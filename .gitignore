@@ -12,3 +12,7 @@ examples/scope/web/scope.js
 examples/scope/web/scope.wasm
 
 .DS_Store
+
+# studio wasm output
+examples/studio/web/studio.js
+examples/studio/web/studio.wasm
