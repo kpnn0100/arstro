@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arstro Scope — DSP × Artboard</title>
+<style>
+  body { margin:0; background:#0c0e13; color:#e6e9ef; font:14px system-ui, sans-serif; }
+  header { display:flex; gap:14px; align-items:center; padding:10px 16px; }
+  button { background:#5cc8ff; color:#03121b; border:0; border-radius:6px; padding:8px 14px; font-weight:600; cursor:pointer; }
+  #status { color:#8b94a7; }
+  canvas { display:block; margin:8px 16px; border:1px solid #2a3040; border-radius:8px; background:#11141a; }
+  .hint { color:#8b94a7; margin:0 16px; }
+  .hint b { color:#ff8a5c; }
+</style>
+</head>
+<body>
+  <header>
+    <strong>Arstro Scope</strong>
+    <button id="start">▶ Start audio</button>
+    <span id="status">loading…</span>
+  </header>
+  <canvas id="c" width="640" height="360"></canvas>
+  <p class="hint">Play with <b>A W S E D F T G Y H U J K</b> — audio is Arstro DSP; the waveform is drawn by Arstro Artboard.</p>
+
+  <script src="scope.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

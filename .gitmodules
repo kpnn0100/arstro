@@ -1,0 +1,6 @@
+[submodule "DigitalSignalProcessing"]
+	path = DigitalSignalProcessing
+	url = https://github.com/kpnn0100/DigitalSignalProcessing.git
+[submodule "Artboard"]
+	path = Artboard
+	url = https://github.com/kpnn0100/artboard.git

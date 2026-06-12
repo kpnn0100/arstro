@@ -1,0 +1,14 @@
+# Build output
+**/build/
+**/build-cov/
+*.o
+*.a
+*.gcno
+*.gcda
+*.gcov
+
+# WASM build output (built locally with emscripten)
+examples/scope/web/scope.js
+examples/scope/web/scope.wasm
+
+.DS_Store
