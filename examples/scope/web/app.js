@@ -4,7 +4,7 @@
  */
 "use strict";
 
-let M = null, started = false, t0 = null;
+let M = null, audio = null, audioNode = null, started = false, t0 = null;
 const W = 640, H = 360, BUF = 1024, CH = 2;
 const canvas = document.getElementById("c");
 window.__abctx = canvas.getContext("2d");
@@ -25,16 +25,17 @@ createScopeModule().then((mod) => {
 
 document.getElementById("start").addEventListener("click", () => {
   if (started || !M) return;
-  const audio = new (window.AudioContext || window.webkitAudioContext)();
+  audio = new (window.AudioContext || window.webkitAudioContext)();
   M.init(W, H, audio.sampleRate);
-  const node = audio.createScriptProcessor(BUF, 0, CH);
-  node.onaudioprocess = (e) => {
+  audioNode = audio.createScriptProcessor(BUF, 0, CH); // persistent: a local would be GC'd -> silence
+  audioNode.onaudioprocess = (e) => {
     const base = M.renderAudio(BUF) >> 2, heap = M.HEAPF32;
     const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
     for (let i = 0; i < BUF; i++) { L[i] = heap[base + i * 2]; R[i] = heap[base + i * 2 + 1]; }
   };
-  node.connect(audio.destination);
-  if (audio.state === "suspended") audio.resume();
+  audioNode.connect(audio.destination);
+  audio.resume();
+  window.__arstroAudio = { audio, audioNode };
   started = true;
   setStatus("playing — " + audio.sampleRate + " Hz");
 });

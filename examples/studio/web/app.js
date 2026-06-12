@@ -7,7 +7,7 @@
  */
 "use strict";
 
-let M = null, audio = null, started = false, t0 = null;
+let M = null, audio = null, audioNode = null, started = false, t0 = null;
 const W = 900, H = 520, BUF = 1024, CH = 2;
 const canvas = document.getElementById("c");
 window.__abctx = canvas.getContext("2d");
@@ -33,17 +33,29 @@ document.getElementById("start").addEventListener("click", () => {
   if (started || !M) return;
   audio = new (window.AudioContext || window.webkitAudioContext)();
   M.init(W, H, audio.sampleRate);      // re-init at the real device sample rate
-  const node = audio.createScriptProcessor(BUF, 0, CH);
-  node.onaudioprocess = (e) => {
+  // Keep the node referenced on a persistent var: a local would be GC'd and go
+  // silent (the classic ScriptProcessorNode pitfall).
+  audioNode = audio.createScriptProcessor(BUF, 0, CH);
+  audioNode.onaudioprocess = (e) => {
     const base = M.renderAudio(BUF) >> 2, heap = M.HEAPF32;
     const L = e.outputBuffer.getChannelData(0), R = e.outputBuffer.getChannelData(1);
     for (let i = 0; i < BUF; i++) { L[i] = heap[base + i * 2]; R[i] = heap[base + i * 2 + 1]; }
   };
-  node.connect(audio.destination);
-  if (audio.state === "suspended") audio.resume();
+  audioNode.connect(audio.destination);
+  audio.resume();                      // contexts start suspended until a gesture
+  window.__arstroAudio = { audio, audioNode }; // extra keepalive
   started = true;
   setStatus("playing — " + audio.sampleRate + " Hz · play A–K");
 });
+
+// Mouse -> raw pointer events (the adapter's input side). The wasm recognizer
+// turns these into click/drag/double-click/right-click; works before audio too.
+function xy(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+canvas.addEventListener("mousedown",  (e) => { if (M) { const [x, y] = xy(e); M.pointer(0, x, y, e.button, performance.now()); } });
+canvas.addEventListener("mousemove",  (e) => { if (M) { const [x, y] = xy(e); M.pointer(1, x, y, e.button, performance.now()); } });
+window.addEventListener("mouseup",    (e) => { if (M) { const [x, y] = xy(e); M.pointer(2, x, y, e.button, performance.now()); } });
+canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // allow right-click gestures
+canvas.addEventListener("dblclick",   (e) => e.preventDefault());
 
 const KEYS = "awsedftgyhujk";
 const held = {};

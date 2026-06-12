@@ -44,6 +44,33 @@ namespace examples
         for (auto &g : mKeyGlow) g.set(0.0);
         mBoard.setBackground(kBg);
         buildStaticScene();
+
+        // Input: recognizer -> router; targets registered in buildStaticScene.
+        mRecognizer.setSink([this](const artboard::Gesture &g) { mRouter.route(g); });
+    }
+
+    void StudioApp::applyKnob(int k, double v01)
+    {
+        if (v01 < 0) v01 = 0;
+        if (v01 > 1) v01 = 1;
+        mKnobTarget[k] = v01; // indicator is driven by the caller (snap on drag, animate on reset)
+        switch (k)
+        {
+        case 0: mSynth.applyParam(GROUP_REVERB + RV_MIX, v01); break;
+        case 1: mSynth.applyParam(GROUP_REVERB + RV_WIDTH, v01); break;
+        case 2: mSynth.applyParam(GROUP_OVERDRIVE + OD_DRIVE, 1.0 + v01 * 10.0); break;
+        case 3: mSynth.applyParam(GROUP_CHORUS + CH_MIX, v01); break;
+        }
+    }
+
+    void StudioApp::pointer(int kind, double x, double y, int button, double timeMs)
+    {
+        RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down
+                             : kind == 2 ? RawPointer::Kind::Up
+                                         : RawPointer::Kind::Move;
+        PointerButton b = button == 2 ? PointerButton::Right : PointerButton::Left;
+        mNowMs = timeMs;
+        mRecognizer.feed(RawPointer{k, Point{x, y}, b, timeMs});
     }
 
     double StudioApp::knobAngle(double v01) const
@@ -120,6 +147,20 @@ namespace examples
             mKnobInd[i] = ind;
             mBoard.add(ind);
             mBoard.add(std::make_shared<Text>(names[i], Point{cx - 24, cy + 44}, 11.0, kMuted));
+
+            // Knob input: drag to set, double-click to reset, right-click to randomize.
+            int k = i;
+            double def = mKnobTarget[i];
+            auto target = std::make_unique<RectTarget>(
+                Rect{cx - 30, cy - 30, 60, 60}, [this, k, def](const Gesture &g) {
+                    using T = Gesture::Type;
+                    if (g.type == T::DragStart) mKnobBase[k] = mKnobTarget[k];
+                    else if (g.type == T::Drag) { applyKnob(k, mKnobBase[k] + (g.start.y - g.pos.y) / 180.0); mKnob[k].set(mKnobTarget[k]); }
+                    else if (g.type == T::DoubleClick) { applyKnob(k, def); mKnob[k].animateTo(def, 250.0, Easing::EaseOutQuad, mNowMs); }
+                    else if (g.type == T::RightClick) { mRng = mRng * 1103515245u + 12345u; applyKnob(k, ((mRng >> 16) & 0x7fff) / 32767.0); mKnob[k].animateTo(mKnobTarget[k], 200.0, Easing::EaseOutQuad, mNowMs); }
+                });
+            mRouter.add(target.get());
+            mTargets.push_back(std::move(target));
         }
 
         // Keyboard: 12 keys
@@ -127,10 +168,19 @@ namespace examples
         for (int i = 0; i < kKeys; ++i)
         {
             bool black = (i == 1 || i == 3 || i == 6 || i == 8 || i == 10);
-            auto key = std::make_shared<Rectangle>(Rect{kx + i * kw + 1, kKeysPanel.y + 30, kw - 2, 48},
-                                                   Paint::filledStroked(black ? kBg : kBorder, kBorder, 1.0), 3.0);
+            Rect kr{kx + i * kw + 1, kKeysPanel.y + 30, kw - 2, 48};
+            auto key = std::make_shared<Rectangle>(kr, Paint::filledStroked(black ? kBg : kBorder, kBorder, 1.0), 3.0);
             mKeyRects[i] = key;
             mBoard.add(key);
+
+            // Key input: press-and-hold plays the note (Down -> on, Up -> off).
+            int midi = 60 + i;
+            auto target = std::make_unique<RectTarget>(kr, [this, midi](const Gesture &g) {
+                if (g.type == Gesture::Type::Down) noteOn(midi, 0.85);
+                else if (g.type == Gesture::Type::Up) noteOff(midi);
+            });
+            mRouter.add(target.get());
+            mTargets.push_back(std::move(target));
         }
     }
 

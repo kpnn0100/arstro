@@ -19,6 +19,7 @@ static void init(double w, double h, double sr) { gApp.reset(new StudioApp(w, h)
 static void frame(double nowMs) { if (gApp) gApp->render(gTarget, nowMs); }
 static void noteOn(int midi, double vel) { if (gApp) gApp->noteOn(midi, vel); }
 static void noteOff(int midi) { if (gApp) gApp->noteOff(midi); }
+static void pointer(int kind, double x, double y, int button, double t) { if (gApp) gApp->pointer(kind, x, y, button, t); }
 static uintptr_t renderAudio(int frames)
 {
     gAudio.resize((size_t)frames * 2);
@@ -32,5 +33,6 @@ EMSCRIPTEN_BINDINGS(arstro_studio)
     emscripten::function("frame", &frame);
     emscripten::function("noteOn", &noteOn);
     emscripten::function("noteOff", &noteOff);
+    emscripten::function("pointer", &pointer);
     emscripten::function("renderAudio", &renderAudio, allow_raw_pointers());
 }

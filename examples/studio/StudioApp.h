@@ -11,6 +11,7 @@
 #include "../../Artboard/include/artboard/artboard.h"
 #include "../../DigitalSignalProcessing/src/synth_dsp.h"
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -27,6 +28,10 @@ namespace examples
         void renderAudio(float *interleaved, int frames); // stereo float + capture for scope/spectrum
         void noteOn(int midi, double vel);
         void noteOff(int midi);
+
+        // Input: adapters feed raw pointer events; the recognizer + router do the rest.
+        // kind: 0=Down 1=Move 2=Up ; button: 0=Left 2=Right (DOM convention).
+        void pointer(int kind, double x, double y, int button, double timeMs);
 
         void render(artboard::IRenderTarget &target, double nowMs);
 
@@ -57,6 +62,14 @@ namespace examples
         std::array<std::shared_ptr<artboard::Line>, 4> mKnobInd;
         std::array<double, 4> mKnobTarget{{0.3, 0.6, 0.25, 0.5}};
         bool mIntroStarted = false;
+
+        // input
+        void applyKnob(int k, double v01); // clamp, store, drive the DSP param
+        artboard::GestureRecognizer mRecognizer;
+        artboard::InputRouter mRouter;
+        std::vector<std::unique_ptr<artboard::RectTarget>> mTargets; // owned key/knob hit regions
+        std::array<double, 4> mKnobBase{{0, 0, 0, 0}};               // knob value at drag start
+        uint32_t mRng = 0x1234567u;
     };
 }
 }
