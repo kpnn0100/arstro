@@ -27,7 +27,7 @@ DSP="$ROOT/DigitalSignalProcessing"; AB="$ROOT/Artboard"
 echo "host: ${HOST_OS}/${HOST_ARCH}   project: ${PROJECT}   target: ${TARGET}"
 
 dsp_src() { find "$DSP/src" -name '*.cpp' -not -path '*/spatial/*' -not -path '*/util/*'; }
-ab_core() { find "$AB/src/core" "$AB/src/anim" "$AB/src/render" "$AB/src/scene" -name '*.cpp'; }
+ab_core() { find "$AB/src/core" "$AB/src/anim" "$AB/src/render" "$AB/src/scene" "$AB/src/input" -name '*.cpp'; }
 
 case "$TARGET" in
   linux-web-server)
