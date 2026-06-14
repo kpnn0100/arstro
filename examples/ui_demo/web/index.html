@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Artboard UI Demo</title>
+<style>
+  body { margin: 0; background: #11141a; color: #f0ece4; font: 14px system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; }
+  .shell { width: min(100%, 1024px); padding: 20px; box-sizing: border-box; }
+  .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; color: #b7bcc8; }
+  canvas { width: 100%; height: auto; border: 1px solid #474d5a; border-radius: 18px; background: #16181f; display: block; }
+  .hint { color: #9ea4b1; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="toolbar">
+      <strong>Artboard UI Demo</strong>
+      <span id="status">loading…</span>
+    </div>
+    <canvas id="c" width="960" height="560"></canvas>
+    <p class="hint">Try the slider, checkbox, text box, and button. The preview card is a parent Segment with its own child Segment tree.</p>
+  </div>
+  <script src="ui_demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
