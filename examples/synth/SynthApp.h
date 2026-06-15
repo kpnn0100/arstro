@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace arstro
@@ -79,13 +80,26 @@ namespace examples
         void drawFx(artboard::IRenderTarget &t, double x0, double frame);
         void drawSet(artboard::IRenderTarget &t, double x0);
         void drawKnob(artboard::IRenderTarget &t, double cx, double cy, double r,
-                      double v01, const artboard::Color &color, const std::string &label, bool active);
+                      double *value, double max, const artboard::Color &color, const std::string &label, bool active);
         void drawValueOverlay(artboard::IRenderTarget &t, double value, const std::string &unit,
-                              const artboard::Color &color);
+                              const artboard::Color &color, double opacity);
 
         double mW, mH;
         arstro::SynthEngine mSynth;
         double mNowMs = 0.0;
+        double mLastMs = -1.0, mDt = 0.0; // frame delta (seconds) for spring/ease integration
+
+        // Per-knob UI animation: a critically-damped spring chases the target value (so the
+        // visual eases with smooth, never-jumping velocity even when the drag reverses), plus
+        // an eased focus highlight. Keyed by the parameter pointer the knob drives.
+        struct KnobAnim { double display = 0, vel = 0, highlight = 0; bool init = false; };
+        std::unordered_map<const double *, KnobAnim> mKnobAnim;
+
+        // Value-overlay (the big centre number) fade in/out.
+        double mOverlayAmt = 0.0;
+        double mOverlayValue = 0.0;
+        std::string mOverlayUnit;
+        artboard::Color mOverlayColor;
 
         // host surface mapping
         double mScale = 1.0, mOffX = 0.0, mOffY = 0.0;

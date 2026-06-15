@@ -24,6 +24,11 @@ namespace examples
 
         Color a(const Color &c, double alpha) { return Color{c.r, c.g, c.b, alpha}; }
         Color white(double alpha) { return Color{1, 1, 1, alpha}; }
+        Color mixCol(const Color &x, const Color &y, double t)
+        {
+            return Color{x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t,
+                         x.a + (y.a - x.a) * t};
+        }
 
         void textAt(IRenderTarget &t, const std::string &s, double x, double base, double size, const Color &c)
         {
@@ -33,6 +38,24 @@ namespace examples
         void textCentered(IRenderTarget &t, const std::string &s, double cx, double base, double size, const Color &c)
         {
             textAt(t, s, cx - s.size() * size * 0.28, base, size, c);
+        }
+
+        // Critically-damped spring step: x chases target with continuous (never-jumping)
+        // velocity, so reversing the drag decelerates and reverses smoothly — no competing
+        // tweens, no instant velocity change.
+        void springStep(double &x, double &v, double target, double dt, double omega)
+        {
+            if (dt <= 0.0) return;
+            if (dt > 0.05) dt = 0.05; // clamp big frame gaps
+            const double accel = -2.0 * omega * v - omega * omega * (x - target);
+            v += accel * dt;
+            x += v * dt;
+        }
+        // Exponential ease toward target with time-constant tau (s) — used for fades.
+        void easeStep(double &x, double target, double dt, double tau)
+        {
+            if (dt <= 0.0 || tau <= 0.0) { x = target; return; }
+            x += (target - x) * (1.0 - std::exp(-dt / tau));
         }
 
         void strokePts(IRenderTarget &t, const std::vector<Point> &p, const Color &c, double w)
@@ -474,10 +497,20 @@ namespace arstro { namespace examples {
 
     // ───────────────────────── drawing helpers ─────────────────────────
     void SynthApp::drawKnob(IRenderTarget &t, double cx, double cy, double r,
-                            double v01, const Color &color, const std::string &label, bool active)
+                            double *value, double max, const Color &color, const std::string &label, bool active)
     {
+        // Per-knob spring: the displayed value eases toward the real target (UI only); the
+        // focus highlight fades in/out. Both integrate with the frame delta so velocity is
+        // continuous and reversing a drag never snaps.
+        KnobAnim &an = mKnobAnim[value];
+        if (!an.init) { an.display = *value; an.highlight = active ? 1.0 : 0.0; an.init = true; }
+        springStep(an.display, an.vel, *value, mDt, 16.0);
+        easeStep(an.highlight, active ? 1.0 : 0.0, mDt, 0.09);
+        const double hl = an.highlight;
+
+        double v01 = an.display / max;
         if (v01 < 0) v01 = 0; if (v01 > 1) v01 = 1;
-        drawCircle(t, cx, cy, r, Paint::filledStroked(white(0.03), white(0.10), 1.5));
+        drawCircle(t, cx, cy, r, Paint::filledStroked(white(0.03), white(0.10 + 0.10 * hl), 1.5));
 
         // Angle convention (matches SoftKnob): an up-pointing vector rotated by the
         // value angle, so value 0 sits at lower-left (≈7 o'clock), max at lower-right
@@ -492,24 +525,27 @@ namespace arstro { namespace examples {
         for (int s = 0; s <= steps; ++s)
             arc.push_back(pt(d0 + (d1 - d0) * (double)s / steps, r - 5));
         if (v01 > 0.001 && arc.size() >= 2)
-            glowAlongPath(t, arc, a(color, active ? 1.0 : 0.85), 4.0, 2.6); // true halo
-        drawCircle(t, cx, cy, r - 9, Paint::filled(a(color, active ? 0.16 : 0.06)));
+            glowAlongPath(t, arc, a(color, 0.85 + 0.15 * hl), 4.0, 2.6); // true halo, brighter on focus
+        drawCircle(t, cx, cy, r - 9, Paint::filled(a(color, 0.06 + 0.12 * hl)));
         const Point tip = pt(d1, r - 4);
         // indicator: glowing line (isotropic halo) + bright tip
         glowAlongPath(t, {{cx, cy}, tip}, color, 4.0, 2.0);
         glowDot(t, tip.x, tip.y, 2.4, color);
-        textCentered(t, label, cx, cy + r + 9, 8.0, active ? color : white(0.35));
+        textCentered(t, label, cx, cy + r + 9, 8.0, mixCol(white(0.35), color, hl));
     }
 
-    void SynthApp::drawValueOverlay(IRenderTarget &t, double value, const std::string &unit, const Color &color)
+    void SynthApp::drawValueOverlay(IRenderTarget &t, double value, const std::string &unit, const Color &color, double opacity)
     {
+        if (opacity <= 0.01) return;
         const double cx = DW * 0.5, cy = 96;
         char buf[32]; std::snprintf(buf, sizeof buf, "%d%s", (int)std::lround(value), unit.c_str());
         std::string s = buf;
         const double bw = 14 + s.size() * 14, bh = 32;
-        drawRoundedRect(t, Rect{cx - bw / 2, cy - bh / 2, bw, bh}, 6.0,
-                        Paint::filledStroked(Color{0, 0, 0, 0.7}, a(color, 0.5), 1.0));
-        textCentered(t, s, cx, cy + 7, 22.0, color);
+        // a slight upward drift as it fades in adds life
+        const double dy = (1.0 - opacity) * 6.0;
+        drawRoundedRect(t, Rect{cx - bw / 2, cy - bh / 2 + dy, bw, bh}, 6.0,
+                        Paint::filledStroked(Color{0, 0, 0, 0.7 * opacity}, a(color, 0.5 * opacity), 1.0));
+        textCentered(t, s, cx, cy + 7 + dy, 22.0, a(color, opacity));
     }
 
     void SynthApp::drawStatusBar(IRenderTarget &t, double frame)
@@ -586,7 +622,7 @@ namespace arstro { namespace examples {
         }
         auto knobs = pageKnobs();
         for (size_t i = 0; i < knobs.size(); ++i)
-            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, *knobs[i].value / knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
+            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, knobs[i].value, knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
     }
 
     void SynthApp::drawOsc(IRenderTarget &t, double, double frame)
@@ -654,7 +690,7 @@ namespace arstro { namespace examples {
         }
         auto knobs = pageKnobs();
         for (size_t i = 0; i < knobs.size(); ++i)
-            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, *knobs[i].value / knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
+            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, knobs[i].value, knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
     }
 
     void SynthApp::drawEnv(IRenderTarget &t, double, double frame)
@@ -691,7 +727,7 @@ namespace arstro { namespace examples {
         t.beginPath(); t.moveTo(0, vy1); t.lineTo(DW, vy1); t.setStroke(white(0.08), 1.0); t.strokePath();
         auto knobs = pageKnobs();
         for (size_t i = 0; i < knobs.size(); ++i)
-            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, *knobs[i].value / knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
+            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, knobs[i].value, knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
     }
 
     void SynthApp::drawFx(IRenderTarget &t, double, double frame)
@@ -751,7 +787,7 @@ namespace arstro { namespace examples {
         t.beginPath(); t.moveTo(DW - 70, vy0); t.lineTo(DW - 70, vy1); t.setStroke(white(0.07), 1.0); t.strokePath();
         auto knobs = pageKnobs();
         for (size_t i = 0; i < knobs.size(); ++i)
-            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, *knobs[i].value / knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
+            drawKnob(t, knobs[i].cx, knobs[i].cy, knobs[i].r, knobs[i].value, knobs[i].max, color, knobs[i].label, mActiveKnob == (int)i);
     }
 
     void SynthApp::drawSet(IRenderTarget &t, double)
@@ -776,9 +812,26 @@ namespace arstro { namespace examples {
     void SynthApp::render(IRenderTarget &target, double nowMs)
     {
         mNowMs = nowMs;
+        mDt = mLastMs < 0 ? 0.0 : (nowMs - mLastMs) / 1000.0; // frame delta in seconds
+        mLastMs = nowMs;
         if (!mIntroDone) { mIntroDone = true; mSlide.animate(Tween::range(0.0, 1.0, 320.0).withEasing(Easing::EaseOutCubic), nowMs); }
         const double slide = mSlide.update(nowMs);
         mAnimator.advance(nowMs);
+
+        // Capture the dragged knob's (smoothed) value for the centre overlay, then fade the
+        // overlay in while dragging and out after release — so it never pops.
+        if (mDrag.active && mActiveKnob >= 0)
+        {
+            auto knobs = pageKnobs();
+            if (mActiveKnob < (int)knobs.size())
+            {
+                auto it = mKnobAnim.find(knobs[mActiveKnob].value);
+                mOverlayValue = it != mKnobAnim.end() && it->second.init ? it->second.display : *knobs[mActiveKnob].value;
+                mOverlayUnit = knobs[mActiveKnob].unit;
+                mOverlayColor = pageColor(mPage);
+            }
+        }
+        easeStep(mOverlayAmt, mDrag.active ? 1.0 : 0.0, mDt, 0.08);
         // MIDI blink follows held notes / recent activity.
         mBlinkAccum += 1;
         mMidiBlink = !mHeldNotes.empty() && ((int)(nowMs / 120) % 2 == 0);
@@ -807,12 +860,7 @@ namespace arstro { namespace examples {
         case Fx: drawFx(target, 0, frame); break;
         case Set: drawSet(target, 0); break;
         }
-        if (mDrag.active && mActiveKnob >= 0)
-        {
-            auto knobs = pageKnobs();
-            if (mActiveKnob < (int)knobs.size())
-                drawValueOverlay(target, *knobs[mActiveKnob].value, knobs[mActiveKnob].unit, color);
-        }
+        drawValueOverlay(target, mOverlayValue, mOverlayUnit, mOverlayColor, mOverlayAmt);
         target.restore();
 
         // chrome on top
