@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -77,6 +77,13 @@ case "$TARGET" in
         EXPORT=createStudioModule; OUTNAME=studio
         APP_DIR="$ROOT/examples/studio"
         APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/StudioApp.cpp")
+        EXTRA_SRC=("${dsp_src[@]}")
+        EXTRA_INC=(-I"$DSP/src")
+        ;;
+      synth)
+        EXPORT=createSynthModule; OUTNAME=synth
+        APP_DIR="$ROOT/examples/synth"
+        APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/SynthApp.cpp")
         EXTRA_SRC=("${dsp_src[@]}")
         EXTRA_INC=(-I"$DSP/src")
         ;;
@@ -145,8 +152,29 @@ case "$TARGET" in
           -o "$OUTDIR/ui_demo_linux"
         echo "built $OUTDIR/ui_demo_linux"
         ;;
+      synth)
+        for dep in gtk+-3.0 alsa; do
+          if ! pkg-config --exists "$dep"; then
+            echo "error: $dep development files not found." >&2
+            exit 1
+          fi
+        done
+        OUTDIR="$ROOT/examples/synth/build"
+        mkdir -p "$OUTDIR"
+        read -r -a SYNTH_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0 alsa)"
+        read -r -a SYNTH_LIBS <<< "$(pkg-config --libs gtk+-3.0 alsa)"
+        c++ -std=c++17 -O2 \
+          "$ROOT/examples/synth/linux_main.cpp" "$ROOT/examples/synth/SynthApp.cpp" \
+          "$AB/src/adapter/native/CairoTarget.cpp" \
+          "${ab_core[@]}" "${dsp_src[@]}" \
+          -I"$AB/src" -I"$AB/include" -I"$DSP/src" \
+          "${SYNTH_CFLAGS[@]}" "${SYNTH_LIBS[@]}" -lpthread \
+          -o "$OUTDIR/synth_linux"
+        echo "built $OUTDIR/synth_linux"
+        echo "run:   $OUTDIR/synth_linux"
+        ;;
       *)
-        echo "linux-native-app currently supports only project 'ui-demo'" >&2
+        echo "linux-native-app currently supports projects 'ui-demo' and 'synth'" >&2
         exit 1
         ;;
     esac

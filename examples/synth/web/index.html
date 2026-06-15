@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Arstro Basic Synth — DSP × Artboard</title>
+<style>
+  body { margin:0; background:#0c0e13; color:#e6e9ef; font:14px system-ui, sans-serif; display:flex; flex-direction:column; align-items:center; }
+  header { display:flex; gap:14px; align-items:center; padding:14px; }
+  button { background:#5cc8ff; color:#03121b; border:0; border-radius:6px; padding:8px 14px; font-weight:600; cursor:pointer; }
+  #status { color:#8b94a7; }
+  canvas { border:1px solid #2a3040; border-radius:14px; }
+  .hint { color:#8b94a7; }
+  .hint b { color:#ff8a5c; }
+</style>
+</head>
+<body>
+  <header>
+    <strong>Arstro Basic Synth</strong>
+    <button id="start">▶ Start audio</button>
+    <span id="status">loading…</span>
+  </header>
+  <canvas id="c" width="900" height="480"></canvas>
+  <p class="hint">Keys <b>A W S E D F T G Y H U J K</b> play one octave · drag the knobs · double-click a knob to reset.
+     Everything is drawn by Arstro Artboard; the sound is Arstro DSP.</p>
+  <script src="synth.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

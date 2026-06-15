@@ -16,3 +16,11 @@ examples/scope/web/scope.wasm
 # studio wasm output
 examples/studio/web/studio.js
 examples/studio/web/studio.wasm
+
+# synth wasm output
+examples/synth/web/synth.js
+examples/synth/web/synth.wasm
+
+# ui_demo wasm output
+examples/ui_demo/web/ui_demo.js
+examples/ui_demo/web/ui_demo.wasm
