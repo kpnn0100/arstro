@@ -240,11 +240,12 @@ namespace arstro { namespace examples {
         if (p < 0) p = 0;
         if (p >= PageCount) p = PageCount - 1;
         if (p == mPage) return;
+        mSlideDir = p > mPage ? 1 : -1; // +1 = navigating right, -1 = left
         mPrevPage = mPage;
         mPage = p;
         mActiveKnob = -1;
         mDrag.active = false;
-        mSlide.animate(Tween::range(0.0, 1.0, 220.0).withEasing(Easing::EaseOutCubic), mNowMs);
+        mSlide.animate(Tween::range(0.0, 1.0, 260.0).withEasing(Easing::EaseOutCubic), mNowMs);
     }
 
     // ───────────────────────── DSP application ─────────────────────────
@@ -821,6 +822,18 @@ namespace arstro { namespace examples {
         }
     }
 
+    void SynthApp::drawPage(IRenderTarget &t, double frame)
+    {
+        switch (mPage)
+        {
+        case Home: drawHome(t, 0, frame); break;
+        case Osc: drawOsc(t, 0, frame); break;
+        case Env: drawEnv(t, 0, frame); break;
+        case Fx: drawFx(t, 0, frame); break;
+        case Set: drawSet(t, 0); break;
+        }
+    }
+
     // ───────────────────────── frame ─────────────────────────
     void SynthApp::render(IRenderTarget &target, double nowMs)
     {
@@ -868,19 +881,31 @@ namespace arstro { namespace examples {
         drawRoundedRect(target, Rect{0.5, 0.5, DW - 1, DH - 1}, 10.0, Paint::stroked(a(color, 0.35), 1.0));
         target.restore();
 
-        // page content (slide in). NOT clipped, so knob/visualiser glow is never cut;
-        // the status bar + nav are drawn on top afterwards to cover any faint bleed.
-        const double dx = (1.0 - slide) * 14.0;
+        // Page content. While transitioning, the outgoing page slides off one way and the
+        // incoming page slides in from the side you navigated toward; clipped to the module
+        // so the moving pages don't bleed into the surrounding margins.
         target.save();
-        target.setTransform(d.mul(Transform::translation(dx, 0)));
-        switch (mPage)
+        target.setTransform(d);
+        target.clipRect(0, 0, DW, DH);
+        const bool transitioning = mPrevPage != mPage && slide < 0.999;
+        if (transitioning)
         {
-        case Home: drawHome(target, 0, frame); break;
-        case Osc: drawOsc(target, 0, frame); break;
-        case Env: drawEnv(target, 0, frame); break;
-        case Fx: drawFx(target, 0, frame); break;
-        case Set: drawSet(target, 0); break;
+            const double newX = mSlideDir * DW * (1.0 - slide); // enters from nav direction
+            const double oldX = -mSlideDir * DW * slide;        // exits the other way
+            const int cur = mPage;
+            mPage = mPrevPage;
+            target.setTransform(d.mul(Transform::translation(oldX, 0)));
+            drawPage(target, frame);
+            mPage = cur;
+            target.setTransform(d.mul(Transform::translation(newX, 0)));
+            drawPage(target, frame);
         }
+        else
+        {
+            target.setTransform(d);
+            drawPage(target, frame);
+        }
+        target.setTransform(d);
         drawValueOverlay(target, mOverlayValue, mOverlayUnit, mOverlayColor, mOverlayAmt);
         target.restore();
 

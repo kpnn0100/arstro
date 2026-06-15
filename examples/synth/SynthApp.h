@@ -77,6 +77,7 @@ namespace examples
         // ---- drawing ----
         void drawStatusBar(artboard::IRenderTarget &t, double frame);
         void drawNav(artboard::IRenderTarget &t);
+        void drawPage(artboard::IRenderTarget &t, double frame); // dispatches the active page
         void drawHome(artboard::IRenderTarget &t, double x0, double frame);
         void drawOsc(artboard::IRenderTarget &t, double x0, double frame);
         void drawEnv(artboard::IRenderTarget &t, double x0, double frame);
@@ -115,7 +116,8 @@ namespace examples
         // page + transition
         int mPage = Home;
         int mPrevPage = Home;
-        artboard::AnimatedProperty mSlide{1.0}; // 0 = mid-slide, 1 = settled
+        int mSlideDir = 1;                       // +1 sliding right, -1 left
+        artboard::AnimatedProperty mSlide{1.0};  // 0 = mid-slide, 1 = settled
         bool mMidiBlink = false;
         double mBlinkAccum = 0.0;
 
