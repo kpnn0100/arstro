@@ -63,6 +63,9 @@ namespace examples
         artboard::Point toDesign(double sx, double sy) const;
         std::vector<KnobRef> pageKnobs();      // interactive knobs for the active page
         void selectPage(int p);
+        // The smoothed (spring) display value of a knob-driven parameter, so visualisers
+        // animate in lockstep with the knob instead of snapping to the raw target.
+        double knobDisplay(const double *v) const;
 
         // ---- DSP application ----
         void applyMaster();

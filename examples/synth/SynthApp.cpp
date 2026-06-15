@@ -229,6 +229,12 @@ namespace arstro { namespace examples {
         return designToScreen().inverse().apply(Point{sx, sy});
     }
 
+    double SynthApp::knobDisplay(const double *v) const
+    {
+        auto it = mKnobAnim.find(v);
+        return (it != mKnobAnim.end() && it->second.init) ? it->second.display : *v;
+    }
+
     void SynthApp::selectPage(int p)
     {
         if (p < 0) p = 0;
@@ -644,11 +650,14 @@ namespace arstro { namespace examples {
             default: return -std::sin(p) * 0.6;                    // sine
             }
         };
+        // Drive the wave from the smoothed knob values so it animates with the knobs.
+        const double dLevel = knobDisplay(&mLevel), dDetune = knobDisplay(&mDetune);
+        const double dSpread = knobDisplay(&mSpread), dVoices = knobDisplay(&mVoices);
         const double H = vy1 - vy0, midY = vy0 + H * 0.5;
         const double tphase = frame * 0.045;
-        const double amp = (mLevel / 100.0) * H * 0.42 * (0.55 + 0.45 * std::min(1.0, mMeterL * 1.5)) + 3;
-        const int voices = std::max(1, (int)(mVoices + 0.5));
-        const double phaseSpread = (mSpread / 100.0) * kPi * 0.8;
+        const double amp = (dLevel / 100.0) * H * 0.42 * (0.55 + 0.45 * std::min(1.0, mMeterL * 1.5)) + 3;
+        const int voices = std::max(1, (int)(dVoices + 0.5));
+        const double phaseSpread = (dSpread / 100.0) * kPi * 0.8;
         // saw jumps once per cycle (2π), square flips twice (π); inserting the edge at its
         // EXACT sub-pixel x keeps the discontinuity gliding smoothly as the phase scrolls
         // (otherwise the vertical edge snaps to the sample grid and stutters).
@@ -658,7 +667,7 @@ namespace arstro { namespace examples {
         {
             double tv = voices == 1 ? 0 : ((double)v / (voices - 1) - 0.5) * 2;
             double phaseOff = tv * phaseSpread;
-            double freqShift = tv * (mDetune / 100.0) * 0.012;
+            double freqShift = tv * (dDetune / 100.0) * 0.012;
             double alpha = v == voices / 2 ? 1.0 : 0.4 - std::fabs(tv) * 0.12;
             const double pscale = kPi * 4 * (1 + freqShift) / DW;
             auto phaseAt = [&](double x) { return x * pscale + tphase + phaseOff; };
@@ -702,10 +711,11 @@ namespace arstro { namespace examples {
         const double vy0 = kStatusH, vy1 = 148;
         drawRoundedRect(t, Rect{0, vy0, DW, vy1 - vy0}, 0.0, Paint::filled(Color{0, 0, 0, 0.3}));
         const double pad = 18, W2 = DW - pad * 2, H2 = (vy1 - vy0) - pad * 2, base = vy0 + pad + H2;
-        const double A = (mAttack / 100.0) * W2 * 0.25 + W2 * 0.04;
-        const double D = (mDecay / 100.0) * W2 * 0.2 + W2 * 0.04;
-        const double S = mSustain / 100.0;
-        const double R = (mRelease / 100.0) * W2 * 0.25 + W2 * 0.06;
+        // Smoothed ADSR so the curve eases with the knobs.
+        const double A = (knobDisplay(&mAttack) / 100.0) * W2 * 0.25 + W2 * 0.04;
+        const double D = (knobDisplay(&mDecay) / 100.0) * W2 * 0.2 + W2 * 0.04;
+        const double S = knobDisplay(&mSustain) / 100.0;
+        const double R = (knobDisplay(&mRelease) / 100.0) * W2 * 0.25 + W2 * 0.06;
         double hold = W2 - A - D - R; if (hold < 8) hold = 8;
         std::vector<Point> pts = {
             {pad, base}, {pad + A, vy0 + pad}, {pad + A + D, base - H2 * S},
@@ -757,7 +767,8 @@ namespace arstro { namespace examples {
             for (size_t i = 1; i < pts.size(); ++i) t.lineTo(pts[i].x, pts[i].y);
             t.setStroke(c, w); t.strokePath();
         };
-        auto &p = mFx[mFxSel];
+        // Smoothed FX params so the visualiser eases with the knobs.
+        const double p[3] = {knobDisplay(&mFx[mFxSel][0]), knobDisplay(&mFx[mFxSel][1]), knobDisplay(&mFx[mFxSel][2])};
         if (mFxSel == 0) { // CMP
             double thr = 1 - p[0] / 100.0;
             std::vector<Point> in, out;
