@@ -8,7 +8,7 @@
 "use strict";
 
 let M = null, audio = null, audioNode = null, started = false, t0 = null;
-const W = 900, H = 480, BUF = 1024, CH = 2;
+const W = 1072, H = 480, BUF = 1024, CH = 2; // 2x the 536x240 design
 const canvas = document.getElementById("c");
 window.__abctx = canvas.getContext("2d");
 
@@ -55,16 +55,21 @@ window.addEventListener("mouseup",    (e) => { if (M) { const [x, y] = xy(e); M.
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("dblclick",   (e) => e.preventDefault());
 
-const KEYS = "awsedftgyhujk"; // 13 keys, C..C
-const held = {};
+// Forward keys to the app: letters (a w s e d f t g y h u j k) play one octave,
+// arrows navigate pages. SynthApp::key owns all key semantics.
+const ARROWS = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
+function keyCode(e) {
+  if (ARROWS[e.key] != null) return ARROWS[e.key];
+  const k = e.key.toLowerCase();
+  return k.length === 1 ? k.charCodeAt(0) : 0;
+}
 addEventListener("keydown", (e) => {
   if (!M || e.repeat) return;
-  const i = KEYS.indexOf(e.key.toLowerCase());
-  if (i < 0 || held[e.key]) return;
-  held[e.key] = 60 + i; M.noteOn(60 + i, 0.85);
+  const c = keyCode(e);
+  if (c) { if (ARROWS[e.key] != null) e.preventDefault(); M.key(c, true); }
 });
 addEventListener("keyup", (e) => {
   if (!M) return;
-  const n = held[e.key];
-  if (n != null) { M.noteOff(n); delete held[e.key]; }
+  const c = keyCode(e);
+  if (c) M.key(c, false);
 });

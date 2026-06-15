@@ -1,45 +1,44 @@
-# Arstro Basic Synth
+# Arstro Synth
 
-A compact, pretty synth example that links **Arstro DSP** (sound) with **Arstro Artboard**
-(drawing + UI + animation). A playable one-octave keyboard drives the DSP `SynthEngine`; the
-sound is visualised as a glowing oscilloscope and a spectrum, and the whole UI animates with the
-Artboard animation system.
+A full-function compact synth whose UI follows the supplied React design: a **536×240 module**
+with a status bar, five colour-coded pages, a bottom nav, draggable knobs, and animated
+per-page visualisers — drawn entirely with **Arstro Artboard** and sounded by **Arstro DSP**.
 
-The app (`SynthApp`) is **platform-free** — it touches only Artboard's `IRenderTarget` and the DSP
-engine — so the identical code runs under both adapters:
+`SynthApp` is **platform-free** (only `IRenderTarget` + the DSP engine), drawn immediate-mode in a
+fixed design space that scales to fill the host surface. It runs under both adapters:
 
 | Target | Render | Audio | Input |
 |--------|--------|-------|-------|
-| Web    | Canvas2D (WASM) | Web Audio (`ScriptProcessor`) | mouse + QWERTY |
-| Linux  | Cairo (GTK3 window) | ALSA playback thread | mouse + QWERTY |
+| Web    | Canvas2D (WASM) | Web Audio (`ScriptProcessor`) | mouse + keyboard |
+| Linux  | Cairo (GTK3 window) | ALSA playback thread | mouse + keyboard |
 
-## What it demonstrates
+## Pages (← → to switch)
 
-The whole UI is built from the Artboard **widget set** on the `Segment` tree — a "flex" of the
-framework:
+- **HOME** — patch info, live L/R output meters (from real audio peak), active-voice count, master
+  `vol`/`pan` knobs.
+- **OSC** — animated waveform visualiser; `SIN/SAW/SQR/TRI` selector and `lvl`/`det`/`spd`/`voc`
+  knobs → oscillator level, detune, stereo spread, unison voice count.
+- **ENV** — ADSR curve + animated playhead; `atk`/`dec`/`sus`/`rel` knobs → the voice envelope.
+- **FX** — five effects (`CMP`/`DRV`/`CHR`/`DLY`/`RVB`), each with its own animated visualiser and
+  3 knobs → compressor, overdrive, chorus, delay (repeater) and reverb. Click the selected tab
+  again to **bypass** it.
+- **SET** — device/settings readout.
 
-- **`LineGraph`** ×2 — the oscilloscope and the spectrum (data visualisation).
-- **`ProgressBar`** — the output level meter.
-- **`TabView`** — TONE / FX / HELP pages.
-- **`Knob`** ×3 — DRIVE / CHORUS / REVERB (vertical drag; double-click resets).
-- **`ComboBox`** — the preset selector (Clean / Warm / Space).
-- **`ToggleSwitch`** — animated DRIVE FX / REVERB FX bypass switches.
-- **`ScrollView`** — the HELP page (clipped, scrollable text), exercising the HAL `clipRect`.
-- **`KeyboardSegment`** — a one-octave keyboard with animated key-press glow.
-
-Animation: an `AnimatedProperty` intro reveal (`Tween` + `EaseOutCubic`), the `Animator` timeline,
-and per-key glow tweens.
+The `SIN/SAW/SQR/TRI` selector picks a real oscillator waveform (sine, band-limited saw/square,
+triangle) — it changes both the visualiser and the sound. Every knob drag pushes a live parameter
+into the DSP `SynthEngine`; the value pops up large while you drag. Page changes slide in
+(Artboard `Animator`/`Tween`).
 
 ## Controls
 
 - **Keys** `A W S E D F T G Y H U J K` — play one octave (C..C).
-- **Knobs** — drag vertically to set; double-click to reset (animated).
-- **Tabs / drop-down / toggles** — click; the HELP tab scrolls.
-- Click ▶ **Start audio** on the web page (browsers require a gesture before audio).
+- **← / →** — switch pages. **↑ / ↓** — move selection on FX / SET.
+- **Drag** a knob vertically to change it.
+
 
 ## Build & run
 
-Web (needs Emscripten on PATH: `source ~/emsdk/emsdk_env.sh`):
+Web (needs Emscripten: `source ~/emsdk/emsdk_env.sh`):
 
 ```bash
 ./build.sh --project synth --target linux-web-server

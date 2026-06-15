@@ -23,7 +23,7 @@ using arstro::examples::SynthApp;
 
 namespace
 {
-    constexpr int kW = 900, kH = 480;
+    constexpr int kW = 1072, kH = 480; // 2x the 536x240 design
     constexpr unsigned kRate = 48000;
     constexpr int kAudioFrames = 512;
 
@@ -36,8 +36,23 @@ namespace
         gint64 startUs = 0;
         std::thread audioThread;
         std::atomic<bool> running{true};
-        std::map<guint, int> held; // keyval -> midi note
+        std::map<guint, int> held; // keyval -> repeat guard
     };
+
+    // GTK keyval -> SynthApp key code: arrows to DOM codes, letters to ASCII.
+    int keyCodeFor(guint keyval)
+    {
+        switch (keyval)
+        {
+        case GDK_KEY_Left: return 37;
+        case GDK_KEY_Up: return 38;
+        case GDK_KEY_Right: return 39;
+        case GDK_KEY_Down: return 40;
+        default: break;
+        }
+        gunichar u = gdk_keyval_to_unicode(gdk_keyval_to_lower(keyval));
+        return (u >= 'a' && u <= 'z') ? (int)u : 0;
+    }
 
     double nowMs(const App &a)
     {
@@ -99,25 +114,16 @@ namespace
         a->synth.pointer(1, e->x, e->y, 0, nowMs(*a));
         return TRUE;
     }
-    int midiForKey(guint keyval)
-    {
-        static const char *row = "awsedftgyhujk"; // 13 keys, C..C
-        gunichar u = gdk_keyval_to_unicode(gdk_keyval_to_lower(keyval));
-        for (int i = 0; row[i]; ++i)
-            if ((gunichar)row[i] == u)
-                return 60 + i;
-        return -1;
-    }
     gboolean onKeyPress(GtkWidget *, GdkEventKey *e, gpointer user)
     {
         auto *a = static_cast<App *>(user);
         if (a->held.count(e->keyval))
             return TRUE; // ignore auto-repeat
-        int midi = midiForKey(e->keyval);
-        if (midi < 0)
+        int code = keyCodeFor(e->keyval);
+        if (!code)
             return FALSE;
-        a->held[e->keyval] = midi;
-        a->synth.noteOn(midi, 0.85);
+        a->held[e->keyval] = code;
+        a->synth.key(code, true);
         return TRUE;
     }
     gboolean onKeyRelease(GtkWidget *, GdkEventKey *e, gpointer user)
@@ -126,7 +132,7 @@ namespace
         auto it = a->held.find(e->keyval);
         if (it == a->held.end())
             return FALSE;
-        a->synth.noteOff(it->second);
+        a->synth.key(it->second, false);
         a->held.erase(it);
         return TRUE;
     }
