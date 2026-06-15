@@ -18,6 +18,7 @@ namespace examples
             Color::hex(0xff3b5c), Color::hex(0x00d4ff), Color::hex(0xbf5af2),
             Color::hex(0xffd600), Color::hex(0x00ff88)};
         const char *kPageName[5] = {"HOME", "OSC", "ENV", "FX", "SET"};
+        const uint32_t kFxCol[5] = {0xff3b5c, 0xff9500, 0x00d4ff, 0xffd600, 0x00ff88};
 
         const Color kBg = Color::hex(0x111111);
         const Color kInk = Color::hex(0xffffff);
@@ -503,10 +504,12 @@ namespace arstro { namespace examples {
         // focus highlight fades in/out. Both integrate with the frame delta so velocity is
         // continuous and reversing a drag never snaps.
         KnobAnim &an = mKnobAnim[value];
-        if (!an.init) { an.display = *value; an.highlight = active ? 1.0 : 0.0; an.init = true; }
+        if (!an.init) { an.display = *value; an.highlight = active ? 1.0 : 0.0; an.scale = 1.0; an.init = true; }
         springStep(an.display, an.vel, *value, mDt, 16.0);
         easeStep(an.highlight, active ? 1.0 : 0.0, mDt, 0.09);
+        easeStep(an.scale, active ? 1.06 : 1.0, mDt, 0.10); // focus "attack" — eases bigger when active
         const double hl = an.highlight;
+        r *= an.scale; // every visual dimension scales from the eased focus
 
         double v01 = an.display / max;
         if (v01 < 0) v01 = 0; if (v01 > 1) v01 = 1;
@@ -550,7 +553,7 @@ namespace arstro { namespace examples {
 
     void SynthApp::drawStatusBar(IRenderTarget &t, double frame)
     {
-        const Color color = pageColor(mPage);
+        const Color color = mAccent;
         drawRoundedRect(t, Rect{0, 0, DW, kStatusH}, 0.0, Paint::filled(a(color, 0.06)));
         t.beginPath(); t.moveTo(0, kStatusH); t.lineTo(DW, kStatusH); t.setStroke(a(color, 0.25), 1.0); t.strokePath();
         textAt(t, kPageName[mPage], 12, 16, 9.0, white(0.6));
@@ -587,7 +590,7 @@ namespace arstro { namespace examples {
     // ───────────────────────── pages ─────────────────────────
     void SynthApp::drawHome(IRenderTarget &t, double, double frame)
     {
-        const Color color = pageColor(Home);
+        const Color color = mAccent;
         // left info panel
         const double px = 12;
         t.beginPath(); t.moveTo(150, kStatusH); t.lineTo(150, DH - kNavH); t.setStroke(white(0.07), 1.0); t.strokePath();
@@ -627,7 +630,7 @@ namespace arstro { namespace examples {
 
     void SynthApp::drawOsc(IRenderTarget &t, double, double frame)
     {
-        const Color color = pageColor(Osc);
+        const Color color = mAccent;
         const double vy0 = kStatusH, vy1 = 148; // viz region (leaves room for controls)
         drawRoundedRect(t, Rect{0, vy0, DW, vy1 - vy0}, 0.0, Paint::filled(Color{0, 0, 0, 0.3}));
 
@@ -695,7 +698,7 @@ namespace arstro { namespace examples {
 
     void SynthApp::drawEnv(IRenderTarget &t, double, double frame)
     {
-        const Color color = pageColor(Env);
+        const Color color = mAccent;
         const double vy0 = kStatusH, vy1 = 148;
         drawRoundedRect(t, Rect{0, vy0, DW, vy1 - vy0}, 0.0, Paint::filled(Color{0, 0, 0, 0.3}));
         const double pad = 18, W2 = DW - pad * 2, H2 = (vy1 - vy0) - pad * 2, base = vy0 + pad + H2;
@@ -732,13 +735,12 @@ namespace arstro { namespace examples {
 
     void SynthApp::drawFx(IRenderTarget &t, double, double frame)
     {
-        static const uint32_t fxCol[5] = {0xff3b5c, 0xff9500, 0x00d4ff, 0xffd600, 0x00ff88};
-        const Color color = Color::hex(fxCol[mFxSel]);
+        const Color color = mAccent;
         const double tw = DW / 5;
         // tabs
         for (int i = 0; i < 5; ++i)
         {
-            Color c = Color::hex(fxCol[i]);
+            Color c = Color::hex(kFxCol[i]);
             bool sel = i == mFxSel;
             if (sel) { drawRoundedRect(t, Rect{i * tw, kStatusH, tw, 40}, 0.0, Paint::filled(a(c, 0.10)));
                        drawRoundedRect(t, Rect{i * tw, kStatusH + 38, tw, 2}, 0.0, Paint::filled(c)); }
@@ -792,7 +794,7 @@ namespace arstro { namespace examples {
 
     void SynthApp::drawSet(IRenderTarget &t, double)
     {
-        const Color color = pageColor(Set);
+        const Color color = mAccent;
         struct S { const char *l, *v; };
         static const S items[8] = {{"SR", "48k"}, {"BIT", "24"}, {"BUF", "128"}, {"OVS", "ON"},
                                     {"MID", "USB"}, {"CH", "ALL"}, {"VER", "3.0.0"}, {"CRC", "8472"}};
@@ -828,17 +830,25 @@ namespace arstro { namespace examples {
                 auto it = mKnobAnim.find(knobs[mActiveKnob].value);
                 mOverlayValue = it != mKnobAnim.end() && it->second.init ? it->second.display : *knobs[mActiveKnob].value;
                 mOverlayUnit = knobs[mActiveKnob].unit;
-                mOverlayColor = pageColor(mPage);
+                mOverlayColor = mAccent;
             }
         }
         easeStep(mOverlayAmt, mDrag.active ? 1.0 : 0.0, mDt, 0.08);
+
+        // Ease the accent colour toward the active page / selected-FX colour.
+        const Color accentTarget = mPage == Fx ? Color::hex(kFxCol[mFxSel]) : pageColor(mPage);
+        if (!mAccentInit) { mAccent = accentTarget; mAccentInit = true; }
+        easeStep(mAccent.r, accentTarget.r, mDt, 0.12);
+        easeStep(mAccent.g, accentTarget.g, mDt, 0.12);
+        easeStep(mAccent.b, accentTarget.b, mDt, 0.12);
+        mAccent.a = 1.0;
         // MIDI blink follows held notes / recent activity.
         mBlinkAccum += 1;
         mMidiBlink = !mHeldNotes.empty() && ((int)(nowMs / 120) % 2 == 0);
         const double frame = nowMs * 0.06;
 
         const Transform d = designToScreen();
-        const Color color = pageColor(mPage);
+        const Color color = mAccent;
 
         // background + module border
         target.save();

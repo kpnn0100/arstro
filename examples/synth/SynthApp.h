@@ -92,8 +92,13 @@ namespace examples
         // Per-knob UI animation: a critically-damped spring chases the target value (so the
         // visual eases with smooth, never-jumping velocity even when the drag reverses), plus
         // an eased focus highlight. Keyed by the parameter pointer the knob drives.
-        struct KnobAnim { double display = 0, vel = 0, highlight = 0; bool init = false; };
+        struct KnobAnim { double display = 0, vel = 0, highlight = 0, scale = 1.0; bool init = false; };
         std::unordered_map<const double *, KnobAnim> mKnobAnim;
+
+        // Global accent colour eased toward the current page / selected-FX colour, so colour
+        // changes (page switch, FX tab) glide instead of snapping.
+        artboard::Color mAccent;
+        bool mAccentInit = false;
 
         // Value-overlay (the big centre number) fade in/out.
         double mOverlayAmt = 0.0;
