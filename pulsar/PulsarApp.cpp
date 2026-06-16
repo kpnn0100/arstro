@@ -57,10 +57,10 @@ namespace pulsar
             mOsc[i] = std::make_shared<OscillatorPanel>("OSC" + std::to_string(i + 1), th, accents[i]);
         }
 
-        // The three oscillators sit in one Row; the gap between panels is twice the gap
+        // The three oscillators sit in one Row; the gap between panels equals the gap
         // between sections inside a panel.
         auto rack = std::make_shared<Row>();
-        rack->spacing = 2.0 * OscillatorPanel::kSectionGap;
+        rack->spacing = OscillatorPanel::kSectionGap;
         rack->x.set(16.0);
         rack->y.set(48.0);
         for (auto &o : mOsc)
