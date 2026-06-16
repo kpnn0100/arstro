@@ -160,8 +160,11 @@ namespace pulsar
         drawRoundedRect(t, Rect{0, 0, W, H}, 10.0,
                         Paint::filledStroked(Color::hex(0x14161c), Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.35}, 1.0));
         drawRoundedRect(t, Rect{0, 0, W, 3.0}, 0.0, Paint::filled(mDimAccent));
+        // faux-bold: overdraw with sub-pixel offsets to thicken the strokes (no HAL weight)
         t.setFill(mMuted ? Color{1, 1, 1, 0.3} : mDimAccent);
-        t.drawText(mName, 34.0, 22.0, 15.0);
+        for (double ox : {0.0, 0.6})
+            for (double oy : {0.0, 0.5})
+                t.drawText(mName, 34.0 + ox, 22.0 + oy, 15.0);
 
         // group backgrounds (NOT behind the octave box)
         const Color bg{1, 1, 1, 0.03};
