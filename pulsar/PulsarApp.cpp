@@ -49,24 +49,23 @@ namespace pulsar
         mRoot->width.set(width);
         mRoot->height.set(height);
 
-        // Per-oscillator accent: OSC1 magenta, OSC2 cyan, OSC3 yellow.
-        const Color accents[3] = {Color::hex(0xff4dd2), Color::hex(0x4de2ff), Color::hex(0xffd84d)};
+        // Per-oscillator accent.
+        const Color accents[3] = {Color::hex(0xe32272), Color::hex(0x22e3dd), Color::hex(0xedc61a)};
         for (int i = 0; i < 3; ++i)
         {
             Theme th = makePulsarTheme(accents[i]);
             mOsc[i] = std::make_shared<OscillatorPanel>("OSC" + std::to_string(i + 1), th, accents[i]);
         }
 
-        // OSC1 anchored; OSC2 snaps to OSC1's right edge, OSC3 to OSC2's right edge.
-        mOsc[0]->x.set(16.0);
-        mOsc[0]->y.set(48.0);
-        const double gap = 14.0;
-        mOsc[1]->y.set(48.0);
-        mOsc[2]->y.set(48.0);
-        mOsc[1]->snapTo(mOsc[0].get(), Segment::SnapEdge::Left, Segment::SnapEdge::Right, gap);
-        mOsc[2]->snapTo(mOsc[1].get(), Segment::SnapEdge::Left, Segment::SnapEdge::Right, gap);
+        // The three oscillators sit in one Row; the gap between panels is twice the gap
+        // between sections inside a panel.
+        auto rack = std::make_shared<Row>();
+        rack->spacing = 2.0 * OscillatorPanel::kSectionGap;
+        rack->x.set(16.0);
+        rack->y.set(48.0);
         for (auto &o : mOsc)
-            mRoot->addChild(o);
+            rack->addChild(o);
+        mRoot->addChild(rack);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }

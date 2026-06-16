@@ -15,7 +15,7 @@ namespace pulsar
         // gap, so the vertical and horizontal spacing match by construction.
         constexpr double kMargin = 10.0;
         constexpr double kCellW = 58.0, kCellH = 48.0, kCellGap = 6.0; // within a group
-        constexpr double kG = 9.0;                                     // group gap == row gap (tight)
+        constexpr double kG = OscillatorPanel::kSectionGap;            // group gap == row gap (tight)
         constexpr double kColY = 178.0;                                // nudged up a little
         constexpr double kUnisonW = 3 * kCellW + 2 * kCellGap;         // voice+detune+stereo
         constexpr double kPairW = 2 * kCellW + kCellGap;               // 2-knob group

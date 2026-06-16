@@ -27,6 +27,8 @@ namespace pulsar
     class OscillatorPanel : public artboard::Segment
     {
     public:
+        static constexpr double kSectionGap = 9.0; // gap between sections inside a panel
+
         OscillatorPanel(std::string name, const artboard::Theme &theme, const artboard::Color &accent);
 
         const std::string &name() const { return mName; }
