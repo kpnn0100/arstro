@@ -11,19 +11,23 @@ namespace pulsar
     {
         Color scale(const Color &c, double f) { return Color{c.r * f, c.g * f, c.b * f, 1.0}; }
 
-        // Grid geometry — two rows of four equal cells; everything aligns to this.
+        // Geometry. Each row is two groups; the inter-group gap (G) equals the inter-row
+        // gap, so the vertical and horizontal spacing match by construction.
         constexpr double kMargin = 10.0;
-        constexpr double kCellW = 58.0, kCellH = 54.0, kGap = 6.0;
-        constexpr double kColY = 184.0, kRowGap = 10.0;
-        constexpr double kRow1Y = kColY, kRow2Y = kColY + kCellH + kRowGap;
-        double cellX(int i) { return kMargin + i * (kCellW + kGap); }
+        constexpr double kCellW = 58.0, kCellH = 48.0, kCellGap = 6.0; // within a group
+        constexpr double kG = 18.0;                                    // group gap == row gap
+        constexpr double kColY = 178.0;                                // nudged up a little
+        constexpr double kUnisonW = 3 * kCellW + 2 * kCellGap;         // voice+detune+stereo
+        constexpr double kPairW = 2 * kCellW + kCellGap;               // 2-knob group
+        constexpr double kRow2Y = kColY + kCellH + kG;
     }
 
     OscillatorPanel::OscillatorPanel(std::string name, const Theme &theme, const Color &accent)
         : mName(std::move(name)), mAccent(accent), mDimAccent(accent),
           mBaseKnob(theme.knob), mBaseSlider(theme.slider)
     {
-        const double W = cellX(3) + kCellW + kMargin; // 4 cells + margins
+        const double rowW = kUnisonW + kG + kCellW;   // == kPairW + kG + kPairW (both 244)
+        const double W = kMargin + rowW + kMargin;     // widened to fit the group gap
         const double H = kRow2Y + kCellH + 8.0;
         width.set(W);
         height.set(H);
@@ -73,22 +77,38 @@ namespace pulsar
         mOctaveStepper = makeStepper("oct", -4, 4, 0);
         mOctaveStepper->onChange = [this](int v) { mOctave = v; };
 
-        // Two flat rows of four cells, stacked by a Column whose spacing is the inter-row
-        // offset. Uniform cell widths => the columns line up perfectly across both rows.
-        auto row1 = std::make_shared<Row>(); row1->spacing = kGap;
-        row1->addChild(mVoiceStepper);
-        row1->addChild(makeKnob("detune", 0, 1, 0.2, &mDetune, false));
-        row1->addChild(makeKnob("stereo", 0, 1, 0.0, &mStereo, false));
-        row1->addChild(mOctaveStepper);
+        // A fixed-width container holding leaf controls at local cell positions.
+        auto group = [&](double w, std::vector<std::shared_ptr<Segment>> items) {
+            auto g = std::make_shared<Segment>();
+            g->width.set(w); g->height.set(kCellH);
+            for (size_t i = 0; i < items.size(); ++i)
+            {
+                items[i]->x.set(i * (kCellW + kCellGap));
+                items[i]->y.set(0.0);
+                g->addChild(items[i]);
+            }
+            return g;
+        };
 
-        auto row2 = std::make_shared<Row>(); row2->spacing = kGap;
-        row2->addChild(makeKnob("phase", 0, 1, 0.0, &mPhase, true));
-        row2->addChild(makeKnob("rnd", 0, 1, 0.0, &mRandom, false));
-        row2->addChild(makeKnob("pan", 0, 1, 0.5, &mPan, false));
-        row2->addChild(makeKnob("level", 0, 1, 0.8, &mLevel, false));
+        // Each row = Row(spacing=G) of two groups; both rows stacked by a Column(spacing=G).
+        // Column spacing == Row spacing == kG, so vertical and horizontal gaps match.
+        auto unison = group(kUnisonW, {mVoiceStepper,
+                                       makeKnob("detune", 0, 1, 0.2, &mDetune, false),
+                                       makeKnob("stereo", 0, 1, 0.0, &mStereo, false)});
+        auto row1 = std::make_shared<Row>(); row1->spacing = kG;
+        row1->addChild(unison);
+        row1->addChild(mOctaveStepper); // single box, separated by the group gap
+
+        auto phaseGrp = group(kPairW, {makeKnob("phase", 0, 1, 0.0, &mPhase, true),
+                                       makeKnob("rnd", 0, 1, 0.0, &mRandom, false)});
+        auto outGrp = group(kPairW, {makeKnob("pan", 0, 1, 0.5, &mPan, false),
+                                     makeKnob("level", 0, 1, 0.8, &mLevel, false)});
+        auto row2 = std::make_shared<Row>(); row2->spacing = kG;
+        row2->addChild(phaseGrp);
+        row2->addChild(outGrp);
 
         auto col = std::make_shared<Column>();
-        col->spacing = kRowGap; // the offset between the two rows
+        col->spacing = kG; // inter-row offset == the inter-group gap
         col->x.set(kMargin); col->y.set(kColY);
         col->addChild(row1);
         col->addChild(row2);
@@ -143,13 +163,12 @@ namespace pulsar
         t.setFill(mMuted ? Color{1, 1, 1, 0.3} : mDimAccent);
         t.drawText(mName, 34.0, 22.0, 15.0);
 
-        // group backgrounds (NOT behind the octave box): UNISON {0..2}, PHASE {0..1}, OUTPUT {2..3}
+        // group backgrounds (NOT behind the octave box)
         const Color bg{1, 1, 1, 0.03};
-        const double span2 = 2 * kCellW + kGap + 4.0;  // 2 cells
-        const double span3 = 3 * kCellW + 2 * kGap + 4.0; // 3 cells
-        drawRoundedRect(t, Rect{cellX(0) - 2, kRow1Y - 2, span3, kCellH + 4}, 8.0, Paint::filled(bg)); // UNISON
-        drawRoundedRect(t, Rect{cellX(0) - 2, kRow2Y - 2, span2, kCellH + 4}, 8.0, Paint::filled(bg)); // PHASE
-        drawRoundedRect(t, Rect{cellX(2) - 2, kRow2Y - 2, span2, kCellH + 4}, 8.0, Paint::filled(bg)); // OUTPUT
+        const double outX = kMargin + kPairW + kG; // OUTPUT group left
+        drawRoundedRect(t, Rect{kMargin - 2, kColY - 2, kUnisonW + 4, kCellH + 4}, 8.0, Paint::filled(bg)); // UNISON
+        drawRoundedRect(t, Rect{kMargin - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg)); // PHASE
+        drawRoundedRect(t, Rect{outX - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg));     // OUTPUT
     }
 }
 }
