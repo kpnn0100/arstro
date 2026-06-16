@@ -57,8 +57,7 @@ namespace pulsar
         std::shared_ptr<artboard::Slider> mPosSlider;
         std::shared_ptr<Stepper> mVoiceStepper;
         std::shared_ptr<Stepper> mOctaveStepper;
-        std::shared_ptr<artboard::Row> mUnison, mPhaseGrp, mOutGrp; // layout groups
-        std::vector<std::shared_ptr<artboard::Knob>> mKnobs; // detune, stereo, pan, level, phase, random
+        std::vector<std::shared_ptr<artboard::Knob>> mKnobs; // detune, stereo, phase, random, pan, level
 
         artboard::KnobStyle mBaseKnob;
         artboard::SliderStyle mBaseSlider;

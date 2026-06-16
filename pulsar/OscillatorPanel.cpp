@@ -10,13 +10,21 @@ namespace pulsar
     namespace
     {
         Color scale(const Color &c, double f) { return Color{c.r * f, c.g * f, c.b * f, 1.0}; }
+
+        // Grid geometry — two rows of four equal cells; everything aligns to this.
+        constexpr double kMargin = 10.0;
+        constexpr double kCellW = 58.0, kCellH = 54.0, kGap = 6.0;
+        constexpr double kColY = 184.0, kRowGap = 10.0;
+        constexpr double kRow1Y = kColY, kRow2Y = kColY + kCellH + kRowGap;
+        double cellX(int i) { return kMargin + i * (kCellW + kGap); }
     }
 
     OscillatorPanel::OscillatorPanel(std::string name, const Theme &theme, const Color &accent)
         : mName(std::move(name)), mAccent(accent), mDimAccent(accent),
           mBaseKnob(theme.knob), mBaseSlider(theme.slider)
     {
-        const double W = 300.0, H = 314.0;
+        const double W = cellX(3) + kCellW + kMargin; // 4 cells + margins
+        const double H = kRow2Y + kCellH + 8.0;
         width.set(W);
         height.set(H);
 
@@ -34,7 +42,6 @@ namespace pulsar
         addChild(mDisplay);
         WaveDisplay *disp = mDisplay.get();
 
-        // POSITION timeline slider under the wave
         mPosSlider = std::make_shared<Slider>(mBaseSlider);
         mPosSlider->setValue(mPosition);
         mPosSlider->x.set(10.0); mPosSlider->y.set(160.0);
@@ -46,55 +53,46 @@ namespace pulsar
             k->label = lbl;
             k->setRange(mn, mx);
             k->setValue(init);
-            k->width.set(62.0); k->height.set(54.0);
+            k->width.set(kCellW); k->height.set(kCellH);
             k->onChange = [slot, isPhase, disp](double v) { *slot = v; if (isPhase) disp->setPhase(v); };
             mKnobs.push_back(k);
             return k;
         };
+        auto makeStepper = [&](const char *lbl, int lo, int hi, int init) {
+            auto s = std::make_shared<Stepper>();
+            s->setColor(mAccent);
+            s->setRange(lo, hi);
+            s->setValue(init);
+            s->setLabel(lbl);
+            s->width.set(kCellW); s->height.set(kCellH);
+            return s;
+        };
 
-        // voice stepper (short, 2-digit box)
-        mVoiceStepper = std::make_shared<Stepper>();
-        mVoiceStepper->setColor(mAccent);
-        mVoiceStepper->setRange(1, 16);
-        mVoiceStepper->setValue(1);
-        mVoiceStepper->setLabel("voice");
-        mVoiceStepper->width.set(60.0); mVoiceStepper->height.set(54.0);
+        mVoiceStepper = makeStepper("voice", 1, 16, 1);
         mVoiceStepper->onChange = [this](int v) { mVoice = v; };
-
-        // UNISON group (left of the top row): voice, detune, stereo
-        mUnison = std::make_shared<Row>();
-        mUnison->spacing = 4.0;
-        mUnison->x.set(10.0); mUnison->y.set(188.0);
-        mUnison->addChild(mVoiceStepper);
-        mUnison->addChild(makeKnob("detune", 0, 1, 0.2, &mDetune, false));
-        mUnison->addChild(makeKnob("stereo", 0, 1, 0.0, &mStereo, false));
-        addChild(mUnison);
-
-        // OCTAVE box — separate segment on the right of the top row
-        mOctaveStepper = std::make_shared<Stepper>();
-        mOctaveStepper->setColor(mAccent);
-        mOctaveStepper->setRange(-4, 4);
-        mOctaveStepper->setValue(0);
-        mOctaveStepper->setLabel("oct");
-        mOctaveStepper->width.set(60.0); mOctaveStepper->height.set(54.0);
-        mOctaveStepper->x.set(W - 10.0 - 60.0); mOctaveStepper->y.set(188.0);
+        mOctaveStepper = makeStepper("oct", -4, 4, 0);
         mOctaveStepper->onChange = [this](int v) { mOctave = v; };
-        addChild(mOctaveStepper);
 
-        // bottom row: phase+random (left), pan+level (right)
-        mPhaseGrp = std::make_shared<Row>();
-        mPhaseGrp->spacing = 4.0;
-        mPhaseGrp->x.set(10.0); mPhaseGrp->y.set(250.0);
-        mPhaseGrp->addChild(makeKnob("phase", 0, 1, 0.0, &mPhase, true));
-        mPhaseGrp->addChild(makeKnob("rnd", 0, 1, 0.0, &mRandom, false));
-        addChild(mPhaseGrp);
+        // Two flat rows of four cells, stacked by a Column whose spacing is the inter-row
+        // offset. Uniform cell widths => the columns line up perfectly across both rows.
+        auto row1 = std::make_shared<Row>(); row1->spacing = kGap;
+        row1->addChild(mVoiceStepper);
+        row1->addChild(makeKnob("detune", 0, 1, 0.2, &mDetune, false));
+        row1->addChild(makeKnob("stereo", 0, 1, 0.0, &mStereo, false));
+        row1->addChild(mOctaveStepper);
 
-        mOutGrp = std::make_shared<Row>();
-        mOutGrp->spacing = 4.0;
-        mOutGrp->x.set(W - 10.0 - 128.0); mOutGrp->y.set(250.0);
-        mOutGrp->addChild(makeKnob("pan", 0, 1, 0.5, &mPan, false));
-        mOutGrp->addChild(makeKnob("level", 0, 1, 0.8, &mLevel, false));
-        addChild(mOutGrp);
+        auto row2 = std::make_shared<Row>(); row2->spacing = kGap;
+        row2->addChild(makeKnob("phase", 0, 1, 0.0, &mPhase, true));
+        row2->addChild(makeKnob("rnd", 0, 1, 0.0, &mRandom, false));
+        row2->addChild(makeKnob("pan", 0, 1, 0.5, &mPan, false));
+        row2->addChild(makeKnob("level", 0, 1, 0.8, &mLevel, false));
+
+        auto col = std::make_shared<Column>();
+        col->spacing = kRowGap; // the offset between the two rows
+        col->x.set(kMargin); col->y.set(kColY);
+        col->addChild(row1);
+        col->addChild(row2);
+        addChild(col);
 
         // waveform selector — added LAST so the open drop-down draws on top
         mCombo = std::make_shared<ComboBox>(theme.combo);
@@ -124,7 +122,7 @@ namespace pulsar
         for (auto &k : mKnobs) k->setStyle(ks);
         SliderStyle ss = mBaseSlider;
         ss.rangeFill.paint.fill = mDimAccent;
-        ss.thumb.paint.fill = mDimAccent;   // thumb shares the osc colour
+        ss.thumb.paint.fill = mDimAccent;
         ss.thumb.paint.stroke = mDimAccent;
         mPosSlider->setStyle(ss);
         mVoiceStepper->setColor(mDimAccent);
@@ -145,12 +143,13 @@ namespace pulsar
         t.setFill(mMuted ? Color{1, 1, 1, 0.3} : mDimAccent);
         t.drawText(mName, 34.0, 22.0, 15.0);
 
-        // faint group backgrounds
-        const Rect groups[4] = {
-            {6, 184, 200, 62}, {224, 184, 70, 62}, // UNISON, OCTAVE
-            {6, 246, 136, 62}, {156, 246, 138, 62}}; // PHASE, OUTPUT
-        for (const Rect &g : groups)
-            drawRoundedRect(t, g, 8.0, Paint::filled(Color{1, 1, 1, 0.03}));
+        // group backgrounds (NOT behind the octave box): UNISON {0..2}, PHASE {0..1}, OUTPUT {2..3}
+        const Color bg{1, 1, 1, 0.03};
+        const double span2 = 2 * kCellW + kGap + 4.0;  // 2 cells
+        const double span3 = 3 * kCellW + 2 * kGap + 4.0; // 3 cells
+        drawRoundedRect(t, Rect{cellX(0) - 2, kRow1Y - 2, span3, kCellH + 4}, 8.0, Paint::filled(bg)); // UNISON
+        drawRoundedRect(t, Rect{cellX(0) - 2, kRow2Y - 2, span2, kCellH + 4}, 8.0, Paint::filled(bg)); // PHASE
+        drawRoundedRect(t, Rect{cellX(2) - 2, kRow2Y - 2, span2, kCellH + 4}, 8.0, Paint::filled(bg)); // OUTPUT
     }
 }
 }
