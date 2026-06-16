@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, synth, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, pulsar, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -86,6 +86,13 @@ case "$TARGET" in
         APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/SynthApp.cpp")
         EXTRA_SRC=("${dsp_src[@]}")
         EXTRA_INC=(-I"$DSP/src")
+        ;;
+      pulsar)
+        EXPORT=createPulsarModule; OUTNAME=pulsar
+        APP_DIR="$ROOT/pulsar"
+        APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/PulsarApp.cpp" "$APP_DIR/OscillatorPanel.cpp" "$APP_DIR/WaveDisplay.cpp" "$APP_DIR/MuteButton.cpp" "$APP_DIR/Stepper.cpp")
+        EXTRA_SRC=()
+        EXTRA_INC=()
         ;;
       ui-demo)
         EXPORT=createUiDemoModule; OUTNAME=ui_demo
@@ -173,8 +180,28 @@ case "$TARGET" in
         echo "built $OUTDIR/synth_linux"
         echo "run:   $OUTDIR/synth_linux"
         ;;
+      pulsar)
+        if ! pkg-config --exists gtk+-3.0; then
+          echo "error: gtk+-3.0 development files not found." >&2
+          exit 1
+        fi
+        OUTDIR="$ROOT/pulsar/build"
+        mkdir -p "$OUTDIR"
+        read -r -a PULSAR_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0)"
+        read -r -a PULSAR_LIBS <<< "$(pkg-config --libs gtk+-3.0)"
+        c++ -std=c++17 -O2 \
+          "$ROOT/pulsar/linux_main.cpp" "$ROOT/pulsar/PulsarApp.cpp" \
+          "$ROOT/pulsar/OscillatorPanel.cpp" "$ROOT/pulsar/WaveDisplay.cpp" "$ROOT/pulsar/MuteButton.cpp" "$ROOT/pulsar/Stepper.cpp" \
+          "$AB/src/adapter/native/CairoTarget.cpp" \
+          "${ab_core[@]}" \
+          -I"$AB/src" -I"$AB/include" \
+          "${PULSAR_CFLAGS[@]}" "${PULSAR_LIBS[@]}" \
+          -o "$OUTDIR/pulsar_linux"
+        echo "built $OUTDIR/pulsar_linux"
+        echo "run:   $OUTDIR/pulsar_linux"
+        ;;
       *)
-        echo "linux-native-app currently supports projects 'ui-demo' and 'synth'" >&2
+        echo "linux-native-app currently supports projects 'ui-demo', 'synth' and 'pulsar'" >&2
         exit 1
         ;;
     esac
