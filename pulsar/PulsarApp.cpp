@@ -36,7 +36,7 @@ namespace pulsar
             // POSITION timeline slider
             th.slider.track = {Paint::filledStroked(surface, border, 1.0), 7.0};
             th.slider.rangeFill = {Paint::filled(accent), 7.0};
-            th.slider.thumb = {Paint::filledStroked(bg, accent, 2.0), 999.0};
+            th.slider.thumb = {Paint::filledStroked(accent, accent, 2.0), 999.0}; // thumb = osc colour
             th.slider.thumbRadius = 7.0;
             return th;
         }

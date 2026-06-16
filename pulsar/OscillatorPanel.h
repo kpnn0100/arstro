@@ -48,7 +48,7 @@ namespace pulsar
         // params
         double mPosition = 0.5, mDetune = 0.2, mStereo = 0.0, mPan = 0.5, mLevel = 0.8;
         double mPhase = 0.0, mRandom = 0.0;
-        int mVoice = 1;
+        int mVoice = 1, mOctave = 0;
 
         // controls
         std::shared_ptr<MuteButton> mMute;
@@ -56,6 +56,8 @@ namespace pulsar
         std::shared_ptr<WaveDisplay> mDisplay;
         std::shared_ptr<artboard::Slider> mPosSlider;
         std::shared_ptr<Stepper> mVoiceStepper;
+        std::shared_ptr<Stepper> mOctaveStepper;
+        std::shared_ptr<artboard::Row> mUnison, mPhaseGrp, mOutGrp; // layout groups
         std::vector<std::shared_ptr<artboard::Knob>> mKnobs; // detune, stereo, pan, level, phase, random
 
         artboard::KnobStyle mBaseKnob;

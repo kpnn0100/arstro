@@ -59,9 +59,9 @@ namespace pulsar
         t.beginPath();
         t.moveTo(cx - 4, boxH * 0.5 + 2); t.lineTo(cx + 4, boxH * 0.5 + 2); t.lineTo(cx, boxH * 0.5 + 8); t.closePath();
         t.setFill(Color{mColor.r, mColor.g, mColor.b, 0.85}); t.fillPath();
-        // label below (matches the knobs)
-        t.setFill(Color{1, 1, 1, 0.35});
-        t.drawText(mLabel, w * 0.5 - mLabel.size() * 8.0 * 0.28, height.value() - 1.0, 8.0);
+        // label below — same font + size as the knob labels (muted, 9px)
+        t.setFill(Color::hex(0x8b94a7));
+        t.drawText(mLabel, w * 0.5 - mLabel.size() * 9.0 * 0.28, height.value() - 1.0, 9.0);
     }
 
     bool Stepper::handleGesture(const Gesture &g, const Point &localPoint)
