@@ -17,7 +17,7 @@ namespace pulsar
             const Color border = Color::hex(0x2a3040), ink = Color::hex(0xe6e9ef);
             const Color muted = Color::hex(0x8b94a7), surface = Color::hex(0x222838);
 
-            th.knob.dial = {Paint::filledStroked(bg, border, 2.0), 999.0};
+            th.knob.dial = {Paint::filled(bg), 999.0};
             th.knob.trackColor = surface;
             th.knob.valueColor = accent;
             th.knob.indicatorColor = accent;
