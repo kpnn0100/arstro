@@ -48,6 +48,7 @@ namespace pulsar
 
         mPosSlider = std::make_shared<Slider>(mBaseSlider);
         mPosSlider->setValue(mPosition);
+        mPosSlider->setDefault(mPosition); // double-click recenters the wavetable position
         mPosSlider->x.set(10.0); mPosSlider->y.set(160.0);
         mPosSlider->width.set(W - 20.0); mPosSlider->height.set(16.0);
         addChild(mPosSlider);
@@ -57,6 +58,7 @@ namespace pulsar
             k->label = lbl;
             k->setRange(mn, mx);
             k->setValue(init);
+            k->setDefault(init); // double-click restores this nominal value
             k->width.set(kCellW); k->height.set(kCellH);
             k->onChange = [slot, isPhase, disp](double v) { *slot = v; if (isPhase) disp->setPhase(v); };
             mKnobs.push_back(k);
