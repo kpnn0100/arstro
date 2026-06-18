@@ -24,3 +24,10 @@ examples/synth/web/synth.wasm
 # ui_demo wasm output
 examples/ui_demo/web/ui_demo.js
 examples/ui_demo/web/ui_demo.wasm
+
+# pulsar wasm output
+pulsar/web/pulsar.js
+pulsar/web/pulsar.wasm
+
+# local reference asset
+src.zip
