@@ -12,14 +12,14 @@ namespace pulsar
 
     FilterPanel::FilterPanel(const Theme &theme, const Color &accent) : mAccent(accent)
     {
-        width.set(514.0);
-        height.set(230.0);
+        width.set(261.0);
+        height.set(198.0);
 
         mTypeCombo = std::make_shared<ComboBox>(theme.combo);
         mTypeCombo->setOptions({"LP 12", "LP 24", "BAND", "HIGH", "NOTCH"});
         mTypeCombo->setSelectedIndex(0);
-        mTypeCombo->x.set(14.0); mTypeCombo->y.set(34.0);
-        mTypeCombo->width.set(486.0); mTypeCombo->height.set(24.0);
+        mTypeCombo->x.set(14.0); mTypeCombo->y.set(32.0);
+        mTypeCombo->width.set(233.0); mTypeCombo->height.set(24.0);
         mTypeCombo->onChange = [this](int idx) { mType = idx; };
         addChild(mTypeCombo);
 
@@ -27,18 +27,18 @@ namespace pulsar
             auto k = std::make_shared<Knob>(theme.knob);
             k->label = lbl;
             k->setRange(0.0, 1.0); k->setValue(init); k->setDefault(init);
-            k->x.set(x); k->y.set(172.0);
-            k->width.set(58.0); k->height.set(48.0);
+            k->x.set(x); k->y.set(140.0);
+            k->width.set(54.0); k->height.set(44.0);
             k->onChange = std::move(cb);
             mKnobs.push_back(k);
             addChild(k);
             return k;
         };
-        // 4 knobs centred: (514-250)/2 = 132
-        knob("cutoff", 0.6, [this](double v) { mCutoff = v; }, 132.0);
-        knob("reso", 0.15, [this](double v) { mReso = v; }, 196.0);
-        knob("drive", 0.0, [this](double v) { mDrive = v; }, 260.0);
-        knob("env", 0.3, [this](double v) { mEnv = v; }, 324.0);
+        // 4 compact knobs across: x = 12 + i*58 (54 wide + 4 gap)
+        knob("cutoff", 0.6, [this](double v) { mCutoff = v; }, 12.0);
+        knob("reso", 0.15, [this](double v) { mReso = v; }, 70.0);
+        knob("drive", 0.0, [this](double v) { mDrive = v; }, 128.0);
+        knob("env", 0.3, [this](double v) { mEnv = v; }, 186.0);
     }
 
     // Visual magnitude response (not audio DSP). x and cutoff are log-freq positions
@@ -100,7 +100,7 @@ namespace pulsar
         const double w = width.value(), h = height.value();
         drawPanelChrome(t, w, h, mAccent, "FILTER");
 
-        const double bx = 14.0, by = 64.0, bw = w - 28.0, bh = 100.0;
+        const double bx = 14.0, by = 62.0, bw = w - 28.0, bh = 70.0;
         drawRoundedRect(t, Rect{bx, by, bw, bh}, 6.0,
                         Paint::filledStroked(Color{0, 0, 0, 0.35}, Color{1, 1, 1, 0.08}, 1.0));
         const double x0 = bx + 8, x1 = bx + bw - 8, top = by + 8, bot = by + bh - 8;

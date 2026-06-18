@@ -57,28 +57,25 @@ namespace pulsar
             mOsc[i] = std::make_shared<OscillatorPanel>("OSC" + std::to_string(i + 1), th, accents[i]);
         }
 
-        // The three oscillators sit in one Row; the gap between panels equals the gap
-        // between sections inside a panel.
-        auto rack = std::make_shared<Row>();
-        rack->spacing = OscillatorPanel::kSectionGap;
-        rack->x.set(16.0);
-        rack->y.set(48.0);
-        for (auto &o : mOsc)
-            rack->addChild(o);
-        mRoot->addChild(rack);
-
-        // signal-path row: FILTER + SUB, each tinted with its own accent.
+        // SUB + FILTER stack in a narrow column to the RIGHT of OSC3.
         const Color filterAccent = Color::hex(0x35d0a0); // green
         const Color subAccent = Color::hex(0x8a93ff);    // indigo
-        mFilter = std::make_shared<FilterPanel>(makePulsarTheme(filterAccent), filterAccent);
         mSub = std::make_shared<SubOscPanel>(makePulsarTheme(subAccent), subAccent);
-        auto signalRow = std::make_shared<Row>();
-        signalRow->spacing = OscillatorPanel::kSectionGap;
-        signalRow->x.set(16.0);
-        signalRow->y.set(417.0);
-        signalRow->addChild(mFilter);
-        signalRow->addChild(mSub);
-        mRoot->addChild(signalRow);
+        mFilter = std::make_shared<FilterPanel>(makePulsarTheme(filterAccent), filterAccent);
+        auto sideCol = std::make_shared<Column>();
+        sideCol->spacing = OscillatorPanel::kSectionGap;
+        sideCol->addChild(mSub);
+        sideCol->addChild(mFilter);
+
+        // Top row: OSC1 OSC2 OSC3 then the SUB/FILTER column, all left-to-right.
+        auto topRow = std::make_shared<Row>();
+        topRow->spacing = OscillatorPanel::kSectionGap;
+        topRow->x.set(16.0);
+        topRow->y.set(48.0);
+        for (auto &o : mOsc)
+            topRow->addChild(o);
+        topRow->addChild(sideCol);
+        mRoot->addChild(topRow);
 
         // modulation row: ENV + LFO + MACRO.
         const Color envAccent = Color::hex(0xff8a3d);   // orange
@@ -90,7 +87,7 @@ namespace pulsar
         auto modRow = std::make_shared<Row>();
         modRow->spacing = OscillatorPanel::kSectionGap;
         modRow->x.set(16.0);
-        modRow->y.set(659.0);
+        modRow->y.set(417.0);
         modRow->addChild(mEnv);
         modRow->addChild(mLfo);
         modRow->addChild(mMacro);
