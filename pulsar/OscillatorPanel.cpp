@@ -1,5 +1,6 @@
 #include "OscillatorPanel.h"
 #include <cmath>
+#include <functional>
 
 namespace arstro
 {
@@ -11,23 +12,32 @@ namespace pulsar
     {
         Color scale(const Color &c, double f) { return Color{c.r * f, c.g * f, c.b * f, 1.0}; }
 
-        // Geometry. Each row is two groups; the inter-group gap (G) equals the inter-row
-        // gap, so the vertical and horizontal spacing match by construction.
+        // Geometry. Knobs sit on a grid; the inter-group gap (G) equals the inter-row
+        // gap, so vertical and horizontal spacing match by construction.
         constexpr double kMargin = 10.0;
         constexpr double kCellW = 58.0, kCellH = 48.0, kCellGap = 6.0; // within a group
         constexpr double kG = OscillatorPanel::kSectionGap;            // group gap == row gap (tight)
-        constexpr double kColY = 178.0;                                // nudged up a little
-        constexpr double kUnisonW = 3 * kCellW + 2 * kCellGap;         // voice+detune+stereo
+        constexpr double kUnisonW = 4 * kCellW + 3 * kCellGap;         // voice+detune+blend+stereo
         constexpr double kPairW = 2 * kCellW + kCellGap;               // 2-knob group
+        // vertical stack under the title
+        constexpr double kComboY = 34.0, kComboH = 26.0;               // wavetable shape
+        constexpr double kScapeY = 64.0, kScapeH = 120.0;              // 3D wavetable scape
+        constexpr double kSliderY = 190.0, kSliderH = 16.0;            // POSITION timeline
+        constexpr double kWarpY = 212.0, kWarpH = 24.0;                // WARP-mode selector
+        constexpr double kColY = 244.0;                                // top of the knob grid
         constexpr double kRow2Y = kColY + kCellH + kG;
+        // group-background x positions on row 2 (warp | phase | output)
+        constexpr double kWarpX = kMargin;
+        constexpr double kPhaseX = kMargin + kCellW + kG;
+        constexpr double kOutX = kPhaseX + kPairW + kG;
     }
 
     OscillatorPanel::OscillatorPanel(std::string name, const Theme &theme, const Color &accent)
         : mName(std::move(name)), mAccent(accent), mDimAccent(accent),
           mBaseKnob(theme.knob), mBaseSlider(theme.slider)
     {
-        const double rowW = kUnisonW + kG + kCellW;   // == kPairW + kG + kPairW (both 244)
-        const double W = kMargin + rowW + kMargin;     // widened to fit the group gap
+        const double rowW = kCellW + kG + kPairW + kG + kPairW; // row2 (warp|phase|output) is the widest
+        const double W = kMargin + rowW + kMargin;
         const double H = kRow2Y + kCellH + 8.0;
         width.set(W);
         height.set(H);
@@ -39,8 +49,8 @@ namespace pulsar
         addChild(mMute);
 
         mDisplay = std::make_shared<WaveDisplay>();
-        mDisplay->x.set(10.0); mDisplay->y.set(64.0);
-        mDisplay->width.set(W - 20.0); mDisplay->height.set(92.0);
+        mDisplay->x.set(10.0); mDisplay->y.set(kScapeY);
+        mDisplay->width.set(W - 20.0); mDisplay->height.set(kScapeH);
         mDisplay->setColor(mAccent);
         mDisplay->setShape(WaveDisplay::Morph3D);
         addChild(mDisplay);
@@ -49,18 +59,19 @@ namespace pulsar
         mPosSlider = std::make_shared<Slider>(mBaseSlider);
         mPosSlider->setValue(mPosition);
         mPosSlider->setDefault(mPosition); // double-click recenters the wavetable position
-        mPosSlider->x.set(10.0); mPosSlider->y.set(160.0);
-        mPosSlider->width.set(W - 20.0); mPosSlider->height.set(16.0);
+        mPosSlider->x.set(10.0); mPosSlider->y.set(kSliderY);
+        mPosSlider->width.set(W - 20.0); mPosSlider->height.set(kSliderH);
         addChild(mPosSlider);
 
-        auto makeKnob = [&](const char *lbl, double mn, double mx, double init, double *slot, bool isPhase) {
+        // A knob with an explicit onChange (handles the cross-wiring to the display).
+        auto makeKnob = [&](const char *lbl, double init, std::function<void(double)> cb) {
             auto k = std::make_shared<Knob>(mBaseKnob);
             k->label = lbl;
-            k->setRange(mn, mx);
+            k->setRange(0.0, 1.0);
             k->setValue(init);
             k->setDefault(init); // double-click restores this nominal value
             k->width.set(kCellW); k->height.set(kCellH);
-            k->onChange = [slot, isPhase, disp](double v) { *slot = v; if (isPhase) disp->setPhase(v); };
+            k->onChange = std::move(cb);
             mKnobs.push_back(k);
             return k;
         };
@@ -75,7 +86,7 @@ namespace pulsar
         };
 
         mVoiceStepper = makeStepper("voice", 1, 16, 1);
-        mVoiceStepper->onChange = [this](int v) { mVoice = v; };
+        mVoiceStepper->onChange = [this](int v) { mVoice = v; syncUnison(); };
         mOctaveStepper = makeStepper("oct", -4, 4, 0);
         mOctaveStepper->onChange = [this](int v) { mOctave = v; };
 
@@ -92,20 +103,23 @@ namespace pulsar
             return g;
         };
 
-        // Each row = Row(spacing=G) of two groups; both rows stacked by a Column(spacing=G).
-        // Column spacing == Row spacing == kG, so vertical and horizontal gaps match.
+        // row 1: UNISON {voice, detune, blend, stereo} | OCTAVE
         auto unison = group(kUnisonW, {mVoiceStepper,
-                                       makeKnob("detune", 0, 1, 0.2, &mDetune, false),
-                                       makeKnob("stereo", 0, 1, 0.0, &mStereo, false)});
+                                       makeKnob("detune", 0.2, [this](double v) { mDetune = v; syncUnison(); }),
+                                       makeKnob("blend", 0.5, [this](double v) { mBlend = v; syncUnison(); }),
+                                       makeKnob("stereo", 0.0, [this](double v) { mStereo = v; })});
         auto row1 = std::make_shared<Row>(); row1->spacing = kG;
         row1->addChild(unison);
-        row1->addChild(mOctaveStepper); // single box, separated by the group gap
+        row1->addChild(mOctaveStepper);
 
-        auto phaseGrp = group(kPairW, {makeKnob("phase", 0, 1, 0.0, &mPhase, true),
-                                       makeKnob("rnd", 0, 1, 0.0, &mRandom, false)});
-        auto outGrp = group(kPairW, {makeKnob("pan", 0, 1, 0.5, &mPan, false),
-                                     makeKnob("level", 0, 1, 0.8, &mLevel, false)});
+        // row 2: WARP {warp} | PHASE {phase, rnd} | OUTPUT {pan, level}
+        auto warpGrp = group(kCellW, {makeKnob("warp", 0.0, [this, disp](double v) { mWarpAmt = v; disp->setWarpAmount(v); })});
+        auto phaseGrp = group(kPairW, {makeKnob("phase", 0.0, [this, disp](double v) { mPhase = v; disp->setPhase(v); }),
+                                       makeKnob("rnd", 0.0, [this](double v) { mRandom = v; })});
+        auto outGrp = group(kPairW, {makeKnob("pan", 0.5, [this](double v) { mPan = v; }),
+                                     makeKnob("level", 0.8, [this](double v) { mLevel = v; })});
         auto row2 = std::make_shared<Row>(); row2->spacing = kG;
+        row2->addChild(warpGrp);
         row2->addChild(phaseGrp);
         row2->addChild(outGrp);
 
@@ -116,14 +130,29 @@ namespace pulsar
         col->addChild(row2);
         addChild(col);
 
-        // waveform selector — added LAST so the open drop-down draws on top
+        syncUnison();
+
+        // selectors — added LAST so the open drop-downs draw on top of everything
+        mWarpCombo = std::make_shared<ComboBox>(theme.combo);
+        mWarpCombo->setOptions({"WARP: OFF", "SYNC", "BEND", "PWM", "MIRROR"});
+        mWarpCombo->setSelectedIndex(WaveDisplay::WarpOff);
+        mWarpCombo->x.set(10.0); mWarpCombo->y.set(kWarpY);
+        mWarpCombo->width.set(W - 20.0); mWarpCombo->height.set(kWarpH);
+        mWarpCombo->onChange = [disp](int idx) { if (disp) disp->setWarp(idx); };
+        addChild(mWarpCombo);
+
         mCombo = std::make_shared<ComboBox>(theme.combo);
         mCombo->setOptions({"SINE", "TRI", "SAW", "SQUARE", "3D"});
         mCombo->setSelectedIndex(WaveDisplay::Morph3D);
-        mCombo->x.set(10.0); mCombo->y.set(34.0);
-        mCombo->width.set(W - 20.0); mCombo->height.set(26.0);
+        mCombo->x.set(10.0); mCombo->y.set(kComboY);
+        mCombo->width.set(W - 20.0); mCombo->height.set(kComboH);
         mCombo->onChange = [disp](int idx) { if (disp) disp->setShape(idx); };
         addChild(mCombo);
+    }
+
+    void OscillatorPanel::syncUnison()
+    {
+        if (mDisplay) mDisplay->setUnison(mVoice, mDetune, mBlend);
     }
 
     void OscillatorPanel::advance(double nowMs)
@@ -162,6 +191,15 @@ namespace pulsar
         drawRoundedRect(t, Rect{0, 0, W, H}, 10.0,
                         Paint::filledStroked(Color::hex(0x14161c), Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.35}, 1.0));
         drawRoundedRect(t, Rect{0, 0, W, 3.0}, 0.0, Paint::filled(mDimAccent));
+
+        // header sheen: a vertical accent glow fading down from under the top stripe
+        t.beginPath();
+        t.moveTo(1, 3); t.lineTo(W - 1, 3); t.lineTo(W - 1, 38); t.lineTo(1, 38); t.closePath();
+        t.setLinearFill(0, 3, 0, 38,
+                        Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.13},
+                        Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.0});
+        t.fillPath();
+
         // faux-bold: overdraw with sub-pixel offsets to thicken the strokes (no HAL weight)
         t.setFill(mMuted ? Color{1, 1, 1, 0.3} : mDimAccent);
         for (double ox : {0.0, 0.6})
@@ -170,10 +208,10 @@ namespace pulsar
 
         // group backgrounds (NOT behind the octave box)
         const Color bg{1, 1, 1, 0.03};
-        const double outX = kMargin + kPairW + kG; // OUTPUT group left
         drawRoundedRect(t, Rect{kMargin - 2, kColY - 2, kUnisonW + 4, kCellH + 4}, 8.0, Paint::filled(bg)); // UNISON
-        drawRoundedRect(t, Rect{kMargin - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg)); // PHASE
-        drawRoundedRect(t, Rect{outX - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg));     // OUTPUT
+        drawRoundedRect(t, Rect{kWarpX - 2, kRow2Y - 2, kCellW + 4, kCellH + 4}, 8.0, Paint::filled(bg));   // WARP
+        drawRoundedRect(t, Rect{kPhaseX - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg));  // PHASE
+        drawRoundedRect(t, Rect{kOutX - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg));    // OUTPUT
     }
 }
 }
