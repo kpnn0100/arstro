@@ -129,19 +129,25 @@ namespace pulsar
         mKeyboard->x.set(16.0); mKeyboard->y.set(693.0);
         mKeyboard->width.set(width - 32.0); mKeyboard->height.set(84.0);
         LfoPanel *lfo = mLfo.get();
-        mKeyboard->onGate = [lfo](bool on) { lfo->setGate(on); };
+        EnvPanel *env = mEnv.get();
+        mKeyboard->onGate = [lfo, env](bool on) { lfo->setGate(on); env->setGate(on); };
         mRoot->addChild(mKeyboard);
 
         // modulation: every knob reads the shared bus; dropping a source badge on a
         // knob routes that source to it (Serum-style).
         wireModBus(mRoot.get(), &mBus);
         Segment *root = mRoot.get();
-        auto assign = [root](int sourceId, const Color &color, const Point &world) {
-            if (Knob *k = knobAt(root, world))
-                k->addModulation(sourceId, color, 0.25, /*bipolar=*/sourceId < 100); // LFO ±, macro +
+        const int envId = mEnv->sourceId();
+        auto assign = [root, envId](int sourceId, const Color &color, const Point &world) {
+            if (Knob *k = knobAt(root, world)) // LFO bipolar; macro/env unipolar
+                k->addModulation(sourceId, color, sourceId == envId ? 1.0 : 0.25, /*bipolar=*/sourceId < 100);
         };
         mLfo->setAssignSink(assign);
         mMacro->setAssignSink(assign);
+        mEnv->setAssignSink(assign);
+
+        // default routing: the amp envelope drives the GAIN (relinkable via its badge).
+        mGain->gainKnob()->addModulation(mEnv->sourceId(), mEnv->accent(), 1.0, /*bipolar=*/false);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
@@ -166,6 +172,7 @@ namespace pulsar
             mBus.set(mLfo->sourceId(i), mLfo->output(i));
         for (int i = 0; i < mMacro->count(); ++i)
             mBus.set(mMacro->sourceId(i), mMacro->value(i));
+        mBus.set(mEnv->sourceId(), mEnv->output());
 
         // background + title
         target.save();

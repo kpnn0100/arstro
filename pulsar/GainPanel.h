@@ -27,7 +27,7 @@ namespace pulsar
 
     private:
         artboard::Color mAccent;
-        double mGainVal = 0.8, mPanVal = 0.5;
+        double mGainVal = 0.0, mPanVal = 0.5; // gain base 0: the amp envelope drives it
         std::shared_ptr<artboard::Knob> mGain;
         std::shared_ptr<artboard::Knob> mPan;
     };
