@@ -1,14 +1,16 @@
 /*
- *  Pulsar by arstro — LfoPanel: a low-frequency modulator. A shape selector
- *  (sine / tri / saw / square / sample-&-hold), a rate and a depth knob, and a
- *  live display that shows two cycles of the shape with a playhead dot cycling at
- *  the rate — so you can see the modulation moving. The depth scales the drawn
- *  amplitude. The shape morphs smoothly when switched.
+ *  Pulsar by arstro — LfoPanel: three LFOs selectable by tab (LFO 1/2/3). Each
+ *  LFO owns an editable bezier curve (its shape, drawn AE-keyframe style), a rate
+ *  and a depth. There is no fixed-shape selector — the curve IS the shape. A
+ *  playhead tracks the phase, and an LFO only advances while a note is gated
+ *  (retriggered on note-on); rate sets the cycle speed.
  *
  *  Reserved for later: tempo sync and routing into the mod matrix.
  */
 #pragma once
 #include "../Artboard/include/artboard/artboard.h"
+#include "LfoCurve.h"
+#include <array>
 #include <memory>
 
 namespace arstro
@@ -21,21 +23,21 @@ namespace pulsar
         LfoPanel(const artboard::Theme &theme, const artboard::Color &accent);
         void advance(double nowMs) override;
 
+        void setGate(bool on); // note-on retriggers all LFO phases; off freezes them
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
 
     private:
-        double lfoSample(double p01) const; // morphed LFO shape at normalized phase
-
+        static constexpr int kCount = 3;
         artboard::Color mAccent;
-        double mShapeTarget = 0.0, mShapeDisp = 0.0, mShapeVel = 0.0; // 0..4
-        double mRate = 0.4, mDepth = 0.8;
-        double mPhase = 0.0; // playhead, advances at the rate
+        std::array<std::shared_ptr<LfoCurve>, kCount> mCurves;
+        std::array<double, kCount> mPhase{{0, 0, 0}};
+        std::array<double, kCount> mRate{{0.4, 0.4, 0.4}};
+        bool mGate = false;
         double mLastMs = -1.0;
 
-        std::shared_ptr<artboard::ComboBox> mShape;
-        std::shared_ptr<artboard::Knob> mRateKnob;
-        std::shared_ptr<artboard::Knob> mDepthKnob;
+        std::shared_ptr<artboard::TabView> mTabs;
     };
 }
 }

@@ -93,6 +93,14 @@ namespace pulsar
         modRow->addChild(mMacro);
         mRoot->addChild(modRow);
 
+        // on-screen keyboard along the bottom — gates the LFOs (note-only motion).
+        mKeyboard = std::make_shared<Keyboard>(mTitleColor);
+        mKeyboard->x.set(16.0); mKeyboard->y.set(693.0);
+        mKeyboard->width.set(width - 32.0); mKeyboard->height.set(84.0);
+        LfoPanel *lfo = mLfo.get();
+        mKeyboard->onGate = [lfo](bool on) { lfo->setGate(on); };
+        mRoot->addChild(mKeyboard);
+
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
 

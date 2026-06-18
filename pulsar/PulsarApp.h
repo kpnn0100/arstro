@@ -15,6 +15,7 @@
 #include "EnvPanel.h"
 #include "LfoPanel.h"
 #include "MacroPanel.h"
+#include "Keyboard.h"
 #include <array>
 #include <memory>
 
@@ -40,6 +41,7 @@ namespace pulsar
         std::shared_ptr<EnvPanel> mEnv;
         std::shared_ptr<LfoPanel> mLfo;
         std::shared_ptr<MacroPanel> mMacro;
+        std::shared_ptr<Keyboard> mKeyboard;
         artboard::GestureRecognizer mRecognizer;
     };
 }

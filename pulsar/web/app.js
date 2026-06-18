@@ -5,7 +5,7 @@
 "use strict";
 
 let M = null, t0 = null;
-const W = 1340, H = 680;
+const W = 1340, H = 800;
 const canvas = document.getElementById("c");
 window.__abctx = canvas.getContext("2d");
 const setStatus = (s) => (document.getElementById("status").textContent = s);
