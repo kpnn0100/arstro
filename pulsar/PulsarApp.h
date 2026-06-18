@@ -12,6 +12,9 @@
 #include "OscillatorPanel.h"
 #include "SubOscPanel.h"
 #include "FilterPanel.h"
+#include "EnvPanel.h"
+#include "LfoPanel.h"
+#include "MacroPanel.h"
 #include <array>
 #include <memory>
 
@@ -34,6 +37,9 @@ namespace pulsar
         std::array<std::shared_ptr<OscillatorPanel>, 3> mOsc;
         std::shared_ptr<FilterPanel> mFilter;
         std::shared_ptr<SubOscPanel> mSub;
+        std::shared_ptr<EnvPanel> mEnv;
+        std::shared_ptr<LfoPanel> mLfo;
+        std::shared_ptr<MacroPanel> mMacro;
         artboard::GestureRecognizer mRecognizer;
     };
 }

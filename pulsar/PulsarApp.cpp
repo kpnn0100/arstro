@@ -80,6 +80,22 @@ namespace pulsar
         signalRow->addChild(mSub);
         mRoot->addChild(signalRow);
 
+        // modulation row: ENV + LFO + MACRO.
+        const Color envAccent = Color::hex(0xff8a3d);   // orange
+        const Color lfoAccent = Color::hex(0xb46bff);   // purple
+        const Color macroAccent = Color::hex(0xffcf3d); // yellow
+        mEnv = std::make_shared<EnvPanel>(makePulsarTheme(envAccent), envAccent, "ENV");
+        mLfo = std::make_shared<LfoPanel>(makePulsarTheme(lfoAccent), lfoAccent);
+        mMacro = std::make_shared<MacroPanel>(makePulsarTheme(macroAccent), macroAccent);
+        auto modRow = std::make_shared<Row>();
+        modRow->spacing = OscillatorPanel::kSectionGap;
+        modRow->x.set(16.0);
+        modRow->y.set(659.0);
+        modRow->addChild(mEnv);
+        modRow->addChild(mLfo);
+        modRow->addChild(mMacro);
+        mRoot->addChild(modRow);
+
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
 
