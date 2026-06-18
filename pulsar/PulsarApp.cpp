@@ -10,6 +10,33 @@ namespace pulsar
     {
         const Color kBg = Color::hex(0x0a0c11);
 
+        // Give every Knob in the tree access to the shared modulation bus.
+        void wireModBus(Segment *s, const ModBus *bus)
+        {
+            if (auto *k = dynamic_cast<Knob *>(s)) k->setModBus(bus);
+            for (const auto &c : s->children()) wireModBus(c.get(), bus);
+        }
+        int countMods(Segment *s)
+        {
+            int n = 0;
+            if (auto *k = dynamic_cast<Knob *>(s)) n += (int)k->modulations().size();
+            for (const auto &c : s->children()) n += countMods(c.get());
+            return n;
+        }
+        // Topmost visible Knob under a world point (deepest child first).
+        Knob *knobAt(Segment *s, const Point &world)
+        {
+            const auto &ch = s->children();
+            for (auto it = ch.rbegin(); it != ch.rend(); ++it)
+            {
+                Segment *c = it->get();
+                if (!c->visible || !c->hitTest(world)) continue;
+                if (Knob *deeper = knobAt(c, world)) return deeper;
+                if (Knob *k = dynamic_cast<Knob *>(c)) return k;
+            }
+            return nullptr;
+        }
+
         Theme makePulsarTheme(const Color &accent)
         {
             Theme th = Theme::basicTheme();
@@ -101,6 +128,16 @@ namespace pulsar
         mKeyboard->onGate = [lfo](bool on) { lfo->setGate(on); };
         mRoot->addChild(mKeyboard);
 
+        // modulation: every knob reads the shared bus; dropping a source badge on a
+        // knob routes that source to it (Serum-style).
+        wireModBus(mRoot.get(), &mBus);
+        Segment *root = mRoot.get();
+        auto assign = [root](int sourceId, const Color &color, const Point &world) {
+            if (Knob *k = knobAt(root, world)) k->addModulation(sourceId, color);
+        };
+        mLfo->setAssignSink(assign);
+        mMacro->setAssignSink(assign);
+
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
 
@@ -113,9 +150,17 @@ namespace pulsar
         mRecognizer.feed(RawPointer{k, Point{x, y}, b, timeMs});
     }
 
+    int PulsarApp::modCount() const { return countMods(mRoot.get()); }
+
     void PulsarApp::render(IRenderTarget &target, double nowMs)
     {
         mRoot->advance(nowMs); // resolves the snap chain (OSC3 -> OSC2 -> OSC1)
+
+        // publish live modulation-source values so the knob rings track them this frame
+        for (int i = 0; i < mLfo->count(); ++i)
+            mBus.set(mLfo->sourceId(i), mLfo->output(i));
+        for (int i = 0; i < mMacro->count(); ++i)
+            mBus.set(mMacro->sourceId(i), mMacro->value(i));
 
         // background + title
         target.save();

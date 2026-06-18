@@ -31,6 +31,8 @@ namespace pulsar
         void render(artboard::IRenderTarget &target, double nowMs);
         void pointer(int kind, double x, double y, int button, double timeMs);
 
+        int modCount() const; // total modulation routings across all knobs (inspection)
+
     private:
         double mW, mH;
         artboard::Color mTitleColor;
@@ -42,6 +44,7 @@ namespace pulsar
         std::shared_ptr<LfoPanel> mLfo;
         std::shared_ptr<MacroPanel> mMacro;
         std::shared_ptr<Keyboard> mKeyboard;
+        artboard::ModBus mBus; // live modulation-source values read by the knobs
         artboard::GestureRecognizer mRecognizer;
     };
 }

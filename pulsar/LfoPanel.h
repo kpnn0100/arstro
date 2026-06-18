@@ -10,7 +10,9 @@
 #pragma once
 #include "../Artboard/include/artboard/artboard.h"
 #include "LfoCurve.h"
+#include "ModSourceBadge.h"
 #include <array>
+#include <functional>
 #include <memory>
 
 namespace arstro
@@ -25,6 +27,11 @@ namespace pulsar
 
         void setGate(bool on); // note-on retriggers all LFO phases; off freezes them
 
+        int count() const { return kCount; }
+        int sourceId(int i) const { return i; }             // bus id for LFO i
+        double output(int i) const;                         // current LFO value (0 when un-gated)
+        void setAssignSink(std::function<void(int, const artboard::Color &, const artboard::Point &)> fn);
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
 
@@ -32,6 +39,7 @@ namespace pulsar
         static constexpr int kCount = 3;
         artboard::Color mAccent;
         std::array<std::shared_ptr<LfoCurve>, kCount> mCurves;
+        std::array<std::shared_ptr<ModSourceBadge>, kCount> mBadges;
         std::array<double, kCount> mPhase{{0, 0, 0}};
         std::array<double, kCount> mRate{{0.4, 0.4, 0.4}};
         bool mGate = false;

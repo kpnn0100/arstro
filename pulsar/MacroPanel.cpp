@@ -24,7 +24,17 @@ namespace pulsar
             k->onChange = [this, idx](double v) { mMacro[idx] = v; };
             mKnobs[i] = k;
             addChild(k);
+
+            auto badge = std::make_shared<ModSourceBadge>(sourceId(i), accent, labels[i]);
+            badge->x.set(45.0 + i * 64.0 + 6.0); badge->y.set(70.0);
+            mBadges[i] = badge;
+            addChild(badge);
         }
+    }
+
+    void MacroPanel::setAssignSink(std::function<void(int, const Color &, const Point &)> fn)
+    {
+        for (auto &b : mBadges) b->onAssign = fn;
     }
 
     void MacroPanel::onPaint(IRenderTarget &t) const

@@ -46,9 +46,24 @@ namespace pulsar
             depth->width.set(58.0); depth->height.set(48.0);
             page->addChild(depth);
 
+            auto badge = std::make_shared<ModSourceBadge>(sourceId(i), accent, "LFO");
+            badge->x.set(280.0); badge->y.set(2.0);
+            page->addChild(badge);
+            mBadges[i] = badge;
+
             mTabs->addPage(std::to_string(i + 1), page);
         }
         addChild(mTabs);
+    }
+
+    double LfoPanel::output(int i) const
+    {
+        return mGate ? mCurves[i]->valueAt(mPhase[i]) : 0.0;
+    }
+
+    void LfoPanel::setAssignSink(std::function<void(int, const Color &, const Point &)> fn)
+    {
+        for (auto &b : mBadges) b->onAssign = fn;
     }
 
     void LfoPanel::setGate(bool on)
