@@ -49,7 +49,7 @@ namespace pulsar
         double mLastMs = -1.0;
 
         // params
-        double mPosition = 0.5, mDetune = 0.2, mStereo = 0.0, mPan = 0.5, mLevel = 0.8;
+        double mPosition = 0.0, mDetune = 0.2, mStereo = 0.0, mPan = 0.5, mLevel = 0.8;
         double mPhase = 0.0, mRandom = 0.0, mBlend = 0.5, mWarpAmt = 0.0;
         int mVoice = 1, mOctave = 0;
 

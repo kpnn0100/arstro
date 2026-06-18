@@ -12,6 +12,7 @@
 #include "OscillatorPanel.h"
 #include "SubOscPanel.h"
 #include "FilterPanel.h"
+#include "GainPanel.h"
 #include "EnvPanel.h"
 #include "LfoPanel.h"
 #include "MacroPanel.h"
@@ -37,9 +38,10 @@ namespace pulsar
         double mW, mH;
         artboard::Color mTitleColor;
         std::shared_ptr<artboard::Segment> mRoot;
-        std::array<std::shared_ptr<OscillatorPanel>, 3> mOsc;
+        std::array<std::shared_ptr<OscillatorPanel>, 2> mOsc;
         std::shared_ptr<FilterPanel> mFilter;
         std::shared_ptr<SubOscPanel> mSub;
+        std::shared_ptr<GainPanel> mGain;
         std::shared_ptr<EnvPanel> mEnv;
         std::shared_ptr<LfoPanel> mLfo;
         std::shared_ptr<MacroPanel> mMacro;

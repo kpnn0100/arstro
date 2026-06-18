@@ -76,25 +76,28 @@ namespace pulsar
         mRoot->width.set(width);
         mRoot->height.set(height);
 
-        // Per-oscillator accent.
-        const Color accents[3] = {Color::hex(0xe32272), Color::hex(0x22e3dd), Color::hex(0xedc61a)};
-        for (int i = 0; i < 3; ++i)
+        // Two oscillators, each its own accent.
+        const Color accents[2] = {Color::hex(0xe32272), Color::hex(0x22e3dd)};
+        for (int i = 0; i < 2; ++i)
         {
             Theme th = makePulsarTheme(accents[i]);
             mOsc[i] = std::make_shared<OscillatorPanel>("OSC" + std::to_string(i + 1), th, accents[i]);
         }
 
-        // SUB + FILTER stack in a narrow column to the RIGHT of OSC3.
+        // SUB + FILTER stack in a narrow column right of the oscillators, then a
+        // GAIN output column (per-note gain + pan).
         const Color filterAccent = Color::hex(0x35d0a0); // green
         const Color subAccent = Color::hex(0x8a93ff);    // indigo
+        const Color gainAccent = Color::hex(0x4de2ff);   // cyan
         mSub = std::make_shared<SubOscPanel>(makePulsarTheme(subAccent), subAccent);
         mFilter = std::make_shared<FilterPanel>(makePulsarTheme(filterAccent), filterAccent);
+        mGain = std::make_shared<GainPanel>(makePulsarTheme(gainAccent), gainAccent);
         auto sideCol = std::make_shared<Column>();
         sideCol->spacing = OscillatorPanel::kSectionGap;
         sideCol->addChild(mSub);
         sideCol->addChild(mFilter);
 
-        // Top row: OSC1 OSC2 OSC3 then the SUB/FILTER column, all left-to-right.
+        // Top row: OSC1 OSC2, the SUB/FILTER column, then GAIN — left-to-right.
         auto topRow = std::make_shared<Row>();
         topRow->spacing = OscillatorPanel::kSectionGap;
         topRow->x.set(16.0);
@@ -102,6 +105,7 @@ namespace pulsar
         for (auto &o : mOsc)
             topRow->addChild(o);
         topRow->addChild(sideCol);
+        topRow->addChild(mGain);
         mRoot->addChild(topRow);
 
         // modulation row: ENV + LFO + MACRO.
@@ -154,7 +158,7 @@ namespace pulsar
 
     void PulsarApp::render(IRenderTarget &target, double nowMs)
     {
-        mRoot->advance(nowMs); // resolves the snap chain (OSC3 -> OSC2 -> OSC1)
+        mRoot->advance(nowMs); // lays out the rows + ticks every animation
 
         // publish live modulation-source values so the knob rings track them this frame
         for (int i = 0; i < mLfo->count(); ++i)

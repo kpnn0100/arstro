@@ -28,10 +28,12 @@ namespace pulsar
         int mShape = 0;
         double mLevel = 0.5;
         int mOctave = -1;
+        bool mOn = true; // power toggle; off dims the panel + disables controls
 
         std::shared_ptr<artboard::ComboBox> mWave;
         std::shared_ptr<Stepper> mOctaveStepper;
         std::shared_ptr<artboard::Knob> mLevelKnob;
+        std::shared_ptr<artboard::ToggleSwitch> mPower;
     };
 }
 }

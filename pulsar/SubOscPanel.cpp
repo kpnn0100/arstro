@@ -39,11 +39,23 @@ namespace pulsar
         mLevelKnob->width.set(58.0); mLevelKnob->height.set(48.0);
         mLevelKnob->onChange = [this](double v) { mLevel = v; };
         addChild(mLevelKnob);
+
+        // power toggle (top-right): off dims the panel and disables its controls
+        mPower = std::make_shared<ToggleSwitch>(theme.toggle);
+        mPower->setOn(true);
+        mPower->x.set(width.value() - 50.0); mPower->y.set(7.0);
+        mPower->width.set(36.0); mPower->height.set(18.0);
+        mPower->onChange = [this](bool on) {
+            mOn = on;
+            mWave->enabled = on; mOctaveStepper->enabled = on; mLevelKnob->enabled = on;
+        };
+        addChild(mPower);
     }
 
     void SubOscPanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mAccent, "SUB");
+        const Color a = mOn ? mAccent : Color{mAccent.r * 0.4, mAccent.g * 0.4, mAccent.b * 0.4, 1.0};
+        drawPanelChrome(t, width.value(), height.value(), a, "SUB");
     }
 }
 }

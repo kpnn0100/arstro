@@ -52,7 +52,6 @@ namespace pulsar
         mDisplay->x.set(10.0); mDisplay->y.set(kScapeY);
         mDisplay->width.set(W - 20.0); mDisplay->height.set(kScapeH);
         mDisplay->setColor(mAccent);
-        mDisplay->setShape(WaveDisplay::Morph3D);
         addChild(mDisplay);
         WaveDisplay *disp = mDisplay.get();
 
@@ -141,12 +140,15 @@ namespace pulsar
         mWarpCombo->onChange = [disp](int idx) { if (disp) disp->setWarp(idx); };
         addChild(mWarpCombo);
 
+        // wavetable shape selector — snaps the POSITION slider to a morph stop
+        // (the slider remains the source of truth, fed to the display each frame).
         mCombo = std::make_shared<ComboBox>(theme.combo);
-        mCombo->setOptions({"SINE", "TRI", "SAW", "SQUARE", "3D"});
-        mCombo->setSelectedIndex(WaveDisplay::Morph3D);
+        mCombo->setOptions({"SINE", "TRI", "SAW", "SQUARE"});
+        mCombo->setSelectedIndex(0);
         mCombo->x.set(10.0); mCombo->y.set(kComboY);
         mCombo->width.set(W - 20.0); mCombo->height.set(kComboH);
-        mCombo->onChange = [disp](int idx) { if (disp) disp->setShape(idx); };
+        Slider *slider = mPosSlider.get();
+        mCombo->onChange = [slider](int idx) { slider->setValue(idx / 3.0); };
         addChild(mCombo);
     }
 
