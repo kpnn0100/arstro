@@ -22,6 +22,8 @@ namespace pulsar
         // (sourceId, colour, world drop point) — the app resolves the target knob.
         std::function<void(int, const artboard::Color &, const artboard::Point &)> onAssign;
 
+        void setSourceId(int id) { mSourceId = id; } // follow the selected source (e.g. LFO tab)
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;

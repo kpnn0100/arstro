@@ -137,7 +137,8 @@ namespace pulsar
         wireModBus(mRoot.get(), &mBus);
         Segment *root = mRoot.get();
         auto assign = [root](int sourceId, const Color &color, const Point &world) {
-            if (Knob *k = knobAt(root, world)) k->addModulation(sourceId, color);
+            if (Knob *k = knobAt(root, world))
+                k->addModulation(sourceId, color, 0.25, /*bipolar=*/sourceId < 100); // LFO ±, macro +
         };
         mLfo->setAssignSink(assign);
         mMacro->setAssignSink(assign);
