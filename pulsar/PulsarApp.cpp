@@ -67,6 +67,19 @@ namespace pulsar
             rack->addChild(o);
         mRoot->addChild(rack);
 
+        // signal-path row: FILTER + SUB, each tinted with its own accent.
+        const Color filterAccent = Color::hex(0x35d0a0); // green
+        const Color subAccent = Color::hex(0x8a93ff);    // indigo
+        mFilter = std::make_shared<FilterPanel>(makePulsarTheme(filterAccent), filterAccent);
+        mSub = std::make_shared<SubOscPanel>(makePulsarTheme(subAccent), subAccent);
+        auto signalRow = std::make_shared<Row>();
+        signalRow->spacing = OscillatorPanel::kSectionGap;
+        signalRow->x.set(16.0);
+        signalRow->y.set(417.0);
+        signalRow->addChild(mFilter);
+        signalRow->addChild(mSub);
+        mRoot->addChild(signalRow);
+
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
 

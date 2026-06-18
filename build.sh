@@ -90,7 +90,7 @@ case "$TARGET" in
       pulsar)
         EXPORT=createPulsarModule; OUTNAME=pulsar
         APP_DIR="$ROOT/pulsar"
-        APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/PulsarApp.cpp" "$APP_DIR/OscillatorPanel.cpp" "$APP_DIR/WaveDisplay.cpp" "$APP_DIR/MuteButton.cpp" "$APP_DIR/Stepper.cpp")
+        APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/PulsarApp.cpp" "$APP_DIR/OscillatorPanel.cpp" "$APP_DIR/WaveDisplay.cpp" "$APP_DIR/MuteButton.cpp" "$APP_DIR/Stepper.cpp" "$APP_DIR/Chrome.cpp" "$APP_DIR/SubOscPanel.cpp" "$APP_DIR/FilterPanel.cpp")
         EXTRA_SRC=()
         EXTRA_INC=()
         ;;
@@ -192,6 +192,7 @@ case "$TARGET" in
         c++ -std=c++17 -O2 \
           "$ROOT/pulsar/linux_main.cpp" "$ROOT/pulsar/PulsarApp.cpp" \
           "$ROOT/pulsar/OscillatorPanel.cpp" "$ROOT/pulsar/WaveDisplay.cpp" "$ROOT/pulsar/MuteButton.cpp" "$ROOT/pulsar/Stepper.cpp" \
+          "$ROOT/pulsar/Chrome.cpp" "$ROOT/pulsar/SubOscPanel.cpp" "$ROOT/pulsar/FilterPanel.cpp" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" \
           -I"$AB/src" -I"$AB/include" \

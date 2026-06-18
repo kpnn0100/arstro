@@ -10,7 +10,7 @@ using arstro::pulsar::PulsarApp;
 
 namespace
 {
-    constexpr int kW = 1080, kH = 470;
+    constexpr int kW = 1080, kH = 900;
 
     struct App
     {

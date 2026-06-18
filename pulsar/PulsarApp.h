@@ -10,6 +10,8 @@
 #pragma once
 #include "../Artboard/include/artboard/artboard.h"
 #include "OscillatorPanel.h"
+#include "SubOscPanel.h"
+#include "FilterPanel.h"
 #include <array>
 #include <memory>
 
@@ -30,6 +32,8 @@ namespace pulsar
         artboard::Color mTitleColor;
         std::shared_ptr<artboard::Segment> mRoot;
         std::array<std::shared_ptr<OscillatorPanel>, 3> mOsc;
+        std::shared_ptr<FilterPanel> mFilter;
+        std::shared_ptr<SubOscPanel> mSub;
         artboard::GestureRecognizer mRecognizer;
     };
 }
