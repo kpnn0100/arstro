@@ -18,6 +18,8 @@
 #include "panels/HistogramPanel.h"
 #include "panels/ColorMixerPanel.h"
 #include "panels/ToneCurvePanel.h"
+#include "panels/ColorGradingPanel.h"
+#include "panels/TransformPanel.h"
 #include "widgets/Filmstrip.h"
 #include <array>
 #include <cstdint>
@@ -54,6 +56,12 @@ namespace cosmo
             std::array<std::array<double, 3>, 8> mixer{};
             std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
             bool curveLog = true;
+            std::array<std::array<double, 3>, 3> grade{};
+            double balance = 0;
+            bool remapOn = false;
+            double remapSrc = 0, remapRange = 30, remapDst = 0, remapStrength = 0;
+            double rotation = 0; int quarter = 0;
+            double cropX = 0, cropY = 0, cropW = 1, cropH = 1;
         };
 
         void rebuildPreview();
@@ -75,6 +83,8 @@ namespace cosmo
         std::shared_ptr<ParamPanel> mEffects;
         std::shared_ptr<ColorMixerPanel> mMixer;
         std::shared_ptr<ToneCurvePanel> mCurve;
+        std::shared_ptr<ColorGradingPanel> mGrade;
+        std::shared_ptr<TransformPanel> mXform;
         std::shared_ptr<Filmstrip> mFilmstrip;
 
         artboard::Theme mTheme;

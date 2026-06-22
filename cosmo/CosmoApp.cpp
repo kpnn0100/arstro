@@ -119,6 +119,47 @@ namespace cosmo
             if (auto *p = curUi()) { p->curveLog = on; mEngine.setCurveLogScale(on); markDirty(); }
         };
 
+        mGrade = std::make_shared<ColorGradingPanel>(mTheme, mAccent);
+        mGrade->onGrade = [this](int r, double h, double s, double l) {
+            if (auto *p = curUi())
+            {
+                mEngine.setGradeHue((EditEngine::GradeRegion)r, (float)h);
+                mEngine.setGradeSaturation((EditEngine::GradeRegion)r, (float)s);
+                mEngine.setGradeLuminance((EditEngine::GradeRegion)r, (float)l);
+                p->grade[r] = {h, s, l};
+                markDirty();
+            }
+        };
+        mGrade->onBalance = [this](double v) {
+            if (auto *p = curUi()) { p->balance = v; mEngine.setGradeBalance((float)v); markDirty(); }
+        };
+        mGrade->onRemap = [this](bool on, double src, double range, double dst, double strength) {
+            if (auto *p = curUi())
+            {
+                p->remapOn = on; p->remapSrc = src; p->remapRange = range; p->remapDst = dst;
+                p->remapStrength = strength * 100.0;
+                mEngine.setHueRemapEnabled(on);
+                mEngine.setHueRemap((float)src, (float)range, (float)dst, (float)strength);
+                markDirty();
+            }
+        };
+
+        mXform = std::make_shared<TransformPanel>(mTheme, mAccent);
+        mXform->onRotate = [this](double v) {
+            if (auto *p = curUi()) { p->rotation = v; mEngine.setRotation((float)v); markDirty(); }
+        };
+        mXform->onQuarterTurns = [this](int i) {
+            if (auto *p = curUi()) { p->quarter = i; mEngine.setQuarterTurns(i); markDirty(); }
+        };
+        mXform->onCrop = [this](double x, double y, double w, double h) {
+            if (auto *p = curUi())
+            {
+                p->cropX = x; p->cropY = y; p->cropW = w; p->cropH = h;
+                mEngine.setCrop((float)x, (float)y, (float)w, (float)h);
+                markDirty();
+            }
+        };
+
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->x.set(rightX);
         mTabs->y.set(photoY + kHistH + 10.0);
@@ -129,6 +170,8 @@ namespace cosmo
         mTabs->addPage("FX", mEffects);
         mTabs->addPage("Mixer", mMixer);
         mTabs->addPage("Curve", mCurve);
+        mTabs->addPage("Grade", mGrade);
+        mTabs->addPage("Xform", mXform);
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
@@ -175,6 +218,17 @@ namespace cosmo
         mMixer->setValues(p.mixer);
         mCurve->setCurve(p.curve);
         mCurve->setLog(p.curveLog);
+
+        ColorGradingPanel::State gs;
+        gs.grade = p.grade; gs.balance = p.balance; gs.remapOn = p.remapOn;
+        gs.remapSrc = p.remapSrc; gs.remapRange = p.remapRange;
+        gs.remapDst = p.remapDst; gs.remapStrength = p.remapStrength;
+        mGrade->setState(gs);
+
+        TransformPanel::State ts;
+        ts.rotation = p.rotation; ts.quarter = p.quarter;
+        ts.cropX = p.cropX; ts.cropY = p.cropY; ts.cropW = p.cropW; ts.cropH = p.cropH;
+        mXform->setState(ts);
     }
 
     void CosmoApp::rebuildPreview()
