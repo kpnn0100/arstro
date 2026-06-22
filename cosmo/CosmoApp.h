@@ -6,8 +6,9 @@
  *  Strict layering: the UI only pushes parameters into the EditEngine and displays
  *  its output (preview image + histogram). It never touches pixels directly.
  *
- *  M3 scope: open multiple images, display the photo, live histogram (log/linear),
- *  and the Basic panel (exposure/contrast). More panels/processors arrive in M4.
+ *  Right column: an always-visible histogram (log/linear) above a TabView of edit
+ *  sections — Light (basic tone), Color (WB + presence), FX (dehaze/grain), Mixer
+ *  (HSL). Curve/Grade/Transform sections arrive with their custom widgets.
  */
 #pragma once
 #include "../Artboard/include/artboard/artboard.h"
@@ -15,7 +16,9 @@
 #include "CosmoTheme.h"
 #include "panels/ParamPanel.h"
 #include "panels/HistogramPanel.h"
+#include "panels/ColorMixerPanel.h"
 #include "widgets/Filmstrip.h"
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -39,11 +42,20 @@ namespace cosmo
         int imageCount() const { return mEngine.imageCount(); }
 
     private:
-        struct UiParams { double exposure = 0.0; double contrast = 0.0; };
+        // The UI's mirror of each image's parameters (knob positions), restored on
+        // slot switch — the engine keeps its own per-slot state for the pipeline.
+        struct UiParams
+        {
+            double exposure = 0, contrast = 0, highlights = 0, shadows = 0, whites = 0, blacks = 0;
+            double temp = 6500, tint = 0, vibrance = 0, saturation = 0;
+            double dehaze = 0, grainAmount = 0, grainSize = 0;
+            std::array<std::array<double, 3>, 8> mixer{};
+        };
 
         void rebuildPreview();
         void markDirty() { mDirty = true; }
         void syncControlsToSlot();
+        UiParams *curUi();
 
         double mW, mH;
         artboard::Rect mPhotoRect;
@@ -53,7 +65,11 @@ namespace cosmo
         std::shared_ptr<artboard::Segment> mRoot;
         std::shared_ptr<artboard::ImageView> mImageView;
         std::shared_ptr<HistogramPanel> mHistogram;
+        std::shared_ptr<artboard::TabView> mTabs;
         std::shared_ptr<ParamPanel> mBasic;
+        std::shared_ptr<ParamPanel> mColor;
+        std::shared_ptr<ParamPanel> mEffects;
+        std::shared_ptr<ColorMixerPanel> mMixer;
         std::shared_ptr<Filmstrip> mFilmstrip;
 
         artboard::Theme mTheme;

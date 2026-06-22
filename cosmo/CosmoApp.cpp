@@ -30,14 +30,12 @@ namespace cosmo
                 {
                     const int x0 = (int)((double)x * w / tw);
                     int x1 = (int)((double)(x + 1) * w / tw); if (x1 <= x0) x1 = x0 + 1;
-                    long acc[4] = {0, 0, 0, 0};
-                    int n = 0;
+                    long acc[4] = {0, 0, 0, 0}; int n = 0;
                     for (int sy = y0; sy < y1; ++sy)
                         for (int sx = x0; sx < x1; ++sx)
                         {
                             const uint8_t *p = rgba + ((size_t)sy * w + sx) * 4;
-                            acc[0] += p[0]; acc[1] += p[1]; acc[2] += p[2]; acc[3] += p[3];
-                            ++n;
+                            acc[0] += p[0]; acc[1] += p[1]; acc[2] += p[2]; acc[3] += p[3]; ++n;
                         }
                     uint8_t *d = out.data() + ((size_t)y * tw + x) * 4;
                     for (int c = 0; c < 4; ++c) d[c] = (uint8_t)(acc[c] / (n > 0 ? n : 1));
@@ -45,6 +43,12 @@ namespace cosmo
             }
             return out;
         }
+    }
+
+    CosmoApp::UiParams *CosmoApp::curUi()
+    {
+        const int s = mEngine.currentSlot();
+        return s >= 0 ? &mSlotParams[s] : nullptr;
     }
 
     CosmoApp::CosmoApp(double width, double height)
@@ -59,7 +63,6 @@ namespace cosmo
         const double photoY = kTopBar + 8.0;
         mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, filmY - photoY - 8.0};
 
-        // center photo
         mImageView = std::make_shared<ImageView>();
         mImageView->x.set(mPhotoRect.x);
         mImageView->y.set(mPhotoRect.y);
@@ -67,28 +70,58 @@ namespace cosmo
         mImageView->height.set(mPhotoRect.h);
         mRoot->addChild(mImageView);
 
-        // right column: histogram + basic panel
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mHistogram->x.set(rightX);
         mHistogram->y.set(photoY);
         mRoot->addChild(mHistogram);
 
-        std::vector<ParamPanel::Spec> basic = {
-            {"exposure", -5.0, 5.0, 0.0, [this](double v) {
-                 const int s = mEngine.currentSlot(); if (s < 0) return;
-                 mEngine.setExposure((float)v); mSlotParams[s].exposure = v; markDirty();
-             }},
-            {"contrast", -100.0, 100.0, 0.0, [this](double v) {
-                 const int s = mEngine.currentSlot(); if (s < 0) return;
-                 mEngine.setContrast((float)v); mSlotParams[s].contrast = v; markDirty();
-             }},
+        // ── edit sections (each pushes params straight into the engine) ──
+        using Spec = ParamPanel::Spec;
+        std::vector<Spec> basic = {
+            {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curUi()) { p->exposure = v; mEngine.setExposure((float)v); markDirty(); } }},
+            {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->contrast = v; mEngine.setContrast((float)v); markDirty(); } }},
+            {"highlight", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
+            {"shadow", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
+            {"white", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
+            {"black", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
+        };
+        std::vector<Spec> color = {
+            {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curUi()) { p->temp = v; mEngine.setTemperature((float)v); markDirty(); } }},
+            {"tint", -150, 150, 0, [this](double v) { if (auto *p = curUi()) { p->tint = v; mEngine.setTint((float)v); markDirty(); } }},
+            {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->vibrance = v; mEngine.setVibrance((float)v); markDirty(); } }},
+            {"sat", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
+        };
+        std::vector<Spec> fx = {
+            {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->dehaze = v; mEngine.setDehaze((float)v); markDirty(); } }},
+            {"grain", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainAmount = v; mEngine.setGrainAmount((float)v); markDirty(); } }},
+            {"grain sz", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
         };
         mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic, 3);
-        mBasic->x.set(rightX);
-        mBasic->y.set(photoY + kHistH + 10.0);
-        mRoot->addChild(mBasic);
+        mColor = std::make_shared<ParamPanel>("COLOR", mTheme, mAccent, color, 2);
+        mEffects = std::make_shared<ParamPanel>("EFFECTS", mTheme, mAccent, fx, 3);
+        mMixer = std::make_shared<ColorMixerPanel>(mTheme, mAccent);
+        mMixer->onChange = [this](int b, double h, double s, double l) {
+            if (auto *p = curUi())
+            {
+                mEngine.setBandHue((EditEngine::HslBand)b, (float)h);
+                mEngine.setBandSaturation((EditEngine::HslBand)b, (float)s);
+                mEngine.setBandLuminance((EditEngine::HslBand)b, (float)l);
+                p->mixer[b] = {h, s, l};
+                markDirty();
+            }
+        };
 
-        // bottom filmstrip
+        mTabs = std::make_shared<TabView>(mTheme.tab);
+        mTabs->x.set(rightX);
+        mTabs->y.set(photoY + kHistH + 10.0);
+        mTabs->width.set(kRightW);
+        mTabs->height.set((filmY - 8.0) - (photoY + kHistH + 10.0));
+        mTabs->addPage("Light", mBasic);
+        mTabs->addPage("Color", mColor);
+        mTabs->addPage("FX", mEffects);
+        mTabs->addPage("Mixer", mMixer);
+        mRoot->addChild(mTabs);
+
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
         mFilmstrip->x.set(kMargin);
         mFilmstrip->y.set(filmY);
@@ -96,9 +129,7 @@ namespace cosmo
         mFilmstrip->onSelect = [this](int i) { selectImage(i); };
         mRoot->addChild(mFilmstrip);
 
-        // interactive preview at roughly screen resolution
         mEngine.setPreviewSize((int)(mPhotoRect.w > mPhotoRect.h ? mPhotoRect.w : mPhotoRect.h));
-
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
 
@@ -108,12 +139,10 @@ namespace cosmo
         if (slot < 0) return -1;
         mSlotParams.push_back(UiParams{});
         mSlotNames.push_back(name);
-
         int tw = 0, th = 0;
         std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
         mFilmstrip->addThumb(thumb.data(), tw, th);
-
-        selectImage(slot);  // show the newly opened image
+        selectImage(slot);
         return slot;
     }
 
@@ -130,7 +159,11 @@ namespace cosmo
     {
         const int s = mEngine.currentSlot();
         if (s < 0) return;
-        mBasic->setValues({mSlotParams[s].exposure, mSlotParams[s].contrast});
+        const UiParams &p = mSlotParams[s];
+        mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks});
+        mColor->setValues({p.temp, p.tint, p.vibrance, p.saturation});
+        mEffects->setValues({p.dehaze, p.grainAmount, p.grainSize});
+        mMixer->setValues(p.mixer);
     }
 
     void CosmoApp::rebuildPreview()
@@ -163,14 +196,11 @@ namespace cosmo
         target.save();
         target.setTransform(Transform::identity());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::bg()));
-
-        // title
         target.setFill(mAccent);
         target.drawText("COSMO", 18.0, 34.0, 22.0);
         target.setFill(Color{1, 1, 1, 0.35});
         target.drawText("by arstro", 104.0, 34.0, 12.0);
 
-        // status / hint
         target.setFill(palette::muted());
         if (mEngine.hasImage())
         {
@@ -183,7 +213,6 @@ namespace cosmo
         {
             target.drawText("Open an image — press O (native) or use the file picker (web)",
                             190.0, 34.0, 12.0);
-            // placeholder frame in the photo area
             drawRoundedRect(target, mPhotoRect, 10.0,
                             Paint::filledStroked(Color::hex(0x101218), Color::hex(0x2a3040), 1.0));
         }
