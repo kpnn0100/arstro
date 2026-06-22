@@ -1,0 +1,144 @@
+@startuml arstro_image_architecture
+'  Arstro ImageProcessing Library — architecture (the image-domain mirror of the
+'  DSP library). This diagram is the design surface: keep it in sync with the code.
+'  M1 implements Exposure + Contrast; later tone/color/effect/transform processors
+'  slot into their reserved positions in the EditEngine pipeline.
+title Arstro ImageProcessing — Class Architecture (M1)
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+' ─────────────────────────── Foundation ───────────────────────────
+package base {
+  class ImageConfig <<singleton>> {
+    + {static} instance() : ImageConfig&
+    + workingSpace() : ColorSpace
+    + maxPreviewEdge() : int
+    + clampToUnit() : bool
+    + setWorkingSpace(ColorSpace)
+  }
+
+  class Image {
+    + width()/height()/channels() : int
+    + pixelCount() : size_t
+    + space() : ColorSpace
+    + at(x,y,c) : Pixel
+    + sampleBilinear(x,y,c) : Pixel
+    + clone() / resizeLike(other)
+  }
+
+  abstract class ImageProcessor {
+    + apply(in : Image, out : Image)
+    + {abstract} process(in : Image, out : Image)
+    + update()
+    + setProperty(id, value)
+    + getProperty(id) : Pixel
+    + setBypass(b) / isBypassed()
+    # mParams : ParameterSet
+  }
+
+  abstract class PointProcessor {
+    + process(in, out)  ' shared per-pixel loop
+    # {abstract} processPixel(in*, out*, channels)
+  }
+
+  class ImageSource {
+    + {abstract} generate() : Image
+    + process(in, out)  ' = generate()
+  }
+
+  class ImageBlock {
+    + add(p) / remove(p) / clear()
+    + process(in, out)  ' runs the ordered chain
+  }
+
+  class SmoothedParameter {
+    + last / target / current : Pixel
+    + setTarget(v) / beginRamp() / interpolate(r) / snap()
+  }
+  class ParameterSet {
+    + resize(n) / init(id,v) / setTarget(id,v) / snap(id)
+    + interpolate(r) / snapAll()
+  }
+
+  ImageProcessor o-- ParameterSet
+  ParameterSet o-- SmoothedParameter
+  PointProcessor --|> ImageProcessor
+  ImageSource --|> ImageProcessor
+  ImageBlock --|> ImageProcessor
+}
+
+package color {
+  class ColorSpace_fns <<functions>> {
+    + srgbEncode(Pixel) : Pixel
+    + srgbDecode(Pixel) : Pixel
+    + encodeInPlace(Image&) / decodeInPlace(Image&)
+    + luminance(r,g,b) : Pixel
+  }
+}
+
+' ─────────────────────────── Sources ───────────────────────────
+package source {
+  class SolidImageSource
+  class FileImageSource {
+    + setEncodedBytes(bytes, w, h, ch)
+    + generate() : Image
+  }
+  SolidImageSource --|> ImageSource
+  FileImageSource --|> ImageSource
+}
+
+' ─────────────────────────── Processors ───────────────────────────
+package tone {
+  class Exposure {
+    + setExposureEv(ev)
+    ' gain = 2^EV (linear)
+  }
+  class Contrast {
+    + setContrast(amount)
+    ' slope around 0.18 pivot
+  }
+  Exposure --|> PointProcessor
+  Contrast --|> PointProcessor
+}
+
+' ─────────────────────────── Analysis / Video / Engine ───────────────────────────
+package analysis {
+  class Histogram <<sink>> {
+    + {static} compute(Image) : HistogramData
+    + {static} toLog(...) / toLinear(...)
+  }
+  class HistogramData {
+    + r/g/b/lum : uint32[256]
+    + maxCount : uint32
+  }
+}
+
+package video {
+  class VideoProcessor {
+    + setProcessor(p)
+    + processFrame(Image) : Image
+    + enableSmoothing(b) / reset()
+  }
+  VideoProcessor o-- ImageProcessor
+}
+
+package engine {
+  class EditEngine <<facade>> {
+    + addImage(rgba, w, h, ch) : int
+    + selectImage(slot)
+    + setExposure(ev) / setContrast(v)
+    + setBypass(b) / resetAll()
+    + setPreviewSize(maxEdge)
+    + renderPreview() : PreviewBuffer
+    + renderFull() : PreviewBuffer
+    + histogram() : HistogramData
+  }
+  EditEngine *-- ImageBlock
+  EditEngine *-- Exposure
+  EditEngine *-- Contrast
+  EditEngine ..> Histogram
+}
+
+@enduml

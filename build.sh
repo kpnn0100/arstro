@@ -25,7 +25,7 @@ done
 
 HOST_OS=$(uname -s); HOST_ARCH=$(uname -m)
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-DSP="$ROOT/DigitalSignalProcessing"; AB="$ROOT/Artboard"
+DSP="$ROOT/DigitalSignalProcessing"; AB="$ROOT/Artboard"; IP="$ROOT/ImageProcessing"
 echo "host: ${HOST_OS}/${HOST_ARCH}   project: ${PROJECT}   target: ${TARGET}"
 
 dsp_src=()
@@ -114,7 +114,7 @@ case "$TARGET" in
     echo "run:   (cd '$OUT' && python3 -m http.server 8000)   then open http://localhost:8000"
     ;;
   native-test)
-    for repo in "$DSP" "$AB"; do
+    for repo in "$DSP" "$AB" "$IP"; do
       echo "== $repo =="
       cmake -S "$repo" -B "$repo/build" >/dev/null
       cmake --build "$repo/build" -j >/dev/null
