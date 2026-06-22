@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, synth, pulsar, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -37,6 +37,12 @@ ab_core=()
 while IFS= read -r -d '' file; do
   ab_core+=("$file")
 done < <(find "$AB/src/core" "$AB/src/anim" "$AB/src/render" "$AB/src/scene" "$AB/src/input" "$AB/src/ui" -name '*.cpp' -print0)
+
+# ImageProcessing engine core (platform-free / WASM-friendly — no codecs).
+ip_src=()
+while IFS= read -r -d '' file; do
+  ip_src+=("$file")
+done < <(find "$IP/src" -name '*.cpp' -print0)
 
 case "$TARGET" in
   linux-web-server)
@@ -94,6 +100,17 @@ case "$TARGET" in
         EXTRA_SRC=()
         EXTRA_INC=()
         ;;
+      cosmo)
+        # Lightroom-style photo editor: Artboard UI + the ImageProcessing engine.
+        # Web has no GdkPixbuf/LibRaw — the browser decodes (decode/ is native-only).
+        EXPORT=createCosmoModule; OUTNAME=cosmo
+        APP_DIR="$ROOT/cosmo"
+        APP_SRC=("$APP_DIR/web_main.cpp")
+        while IFS= read -r -d '' f; do APP_SRC+=("$f"); done < <(find "$APP_DIR" -name '*.cpp' \
+          ! -name 'web_main.cpp' ! -name 'linux_main.cpp' ! -path '*/decode/*' -print0)
+        EXTRA_SRC=("${ip_src[@]}")
+        EXTRA_INC=(-I"$IP/src")
+        ;;
       ui-demo)
         EXPORT=createUiDemoModule; OUTNAME=ui_demo
         APP_DIR="$ROOT/examples/ui_demo"
@@ -108,7 +125,7 @@ case "$TARGET" in
       "${APP_SRC[@]}" "$AB/src/adapter/web/Canvas2DTarget.cpp" "${ab_core[@]}" "${EXTRA_SRC[@]}" \
       -I"$AB/src" -I"$AB/include" "${EXTRA_INC[@]}" \
       -sMODULARIZE=1 -sEXPORT_NAME=$EXPORT \
-      -sEXPORTED_RUNTIME_METHODS=HEAPF32 -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web \
+      -sEXPORTED_RUNTIME_METHODS=HEAPF32,HEAPU8 -sALLOW_MEMORY_GROWTH=1 -sENVIRONMENT=web \
       -o "$OUT/$OUTNAME.js"
     echo "built $OUT/$OUTNAME.js + $OUTNAME.wasm"
     echo "run:   (cd '$OUT' && python3 -m http.server 8000)   then open http://localhost:8000"
@@ -202,8 +219,41 @@ case "$TARGET" in
         echo "built $OUTDIR/pulsar_linux"
         echo "run:   $OUTDIR/pulsar_linux"
         ;;
+      cosmo)
+        if ! pkg-config --exists gtk+-3.0; then
+          echo "error: gtk+-3.0 development files not found." >&2
+          exit 1
+        fi
+        OUTDIR="$ROOT/cosmo/build"
+        mkdir -p "$OUTDIR"
+        read -r -a COSMO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0)"
+        read -r -a COSMO_LIBS <<< "$(pkg-config --libs gtk+-3.0)"
+        # RAW decoding is optional: enabled only if LibRaw is installed.
+        RAW_DEF=""; RAW_CFLAGS=(); RAW_LIBS=()
+        if pkg-config --exists libraw; then
+          RAW_DEF="-DCOSMO_HAVE_LIBRAW"
+          read -r -a RAW_CFLAGS <<< "$(pkg-config --cflags libraw)"
+          read -r -a RAW_LIBS <<< "$(pkg-config --libs libraw)"
+          echo "cosmo: RAW enabled (LibRaw)"
+        else
+          echo "cosmo: RAW disabled (LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only"
+        fi
+        # All cosmo .cpp except the web entry (decode/ is native and included here).
+        cosmo_src=()
+        while IFS= read -r -d '' f; do cosmo_src+=("$f"); done \
+          < <(find "$ROOT/cosmo" -name '*.cpp' ! -name 'web_main.cpp' -print0)
+        c++ -std=c++17 -O2 $RAW_DEF \
+          "${cosmo_src[@]}" \
+          "$AB/src/adapter/native/CairoTarget.cpp" \
+          "${ab_core[@]}" "${ip_src[@]}" \
+          -I"$AB/src" -I"$AB/include" -I"$IP/src" \
+          "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" \
+          -o "$OUTDIR/cosmo_linux"
+        echo "built $OUTDIR/cosmo_linux"
+        echo "run:   $OUTDIR/cosmo_linux [image files...]   (press O to open more)"
+        ;;
       *)
-        echo "linux-native-app currently supports projects 'ui-demo', 'synth' and 'pulsar'" >&2
+        echo "linux-native-app currently supports projects 'ui-demo', 'synth', 'pulsar' and 'cosmo'" >&2
         exit 1
         ;;
     esac
