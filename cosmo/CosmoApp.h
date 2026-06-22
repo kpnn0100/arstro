@@ -17,11 +17,13 @@
 #include "panels/ParamPanel.h"
 #include "panels/HistogramPanel.h"
 #include "panels/ColorMixerPanel.h"
+#include "panels/ToneCurvePanel.h"
 #include "widgets/Filmstrip.h"
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace arstro
@@ -50,6 +52,8 @@ namespace cosmo
             double temp = 6500, tint = 0, vibrance = 0, saturation = 0;
             double dehaze = 0, grainAmount = 0, grainSize = 0;
             std::array<std::array<double, 3>, 8> mixer{};
+            std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
+            bool curveLog = true;
         };
 
         void rebuildPreview();
@@ -70,6 +74,7 @@ namespace cosmo
         std::shared_ptr<ParamPanel> mColor;
         std::shared_ptr<ParamPanel> mEffects;
         std::shared_ptr<ColorMixerPanel> mMixer;
+        std::shared_ptr<ToneCurvePanel> mCurve;
         std::shared_ptr<Filmstrip> mFilmstrip;
 
         artboard::Theme mTheme;

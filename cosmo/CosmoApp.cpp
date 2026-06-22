@@ -111,6 +111,14 @@ namespace cosmo
             }
         };
 
+        mCurve = std::make_shared<ToneCurvePanel>(mTheme, mAccent);
+        mCurve->onCurveChange = [this](const std::vector<std::pair<float, float>> &pts) {
+            if (auto *p = curUi()) { p->curve = pts; mEngine.setCurvePoints(pts); markDirty(); }
+        };
+        mCurve->onLogChange = [this](bool on) {
+            if (auto *p = curUi()) { p->curveLog = on; mEngine.setCurveLogScale(on); markDirty(); }
+        };
+
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->x.set(rightX);
         mTabs->y.set(photoY + kHistH + 10.0);
@@ -120,6 +128,7 @@ namespace cosmo
         mTabs->addPage("Color", mColor);
         mTabs->addPage("FX", mEffects);
         mTabs->addPage("Mixer", mMixer);
+        mTabs->addPage("Curve", mCurve);
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
@@ -164,6 +173,8 @@ namespace cosmo
         mColor->setValues({p.temp, p.tint, p.vibrance, p.saturation});
         mEffects->setValues({p.dehaze, p.grainAmount, p.grainSize});
         mMixer->setValues(p.mixer);
+        mCurve->setCurve(p.curve);
+        mCurve->setLog(p.curveLog);
     }
 
     void CosmoApp::rebuildPreview()
