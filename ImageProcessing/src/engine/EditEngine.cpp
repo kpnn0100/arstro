@@ -4,20 +4,26 @@
 
 namespace arstro
 {
-    EditEngine::EditEngine()
-    {
-        buildPipeline();
-    }
+    EditEngine::EditEngine() { buildPipeline(); }
 
     void EditEngine::buildPipeline()
     {
         mPipeline.clear();
-        // Reserved canonical order; stages added in later milestones slot in here.
+        // Canonical order (the hard contract): geometry first, then tone, colour, effects.
+        mPipeline.add(&mCrop);
+        mPipeline.add(&mRotate);
         mPipeline.add(&mExposure);
         mPipeline.add(&mContrast);
+        mPipeline.add(&mToneRegions);
+        mPipeline.add(&mWhiteBalance);
+        mPipeline.add(&mToneCurve);
+        mPipeline.add(&mVibrance);
+        mPipeline.add(&mColorMixer);
+        mPipeline.add(&mColorGrading);
+        mPipeline.add(&mDehaze);
+        mPipeline.add(&mGrain);
     }
 
-    // Decode straight RGBA8/RGB8 (gamma sRGB) into a linear-light Image.
     static Image decodeToLinear(const uint8_t *rgba, int w, int h, int channels)
     {
         Image img(w, h, channels, ColorSpace::EncodedSRGB);
@@ -47,38 +53,103 @@ namespace arstro
         if (slot < 0 || slot >= (int)mSlots.size())
             return;
         mCurrent = slot;
-        mProxySlot = -1;  // invalidate proxy cache
+        mProxySlot = -1;
         applyParamsToProcessors();
     }
 
     void EditEngine::applyParamsToProcessors()
     {
-        // Callers (selectImage / resetAll) guarantee a valid current slot.
         const Params &p = mSlots[mCurrent].params;
-        mExposure.setExposureEv((Pixel)p.exposure);
-        mContrast.setContrast((Pixel)p.contrast);
+        mCrop.setRect(p.cropX, p.cropY, p.cropW, p.cropH);
+        mRotate.setAngle(p.rotation);
+        mRotate.setQuarterTurns(p.quarterTurns);
+        mExposure.setExposureEv(p.exposure);
+        mContrast.setContrast(p.contrast);
+        mToneRegions.setHighlights(p.highlights);
+        mToneRegions.setShadows(p.shadows);
+        mToneRegions.setWhites(p.whites);
+        mToneRegions.setBlacks(p.blacks);
+        mWhiteBalance.setTemperature(p.temp);
+        mWhiteBalance.setTint(p.tint);
+        mToneCurve.setLogScale(p.curveLog);
+        mToneCurve.setPoints(p.curve);
+        mVibrance.setVibrance(p.vibrance);
+        mVibrance.setSaturation(p.saturation);
+        for (int b = 0; b < 8; ++b)
+        {
+            mColorMixer.setBandHue(b, p.bands[b].h);
+            mColorMixer.setBandSaturation(b, p.bands[b].s);
+            mColorMixer.setBandLuminance(b, p.bands[b].l);
+        }
+        for (int r = 0; r < 3; ++r)
+        {
+            mColorGrading.setGradeHue((ColorGrading::Region)r, p.grade[r].hue);
+            mColorGrading.setGradeSaturation((ColorGrading::Region)r, p.grade[r].sat);
+            mColorGrading.setGradeLuminance((ColorGrading::Region)r, p.grade[r].lum);
+        }
+        mColorGrading.setBalance(p.balance);
+        mColorGrading.setHueRemapEnabled(p.remapEnable);
+        mColorGrading.setHueRemap(p.remapSrc, p.remapRange, p.remapDst, p.remapStrength);
+        mDehaze.setAmount(p.dehaze);
+        mGrain.setAmount(p.grainAmount);
+        mGrain.setSize(p.grainSize);
     }
 
     void EditEngine::setPreviewSize(int maxEdge)
     {
-        if (maxEdge < 1)
-            maxEdge = 1;
+        if (maxEdge < 1) maxEdge = 1;
         mPreviewMaxEdge = maxEdge;
     }
 
-    void EditEngine::setExposure(float ev)
+    // ── parameter setters ──
+    void EditEngine::setExposure(float v) { if (auto *p = cur()) { p->exposure = v; mExposure.setExposureEv(v); } }
+    void EditEngine::setContrast(float v) { if (auto *p = cur()) { p->contrast = v; mContrast.setContrast(v); } }
+    void EditEngine::setHighlights(float v) { if (auto *p = cur()) { p->highlights = v; mToneRegions.setHighlights(v); } }
+    void EditEngine::setShadows(float v) { if (auto *p = cur()) { p->shadows = v; mToneRegions.setShadows(v); } }
+    void EditEngine::setWhites(float v) { if (auto *p = cur()) { p->whites = v; mToneRegions.setWhites(v); } }
+    void EditEngine::setBlacks(float v) { if (auto *p = cur()) { p->blacks = v; mToneRegions.setBlacks(v); } }
+    void EditEngine::setTemperature(float v) { if (auto *p = cur()) { p->temp = v; mWhiteBalance.setTemperature(v); } }
+    void EditEngine::setTint(float v) { if (auto *p = cur()) { p->tint = v; mWhiteBalance.setTint(v); } }
+    void EditEngine::setVibrance(float v) { if (auto *p = cur()) { p->vibrance = v; mVibrance.setVibrance(v); } }
+    void EditEngine::setSaturation(float v) { if (auto *p = cur()) { p->saturation = v; mVibrance.setSaturation(v); } }
+    void EditEngine::setDehaze(float v) { if (auto *p = cur()) { p->dehaze = v; mDehaze.setAmount(v); } }
+    void EditEngine::setGrainAmount(float v) { if (auto *p = cur()) { p->grainAmount = v; mGrain.setAmount(v); } }
+    void EditEngine::setGrainSize(float v) { if (auto *p = cur()) { p->grainSize = v; mGrain.setSize(v); } }
+
+    void EditEngine::setCurvePoints(const std::vector<std::pair<float, float>> &pts)
     {
-        if (mCurrent < 0) return;
-        mSlots[mCurrent].params.exposure = ev;
-        mExposure.setExposureEv((Pixel)ev);
+        if (auto *p = cur()) { p->curve = pts; mToneCurve.setPoints(pts); }
+    }
+    void EditEngine::setCurveLogScale(bool log)
+    {
+        if (auto *p = cur()) { p->curveLog = log; mToneCurve.setLogScale(log); }
     }
 
-    void EditEngine::setContrast(float v)
+    void EditEngine::setBandHue(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].h = v; mColorMixer.setBandHue(b, v); } }
+    void EditEngine::setBandSaturation(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].s = v; mColorMixer.setBandSaturation(b, v); } }
+    void EditEngine::setBandLuminance(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].l = v; mColorMixer.setBandLuminance(b, v); } }
+
+    void EditEngine::setGradeHue(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].hue = v; mColorGrading.setGradeHue((ColorGrading::Region)r, v); } }
+    void EditEngine::setGradeSaturation(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].sat = v; mColorGrading.setGradeSaturation((ColorGrading::Region)r, v); } }
+    void EditEngine::setGradeLuminance(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].lum = v; mColorGrading.setGradeLuminance((ColorGrading::Region)r, v); } }
+    void EditEngine::setGradeBalance(float v) { if (auto *p = cur()) { p->balance = v; mColorGrading.setBalance(v); } }
+    void EditEngine::setHueRemapEnabled(bool on) { if (auto *p = cur()) { p->remapEnable = on; mColorGrading.setHueRemapEnabled(on); } }
+    void EditEngine::setHueRemap(float src, float range, float dst, float strength)
     {
-        if (mCurrent < 0) return;
-        mSlots[mCurrent].params.contrast = v;
-        mContrast.setContrast((Pixel)v);
+        if (auto *p = cur())
+        {
+            p->remapSrc = src; p->remapRange = range; p->remapDst = dst; p->remapStrength = strength;
+            mColorGrading.setHueRemap(src, range, dst, strength);
+        }
     }
+
+    void EditEngine::setCrop(float x, float y, float w, float h)
+    {
+        if (auto *p = cur()) { p->cropX = x; p->cropY = y; p->cropW = w; p->cropH = h; mCrop.setRect(x, y, w, h); }
+    }
+    void EditEngine::resetCrop() { setCrop(0, 0, 1, 1); }
+    void EditEngine::setRotation(float deg) { if (auto *p = cur()) { p->rotation = deg; mRotate.setAngle(deg); } }
+    void EditEngine::setQuarterTurns(int t) { if (auto *p = cur()) { p->quarterTurns = t & 3; mRotate.setQuarterTurns(t); } }
 
     void EditEngine::setBypass(bool b) { mPipeline.setBypass(b); }
 
@@ -89,7 +160,6 @@ namespace arstro
         applyParamsToProcessors();
     }
 
-    // Area-average downscale in linear light (no upscaling: scale clamped to 1).
     static Image downscaleLinear(const Image &src, int maxEdge)
     {
         const int sw = src.width(), sh = src.height();
@@ -97,32 +167,23 @@ namespace arstro
         if (longEdge <= maxEdge)
             return src.clone();
         const double scale = (double)maxEdge / (double)longEdge;
-        int tw = (int)(sw * scale + 0.5);
-        int th = (int)(sh * scale + 0.5);
-        if (tw < 1) tw = 1;
-        if (th < 1) th = 1;
+        int tw = (int)(sw * scale + 0.5); if (tw < 1) tw = 1;
+        int th = (int)(sh * scale + 0.5); if (th < 1) th = 1;
         const int ch = src.channels();
         Image out(tw, th, ch, src.space());
         for (int ty = 0; ty < th; ++ty)
         {
             const int y0 = (int)((double)ty * sh / th);
-            int y1 = (int)((double)(ty + 1) * sh / th);
-            if (y1 <= y0) y1 = y0 + 1;
+            int y1 = (int)((double)(ty + 1) * sh / th); if (y1 <= y0) y1 = y0 + 1;
             for (int tx = 0; tx < tw; ++tx)
             {
                 const int x0 = (int)((double)tx * sw / tw);
-                int x1 = (int)((double)(tx + 1) * sw / tw);
-                if (x1 <= x0) x1 = x0 + 1;
+                int x1 = (int)((double)(tx + 1) * sw / tw); if (x1 <= x0) x1 = x0 + 1;
                 for (int c = 0; c < ch; ++c)
                 {
-                    double sum = 0.0;
-                    int n = 0;
+                    double sum = 0.0; int n = 0;
                     for (int y = y0; y < y1; ++y)
-                        for (int x = x0; x < x1; ++x)
-                        {
-                            sum += src.at(x, y, c);
-                            ++n;
-                        }
+                        for (int x = x0; x < x1; ++x) { sum += src.at(x, y, c); ++n; }
                     out.at(tx, ty, c) = (Pixel)(sum / (n > 0 ? n : 1));
                 }
             }
@@ -143,13 +204,10 @@ namespace arstro
     {
         Image processed;
         mPipeline.apply(linearSource, processed);
-
-        // Egress: encode linear -> sRGB for display and histogram.
         color::encodeInPlace(processed);
         mLastHistogram = Histogram::compute(processed);
 
-        const int w = processed.width(), h = processed.height();
-        const int ch = processed.channels();
+        const int w = processed.width(), h = processed.height(), ch = processed.channels();
         outBytes.assign((size_t)w * h * 4, 255);
         const Pixel *s = processed.data();
         uint8_t *d = outBytes.data();
@@ -168,23 +226,20 @@ namespace arstro
         }
         PreviewBuffer pb;
         pb.rgba = outBytes.data();
-        pb.width = w;
-        pb.height = h;
+        pb.width = w; pb.height = h;
         return pb;
     }
 
     PreviewBuffer EditEngine::renderPreview()
     {
-        if (mCurrent < 0)
-            return PreviewBuffer{};
+        if (mCurrent < 0) return PreviewBuffer{};
         ensurePreviewProxy();
         return renderInto(mPreviewProxy, mPreviewOut);
     }
 
     PreviewBuffer EditEngine::renderFull()
     {
-        if (mCurrent < 0)
-            return PreviewBuffer{};
+        if (mCurrent < 0) return PreviewBuffer{};
         return renderInto(mSlots[mCurrent].source, mFullOut);
     }
 }

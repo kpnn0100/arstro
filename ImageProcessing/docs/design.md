@@ -59,8 +59,7 @@ See [`architecture.puml`](architecture.puml) for the class diagram.
 - **Pipeline order is a hard contract.** `Crop → Rotate → Exposure → Contrast →
   ToneRegions → WhiteBalance → ToneCurve → Vibrance → ColorMixer → ColorGrading →
   Dehaze → Grain`. Geometry first so spatial effects and the histogram describe the
-  framed image and grain isn't rotated. (This milestone implements Exposure + Contrast;
-  later stages slot into their reserved positions.)
+  framed image and grain isn't rotated.
 - **Preview vs full-res.** Interactive edits run on a fitted, area-averaged preview
   proxy (`renderPreview`); export runs the full-res path (`renderFull`). Resolution-
   independent params (gain-based ops, normalized crop) match between the two.
@@ -79,9 +78,20 @@ Unit tests live in `unittest/` (dependency-free `MiniTest.h`). Every reachable c
 source line is exercised; the only gcov residual is the compiler-generated deleting-
 destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncallable.
 
+## Processor catalog
+
+| Family | Processors |
+|--------|------------|
+| `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (1024-entry LUT, log/linear domain) |
+| `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (8 HSL bands), ColorGrading (3-way wheels + hue-range remap) |
+| `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (deterministic monochrome value noise) |
+| `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear) |
+
 ## Status (milestones)
 
-- **M1 (done):** base layer, `ImageBlock`, `EditEngine` skeleton, Exposure + Contrast,
-  Histogram, sources, video wrapper, full unit coverage.
-- **M4 (planned):** ToneRegions, WhiteBalance, Vibrance, Dehaze, Grain, ToneCurve,
-  ColorMixer, ColorGrading (+ hue remap), Crop, Rotate, and their EditEngine setters.
+- **M1 (done):** base layer, `ImageBlock`, `EditEngine`, Histogram, sources, video wrapper.
+- **M4a (done):** the full processor catalog above + every `EditEngine` setter, per-slot
+  parameter state, the canonical pipeline, and HSL/Kelvin colour math. 45 unit tests; every
+  reachable core line covered.
+- **M4b (planned):** the matching cosmo UI panels + custom widgets (curve editor, colour
+  wheels, crop overlay).

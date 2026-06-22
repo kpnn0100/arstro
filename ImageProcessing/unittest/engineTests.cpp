@@ -139,6 +139,112 @@ TEST(Engine_preview_downscale_and_full)
     CHECK(full.width == 100 && full.height == 50);  // full path is unscaled
 }
 
+// A varied test image: brightness gradient (x) + colour variation (y), so every
+// tonal region and hue band is exercised (a flat gray would make many ops no-op).
+static std::vector<uint8_t> variedRGBA8(int w, int h)
+{
+    std::vector<uint8_t> b((size_t)w * h * 4);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+            uint8_t *p = b.data() + ((size_t)y * w + x) * 4;
+            p[0] = (uint8_t)(30 + x * 210 / (w > 1 ? w - 1 : 1));   // dark..bright
+            p[1] = (uint8_t)(30 + y * 190 / (h > 1 ? h - 1 : 1));   // colour variation
+            p[2] = 120;
+            p[3] = 255;
+        }
+    return b;
+}
+
+TEST(Engine_full_catalog_setters_route)
+{
+    EditEngine eng;
+    auto bytes = variedRGBA8(16, 16);
+    eng.addImage(bytes.data(), 16, 16, 4);
+    PreviewBuffer base = eng.renderPreview();
+    const std::vector<uint8_t> b0(base.rgba, base.rgba + (size_t)base.width * base.height * 4);
+
+    // Each setter should change the rendered output; resetAll restores it.
+    auto changes = [&](auto fn) {
+        eng.resetAll();
+        fn();
+        PreviewBuffer pb = eng.renderPreview();
+        std::vector<uint8_t> cur(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
+        return cur != b0;
+    };
+
+    CHECK(changes([&] { eng.setShadows(80.f); }));
+    CHECK(changes([&] { eng.setHighlights(-80.f); }));
+    CHECK(changes([&] { eng.setTemperature(9000.f); }));
+    CHECK(changes([&] { eng.setVibrance(100.f); eng.setSaturation(100.f); }));
+    CHECK(changes([&] { eng.setDehaze(100.f); }));
+    CHECK(changes([&] { eng.setGrainAmount(100.f); eng.setGrainSize(30.f); }));
+    CHECK(changes([&] { eng.setCurvePoints({{0.f, 0.2f}, {1.f, 1.f}}); }));
+    CHECK(changes([&] { eng.setBandSaturation(EditEngine::Red, -100.f); }));
+    CHECK(changes([&] { eng.setGradeSaturation(EditEngine::Shadows, 100.f);
+                        eng.setGradeHue(EditEngine::Shadows, 30.f); }));
+
+    eng.resetAll();
+    PreviewBuffer back = eng.renderPreview();
+    std::vector<uint8_t> backBytes(back.rgba, back.rgba + (size_t)back.width * back.height * 4);
+    CHECK(backBytes == b0);  // resetAll restores the original render exactly
+}
+
+TEST(Engine_transform_changes_dimensions)
+{
+    EditEngine eng;
+    auto bytes = solidRGBA8(40, 20, 128);
+    eng.addImage(bytes.data(), 40, 20, 4);
+    eng.setPreviewSize(4096);  // no downscale for this small image
+
+    eng.setCrop(0.f, 0.f, 0.5f, 1.f);
+    PreviewBuffer cropped = eng.renderFull();
+    CHECK(cropped.width == 20 && cropped.height == 20);
+
+    eng.resetCrop();
+    eng.setQuarterTurns(1);
+    PreviewBuffer turned = eng.renderFull();
+    CHECK(turned.width == 20 && turned.height == 40);  // dims swap
+}
+
+TEST(Engine_every_setter_runs)
+{
+    EditEngine eng;
+    auto bytes = variedRGBA8(12, 12);
+    eng.addImage(bytes.data(), 12, 12, 4);
+
+    eng.setExposure(0.5f); eng.setContrast(20.f);
+    eng.setHighlights(-30.f); eng.setShadows(30.f); eng.setWhites(10.f); eng.setBlacks(-10.f);
+    eng.setTemperature(7200.f); eng.setTint(20.f);
+    eng.setVibrance(40.f); eng.setSaturation(15.f);
+    eng.setDehaze(25.f); eng.setGrainAmount(20.f); eng.setGrainSize(40.f);
+    eng.setCurvePoints({{0.f, 0.05f}, {0.5f, 0.55f}, {1.f, 1.f}}); eng.setCurveLogScale(false);
+    eng.setCurveLogScale(true);
+    for (int b = 0; b < 8; ++b)
+    {
+        eng.setBandHue((EditEngine::HslBand)b, 10.f);
+        eng.setBandSaturation((EditEngine::HslBand)b, -10.f);
+        eng.setBandLuminance((EditEngine::HslBand)b, 5.f);
+    }
+    for (int r = 0; r < 3; ++r)
+    {
+        eng.setGradeHue((EditEngine::GradeRegion)r, 30.f * r);
+        eng.setGradeSaturation((EditEngine::GradeRegion)r, 20.f);
+        eng.setGradeLuminance((EditEngine::GradeRegion)r, 5.f);
+    }
+    eng.setGradeBalance(15.f);
+    eng.setHueRemapEnabled(true);
+    eng.setHueRemap(20.f, 30.f, 50.f, 0.8f);
+    eng.setCrop(0.05f, 0.05f, 0.9f, 0.9f);
+    eng.setRotation(2.5f);
+    eng.setQuarterTurns(1);
+
+    PreviewBuffer pv = eng.renderPreview();
+    CHECK(pv.rgba != nullptr && pv.width > 0);
+    PreviewBuffer full = eng.renderFull();
+    CHECK(full.rgba != nullptr && full.width > 0);
+}
+
 TEST(Engine_rgb_input)
 {
     EditEngine eng;

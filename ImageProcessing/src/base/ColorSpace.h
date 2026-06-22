@@ -29,5 +29,17 @@ namespace arstro
 
         /** Rec.709 relative luminance of a linear-light RGB triple. */
         Pixel luminance(Pixel r, Pixel g, Pixel b);
+
+        /** RGB (0..1) -> HSL with hue in [0,360), saturation/lightness in [0,1]. */
+        void rgbToHsl(Pixel r, Pixel g, Pixel b, Pixel &h, Pixel &s, Pixel &l);
+        /** HSL (hue [0,360), s/l in [0,1]) -> RGB (0..1). */
+        void hslToRgb(Pixel h, Pixel s, Pixel l, Pixel &r, Pixel &g, Pixel &b);
+
+        /** Per-channel white-balance gains for a temperature (Kelvin) + tint
+         *  (green<->magenta), normalized so a neutral grey keeps its luminance. */
+        void kelvinToRgbGain(Pixel kelvin, Pixel tint, Pixel &gr, Pixel &gg, Pixel &gb);
+
+        /** Smallest signed angular delta from hue a to hue b, in degrees [-180,180]. */
+        Pixel hueDelta(Pixel a, Pixel b);
     }
 }

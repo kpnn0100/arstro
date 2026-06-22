@@ -3,7 +3,7 @@
 '  DSP library). This diagram is the design surface: keep it in sync with the code.
 '  M1 implements Exposure + Contrast; later tone/color/effect/transform processors
 '  slot into their reserved positions in the EditEngine pipeline.
-title Arstro ImageProcessing — Class Architecture (M1)
+title Arstro ImageProcessing — Class Architecture (M4a: full processor catalog)
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
@@ -69,12 +69,14 @@ package base {
   ImageBlock --|> ImageProcessor
 }
 
-package color {
+package "base::color" as colorspace {
   class ColorSpace_fns <<functions>> {
-    + srgbEncode(Pixel) : Pixel
-    + srgbDecode(Pixel) : Pixel
+    + srgbEncode/srgbDecode(Pixel) : Pixel
     + encodeInPlace(Image&) / decodeInPlace(Image&)
     + luminance(r,g,b) : Pixel
+    + rgbToHsl(...) / hslToRgb(...)
+    + kelvinToRgbGain(K, tint, &gr, &gg, &gb)
+    + hueDelta(a, b) : Pixel
   }
 }
 
@@ -91,16 +93,39 @@ package source {
 
 ' ─────────────────────────── Processors ───────────────────────────
 package tone {
-  class Exposure {
-    + setExposureEv(ev)
-    ' gain = 2^EV (linear)
-  }
-  class Contrast {
-    + setContrast(amount)
-    ' slope around 0.18 pivot
-  }
+  class Exposure { + setExposureEv(ev)  ' 2^EV (linear) }
+  class Contrast { + setContrast(v)     ' slope around 0.18 pivot }
+  class ToneRegions { + setHighlights/Shadows/Whites/Blacks(v) }
+  class ToneCurve { + setPoints(pts) / setLogScale(b)  ' 1024-LUT }
   Exposure --|> PointProcessor
   Contrast --|> PointProcessor
+  ToneRegions --|> PointProcessor
+  ToneCurve --|> PointProcessor
+}
+
+package color {
+  class WhiteBalance { + setTemperature(K) / setTint(v) }
+  class Vibrance { + setVibrance(v) / setSaturation(v) }
+  class ColorMixer { + setBandHue/Saturation/Luminance(band, v)  ' 8 bands }
+  class ColorGrading { + setGradeHue/Sat/Lum(region) / setHueRemap(...) }
+  WhiteBalance --|> PointProcessor
+  Vibrance --|> PointProcessor
+  ColorMixer --|> PointProcessor
+  ColorGrading --|> PointProcessor
+}
+
+package effect {
+  class Dehaze { + setAmount(v)  ' dark-channel prior }
+  class Grain { + setAmount(v) / setSize(v) / setSeed(s) }
+  Dehaze --|> ImageProcessor
+  Grain --|> ImageProcessor
+}
+
+package transform {
+  class Crop { + setRect(x,y,w,h)  ' normalized }
+  class Rotate { + setAngle(deg) / setQuarterTurns(n) }
+  Crop --|> ImageProcessor
+  Rotate --|> ImageProcessor
 }
 
 ' ─────────────────────────── Analysis / Video / Engine ───────────────────────────
@@ -126,18 +151,28 @@ package video {
 
 package engine {
   class EditEngine <<facade>> {
-    + addImage(rgba, w, h, ch) : int
-    + selectImage(slot)
-    + setExposure(ev) / setContrast(v)
-    + setBypass(b) / resetAll()
-    + setPreviewSize(maxEdge)
-    + renderPreview() : PreviewBuffer
-    + renderFull() : PreviewBuffer
+    + addImage(rgba, w, h, ch) : int / selectImage(slot)
+    + setExposure/Contrast/Highlights/Shadows/Whites/Blacks(v)
+    + setTemperature/Tint/Vibrance/Saturation/Dehaze/Grain*(v)
+    + setCurvePoints(pts) / setBand*(band) / setGrade*(region) / setHueRemap(...)
+    + setCrop(x,y,w,h) / setRotation(deg) / setQuarterTurns(n)
+    + setBypass(b) / resetAll() / setPreviewSize(maxEdge)
+    + renderPreview() / renderFull() : PreviewBuffer
     + histogram() : HistogramData
   }
   EditEngine *-- ImageBlock
+  EditEngine *-- Crop
+  EditEngine *-- Rotate
   EditEngine *-- Exposure
   EditEngine *-- Contrast
+  EditEngine *-- ToneRegions
+  EditEngine *-- WhiteBalance
+  EditEngine *-- ToneCurve
+  EditEngine *-- Vibrance
+  EditEngine *-- ColorMixer
+  EditEngine *-- ColorGrading
+  EditEngine *-- Dehaze
+  EditEngine *-- Grain
   EditEngine ..> Histogram
 }
 

@@ -24,6 +24,22 @@
 // Tone
 #include "tone/Exposure.h"
 #include "tone/Contrast.h"
+#include "tone/ToneRegions.h"
+#include "tone/ToneCurve.h"
+
+// Color
+#include "color/WhiteBalance.h"
+#include "color/Vibrance.h"
+#include "color/ColorMixer.h"
+#include "color/ColorGrading.h"
+
+// Effects
+#include "effect/Dehaze.h"
+#include "effect/Grain.h"
+
+// Transform
+#include "transform/Crop.h"
+#include "transform/Rotate.h"
 
 // Analysis + video + engine
 #include "analysis/Histogram.h"

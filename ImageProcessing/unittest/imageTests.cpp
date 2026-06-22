@@ -318,4 +318,302 @@ TEST(ImageProcessor_polymorphic_delete)
     delete p;
 }
 
+// Helper: a 1x1 RGB image from linear values.
+static Image px1(Pixel r, Pixel g, Pixel b)
+{
+    Image img(1, 1, 3, ColorSpace::LinearSRGB);
+    img.at(0, 0, 0) = r; img.at(0, 0, 1) = g; img.at(0, 0, 2) = b;
+    return img;
+}
+static Image pxHsl(Pixel h, Pixel s, Pixel l)
+{
+    Pixel r, g, b; color::hslToRgb(h, s, l, r, g, b);
+    return px1(r, g, b);
+}
+static Pixel satOf(const Image &im)
+{
+    Pixel h, s, l; color::rgbToHsl(im.at(0, 0, 0), im.at(0, 0, 1), im.at(0, 0, 2), h, s, l);
+    return s;
+}
+static Pixel hueOf(const Image &im)
+{
+    Pixel h, s, l; color::rgbToHsl(im.at(0, 0, 0), im.at(0, 0, 1), im.at(0, 0, 2), h, s, l);
+    return h;
+}
+
+// ── ColorSpace HSL / Kelvin ──
+TEST(ColorSpace_hsl_kelvin_huedelta)
+{
+    Pixel h, s, l, r, g, b;
+    color::rgbToHsl(1, 0, 0, h, s, l); CHECK_NEAR(h, 0, 1e-3); CHECK_NEAR(s, 1, 1e-3);
+    color::rgbToHsl(0, 1, 0, h, s, l); CHECK_NEAR(h, 120, 1e-2);
+    color::rgbToHsl(0, 0, 1, h, s, l); CHECK_NEAR(h, 240, 1e-2);
+    color::rgbToHsl((Pixel)0.5, (Pixel)0.5, (Pixel)0.5, h, s, l); CHECK_NEAR(s, 0, 1e-6);
+    color::hslToRgb(0, 1, (Pixel)0.5, r, g, b); CHECK_NEAR(r, 1, 1e-3); CHECK_NEAR(g, 0, 1e-3);
+    color::hslToRgb(120, 0, (Pixel)0.5, r, g, b); CHECK_NEAR(r, 0.5, 1e-3);  // s=0 -> gray
+
+    Pixel gr, gg, gb;
+    color::kelvinToRgbGain(6500, 0, gr, gg, gb);
+    CHECK_NEAR(gr, 1, 1e-3); CHECK_NEAR(gg, 1, 1e-3); CHECK_NEAR(gb, 1, 1e-3);
+    color::kelvinToRgbGain(9000, 0, gr, gg, gb);
+    CHECK(gr > gb);  // warmer -> more red than blue
+    CHECK_NEAR(color::luminance(gr, gg, gb), 1.0, 1e-3);  // luminance-preserving
+
+    CHECK_NEAR(color::hueDelta(350, 10), 20, 1e-3);
+    CHECK_NEAR(color::hueDelta(10, 350), -20, 1e-3);
+}
+
+// ── ToneRegions ──
+TEST(ToneRegions_lift_and_identity)
+{
+    ToneRegions tr;
+    Image dark = solidLinear(1, 1, 3, (Pixel)0.1);
+    Image id = tr.apply(dark);
+    CHECK_NEAR(id.at(0, 0, 0), 0.1, 1e-6);  // all sliders 0 -> identity
+
+    tr.setShadows(100.0);
+    Image out = tr.apply(dark);
+    CHECK(out.at(0, 0, 0) > 0.3);  // shadows lift brightens the dark pixel
+}
+
+// ── WhiteBalance ──
+TEST(WhiteBalance_identity_and_warm)
+{
+    WhiteBalance wb;
+    Image gray = solidLinear(1, 1, 3, (Pixel)0.5);
+    Image id = wb.apply(gray);
+    CHECK_NEAR(id.at(0, 0, 0), 0.5, 1e-4);  // 6500K = identity
+
+    wb.setTemperature(9000.0);
+    Image warm = wb.apply(gray);
+    CHECK(warm.at(0, 0, 0) > warm.at(0, 0, 2));  // red boosted over blue
+}
+
+// ── Vibrance ──
+TEST(Vibrance_weights_by_saturation)
+{
+    Image lowS = pxHsl(30, (Pixel)0.2, (Pixel)0.5);
+    Image highS = pxHsl(30, (Pixel)0.8, (Pixel)0.5);
+    const Pixel lo0 = satOf(lowS), hi0 = satOf(highS);
+
+    Vibrance v; v.setVibrance(50.0);
+    const Pixel dLo = satOf(v.apply(lowS)) - lo0;
+    const Pixel dHi = satOf(v.apply(highS)) - hi0;
+    CHECK(dLo > dHi);  // vibrance lifts low-saturation pixels more
+
+    Vibrance id;  // 0/0 -> identity
+    CHECK_NEAR(satOf(id.apply(lowS)), lo0, 1e-4);
+}
+
+// ── ToneCurve ──
+TEST(ToneCurve_identity_and_brighten)
+{
+    ToneCurve c;  // default identity
+    Image mid = solidLinear(1, 1, 3, (Pixel)0.18);
+    CHECK_NEAR(c.apply(mid).at(0, 0, 0), 0.18, 2e-3);
+
+    c.setPoints({{0.f, 0.f}, {0.5f, 0.75f}, {1.f, 1.f}});  // lifts mids
+    CHECK(c.apply(mid).at(0, 0, 0) > 0.18);
+
+    c.setLogScale(false);  // linear domain still runs; identity points -> identity
+    ToneCurve lin; lin.setLogScale(false);
+    CHECK_NEAR(lin.apply(mid).at(0, 0, 0), 0.18, 2e-3);
+}
+
+// ── ColorMixer ──
+TEST(ColorMixer_band_isolation)
+{
+    Image blue = pxHsl(240, (Pixel)0.8, (Pixel)0.5);
+    const Pixel s0 = satOf(blue), h0 = hueOf(blue);
+
+    ColorMixer m; m.setBandHue(0, 100.0);  // shift RED band — far from blue
+    Image out = m.apply(blue);
+    CHECK_NEAR(hueOf(out), h0, 1.0);  // blue essentially unchanged
+
+    ColorMixer m2; m2.setBandSaturation(5, -100.0);  // BLUE band desaturates
+    CHECK(satOf(m2.apply(blue)) < s0);
+}
+
+// ── ColorGrading ──
+TEST(ColorGrading_hue_remap_and_identity)
+{
+    Image green = pxHsl(120, (Pixel)0.9, (Pixel)0.5);
+    ColorGrading id;  // disabled -> identity
+    CHECK_NEAR(hueOf(id.apply(green)), 120.0, 2.0);
+
+    Image red = pxHsl(0, (Pixel)0.9, (Pixel)0.5);
+    ColorGrading cg;
+    cg.setHueRemapEnabled(true);
+    cg.setHueRemap(/*src*/ 0, /*range*/ 40, /*dst*/ 30, /*strength*/ 1.0);
+    Image out = cg.apply(red);
+    CHECK_NEAR(hueOf(out), 30.0, 6.0);  // red remapped toward orange
+}
+
+// ── Dehaze ──
+TEST(Dehaze_identity_and_contrast)
+{
+    Dehaze d;
+    Image flat = solidLinear(1, 1, 3, (Pixel)0.5);
+    CHECK_NEAR(d.apply(flat).at(0, 0, 0), 0.5, 1e-6);  // amount 0 -> identity
+
+    Image grad(2, 1, 3, ColorSpace::LinearSRGB);
+    for (int c = 0; c < 3; ++c) { grad.at(0, 0, c) = (Pixel)0.45; grad.at(1, 0, c) = (Pixel)0.55; }
+    Dehaze d2; d2.setAmount(100.0);
+    Image out = d2.apply(grad);
+    const double inSpread = 0.55 - 0.45;
+    const double outSpread = out.at(1, 0, 0) - out.at(0, 0, 0);
+    CHECK(outSpread > inSpread);  // dehaze increases local contrast
+}
+
+// ── Grain ──
+TEST(Grain_identity_deterministic)
+{
+    Image gray = solidLinear(8, 8, 3, (Pixel)0.5);
+    Grain g0;
+    Image id = g0.apply(gray);
+    CHECK_NEAR(id.at(0, 0, 0), 0.5, 1e-6);  // amount 0 -> identity
+
+    Grain g; g.setAmount(100.0); g.setSize(20.0);
+    Image a = g.apply(gray);
+    Image b = g.apply(gray);
+    bool varies = false, same = true;
+    for (size_t i = 0; i < gray.pixelCount() * 3; ++i)
+    {
+        if (std::fabs(a.data()[i] - 0.5) > 1e-4) varies = true;
+        if (std::fabs(a.data()[i] - b.data()[i]) > 1e-9) same = false;
+    }
+    CHECK(varies);  // grain adds variation
+    CHECK(same);    // deterministic for a fixed seed
+}
+
+// ── Crop ──
+TEST(Crop_dims_and_origin)
+{
+    Image img(4, 4, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 4; ++x)
+            for (int c = 0; c < 3; ++c) img.at(x, y, c) = (Pixel)(x + y) / 8;
+    Crop crop; crop.setRect(0, 0, (Pixel)0.5, (Pixel)0.5);
+    Image out = crop.apply(img);
+    CHECK(out.width() == 2 && out.height() == 2);
+    CHECK_NEAR(out.at(0, 0, 0), img.at(0, 0, 0), 1e-9);
+
+    Crop full;  // default full frame -> same dims
+    CHECK(full.apply(img).width() == 4);
+}
+
+// ── Rotate ──
+TEST(Rotate_quarter_turns_and_identity)
+{
+    Image img(2, 1, 3, ColorSpace::LinearSRGB);
+    img.at(0, 0, 0) = 1; img.at(0, 0, 1) = 0; img.at(0, 0, 2) = 0;  // red left
+    img.at(1, 0, 0) = 0; img.at(1, 0, 1) = 1; img.at(1, 0, 2) = 0;  // green right
+
+    Rotate r0;
+    CHECK_NEAR(r0.apply(img).at(0, 0, 0), 1.0, 1e-9);  // qt 0, angle 0 -> identity
+
+    Rotate r1; r1.setQuarterTurns(1);
+    Image out = r1.apply(img);
+    CHECK(out.width() == 1 && out.height() == 2);  // dims swap
+    CHECK_NEAR(out.at(0, 0, 0), 1.0, 1e-9);  // red on top
+    CHECK_NEAR(out.at(0, 1, 1), 1.0, 1e-9);  // green on bottom
+
+    // four 90-degree turns return to the original
+    Image acc = img.clone();
+    Rotate rr; rr.setQuarterTurns(1);
+    for (int i = 0; i < 4; ++i) acc = rr.apply(acc);
+    CHECK(acc.width() == 2 && acc.height() == 1);
+    CHECK_NEAR(acc.at(0, 0, 0), 1.0, 1e-9);
+    CHECK_NEAR(acc.at(1, 0, 1), 1.0, 1e-9);
+
+    Rotate ra; ra.setAngle(0.0);  // angle 0 with qt 0 is identity
+    CHECK_NEAR(ra.apply(img).at(1, 0, 1), 1.0, 1e-9);
+}
+
+// ── edge cases / branch coverage ──
+TEST(Processors_grayscale_passthrough)
+{
+    Image g = solidLinear(2, 2, 1, (Pixel)0.4);  // single-channel
+    WhiteBalance wb; wb.setTemperature(9000.0);
+    CHECK_NEAR(wb.apply(g).at(0, 0, 0), 0.4, 1e-6);
+    Vibrance v; v.setSaturation(100.0);
+    CHECK_NEAR(v.apply(g).at(0, 0, 0), 0.4, 1e-6);
+    ColorMixer m; m.setBandSaturation(0, 50.0);
+    CHECK_NEAR(m.apply(g).at(0, 0, 0), 0.4, 1e-6);
+    ColorGrading cg; cg.setGradeSaturation(ColorGrading::Shadows, 80.0);
+    CHECK_NEAR(cg.apply(g).at(0, 0, 0), 0.4, 1e-6);
+}
+
+TEST(Vibrance_and_mixer_clamps)
+{
+    // saturation pushed past 1 (clamp) and below 0 (clamp)
+    Image c = pxHsl(200, (Pixel)0.9, (Pixel)0.5);
+    Vibrance up; up.setSaturation(100.0);
+    CHECK(satOf(up.apply(c)) <= 1.0 + 1e-6);
+    Vibrance dn; dn.setSaturation(-100.0);
+    CHECK(satOf(dn.apply(c)) >= -1e-6);
+
+    // ColorMixer hue wrap below 0 and saturation clamp
+    ColorMixer m; m.setBandHue(5, -100.0); m.setBandSaturation(5, 100.0);  // blue band
+    Image out = m.apply(c);
+    CHECK(hueOf(out) >= 0.0 && hueOf(out) < 360.0);
+}
+
+TEST(ToneCurve_empty_points_resets)
+{
+    ToneCurve c;
+    c.setPoints({});  // empty -> falls back to identity
+    Image mid = solidLinear(1, 1, 3, (Pixel)0.3);
+    CHECK_NEAR(c.apply(mid).at(0, 0, 0), 0.3, 3e-3);
+}
+
+TEST(Dehaze_add_haze)
+{
+    Image grad(2, 1, 3, ColorSpace::LinearSRGB);
+    for (int c = 0; c < 3; ++c) { grad.at(0, 0, c) = (Pixel)0.3; grad.at(1, 0, c) = (Pixel)0.7; }
+    Dehaze d; d.setAmount(-80.0);  // add haze -> fade toward airlight (less spread)
+    Image out = d.apply(grad);
+    const double inSpread = 0.7 - 0.3;
+    const double outSpread = out.at(1, 0, 0) - out.at(0, 0, 0);
+    CHECK(outSpread < inSpread);
+}
+
+TEST(Crop_degenerate_passthrough)
+{
+    Image empty;  // 0x0 -> degenerate guard -> clone passthrough
+    Crop crop; crop.setRect(0, 0, (Pixel)0.5, (Pixel)0.5);
+    CHECK(crop.apply(empty).empty());
+
+    // far-edge crop where the pixel width clamps to zero -> passthrough
+    Image img = solidLinear(4, 4, 3, (Pixel)0.5);
+    Crop edge; edge.setRect((Pixel)1.0, 0, (Pixel)0.5, (Pixel)0.5);
+    Image o = edge.apply(img);
+    CHECK(!o.empty());
+}
+
+TEST(Rotate_180_270_and_angle)
+{
+    Image img(2, 2, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < 2; ++y)
+        for (int x = 0; x < 2; ++x)
+            for (int c = 0; c < 3; ++c) img.at(x, y, c) = (Pixel)(x + 2 * y) / 4;
+
+    Rotate r2; r2.setQuarterTurns(2);  // 180
+    Image o2 = r2.apply(img);
+    CHECK(o2.width() == 2 && o2.height() == 2);
+    CHECK_NEAR(o2.at(0, 0, 0), img.at(1, 1, 0), 1e-9);  // corner swapped
+
+    Rotate r3; r3.setQuarterTurns(3);  // 270
+    Image o3 = r3.apply(img);
+    CHECK(o3.width() == 2 && o3.height() == 2);
+
+    // arbitrary angle: white square rotated 45 -> corners fall outside (0), centre stays
+    Image white = solidLinear(7, 7, 3, (Pixel)1.0);
+    Rotate ra; ra.setAngle(45.0);
+    Image oa = ra.apply(white);
+    CHECK(oa.width() == 7 && oa.height() == 7);
+    CHECK(oa.at(0, 0, 0) < 0.5);            // corner outside the source -> transparent
+    CHECK(oa.at(3, 3, 0) > 0.5);            // centre still white
+}
+
 MINITEST_MAIN
