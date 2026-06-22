@@ -63,6 +63,35 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    void saveDialog(App *a)
+    {
+        if (a->app.imageCount() == 0)
+            return;
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Export image", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Export", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "cosmo_export.png");
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            int w = 0, h = 0;
+            const uint8_t *px = a->app.exportFullRes(w, h);  // full-res RGBA8
+            if (px && w > 0 && h > 0)
+            {
+                GdkPixbuf *pb = gdk_pixbuf_new_from_data(px, GDK_COLORSPACE_RGB, TRUE, 8, w, h,
+                                                         w * 4, nullptr, nullptr);
+                GError *err = nullptr;
+                gdk_pixbuf_savev(pb, path, "png", nullptr, nullptr, &err);
+                if (err) { g_printerr("cosmo: export failed: %s\n", err->message); g_error_free(err); }
+                else g_print("cosmo: exported %s (%dx%d)\n", path, w, h);
+                g_object_unref(pb);
+            }
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+    }
+
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
         auto *a = static_cast<App *>(user);
@@ -89,6 +118,11 @@ namespace
         if (e->keyval == GDK_KEY_o || e->keyval == GDK_KEY_O)
         {
             openDialog(static_cast<App *>(user));
+            return TRUE;
+        }
+        if (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S)
+        {
+            saveDialog(static_cast<App *>(user));
             return TRUE;
         }
         return FALSE;

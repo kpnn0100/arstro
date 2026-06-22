@@ -250,7 +250,7 @@ case "$TARGET" in
           "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" \
           -o "$OUTDIR/cosmo_linux"
         echo "built $OUTDIR/cosmo_linux"
-        echo "run:   $OUTDIR/cosmo_linux [image files...]   (press O to open more)"
+        echo "run:   $OUTDIR/cosmo_linux [image files...]   (O = open, S = export PNG)"
         ;;
       *)
         echo "linux-native-app currently supports projects 'ui-demo', 'synth', 'pulsar' and 'cosmo'" >&2

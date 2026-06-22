@@ -231,6 +231,15 @@ namespace cosmo
         mXform->setState(ts);
     }
 
+    const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
+    {
+        if (!mEngine.hasImage()) { w = h = 0; return nullptr; }
+        PreviewBuffer pb = mEngine.renderFull();
+        w = pb.width;
+        h = pb.height;
+        return pb.rgba;
+    }
+
     void CosmoApp::rebuildPreview()
     {
         PreviewBuffer pv = mEngine.renderPreview();

@@ -45,6 +45,10 @@ namespace cosmo
         void selectImage(int slot);
         int imageCount() const { return mEngine.imageCount(); }
 
+        /** Render the current edit at full resolution. Returns engine-owned straight
+         *  RGBA8 (valid until the next full render), or nullptr if no image. */
+        const uint8_t *exportFullRes(int &w, int &h);
+
     private:
         // The UI's mirror of each image's parameters (knob positions), restored on
         // slot switch — the engine keeps its own per-slot state for the pipeline.
