@@ -62,22 +62,28 @@ namespace cosmo
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
 
-        // Basic: every tone/colour/effect slider in one column (Light + Color + FX merged).
-        using Spec = ParamPanel::Spec;
-        std::vector<Spec> basic = {
-            {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curUi()) { p->exposure = v; mEngine.setExposure((float)v); markDirty(); } }},
-            {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->contrast = v; mEngine.setContrast((float)v); markDirty(); } }},
-            {"highlights", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
-            {"shadows", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
-            {"whites", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
-            {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
-            {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curUi()) { p->temp = v; mEngine.setTemperature((float)v); markDirty(); } }},
-            {"tint", -150, 150, 0, [this](double v) { if (auto *p = curUi()) { p->tint = v; mEngine.setTint((float)v); markDirty(); } }},
-            {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->vibrance = v; mEngine.setVibrance((float)v); markDirty(); } }},
-            {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
-            {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->dehaze = v; mEngine.setDehaze((float)v); markDirty(); } }},
-            {"grain", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainAmount = v; mEngine.setGrainAmount((float)v); markDirty(); } }},
-            {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
+        // Basic: tone/colour/effect sliders, grouped into labeled sections.
+        using Section = ParamPanel::Section;
+        std::vector<Section> basic = {
+            {"TONE", {
+                {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curUi()) { p->exposure = v; mEngine.setExposure((float)v); markDirty(); } }},
+                {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->contrast = v; mEngine.setContrast((float)v); markDirty(); } }},
+                {"highlights", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
+                {"shadows", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
+                {"whites", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
+                {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
+            }},
+            {"COLOR", {
+                {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curUi()) { p->temp = v; mEngine.setTemperature((float)v); markDirty(); } }},
+                {"tint", -150, 150, 0, [this](double v) { if (auto *p = curUi()) { p->tint = v; mEngine.setTint((float)v); markDirty(); } }},
+                {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->vibrance = v; mEngine.setVibrance((float)v); markDirty(); } }},
+                {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
+            }},
+            {"EFFECTS", {
+                {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->dehaze = v; mEngine.setDehaze((float)v); markDirty(); } }},
+                {"grain", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainAmount = v; mEngine.setGrainAmount((float)v); markDirty(); } }},
+                {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
+            }},
         };
         mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic);
 
@@ -262,13 +268,15 @@ namespace cosmo
         mHistogram->setHistogram(mEngine.histogram());
     }
 
-    void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs)
+    void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt)
     {
         RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down
                              : kind == 2 ? RawPointer::Kind::Up
                                          : RawPointer::Kind::Move;
         PointerButton b = button == 2 ? PointerButton::Right : PointerButton::Left;
-        mRecognizer.feed(RawPointer{k, Point{x, y}, b, timeMs});
+        RawPointer rp{k, Point{x, y}, b, timeMs};
+        rp.alt = alt;
+        mRecognizer.feed(rp);
     }
 
     void CosmoApp::render(IRenderTarget &target, double nowMs)

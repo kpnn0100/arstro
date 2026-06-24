@@ -1,13 +1,12 @@
 /*
- *  Cosmo by arstro — TransformPanel: straighten (slider), 90-degree steps
- *  (ComboBox), and crop via normalized x/y/w/h sliders, laid out in a column.
- *  Responsive via layout(w,h).
+ *  Cosmo by arstro — TransformPanel: straighten (slider), 90-degree rotation via two
+ *  buttons (CCW / CW — clearer than a combobox), and crop via normalized x/y/w/h
+ *  sliders, laid out in a column. Responsive via layout(w,h).
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
 #include <functional>
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace arstro
@@ -32,12 +31,12 @@ namespace cosmo
 
     private:
         void emitCrop();
-        struct Row { std::shared_ptr<artboard::Segment> ctrl; std::string label; bool labeled; double baseY = 0; };
 
         artboard::Color mAccent;
         std::shared_ptr<artboard::Slider> mRotate, mX, mY, mW, mH;
-        std::shared_ptr<artboard::ComboBox> mQuarter;
-        std::vector<Row> mRows;
+        std::shared_ptr<artboard::Button> mCCW, mCW;
+        int mQuarter = 0;
+        double mRowY[6] = {0, 0, 0, 0, 0, 0};  // label baselines
     };
 }
 }

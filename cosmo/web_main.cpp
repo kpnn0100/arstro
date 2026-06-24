@@ -22,7 +22,7 @@ static std::vector<uint8_t> gInput;  // staging buffer JS writes decoded pixels 
 
 static void init(double w, double h) { gApp.reset(new CosmoApp(w, h)); }
 static void frame(double nowMs) { if (gApp) gApp->render(gTarget, nowMs); }
-static void pointer(int kind, double x, double y, int button, double t) { if (gApp) gApp->pointer(kind, x, y, button, t); }
+static void pointer(int kind, double x, double y, int button, double t, bool alt) { if (gApp) gApp->pointer(kind, x, y, button, t, alt); }
 static void resize(double w, double h) { if (gApp) gApp->setSize(w, h); }
 
 // JS calls allocInput(bytes) -> heap pointer, fills HEAPU8 at it, then loadImage().

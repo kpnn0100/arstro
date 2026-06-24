@@ -1,8 +1,8 @@
 /*
- *  Cosmo by arstro — ParamPanel: a titled panel of labeled horizontal sliders laid
- *  out in a single column, each bound to a callback. The Basic edit section is a
- *  ParamPanel (DRY). Responsive: layout(w,h) fills the given area, distributing the
- *  slider rows evenly so there is no unused vertical space.
+ *  Cosmo by arstro — ParamPanel: a titled panel of labeled horizontal sliders in a
+ *  column, grouped into labeled SECTIONS (e.g. Tone / Color / Effects) rather than
+ *  one flat list. Each slider binds to a callback. Responsive: layout(w,h) fills the
+ *  area, distributing slider rows evenly (section headers take a fixed slim row).
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
@@ -22,27 +22,31 @@ namespace cosmo
         {
             std::string label;
             double min, max, def;
-            std::function<void(double)> onChange;  // called live as the slider drags
+            std::function<void(double)> onChange;
+        };
+        struct Section
+        {
+            std::string title;
+            std::vector<Spec> specs;
         };
 
         ParamPanel(const std::string &title, const artboard::Theme &theme,
-                   const artboard::Color &accent, const std::vector<Spec> &specs);
+                   const artboard::Color &accent, const std::vector<Section> &sections);
 
-        /** Resize to (w,h) and re-flow the slider column to fill it. */
         void layout(double w, double h);
-
-        /** Set slider positions without firing callbacks (used when switching slots). */
+        /** Set all slider positions (flat order across sections), no callbacks. */
         void setValues(const std::vector<double> &values);
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
 
     private:
+        struct Item { bool header; std::string label; int sliderIndex; double baseY; };
+
         std::string mTitle;
         artboard::Color mAccent;
-        std::vector<std::string> mLabels;
         std::vector<std::shared_ptr<artboard::Slider>> mSliders;
-        std::vector<double> mRowY;  // baseline y for each row's label (set in layout)
+        std::vector<Item> mItems;  // section headers + slider rows, in display order
     };
 }
 }

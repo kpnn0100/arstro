@@ -40,7 +40,7 @@ namespace cosmo
         CosmoApp(double width, double height);
 
         void render(artboard::IRenderTarget &target, double nowMs);
-        void pointer(int kind, double x, double y, int button, double timeMs);
+        void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false);
         /** Reflow the whole UI to a new window size. */
         void setSize(double width, double height);
 

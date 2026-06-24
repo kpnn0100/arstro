@@ -10,52 +10,63 @@ namespace cosmo
 
     namespace
     {
-        constexpr double kHeaderH = 34.0;
+        constexpr double kHeaderH = 34.0;   // panel title bar
         constexpr double kPad = 12.0;
         constexpr double kLabelW = 84.0;
         constexpr double kSliderH = 14.0;
+        constexpr double kSectionH = 20.0;  // section sub-header row
     }
 
     ParamPanel::ParamPanel(const std::string &title, const Theme &theme,
-                           const Color &accent, const std::vector<Spec> &specs)
+                           const Color &accent, const std::vector<Section> &sections)
         : mTitle(title), mAccent(accent)
     {
-        for (const auto &s : specs)
+        for (const auto &sec : sections)
         {
-            auto sl = std::make_shared<Slider>(theme.slider);
-            sl->setRange(s.min, s.max);
-            sl->setValue(s.def);
-            sl->setDefault(s.def);
-            sl->onChange = s.onChange;
-            mLabels.push_back(s.label);
-            mSliders.push_back(sl);
-            addChild(sl);
+            mItems.push_back({true, sec.title, -1, 0.0});
+            for (const auto &s : sec.specs)
+            {
+                auto sl = std::make_shared<Slider>(theme.slider);
+                sl->setRange(s.min, s.max);
+                sl->setValue(s.def);
+                sl->setDefault(s.def);
+                sl->setClickJumps(false);  // drag-only; double-click cleanly resets (item 6)
+                sl->onChange = s.onChange;
+                mItems.push_back({false, s.label, (int)mSliders.size(), 0.0});
+                mSliders.push_back(sl);
+                addChild(sl);
+            }
         }
         width.set(300.0);
-        height.set(kHeaderH + specs.size() * 30.0 + kPad);
+        height.set(360.0);
     }
 
     void ParamPanel::layout(double w, double h)
     {
         width.set(w);
         height.set(h);
-        const int rows = (int)mSliders.size();
-        mRowY.assign(rows, 0.0);
-        if (rows == 0)
-            return;
+        int nHeaders = 0, nSliders = 0;
+        for (const auto &it : mItems) (it.header ? nHeaders : nSliders) += 1;
         const double usable = h - kHeaderH - kPad;
-        const double rowH = usable / rows;
-        const double sliderX = kLabelW;
-        const double sliderW = w - kLabelW - kPad;
-        for (int i = 0; i < rows; ++i)
+        const double sliderRowH = nSliders > 0 ? (usable - nHeaders * kSectionH) / nSliders : usable;
+        double y = kHeaderH;
+        for (auto &it : mItems)
         {
-            const double rowTop = kHeaderH + i * rowH;
-            mRowY[i] = rowTop + rowH * 0.5 + 3.0;  // label baseline (centered)
-            auto &sl = mSliders[i];
-            sl->x.set(sliderX);
-            sl->y.set(rowTop + (rowH - kSliderH) * 0.5);
-            sl->width.set(sliderW > 20 ? sliderW : 20);
-            sl->height.set(kSliderH);
+            if (it.header)
+            {
+                it.baseY = y + kSectionH * 0.5 + 3.0;
+                y += kSectionH;
+            }
+            else
+            {
+                it.baseY = y + sliderRowH * 0.5 + 3.0;
+                auto &sl = mSliders[it.sliderIndex];
+                sl->x.set(kLabelW);
+                sl->y.set(y + (sliderRowH - kSliderH) * 0.5);
+                sl->width.set(w - kLabelW - kPad > 20 ? w - kLabelW - kPad : 20);
+                sl->height.set(kSliderH);
+                y += sliderRowH;
+            }
         }
     }
 
@@ -68,9 +79,20 @@ namespace cosmo
     void ParamPanel::onPaint(IRenderTarget &t) const
     {
         drawPanelChrome(t, width.value(), height.value(), mAccent, mTitle);
-        t.setFill(palette::muted());
-        for (size_t i = 0; i < mLabels.size() && i < mRowY.size(); ++i)
-            t.drawText(mLabels[i], 10.0, mRowY[i], 10.0);
+        for (const auto &it : mItems)
+        {
+            if (it.header)
+            {
+                t.setFill(Color{mAccent.r, mAccent.g, mAccent.b, 0.9});
+                for (double ox : {0.0, 0.5})  // faux-bold section title
+                    t.drawText(it.label, 10.0 + ox, it.baseY, 10.0);
+            }
+            else
+            {
+                t.setFill(palette::muted());
+                t.drawText(it.label, 12.0, it.baseY, 10.0);
+            }
+        }
     }
 }
 }

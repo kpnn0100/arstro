@@ -1,12 +1,15 @@
 /*
- *  Cosmo by arstro — CurveEditor: an interactive tone-curve editor. Control points
- *  in [0,1]x[0,1] joined piecewise-linearly (matching the engine's ToneCurve LUT).
- *  Drag a point to move it (endpoints keep their x; interior points stay ordered),
- *  double-click empty space to add a point, double-click a point to remove it.
- *  Emits the point list on every change.
+ *  Cosmo by arstro — CurveEditor: an interactive tone-curve editor over [0,1]x[0,1].
+ *  Control points are CORNERS by default (straight segments); Alt-drag a point to
+ *  pull out symmetric bezier handles (After-Effects style), then drag either handle
+ *  to shape the tangents independently. Drag a point to move it (endpoints keep x),
+ *  double-click empty space to add a corner point, double-click a point to remove it.
+ *  Emits a dense piecewise-linear sampling of the curve (the engine keeps a simple
+ *  LUT); the visible curve is the same dense sampling, so it reads smooth.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "BezierCurve.h"
 #include <functional>
 #include <utility>
 #include <vector>
@@ -21,26 +24,27 @@ namespace cosmo
         explicit CurveEditor(const artboard::Color &accent);
 
         std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
-
-        void setPoints(const std::vector<std::pair<float, float>> &pts);
-        void reset();  // identity diagonal
+        void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
+        void reset();
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
-        bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        double px(double nx) const;  // normalized x -> pixel
-        double py(double ny) const;
-        double nx(double pxv) const; // pixel -> normalized
+        double px(double x) const;   // normalized x -> pixel (no clamp)
+        double py(double y) const;
+        double nx(double pxv) const; // pixel -> normalized (no clamp)
         double ny(double pyv) const;
-        int nodeAt(const artboard::Point &local) const;  // index within hit radius, else -1
+        int pointAt(const artboard::Point &local) const;
+        bool handleAt(const artboard::Point &local, int &idx, int &kind) const;  // kind 1=in,2=out
         void emit();
 
-        std::vector<std::pair<float, float>> mPts;  // sorted by x, in [0,1]
+        std::vector<CtrlPoint> mPts;
         artboard::Color mAccent;
-        int mDrag = -1;
+        int mDragIdx = -1;
+        int mDragKind = 0;  // 0 body, 1 in-handle, 2 out-handle, 3 symmetric pull (alt)
     };
 }
 }

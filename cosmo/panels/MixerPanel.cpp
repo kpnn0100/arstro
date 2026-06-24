@@ -19,6 +19,7 @@ namespace cosmo
             };
             mTabs->addPage(names[c], mEditors[c]);
         }
+        mEditors[0]->setMappedHue(true);  // Hue tab: colour the line by the output hue
         addChild(mTabs);
         width.set(300.0);
         height.set(220.0);

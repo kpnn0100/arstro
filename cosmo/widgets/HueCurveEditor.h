@@ -1,13 +1,15 @@
 /*
- *  Cosmo by arstro — HueCurveEditor: a 2-axis mapper for the colour mixer. X is the
- *  pixel's input hue [0,360); Y is the adjustment in [-1,1] (centered at 0 = no
- *  change). The curve is CYCLIC — the last point wraps continuously back to the
- *  first across the 360/0 seam, so colours never go discrete. Drag points to shape
- *  it, double-click to add a point (or remove one). A hue gradient strip along the
- *  bottom gives context. Emits the point list on every change.
+ *  Cosmo by arstro — HueCurveEditor: a CYCLIC 2-axis mapper for the colour mixer.
+ *  X = pixel input hue [0,360); Y = adjustment [-1,1] (0 = no change). Bezier-capable
+ *  control points (Alt-drag for handles, like CurveEditor); the curve wraps
+ *  continuously across the 360/0 seam (a point dragged off the left edge rejoins on
+ *  the right with no break). In "mapped-hue" mode (the Hue channel) the line is
+ *  coloured by the OUTPUT hue, so you see what each input hue maps to. Emits a dense
+ *  sampling for the engine.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "BezierCurve.h"
 #include <functional>
 #include <utility>
 #include <vector>
@@ -22,8 +24,8 @@ namespace cosmo
         explicit HueCurveEditor(const artboard::Color &accent);
 
         std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
-        void setPoints(const std::vector<std::pair<float, float>> &pts);
-        const std::vector<std::pair<float, float>> &points() const { return mPts; }
+        void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
+        void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -32,19 +34,22 @@ namespace cosmo
 
     private:
         double plotTop() const { return 12.0; }
-        double plotBot() const { return height.value() - 12.0 - 10.0; }  // leave room for hue strip
+        double plotBot() const { return height.value() - 12.0 - 10.0; }
         double midY() const { return (plotTop() + plotBot()) * 0.5; }
         double halfH() const { return (plotBot() - plotTop()) * 0.5; }
-        double pxh(double hue) const;   // hue 0..360 -> pixel x
-        double pyv(double y) const;     // y -1..1 -> pixel y
-        double nxh(double px) const;    // pixel x -> hue 0..360
-        double nyv(double py) const;    // pixel y -> y -1..1
+        double pxh(double hue) const;
+        double pyv(double y) const;
+        double nxh(double px, bool wrap) const;
+        double nyv(double py) const;
         int pointAt(const artboard::Point &local) const;
+        bool handleAt(const artboard::Point &local, int &idx, int &kind) const;
         void emit();
 
-        std::vector<std::pair<float, float>> mPts;  // (hue 0..360, y -1..1), unordered
+        std::vector<CtrlPoint> mPts;  // x in [0,360), y in [-1,1]
         artboard::Color mAccent;
-        int mDrag = -1;
+        bool mMappedHue = false;
+        int mDragIdx = -1;
+        int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull
     };
 }
 }
