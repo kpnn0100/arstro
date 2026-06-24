@@ -35,3 +35,6 @@ cosmo/web/cosmo.wasm
 
 # local reference asset
 src.zip
+
+# vendored LibRaw source tree (user-managed; build.sh builds its static lib on demand)
+ImageProcessing/lib/

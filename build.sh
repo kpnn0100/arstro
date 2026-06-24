@@ -228,13 +228,25 @@ case "$TARGET" in
         mkdir -p "$OUTDIR"
         read -r -a COSMO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0)"
         read -r -a COSMO_LIBS <<< "$(pkg-config --libs gtk+-3.0)"
-        # RAW decoding is optional: enabled only if LibRaw is installed.
+        # RAW decoding is optional. Prefer a vendored LibRaw source tree under
+        # ImageProcessing/lib/LibRaw (built on demand into a static lib); else fall
+        # back to a system LibRaw via pkg-config; else build without RAW.
         RAW_DEF=""; RAW_CFLAGS=(); RAW_LIBS=()
-        if pkg-config --exists libraw; then
+        LIBRAW_DIR="$IP/lib/LibRaw"
+        if [ -f "$LIBRAW_DIR/libraw/libraw.h" ]; then
+          if [ ! -f "$LIBRAW_DIR/lib/libraw.a" ]; then
+            echo "cosmo: building vendored LibRaw static lib (one-time)…"
+            (cd "$LIBRAW_DIR" && make -f Makefile.dist lib/libraw.a -j"$(nproc)") >/dev/null
+          fi
+          RAW_DEF="-DCOSMO_HAVE_LIBRAW"
+          RAW_CFLAGS=(-I"$LIBRAW_DIR")
+          RAW_LIBS=("$LIBRAW_DIR/lib/libraw.a" -lz)   # default LibRaw build uses zlib
+          echo "cosmo: RAW enabled (vendored LibRaw)"
+        elif pkg-config --exists libraw; then
           RAW_DEF="-DCOSMO_HAVE_LIBRAW"
           read -r -a RAW_CFLAGS <<< "$(pkg-config --cflags libraw)"
           read -r -a RAW_LIBS <<< "$(pkg-config --libs libraw)"
-          echo "cosmo: RAW enabled (LibRaw)"
+          echo "cosmo: RAW enabled (system LibRaw)"
         else
           echo "cosmo: RAW disabled (LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only"
         fi
