@@ -84,7 +84,7 @@ destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncall
 |--------|------------|
 | `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (1024-entry LUT, log/linear domain) |
 | `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (3 cyclic per-hue curves: hue-shift/sat/lum over the input hue, wrapping at 360 so it never bands), ColorGrading (3-way wheels + hue-range remap) |
-| `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (deterministic monochrome value noise) |
+| `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (smooth two-octave deterministic value noise — quintic fade, so `size` sets grain scale without blocky upscaling) |
 | `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear) |
 
 ## Status (milestones)
