@@ -180,7 +180,7 @@ TEST(Engine_full_catalog_setters_route)
     CHECK(changes([&] { eng.setDehaze(100.f); }));
     CHECK(changes([&] { eng.setGrainAmount(100.f); eng.setGrainSize(30.f); }));
     CHECK(changes([&] { eng.setCurvePoints({{0.f, 0.2f}, {1.f, 1.f}}); }));
-    CHECK(changes([&] { eng.setBandSaturation(EditEngine::Red, -100.f); }));
+    CHECK(changes([&] { eng.setMixerCurve(EditEngine::MixerSat, {{0.f, -1.f}, {180.f, -1.f}}); }));
     CHECK(changes([&] { eng.setGradeSaturation(EditEngine::Shadows, 100.f);
                         eng.setGradeHue(EditEngine::Shadows, 30.f); }));
 
@@ -220,12 +220,9 @@ TEST(Engine_every_setter_runs)
     eng.setDehaze(25.f); eng.setGrainAmount(20.f); eng.setGrainSize(40.f);
     eng.setCurvePoints({{0.f, 0.05f}, {0.5f, 0.55f}, {1.f, 1.f}}); eng.setCurveLogScale(false);
     eng.setCurveLogScale(true);
-    for (int b = 0; b < 8; ++b)
-    {
-        eng.setBandHue((EditEngine::HslBand)b, 10.f);
-        eng.setBandSaturation((EditEngine::HslBand)b, -10.f);
-        eng.setBandLuminance((EditEngine::HslBand)b, 5.f);
-    }
+    eng.setMixerCurve(EditEngine::MixerHue, {{0.f, 0.1f}, {120.f, 0.f}, {240.f, -0.1f}});
+    eng.setMixerCurve(EditEngine::MixerSat, {{0.f, -0.1f}, {180.f, 0.1f}});
+    eng.setMixerCurve(EditEngine::MixerLum, {{0.f, 0.05f}, {180.f, -0.05f}});
     for (int r = 0; r < 3; ++r)
     {
         eng.setGradeHue((EditEngine::GradeRegion)r, 30.f * r);

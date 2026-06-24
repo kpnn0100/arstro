@@ -51,7 +51,7 @@ namespace arstro
     class EditEngine
     {
     public:
-        enum HslBand { Red, Orange, Yellow, Green, Aqua, Blue, Purple, Magenta };
+        enum MixerChannel { MixerHue, MixerSat, MixerLum };
         enum GradeRegion { Shadows, Midtones, Highlights };
 
         EditEngine();
@@ -90,10 +90,9 @@ namespace arstro
         void setCurvePoints(const std::vector<std::pair<float, float>> &pts);
         void setCurveLogScale(bool log);
 
-        // ── colour mixer (8 HSL bands) ──
-        void setBandHue(HslBand b, float v);         // -100..+100
-        void setBandSaturation(HslBand b, float v);
-        void setBandLuminance(HslBand b, float v);
+        // ── colour mixer (cyclic per-hue curves) ──
+        // points: (hue 0..360, y in [-1,1]); the curve wraps at the 360/0 seam.
+        void setMixerCurve(MixerChannel c, const std::vector<std::pair<float, float>> &points);
 
         // ── colour grading (3-way wheels + hue remap) ──
         void setGradeHue(GradeRegion r, float deg);   // 0..360
@@ -114,7 +113,6 @@ namespace arstro
         void resetAll();
 
     private:
-        struct Hsl { float h = 0, s = 0, l = 0; };
         struct Grade { float hue = 0, sat = 0, lum = 0; };
         struct Params
         {
@@ -125,7 +123,7 @@ namespace arstro
             float dehaze = 0, grainAmount = 0, grainSize = 0;
             std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
             bool curveLog = true;
-            std::array<Hsl, 8> bands{};
+            std::array<std::vector<std::pair<float, float>>, 3> mixer{};  // hue/sat/lum curves
             std::array<Grade, 3> grade{};
             float balance = 0;
             bool remapEnable = false;

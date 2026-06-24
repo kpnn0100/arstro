@@ -106,7 +106,7 @@ package tone {
 package color {
   class WhiteBalance { + setTemperature(K) / setTint(v) }
   class Vibrance { + setVibrance(v) / setSaturation(v) }
-  class ColorMixer { + setBandHue/Saturation/Luminance(band, v)  ' 8 bands }
+  class ColorMixer { + setCurve(Hue|Sat|Lum, points)  ' 3 cyclic per-hue LUTs }
   class ColorGrading { + setGradeHue/Sat/Lum(region) / setHueRemap(...) }
   WhiteBalance --|> PointProcessor
   Vibrance --|> PointProcessor
@@ -154,7 +154,7 @@ package engine {
     + addImage(rgba, w, h, ch) : int / selectImage(slot)
     + setExposure/Contrast/Highlights/Shadows/Whites/Blacks(v)
     + setTemperature/Tint/Vibrance/Saturation/Dehaze/Grain*(v)
-    + setCurvePoints(pts) / setBand*(band) / setGrade*(region) / setHueRemap(...)
+    + setCurvePoints(pts) / setMixerCurve(channel, pts) / setGrade*(region) / setHueRemap(...)
     + setCrop(x,y,w,h) / setRotation(deg) / setQuarterTurns(n)
     + setBypass(b) / resetAll() / setPreviewSize(maxEdge)
     + renderPreview() / renderFull() : PreviewBuffer

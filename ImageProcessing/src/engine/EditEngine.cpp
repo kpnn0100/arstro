@@ -75,12 +75,9 @@ namespace arstro
         mToneCurve.setPoints(p.curve);
         mVibrance.setVibrance(p.vibrance);
         mVibrance.setSaturation(p.saturation);
-        for (int b = 0; b < 8; ++b)
-        {
-            mColorMixer.setBandHue(b, p.bands[b].h);
-            mColorMixer.setBandSaturation(b, p.bands[b].s);
-            mColorMixer.setBandLuminance(b, p.bands[b].l);
-        }
+        mColorMixer.setCurve(ColorMixer::Hue, p.mixer[0]);
+        mColorMixer.setCurve(ColorMixer::Sat, p.mixer[1]);
+        mColorMixer.setCurve(ColorMixer::Lum, p.mixer[2]);
         for (int r = 0; r < 3; ++r)
         {
             mColorGrading.setGradeHue((ColorGrading::Region)r, p.grade[r].hue);
@@ -125,9 +122,14 @@ namespace arstro
         if (auto *p = cur()) { p->curveLog = log; mToneCurve.setLogScale(log); }
     }
 
-    void EditEngine::setBandHue(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].h = v; mColorMixer.setBandHue(b, v); } }
-    void EditEngine::setBandSaturation(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].s = v; mColorMixer.setBandSaturation(b, v); } }
-    void EditEngine::setBandLuminance(HslBand b, float v) { if (auto *p = cur()) { p->bands[b].l = v; mColorMixer.setBandLuminance(b, v); } }
+    void EditEngine::setMixerCurve(MixerChannel c, const std::vector<std::pair<float, float>> &points)
+    {
+        if (auto *p = cur())
+        {
+            p->mixer[c] = points;
+            mColorMixer.setCurve((ColorMixer::Channel)c, points);
+        }
+    }
 
     void EditEngine::setGradeHue(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].hue = v; mColorGrading.setGradeHue((ColorGrading::Region)r, v); } }
     void EditEngine::setGradeSaturation(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].sat = v; mColorGrading.setGradeSaturation((ColorGrading::Region)r, v); } }

@@ -420,18 +420,31 @@ TEST(ToneCurve_identity_and_brighten)
     CHECK_NEAR(lin.apply(mid).at(0, 0, 0), 0.18, 2e-3);
 }
 
-// ── ColorMixer ──
-TEST(ColorMixer_band_isolation)
+// ── ColorMixer (cyclic per-hue curves) ──
+TEST(ColorMixer_hue_curve_localized_and_cyclic)
 {
     Image blue = pxHsl(240, (Pixel)0.8, (Pixel)0.5);
-    const Pixel s0 = satOf(blue), h0 = hueOf(blue);
+    Image red = pxHsl(0, (Pixel)0.8, (Pixel)0.5);
 
-    ColorMixer m; m.setBandHue(0, 100.0);  // shift RED band — far from blue
-    Image out = m.apply(blue);
-    CHECK_NEAR(hueOf(out), h0, 1.0);  // blue essentially unchanged
+    // identity: no curves -> unchanged
+    ColorMixer id;
+    CHECK_NEAR(satOf(id.apply(blue)), 0.8, 1e-3);
 
-    ColorMixer m2; m2.setBandSaturation(5, -100.0);  // BLUE band desaturates
-    CHECK(satOf(m2.apply(blue)) < s0);
+    // localized Sat curve: desaturate only around red (hue 0), leave blue alone
+    ColorMixer m;
+    m.setCurve(ColorMixer::Sat, {{0.f, -1.f}, {60.f, 0.f}, {180.f, 0.f}, {300.f, 0.f}});
+    CHECK_NEAR(satOf(m.apply(blue)), 0.8, 0.03);  // blue (240) unchanged
+    CHECK(satOf(m.apply(red)) < 0.2);             // red desaturated
+
+    // single point -> constant curve affecting ALL hues
+    ColorMixer mc;
+    mc.setCurve(ColorMixer::Sat, {{0.f, -1.f}});
+    CHECK(satOf(mc.apply(blue)) < 0.2);           // even blue desaturated
+
+    // Hue-shift curve: push red toward orange/yellow (+60 at hue 0)
+    ColorMixer mh;
+    mh.setCurve(ColorMixer::Hue, {{0.f, 1.f}, {120.f, 0.f}, {240.f, 0.f}});
+    CHECK(hueOf(mh.apply(pxHsl(0, (Pixel)0.9, (Pixel)0.5))) > 30.0);
 }
 
 // ── ColorGrading ──
@@ -538,7 +551,7 @@ TEST(Processors_grayscale_passthrough)
     CHECK_NEAR(wb.apply(g).at(0, 0, 0), 0.4, 1e-6);
     Vibrance v; v.setSaturation(100.0);
     CHECK_NEAR(v.apply(g).at(0, 0, 0), 0.4, 1e-6);
-    ColorMixer m; m.setBandSaturation(0, 50.0);
+    ColorMixer m; m.setCurve(ColorMixer::Sat, {{0.f, 0.5f}, {180.f, 0.5f}});
     CHECK_NEAR(m.apply(g).at(0, 0, 0), 0.4, 1e-6);
     ColorGrading cg; cg.setGradeSaturation(ColorGrading::Shadows, 80.0);
     CHECK_NEAR(cg.apply(g).at(0, 0, 0), 0.4, 1e-6);
@@ -553,10 +566,13 @@ TEST(Vibrance_and_mixer_clamps)
     Vibrance dn; dn.setSaturation(-100.0);
     CHECK(satOf(dn.apply(c)) >= -1e-6);
 
-    // ColorMixer hue wrap below 0 and saturation clamp
-    ColorMixer m; m.setBandHue(5, -100.0); m.setBandSaturation(5, 100.0);  // blue band
+    // ColorMixer: strong negative hue shift wraps below 0; saturation clamps high
+    ColorMixer m;
+    m.setCurve(ColorMixer::Hue, {{0.f, -1.f}, {120.f, -1.f}, {240.f, -1.f}});  // shift all -60
+    m.setCurve(ColorMixer::Sat, {{0.f, 1.f}, {180.f, 1.f}});                   // 2x sat (clamps)
     Image out = m.apply(c);
     CHECK(hueOf(out) >= 0.0 && hueOf(out) < 360.0);
+    CHECK(satOf(out) <= 1.0 + 1e-6);
 }
 
 TEST(ToneCurve_empty_points_resets)
