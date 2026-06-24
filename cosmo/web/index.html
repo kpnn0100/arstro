@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cosmo by arstro</title>
 <style>
-  body { margin:0; background:#07090d; color:#e6e9ef; font:14px system-ui, sans-serif; display:flex; flex-direction:column; align-items:center; }
-  header { display:flex; gap:14px; align-items:center; padding:12px; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#07090d; color:#e6e9ef; font:14px system-ui, sans-serif; }
+  header { display:flex; gap:14px; align-items:center; padding:8px 12px; height:36px; box-sizing:border-box; }
   #status { color:#8b94a7; }
-  canvas { border:1px solid #1c2330; border-radius:12px; }
-  label.open { background:#f2b24a; color:#0a0c11; padding:6px 12px; border-radius:7px; cursor:pointer; font-weight:600; }
+  canvas { display:block; }
+  label.open { background:#f2b24a; color:#0a0c11; padding:5px 12px; border-radius:7px; cursor:pointer; font-weight:600; }
   input[type=file] { display:none; }
 </style>
 </head>
@@ -19,7 +19,7 @@
     <label class="open">Open images<input id="file" type="file" accept="image/*" multiple /></label>
     <span id="status">loading…</span>
   </header>
-  <canvas id="c" width="1280" height="860"></canvas>
+  <canvas id="c"></canvas>
   <script src="cosmo.js"></script>
   <script src="app.js"></script>
 </body>

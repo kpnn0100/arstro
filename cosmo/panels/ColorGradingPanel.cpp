@@ -1,5 +1,6 @@
 #include "ColorGradingPanel.h"
 #include "../Chrome.h"
+#include "../CosmoTheme.h"
 
 namespace arstro
 {
@@ -7,45 +8,88 @@ namespace cosmo
 {
     using namespace artboard;
 
+    namespace
+    {
+        constexpr double kHeaderH = 34.0;
+        constexpr double kPad = 12.0;
+        constexpr double kLabelW = 64.0;
+        constexpr double kCtrlH = 16.0;
+    }
+
     ColorGradingPanel::ColorGradingPanel(const Theme &theme, const Color &accent) : mAccent(accent)
     {
         width.set(300.0);
-        height.set(290.0);
+        height.set(300.0);
 
         mRegionSel = std::make_shared<ComboBox>(theme.combo);
         mRegionSel->setOptions({"Shadows", "Midtones", "Highlights"});
         mRegionSel->setSelectedIndex(0);
-        mRegionSel->x.set(14.0); mRegionSel->y.set(40.0);
-        mRegionSel->width.set(170.0); mRegionSel->height.set(24.0);
         mRegionSel->onChange = [this](int r) { mRegion = r; loadRegion(); };
         addChild(mRegionSel);
 
-        auto knob = [&](double mn, double mx, double def, const char *label, double x, double y) {
-            auto k = std::make_shared<Knob>(theme.knob);
-            k->label = label; k->setRange(mn, mx); k->setValue(def); k->setDefault(def);
-            k->width.set(40.0); k->height.set(40.0); k->x.set(x); k->y.set(y);
-            addChild(k);
-            return k;
+        auto slider = [&](double mn, double mx, double def) {
+            auto s = std::make_shared<Slider>(theme.slider);
+            s->setRange(mn, mx); s->setValue(def); s->setDefault(def);
+            addChild(s);
+            return s;
         };
-        mHue = knob(0, 360, 0, "hue", 20, 80);
-        mSat = knob(0, 100, 0, "sat", 80, 80);
-        mLum = knob(-100, 100, 0, "lum", 140, 80);
-        mBalance = knob(-100, 100, 0, "balance", 210, 80);
-        for (auto *k : {mHue.get(), mSat.get(), mLum.get()}) k->onChange = [this](double) { emitGrade(); };
+        mHue = slider(0, 360, 0);
+        mSat = slider(0, 100, 0);
+        mLum = slider(-100, 100, 0);
+        mBalance = slider(-100, 100, 0);
+        for (auto *s : {mHue.get(), mSat.get(), mLum.get()}) s->onChange = [this](double) { emitGrade(); };
         mBalance->onChange = [this](double v) { mState.balance = v; if (onBalance) onBalance(v); };
 
-        mRemap = std::make_shared<ToggleSwitch>(theme.toggle);
-        mRemap->width.set(34.0); mRemap->height.set(16.0);
-        mRemap->x.set(70.0); mRemap->y.set(150.0);
+        mRemap = std::make_shared<TextToggle>("remap", accent);
         mRemap->onChange = [this](bool on) { mState.remapOn = on; emitRemap(); };
         addChild(mRemap);
 
-        mSrc = knob(0, 360, 0, "src", 20, 190);
-        mRange = knob(0, 180, 30, "range", 90, 190);
-        mDst = knob(0, 360, 0, "dst", 160, 190);
-        mStrength = knob(0, 100, 0, "amt", 230, 190);
-        for (auto *k : {mSrc.get(), mRange.get(), mDst.get(), mStrength.get()})
-            k->onChange = [this](double) { emitRemap(); };
+        mSrc = slider(0, 360, 0);
+        mRange = slider(0, 180, 30);
+        mDst = slider(0, 360, 0);
+        mStrength = slider(0, 100, 0);
+        for (auto *s : {mSrc.get(), mRange.get(), mDst.get(), mStrength.get()})
+            s->onChange = [this](double) { emitRemap(); };
+
+        mRows = {
+            {mRegionSel, "", false},
+            {mHue, "hue", true}, {mSat, "sat", true}, {mLum, "lum", true},
+            {mBalance, "balance", true},
+            {mRemap, "", false},
+            {mSrc, "src", true}, {mRange, "range", true}, {mDst, "dst", true}, {mStrength, "amount", true},
+        };
+    }
+
+    void ColorGradingPanel::layout(double w, double h)
+    {
+        width.set(w);
+        height.set(h);
+        const int rows = (int)mRows.size();
+        const double usable = h - kHeaderH - kPad;
+        const double rowH = rows > 0 ? usable / rows : usable;
+        for (int i = 0; i < rows; ++i)
+        {
+            const double top = kHeaderH + i * rowH;
+            Row &r = mRows[i];
+            r.baseY = top + rowH * 0.5 + 3.0;
+            const bool labeled = r.labeled;
+            const double cx = labeled ? kLabelW : kPad;
+            const double cw = w - cx - kPad;
+            r.ctrl->x.set(cx);
+            r.ctrl->width.set(cw > 20 ? cw : 20);
+            if (labeled)
+            {
+                r.ctrl->y.set(top + (rowH - kCtrlH) * 0.5);
+                r.ctrl->height.set(kCtrlH);
+            }
+            else
+            {
+                // combo / toggle: a bit taller
+                const double ch = rowH > 26 ? 22.0 : rowH - 2.0;
+                r.ctrl->y.set(top + (rowH - ch) * 0.5);
+                r.ctrl->height.set(ch);
+            }
+        }
     }
 
     void ColorGradingPanel::loadRegion()
@@ -86,8 +130,10 @@ namespace cosmo
     void ColorGradingPanel::onPaint(IRenderTarget &t) const
     {
         drawPanelChrome(t, width.value(), height.value(), mAccent, "GRADE");
-        t.setFill(Color{1, 1, 1, 0.45});
-        t.drawText("remap", 14.0, 162.0, 10.0);
+        t.setFill(palette::muted());
+        for (const auto &r : mRows)
+            if (r.labeled)
+                t.drawText(r.label, 10.0, r.baseY, 10.0);
     }
 }
 }

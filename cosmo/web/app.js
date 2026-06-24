@@ -1,15 +1,26 @@
 /*
- *  Cosmo by arstro — web driver. Wires the wasm module to a Canvas2D context and
- *  an rAF loop; decodes opened files in the browser (createImageBitmap -> canvas
- *  -> ImageData) and pushes straight RGBA8 bytes into the wasm heap via loadImage.
+ *  Cosmo by arstro — web driver. Wires the wasm module to a Canvas2D context and an
+ *  rAF loop; the canvas fills the window and the UI reflows on resize. Opened files
+ *  are decoded in the browser (createImageBitmap -> canvas -> ImageData) and pushed
+ *  into the wasm heap via loadImage.
  */
 "use strict";
 
 let M = null, t0 = null;
-const W = 1280, H = 860;
 const canvas = document.getElementById("c");
 window.__abctx = canvas.getContext("2d");
 const setStatus = (s) => (document.getElementById("status").textContent = s);
+
+function viewSize() {
+  return { w: Math.max(640, Math.floor(window.innerWidth - 4)),
+           h: Math.max(360, Math.floor(window.innerHeight - 52)) };
+}
+function applySize() {
+  const s = viewSize();
+  canvas.width = s.w; canvas.height = s.h;
+  if (M) M.resize(s.w, s.h);
+}
+window.addEventListener("resize", applySize);
 
 function loop() {
   if (M) { if (t0 === null) t0 = performance.now(); M.frame(performance.now() - t0); }
@@ -18,12 +29,13 @@ function loop() {
 
 createCosmoModule().then((mod) => {
   M = mod;
-  M.init(W, H);
+  const s = viewSize();
+  canvas.width = s.w; canvas.height = s.h;
+  M.init(s.w, s.h);
   setStatus("ready — open an image");
   requestAnimationFrame(loop);
 }).catch((e) => setStatus("wasm load failed: " + e));
 
-// Decode a File to straight RGBA8 and hand it to the wasm engine.
 async function loadFile(file) {
   const bmp = await createImageBitmap(file);
   const off = document.createElement("canvas");

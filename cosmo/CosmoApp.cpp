@@ -1,4 +1,5 @@
 #include "CosmoApp.h"
+#include <algorithm>
 
 namespace arstro
 {
@@ -10,11 +11,8 @@ namespace cosmo
     {
         constexpr double kMargin = 16.0;
         constexpr double kTopBar = 56.0;
-        constexpr double kRightW = 352.0;
-        constexpr double kFilmH = 80.0;
-        constexpr double kHistH = 190.0;
+        double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
-        // Box-average downscale of straight RGBA8 to fit `maxEdge` (preserve aspect).
         std::vector<uint8_t> makeThumb(const uint8_t *rgba, int w, int h, int maxEdge, int &tw, int &th)
         {
             const int longEdge = w > h ? w : h;
@@ -58,55 +56,37 @@ namespace cosmo
         mRoot->width.set(width);
         mRoot->height.set(height);
 
-        const double rightX = mW - kRightW - kMargin;
-        const double filmY = mH - kFilmH - kMargin;
-        const double photoY = kTopBar + 8.0;
-        mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, filmY - photoY - 8.0};
-
         mImageView = std::make_shared<ImageView>();
-        mImageView->x.set(mPhotoRect.x);
-        mImageView->y.set(mPhotoRect.y);
-        mImageView->width.set(mPhotoRect.w);
-        mImageView->height.set(mPhotoRect.h);
         mRoot->addChild(mImageView);
 
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
-        mHistogram->x.set(rightX);
-        mHistogram->y.set(photoY);
         mRoot->addChild(mHistogram);
 
-        // ── edit sections (each pushes params straight into the engine) ──
+        // Basic: every tone/colour/effect slider in one column (Light + Color + FX merged).
         using Spec = ParamPanel::Spec;
         std::vector<Spec> basic = {
             {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curUi()) { p->exposure = v; mEngine.setExposure((float)v); markDirty(); } }},
             {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->contrast = v; mEngine.setContrast((float)v); markDirty(); } }},
-            {"highlight", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
-            {"shadow", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
-            {"white", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
-            {"black", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
-        };
-        std::vector<Spec> color = {
+            {"highlights", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
+            {"shadows", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
+            {"whites", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
+            {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
             {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curUi()) { p->temp = v; mEngine.setTemperature((float)v); markDirty(); } }},
             {"tint", -150, 150, 0, [this](double v) { if (auto *p = curUi()) { p->tint = v; mEngine.setTint((float)v); markDirty(); } }},
             {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->vibrance = v; mEngine.setVibrance((float)v); markDirty(); } }},
-            {"sat", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
-        };
-        std::vector<Spec> fx = {
+            {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
             {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->dehaze = v; mEngine.setDehaze((float)v); markDirty(); } }},
             {"grain", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainAmount = v; mEngine.setGrainAmount((float)v); markDirty(); } }},
-            {"grain sz", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
+            {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
         };
-        mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic, 3);
-        mColor = std::make_shared<ParamPanel>("COLOR", mTheme, mAccent, color, 2);
-        mEffects = std::make_shared<ParamPanel>("EFFECTS", mTheme, mAccent, fx, 3);
-        mMixer = std::make_shared<ColorMixerPanel>(mTheme, mAccent);
-        mMixer->onChange = [this](int b, double h, double s, double l) {
+        mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic);
+
+        mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
+        mMixer->onChange = [this](int ch, const std::vector<std::pair<float, float>> &pts) {
             if (auto *p = curUi())
             {
-                mEngine.setBandHue((EditEngine::HslBand)b, (float)h);
-                mEngine.setBandSaturation((EditEngine::HslBand)b, (float)s);
-                mEngine.setBandLuminance((EditEngine::HslBand)b, (float)l);
-                p->mixer[b] = {h, s, l};
+                p->mixer[ch] = pts;
+                mEngine.setMixerCurve((EditEngine::MixerChannel)ch, pts);
                 markDirty();
             }
         };
@@ -130,9 +110,7 @@ namespace cosmo
                 markDirty();
             }
         };
-        mGrade->onBalance = [this](double v) {
-            if (auto *p = curUi()) { p->balance = v; mEngine.setGradeBalance((float)v); markDirty(); }
-        };
+        mGrade->onBalance = [this](double v) { if (auto *p = curUi()) { p->balance = v; mEngine.setGradeBalance((float)v); markDirty(); } };
         mGrade->onRemap = [this](bool on, double src, double range, double dst, double strength) {
             if (auto *p = curUi())
             {
@@ -145,12 +123,8 @@ namespace cosmo
         };
 
         mXform = std::make_shared<TransformPanel>(mTheme, mAccent);
-        mXform->onRotate = [this](double v) {
-            if (auto *p = curUi()) { p->rotation = v; mEngine.setRotation((float)v); markDirty(); }
-        };
-        mXform->onQuarterTurns = [this](int i) {
-            if (auto *p = curUi()) { p->quarter = i; mEngine.setQuarterTurns(i); markDirty(); }
-        };
+        mXform->onRotate = [this](double v) { if (auto *p = curUi()) { p->rotation = v; mEngine.setRotation((float)v); markDirty(); } };
+        mXform->onQuarterTurns = [this](int i) { if (auto *p = curUi()) { p->quarter = i; mEngine.setQuarterTurns(i); markDirty(); } };
         mXform->onCrop = [this](double x, double y, double w, double h) {
             if (auto *p = curUi())
             {
@@ -161,13 +135,7 @@ namespace cosmo
         };
 
         mTabs = std::make_shared<TabView>(mTheme.tab);
-        mTabs->x.set(rightX);
-        mTabs->y.set(photoY + kHistH + 10.0);
-        mTabs->width.set(kRightW);
-        mTabs->height.set((filmY - 8.0) - (photoY + kHistH + 10.0));
-        mTabs->addPage("Light", mBasic);
-        mTabs->addPage("Color", mColor);
-        mTabs->addPage("FX", mEffects);
+        mTabs->addPage("Basic", mBasic);
         mTabs->addPage("Mixer", mMixer);
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
@@ -175,14 +143,62 @@ namespace cosmo
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
-        mFilmstrip->x.set(kMargin);
-        mFilmstrip->y.set(filmY);
-        mFilmstrip->width.set(rightX - kMargin - kMargin);
         mFilmstrip->onSelect = [this](int i) { selectImage(i); };
         mRoot->addChild(mFilmstrip);
 
-        mEngine.setPreviewSize((int)(mPhotoRect.w > mPhotoRect.h ? mPhotoRect.w : mPhotoRect.h));
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
+        layout();
+    }
+
+    void CosmoApp::layout()
+    {
+        const double rightW = clampd(mW * 0.30, 300.0, 460.0);
+        const double filmH = clampd(mH * 0.10, 72.0, 110.0);
+        const double histH = clampd(mH * 0.22, 150.0, 240.0);
+        const double rightX = mW - rightW - kMargin;
+        const double filmY = mH - filmH - kMargin;
+        const double photoY = kTopBar + 8.0;
+        mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, filmY - photoY - 8.0};
+
+        mImageView->x.set(mPhotoRect.x);
+        mImageView->y.set(mPhotoRect.y);
+        mImageView->width.set(mPhotoRect.w);
+        mImageView->height.set(mPhotoRect.h);
+
+        mHistogram->x.set(rightX);
+        mHistogram->y.set(photoY);
+        mHistogram->layout(rightW, histH);
+
+        const double tabsY = photoY + histH + 10.0;
+        const double tabsH = (filmY - 8.0) - tabsY;
+        mTabs->x.set(rightX);
+        mTabs->y.set(tabsY);
+        mTabs->width.set(rightW);
+        mTabs->height.set(tabsH);
+        const double contentH = tabsH - mTabs->tabHeight - 6.0;
+        mBasic->layout(rightW, contentH);
+        mMixer->layout(rightW, contentH);
+        mCurve->layout(rightW, contentH);
+        mGrade->layout(rightW, contentH);
+        mXform->layout(rightW, contentH);
+
+        mFilmstrip->x.set(kMargin);
+        mFilmstrip->y.set(filmY);
+        mFilmstrip->width.set(rightX - kMargin - kMargin);
+        mFilmstrip->height.set(filmH);
+
+        mEngine.setPreviewSize((int)(mPhotoRect.w > mPhotoRect.h ? mPhotoRect.w : mPhotoRect.h));
+        markDirty();
+    }
+
+    void CosmoApp::setSize(double width, double height)
+    {
+        if (width < 320) width = 320;
+        if (height < 240) height = 240;
+        mW = width; mH = height;
+        mRoot->width.set(width);
+        mRoot->height.set(height);
+        layout();
     }
 
     int CosmoApp::openImage(const uint8_t *rgba, int w, int h, const std::string &name)
@@ -212,10 +228,9 @@ namespace cosmo
         const int s = mEngine.currentSlot();
         if (s < 0) return;
         const UiParams &p = mSlotParams[s];
-        mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks});
-        mColor->setValues({p.temp, p.tint, p.vibrance, p.saturation});
-        mEffects->setValues({p.dehaze, p.grainAmount, p.grainSize});
-        mMixer->setValues(p.mixer);
+        mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks,
+                           p.temp, p.tint, p.vibrance, p.saturation, p.dehaze, p.grainAmount, p.grainSize});
+        mMixer->setCurves(p.mixer);
         mCurve->setCurve(p.curve);
         mCurve->setLog(p.curveLog);
 
@@ -235,8 +250,7 @@ namespace cosmo
     {
         if (!mEngine.hasImage()) { w = h = 0; return nullptr; }
         PreviewBuffer pb = mEngine.renderFull();
-        w = pb.width;
-        h = pb.height;
+        w = pb.width; h = pb.height;
         return pb.rgba;
     }
 

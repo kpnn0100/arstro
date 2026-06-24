@@ -10,15 +10,22 @@ namespace cosmo
 
     HistogramPanel::HistogramPanel(const Theme &theme, const Color &accent) : mAccent(accent)
     {
+        (void)theme;
         width.set(352.0);
         height.set(190.0);
-        mLogToggle = std::make_shared<ToggleSwitch>(theme.toggle);
-        mLogToggle->width.set(34.0);
-        mLogToggle->height.set(16.0);
-        mLogToggle->x.set(width.value() - 48.0);
-        mLogToggle->y.set(11.0);
+        mLogToggle = std::make_shared<TextToggle>("log", accent);
+        mLogToggle->x.set(width.value() - 44.0);
+        mLogToggle->y.set(10.0);
         mLogToggle->onChange = [this](bool on) { mLog = on; };
         addChild(mLogToggle);
+    }
+
+    void HistogramPanel::layout(double w, double h)
+    {
+        width.set(w);
+        height.set(h);
+        mLogToggle->x.set(w - 44.0);
+        mLogToggle->y.set(10.0);
     }
 
     void HistogramPanel::onPaint(IRenderTarget &t) const
@@ -26,12 +33,7 @@ namespace cosmo
         const double w = width.value(), h = height.value();
         drawPanelChrome(t, w, h, mAccent, "HISTOGRAM");
 
-        // "LOG" label next to the toggle
-        t.setFill(Color{1, 1, 1, 0.45});
-        t.drawText(mLog ? "LOG" : "LIN", w - 78.0, 22.0, 10.0);
-
         const double px = 12.0, py = 40.0, pw = w - 24.0, ph = h - 52.0;
-        // plot frame
         drawRoundedRect(t, Rect{px, py, pw, ph}, 4.0,
                         Paint::filledStroked(Color::hex(0x0a0c11), Color::hex(0x2a3040), 1.0));
 
@@ -39,7 +41,6 @@ namespace cosmo
         if (mLog) arstro::Histogram::toLog(mData, norm);
         else arstro::Histogram::toLinear(mData, norm);
 
-        // R, G, B, then luminance on top — translucent fills, additive-ish look.
         const Color cols[4] = {
             Color{0.95, 0.30, 0.34, 0.45},
             Color{0.35, 0.90, 0.45, 0.45},

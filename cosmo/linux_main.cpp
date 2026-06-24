@@ -113,6 +113,11 @@ namespace
         a->app.pointer(1, e->x, e->y, 0, nowMs(*a));
         return TRUE;
     }
+    void onSizeAllocate(GtkWidget *, GtkAllocation *alloc, gpointer user)
+    {
+        auto *a = static_cast<App *>(user);
+        a->app.setSize(alloc->width, alloc->height);  // reflow the UI to the window
+    }
     gboolean onKey(GtkWidget *, GdkEventKey *e, gpointer user)
     {
         if (e->keyval == GDK_KEY_o || e->keyval == GDK_KEY_O)
@@ -144,7 +149,7 @@ int main(int argc, char **argv)
     gtk_window_set_default_size(GTK_WINDOW(app.window), kW, kH);
 
     app.area = gtk_drawing_area_new();
-    gtk_widget_set_size_request(app.area, kW, kH);
+    gtk_widget_set_size_request(app.area, 640, 400);  // minimum; the area fills the window
     gtk_widget_set_can_focus(app.area, TRUE);
     gtk_widget_add_events(app.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK);
@@ -155,6 +160,7 @@ int main(int argc, char **argv)
     g_signal_connect(app.area, "button-release-event", G_CALLBACK(onButton), &app);
     g_signal_connect(app.area, "motion-notify-event", G_CALLBACK(onMotion), &app);
     g_signal_connect(app.area, "key-press-event", G_CALLBACK(onKey), &app);
+    g_signal_connect(app.area, "size-allocate", G_CALLBACK(onSizeAllocate), &app);
 
     gtk_container_add(GTK_CONTAINER(app.window), app.area);
     gtk_widget_show_all(app.window);
