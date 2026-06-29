@@ -14,7 +14,7 @@ namespace cosmo
         constexpr double kPad = 12.0;
         constexpr double kLabelW = 84.0;
         constexpr double kSliderH = 14.0;
-        constexpr double kSectionH = 20.0;  // section sub-header row
+        constexpr double kSectionH = 26.0;  // section sub-header row (room for a divider)
     }
 
     ParamPanel::ParamPanel(const std::string &title, const Theme &theme,
@@ -79,13 +79,25 @@ namespace cosmo
     void ParamPanel::onPaint(IRenderTarget &t) const
     {
         drawPanelChrome(t, width.value(), height.value(), mTitle);
+        const double w = width.value();
+        bool firstHeader = true;
         for (const auto &it : mItems)
         {
             if (it.header)
             {
-                t.setFill(palette::ink());  // hierarchy by colour: header (ink) > label (muted)
+                // A hairline rule above each section (except the first) separates groups
+                // cleanly; a short accent tick + faux-bold ink label names it.
+                if (!firstHeader)
+                {
+                    const double ly = it.baseY - 16.0;
+                    t.setStroke(palette::line(), 1.0);
+                    t.beginPath(); t.moveTo(10.0, ly); t.lineTo(w - kPad, ly); t.strokePath();
+                }
+                firstHeader = false;
+                drawRoundedRect(t, Rect{10.0, it.baseY - 8.0, 3.0, 10.0}, 1.5, Paint::filled(mAccent));  // accent tick
+                t.setFill(palette::ink());
                 for (double ox : {0.0, 0.4})  // faux-bold section title
-                    t.drawText(it.label, 10.0 + ox, it.baseY, 10.0);
+                    t.drawText(it.label, 19.0 + ox, it.baseY, 10.5);
             }
             else
             {
