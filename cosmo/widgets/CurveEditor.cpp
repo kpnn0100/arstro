@@ -1,4 +1,5 @@
 #include "CurveEditor.h"
+#include "../CosmoTheme.h"
 #include <algorithm>
 
 namespace arstro
@@ -115,7 +116,7 @@ namespace cosmo
     void CurveEditor::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        drawRoundedRect(t, Rect{0, 0, w, h}, 6.0, Paint::filledStroked(Color::hex(0x0a0c11), Color::hex(0x2a3040), 1.0));
+        drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(), Paint::filledStroked(palette::bg(), palette::line(), 1.0));
         for (int i = 1; i < 4; ++i)
         {
             const double gx = px(i / 4.0), gy = py(i / 4.0);

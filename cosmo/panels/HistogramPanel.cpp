@@ -1,5 +1,6 @@
 #include "HistogramPanel.h"
 #include "../Chrome.h"
+#include "../CosmoTheme.h"
 
 namespace arstro
 {
@@ -31,11 +32,11 @@ namespace cosmo
     void HistogramPanel::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        drawPanelChrome(t, w, h, mAccent, "HISTOGRAM");
+        drawPanelChrome(t, w, h, "HISTOGRAM");
 
         const double px = 12.0, py = 40.0, pw = w - 24.0, ph = h - 52.0;
-        drawRoundedRect(t, Rect{px, py, pw, ph}, 4.0,
-                        Paint::filledStroked(Color::hex(0x0a0c11), Color::hex(0x2a3040), 1.0));
+        drawRoundedRect(t, Rect{px, py, pw, ph}, radius::control(),
+                        Paint::filledStroked(palette::bg(), palette::line(), 1.0));
 
         float norm[4][HD::kBins];
         if (mLog) arstro::Histogram::toLog(mData, norm);

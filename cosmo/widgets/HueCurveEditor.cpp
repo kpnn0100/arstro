@@ -1,4 +1,5 @@
 #include "HueCurveEditor.h"
+#include "../CosmoTheme.h"
 #include <algorithm>
 #include <cmath>
 
@@ -117,7 +118,7 @@ namespace cosmo
     void HueCurveEditor::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        drawRoundedRect(t, Rect{0, 0, w, h}, 6.0, Paint::filledStroked(Color::hex(0x0a0c11), Color::hex(0x2a3040), 1.0));
+        drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(), Paint::filledStroked(palette::bg(), palette::line(), 1.0));
         t.beginPath(); t.moveTo(kPad, midY()); t.lineTo(w - kPad, midY()); t.setStroke(Color{1, 1, 1, 0.12}, 1.0); t.strokePath();
         for (int d = 60; d < 360; d += 60)
         { const double gx = pxh(d); t.beginPath(); t.moveTo(gx, plotTop()); t.lineTo(gx, plotBot()); t.setStroke(Color{1, 1, 1, 0.05}, 1.0); t.strokePath(); }

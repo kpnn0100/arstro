@@ -41,7 +41,7 @@ namespace cosmo
 
     void ToneCurvePanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mAccent, "CURVE");
+        drawPanelChrome(t, width.value(), height.value(), "CURVE");
     }
 }
 }

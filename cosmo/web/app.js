@@ -32,7 +32,7 @@ createCosmoModule().then((mod) => {
   const s = viewSize();
   canvas.width = s.w; canvas.height = s.h;
   M.init(s.w, s.h);
-  setStatus("ready — open an image");
+  setStatus("ready - open an image");
   requestAnimationFrame(loop);
 }).catch((e) => setStatus("wasm load failed: " + e));
 

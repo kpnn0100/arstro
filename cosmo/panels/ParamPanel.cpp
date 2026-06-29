@@ -78,13 +78,13 @@ namespace cosmo
 
     void ParamPanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mAccent, mTitle);
+        drawPanelChrome(t, width.value(), height.value(), mTitle);
         for (const auto &it : mItems)
         {
             if (it.header)
             {
-                t.setFill(Color{mAccent.r, mAccent.g, mAccent.b, 0.9});
-                for (double ox : {0.0, 0.5})  // faux-bold section title
+                t.setFill(palette::ink());  // hierarchy by colour: header (ink) > label (muted)
+                for (double ox : {0.0, 0.4})  // faux-bold section title
                     t.drawText(it.label, 10.0 + ox, it.baseY, 10.0);
             }
             else

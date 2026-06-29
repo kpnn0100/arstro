@@ -1,5 +1,6 @@
 #include "Filmstrip.h"
 #include "../Chrome.h"
+#include "../CosmoTheme.h"
 
 namespace arstro
 {
@@ -39,15 +40,15 @@ namespace cosmo
     void Filmstrip::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        drawRoundedRect(t, Rect{0, 0, w, h}, 8.0,
-                        Paint::filledStroked(Color::hex(0x101218), Color::hex(0x2a3040), 1.0));
+        drawRoundedRect(t, Rect{0, 0, w, h}, radius::panel(),
+                        Paint::filledStroked(palette::panel(), palette::line(), 1.0));
         // per-cell dark slot, and an accent border on the selected one
         for (int i = 0; i < (int)mThumbs.size(); ++i)
         {
             const Rect cell{cellX(i), kPad, kCellW, kCellH};
-            drawRoundedRect(t, cell, 5.0, Paint::filled(Color::hex(0x0a0c11)));
+            drawRoundedRect(t, cell, radius::control(), Paint::filled(palette::bg()));
             if (i == mSelected)
-                drawRoundedRect(t, cell, 5.0, Paint::stroked(mAccent, 2.0));
+                drawRoundedRect(t, cell, radius::control(), Paint::stroked(mAccent, 2.0));
         }
     }
 

@@ -129,7 +129,7 @@ namespace cosmo
 
     void ColorGradingPanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mAccent, "GRADE");
+        drawPanelChrome(t, width.value(), height.value(), "GRADE");
         t.setFill(palette::muted());
         for (const auto &r : mRows)
             if (r.labeled)

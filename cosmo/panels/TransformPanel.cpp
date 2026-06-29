@@ -85,7 +85,7 @@ namespace cosmo
 
     void TransformPanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mAccent, "TRANSFORM");
+        drawPanelChrome(t, width.value(), height.value(), "TRANSFORM");
         t.setFill(palette::muted());
         for (int r = 0; r < 6; ++r)
             t.drawText(kLabels[r], 10.0, mRowY[r], 10.0);

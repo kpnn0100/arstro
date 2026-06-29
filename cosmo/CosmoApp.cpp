@@ -292,10 +292,18 @@ namespace cosmo
         target.save();
         target.setTransform(Transform::identity());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::bg()));
+        // wordmark (the one intentional brand-accent moment) + quiet byline
         target.setFill(mAccent);
-        target.drawText("COSMO", 18.0, 34.0, 22.0);
-        target.setFill(Color{1, 1, 1, 0.35});
-        target.drawText("by arstro", 104.0, 34.0, 12.0);
+        for (double ox : {0.0, 0.5})
+            target.drawText("COSMO", 18.0 + ox, 33.0, 19.0);
+        target.setFill(palette::faint());
+        target.drawText("by arstro", 96.0, 33.0, 11.0);
+        // hairline under the top bar
+        target.beginPath();
+        target.moveTo(0.0, kTopBar);
+        target.lineTo(mW, kTopBar);
+        target.setStroke(palette::line(), 1.0);
+        target.strokePath();
 
         target.setFill(palette::muted());
         if (mEngine.hasImage())
@@ -307,10 +315,10 @@ namespace cosmo
         }
         else
         {
-            target.drawText("Open an image — press O (native) or use the file picker (web)",
-                            190.0, 34.0, 12.0);
-            drawRoundedRect(target, mPhotoRect, 10.0,
-                            Paint::filledStroked(Color::hex(0x101218), Color::hex(0x2a3040), 1.0));
+            target.drawText("Open an image  -  press O (native) or use the file picker (web)",
+                            190.0, 33.0, 12.0);
+            drawRoundedRect(target, mPhotoRect, radius::panel(),
+                            Paint::filledStroked(palette::panel(), palette::line(), 1.0));
         }
         target.restore();
 

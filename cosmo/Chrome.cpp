@@ -1,4 +1,5 @@
 #include "Chrome.h"
+#include "CosmoTheme.h"
 
 namespace arstro
 {
@@ -6,27 +7,23 @@ namespace cosmo
 {
     using namespace artboard;
 
-    void drawPanelChrome(IRenderTarget &t, double w, double h,
-                         const Color &accent, const std::string &title)
+    void drawPanelChrome(IRenderTarget &t, double w, double h, const std::string &title)
     {
-        drawRoundedRect(t, Rect{0, 0, w, h}, 10.0,
-                        Paint::filledStroked(Color::hex(0x14161c),
-                                             Color{accent.r, accent.g, accent.b, 0.32}, 1.0));
-        drawRoundedRect(t, Rect{0, 0, w, 3.0}, 0.0, Paint::filled(accent));
+        // Elevated body with a hairline edge (one radius scale).
+        drawRoundedRect(t, Rect{0, 0, w, h}, radius::panel(),
+                        Paint::filledStroked(palette::panel(), palette::line(), 1.0));
 
-        // header sheen: a vertical accent glow fading down from under the top stripe
+        // Quiet title (faux-bold via a half-pixel overdraw — weight, not size/accent).
+        t.setFill(palette::ink());
+        for (double ox : {0.0, 0.4})
+            t.drawText(title, 14.0 + ox, 21.0, 11.0);
+
+        // Hairline divider under the header.
         t.beginPath();
-        t.moveTo(1, 3); t.lineTo(w - 1, 3); t.lineTo(w - 1, 36); t.lineTo(1, 36); t.closePath();
-        t.setLinearFill(0, 3, 0, 36,
-                        Color{accent.r, accent.g, accent.b, 0.12},
-                        Color{accent.r, accent.g, accent.b, 0.0});
-        t.fillPath();
-
-        // faux-bold title (overdraw with sub-pixel offsets)
-        t.setFill(accent);
-        for (double ox : {0.0, 0.5})
-            for (double oy : {0.0, 0.5})
-                t.drawText(title, 14.0 + ox, 21.0 + oy, 13.0);
+        t.moveTo(12.0, 31.0);
+        t.lineTo(w - 12.0, 31.0);
+        t.setStroke(palette::line(), 1.0);
+        t.strokePath();
     }
 }
 }
