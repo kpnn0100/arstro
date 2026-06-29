@@ -81,6 +81,7 @@ namespace cosmo
         std::shared_ptr<HistogramPanel> mHistogram;
         std::shared_ptr<artboard::TabView> mTabs;
         std::shared_ptr<ParamPanel> mBasic;
+        std::shared_ptr<ParamPanel> mDetail;   // sharpening + noise reduction + lens
         std::shared_ptr<MixerPanel> mMixer;
         std::shared_ptr<ToneCurvePanel> mCurve;
         std::shared_ptr<ColorGradingPanel> mGrade;

@@ -82,13 +82,35 @@ namespace cosmo
                 {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->vibrance = (float)v; submit(); } }},
                 {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->saturation = (float)v; submit(); } }},
             }},
-            {"EFFECTS", {
+            {"PRESENCE", {
+                {"texture", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->texture = (float)v; submit(); } }},
+                {"clarity", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->clarity = (float)v; submit(); } }},
                 {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->dehaze = (float)v; submit(); } }},
+            }},
+            {"EFFECTS", {
                 {"grain", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->grainAmount = (float)v; submit(); } }},
                 {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->grainSize = (float)v; submit(); } }},
             }},
         };
         mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic);
+
+        std::vector<Section> detail = {
+            {"SHARPENING", {
+                {"amount", 0, 150, 0, [this](double v) { if (auto *p = curParams()) { p->sharpenAmount = (float)v; submit(); } }},
+                {"radius", 0.5, 3, 1, [this](double v) { if (auto *p = curParams()) { p->sharpenRadius = (float)v; submit(); } }},
+                {"masking", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->sharpenMasking = (float)v; submit(); } }},
+            }},
+            {"NOISE REDUCTION", {
+                {"luminance", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->nrLuminance = (float)v; submit(); } }},
+                {"color", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->nrColor = (float)v; submit(); } }},
+            }},
+            {"LENS", {
+                {"distortion", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->lensDistortion = (float)v; submit(); } }},
+                {"defringe", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->lensCA = (float)v; submit(); } }},
+                {"vignette", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->lensVignette = (float)v; submit(); } }},
+            }},
+        };
+        mDetail = std::make_shared<ParamPanel>("DETAIL", mTheme, mAccent, detail);
 
         mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
         mMixer->onChange = [this](int ch, const std::vector<std::pair<float, float>> &pts) {
@@ -124,6 +146,7 @@ namespace cosmo
 
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->addPage("Basic", mBasic);
+        mTabs->addPage("Detail", mDetail);
         mTabs->addPage("Mixer", mMixer);
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
@@ -184,6 +207,7 @@ namespace cosmo
         mTabs->width.set(rightW); mTabs->height.set(tabsH);
         const double contentH = tabsH - mTabs->tabHeight - 6.0;
         mBasic->layout(rightW, contentH);
+        mDetail->layout(rightW, contentH);
         mMixer->layout(rightW, contentH);
         mCurve->layout(rightW, contentH);
         mGrade->layout(rightW, contentH);
@@ -289,7 +313,11 @@ namespace cosmo
         if (mCurrentSlot < 0) return;
         const EditParams &p = mSlotParams[mCurrentSlot];
         mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks,
-                           p.temp, p.tint, p.vibrance, p.saturation, p.dehaze, p.grainAmount, p.grainSize});
+                           p.temp, p.tint, p.vibrance, p.saturation,
+                           p.texture, p.clarity, p.dehaze, p.grainAmount, p.grainSize});
+        mDetail->setValues({p.sharpenAmount, p.sharpenRadius, p.sharpenMasking,
+                            p.nrLuminance, p.nrColor,
+                            p.lensDistortion, p.lensCA, p.lensVignette});
         mMixer->setCurves(p.mixer);
         mCurve->setCurve(p.curve);
         mCurve->setLog(p.curveLog);
