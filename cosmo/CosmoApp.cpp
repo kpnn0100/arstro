@@ -46,12 +46,40 @@ namespace cosmo
         }
     }
 
-    EditParams *CosmoApp::curParams() { return mCurrentSlot >= 0 ? &mSlotParams[mCurrentSlot] : nullptr; }
+    namespace
+    {
+        // Compose a group base with a per-image scalar offset (the double adjustment).
+        EditParams composeParams(const EditParams &base, const arstro::LocalAdjust &d)
+        {
+            EditParams e = base;
+            e.exposure += d.exposure; e.contrast += d.contrast;
+            e.highlights += d.highlights; e.shadows += d.shadows; e.whites += d.whites; e.blacks += d.blacks;
+            e.temp += d.temp / 100.f * 3500.f;  // relative warm/cool shift in Kelvin
+            e.tint += d.tint; e.saturation += d.saturation;
+            e.texture += d.texture; e.clarity += d.clarity; e.dehaze += d.dehaze;
+            return e;
+        }
+    }
+
+    EditParams CosmoApp::effectiveParams(int slot) const
+    {
+        if (slot < 0 || slot >= (int)mSlotParams.size()) return EditParams{};
+        if (mSlotGrouped[slot]) return composeParams(mGroupBase, mSlotDelta[slot]);
+        return mSlotParams[slot];
+    }
+
+    // The panels edit the group base when the current image is grouped (so changes
+    // apply to the whole group); otherwise they edit the image's own params.
+    EditParams *CosmoApp::curParams()
+    {
+        if (mCurrentSlot < 0) return nullptr;
+        return mSlotGrouped[mCurrentSlot] ? &mGroupBase : &mSlotParams[mCurrentSlot];
+    }
 
     void CosmoApp::submit()
     {
         if (mCurrentSlot < 0) return;
-        EditParams p = mSlotParams[mCurrentSlot];
+        EditParams p = effectiveParams(mCurrentSlot);
         // In crop mode (Transform tab) render the FULL frame so the crop box can be
         // dragged over the whole image; the slot keeps the real crop.
         if (mTabs && mTabs->selectedIndex() == mXformTabIndex)
@@ -93,6 +121,14 @@ namespace cosmo
             mCompareView->setActive(on && mCurrentSlot >= 0);
         };
         mRoot->addChild(mCompareToggle);
+
+        mGroupBar = std::make_shared<GroupDeltaBar>(mTheme, mAccent);  // per-image offset (double adjustment)
+        mGroupBar->visible = false;
+        mGroupBar->onChange = [this](double ev, double temp) {
+            if (mCurrentSlot >= 0 && mSlotGrouped[mCurrentSlot])
+            { mSlotDelta[mCurrentSlot].exposure = (float)ev; mSlotDelta[mCurrentSlot].temp = (float)temp; submit(); }
+        };
+        mRoot->addChild(mGroupBar);
 
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
@@ -259,6 +295,8 @@ namespace cosmo
             for (int i = 0; i < imageCount(); ++i) all[i] = i;
             pasteTo(all);
         }});
+        develop.items.push_back({"Group Selected", [this] { groupSelected(); }});
+        develop.items.push_back({"Ungroup Selected", [this] { ungroupSelected(); }});
         mMenuBar->addMenu(develop);
 
         MenuBar::Menu preset;
@@ -296,6 +334,8 @@ namespace cosmo
         mCompareView->width.set(mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
         mCompareToggle->x.set(mPhotoRect.x + mPhotoRect.w - 112.0); mCompareToggle->y.set(mPhotoRect.y - 22.0);
         mCompareToggle->width.set(112.0); mCompareToggle->height.set(18.0);
+        mGroupBar->x.set(mPhotoRect.x); mGroupBar->y.set(mPhotoRect.y - 24.0);
+        mGroupBar->layout(mPhotoRect.w - 124.0, 20.0);
 
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
@@ -344,6 +384,8 @@ namespace cosmo
         mSlotNames.push_back(name);
         mSlotPaths.push_back(path);
         mSlotSessions.push_back("");
+        mSlotGrouped.push_back(0);
+        mSlotDelta.push_back(arstro::LocalAdjust{});
         int tw = 0, th = 0;
         std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
         mFilmstrip->addThumb(thumb.data(), tw, th);
@@ -369,7 +411,7 @@ namespace cosmo
         if (mCurrentSlot < 0) return false;
         std::ofstream f(path);
         if (!f) return false;
-        f << "image=" << mSlotPaths[mCurrentSlot] << "\n" << serializeParams(mSlotParams[mCurrentSlot]);
+        f << "image=" << mSlotPaths[mCurrentSlot] << "\n" << serializeParams(effectiveParams(mCurrentSlot));
         mSlotSessions[mCurrentSlot] = path;
         return true;
     }
@@ -411,7 +453,11 @@ namespace cosmo
     void CosmoApp::syncControlsToSlot()
     {
         if (mCurrentSlot < 0) return;
-        const EditParams &p = mSlotParams[mCurrentSlot];
+        const EditParams &p = *curParams();  // group base when grouped, else the image's own params
+
+        const bool grouped = mSlotGrouped[mCurrentSlot] != 0;
+        mGroupBar->visible = grouped;
+        if (grouped) mGroupBar->setValues(mSlotDelta[mCurrentSlot].exposure, mSlotDelta[mCurrentSlot].temp);
         mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks,
                            p.temp, p.tint, p.vibrance, p.saturation,
                            p.texture, p.clarity, p.dehaze, p.grainAmount, p.grainSize});
@@ -523,12 +569,36 @@ namespace cosmo
         mMenuBar->setMenuItems(mPresetMenuIndex, std::move(items));
     }
 
+    void CosmoApp::groupSelected()
+    {
+        if (mCurrentSlot < 0) return;
+        const std::vector<int> &sel = mFilmstrip->selection();
+        mGroupBase = effectiveParams(mCurrentSlot);  // current look becomes the shared base
+        for (int i : sel)
+            if (i >= 0 && i < (int)mSlotGrouped.size()) { mSlotGrouped[i] = 1; mSlotDelta[i] = arstro::LocalAdjust{}; }
+        syncControlsToSlot();
+        submit();
+    }
+
+    void CosmoApp::ungroupSelected()
+    {
+        const std::vector<int> &sel = mFilmstrip->selection();
+        for (int i : sel)
+            if (i >= 0 && i < (int)mSlotGrouped.size() && mSlotGrouped[i])
+            {
+                mSlotParams[i] = effectiveParams(i);  // bake the current look so it is preserved
+                mSlotGrouped[i] = 0;
+            }
+        syncControlsToSlot();
+        submit();
+    }
+
     void CosmoApp::renderBefore()
     {
         if (mCurrentSlot < 0) return;
         // The baseline keeps geometry (crop/rotate/lens) but drops all tonal/colour
         // edits, so the split aligns and shows exactly what the adjustments did.
-        const EditParams &cur = mSlotParams[mCurrentSlot];
+        const EditParams cur = effectiveParams(mCurrentSlot);
         EditParams b;
         b.cropX = cur.cropX; b.cropY = cur.cropY; b.cropW = cur.cropW; b.cropH = cur.cropH;
         b.rotation = cur.rotation; b.quarterTurns = cur.quarterTurns;
@@ -540,7 +610,7 @@ namespace cosmo
     const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
     {
         if (mCurrentSlot < 0) { w = h = 0; return nullptr; }
-        if (!mService.renderFull(mCurrentSlot, mSlotParams[mCurrentSlot], mExportFrame)) { w = h = 0; return nullptr; }
+        if (!mService.renderFull(mCurrentSlot, effectiveParams(mCurrentSlot), mExportFrame)) { w = h = 0; return nullptr; }
         w = mExportFrame.width; h = mExportFrame.height;
         return mExportFrame.rgba.data();
     }

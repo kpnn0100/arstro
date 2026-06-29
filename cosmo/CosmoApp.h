@@ -28,6 +28,7 @@
 #include "widgets/CropOverlay.h"
 #include "widgets/CompareView.h"
 #include "widgets/TextToggle.h"
+#include "widgets/GroupDeltaBar.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -86,7 +87,10 @@ namespace cosmo
         void renderBefore();           // render the no-edit baseline for the compare view
         void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
         void refreshPresetMenu();
-        EditParams *curParams();
+        void groupSelected();          // form a group from the multi-selection
+        void ungroupSelected();        // bake effective params back, leave the group
+        EditParams effectiveParams(int slot) const;  // group base composed with per-image delta
+        EditParams *curParams();       // the layer the panels edit (group base if grouped)
 
         double mW, mH;
         artboard::Rect mPhotoRect;
@@ -108,6 +112,7 @@ namespace cosmo
         std::shared_ptr<CropOverlay> mCropOverlay;   // sits over the photo (Transform tab)
         std::shared_ptr<CompareView> mCompareView;   // before/after split over the photo
         std::shared_ptr<TextToggle> mCompareToggle;  // top-bar before/after switch
+        std::shared_ptr<GroupDeltaBar> mGroupBar;    // per-image offset (visible when grouped)
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
@@ -119,10 +124,14 @@ namespace cosmo
         artboard::Theme mTheme;
         artboard::GestureRecognizer mRecognizer;
 
-        std::vector<EditParams> mSlotParams;  // UI-authoritative per-image params
+        std::vector<EditParams> mSlotParams;  // UI-authoritative per-image params (ungrouped)
         std::vector<std::string> mSlotNames;
         std::vector<std::string> mSlotPaths;      // source image file path per slot
         std::vector<std::string> mSlotSessions;   // last .cosmo save path per slot
+        // grouping: a shared base look + a per-image scalar offset (double adjustment)
+        EditParams mGroupBase;
+        std::vector<char> mSlotGrouped;            // 1 = member of the group
+        std::vector<arstro::LocalAdjust> mSlotDelta;  // per-image offset on top of the base
         int mCurrentSlot = -1;
         int mPreviewEdge = 1600;
         RenderService::Frame mExportFrame;
