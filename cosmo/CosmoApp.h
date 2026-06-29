@@ -26,6 +26,8 @@
 #include "widgets/MenuBar.h"
 #include "widgets/MaskOverlay.h"
 #include "widgets/CropOverlay.h"
+#include "widgets/CompareView.h"
+#include "widgets/TextToggle.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -73,6 +75,7 @@ namespace cosmo
         void submit();                 // push the current slot's params to the render service
         void syncControlsToSlot();
         void syncMaskUI();             // refresh mask panel + photo overlay from current slot
+        void renderBefore();           // render the no-edit baseline for the compare view
         EditParams *curParams();
 
         double mW, mH;
@@ -93,6 +96,8 @@ namespace cosmo
         std::shared_ptr<MaskPanel> mMaskPanel;
         std::shared_ptr<MaskOverlay> mMaskOverlay;   // sits over the photo
         std::shared_ptr<CropOverlay> mCropOverlay;   // sits over the photo (Transform tab)
+        std::shared_ptr<CompareView> mCompareView;   // before/after split over the photo
+        std::shared_ptr<TextToggle> mCompareToggle;  // top-bar before/after switch
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
@@ -111,6 +116,7 @@ namespace cosmo
         int mCurrentSlot = -1;
         int mPreviewEdge = 1600;
         RenderService::Frame mExportFrame;
+        RenderService::Frame mBeforeFrame;  // no-edit baseline for compare
     };
 }
 }

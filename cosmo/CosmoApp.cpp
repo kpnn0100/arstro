@@ -83,6 +83,16 @@ namespace cosmo
         };
         mRoot->addChild(mCropOverlay);
 
+        mCompareView = std::make_shared<CompareView>(mAccent);  // before/after split over the photo
+        mRoot->addChild(mCompareView);
+
+        mCompareToggle = std::make_shared<TextToggle>("before / after", mAccent);
+        mCompareToggle->onChange = [this](bool on) {
+            if (on) renderBefore();
+            mCompareView->setActive(on && mCurrentSlot >= 0);
+        };
+        mRoot->addChild(mCompareToggle);
+
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
 
@@ -260,6 +270,10 @@ namespace cosmo
         mMaskOverlay->width.set(mPhotoRect.w); mMaskOverlay->height.set(mPhotoRect.h);
         mCropOverlay->x.set(mPhotoRect.x); mCropOverlay->y.set(mPhotoRect.y);
         mCropOverlay->width.set(mPhotoRect.w); mCropOverlay->height.set(mPhotoRect.h);
+        mCompareView->x.set(mPhotoRect.x); mCompareView->y.set(mPhotoRect.y);
+        mCompareView->width.set(mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
+        mCompareToggle->x.set(mPhotoRect.x + mPhotoRect.w - 112.0); mCompareToggle->y.set(mPhotoRect.y - 22.0);
+        mCompareToggle->width.set(112.0); mCompareToggle->height.set(18.0);
 
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
@@ -403,6 +417,8 @@ namespace cosmo
 
         mSelectedMask = p.masks.empty() ? -1 : 0;
         syncMaskUI();
+
+        if (mCompareToggle && mCompareToggle->on()) renderBefore();  // refresh baseline for new slot
     }
 
     void CosmoApp::syncMaskUI()
@@ -419,6 +435,20 @@ namespace cosmo
         const bool onMaskTab = mTabs && mTabs->selectedIndex() == mMaskTabIndex;
         const bool active = onMaskTab && p && mSelectedMask >= 0 && mSelectedMask < n;
         mMaskOverlay->setMask(active ? p->masks[mSelectedMask] : arstro::MaskParams{}, active);
+    }
+
+    void CosmoApp::renderBefore()
+    {
+        if (mCurrentSlot < 0) return;
+        // The baseline keeps geometry (crop/rotate/lens) but drops all tonal/colour
+        // edits, so the split aligns and shows exactly what the adjustments did.
+        const EditParams &cur = mSlotParams[mCurrentSlot];
+        EditParams b;
+        b.cropX = cur.cropX; b.cropY = cur.cropY; b.cropW = cur.cropW; b.cropH = cur.cropH;
+        b.rotation = cur.rotation; b.quarterTurns = cur.quarterTurns;
+        b.lensDistortion = cur.lensDistortion; b.lensCA = cur.lensCA; b.lensVignette = cur.lensVignette;
+        if (mService.renderFull(mCurrentSlot, b, mBeforeFrame) && mBeforeFrame.width > 0)
+            mCompareView->setBefore(mBeforeFrame.rgba.data(), mBeforeFrame.width, mBeforeFrame.height);
     }
 
     const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
@@ -462,6 +492,7 @@ namespace cosmo
         }
         mMaskOverlay->setFittedRect(mImageView->fittedRect());  // photo display area (local)
         mCropOverlay->setFittedRect(mImageView->fittedRect());
+        mCompareView->setFittedRect(mImageView->fittedRect());
 
         target.save();
         target.setTransform(Transform::identity());
