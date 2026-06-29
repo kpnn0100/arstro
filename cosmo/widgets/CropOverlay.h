@@ -26,6 +26,11 @@ namespace cosmo
         void setActive(bool a) { mActive = a; }
         /** Pixel aspect ratio (w:h) to lock to, 0 = free. */
         void setAspect(double ratio) { mAspect = ratio; if (ratio > 0) applyAspect(); }
+        /** The crop box's current pixel ratio w:h (for a "Custom" aspect lock). */
+        double currentPixelRatio() const
+        {
+            return (mFitted.h > 0 && mH > 0) ? (mW * mFitted.w) / (mH * mFitted.h) : 0.0;
+        }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

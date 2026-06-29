@@ -1,13 +1,14 @@
 /*
- *  Cosmo by arstro — TransformPanel: straighten (slider), 90-degree rotation via two
- *  buttons (CCW / CW — clearer than a combobox), and crop via normalized x/y/w/h
- *  sliders, laid out in a column. Responsive via layout(w,h).
+ *  Cosmo by arstro — TransformPanel: a rotate KNOB with a live degree readout,
+ *  90-degree CCW/CW icon buttons, and an aspect-ratio selector (with a Custom
+ *  entry that locks the crop box's current ratio). Cropping itself is done by
+ *  dragging the on-photo CropOverlay, so this panel no longer has crop sliders.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "../widgets/IconButton.h"
 #include <functional>
 #include <memory>
-#include <vector>
 
 namespace arstro
 {
@@ -18,10 +19,10 @@ namespace cosmo
     public:
         TransformPanel(const artboard::Theme &theme, const artboard::Color &accent);
 
-        std::function<void(double)> onRotate;                       // degrees
-        std::function<void(int)> onQuarterTurns;                    // 0..3
-        std::function<void(double, double, double, double)> onCrop;  // normalized x,y,w,h
-        std::function<void(double)> onAspect;                       // pixel ratio w:h, 0 = free
+        std::function<void(double)> onRotate;       // straighten, degrees
+        std::function<void(int)> onQuarterTurns;    // 0..3
+        std::function<void(double)> onAspect;       // pixel ratio w:h, 0 = free
+        std::function<double()> currentRatio;       // host supplies the crop box's live ratio (Custom)
 
         struct State { double rotation = 0; int quarter = 0; double cropX = 0, cropY = 0, cropW = 1, cropH = 1; };
         void setState(const State &s);
@@ -31,14 +32,13 @@ namespace cosmo
         void onPaint(artboard::IRenderTarget &t) const override;
 
     private:
-        void emitCrop();
-
         artboard::Color mAccent;
-        std::shared_ptr<artboard::Slider> mRotate, mX, mY, mW, mH;
-        std::shared_ptr<artboard::Button> mCCW, mCW;
+        std::shared_ptr<artboard::Knob> mRotateKnob;
+        std::shared_ptr<IconButton> mCCW, mCW;
         std::shared_ptr<artboard::ComboBox> mAspectSel;
         int mQuarter = 0;
-        double mRowY[7] = {0, 0, 0, 0, 0, 0, 0};  // label baselines
+        double mKnobX = 0, mKnobY = 0, mKnobSize = 0;
+        double mTurnLabelY = 0, mAspectLabelY = 0;
     };
 }
 }

@@ -209,10 +209,8 @@ namespace cosmo
         mXform = std::make_shared<TransformPanel>(mTheme, mAccent);
         mXform->onRotate = [this](double v) { if (auto *p = curParams()) { p->rotation = (float)v; submit(); } };
         mXform->onQuarterTurns = [this](int i) { if (auto *p = curParams()) { p->quarterTurns = i; submit(); } };
-        mXform->onCrop = [this](double x, double y, double w, double h) {
-            if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; mCropOverlay->setCrop(x, y, w, h); submit(); }
-        };
         mXform->onAspect = [this](double ratio) { mCropOverlay->setAspect(ratio); };
+        mXform->currentRatio = [this] { return mCropOverlay->currentPixelRatio(); };
 
         mMaskPanel = std::make_shared<MaskPanel>(mTheme, mAccent);
         mMaskPanel->onAdd = [this](int type) {
