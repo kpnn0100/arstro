@@ -77,7 +77,12 @@ namespace cosmo
 
     bool MenuBar::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type != Gesture::Type::Click && g.type != Gesture::Type::Down)
+        // Only the Click decides what happens; a Down is merely consumed (when it
+        // lands on the bar or the open dropdown) so the press doesn't fall through
+        // and dismiss the menu before the matching Click can fire an item.
+        if (g.type == Gesture::Type::Down)
+            return pointInActiveArea(local);
+        if (g.type != Gesture::Type::Click)
             return Segment::handleGesture(g, local);
 
         // click inside an open dropdown -> fire item, then close
@@ -88,7 +93,7 @@ namespace cosmo
             {
                 auto action = mMenus[mOpen].items[it].action;  // copy before closing
                 setOpen(-1);
-                if (g.type == Gesture::Type::Click && action) action();
+                if (action) action();
                 return true;
             }
         }
@@ -96,11 +101,10 @@ namespace cosmo
         const int t = titleAt(local);
         if (t >= 0)
         {
-            if (g.type == Gesture::Type::Click)
-                setOpen(mOpen == t ? -1 : t);
+            setOpen(mOpen == t ? -1 : t);
             return true;
         }
-        if (g.type == Gesture::Type::Click) setOpen(-1);  // bar gutter closes
+        setOpen(-1);  // bar gutter closes
         return true;
     }
 
