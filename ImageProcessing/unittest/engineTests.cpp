@@ -343,3 +343,46 @@ TEST(RenderService_async_and_full)
     CHECK(full.width == 40 && full.height == 30);
     // destructor joins the worker cleanly (test would hang otherwise)
 }
+
+// ── EditParams serialization round-trip (session save/load) ──
+TEST(EditParamsIO_roundtrip)
+{
+    EditParams p;
+    p.exposure = 0.8f; p.contrast = -25.f; p.shadows = 40.f; p.temp = 7200.f; p.vibrance = 33.f;
+    p.dehaze = 50.f; p.grainAmount = 12.f; p.grainSize = 60.f;
+    p.curve = {{0.f, 0.05f}, {0.5f, 0.6f}, {1.f, 0.95f}};
+    p.curveLog = false;
+    p.mixer[0] = {{0.f, 0.3f}, {180.f, -0.2f}};
+    p.mixer[2] = {{120.f, 0.5f}};
+    p.grade[1] = {210.f, 35.f, -8.f};
+    p.balance = 15.f;
+    p.remapEnable = true; p.remapSrc = 12.f; p.remapRange = 44.f; p.remapDst = 200.f; p.remapStrength = 0.7f;
+    p.cropX = 0.1f; p.cropY = 0.05f; p.cropW = 0.8f; p.cropH = 0.9f;
+    p.rotation = -3.5f; p.quarterTurns = 3;
+
+    const std::string text = serializeParams(p);
+    EditParams q;
+    CHECK(deserializeParams(text, q));
+
+    CHECK_NEAR(q.exposure, 0.8, 1e-4);
+    CHECK_NEAR(q.contrast, -25.0, 1e-4);
+    CHECK_NEAR(q.temp, 7200.0, 1e-2);
+    CHECK_NEAR(q.dehaze, 50.0, 1e-4);
+    CHECK(q.curve.size() == 3);
+    CHECK_NEAR(q.curve[1].first, 0.5, 1e-4);
+    CHECK_NEAR(q.curve[1].second, 0.6, 1e-4);
+    CHECK(!q.curveLog);
+    CHECK(q.mixer[0].size() == 2 && q.mixer[2].size() == 1);
+    CHECK_NEAR(q.grade[1].hue, 210.0, 1e-3);
+    CHECK_NEAR(q.grade[1].lum, -8.0, 1e-4);
+    CHECK(q.remapEnable);
+    CHECK_NEAR(q.remapStrength, 0.7, 1e-4);
+    CHECK_NEAR(q.cropW, 0.8, 1e-4);
+    CHECK(q.quarterTurns == 3);
+
+    // empty/garbage tolerated -> defaults kept
+    EditParams d;
+    deserializeParams("nonsense\n=bad\nfoo=1\n", d);
+    CHECK_NEAR(d.exposure, 0.0, 1e-9);
+    CHECK_NEAR(d.temp, 6500.0, 1e-3);
+}

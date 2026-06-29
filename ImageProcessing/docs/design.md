@@ -42,7 +42,7 @@ decoding (LibRaw / stb_image / the browser) lives in the app layer behind the
 | Analysis | `analysis/Histogram` | A sink: tonal distribution of the output (not a processor). |
 | Accel | `base/Parallel` | Row-parallel `parallelFor` across CPU cores (native, `-pthread`); serial fallback on the single-threaded web build. |
 | Video | `video/VideoProcessor` | Per-frame application wrapper over an ImageProcessor. |
-| Params | `engine/EditParams` | The UI-independent edit description (plain data): every control's value. Built by any front end, handed to the engine. |
+| Params | `engine/EditParams` (+ `EditParamsIO`) | The UI-independent edit description (plain data): every control's value. `EditParamsIO` serializes it to/from text for session/sidecar files. Built by any front end, handed to the engine. |
 | Engine | `engine/EditEngine` | The facade: slots, flat + whole-`EditParams` API, preview/full render, histogram, and `renderImage(img, params, maxEdge)` — the seam a video editor reuses per frame. |
 | Service | `engine/RenderService` | Runs an EditEngine on its OWN worker thread; the UI submits `(slot, EditParams)` and polls completed frames, never blocking. Synchronous fallback when threads are off. |
 

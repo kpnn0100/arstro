@@ -46,5 +46,6 @@
 #include "analysis/Histogram.h"
 #include "video/VideoProcessor.h"
 #include "engine/EditParams.h"
+#include "engine/EditParamsIO.h"
 #include "engine/EditEngine.h"
 #include "engine/RenderService.h"
