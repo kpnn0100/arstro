@@ -235,7 +235,11 @@ namespace cosmo
         auto editMask = [this](auto fn) {
             if (auto *p = curParams())
                 if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
-                { fn(p->masks[mSelectedMask]); submit(); }
+                {
+                    fn(p->masks[mSelectedMask]);
+                    mMaskOverlay->updateMask(p->masks[mSelectedMask]);  // keep overlay copy current
+                    submit();
+                }
         };
         mMaskPanel->onInvert = [editMask](bool on) { editMask([on](arstro::MaskParams &m) { m.inverted = on; }); };
         mMaskPanel->onFeather = [editMask](double v) { editMask([v](arstro::MaskParams &m) { m.feather = (float)v; }); };

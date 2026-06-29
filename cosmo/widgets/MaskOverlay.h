@@ -29,6 +29,10 @@ namespace cosmo
         /** The photo's display rect in this overlay's local space (from ImageView). */
         void setFittedRect(const artboard::Rect &localFitted) { mFitted = localFitted; }
         void setMask(const arstro::MaskParams &m, bool active) { mMask = m; mActive = active; }
+        /** Keep the overlay's working copy in sync with panel edits (adjust/feather/
+         *  invert) WITHOUT changing visibility, so a later drag writes back the full,
+         *  current mask instead of a stale one. */
+        void updateMask(const arstro::MaskParams &m) { mMask = m; }
         void setBrushRadius(double normRadius) { mBrushRadius = normRadius; }
 
     protected:
