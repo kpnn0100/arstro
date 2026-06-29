@@ -1,6 +1,7 @@
 #include "Filmstrip.h"
 #include "../Chrome.h"
 #include "../CosmoTheme.h"
+#include <algorithm>
 
 namespace arstro
 {
@@ -34,7 +35,10 @@ namespace cosmo
         mThumbs.push_back(v);
         addChild(v);
         if (mSelected < 0)
+        {
             mSelected = 0;
+            mSelection = {0};
+        }
     }
 
     void Filmstrip::onPaint(IRenderTarget &t) const
@@ -47,8 +51,11 @@ namespace cosmo
         {
             const Rect cell{cellX(i), kPad, kCellW, kCellH};
             drawRoundedRect(t, cell, radius::control(), Paint::filled(palette::bg()));
+            const bool inSel = std::find(mSelection.begin(), mSelection.end(), i) != mSelection.end();
             if (i == mSelected)
                 drawRoundedRect(t, cell, radius::control(), Paint::stroked(mAccent, 2.0));
+            else if (inSel)  // part of the multi-selection (sync target)
+                drawRoundedRect(t, cell, radius::control(), Paint::stroked(Color{mAccent.r, mAccent.g, mAccent.b, 0.55f}, 1.5));
         }
     }
 
@@ -62,9 +69,18 @@ namespace cosmo
                 if (localPoint.x >= x0 && localPoint.x <= x0 + kCellW &&
                     localPoint.y >= kPad && localPoint.y <= kPad + kCellH)
                 {
-                    mSelected = i;
-                    if (onSelect)
-                        onSelect(i);
+                    if (g.alt)  // alt-click extends the multi-selection (sync target)
+                    {
+                        auto it = std::find(mSelection.begin(), mSelection.end(), i);
+                        if (it != mSelection.end()) { if (mSelection.size() > 1) mSelection.erase(it); }
+                        else mSelection.push_back(i);
+                    }
+                    else  // plain click: single-select
+                    {
+                        mSelected = i;
+                        mSelection = {i};
+                        if (onSelect) onSelect(i);
+                    }
                     return true;
                 }
             }

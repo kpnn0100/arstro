@@ -76,6 +76,7 @@ namespace cosmo
         void syncControlsToSlot();
         void syncMaskUI();             // refresh mask panel + photo overlay from current slot
         void renderBefore();           // render the no-edit baseline for the compare view
+        void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
         EditParams *curParams();
 
         double mW, mH;
@@ -117,6 +118,8 @@ namespace cosmo
         int mPreviewEdge = 1600;
         RenderService::Frame mExportFrame;
         RenderService::Frame mBeforeFrame;  // no-edit baseline for compare
+        EditParams mClipboard;              // copy/paste develop settings
+        bool mHasClip = false;
     };
 }
 }

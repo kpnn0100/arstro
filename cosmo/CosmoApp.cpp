@@ -244,6 +244,21 @@ namespace cosmo
         settings.title = "Settings";
         settings.overlay = true;  // its open state is the floating panel below
         mMenuBar->addMenu(settings);
+
+        MenuBar::Menu develop;
+        develop.title = "Develop";
+        develop.items.push_back({"Copy Settings", [this] {
+            if (auto *p = curParams()) { mClipboard = *p; mHasClip = true; }
+        }});
+        develop.items.push_back({"Paste to Selected", [this] {
+            pasteTo(mFilmstrip->selection());
+        }});
+        develop.items.push_back({"Paste to All Images", [this] {
+            std::vector<int> all(imageCount());
+            for (int i = 0; i < imageCount(); ++i) all[i] = i;
+            pasteTo(all);
+        }});
+        mMenuBar->addMenu(develop);
         // One active menu at a time (tab-like): the Settings panel shows iff Settings
         // is the active menu, so opening File closes Settings and vice versa.
         mMenuBar->onOpenChanged = [this](int open) { mSettings->visible = (open == 1); };
@@ -435,6 +450,19 @@ namespace cosmo
         const bool onMaskTab = mTabs && mTabs->selectedIndex() == mMaskTabIndex;
         const bool active = onMaskTab && p && mSelectedMask >= 0 && mSelectedMask < n;
         mMaskOverlay->setMask(active ? p->masks[mSelectedMask] : arstro::MaskParams{}, active);
+    }
+
+    void CosmoApp::pasteTo(const std::vector<int> &slots)
+    {
+        if (!mHasClip) return;
+        bool affectedCurrent = false;
+        for (int i : slots)
+            if (i >= 0 && i < (int)mSlotParams.size())
+            {
+                mSlotParams[i] = mClipboard;       // replace this image's develop settings
+                if (i == mCurrentSlot) affectedCurrent = true;
+            }
+        if (affectedCurrent) { syncControlsToSlot(); submit(); }  // others re-render when selected
     }
 
     void CosmoApp::renderBefore()

@@ -21,9 +21,11 @@ namespace cosmo
 
         /** Append a thumbnail (straight RGBA8); copies the bytes into an ImageView. */
         void addThumb(const uint8_t *rgba, int w, int h);
-        void setSelected(int idx) { mSelected = idx; }
+        void setSelected(int idx) { mSelected = idx; mSelection = idx >= 0 ? std::vector<int>{idx} : std::vector<int>{}; }
         int selected() const { return mSelected; }
         int count() const { return (int)mThumbs.size(); }
+        /** Indices in the multi-selection (alt-click extends it); always includes the primary. */
+        const std::vector<int> &selection() const { return mSelection; }
 
         std::function<void(int)> onSelect;
 
@@ -34,6 +36,7 @@ namespace cosmo
     private:
         artboard::Color mAccent;
         int mSelected = -1;
+        std::vector<int> mSelection;  // multi-selection (sync target); includes the primary
         std::vector<std::shared_ptr<artboard::ImageView>> mThumbs;
     };
 }
