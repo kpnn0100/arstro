@@ -1,6 +1,7 @@
 #include "EditEngine.h"
 #include "../base/ColorSpace.h"
 #include "../base/Parallel.h"
+#include "MaskStack.h"
 #include <algorithm>
 
 namespace arstro
@@ -119,6 +120,7 @@ namespace arstro
         mSharpen.setAmount(p.sharpenAmount);
         mSharpen.setRadius(p.sharpenRadius);
         mSharpen.setMasking(p.sharpenMasking);
+        mMasks = p.masks;  // local adjustments applied post-pipeline (see renderInto)
     }
 
     void EditEngine::setPreviewSize(int maxEdge)
@@ -193,6 +195,7 @@ namespace arstro
     void EditEngine::resetCrop() { setCrop(0, 0, 1, 1); }
     void EditEngine::setRotation(float deg) { if (auto *p = cur()) { p->rotation = deg; mRotate.setAngle(deg); } }
     void EditEngine::setQuarterTurns(int t) { if (auto *p = cur()) { p->quarterTurns = t & 3; mRotate.setQuarterTurns(t); } }
+    void EditEngine::setMasks(const std::vector<MaskParams> &masks) { if (auto *p = cur()) { p->masks = masks; mMasks = masks; } }
 
     void EditEngine::setBypass(bool b) { mPipeline.setBypass(b); }
 
@@ -247,6 +250,7 @@ namespace arstro
     {
         Image processed;
         mPipeline.apply(linearSource, processed);
+        applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
         color::encodeInPlace(processed);
         mLastHistogram = Histogram::compute(processed);
 

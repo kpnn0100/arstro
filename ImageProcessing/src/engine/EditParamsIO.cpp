@@ -36,6 +36,70 @@ namespace arstro
         }
 
         float f(const std::string &s) { try { return std::stof(s); } catch (...) { return 0.f; } }
+
+        std::vector<float> floats(const std::string &s, char sep)
+        {
+            std::vector<float> v; std::stringstream ss(s); std::string t;
+            while (std::getline(ss, t, sep)) v.push_back(f(t));
+            return v;
+        }
+
+        // One mask packed as: geometry(11) | localAdjust(12) | dabs(x:y:r:f;...)
+        std::string maskStr(const MaskParams &m)
+        {
+            std::ostringstream o; o.precision(7);
+            o << m.type << ',' << (m.inverted ? 1 : 0) << ',' << m.feather << ',' << m.cx << ',' << m.cy
+              << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1;
+            const LocalAdjust &a = m.adjust;
+            o << '|' << a.exposure << ',' << a.contrast << ',' << a.highlights << ',' << a.shadows
+              << ',' << a.whites << ',' << a.blacks << ',' << a.temp << ',' << a.tint << ',' << a.saturation
+              << ',' << a.texture << ',' << a.clarity << ',' << a.dehaze << '|';
+            for (size_t i = 0; i < m.dabs.size(); ++i)
+            {
+                const auto &d = m.dabs[i];
+                if (i) o << ';';
+                o << d.x << ':' << d.y << ':' << d.radius << ':' << d.flow;
+            }
+            return o.str();
+        }
+
+        MaskParams parseMask(const std::string &s)
+        {
+            MaskParams m;
+            std::vector<std::string> parts; std::stringstream ss(s); std::string part;
+            while (std::getline(ss, part, '|')) parts.push_back(part);
+            if (!parts.empty())
+            {
+                auto g = floats(parts[0], ',');
+                if (g.size() >= 11)
+                {
+                    m.type = (int)g[0]; m.inverted = g[1] != 0; m.feather = g[2];
+                    m.cx = g[3]; m.cy = g[4]; m.rx = g[5]; m.ry = g[6];
+                    m.x0 = g[7]; m.y0 = g[8]; m.x1 = g[9]; m.y1 = g[10];
+                }
+            }
+            if (parts.size() >= 2)
+            {
+                auto a = floats(parts[1], ',');
+                if (a.size() >= 12)
+                {
+                    LocalAdjust &la = m.adjust;
+                    la.exposure = a[0]; la.contrast = a[1]; la.highlights = a[2]; la.shadows = a[3];
+                    la.whites = a[4]; la.blacks = a[5]; la.temp = a[6]; la.tint = a[7];
+                    la.saturation = a[8]; la.texture = a[9]; la.clarity = a[10]; la.dehaze = a[11];
+                }
+            }
+            if (parts.size() >= 3 && !parts[2].empty())
+            {
+                std::stringstream ds(parts[2]); std::string dab;
+                while (std::getline(ds, dab, ';'))
+                {
+                    auto df = floats(dab, ':');
+                    if (df.size() >= 4) m.dabs.push_back({df[0], df[1], df[2], df[3]});
+                }
+            }
+            return m;
+        }
     }
 
     std::string serializeParams(const EditParams &p)
@@ -66,6 +130,7 @@ namespace arstro
           << "\nremapDst=" << p.remapDst << "\nremapStrength=" << p.remapStrength
           << "\ncrop=" << p.cropX << ',' << p.cropY << ',' << p.cropW << ',' << p.cropH
           << "\nrotation=" << p.rotation << "\nquarterTurns=" << p.quarterTurns << "\n";
+        for (const auto &m : p.masks) o << "mask=" << maskStr(m) << "\n";
         return o.str();
     }
 
@@ -116,6 +181,7 @@ namespace arstro
             else if (k == "remapStrength") out.remapStrength = f(v);
             else if (k == "rotation") out.rotation = f(v);
             else if (k == "quarterTurns") out.quarterTurns = (int)f(v);
+            else if (k == "mask") out.masks.push_back(parseMask(v));
             else if (k.rfind("grade", 0) == 0 && k.size() == 6)
             {
                 const int r = k[5] - '0';

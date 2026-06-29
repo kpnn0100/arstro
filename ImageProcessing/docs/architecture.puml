@@ -163,6 +163,9 @@ package video {
 }
 
 package engine {
+  class MaskParams { + type / inverted / feather / geometry / dabs[] / adjust:LocalAdjust }
+  class MaskStack <<free fn>> { + maskCoverage(m,nx,ny) / applyMaskStack(img, masks[]) }
+  MaskStack ..> MaskParams
   class EditEngine <<facade>> {
     + addImage(rgba, w, h, ch) : int / selectImage(slot)
     + setExposure/Contrast/Highlights/Shadows/Whites/Blacks(v)

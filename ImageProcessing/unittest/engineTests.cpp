@@ -405,3 +405,78 @@ TEST(EditParamsIO_roundtrip)
     CHECK_NEAR(d.exposure, 0.0, 1e-9);
     CHECK_NEAR(d.temp, 6500.0, 1e-3);
 }
+
+// ── Local adjustments (masks) ──
+TEST(MaskCoverage_shapes)
+{
+    MaskParams radial;  // centred ellipse, default feather
+    radial.type = MaskParams::Radial; radial.cx = 0.5f; radial.cy = 0.5f; radial.rx = 0.3f; radial.ry = 0.3f;
+    CHECK(maskCoverage(radial, 0.5f, 0.5f) > 0.99f);   // centre fully covered
+    CHECK(maskCoverage(radial, 0.95f, 0.5f) < 0.01f);  // far outside not covered
+    MaskParams inv = radial; inv.inverted = true;
+    CHECK(maskCoverage(inv, 0.5f, 0.5f) < 0.01f);      // inversion flips it
+
+    MaskParams lin;  // vertical gradient 0 at y0=0.3 -> 1 at y1=0.7
+    lin.type = MaskParams::Linear; lin.x0 = 0.5f; lin.y0 = 0.3f; lin.x1 = 0.5f; lin.y1 = 0.7f;
+    CHECK(maskCoverage(lin, 0.5f, 0.2f) < 0.01f);
+    CHECK(maskCoverage(lin, 0.5f, 0.8f) > 0.99f);
+    CHECK(maskCoverage(lin, 0.5f, 0.5f) > 0.3f && maskCoverage(lin, 0.5f, 0.5f) < 0.7f);
+
+    MaskParams brush;
+    brush.type = MaskParams::Brush; brush.feather = 0.5f;
+    brush.dabs.push_back({0.25f, 0.25f, 0.1f, 1.f});
+    CHECK(maskCoverage(brush, 0.25f, 0.25f) > 0.9f);   // dab centre
+    CHECK(maskCoverage(brush, 0.75f, 0.75f) < 0.01f);  // away from any dab
+}
+
+TEST(MaskStack_blends_local_adjustment)
+{
+    EditEngine eng;
+    auto bytes = solidRGBA8(32, 32, 100);  // uniform mid-gray
+    eng.addImage(bytes.data(), 32, 32, 4);
+    eng.setPreviewSize(4096);  // no downscale
+
+    PreviewBuffer base = eng.renderFull();
+    const int cx = base.width / 2, cy = base.height / 2;
+    const int center0 = base.rgba[((size_t)cy * base.width + cx) * 4];
+    const int corner0 = base.rgba[0];
+
+    MaskParams m;  // centred radial, big exposure lift
+    m.type = MaskParams::Radial; m.cx = 0.5f; m.cy = 0.5f; m.rx = 0.25f; m.ry = 0.25f; m.feather = 0.3f;
+    m.adjust.exposure = 2.0f;
+    eng.setMasks({m});
+
+    PreviewBuffer out = eng.renderFull();
+    const int center1 = out.rgba[((size_t)cy * out.width + cx) * 4];
+    const int corner1 = out.rgba[0];
+    CHECK(center1 > center0 + 20);                 // mask centre brightened
+    CHECK(std::abs(corner1 - corner0) <= 2);       // outside the mask unchanged
+
+    eng.setMasks({});  // clearing masks restores the base render
+    PreviewBuffer back = eng.renderFull();
+    CHECK(std::abs((int)back.rgba[((size_t)cy * back.width + cx) * 4] - center0) <= 1);
+}
+
+TEST(EditParamsIO_masks_roundtrip)
+{
+    EditParams p;
+    MaskParams r; r.type = MaskParams::Radial; r.cx = 0.4f; r.cy = 0.6f; r.rx = 0.2f; r.ry = 0.35f;
+    r.feather = 0.7f; r.inverted = true; r.adjust.exposure = 1.5f; r.adjust.clarity = 40.f;
+    MaskParams b; b.type = MaskParams::Brush; b.adjust.temp = -30.f;
+    b.dabs.push_back({0.1f, 0.2f, 0.08f, 0.5f});
+    b.dabs.push_back({0.3f, 0.4f, 0.06f, 1.0f});
+    p.masks = {r, b};
+
+    EditParams q;
+    CHECK(deserializeParams(serializeParams(p), q));
+    CHECK(q.masks.size() == 2);
+    CHECK(q.masks[0].type == MaskParams::Radial);
+    CHECK(q.masks[0].inverted);
+    CHECK_NEAR(q.masks[0].cy, 0.6, 1e-4);
+    CHECK_NEAR(q.masks[0].adjust.exposure, 1.5, 1e-4);
+    CHECK_NEAR(q.masks[0].adjust.clarity, 40.0, 1e-4);
+    CHECK(q.masks[1].type == MaskParams::Brush);
+    CHECK(q.masks[1].dabs.size() == 2);
+    CHECK_NEAR(q.masks[1].dabs[1].radius, 0.06, 1e-4);
+    CHECK_NEAR(q.masks[1].adjust.temp, -30.0, 1e-4);
+}

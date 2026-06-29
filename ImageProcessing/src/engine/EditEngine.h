@@ -141,6 +141,9 @@ namespace arstro
         void setRotation(float degrees);                    // straighten
         void setQuarterTurns(int turns);                    // 0..3
 
+        // ── local adjustments (masks) ──
+        void setMasks(const std::vector<MaskParams> &masks);
+
         // ── global ──
         void setBypass(bool b);
         void resetAll();
@@ -180,6 +183,7 @@ namespace arstro
         Sharpen mSharpen;
         Grain mGrain;
 
+        std::vector<MaskParams> mMasks;
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;
         HistogramData mLastHistogram;

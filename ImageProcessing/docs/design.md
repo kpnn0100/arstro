@@ -106,6 +106,7 @@ destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncall
 | `detail/` | Sharpen (unsharp mask on perceptual luma, amount/radius/edge-masking), NoiseReduction (Gaussian chroma blur for colour speckle + edge-preserving bilateral on luma) |
 | `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear), LensCorrection (radial distortion + chromatic-aberration + vignette, one resample pass) |
 | `base/` (shared) | `spatial::` separable Gaussian + luminance plane helpers, used by the detail/presence processors so none re-implements a blur |
+| `engine/MaskStack` | local adjustments: each `MaskParams` (radial / linear / brush) builds a 0..1 coverage plane in normalised framed coords, renders an adjusted copy through the same processors, and blends it over the base. Applied post-pipeline in `renderInto`, so it rides preview, full-res, and the video seam alike. |
 
 ## Status (milestones)
 
