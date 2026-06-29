@@ -7,6 +7,7 @@
  */
 #include "CosmoApp.h"
 #include "../Artboard/src/adapter/web/Canvas2DTarget.h"
+#include <emscripten.h>
 #include <emscripten/bind.h>
 #include <cstdint>
 #include <memory>
@@ -20,7 +21,12 @@ static std::unique_ptr<CosmoApp> gApp;
 static artboard::Canvas2DTarget gTarget;
 static std::vector<uint8_t> gInput;  // staging buffer JS writes decoded pixels into
 
-static void init(double w, double h) { gApp.reset(new CosmoApp(w, h)); }
+static void init(double w, double h)
+{
+    gApp.reset(new CosmoApp(w, h));
+    // File > Open on the web opens the browser file picker (the page's <input>).
+    gApp->onOpenRequested = [] { EM_ASM({ var el = document.getElementById('file'); if (el) el.click(); }); };
+}
 static void frame(double nowMs) { if (gApp) gApp->render(gTarget, nowMs); }
 static void pointer(int kind, double x, double y, int button, double t, bool alt) { if (gApp) gApp->pointer(kind, x, y, button, t, alt); }
 static void resize(double w, double h) { if (gApp) gApp->setSize(w, h); }

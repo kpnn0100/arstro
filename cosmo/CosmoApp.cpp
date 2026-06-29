@@ -1,5 +1,7 @@
 #include "CosmoApp.h"
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 
 namespace arstro
 {
@@ -10,7 +12,7 @@ namespace cosmo
     namespace
     {
         constexpr double kMargin = 16.0;
-        constexpr double kTopBar = 56.0;
+        constexpr double kTopBar = 64.0;   // wordmark row + menu bar row
         double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
         std::vector<uint8_t> makeThumb(const uint8_t *rgba, int w, int h, int maxEdge, int &tw, int &th)
@@ -120,22 +122,38 @@ namespace cosmo
             if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; submit(); }
         };
 
-        mSettings = std::make_shared<SettingsPanel>(mTheme, mAccent);
-        mSettings->onPreviewEdge = [this](int edge) { mPreviewEdge = edge; mService.setPreviewSize(edge); submit(); };
-        mSettings->onThreads = [this](int n) { par::setThreads(n); submit(); };
-
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->addPage("Basic", mBasic);
         mTabs->addPage("Mixer", mMixer);
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
         mTabs->addPage("Xform", mXform);
-        mTabs->addPage("Settings", mSettings);
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
         mFilmstrip->onSelect = [this](int i) { selectImage(i); };
         mRoot->addChild(mFilmstrip);
+
+        // Settings now lives in the menu bar (a floating overlay, not a tab).
+        mSettings = std::make_shared<SettingsPanel>(mTheme, mAccent);
+        mSettings->onPreviewEdge = [this](int edge) { mPreviewEdge = edge; mService.setPreviewSize(edge); submit(); };
+        mSettings->onThreads = [this](int n) { par::setThreads(n); submit(); };
+        mSettings->visible = false;
+        mRoot->addChild(mSettings);
+
+        // Top-left menu bar (drawn last -> dropdowns overlay the canvas).
+        mMenuBar = std::make_shared<MenuBar>(mAccent);
+        MenuBar::Menu file;
+        file.title = "File";
+        file.items.push_back({"Open...", [this] { if (onOpenRequested) onOpenRequested(); }});
+        file.items.push_back({"Save", [this] { saveSession(); }});
+        file.items.push_back({"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }});
+        mMenuBar->addMenu(file);
+        MenuBar::Menu settings;
+        settings.title = "Settings";
+        settings.action = [this] { mSettings->visible = !mSettings->visible; };
+        mMenuBar->addMenu(settings);
+        mRoot->addChild(mMenuBar);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         layout();
@@ -167,10 +185,16 @@ namespace cosmo
         mCurve->layout(rightW, contentH);
         mGrade->layout(rightW, contentH);
         mXform->layout(rightW, contentH);
-        mSettings->layout(rightW, contentH);
 
         mFilmstrip->x.set(kMargin); mFilmstrip->y.set(filmY);
         mFilmstrip->width.set(rightX - kMargin - kMargin); mFilmstrip->height.set(filmH);
+
+        // menu bar (top-left, under the wordmark) + floating settings overlay
+        mMenuBarX = kMargin; mMenuBarY = 34.0;
+        mMenuBar->x.set(mMenuBarX); mMenuBar->y.set(mMenuBarY);
+        mMenuBar->width.set(160.0); mMenuBar->height.set(22.0);
+        mSettings->x.set(kMargin); mSettings->y.set(kTopBar + 6.0);
+        mSettings->layout(280.0, 150.0);
 
         mService.setPreviewSize(mPreviewEdge);
         submit();
@@ -185,17 +209,67 @@ namespace cosmo
         layout();
     }
 
-    int CosmoApp::openImage(const uint8_t *rgba, int w, int h, const std::string &name)
+    int CosmoApp::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
         const int slot = mService.addImage(rgba, w, h, 4);
         if (slot < 0) return -1;
         mSlotParams.push_back(EditParams{});
         mSlotNames.push_back(name);
+        mSlotPaths.push_back(path);
+        mSlotSessions.push_back("");
         int tw = 0, th = 0;
         std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
         mFilmstrip->addThumb(thumb.data(), tw, th);
         selectImage(slot);
         return slot;
+    }
+
+    std::string CosmoApp::currentSourcePath() const
+    {
+        return mCurrentSlot >= 0 ? mSlotPaths[mCurrentSlot] : std::string();
+    }
+
+    void CosmoApp::applyParams(const EditParams &p)
+    {
+        if (mCurrentSlot < 0) return;
+        mSlotParams[mCurrentSlot] = p;
+        syncControlsToSlot();
+        submit();
+    }
+
+    bool CosmoApp::saveSessionAs(const std::string &path)
+    {
+        if (mCurrentSlot < 0) return false;
+        std::ofstream f(path);
+        if (!f) return false;
+        f << "image=" << mSlotPaths[mCurrentSlot] << "\n" << serializeParams(mSlotParams[mCurrentSlot]);
+        mSlotSessions[mCurrentSlot] = path;
+        return true;
+    }
+
+    void CosmoApp::saveSession()
+    {
+        if (mCurrentSlot < 0) return;
+        if (mSlotSessions[mCurrentSlot].empty())
+        {
+            if (onSaveAsRequested) onSaveAsRequested();  // no path yet -> prompt
+        }
+        else
+            saveSessionAs(mSlotSessions[mCurrentSlot]);
+    }
+
+    bool CosmoApp::readSessionFile(const std::string &path, std::string &imagePath, EditParams &params)
+    {
+        std::ifstream f(path);
+        if (!f) return false;
+        std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        imagePath.clear();
+        std::stringstream ss(text);
+        std::string line;
+        while (std::getline(ss, line))
+            if (line.rfind("image=", 0) == 0) { imagePath = line.substr(6); break; }
+        deserializeParams(text, params);  // ignores the image= line
+        return true;
     }
 
     void CosmoApp::selectImage(int slot)
@@ -246,6 +320,8 @@ namespace cosmo
         PointerButton b = button == 2 ? PointerButton::Right : PointerButton::Left;
         RawPointer rp{k, Point{x, y}, b, timeMs};
         rp.alt = alt;
+        if (kind == 0 && mMenuBar)  // press outside an open menu closes it
+            mMenuBar->closeIfOutside(Point{x - mMenuBarX, y - mMenuBarY});
         mRecognizer.feed(rp);
     }
 
@@ -264,11 +340,11 @@ namespace cosmo
         target.save();
         target.setTransform(Transform::identity());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::bg()));
-        target.setFill(mAccent);
+        target.setFill(mAccent);  // wordmark on the top row; the menu bar sits below it
         for (double ox : {0.0, 0.5})
-            target.drawText("COSMO", 18.0 + ox, 33.0, 19.0);
+            target.drawText("COSMO", 18.0 + ox, 22.0, 18.0);
         target.setFill(palette::faint());
-        target.drawText("by arstro", 96.0, 33.0, 11.0);
+        target.drawText("by arstro", 92.0, 22.0, 11.0);
         target.beginPath();
         target.moveTo(0.0, kTopBar); target.lineTo(mW, kTopBar);
         target.setStroke(palette::line(), 1.0); target.strokePath();
@@ -278,11 +354,11 @@ namespace cosmo
         {
             const std::string status = mSlotNames[mCurrentSlot] + "   (" + std::to_string(mCurrentSlot + 1) +
                                        "/" + std::to_string(imageCount()) + ")";
-            target.drawText(status, 190.0, 33.0, 12.0);
+            target.drawText(status, mW - 280.0, 22.0, 12.0);
         }
         else
         {
-            target.drawText("Open an image  -  press O (native) or use the file picker (web)", 190.0, 33.0, 12.0);
+            target.drawText("Open an image  -  press O or File > Open", mW - 320.0, 22.0, 12.0);
             drawRoundedRect(target, mPhotoRect, radius::panel(),
                             Paint::filledStroked(palette::panel(), palette::line(), 1.0));
         }

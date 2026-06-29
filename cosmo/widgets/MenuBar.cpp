@@ -1,0 +1,129 @@
+#include "MenuBar.h"
+#include "../CosmoTheme.h"
+
+namespace arstro
+{
+namespace cosmo
+{
+    using namespace artboard;
+
+    namespace
+    {
+        constexpr double kGap = 6.0;       // padding inside a title
+        constexpr double kChar = 6.6;      // approx glyph advance at 12px
+        constexpr double kTitlePx = 12.0;
+        constexpr double kItemH = 24.0;
+        constexpr double kDropW = 150.0;
+    }
+
+    MenuBar::MenuBar(const Color &accent) : mAccent(accent)
+    {
+        height.set(24.0);
+        width.set(300.0);
+    }
+
+    void MenuBar::addMenu(Menu m) { mMenus.push_back(std::move(m)); }
+
+    double MenuBar::titleW(int i) const { return (double)mMenus[i].title.size() * kChar + 2 * kGap + 6.0; }
+    double MenuBar::titleX(int i) const
+    {
+        double x = 0.0;
+        for (int k = 0; k < i; ++k) x += titleW(k);
+        return x;
+    }
+
+    Rect MenuBar::dropdownRect(int i) const
+    {
+        const int n = (int)mMenus[i].items.size();
+        return Rect{titleX(i), height.value(), kDropW, n * kItemH + 6.0};
+    }
+
+    int MenuBar::titleAt(const Point &p) const
+    {
+        if (p.y < 0 || p.y > height.value()) return -1;
+        for (int i = 0; i < (int)mMenus.size(); ++i)
+            if (p.x >= titleX(i) && p.x < titleX(i) + titleW(i)) return i;
+        return -1;
+    }
+
+    int MenuBar::itemAt(int menu, const Point &p) const
+    {
+        if (menu < 0) return -1;
+        const Rect d = dropdownRect(menu);
+        if (!d.contains(p)) return -1;
+        const int idx = (int)((p.y - (d.y + 3.0)) / kItemH);
+        return (idx >= 0 && idx < (int)mMenus[menu].items.size()) ? idx : -1;
+    }
+
+    bool MenuBar::hitTestSelf(const Point &p) const
+    {
+        if (p.x >= 0 && p.x <= width.value() && p.y >= 0 && p.y <= height.value()) return true;
+        return mOpen >= 0 && dropdownRect(mOpen).contains(p);  // open dropdown is hittable
+    }
+
+    void MenuBar::closeIfOutside(const Point &local)
+    {
+        if (mOpen < 0) return;
+        const bool inBar = (local.x >= 0 && local.x <= width.value() && local.y >= 0 && local.y <= height.value());
+        if (!inBar && !dropdownRect(mOpen).contains(local)) mOpen = -1;
+    }
+
+    bool MenuBar::handleGesture(const Gesture &g, const Point &local)
+    {
+        if (g.type != Gesture::Type::Click && g.type != Gesture::Type::Down)
+            return Segment::handleGesture(g, local);
+
+        // click inside an open dropdown -> fire item
+        if (mOpen >= 0)
+        {
+            const int it = itemAt(mOpen, local);
+            if (it >= 0)
+            {
+                auto action = mMenus[mOpen].items[it].action;  // copy before closing
+                mOpen = -1;
+                if (g.type == Gesture::Type::Click && action) action();
+                return true;
+            }
+        }
+        // click on a title
+        const int t = titleAt(local);
+        if (t >= 0)
+        {
+            if (g.type == Gesture::Type::Click)
+            {
+                if (!mMenus[t].items.empty())
+                    mOpen = (mOpen == t) ? -1 : t;  // toggle dropdown
+                else { mOpen = -1; if (mMenus[t].action) mMenus[t].action(); }  // direct action
+            }
+            return true;
+        }
+        if (g.type == Gesture::Type::Click) mOpen = -1;  // click on the bar gutter closes
+        return true;
+    }
+
+    void MenuBar::onPaint(IRenderTarget &t) const
+    {
+        for (int i = 0; i < (int)mMenus.size(); ++i)
+        {
+            const bool active = (i == mOpen);
+            if (active)
+                drawRoundedRect(t, Rect{titleX(i), 0, titleW(i), height.value()}, radius::control(),
+                                Paint::filled(palette::surface()));
+            t.setFill(active ? palette::ink() : palette::muted());
+            t.drawText(mMenus[i].title, titleX(i) + kGap + 3.0, height.value() * 0.5 + kTitlePx * 0.35, kTitlePx);
+        }
+        if (mOpen >= 0 && !mMenus[mOpen].items.empty())
+        {
+            const Rect d = dropdownRect(mOpen);
+            drawRoundedRect(t, d, radius::control(),
+                            Paint::filledStroked(palette::panel(), palette::line(), 1.0));
+            for (int i = 0; i < (int)mMenus[mOpen].items.size(); ++i)
+            {
+                const double y = d.y + 3.0 + i * kItemH;
+                t.setFill(palette::ink());
+                t.drawText(mMenus[mOpen].items[i].label, d.x + 12.0, y + kItemH * 0.5 + 4.0, 12.0);
+            }
+        }
+    }
+}
+}

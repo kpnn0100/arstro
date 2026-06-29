@@ -32,15 +32,65 @@ namespace
     double nowMs(const App &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
     int mapButton(guint b) { return b == 3 ? 2 : 0; }
 
-    void openPath(App *a, const std::string &path)
+    std::string baseName(const std::string &p)
+    {
+        auto s = p.find_last_of("/\\");
+        return s == std::string::npos ? p : p.substr(s + 1);
+    }
+    bool endsWith(const std::string &s, const std::string &suf)
+    {
+        return s.size() >= suf.size() && s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
+    }
+
+    void openImageFile(App *a, const std::string &path)
     {
         DecodedImage img = a->decoder.decodeFile(path);
         if (img.ok())
-            a->app.openImage(img.rgba.data(), img.width, img.height, img.name);
+            a->app.openImage(img.rgba.data(), img.width, img.height, baseName(path), path);
         else
             g_printerr("cosmo: could not decode %s%s\n", path.c_str(),
                        (NativeImageDecoder::isRawExtension(path) && !NativeImageDecoder::rawSupported())
                            ? " (RAW needs a LibRaw build)" : "");
+    }
+
+    void openPath(App *a, const std::string &path)
+    {
+        if (endsWith(path, ".cosmo"))  // a saved session: load the referenced image + its params
+        {
+            std::string imgPath;
+            arstro::EditParams params;
+            if (CosmoApp::readSessionFile(path, imgPath, params) && !imgPath.empty())
+            {
+                DecodedImage img = a->decoder.decodeFile(imgPath);
+                if (img.ok())
+                {
+                    a->app.openImage(img.rgba.data(), img.width, img.height, baseName(imgPath), imgPath);
+                    a->app.applyParams(params);
+                }
+                else
+                    g_printerr("cosmo: session image not found: %s\n", imgPath.c_str());
+            }
+            return;
+        }
+        openImageFile(a, path);
+    }
+
+    void saveSessionDialog(App *a)
+    {
+        if (a->app.imageCount() == 0) return;
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Save session", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Save", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "edit.cosmo");
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (a->app.saveSessionAs(path)) g_print("cosmo: saved session %s\n", path);
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
     }
 
     void openDialog(App *a)
@@ -142,7 +192,11 @@ int main(int argc, char **argv)
     App app;
     app.startUs = g_get_monotonic_time();
 
-    // open any files passed on the command line
+    // File menu actions -> native dialogs
+    app.app.onOpenRequested = [&app] { openDialog(&app); };
+    app.app.onSaveAsRequested = [&app] { saveSessionDialog(&app); };
+
+    // open any files passed on the command line (image or .cosmo session)
     for (int i = 1; i < argc; ++i)
         openPath(&app, argv[i]);
 
