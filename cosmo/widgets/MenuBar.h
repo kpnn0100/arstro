@@ -28,6 +28,9 @@ namespace cosmo
 
         explicit MenuBar(const artboard::Color &accent);
         void addMenu(Menu m);
+        int menuCount() const { return (int)mMenus.size(); }
+        /** Replace a menu's dropdown items (e.g. a dynamic preset list). */
+        void setMenuItems(int index, std::vector<Item> items);
 
         /** Fired whenever the active menu changes (index, or -1 = none open). */
         std::function<void(int)> onOpenChanged;

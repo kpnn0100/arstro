@@ -57,6 +57,14 @@ namespace cosmo
         std::function<void()> onOpenRequested;     // host shows an open dialog
         std::function<void()> onSaveRequested;     // Save (falls back to Save As if no path)
         std::function<void()> onSaveAsRequested;   // host shows a save dialog
+        std::function<void()> onSavePresetRequested;  // host prompts for a preset name
+
+        /** Directory presets live in (host sets it; empty disables presets). */
+        void setPresetDir(const std::string &dir);
+        /** Save the current develop settings as a named preset file. */
+        bool savePreset(const std::string &name);
+        /** Apply a named preset to the current image. */
+        bool applyPreset(const std::string &name);
 
         /** Source image path of the current slot (for the host's Save dialog default). */
         std::string currentSourcePath() const;
@@ -77,6 +85,7 @@ namespace cosmo
         void syncMaskUI();             // refresh mask panel + photo overlay from current slot
         void renderBefore();           // render the no-edit baseline for the compare view
         void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
+        void refreshPresetMenu();
         EditParams *curParams();
 
         double mW, mH;
@@ -120,6 +129,8 @@ namespace cosmo
         RenderService::Frame mBeforeFrame;  // no-edit baseline for compare
         EditParams mClipboard;              // copy/paste develop settings
         bool mHasClip = false;
+        std::string mPresetDir;             // where named presets are stored
+        int mPresetMenuIndex = -1;          // menu bar index of the Preset dropdown
     };
 }
 }

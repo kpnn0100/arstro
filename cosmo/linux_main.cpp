@@ -93,6 +93,27 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    void savePresetDialog(App *a)
+    {
+        if (a->app.imageCount() == 0) return;
+        GtkWidget *d = gtk_dialog_new_with_buttons(
+            "Save preset", GTK_WINDOW(a->window), GTK_DIALOG_MODAL,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Save", GTK_RESPONSE_ACCEPT, nullptr);
+        GtkWidget *entry = gtk_entry_new();
+        gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "preset name");
+        gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
+        gtk_dialog_set_default_response(GTK_DIALOG(d), GTK_RESPONSE_ACCEPT);
+        gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(d))), entry);
+        gtk_widget_show_all(d);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            const char *name = gtk_entry_get_text(GTK_ENTRY(entry));
+            if (name && *name && a->app.savePreset(name)) g_print("cosmo: saved preset '%s'\n", name);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     void openDialog(App *a)
     {
         GtkWidget *d = gtk_file_chooser_dialog_new(
@@ -195,6 +216,14 @@ int main(int argc, char **argv)
     // File menu actions -> native dialogs
     app.app.onOpenRequested = [&app] { openDialog(&app); };
     app.app.onSaveAsRequested = [&app] { saveSessionDialog(&app); };
+    app.app.onSavePresetRequested = [&app] { savePresetDialog(&app); };
+
+    // Presets live under the user's config dir.
+    {
+        const char *cfg = g_get_user_config_dir();
+        std::string dir = std::string(cfg ? cfg : ".") + "/cosmo/presets";
+        app.app.setPresetDir(dir);
+    }
 
     // open any files passed on the command line (image or .cosmo session)
     for (int i = 1; i < argc; ++i)

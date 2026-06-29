@@ -1,5 +1,6 @@
 #include "CosmoApp.h"
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -259,6 +260,12 @@ namespace cosmo
             pasteTo(all);
         }});
         mMenuBar->addMenu(develop);
+
+        MenuBar::Menu preset;
+        preset.title = "Preset";
+        preset.items.push_back({"Save Preset...", [this] { if (onSavePresetRequested) onSavePresetRequested(); }});
+        mMenuBar->addMenu(preset);
+        mPresetMenuIndex = mMenuBar->menuCount() - 1;
         // One active menu at a time (tab-like): the Settings panel shows iff Settings
         // is the active menu, so opening File closes Settings and vice versa.
         mMenuBar->onOpenChanged = [this](int open) { mSettings->visible = (open == 1); };
@@ -463,6 +470,57 @@ namespace cosmo
                 if (i == mCurrentSlot) affectedCurrent = true;
             }
         if (affectedCurrent) { syncControlsToSlot(); submit(); }  // others re-render when selected
+    }
+
+    void CosmoApp::setPresetDir(const std::string &dir)
+    {
+        mPresetDir = dir;
+        refreshPresetMenu();
+    }
+
+    bool CosmoApp::savePreset(const std::string &name)
+    {
+        if (mPresetDir.empty() || name.empty() || mCurrentSlot < 0) return false;
+        std::error_code ec;
+        std::filesystem::create_directories(mPresetDir, ec);
+        std::ofstream f(mPresetDir + "/" + name + ".cosmopreset");
+        if (!f) return false;
+        f << serializeParams(mSlotParams[mCurrentSlot]);  // image-independent: develop settings only
+        refreshPresetMenu();
+        return true;
+    }
+
+    bool CosmoApp::applyPreset(const std::string &name)
+    {
+        if (mPresetDir.empty() || mCurrentSlot < 0) return false;
+        std::ifstream f(mPresetDir + "/" + name + ".cosmopreset");
+        if (!f) return false;
+        std::stringstream ss; ss << f.rdbuf();
+        EditParams p;
+        if (!deserializeParams(ss.str(), p)) return false;
+        mSlotParams[mCurrentSlot] = p;
+        syncControlsToSlot();
+        submit();
+        return true;
+    }
+
+    void CosmoApp::refreshPresetMenu()
+    {
+        if (!mMenuBar || mPresetMenuIndex < 0) return;
+        std::vector<MenuBar::Item> items;
+        items.push_back({"Save Preset...", [this] { if (onSavePresetRequested) onSavePresetRequested(); }});
+        std::error_code ec;
+        if (!mPresetDir.empty() && std::filesystem::is_directory(mPresetDir, ec))
+        {
+            std::vector<std::string> names;
+            for (const auto &e : std::filesystem::directory_iterator(mPresetDir, ec))
+                if (e.path().extension() == ".cosmopreset")
+                    names.push_back(e.path().stem().string());
+            std::sort(names.begin(), names.end());
+            for (const auto &n : names)
+                items.push_back({n, [this, n] { applyPreset(n); }});
+        }
+        mMenuBar->setMenuItems(mPresetMenuIndex, std::move(items));
     }
 
     void CosmoApp::renderBefore()

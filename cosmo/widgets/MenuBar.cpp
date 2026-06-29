@@ -24,6 +24,11 @@ namespace cosmo
 
     void MenuBar::addMenu(Menu m) { mMenus.push_back(std::move(m)); }
 
+    void MenuBar::setMenuItems(int index, std::vector<Item> items)
+    {
+        if (index >= 0 && index < (int)mMenus.size()) mMenus[index].items = std::move(items);
+    }
+
     void MenuBar::setOpen(int idx)
     {
         if (idx == mOpen) return;
