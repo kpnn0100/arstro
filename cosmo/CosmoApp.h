@@ -25,6 +25,7 @@
 #include "widgets/Filmstrip.h"
 #include "widgets/MenuBar.h"
 #include "widgets/MaskOverlay.h"
+#include "widgets/CropOverlay.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -91,11 +92,13 @@ namespace cosmo
         std::shared_ptr<TransformPanel> mXform;
         std::shared_ptr<MaskPanel> mMaskPanel;
         std::shared_ptr<MaskOverlay> mMaskOverlay;   // sits over the photo
+        std::shared_ptr<CropOverlay> mCropOverlay;   // sits over the photo (Transform tab)
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
         int mSelectedMask = -1;
         int mMaskTabIndex = 2;                       // Basic, Detail, Mask, ...
+        int mXformTabIndex = 6;                      // ..., Mixer, Curve, Grade, Xform
         double mMenuBarX = 0, mMenuBarY = 0;        // position in root space (for outside-click)
 
         artboard::Theme mTheme;

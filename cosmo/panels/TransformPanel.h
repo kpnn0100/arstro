@@ -21,6 +21,7 @@ namespace cosmo
         std::function<void(double)> onRotate;                       // degrees
         std::function<void(int)> onQuarterTurns;                    // 0..3
         std::function<void(double, double, double, double)> onCrop;  // normalized x,y,w,h
+        std::function<void(double)> onAspect;                       // pixel ratio w:h, 0 = free
 
         struct State { double rotation = 0; int quarter = 0; double cropX = 0, cropY = 0, cropW = 1, cropH = 1; };
         void setState(const State &s);
@@ -35,8 +36,9 @@ namespace cosmo
         artboard::Color mAccent;
         std::shared_ptr<artboard::Slider> mRotate, mX, mY, mW, mH;
         std::shared_ptr<artboard::Button> mCCW, mCW;
+        std::shared_ptr<artboard::ComboBox> mAspectSel;
         int mQuarter = 0;
-        double mRowY[6] = {0, 0, 0, 0, 0, 0};  // label baselines
+        double mRowY[7] = {0, 0, 0, 0, 0, 0, 0};  // label baselines
     };
 }
 }

@@ -49,8 +49,13 @@ namespace cosmo
 
     void CosmoApp::submit()
     {
-        if (mCurrentSlot >= 0)
-            mService.render(mCurrentSlot, mSlotParams[mCurrentSlot]);
+        if (mCurrentSlot < 0) return;
+        EditParams p = mSlotParams[mCurrentSlot];
+        // In crop mode (Transform tab) render the FULL frame so the crop box can be
+        // dragged over the whole image; the slot keeps the real crop.
+        if (mTabs && mTabs->selectedIndex() == mXformTabIndex)
+        { p.cropX = 0; p.cropY = 0; p.cropW = 1; p.cropH = 1; }
+        mService.render(mCurrentSlot, p);
     }
 
     CosmoApp::CosmoApp(double width, double height)
@@ -70,6 +75,13 @@ namespace cosmo
                 { p->masks[mSelectedMask] = m; submit(); }
         };
         mRoot->addChild(mMaskOverlay);
+
+        mCropOverlay = std::make_shared<CropOverlay>(mAccent);  // active on the Transform tab
+        mCropOverlay->onChange = [this](double x, double y, double w, double h) {
+            if (auto *p = curParams())
+            { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; submit(); }
+        };
+        mRoot->addChild(mCropOverlay);
 
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
@@ -149,8 +161,9 @@ namespace cosmo
         mXform->onRotate = [this](double v) { if (auto *p = curParams()) { p->rotation = (float)v; submit(); } };
         mXform->onQuarterTurns = [this](int i) { if (auto *p = curParams()) { p->quarterTurns = i; submit(); } };
         mXform->onCrop = [this](double x, double y, double w, double h) {
-            if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; submit(); }
+            if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; mCropOverlay->setCrop(x, y, w, h); submit(); }
         };
+        mXform->onAspect = [this](double ratio) { mCropOverlay->setAspect(ratio); };
 
         mMaskPanel = std::make_shared<MaskPanel>(mTheme, mAccent);
         mMaskPanel->onAdd = [this](int type) {
@@ -189,8 +202,13 @@ namespace cosmo
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
         mTabs->addPage("Xform", mXform);
-        mMaskTabIndex = 2;
-        mTabs->onChange = [this](int) { syncMaskUI(); };  // show the overlay only on the Mask tab
+        mMaskTabIndex = 2; mXformTabIndex = 6;
+        mTabs->onChange = [this](int idx) {
+            syncMaskUI();                                  // mask overlay only on the Mask tab
+            mCropOverlay->setActive(idx == mXformTabIndex);  // crop box only on the Transform tab
+            if (auto *p = curParams()) mCropOverlay->setCrop(p->cropX, p->cropY, p->cropW, p->cropH);
+            submit();                                      // crop mode toggled -> full/cropped re-render
+        };
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
@@ -240,6 +258,8 @@ namespace cosmo
 
         mMaskOverlay->x.set(mPhotoRect.x); mMaskOverlay->y.set(mPhotoRect.y);
         mMaskOverlay->width.set(mPhotoRect.w); mMaskOverlay->height.set(mPhotoRect.h);
+        mCropOverlay->x.set(mPhotoRect.x); mCropOverlay->y.set(mPhotoRect.y);
+        mCropOverlay->width.set(mPhotoRect.w); mCropOverlay->height.set(mPhotoRect.h);
 
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
@@ -378,6 +398,9 @@ namespace cosmo
         ts.cropX = p.cropX; ts.cropY = p.cropY; ts.cropW = p.cropW; ts.cropH = p.cropH;
         mXform->setState(ts);
 
+        mCropOverlay->setCrop(p.cropX, p.cropY, p.cropW, p.cropH);
+        mCropOverlay->setActive(mTabs && mTabs->selectedIndex() == mXformTabIndex);
+
         mSelectedMask = p.masks.empty() ? -1 : 0;
         syncMaskUI();
     }
@@ -438,6 +461,7 @@ namespace cosmo
             mHistogram->setHistogram(f.hist);
         }
         mMaskOverlay->setFittedRect(mImageView->fittedRect());  // photo display area (local)
+        mCropOverlay->setFittedRect(mImageView->fittedRect());
 
         target.save();
         target.setTransform(Transform::identity());
