@@ -30,6 +30,7 @@ namespace cosmo
                 sl->setRange(s.min, s.max);
                 sl->setValue(s.def);
                 sl->setDefault(s.def);  // click jumps to the cursor (spring-smoothed); double-click resets
+                if (s.hasGradient) sl->setTrackGradient(s.gradLeft, s.gradRight);
                 sl->onChange = s.onChange;
                 mItems.push_back({false, s.label, (int)mSliders.size(), 0.0});
                 mSliders.push_back(sl);

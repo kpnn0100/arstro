@@ -144,8 +144,10 @@ namespace cosmo
                 {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->blacks = (float)v; submit(); } }},
             }},
             {"COLOR", {
-                {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curParams()) { p->temp = (float)v; submit(); } }},
-                {"tint", -150, 150, 0, [this](double v) { if (auto *p = curParams()) { p->tint = (float)v; submit(); } }},
+                {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curParams()) { p->temp = (float)v; submit(); } },
+                 true, Color{0.30f, 0.55f, 1.0f, 1.0f}, Color{1.0f, 0.82f, 0.30f, 1.0f}},   // blue -> warm
+                {"tint", -150, 150, 0, [this](double v) { if (auto *p = curParams()) { p->tint = (float)v; submit(); } },
+                 true, Color{0.40f, 0.80f, 0.35f, 1.0f}, Color{0.85f, 0.30f, 0.78f, 1.0f}},   // green -> magenta
                 {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->vibrance = (float)v; submit(); } }},
                 {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->saturation = (float)v; submit(); } }},
             }},

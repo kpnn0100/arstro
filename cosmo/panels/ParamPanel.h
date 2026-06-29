@@ -23,6 +23,8 @@ namespace cosmo
             std::string label;
             double min, max, def;
             std::function<void(double)> onChange;
+            bool hasGradient = false;            // render the track as a colour ramp
+            artboard::Color gradLeft, gradRight; // ramp endpoints (when hasGradient)
         };
         struct Section
         {
