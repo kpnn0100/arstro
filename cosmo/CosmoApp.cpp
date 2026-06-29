@@ -151,8 +151,11 @@ namespace cosmo
         mMenuBar->addMenu(file);
         MenuBar::Menu settings;
         settings.title = "Settings";
-        settings.action = [this] { mSettings->visible = !mSettings->visible; };
+        settings.overlay = true;  // its open state is the floating panel below
         mMenuBar->addMenu(settings);
+        // One active menu at a time (tab-like): the Settings panel shows iff Settings
+        // is the active menu, so opening File closes Settings and vice versa.
+        mMenuBar->onOpenChanged = [this](int open) { mSettings->visible = (open == 1); };
         mRoot->addChild(mMenuBar);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
@@ -320,8 +323,15 @@ namespace cosmo
         PointerButton b = button == 2 ? PointerButton::Right : PointerButton::Left;
         RawPointer rp{k, Point{x, y}, b, timeMs};
         rp.alt = alt;
-        if (kind == 0 && mMenuBar)  // press outside an open menu closes it
-            mMenuBar->closeIfOutside(Point{x - mMenuBarX, y - mMenuBarY});
+        if (kind == 0 && mMenuBar)  // a press outside the bar/dropdown AND the settings overlay closes the menu
+        {
+            const bool inMenu = mMenuBar->pointInActiveArea(Point{x - mMenuBarX, y - mMenuBarY});
+            const bool inSettings = mSettings->visible &&
+                Rect{mSettings->x.value(), mSettings->y.value(), mSettings->width.value(), mSettings->height.value()}
+                    .contains(Point{x, y});
+            if (!inMenu && !inSettings)
+                mMenuBar->close();
+        }
         mRecognizer.feed(rp);
     }
 

@@ -24,6 +24,13 @@ namespace cosmo
 
     void MenuBar::addMenu(Menu m) { mMenus.push_back(std::move(m)); }
 
+    void MenuBar::setOpen(int idx)
+    {
+        if (idx == mOpen) return;
+        mOpen = idx;
+        if (onOpenChanged) onOpenChanged(mOpen);  // app shows/hides overlay menus
+    }
+
     double MenuBar::titleW(int i) const { return (double)mMenus[i].title.size() * kChar + 2 * kGap + 6.0; }
     double MenuBar::titleX(int i) const
     {
@@ -58,14 +65,14 @@ namespace cosmo
     bool MenuBar::hitTestSelf(const Point &p) const
     {
         if (p.x >= 0 && p.x <= width.value() && p.y >= 0 && p.y <= height.value()) return true;
-        return mOpen >= 0 && dropdownRect(mOpen).contains(p);  // open dropdown is hittable
+        // an open dropdown (items menu) is also hittable
+        return mOpen >= 0 && !mMenus[mOpen].items.empty() && dropdownRect(mOpen).contains(p);
     }
 
-    void MenuBar::closeIfOutside(const Point &local)
+    bool MenuBar::pointInActiveArea(const Point &local) const
     {
-        if (mOpen < 0) return;
-        const bool inBar = (local.x >= 0 && local.x <= width.value() && local.y >= 0 && local.y <= height.value());
-        if (!inBar && !dropdownRect(mOpen).contains(local)) mOpen = -1;
+        if (local.x >= 0 && local.x <= width.value() && local.y >= 0 && local.y <= height.value()) return true;
+        return mOpen >= 0 && !mMenus[mOpen].items.empty() && dropdownRect(mOpen).contains(local);
     }
 
     bool MenuBar::handleGesture(const Gesture &g, const Point &local)
@@ -73,31 +80,27 @@ namespace cosmo
         if (g.type != Gesture::Type::Click && g.type != Gesture::Type::Down)
             return Segment::handleGesture(g, local);
 
-        // click inside an open dropdown -> fire item
-        if (mOpen >= 0)
+        // click inside an open dropdown -> fire item, then close
+        if (mOpen >= 0 && !mMenus[mOpen].items.empty())
         {
             const int it = itemAt(mOpen, local);
             if (it >= 0)
             {
                 auto action = mMenus[mOpen].items[it].action;  // copy before closing
-                mOpen = -1;
+                setOpen(-1);
                 if (g.type == Gesture::Type::Click && action) action();
                 return true;
             }
         }
-        // click on a title
+        // click on a title -> make it the single active menu (or toggle it closed)
         const int t = titleAt(local);
         if (t >= 0)
         {
             if (g.type == Gesture::Type::Click)
-            {
-                if (!mMenus[t].items.empty())
-                    mOpen = (mOpen == t) ? -1 : t;  // toggle dropdown
-                else { mOpen = -1; if (mMenus[t].action) mMenus[t].action(); }  // direct action
-            }
+                setOpen(mOpen == t ? -1 : t);
             return true;
         }
-        if (g.type == Gesture::Type::Click) mOpen = -1;  // click on the bar gutter closes
+        if (g.type == Gesture::Type::Click) setOpen(-1);  // bar gutter closes
         return true;
     }
 

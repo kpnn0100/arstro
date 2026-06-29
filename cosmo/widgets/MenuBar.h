@@ -1,7 +1,9 @@
 /*
- *  Cosmo by arstro — MenuBar: a top-left menu strip (File, Settings, ...). A menu
- *  with items opens a dropdown; a menu with no items is a direct-action button. The
- *  app closes an open menu on an outside click (closeIfOutside).
+ *  Cosmo by arstro — MenuBar: a top-left menu strip (File, Settings, ...). The bar
+ *  has a single ACTIVE menu (at most one open at a time, tab-like): clicking one
+ *  closes the other. A menu either drops down a list of items, or is an `overlay`
+ *  menu whose open state is shown by the app (e.g. the Settings panel) — signalled
+ *  via onOpenChanged.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
@@ -17,15 +19,23 @@ namespace cosmo
     {
     public:
         struct Item { std::string label; std::function<void()> action; };
-        struct Menu { std::string title; std::vector<Item> items; std::function<void()> action; };
+        struct Menu
+        {
+            std::string title;
+            std::vector<Item> items;  // dropdown items (empty for an overlay menu)
+            bool overlay = false;     // open state shown by the app, not a dropdown
+        };
 
         explicit MenuBar(const artboard::Color &accent);
         void addMenu(Menu m);
 
-        bool isOpen() const { return mOpen >= 0; }
-        void close() { mOpen = -1; }
-        /** Close if a (local-space) point is outside the bar + any open dropdown. */
-        void closeIfOutside(const artboard::Point &local);
+        /** Fired whenever the active menu changes (index, or -1 = none open). */
+        std::function<void(int)> onOpenChanged;
+
+        int openIndex() const { return mOpen; }
+        void close() { setOpen(-1); }
+        /** True if a local-space point is on the bar or the open dropdown. */
+        bool pointInActiveArea(const artboard::Point &local) const;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -33,11 +43,12 @@ namespace cosmo
         bool hitTestSelf(const artboard::Point &p) const override;
 
     private:
+        void setOpen(int idx);
         double titleX(int i) const;
         double titleW(int i) const;
         artboard::Rect dropdownRect(int i) const;
-        int titleAt(const artboard::Point &p) const;  // -1 if none
-        int itemAt(int menu, const artboard::Point &p) const;  // -1 if none
+        int titleAt(const artboard::Point &p) const;
+        int itemAt(int menu, const artboard::Point &p) const;
 
         std::vector<Menu> mMenus;
         artboard::Color mAccent;
