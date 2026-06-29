@@ -10,12 +10,12 @@ namespace cosmo
     GroupDeltaBar::GroupDeltaBar(const Theme &theme, const Color &accent) : mAccent(accent)
     {
         mExp = std::make_shared<Slider>(theme.slider);
-        mExp->setRange(-5, 5); mExp->setValue(0); mExp->setDefault(0); mExp->setClickJumps(false);
+        mExp->setRange(-5, 5); mExp->setValue(0); mExp->setDefault(0);
         mExp->onChange = [this](double) { if (onChange) onChange(mExp->value(), mTemp->value()); };
         addChild(mExp);
 
         mTemp = std::make_shared<Slider>(theme.slider);
-        mTemp->setRange(-100, 100); mTemp->setValue(0); mTemp->setDefault(0); mTemp->setClickJumps(false);
+        mTemp->setRange(-100, 100); mTemp->setValue(0); mTemp->setDefault(0);
         mTemp->onChange = [this](double) { if (onChange) onChange(mExp->value(), mTemp->value()); };
         addChild(mTemp);
     }

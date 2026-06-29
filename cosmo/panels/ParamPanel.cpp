@@ -29,8 +29,7 @@ namespace cosmo
                 auto sl = std::make_shared<Slider>(theme.slider);
                 sl->setRange(s.min, s.max);
                 sl->setValue(s.def);
-                sl->setDefault(s.def);
-                sl->setClickJumps(false);  // drag-only; double-click cleanly resets (item 6)
+                sl->setDefault(s.def);  // click jumps to the cursor (spring-smoothed); double-click resets
                 sl->onChange = s.onChange;
                 mItems.push_back({false, s.label, (int)mSliders.size(), 0.0});
                 mSliders.push_back(sl);

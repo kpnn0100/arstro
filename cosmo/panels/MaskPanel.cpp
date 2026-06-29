@@ -36,7 +36,7 @@ namespace cosmo
         addChild(mInvert);
 
         mFeather = std::make_shared<Slider>(theme.slider);
-        mFeather->setRange(0, 100); mFeather->setValue(50); mFeather->setClickJumps(false);
+        mFeather->setRange(0, 100); mFeather->setValue(50);
         mFeather->onChange = [this](double v) { if (mHasSelection && onFeather) onFeather(v / 100.0); };
         addChild(mFeather);
 
