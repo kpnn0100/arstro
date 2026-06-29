@@ -21,8 +21,10 @@
 #include "panels/ColorGradingPanel.h"
 #include "panels/TransformPanel.h"
 #include "panels/SettingsPanel.h"
+#include "panels/MaskPanel.h"
 #include "widgets/Filmstrip.h"
 #include "widgets/MenuBar.h"
+#include "widgets/MaskOverlay.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -69,6 +71,7 @@ namespace cosmo
         void layout();
         void submit();                 // push the current slot's params to the render service
         void syncControlsToSlot();
+        void syncMaskUI();             // refresh mask panel + photo overlay from current slot
         EditParams *curParams();
 
         double mW, mH;
@@ -86,9 +89,13 @@ namespace cosmo
         std::shared_ptr<ToneCurvePanel> mCurve;
         std::shared_ptr<ColorGradingPanel> mGrade;
         std::shared_ptr<TransformPanel> mXform;
+        std::shared_ptr<MaskPanel> mMaskPanel;
+        std::shared_ptr<MaskOverlay> mMaskOverlay;   // sits over the photo
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
+        int mSelectedMask = -1;
+        int mMaskTabIndex = 2;                       // Basic, Detail, Mask, ...
         double mMenuBarX = 0, mMenuBarY = 0;        // position in root space (for outside-click)
 
         artboard::Theme mTheme;

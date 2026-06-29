@@ -63,6 +63,14 @@ namespace cosmo
         mImageView = std::make_shared<ImageView>();
         mRoot->addChild(mImageView);
 
+        mMaskOverlay = std::make_shared<MaskOverlay>(mAccent);  // sits over the photo
+        mMaskOverlay->onChange = [this](const arstro::MaskParams &m) {
+            if (auto *p = curParams())
+                if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+                { p->masks[mSelectedMask] = m; submit(); }
+        };
+        mRoot->addChild(mMaskOverlay);
+
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
 
@@ -144,13 +152,45 @@ namespace cosmo
             if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; submit(); }
         };
 
+        mMaskPanel = std::make_shared<MaskPanel>(mTheme, mAccent);
+        mMaskPanel->onAdd = [this](int type) {
+            if (auto *p = curParams())
+            {
+                arstro::MaskParams m; m.type = type;
+                p->masks.push_back(m);
+                mSelectedMask = (int)p->masks.size() - 1;
+                syncMaskUI(); submit();
+            }
+        };
+        mMaskPanel->onSelect = [this](int i) { mSelectedMask = i; syncMaskUI(); };
+        mMaskPanel->onDelete = [this] {
+            if (auto *p = curParams())
+                if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+                {
+                    p->masks.erase(p->masks.begin() + mSelectedMask);
+                    if (mSelectedMask >= (int)p->masks.size()) mSelectedMask = (int)p->masks.size() - 1;
+                    syncMaskUI(); submit();
+                }
+        };
+        auto editMask = [this](auto fn) {
+            if (auto *p = curParams())
+                if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+                { fn(p->masks[mSelectedMask]); submit(); }
+        };
+        mMaskPanel->onInvert = [editMask](bool on) { editMask([on](arstro::MaskParams &m) { m.inverted = on; }); };
+        mMaskPanel->onFeather = [editMask](double v) { editMask([v](arstro::MaskParams &m) { m.feather = (float)v; }); };
+        mMaskPanel->onLocal = [editMask](const arstro::LocalAdjust &a) { editMask([&a](arstro::MaskParams &m) { m.adjust = a; }); };
+
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->addPage("Basic", mBasic);
         mTabs->addPage("Detail", mDetail);
+        mTabs->addPage("Mask", mMaskPanel);
         mTabs->addPage("Mixer", mMixer);
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
         mTabs->addPage("Xform", mXform);
+        mMaskTabIndex = 2;
+        mTabs->onChange = [this](int) { syncMaskUI(); };  // show the overlay only on the Mask tab
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
@@ -198,6 +238,9 @@ namespace cosmo
         mImageView->x.set(mPhotoRect.x); mImageView->y.set(mPhotoRect.y);
         mImageView->width.set(mPhotoRect.w); mImageView->height.set(mPhotoRect.h);
 
+        mMaskOverlay->x.set(mPhotoRect.x); mMaskOverlay->y.set(mPhotoRect.y);
+        mMaskOverlay->width.set(mPhotoRect.w); mMaskOverlay->height.set(mPhotoRect.h);
+
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
@@ -208,6 +251,7 @@ namespace cosmo
         const double contentH = tabsH - mTabs->tabHeight - 6.0;
         mBasic->layout(rightW, contentH);
         mDetail->layout(rightW, contentH);
+        mMaskPanel->layout(rightW, contentH);
         mMixer->layout(rightW, contentH);
         mCurve->layout(rightW, contentH);
         mGrade->layout(rightW, contentH);
@@ -333,6 +377,25 @@ namespace cosmo
         ts.rotation = p.rotation; ts.quarter = p.quarterTurns;
         ts.cropX = p.cropX; ts.cropY = p.cropY; ts.cropW = p.cropW; ts.cropH = p.cropH;
         mXform->setState(ts);
+
+        mSelectedMask = p.masks.empty() ? -1 : 0;
+        syncMaskUI();
+    }
+
+    void CosmoApp::syncMaskUI()
+    {
+        EditParams *p = curParams();
+        const int n = p ? (int)p->masks.size() : 0;
+        if (mSelectedMask >= n) mSelectedMask = n - 1;
+        if (mSelectedMask < 0 && n > 0) mSelectedMask = 0;
+
+        static const std::vector<arstro::MaskParams> kEmpty;
+        mMaskPanel->setMasks(p ? p->masks : kEmpty, mSelectedMask);
+
+        // The overlay is interactive only on the Mask tab with a mask selected.
+        const bool onMaskTab = mTabs && mTabs->selectedIndex() == mMaskTabIndex;
+        const bool active = onMaskTab && p && mSelectedMask >= 0 && mSelectedMask < n;
+        mMaskOverlay->setMask(active ? p->masks[mSelectedMask] : arstro::MaskParams{}, active);
     }
 
     const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
@@ -374,6 +437,7 @@ namespace cosmo
             mImageView->setImage(f.rgba.data(), f.width, f.height);
             mHistogram->setHistogram(f.hist);
         }
+        mMaskOverlay->setFittedRect(mImageView->fittedRect());  // photo display area (local)
 
         target.save();
         target.setTransform(Transform::identity());
