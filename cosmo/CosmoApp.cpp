@@ -43,10 +43,12 @@ namespace cosmo
         }
     }
 
-    CosmoApp::UiParams *CosmoApp::curUi()
+    EditParams *CosmoApp::curParams() { return mCurrentSlot >= 0 ? &mSlotParams[mCurrentSlot] : nullptr; }
+
+    void CosmoApp::submit()
     {
-        const int s = mEngine.currentSlot();
-        return s >= 0 ? &mSlotParams[s] : nullptr;
+        if (mCurrentSlot >= 0)
+            mService.render(mCurrentSlot, mSlotParams[mCurrentSlot]);
     }
 
     CosmoApp::CosmoApp(double width, double height)
@@ -62,83 +64,65 @@ namespace cosmo
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
 
-        // Basic: tone/colour/effect sliders, grouped into labeled sections.
         using Section = ParamPanel::Section;
         std::vector<Section> basic = {
             {"TONE", {
-                {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curUi()) { p->exposure = v; mEngine.setExposure((float)v); markDirty(); } }},
-                {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->contrast = v; mEngine.setContrast((float)v); markDirty(); } }},
-                {"highlights", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->highlights = v; mEngine.setHighlights((float)v); markDirty(); } }},
-                {"shadows", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->shadows = v; mEngine.setShadows((float)v); markDirty(); } }},
-                {"whites", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->whites = v; mEngine.setWhites((float)v); markDirty(); } }},
-                {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->blacks = v; mEngine.setBlacks((float)v); markDirty(); } }},
+                {"exposure", -5, 5, 0, [this](double v) { if (auto *p = curParams()) { p->exposure = (float)v; submit(); } }},
+                {"contrast", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->contrast = (float)v; submit(); } }},
+                {"highlights", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->highlights = (float)v; submit(); } }},
+                {"shadows", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->shadows = (float)v; submit(); } }},
+                {"whites", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->whites = (float)v; submit(); } }},
+                {"blacks", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->blacks = (float)v; submit(); } }},
             }},
             {"COLOR", {
-                {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curUi()) { p->temp = v; mEngine.setTemperature((float)v); markDirty(); } }},
-                {"tint", -150, 150, 0, [this](double v) { if (auto *p = curUi()) { p->tint = v; mEngine.setTint((float)v); markDirty(); } }},
-                {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->vibrance = v; mEngine.setVibrance((float)v); markDirty(); } }},
-                {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->saturation = v; mEngine.setSaturation((float)v); markDirty(); } }},
+                {"temp", 2000, 50000, 6500, [this](double v) { if (auto *p = curParams()) { p->temp = (float)v; submit(); } }},
+                {"tint", -150, 150, 0, [this](double v) { if (auto *p = curParams()) { p->tint = (float)v; submit(); } }},
+                {"vibrance", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->vibrance = (float)v; submit(); } }},
+                {"saturation", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->saturation = (float)v; submit(); } }},
             }},
             {"EFFECTS", {
-                {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curUi()) { p->dehaze = v; mEngine.setDehaze((float)v); markDirty(); } }},
-                {"grain", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainAmount = v; mEngine.setGrainAmount((float)v); markDirty(); } }},
-                {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curUi()) { p->grainSize = v; mEngine.setGrainSize((float)v); markDirty(); } }},
+                {"dehaze", -100, 100, 0, [this](double v) { if (auto *p = curParams()) { p->dehaze = (float)v; submit(); } }},
+                {"grain", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->grainAmount = (float)v; submit(); } }},
+                {"grain size", 0, 100, 0, [this](double v) { if (auto *p = curParams()) { p->grainSize = (float)v; submit(); } }},
             }},
         };
         mBasic = std::make_shared<ParamPanel>("BASIC", mTheme, mAccent, basic);
 
         mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
         mMixer->onChange = [this](int ch, const std::vector<std::pair<float, float>> &pts) {
-            if (auto *p = curUi())
-            {
-                p->mixer[ch] = pts;
-                mEngine.setMixerCurve((EditEngine::MixerChannel)ch, pts);
-                markDirty();
-            }
+            if (auto *p = curParams()) { p->mixer[ch] = pts; submit(); }
         };
 
         mCurve = std::make_shared<ToneCurvePanel>(mTheme, mAccent);
         mCurve->onCurveChange = [this](const std::vector<std::pair<float, float>> &pts) {
-            if (auto *p = curUi()) { p->curve = pts; mEngine.setCurvePoints(pts); markDirty(); }
+            if (auto *p = curParams()) { p->curve = pts; submit(); }
         };
-        mCurve->onLogChange = [this](bool on) {
-            if (auto *p = curUi()) { p->curveLog = on; mEngine.setCurveLogScale(on); markDirty(); }
-        };
+        mCurve->onLogChange = [this](bool on) { if (auto *p = curParams()) { p->curveLog = on; submit(); } };
 
         mGrade = std::make_shared<ColorGradingPanel>(mTheme, mAccent);
         mGrade->onGrade = [this](int r, double h, double s, double l) {
-            if (auto *p = curUi())
-            {
-                mEngine.setGradeHue((EditEngine::GradeRegion)r, (float)h);
-                mEngine.setGradeSaturation((EditEngine::GradeRegion)r, (float)s);
-                mEngine.setGradeLuminance((EditEngine::GradeRegion)r, (float)l);
-                p->grade[r] = {h, s, l};
-                markDirty();
-            }
+            if (auto *p = curParams()) { p->grade[r].hue = (float)h; p->grade[r].sat = (float)s; p->grade[r].lum = (float)l; submit(); }
         };
-        mGrade->onBalance = [this](double v) { if (auto *p = curUi()) { p->balance = v; mEngine.setGradeBalance((float)v); markDirty(); } };
+        mGrade->onBalance = [this](double v) { if (auto *p = curParams()) { p->balance = (float)v; submit(); } };
         mGrade->onRemap = [this](bool on, double src, double range, double dst, double strength) {
-            if (auto *p = curUi())
+            if (auto *p = curParams())
             {
-                p->remapOn = on; p->remapSrc = src; p->remapRange = range; p->remapDst = dst;
-                p->remapStrength = strength * 100.0;
-                mEngine.setHueRemapEnabled(on);
-                mEngine.setHueRemap((float)src, (float)range, (float)dst, (float)strength);
-                markDirty();
+                p->remapEnable = on; p->remapSrc = (float)src; p->remapRange = (float)range;
+                p->remapDst = (float)dst; p->remapStrength = (float)strength;  // 0..1
+                submit();
             }
         };
 
         mXform = std::make_shared<TransformPanel>(mTheme, mAccent);
-        mXform->onRotate = [this](double v) { if (auto *p = curUi()) { p->rotation = v; mEngine.setRotation((float)v); markDirty(); } };
-        mXform->onQuarterTurns = [this](int i) { if (auto *p = curUi()) { p->quarter = i; mEngine.setQuarterTurns(i); markDirty(); } };
+        mXform->onRotate = [this](double v) { if (auto *p = curParams()) { p->rotation = (float)v; submit(); } };
+        mXform->onQuarterTurns = [this](int i) { if (auto *p = curParams()) { p->quarterTurns = i; submit(); } };
         mXform->onCrop = [this](double x, double y, double w, double h) {
-            if (auto *p = curUi())
-            {
-                p->cropX = x; p->cropY = y; p->cropW = w; p->cropH = h;
-                mEngine.setCrop((float)x, (float)y, (float)w, (float)h);
-                markDirty();
-            }
+            if (auto *p = curParams()) { p->cropX = (float)x; p->cropY = (float)y; p->cropW = (float)w; p->cropH = (float)h; submit(); }
         };
+
+        mSettings = std::make_shared<SettingsPanel>(mTheme, mAccent);
+        mSettings->onPreviewEdge = [this](int edge) { mPreviewEdge = edge; mService.setPreviewSize(edge); submit(); };
+        mSettings->onThreads = [this](int n) { par::setThreads(n); submit(); };
 
         mTabs = std::make_shared<TabView>(mTheme.tab);
         mTabs->addPage("Basic", mBasic);
@@ -146,6 +130,7 @@ namespace cosmo
         mTabs->addPage("Curve", mCurve);
         mTabs->addPage("Grade", mGrade);
         mTabs->addPage("Xform", mXform);
+        mTabs->addPage("Settings", mSettings);
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
@@ -166,35 +151,29 @@ namespace cosmo
         const double photoY = kTopBar + 8.0;
         mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, filmY - photoY - 8.0};
 
-        mImageView->x.set(mPhotoRect.x);
-        mImageView->y.set(mPhotoRect.y);
-        mImageView->width.set(mPhotoRect.w);
-        mImageView->height.set(mPhotoRect.h);
+        mImageView->x.set(mPhotoRect.x); mImageView->y.set(mPhotoRect.y);
+        mImageView->width.set(mPhotoRect.w); mImageView->height.set(mPhotoRect.h);
 
-        mHistogram->x.set(rightX);
-        mHistogram->y.set(photoY);
+        mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
         const double tabsY = photoY + histH + 10.0;
         const double tabsH = (filmY - 8.0) - tabsY;
-        mTabs->x.set(rightX);
-        mTabs->y.set(tabsY);
-        mTabs->width.set(rightW);
-        mTabs->height.set(tabsH);
+        mTabs->x.set(rightX); mTabs->y.set(tabsY);
+        mTabs->width.set(rightW); mTabs->height.set(tabsH);
         const double contentH = tabsH - mTabs->tabHeight - 6.0;
         mBasic->layout(rightW, contentH);
         mMixer->layout(rightW, contentH);
         mCurve->layout(rightW, contentH);
         mGrade->layout(rightW, contentH);
         mXform->layout(rightW, contentH);
+        mSettings->layout(rightW, contentH);
 
-        mFilmstrip->x.set(kMargin);
-        mFilmstrip->y.set(filmY);
-        mFilmstrip->width.set(rightX - kMargin - kMargin);
-        mFilmstrip->height.set(filmH);
+        mFilmstrip->x.set(kMargin); mFilmstrip->y.set(filmY);
+        mFilmstrip->width.set(rightX - kMargin - kMargin); mFilmstrip->height.set(filmH);
 
-        mEngine.setPreviewSize((int)(mPhotoRect.w > mPhotoRect.h ? mPhotoRect.w : mPhotoRect.h));
-        markDirty();
+        mService.setPreviewSize(mPreviewEdge);
+        submit();
     }
 
     void CosmoApp::setSize(double width, double height)
@@ -202,16 +181,15 @@ namespace cosmo
         if (width < 320) width = 320;
         if (height < 240) height = 240;
         mW = width; mH = height;
-        mRoot->width.set(width);
-        mRoot->height.set(height);
+        mRoot->width.set(width); mRoot->height.set(height);
         layout();
     }
 
     int CosmoApp::openImage(const uint8_t *rgba, int w, int h, const std::string &name)
     {
-        const int slot = mEngine.addImage(rgba, w, h, 4);
+        const int slot = mService.addImage(rgba, w, h, 4);
         if (slot < 0) return -1;
-        mSlotParams.push_back(UiParams{});
+        mSlotParams.push_back(EditParams{});
         mSlotNames.push_back(name);
         int tw = 0, th = 0;
         std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
@@ -222,18 +200,17 @@ namespace cosmo
 
     void CosmoApp::selectImage(int slot)
     {
-        if (slot < 0 || slot >= mEngine.imageCount()) return;
-        mEngine.selectImage(slot);
+        if (slot < 0 || slot >= (int)mSlotParams.size()) return;
+        mCurrentSlot = slot;
         mFilmstrip->setSelected(slot);
         syncControlsToSlot();
-        markDirty();
+        submit();
     }
 
     void CosmoApp::syncControlsToSlot()
     {
-        const int s = mEngine.currentSlot();
-        if (s < 0) return;
-        const UiParams &p = mSlotParams[s];
+        if (mCurrentSlot < 0) return;
+        const EditParams &p = mSlotParams[mCurrentSlot];
         mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks,
                            p.temp, p.tint, p.vibrance, p.saturation, p.dehaze, p.grainAmount, p.grainSize});
         mMixer->setCurves(p.mixer);
@@ -241,31 +218,24 @@ namespace cosmo
         mCurve->setLog(p.curveLog);
 
         ColorGradingPanel::State gs;
-        gs.grade = p.grade; gs.balance = p.balance; gs.remapOn = p.remapOn;
-        gs.remapSrc = p.remapSrc; gs.remapRange = p.remapRange;
-        gs.remapDst = p.remapDst; gs.remapStrength = p.remapStrength;
+        for (int r = 0; r < 3; ++r) gs.grade[r] = {p.grade[r].hue, p.grade[r].sat, p.grade[r].lum};
+        gs.balance = p.balance; gs.remapOn = p.remapEnable;
+        gs.remapSrc = p.remapSrc; gs.remapRange = p.remapRange; gs.remapDst = p.remapDst;
+        gs.remapStrength = p.remapStrength * 100.0;  // panel uses 0..100
         mGrade->setState(gs);
 
         TransformPanel::State ts;
-        ts.rotation = p.rotation; ts.quarter = p.quarter;
+        ts.rotation = p.rotation; ts.quarter = p.quarterTurns;
         ts.cropX = p.cropX; ts.cropY = p.cropY; ts.cropW = p.cropW; ts.cropH = p.cropH;
         mXform->setState(ts);
     }
 
     const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
     {
-        if (!mEngine.hasImage()) { w = h = 0; return nullptr; }
-        PreviewBuffer pb = mEngine.renderFull();
-        w = pb.width; h = pb.height;
-        return pb.rgba;
-    }
-
-    void CosmoApp::rebuildPreview()
-    {
-        PreviewBuffer pv = mEngine.renderPreview();
-        if (!pv.rgba) return;
-        mImageView->setImage(pv.rgba, pv.width, pv.height);
-        mHistogram->setHistogram(mEngine.histogram());
+        if (mCurrentSlot < 0) { w = h = 0; return nullptr; }
+        if (!mService.renderFull(mCurrentSlot, mSlotParams[mCurrentSlot], mExportFrame)) { w = h = 0; return nullptr; }
+        w = mExportFrame.width; h = mExportFrame.height;
+        return mExportFrame.rgba.data();
     }
 
     void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt)
@@ -283,40 +253,36 @@ namespace cosmo
     {
         mRoot->advance(nowMs);
 
-        if (mDirty && mEngine.hasImage())
+        // Pick up any completed frame from the worker (non-blocking).
+        RenderService::Frame f;
+        if (mService.tryAcquire(f) && f.width > 0)
         {
-            rebuildPreview();
-            mDirty = false;
+            mImageView->setImage(f.rgba.data(), f.width, f.height);
+            mHistogram->setHistogram(f.hist);
         }
 
         target.save();
         target.setTransform(Transform::identity());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::bg()));
-        // wordmark (the one intentional brand-accent moment) + quiet byline
         target.setFill(mAccent);
         for (double ox : {0.0, 0.5})
             target.drawText("COSMO", 18.0 + ox, 33.0, 19.0);
         target.setFill(palette::faint());
         target.drawText("by arstro", 96.0, 33.0, 11.0);
-        // hairline under the top bar
         target.beginPath();
-        target.moveTo(0.0, kTopBar);
-        target.lineTo(mW, kTopBar);
-        target.setStroke(palette::line(), 1.0);
-        target.strokePath();
+        target.moveTo(0.0, kTopBar); target.lineTo(mW, kTopBar);
+        target.setStroke(palette::line(), 1.0); target.strokePath();
 
         target.setFill(palette::muted());
-        if (mEngine.hasImage())
+        if (mCurrentSlot >= 0)
         {
-            const int s = mEngine.currentSlot();
-            const std::string status = mSlotNames[s] + "   (" + std::to_string(s + 1) + "/" +
-                                       std::to_string(imageCount()) + ")";
-            target.drawText(status, 190.0, 34.0, 12.0);
+            const std::string status = mSlotNames[mCurrentSlot] + "   (" + std::to_string(mCurrentSlot + 1) +
+                                       "/" + std::to_string(imageCount()) + ")";
+            target.drawText(status, 190.0, 33.0, 12.0);
         }
         else
         {
-            target.drawText("Open an image  -  press O (native) or use the file picker (web)",
-                            190.0, 33.0, 12.0);
+            target.drawText("Open an image  -  press O (native) or use the file picker (web)", 190.0, 33.0, 12.0);
             drawRoundedRect(target, mPhotoRect, radius::panel(),
                             Paint::filledStroked(palette::panel(), palette::line(), 1.0));
         }

@@ -254,7 +254,9 @@ case "$TARGET" in
         cosmo_src=()
         while IFS= read -r -d '' f; do cosmo_src+=("$f"); done \
           < <(find "$ROOT/cosmo" -name '*.cpp' ! -name 'web_main.cpp' -print0)
-        c++ -std=c++17 -O2 $RAW_DEF \
+        # ARSTRO_ENABLE_THREADS: engine on a worker thread (RenderService) + multicore
+        # pixel pipeline. Defined for EVERY TU so the RenderService layout matches.
+        c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF \
           "${cosmo_src[@]}" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" "${ip_src[@]}" \
