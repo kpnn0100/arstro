@@ -5,6 +5,7 @@
  */
 #include "MiniTest.h"
 #include "image_processing.h"
+#include <cmath>
 
 using namespace arstro;
 
@@ -630,6 +631,140 @@ TEST(Rotate_180_270_and_angle)
     CHECK(oa.width() == 7 && oa.height() == 7);
     CHECK(oa.at(0, 0, 0) < 0.5);            // corner outside the source -> transparent
     CHECK(oa.at(3, 3, 0) > 0.5);            // centre still white
+}
+
+// ── Detail / presence / lens (spatial processors) ──
+
+// A horizontal gray step: left half dark, right half bright (linear light).
+static Image grayStep(int w, int h, Pixel lo, Pixel hi)
+{
+    Image img(w, h, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+            Pixel v = x < w / 2 ? lo : hi;
+            for (int c = 0; c < 3; ++c) img.at(x, y, c) = v;
+        }
+    return img;
+}
+
+TEST(Sharpen_identity_and_overshoot)
+{
+    Image step = grayStep(8, 3, (Pixel)0.2, (Pixel)0.6);
+
+    Sharpen id;  // amount 0 -> identity
+    Image i = id.apply(step);
+    CHECK_NEAR(i.at(0, 1, 0), 0.2, 1e-5);
+    CHECK_NEAR(i.at(7, 1, 0), 0.6, 1e-5);
+
+    Sharpen s; s.setAmount(120.f); s.setRadius(1.f); s.setMasking(0.f);
+    Image o = s.apply(step);
+    const int el = 8 / 2 - 1, er = 8 / 2;  // pixels straddling the edge
+    CHECK(o.at(el, 1, 0) < step.at(el, 1, 0));  // dark side dips (overshoot)
+    CHECK(o.at(er, 1, 0) > step.at(er, 1, 0));  // bright side lifts
+
+    // masking gates flat areas: with full masking the edge still sharpens, but a
+    // pixel far from the edge (flat) stays put.
+    Sharpen sm; sm.setAmount(120.f); sm.setRadius(1.f); sm.setMasking(100.f);
+    Image om = sm.apply(step);
+    CHECK(om.at(er, 1, 0) > step.at(er, 1, 0));        // edge still sharpened
+    CHECK_NEAR(om.at(0, 1, 0), step.at(0, 1, 0), 1e-3);  // flat region untouched
+}
+
+TEST(NoiseReduction_identity_and_smooths)
+{
+    // checkerboard luminance noise on an otherwise mid-gray patch
+    Image noisy(8, 8, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+        {
+            Pixel v = ((x + y) & 1) ? (Pixel)0.35 : (Pixel)0.25;
+            for (int c = 0; c < 3; ++c) noisy.at(x, y, c) = v;
+        }
+    auto totalVariation = [](const Image &im) {
+        double tv = 0; int w = im.width(), h = im.height();
+        for (int y = 0; y < h; ++y)
+            for (int x = 1; x < w; ++x) tv += std::fabs(im.at(x, y, 0) - im.at(x - 1, y, 0));
+        return tv;
+    };
+
+    NoiseReduction id;  // 0/0 -> identity
+    CHECK_NEAR(id.apply(noisy).at(0, 0, 0), 0.25, 1e-5);
+
+    NoiseReduction nr; nr.setLuminance(100.f);
+    CHECK(totalVariation(nr.apply(noisy)) < totalVariation(noisy));  // luma smoothed
+
+    // colour speckle: uniform-ish luma, alternating red/blue tint
+    Image speckle(8, 8, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+        {
+            bool a = (x + y) & 1;
+            speckle.at(x, y, 0) = a ? (Pixel)0.5 : (Pixel)0.3;
+            speckle.at(x, y, 1) = (Pixel)0.4;
+            speckle.at(x, y, 2) = a ? (Pixel)0.3 : (Pixel)0.5;
+        }
+    NoiseReduction cnr; cnr.setColor(100.f);
+    Image out = cnr.apply(speckle);
+    double before = std::fabs(speckle.at(0, 0, 0) - speckle.at(0, 0, 2));
+    double after = std::fabs(out.at(0, 0, 0) - out.at(0, 0, 2));
+    CHECK(after < before);  // chroma spread reduced
+}
+
+TEST(Texture_and_Clarity_local_contrast)
+{
+    Image step = grayStep(16, 4, (Pixel)0.3, (Pixel)0.7);
+
+    Texture tid; CHECK_NEAR(tid.apply(step).at(0, 0, 0), 0.3, 1e-5);  // 0 -> identity
+    Clarity cid; CHECK_NEAR(cid.apply(step).at(0, 0, 0), 0.3, 1e-5);
+
+    auto edgeGap = [](const Image &im) {
+        int w = im.width(); return (double)im.at(w / 2, 1, 0) - im.at(w / 2 - 1, 1, 0);
+    };
+    const double base = edgeGap(step);
+
+    Texture t; t.setAmount(100.f);
+    CHECK(edgeGap(t.apply(step)) > base);   // adds fine contrast across the edge
+
+    Clarity c; c.setAmount(100.f);
+    CHECK(edgeGap(c.apply(step)) > base);   // adds midtone local contrast
+    Clarity cn; cn.setAmount(-100.f);
+    CHECK(edgeGap(cn.apply(step)) < base);  // negative softens
+}
+
+TEST(LensCorrection_identity_vignette_distortion)
+{
+    // varied colour gradient so geometric ops are observable
+    Image g(9, 9, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < 9; ++y)
+        for (int x = 0; x < 9; ++x)
+        {
+            g.at(x, y, 0) = (Pixel)x / 8;
+            g.at(x, y, 1) = (Pixel)y / 8;
+            g.at(x, y, 2) = (Pixel)0.5;
+        }
+
+    LensCorrection id;  // all zero -> exact identity
+    Image i = id.apply(g);
+    CHECK_NEAR(i.at(3, 5, 0), g.at(3, 5, 0), 1e-6);
+    CHECK_NEAR(i.at(8, 0, 1), g.at(8, 0, 1), 1e-6);
+
+    LensCorrection vig; vig.setVignette(-100.f);
+    Image v = vig.apply(solidLinear(9, 9, 3, (Pixel)0.5));
+    CHECK_NEAR(v.at(4, 4, 0), 0.5, 1e-4);  // centre unchanged
+    CHECK(v.at(0, 0, 0) < 0.05);           // corner darkened to ~0
+
+    LensCorrection dist; dist.setDistortion(100.f);
+    Image dimg = dist.apply(g);
+    bool remapped = false;
+    for (int y = 0; y < 9 && !remapped; ++y)
+        for (int x = 0; x < 9; ++x)
+            if (std::fabs(dimg.at(x, y, 0) - g.at(x, y, 0)) > 1e-4) { remapped = true; break; }
+    CHECK(remapped);  // geometry remapped somewhere in the frame
+
+    LensCorrection ca; ca.setChromaticAberration(100.f);
+    Image cao = ca.apply(g);
+    CHECK(cao.at(1, 1, 0) != g.at(1, 1, 0) || cao.at(1, 1, 2) != g.at(1, 1, 2));  // R/B shifted
 }
 
 MINITEST_MAIN

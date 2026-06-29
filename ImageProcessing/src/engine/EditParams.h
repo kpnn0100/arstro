@@ -23,8 +23,15 @@ namespace arstro
         float highlights = 0, shadows = 0, whites = 0, blacks = 0;
         // colour / presence
         float temp = 6500, tint = 0, vibrance = 0, saturation = 0;
+        // presence: local contrast
+        float texture = 0, clarity = 0;
         // effects
         float dehaze = 0, grainAmount = 0, grainSize = 0;
+        // detail: sharpening + noise reduction
+        float sharpenAmount = 0, sharpenRadius = 1, sharpenMasking = 0;
+        float nrLuminance = 0, nrColor = 0;
+        // lens corrections
+        float lensDistortion = 0, lensCA = 0, lensVignette = 0;
         // tone curve (display-domain control points) + domain
         std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
         bool curveLog = true;

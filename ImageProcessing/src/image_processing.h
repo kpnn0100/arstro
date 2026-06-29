@@ -11,6 +11,7 @@
 #include "base/Pixel.h"
 #include "base/Image.h"
 #include "base/ColorSpace.h"
+#include "base/Spatial.h"
 #include "base/SmoothedParameter.h"
 #include "base/ImageConfig.h"
 #include "base/Parallel.h"
@@ -37,10 +38,17 @@
 // Effects
 #include "effect/Dehaze.h"
 #include "effect/Grain.h"
+#include "effect/Texture.h"
+#include "effect/Clarity.h"
+
+// Detail
+#include "detail/Sharpen.h"
+#include "detail/NoiseReduction.h"
 
 // Transform
 #include "transform/Crop.h"
 #include "transform/Rotate.h"
+#include "transform/LensCorrection.h"
 
 // Analysis + video + engine
 #include "analysis/Histogram.h"

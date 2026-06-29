@@ -117,15 +117,28 @@ package color {
 package effect {
   class Dehaze { + setAmount(v)  ' dark-channel prior }
   class Grain { + setAmount(v) / setSize(v) / setSeed(s) }
+  class Texture { + setAmount(v)  ' fine-radius local contrast }
+  class Clarity { + setAmount(v)  ' large-radius midtone local contrast }
   Dehaze --|> ImageProcessor
   Grain --|> ImageProcessor
+  Texture --|> ImageProcessor
+  Clarity --|> ImageProcessor
+}
+
+package detail {
+  class Sharpen { + setAmount(v) / setRadius(px) / setMasking(v)  ' unsharp on perceptual luma }
+  class NoiseReduction { + setLuminance(v) / setColor(v)  ' bilateral luma + chroma blur }
+  Sharpen --|> ImageProcessor
+  NoiseReduction --|> ImageProcessor
 }
 
 package transform {
   class Crop { + setRect(x,y,w,h)  ' normalized }
   class Rotate { + setAngle(deg) / setQuarterTurns(n) }
+  class LensCorrection { + setDistortion(v) / setChromaticAberration(v) / setVignette(v) }
   Crop --|> ImageProcessor
   Rotate --|> ImageProcessor
+  LensCorrection --|> ImageProcessor
 }
 
 ' ─────────────────────────── Analysis / Video / Engine ───────────────────────────

@@ -13,9 +13,11 @@
  *  each with its own parameter set.
  *
  *  Pipeline order (the hard contract — geometry first so spatial effects and the
- *  histogram describe the framed image, and grain isn't rotated):
- *      Crop -> Rotate -> Exposure -> Contrast -> ToneRegions -> WhiteBalance
- *      -> ToneCurve -> Vibrance -> ColorMixer -> ColorGrading -> Dehaze -> Grain
+ *  histogram describe the framed image, noise reduction before tone amplifies it,
+ *  and sharpening/grain last so they aren't blurred or rotated):
+ *      Crop -> Rotate -> LensCorrection -> NoiseReduction -> Exposure -> Contrast
+ *      -> ToneRegions -> WhiteBalance -> ToneCurve -> Texture -> Clarity
+ *      -> Vibrance -> ColorMixer -> ColorGrading -> Dehaze -> Sharpen -> Grain
  */
 #pragma once
 #include "../base/Image.h"
@@ -32,8 +34,13 @@
 #include "../color/ColorGrading.h"
 #include "../effect/Dehaze.h"
 #include "../effect/Grain.h"
+#include "../effect/Texture.h"
+#include "../effect/Clarity.h"
+#include "../detail/Sharpen.h"
+#include "../detail/NoiseReduction.h"
 #include "../transform/Crop.h"
 #include "../transform/Rotate.h"
+#include "../transform/LensCorrection.h"
 #include <array>
 #include <cstdint>
 #include <utility>
@@ -94,9 +101,23 @@ namespace arstro
         void setTint(float v);              // -150..+150
         void setVibrance(float v);          // -100..+100
         void setSaturation(float v);
+        void setTexture(float v);           // -100..+100 (fine local contrast)
+        void setClarity(float v);           // -100..+100 (midtone local contrast)
         void setDehaze(float v);            // -100..+100
         void setGrainAmount(float v);       // 0..100
         void setGrainSize(float v);         // 0..100
+
+        // ── detail (sharpening + noise reduction) ──
+        void setSharpenAmount(float v);     // 0..150
+        void setSharpenRadius(float px);    // 0.5..3
+        void setSharpenMasking(float v);    // 0..100
+        void setNoiseLuminance(float v);    // 0..100
+        void setNoiseColor(float v);        // 0..100
+
+        // ── lens corrections ──
+        void setLensDistortion(float v);    // -100..+100
+        void setLensCA(float v);            // -100..+100
+        void setLensVignette(float v);      // -100..+100
 
         // ── tone curve ──
         void setCurvePoints(const std::vector<std::pair<float, float>> &pts);
@@ -143,15 +164,20 @@ namespace arstro
         ImageBlock mPipeline;
         Crop mCrop;
         Rotate mRotate;
+        LensCorrection mLens;
+        NoiseReduction mNoiseReduction;
         Exposure mExposure;
         Contrast mContrast;
         ToneRegions mToneRegions;
         WhiteBalance mWhiteBalance;
         ToneCurve mToneCurve;
+        Texture mTexture;
+        Clarity mClarity;
         Vibrance mVibrance;
         ColorMixer mColorMixer;
         ColorGrading mColorGrading;
         Dehaze mDehaze;
+        Sharpen mSharpen;
         Grain mGrain;
 
         std::vector<uint8_t> mPreviewOut;

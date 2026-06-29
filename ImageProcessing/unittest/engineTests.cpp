@@ -185,6 +185,14 @@ TEST(Engine_full_catalog_setters_route)
     CHECK(changes([&] { eng.setMixerCurve(EditEngine::MixerSat, {{0.f, -1.f}, {180.f, -1.f}}); }));
     CHECK(changes([&] { eng.setGradeSaturation(EditEngine::Shadows, 100.f);
                         eng.setGradeHue(EditEngine::Shadows, 30.f); }));
+    CHECK(changes([&] { eng.setTexture(100.f); }));
+    CHECK(changes([&] { eng.setClarity(100.f); }));
+    CHECK(changes([&] { eng.setSharpenAmount(120.f); eng.setSharpenRadius(1.5f); }));
+    CHECK(changes([&] { eng.setNoiseColor(100.f); }));
+    CHECK(changes([&] { eng.setNoiseLuminance(100.f); }));
+    CHECK(changes([&] { eng.setLensVignette(-100.f); }));
+    CHECK(changes([&] { eng.setLensDistortion(100.f); }));
+    CHECK(changes([&] { eng.setLensCA(100.f); }));
 
     eng.resetAll();
     PreviewBuffer back = eng.renderPreview();
@@ -350,6 +358,10 @@ TEST(EditParamsIO_roundtrip)
     EditParams p;
     p.exposure = 0.8f; p.contrast = -25.f; p.shadows = 40.f; p.temp = 7200.f; p.vibrance = 33.f;
     p.dehaze = 50.f; p.grainAmount = 12.f; p.grainSize = 60.f;
+    p.texture = 22.f; p.clarity = -18.f;
+    p.sharpenAmount = 80.f; p.sharpenRadius = 1.4f; p.sharpenMasking = 35.f;
+    p.nrLuminance = 25.f; p.nrColor = 40.f;
+    p.lensDistortion = -12.f; p.lensCA = 30.f; p.lensVignette = -45.f;
     p.curve = {{0.f, 0.05f}, {0.5f, 0.6f}, {1.f, 0.95f}};
     p.curveLog = false;
     p.mixer[0] = {{0.f, 0.3f}, {180.f, -0.2f}};
@@ -379,6 +391,13 @@ TEST(EditParamsIO_roundtrip)
     CHECK_NEAR(q.remapStrength, 0.7, 1e-4);
     CHECK_NEAR(q.cropW, 0.8, 1e-4);
     CHECK(q.quarterTurns == 3);
+    CHECK_NEAR(q.texture, 22.0, 1e-4);
+    CHECK_NEAR(q.clarity, -18.0, 1e-4);
+    CHECK_NEAR(q.sharpenAmount, 80.0, 1e-4);
+    CHECK_NEAR(q.sharpenRadius, 1.4, 1e-4);
+    CHECK_NEAR(q.nrColor, 40.0, 1e-4);
+    CHECK_NEAR(q.lensCA, 30.0, 1e-4);
+    CHECK_NEAR(q.lensVignette, -45.0, 1e-4);
 
     // empty/garbage tolerated -> defaults kept
     EditParams d;

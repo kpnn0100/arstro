@@ -47,8 +47,14 @@ namespace arstro
           << "\nwhites=" << p.whites << "\nblacks=" << p.blacks
           << "\ntemp=" << p.temp << "\ntint=" << p.tint
           << "\nvibrance=" << p.vibrance << "\nsaturation=" << p.saturation
+          << "\ntexture=" << p.texture << "\nclarity=" << p.clarity
           << "\ndehaze=" << p.dehaze << "\ngrainAmount=" << p.grainAmount
           << "\ngrainSize=" << p.grainSize
+          << "\nsharpenAmount=" << p.sharpenAmount << "\nsharpenRadius=" << p.sharpenRadius
+          << "\nsharpenMasking=" << p.sharpenMasking
+          << "\nnrLuminance=" << p.nrLuminance << "\nnrColor=" << p.nrColor
+          << "\nlensDistortion=" << p.lensDistortion << "\nlensCA=" << p.lensCA
+          << "\nlensVignette=" << p.lensVignette
           << "\ncurve=" << curveStr(p.curve) << "\ncurveLog=" << (p.curveLog ? 1 : 0)
           << "\nmixer0=" << curveStr(p.mixer[0]) << "\nmixer1=" << curveStr(p.mixer[1])
           << "\nmixer2=" << curveStr(p.mixer[2]);
@@ -84,6 +90,16 @@ namespace arstro
             else if (k == "tint") out.tint = f(v);
             else if (k == "vibrance") out.vibrance = f(v);
             else if (k == "saturation") out.saturation = f(v);
+            else if (k == "texture") out.texture = f(v);
+            else if (k == "clarity") out.clarity = f(v);
+            else if (k == "sharpenAmount") out.sharpenAmount = f(v);
+            else if (k == "sharpenRadius") out.sharpenRadius = f(v);
+            else if (k == "sharpenMasking") out.sharpenMasking = f(v);
+            else if (k == "nrLuminance") out.nrLuminance = f(v);
+            else if (k == "nrColor") out.nrColor = f(v);
+            else if (k == "lensDistortion") out.lensDistortion = f(v);
+            else if (k == "lensCA") out.lensCA = f(v);
+            else if (k == "lensVignette") out.lensVignette = f(v);
             else if (k == "dehaze") out.dehaze = f(v);
             else if (k == "grainAmount") out.grainAmount = f(v);
             else if (k == "grainSize") out.grainSize = f(v);

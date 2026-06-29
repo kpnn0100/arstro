@@ -72,10 +72,12 @@ See [`architecture.puml`](architecture.puml) for the class diagram.
 - **Headless engine / param layering.** `EditEngine` exposes a flat setter per edit
   control and returns RGBA8 pixels + a histogram. The UI never touches pixels or the
   processors — exactly the DSP → Pulsar split.
-- **Pipeline order is a hard contract.** `Crop → Rotate → Exposure → Contrast →
-  ToneRegions → WhiteBalance → ToneCurve → Vibrance → ColorMixer → ColorGrading →
-  Dehaze → Grain`. Geometry first so spatial effects and the histogram describe the
-  framed image and grain isn't rotated.
+- **Pipeline order is a hard contract.** `Crop → Rotate → LensCorrection →
+  NoiseReduction → Exposure → Contrast → ToneRegions → WhiteBalance → ToneCurve →
+  Texture → Clarity → Vibrance → ColorMixer → ColorGrading → Dehaze → Sharpen →
+  Grain`. Geometry first so spatial effects and the histogram describe the framed
+  image; noise reduction precedes the tone ops that would amplify it; sharpening and
+  grain come last so they are neither blurred nor rotated.
 - **Preview vs full-res.** Interactive edits run on a fitted, area-averaged preview
   proxy (`renderPreview`); export runs the full-res path (`renderFull`). Resolution-
   independent params (gain-based ops, normalized crop) match between the two.
@@ -100,8 +102,10 @@ destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncall
 |--------|------------|
 | `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (1024-entry LUT, log/linear domain) |
 | `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (3 cyclic per-hue curves: hue-shift/sat/lum over the input hue, wrapping at 360 so it never bands), ColorGrading (3-way wheels + hue-range remap) |
-| `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (smooth two-octave deterministic value noise — quintic fade, so `size` sets grain scale without blocky upscaling) |
-| `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear) |
+| `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (smooth two-octave deterministic value noise — quintic fade, so `size` sets grain scale without blocky upscaling), Texture (fine-radius local contrast), Clarity (large-radius midtone local contrast, midtone-masked) |
+| `detail/` | Sharpen (unsharp mask on perceptual luma, amount/radius/edge-masking), NoiseReduction (Gaussian chroma blur for colour speckle + edge-preserving bilateral on luma) |
+| `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear), LensCorrection (radial distortion + chromatic-aberration + vignette, one resample pass) |
+| `base/` (shared) | `spatial::` separable Gaussian + luminance plane helpers, used by the detail/presence processors so none re-implements a blur |
 
 ## Status (milestones)
 

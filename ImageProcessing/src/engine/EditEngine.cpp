@@ -13,15 +13,20 @@ namespace arstro
         // Canonical order (the hard contract): geometry first, then tone, colour, effects.
         mPipeline.add(&mCrop);
         mPipeline.add(&mRotate);
+        mPipeline.add(&mLens);
+        mPipeline.add(&mNoiseReduction);
         mPipeline.add(&mExposure);
         mPipeline.add(&mContrast);
         mPipeline.add(&mToneRegions);
         mPipeline.add(&mWhiteBalance);
         mPipeline.add(&mToneCurve);
+        mPipeline.add(&mTexture);
+        mPipeline.add(&mClarity);
         mPipeline.add(&mVibrance);
         mPipeline.add(&mColorMixer);
         mPipeline.add(&mColorGrading);
         mPipeline.add(&mDehaze);
+        mPipeline.add(&mSharpen);
         mPipeline.add(&mGrain);
     }
 
@@ -87,6 +92,8 @@ namespace arstro
         mWhiteBalance.setTint(p.tint);
         mToneCurve.setLogScale(p.curveLog);
         mToneCurve.setPoints(p.curve);
+        mTexture.setAmount(p.texture);
+        mClarity.setAmount(p.clarity);
         mVibrance.setVibrance(p.vibrance);
         mVibrance.setSaturation(p.saturation);
         mColorMixer.setCurve(ColorMixer::Hue, p.mixer[0]);
@@ -104,6 +111,14 @@ namespace arstro
         mDehaze.setAmount(p.dehaze);
         mGrain.setAmount(p.grainAmount);
         mGrain.setSize(p.grainSize);
+        mLens.setDistortion(p.lensDistortion);
+        mLens.setChromaticAberration(p.lensCA);
+        mLens.setVignette(p.lensVignette);
+        mNoiseReduction.setLuminance(p.nrLuminance);
+        mNoiseReduction.setColor(p.nrColor);
+        mSharpen.setAmount(p.sharpenAmount);
+        mSharpen.setRadius(p.sharpenRadius);
+        mSharpen.setMasking(p.sharpenMasking);
     }
 
     void EditEngine::setPreviewSize(int maxEdge)
@@ -123,9 +138,21 @@ namespace arstro
     void EditEngine::setTint(float v) { if (auto *p = cur()) { p->tint = v; mWhiteBalance.setTint(v); } }
     void EditEngine::setVibrance(float v) { if (auto *p = cur()) { p->vibrance = v; mVibrance.setVibrance(v); } }
     void EditEngine::setSaturation(float v) { if (auto *p = cur()) { p->saturation = v; mVibrance.setSaturation(v); } }
+    void EditEngine::setTexture(float v) { if (auto *p = cur()) { p->texture = v; mTexture.setAmount(v); } }
+    void EditEngine::setClarity(float v) { if (auto *p = cur()) { p->clarity = v; mClarity.setAmount(v); } }
     void EditEngine::setDehaze(float v) { if (auto *p = cur()) { p->dehaze = v; mDehaze.setAmount(v); } }
     void EditEngine::setGrainAmount(float v) { if (auto *p = cur()) { p->grainAmount = v; mGrain.setAmount(v); } }
     void EditEngine::setGrainSize(float v) { if (auto *p = cur()) { p->grainSize = v; mGrain.setSize(v); } }
+
+    void EditEngine::setSharpenAmount(float v) { if (auto *p = cur()) { p->sharpenAmount = v; mSharpen.setAmount(v); } }
+    void EditEngine::setSharpenRadius(float px) { if (auto *p = cur()) { p->sharpenRadius = px; mSharpen.setRadius(px); } }
+    void EditEngine::setSharpenMasking(float v) { if (auto *p = cur()) { p->sharpenMasking = v; mSharpen.setMasking(v); } }
+    void EditEngine::setNoiseLuminance(float v) { if (auto *p = cur()) { p->nrLuminance = v; mNoiseReduction.setLuminance(v); } }
+    void EditEngine::setNoiseColor(float v) { if (auto *p = cur()) { p->nrColor = v; mNoiseReduction.setColor(v); } }
+
+    void EditEngine::setLensDistortion(float v) { if (auto *p = cur()) { p->lensDistortion = v; mLens.setDistortion(v); } }
+    void EditEngine::setLensCA(float v) { if (auto *p = cur()) { p->lensCA = v; mLens.setChromaticAberration(v); } }
+    void EditEngine::setLensVignette(float v) { if (auto *p = cur()) { p->lensVignette = v; mLens.setVignette(v); } }
 
     void EditEngine::setCurvePoints(const std::vector<std::pair<float, float>> &pts)
     {
