@@ -12,8 +12,14 @@ endif()
 # unlike the DSP library there is nothing to exclude from the glob.
 file(GLOB_RECURSE ARSTRO_IMG_SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
+find_package(Threads REQUIRED)
+
 add_library(arstro_image STATIC ${ARSTRO_IMG_SOURCES})
 target_include_directories(arstro_image PUBLIC src)
+# Multicore acceleration + RenderService worker thread (native). The web build
+# omits this define and runs the same code single-threaded / synchronously.
+target_compile_definitions(arstro_image PUBLIC ARSTRO_ENABLE_THREADS)
+target_link_libraries(arstro_image PUBLIC Threads::Threads)
 
 # ── Unit tests (dependency-free MiniTest harness) ──
 enable_testing()

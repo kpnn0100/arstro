@@ -4,6 +4,8 @@
  */
 #include "MiniTest.h"
 #include "image_processing.h"
+#include <chrono>
+#include <thread>
 #include <vector>
 
 using namespace arstro;
@@ -251,4 +253,93 @@ TEST(Engine_rgb_input)
     PreviewBuffer pb = eng.renderPreview();
     CHECK(pb.width == 2);
     CHECK((int)pb.rgba[3] == 255);  // synthesized opaque alpha
+}
+
+// ── EditParams: the UI-independent edit description ──
+TEST(EditParams_roundtrip)
+{
+    EditEngine eng;
+    auto bytes = solidRGBA8(8, 8, 128);
+    eng.addImage(bytes.data(), 8, 8, 4);
+
+    EditParams p;
+    p.exposure = 0.7f; p.contrast = 15.f; p.temp = 7000.f;
+    p.curve = {{0.f, 0.1f}, {1.f, 1.f}};
+    p.mixer[1] = {{0.f, 0.5f}, {180.f, 0.5f}};
+    p.grade[0] = {30.f, 40.f, 5.f};
+    p.cropW = 0.8f; p.rotation = 2.f;
+    eng.setCurrentParams(p);
+
+    const EditParams &q = eng.currentParams();
+    CHECK_NEAR(q.exposure, 0.7, 1e-6);
+    CHECK_NEAR(q.temp, 7000.0, 1e-3);
+    CHECK(q.grade[0].hue == 30.f);
+    CHECK_NEAR(q.cropW, 0.8, 1e-6);
+    PreviewBuffer pb = eng.renderPreview();  // cropW 0.8 of 8px -> width ~6
+    CHECK(pb.rgba != nullptr && pb.width > 0);
+}
+
+// ── renderImage: the seam a video editor reuses (no slot machinery) ──
+TEST(Engine_renderImage_reuse)
+{
+    EditEngine eng;
+    std::vector<uint8_t> bytes((size_t)100 * 50 * 4, 128);
+    Image img = EditEngine::fromEncodedBytes(bytes.data(), 100, 50, 4);
+
+    EditParams p; p.exposure = 1.0f;
+    PreviewBuffer pb = eng.renderImage(img, p, 40);  // long edge -> 40
+    CHECK(pb.width == 40 && pb.height == 20);
+    CHECK((int)pb.rgba[0] > 150);  // +1 EV brightens mid-gray
+
+    EditParams id;  // identity, on the same engine, no slot selected
+    PreviewBuffer pb2 = eng.renderImage(img, id, 40);
+    CHECK(std::abs((int)pb2.rgba[0] - 128) <= 2);
+}
+
+// ── hardware acceleration: parallel output == serial output ──
+TEST(Parallel_matches_serial)
+{
+    EditEngine eng;
+    auto bytes = variedRGBA8(80, 60);
+    Image img = EditEngine::fromEncodedBytes(bytes.data(), 80, 60, 4);
+    EditParams p; p.exposure = 0.5f; p.contrast = 20.f; p.vibrance = 30.f;
+
+    par::setThreads(1);
+    PreviewBuffer a = eng.renderImage(img, p, 80);
+    std::vector<uint8_t> serial(a.rgba, a.rgba + (size_t)a.width * a.height * 4);
+    par::setThreads(8);
+    PreviewBuffer b = eng.renderImage(img, p, 80);
+    std::vector<uint8_t> parallel(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+    par::setThreads(0);  // back to auto
+
+    CHECK(serial == parallel);  // row-parallel must be byte-identical to serial
+}
+
+// ── RenderService: engine on its own thread; UI submits + polls, never blocks ──
+TEST(RenderService_async_and_full)
+{
+    RenderService svc;
+    auto bytes = variedRGBA8(40, 30);
+    CHECK(svc.addImage(bytes.data(), 40, 30, 4) == 0);
+    CHECK(svc.addImage(bytes.data(), 40, 30, 4) == 1);  // sequential slot ids
+
+    EditParams p; p.exposure = 1.0f;
+    svc.setPreviewSize(64);
+    svc.render(0, p);
+
+    RenderService::Frame f;
+    bool got = false;
+    for (int i = 0; i < 400 && !got; ++i)  // poll up to ~2s; render is async
+    {
+        if (svc.tryAcquire(f)) got = true;
+        else std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    CHECK(got);
+    CHECK(f.width > 0 && f.height > 0);
+    CHECK((int)f.rgba.size() == f.width * f.height * 4);
+
+    RenderService::Frame full;
+    CHECK(svc.renderFull(0, p, full));   // blocking full-res
+    CHECK(full.width == 40 && full.height == 30);
+    // destructor joins the worker cleanly (test would hang otherwise)
 }

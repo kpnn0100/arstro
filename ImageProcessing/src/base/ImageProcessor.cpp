@@ -1,4 +1,5 @@
 #include "ImageProcessor.h"
+#include "Parallel.h"
 #include <algorithm>
 
 namespace arstro
@@ -85,10 +86,18 @@ namespace arstro
     {
         out.resizeLike(in);
         const int ch = in.channels();
-        const size_t px = in.pixelCount();
+        const int w = in.width(), h = in.height();
         const Pixel *s = in.data();
         Pixel *d = out.data();
-        for (size_t i = 0; i < px; ++i)
-            processPixel(s + i * ch, d + i * ch, ch);
+        // Row-parallel: each row is independent (reads `in`, writes its own `out` row).
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+            {
+                const Pixel *sr = s + (size_t)y * w * ch;
+                Pixel *dr = d + (size_t)y * w * ch;
+                for (int x = 0; x < w; ++x)
+                    processPixel(sr + x * ch, dr + x * ch, ch);
+            }
+        });
     }
 }

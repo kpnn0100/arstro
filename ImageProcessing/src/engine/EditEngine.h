@@ -21,6 +21,7 @@
 #include "../base/Image.h"
 #include "../base/ImageBlock.h"
 #include "../analysis/Histogram.h"
+#include "EditParams.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
 #include "../tone/ToneRegions.h"
@@ -69,6 +70,17 @@ namespace arstro
         PreviewBuffer renderFull();
         const HistogramData &histogram() const { return mLastHistogram; }
 
+        // ── whole-EditParams API (UI-independent; the reusable seam) ──
+        void applyParams(const EditParams &p);                  // push a full set to the pipeline
+        const EditParams &currentParams() const;                // current slot's params
+        void setCurrentParams(const EditParams &p);             // replace current slot's params
+        /** Decode straight RGBA8/RGB8 (gamma sRGB) bytes into a linear-light Image. */
+        static Image fromEncodedBytes(const uint8_t *rgba, int width, int height, int channels);
+        /** Render ANY linear image with a param set (downscaled to maxEdge if larger).
+         *  This is the seam a video editor reuses: decode a frame -> Image -> renderImage.
+         *  Returns engine-owned RGBA8, valid until the next render on this engine. */
+        PreviewBuffer renderImage(const Image &linearSrc, const EditParams &p, int maxEdge);
+
         // ── basic tone ──
         void setExposure(float ev);       // -5..+5
         void setContrast(float v);        // -100..+100
@@ -113,32 +125,12 @@ namespace arstro
         void resetAll();
 
     private:
-        struct Grade { float hue = 0, sat = 0, lum = 0; };
-        struct Params
-        {
-            float exposure = 0, contrast = 0;
-            float highlights = 0, shadows = 0, whites = 0, blacks = 0;
-            float temp = 6500, tint = 0;
-            float vibrance = 0, saturation = 0;
-            float dehaze = 0, grainAmount = 0, grainSize = 0;
-            std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
-            bool curveLog = true;
-            std::array<std::vector<std::pair<float, float>>, 3> mixer{};  // hue/sat/lum curves
-            std::array<Grade, 3> grade{};
-            float balance = 0;
-            bool remapEnable = false;
-            float remapSrc = 0, remapRange = 30, remapDst = 0, remapStrength = 0;
-            float cropX = 0, cropY = 0, cropW = 1, cropH = 1;
-            float rotation = 0;
-            int quarterTurns = 0;
-        };
-        struct Slot { Image source; Params params; };
+        struct Slot { Image source; EditParams params; };
 
         void buildPipeline();
-        void applyParamsToProcessors();
         PreviewBuffer renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes);
         void ensurePreviewProxy();
-        Params *cur() { return mCurrent >= 0 ? &mSlots[mCurrent].params : nullptr; }
+        EditParams *cur() { return mCurrent >= 0 ? &mSlots[mCurrent].params : nullptr; }
 
         std::vector<Slot> mSlots;
         int mCurrent = -1;

@@ -40,10 +40,26 @@ decoding (LibRaw / stb_image / the browser) lives in the app layer behind the
 | Sources | `base/ImageSource` → `source/*` | Pipeline starting points (file / solid / noise). |
 | Modules | `tone/`, `color/`, `effect/`, `transform/` | Concrete processors. |
 | Analysis | `analysis/Histogram` | A sink: tonal distribution of the output (not a processor). |
+| Accel | `base/Parallel` | Row-parallel `parallelFor` across CPU cores (native, `-pthread`); serial fallback on the single-threaded web build. |
 | Video | `video/VideoProcessor` | Per-frame application wrapper over an ImageProcessor. |
-| Engine | `engine/EditEngine` | The facade: slots, flat parameter API, preview/full render, histogram. |
+| Params | `engine/EditParams` | The UI-independent edit description (plain data): every control's value. Built by any front end, handed to the engine. |
+| Engine | `engine/EditEngine` | The facade: slots, flat + whole-`EditParams` API, preview/full render, histogram, and `renderImage(img, params, maxEdge)` — the seam a video editor reuses per frame. |
+| Service | `engine/RenderService` | Runs an EditEngine on its OWN worker thread; the UI submits `(slot, EditParams)` and polls completed frames, never blocking. Synchronous fallback when threads are off. |
 
 See [`architecture.puml`](architecture.puml) for the class diagram.
+
+## Threading & reuse
+
+- **Core is UI-free and reusable.** `EditParams` (data) + `EditEngine` (pipeline) +
+  `RenderService` (threading) have zero Artboard/UI dependency. A video editor decodes a
+  frame, builds an `EditParams`, and calls `EditEngine::renderImage(frame, params, maxEdge)`
+  (or drives a `RenderService`) — the same core, no photo-app coupling.
+- **Two cores.** `RenderService` puts the engine on a worker thread; the UI thread only
+  submits parameter snapshots and polls finished frames. Renders coalesce to the latest
+  request, so dragging a slider never queues a backlog.
+- **Hardware acceleration.** Inside a render, the hot per-pixel loops (every point op, the
+  sRGB egress encode, the preview downscale) run row-parallel across all CPU cores via
+  `par::parallelFor`. Parallel output is byte-identical to serial (rows are independent).
 
 ## Key design rules
 

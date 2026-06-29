@@ -1,5 +1,6 @@
 #include "EditEngine.h"
 #include "../base/ColorSpace.h"
+#include "../base/Parallel.h"
 #include <algorithm>
 
 namespace arstro
@@ -24,7 +25,7 @@ namespace arstro
         mPipeline.add(&mGrain);
     }
 
-    static Image decodeToLinear(const uint8_t *rgba, int w, int h, int channels)
+    Image EditEngine::fromEncodedBytes(const uint8_t *rgba, int w, int h, int channels)
     {
         Image img(w, h, channels, ColorSpace::EncodedSRGB);
         const size_t n = (size_t)w * h * channels;
@@ -40,7 +41,7 @@ namespace arstro
         if (!rgba || width <= 0 || height <= 0 || channels < 1)
             return -1;
         Slot s;
-        s.source = decodeToLinear(rgba, width, height, channels);
+        s.source = fromEncodedBytes(rgba, width, height, channels);
         mSlots.push_back(std::move(s));
         const int slot = (int)mSlots.size() - 1;
         if (mCurrent < 0)
@@ -54,12 +55,25 @@ namespace arstro
             return;
         mCurrent = slot;
         mProxySlot = -1;
-        applyParamsToProcessors();
+        applyParams(mSlots[mCurrent].params);
     }
 
-    void EditEngine::applyParamsToProcessors()
+    const EditParams &EditEngine::currentParams() const
     {
-        const Params &p = mSlots[mCurrent].params;
+        static const EditParams kEmpty;
+        return mCurrent >= 0 ? mSlots[mCurrent].params : kEmpty;
+    }
+
+    void EditEngine::setCurrentParams(const EditParams &p)
+    {
+        if (mCurrent < 0)
+            return;
+        mSlots[mCurrent].params = p;
+        applyParams(p);
+    }
+
+    void EditEngine::applyParams(const EditParams &p)
+    {
         mCrop.setRect(p.cropX, p.cropY, p.cropW, p.cropH);
         mRotate.setAngle(p.rotation);
         mRotate.setQuarterTurns(p.quarterTurns);
@@ -158,8 +172,8 @@ namespace arstro
     void EditEngine::resetAll()
     {
         if (mCurrent < 0) return;
-        mSlots[mCurrent].params = Params{};
-        applyParamsToProcessors();
+        mSlots[mCurrent].params = EditParams{};
+        applyParams(mSlots[mCurrent].params);
     }
 
     static Image downscaleLinear(const Image &src, int maxEdge)
@@ -213,19 +227,22 @@ namespace arstro
         outBytes.assign((size_t)w * h * 4, 255);
         const Pixel *s = processed.data();
         uint8_t *d = outBytes.data();
-        for (size_t i = 0; i < (size_t)w * h; ++i)
-        {
-            const Pixel *p = s + i * ch;
-            uint8_t *q = d + i * 4;
-            Pixel r = ch >= 1 ? p[0] : 0;
-            Pixel g = ch >= 3 ? p[1] : r;
-            Pixel b = ch >= 3 ? p[2] : r;
-            Pixel a = ch >= 4 ? p[3] : (Pixel)1;
-            q[0] = (uint8_t)(clamp01(r) * 255 + 0.5f);
-            q[1] = (uint8_t)(clamp01(g) * 255 + 0.5f);
-            q[2] = (uint8_t)(clamp01(b) * 255 + 0.5f);
-            q[3] = (uint8_t)(clamp01(a) * 255 + 0.5f);
-        }
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+                for (int x = 0; x < w; ++x)
+                {
+                    const Pixel *p = s + ((size_t)y * w + x) * ch;
+                    uint8_t *q = d + ((size_t)y * w + x) * 4;
+                    Pixel r = ch >= 1 ? p[0] : 0;
+                    Pixel g = ch >= 3 ? p[1] : r;
+                    Pixel b = ch >= 3 ? p[2] : r;
+                    Pixel a = ch >= 4 ? p[3] : (Pixel)1;
+                    q[0] = (uint8_t)(clamp01(r) * 255 + 0.5f);
+                    q[1] = (uint8_t)(clamp01(g) * 255 + 0.5f);
+                    q[2] = (uint8_t)(clamp01(b) * 255 + 0.5f);
+                    q[3] = (uint8_t)(clamp01(a) * 255 + 0.5f);
+                }
+        });
         PreviewBuffer pb;
         pb.rgba = outBytes.data();
         pb.width = w; pb.height = h;
@@ -243,5 +260,14 @@ namespace arstro
     {
         if (mCurrent < 0) return PreviewBuffer{};
         return renderInto(mSlots[mCurrent].source, mFullOut);
+    }
+
+    PreviewBuffer EditEngine::renderImage(const Image &linearSrc, const EditParams &p, int maxEdge)
+    {
+        if (linearSrc.empty()) return PreviewBuffer{};
+        if (maxEdge < 1) maxEdge = 1;
+        applyParams(p);
+        Image src = downscaleLinear(linearSrc, maxEdge);
+        return renderInto(src, mFullOut);  // engine-owned; consume before the next render
     }
 }

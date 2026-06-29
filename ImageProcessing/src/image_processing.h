@@ -13,6 +13,7 @@
 #include "base/ColorSpace.h"
 #include "base/SmoothedParameter.h"
 #include "base/ImageConfig.h"
+#include "base/Parallel.h"
 #include "base/ImageProcessor.h"
 #include "base/ImageSource.h"
 #include "base/ImageBlock.h"
@@ -44,4 +45,6 @@
 // Analysis + video + engine
 #include "analysis/Histogram.h"
 #include "video/VideoProcessor.h"
+#include "engine/EditParams.h"
 #include "engine/EditEngine.h"
+#include "engine/RenderService.h"
