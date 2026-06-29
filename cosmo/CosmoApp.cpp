@@ -680,6 +680,7 @@ namespace cosmo
         target.restore();
 
         mRoot->render(target);
+        mRoot->renderOverlay(target);  // open dropdowns/popups, on top of everything
     }
 }
 }
