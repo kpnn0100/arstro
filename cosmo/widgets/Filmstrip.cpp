@@ -38,6 +38,7 @@ namespace cosmo
         {
             mSelected = 0;
             mSelection = {0};
+            mAnchor = 0;
         }
     }
 
@@ -69,16 +70,25 @@ namespace cosmo
                 if (localPoint.x >= x0 && localPoint.x <= x0 + kCellW &&
                     localPoint.y >= kPad && localPoint.y <= kPad + kCellH)
                 {
-                    if (g.alt)  // alt-click extends the multi-selection (sync target)
+                    if (g.shift && mAnchor >= 0)  // Shift: select the range from the anchor
+                    {
+                        mSelection.clear();
+                        const int lo = mAnchor < i ? mAnchor : i, hi = mAnchor < i ? i : mAnchor;
+                        for (int k = lo; k <= hi; ++k) mSelection.push_back(k);
+                        mSelected = i;
+                    }
+                    else if (g.ctrl || g.alt)  // Ctrl/Cmd (or Alt): add/remove from the selection
                     {
                         auto it = std::find(mSelection.begin(), mSelection.end(), i);
                         if (it != mSelection.end()) { if (mSelection.size() > 1) mSelection.erase(it); }
                         else mSelection.push_back(i);
+                        mSelected = i; mAnchor = i;
                     }
                     else  // plain click: single-select
                     {
                         mSelected = i;
                         mSelection = {i};
+                        mAnchor = i;
                         if (onSelect) onSelect(i);
                     }
                     return true;

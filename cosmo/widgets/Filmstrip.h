@@ -36,6 +36,7 @@ namespace cosmo
     private:
         artboard::Color mAccent;
         int mSelected = -1;
+        int mAnchor = -1;             // last single-clicked cell, for Shift range selection
         std::vector<int> mSelection;  // multi-selection (sync target); includes the primary
         std::vector<std::shared_ptr<artboard::ImageView>> mThumbs;
     };

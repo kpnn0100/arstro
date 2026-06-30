@@ -45,7 +45,7 @@ namespace cosmo
         CosmoApp(double width, double height);
 
         void render(artboard::IRenderTarget &target, double nowMs);
-        void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false);
+        void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
         void setSize(double width, double height);
 
         // `path` is the source file path (used by Save to record the working image).

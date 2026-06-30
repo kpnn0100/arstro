@@ -176,14 +176,18 @@ namespace
         auto *a = static_cast<App *>(user);
         gtk_widget_grab_focus(w);
         const bool alt = (e->state & GDK_MOD1_MASK) != 0;  // Mod1 = Alt
-        a->app.pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, mapButton(e->button), nowMs(*a), alt);
+        const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
+        const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        a->app.pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, mapButton(e->button), nowMs(*a), alt, shift, ctrl);
         return TRUE;
     }
     gboolean onMotion(GtkWidget *, GdkEventMotion *e, gpointer user)
     {
         auto *a = static_cast<App *>(user);
         const bool alt = (e->state & GDK_MOD1_MASK) != 0;
-        a->app.pointer(1, e->x, e->y, 0, nowMs(*a), alt);
+        const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
+        const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        a->app.pointer(1, e->x, e->y, 0, nowMs(*a), alt, shift, ctrl);
         return TRUE;
     }
     void onSizeAllocate(GtkWidget *, GtkAllocation *alloc, gpointer user)

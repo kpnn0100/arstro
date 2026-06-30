@@ -58,7 +58,7 @@ document.getElementById("file").addEventListener("change", async (e) => {
 });
 
 function xy(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
-canvas.addEventListener("mousedown", (e) => { if (M) { const [x, y] = xy(e); M.pointer(0, x, y, e.button, performance.now(), e.altKey); } });
-canvas.addEventListener("mousemove", (e) => { if (M) { const [x, y] = xy(e); M.pointer(1, x, y, e.button, performance.now(), e.altKey); } });
-window.addEventListener("mouseup", (e) => { if (M) { const [x, y] = xy(e); M.pointer(2, x, y, e.button, performance.now(), e.altKey); } });
+canvas.addEventListener("mousedown", (e) => { if (M) { const [x, y] = xy(e); M.pointer(0, x, y, e.button, performance.now(), e.altKey, e.shiftKey, e.ctrlKey || e.metaKey); } });
+canvas.addEventListener("mousemove", (e) => { if (M) { const [x, y] = xy(e); M.pointer(1, x, y, e.button, performance.now(), e.altKey, e.shiftKey, e.ctrlKey || e.metaKey); } });
+window.addEventListener("mouseup", (e) => { if (M) { const [x, y] = xy(e); M.pointer(2, x, y, e.button, performance.now(), e.altKey, e.shiftKey, e.ctrlKey || e.metaKey); } });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());

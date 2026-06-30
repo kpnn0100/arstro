@@ -28,7 +28,7 @@ static void init(double w, double h)
     gApp->onOpenRequested = [] { EM_ASM({ var el = document.getElementById('file'); if (el) el.click(); }); };
 }
 static void frame(double nowMs) { if (gApp) gApp->render(gTarget, nowMs); }
-static void pointer(int kind, double x, double y, int button, double t, bool alt) { if (gApp) gApp->pointer(kind, x, y, button, t, alt); }
+static void pointer(int kind, double x, double y, int button, double t, bool alt, bool shift, bool ctrl) { if (gApp) gApp->pointer(kind, x, y, button, t, alt, shift, ctrl); }
 static void resize(double w, double h) { if (gApp) gApp->setSize(w, h); }
 
 // JS calls allocInput(bytes) -> heap pointer, fills HEAPU8 at it, then loadImage().

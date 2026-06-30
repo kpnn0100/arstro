@@ -619,14 +619,14 @@ namespace cosmo
         return mExportFrame.rgba.data();
     }
 
-    void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt)
+    void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
         RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down
                              : kind == 2 ? RawPointer::Kind::Up
                                          : RawPointer::Kind::Move;
         PointerButton b = button == 2 ? PointerButton::Right : PointerButton::Left;
         RawPointer rp{k, Point{x, y}, b, timeMs};
-        rp.alt = alt;
+        rp.alt = alt; rp.shift = shift; rp.ctrl = ctrl;
         if (kind == 0 && mMenuBar)  // a press outside the bar/dropdown AND the settings overlay closes the menu
         {
             const bool inMenu = mMenuBar->pointInActiveArea(Point{x - mMenuBarX, y - mMenuBarY});
