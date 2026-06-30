@@ -48,33 +48,42 @@ namespace cosmo
 
     namespace
     {
-        // Compose a group base with a per-image scalar offset (the double adjustment).
-        EditParams composeParams(const EditParams &base, const arstro::LocalAdjust &d)
+        // Add a group's scalar offset onto an EditParams (one level of the chain).
+        void addOffset(EditParams &e, const arstro::LocalAdjust &d)
         {
-            EditParams e = base;
             e.exposure += d.exposure; e.contrast += d.contrast;
             e.highlights += d.highlights; e.shadows += d.shadows; e.whites += d.whites; e.blacks += d.blacks;
             e.temp += d.temp / 100.f * 3500.f;  // relative warm/cool shift in Kelvin
             e.tint += d.tint; e.saturation += d.saturation;
             e.texture += d.texture; e.clarity += d.clarity; e.dehaze += d.dehaze;
-            return e;
         }
     }
 
+    int CosmoApp::filmstripCells() const { return mFilmstrip ? mFilmstrip->cellCount() : 0; }
+
+    int CosmoApp::nodeForSlot(int slot) const
+    {
+        for (int i = 0; i < (int)mNodes.size(); ++i)
+            if (!mNodes[i].group && mNodes[i].slot == slot) return i;
+        return -1;
+    }
+
+    // An image renders as its own params with every ancestor group's offset summed in.
     EditParams CosmoApp::effectiveParams(int slot) const
     {
         if (slot < 0 || slot >= (int)mSlotParams.size()) return EditParams{};
-        if (mSlotGrouped[slot]) return composeParams(mGroupBase, mSlotDelta[slot]);
-        return mSlotParams[slot];
+        EditParams e = mSlotParams[slot];
+        int n = nodeForSlot(slot);
+        if (n >= 0)
+            for (int g = mNodes[n].parent; ; g = mNodes[g].parent)  // walk up to the root
+            {
+                addOffset(e, mNodes[g].offset);
+                if (g == 0) break;
+            }
+        return e;
     }
 
-    // The panels edit the group base when the current image is grouped (so changes
-    // apply to the whole group); otherwise they edit the image's own params.
-    EditParams *CosmoApp::curParams()
-    {
-        if (mCurrentSlot < 0) return nullptr;
-        return mSlotGrouped[mCurrentSlot] ? &mGroupBase : &mSlotParams[mCurrentSlot];
-    }
+    EditParams *CosmoApp::curParams() { return mCurrentSlot >= 0 ? &mSlotParams[mCurrentSlot] : nullptr; }
 
     void CosmoApp::submit()
     {
@@ -93,6 +102,8 @@ namespace cosmo
         mRoot = std::make_shared<Segment>();
         mRoot->width.set(width);
         mRoot->height.set(height);
+
+        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}});  // root group (index 0)
 
         mImageView = std::make_shared<ImageView>();
         mRoot->addChild(mImageView);
@@ -121,14 +132,6 @@ namespace cosmo
             mCompareView->setActive(on && mCurrentSlot >= 0);
         };
         mRoot->addChild(mCompareToggle);
-
-        mGroupBar = std::make_shared<GroupDeltaBar>(mTheme, mAccent);  // per-image offset (double adjustment)
-        mGroupBar->visible = false;
-        mGroupBar->onChange = [this](double ev, double temp) {
-            if (mCurrentSlot >= 0 && mSlotGrouped[mCurrentSlot])
-            { mSlotDelta[mCurrentSlot].exposure = (float)ev; mSlotDelta[mCurrentSlot].temp = (float)temp; submit(); }
-        };
-        mRoot->addChild(mGroupBar);
 
         mHistogram = std::make_shared<HistogramPanel>(mTheme, mAccent);
         mRoot->addChild(mHistogram);
@@ -180,6 +183,32 @@ namespace cosmo
             }},
         };
         mDetail = std::make_shared<ParamPanel>("DETAIL", mTheme, mAccent, detail);
+
+        // Group offset panel: scalar offsets added to every descendant image (shown
+        // in place of the tabs when a group is the edit target).
+        auto goff = [this](const char *label, double mn, double mx, float arstro::LocalAdjust::*field) {
+            return ParamPanel::Spec{label, mn, mx, 0, [this, field](double v) {
+                                        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size())
+                                        { mNodes[mEditGroup].offset.*field = (float)v; submit(); }
+                                    }};
+        };
+        std::vector<ParamPanel::Section> groupSecs = {{"GROUP OFFSET", {
+            goff("exposure", -5, 5, &arstro::LocalAdjust::exposure),
+            goff("contrast", -100, 100, &arstro::LocalAdjust::contrast),
+            goff("highlights", -100, 100, &arstro::LocalAdjust::highlights),
+            goff("shadows", -100, 100, &arstro::LocalAdjust::shadows),
+            goff("whites", -100, 100, &arstro::LocalAdjust::whites),
+            goff("blacks", -100, 100, &arstro::LocalAdjust::blacks),
+            goff("temp", -100, 100, &arstro::LocalAdjust::temp),
+            goff("tint", -100, 100, &arstro::LocalAdjust::tint),
+            goff("saturation", -100, 100, &arstro::LocalAdjust::saturation),
+            goff("texture", -100, 100, &arstro::LocalAdjust::texture),
+            goff("clarity", -100, 100, &arstro::LocalAdjust::clarity),
+            goff("dehaze", -100, 100, &arstro::LocalAdjust::dehaze),
+        }}};
+        mGroupPanel = std::make_shared<ParamPanel>("GROUP", mTheme, mAccent, groupSecs);
+        mGroupPanel->visible = false;
+        mRoot->addChild(mGroupPanel);
 
         mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
         mMixer->onChange = [this](int ch, const std::vector<std::pair<float, float>> &pts) {
@@ -263,8 +292,22 @@ namespace cosmo
         mRoot->addChild(mTabs);
 
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
-        mFilmstrip->onSelect = [this](int i) { selectImage(i); };
+        mFilmstrip->onSelect = [this](int cell, bool shift, bool ctrl) { selectNode(cell, shift, ctrl); };
+        mFilmstrip->onActivate = [this](int cell) {
+            const auto &kids = mNodes[mCurGroup].kids;
+            if (cell >= 0 && cell < (int)kids.size() && mNodes[kids[cell]].group) navigateToGroup(kids[cell]);
+        };
+        mFilmstrip->onContext = [this](int cell, double x, double y) { showCellContext(cell, x, y); };
         mRoot->addChild(mFilmstrip);
+
+        mBreadcrumb = std::make_shared<Breadcrumb>(mAccent);
+        mBreadcrumb->onNavigate = [this](int level) {
+            // walk up from mCurGroup to the chosen depth
+            std::vector<int> chain; for (int n = mCurGroup; ; n = mNodes[n].parent) { chain.push_back(n); if (n == 0) break; }
+            std::reverse(chain.begin(), chain.end());
+            if (level >= 0 && level < (int)chain.size()) navigateToGroup(chain[level]);
+        };
+        mRoot->addChild(mBreadcrumb);
 
         // Settings now lives in the menu bar (a floating overlay, not a tab).
         mSettings = std::make_shared<SettingsPanel>(mTheme, mAccent);
@@ -292,15 +335,20 @@ namespace cosmo
             if (auto *p = curParams()) { mClipboard = *p; mHasClip = true; }
         }});
         develop.items.push_back({"Paste to Selected", [this] {
-            pasteTo(mFilmstrip->selection());
+            std::vector<int> slots;
+            for (int n : mSel)
+                if (n >= 0 && n < (int)mNodes.size() && !mNodes[n].group && mNodes[n].slot >= 0)
+                    slots.push_back(mNodes[n].slot);
+            if (slots.empty() && mCurrentSlot >= 0) slots.push_back(mCurrentSlot);
+            pasteTo(slots);
         }});
         develop.items.push_back({"Paste to All Images", [this] {
             std::vector<int> all(imageCount());
             for (int i = 0; i < imageCount(); ++i) all[i] = i;
             pasteTo(all);
         }});
-        develop.items.push_back({"Group Selected", [this] { groupSelected(); }});
-        develop.items.push_back({"Ungroup Selected", [this] { ungroupSelected(); }});
+        develop.items.push_back({"Group Selection", [this] { createGroupFromSelection(); }});
+        develop.items.push_back({"Ungroup Selection", [this] { ungroupSelected(); }});
         mMenuBar->addMenu(develop);
 
         MenuBar::Menu preset;
@@ -312,6 +360,9 @@ namespace cosmo
         // is the active menu, so opening File closes Settings and vice versa.
         mMenuBar->onOpenChanged = [this](int open) { mSettings->visible = (open == 1); };
         mRoot->addChild(mMenuBar);
+
+        mContextMenu = std::make_shared<ContextMenu>(mAccent);  // right-click popup (modal when open)
+        mRoot->addChild(mContextMenu);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         layout();
@@ -338,9 +389,6 @@ namespace cosmo
         mCompareView->width.set(mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
         mCompareToggle->x.set(mPhotoRect.x + mPhotoRect.w - 112.0); mCompareToggle->y.set(mPhotoRect.y - 22.0);
         mCompareToggle->width.set(112.0); mCompareToggle->height.set(18.0);
-        mGroupBar->x.set(mPhotoRect.x); mGroupBar->y.set(mPhotoRect.y - 24.0);
-        mGroupBar->layout(mPhotoRect.w - 124.0, 20.0);
-
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
@@ -356,9 +404,19 @@ namespace cosmo
         mCurve->layout(rightW, contentH);
         mGrade->layout(rightW, contentH);
         mXform->layout(rightW, contentH);
+        // group offset panel shares the tabs' rect (shown when a group is selected)
+        mGroupPanel->x.set(rightX); mGroupPanel->y.set(tabsY);
+        mGroupPanel->layout(rightW, tabsH);
 
+        // breadcrumb row above the filmstrip
+        mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(filmY - 20.0);
+        mBreadcrumb->width.set(rightX - 2 * kMargin); mBreadcrumb->height.set(18.0);
         mFilmstrip->x.set(kMargin); mFilmstrip->y.set(filmY);
         mFilmstrip->width.set(rightX - kMargin - kMargin); mFilmstrip->height.set(filmH);
+
+        // context menu covers the root so it can clamp + be modal
+        mContextMenu->x.set(0); mContextMenu->y.set(0);
+        mContextMenu->width.set(mW); mContextMenu->height.set(mH);
 
         // menu bar (top-left, under the wordmark) + floating settings overlay
         mMenuBarX = kMargin; mMenuBarY = 34.0;
@@ -388,12 +446,21 @@ namespace cosmo
         mSlotNames.push_back(name);
         mSlotPaths.push_back(path);
         mSlotSessions.push_back("");
-        mSlotGrouped.push_back(0);
-        mSlotDelta.push_back(arstro::LocalAdjust{});
         int tw = 0, th = 0;
         std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
         mFilmstrip->addThumb(thumb.data(), tw, th);
-        selectImage(slot);
+
+        // add an image leaf node under the current group
+        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = mCurGroup; leaf.slot = slot;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(leaf);
+        mNodes[mCurGroup].kids.push_back(node);
+
+        rebuildFilmstrip();
+        // select the new image (find its cell in the current group)
+        const auto &kids = mNodes[mCurGroup].kids;
+        for (int c = 0; c < (int)kids.size(); ++c)
+            if (kids[c] == node) { selectNode(c, false, false); break; }
         return slot;
     }
 
@@ -448,8 +515,16 @@ namespace cosmo
     void CosmoApp::selectImage(int slot)
     {
         if (slot < 0 || slot >= (int)mSlotParams.size()) return;
-        mCurrentSlot = slot;
-        mFilmstrip->setSelected(slot);
+        const int n = nodeForSlot(slot);
+        if (n >= 0)
+        {
+            mCurGroup = mNodes[n].parent;
+            rebuildFilmstrip();
+            const auto &kids = mNodes[mCurGroup].kids;
+            for (int c = 0; c < (int)kids.size(); ++c)
+                if (kids[c] == n) { selectNode(c, false, false); return; }
+        }
+        mCurrentSlot = slot;  // fallback (no node yet)
         syncControlsToSlot();
         submit();
     }
@@ -457,11 +532,7 @@ namespace cosmo
     void CosmoApp::syncControlsToSlot()
     {
         if (mCurrentSlot < 0) return;
-        const EditParams &p = *curParams();  // group base when grouped, else the image's own params
-
-        const bool grouped = mSlotGrouped[mCurrentSlot] != 0;
-        mGroupBar->visible = grouped;
-        if (grouped) mGroupBar->setValues(mSlotDelta[mCurrentSlot].exposure, mSlotDelta[mCurrentSlot].temp);
+        const EditParams &p = mSlotParams[mCurrentSlot];  // the tabs edit the image's own params
         mBasic->setValues({p.exposure, p.contrast, p.highlights, p.shadows, p.whites, p.blacks,
                            p.temp, p.tint, p.vibrance, p.saturation,
                            p.texture, p.clarity, p.dehaze, p.grainAmount, p.grainSize});
@@ -573,28 +644,164 @@ namespace cosmo
         mMenuBar->setMenuItems(mPresetMenuIndex, std::move(items));
     }
 
-    void CosmoApp::groupSelected()
+    void CosmoApp::rebuildFilmstrip()
     {
-        if (mCurrentSlot < 0) return;
-        const std::vector<int> &sel = mFilmstrip->selection();
-        mGroupBase = effectiveParams(mCurrentSlot);  // current look becomes the shared base
-        for (int i : sel)
-            if (i >= 0 && i < (int)mSlotGrouped.size()) { mSlotGrouped[i] = 1; mSlotDelta[i] = arstro::LocalAdjust{}; }
-        syncControlsToSlot();
-        submit();
+        std::vector<Filmstrip::Cell> cells;
+        for (int n : mNodes[mCurGroup].kids)
+        {
+            const GNode &g = mNodes[n];
+            Filmstrip::Cell c;
+            c.group = g.group; c.node = n; c.name = g.name;
+            if (g.group) c.count = (int)g.kids.size();
+            else c.thumbSlot = g.slot;
+            cells.push_back(c);
+        }
+        mFilmstrip->setCells(std::move(cells));
+
+        // breadcrumb: root -> ... -> current group
+        std::vector<int> chain;
+        for (int n = mCurGroup; ; n = mNodes[n].parent) { chain.push_back(n); if (n == 0) break; }
+        std::reverse(chain.begin(), chain.end());
+        std::vector<std::string> names;
+        for (int n : chain) names.push_back(mNodes[n].name);
+        mBreadcrumb->setPath(names);
+
+        // refresh the highlight from the current selection
+        std::vector<int> selCells; int primary = -1;
+        const auto &kids = mNodes[mCurGroup].kids;
+        for (int c = 0; c < (int)kids.size(); ++c)
+            if (std::find(mSel.begin(), mSel.end(), kids[c]) != mSel.end()) selCells.push_back(c);
+        for (int c = 0; c < (int)kids.size(); ++c)
+            if ((mEditGroup >= 0 && kids[c] == mEditGroup) ||
+                (mEditGroup < 0 && !mNodes[kids[c]].group && mNodes[kids[c]].slot == mCurrentSlot)) primary = c;
+        mFilmstrip->setSelection(selCells, primary);
+    }
+
+    void CosmoApp::navigateToGroup(int node)
+    {
+        if (node < 0 || node >= (int)mNodes.size() || !mNodes[node].group) return;
+        mCurGroup = node;
+        mSel.clear(); mSelAnchor = -1;
+        rebuildFilmstrip();
+    }
+
+    void CosmoApp::setEditTarget(int node)
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return;
+        if (mNodes[node].group)
+        {
+            mEditGroup = node;
+            mTabs->visible = false;
+            mGroupPanel->visible = true;
+            const arstro::LocalAdjust &o = mNodes[node].offset;
+            mGroupPanel->setValues({o.exposure, o.contrast, o.highlights, o.shadows, o.whites, o.blacks,
+                                    o.temp, o.tint, o.saturation, o.texture, o.clarity, o.dehaze});
+        }
+        else
+        {
+            mEditGroup = -1;
+            mTabs->visible = true;
+            mGroupPanel->visible = false;
+            mCurrentSlot = mNodes[node].slot;
+            syncControlsToSlot();
+            submit();
+        }
+    }
+
+    void CosmoApp::selectNode(int cell, bool shift, bool ctrl)
+    {
+        const auto &kids = mNodes[mCurGroup].kids;
+        if (cell < 0 || cell >= (int)kids.size()) return;
+        const int node = kids[cell];
+        if (shift && mSelAnchor >= 0 && mSelAnchor < (int)kids.size())
+        {
+            mSel.clear();
+            const int lo = mSelAnchor < cell ? mSelAnchor : cell, hi = mSelAnchor < cell ? cell : mSelAnchor;
+            for (int k = lo; k <= hi; ++k) mSel.push_back(kids[k]);
+        }
+        else if (ctrl)
+        {
+            auto it = std::find(mSel.begin(), mSel.end(), node);
+            if (it != mSel.end()) { if (mSel.size() > 1) mSel.erase(it); }
+            else mSel.push_back(node);
+            mSelAnchor = cell;
+        }
+        else
+        {
+            mSel = {node};
+            mSelAnchor = cell;
+        }
+        setEditTarget(node);  // edit the (last-touched) node: image -> tabs, group -> offsets
+        rebuildFilmstrip();
+    }
+
+    void CosmoApp::createGroupFromSelection()
+    {
+        if (mSel.empty()) return;
+        // new group under the current group, named sequentially
+        int gi = 1; for (const auto &n : mNodes) if (n.group) ++gi;
+        GNode grp; grp.group = true; grp.name = "Group " + std::to_string(gi); grp.parent = mCurGroup;
+        const int gnode = (int)mNodes.size();
+        mNodes.push_back(grp);
+        auto &siblings = mNodes[mCurGroup].kids;
+        // move every selected node (that is a direct child of mCurGroup) into the new group
+        std::vector<int> moved = mSel;
+        siblings.erase(std::remove_if(siblings.begin(), siblings.end(),
+                       [&](int k) { return std::find(moved.begin(), moved.end(), k) != moved.end(); }),
+                       siblings.end());
+        for (int k : moved) { mNodes[k].parent = gnode; mNodes[gnode].kids.push_back(k); }
+        siblings.push_back(gnode);
+        mSel = {gnode};
+        mSelAnchor = -1;
+        rebuildFilmstrip();
+        // select the new group cell for editing
+        const auto &kids = mNodes[mCurGroup].kids;
+        for (int c = 0; c < (int)kids.size(); ++c) if (kids[c] == gnode) { selectNode(c, false, false); break; }
     }
 
     void CosmoApp::ungroupSelected()
     {
-        const std::vector<int> &sel = mFilmstrip->selection();
-        for (int i : sel)
-            if (i >= 0 && i < (int)mSlotGrouped.size() && mSlotGrouped[i])
-            {
-                mSlotParams[i] = effectiveParams(i);  // bake the current look so it is preserved
-                mSlotGrouped[i] = 0;
-            }
-        syncControlsToSlot();
+        // ungroup each selected group: move its children up to the current group, drop the group
+        std::vector<int> sel = mSel;
+        for (int n : sel)
+        {
+            if (n < 0 || n >= (int)mNodes.size() || !mNodes[n].group || n == 0) continue;
+            auto &kids = mNodes[mCurGroup].kids;
+            for (int child : mNodes[n].kids) { mNodes[child].parent = mCurGroup; kids.push_back(child); }
+            mNodes[n].kids.clear();
+            kids.erase(std::remove(kids.begin(), kids.end(), n), kids.end());  // detach the empty group
+        }
+        mSel.clear(); mSelAnchor = -1;
+        rebuildFilmstrip();
         submit();
+    }
+
+    void CosmoApp::showCellContext(int cell, double x, double y)
+    {
+        const auto &kids = mNodes[mCurGroup].kids;
+        if (cell < 0 || cell >= (int)kids.size()) return;
+        const int node = kids[cell];
+        if (std::find(mSel.begin(), mSel.end(), node) == mSel.end())
+            selectNode(cell, false, false);  // right-click selects if not already
+
+        std::vector<ContextMenu::Item> items;
+        items.push_back({"Group Selection", [this] { createGroupFromSelection(); }, !mSel.empty()});
+        const bool oneGroup = mSel.size() == 1 && mNodes[mSel[0]].group;
+        items.push_back({"Rename Group...", [this] {
+            if (!mSel.empty() && mNodes[mSel[0]].group) { mRenameTarget = mSel[0]; if (onRenameGroupRequested) onRenameGroupRequested(); }
+        }, oneGroup});
+        items.push_back({"Ungroup", [this] { ungroupSelected(); }, oneGroup});
+        mContextMenu->show(x, y, std::move(items));
+    }
+
+    void CosmoApp::renameGroup(const std::string &name)
+    {
+        if (mRenameTarget > 0 && mRenameTarget < (int)mNodes.size() && mNodes[mRenameTarget].group && !name.empty())
+        {
+            mNodes[mRenameTarget].name = name;
+            rebuildFilmstrip();
+        }
+        mRenameTarget = -1;
     }
 
     void CosmoApp::renderBefore()

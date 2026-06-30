@@ -28,7 +28,8 @@
 #include "widgets/CropOverlay.h"
 #include "widgets/CompareView.h"
 #include "widgets/TextToggle.h"
-#include "widgets/GroupDeltaBar.h"
+#include "widgets/ContextMenu.h"
+#include "widgets/Breadcrumb.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -59,6 +60,11 @@ namespace cosmo
         std::function<void()> onSaveRequested;     // Save (falls back to Save As if no path)
         std::function<void()> onSaveAsRequested;   // host shows a save dialog
         std::function<void()> onSavePresetRequested;  // host prompts for a preset name
+        std::function<void()> onRenameGroupRequested; // host prompts for a group name
+        /** Rename the group targeted by the last "Rename" context action. */
+        void renameGroup(const std::string &name);
+        /** Number of cells (images + sub-groups) shown for the current group (for tests). */
+        int filmstripCells() const;
 
         /** Directory presets live in (host sets it; empty disables presets). */
         void setPresetDir(const std::string &dir);
@@ -87,10 +93,26 @@ namespace cosmo
         void renderBefore();           // render the no-edit baseline for the compare view
         void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
         void refreshPresetMenu();
-        void groupSelected();          // form a group from the multi-selection
-        void ungroupSelected();        // bake effective params back, leave the group
-        EditParams effectiveParams(int slot) const;  // group base composed with per-image delta
-        EditParams *curParams();       // the layer the panels edit (group base if grouped)
+        // ── group tree (recursive; additive scalar offsets per group level) ──
+        struct GNode
+        {
+            bool group = false;
+            std::string name;
+            int parent = 0;             // parent node index; root (0) is its own parent
+            int slot = -1;              // image leaf -> mSlotParams index
+            arstro::LocalAdjust offset; // group's additive scalar offset (groups only)
+            std::vector<int> kids;      // child node indices, in display order
+        };
+        int nodeForSlot(int slot) const;
+        void rebuildFilmstrip();        // show mCurGroup's children + breadcrumb
+        void navigateToGroup(int node); // drill into / up to a group
+        void selectNode(int cell, bool shift, bool ctrl);
+        void showCellContext(int cell, double x, double y);
+        void createGroupFromSelection();
+        void ungroupSelected();
+        void setEditTarget(int node);   // image -> tabs; group -> offset panel
+        EditParams effectiveParams(int slot) const;  // image params + sum of ancestor group offsets
+        EditParams *curParams();       // the current image's params (what the tabs edit)
 
         double mW, mH;
         artboard::Rect mPhotoRect;
@@ -112,7 +134,9 @@ namespace cosmo
         std::shared_ptr<CropOverlay> mCropOverlay;   // sits over the photo (Transform tab)
         std::shared_ptr<CompareView> mCompareView;   // before/after split over the photo
         std::shared_ptr<TextToggle> mCompareToggle;  // top-bar before/after switch
-        std::shared_ptr<GroupDeltaBar> mGroupBar;    // per-image offset (visible when grouped)
+        std::shared_ptr<ParamPanel> mGroupPanel;     // group offset sliders (when a group is selected)
+        std::shared_ptr<ContextMenu> mContextMenu;   // right-click popup
+        std::shared_ptr<Breadcrumb> mBreadcrumb;     // group navigation path
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
@@ -128,10 +152,13 @@ namespace cosmo
         std::vector<std::string> mSlotNames;
         std::vector<std::string> mSlotPaths;      // source image file path per slot
         std::vector<std::string> mSlotSessions;   // last .cosmo save path per slot
-        // grouping: a shared base look + a per-image scalar offset (double adjustment)
-        EditParams mGroupBase;
-        std::vector<char> mSlotGrouped;            // 1 = member of the group
-        std::vector<arstro::LocalAdjust> mSlotDelta;  // per-image offset on top of the base
+        // recursive group tree (mNodes[0] = root group); images are leaves under it
+        std::vector<GNode> mNodes;
+        int mCurGroup = 0;        // group whose children the filmstrip shows
+        std::vector<int> mSel;    // selected node indices within mCurGroup
+        int mSelAnchor = -1;      // cell index in mCurGroup.kids for Shift range
+        int mEditGroup = -1;      // group node edited via the offset panel; -1 = editing an image
+        int mRenameTarget = -1;   // group awaiting a name from onRenameGroupRequested
         int mCurrentSlot = -1;
         int mPreviewEdge = 1600;
         RenderService::Frame mExportFrame;

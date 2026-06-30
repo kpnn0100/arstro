@@ -93,6 +93,26 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    void renameGroupDialog(App *a)
+    {
+        GtkWidget *d = gtk_dialog_new_with_buttons(
+            "Rename group", GTK_WINDOW(a->window), GTK_DIALOG_MODAL,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Rename", GTK_RESPONSE_ACCEPT, nullptr);
+        GtkWidget *entry = gtk_entry_new();
+        gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "group name");
+        gtk_entry_set_activates_default(GTK_ENTRY(entry), TRUE);
+        gtk_dialog_set_default_response(GTK_DIALOG(d), GTK_RESPONSE_ACCEPT);
+        gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(d))), entry);
+        gtk_widget_show_all(d);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            const char *name = gtk_entry_get_text(GTK_ENTRY(entry));
+            if (name && *name) a->app.renameGroup(name);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     void savePresetDialog(App *a)
     {
         if (a->app.imageCount() == 0) return;
@@ -221,6 +241,7 @@ int main(int argc, char **argv)
     app.app.onOpenRequested = [&app] { openDialog(&app); };
     app.app.onSaveAsRequested = [&app] { saveSessionDialog(&app); };
     app.app.onSavePresetRequested = [&app] { savePresetDialog(&app); };
+    app.app.onRenameGroupRequested = [&app] { renameGroupDialog(&app); };
 
     // Presets live under the user's config dir.
     {
