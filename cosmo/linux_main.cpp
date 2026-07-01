@@ -230,6 +230,18 @@ namespace
         a->app.pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, mapButton(e->button), nowMs(*a), alt, shift, ctrl);
         return TRUE;
     }
+    gboolean onScroll(GtkWidget *, GdkEventScroll *e, gpointer user)
+    {
+        auto *a = static_cast<App *>(user);
+        const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        double dy = 0.0;
+        if (e->direction == GDK_SCROLL_UP) dy = 1.0;
+        else if (e->direction == GDK_SCROLL_DOWN) dy = -1.0;
+        else if (e->direction == GDK_SCROLL_SMOOTH) dy = -e->delta_y;  // up = positive
+        a->app.wheel(e->x, e->y, dy, ctrl);
+        gtk_widget_queue_draw(a->area);
+        return TRUE;
+    }
     gboolean onMotion(GtkWidget *, GdkEventMotion *e, gpointer user)
     {
         auto *a = static_cast<App *>(user);
@@ -294,13 +306,14 @@ int main(int argc, char **argv)
     gtk_widget_set_size_request(app.area, 640, 400);  // minimum; the area fills the window
     gtk_widget_set_can_focus(app.area, TRUE);
     gtk_widget_add_events(app.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-                                        GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK);
+                                        GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 
     g_signal_connect(app.window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
     g_signal_connect(app.area, "draw", G_CALLBACK(onDraw), &app);
     g_signal_connect(app.area, "button-press-event", G_CALLBACK(onButton), &app);
     g_signal_connect(app.area, "button-release-event", G_CALLBACK(onButton), &app);
     g_signal_connect(app.area, "motion-notify-event", G_CALLBACK(onMotion), &app);
+    g_signal_connect(app.area, "scroll-event", G_CALLBACK(onScroll), &app);
     g_signal_connect(app.area, "key-press-event", G_CALLBACK(onKey), &app);
     g_signal_connect(app.area, "size-allocate", G_CALLBACK(onSizeAllocate), &app);
 

@@ -47,6 +47,8 @@ namespace cosmo
 
         void render(artboard::IRenderTarget &target, double nowMs);
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
+        /** Mouse wheel; with ctrl held over the photo it zooms about the cursor (#13). */
+        void wheel(double x, double y, double delta, bool ctrl);
         void setSize(double width, double height);
 
         // `path` is the source file path (used by Save to record the working image).
@@ -65,6 +67,8 @@ namespace cosmo
         void renameGroup(const std::string &name);
         /** Number of cells (images + sub-groups) shown for the current group (for tests). */
         int filmstripCells() const;
+        /** Current photo zoom factor (for tests). */
+        double imageZoom() const;
 
         /** Directory presets live in (host sets it; empty disables presets). */
         void setPresetDir(const std::string &dir);

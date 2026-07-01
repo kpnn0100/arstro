@@ -29,6 +29,7 @@ static void init(double w, double h)
 }
 static void frame(double nowMs) { if (gApp) gApp->render(gTarget, nowMs); }
 static void pointer(int kind, double x, double y, int button, double t, bool alt, bool shift, bool ctrl) { if (gApp) gApp->pointer(kind, x, y, button, t, alt, shift, ctrl); }
+static void wheel(double x, double y, double delta, bool ctrl) { if (gApp) gApp->wheel(x, y, delta, ctrl); }
 static void resize(double w, double h) { if (gApp) gApp->setSize(w, h); }
 
 // JS calls allocInput(bytes) -> heap pointer, fills HEAPU8 at it, then loadImage().
@@ -49,6 +50,7 @@ EMSCRIPTEN_BINDINGS(arstro_cosmo)
     emscripten::function("init", &init);
     emscripten::function("frame", &frame);
     emscripten::function("pointer", &pointer);
+    emscripten::function("wheel", &wheel);
     emscripten::function("resize", &resize);
     emscripten::function("allocInput", &allocInput);
     emscripten::function("loadImage", &loadImage);

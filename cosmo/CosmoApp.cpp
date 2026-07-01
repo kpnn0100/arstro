@@ -60,6 +60,7 @@ namespace cosmo
     }
 
     int CosmoApp::filmstripCells() const { return mFilmstrip ? mFilmstrip->cellCount() : 0; }
+    double CosmoApp::imageZoom() const { return mImageView ? mImageView->zoom() : 1.0; }
 
     int CosmoApp::nodeForSlot(int slot) const
     {
@@ -438,6 +439,7 @@ namespace cosmo
         if (height < 240) height = 240;
         mW = width; mH = height;
         mRoot->width.set(width); mRoot->height.set(height);
+        mImageView->resetView();  // zoom math depends on the photo bounds; reset on resize
         layout();
     }
 
@@ -706,6 +708,7 @@ namespace cosmo
             mTabs->visible = true;
             mGroupPanel->visible = false;
             mCurrentSlot = mNodes[node].slot;
+            mImageView->resetView();  // start each image at 1x
             syncControlsToSlot();
             submit();
         }
@@ -828,6 +831,15 @@ namespace cosmo
         if (!mService.renderFull(mCurrentSlot, effectiveParams(mCurrentSlot), mExportFrame)) { w = h = 0; return nullptr; }
         w = mExportFrame.width; h = mExportFrame.height;
         return mExportFrame.rgba.data();
+    }
+
+    void CosmoApp::wheel(double x, double y, double delta, bool ctrl)
+    {
+        if (!ctrl || delta == 0.0) return;  // ctrl+scroll = zoom; plain scroll ignored
+        if (x < mPhotoRect.x || x > mPhotoRect.x + mPhotoRect.w ||
+            y < mPhotoRect.y || y > mPhotoRect.y + mPhotoRect.h)
+            return;  // only over the photo
+        mImageView->zoomAbout(delta > 0 ? 1.15 : 1.0 / 1.15, Point{x - mPhotoRect.x, y - mPhotoRect.y});
     }
 
     void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)

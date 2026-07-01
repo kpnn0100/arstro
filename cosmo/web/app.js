@@ -62,3 +62,4 @@ canvas.addEventListener("mousedown", (e) => { if (M) { const [x, y] = xy(e); M.p
 canvas.addEventListener("mousemove", (e) => { if (M) { const [x, y] = xy(e); M.pointer(1, x, y, e.button, performance.now(), e.altKey, e.shiftKey, e.ctrlKey || e.metaKey); } });
 window.addEventListener("mouseup", (e) => { if (M) { const [x, y] = xy(e); M.pointer(2, x, y, e.button, performance.now(), e.altKey, e.shiftKey, e.ctrlKey || e.metaKey); } });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("wheel", (e) => { if (M) { const [x, y] = xy(e); M.wheel(x, y, -e.deltaY, e.ctrlKey || e.metaKey); if (e.ctrlKey) e.preventDefault(); } }, { passive: false });
