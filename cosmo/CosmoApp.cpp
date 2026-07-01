@@ -61,6 +61,7 @@ namespace cosmo
 
     int CosmoApp::filmstripCells() const { return mFilmstrip ? mFilmstrip->cellCount() : 0; }
     double CosmoApp::imageZoom() const { return mImageView ? mImageView->zoom() : 1.0; }
+    int CosmoApp::previewPixelWidth() const { return mImageView ? mImageView->imageWidth() : 0; }
 
     int CosmoApp::nodeForSlot(int slot) const
     {
@@ -440,6 +441,7 @@ namespace cosmo
         mW = width; mH = height;
         mRoot->width.set(width); mRoot->height.set(height);
         mImageView->resetView();  // zoom math depends on the photo bounds; reset on resize
+        mService.setPreviewSize(mPreviewEdge);  // base preview resolution at 1x
         layout();
     }
 
@@ -709,6 +711,7 @@ namespace cosmo
             mGroupPanel->visible = false;
             mCurrentSlot = mNodes[node].slot;
             mImageView->resetView();  // start each image at 1x
+            mService.setPreviewSize(mPreviewEdge);  // back to the base preview resolution
             syncControlsToSlot();
             submit();
         }
@@ -840,6 +843,11 @@ namespace cosmo
             y < mPhotoRect.y || y > mPhotoRect.y + mPhotoRect.h)
             return;  // only over the photo
         mImageView->zoomAbout(delta > 0 ? 1.15 : 1.0 / 1.15, Point{x - mPhotoRect.x, y - mPhotoRect.y});
+        // Re-render the preview at a higher resolution proportional to the zoom so a
+        // high-res original stays sharp when magnified (engine caps at the source size).
+        const int eff = std::max(mPreviewEdge, (int)(mPreviewEdge * mImageView->zoom() + 0.5));
+        mService.setPreviewSize(eff);
+        submit();
     }
 
     void CosmoApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)

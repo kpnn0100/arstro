@@ -69,6 +69,8 @@ namespace cosmo
         int filmstripCells() const;
         /** Current photo zoom factor (for tests). */
         double imageZoom() const;
+        /** Pixel width of the preview currently displayed (for tests). */
+        int previewPixelWidth() const;
 
         /** Directory presets live in (host sets it; empty disables presets). */
         void setPresetDir(const std::string &dir);
