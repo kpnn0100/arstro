@@ -127,12 +127,27 @@ namespace cosmo
         for (int i = 0; i < 48; ++i)
         { const double h0 = (double)i / 48 * 360.0; drawRoundedRect(t, Rect{pxh(h0), sy, pxh((double)(i + 1) / 48 * 360.0) - pxh(h0) + 1.0, sh}, 0.0, Paint::filled(hueColor(h0))); }
 
+        // hue distribution of the image, behind the curve (bars coloured by hue)
+        if (mHueHist.size() >= 2)
+        {
+            const int n = (int)mHueHist.size();
+            const double top = plotTop(), bot = plotBot();
+            for (int i = 0; i < n; ++i)
+            {
+                double v = mHueHist[i]; if (v <= 0) continue; if (v > 1) v = 1;
+                const double h0 = (double)i / n * 360.0, h1 = (double)(i + 1) / n * 360.0;
+                const double x0 = pxh(h0), barTop = bot - v * (bot - top) * 0.8;
+                Color c = hueColor((h0 + h1) * 0.5); c.a = 0.30f;
+                drawRoundedRect(t, Rect{x0, barTop, pxh(h1) - x0 + 1.0, bot - barTop}, 0.0, Paint::filled(c));
+            }
+        }
+
         // dense cyclic curve; break the polyline where x wraps so the seam joins continuously.
         const auto dense = sampleCurve(mPts, true, 360.0f);
         for (size_t i = 0; i + 1 < dense.size(); ++i)
         {
             if (dense[i + 1].first < dense[i].first) continue;  // wrap fold -> skip the jump
-            const Color col = mMappedHue ? hueColor(dense[i].first + dense[i].second * 60.0) : mAccent;
+            const Color col = mMappedHue ? hueColor(dense[i].first + dense[i].second * 180.0) : mAccent;
             t.beginPath(); t.moveTo(pxh(dense[i].first), pyv(dense[i].second));
             t.lineTo(pxh(dense[i + 1].first), pyv(dense[i + 1].second));
             t.setStroke(col, 2.0); t.strokePath();

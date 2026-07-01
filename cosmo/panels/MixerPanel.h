@@ -26,6 +26,8 @@ namespace cosmo
         std::function<void(int, const std::vector<std::pair<float, float>> &)> onChange;
 
         void setCurves(const std::array<std::vector<std::pair<float, float>>, 3> &curves);
+        void setHueHistogram(std::vector<float> bins)
+        { for (auto &e : mEditors) if (e) e->setHueHistogram(bins); }
         void layout(double w, double h);
 
     private:

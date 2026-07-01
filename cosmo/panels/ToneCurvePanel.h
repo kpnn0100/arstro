@@ -26,6 +26,7 @@ namespace cosmo
 
         void setCurve(const std::vector<std::pair<float, float>> &pts) { mCurve->setPoints(pts); }
         void setLog(bool log) { mLogToggle->setOn(log); }
+        void setHistogram(std::vector<float> bins) { mCurve->setHistogram(std::move(bins)); }
         void layout(double w, double h);
 
     protected:

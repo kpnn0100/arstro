@@ -26,6 +26,8 @@ namespace cosmo
         std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
         void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
         void reset();
+        /** Faint luminance histogram drawn behind the curve (bins normalised 0..1). */
+        void setHistogram(std::vector<float> bins) { mHist = std::move(bins); }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -42,6 +44,7 @@ namespace cosmo
         void emit();
 
         std::vector<CtrlPoint> mPts;
+        std::vector<float> mHist;  // luminance histogram background
         artboard::Color mAccent;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in-handle, 2 out-handle, 3 symmetric pull (alt)

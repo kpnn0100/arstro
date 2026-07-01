@@ -26,6 +26,9 @@ namespace cosmo
         std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
         void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
+        /** Hue distribution of the image (bins over 0..360, normalised 0..1), drawn
+         *  behind the curve so you see which hues the edit affects. */
+        void setHueHistogram(std::vector<float> bins) { mHueHist = std::move(bins); }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -46,6 +49,7 @@ namespace cosmo
         void emit();
 
         std::vector<CtrlPoint> mPts;  // x in [0,360), y in [-1,1]
+        std::vector<float> mHueHist;  // hue distribution background
         artboard::Color mAccent;
         bool mMappedHue = false;
         int mDragIdx = -1;

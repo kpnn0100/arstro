@@ -860,6 +860,33 @@ namespace cosmo
         {
             mImageView->setImage(f.rgba.data(), f.width, f.height);
             mHistogram->setHistogram(f.hist);
+
+            // luminance histogram behind the tone curve (#15)
+            std::vector<float> lum(HistogramData::kBins);
+            const double lmax = f.hist.maxCount > 0 ? (double)f.hist.maxCount : 1.0;
+            for (int i = 0; i < HistogramData::kBins; ++i) lum[i] = (float)(f.hist.lum[i] / lmax);
+            mCurve->setHistogram(std::move(lum));
+
+            // hue distribution behind the mixer curves (#2): saturation-weighted, sparse-sampled
+            constexpr int kHueBins = 72;
+            std::vector<float> hue(kHueBins, 0.f);
+            const uint8_t *px = f.rgba.data();
+            const size_t total = (size_t)f.width * f.height;
+            const size_t stride = total > 40000 ? total / 40000 : 1;
+            for (size_t i = 0; i < total; i += stride)
+            {
+                const uint8_t *p = px + i * 4;
+                float r = p[0] / 255.f, g = p[1] / 255.f, b = p[2] / 255.f;
+                float mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b)), d = mx - mn;
+                if (d < 1e-4f || mx <= 0.f) continue;  // skip near-gray
+                float hh = (mx == r) ? std::fmod((g - b) / d, 6.f) : (mx == g) ? (b - r) / d + 2.f : (r - g) / d + 4.f;
+                hh *= 60.f; if (hh < 0) hh += 360.f;
+                int bin = (int)(hh / 360.f * kHueBins); if (bin >= kHueBins) bin = kHueBins - 1;
+                hue[bin] += d / mx;  // saturation weight
+            }
+            float hmax = 1e-6f; for (float v : hue) hmax = std::max(hmax, v);
+            for (float &v : hue) v /= hmax;
+            mMixer->setHueHistogram(std::move(hue));
         }
         mMaskOverlay->setFittedRect(mImageView->fittedRect());  // photo display area (local)
         mCropOverlay->setFittedRect(mImageView->fittedRect());

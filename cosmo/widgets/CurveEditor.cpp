@@ -117,6 +117,23 @@ namespace cosmo
     {
         const double w = width.value(), h = height.value();
         drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(), Paint::filledStroked(palette::bg(), palette::line(), 1.0));
+
+        // faint luminance histogram behind the curve (post-edit tones of the image)
+        if (mHist.size() >= 2)
+        {
+            const int n = (int)mHist.size();
+            t.setFill(Color{1, 1, 1, 0.10f});
+            t.beginPath();
+            t.moveTo(px(0.0), py(0.0));
+            for (int i = 0; i < n; ++i)
+            {
+                double v = mHist[i]; if (v < 0) v = 0; else if (v > 1) v = 1;
+                t.lineTo(px((double)i / (n - 1)), py(v));
+            }
+            t.lineTo(px(1.0), py(0.0));
+            t.closePath();
+            t.fillPath();
+        }
         for (int i = 1; i < 4; ++i)
         {
             const double gx = px(i / 4.0), gy = py(i / 4.0);
