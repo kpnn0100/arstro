@@ -152,6 +152,36 @@ cmake --build build
 ./build/artboard_tests
 ```
 
+### 2.1 Cross-platform build with CMake (Linux, Windows, macOS)
+
+The umbrella `CMakeLists.txt` builds the **cosmo** photo editor and the library unit
+tests with plain CMake — the same GTK3 + Cairo native backend on every platform (no
+`build.sh` / bash needed). GTK3 pulls in Cairo and GdkPixbuf; LibRaw (RAW decode) is
+optional and auto-detected via `pkg-config`.
+
+```bash
+cmake -S . -B build            # configure (prints whether RAW/LibRaw was found)
+cmake --build build -j         # -> build/cosmo/cosmo, plus the library test exes
+ctest --test-dir build         # run the Artboard + ImageProcessing unit tests
+```
+
+**Windows** — build in the *MSYS2 MinGW64* shell (GTK is a first-class MinGW package):
+
+```bash
+pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake \
+                   mingw-w64-x86_64-ninja mingw-w64-x86_64-gtk3 \
+                   mingw-w64-x86_64-libraw mingw-w64-x86_64-pkgconf
+cmake -S . -B build -G Ninja
+cmake --build build            # -> build\cosmo\cosmo.exe
+```
+
+Notes:
+- Options: `-DARSTRO_BUILD_COSMO=OFF` builds just the libraries + tests (no GTK needed).
+- If `pkg-config` cannot find `gtk+-3.0`, ensure you are in the MinGW64 shell (not the
+  plain MSYS shell) so `PKG_CONFIG_PATH` points at the MinGW packages.
+- The **web** (Emscripten/WASM) target still ships via `build.sh --target linux-web-server`;
+  CMake here covers the native desktop build.
+
 ## 3. Upgrade Artboard and DigitalSignalProcessing
 
 Both dependencies are git submodules. Upgrade them from the umbrella repository root.
