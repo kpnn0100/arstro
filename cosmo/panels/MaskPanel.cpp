@@ -1,4 +1,5 @@
 #include "MaskPanel.h"
+#include "../Chrome.h"
 #include "../CosmoTheme.h"
 
 namespace arstro
@@ -7,14 +8,20 @@ namespace cosmo
 {
     using namespace artboard;
 
-    namespace { constexpr double kPad = 10, kBtnH = 24, kComboH = 24, kGap = 6, kLabelH = 14, kSliderH = 18; }
+    namespace { constexpr double kHeaderH = 34, kPad = 12, kBtnH = 26, kComboH = 26, kGap = 6, kRowH = 22; }
 
     MaskPanel::MaskPanel(const Theme &theme, const Color &accent) : mAccent(accent)
     {
         width.set(300.0); height.set(400.0);
 
+        // flat "chip" style for the add buttons: filled, no border, less rounded
+        ButtonStyle flat = theme.button;
+        flat.idle = {Paint::filled(palette::surface()), radius::control()};
+        flat.pressed = {Paint::filled(palette::line()), radius::control()};
+        flat.label.color = palette::ink();
+
         auto mkBtn = [&](const char *label, int type) {
-            auto b = std::make_shared<Button>(label, theme.button);
+            auto b = std::make_shared<Button>(label, flat);
             b->onClick = [this, type] { if (onAdd) onAdd(type); };
             addChild(b);
             return b;
@@ -27,7 +34,8 @@ namespace cosmo
         mSelect->onChange = [this](int i) { if (onSelect) onSelect(i); };
         addChild(mSelect);
 
-        mDelete = std::make_shared<Button>("Delete", theme.button);
+        mDelete = std::make_shared<IconButton>(IconButton::Icon::Trash, accent);
+        mDelete->setColors(Color{0.80f, 0.52f, 0.55f, 1.0f}, Color{0.16f, 0.10f, 0.11f, 1.0f});  // pastel red
         mDelete->onClick = [this] { if (onDelete) onDelete(); };
         addChild(mDelete);
 
@@ -46,21 +54,29 @@ namespace cosmo
                                         if (mHasSelection && onLocal) onLocal(mEditing);
                                     }};
         };
-        std::vector<ParamPanel::Section> sections = {{"LOCAL ADJUST", {
-            spec("exposure", -5, 5, &LocalAdjust::exposure),
-            spec("contrast", -100, 100, &LocalAdjust::contrast),
-            spec("highlights", -100, 100, &LocalAdjust::highlights),
-            spec("shadows", -100, 100, &LocalAdjust::shadows),
-            spec("whites", -100, 100, &LocalAdjust::whites),
-            spec("blacks", -100, 100, &LocalAdjust::blacks),
-            spec("temp", -100, 100, &LocalAdjust::temp),
-            spec("tint", -100, 100, &LocalAdjust::tint),
-            spec("saturation", -100, 100, &LocalAdjust::saturation),
-            spec("texture", -100, 100, &LocalAdjust::texture),
-            spec("clarity", -100, 100, &LocalAdjust::clarity),
-            spec("dehaze", -100, 100, &LocalAdjust::dehaze),
-        }}};
+        // sub-sectioned local adjustments (like the Basic tab)
+        std::vector<ParamPanel::Section> sections = {
+            {"TONE", {
+                spec("exposure", -5, 5, &LocalAdjust::exposure),
+                spec("contrast", -100, 100, &LocalAdjust::contrast),
+                spec("highlights", -100, 100, &LocalAdjust::highlights),
+                spec("shadows", -100, 100, &LocalAdjust::shadows),
+                spec("whites", -100, 100, &LocalAdjust::whites),
+                spec("blacks", -100, 100, &LocalAdjust::blacks),
+            }},
+            {"COLOR", {
+                spec("temp", -100, 100, &LocalAdjust::temp),
+                spec("tint", -100, 100, &LocalAdjust::tint),
+                spec("saturation", -100, 100, &LocalAdjust::saturation),
+            }},
+            {"PRESENCE", {
+                spec("texture", -100, 100, &LocalAdjust::texture),
+                spec("clarity", -100, 100, &LocalAdjust::clarity),
+                spec("dehaze", -100, 100, &LocalAdjust::dehaze),
+            }},
+        };
         mLocal = std::make_shared<ParamPanel>("", theme, accent, sections);
+        mLocal->setChrome(false);  // embedded: no nested panel box, just sections + sliders
         addChild(mLocal);
     }
 
@@ -92,7 +108,9 @@ namespace cosmo
     {
         width.set(w); height.set(h);
         const double cw = w - 2 * kPad;
-        double y = 8;
+        double y = kHeaderH + 6;
+
+        // add-mask chips
         const double bw = (cw - 2 * kGap) / 3;
         for (int i = 0; i < 3; ++i)
         {
@@ -101,17 +119,22 @@ namespace cosmo
             b->width.set(bw); b->height.set(kBtnH);
         }
         y += kBtnH + kGap;
-        mSelect->x.set(kPad); mSelect->y.set(y); mSelect->width.set(cw); mSelect->height.set(kComboH);
+
+        // select combo (left, flex) + delete icon (right, square)
+        const double delW = kComboH;
+        mSelect->x.set(kPad); mSelect->y.set(y); mSelect->width.set(cw - delW - kGap); mSelect->height.set(kComboH);
+        mDelete->x.set(kPad + cw - delW); mDelete->y.set(y); mDelete->width.set(delW); mDelete->height.set(kComboH);
         y += kComboH + kGap;
-        const double half = (cw - kGap) / 2;
-        mDelete->x.set(kPad); mDelete->y.set(y); mDelete->width.set(half); mDelete->height.set(kBtnH);
-        mInvert->x.set(kPad + half + kGap); mInvert->y.set(y + (kBtnH - 18) * 0.5);
-        mInvert->width.set(half); mInvert->height.set(18);
-        y += kBtnH + kGap;
-        mFeatherLabelY = y + kLabelH - 3;
-        y += kLabelH;
-        mFeather->x.set(kPad); mFeather->y.set(y); mFeather->width.set(cw); mFeather->height.set(kSliderH);
-        y += kSliderH + kGap;
+
+        // invert (left) + feather slider (right)
+        const double invW = 66.0, labW = 42.0;
+        mInvert->x.set(kPad); mInvert->y.set(y + (kRowH - 18) * 0.5); mInvert->width.set(invW); mInvert->height.set(18);
+        mFeatherLabelX = kPad + invW + 6; mFeatherLabelY = y + kRowH * 0.5 + 4;
+        const double fx = mFeatherLabelX + labW;
+        mFeather->x.set(fx); mFeather->y.set(y + (kRowH - 14) * 0.5);
+        mFeather->width.set(kPad + cw - fx); mFeather->height.set(14);
+        y += kRowH + kGap;
+
         mLocal->x.set(0); mLocal->y.set(y);
         mLocal->width.set(w); mLocal->height.set(h - y);
         mLocal->layout(w, h - y);
@@ -119,13 +142,9 @@ namespace cosmo
 
     void MaskPanel::onPaint(IRenderTarget &t) const
     {
+        drawPanelChrome(t, width.value(), height.value(), "MASK");  // gray body joining the tab
         t.setFill(palette::muted());
-        t.drawText("FEATHER", kPad, mFeatherLabelY, 10.0);
-        if (!mHasSelection)
-        {
-            t.setFill(palette::faint());
-            t.drawText("Add a mask, then paint or drag on the photo.", kPad, 8 + kBtnH + kComboH + 64, 11.0);
-        }
+        t.drawText("feather", mFeatherLabelX, mFeatherLabelY, 10.0);
     }
 }
 }

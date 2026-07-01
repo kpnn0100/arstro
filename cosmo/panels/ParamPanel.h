@@ -38,6 +38,8 @@ namespace cosmo
         void layout(double w, double h);
         /** Set all slider positions (flat order across sections), no callbacks. */
         void setValues(const std::vector<double> &values);
+        /** Draw the panel chrome (title bar + body). Off when embedded in another panel. */
+        void setChrome(bool on) { mDrawChrome = on; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -49,6 +51,7 @@ namespace cosmo
         artboard::Color mAccent;
         std::vector<std::shared_ptr<artboard::Slider>> mSliders;
         std::vector<Item> mItems;  // section headers + slider rows, in display order
+        bool mDrawChrome = true;
     };
 }
 }

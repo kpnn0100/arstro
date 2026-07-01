@@ -14,10 +14,12 @@ namespace cosmo
     class IconButton : public artboard::Segment
     {
     public:
-        enum class Icon { RotateCCW, RotateCW };
+        enum class Icon { RotateCCW, RotateCW, Trash };
         IconButton(Icon icon, const artboard::Color &accent);
 
         std::function<void()> onClick;
+        /** Override the background + glyph colours (e.g. a pastel-red delete). */
+        void setColors(const artboard::Color &bg, const artboard::Color &icon) { mBg = bg; mIconColor = icon; mCustom = true; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -27,6 +29,8 @@ namespace cosmo
     private:
         Icon mIcon;
         artboard::Color mAccent;
+        artboard::Color mBg, mIconColor;
+        bool mCustom = false;
         bool mPressed = false;
     };
 }

@@ -21,10 +21,29 @@ namespace cosmo
     void IconButton::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
+        const Color bg = mCustom ? mBg : palette::surface();
+        const Color ink = mCustom ? mIconColor : palette::ink();
         drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(),
-                        Paint::filled(mPressed ? palette::line() : palette::surface()));
+                        Paint::filled(mPressed ? palette::line() : bg));
 
         const double cx = w * 0.5, cy = h * 0.5;
+
+        if (mIcon == Icon::Trash)
+        {
+            const double bw = std::min(w, h) * 0.34, bh = std::min(w, h) * 0.40;
+            t.setStroke(ink, 1.6);
+            // lid
+            t.beginPath(); t.moveTo(cx - bw, cy - bh * 0.7); t.lineTo(cx + bw, cy - bh * 0.7); t.strokePath();
+            // handle
+            t.beginPath(); t.moveTo(cx - bw * 0.4, cy - bh * 0.7); t.lineTo(cx - bw * 0.4, cy - bh); t.lineTo(cx + bw * 0.4, cy - bh); t.lineTo(cx + bw * 0.4, cy - bh * 0.7); t.strokePath();
+            // can body
+            t.beginPath();
+            t.moveTo(cx - bw * 0.8, cy - bh * 0.7); t.lineTo(cx - bw * 0.65, cy + bh);
+            t.lineTo(cx + bw * 0.65, cy + bh); t.lineTo(cx + bw * 0.8, cy - bh * 0.7);
+            t.strokePath();
+            return;
+        }
+
         const double r = std::min(w, h) * 0.26;
         const bool cw = mIcon == Icon::RotateCW;
         // A ~290° arc with a small gap; arrowhead at the open end.
@@ -32,7 +51,7 @@ namespace cosmo
         const double a0 = (cw ? -1.0 : 1.0) * gap * 0.5 - 1.5708;  // start near top
         const double sweep = (cw ? 1.0 : -1.0) * (6.2832 - gap);
         const int n = 26;
-        t.setStroke(palette::ink(), 1.6);
+        t.setStroke(ink, 1.6);
         t.beginPath();
         for (int i = 0; i <= n; ++i)
         {
@@ -47,7 +66,7 @@ namespace cosmo
         const double ex = cx + r * std::cos(aEnd), ey = cy + r * std::sin(aEnd);
         const double tang = aEnd + (cw ? 1.5708 : -1.5708);  // tangent direction
         const double ah = std::min(w, h) * 0.16;
-        t.setFill(palette::ink());
+        t.setFill(ink);
         t.beginPath();
         t.moveTo(ex + ah * std::cos(tang), ey + ah * std::sin(tang));
         t.lineTo(ex + ah * std::cos(tang + 2.4), ey + ah * std::sin(tang + 2.4));

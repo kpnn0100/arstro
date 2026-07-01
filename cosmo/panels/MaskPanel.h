@@ -11,6 +11,7 @@
 #include "../../ImageProcessing/src/engine/EditParams.h"
 #include "ParamPanel.h"
 #include "../widgets/TextToggle.h"
+#include "../widgets/IconButton.h"
 #include <functional>
 #include <memory>
 #include <vector>
@@ -40,14 +41,15 @@ namespace cosmo
 
     private:
         artboard::Color mAccent;
-        std::shared_ptr<artboard::Button> mAddRadial, mAddLinear, mAddBrush, mDelete;
+        std::shared_ptr<artboard::Button> mAddRadial, mAddLinear, mAddBrush;
+        std::shared_ptr<IconButton> mDelete;
         std::shared_ptr<artboard::ComboBox> mSelect;
         std::shared_ptr<TextToggle> mInvert;
         std::shared_ptr<artboard::Slider> mFeather;
         std::shared_ptr<ParamPanel> mLocal;
         arstro::LocalAdjust mEditing;
         bool mHasSelection = false;
-        double mFeatherLabelY = 0;
+        double mFeatherLabelX = 0, mFeatherLabelY = 0;
     };
 }
 }

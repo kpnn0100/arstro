@@ -47,9 +47,10 @@ namespace cosmo
         height.set(h);
         int nHeaders = 0, nSliders = 0;
         for (const auto &it : mItems) (it.header ? nHeaders : nSliders) += 1;
-        const double usable = h - kHeaderH - kPad;
+        const double top = mDrawChrome ? kHeaderH : 6.0;  // no title bar when embedded
+        const double usable = h - top - kPad;
         const double sliderRowH = nSliders > 0 ? (usable - nHeaders * kSectionH) / nSliders : usable;
-        double y = kHeaderH;
+        double y = top;
         for (auto &it : mItems)
         {
             if (it.header)
@@ -78,7 +79,8 @@ namespace cosmo
 
     void ParamPanel::onPaint(IRenderTarget &t) const
     {
-        drawPanelChrome(t, width.value(), height.value(), mTitle);
+        if (mDrawChrome)
+            drawPanelChrome(t, width.value(), height.value(), mTitle);
         const double w = width.value();
         bool firstHeader = true;
         for (const auto &it : mItems)
