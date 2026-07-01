@@ -442,7 +442,7 @@ TEST(ColorMixer_hue_curve_localized_and_cyclic)
     mc.setCurve(ColorMixer::Sat, {{0.f, -1.f}});
     CHECK(satOf(mc.apply(blue)) < 0.2);           // even blue desaturated
 
-    // Hue-shift curve: push red toward orange/yellow (+60 at hue 0)
+    // Hue-shift curve: y=1 bends the hue by +180deg (full any-to-any range)
     ColorMixer mh;
     mh.setCurve(ColorMixer::Hue, {{0.f, 1.f}, {120.f, 0.f}, {240.f, 0.f}});
     CHECK(hueOf(mh.apply(pxHsl(0, (Pixel)0.9, (Pixel)0.5))) > 30.0);
@@ -569,7 +569,7 @@ TEST(Vibrance_and_mixer_clamps)
 
     // ColorMixer: strong negative hue shift wraps below 0; saturation clamps high
     ColorMixer m;
-    m.setCurve(ColorMixer::Hue, {{0.f, -1.f}, {120.f, -1.f}, {240.f, -1.f}});  // shift all -60
+    m.setCurve(ColorMixer::Hue, {{0.f, -1.f}, {120.f, -1.f}, {240.f, -1.f}});  // shift all -180
     m.setCurve(ColorMixer::Sat, {{0.f, 1.f}, {180.f, 1.f}});                   // 2x sat (clamps)
     Image out = m.apply(c);
     CHECK(hueOf(out) >= 0.0 && hueOf(out) < 360.0);

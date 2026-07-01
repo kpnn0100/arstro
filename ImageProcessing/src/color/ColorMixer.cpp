@@ -90,7 +90,7 @@ namespace arstro
         const float yh = sampleCyclic(Hue, (float)h);
         const float ys = sampleCyclic(Sat, (float)h);
         const float yl = sampleCyclic(Lum, (float)h);
-        h += (Pixel)(yh * 60.0f);
+        h += (Pixel)(yh * 180.0f);  // full ±180deg bend so any hue can reach any target
         s *= (Pixel)1 + (Pixel)ys;
         l += (Pixel)(yl * 0.5f);
         if (h < 0) h += 360;
