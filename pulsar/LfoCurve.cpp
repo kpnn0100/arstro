@@ -69,9 +69,20 @@ namespace pulsar
         return mNodes.back().y;
     }
 
+    void LfoCurve::advance(double nowMs)
+    {
+        const double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
+        mLastMs = nowMs;
+        mReveal.advance(dt, 20.0);
+        Segment::advance(nowMs);
+    }
+
     void LfoCurve::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
+        // The frame + zero line stay stable; the curve content fades in on tab select.
+        const double rv = mReveal.value();
+        auto fade = [rv](Color c) { c.a *= rv; return c; };
         drawRoundedRect(t, Rect{0, 0, w, h}, 6.0,
                         Paint::filledStroked(Color{0, 0, 0, 0.35}, Color{1, 1, 1, 0.08}, 1.0));
         // zero line
@@ -92,8 +103,8 @@ namespace pulsar
         for (auto &p : pts) t.lineTo(p.x, p.y);
         t.lineTo(pts.back().x, sy(0.0)); t.closePath();
         t.setLinearFill(0, padY(), 0, h - padY(),
-                        Color{mAccent.r, mAccent.g, mAccent.b, 0.16},
-                        Color{mAccent.r, mAccent.g, mAccent.b, 0.0});
+                        fade(Color{mAccent.r, mAccent.g, mAccent.b, 0.16}),
+                        fade(Color{mAccent.r, mAccent.g, mAccent.b, 0.0}));
         t.fillPath();
         const double passW[3] = {6.0, 4.0, 2.5};
         const double passA[3] = {0.06, 0.12, 0.22};
@@ -101,12 +112,12 @@ namespace pulsar
         {
             t.beginPath(); t.moveTo(pts[0].x, pts[0].y);
             for (size_t i = 1; i < pts.size(); ++i) t.lineTo(pts[i].x, pts[i].y);
-            t.setStroke(Color{mAccent.r, mAccent.g, mAccent.b, passA[pass]}, passW[pass]);
+            t.setStroke(fade(Color{mAccent.r, mAccent.g, mAccent.b, passA[pass]}), passW[pass]);
             t.strokePath();
         }
         t.beginPath(); t.moveTo(pts[0].x, pts[0].y);
         for (size_t i = 1; i < pts.size(); ++i) t.lineTo(pts[i].x, pts[i].y);
-        t.setStroke(mAccent, 2.0); t.strokePath();
+        t.setStroke(fade(mAccent), 2.0); t.strokePath();
 
         // selected node's tangent handles
         if (mSel >= 0)
@@ -116,8 +127,8 @@ namespace pulsar
             {
                 const Point hsd = handleScreen(mSel, dir);
                 t.beginPath(); t.moveTo(n.x, n.y); t.lineTo(hsd.x, hsd.y);
-                t.setStroke(Color{1, 1, 1, 0.4}, 1.0); t.strokePath();
-                drawCircle(t, hsd.x, hsd.y, 3.0, Paint::filled(Color{1, 1, 1, 0.7}));
+                t.setStroke(fade(Color{1, 1, 1, 0.4}), 1.0); t.strokePath();
+                drawCircle(t, hsd.x, hsd.y, 3.0, Paint::filled(fade(Color{1, 1, 1, 0.7})));
             }
         }
         // node dots
@@ -126,15 +137,15 @@ namespace pulsar
             const Point p = nodeScreen((int)i);
             const bool sel = (int)i == mSel;
             drawCircle(t, p.x, p.y, sel ? 5.0 : 4.0,
-                       Paint::filledStroked(sel ? Color{1, 1, 1, 0.95} : mAccent, Color{0, 0, 0, 0.5}, 1.0));
+                       Paint::filledStroked(fade(sel ? Color{1, 1, 1, 0.95} : mAccent), fade(Color{0, 0, 0, 0.5}), 1.0));
         }
 
         // playhead
         if (mActive)
         {
             const double px = sx(clamp(mPhase, 0.0, 1.0)), py = sy(valueAt(mPhase));
-            drawCircle(t, px, py, 6.0, Paint::filled(Color{mAccent.r, mAccent.g, mAccent.b, 0.18}));
-            drawCircle(t, px, py, 3.2, Paint::filled(Color{1, 1, 1, 0.95}));
+            drawCircle(t, px, py, 6.0, Paint::filled(fade(Color{mAccent.r, mAccent.g, mAccent.b, 0.18})));
+            drawCircle(t, px, py, 3.2, Paint::filled(fade(Color{1, 1, 1, 0.95})));
         }
     }
 

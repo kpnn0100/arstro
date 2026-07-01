@@ -31,8 +31,9 @@ namespace pulsar
         artboard::Color mAccent;
         int mType = 0;
         double mCutoff = 0.6, mReso = 0.15, mDrive = 0.0, mEnv = 0.3;
-        double mCutoffDisp = 0.6, mResoDisp = 0.15;
-        double mCutoffVel = 0.0, mResoVel = 0.0;
+        // Displayed cutoff/resonance glide to their knob targets via the shared core
+        // Spring, so the response curve animates. Seeded to the initial knob values.
+        artboard::Spring mCutoffDisp{0.6}, mResoDisp{0.15};
         double mLastMs = -1.0;
 
         std::shared_ptr<artboard::ComboBox> mTypeCombo;

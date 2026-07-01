@@ -25,6 +25,10 @@ namespace pulsar
         void setPlayhead(double phase01, bool active) { mPhase = phase01; mActive = active; }
         double valueAt(double phase01) const; // sampled curve value in [-1,1]
 
+        /** Fade the curve content in from zero (used when this tab becomes selected). */
+        void triggerReveal() { mReveal.reset(0.0); mReveal.setTarget(1.0); }
+        void advance(double nowMs) override; // ticks the reveal fade
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
@@ -50,6 +54,8 @@ namespace pulsar
         artboard::Color mAccent = artboard::Color::hex(0xb46bff);
         double mPhase = 0.0;
         bool mActive = false;
+        artboard::Spring mReveal{1.0}; // content fade-in on tab select (1 = fully shown)
+        double mLastMs = -1.0;
     };
 }
 }

@@ -22,6 +22,8 @@ namespace pulsar
         std::function<void(bool)> onGate; // true on note-on, false on note-off
         int note() const { return mNote; }
 
+        void advance(double nowMs) override; // fades the pressed-key highlight in/out
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
@@ -33,7 +35,10 @@ namespace pulsar
         double whiteW() const { return width.value() / kWhite; }
 
         artboard::Color mAccent;
-        int mNote = -1; // currently held semitone (relative), -1 = none
+        int mNote = -1;    // currently held semitone (relative), -1 = none
+        int mLitNote = -1; // key whose highlight is fading (kept during release fade-out)
+        artboard::Spring mLit; // 0..1 press highlight, springs in on down and out on release
+        double mLastMs = -1.0;
         bool mDown = false;
     };
 }

@@ -9,24 +9,24 @@ namespace pulsar
     void drawPanelChrome(IRenderTarget &t, double w, double h,
                          const Color &accent, const std::string &title)
     {
-        drawRoundedRect(t, Rect{0, 0, w, h}, 10.0,
-                        Paint::filledStroked(Color::hex(0x14161c),
-                                             Color{accent.r, accent.g, accent.b, 0.32}, 1.0));
-        drawRoundedRect(t, Rect{0, 0, w, 3.0}, 0.0, Paint::filled(accent));
+        const Color surface = Color::hex(0x141824);
+        const Color hairline = Color{1, 1, 1, 0.07};
+        const Color titleInk = Color::hex(0xdfe4ee);
 
-        // header sheen: a vertical accent glow fading down from under the top stripe
-        t.beginPath();
-        t.moveTo(1, 3); t.lineTo(w - 1, 3); t.lineTo(w - 1, 36); t.lineTo(1, 36); t.closePath();
-        t.setLinearFill(0, 3, 0, 36,
-                        Color{accent.r, accent.g, accent.b, 0.12},
-                        Color{accent.r, accent.g, accent.b, 0.0});
-        t.fillPath();
+        // Quiet chassis: one neutral surface + a single hairline. No accent-tinted
+        // border, no full-width colour stripe, no header sheen.
+        drawRoundedRect(t, Rect{0, 0, w, h}, 12.0, Paint::filledStroked(surface, hairline, 1.0));
 
-        // faux-bold title (overdraw with sub-pixel offsets)
-        t.setFill(accent);
-        for (double ox : {0.0, 0.5})
-            for (double oy : {0.0, 0.5})
-                t.drawText(title, 14.0 + ox, 21.0 + oy, 13.0);
+        // molded top-edge highlight (a physical panel, not a glow)
+        t.beginPath(); t.moveTo(13.0, 1.0); t.lineTo(w - 13.0, 1.0);
+        t.setStroke(Color{1, 1, 1, 0.05}, 1.0); t.strokePath();
+
+        // title: real hierarchy via size + neutral ink (no faux-bold overdraw)
+        t.setFill(titleInk);
+        t.drawText(title, 15.0, 23.0, 12.5);
+
+        // short accent tab under the title — the section's identity, quietly
+        drawRoundedRect(t, Rect{15.0, 30.0, 20.0, 2.0}, 1.0, Paint::filled(accent));
     }
 }
 }

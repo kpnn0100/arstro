@@ -45,7 +45,7 @@ namespace pulsar
     // in [0,1]; returns roughly [0,1.5].
     double FilterPanel::gain(double x) const
     {
-        const double c = mCutoffDisp, reso = mResoDisp, eps = 1e-3;
+        const double c = mCutoffDisp.value(), reso = mResoDisp.value(), eps = 1e-3;
         double g;
         switch (mType)
         {
@@ -81,17 +81,12 @@ namespace pulsar
 
     void FilterPanel::advance(double nowMs)
     {
-        double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
+        const double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
         mLastMs = nowMs;
-        if (dt > 0.0)
-        {
-            if (dt > 0.05) dt = 0.05;
-            const double omega = 16.0;
-            double acc = -2.0 * omega * mCutoffVel - omega * omega * (mCutoffDisp - mCutoff);
-            mCutoffVel += acc * dt; mCutoffDisp += mCutoffVel * dt;
-            acc = -2.0 * omega * mResoVel - omega * omega * (mResoDisp - mReso);
-            mResoVel += acc * dt; mResoDisp += mResoVel * dt;
-        }
+        mCutoffDisp.setTarget(mCutoff);
+        mResoDisp.setTarget(mReso);
+        mCutoffDisp.advance(dt, 16.0);
+        mResoDisp.advance(dt, 16.0);
         Segment::advance(nowMs);
     }
 
@@ -107,7 +102,7 @@ namespace pulsar
         auto yFor = [&](double g) { return bot - (g / 1.5) * (bot - top); };
 
         // cutoff marker line
-        const double cx = x0 + mCutoffDisp * (x1 - x0);
+        const double cx = x0 + mCutoffDisp.value() * (x1 - x0);
         t.beginPath(); t.moveTo(cx, top); t.lineTo(cx, bot);
         t.setStroke(Color{1, 1, 1, 0.10}, 1.0); t.strokePath();
 

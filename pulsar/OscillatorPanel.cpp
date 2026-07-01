@@ -190,26 +190,21 @@ namespace pulsar
     void OscillatorPanel::onPaint(IRenderTarget &t) const
     {
         const double W = width.value(), H = height.value();
-        drawRoundedRect(t, Rect{0, 0, W, H}, 10.0,
-                        Paint::filledStroked(Color::hex(0x14161c), Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.35}, 1.0));
-        drawRoundedRect(t, Rect{0, 0, W, 3.0}, 0.0, Paint::filled(mDimAccent));
+        // Quiet chassis matching Chrome.cpp: one neutral surface + a single hairline.
+        drawRoundedRect(t, Rect{0, 0, W, H}, 12.0,
+                        Paint::filledStroked(Color::hex(0x141824), Color{1, 1, 1, 0.07}, 1.0));
+        // molded top-edge highlight
+        t.beginPath(); t.moveTo(13.0, 1.0); t.lineTo(W - 13.0, 1.0);
+        t.setStroke(Color{1, 1, 1, 0.05}, 1.0); t.strokePath();
 
-        // header sheen: a vertical accent glow fading down from under the top stripe
-        t.beginPath();
-        t.moveTo(1, 3); t.lineTo(W - 1, 3); t.lineTo(W - 1, 38); t.lineTo(1, 38); t.closePath();
-        t.setLinearFill(0, 3, 0, 38,
-                        Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.13},
-                        Color{mDimAccent.r, mDimAccent.g, mDimAccent.b, 0.0});
-        t.fillPath();
-
-        // faux-bold: overdraw with sub-pixel offsets to thicken the strokes (no HAL weight)
-        t.setFill(mMuted ? Color{1, 1, 1, 0.3} : mDimAccent);
-        for (double ox : {0.0, 0.6})
-            for (double oy : {0.0, 0.5})
-                t.drawText(mName, 34.0 + ox, 22.0 + oy, 15.0);
+        // title: neutral ink, single pass (no faux-bold overdraw); leaves room for the mute toggle
+        t.setFill(mMuted ? Color{1, 1, 1, 0.28} : Color::hex(0xdfe4ee));
+        t.drawText(mName, 34.0, 23.0, 13.0);
+        // short accent tab — identity signal, dims with mute
+        drawRoundedRect(t, Rect{34.0, 30.0, 20.0, 2.0}, 1.0, Paint::filled(mDimAccent));
 
         // group backgrounds (NOT behind the octave box)
-        const Color bg{1, 1, 1, 0.03};
+        const Color bg{1, 1, 1, 0.02};
         drawRoundedRect(t, Rect{kMargin - 2, kColY - 2, kUnisonW + 4, kCellH + 4}, 8.0, Paint::filled(bg)); // UNISON
         drawRoundedRect(t, Rect{kWarpX - 2, kRow2Y - 2, kCellW + 4, kCellH + 4}, 8.0, Paint::filled(bg));   // WARP
         drawRoundedRect(t, Rect{kPhaseX - 2, kRow2Y - 2, kPairW + 4, kCellH + 4}, 8.0, Paint::filled(bg));  // PHASE

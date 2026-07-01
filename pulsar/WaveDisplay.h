@@ -40,10 +40,10 @@ namespace pulsar
         double tableAt(double p01, double tablePos) const;
         double waveAt(double p01) const;
 
-        double mPosTarget = 0.0, mPosDisplay = 0.0, mVel = 0.0;
-        double mPhaseTarget = 0.0, mPhaseDisplay = 0.0, mPhaseVel = 0.0;
+        // Position / phase / warp-amount glide to their targets via the shared core
+        // Spring (framerate-independent), so every change animates smoothly.
+        artboard::Spring mPos, mPhase, mWarpAmt;
         int mWarp = WarpOff;
-        double mWarpTarget = 0.0, mWarpDisplay = 0.0, mWarpVel = 0.0;
         int mVoices = 1;
         double mDetune = 0.0, mBlend = 0.0;
         double mLastMs = -1.0;

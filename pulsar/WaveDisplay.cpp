@@ -25,10 +25,10 @@ namespace pulsar
         double clamp01(double v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
     }
 
-    void WaveDisplay::setPosition(double pos01) { mPosTarget = clamp01(pos01); }
-    void WaveDisplay::setPhase(double turns01) { mPhaseTarget = clamp01(turns01); }
+    void WaveDisplay::setPosition(double pos01) { mPos.setTarget(clamp01(pos01)); }
+    void WaveDisplay::setPhase(double turns01) { mPhase.setTarget(clamp01(turns01)); }
     void WaveDisplay::setWarp(int mode) { mWarp = mode; }
-    void WaveDisplay::setWarpAmount(double amt01) { mWarpTarget = clamp01(amt01); }
+    void WaveDisplay::setWarpAmount(double amt01) { mWarpAmt.setTarget(clamp01(amt01)); }
     void WaveDisplay::setUnison(int voices, double detune01, double blend01)
     {
         mVoices = voices < 1 ? 1 : voices;
@@ -39,7 +39,7 @@ namespace pulsar
     // WARP stage: remap normalized phase p∈[0,1) → [0,1); identity at amount 0.
     double WaveDisplay::warpPhase(double p01) const
     {
-        const double a = mWarpDisplay;
+        const double a = mWarpAmt.value();
         if (a <= 1e-4) return p01;
         switch (mWarp)
         {
@@ -62,28 +62,21 @@ namespace pulsar
 
     double WaveDisplay::waveAt(double p01) const
     {
-        double read = p01 + mPhaseDisplay;
+        double read = p01 + mPhase.value();
         read -= std::floor(read);
-        return tableAt(warpPhase(read), mPosDisplay);
+        return tableAt(warpPhase(read), mPos.value());
     }
 
     double WaveDisplay::sample(double p01) const { return waveAt(p01); }
 
     void WaveDisplay::advance(double nowMs)
     {
-        double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
+        const double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
         mLastMs = nowMs;
-        if (dt > 0.0)
-        {
-            if (dt > 0.05) dt = 0.05;
-            const double omega = 16.0;
-            double acc = -2.0 * omega * mVel - omega * omega * (mPosDisplay - mPosTarget);
-            mVel += acc * dt; mPosDisplay += mVel * dt;
-            acc = -2.0 * omega * mPhaseVel - omega * omega * (mPhaseDisplay - mPhaseTarget);
-            mPhaseVel += acc * dt; mPhaseDisplay += mPhaseVel * dt;
-            acc = -2.0 * omega * mWarpVel - omega * omega * (mWarpDisplay - mWarpTarget);
-            mWarpVel += acc * dt; mWarpDisplay += mWarpVel * dt;
-        }
+        const double omega = 16.0; // slightly slower than the knob follower; a lush morph
+        mPos.advance(dt, omega);
+        mPhase.advance(dt, omega);
+        mWarpAmt.advance(dt, omega);
         Segment::advance(nowMs);
     }
 

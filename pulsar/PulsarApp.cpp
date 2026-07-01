@@ -8,7 +8,15 @@ namespace pulsar
 
     namespace
     {
-        const Color kBg = Color::hex(0x0a0c11);
+        const Color kBg = Color::hex(0x0b0d12);
+        // Neutral chassis + meaning-only colour. Every audio-path section shares one
+        // signal colour (OSC B a subtle cooler sibling of OSC A); the three modulation
+        // sources carry the only other hues, so a mod ring genuinely pops.
+        const Color kSignal = Color::hex(0x54cfe6);  // OSC A / sub / filter / gain (cyan)
+        const Color kSignalB = Color::hex(0x62b8ee); // OSC B (cooler neighbouring blue)
+        const Color kEnv = Color::hex(0xf2a13c);     // modulation: envelope (amber)
+        const Color kLfo = Color::hex(0xac8bff);     // modulation: LFO (violet)
+        const Color kMacro = Color::hex(0xf27ba6);   // modulation: macro (rose)
 
         // Give every Knob in the tree access to the shared modulation bus.
         void wireModBus(Segment *s, const ModBus *bus)
@@ -40,28 +48,29 @@ namespace pulsar
         Theme makePulsarTheme(const Color &accent)
         {
             Theme th = Theme::basicTheme();
-            const Color bg = Color::hex(0x0c0e13), panel = Color::hex(0x161a23);
-            const Color border = Color::hex(0x2a3040), ink = Color::hex(0xe6e9ef);
-            const Color muted = Color::hex(0x8b94a7), surface = Color::hex(0x222838);
+            const Color bg = Color::hex(0x0e111a), panel = Color::hex(0x181c28);
+            const Color border = Color::hex(0x2b3242), ink = Color::hex(0xe6e9ef);
+            const Color muted = Color::hex(0x848da0);
+            const Color track = Color{1, 1, 1, 0.10}; // neutral knob/slider track
 
             th.knob.dial = {Paint::filled(bg), 999.0};
-            th.knob.trackColor = surface;
+            th.knob.trackColor = track;
             th.knob.valueColor = accent;
             th.knob.indicatorColor = accent;
             th.knob.label = {muted, 9.0};
 
-            th.toggle.trackOff = {Paint::filledStroked(surface, border, 1.0), 999.0};
+            th.toggle.trackOff = {Paint::filledStroked(panel, border, 1.0), 999.0};
             th.toggle.trackOn = {Paint::filledStroked(accent, accent, 1.0), 999.0};
             th.toggle.thumb = {Paint::filledStroked(ink, border, 1.0), 999.0};
 
             th.combo.field = {Paint::filledStroked(panel, border, 1.0), 6.0};
             th.combo.popup = {Paint::filledStroked(panel, accent, 1.0), 6.0};
-            th.combo.rowSelected = {Paint::filled(Color::hex(0x2a3a4a)), 0.0};
+            th.combo.rowSelected = {Paint::filled(Color::hex(0x22303f)), 0.0};
             th.combo.text = {ink, 13.0};
             th.combo.caretColor = accent;
 
             // POSITION timeline slider
-            th.slider.track = {Paint::filledStroked(surface, border, 1.0), 7.0};
+            th.slider.track = {Paint::filledStroked(panel, border, 1.0), 7.0};
             th.slider.rangeFill = {Paint::filled(accent), 7.0};
             th.slider.thumb = {Paint::filledStroked(accent, accent, 2.0), 999.0}; // thumb = osc colour
             th.slider.thumbRadius = 7.0;
@@ -70,14 +79,14 @@ namespace pulsar
     }
 
     PulsarApp::PulsarApp(double width, double height)
-        : mW(width), mH(height), mTitleColor(Color::hex(0x4de2ff))
+        : mW(width), mH(height), mTitleColor(Color::hex(0x54cfe6))
     {
         mRoot = std::make_shared<Segment>();
         mRoot->width.set(width);
         mRoot->height.set(height);
 
-        // Two oscillators, each its own accent.
-        const Color accents[2] = {Color::hex(0xe32272), Color::hex(0x22e3dd)};
+        // Two oscillators: OSC A is the signal colour, OSC B a subtle cooler sibling.
+        const Color accents[2] = {kSignal, kSignalB};
         for (int i = 0; i < 2; ++i)
         {
             Theme th = makePulsarTheme(accents[i]);
@@ -85,10 +94,10 @@ namespace pulsar
         }
 
         // SUB + FILTER stack in a narrow column right of the oscillators, then a
-        // GAIN output column (per-note gain + pan).
-        const Color filterAccent = Color::hex(0x35d0a0); // green
-        const Color subAccent = Color::hex(0x8a93ff);    // indigo
-        const Color gainAccent = Color::hex(0x4de2ff);   // cyan
+        // GAIN output column (per-note gain + pan) — all one signal colour.
+        const Color filterAccent = kSignal;
+        const Color subAccent = kSignal;
+        const Color gainAccent = kSignal;
         mSub = std::make_shared<SubOscPanel>(makePulsarTheme(subAccent), subAccent);
         mFilter = std::make_shared<FilterPanel>(makePulsarTheme(filterAccent), filterAccent);
         mGain = std::make_shared<GainPanel>(makePulsarTheme(gainAccent), gainAccent);
@@ -109,9 +118,9 @@ namespace pulsar
         mRoot->addChild(topRow);
 
         // modulation row: ENV + LFO + MACRO.
-        const Color envAccent = Color::hex(0xff8a3d);   // orange
-        const Color lfoAccent = Color::hex(0xb46bff);   // purple
-        const Color macroAccent = Color::hex(0xffcf3d); // yellow
+        const Color envAccent = kEnv;
+        const Color lfoAccent = kLfo;
+        const Color macroAccent = kMacro;
         mEnv = std::make_shared<EnvPanel>(makePulsarTheme(envAccent), envAccent, "ENV");
         mLfo = std::make_shared<LfoPanel>(makePulsarTheme(lfoAccent), lfoAccent);
         mMacro = std::make_shared<MacroPanel>(makePulsarTheme(macroAccent), macroAccent);

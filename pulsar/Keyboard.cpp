@@ -40,17 +40,30 @@ namespace pulsar
         return (wi / 7) * 12 + kWhiteSemis[wi % 7];
     }
 
+    void Keyboard::advance(double nowMs)
+    {
+        const double dt = mLastMs < 0.0 ? 0.0 : (nowMs - mLastMs) / 1000.0;
+        mLastMs = nowMs;
+        mLit.advance(dt, 26.0); // snappy press feedback
+        Segment::advance(nowMs);
+    }
+
     void Keyboard::onPaint(IRenderTarget &t) const
     {
         const double ww = whiteW(), w = width.value(), h = height.value();
         const double bw = ww * 0.62, bh = h * 0.62;
+        // blend a key's base colour toward the accent by its live highlight amount
+        auto lerp = [](const Color &a, const Color &b, double u) {
+            return Color{a.r + (b.r - a.r) * u, a.g + (b.g - a.g) * u, a.b + (b.b - a.b) * u, 1.0};
+        };
+        const double lit = mLit.value();
 
         // white keys
         for (int i = 0; i < kWhite; ++i)
         {
             const int semi = (i / 7) * 12 + kWhiteSemis[i % 7];
-            const bool on = (semi == mNote);
-            const Color fill = on ? Color{mAccent.r, mAccent.g, mAccent.b, 0.85} : Color::hex(0xdfe4ec);
+            const double k = (semi == mLitNote) ? lit : 0.0;
+            const Color fill = lerp(Color::hex(0xdfe4ec), mAccent, k);
             drawRoundedRect(t, Rect{i * ww + 1, 0, ww - 2, h}, 4.0,
                             Paint::filledStroked(fill, Color{0, 0, 0, 0.4}, 1.0));
         }
@@ -60,8 +73,8 @@ namespace pulsar
             {
                 const double cx = (oct * 7 + kBlackAfterWhite[b] + 1) * ww;
                 const int semi = oct * 12 + kBlackSemis[b];
-                const bool on = (semi == mNote);
-                const Color fill = on ? Color{mAccent.r, mAccent.g, mAccent.b, 0.95} : Color::hex(0x14181f);
+                const double k = (semi == mLitNote) ? lit : 0.0;
+                const Color fill = lerp(Color::hex(0x14181f), mAccent, k);
                 drawRoundedRect(t, Rect{cx - bw * 0.5, 0, bw, bh}, 3.0,
                                 Paint::filledStroked(fill, Color{0, 0, 0, 0.5}, 1.0));
             }
@@ -74,18 +87,19 @@ namespace pulsar
         {
             mDown = true;
             const int k = keyAt(lp);
-            if (k >= 0) { mNote = k; if (onGate) onGate(true); }
+            if (k >= 0) { mNote = k; mLitNote = k; mLit.setTarget(1.0); if (onGate) onGate(true); }
             return true;
         }
         if (g.type == T::Drag && mDown)
         {
             const int k = keyAt(lp);
-            if (k >= 0) mNote = k; // glide the held note
+            if (k >= 0) { mNote = k; mLitNote = k; } // glide the held note (highlight follows)
             return true;
         }
         if (g.type == T::Up || g.type == T::Drop)
         {
             mDown = false; mNote = -1;
+            mLit.setTarget(0.0); // fade the highlight out (mLitNote kept for the fade)
             if (onGate) onGate(false);
             return true;
         }

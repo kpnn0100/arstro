@@ -60,6 +60,7 @@ namespace pulsar
     {
         mSelected = i;
         for (int k = 0; k < kCount; ++k) mCurves[k]->visible = (k == i);
+        mCurves[i]->triggerReveal(); // fade the newly shown curve in
         mRateKnob->setValue(mRate[i]);
         mBpmToggle->setOn(mBpm[i]);
         mBadge->setSourceId(sourceId(i));
