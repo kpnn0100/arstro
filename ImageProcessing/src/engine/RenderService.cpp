@@ -121,7 +121,7 @@ namespace arstro
                 if (fullPreviewOnly) mEngine.setPreviewSize(maxEdge);
                 PreviewBuffer pb = fullPreviewOnly ? mEngine.renderPreview() : mEngine.renderFull();
                 Frame f;
-                if (pb.rgba) { f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4); f.width = pb.width; f.height = pb.height; f.hist = mEngine.histogram(); }
+                if (pb.rgba) { f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4); f.width = pb.width; f.height = pb.height; f.hist = mEngine.histogram(); f.preCurveHist = mEngine.preCurveHistogram(); f.preMixerHue = mEngine.preMixerHue(); }
                 {
                     std::lock_guard<std::mutex> lk(mMu);
                     mFullResult = std::move(f);
@@ -146,6 +146,8 @@ namespace arstro
         f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         f.width = pb.width; f.height = pb.height;
         f.hist = mEngine.histogram();
+        f.preCurveHist = mEngine.preCurveHistogram();
+        f.preMixerHue = mEngine.preMixerHue();
         {
             std::lock_guard<std::mutex> lk(mMu);
             mReady = std::move(f);
@@ -187,6 +189,7 @@ namespace arstro
         if (!pb.rgba) return false;
         out.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         out.width = pb.width; out.height = pb.height; out.hist = mEngine.histogram();
+        out.preCurveHist = mEngine.preCurveHistogram(); out.preMixerHue = mEngine.preMixerHue();
         return true;
     }
     bool RenderService::renderPreviewSync(int slot, const EditParams &params, Frame &out)
@@ -198,6 +201,7 @@ namespace arstro
         if (!pb.rgba) return false;
         out.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         out.width = pb.width; out.height = pb.height; out.hist = mEngine.histogram();
+        out.preCurveHist = mEngine.preCurveHistogram(); out.preMixerHue = mEngine.preMixerHue();
         return true;
     }
     void RenderService::doPreview(int slot, const EditParams &params, int maxEdge)
@@ -209,6 +213,7 @@ namespace arstro
         if (!pb.rgba) return;
         mReady.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         mReady.width = pb.width; mReady.height = pb.height; mReady.hist = mEngine.histogram();
+        mReady.preCurveHist = mEngine.preCurveHistogram(); mReady.preMixerHue = mEngine.preMixerHue();
         mFrameReady = true;
     }
 #endif

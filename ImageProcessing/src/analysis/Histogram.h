@@ -25,11 +25,23 @@ namespace arstro
         uint32_t maxCount = 0;  ///< largest bin across all channels (for normalising a plot)
     };
 
+    /** Saturation-weighted hue distribution (how much of each hue the image contains),
+     *  used to draw a context histogram behind the colour-mixer curves. */
+    struct HueHistogram
+    {
+        static constexpr int kBins = 72;
+        std::array<float, kBins> bins{};  ///< normalised 0..1 (peak = 1)
+    };
+
     class Histogram
     {
     public:
         /** Compute the histogram of `image` (encoded on the fly if linear). */
         static HistogramData compute(const Image &image);
+
+        /** Saturation-weighted hue distribution of a LINEAR image (matches the hue the
+         *  colour mixer keys on: rgbToHsl of linear RGB). Normalised so the peak is 1. */
+        static HueHistogram computeHue(const Image &linear);
 
         /** Fill a normalised [0,1] log-scaled readout (rows: 0=r,1=g,2=b,3=lum). */
         static void toLog(const HistogramData &in, float out[4][HistogramData::kBins]);

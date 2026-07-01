@@ -58,6 +58,29 @@ namespace arstro
         return h;
     }
 
+    HueHistogram Histogram::computeHue(const Image &image)
+    {
+        HueHistogram hh;
+        const int ch = image.channels();
+        if (ch < 3 || image.empty()) return hh;
+        const size_t px = image.pixelCount();
+        const Pixel *d = image.data();
+        for (size_t i = 0; i < px; ++i)
+        {
+            const Pixel *p = d + i * ch;
+            Pixel h, s, l;
+            color::rgbToHsl(p[0], p[1], p[2], h, s, l);  // linear-space hue, as the mixer keys on
+            if (s <= (Pixel)0) continue;                  // skip greys
+            int bin = (int)(h / (Pixel)360 * HueHistogram::kBins);
+            if (bin < 0) bin = 0; if (bin >= HueHistogram::kBins) bin = HueHistogram::kBins - 1;
+            hh.bins[bin] += (float)s;                     // weight by saturation
+        }
+        float mx = 1e-6f;
+        for (float v : hh.bins) if (v > mx) mx = v;
+        for (float &v : hh.bins) v /= mx;                 // normalise peak to 1
+        return hh;
+    }
+
     void Histogram::toLinear(const HistogramData &in, float out[4][HistogramData::kBins])
     {
         const float denom = in.maxCount > 0 ? (float)in.maxCount : 1.0f;

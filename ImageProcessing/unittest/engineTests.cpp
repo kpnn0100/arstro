@@ -101,6 +101,48 @@ TEST(Engine_histogram_after_render)
     CHECK(sum == 16);  // 4x4 pixels
 }
 
+// The pre-curve / pre-mixer histogram taps reflect the image ENTERING those stages:
+// a downstream change must not move them; an upstream change must.
+static std::vector<uint8_t> variedRGBA8b(int w, int h)
+{
+    std::vector<uint8_t> b((size_t)w * h * 4);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+            uint8_t *p = b.data() + ((size_t)y * w + x) * 4;
+            p[0] = (uint8_t)(20 + x * 200 / (w - 1)); p[1] = (uint8_t)(200 - y * 180 / (h - 1)); p[2] = 90; p[3] = 255;
+        }
+    return b;
+}
+TEST(Engine_pre_stage_histogram_taps)
+{
+    EditEngine eng;
+    auto bytes = variedRGBA8b(20, 20);
+    eng.addImage(bytes.data(), 20, 20, 4);
+    eng.setPreviewSize(4096);
+    eng.renderPreview();
+    const HistogramData preCurve0 = eng.preCurveHistogram();
+    const HueHistogram preMixer0 = eng.preMixerHue();
+
+    // the colour mixer is DOWNSTREAM of both taps -> neither moves
+    eng.setMixerCurve(EditEngine::MixerHue, {{0.f, 1.f}, {180.f, 1.f}, {359.f, 1.f}});
+    eng.renderPreview();
+    CHECK(eng.preMixerHue().bins == preMixer0.bins);
+    CHECK(eng.preCurveHistogram().lum == preCurve0.lum);
+    // the tone curve is DOWNSTREAM of the pre-curve tap -> the luma tap stays put
+    eng.setCurvePoints({{0.f, 1.f}, {1.f, 0.f}});  // invert
+    eng.renderPreview();
+    CHECK(eng.preCurveHistogram().lum == preCurve0.lum);
+
+    // but an UPSTREAM change (exposure) moves the pre-curve luma tap
+    eng.resetAll();
+    eng.renderPreview();
+    const HistogramData base = eng.preCurveHistogram();
+    eng.setExposure(2.0f);
+    eng.renderPreview();
+    CHECK(!(eng.preCurveHistogram().lum == base.lum));
+}
+
 TEST(Engine_multi_image_independent_params)
 {
     EditEngine eng;

@@ -10,25 +10,25 @@ namespace arstro
 
     void EditEngine::buildPipeline()
     {
-        mPipeline.clear();
-        // Canonical order (the hard contract): geometry first, then tone, colour, effects.
-        mPipeline.add(&mCrop);
-        mPipeline.add(&mRotate);
-        mPipeline.add(&mLens);
-        mPipeline.add(&mNoiseReduction);
-        mPipeline.add(&mExposure);
-        mPipeline.add(&mContrast);
-        mPipeline.add(&mToneRegions);
-        mPipeline.add(&mWhiteBalance);
-        mPipeline.add(&mToneCurve);
-        mPipeline.add(&mTexture);
-        mPipeline.add(&mClarity);
-        mPipeline.add(&mVibrance);
-        mPipeline.add(&mColorMixer);
-        mPipeline.add(&mColorGrading);
-        mPipeline.add(&mDehaze);
-        mPipeline.add(&mSharpen);
-        mPipeline.add(&mGrain);
+        mChainPre.clear(); mChainMid.clear(); mChainPost.clear();
+        // Canonical order (the hard contract), split at the tone-curve and mixer taps.
+        mChainPre.add(&mCrop);            // geometry + pre-tone, up to WhiteBalance
+        mChainPre.add(&mRotate);
+        mChainPre.add(&mLens);
+        mChainPre.add(&mNoiseReduction);
+        mChainPre.add(&mExposure);
+        mChainPre.add(&mContrast);
+        mChainPre.add(&mToneRegions);
+        mChainPre.add(&mWhiteBalance);    // <- tap: luma entering the tone curve
+        mChainMid.add(&mToneCurve);
+        mChainMid.add(&mTexture);
+        mChainMid.add(&mClarity);
+        mChainMid.add(&mVibrance);        // <- tap: hue entering the colour mixer
+        mChainPost.add(&mColorMixer);
+        mChainPost.add(&mColorGrading);
+        mChainPost.add(&mDehaze);
+        mChainPost.add(&mSharpen);
+        mChainPost.add(&mGrain);
     }
 
     Image EditEngine::fromEncodedBytes(const uint8_t *rgba, int w, int h, int channels)
@@ -197,7 +197,7 @@ namespace arstro
     void EditEngine::setQuarterTurns(int t) { if (auto *p = cur()) { p->quarterTurns = t & 3; mRotate.setQuarterTurns(t); } }
     void EditEngine::setMasks(const std::vector<MaskParams> &masks) { if (auto *p = cur()) { p->masks = masks; mMasks = masks; } }
 
-    void EditEngine::setBypass(bool b) { mPipeline.setBypass(b); }
+    void EditEngine::setBypass(bool b) { mChainPre.setBypass(b); mChainMid.setBypass(b); mChainPost.setBypass(b); }
 
     void EditEngine::resetAll()
     {
@@ -248,8 +248,13 @@ namespace arstro
 
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes)
     {
-        Image processed;
-        mPipeline.apply(linearSource, processed);
+        // Run the three segments, tapping histograms at the boundaries.
+        Image preCurve, preMixer, processed;
+        mChainPre.apply(linearSource, preCurve);
+        mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
+        mChainMid.apply(preCurve, preMixer);
+        mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
+        mChainPost.apply(preMixer, processed);
         applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
         color::encodeInPlace(processed);
         mLastHistogram = Histogram::compute(processed);

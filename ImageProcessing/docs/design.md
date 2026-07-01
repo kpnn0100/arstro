@@ -77,7 +77,11 @@ See [`architecture.puml`](architecture.puml) for the class diagram.
   Texture → Clarity → Vibrance → ColorMixer → ColorGrading → Dehaze → Sharpen →
   Grain`. Geometry first so spatial effects and the histogram describe the framed
   image; noise reduction precedes the tone ops that would amplify it; sharpening and
-  grain come last so they are neither blurred nor rotated.
+  grain come last so they are neither blurred nor rotated. The engine runs this order
+  as three segments so it can **tap** the image entering the tone curve (a luminance
+  histogram) and entering the colour mixer (a saturation-weighted hue distribution) —
+  the UI draws these behind the curve/mixer editors so each control's background shows
+  the data it operates on, not the final output.
 - **Preview vs full-res.** Interactive edits run on a fitted, area-averaged preview
   proxy (`renderPreview`); export runs the full-res path (`renderFull`). Resolution-
   independent params (gain-based ops, normalized crop) match between the two.

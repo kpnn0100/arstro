@@ -76,6 +76,10 @@ namespace arstro
         PreviewBuffer renderPreview();
         PreviewBuffer renderFull();
         const HistogramData &histogram() const { return mLastHistogram; }
+        /** Luminance histogram of the image entering the tone curve (pre-curve). */
+        const HistogramData &preCurveHistogram() const { return mPreCurveHist; }
+        /** Hue distribution of the image entering the colour mixer (pre-mixer). */
+        const HueHistogram &preMixerHue() const { return mPreMixerHue; }
 
         // ── whole-EditParams API (UI-independent; the reusable seam) ──
         void applyParams(const EditParams &p);                  // push a full set to the pipeline
@@ -164,7 +168,9 @@ namespace arstro
         int mProxySlot = -1;
         int mProxyEdge = -1;
 
-        ImageBlock mPipeline;
+        // pipeline split into three segments so histograms can be tapped at the
+        // boundaries: pre (before ToneCurve), mid (before ColorMixer), post.
+        ImageBlock mChainPre, mChainMid, mChainPost;
         Crop mCrop;
         Rotate mRotate;
         LensCorrection mLens;
@@ -187,5 +193,7 @@ namespace arstro
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;
         HistogramData mLastHistogram;
+        HistogramData mPreCurveHist;   // luma entering ToneCurve
+        HueHistogram mPreMixerHue;     // hue entering ColorMixer
     };
 }

@@ -32,7 +32,9 @@ namespace arstro
         {
             std::vector<uint8_t> rgba;  // straight RGBA8
             int width = 0, height = 0;
-            HistogramData hist;
+            HistogramData hist;         // final output histogram
+            HistogramData preCurveHist; // luma entering the tone curve
+            HueHistogram preMixerHue;   // hue entering the colour mixer
         };
 
         RenderService();
