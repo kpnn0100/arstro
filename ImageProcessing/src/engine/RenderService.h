@@ -49,6 +49,9 @@ namespace arstro
         bool tryAcquire(Frame &out);
         /** Full-resolution render (blocks until done) — for export. */
         bool renderFull(int slot, const EditParams &params, Frame &out);
+        /** Preview-size render (blocks until done) — for the before/after baseline,
+         *  so it is cheap to draw and matches the live preview's resolution. */
+        bool renderPreviewSync(int slot, const EditParams &params, Frame &out);
 
         bool threaded() const;
 
@@ -78,6 +81,7 @@ namespace arstro
         int mFullSlot = -1;
         EditParams mFullParams;
         bool mFullDone = false;
+        bool mFullPreviewOnly = false;   // the blocking request renders at preview size
         Frame mFullResult;
 #endif
     };

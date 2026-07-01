@@ -376,7 +376,9 @@ namespace cosmo
         const double rightX = mW - rightW - kMargin;
         const double filmY = mH - filmH - kMargin;
         const double photoY = kTopBar + 8.0;
-        mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, filmY - photoY - 8.0};
+        const double crumbY = filmY - 18.0;         // breadcrumb sits just above the filmstrip
+        const double compareRowY = crumbY - 28.0;   // a control row under the photo (before/after)
+        mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, compareRowY - photoY - 6.0};
 
         mImageView->x.set(mPhotoRect.x); mImageView->y.set(mPhotoRect.y);
         mImageView->width.set(mPhotoRect.w); mImageView->height.set(mPhotoRect.h);
@@ -387,8 +389,9 @@ namespace cosmo
         mCropOverlay->width.set(mPhotoRect.w); mCropOverlay->height.set(mPhotoRect.h);
         mCompareView->x.set(mPhotoRect.x); mCompareView->y.set(mPhotoRect.y);
         mCompareView->width.set(mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
-        mCompareToggle->x.set(mPhotoRect.x + mPhotoRect.w - 112.0); mCompareToggle->y.set(mPhotoRect.y - 22.0);
-        mCompareToggle->width.set(112.0); mCompareToggle->height.set(18.0);
+        // before/after toggle: its own row under the photo, centred
+        mCompareToggle->x.set(mPhotoRect.x + (mPhotoRect.w - 112.0) * 0.5); mCompareToggle->y.set(compareRowY + 3.0);
+        mCompareToggle->width.set(112.0); mCompareToggle->height.set(20.0);
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
@@ -409,7 +412,7 @@ namespace cosmo
         mGroupPanel->layout(rightW, tabsH);
 
         // breadcrumb row above the filmstrip
-        mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(filmY - 20.0);
+        mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(crumbY);
         mBreadcrumb->width.set(rightX - 2 * kMargin); mBreadcrumb->height.set(18.0);
         mFilmstrip->x.set(kMargin); mFilmstrip->y.set(filmY);
         mFilmstrip->width.set(rightX - kMargin - kMargin); mFilmstrip->height.set(filmH);
@@ -814,7 +817,8 @@ namespace cosmo
         b.cropX = cur.cropX; b.cropY = cur.cropY; b.cropW = cur.cropW; b.cropH = cur.cropH;
         b.rotation = cur.rotation; b.quarterTurns = cur.quarterTurns;
         b.lensDistortion = cur.lensDistortion; b.lensCA = cur.lensCA; b.lensVignette = cur.lensVignette;
-        if (mService.renderFull(mCurrentSlot, b, mBeforeFrame) && mBeforeFrame.width > 0)
+        // Preview-size (not full-res) so the compare overlay is cheap to draw each frame.
+        if (mService.renderPreviewSync(mCurrentSlot, b, mBeforeFrame) && mBeforeFrame.width > 0)
             mCompareView->setBefore(mBeforeFrame.rgba.data(), mBeforeFrame.width, mBeforeFrame.height);
     }
 
@@ -882,7 +886,6 @@ namespace cosmo
         }
         else
         {
-            target.drawText("Open an image  -  press O or File > Open", mW - 320.0, 22.0, 12.0);
             drawRoundedRect(target, mPhotoRect, radius::panel(),
                             Paint::filledStroked(palette::panel(), palette::line(), 1.0));
         }

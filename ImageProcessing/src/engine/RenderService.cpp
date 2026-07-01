@@ -64,6 +64,23 @@ namespace arstro
         mPendingFull = true;
         mFullSlot = slot;
         mFullParams = params;
+        mFullPreviewOnly = false;
+        mFullDone = false;
+        mCv.notify_all();
+        mCv.wait(lk, [this] { return mFullDone || mStop; });
+        if (!mFullDone)
+            return false;
+        out = std::move(mFullResult);
+        return true;
+    }
+
+    bool RenderService::renderPreviewSync(int slot, const EditParams &params, Frame &out)
+    {
+        std::unique_lock<std::mutex> lk(mMu);
+        mPendingFull = true;
+        mFullSlot = slot;
+        mFullParams = params;
+        mFullPreviewOnly = true;   // render at preview size, not full-res
         mFullDone = false;
         mCv.notify_all();
         mCv.wait(lk, [this] { return mFullDone || mStop; });
@@ -78,7 +95,7 @@ namespace arstro
         for (;;)
         {
             std::vector<AddCmd> adds;
-            bool doPrev = false, doFull = false;
+            bool doPrev = false, doFull = false, fullPreviewOnly = false;
             int slot = -1, fullSlot = -1, maxEdge = 1600;
             EditParams params, fullParams;
             {
@@ -90,7 +107,7 @@ namespace arstro
                     return;
                 adds.swap(mAddQueue);
                 maxEdge = mPreviewMaxEdge;
-                if (mPendingFull) { doFull = true; fullSlot = mFullSlot; fullParams = mFullParams; mPendingFull = false; }
+                if (mPendingFull) { doFull = true; fullSlot = mFullSlot; fullParams = mFullParams; fullPreviewOnly = mFullPreviewOnly; mPendingFull = false; }
                 if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; mPendingPreview = false; }
             }
 
@@ -101,7 +118,8 @@ namespace arstro
             {
                 mEngine.selectImage(fullSlot);
                 mEngine.setCurrentParams(fullParams);
-                PreviewBuffer pb = mEngine.renderFull();
+                if (fullPreviewOnly) mEngine.setPreviewSize(maxEdge);
+                PreviewBuffer pb = fullPreviewOnly ? mEngine.renderPreview() : mEngine.renderFull();
                 Frame f;
                 if (pb.rgba) { f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4); f.width = pb.width; f.height = pb.height; f.hist = mEngine.histogram(); }
                 {
@@ -166,6 +184,17 @@ namespace arstro
         mEngine.selectImage(slot);
         mEngine.setCurrentParams(params);
         PreviewBuffer pb = mEngine.renderFull();
+        if (!pb.rgba) return false;
+        out.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
+        out.width = pb.width; out.height = pb.height; out.hist = mEngine.histogram();
+        return true;
+    }
+    bool RenderService::renderPreviewSync(int slot, const EditParams &params, Frame &out)
+    {
+        mEngine.setPreviewSize(mPreviewMaxEdge);
+        mEngine.selectImage(slot);
+        mEngine.setCurrentParams(params);
+        PreviewBuffer pb = mEngine.renderPreview();
         if (!pb.rgba) return false;
         out.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         out.width = pb.width; out.height = pb.height; out.hist = mEngine.histogram();
