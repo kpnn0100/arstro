@@ -9,7 +9,9 @@
 #include "../Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
+#include <cctype>
 #include <string>
+#include <vector>
 
 using arstro::cosmo::CosmoApp;
 using arstro::cosmo::NativeImageDecoder;
@@ -51,6 +53,35 @@ namespace
             g_printerr("cosmo: could not decode %s%s\n", path.c_str(),
                        (NativeImageDecoder::isRawExtension(path) && !NativeImageDecoder::rawSupported())
                            ? " (RAW needs a LibRaw build)" : "");
+    }
+
+    // filename without directory or extension, lowercased (for same-name matching)
+    std::string stemLower(const std::string &p)
+    {
+        std::string b = baseName(p);
+        auto dot = b.find_last_of('.');
+        if (dot != std::string::npos) b = b.substr(0, dot);
+        for (char &c : b) c = (char)std::tolower((unsigned char)c);
+        return b;
+    }
+
+    // Open a set of paths, but when the same base name exists as both RAW and a
+    // rendered format (e.g. IMG_1.RW2 + IMG_1.JPG), keep only the RAW (#11).
+    void openPath(App *a, const std::string &path);  // fwd
+    void openPaths(App *a, const std::vector<std::string> &paths)
+    {
+        for (const std::string &p : paths)
+        {
+            if (!NativeImageDecoder::isRawExtension(p))
+            {
+                bool rawDup = false;
+                for (const std::string &q : paths)
+                    if (&q != &p && NativeImageDecoder::isRawExtension(q) && stemLower(q) == stemLower(p))
+                    { rawDup = true; break; }
+                if (rawDup) { g_print("cosmo: skipping %s (RAW with same name preferred)\n", p.c_str()); continue; }
+            }
+            openPath(a, p);
+        }
     }
 
     void openPath(App *a, const std::string &path)
@@ -143,12 +174,10 @@ namespace
         if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
         {
             GSList *files = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(d));
-            for (GSList *it = files; it; it = it->next)
-            {
-                openPath(a, (const char *)it->data);
-                g_free(it->data);
-            }
+            std::vector<std::string> paths;
+            for (GSList *it = files; it; it = it->next) { paths.emplace_back((const char *)it->data); g_free(it->data); }
             g_slist_free(files);
+            openPaths(a, paths);  // prefer RAW over a same-name rendered file
         }
         gtk_widget_destroy(d);
         gtk_widget_queue_draw(a->area);
@@ -251,8 +280,11 @@ int main(int argc, char **argv)
     }
 
     // open any files passed on the command line (image or .cosmo session)
-    for (int i = 1; i < argc; ++i)
-        openPath(&app, argv[i]);
+    {
+        std::vector<std::string> paths;
+        for (int i = 1; i < argc; ++i) paths.emplace_back(argv[i]);
+        openPaths(&app, paths);  // prefer RAW over a same-name rendered file
+    }
 
     app.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(app.window), "Cosmo by arstro");
