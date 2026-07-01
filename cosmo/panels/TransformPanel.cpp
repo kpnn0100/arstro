@@ -55,13 +55,13 @@ namespace cosmo
         mKnobSize = 56.0; mKnobX = kPad; mKnobY = y;
         mRotateKnob->x.set(mKnobX); mRotateKnob->y.set(mKnobY);
         mRotateKnob->width.set(mKnobSize); mRotateKnob->height.set(mKnobSize);
-        y += mKnobSize + 14.0;
 
-        const double ib = 30.0;
-        mTurnLabelY = y + ib * 0.5 + 4.0;
-        mCCW->x.set(kPad + cw - 2 * ib - 8.0); mCCW->y.set(y); mCCW->width.set(ib); mCCW->height.set(ib);
-        mCW->x.set(kPad + cw - ib); mCW->y.set(y); mCW->width.set(ib); mCW->height.set(ib);
-        y += ib + 16.0;
+        // rotate-90 icon buttons share the knob row (right-aligned, centred on the knob)
+        const double ib = 32.0;
+        const double iy = mKnobY + (mKnobSize - ib) * 0.5;
+        mCCW->x.set(kPad + cw - 2 * ib - 8.0); mCCW->y.set(iy); mCCW->width.set(ib); mCCW->height.set(ib);
+        mCW->x.set(kPad + cw - ib); mCW->y.set(iy); mCW->width.set(ib); mCW->height.set(ib);
+        y += mKnobSize + 16.0;
 
         const double labelW = 52.0;
         mAspectLabelY = y + 13.0 + 4.0;
@@ -88,7 +88,6 @@ namespace cosmo
         t.drawText(deg, mKnobX + mKnobSize + 14.0, mKnobY + 40.0, 16.0);
 
         t.setFill(palette::muted());
-        t.drawText("rotate 90", mKnobX, mTurnLabelY, 11.0);
         t.drawText("aspect", 10.0, mAspectLabelY, 10.0);
     }
 }
