@@ -24,6 +24,8 @@
 #include "panels/MaskPanel.h"
 #include "widgets/Filmstrip.h"
 #include "widgets/MenuBar.h"
+#include "widgets/PresetBar.h"
+#include "widgets/PresetDialog.h"
 #include "widgets/MaskOverlay.h"
 #include "widgets/CropOverlay.h"
 #include "widgets/CompareView.h"
@@ -61,10 +63,16 @@ namespace cosmo
         std::function<void()> onOpenRequested;     // host shows an open dialog
         std::function<void()> onSaveRequested;     // Save (falls back to Save As if no path)
         std::function<void()> onSaveAsRequested;   // host shows a save dialog
-        std::function<void()> onSavePresetRequested;  // host prompts for a preset name
-        std::function<void()> onRenameGroupRequested; // host prompts for a group name
+        std::function<void()> onSavePresetRequested;   // host prompts for a preset name (Save -> .apf in preset dir)
+        std::function<void()> onExportPresetRequested; // host prompts for a save path (Export -> .apf anywhere)
+        std::function<void()> onImportPresetRequested; // host shows an open dialog for a .apf file
+        std::function<void()> onRenameGroupRequested;   // host prompts for a group name
         /** Rename the group targeted by the last "Rename" context action. */
         void renameGroup(const std::string &name);
+        /** Whether the preset category picker is currently open (for tests). */
+        bool presetPickerOpen() const;
+        /** PresetBar world rect {x,y,w,h} (for tests). */
+        std::vector<double> testBarRect() const;
         /** Number of cells (images + sub-groups) shown for the current group (for tests). */
         int filmstripCells() const;
         /** Current photo zoom factor (for tests). */
@@ -74,9 +82,18 @@ namespace cosmo
 
         /** Directory presets live in (host sets it; empty disables presets). */
         void setPresetDir(const std::string &dir);
-        /** Save the current develop settings as a named preset file. */
+        /** Save the current develop settings as `name`.apf in the preset dir, containing
+         *  only the categories last chosen in the Save picker (all if none chosen). */
         bool savePreset(const std::string &name);
-        /** Apply a named preset to the current image. */
+        /** Write the current develop settings as an .apf to an arbitrary path (Export),
+         *  using the categories last chosen in the Export picker. */
+        bool exportPresetTo(const std::string &path);
+        /** Load an .apf from `path` and raise the category picker; on confirm the chosen
+         *  categories are applied to the current image or the whole selected group.
+         *  Returns false if the file cannot be parsed or targets a different engine. */
+        bool importPresetFrom(const std::string &path);
+        /** Quick-apply a named preset from the preset dir to the current image (all
+         *  present categories, no picker) — used by the Preset menu list. */
         bool applyPreset(const std::string &name);
 
         /** Source image path of the current slot (for the host's Save dialog default). */
@@ -99,6 +116,13 @@ namespace cosmo
         void renderBefore();           // render the no-edit baseline for the compare view
         void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
         void refreshPresetMenu();
+        // ── preset save/import/export (generic .apf) ──
+        void presetSaveClicked();    // bar SAVE   -> picker -> host name dialog
+        void presetImportClicked();  // bar IMPORT -> host open dialog
+        void presetExportClicked();  // bar EXPORT -> picker -> host path dialog
+        void applyImport(const std::vector<std::string> &categories);  // apply mPendingApf to targets
+        std::vector<int> selectedImageSlots() const;  // slots implied by the current selection (groups expand)
+        static std::vector<PresetDialog::Row> buildPresetRows(const std::vector<std::string> &keys);
         // ── group tree (recursive; additive scalar offsets per group level) ──
         struct GNode
         {
@@ -146,6 +170,8 @@ namespace cosmo
         std::shared_ptr<SettingsPanel> mSettings;   // floating overlay (not a tab)
         std::shared_ptr<Filmstrip> mFilmstrip;
         std::shared_ptr<MenuBar> mMenuBar;
+        std::shared_ptr<PresetBar> mPresetBar;       // bottom of the edit column (Save/Import/Export)
+        std::shared_ptr<PresetDialog> mPresetDialog; // modal category picker (overlay)
         int mSelectedMask = -1;
         int mMaskTabIndex = 2;                       // Basic, Detail, Mask, ...
         int mXformTabIndex = 6;                      // ..., Mixer, Curve, Grade, Xform
@@ -173,6 +199,8 @@ namespace cosmo
         bool mHasClip = false;
         std::string mPresetDir;             // where named presets are stored
         int mPresetMenuIndex = -1;          // menu bar index of the Preset dropdown
+        std::vector<std::string> mPendingCategories;  // categories chosen in the Save/Export picker
+        arstro::apf::Document mPendingApf;             // parsed doc awaiting Import confirmation
     };
 }
 }

@@ -9,6 +9,7 @@
 #include "../Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
+#include <unistd.h>
 #include <cctype>
 #include <string>
 #include <vector>
@@ -165,6 +166,52 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    // Export the current develop settings to a chosen .apf path (Export preset).
+    void exportPresetDialog(App *a)
+    {
+        if (a->app.imageCount() == 0) return;
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Export preset", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Export", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "preset.apf");
+        GtkFileFilter *filt = gtk_file_filter_new();
+        gtk_file_filter_set_name(filt, "Arstro preset (*.apf)");
+        gtk_file_filter_add_pattern(filt, "*.apf");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), filt);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            std::string p = path ? path : "";
+            if (!p.empty() && !endsWith(p, ".apf")) p += ".apf";  // enforce the extension
+            if (a->app.exportPresetTo(p)) g_print("cosmo: exported preset %s\n", p.c_str());
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    // Pick an .apf file to import (then the app raises the category picker).
+    void importPresetDialog(App *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Import preset", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+        GtkFileFilter *filt = gtk_file_filter_new();
+        gtk_file_filter_set_name(filt, "Arstro preset (*.apf)");
+        gtk_file_filter_add_pattern(filt, "*.apf");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), filt);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path && !a->app.importPresetFrom(path))
+                g_printerr("cosmo: could not import preset %s (bad file or different engine)\n", path);
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     void openDialog(App *a)
     {
         GtkWidget *d = gtk_file_chooser_dialog_new(
@@ -282,13 +329,18 @@ int main(int argc, char **argv)
     app.app.onOpenRequested = [&app] { openDialog(&app); };
     app.app.onSaveAsRequested = [&app] { saveSessionDialog(&app); };
     app.app.onSavePresetRequested = [&app] { savePresetDialog(&app); };
+    app.app.onExportPresetRequested = [&app] { exportPresetDialog(&app); };
+    app.app.onImportPresetRequested = [&app] { importPresetDialog(&app); };
     app.app.onRenameGroupRequested = [&app] { renameGroupDialog(&app); };
 
-    // Presets live under the user's config dir.
+    // Presets live in a "presets" folder next to the cosmo executable, so a preset
+    // library travels with the app. Fall back to the CWD if the exe path is unknown.
     {
-        const char *cfg = g_get_user_config_dir();
-        std::string dir = std::string(cfg ? cfg : ".") + "/cosmo/presets";
-        app.app.setPresetDir(dir);
+        std::string exeDir = ".";
+        char buf[4096];
+        ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (n > 0) { buf[n] = '\0'; std::string exe(buf); auto s = exe.find_last_of('/'); if (s != std::string::npos) exeDir = exe.substr(0, s); }
+        app.app.setPresetDir(exeDir + "/presets");
     }
 
     // open any files passed on the command line (image or .cosmo session)

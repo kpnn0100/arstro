@@ -57,8 +57,35 @@ namespace cosmo
             e.tint += d.tint; e.saturation += d.saturation;
             e.texture += d.texture; e.clarity += d.clarity; e.dehaze += d.dehaze;
         }
+
+        // Friendly label for a generic .apf category key (see EditParamsApf).
+        std::string catLabel(const std::string &key)
+        {
+            if (key == "basic") return "Basic (exposure, contrast, tone)";
+            if (key == "color") return "Color (white balance, vibrance)";
+            if (key == "presence") return "Presence (texture, clarity, dehaze)";
+            if (key == "effects") return "Effects (grain)";
+            if (key == "detail") return "Detail (sharpen, noise reduction)";
+            if (key == "lens") return "Lens corrections";
+            if (key == "curve") return "Tone curve";
+            if (key == "mixer") return "Color mixer";
+            if (key == "grade") return "Color grading";
+            if (key == "transform") return "Crop and rotate";
+            if (key == "masks") return "Masks (local adjustments)";
+            return key;
+        }
     }
 
+    std::vector<PresetDialog::Row> CosmoApp::buildPresetRows(const std::vector<std::string> &keys)
+    {
+        std::vector<PresetDialog::Row> rows;
+        for (const auto &k : keys) rows.push_back({k, catLabel(k), true});
+        return rows;
+    }
+
+    bool CosmoApp::presetPickerOpen() const { return mPresetDialog && mPresetDialog->isOpen(); }
+    std::vector<double> CosmoApp::testBarRect() const
+    { return {mPresetBar->x.value(), mPresetBar->y.value(), mPresetBar->width.value(), mPresetBar->height.value()}; }
     int CosmoApp::filmstripCells() const { return mFilmstrip ? mFilmstrip->cellCount() : 0; }
     double CosmoApp::imageZoom() const { return mImageView ? mImageView->zoom() : 1.0; }
     int CosmoApp::previewPixelWidth() const { return mImageView ? mImageView->imageWidth() : 0; }
@@ -293,6 +320,13 @@ namespace cosmo
         };
         mRoot->addChild(mTabs);
 
+        // Save / Import / Export bar snapped to the bottom of the edit column.
+        mPresetBar = std::make_shared<PresetBar>(mAccent);
+        mPresetBar->onSave = [this] { presetSaveClicked(); };
+        mPresetBar->onImport = [this] { presetImportClicked(); };
+        mPresetBar->onExport = [this] { presetExportClicked(); };
+        mRoot->addChild(mPresetBar);
+
         mFilmstrip = std::make_shared<Filmstrip>(mAccent);
         mFilmstrip->onSelect = [this](int cell, bool shift, bool ctrl) { selectNode(cell, shift, ctrl); };
         mFilmstrip->onActivate = [this](int cell) {
@@ -355,7 +389,8 @@ namespace cosmo
 
         MenuBar::Menu preset;
         preset.title = "Preset";
-        preset.items.push_back({"Save Preset...", [this] { if (onSavePresetRequested) onSavePresetRequested(); }});
+        preset.items.push_back({"Save Preset...", [this] { presetSaveClicked(); }});
+        preset.items.push_back({"Import Preset...", [this] { presetImportClicked(); }});
         mMenuBar->addMenu(preset);
         mPresetMenuIndex = mMenuBar->menuCount() - 1;
         // One active menu at a time (tab-like): the Settings panel shows iff Settings
@@ -365,6 +400,9 @@ namespace cosmo
 
         mContextMenu = std::make_shared<ContextMenu>(mAccent);  // right-click popup (modal when open)
         mRoot->addChild(mContextMenu);
+
+        mPresetDialog = std::make_shared<PresetDialog>(mAccent);  // modal category picker (overlay)
+        mRoot->addChild(mPresetDialog);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         layout();
@@ -397,8 +435,11 @@ namespace cosmo
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
+        const double colBottom = filmY - 8.0;          // right column's bottom edge
+        const double barH = 30.0;                       // preset button bar
+        const double barY = colBottom - barH;
         const double tabsY = photoY + histH + 10.0;
-        const double tabsH = (filmY - 8.0) - tabsY;
+        const double tabsH = (barY - 8.0) - tabsY;      // leave an 8px gap above the bar
         mTabs->x.set(rightX); mTabs->y.set(tabsY);
         mTabs->width.set(rightW); mTabs->height.set(tabsH);
         const double contentH = tabsH - mTabs->tabHeight - 6.0;
@@ -412,6 +453,13 @@ namespace cosmo
         // group offset panel shares the tabs' rect (shown when a group is selected)
         mGroupPanel->x.set(rightX); mGroupPanel->y.set(tabsY);
         mGroupPanel->layout(rightW, tabsH);
+
+        // preset bar pinned to the bottom of the edit column
+        mPresetBar->x.set(rightX); mPresetBar->y.set(barY);
+        mPresetBar->width.set(rightW); mPresetBar->height.set(barH);
+        // modal category picker covers the root so it can centre + be modal
+        mPresetDialog->x.set(0); mPresetDialog->y.set(0);
+        mPresetDialog->width.set(mW); mPresetDialog->height.set(mH);
 
         // breadcrumb row above the filmstrip
         mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(crumbY);
@@ -606,27 +654,113 @@ namespace cosmo
         refreshPresetMenu();
     }
 
+    // Every image slot implied by the current selection (a selected group expands to
+    // all its descendant image leaves); falls back to the current image.
+    std::vector<int> CosmoApp::selectedImageSlots() const
+    {
+        std::vector<int> slots;
+        std::function<void(int)> collect = [&](int node) {
+            if (node < 0 || node >= (int)mNodes.size()) return;
+            if (mNodes[node].group) { for (int k : mNodes[node].kids) collect(k); }
+            else if (mNodes[node].slot >= 0) slots.push_back(mNodes[node].slot);
+        };
+        for (int n : mSel) collect(n);
+        if (slots.empty() && mCurrentSlot >= 0) slots.push_back(mCurrentSlot);
+        return slots;
+    }
+
+    void CosmoApp::presetSaveClicked()
+    {
+        if (mCurrentSlot < 0 || !mPresetDialog) return;
+        mPresetDialog->show("Save preset", "Continue", buildPresetRows(apfImageCategories()),
+            [this](std::vector<std::string> cats) {
+                mPendingCategories = std::move(cats);
+                if (onSavePresetRequested) onSavePresetRequested();  // host name dialog -> savePreset(name)
+            });
+    }
+
+    void CosmoApp::presetExportClicked()
+    {
+        if (mCurrentSlot < 0 || !mPresetDialog) return;
+        mPresetDialog->show("Export preset", "Continue", buildPresetRows(apfImageCategories()),
+            [this](std::vector<std::string> cats) {
+                mPendingCategories = std::move(cats);
+                if (onExportPresetRequested) onExportPresetRequested();  // host path dialog -> exportPresetTo(path)
+            });
+    }
+
+    void CosmoApp::presetImportClicked()
+    {
+        if (onImportPresetRequested) onImportPresetRequested();  // host open dialog -> importPresetFrom(path)
+    }
+
     bool CosmoApp::savePreset(const std::string &name)
     {
         if (mPresetDir.empty() || name.empty() || mCurrentSlot < 0) return false;
         std::error_code ec;
         std::filesystem::create_directories(mPresetDir, ec);
-        std::ofstream f(mPresetDir + "/" + name + ".cosmopreset");
+        const std::vector<std::string> cats = mPendingCategories.empty() ? apfImageCategories() : mPendingCategories;
+        const apf::Document doc = editParamsToApf(mSlotParams[mCurrentSlot], cats, name);
+        std::ofstream f(mPresetDir + "/" + name + ".apf");
         if (!f) return false;
-        f << serializeParams(mSlotParams[mCurrentSlot]);  // image-independent: develop settings only
+        f << apf::serialize(doc);
         refreshPresetMenu();
         return true;
+    }
+
+    bool CosmoApp::exportPresetTo(const std::string &path)
+    {
+        if (mCurrentSlot < 0 || path.empty()) return false;
+        const std::vector<std::string> cats = mPendingCategories.empty() ? apfImageCategories() : mPendingCategories;
+        const std::string name = std::filesystem::path(path).stem().string();
+        const apf::Document doc = editParamsToApf(mSlotParams[mCurrentSlot], cats, name);
+        std::ofstream f(path);
+        if (!f) return false;
+        f << apf::serialize(doc);
+        return true;
+    }
+
+    bool CosmoApp::importPresetFrom(const std::string &path)
+    {
+        std::ifstream f(path);
+        if (!f) return false;
+        std::stringstream ss; ss << f.rdbuf();
+        apf::Document doc;
+        if (!apf::parse(ss.str(), doc)) return false;
+        if (!doc.engine.empty() && doc.engine != apfImageEngine()) return false;  // different engine domain
+        const std::vector<std::string> present = apfPresentImageCategories(doc);
+        if (present.empty()) return false;
+        mPendingApf = doc;
+        if (mPresetDialog)
+            mPresetDialog->show("Import preset", "Apply", buildPresetRows(present),
+                [this](std::vector<std::string> cats) { applyImport(cats); });
+        else
+            applyImport(present);
+        return true;
+    }
+
+    void CosmoApp::applyImport(const std::vector<std::string> &categories)
+    {
+        bool affectedCurrent = false;
+        for (int s : selectedImageSlots())  // current image, or all images in the selected group
+            if (s >= 0 && s < (int)mSlotParams.size())
+            {
+                if (applyApfToEditParams(mPendingApf, categories, mSlotParams[s]) && s == mCurrentSlot)
+                    affectedCurrent = true;
+            }
+        if (affectedCurrent) { syncControlsToSlot(); submit(); }  // others re-render when selected
     }
 
     bool CosmoApp::applyPreset(const std::string &name)
     {
         if (mPresetDir.empty() || mCurrentSlot < 0) return false;
-        std::ifstream f(mPresetDir + "/" + name + ".cosmopreset");
+        std::ifstream f(mPresetDir + "/" + name + ".apf");
         if (!f) return false;
         std::stringstream ss; ss << f.rdbuf();
-        EditParams p;
-        if (!deserializeParams(ss.str(), p)) return false;
-        mSlotParams[mCurrentSlot] = p;
+        apf::Document doc;
+        if (!apf::parse(ss.str(), doc)) return false;
+        if (!doc.engine.empty() && doc.engine != apfImageEngine()) return false;
+        if (!applyApfToEditParams(doc, apfPresentImageCategories(doc), mSlotParams[mCurrentSlot])) return false;
         syncControlsToSlot();
         submit();
         return true;
@@ -636,13 +770,14 @@ namespace cosmo
     {
         if (!mMenuBar || mPresetMenuIndex < 0) return;
         std::vector<MenuBar::Item> items;
-        items.push_back({"Save Preset...", [this] { if (onSavePresetRequested) onSavePresetRequested(); }});
+        items.push_back({"Save Preset...", [this] { presetSaveClicked(); }});
+        items.push_back({"Import Preset...", [this] { presetImportClicked(); }});
         std::error_code ec;
         if (!mPresetDir.empty() && std::filesystem::is_directory(mPresetDir, ec))
         {
             std::vector<std::string> names;
             for (const auto &e : std::filesystem::directory_iterator(mPresetDir, ec))
-                if (e.path().extension() == ".cosmopreset")
+                if (e.path().extension() == ".apf")
                     names.push_back(e.path().stem().string());
             std::sort(names.begin(), names.end());
             for (const auto &n : names)
