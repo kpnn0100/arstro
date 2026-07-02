@@ -64,9 +64,9 @@ namespace cosmo
     void HistoryView::relayout()
     {
         const int n = (int)mNodes.size();
-        mDepth.assign(n, 0);
+        mRow.assign(n, 0);
         mLane.assign(n, 0);
-        mMaxDepth = mMaxLane = 0;
+        mMaxRow = mMaxLane = 0;
         if (n == 0) return;
 
         std::vector<std::vector<int>> kids(n);
@@ -78,31 +78,34 @@ namespace cosmo
             else roots.push_back(i);
         }
 
-        int nextLane = 0;
-        std::function<void(int, int, int)> dfs = [&](int node, int lane, int depth) {
+        // git-log layout: every node gets its OWN row (pre-order visitation counter) so
+        // labels never share a line; lanes are only the graph columns. First child stays
+        // in the parent's lane; each further child opens a fresh lane.
+        int nextRow = 0, nextLane = 0;
+        std::function<void(int, int)> dfs = [&](int node, int lane) {
             mLane[node] = lane;
-            mDepth[node] = depth;
+            mRow[node] = nextRow++;
             mMaxLane = std::max(mMaxLane, lane);
-            mMaxDepth = std::max(mMaxDepth, depth);
+            mMaxRow = std::max(mMaxRow, mRow[node]);
             for (size_t i = 0; i < kids[node].size(); ++i)
-                dfs(kids[node][i], i == 0 ? lane : ++nextLane, depth + 1);
+                dfs(kids[node][i], i == 0 ? lane : ++nextLane);
         };
         for (size_t i = 0; i < roots.size(); ++i)
-            dfs(roots[i], i == 0 ? 0 : ++nextLane, 0);
+            dfs(roots[i], i == 0 ? 0 : ++nextLane);
     }
 
     Point HistoryView::nodeCenter(int i) const
     {
         const Rect tr = treeRect();
         return Point{tr.x + kPadX + mLane[i] * kLaneW - mPanX,
-                     tr.y + kPadY + mDepth[i] * kRowH - mPanY};
+                     tr.y + kPadY + mRow[i] * kRowH - mPanY};
     }
 
     void HistoryView::clampPan()
     {
         const Rect tr = treeRect();
         const double contentW = kPadX * 2 + mMaxLane * kLaneW + kLabelSpace;
-        const double contentH = kPadY * 2 + mMaxDepth * kRowH;
+        const double contentH = kPadY * 2 + mMaxRow * kRowH;
         const double maxX = std::max(0.0, contentW - tr.w);
         const double maxY = std::max(0.0, contentH - tr.h);
         mPanX = clampd(mPanX, 0.0, maxX);
@@ -111,9 +114,9 @@ namespace cosmo
 
     void HistoryView::scrollToCurrent()
     {
-        if (mCurrent < 0 || mCurrent >= (int)mDepth.size()) { clampPan(); return; }
+        if (mCurrent < 0 || mCurrent >= (int)mRow.size()) { clampPan(); return; }
         const Rect tr = treeRect();
-        mPanY = kPadY + mDepth[mCurrent] * kRowH - tr.h * 0.5;   // centre the current row
+        mPanY = kPadY + mRow[mCurrent] * kRowH - tr.h * 0.5;     // centre the current row
         mPanX = kPadX + mLane[mCurrent] * kLaneW - tr.w * 0.35;
         clampPan();
     }
@@ -188,8 +191,8 @@ namespace cosmo
             const Point a = nodeCenter(par), b = nodeCenter(i);
             t.beginPath();
             t.moveTo(a.x, a.y);
-            if (std::abs(a.x - b.x) < 0.5) t.lineTo(b.x, b.y);   // same lane: straight
-            else { t.lineTo(a.x, b.y - kRowH * 0.5); t.lineTo(b.x, b.y); }  // elbow into the new lane
+            if (std::abs(a.x - b.x) < 0.5) t.lineTo(b.x, b.y);   // same lane: straight down
+            else { t.lineTo(b.x, a.y + kRowH * 0.5); t.lineTo(b.x, b.y); }  // fork into child's lane, then down it
             t.strokePath();
         }
 

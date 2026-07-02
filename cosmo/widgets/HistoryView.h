@@ -48,7 +48,7 @@ namespace cosmo
         artboard::Rect treeRect() const;     // clipped, pannable area inside the card
         artboard::Rect closeBtnRect() const;
         artboard::Point nodeCenter(int i) const;  // world-space, incl. pan
-        void relayout();                     // depth + lane per node, content size
+        void relayout();                     // row + lane per node, content size
         void clampPan();
         void scrollToCurrent();
 
@@ -56,9 +56,9 @@ namespace cosmo
         bool mOpen = false;
         std::vector<Node> mNodes;
         int mCurrent = -1;
-        std::vector<int> mDepth;   // row per node
-        std::vector<int> mLane;    // column per node
-        int mMaxDepth = 0, mMaxLane = 0;
+        std::vector<int> mRow;     // unique row per node (git-log order: no two share a line)
+        std::vector<int> mLane;    // graph column (branch lane) per node
+        int mMaxRow = 0, mMaxLane = 0;
         double mPanX = 0, mPanY = 0;
         artboard::Point mDragLast{0, 0};
     };
