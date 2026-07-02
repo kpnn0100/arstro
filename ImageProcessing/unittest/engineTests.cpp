@@ -448,6 +448,62 @@ TEST(EditParamsIO_roundtrip)
     CHECK_NEAR(d.temp, 6500.0, 1e-3);
 }
 
+// ── .apf generic preset envelope + selective image mapping ──
+TEST(Apf_selective_save_and_apply)
+{
+    EditParams p;
+    p.exposure = 1.2f; p.contrast = 30.f; p.temp = 7200.f; p.vibrance = 40.f;
+    p.curve = {{0.f, 0.05f}, {1.f, 0.95f}};
+    p.grade[1] = {210.f, 25.f, -6.f};
+    MaskParams m; m.type = MaskParams::Radial; m.adjust.exposure = 0.8f; p.masks = {m};
+
+    // save ONLY basic + curve
+    apf::Document doc = editParamsToApf(p, {"basic", "curve"}, "Look A");
+    CHECK(doc.engine == std::string("image"));
+    CHECK(doc.name == std::string("Look A"));
+    CHECK(doc.has("basic") && doc.has("curve"));
+    CHECK(!doc.has("color") && !doc.has("masks"));  // unticked categories omitted
+
+    // round-trip the envelope through text
+    apf::Document rt;
+    CHECK(apf::parse(apf::serialize(doc), rt));
+    CHECK(rt.engine == std::string("image"));
+    auto present = apfPresentImageCategories(rt);
+    CHECK(present.size() == 2 && present[0] == std::string("basic"));
+
+    // apply only "basic" onto a fresh params -> basic changes, curve untouched (default)
+    EditParams out;  // defaults
+    CHECK(applyApfToEditParams(rt, {"basic"}, out));
+    CHECK_NEAR(out.exposure, 1.2, 1e-4);
+    CHECK_NEAR(out.contrast, 30.0, 1e-4);
+    CHECK(out.curve.size() == 2 && out.curve[1].second == 1.f);  // curve NOT applied (default identity)
+    CHECK_NEAR(out.temp, 6500.0, 1e-3);                          // color not in the file at all
+
+    // apply "curve" too -> curve now changes
+    CHECK(applyApfToEditParams(rt, {"basic", "curve"}, out));
+    CHECK(out.curve.size() == 2);
+    CHECK_NEAR(out.curve[0].second, 0.05, 1e-4);
+
+    // a full save carries masks + grade; apply restores them
+    apf::Document full = editParamsToApf(p, apfImageCategories(), "Full");
+    EditParams out2;
+    CHECK(applyApfToEditParams(full, apfImageCategories(), out2));
+    CHECK(out2.masks.size() == 1);
+    CHECK_NEAR(out2.masks[0].adjust.exposure, 0.8, 1e-4);
+    CHECK_NEAR(out2.grade[1].hue, 210.0, 1e-3);
+}
+
+TEST(Apf_rejects_other_engine)
+{
+    apf::Document audio; audio.engine = "audio"; audio.category("basic").set("exposure", "1.0");
+    EditParams out;
+    CHECK(!applyApfToEditParams(audio, {"basic"}, out));  // cross-engine rejected
+    CHECK_NEAR(out.exposure, 0.0, 1e-9);                  // nothing applied
+    // a non-apf blob fails to parse
+    apf::Document d;
+    CHECK(!apf::parse("not a preset\nx=1\n", d));
+}
+
 // ── Local adjustments (masks) ──
 TEST(MaskCoverage_shapes)
 {

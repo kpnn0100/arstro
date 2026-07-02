@@ -55,6 +55,8 @@
 #include "video/VideoProcessor.h"
 #include "engine/EditParams.h"
 #include "engine/EditParamsIO.h"
+#include "engine/Apf.h"
+#include "engine/EditParamsApf.h"
 #include "engine/MaskStack.h"
 #include "engine/EditEngine.h"
 #include "engine/RenderService.h"
