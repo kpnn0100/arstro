@@ -42,6 +42,12 @@ namespace cosmo
         scrollToCurrent();
     }
 
+    void HistoryView::scrollBy(double wheelDelta)
+    {
+        mPanY -= wheelDelta * kRowH;   // one wheel notch ~= one row; up (positive) = older/top
+        clampPan();
+    }
+
     Rect HistoryView::cardRect() const
     {
         const double w = clampd(width.value() - 100.0, 360.0, 640.0);
@@ -212,6 +218,25 @@ namespace cosmo
             t.drawText(mNodes[i].label, lx, cn.y + 4.0, 12.0);
         }
         t.restore();
+
+        // scrollbars (drawn crisp, outside the clip) so it reads as a scroll view
+        const double contentH = kPadY * 2 + mMaxRow * kRowH;
+        const double contentW = kPadX * 2 + mMaxLane * kLaneW + kLabelSpace;
+        const double maxY = std::max(0.0, contentH - tr.h), maxX = std::max(0.0, contentW - tr.w);
+        if (maxY > 0.5)  // vertical
+        {
+            const double thumbH = std::max(28.0, tr.h * tr.h / contentH);
+            const double ty = tr.y + (mPanY / maxY) * (tr.h - thumbH);
+            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, tr.y, 4.0, tr.h}, 2.0, Paint::filled(palette::surface()));
+            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, ty, 4.0, thumbH}, 2.0, Paint::filled(palette::faint()));
+        }
+        if (maxX > 0.5)  // horizontal
+        {
+            const double thumbW = std::max(28.0, tr.w * tr.w / contentW);
+            const double tx = tr.x + (mPanX / maxX) * (tr.w - thumbW);
+            drawRoundedRect(t, Rect{tr.x, tr.y + tr.h - 5.0, tr.w, 4.0}, 2.0, Paint::filled(palette::surface()));
+            drawRoundedRect(t, Rect{tx, tr.y + tr.h - 5.0, thumbW, 4.0}, 2.0, Paint::filled(palette::faint()));
+        }
     }
 }
 }

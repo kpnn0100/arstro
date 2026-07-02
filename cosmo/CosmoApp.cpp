@@ -1075,6 +1075,11 @@ namespace cosmo
 
     void CosmoApp::wheel(double x, double y, double delta, bool ctrl)
     {
+        if (mHistoryView && mHistoryView->isOpen())  // scroll the history tree when it's open
+        {
+            mHistoryView->scrollBy(delta);
+            return;
+        }
         if (!ctrl || delta == 0.0) return;  // ctrl+scroll = zoom; plain scroll ignored
         if (x < mPhotoRect.x || x > mPhotoRect.x + mPhotoRect.w ||
             y < mPhotoRect.y || y > mPhotoRect.y + mPhotoRect.h)

@@ -30,6 +30,8 @@ namespace cosmo
         void show(std::vector<Node> nodes, int current);
         /** Update just the highlighted node (after a jump) while staying open. */
         void setCurrent(int current);
+        /** Scroll the tree by a mouse-wheel delta (positive = toward older/top steps). */
+        void scrollBy(double wheelDelta);
         void hide() { mOpen = false; }
         bool isOpen() const { return mOpen; }
 
