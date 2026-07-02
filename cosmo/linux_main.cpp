@@ -305,14 +305,30 @@ namespace
     }
     gboolean onKey(GtkWidget *, GdkEventKey *e, gpointer user)
     {
-        if (e->keyval == GDK_KEY_o || e->keyval == GDK_KEY_O)
+        auto *a = static_cast<App *>(user);
+        const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
+        // Ctrl+Z = undo, Ctrl+Y (or Ctrl+Shift+Z) = redo
+        if (ctrl && (e->keyval == GDK_KEY_z || e->keyval == GDK_KEY_Z))
         {
-            openDialog(static_cast<App *>(user));
+            if (shift) a->app.redo(); else a->app.undo();
+            gtk_widget_queue_draw(a->area);
             return TRUE;
         }
-        if (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S)
+        if (ctrl && (e->keyval == GDK_KEY_y || e->keyval == GDK_KEY_Y))
         {
-            saveDialog(static_cast<App *>(user));
+            a->app.redo();
+            gtk_widget_queue_draw(a->area);
+            return TRUE;
+        }
+        if (!ctrl && (e->keyval == GDK_KEY_o || e->keyval == GDK_KEY_O))
+        {
+            openDialog(a);
+            return TRUE;
+        }
+        if (!ctrl && (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S))
+        {
+            saveDialog(a);
             return TRUE;
         }
         return FALSE;

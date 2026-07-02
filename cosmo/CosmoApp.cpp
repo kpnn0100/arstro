@@ -86,6 +86,9 @@ namespace cosmo
     bool CosmoApp::presetPickerOpen() const { return mPresetDialog && mPresetDialog->isOpen(); }
     std::vector<double> CosmoApp::testBarRect() const
     { return {mPresetBar->x.value(), mPresetBar->y.value(), mPresetBar->width.value(), mPresetBar->height.value()}; }
+    std::vector<double> CosmoApp::testHistoryNodeXY(int i) const
+    { auto p = mHistoryView->testNodeCenter(i); return {p.x, p.y}; }
+    bool CosmoApp::historyPopupOpen() const { return mHistoryView && mHistoryView->isOpen(); }
     int CosmoApp::filmstripCells() const { return mFilmstrip ? mFilmstrip->cellCount() : 0; }
     double CosmoApp::imageZoom() const { return mImageView ? mImageView->zoom() : 1.0; }
     int CosmoApp::previewPixelWidth() const { return mImageView ? mImageView->imageWidth() : 0; }
@@ -117,6 +120,7 @@ namespace cosmo
     void CosmoApp::submit()
     {
         if (mCurrentSlot < 0) return;
+        recordHistory();  // capture the edit that led here (no-op for navigation / undo re-apply)
         EditParams p = effectiveParams(mCurrentSlot);
         // In crop mode (Transform tab) render the FULL frame so the crop box can be
         // dragged over the whole image; the slot keeps the real crop.
@@ -349,6 +353,8 @@ namespace cosmo
         mSettings = std::make_shared<SettingsPanel>(mTheme, mAccent);
         mSettings->onPreviewEdge = [this](int edge) { mPreviewEdge = edge; mService.setPreviewSize(edge); submit(); };
         mSettings->onThreads = [this](int n) { par::setThreads(n); submit(); };
+        mSettings->onHistorySteps = [this](int steps) { setHistoryLimits(steps, mHistoryCoalesceMs); };
+        mSettings->onHistoryCoalesce = [this](int ms) { setHistoryLimits(mHistorySteps, (double)ms); };
         mSettings->visible = false;
         mRoot->addChild(mSettings);
 
@@ -387,6 +393,13 @@ namespace cosmo
         develop.items.push_back({"Ungroup Selection", [this] { ungroupSelected(); }});
         mMenuBar->addMenu(develop);
 
+        MenuBar::Menu history;
+        history.title = "History";
+        history.items.push_back({"Undo   (Ctrl+Z)", [this] { undo(); }});
+        history.items.push_back({"Redo   (Ctrl+Y)", [this] { redo(); }});
+        history.items.push_back({"Show History Tree...", [this] { openHistoryView(); }});
+        mMenuBar->addMenu(history);
+
         MenuBar::Menu preset;
         preset.title = "Preset";
         preset.items.push_back({"Save Preset...", [this] { presetSaveClicked(); }});
@@ -403,6 +416,10 @@ namespace cosmo
 
         mPresetDialog = std::make_shared<PresetDialog>(mAccent);  // modal category picker (overlay)
         mRoot->addChild(mPresetDialog);
+
+        mHistoryView = std::make_shared<HistoryView>(mAccent);    // git-tree history popup (overlay)
+        mHistoryView->onSelect = [this](int node) { jumpToHistory(node); };
+        mRoot->addChild(mHistoryView);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         layout();
@@ -460,6 +477,9 @@ namespace cosmo
         // modal category picker covers the root so it can centre + be modal
         mPresetDialog->x.set(0); mPresetDialog->y.set(0);
         mPresetDialog->width.set(mW); mPresetDialog->height.set(mH);
+        // history popup also covers the root (centred, modal)
+        mHistoryView->x.set(0); mHistoryView->y.set(0);
+        mHistoryView->width.set(mW); mHistoryView->height.set(mH);
 
         // breadcrumb row above the filmstrip
         mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(crumbY);
@@ -474,9 +494,9 @@ namespace cosmo
         // menu bar (top-left, under the wordmark) + floating settings overlay
         mMenuBarX = kMargin; mMenuBarY = 34.0;
         mMenuBar->x.set(mMenuBarX); mMenuBar->y.set(mMenuBarY);
-        mMenuBar->width.set(160.0); mMenuBar->height.set(22.0);
+        mMenuBar->width.set(380.0); mMenuBar->height.set(22.0);
         mSettings->x.set(kMargin); mSettings->y.set(kTopBar + 6.0);
-        mSettings->layout(280.0, 150.0);
+        mSettings->layout(280.0, 214.0);
 
         mService.setPreviewSize(mPreviewEdge);
         submit();
@@ -498,6 +518,9 @@ namespace cosmo
         const int slot = mService.addImage(rgba, w, h, 4);
         if (slot < 0) return -1;
         mSlotParams.push_back(EditParams{});
+        History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
+        hist.init(EditParams{});   // root = the freshly-opened, unedited state
+        mSlotHistory.push_back(std::move(hist));
         mSlotNames.push_back(name);
         mSlotPaths.push_back(path);
         mSlotSessions.push_back("");
@@ -643,9 +666,85 @@ namespace cosmo
             if (i >= 0 && i < (int)mSlotParams.size())
             {
                 mSlotParams[i] = mClipboard;       // replace this image's develop settings
+                recordSlotEdit(i);                 // a discrete "Paste" step in that image's history
                 if (i == mCurrentSlot) affectedCurrent = true;
             }
         if (affectedCurrent) { syncControlsToSlot(); submit(); }  // others re-render when selected
+    }
+
+    // ── edit history (branching time machine) ──
+    void CosmoApp::recordHistory()
+    {
+        if (mSuppressHistory) return;
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
+        History &h = mSlotHistory[mCurrentSlot];
+        if (h.empty()) h.init(mSlotParams[mCurrentSlot]);
+        h.record(mSlotParams[mCurrentSlot], mNowMs);
+    }
+
+    void CosmoApp::recordSlotEdit(int slot)
+    {
+        if (slot < 0 || slot >= (int)mSlotHistory.size()) return;
+        History &h = mSlotHistory[slot];
+        if (h.empty()) h.init(mSlotParams[slot]);
+        h.breakCoalesce();                              // paste/import/apply = a discrete step
+        h.record(mSlotParams[slot], mNowMs);
+    }
+
+    void CosmoApp::applyHistoryParams(const EditParams *p)
+    {
+        if (!p || mCurrentSlot < 0) return;
+        mSlotParams[mCurrentSlot] = *p;
+        mSuppressHistory = true;                        // re-applying a node must not add one
+        syncControlsToSlot();
+        submit();
+        mSuppressHistory = false;
+        if (mHistoryView && mHistoryView->isOpen())
+            mHistoryView->setCurrent(mSlotHistory[mCurrentSlot].current);
+    }
+
+    void CosmoApp::undo()
+    {
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
+        applyHistoryParams(mSlotHistory[mCurrentSlot].undo());
+    }
+
+    void CosmoApp::redo()
+    {
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
+        applyHistoryParams(mSlotHistory[mCurrentSlot].redo());
+    }
+
+    void CosmoApp::jumpToHistory(int node)
+    {
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
+        applyHistoryParams(mSlotHistory[mCurrentSlot].jumpTo(node));
+    }
+
+    void CosmoApp::openHistoryView()
+    {
+        if (!mHistoryView || mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
+        const History &h = mSlotHistory[mCurrentSlot];
+        std::vector<HistoryView::Node> snap;
+        snap.reserve(h.nodes.size());
+        for (const auto &n : h.nodes) snap.push_back({n.parent, n.label});
+        mHistoryView->show(std::move(snap), h.current);
+    }
+
+    bool CosmoApp::canUndo() const
+    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canUndo(); }
+    bool CosmoApp::canRedo() const
+    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canRedo(); }
+    int CosmoApp::historyNodeCount() const
+    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() ? (int)mSlotHistory[mCurrentSlot].nodes.size() : 0; }
+    int CosmoApp::historyCurrent() const
+    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() ? mSlotHistory[mCurrentSlot].current : -1; }
+
+    void CosmoApp::setHistoryLimits(int maxSteps, double coalesceMs)
+    {
+        mHistorySteps = maxSteps > 2 ? maxSteps : 2;
+        mHistoryCoalesceMs = coalesceMs < 0 ? 0 : coalesceMs;
+        for (auto &h : mSlotHistory) h.setLimits(mHistorySteps, mHistoryCoalesceMs);
     }
 
     void CosmoApp::setPresetDir(const std::string &dir)
@@ -745,8 +844,11 @@ namespace cosmo
         for (int s : selectedImageSlots())  // current image, or all images in the selected group
             if (s >= 0 && s < (int)mSlotParams.size())
             {
-                if (applyApfToEditParams(mPendingApf, categories, mSlotParams[s]) && s == mCurrentSlot)
-                    affectedCurrent = true;
+                if (applyApfToEditParams(mPendingApf, categories, mSlotParams[s]))
+                {
+                    recordSlotEdit(s);          // a discrete "import preset" step per image
+                    if (s == mCurrentSlot) affectedCurrent = true;
+                }
             }
         if (affectedCurrent) { syncControlsToSlot(); submit(); }  // others re-render when selected
     }
@@ -1007,6 +1109,7 @@ namespace cosmo
 
     void CosmoApp::render(IRenderTarget &target, double nowMs)
     {
+        mNowMs = nowMs;  // history coalescing uses the latest frame time
         mRoot->advance(nowMs);
 
         // Pick up any completed frame from the worker (non-blocking).

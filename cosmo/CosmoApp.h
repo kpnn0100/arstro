@@ -14,6 +14,7 @@
 #include "../Artboard/include/artboard/artboard.h"
 #include "../ImageProcessing/src/image_processing.h"
 #include "CosmoTheme.h"
+#include "History.h"
 #include "panels/ParamPanel.h"
 #include "panels/HistogramPanel.h"
 #include "panels/MixerPanel.h"
@@ -26,6 +27,7 @@
 #include "widgets/MenuBar.h"
 #include "widgets/PresetBar.h"
 #include "widgets/PresetDialog.h"
+#include "widgets/HistoryView.h"
 #include "widgets/MaskOverlay.h"
 #include "widgets/CropOverlay.h"
 #include "widgets/CompareView.h"
@@ -73,6 +75,9 @@ namespace cosmo
         bool presetPickerOpen() const;
         /** PresetBar world rect {x,y,w,h} (for tests). */
         std::vector<double> testBarRect() const;
+        /** World {x,y} of history node i in the open popup (for tests). */
+        std::vector<double> testHistoryNodeXY(int i) const;
+        bool historyPopupOpen() const;
         /** Number of cells (images + sub-groups) shown for the current group (for tests). */
         int filmstripCells() const;
         /** Current photo zoom factor (for tests). */
@@ -96,6 +101,17 @@ namespace cosmo
          *  present categories, no picker) — used by the Preset menu list. */
         bool applyPreset(const std::string &name);
 
+        // ── edit history (branching "time machine"; Ctrl+Z / Ctrl+Y) ──
+        void undo();               // step back to the parent state
+        void redo();               // step forward to the newest child state
+        void openHistoryView();    // show the git-tree history popup
+        bool canUndo() const;      // (for tests / host)
+        bool canRedo() const;
+        int historyNodeCount() const;   // nodes in the current image's history (for tests)
+        int historyCurrent() const;     // current node index (for tests)
+        /** Configure history for all images: max stored steps and the coalesce window. */
+        void setHistoryLimits(int maxSteps, double coalesceMs);
+
         /** Source image path of the current slot (for the host's Save dialog default). */
         std::string currentSourcePath() const;
         /** Apply a full param set to the current slot (e.g. after loading a session). */
@@ -115,6 +131,10 @@ namespace cosmo
         void syncMaskUI();             // refresh mask panel + photo overlay from current slot
         void renderBefore();           // render the no-edit baseline for the compare view
         void pasteTo(const std::vector<int> &slots);  // copy clipboard params into slots
+        void recordHistory();                          // snapshot the current slot's edit (from submit)
+        void recordSlotEdit(int slot);                 // snapshot a specific slot as a discrete step
+        void applyHistoryParams(const EditParams *p);  // apply an undo/redo/jump result to the slot
+        void jumpToHistory(int node);                  // jump the current image to a history node
         void refreshPresetMenu();
         // ── preset save/import/export (generic .apf) ──
         void presetSaveClicked();    // bar SAVE   -> picker -> host name dialog
@@ -172,6 +192,7 @@ namespace cosmo
         std::shared_ptr<MenuBar> mMenuBar;
         std::shared_ptr<PresetBar> mPresetBar;       // bottom of the edit column (Save/Import/Export)
         std::shared_ptr<PresetDialog> mPresetDialog; // modal category picker (overlay)
+        std::shared_ptr<HistoryView> mHistoryView;   // git-tree history popup (overlay)
         int mSelectedMask = -1;
         int mMaskTabIndex = 2;                       // Basic, Detail, Mask, ...
         int mXformTabIndex = 6;                      // ..., Mixer, Curve, Grade, Xform
@@ -181,6 +202,7 @@ namespace cosmo
         artboard::GestureRecognizer mRecognizer;
 
         std::vector<EditParams> mSlotParams;  // UI-authoritative per-image params (ungrouped)
+        std::vector<History> mSlotHistory;    // branching edit timeline per image
         std::vector<std::string> mSlotNames;
         std::vector<std::string> mSlotPaths;      // source image file path per slot
         std::vector<std::string> mSlotSessions;   // last .cosmo save path per slot
@@ -201,6 +223,10 @@ namespace cosmo
         int mPresetMenuIndex = -1;          // menu bar index of the Preset dropdown
         std::vector<std::string> mPendingCategories;  // categories chosen in the Save/Export picker
         arstro::apf::Document mPendingApf;             // parsed doc awaiting Import confirmation
+        double mNowMs = 0.0;                           // last frame time (for history coalescing)
+        int mHistorySteps = 100;                       // default max steps for new images
+        double mHistoryCoalesceMs = 450.0;             // default coalesce window for new images
+        bool mSuppressHistory = false;                 // guards param changes that must not record
     };
 }
 }
