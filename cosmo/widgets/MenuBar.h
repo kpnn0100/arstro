@@ -42,6 +42,10 @@ namespace cosmo
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        /** The open dropdown draws here (like ContextMenu/PresetDialog/HistoryView)
+         *  so it's always on top, regardless of what else is added to the root
+         *  after the menu bar (e.g. the left-docked preset panel). */
+        void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override;
 

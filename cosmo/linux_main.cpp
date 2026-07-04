@@ -125,6 +125,91 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    void saveWorkspaceDialog(App *a)
+    {
+        if (a->app.imageCount() == 0) return;
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Save workspace", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Save", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        const std::string cur = a->app.currentWorkspacePath();
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), cur.empty() ? "workspace.cosmoproj" : baseName(cur).c_str());
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            std::string p = path ? path : "";
+            if (!p.empty() && !endsWith(p, ".cosmoproj")) p += ".cosmoproj";
+            if (a->app.saveWorkspaceAs(p)) g_print("cosmo: saved workspace %s\n", p.c_str());
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    // Recreate every image + group from a parsed workspace (decoding is host-side;
+    // the app only knows the group tree + develop settings). A missing source file
+    // becomes a placeholder leaf so later entries' `parent` indices stay aligned.
+    void loadWorkspaceFile(App *a, const std::string &path)
+    {
+        std::vector<CosmoApp::WorkspaceEntry> entries;
+        if (!CosmoApp::readWorkspaceFile(path, entries))
+        {
+            g_printerr("cosmo: could not read workspace %s\n", path.c_str());
+            return;
+        }
+        a->app.resetWorkspace();
+        for (const auto &e : entries)
+        {
+            const int parentNode = e.parent < 0 ? 0 : e.parent + 1;  // node 0 = workspace root
+            if (e.group)
+            {
+                a->app.addWorkspaceGroup(parentNode, e.name, e.offset);
+                continue;
+            }
+            DecodedImage img = a->decoder.decodeFile(e.imagePath);
+            if (img.ok())
+            {
+                const int slot = a->app.openImageInto(parentNode, img.rgba.data(), img.width, img.height,
+                                                       baseName(e.imagePath), e.imagePath);
+                a->app.applyParamsToSlot(slot, e.params);
+            }
+            else
+            {
+                g_printerr("cosmo: workspace image missing: %s\n", e.imagePath.c_str());
+                a->app.addWorkspaceMissingImage(parentNode, baseName(e.imagePath));
+            }
+        }
+        a->app.finishWorkspaceLoad(path);
+    }
+
+    void loadWorkspaceDialog(App *a)
+    {
+        if (a->app.imageCount() > 0)  // loading replaces the whole session -- confirm first
+        {
+            GtkWidget *confirm = gtk_message_dialog_new(
+                GTK_WINDOW(a->window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL,
+                "Loading a workspace replaces every open image and its edits. Continue?");
+            const int resp = gtk_dialog_run(GTK_DIALOG(confirm));
+            gtk_widget_destroy(confirm);
+            if (resp != GTK_RESPONSE_OK) return;
+        }
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Load workspace", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+        GtkFileFilter *filt = gtk_file_filter_new();
+        gtk_file_filter_set_name(filt, "Cosmo workspace (*.cosmoproj)");
+        gtk_file_filter_add_pattern(filt, "*.cosmoproj");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), filt);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path) loadWorkspaceFile(a, path);
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     void renameGroupDialog(App *a)
     {
         GtkWidget *d = gtk_dialog_new_with_buttons(
@@ -331,6 +416,12 @@ namespace
             saveDialog(a);
             return TRUE;
         }
+        if (e->keyval == GDK_KEY_Delete || e->keyval == GDK_KEY_KP_Delete)
+        {
+            a->app.deleteSelected();
+            gtk_widget_queue_draw(a->area);
+            return TRUE;
+        }
         return FALSE;
     }
 }
@@ -348,6 +439,8 @@ int main(int argc, char **argv)
     app.app.onExportPresetRequested = [&app] { exportPresetDialog(&app); };
     app.app.onImportPresetRequested = [&app] { importPresetDialog(&app); };
     app.app.onRenameGroupRequested = [&app] { renameGroupDialog(&app); };
+    app.app.onSaveWorkspaceRequested = [&app] { saveWorkspaceDialog(&app); };
+    app.app.onLoadWorkspaceRequested = [&app] { loadWorkspaceDialog(&app); };
 
     // Presets live in a "presets" folder next to the cosmo executable, so a preset
     // library travels with the app. Fall back to the CWD if the exe path is unknown.

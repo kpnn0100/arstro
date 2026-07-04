@@ -35,6 +35,8 @@ namespace cosmo
         /** Refresh the list + selected mask's controls (no callbacks). */
         void setMasks(const std::vector<arstro::MaskParams> &masks, int selected);
         void layout(double w, double h);
+        /** Forwards to the embedded local-adjustment ParamPanel's scroll. */
+        void scrollBy(double wheelDelta);
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

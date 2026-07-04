@@ -57,11 +57,21 @@ namespace arstro
 
     void EditEngine::selectImage(int slot)
     {
-        if (slot < 0 || slot >= (int)mSlots.size())
+        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].source.empty())
             return;
         mCurrent = slot;
         mProxySlot = -1;
         applyParams(mSlots[mCurrent].params);
+    }
+
+    void EditEngine::releaseImage(int slot)
+    {
+        if (slot < 0 || slot >= (int)mSlots.size())
+            return;
+        mSlots[slot].source = Image{};
+        mSlots[slot].params = EditParams{};
+        if (mProxySlot == slot) { mProxySlot = -1; mPreviewProxy = Image{}; }
+        if (mCurrent == slot) mCurrent = -1;
     }
 
     const EditParams &EditEngine::currentParams() const

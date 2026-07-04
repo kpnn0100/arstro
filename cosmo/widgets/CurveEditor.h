@@ -1,9 +1,11 @@
 /*
  *  Cosmo by arstro — CurveEditor: an interactive tone-curve editor over [0,1]x[0,1].
  *  Control points are CORNERS by default (straight segments); Alt-drag a point to
- *  pull out symmetric bezier handles (After-Effects style), then drag either handle
- *  to shape the tangents independently. Drag a point to move it (endpoints keep x),
- *  double-click empty space to add a corner point, double-click a point to remove it.
+ *  pull out symmetric bezier handles. Once a point has handles, dragging either one
+ *  mirrors the opposite handle (keeps a straight tangent through the point); hold
+ *  Alt while dragging a handle to break the mirror and move just that one. Drag a
+ *  point to move it (endpoints keep x); double-click empty space to add a corner
+ *  point, double-click a point to remove it.
  *  Emits a dense piecewise-linear sampling of the curve (the engine keeps a simple
  *  LUT); the visible curve is the same dense sampling, so it reads smooth.
  */

@@ -27,6 +27,7 @@
 #include "widgets/MenuBar.h"
 #include "widgets/PresetBar.h"
 #include "widgets/PresetDialog.h"
+#include "widgets/PresetPanel.h"
 #include "widgets/HistoryView.h"
 #include "widgets/MaskOverlay.h"
 #include "widgets/CropOverlay.h"
@@ -58,6 +59,9 @@ namespace cosmo
         // `path` is the source file path (used by Save to record the working image).
         int openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path = "");
         void selectImage(int slot);
+        /** Remove the current selection (images and/or groups, with their contents)
+         *  from the session -- via the filmstrip's right-click menu, or the Delete key. */
+        void deleteSelected();
         int imageCount() const { return (int)mSlotParams.size(); }
         const uint8_t *exportFullRes(int &w, int &h);
 
@@ -124,8 +128,52 @@ namespace cosmo
         /** Parse a .cosmo session file into the referenced image path + params. */
         static bool readSessionFile(const std::string &path, std::string &imagePath, EditParams &params);
 
+        // ── whole workspace (every open image + its settings + the group tree) ──
+        /** One entry read back from a workspace file, in file order. `parent` indexes
+         *  an earlier entry in the same vector (-1 = attach at the workspace root). */
+        struct WorkspaceEntry
+        {
+            bool group = false;
+            int parent = -1;
+            std::string name;              // group name (groups only)
+            arstro::LocalAdjust offset;    // group scalar offset (groups only)
+            std::string imagePath;         // source file path (images only)
+            EditParams params;              // develop settings (images only)
+        };
+        /** Parse a workspace file into its entries, in the order they should be
+         *  recreated (a group always precedes anything it's the parent of). */
+        static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out);
+        /** Write every open image + the group tree + each image's settings to `path`. */
+        bool saveWorkspaceAs(const std::string &path);
+        /** Save to the remembered workspace path, or trigger onSaveWorkspaceRequested
+         *  if this session didn't come from (or hasn't yet been saved to) one. */
+        void saveWorkspace();
+        /** Remembered path from the last load/save, for the host's dialog default. */
+        std::string currentWorkspacePath() const { return mWorkspacePath; }
+        /** Release every open image and reset to an empty, single-root session --
+         *  call before recreating one from a loaded WorkspaceEntry list. */
+        void resetWorkspace();
+        /** Add a group node under `parentNode` (a real node index; use 0 for the
+         *  workspace root). Returns the new node's index. */
+        int addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset);
+        /** Add an image leaf under `parentNode` without selecting it or touching the
+         *  filmstrip (batch-friendly companion to openImage). Returns its slot id. */
+        int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);
+        /** Add a placeholder leaf (no engine slot) for an image that failed to decode,
+         *  so later entries' `parent` indices stay aligned with the ones just created. */
+        int addWorkspaceMissingImage(int parentNode, const std::string &name);
+        /** Seed a freshly-created slot's params + history root (skips recording). */
+        void applyParamsToSlot(int slot, const EditParams &p);
+        /** Rebuild the filmstrip/selection after a batch of addWorkspaceGroup /
+         *  openImageInto calls, and remember `path` for a plain "Save Workspace". */
+        void finishWorkspaceLoad(const std::string &path);
+        std::function<void()> onSaveWorkspaceRequested;  // host shows a save dialog -> saveWorkspaceAs(path)
+        std::function<void()> onLoadWorkspaceRequested;  // host shows an open dialog -> loads via readWorkspaceFile
+
     private:
-        void layout();
+        /** `animateShift`: ease the properties that move because the preset panel
+         *  opened/closed, instead of snapping (used only by that toggle). */
+        void layout(bool animateShift = false);
         void submit();                 // push the current slot's params to the render service
         void syncControlsToSlot();
         void syncMaskUI();             // refresh mask panel + photo overlay from current slot
@@ -158,8 +206,13 @@ namespace cosmo
         void navigateToGroup(int node); // drill into / up to a group
         void selectNode(int cell, bool shift, bool ctrl);
         void showCellContext(int cell, double x, double y);
+        void showPhotoContext(double x, double y);  // right-click anywhere on the photo -> Add Photo
+        void showPresetContext(const std::string &name, double x, double y);  // right-click a preset -> Delete
+        void deletePresetFile(const std::string &name);
         void createGroupFromSelection();
         void ungroupSelected();
+        void collectSubtree(int node, std::vector<int> &out) const;  // node + every descendant, pre-order
+        void deleteNode(int node);      // remove a node (and, for a group, its whole subtree)
         void setEditTarget(int node);   // image -> tabs; group -> offset panel
         EditParams effectiveParams(int slot) const;  // image params + sum of ancestor group offsets
         EditParams *curParams();       // the current image's params (what the tabs edit)
@@ -170,6 +223,7 @@ namespace cosmo
 
         arstro::RenderService mService;  // engine on its own thread
         std::shared_ptr<artboard::Segment> mRoot;
+        std::shared_ptr<artboard::Segment> mPhotoContext;  // right-click "Add Photo" over the photo area
         std::shared_ptr<artboard::ImageView> mImageView;
         std::shared_ptr<HistogramPanel> mHistogram;
         std::shared_ptr<artboard::TabView> mTabs;
@@ -192,6 +246,8 @@ namespace cosmo
         std::shared_ptr<MenuBar> mMenuBar;
         std::shared_ptr<PresetBar> mPresetBar;       // bottom of the edit column (Save/Import/Export)
         std::shared_ptr<PresetDialog> mPresetDialog; // modal category picker (overlay)
+        std::shared_ptr<PresetPanel> mPresetPanel;   // preset browser docked to the left (toggled)
+        std::shared_ptr<IconButton> mPresetToggle;   // shows/hides mPresetPanel
         std::shared_ptr<HistoryView> mHistoryView;   // git-tree history popup (overlay)
         int mSelectedMask = -1;
         int mMaskTabIndex = 2;                       // Basic, Detail, Mask, ...
@@ -206,6 +262,7 @@ namespace cosmo
         std::vector<std::string> mSlotNames;
         std::vector<std::string> mSlotPaths;      // source image file path per slot
         std::vector<std::string> mSlotSessions;   // last .cosmo save path per slot
+        std::string mWorkspacePath;                // last workspace load/save path (empty = none yet)
         // recursive group tree (mNodes[0] = root group); images are leaves under it
         std::vector<GNode> mNodes;
         int mCurGroup = 0;        // group whose children the filmstrip shows
@@ -217,10 +274,13 @@ namespace cosmo
         int mPreviewEdge = 1600;
         RenderService::Frame mExportFrame;
         RenderService::Frame mBeforeFrame;  // no-edit baseline for compare
+        int mBeforeSlot = -1;                // slot mBeforeFrame was last rendered for
+        EditParams mBeforeGeom;              // geometry fields last rendered into mBeforeFrame
         EditParams mClipboard;              // copy/paste develop settings
         bool mHasClip = false;
         std::string mPresetDir;             // where named presets are stored
         int mPresetMenuIndex = -1;          // menu bar index of the Preset dropdown
+        bool mPresetPanelOpen = true;       // target state of the animated left-docked preset browser
         std::vector<std::string> mPendingCategories;  // categories chosen in the Save/Export picker
         arstro::apf::Document mPendingApf;             // parsed doc awaiting Import confirmation
         double mNowMs = 0.0;                           // last frame time (for history coalescing)

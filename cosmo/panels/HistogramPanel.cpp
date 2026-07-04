@@ -29,6 +29,24 @@ namespace cosmo
         mLogToggle->y.set(10.0);
     }
 
+    void HistogramPanel::advance(double nowMs)
+    {
+        Segment::advance(nowMs);
+        const double dt = mLastAdvanceMs >= 0.0 ? (nowMs - mLastAdvanceMs) / 1000.0 : 0.0;
+        mLastAdvanceMs = nowMs;
+        if (dt <= 0.0) return;
+
+        float target[4][HD::kBins];
+        if (mLog) arstro::Histogram::toLog(mData, target);
+        else arstro::Histogram::toLinear(mData, target);
+        for (int ch = 0; ch < 4; ++ch)
+            for (int i = 0; i < HD::kBins; ++i)
+            {
+                mSmooth[ch][i].setTarget(target[ch][i]);
+                mSmooth[ch][i].advance(dt, 14.0);  // gentle "morph", not a snappy control follow
+            }
+    }
+
     void HistogramPanel::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
@@ -37,10 +55,6 @@ namespace cosmo
         const double px = 12.0, py = 40.0, pw = w - 24.0, ph = h - 52.0;
         drawRoundedRect(t, Rect{px, py, pw, ph}, radius::control(),
                         Paint::filledStroked(palette::bg(), palette::line(), 1.0));
-
-        float norm[4][HD::kBins];
-        if (mLog) arstro::Histogram::toLog(mData, norm);
-        else arstro::Histogram::toLinear(mData, norm);
 
         const Color cols[4] = {
             Color{0.95, 0.30, 0.34, 0.45},
@@ -54,7 +68,7 @@ namespace cosmo
             for (int i = 0; i < HD::kBins; ++i)
             {
                 const double x = px + (double)i / (HD::kBins - 1) * pw;
-                const double y = py + ph - (double)norm[ch][i] * ph;
+                const double y = py + ph - mSmooth[ch][i].value() * ph;
                 t.lineTo(x, y);
             }
             t.lineTo(px + pw, py + ph);

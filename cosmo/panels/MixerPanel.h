@@ -33,6 +33,7 @@ namespace cosmo
     private:
         std::shared_ptr<artboard::TabView> mTabs;
         std::shared_ptr<HueCurveEditor> mEditors[3];
+        std::shared_ptr<artboard::Button> mReset;  // resets whichever channel sub-tab is active
     };
 }
 }

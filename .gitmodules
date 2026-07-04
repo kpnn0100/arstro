@@ -4,3 +4,6 @@
 [submodule "Artboard"]
 	path = Artboard
 	url = https://github.com/kpnn0100/artboard.git
+[submodule "ImageProcessing/lib/LibRaw"]
+	path = ImageProcessing/lib/LibRaw
+	url = https://github.com/LibRaw/LibRaw.git

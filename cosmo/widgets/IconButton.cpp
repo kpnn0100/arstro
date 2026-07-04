@@ -28,6 +28,23 @@ namespace cosmo
 
         const double cx = w * 0.5, cy = h * 0.5;
 
+        if (mIcon == Icon::Sidebar)
+        {
+            // a frame with a divider near the left third -- the standard "toggle
+            // side panel" glyph.
+            const double bw = std::min(w, h) * 0.62, bh = std::min(w, h) * 0.5;
+            const Rect box{cx - bw * 0.5, cy - bh * 0.5, bw, bh};
+            t.setStroke(ink, 1.4);
+            t.beginPath();
+            t.moveTo(box.x, box.y); t.lineTo(box.x + box.w, box.y);
+            t.lineTo(box.x + box.w, box.y + box.h); t.lineTo(box.x, box.y + box.h);
+            t.closePath();
+            t.strokePath();
+            const double divX = box.x + box.w * 0.38;
+            t.beginPath(); t.moveTo(divX, box.y); t.lineTo(divX, box.y + box.h); t.strokePath();
+            return;
+        }
+
         if (mIcon == Icon::Trash)
         {
             const double bw = std::min(w, h) * 0.34, bh = std::min(w, h) * 0.40;

@@ -94,10 +94,12 @@ namespace cosmo
 
     bool Filmstrip::handleGesture(const Gesture &g, const Point &localPoint)
     {
+        // Right-click reports even off any cell (i = -1), e.g. empty strip space or
+        // the "All Photos" background, so the host can still offer to add a photo.
+        if (g.type == Gesture::Type::RightClick) { if (onContext) onContext(cellAt(localPoint), g.pos.x, g.pos.y); return true; }
         const int i = cellAt(localPoint);
         if (i < 0) return Segment::handleGesture(g, localPoint);
         if (g.type == Gesture::Type::DoubleClick) { if (onActivate) onActivate(i); return true; }
-        if (g.type == Gesture::Type::RightClick) { if (onContext) onContext(i, g.pos.x, g.pos.y); return true; }
         if (g.type == Gesture::Type::Click) { if (onSelect) onSelect(i, g.shift, g.ctrl); return true; }
         return Segment::handleGesture(g, localPoint);
     }

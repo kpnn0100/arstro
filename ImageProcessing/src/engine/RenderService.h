@@ -44,6 +44,9 @@ namespace arstro
 
         /** Add an image (copied); returns its slot id (assigned sequentially). */
         int addImage(const uint8_t *rgba, int w, int h, int channels = 4);
+        /** Free a slot's pixels (e.g. removed from the session); its index is never
+         *  reused, so every other slot's id stays valid. */
+        void releaseImage(int slot);
         void setPreviewSize(int maxEdge);
         /** Request a preview render of (slot, params); coalesced to the latest request. */
         void render(int slot, const EditParams &params);
@@ -75,6 +78,7 @@ namespace arstro
         bool mStop = false;
 
         std::vector<AddCmd> mAddQueue;   // pending image adds (applied in order)
+        std::vector<int> mReleaseQueue;  // pending image releases (applied in order)
         bool mPendingPreview = false;
         int mPendingSlot = -1;
         EditParams mPendingParams;

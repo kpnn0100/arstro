@@ -140,6 +140,8 @@ namespace cosmo
         mLocal->layout(w, h - y);
     }
 
+    void MaskPanel::scrollBy(double wheelDelta) { mLocal->scrollBy(wheelDelta); }
+
     void MaskPanel::onPaint(IRenderTarget &t) const
     {
         drawPanelChrome(t, width.value(), height.value(), "MASK");  // gray body joining the tab

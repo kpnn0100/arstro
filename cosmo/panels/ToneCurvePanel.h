@@ -36,6 +36,7 @@ namespace cosmo
         artboard::Color mAccent;
         std::shared_ptr<CurveEditor> mCurve;
         std::shared_ptr<TextToggle> mLogToggle;
+        std::shared_ptr<artboard::Button> mReset;
     };
 }
 }

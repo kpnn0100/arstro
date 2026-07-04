@@ -35,7 +35,7 @@ namespace cosmo
 
         std::function<void(int, bool, bool)> onSelect;       // cell index, shift, ctrl
         std::function<void(int)> onActivate;                 // double-click (drill into group)
-        std::function<void(int, double, double)> onContext;  // right-click + world position
+        std::function<void(int, double, double)> onContext;  // cell index (-1 off any cell) + world position
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

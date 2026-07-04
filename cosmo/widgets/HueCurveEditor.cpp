@@ -41,6 +41,12 @@ namespace cosmo
         if (mPts.size() < 2) mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
     }
 
+    void HueCurveEditor::reset()
+    {
+        mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
+        emit();
+    }
+
     double HueCurveEditor::pxh(double hue) const { return kPad + hue / 360.0 * (width.value() - 2 * kPad); }
     double HueCurveEditor::pyv(double y) const { return midY() - y * halfH(); }
     double HueCurveEditor::nxh(double px, bool wrap) const
@@ -83,6 +89,8 @@ namespace cosmo
         using T = Gesture::Type;
         if (g.type == T::DoubleClick)
         {
+            // Double-click an existing point to remove it (keeping at least two);
+            // double-click empty space to add a point there.
             const int hit = pointAt(local);
             if (hit >= 0 && mPts.size() > 2) mPts.erase(mPts.begin() + hit);
             else { CtrlPoint c; c.x = (float)nxh(local.x, true); c.y = (float)nyv(local.y); mPts.push_back(c); }
@@ -101,12 +109,24 @@ namespace cosmo
         {
             CtrlPoint &cp = mPts[mDragIdx];
             if (mDragKind == 0) { cp.x = (float)nxh(local.x, true); cp.y = (float)nyv(local.y); }
-            else
+            else if (mDragKind == 3)  // Alt-drag on the corner itself: pull out symmetric handles
             {
                 const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
-                if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }
-                else if (mDragKind == 2) { cp.ox = hx; cp.oy = hy; }
-                else { cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy; }
+                cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy;
+            }
+            else  // dragging an existing handle directly
+            {
+                const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
+                if (g.alt)  // Alt: tear it apart -- move only this handle, independently
+                {
+                    if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }
+                    else { cp.ox = hx; cp.oy = hy; }
+                }
+                else  // plain drag: mirror the opposite handle so the tangent stays a straight line
+                {
+                    if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; cp.ox = -hx; cp.oy = -hy; }
+                    else { cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy; }
+                }
             }
             emit();
             return true;

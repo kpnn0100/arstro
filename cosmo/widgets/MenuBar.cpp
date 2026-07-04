@@ -33,6 +33,11 @@ namespace cosmo
     {
         if (idx == mOpen) return;
         mOpen = idx;
+        // Topmost for input + draws last, like ContextMenu/PresetDialog/HistoryView:
+        // otherwise a sibling added after the menu bar (e.g. the left-docked preset
+        // panel) would sit ahead of it in hit-test order and eat clicks meant for
+        // the dropdown, even though the dropdown paints on top via onOverlay.
+        if (mOpen >= 0) raise();
         if (onOpenChanged) onOpenChanged(mOpen);  // app shows/hides overlay menus
     }
 
@@ -124,17 +129,19 @@ namespace cosmo
             t.setFill(active ? palette::ink() : palette::muted());
             t.drawText(mMenus[i].title, titleX(i) + kGap + 3.0, height.value() * 0.5 + kTitlePx * 0.35, kTitlePx);
         }
-        if (mOpen >= 0 && !mMenus[mOpen].items.empty())
+    }
+
+    void MenuBar::onOverlay(IRenderTarget &t) const
+    {
+        if (mOpen < 0 || mMenus[mOpen].items.empty()) return;
+        const Rect d = dropdownRect(mOpen);
+        drawRoundedRect(t, d, radius::control(),
+                        Paint::filledStroked(palette::panel(), palette::line(), 1.0));
+        for (int i = 0; i < (int)mMenus[mOpen].items.size(); ++i)
         {
-            const Rect d = dropdownRect(mOpen);
-            drawRoundedRect(t, d, radius::control(),
-                            Paint::filledStroked(palette::panel(), palette::line(), 1.0));
-            for (int i = 0; i < (int)mMenus[mOpen].items.size(); ++i)
-            {
-                const double y = d.y + 3.0 + i * kItemH;
-                t.setFill(palette::ink());
-                t.drawText(mMenus[mOpen].items[i].label, d.x + 12.0, y + kItemH * 0.5 + 4.0, 12.0);
-            }
+            const double y = d.y + 3.0 + i * kItemH;
+            t.setFill(palette::ink());
+            t.drawText(mMenus[mOpen].items[i].label, d.x + 12.0, y + kItemH * 0.5 + 4.0, 12.0);
         }
     }
 }

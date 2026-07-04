@@ -14,7 +14,29 @@ namespace cosmo
     {
         constexpr double kMargin = 16.0;
         constexpr double kTopBar = 64.0;   // wordmark row + menu bar row
+        constexpr double kPresetPanelW = 200.0;  // left-docked preset browser, when open
         double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+        // Fires a callback on right-click; every other gesture is left unhandled so
+        // it falls through to whatever the framework would otherwise do (nothing --
+        // this sits UNDER the photo/mask/crop/compare widgets in z-order, so it only
+        // ever sees a gesture when none of those claim it first).
+        class RightClickController : public InputController
+        {
+        public:
+            explicit RightClickController(std::function<void(double, double)> onRightClick)
+                : mOnRightClick(std::move(onRightClick)) {}
+            bool onGesture(Segment &, const Gesture &g, const Point &) override
+            {
+                if (g.type != Gesture::Type::RightClick) return false;
+                if (mOnRightClick) mOnRightClick(g.pos.x, g.pos.y);
+                return true;
+            }
+            bool onKey(Segment &, const KeyEvent &) override { return false; }
+
+        private:
+            std::function<void(double, double)> mOnRightClick;
+        };
 
         std::vector<uint8_t> makeThumb(const uint8_t *rgba, int w, int h, int maxEdge, int &tw, int &th)
         {
@@ -138,6 +160,15 @@ namespace cosmo
 
         mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}});  // root group (index 0)
 
+        // Added FIRST (least topmost): the photo/mask/crop/compare widgets added
+        // below all claim gestures over this same area whenever they're active, so
+        // this only ever sees a right-click that none of them wanted -- exactly
+        // "right-click anywhere on the photo" without stealing their drags.
+        mPhotoContext = std::make_shared<Segment>();
+        mPhotoContext->setInputController(std::make_shared<RightClickController>(
+            [this](double x, double y) { showPhotoContext(x, y); }));
+        mRoot->addChild(mPhotoContext);
+
         mImageView = std::make_shared<ImageView>();
         mRoot->addChild(mImageView);
 
@@ -241,6 +272,10 @@ namespace cosmo
         }}};
         mGroupPanel = std::make_shared<ParamPanel>("GROUP", mTheme, mAccent, groupSecs);
         mGroupPanel->visible = false;
+        // Sections snap to a fixed per-row height now (ParamPanel::layout), so on a
+        // short window a panel's natural content can exceed its allotted rect; clip
+        // rather than let it bleed over the preset bar below.
+        mGroupPanel->clipToBounds = true;
         mRoot->addChild(mGroupPanel);
 
         mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
@@ -308,6 +343,11 @@ namespace cosmo
         mMaskPanel->onLocal = [editMask](const arstro::LocalAdjust &a) { editMask([&a](arstro::MaskParams &m) { m.adjust = a; }); };
 
         mTabs = std::make_shared<TabView>(mTheme.tab);
+        // Sections snap to a fixed per-row height now (ParamPanel::layout / Color-
+        // GradingPanel::layout), so on a short window a page's natural content can
+        // exceed the tab's allotted rect; clip rather than let it bleed over the
+        // preset bar pinned below.
+        mTabs->clipToBounds = true;
         mTabs->addPage("Basic", mBasic);
         mTabs->addPage("Detail", mDetail);
         mTabs->addPage("Mask", mMaskPanel);
@@ -365,6 +405,8 @@ namespace cosmo
         file.items.push_back({"Open...", [this] { if (onOpenRequested) onOpenRequested(); }});
         file.items.push_back({"Save", [this] { saveSession(); }});
         file.items.push_back({"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }});
+        file.items.push_back({"Save Workspace...", [this] { saveWorkspace(); }});
+        file.items.push_back({"Load Workspace...", [this] { if (onLoadWorkspaceRequested) onLoadWorkspaceRequested(); }});
         mMenuBar->addMenu(file);
         MenuBar::Menu settings;
         settings.title = "Settings";
@@ -408,7 +450,12 @@ namespace cosmo
         mPresetMenuIndex = mMenuBar->menuCount() - 1;
         // One active menu at a time (tab-like): the Settings panel shows iff Settings
         // is the active menu, so opening File closes Settings and vice versa.
-        mMenuBar->onOpenChanged = [this](int open) { mSettings->visible = (open == 1); };
+        mMenuBar->onOpenChanged = [this](int open) {
+            mSettings->visible = (open == 1);
+            // Same fix as the menu bar's own dropdown: raise so it wins hit-testing
+            // (and paint order) over whatever was added after it, e.g. the preset panel.
+            if (mSettings->visible) mSettings->raise();
+        };
         mRoot->addChild(mMenuBar);
 
         mContextMenu = std::make_shared<ContextMenu>(mAccent);  // right-click popup (modal when open)
@@ -421,11 +468,24 @@ namespace cosmo
         mHistoryView->onSelect = [this](int node) { jumpToHistory(node); };
         mRoot->addChild(mHistoryView);
 
+        // Preset browser: docked to the left edge, open by default; a toolbar
+        // button (snapped to the top-right) toggles it with a slide animation.
+        // Double-click a preset to apply. Its width (not `visible`) IS the open/
+        // closed state, so the slide animates smoothly via Property::animateTo.
+        mPresetPanel = std::make_shared<PresetPanel>(mAccent);
+        mPresetPanel->onApply = [this](const std::string &name) { applyPreset(name); };
+        mPresetPanel->onContext = [this](const std::string &name, double x, double y) { showPresetContext(name, x, y); };
+        mRoot->addChild(mPresetPanel);
+
+        mPresetToggle = std::make_shared<IconButton>(IconButton::Icon::Sidebar, mAccent);
+        mPresetToggle->onClick = [this] { mPresetPanelOpen = !mPresetPanelOpen; layout(true); };
+        mRoot->addChild(mPresetToggle);
+
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
         layout();
     }
 
-    void CosmoApp::layout()
+    void CosmoApp::layout(bool animateShift)
     {
         const double rightW = clampd(mW * 0.30, 300.0, 460.0);
         const double filmH = clampd(mH * 0.10, 72.0, 110.0);
@@ -435,26 +495,39 @@ namespace cosmo
         const double photoY = kTopBar + 8.0;
         const double crumbY = filmY - 18.0;         // breadcrumb sits just above the filmstrip
         const double compareRowY = crumbY - 28.0;   // a control row under the photo (before/after)
-        mPhotoRect = Rect{kMargin, photoY, rightX - kMargin - kMargin, compareRowY - photoY - 6.0};
+        // The preset browser (left-docked, toggled) pushes the photo/filmstrip/
+        // breadcrumb right when open, rather than overlapping them. Only the
+        // properties that actually move because of the toggle animate; everything
+        // else (a plain resize) snaps, via the same layout() with animateShift=false.
+        constexpr double kShiftMs = 220.0;
+        auto place = [&](Property &prop, double target) {
+            if (animateShift) prop.animateTo(target, kShiftMs, Easing::EaseOutCubic, mNowMs);
+            else prop.set(target);
+        };
+        const double leftX = mPresetPanelOpen ? kMargin + kPresetPanelW + kMargin : kMargin;
+        mPhotoRect = Rect{leftX, photoY, rightX - leftX - kMargin, compareRowY - photoY - 6.0};
 
-        mImageView->x.set(mPhotoRect.x); mImageView->y.set(mPhotoRect.y);
-        mImageView->width.set(mPhotoRect.w); mImageView->height.set(mPhotoRect.h);
+        place(mPresetPanel->width, mPresetPanelOpen ? kPresetPanelW : 0.0);
 
-        mMaskOverlay->x.set(mPhotoRect.x); mMaskOverlay->y.set(mPhotoRect.y);
-        mMaskOverlay->width.set(mPhotoRect.w); mMaskOverlay->height.set(mPhotoRect.h);
-        mCropOverlay->x.set(mPhotoRect.x); mCropOverlay->y.set(mPhotoRect.y);
-        mCropOverlay->width.set(mPhotoRect.w); mCropOverlay->height.set(mPhotoRect.h);
-        mCompareView->x.set(mPhotoRect.x); mCompareView->y.set(mPhotoRect.y);
-        mCompareView->width.set(mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
+        place(mPhotoContext->x, mPhotoRect.x); mPhotoContext->y.set(mPhotoRect.y);
+        place(mPhotoContext->width, mPhotoRect.w); mPhotoContext->height.set(mPhotoRect.h);
+        place(mImageView->x, mPhotoRect.x); mImageView->y.set(mPhotoRect.y);
+        place(mImageView->width, mPhotoRect.w); mImageView->height.set(mPhotoRect.h);
+
+        place(mMaskOverlay->x, mPhotoRect.x); mMaskOverlay->y.set(mPhotoRect.y);
+        place(mMaskOverlay->width, mPhotoRect.w); mMaskOverlay->height.set(mPhotoRect.h);
+        place(mCropOverlay->x, mPhotoRect.x); mCropOverlay->y.set(mPhotoRect.y);
+        place(mCropOverlay->width, mPhotoRect.w); mCropOverlay->height.set(mPhotoRect.h);
+        place(mCompareView->x, mPhotoRect.x); mCompareView->y.set(mPhotoRect.y);
+        place(mCompareView->width, mPhotoRect.w); mCompareView->height.set(mPhotoRect.h);
         // before/after toggle: its own row under the photo, centred
-        mCompareToggle->x.set(mPhotoRect.x + (mPhotoRect.w - 112.0) * 0.5); mCompareToggle->y.set(compareRowY + 3.0);
+        place(mCompareToggle->x, mPhotoRect.x + (mPhotoRect.w - 112.0) * 0.5); mCompareToggle->y.set(compareRowY + 3.0);
         mCompareToggle->width.set(112.0); mCompareToggle->height.set(20.0);
         mHistogram->x.set(rightX); mHistogram->y.set(photoY);
         mHistogram->layout(rightW, histH);
 
-        const double colBottom = filmY - 8.0;          // right column's bottom edge
         const double barH = 30.0;                       // preset button bar
-        const double barY = colBottom - barH;
+        const double barY = mH - kMargin - barH;        // pinned to the literal bottom of the window
         const double tabsY = photoY + histH + 10.0;
         const double tabsH = (barY - 8.0) - tabsY;      // leave an 8px gap above the bar
         mTabs->x.set(rightX); mTabs->y.set(tabsY);
@@ -482,10 +555,15 @@ namespace cosmo
         mHistoryView->width.set(mW); mHistoryView->height.set(mH);
 
         // breadcrumb row above the filmstrip
-        mBreadcrumb->x.set(kMargin); mBreadcrumb->y.set(crumbY);
-        mBreadcrumb->width.set(rightX - 2 * kMargin); mBreadcrumb->height.set(18.0);
-        mFilmstrip->x.set(kMargin); mFilmstrip->y.set(filmY);
-        mFilmstrip->width.set(rightX - kMargin - kMargin); mFilmstrip->height.set(filmH);
+        place(mBreadcrumb->x, leftX); mBreadcrumb->y.set(crumbY);
+        place(mBreadcrumb->width, rightX - leftX - kMargin); mBreadcrumb->height.set(18.0);
+        place(mFilmstrip->x, leftX); mFilmstrip->y.set(filmY);
+        place(mFilmstrip->width, rightX - leftX - kMargin); mFilmstrip->height.set(filmH);
+
+        // preset browser: docked left (x fixed; width IS the open/closed state,
+        // animated above), spanning the same rows as the photo/filmstrip
+        mPresetPanel->x.set(kMargin); mPresetPanel->y.set(photoY);
+        mPresetPanel->layout((filmY + filmH) - photoY);
 
         // context menu covers the root so it can clamp + be modal
         mContextMenu->x.set(0); mContextMenu->y.set(0);
@@ -495,6 +573,9 @@ namespace cosmo
         mMenuBarX = kMargin; mMenuBarY = 34.0;
         mMenuBar->x.set(mMenuBarX); mMenuBar->y.set(mMenuBarY);
         mMenuBar->width.set(380.0); mMenuBar->height.set(22.0);
+        // preset-panel toggle: same row as the menu bar, snapped to the window's right edge
+        mPresetToggle->x.set(mW - kMargin - 22.0); mPresetToggle->y.set(mMenuBarY);
+        mPresetToggle->width.set(22.0); mPresetToggle->height.set(22.0);
         mSettings->x.set(kMargin); mSettings->y.set(kTopBar + 6.0);
         mSettings->layout(280.0, 214.0);
 
@@ -515,30 +596,13 @@ namespace cosmo
 
     int CosmoApp::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
-        const int slot = mService.addImage(rgba, w, h, 4);
+        const int slot = openImageInto(mCurGroup, rgba, w, h, name, path);
         if (slot < 0) return -1;
-        mSlotParams.push_back(EditParams{});
-        History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
-        hist.init(EditParams{});   // root = the freshly-opened, unedited state
-        mSlotHistory.push_back(std::move(hist));
-        mSlotNames.push_back(name);
-        mSlotPaths.push_back(path);
-        mSlotSessions.push_back("");
-        int tw = 0, th = 0;
-        std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
-        mFilmstrip->addThumb(thumb.data(), tw, th);
-
-        // add an image leaf node under the current group
-        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = mCurGroup; leaf.slot = slot;
-        const int node = (int)mNodes.size();
-        mNodes.push_back(leaf);
-        mNodes[mCurGroup].kids.push_back(node);
-
         rebuildFilmstrip();
         // select the new image (find its cell in the current group)
         const auto &kids = mNodes[mCurGroup].kids;
         for (int c = 0; c < (int)kids.size(); ++c)
-            if (kids[c] == node) { selectNode(c, false, false); break; }
+            if (mNodes[kids[c]].slot == slot) { selectNode(c, false, false); break; }
         return slot;
     }
 
@@ -588,6 +652,183 @@ namespace cosmo
             if (line.rfind("image=", 0) == 0) { imagePath = line.substr(6); break; }
         deserializeParams(text, params);  // ignores the image= line
         return true;
+    }
+
+    // ── whole workspace (every open image + the group tree + each image's settings) ──
+    bool CosmoApp::saveWorkspaceAs(const std::string &path)
+    {
+        std::ofstream f(path);
+        if (!f) return false;
+        f << "cosmoworkspace=1\n";
+        int nextId = 0;
+        std::function<void(int, int)> walk = [&](int node, int parentId) {
+            for (int k : mNodes[node].kids)
+            {
+                const GNode &g = mNodes[k];
+                const int myId = nextId++;
+                if (g.group)
+                {
+                    const arstro::LocalAdjust &o = g.offset;
+                    f << "#group\nparent=" << parentId << "\nname=" << g.name << "\noffset="
+                      << o.exposure << ',' << o.contrast << ',' << o.highlights << ',' << o.shadows << ','
+                      << o.whites << ',' << o.blacks << ',' << o.temp << ',' << o.tint << ','
+                      << o.saturation << ',' << o.texture << ',' << o.clarity << ',' << o.dehaze << '\n';
+                    walk(k, myId);
+                }
+                else if (g.slot >= 0 && g.slot < (int)mSlotPaths.size())
+                {
+                    f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n'
+                      << serializeParams(mSlotParams[g.slot]);
+                }
+            }
+        };
+        walk(0, -1);
+        mWorkspacePath = path;
+        return true;
+    }
+
+    void CosmoApp::saveWorkspace()
+    {
+        if (imageCount() == 0) return;
+        if (mWorkspacePath.empty())
+        {
+            if (onSaveWorkspaceRequested) onSaveWorkspaceRequested();
+        }
+        else
+            saveWorkspaceAs(mWorkspacePath);
+    }
+
+    bool CosmoApp::readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out)
+    {
+        std::ifstream f(path);
+        if (!f) return false;
+        out.clear();
+
+        bool inGroup = false, inImage = false;
+        std::vector<std::string> block;
+        auto flush = [&] {
+            if (!inGroup && !inImage) return;
+            WorkspaceEntry e;
+            e.group = inGroup;
+            std::string blockText;
+            for (const auto &l : block)
+            {
+                blockText += l; blockText += '\n';
+                const auto eq = l.find('=');
+                if (eq == std::string::npos) continue;
+                const std::string k = l.substr(0, eq), v = l.substr(eq + 1);
+                if (k == "parent") { try { e.parent = std::stoi(v); } catch (...) {} }
+                else if (k == "name") e.name = v;
+                else if (k == "path") e.imagePath = v;
+                else if (k == "offset")
+                {
+                    std::stringstream ts(v); std::string t; float vals[12] = {0};
+                    int i = 0;
+                    while (i < 12 && std::getline(ts, t, ',')) { try { vals[i] = std::stof(t); } catch (...) {} ++i; }
+                    arstro::LocalAdjust &o = e.offset;
+                    o.exposure = vals[0]; o.contrast = vals[1]; o.highlights = vals[2]; o.shadows = vals[3];
+                    o.whites = vals[4]; o.blacks = vals[5]; o.temp = vals[6]; o.tint = vals[7];
+                    o.saturation = vals[8]; o.texture = vals[9]; o.clarity = vals[10]; o.dehaze = vals[11];
+                }
+            }
+            if (inImage) deserializeParams(blockText, e.params);
+            out.push_back(std::move(e));
+            block.clear();
+        };
+
+        std::string line;
+        while (std::getline(f, line))
+        {
+            if (line == "#group" || line == "#image")
+            {
+                flush();
+                inGroup = (line == "#group");
+                inImage = (line == "#image");
+                continue;
+            }
+            if (line.rfind("cosmoworkspace=", 0) == 0) continue;  // header
+            block.push_back(line);
+        }
+        flush();
+        return true;
+    }
+
+    void CosmoApp::resetWorkspace()
+    {
+        for (int slot = 0; slot < (int)mSlotParams.size(); ++slot)
+            mService.releaseImage(slot);
+        mSlotParams.clear(); mSlotHistory.clear(); mSlotNames.clear();
+        mSlotPaths.clear(); mSlotSessions.clear();
+        mNodes.clear();
+        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}});
+        mCurGroup = 0; mSel.clear(); mSelAnchor = -1; mEditGroup = -1; mRenameTarget = -1;
+        mCurrentSlot = -1;
+        mHasClip = false;
+        mGroupPanel->visible = false;
+        mTabs->visible = true;
+        rebuildFilmstrip();
+    }
+
+    int CosmoApp::addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset)
+    {
+        if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = 0;
+        GNode g; g.group = true; g.name = name.empty() ? "Group" : name; g.parent = parentNode; g.offset = offset;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(g);
+        mNodes[parentNode].kids.push_back(node);
+        return node;
+    }
+
+    int CosmoApp::openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
+    {
+        if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = mCurGroup;
+        const int slot = mService.addImage(rgba, w, h, 4);
+        if (slot < 0) return -1;
+        mSlotParams.push_back(EditParams{});
+        History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
+        hist.init(EditParams{});
+        mSlotHistory.push_back(std::move(hist));
+        mSlotNames.push_back(name);
+        mSlotPaths.push_back(path);
+        mSlotSessions.push_back("");
+        int tw = 0, th = 0;
+        std::vector<uint8_t> thumb = makeThumb(rgba, w, h, 110, tw, th);
+        mFilmstrip->addThumb(thumb.data(), tw, th);
+
+        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = parentNode; leaf.slot = slot;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(leaf);
+        mNodes[parentNode].kids.push_back(node);
+        return slot;
+    }
+
+    int CosmoApp::addWorkspaceMissingImage(int parentNode, const std::string &name)
+    {
+        if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = 0;
+        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = parentNode; leaf.slot = -1;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(leaf);
+        mNodes[parentNode].kids.push_back(node);
+        return node;
+    }
+
+    void CosmoApp::applyParamsToSlot(int slot, const EditParams &p)
+    {
+        if (slot < 0 || slot >= (int)mSlotParams.size()) return;
+        mSlotParams[slot] = p;
+        mSlotHistory[slot].init(p);  // seed history with the LOADED state, not a blank one
+    }
+
+    void CosmoApp::finishWorkspaceLoad(const std::string &path)
+    {
+        mWorkspacePath = path;
+        if (!mSlotParams.empty())
+            selectImage(0);
+        else
+        {
+            mCurGroup = 0;
+            rebuildFilmstrip();
+        }
     }
 
     void CosmoApp::selectImage(int slot)
@@ -796,11 +1037,14 @@ namespace cosmo
     bool CosmoApp::savePreset(const std::string &name)
     {
         if (mPresetDir.empty() || name.empty() || mCurrentSlot < 0) return false;
+        // A "/" in the name nests the preset into a subfolder of the preset dir
+        // (e.g. "Portraits/Warm" -> <presetDir>/Portraits/Warm.apf).
+        const std::filesystem::path full = std::filesystem::path(mPresetDir) / (name + ".apf");
         std::error_code ec;
-        std::filesystem::create_directories(mPresetDir, ec);
+        std::filesystem::create_directories(full.parent_path(), ec);
         const std::vector<std::string> cats = mPendingCategories.empty() ? apfImageCategories() : mPendingCategories;
         const apf::Document doc = editParamsToApf(mSlotParams[mCurrentSlot], cats, name);
-        std::ofstream f(mPresetDir + "/" + name + ".apf");
+        std::ofstream f(full);
         if (!f) return false;
         f << apf::serialize(doc);
         refreshPresetMenu();
@@ -870,6 +1114,7 @@ namespace cosmo
 
     void CosmoApp::refreshPresetMenu()
     {
+        if (mPresetPanel) mPresetPanel->setRoot(mPresetDir);  // folder-tree browser stays in sync too
         if (!mMenuBar || mPresetMenuIndex < 0) return;
         std::vector<MenuBar::Item> items;
         items.push_back({"Save Preset...", [this] { presetSaveClicked(); }});
@@ -1024,11 +1269,17 @@ namespace cosmo
 
     void CosmoApp::showCellContext(int cell, double x, double y)
     {
+        // A right-click off any cell (empty filmstrip space, or "All Photos" with
+        // nothing under the pointer) still gets a menu -- just "Add Photo..." into
+        // whatever group is currently being viewed, since there's no specific target.
         const auto &kids = mNodes[mCurGroup].kids;
-        if (cell < 0 || cell >= (int)kids.size()) return;
-        const int node = kids[cell];
-        if (std::find(mSel.begin(), mSel.end(), node) == mSel.end())
-            selectNode(cell, false, false);  // right-click selects if not already
+        const bool validCell = cell >= 0 && cell < (int)kids.size();
+        if (validCell)
+        {
+            const int node = kids[cell];
+            if (std::find(mSel.begin(), mSel.end(), node) == mSel.end())
+                selectNode(cell, false, false);  // right-click selects if not already
+        }
 
         std::vector<ContextMenu::Item> items;
         items.push_back({"Group Selection", [this] { createGroupFromSelection(); }, !mSel.empty()});
@@ -1037,7 +1288,113 @@ namespace cosmo
             if (!mSel.empty() && mNodes[mSel[0]].group) { mRenameTarget = mSel[0]; if (onRenameGroupRequested) onRenameGroupRequested(); }
         }, oneGroup});
         items.push_back({"Ungroup", [this] { ungroupSelected(); }, oneGroup});
+        // Always available: adds into the right-clicked group (drilling in first),
+        // or into the group currently being viewed otherwise (an image, several
+        // selected items, or empty "All Photos" space all land here).
+        items.push_back({"Add Photo...", [this] {
+            if (mSel.size() == 1 && mNodes[mSel[0]].group) navigateToGroup(mSel[0]);
+            if (onOpenRequested) onOpenRequested();
+        }, true});
+        items.push_back({"Delete", [this] { deleteSelected(); }, !mSel.empty()});
         mContextMenu->show(x, y, std::move(items));
+    }
+
+    void CosmoApp::showPhotoContext(double x, double y)
+    {
+        std::vector<ContextMenu::Item> items;
+        items.push_back({"Add Photo...", [this] { if (onOpenRequested) onOpenRequested(); }, true});
+        mContextMenu->show(x, y, std::move(items));
+    }
+
+    void CosmoApp::showPresetContext(const std::string &name, double x, double y)
+    {
+        std::vector<ContextMenu::Item> items;
+        items.push_back({"Delete", [this, name] { deletePresetFile(name); }, true});
+        mContextMenu->show(x, y, std::move(items));
+    }
+
+    void CosmoApp::deletePresetFile(const std::string &name)
+    {
+        if (mPresetDir.empty()) return;
+        std::error_code ec;
+        std::filesystem::remove(std::filesystem::path(mPresetDir) / (name + ".apf"), ec);
+        refreshPresetMenu();  // also rescans the folder tree in mPresetPanel
+    }
+
+    void CosmoApp::collectSubtree(int node, std::vector<int> &out) const
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return;
+        out.push_back(node);
+        if (mNodes[node].group)
+            for (int k : mNodes[node].kids) collectSubtree(k, out);
+    }
+
+    void CosmoApp::deleteNode(int node)
+    {
+        if (node <= 0 || node >= (int)mNodes.size()) return;  // node 0 (root) can't be deleted
+        // Free every image slot in this subtree's engine-side pixels (the actual
+        // memory a "delete" should reclaim); slot indices are never reused, so no
+        // other image's bookkeeping needs to shift.
+        std::vector<int> subtree;
+        collectSubtree(node, subtree);
+        for (int n : subtree)
+            if (!mNodes[n].group && mNodes[n].slot >= 0)
+                mService.releaseImage(mNodes[n].slot);
+
+        // Detach from its parent: the whole subtree disappears from every future
+        // traversal (filmstrip, breadcrumb, selection). The orphaned GNode entries
+        // are left in place (harmless, unreferenced) so no other node's index shifts.
+        const int parent = mNodes[node].parent;
+        auto &kids = mNodes[parent].kids;
+        kids.erase(std::remove(kids.begin(), kids.end(), node), kids.end());
+    }
+
+    void CosmoApp::deleteSelected()
+    {
+        if (mSel.empty()) return;
+
+        // Does the deletion remove whatever the tabs/offset panel are currently
+        // showing (the edited image, or the edited group)? (mCurrentSlot < 0 must
+        // short-circuit: nodeForSlot(-1) would otherwise match a "missing image"
+        // placeholder leaf, which also carries slot == -1.)
+        const int editNode = mEditGroup >= 0 ? mEditGroup : (mCurrentSlot >= 0 ? nodeForSlot(mCurrentSlot) : -1);
+        bool editTargetGone = false;
+        if (editNode >= 0)
+            for (int n : mSel)
+            {
+                std::vector<int> subtree;
+                collectSubtree(n, subtree);
+                if (std::find(subtree.begin(), subtree.end(), editNode) != subtree.end())
+                { editTargetGone = true; break; }
+            }
+
+        // Remember where the edited item sat among its siblings so, if it's the one
+        // being removed, whatever slides into that same position afterward (the
+        // "next" item) can be selected -- if nothing slides into it (it was the
+        // last), fall back to the default/blank state instead of the previous item.
+        int anchorCell = -1;
+        if (editTargetGone)
+        {
+            const auto &kidsBefore = mNodes[mCurGroup].kids;
+            for (int c = 0; c < (int)kidsBefore.size(); ++c)
+                if (kidsBefore[c] == editNode) { anchorCell = c; break; }
+        }
+
+        const std::vector<int> victims = mSel;  // deleteNode mutates mNodes; copy first
+        for (int n : victims) deleteNode(n);
+        mSel.clear(); mSelAnchor = -1;
+
+        if (editTargetGone)
+        {
+            mCurrentSlot = -1; mEditGroup = -1;
+            mTabs->visible = true; mGroupPanel->visible = false;
+            const auto &kids = mNodes[mCurGroup].kids;
+            if (anchorCell >= 0 && anchorCell < (int)kids.size())
+                selectNode(anchorCell, false, false);  // the next image slid into the deleted slot
+            // else: no next item (it was the last) -> stays in the default/blank state
+        }
+        rebuildFilmstrip();
+        submit();
     }
 
     void CosmoApp::renameGroup(const std::string &name)
@@ -1060,9 +1417,25 @@ namespace cosmo
         b.cropX = cur.cropX; b.cropY = cur.cropY; b.cropW = cur.cropW; b.cropH = cur.cropH;
         b.rotation = cur.rotation; b.quarterTurns = cur.quarterTurns;
         b.lensDistortion = cur.lensDistortion; b.lensCA = cur.lensCA; b.lensVignette = cur.lensVignette;
+
+        // The baseline only depends on geometry, which almost never changes across an
+        // undo/redo of tonal edits (exposure, curves, ...). Skip the blocking re-render
+        // when it's identical to what's already sitting in mBeforeFrame -- this was what
+        // made Ctrl+Z feel slow while the before/after compare view was open: every step
+        // re-ran a full synchronous preview render of an unchanged baseline.
+        if (mBeforeSlot == mCurrentSlot &&
+            b.cropX == mBeforeGeom.cropX && b.cropY == mBeforeGeom.cropY &&
+            b.cropW == mBeforeGeom.cropW && b.cropH == mBeforeGeom.cropH &&
+            b.rotation == mBeforeGeom.rotation && b.quarterTurns == mBeforeGeom.quarterTurns &&
+            b.lensDistortion == mBeforeGeom.lensDistortion && b.lensCA == mBeforeGeom.lensCA &&
+            b.lensVignette == mBeforeGeom.lensVignette)
+            return;
+
         // Preview-size (not full-res) so the compare overlay is cheap to draw each frame.
         if (mService.renderPreviewSync(mCurrentSlot, b, mBeforeFrame) && mBeforeFrame.width > 0)
             mCompareView->setBefore(mBeforeFrame.rgba.data(), mBeforeFrame.width, mBeforeFrame.height);
+        mBeforeSlot = mCurrentSlot;
+        mBeforeGeom = b;
     }
 
     const uint8_t *CosmoApp::exportFullRes(int &w, int &h)
@@ -1078,6 +1451,29 @@ namespace cosmo
         if (mHistoryView && mHistoryView->isOpen())  // scroll the history tree when it's open
         {
             mHistoryView->scrollBy(delta);
+            return;
+        }
+        if (mPresetPanelOpen &&
+            x >= mPresetPanel->x.value() && x <= mPresetPanel->x.value() + mPresetPanel->width.value() &&
+            y >= mPresetPanel->y.value() && y <= mPresetPanel->y.value() + mPresetPanel->height.value())
+        {
+            mPresetPanel->scrollBy(delta);
+            return;
+        }
+        // Plain wheel over the edit column (tabs, or the group-offset panel) scrolls
+        // whichever section list is showing, when it's taller than its allotted rect.
+        if (x >= mTabs->x.value() && x <= mTabs->x.value() + mTabs->width.value() &&
+            y >= mTabs->y.value() && y <= mTabs->y.value() + mTabs->height.value())
+        {
+            if (mEditGroup >= 0) mGroupPanel->scrollBy(delta);
+            else switch (mTabs->selectedIndex())  // page order set by addPage() in the ctor
+            {
+                case 0: mBasic->scrollBy(delta); break;
+                case 1: mDetail->scrollBy(delta); break;
+                case 2: mMaskPanel->scrollBy(delta); break;
+                case 5: mGrade->scrollBy(delta); break;
+                default: break;  // Mixer/Curve/Xform lay out their own fixed content
+            }
             return;
         }
         if (!ctrl || delta == 0.0) return;  // ctrl+scroll = zoom; plain scroll ignored

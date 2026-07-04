@@ -1,7 +1,8 @@
 /*
  *  Cosmo by arstro — HueCurveEditor: a CYCLIC 2-axis mapper for the colour mixer.
  *  X = pixel input hue [0,360); Y = adjustment [-1,1] (0 = no change). Bezier-capable
- *  control points (Alt-drag for handles, like CurveEditor); the curve wraps
+ *  control points (Alt-drag for handles, like CurveEditor -- plain-drag an existing
+ *  handle mirrors its opposite; Alt+drag breaks the mirror); the curve wraps
  *  continuously across the 360/0 seam (a point dragged off the left edge rejoins on
  *  the right with no break). In "mapped-hue" mode (the Hue channel) the line is
  *  coloured by the OUTPUT hue, so you see what each input hue maps to. Emits a dense
@@ -25,6 +26,7 @@ namespace cosmo
 
         std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
         void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
+        void reset();  // back to a flat (no-op) curve
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
         /** Hue distribution of the image (bins over 0..360, normalised 0..1), drawn
          *  behind the curve so you see which hues the edit affects. */

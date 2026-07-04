@@ -168,6 +168,31 @@ TEST(Engine_multi_image_independent_params)
     CHECK((int)pb.rgba[0] == bright);
 }
 
+TEST(Engine_release_image_frees_and_keeps_indices_stable)
+{
+    EditEngine eng;
+    auto a = solidRGBA8(4, 4, 64);
+    auto b = solidRGBA8(4, 4, 200);
+    int s0 = eng.addImage(a.data(), 4, 4, 4);
+    int s1 = eng.addImage(b.data(), 4, 4, 4);
+    CHECK(s0 == 0 && s1 == 1);
+    CHECK(eng.currentSlot() == s0);  // the first-added image auto-selects
+
+    eng.releaseImage(s0);
+    CHECK(eng.imageCount() == 2);    // the index stays valid; nothing shifts
+    CHECK(eng.currentSlot() == -1);  // the released slot was current -> now none
+
+    eng.selectImage(s0);             // a released slot can never be selected again
+    CHECK(eng.currentSlot() == -1);
+
+    eng.selectImage(s1);             // the other slot is untouched by the release
+    CHECK(eng.currentSlot() == s1);
+    PreviewBuffer pb = eng.renderPreview();
+    CHECK(pb.rgba != nullptr && (int)pb.rgba[0] > 150);
+
+    eng.releaseImage(999);           // out of range -> no-op, no crash
+}
+
 TEST(Engine_preview_downscale_and_full)
 {
     EditEngine eng;

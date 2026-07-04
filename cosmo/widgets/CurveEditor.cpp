@@ -15,9 +15,9 @@ namespace cosmo
         double clamp01(double v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
     }
 
-    CurveEditor::CurveEditor(const Color &accent) : mAccent(accent) { width.set(300.0); height.set(200.0); reset(); }
+    CurveEditor::CurveEditor(const Color &accent) : mAccent(accent) { width.set(300.0); height.set(200.0); mPts = {{0.f, 0.f}, {1.f, 1.f}}; }
 
-    void CurveEditor::reset() { mPts = {{0.f, 0.f}, {1.f, 1.f}}; }
+    void CurveEditor::reset() { mPts = {{0.f, 0.f}, {1.f, 1.f}}; emit(); }
 
     void CurveEditor::setPoints(const std::vector<std::pair<float, float>> &pts)
     {
@@ -65,10 +65,16 @@ namespace cosmo
         using T = Gesture::Type;
         if (g.type == T::DoubleClick)
         {
+            // Double-click an existing interior point to remove it; double-click
+            // empty space to add a corner point there.
             const int hit = pointAt(local);
-            if (hit > 0 && hit < (int)mPts.size() - 1) mPts.erase(mPts.begin() + hit);  // remove interior
-            else { CtrlPoint c; c.x = (float)clamp01(nx(local.x)); c.y = (float)clamp01(ny(local.y)); mPts.push_back(c);
-                   std::sort(mPts.begin(), mPts.end(), [](const CtrlPoint &a, const CtrlPoint &b) { return a.x < b.x; }); }
+            if (hit > 0 && hit < (int)mPts.size() - 1) mPts.erase(mPts.begin() + hit);
+            else
+            {
+                CtrlPoint c; c.x = (float)clamp01(nx(local.x)); c.y = (float)clamp01(ny(local.y));
+                mPts.push_back(c);
+                std::sort(mPts.begin(), mPts.end(), [](const CtrlPoint &a, const CtrlPoint &b) { return a.x < b.x; });
+            }
             emit();
             return true;
         }
@@ -80,7 +86,7 @@ namespace cosmo
             if (p >= 0)
             {
                 mDragIdx = p;
-                if (g.alt) { mPts[p].smooth = true; mDragKind = 3; }  // Alt: pull symmetric handles
+                if (g.alt) { mPts[p].smooth = true; mDragKind = 3; }  // Alt+drag a bare corner: pull out symmetric handles
                 else mDragKind = 0;
                 return true;
             }
@@ -99,12 +105,24 @@ namespace cosmo
                     cp.x = std::min(std::max((float)nx(local.x), lo), hi);
                 }
             }
-            else  // adjust a handle (or symmetric pull)
+            else if (mDragKind == 3)  // Alt-drag on the corner itself: pull out symmetric handles
             {
                 const float hx = (float)(nx(local.x)) - cp.x, hy = (float)(ny(local.y)) - cp.y;
-                if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }
-                else if (mDragKind == 2) { cp.ox = hx; cp.oy = hy; }
-                else { cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy; }  // symmetric
+                cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy;
+            }
+            else  // dragging an existing handle directly
+            {
+                const float hx = (float)(nx(local.x)) - cp.x, hy = (float)(ny(local.y)) - cp.y;
+                if (g.alt)  // Alt: tear it apart -- move only this handle, independently
+                {
+                    if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }
+                    else { cp.ox = hx; cp.oy = hy; }
+                }
+                else  // plain drag: mirror the opposite handle so the tangent stays a straight line
+                {
+                    if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; cp.ox = -hx; cp.oy = -hy; }
+                    else { cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy; }
+                }
             }
             emit();
             return true;

@@ -67,6 +67,9 @@ namespace arstro
         // ── images / slots ──
         int addImage(const uint8_t *rgba, int width, int height, int channels = 4);
         void selectImage(int slot);
+        /** Free a slot's source pixels in place (its index stays valid but unusable) --
+         *  for "remove from session" without shifting every other slot's index. */
+        void releaseImage(int slot);
         int imageCount() const { return (int)mSlots.size(); }
         int currentSlot() const { return mCurrent; }
         bool hasImage() const { return mCurrent >= 0; }

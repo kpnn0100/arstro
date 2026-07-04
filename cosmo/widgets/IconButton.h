@@ -14,7 +14,7 @@ namespace cosmo
     class IconButton : public artboard::Segment
     {
     public:
-        enum class Icon { RotateCCW, RotateCW, Trash };
+        enum class Icon { RotateCCW, RotateCW, Trash, Sidebar };
         IconButton(Icon icon, const artboard::Color &accent);
 
         std::function<void()> onClick;

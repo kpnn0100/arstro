@@ -1,4 +1,5 @@
 #include "MixerPanel.h"
+#include "../CosmoTheme.h"
 
 namespace arstro
 {
@@ -21,6 +22,18 @@ namespace cosmo
         }
         mEditors[0]->setMappedHue(true);  // Hue tab: colour the line by the output hue
         addChild(mTabs);
+
+        ButtonStyle flat = theme.button;  // flat "chip" style, matching MaskPanel's add buttons
+        flat.idle = {Paint::filled(palette::surface()), radius::control()};
+        flat.pressed = {Paint::filled(palette::line()), radius::control()};
+        flat.label.color = palette::ink();
+        mReset = std::make_shared<Button>("Reset", flat);
+        mReset->onClick = [this] {
+            const int c = mTabs->selectedIndex();
+            if (c >= 0 && c < 3) mEditors[c]->reset();
+        };
+        addChild(mReset);
+
         width.set(300.0);
         height.set(220.0);
     }
@@ -35,12 +48,15 @@ namespace cosmo
     {
         width.set(w);
         height.set(h);
+        constexpr double kHeaderH = 26.0;  // room for the Reset button, above the sub-tabs
+        mReset->x.set(w - 48.0); mReset->y.set(2.0);
+        mReset->width.set(40.0); mReset->height.set(20.0);
         mTabs->x.set(0.0);
-        mTabs->y.set(0.0);
+        mTabs->y.set(kHeaderH);
         mTabs->width.set(w);
-        mTabs->height.set(h);
+        mTabs->height.set(h - kHeaderH);
         const double cw = w;
-        const double ch = h - mTabs->tabHeight - 6.0;
+        const double ch = (h - kHeaderH) - mTabs->tabHeight - 6.0;
         for (int c = 0; c < 3; ++c)
         {
             mEditors[c]->width.set(cw);

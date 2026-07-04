@@ -36,6 +36,8 @@ namespace cosmo
         };
         void setState(const State &s);
         void layout(double w, double h);
+        /** Scroll the row list by a mouse-wheel delta (positive = up). */
+        void scrollBy(double wheelDelta);
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -44,17 +46,22 @@ namespace cosmo
         void loadRegion();
         void emitGrade();
         void emitRemap();
+        void clampScroll();
+        void reflow();  // reposition rows from width/mScrollY (layout() and scrollBy() both need this)
 
         // ordered rows for responsive layout
         struct Row { std::shared_ptr<artboard::Segment> ctrl; std::string label; bool labeled; double baseY = 0; };
 
         artboard::Color mAccent;
+        std::shared_ptr<artboard::Segment> mBody;  // clipped viewport below the title bar; owns the row controls
         std::shared_ptr<artboard::ComboBox> mRegionSel;
         std::shared_ptr<artboard::Slider> mHue, mSat, mLum, mBalance, mSrc, mRange, mDst, mStrength;
         std::shared_ptr<TextToggle> mRemap;
         std::vector<Row> mRows;
         State mState;
         int mRegion = 0;
+        double mScrollY = 0.0;
+        double mNaturalH = 0.0;
     };
 }
 }

@@ -32,6 +32,13 @@ namespace arstro
         return mNextSlot++;  // engine assigns the same id (queue is FIFO)
     }
 
+    void RenderService::releaseImage(int slot)
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        mReleaseQueue.push_back(slot);
+        mCv.notify_all();
+    }
+
     void RenderService::setPreviewSize(int maxEdge)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -95,17 +102,19 @@ namespace arstro
         for (;;)
         {
             std::vector<AddCmd> adds;
+            std::vector<int> releases;
             bool doPrev = false, doFull = false, fullPreviewOnly = false;
             int slot = -1, fullSlot = -1, maxEdge = 1600;
             EditParams params, fullParams;
             {
                 std::unique_lock<std::mutex> lk(mMu);
                 mCv.wait(lk, [this] {
-                    return mStop || !mAddQueue.empty() || mPendingPreview || mPendingFull;
+                    return mStop || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull;
                 });
                 if (mStop)
                     return;
                 adds.swap(mAddQueue);
+                releases.swap(mReleaseQueue);
                 maxEdge = mPreviewMaxEdge;
                 if (mPendingFull) { doFull = true; fullSlot = mFullSlot; fullParams = mFullParams; fullPreviewOnly = mFullPreviewOnly; mPendingFull = false; }
                 if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; mPendingPreview = false; }
@@ -113,6 +122,8 @@ namespace arstro
 
             for (auto &a : adds)  // apply queued image adds, in order
                 mEngine.addImage(a.bytes.data(), a.w, a.h, a.ch);
+            for (int s : releases)  // apply queued image releases, in order
+                mEngine.releaseImage(s);
 
             if (doFull)
             {
@@ -167,6 +178,7 @@ namespace arstro
         if (slot >= 0) mNextSlot = slot + 1;
         return slot;
     }
+    void RenderService::releaseImage(int slot) { mEngine.releaseImage(slot); }
     void RenderService::setPreviewSize(int maxEdge)
     {
         mPreviewMaxEdge = maxEdge < 1 ? 1 : maxEdge;
