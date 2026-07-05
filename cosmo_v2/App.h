@@ -9,6 +9,8 @@
 #include "../Artboard/include/artboard/artboard.h"
 #include "../cosmo_core/EditSession.h"
 #include "Theme.h"
+#include "widgets/TopBar.h"
+#include "widgets/LeftRail.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -47,14 +49,15 @@ namespace cosmo_v2
         std::function<void()> onLoadWorkspaceRequested;
         void renameGroup(const std::string &name);
 
-        void setPresetDir(const std::string &dir) { mSession.setPresetDir(dir); }
-        bool savePreset(const std::string &name) { return mSession.savePreset(name); }
+        void setPresetDir(const std::string &dir) { mSession.setPresetDir(dir); refreshPresetTree(); }
+        bool savePreset(const std::string &name) { const bool ok = mSession.savePreset(name); if (ok) refreshPresetTree(); return ok; }
         bool exportPresetTo(const std::string &path) { return mSession.exportPresetTo(path); }
         /** NOTE: applies every present category immediately -- the category-picker
          *  modal (Figma brief frame 8) is one of the secondary states scoped for a
          *  follow-up pass, so import is "quick apply all" until it lands. */
         bool importPresetFrom(const std::string &path);
         bool applyPreset(const std::string &name) { return mSession.applyPreset(name); }
+        bool deletePresetFile(const std::string &name) { const bool ok = mSession.deletePresetFile(name); if (ok) refreshPresetTree(); return ok; }
 
         void undo();
         void redo();
@@ -89,13 +92,19 @@ namespace cosmo_v2
         /** Push the current slot's params into every panel that isn't backed by
          *  live queries -- filled in as each panel lands (no-op until then). */
         void syncControlsToSlot();
+        void refreshPresetTree();
+        void toggleRail();
 
         double mW, mH;
+        double mNowMs = 0.0;
+        bool mRailOpen = true;
         cosmo::EditSession mSession;
         artboard::Theme mTheme;
         artboard::Color mAccent;
         artboard::GestureRecognizer mRecognizer;
         std::shared_ptr<artboard::Segment> mRoot;
+        std::shared_ptr<TopBar> mTopBar;
+        std::shared_ptr<LeftRail> mLeftRail;
     };
 }
 }

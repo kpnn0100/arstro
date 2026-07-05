@@ -1,4 +1,5 @@
 #include "App.h"
+#include "../cosmo_core/PresetLibrary.h"
 
 namespace arstro
 {
@@ -6,26 +7,75 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
+    namespace { constexpr double kRailAnimMs = 200.0; }
+
     App::App(double width, double height)
         : mW(width), mH(height), mTheme(makeCosmoV2Theme()), mAccent(palette::primary())
     {
         mRoot = std::make_shared<Segment>();
         mRoot->width.set(width);
         mRoot->height.set(height);
+        mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
 
-        // The full chrome (top bar, left rail, center stage, right column) is
-        // built incrementally in following milestones; for now the root is an
-        // empty themed canvas so the app boots and renders the background.
+        mTopBar = std::make_shared<TopBar>();
+        mTopBar->width.set(width);
+        mTopBar->onRailToggle = [this] { toggleRail(); };
+        mRoot->addChild(mTopBar);
+
+        mLeftRail = std::make_shared<LeftRail>();
+        mLeftRail->width.set(LeftRail::kOpenWidth);
+        mLeftRail->tree()->onApply = [this](std::string relPath) {
+            if (mSession.applyPreset(relPath)) { mLeftRail->tree()->setSelected(relPath); syncControlsToSlot(); }
+        };
+        mRoot->addChild(mLeftRail);
+
+        // Center stage / right column land in the next milestones; the root is
+        // otherwise an empty themed canvas below the chrome built so far.
+
+        layout();
     }
 
     void App::layout()
     {
-        // Populated as chrome/panels land.
+        mTopBar->width.set(mW);
+        mTopBar->layout();
+
+        mLeftRail->x.set(0.0);
+        mLeftRail->y.set(TopBar::kHeight);
+        mLeftRail->height.set(mH - TopBar::kHeight);
+        mLeftRail->layout();
+    }
+
+    void App::toggleRail()
+    {
+        mRailOpen = !mRailOpen;
+        mTopBar->setRailOpen(mRailOpen);
+        mLeftRail->width.animateTo(mRailOpen ? LeftRail::kOpenWidth : 0.0, kRailAnimMs, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::refreshPresetTree()
+    {
+        mLeftRail->tree()->setRoots(cosmo::PresetLibrary::scan(mSession.presetDir()));
     }
 
     void App::syncControlsToSlot()
     {
-        // No-op until panels exist to sync into.
+        const int slot = mSession.currentSlot();
+        if (slot >= 0)
+        {
+            // mSlotNames/paths aren't exposed by name lookup on EditSession yet
+            // (only the currently-open source path is) -- the filmstrip milestone
+            // adds a proper per-slot name accessor; until then this shows the
+            // source path's filename via currentSourcePath().
+            std::string name = mSession.currentSourcePath();
+            auto slash = name.find_last_of('/');
+            if (slash != std::string::npos) name = name.substr(slash + 1);
+            mTopBar->setFilename(name, slot + 1, mSession.imageCount());
+        }
+        else
+        {
+            mTopBar->setFilename("", 0, 0);
+        }
     }
 
     void App::setSize(double width, double height)
@@ -48,13 +98,22 @@ namespace cosmo_v2
         mRecognizer.feed(rp);
     }
 
-    void App::wheel(double, double, double, bool)
+    void App::wheel(double x, double y, double delta, bool ctrl)
     {
-        // Wired once a scrollable panel exists.
+        (void)ctrl;
+        const double railX = mLeftRail->x.value(), railY = mLeftRail->y.value();
+        if (x >= railX && x <= railX + mLeftRail->width.value() &&
+            y >= railY && y <= railY + mLeftRail->height.value())
+        {
+            mLeftRail->scrollBy(delta);
+        }
+        // Center-stage zoom and right-column panel scrolling wire in once those
+        // regions exist.
     }
 
     void App::render(IRenderTarget &target, double nowMs)
     {
+        mNowMs = nowMs;
         mSession.tick(nowMs);
         mRoot->advance(nowMs);
 
@@ -75,7 +134,9 @@ namespace cosmo_v2
 
     int App::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
-        return mSession.openImage(rgba, w, h, name, path);
+        const int slot = mSession.openImage(rgba, w, h, name, path);
+        syncControlsToSlot();
+        return slot;
     }
 
     void App::selectImage(int slot)
