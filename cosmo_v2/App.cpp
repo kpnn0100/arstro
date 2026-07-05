@@ -1,5 +1,6 @@
 #include "App.h"
 #include "../cosmo_core/PresetLibrary.h"
+#include <algorithm>
 
 namespace arstro
 {
@@ -29,8 +30,41 @@ namespace cosmo_v2
         };
         mRoot->addChild(mLeftRail);
 
-        // Center stage / right column land in the next milestones; the root is
-        // otherwise an empty themed canvas below the chrome built so far.
+        mCenterStage = std::make_shared<CenterStage>();
+        mCenterStage->photo()->onBeforeAfterChange = [this](bool after) {
+            if (after)
+            {
+                if (mLastAfterFrame.width > 0)
+                    mCenterStage->photo()->imageView()->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
+            }
+            else if (const auto *before = mSession.renderBefore())
+            {
+                if (before->width > 0)
+                    mCenterStage->photo()->imageView()->setImage(before->rgba.data(), before->width, before->height);
+            }
+        };
+        mCenterStage->filmstrip()->onSelect = [this](int cell, bool shift, bool ctrl) {
+            mSession.selectNode(cell, shift, ctrl);
+            syncControlsToSlot();
+        };
+        mCenterStage->filmstrip()->onActivate = [this](int cell) {
+            const auto cells = mSession.currentGroupCells();
+            if (cell >= 0 && cell < (int)cells.size() && cells[cell].group)
+            {
+                mSession.navigateToGroup(cells[cell].node);
+                syncControlsToSlot();
+            }
+        };
+        mCenterStage->breadcrumb()->onCrumbClick = [this](int idx) {
+            std::vector<int> chain;
+            for (int n = mSession.currentGroup(); ; n = mSession.nodes()[n].parent) { chain.push_back(n); if (n == 0) break; }
+            std::reverse(chain.begin(), chain.end());
+            if (idx >= 0 && idx < (int)chain.size()) { mSession.navigateToGroup(chain[idx]); syncControlsToSlot(); }
+        };
+        mRoot->addChild(mCenterStage);
+
+        // The right column (histogram/tabs/panels/action bar) lands in the next
+        // milestone; center stage currently spans to the window's right edge.
 
         layout();
     }
@@ -44,6 +78,12 @@ namespace cosmo_v2
         mLeftRail->y.set(TopBar::kHeight);
         mLeftRail->height.set(mH - TopBar::kHeight);
         mLeftRail->layout();
+
+        mCenterStage->x.set(mLeftRail->width.value());
+        mCenterStage->y.set(TopBar::kHeight);
+        mCenterStage->width.set(std::max(0.0, mW - mLeftRail->width.value()));
+        mCenterStage->height.set(mH - TopBar::kHeight);
+        mCenterStage->layout();
     }
 
     void App::toggleRail()
@@ -58,24 +98,57 @@ namespace cosmo_v2
         mLeftRail->tree()->setRoots(cosmo::PresetLibrary::scan(mSession.presetDir()));
     }
 
+    void App::registerThumb(int slot)
+    {
+        const auto *thumb = mSession.thumbForSlot(slot);
+        if (thumb) mCenterStage->filmstrip()->addThumb(thumb->rgba.data(), thumb->w, thumb->h);
+    }
+
+    namespace
+    {
+        std::string filenameOf(const std::string &path)
+        {
+            const auto slash = path.find_last_of('/');
+            return slash == std::string::npos ? path : path.substr(slash + 1);
+        }
+    }
+
     void App::syncControlsToSlot()
     {
         const int slot = mSession.currentSlot();
         if (slot >= 0)
-        {
-            // mSlotNames/paths aren't exposed by name lookup on EditSession yet
-            // (only the currently-open source path is) -- the filmstrip milestone
-            // adds a proper per-slot name accessor; until then this shows the
-            // source path's filename via currentSourcePath().
-            std::string name = mSession.currentSourcePath();
-            auto slash = name.find_last_of('/');
-            if (slash != std::string::npos) name = name.substr(slash + 1);
-            mTopBar->setFilename(name, slot + 1, mSession.imageCount());
-        }
+            mTopBar->setFilename(filenameOf(mSession.currentSourcePath()), slot + 1, mSession.imageCount());
         else
-        {
             mTopBar->setFilename("", 0, 0);
+
+        // Breadcrumb: the group path, plus the selected image's own filename as
+        // the trailing crumb (matching the Figma mock's "Library > Album >
+        // river_02.jpg") when an image, not a group, is being edited.
+        std::vector<std::string> crumbs = mSession.breadcrumbPath();
+        if (mSession.editGroup() < 0 && slot >= 0)
+        {
+            const std::string name = filenameOf(mSession.currentSourcePath());
+            if (!name.empty()) crumbs.push_back(name);
         }
+        mCenterStage->breadcrumb()->setPath(crumbs);
+
+        // Filmstrip: the current group's children + which cell(s) are selected.
+        std::vector<Filmstrip::Cell> cells;
+        for (const auto &c : mSession.currentGroupCells())
+            cells.push_back({c.group, c.node, c.slot, c.name, c.count});
+        mCenterStage->filmstrip()->setCells(cells);
+
+        const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
+        const auto &sel = mSession.selection();
+        std::vector<int> selCells;
+        int primary = -1;
+        for (int c = 0; c < (int)kids.size(); ++c)
+            if (std::find(sel.begin(), sel.end(), kids[c]) != sel.end()) selCells.push_back(c);
+        for (int c = 0; c < (int)kids.size(); ++c)
+            if ((mSession.editGroup() >= 0 && kids[c] == mSession.editGroup()) ||
+                (mSession.editGroup() < 0 && !mSession.nodes()[kids[c]].group && mSession.nodes()[kids[c]].slot == slot))
+                primary = c;
+        mCenterStage->filmstrip()->setSelection(selCells, primary);
     }
 
     void App::setSize(double width, double height)
@@ -116,11 +189,19 @@ namespace cosmo_v2
         mNowMs = nowMs;
         mSession.tick(nowMs);
         mRoot->advance(nowMs);
+        // Re-run manual composite layout every frame (cheap arithmetic) so
+        // children stay in sync while the rail's width Property is mid-animation
+        // -- matching the design brief's "the edit area reflows in step, it
+        // doesn't just get covered or revealed" for the rail toggle.
+        layout();
 
         RenderService::Frame f;
         if (mSession.renderService().tryAcquire(f) && f.width > 0)
         {
-            // Pushed into the canvas/histogram once those widgets exist.
+            mLastAfterFrame = f;
+            if (mCenterStage->photo()->showAfter())
+                mCenterStage->photo()->imageView()->setImage(f.rgba.data(), f.width, f.height);
+            // Histogram/curve/mixer taps wire in with the right column.
         }
 
         target.save();
@@ -135,7 +216,15 @@ namespace cosmo_v2
     int App::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
         const int slot = mSession.openImage(rgba, w, h, name, path);
+        if (slot >= 0) registerThumb(slot);
         syncControlsToSlot();
+        return slot;
+    }
+
+    int App::openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
+    {
+        const int slot = mSession.openImageInto(parentNode, rgba, w, h, name, path);
+        if (slot >= 0) registerThumb(slot);
         return slot;
     }
 

@@ -11,6 +11,7 @@
 #include "Theme.h"
 #include "widgets/TopBar.h"
 #include "widgets/LeftRail.h"
+#include "widgets/CenterStage.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -80,8 +81,7 @@ namespace cosmo_v2
         void resetWorkspace() { mSession.resetWorkspace(); }
         int addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset)
         { return mSession.addWorkspaceGroup(parentNode, name, offset); }
-        int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
-        { return mSession.openImageInto(parentNode, rgba, w, h, name, path); }
+        int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);
         int addWorkspaceMissingImage(int parentNode, const std::string &name)
         { return mSession.addWorkspaceMissingImage(parentNode, name); }
         void applyParamsToSlot(int slot, const EditParams &p) { mSession.applyParamsToSlot(slot, p); }
@@ -94,17 +94,20 @@ namespace cosmo_v2
         void syncControlsToSlot();
         void refreshPresetTree();
         void toggleRail();
+        void registerThumb(int slot);
 
         double mW, mH;
         double mNowMs = 0.0;
         bool mRailOpen = true;
         cosmo::EditSession mSession;
+        RenderService::Frame mLastAfterFrame;
         artboard::Theme mTheme;
         artboard::Color mAccent;
         artboard::GestureRecognizer mRecognizer;
         std::shared_ptr<artboard::Segment> mRoot;
         std::shared_ptr<TopBar> mTopBar;
         std::shared_ptr<LeftRail> mLeftRail;
+        std::shared_ptr<CenterStage> mCenterStage;
     };
 }
 }
