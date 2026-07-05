@@ -100,6 +100,7 @@ namespace cosmo_v2
         double mW, mH;
         double mNowMs = 0.0;
         bool mRailOpen = true;
+        int mActiveMenu = -1;
         cosmo::EditSession mSession;
         RenderService::Frame mLastAfterFrame;
         artboard::Theme mTheme;

@@ -21,6 +21,14 @@ namespace cosmo_v2
         mTopBar = std::make_shared<TopBar>();
         mTopBar->width.set(width);
         mTopBar->onRailToggle = [this] { toggleRail(); };
+        // App.tsx's own menu bar has no dropdown content (menuOpen only drives the
+        // active-pill highlight; File/Open etc. are reachable via keyboard, wired
+        // in linux_main.cpp) -- toggling the highlight is the complete, faithful
+        // behavior for what's actually specified.
+        mTopBar->onMenuClick = [this](int idx) {
+            mActiveMenu = (mActiveMenu == idx) ? -1 : idx;
+            mTopBar->setActiveMenu(mActiveMenu);
+        };
         mRoot->addChild(mTopBar);
 
         mLeftRail = std::make_shared<LeftRail>();
@@ -172,6 +180,14 @@ namespace cosmo_v2
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
+        // A press below the top bar while a menu is highlighted closes it first
+        // (matches App.tsx's root-level onClick={() => menuOpen && setMenuOpen(null)});
+        // the press still goes on to do its own thing afterward.
+        if (kind == 0 && mActiveMenu >= 0 && y > TopBar::kHeight)
+        {
+            mActiveMenu = -1;
+            mTopBar->setActiveMenu(-1);
+        }
         RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down
                              : kind == 2 ? RawPointer::Kind::Up
                                          : RawPointer::Kind::Move;

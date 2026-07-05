@@ -10,6 +10,11 @@
 #include "../../cosmo_core/EditSession.h"
 #include "HistogramWidget.h"
 #include "ParamPanel.h"
+#include "MaskPanel.h"
+#include "MixerPanel.h"
+#include "CurvePanel.h"
+#include "GradePanel.h"
+#include "XformPanel.h"
 #include "ActionBar.h"
 #include <functional>
 #include <memory>
@@ -41,7 +46,13 @@ namespace cosmo_v2
         std::shared_ptr<artboard::TabView> mTabs;
         std::shared_ptr<ParamPanel> mBasic;
         std::shared_ptr<ParamPanel> mDetail;
+        std::shared_ptr<MaskPanel> mMask;
+        std::shared_ptr<MixerPanel> mMixer;
+        std::shared_ptr<CurvePanel> mCurve;
+        std::shared_ptr<GradePanel> mGrade;
+        std::shared_ptr<XformPanel> mXform;
         std::shared_ptr<ActionBar> mActionBar;
+        int mSelectedMask = -1;
     };
 }
 }
