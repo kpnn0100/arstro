@@ -22,6 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
+option(ARSTRO_BUILD_COSMO_V2 "Build the cosmo_v2 photo editor GUI (Figma-exact UI, shared cosmo_core logic)" OFF)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
 
@@ -30,6 +31,16 @@ enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` s
 add_subdirectory(Artboard)
 add_subdirectory(ImageProcessing)
 
+# cosmo_core: the UI-free Cosmo session/editing logic shared by cosmo and cosmo_v2
+# (see cosmo_core/CMakeLists.txt) -- built whenever either app is.
+if(ARSTRO_BUILD_COSMO OR ARSTRO_BUILD_COSMO_V2)
+  add_subdirectory(cosmo_core)
+endif()
+
 if(ARSTRO_BUILD_COSMO)
   add_subdirectory(cosmo)
+endif()
+
+if(ARSTRO_BUILD_COSMO_V2)
+  add_subdirectory(cosmo_v2)
 endif()
