@@ -22,7 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
-option(ARSTRO_BUILD_COSMO_V2 "Build the cosmo_v2 photo editor GUI (Figma-exact UI, shared cosmo_core logic)" OFF)
+option(ARSTRO_BUILD_COSMO_V2 "Build the cosmo_v2 photo editor GUI (Figma-exact UI, shared cosmo_core logic)" ON)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
 

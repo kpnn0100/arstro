@@ -1,0 +1,79 @@
+/*
+ *  cosmo_v2 by arstro — theme factory + design tokens.
+ *
+ *  Values are taken verbatim from the Figma export's theme.css (ref/extracted/
+ *  src/styles/theme.css) -- this is a from-scratch visual language for the same
+ *  editor cosmo already implements, so nothing here reuses cosmo's own
+ *  CosmoTheme.h palette/radius scale (deliberately: see the task's "don't refer
+ *  to cosmo's UI" constraint).
+ *
+ *  Design language: a near-black dark UI, ONE accent (a blue, used only for
+ *  interactive/selected state -- active tab, slider fill, selection ring,
+ *  primary button), a restrained near-neutral grey ramp otherwise. Radii are
+ *  small and literal per Figma's own bracket values (1-3px), not a single
+ *  uniform scale. Typography: DM Sans (body/UI) + JetBrains Mono (numerics/
+ *  filenames), both vendored under assets/fonts and registered at startup via
+ *  Fontconfig (see linux_main.cpp) -- see Artboard's FR-22 drawText family
+ *  parameter this depends on.
+ */
+#pragma once
+#include "../Artboard/include/artboard/artboard.h"
+
+namespace arstro
+{
+namespace cosmo_v2
+{
+    artboard::Theme makeCosmoV2Theme();
+
+    namespace font
+    {
+        inline const char *sans() { return "DM Sans"; }
+        inline const char *sansMedium() { return "DM Sans Medium"; }
+        inline const char *sansSemiBold() { return "DM Sans SemiBold"; }
+        inline const char *mono() { return "JetBrains Mono"; }
+        inline const char *monoMedium() { return "JetBrains Mono Medium"; }
+    }
+
+    // theme.css tokens, verbatim (hex values as authored in the Figma export).
+    namespace palette
+    {
+        inline artboard::Color background() { return artboard::Color::hex(0x141414); }
+        inline artboard::Color foreground() { return artboard::Color::hex(0xDBDBDB); }
+        inline artboard::Color card() { return artboard::Color::hex(0x1C1C1C); }
+        inline artboard::Color popover() { return artboard::Color::hex(0x222222); }
+        inline artboard::Color primary() { return artboard::Color::hex(0x4F7EF7); }       // the single accent
+        inline artboard::Color primaryForeground() { return artboard::Color::hex(0xFFFFFF); }
+        inline artboard::Color secondary() { return artboard::Color::hex(0x252525); }
+        inline artboard::Color secondaryForeground() { return artboard::Color::hex(0xAAAAAA); }
+        inline artboard::Color muted() { return artboard::Color::hex(0x191919); }
+        inline artboard::Color mutedForeground() { return artboard::Color::hex(0x636363); }
+        inline artboard::Color destructive() { return artboard::Color::hex(0xE5534B); }
+        inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.072}; }  // rgba(255,255,255,.072)
+        inline artboard::Color input() { return artboard::Color::hex(0x252525); }
+        inline artboard::Color switchBackground() { return artboard::Color::hex(0x444444); }
+        inline artboard::Color ring() { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, 0.5}; }
+
+        // Literal per-widget surface colors used directly in the Figma source
+        // (bracket values, not theme.css tokens) -- kept here so every widget
+        // pulls from one place rather than re-hardcoding hex literals.
+        inline artboard::Color canvasBg() { return artboard::Color::hex(0x0A0A0A); }     // photo stage
+        inline artboard::Color histogramBg() { return artboard::Color::hex(0x0F0F0F); }
+        inline artboard::Color leftRailBg() { return artboard::Color::hex(0x161616); }   // rail + breadcrumb
+        inline artboard::Color filmstripBg() { return artboard::Color::hex(0x121212); }
+        inline artboard::Color folderChipBg() { return artboard::Color::hex(0x1A1A1A); }
+        inline artboard::Color segmentedBg() { return artboard::Color::hex(0x111111); }  // RGB/Hue-Sat-Lum pickers
+        inline artboard::Color curvePlotBg() { return artboard::Color::hex(0x0D0D0D); }
+        inline artboard::Color white() { return artboard::Color::rgba(255, 255, 255); }
+        inline artboard::Color whiteAlpha(double a) { return artboard::Color{1.0, 1.0, 1.0, a}; }
+    }
+
+    // Figma uses small literal per-component radii (bracket values), not one
+    // uniform scale -- named here so every widget cites the same constant.
+    namespace radius
+    {
+        inline double hairline() { return 1.0; }  // rounded-[1px]: mixer/curve/grade segmented pickers
+        inline double control() { return 2.0; }   // rounded-[2px]: buttons, chips, panels, filmstrip cells
+        inline double pill() { return 9999.0; }   // rounded-full: slider track/thumb, before/after pill
+    }
+}
+}
