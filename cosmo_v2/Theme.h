@@ -24,6 +24,9 @@ namespace arstro
 namespace cosmo_v2
 {
     artboard::Theme makeCosmoV2Theme();
+    /** Cached instance (built once) for widgets that just need to read styles,
+     *  rather than constructing a fresh Theme per control. */
+    const artboard::Theme &sharedTheme();
 
     namespace font
     {

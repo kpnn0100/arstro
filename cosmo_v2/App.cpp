@@ -63,8 +63,11 @@ namespace cosmo_v2
         };
         mRoot->addChild(mCenterStage);
 
-        // The right column (histogram/tabs/panels/action bar) lands in the next
-        // milestone; center stage currently spans to the window's right edge.
+        mRightColumn = std::make_shared<RightColumn>(mSession);
+        mRightColumn->actionBar()->onSave = [this] { if (onSavePresetRequested) onSavePresetRequested(); };
+        mRightColumn->actionBar()->onImport = [this] { if (onImportPresetRequested) onImportPresetRequested(); };
+        mRightColumn->actionBar()->onExport = [this] { if (onExportPresetRequested) onExportPresetRequested(); };
+        mRoot->addChild(mRightColumn);
 
         layout();
     }
@@ -79,9 +82,14 @@ namespace cosmo_v2
         mLeftRail->height.set(mH - TopBar::kHeight);
         mLeftRail->layout();
 
+        mRightColumn->x.set(mW - RightColumn::kWidth);
+        mRightColumn->y.set(TopBar::kHeight);
+        mRightColumn->height.set(mH - TopBar::kHeight);
+        mRightColumn->layout();
+
         mCenterStage->x.set(mLeftRail->width.value());
         mCenterStage->y.set(TopBar::kHeight);
-        mCenterStage->width.set(std::max(0.0, mW - mLeftRail->width.value()));
+        mCenterStage->width.set(std::max(0.0, mW - mLeftRail->width.value() - RightColumn::kWidth));
         mCenterStage->height.set(mH - TopBar::kHeight);
         mCenterStage->layout();
     }
@@ -149,6 +157,8 @@ namespace cosmo_v2
                 (mSession.editGroup() < 0 && !mSession.nodes()[kids[c]].group && mSession.nodes()[kids[c]].slot == slot))
                 primary = c;
         mCenterStage->filmstrip()->setSelection(selCells, primary);
+
+        mRightColumn->syncToSlot();
     }
 
     void App::setSize(double width, double height)
@@ -179,9 +189,15 @@ namespace cosmo_v2
             y >= railY && y <= railY + mLeftRail->height.value())
         {
             mLeftRail->scrollBy(delta);
+            return;
         }
-        // Center-stage zoom and right-column panel scrolling wire in once those
-        // regions exist.
+        const double colX = mRightColumn->x.value(), colY = mRightColumn->y.value();
+        if (x >= colX && x <= colX + mRightColumn->width.value() &&
+            y >= colY && y <= colY + mRightColumn->height.value())
+        {
+            mRightColumn->scrollActivePanel(delta);
+        }
+        // Center-stage ctrl+scroll zoom wires in with mask/crop tool support.
     }
 
     void App::render(IRenderTarget &target, double nowMs)
@@ -201,7 +217,8 @@ namespace cosmo_v2
             mLastAfterFrame = f;
             if (mCenterStage->photo()->showAfter())
                 mCenterStage->photo()->imageView()->setImage(f.rgba.data(), f.width, f.height);
-            // Histogram/curve/mixer taps wire in with the right column.
+            mRightColumn->histogram()->setHistogram(f.hist);
+            // Curve/mixer background histograms wire in with those tabs.
         }
 
         target.save();

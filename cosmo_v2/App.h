@@ -12,6 +12,7 @@
 #include "widgets/TopBar.h"
 #include "widgets/LeftRail.h"
 #include "widgets/CenterStage.h"
+#include "widgets/RightColumn.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -108,6 +109,7 @@ namespace cosmo_v2
         std::shared_ptr<TopBar> mTopBar;
         std::shared_ptr<LeftRail> mLeftRail;
         std::shared_ptr<CenterStage> mCenterStage;
+        std::shared_ptr<RightColumn> mRightColumn;
     };
 }
 }

@@ -64,5 +64,11 @@ namespace cosmo_v2
         th.label = {palette::foreground(), 11.0, font::sans()};
         return th;
     }
+
+    const Theme &sharedTheme()
+    {
+        static const Theme th = makeCosmoV2Theme();
+        return th;
+    }
 }
 }
