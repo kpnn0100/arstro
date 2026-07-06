@@ -18,6 +18,7 @@ namespace cosmo_v2
             {
                 auto row = std::make_shared<SliderRow>(spec.label, spec.min, spec.max, 0.0);
                 row->onChange = spec.onChange;
+                if (spec.hasGradient) row->setTrackGradient(spec.gradLeft, spec.gradRight);
                 addChild(row);
                 mFlatRows.push_back(row);
             }

@@ -25,7 +25,7 @@ namespace cosmo_v2
     class CurvePanel : public artboard::Segment
     {
     public:
-        static constexpr double kPlotW = 232.0, kPlotH = 164.0;
+        static constexpr double kPlotH = 164.0;  // plot width fills the panel (set in layout)
 
         CurvePanel();
 
@@ -48,6 +48,7 @@ namespace cosmo_v2
         std::vector<std::pair<float, float>> mPoints{{0, 0}, {1, 1}};
         int mDragIndex = -1;
         double mPlotY = 0.0;
+        double mPlotW = 232.0;  // set each layout() to the panel's inner width
     };
 }
 }

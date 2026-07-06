@@ -9,31 +9,13 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace
-    {
-        const std::vector<std::string> kMenus = {"File", "Settings", "Develop", "History", "Preset"};
-        constexpr double kMenuFontPx = 11.0;
-        constexpr double kMenuPadX = 8.125;  // px-2.5
-        constexpr double kMenuPadY = 3.25;   // py-1 (height derives from font + padding)
-        constexpr double kMenuHeight = 21.0; // ~11px line height + 2*py-1, approximated
-        constexpr double kMenuGap = 1.0;     // gap-[1px]
-    }
+    namespace { constexpr double kMenuHeight = 21.0; }
 
     TopBar::TopBar()
     {
-        for (size_t i = 0; i < kMenus.size(); ++i)
-        {
-            auto btn = std::make_shared<PillButton>(kMenus[i]);
-            btn->idleBox = {Paint{}, 2.0};  // no fill/stroke -> PillButton skips drawing the box
-            btn->activeBox = {Paint::filled(palette::primary()), 2.0};
-            btn->idleText = {palette::mutedForeground(), kMenuFontPx, font::sansMedium()};
-            btn->activeText = {palette::white(), kMenuFontPx, font::sansMedium()};
-            btn->height.set(kMenuHeight);
-            const int idx = (int)i;
-            btn->onClick = [this, idx] { if (onMenuClick) onMenuClick(idx); };
-            addChild(btn);
-            mMenus.push_back(btn);
-        }
+        mMenuStrip = std::make_shared<MenuStrip>();
+        mMenuStrip->height.set(kMenuHeight);
+        addChild(mMenuStrip);
 
         mRailToggle = std::make_shared<IconButton>(
             [](IRenderTarget &t, const Rect &r, const Color &c) { icon::panelLeft(t, r, c); });
@@ -46,12 +28,6 @@ namespace cosmo_v2
         addChild(mRailToggle);
 
         height.set(kHeight);
-    }
-
-    void TopBar::setActiveMenu(int index)
-    {
-        for (size_t i = 0; i < mMenus.size(); ++i)
-            mMenus[i]->active = ((int)i == index);
     }
 
     void TopBar::setFilename(const std::string &name, int index, int total)
@@ -70,17 +46,12 @@ namespace cosmo_v2
     {
         const double w = width.value();
 
-        // Left group: wordmark (drawn directly in onPaint, not a child) + menus.
+        // Left group: wordmark (drawn directly in onPaint, not a child) + the menu strip.
         const double wordmarkW = estimateTextWidth("cosmo.", 13.0);
-        double cx = kPad + wordmarkW + 3.25 /*mr-1*/ + 9.75 /*gap-3*/;
-        for (auto &btn : mMenus)
-        {
-            const double bw = estimateTextWidth(btn->label(), kMenuFontPx) + 2 * kMenuPadX;
-            btn->x.set(cx);
-            btn->y.set((kHeight - kMenuHeight) * 0.5);
-            btn->width.set(bw);
-            cx += bw + kMenuGap;
-        }
+        const double cx = kPad + wordmarkW + 3.25 /*mr-1*/ + 9.75 /*gap-3*/;
+        mMenuStrip->x.set(cx);
+        mMenuStrip->y.set((kHeight - kMenuHeight) * 0.5);
+        mMenuStrip->width.set(mMenuStrip->contentWidth());
 
         // Right group: filename + rail toggle, positioned from the right edge in.
         mRailToggle->x.set(w - kPad - mRailToggle->width.value());

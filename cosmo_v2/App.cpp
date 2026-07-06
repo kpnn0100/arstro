@@ -21,36 +21,27 @@ namespace cosmo_v2
         mTopBar = std::make_shared<TopBar>();
         mTopBar->width.set(width);
         mTopBar->onRailToggle = [this] { toggleRail(); };
-        // App.tsx's own menu bar has no dropdown content (menuOpen only drives the
-        // active-pill highlight; File/Open etc. are reachable via keyboard, wired
-        // in linux_main.cpp) -- toggling the highlight is the complete, faithful
-        // behavior for what's actually specified.
-        mTopBar->onMenuClick = [this](int idx) {
-            mActiveMenu = (mActiveMenu == idx) ? -1 : idx;
-            mTopBar->setActiveMenu(mActiveMenu);
-        };
+        buildMenus();  // File/Settings/Develop/History/Preset dropdowns, wired to real actions
         mRoot->addChild(mTopBar);
 
         mLeftRail = std::make_shared<LeftRail>();
-        mLeftRail->width.set(LeftRail::kOpenWidth);
+        mLeftRail->width.set(LeftRail::kOpenWidth);  // start open (matches mRailOpen{true}); observe() fire is then a no-op animate
         mLeftRail->tree()->onApply = [this](std::string relPath) {
             if (mSession.applyPreset(relPath)) { mLeftRail->tree()->setSelected(relPath); syncControlsToSlot(); }
         };
         mRoot->addChild(mLeftRail);
 
+        // Single source of truth for "is the preset rail open": both the rail's
+        // width and the top-bar toggle's highlight derive from it (via observe),
+        // so they can never disagree -- and it fires now, initialising the toggle
+        // highlighted because the rail starts open (fixes the start-up mismatch).
+        mRailOpen.observe([this](const bool &open) {
+            mTopBar->setRailOpen(open);
+            mLeftRail->width.animateTo(open ? LeftRail::kOpenWidth : 0.0, kRailAnimMs, Easing::EaseOutCubic, mNowMs);
+        });
+
         mCenterStage = std::make_shared<CenterStage>();
-        mCenterStage->photo()->onBeforeAfterChange = [this](bool after) {
-            if (after)
-            {
-                if (mLastAfterFrame.width > 0)
-                    mCenterStage->photo()->imageView()->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
-            }
-            else if (const auto *before = mSession.renderBefore())
-            {
-                if (before->width > 0)
-                    mCenterStage->photo()->imageView()->setImage(before->rgba.data(), before->width, before->height);
-            }
-        };
+        mCenterStage->photo()->onModeChange = [this](int) { refreshPhotoForMode(); };
         mCenterStage->filmstrip()->onSelect = [this](int cell, bool shift, bool ctrl) {
             mSession.selectNode(cell, shift, ctrl);
             syncControlsToSlot();
@@ -77,11 +68,44 @@ namespace cosmo_v2
         mRightColumn->actionBar()->onExport = [this] { if (onExportPresetRequested) onExportPresetRequested(); };
         mRoot->addChild(mRightColumn);
 
+        // History-tree modal (added last -> topmost for hit-test + overlay). Clicking
+        // a node jumps the image to that state; re-highlight the landed node.
+        mHistoryView = std::make_shared<HistoryView>();
+        mHistoryView->onSelect = [this](int node) {
+            if (mSession.jumpToHistory(node)) { syncControlsToSlot(); mHistoryView->setCurrent(node); }
+        };
+        mRoot->addChild(mHistoryView);
+
+        // Right-click context menu (root child so raising it wins hit-testing).
+        // Photo area: group / add photo to the current group; filmstrip cell adds Delete.
+        mContextMenu = std::make_shared<ContextMenu>();
+        mRoot->addChild(mContextMenu);
+        mCenterStage->photo()->onContext = [this](double x, double y) { openEditContext(x, y, -1); };
+        mCenterStage->filmstrip()->onContext = [this](int cell, double x, double y) {
+            if (cell >= 0)
+            {
+                // Keep an existing multi-selection when right-clicking WITHIN it, so
+                // "Group Selection" groups ALL selected images; only replace the
+                // selection when right-clicking a cell that isn't already selected.
+                const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
+                const auto &sel = mSession.selection();
+                const bool inSel = cell < (int)kids.size() &&
+                                   std::find(sel.begin(), sel.end(), kids[cell]) != sel.end();
+                if (!inSel) { mSession.selectNode(cell, false, false); syncControlsToSlot(); }
+            }
+            openEditContext(x, y, cell);  // cell < 0 (empty strip) -> photo menu (Add Photo / Group / Ungroup)
+        };
+
         layout();
     }
 
     void App::layout()
     {
+        mHistoryView->x.set(0.0); mHistoryView->y.set(0.0);
+        mHistoryView->width.set(mW); mHistoryView->height.set(mH);  // full-window modal
+        mContextMenu->x.set(0.0); mContextMenu->y.set(0.0);
+        mContextMenu->width.set(mW); mContextMenu->height.set(mH);
+
         mTopBar->width.set(mW);
         mTopBar->layout();
 
@@ -104,9 +128,9 @@ namespace cosmo_v2
 
     void App::toggleRail()
     {
-        mRailOpen = !mRailOpen;
-        mTopBar->setRailOpen(mRailOpen);
-        mLeftRail->width.animateTo(mRailOpen ? LeftRail::kOpenWidth : 0.0, kRailAnimMs, Easing::EaseOutCubic, mNowMs);
+        // Flip the ONE source of truth; the observer set in the ctor updates both
+        // the toggle highlight and the rail width, so they stay in lockstep.
+        mRailOpen.set(!mRailOpen.get());
     }
 
     void App::refreshPresetTree()
@@ -120,6 +144,27 @@ namespace cosmo_v2
         if (thumb) mCenterStage->filmstrip()->addThumb(thumb->rgba.data(), thumb->w, thumb->h);
     }
 
+    void App::refreshPhotoForMode()
+    {
+        auto photo = mCenterStage->photo();
+        const int mode = photo->mode();
+        auto setBefore = [&](std::shared_ptr<artboard::ImageView> view) {
+            if (const auto *b = mSession.renderBefore(); b && b->width > 0)
+                view->setImage(b->rgba.data(), b->width, b->height);
+        };
+        if (mode == PhotoCanvas::Before)
+        {
+            setBefore(photo->imageView());
+        }
+        else
+        {
+            if (mLastAfterFrame.width > 0)
+                photo->imageView()->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
+            if (mode == PhotoCanvas::Split)
+                setBefore(photo->beforeView());
+        }
+    }
+
     namespace
     {
         std::string filenameOf(const std::string &path)
@@ -127,6 +172,86 @@ namespace cosmo_v2
             const auto slash = path.find_last_of('/');
             return slash == std::string::npos ? path : path.substr(slash + 1);
         }
+    }
+
+    void App::buildMenus()
+    {
+        auto ms = mTopBar->menuStrip();
+        // When a menu opens, raise the TopBar to the front of the root's children
+        // so its dropdown wins HIT-TESTING over the body widgets (left rail /
+        // center stage / right column) it visually overlaps. The dropdown is only
+        // "on top" in the overlay DRAW pass; without this, a click on a dropdown
+        // item that overlaps a body widget is stolen by that widget (menu items
+        // then never fire). MenuStrip::setOpen already raise()s itself within the
+        // TopBar; this raises the TopBar within the root.
+        ms->onOpenChanged = [this](int open) { if (open >= 0) mTopBar->raise(); };
+
+        ms->addMenu({"File", {
+            {"Open...",    [this] { if (onOpenRequested) onOpenRequested(); }},
+            {"Save",       [this] { saveSession(); }},
+            {"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }},
+        }});
+        ms->addMenu({"Settings", {
+            {"Reset Workspace", [this] { resetWorkspace(); syncControlsToSlot(); }},
+        }});
+        ms->addMenu({"Develop", {
+            {"Copy Settings",        [this] { copySettings(); }},
+            {"Paste to Selected",    [this] { pasteSettings(false); }},
+            {"Paste to All Images",  [this] { pasteSettings(true); }},
+            {"Group Selection",      [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }},
+            {"Ungroup Selection",    [this] { mSession.ungroupSelected(); syncControlsToSlot(); }},
+        }});
+        ms->addMenu({"History", {
+            {"Undo   (Ctrl+Z)",      [this] { undo(); }},
+            {"Redo   (Ctrl+Y)",      [this] { redo(); }},
+            {"Show History Tree...", [this] { openHistoryView(); }},
+        }});
+        ms->addMenu({"Preset", {
+            {"Save Preset...",   [this] { if (onSavePresetRequested) onSavePresetRequested(); }},
+            {"Import Preset...", [this] { if (onImportPresetRequested) onImportPresetRequested(); }},
+        }});
+    }
+
+    void App::copySettings()
+    {
+        if (const EditParams *p = mSession.curParams()) { mClipboard = *p; mHasClipboard = true; }
+    }
+
+    void App::pasteSettings(bool toAll)
+    {
+        if (!mHasClipboard) return;
+        if (toAll)
+            for (int s = 0; s < mSession.imageCount(); ++s) mSession.applyParamsToSlot(s, mClipboard);
+        else
+            for (int s : mSession.selectedImageSlots()) mSession.applyParamsToSlot(s, mClipboard);
+        syncControlsToSlot();
+    }
+
+    void App::openHistoryView()
+    {
+        // Snapshot the current image's branching history (parent + label per node)
+        // into the modal tree view (like cosmo's openHistoryView). No image / no
+        // history -> nothing to show.
+        const cosmo::History *h = mSession.currentHistory();
+        if (!h || h->nodes.empty()) return;
+        std::vector<HistoryView::Node> nodes;
+        nodes.reserve(h->nodes.size());
+        for (const auto &n : h->nodes) nodes.push_back({n.parent, n.label});
+        mHistoryView->show(std::move(nodes), h->current);
+    }
+
+    void App::openEditContext(double x, double y, int cell)
+    {
+        // Photo/filmstrip right-click: group the selection or add a photo to the
+        // current group (all photos live in the current group -- see cosmo's
+        // showPhotoContext / showCellContext).
+        std::vector<ContextMenu::Item> items;
+        items.push_back({"Add Photo...",      [this] { if (onOpenRequested) onOpenRequested(); }});
+        items.push_back({"Group Selection",   [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }});
+        items.push_back({"Ungroup Selection", [this] { mSession.ungroupSelected(); syncControlsToSlot(); }});
+        if (cell >= 0)
+            items.push_back({"Delete",        [this] { deleteSelected(); }});
+        mContextMenu->open(std::move(items), x, y);
     }
 
     void App::syncControlsToSlot()
@@ -180,13 +305,14 @@ namespace cosmo_v2
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
-        // A press below the top bar while a menu is highlighted closes it first
-        // (matches App.tsx's root-level onClick={() => menuOpen && setMenuOpen(null)});
-        // the press still goes on to do its own thing afterward.
-        if (kind == 0 && mActiveMenu >= 0 && y > TopBar::kHeight)
+        // A press outside the open menu's bar/dropdown area closes it first (the
+        // press still goes on to do its own thing afterward), matching cosmo's
+        // MenuBar outside-click dismissal.
+        if (kind == 0)
         {
-            mActiveMenu = -1;
-            mTopBar->setActiveMenu(-1);
+            auto ms = mTopBar->menuStrip();
+            if (ms->openIndex() >= 0 && !ms->pointInActiveArea(ms->toLocal(Point{x, y})))
+                ms->close();
         }
         RawPointer::Kind k = kind == 0 ? RawPointer::Kind::Down
                              : kind == 2 ? RawPointer::Kind::Up
@@ -200,6 +326,7 @@ namespace cosmo_v2
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
         (void)ctrl;
+        if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
         const double railX = mLeftRail->x.value(), railY = mLeftRail->y.value();
         if (x >= railX && x <= railX + mLeftRail->width.value() &&
             y >= railY && y <= railY + mLeftRail->height.value())
@@ -231,8 +358,7 @@ namespace cosmo_v2
         if (mSession.renderService().tryAcquire(f) && f.width > 0)
         {
             mLastAfterFrame = f;
-            if (mCenterStage->photo()->showAfter())
-                mCenterStage->photo()->imageView()->setImage(f.rgba.data(), f.width, f.height);
+            refreshPhotoForMode();
             mRightColumn->histogram()->setHistogram(f.hist);
             // Curve/mixer background histograms wire in with those tabs.
         }

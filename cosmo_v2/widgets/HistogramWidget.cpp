@@ -18,14 +18,6 @@ namespace cosmo_v2
 
     HistogramWidget::HistogramWidget() { height.set(kHeight); }
 
-    bool HistogramWidget::handleGesture(const Gesture &g, const Point &local)
-    {
-        if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
-        const double w = width.value();
-        if (local.y <= kLabelRowH && local.x >= w - 40.0) { mLog = !mLog; return true; }
-        return true;
-    }
-
     void HistogramWidget::onPaint(IRenderTarget &t) const
     {
         const double w = width.value();
@@ -33,16 +25,15 @@ namespace cosmo_v2
         t.beginPath(); t.moveTo(0, height.value()); t.lineTo(w, height.value());
         t.setStroke(palette::border(), 1.0); t.strokePath();
 
+        // Just the section label -- the Log/Linear toggle was removed (task point 7);
+        // the plot always uses the log scale (steadier for photographic data).
         t.setFill(palette::mutedForeground());
         t.drawText("HISTOGRAM", kPadX, kLabelRowH * 0.5 + 9.0 * 0.35 + 3.0, 9.0, font::sansSemiBold(), 0.12 * 9.0);
-        const std::string toggleLabel = mLog ? "Log" : "Linear";
-        t.drawText(toggleLabel, w - kPadX - estimateTextWidth(toggleLabel, 9.0), kLabelRowH * 0.5 + 9.0 * 0.35 + 3.0, 9.0, font::sans());
 
         if (!mHasData) return;
 
         float rows[4][HistogramData::kBins];
-        if (mLog) Histogram::toLog(mData, rows);
-        else Histogram::toLinear(mData, rows);
+        Histogram::toLog(mData, rows);
 
         const double plotY = kLabelRowH;
         const int n = HistogramData::kBins;

@@ -23,6 +23,7 @@ namespace cosmo_v2
         mRegionPicker->containerBox = {Paint::filledStroked(palette::segmentedBg(), palette::border(), 1.0), radius::control()};
         mRegionPicker->idleSegBox = {Paint{}, radius::hairline()};
         mRegionPicker->activeSegBox = {Paint::filled(palette::primary()), radius::hairline()};
+        mRegionPicker->edgeRadius = radius::control();
         mRegionPicker->idleText = {palette::mutedForeground(), 10.0, font::sans()};
         mRegionPicker->activeText = {palette::white(), 10.0, font::sans()};
         mRegionPicker->padding = 2.0; mRegionPicker->gap = 2.0;

@@ -17,7 +17,7 @@ namespace cosmo_v2
         mHistogram = std::make_shared<HistogramWidget>();
         addChild(mHistogram);
 
-        mTabs = std::make_shared<TabView>(sharedTheme().tab);
+        mTabs = std::make_shared<EditStackTabs>();
         mTabs->tabHeight = 27.0;
 
         auto set = [this](std::function<void(EditParams &, double)> setter) {
@@ -36,8 +36,13 @@ namespace cosmo_v2
                 {"Blacks", -100, 100, set([](EditParams &p, double v) { p.blacks = (float)v; })},
             }},
             {"COLOUR", {
-                {"Temperature", -100, 100, set([](EditParams &p, double v) { p.temp = (float)toKelvin(v); })},
-                {"Tint", -100, 100, set([](EditParams &p, double v) { p.tint = (float)toTint(v); })},
+                // Temperature / Tint tracks carry a colour ramp so the drag
+                // direction reads as the colour it pushes toward (task point 6):
+                // temperature cool-blue -> warm-amber, tint green -> magenta.
+                {"Temperature", -100, 100, set([](EditParams &p, double v) { p.temp = (float)toKelvin(v); }),
+                 true, Color::rgba(74, 132, 232), Color::rgba(240, 178, 84)},
+                {"Tint", -100, 100, set([](EditParams &p, double v) { p.tint = (float)toTint(v); }),
+                 true, Color::rgba(88, 196, 118), Color::rgba(206, 104, 196)},
                 {"Vibrance", -100, 100, set([](EditParams &p, double v) { p.vibrance = (float)v; })},
                 {"Saturation", -100, 100, set([](EditParams &p, double v) { p.saturation = (float)v; })},
             }},
@@ -102,19 +107,35 @@ namespace cosmo_v2
                 mMask->setMasks(p->masks, mSelectedMask);
             }
         };
+        mMask->onSelectMask = [this](int i) {
+            if (auto *p = mSession.curParams(); p && i >= 0 && i < (int)p->masks.size())
+            {
+                mSelectedMask = i;
+                mMask->setMasks(p->masks, mSelectedMask);
+            }
+        };
+        // Writing feather / adjust gives the mask a non-identity LocalAdjust so the
+        // engine's applyMaskStack stops skipping it -> the mask visibly renders. No
+        // setMasks() here (would fight a live drag); it re-syncs on select/add/slot.
+        mMask->onFeatherChange = [this](double f) {
+            if (auto *p = mSession.curParams(); p && mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+            {
+                p->masks[mSelectedMask].feather = (float)f;
+                mSession.submit();
+            }
+        };
+        mMask->onAdjustChange = [this](const LocalAdjust &a) {
+            if (auto *p = mSession.curParams(); p && mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+            {
+                p->masks[mSelectedMask].adjust = a;
+                mSession.submit();
+            }
+        };
         mTabs->addPage("Mask", mMask);
 
         mMixer = std::make_shared<MixerPanel>();
-        mMixer->onBandChange = [this](int channel, float hueDeg, float y) {
-            if (auto *p = mSession.curParams())
-            {
-                auto &curve = p->mixer[channel];
-                auto it = std::find_if(curve.begin(), curve.end(),
-                                        [hueDeg](const auto &pt) { return std::abs(pt.first - hueDeg) < 0.5f; });
-                if (it != curve.end()) it->second = y;
-                else { curve.push_back({hueDeg, y}); std::sort(curve.begin(), curve.end()); }
-                mSession.submit();
-            }
+        mMixer->onCurveChange = [this](int channel, std::vector<std::pair<float, float>> pts) {
+            if (auto *p = mSession.curParams()) { p->mixer[channel] = std::move(pts); mSession.submit(); }
         };
         mTabs->addPage("Mixer", mMixer);
 
@@ -211,9 +232,8 @@ namespace cosmo_v2
             case 0: mBasic->scrollBy(delta); break;
             case 1: mDetail->scrollBy(delta); break;
             case 2: mMask->scrollBy(delta); break;
-            case 3: mMixer->scrollBy(delta); break;
             case 5: mGrade->scrollBy(delta); break;
-            default: break;
+            default: break;  // Mixer/Curve/Xform are fixed-height (no scroll)
         }
     }
 
@@ -228,19 +248,23 @@ namespace cosmo_v2
         const double tabsH = h - tabsY - actionBarH;
         mTabs->x.set(0.0); mTabs->y.set(tabsY);
         mTabs->width.set(w); mTabs->height.set(std::max(0.0, tabsH));
+        mTabs->layoutPages();  // sizes/positions/visibility of all seven pages
 
-        const double pageH = std::max(0.0, tabsH - mTabs->tabHeight);
-        mBasic->width.set(w); mBasic->height.set(pageH); mBasic->layout();
-        mDetail->width.set(w); mDetail->height.set(pageH); mDetail->layout();
-        mMask->width.set(w); mMask->height.set(pageH); mMask->layout();
-        mMixer->width.set(w); mMixer->height.set(pageH); mMixer->layout();
-        mCurve->width.set(w); mCurve->height.set(pageH); mCurve->layout();
-        mGrade->width.set(w); mGrade->height.set(pageH); mGrade->layout();
-        mXform->width.set(w); mXform->height.set(pageH); mXform->layout();
+        // Each concrete panel lays out its own internals at the size the tab stack gave it.
+        mBasic->layout(); mDetail->layout(); mMask->layout(); mMixer->layout();
+        mCurve->layout(); mGrade->layout(); mXform->layout();
 
         mActionBar->x.set(0.0); mActionBar->y.set(h - actionBarH);
         mActionBar->width.set(w);
         mActionBar->layout();
+    }
+
+    void RightColumn::onPaint(IRenderTarget &t) const
+    {
+        // The card surface behind the whole column (Figma's `bg-card`): the
+        // panel body shows it directly and the active tab is filled with the same
+        // card colour, so the highlighted tab blends into the editing section.
+        drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(palette::card()));
     }
 }
 }

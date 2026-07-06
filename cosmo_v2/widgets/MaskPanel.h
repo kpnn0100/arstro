@@ -1,12 +1,13 @@
 /*
- *  cosmo_v2 by arstro — MaskPanel (App.tsx MaskPanel): three "add mask" chips,
- *  the current mask's swatch/type/invert/delete row, a feather slider, then
- *  Basic-style tone/colour/presence sliders scoped to that mask's
- *  LocalAdjust. The Figma mock hardcodes one example mask with all no-op
- *  callbacks; this wires it to the current image's real EditParams::masks.
- *  No multi-mask picker is specified in the source, so adding a mask makes
- *  it the current one (matches cosmo's own mSelectedMask convention) and
- *  there is presently one mask "in focus" at a time, exactly as drawn.
+ *  cosmo_v2 by arstro — MaskPanel: three "add mask" chips, a ComboBox to pick
+ *  WHICH mask to edit, its invert/delete controls, a feather slider, then
+ *  Basic-style tone/colour/presence sliders scoped to that mask's LocalAdjust.
+ *
+ *  The per-mask sliders are wired (via onFeatherChange / onAdjustChange) so
+ *  editing a mask actually writes its `adjust` — without a non-identity adjust
+ *  the engine's applyMaskStack skips the mask entirely (MaskStack: identity ->
+ *  skipped), which is why masks previously had no visible effect. The mask
+ *  picker mirrors cosmo's MaskPanel ComboBox.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
@@ -33,9 +34,12 @@ namespace cosmo_v2
         void layout();
         void scrollBy(double delta);
 
-        std::function<void(int type)> onAddMask;  // MaskParams::Type
+        std::function<void(int type)> onAddMask;   // MaskParams::Type
+        std::function<void(int index)> onSelectMask;  // choose which mask to edit
         std::function<void()> onToggleInvert;
         std::function<void()> onDeleteMask;
+        std::function<void(double)> onFeatherChange;              // 0..1
+        std::function<void(const LocalAdjust &)> onAdjustChange;  // selected mask's local adjust
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -44,6 +48,7 @@ namespace cosmo_v2
         static constexpr double kPadX = 9.75;
 
         std::vector<std::shared_ptr<PillButton>> mAddChips;
+        std::shared_ptr<artboard::ComboBox> mSelect;   // which mask to edit
         std::shared_ptr<PillButton> mInvBtn;
         std::shared_ptr<IconButton> mTrashBtn;
         std::shared_ptr<SliderRow> mFeather;
@@ -53,14 +58,14 @@ namespace cosmo_v2
 
         std::vector<MaskParams> mMasks;
         int mSelected = -1;
+        LocalAdjust mEditing;   // working copy of the selected mask's adjust
         double mScroll = 0.0;
         double mContentHeight = 0.0;
 
-        // Cached header y positions from the last layout(), read by onPaint --
-        // [0]="Add Mask", [1]="Mask N -- Type" (only when a mask is selected),
-        // [2]="Tone", [3]="Colour", [4]="Presence".
-        double mHeaderY[5] = {0, 0, 0, 0, 0};
-        double mInfoRowY = 0.0;
+        // Cached header y's for onPaint: [0]="Add Mask", [1]="Tone", [2]="Colour",
+        // [3]="Presence". The mask identity is now the ComboBox, not a header.
+        double mHeaderY[4] = {0, 0, 0, 0};
+        double mSelectRowY = 0.0;
     };
 }
 }

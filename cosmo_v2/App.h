@@ -13,6 +13,8 @@
 #include "widgets/LeftRail.h"
 #include "widgets/CenterStage.h"
 #include "widgets/RightColumn.h"
+#include "widgets/HistoryView.h"
+#include "widgets/ContextMenu.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -96,12 +98,23 @@ namespace cosmo_v2
         void refreshPresetTree();
         void toggleRail();
         void registerThumb(int slot);
+        /** Push the correct image(s) into the photo canvas for its current
+         *  before/split/after mode (before = original, after = edited, split = both). */
+        void refreshPhotoForMode();
+        void buildMenus();          // populate the TopBar's MenuStrip + wire actions
+        void copySettings();        // Develop ▸ Copy Settings
+        void pasteSettings(bool toAll);  // Develop ▸ Paste to Selected / to All Images
+        void openHistoryView();     // History ▸ Show History Tree… (in-app, like cosmo)
+        void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
 
         double mW, mH;
         double mNowMs = 0.0;
-        bool mRailOpen = true;
-        int mActiveMenu = -1;
+        // One source of truth for the preset-rail open state; the toggle
+        // highlight and the rail width both observe() it so they can't desync.
+        artboard::Observable<bool> mRailOpen{true};
         cosmo::EditSession mSession;
+        EditParams mClipboard;       // Develop ▸ Copy/Paste Settings clipboard
+        bool mHasClipboard = false;
         RenderService::Frame mLastAfterFrame;
         artboard::Theme mTheme;
         artboard::Color mAccent;
@@ -111,6 +124,8 @@ namespace cosmo_v2
         std::shared_ptr<LeftRail> mLeftRail;
         std::shared_ptr<CenterStage> mCenterStage;
         std::shared_ptr<RightColumn> mRightColumn;
+        std::shared_ptr<HistoryView> mHistoryView;
+        std::shared_ptr<ContextMenu> mContextMenu;
     };
 }
 }

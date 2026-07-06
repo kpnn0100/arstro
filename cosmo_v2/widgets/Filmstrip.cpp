@@ -58,7 +58,22 @@ namespace cosmo_v2
     void Filmstrip::setSelection(std::vector<int> selCells, int primaryCell)
     {
         mSel = std::move(selCells);
-        mPrimary = primaryCell;
+        mPrimary = primaryCell;  // advance() slides the ring to it
+    }
+
+    void Filmstrip::advance(double nowMs)
+    {
+        if (mPrimary >= 0)
+        {
+            if (!mRingInit) { mRingPos.set(mPrimary); mRingInit = true; mRingTarget = mPrimary; }
+            else if (mPrimary != mRingTarget)
+            {
+                mRingPos.animateTo(mPrimary, 200.0, Easing::EaseOutCubic, nowMs);
+                mRingTarget = mPrimary;
+            }
+            mRingPos.update(nowMs);
+        }
+        Segment::advance(nowMs);
     }
 
     void Filmstrip::scrollBy(double delta)
@@ -79,10 +94,13 @@ namespace cosmo_v2
     bool Filmstrip::handleGesture(const Gesture &g, const Point &local)
     {
         const int cell = cellAt(local.x);
+        // Right-click ALWAYS opens the context menu -- even on empty strip space
+        // (cell == -1), so "add photo to this group" is reachable anywhere in the
+        // browse section, not only on a thumbnail.
+        if (g.type == Gesture::Type::RightClick) { if (onContext) onContext(cell, g.pos.x, g.pos.y); return true; }
         if (cell < 0) return Segment::handleGesture(g, local);
         if (g.type == Gesture::Type::Click) { if (onSelect) onSelect(cell, g.shift, g.ctrl); return true; }
         if (g.type == Gesture::Type::DoubleClick) { if (onActivate) onActivate(cell); return true; }
-        if (g.type == Gesture::Type::RightClick) { if (onContext) onContext(cell, g.pos.x, g.pos.y); return true; }
         return Segment::handleGesture(g, local);
     }
 
@@ -98,9 +116,6 @@ namespace cosmo_v2
             const double x = cellX(i), cw = cellW(i);
             const double y = (kHeight - kCellH) * 0.5;
             if (x + cw < 0 || x > w) continue;  // offscreen
-
-            const bool selected = std::find(mSel.begin(), mSel.end(), i) != mSel.end();
-            const bool primary = (i == mPrimary);
 
             if (c.group)
             {
@@ -131,40 +146,63 @@ namespace cosmo_v2
                 t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.4});
                 t.drawText(countStr, x + cw * 0.5 - countStr.size() * 8.0 * 0.3, y + kCellH * 0.5 + 11.0, 8.0, font::sans());
             }
-            else
-            {
-                if (primary)
-                {
-                    // ring-[2px] ring-primary ring-offset-[2px]: stroke 2px outside a
-                    // 2px transparent gap from the cell edge.
-                    t.setStroke(palette::primary(), 2.0);
-                    t.beginPath();
-                    const double o = 3.0;  // offset + half stroke width
-                    t.moveTo(x - o, y - o); t.lineTo(x + cw + o, y - o);
-                    t.lineTo(x + cw + o, y + kCellH + o); t.lineTo(x - o, y + kCellH + o);
-                    t.closePath();
-                    t.strokePath();
+            // Photo cells: the thumbnail is a child ImageView; its selection outline,
+            // sliding primary ring and name bar are drawn in onOverlay (below) so
+            // they sit ABOVE the thumbnail instead of behind it.
+        }
+    }
 
-                    const std::string &label = c.name;
-                    drawRoundedRect(t, Rect{x, y + kCellH - 12.0, cw, 12.0}, 0.0,
-                                    Paint::filled(Color{palette::primary().r, palette::primary().g, palette::primary().b, 0.8}));
-                    t.setFill(palette::white());
-                    t.drawText(label, x + cw * 0.5 - label.size() * 7.0 * 0.3, y + kCellH - 3.0, 7.0, font::sansMedium());
-                }
-                else if (selected)
-                {
-                    t.setStroke(Color{1, 1, 1, 0.2}, 1.0);
-                    t.beginPath(); t.moveTo(x, y); t.lineTo(x + cw, y); t.lineTo(x + cw, y + kCellH); t.lineTo(x, y + kCellH); t.closePath();
-                    t.strokePath();
-                }
-                else
-                {
-                    t.setStroke(Color{1, 1, 1, 0.08}, 1.0);
-                    t.beginPath(); t.moveTo(x, y); t.lineTo(x + cw, y); t.lineTo(x + cw, y + kCellH); t.lineTo(x, y + kCellH); t.closePath();
-                    t.strokePath();
-                }
+    void Filmstrip::onOverlay(IRenderTarget &t) const
+    {
+        // Drawn in the overlay pass -> on top of the thumbnail ImageViews (children
+        // render after onPaint). Clipped to the strip so a scrolled-off cell's ring
+        // doesn't spill over the photo/breadcrumb above.
+        const double w = width.value();
+        if (mCells.empty()) return;
+        t.save();
+        t.clipRect(0, 0, w, kHeight);
+        const Color pr = palette::primary();
+        const double ry = (kHeight - kCellH) * 0.5;
+
+        for (int i = 0; i < (int)mCells.size(); ++i)
+        {
+            if (mCells[i].group || i == mPrimary) continue;
+            const double x = cellX(i), cw = cellW(i);
+            if (x + cw < 0 || x > w) continue;
+            const bool selected = std::find(mSel.begin(), mSel.end(), i) != mSel.end();
+            const double o = selected ? 2.0 : 1.0;
+            t.setStroke(selected ? Color{pr.r, pr.g, pr.b, 0.65} : Color{1, 1, 1, 0.08}, selected ? 2.0 : 1.0);
+            t.beginPath();
+            t.moveTo(x - o, ry - o); t.lineTo(x + cw + o, ry - o);
+            t.lineTo(x + cw + o, ry + kCellH + o); t.lineTo(x - o, ry + kCellH + o); t.closePath();
+            t.strokePath();
+        }
+
+        // Primary ring at its animated position: slides to the newly-selected photo
+        // and follows the cell during scroll (cellX() includes the scroll offset).
+        if (mPrimary >= 0 && mPrimary < (int)mCells.size())
+        {
+            const double p = std::clamp(mRingPos.value(), 0.0, (double)(mCells.size() - 1));
+            const int a = (int)std::floor(p), b = std::min((int)mCells.size() - 1, a + 1);
+            const double f = p - a;
+            const double rx = cellX(a) + (cellX(b) - cellX(a)) * f;
+            const double rw = cellW(a) + (cellW(b) - cellW(a)) * f;
+            const double o = 3.0;
+            t.setStroke(pr, 2.0);
+            t.beginPath();
+            t.moveTo(rx - o, ry - o); t.lineTo(rx + rw + o, ry - o);
+            t.lineTo(rx + rw + o, ry + kCellH + o); t.lineTo(rx - o, ry + kCellH + o); t.closePath();
+            t.strokePath();
+            if (!mCells[mPrimary].group)
+            {
+                const std::string &label = mCells[mPrimary].name;
+                drawRoundedRect(t, Rect{rx, ry + kCellH - 12.0, rw, 12.0}, 0.0,
+                                Paint::filled(Color{pr.r, pr.g, pr.b, 0.8}));
+                t.setFill(palette::white());
+                t.drawText(label, rx + rw * 0.5 - label.size() * 7.0 * 0.3, ry + kCellH - 3.0, 7.0, font::sansMedium());
             }
         }
+        t.restore();
     }
 }
 }

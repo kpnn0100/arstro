@@ -9,6 +9,7 @@
 #include "../../Artboard/include/artboard/artboard.h"
 #include "../../cosmo_core/EditSession.h"
 #include "HistogramWidget.h"
+#include "EditStackTabs.h"
 #include "ParamPanel.h"
 #include "MaskPanel.h"
 #include "MixerPanel.h"
@@ -26,7 +27,9 @@ namespace cosmo_v2
     class RightColumn : public artboard::Segment
     {
     public:
-        static constexpr double kWidth = 292.0;
+        // Wider than the Figma mock's 292px so the 7 edit-stack tab labels sit
+        // comfortably centred (task point 5: "make the edit stack wider").
+        static constexpr double kWidth = 324.0;
 
         explicit RightColumn(cosmo::EditSession &session);
 
@@ -40,10 +43,13 @@ namespace cosmo_v2
         void scrollActivePanel(double delta);
         void layout();  // call after width/height changes
 
+    protected:
+        void onPaint(artboard::IRenderTarget &t) const override;  // card body (blends with active tab)
+
     private:
         cosmo::EditSession &mSession;
         std::shared_ptr<HistogramWidget> mHistogram;
-        std::shared_ptr<artboard::TabView> mTabs;
+        std::shared_ptr<EditStackTabs> mTabs;
         std::shared_ptr<ParamPanel> mBasic;
         std::shared_ptr<ParamPanel> mDetail;
         std::shared_ptr<MaskPanel> mMask;

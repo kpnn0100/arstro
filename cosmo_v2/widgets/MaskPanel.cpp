@@ -5,6 +5,7 @@
 #include "UnitConversions.h"
 #include "../Theme.h"
 #include <algorithm>
+#include <string>
 
 namespace arstro
 {
@@ -14,16 +15,26 @@ namespace cosmo_v2
 
     namespace
     {
-        constexpr double kPadX = 9.75;
         constexpr double kChipGap = 4.875, kChipH = 22.75, kChipMarginBottom = 9.75;
-        constexpr double kInfoRowH = 9.75 + 8.125;  // swatch height + mb-2.5
+        constexpr double kSelectRowH = 22.75, kSelectRowMB = 8.125;
         const char *kTypeNames[3] = {"Radial", "Linear", "Brush"};
 
         std::string maskLabel(const MaskParams &m, int index)
         {
-            std::string s = "Mask " + std::to_string(index + 1) + " -- " + kTypeNames[m.type];
-            if (m.inverted) s += ", Inverted";
+            std::string s = kTypeNames[m.type] + std::string(" ") + std::to_string(index + 1);
+            if (m.inverted) s += " (inv)";
             return s;
+        }
+
+        ComboStyle maskComboStyle()
+        {
+            ComboStyle cs;
+            cs.field = {Paint::filledStroked(palette::secondary(), palette::border(), 1.0), radius::control()};
+            cs.popup = {Paint::filledStroked(palette::popover(), palette::border(), 1.0), radius::control()};
+            cs.rowSelected = {Paint::filled(palette::primary()), 0.0};
+            cs.text = {palette::foreground(), 10.0, font::sans()};
+            cs.caretColor = palette::mutedForeground();
+            return cs;
         }
     }
 
@@ -41,11 +52,17 @@ namespace cosmo_v2
             mAddChips.push_back(chip);
         }
 
+        mSelect = std::make_shared<ComboBox>(maskComboStyle());
+        mSelect->rowHeight = 22.0;
+        mSelect->height.set(kSelectRowH);
+        mSelect->onChange = [this](int i) { if (onSelectMask) onSelectMask(i); };
+        addChild(mSelect);
+
         mInvBtn = std::make_shared<PillButton>("Inv");
-        mInvBtn->idleBox = {Paint{}, radius::hairline()};
+        mInvBtn->idleBox = {Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0), radius::control()};
         mInvBtn->idleText = {palette::mutedForeground(), 9.0, font::sans()};
-        mInvBtn->width.set(estimateTextWidth("Inv", 9.0) + 2 * 3.25);
-        mInvBtn->height.set(9.0 * 1.3 + 2 * 1.625);
+        mInvBtn->width.set(estimateTextWidth("Inv", 9.0) + 2 * 6.5);
+        mInvBtn->height.set(kSelectRowH);
         mInvBtn->onClick = [this] { if (onToggleInvert) onToggleInvert(); };
         addChild(mInvBtn);
 
@@ -53,25 +70,38 @@ namespace cosmo_v2
             [](IRenderTarget &t, const Rect &r, const Color &c) { icon::trash2(t, r, c); });
         mTrashBtn->idleColor = palette::mutedForeground();
         mTrashBtn->activeColor = palette::destructive();
-        mTrashBtn->width.set(10.0 + 2 * 1.625);
-        mTrashBtn->height.set(10.0 + 2 * 1.625);
+        mTrashBtn->width.set(kSelectRowH);
+        mTrashBtn->height.set(kSelectRowH);
         mTrashBtn->onClick = [this] { if (onDeleteMask) onDeleteMask(); };
         addChild(mTrashBtn);
 
+        auto adjust = [this] { if (onAdjustChange) onAdjustChange(mEditing); };
         mFeather = std::make_shared<SliderRow>("Feather", 0, 100, 0.0);
+        mFeather->onChange = [this](double v) { if (onFeatherChange) onFeatherChange(v / 100.0); };
         addChild(mFeather);
         mExposure = std::make_shared<SliderRow>("Exposure", -400, 400, 0.0);
+        mExposure->onChange = [this, adjust](double v) { mEditing.exposure = (float)toEv(v); adjust(); };
         addChild(mExposure);
         mHighlights = std::make_shared<SliderRow>("Highlights", -100, 100, 0.0);
+        mHighlights->onChange = [this, adjust](double v) { mEditing.highlights = (float)v; adjust(); };
         addChild(mHighlights);
         mShadows = std::make_shared<SliderRow>("Shadows", -100, 100, 0.0);
+        mShadows->onChange = [this, adjust](double v) { mEditing.shadows = (float)v; adjust(); };
         addChild(mShadows);
         mTemperature = std::make_shared<SliderRow>("Temperature", -100, 100, 0.0);
+        mTemperature->onChange = [this, adjust](double v) { mEditing.temp = (float)v; adjust(); };
         addChild(mTemperature);
         mSaturation = std::make_shared<SliderRow>("Saturation", -100, 100, 0.0);
+        mSaturation->onChange = [this, adjust](double v) { mEditing.saturation = (float)v; adjust(); };
         addChild(mSaturation);
         mDehaze = std::make_shared<SliderRow>("Dehaze", 0, 100, 0.0);
+        mDehaze->onChange = [this, adjust](double v) { mEditing.dehaze = (float)v; adjust(); };
         addChild(mDehaze);
+
+        // No mask selected initially -> hide the per-mask controls.
+        mSelect->visible = mInvBtn->visible = mTrashBtn->visible = mFeather->visible = false;
+        mExposure->visible = mHighlights->visible = mShadows->visible = false;
+        mTemperature->visible = mSaturation->visible = mDehaze->visible = false;
     }
 
     void MaskPanel::setMasks(const std::vector<MaskParams> &masks, int selected)
@@ -79,12 +109,18 @@ namespace cosmo_v2
         mMasks = masks;
         mSelected = (selected >= 0 && selected < (int)masks.size()) ? selected : -1;
         const bool has = mSelected >= 0;
-        mInvBtn->visible = mTrashBtn->visible = mFeather->visible = has;
+        mSelect->visible = mInvBtn->visible = mTrashBtn->visible = mFeather->visible = has;
         mExposure->visible = mHighlights->visible = mShadows->visible = has;
         mTemperature->visible = mSaturation->visible = mDehaze->visible = has;
-        if (!has) return;
+        if (!has) { mSelect->setOptions({}); return; }
+
+        std::vector<std::string> opts;
+        for (int i = 0; i < (int)mMasks.size(); ++i) opts.push_back(maskLabel(mMasks[i], i));
+        mSelect->setOptions(opts);
+        mSelect->setSelectedIndex(mSelected);
 
         const MaskParams &m = mMasks[mSelected];
+        mEditing = m.adjust;
         mFeather->setValue(m.feather * 100.0);
         mExposure->setValue(fromEv(m.adjust.exposure));
         mHighlights->setValue(m.adjust.highlights);
@@ -96,8 +132,7 @@ namespace cosmo_v2
 
     void MaskPanel::scrollBy(double delta)
     {
-        const double viewH = height.value();
-        const double maxScroll = std::max(0.0, mContentHeight - viewH);
+        const double maxScroll = std::max(0.0, mContentHeight - height.value());
         mScroll = std::min(maxScroll, std::max(0.0, mScroll - delta));
         layout();
     }
@@ -120,35 +155,32 @@ namespace cosmo_v2
 
         if (mSelected >= 0)
         {
-            mHeaderY[1] = y;
-            y += kSectionHeaderHeight;  // "Mask N -- Type" header
-
-            mInfoRowY = y;
-            mInvBtn->x.set(w - kPadX - mTrashBtn->width.value() - 1.625 - mInvBtn->width.value());
-            mInvBtn->y.set(mInfoRowY);
+            // Selector row: mask ComboBox + Inv + trash, centred on one line.
+            mSelectRowY = y;
             mTrashBtn->x.set(w - kPadX - mTrashBtn->width.value());
-            mTrashBtn->y.set(mInfoRowY);
-            y += kInfoRowH;
+            mTrashBtn->y.set(y);
+            mInvBtn->x.set(mTrashBtn->x.value() - 4.875 - mInvBtn->width.value());
+            mInvBtn->y.set(y);
+            const double comboW = std::max(0.0, mInvBtn->x.value() - 4.875 - kPadX);
+            mSelect->x.set(kPadX); mSelect->y.set(y); mSelect->width.set(comboW);
+            y += kSelectRowH + kSelectRowMB;
 
             mFeather->x.set(kPadX); mFeather->y.set(y); mFeather->width.set(innerW); mFeather->layout();
             y += SliderRow::kRowHeight;
 
-            mHeaderY[2] = y;
-            y += kSectionHeaderHeight;  // "Tone"
+            mHeaderY[1] = y; y += kSectionHeaderHeight;  // "Tone"
             for (auto *row : {mExposure.get(), mHighlights.get(), mShadows.get()})
             {
                 row->x.set(kPadX); row->y.set(y); row->width.set(innerW); row->layout();
                 y += SliderRow::kRowHeight;
             }
-            mHeaderY[3] = y;
-            y += kSectionHeaderHeight;  // "Colour"
+            mHeaderY[2] = y; y += kSectionHeaderHeight;  // "Colour"
             for (auto *row : {mTemperature.get(), mSaturation.get()})
             {
                 row->x.set(kPadX); row->y.set(y); row->width.set(innerW); row->layout();
                 y += SliderRow::kRowHeight;
             }
-            mHeaderY[4] = y;
-            y += kSectionHeaderHeight;  // "Presence"
+            mHeaderY[3] = y; y += kSectionHeaderHeight;  // "Presence"
             mDehaze->x.set(kPadX); mDehaze->y.set(y); mDehaze->width.set(innerW); mDehaze->layout();
             y += SliderRow::kRowHeight;
         }
@@ -163,25 +195,9 @@ namespace cosmo_v2
 
         if (visible(mHeaderY[0])) drawSectionHeader(t, kPadX, mHeaderY[0], innerW, "Add Mask");
         if (mSelected < 0) return;
-
-        if (visible(mHeaderY[1])) drawSectionHeader(t, kPadX, mHeaderY[1], innerW, maskLabel(mMasks[mSelected], mSelected));
-        if (visible(mHeaderY[2])) drawSectionHeader(t, kPadX, mHeaderY[2], innerW, "Tone");
-        if (visible(mHeaderY[3])) drawSectionHeader(t, kPadX, mHeaderY[3], innerW, "Colour");
-        if (visible(mHeaderY[4])) drawSectionHeader(t, kPadX, mHeaderY[4], innerW, "Presence");
-
-        if (mInfoRowY >= -kInfoRowH && mInfoRowY <= viewH)
-        {
-            const MaskParams &m = mMasks[mSelected];
-            const Color primary = palette::primary();
-            drawRoundedRect(t, Rect{kPadX, mInfoRowY + 1.0, 9.75, 9.75}, 1.0,
-                            Paint::filledStroked(Color{primary.r, primary.g, primary.b, 0.5},
-                                                  Color{primary.r, primary.g, primary.b, 0.6}, 1.0));
-            std::string label = kTypeNames[m.type];
-            if (m.inverted) label += ", Inverted";
-            const Color fg = palette::foreground();
-            t.setFill(Color{fg.r, fg.g, fg.b, 0.8});
-            t.drawText(label, kPadX + 9.75 + 6.5, mInfoRowY + 9.75 * 0.5 + 1.0 + 10.0 * 0.35, 10.0, font::sans());
-        }
+        if (visible(mHeaderY[1])) drawSectionHeader(t, kPadX, mHeaderY[1], innerW, "Tone");
+        if (visible(mHeaderY[2])) drawSectionHeader(t, kPadX, mHeaderY[2], innerW, "Colour");
+        if (visible(mHeaderY[3])) drawSectionHeader(t, kPadX, mHeaderY[3], innerW, "Presence");
     }
 }
 }

@@ -28,6 +28,9 @@ namespace cosmo_v2
 
         void setValue(double v);  // programmatic -- does not fire onChange
         double value() const;
+        /** Paint the track as a left->right colour ramp (e.g. temperature blue->
+         *  amber, tint green->magenta) so the drag direction reads as a colour. */
+        void setTrackGradient(const artboard::Color &left, const artboard::Color &right);
         std::function<void(double)> onChange;
 
         void layout();  // call after width changes

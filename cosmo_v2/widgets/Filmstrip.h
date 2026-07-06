@@ -49,6 +49,8 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        void onOverlay(artboard::IRenderTarget &t) const override;  // selection rings/name ABOVE thumbnails
+        void advance(double nowMs) override;  // slides the primary ring between cells
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
@@ -65,6 +67,12 @@ namespace cosmo_v2
         std::vector<int> mSel;
         int mPrimary = -1;
         double mScrollX = 0.0;
+        // The primary-selection ring slides to the newly-selected cell (mRingPos =
+        // a fractional cell index, converted to x/width in onPaint so it also
+        // follows the cell during scroll).
+        artboard::AnimatedProperty mRingPos;
+        int mRingTarget = -1;
+        bool mRingInit = false;
     };
 }
 }
