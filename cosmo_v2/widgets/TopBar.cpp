@@ -58,6 +58,19 @@ namespace cosmo_v2
         mRailToggle->y.set((kHeight - mRailToggle->height.value()) * 0.5);
     }
 
+    Rect TopBar::wordmarkRect() const
+    {
+        const double wmW = estimateTextWidth("cosmo.", 13.0);
+        return Rect{kPad - 4.0, 0.0, wmW + 8.0, kHeight};
+    }
+
+    bool TopBar::handleGesture(const Gesture &g, const Point &local)
+    {
+        // Clicking the "cosmo." wordmark returns to the launcher (R-HOME).
+        if (g.type == Gesture::Type::Click && onHome && wordmarkRect().contains(local)) { onHome(); return true; }
+        return Segment::handleGesture(g, local);
+    }
+
     void TopBar::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = kHeight;
@@ -78,6 +91,14 @@ namespace cosmo_v2
         const double dotX = kPad + estimateTextWidth("cosmo", 13.0);
         t.setFill(palette::primary());
         t.drawText(".", dotX, baseline, 13.0, font::sansSemiBold(), -0.39);
+
+        // Project name, centred in the bar (R-HOME item 2).
+        if (!mProjectName.empty())
+        {
+            const double nameW = estimateTextWidth(mProjectName, 12.0);
+            t.setFill(palette::foreground());
+            t.drawText(mProjectName, (w - nameW) * 0.5, h * 0.5 + 12.0 * 0.35, 12.0, font::sansMedium());
+        }
 
         // Filename + "(i/n)", right-aligned against the rail toggle.
         if (mFileTotal > 0)

@@ -32,21 +32,27 @@ namespace cosmo_v2
 
         std::shared_ptr<MenuStrip> menuStrip() { return mMenuStrip; }
         void setFilename(const std::string &name, int index, int total);  // total<=0 hides it
+        void setProjectName(const std::string &name) { mProjectName = name; }  // shown centred
         void setRailOpen(bool open);
 
         std::function<void()> onRailToggle;
+        std::function<void()> onHome;   // clicking the "cosmo." wordmark returns to the launcher
 
         void layout();  // call after width changes
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
 
     private:
         static constexpr double kPad = 9.75;
 
+        artboard::Rect wordmarkRect() const;
+
         std::shared_ptr<MenuStrip> mMenuStrip;
         std::shared_ptr<IconButton> mRailToggle;
         std::string mFilename;
+        std::string mProjectName;
         int mFileIndex = 0, mFileTotal = 0;
         bool mRailOpen = true;
     };

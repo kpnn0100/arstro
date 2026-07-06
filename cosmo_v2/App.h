@@ -17,6 +17,7 @@
 #include "widgets/ContextMenu.h"
 #include "widgets/PresetDialog.h"
 #include "widgets/SettingsDialog.h"
+#include "widgets/ConfirmDialog.h"
 #include "widgets/HomeScreen.h"
 #include "../cosmo_core/ProjectStore.h"
 #include <cstdint>
@@ -129,6 +130,7 @@ namespace cosmo_v2
         void presetExportClicked(); // Export Preset -> category picker -> host path dialog
         void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
         void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
+        void requestHome();         // wordmark click: prompt to save/discard if dirty, else go home
 
         enum class Screen { Home, Editor };
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
@@ -154,6 +156,7 @@ namespace cosmo_v2
         std::shared_ptr<ContextMenu> mContextMenu;
         std::shared_ptr<PresetDialog> mPresetDialog;      // modal category picker (overlay)
         std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
+        std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher
         std::shared_ptr<HomeScreen> mHome;

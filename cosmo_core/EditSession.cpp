@@ -321,6 +321,7 @@ namespace cosmo
     void EditSession::submit()
     {
         if (mCurrentSlot < 0) return;
+        mDirty = true;   // an edit is being committed -> unsaved changes
         recordHistory();
         EditParams p = effectiveParams(mCurrentSlot);
         if (mCropPreviewMode)
@@ -546,6 +547,7 @@ namespace cosmo
         };
         walk(0, -1);
         mWorkspacePath = path;
+        mDirty = false;   // just persisted
         return true;
     }
 
@@ -615,6 +617,7 @@ namespace cosmo
         mCurGroup = 0; mSel.clear(); mSelAnchor = -1; mEditGroup = -1;
         mCurrentSlot = -1;
         mHasClip = false;
+        mDirty = false;
     }
 
     int EditSession::addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset)
@@ -665,6 +668,7 @@ namespace cosmo
             selectImage(0);
         else
             mCurGroup = 0;
+        mDirty = false;   // freshly loaded == clean
     }
 
     int EditSession::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)

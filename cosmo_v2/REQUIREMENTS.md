@@ -123,8 +123,12 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
 "New Project" card. Empty-search state shows the "No projects match" placeholder.
 
 - **R-HOME-1 Screen state machine.** App has three screens: `loading → home → editor`. The
-  editor is the current cosmo_v2 UI. "Home" (logo/back) from the editor returns to home. Screen
-  transitions cross-fade (R-G-1).
+  editor is the current cosmo_v2 UI. Clicking the top-left **`cosmo.` wordmark** in the editor
+  returns to home; if the project has **unsaved changes** (`EditSession::isDirty()`), a modal
+  first asks to **Save** (accent) or **Discard** (red/destructive), with Cancel/click-outside to
+  stay (`ConfirmDialog`). Screen transitions cross-fade (R-G-1).
+- **R-HOME-1b Project name in the top bar.** The open project's name (the `.cmp` stem) is shown
+  centred in the editor top bar; set on New/Open/Import/Recent-open.
 - **R-HOME-2 Project file format `.cmp` = catalog/manifest.** A `.cmp` is a JSON catalog that
   **references the original image files on disk** (absolute/relative paths) plus each image's
   edit settings and the group tree — i.e. it reuses cosmo_v2's existing workspace serialization

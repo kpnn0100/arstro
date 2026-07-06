@@ -99,6 +99,11 @@ namespace cosmo
         void applyParams(const EditParams &p);        // replace the current slot's params wholesale + submit
         void applyParamsToSlot(int slot, const EditParams &p);  // seed a slot's params + history root (no submit)
         void submit();                                 // record history + re-render the current slot
+
+        /** Unsaved-changes flag: true once an edit is submitted, cleared on
+         *  save/load/reset. Drives the "save or discard?" prompt (R-HOME). */
+        bool isDirty() const { return mDirty; }
+        void markClean() { mDirty = false; }
         /** While true, submit() renders the full (uncropped) frame so a crop box can
          *  be dragged over the whole image; the slot's real crop is unaffected. */
         void setCropPreviewMode(bool on) { mCropPreviewMode = on; }
@@ -216,6 +221,7 @@ namespace cosmo
         bool mSuppressHistory = false;
         bool mCropPreviewMode = false;
         int mPreviewEdge = 1600;
+        bool mDirty = false;   // unsaved edits since the last save/load/reset
 
         RenderService::Frame mExportFrame;
         RenderService::Frame mBeforeFrame;

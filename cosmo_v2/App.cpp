@@ -28,6 +28,7 @@ namespace cosmo_v2
         mTopBar = std::make_shared<TopBar>();
         mTopBar->width.set(width);
         mTopBar->onRailToggle = [this] { toggleRail(); };
+        mTopBar->onHome = [this] { requestHome(); };
         buildMenus();  // File/Settings/Develop/History/Preset dropdowns, wired to real actions
         mRoot->addChild(mTopBar);
 
@@ -118,6 +119,9 @@ namespace cosmo_v2
         mSettingsDialog->onThreads = [this](int n) { arstro::par::setThreads(n); mSession.submit(); };
         mRoot->addChild(mSettingsDialog);
 
+        mConfirmDialog = std::make_shared<ConfirmDialog>(mAccent);
+        mRoot->addChild(mConfirmDialog);
+
         // ── home screen (R-HOME): a standalone full-window launcher, not part of the
         // editor's mRoot tree. render()/input route to it while mScreen == Home. ──
         mHome = std::make_shared<HomeScreen>();
@@ -143,6 +147,8 @@ namespace cosmo_v2
         mPresetDialog->width.set(mW); mPresetDialog->height.set(mH);       // full-window modal
         mSettingsDialog->x.set(0.0); mSettingsDialog->y.set(0.0);
         mSettingsDialog->width.set(mW); mSettingsDialog->height.set(mH);
+        mConfirmDialog->x.set(0.0); mConfirmDialog->y.set(0.0);
+        mConfirmDialog->width.set(mW); mConfirmDialog->height.set(mH);
 
         mTopBar->width.set(mW);
         mTopBar->layout();
@@ -606,6 +612,7 @@ namespace cosmo_v2
 
     void App::showHome()
     {
+        if (mConfirmDialog) mConfirmDialog->close();  // don't leave a modal lingering in the editor tree
         mScreen = Screen::Home;
         refreshHome();
         mScreenFade.set(1.0);
@@ -615,9 +622,28 @@ namespace cosmo_v2
     void App::showEditor()
     {
         mScreen = Screen::Editor;
+        // Centre the project name in the top bar (R-HOME item 2): the .cmp stem.
+        const std::string wp = mSession.workspacePath();
+        std::string stem = wp;
+        if (auto s = stem.find_last_of("/\\"); s != std::string::npos) stem = stem.substr(s + 1);
+        if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
+        mTopBar->setProjectName(stem);
         syncControlsToSlot();
         mScreenFade.set(1.0);
         mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::requestHome()
+    {
+        // Unsaved edits -> ask to save or discard (discard is destructive/red); a
+        // clean project just returns to the launcher (R-HOME item 1).
+        if (!mSession.isDirty()) { showHome(); return; }
+        ConfirmDialog::Button save{"Save", false, true, [this] { saveWorkspace(); showHome(); }};
+        ConfirmDialog::Button discard{"Discard", true, false, [this] { mSession.markClean(); showHome(); }};
+        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
+        mConfirmDialog->show("Unsaved changes",
+                             "Save your changes to this project before leaving?",
+                             {cancel, discard, save});
     }
 
     bool App::key(const artboard::KeyEvent &e)
