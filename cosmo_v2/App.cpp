@@ -3,6 +3,8 @@
 #include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
 #include "base/Parallel.h"          // par::setThreads() for the settings dialog
 #include <algorithm>
+#include <cstdio>
+#include <ctime>
 
 namespace arstro
 {
@@ -18,7 +20,10 @@ namespace cosmo_v2
         mRoot = std::make_shared<Segment>();
         mRoot->width.set(width);
         mRoot->height.set(height);
-        mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
+        // Gestures route to whichever screen is active (launcher vs. editor).
+        mRecognizer.setSink([this](const Gesture &g) {
+            if (mScreen == Screen::Home) mHome->onGesture(g); else mRoot->onGesture(g);
+        });
 
         mTopBar = std::make_shared<TopBar>();
         mTopBar->width.set(width);
@@ -112,6 +117,18 @@ namespace cosmo_v2
         mSettingsDialog->onPreviewEdge = [this](int edge) { mSession.setPreviewEdge(edge); };
         mSettingsDialog->onThreads = [this](int n) { arstro::par::setThreads(n); mSession.submit(); };
         mRoot->addChild(mSettingsDialog);
+
+        // ── home screen (R-HOME): a standalone full-window launcher, not part of the
+        // editor's mRoot tree. render()/input route to it while mScreen == Home. ──
+        mHome = std::make_shared<HomeScreen>();
+        mHome->width.set(mW); mHome->height.set(mH);
+        mHome->onNewProject    = [this] { if (onNewProjectRequested) onNewProjectRequested(); };
+        mHome->onOpenProject   = [this] { if (onOpenProjectRequested) onOpenProjectRequested(); };
+        mHome->onImportCatalog = [this] { if (onImportCatalogRequested) onImportCatalogRequested(); };
+        mHome->onOpenRecent    = [this](int idx) {
+            if (idx >= 0 && idx < (int)mRecents.size() && onOpenRecentRequested) onOpenRecentRequested(mRecents[idx].path);
+        };
+        mHome->layout();
 
         layout();
     }
@@ -208,6 +225,7 @@ namespace cosmo_v2
         ms->onOpenChanged = [this](int open) { if (open >= 0) mTopBar->raise(); };
 
         ms->addMenu({"File", {
+            {"Home",       [this] { showHome(); }},
             {"Open...",    [this] { if (onOpenRequested) onOpenRequested(); }},
             {"Save",       [this] { saveSession(); }},
             {"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }},
@@ -322,6 +340,7 @@ namespace cosmo_v2
         if (height < 240) height = 240;
         mW = width; mH = height;
         mRoot->width.set(width); mRoot->height.set(height);
+        if (mHome) { mHome->width.set(width); mHome->height.set(height); mHome->layout(); }
         layout();
     }
 
@@ -347,6 +366,7 @@ namespace cosmo_v2
 
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
+        if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
 
         // Ctrl + wheel over the photo = zoom about the cursor (R-ZOOM-1). The photo's
@@ -387,6 +407,25 @@ namespace cosmo_v2
     void App::render(IRenderTarget &target, double nowMs)
     {
         mNowMs = nowMs;
+        mScreenFade.update(nowMs);
+
+        // Home screen: render the launcher instead of the editor, then the transition
+        // scrim on top (cross-fades on screen switch — R-HOME-1 / R-G-1).
+        if (mScreen == Screen::Home)
+        {
+            mHome->width.set(mW); mHome->height.set(mH);
+            mHome->layout();
+            mHome->advance(nowMs);
+            target.save();
+            target.setTransform(Transform::identity());
+            mHome->render(target);
+            mHome->renderOverlay(target);
+            const double a = mScreenFade.value();
+            if (a > 0.001) drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
+            target.restore();
+            return;
+        }
+
         mSession.tick(nowMs);
         mRoot->advance(nowMs);
         // Re-run manual composite layout every frame (cheap arithmetic) so
@@ -420,6 +459,16 @@ namespace cosmo_v2
 
         mRoot->render(target);
         mRoot->renderOverlay(target);
+
+        // Cross-fade scrim when we just switched into the editor.
+        const double a = mScreenFade.value();
+        if (a > 0.001)
+        {
+            target.save();
+            target.setTransform(Transform::identity());
+            drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
+            target.restore();
+        }
     }
 
     int App::openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
@@ -502,6 +551,81 @@ namespace cosmo_v2
     {
         // Raw setting (0 = Auto), not the resolved count, so the Auto chip reads right.
         mSettingsDialog->show(mSession.previewEdge(), arstro::par::threadsRef());
+    }
+
+    namespace
+    {
+        std::string formatBytes(long long b)
+        {
+            if (b <= 0) return "";
+            const char *u[] = {"B", "KB", "MB", "GB", "TB"};
+            double v = (double)b; int i = 0;
+            while (v >= 1024.0 && i < 4) { v /= 1024.0; ++i; }
+            char buf[32];
+            std::snprintf(buf, sizeof buf, v < 10 && i > 0 ? "%.1f %s" : "%.0f %s", v, u[i]);
+            return buf;
+        }
+        std::string relativeTime(long long thenEpoch)
+        {
+            if (thenEpoch <= 0) return "";
+            const long long now = (long long)std::time(nullptr);
+            long long d = now - thenEpoch; if (d < 0) d = 0;
+            if (d < 60) return "just now";
+            if (d < 3600) return std::to_string(d / 60) + "m ago";
+            if (d < 86400) return std::to_string(d / 3600) + "h ago";
+            if (d < 172800) return "Yesterday";
+            if (d < 604800) return std::to_string(d / 86400) + " days ago";
+            if (d < 2592000) return std::to_string(d / 604800) + " weeks ago";
+            if (d < 31536000) return std::to_string(d / 2592000) + " months ago";
+            return std::to_string(d / 31536000) + " years ago";
+        }
+    }
+
+    void App::refreshHome()
+    {
+        mRecents = cosmo::ProjectStore::recents();
+        std::vector<HomeScreen::CardInfo> cards;
+        cards.reserve(mRecents.size());
+        for (size_t i = 0; i < mRecents.size(); ++i)
+        {
+            const auto &r = mRecents[i];
+            HomeScreen::CardInfo ci;
+            ci.name = r.name;
+            ci.photos = std::to_string(r.photoCount) + (r.photoCount == 1 ? " photo" : " photos");
+            ci.size = formatBytes(r.sizeBytes);
+            ci.date = relativeTime(r.lastOpened);
+            ci.recentIndex = (int)i;
+            cards.push_back(std::move(ci));
+        }
+        mHome->setRecents(cards);
+        // Ask the host to decode each project's first image into a cover thumbnail.
+        for (size_t i = 0; i < mRecents.size(); ++i)
+            if (!mRecents[i].firstImagePath.empty() && onDecodeThumbnail)
+                onDecodeThumbnail((int)i, mRecents[i].firstImagePath);
+    }
+
+    void App::showHome()
+    {
+        mScreen = Screen::Home;
+        refreshHome();
+        mScreenFade.set(1.0);
+        mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::showEditor()
+    {
+        mScreen = Screen::Editor;
+        syncControlsToSlot();
+        mScreenFade.set(1.0);
+        mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
+    }
+
+    bool App::key(const artboard::KeyEvent &e)
+    {
+        const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
+        // On Home the launcher owns the keyboard: swallow unhandled keys so the
+        // editor's plain-key shortcuts (o/s/Delete) don't fire behind it.
+        return handled || mScreen == Screen::Home;
     }
 
     void App::undo()

@@ -103,7 +103,16 @@ Reference: `cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings tha
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
   card, fade+scale open/close, Esc/click-outside dismiss).
 
-## R-HOME — Home screen & projects (item 4)
+## R-HOME — Home screen & projects (item 4) — ✅ IMPLEMENTED
+
+Status: implemented. `widgets/HomeScreen.{h,cpp}` (Figma-faithful launcher) + a screen
+state machine in `App` (`Home`/`Editor`, cross-fade scrim on switch) + `cosmo_core/
+ProjectStore.{h,cpp}` (persisted recent index) + host dialogs in `linux_main.cpp`. The app
+starts on Home. Notes vs. the spec below: the recent index is a small **line-based TSV** in
+the config dir (not literally JSON); the Figma **LoadingScreen** is not implemented (the app
+opens straight on Home); a `.cmp` is exactly the existing workspace catalog with a `.cmp`
+extension. Search is a focusable `artboard::TextBox` fed by host key/text events.
+
 
 Reference Figma: `ref/2/extracted/src/app/App.tsx` → `HomeScreenDesktop` (lines ~214–386) and
 `LoadingScreen`. Must match 100% (R-G-2): left 300px sidebar (`#161616`) with wordmark

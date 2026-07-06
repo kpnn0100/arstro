@@ -17,6 +17,8 @@
 #include "widgets/ContextMenu.h"
 #include "widgets/PresetDialog.h"
 #include "widgets/SettingsDialog.h"
+#include "widgets/HomeScreen.h"
+#include "../cosmo_core/ProjectStore.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -35,7 +37,23 @@ namespace cosmo_v2
         void render(artboard::IRenderTarget &target, double nowMs);
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
         void wheel(double x, double y, double delta, bool ctrl);
+        /** Forward a key/text event; returns true if consumed (host suppresses its
+         *  own shortcut for that key). */
+        bool key(const artboard::KeyEvent &e);
         void setSize(double width, double height);
+
+        // ── home screen / projects (R-HOME) ──
+        void showHome();     // leave the editor, show the project launcher (refreshes recents)
+        void showEditor();   // enter the editor (after a project is created/opened)
+        bool onHomeScreen() const { return mScreen == Screen::Home; }
+        /** Host pushes a decoded cover for recent `recentIndex` (first image). */
+        void setHomeThumbnail(int recentIndex, const uint8_t *rgba, int w, int h)
+        { if (mHome) mHome->setThumbnail(recentIndex, rgba, w, h); }
+        std::function<void()> onNewProjectRequested;      // host: Save-As .cmp dialog -> newProject
+        std::function<void()> onOpenProjectRequested;     // host: Open .cmp dialog -> openProject
+        std::function<void()> onImportCatalogRequested;   // host: multi-image dialog -> new project
+        std::function<void(const std::string &cmpPath)> onOpenRecentRequested;  // host: load that .cmp
+        std::function<void(int recentIndex, const std::string &imagePath)> onDecodeThumbnail;  // host decodes -> setHomeThumbnail
 
         int openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path = "");
         void selectImage(int slot);
@@ -110,6 +128,9 @@ namespace cosmo_v2
         void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
         void presetExportClicked(); // Export Preset -> category picker -> host path dialog
         void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
+        void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
+
+        enum class Screen { Home, Editor };
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
 
         double mW, mH;
@@ -133,6 +154,11 @@ namespace cosmo_v2
         std::shared_ptr<ContextMenu> mContextMenu;
         std::shared_ptr<PresetDialog> mPresetDialog;      // modal category picker (overlay)
         std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
+
+        Screen mScreen = Screen::Home;                    // app starts on the launcher
+        std::shared_ptr<HomeScreen> mHome;
+        artboard::AnimatedProperty mScreenFade{0.0};      // cross-fade scrim on screen switch (1->0)
+        std::vector<cosmo::RecentEntry> mRecents;         // backing the home grid (open-by-index)
     };
 }
 }

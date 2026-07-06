@@ -13,6 +13,8 @@
 #include <gdk/gdkkeysyms.h>
 #include <unistd.h>
 #include <cctype>
+#include <ctime>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -341,6 +343,127 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    // ── Projects (.cmp) — a .cmp IS a workspace catalog referencing images on disk
+    //    (R-HOME-2); New/Open/Import reuse the workspace machinery above. ──
+    std::string ensureCmp(const std::string &p) { return endsWith(p, ".cmp") ? p : p + ".cmp"; }
+
+    // Read a just-created/opened .cmp back and record it in the recent index.
+    void rememberProject(const std::string &cmpPath)
+    {
+        std::vector<App::WorkspaceEntry> entries;
+        App::readWorkspaceFile(cmpPath, entries);
+        arstro::cosmo::RecentEntry e;
+        e.name = std::filesystem::path(cmpPath).stem().string();
+        e.path = cmpPath;
+        long long size = 0; int count = 0;
+        for (const auto &en : entries)
+            if (!en.group && !en.imagePath.empty())
+            {
+                if (e.firstImagePath.empty()) e.firstImagePath = en.imagePath;
+                ++count;
+                std::error_code ec;
+                const auto s = std::filesystem::file_size(en.imagePath, ec);
+                if (!ec) size += (long long)s;
+            }
+        e.photoCount = count;
+        e.sizeBytes = size;
+        e.lastOpened = (long long)std::time(nullptr);
+        arstro::cosmo::ProjectStore::remember(std::move(e));
+    }
+
+    void addCmpFilter(GtkWidget *d)
+    {
+        GtkFileFilter *filt = gtk_file_filter_new();
+        gtk_file_filter_set_name(filt, "Cosmo project (*.cmp)");
+        gtk_file_filter_add_pattern(filt, "*.cmp");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), filt);
+    }
+
+    void newProjectDialog(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "New Project", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Create", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "Untitled.cmp");
+        addCmpFilter(d);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path)
+            {
+                const std::string cmp = ensureCmp(path);
+                a->app.resetWorkspace();
+                a->app.saveWorkspaceAs(cmp);   // empty project; user adds photos in the editor
+                rememberProject(cmp);
+                a->app.showEditor();
+            }
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    void openProjectDialog(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Open Project", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+        addCmpFilter(d);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path) { loadWorkspaceFile(a, path); rememberProject(path); a->app.showEditor(); }
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    void importCatalogDialog(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Import Catalog", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Import", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(d), TRUE);
+        std::vector<std::string> imgs;
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            GSList *files = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(d));
+            for (GSList *it = files; it; it = it->next) { imgs.emplace_back((const char *)it->data); g_free(it->data); }
+            g_slist_free(files);
+        }
+        gtk_widget_destroy(d);
+        if (imgs.empty()) return;
+
+        GtkWidget *sd = gtk_file_chooser_dialog_new(
+            "Save New Project", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Create", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(sd), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(sd), "Imported.cmp");
+        addCmpFilter(sd);
+        std::string cmp;
+        if (gtk_dialog_run(GTK_DIALOG(sd)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *p = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(sd));
+            if (p) cmp = ensureCmp(p);
+            g_free(p);
+        }
+        gtk_widget_destroy(sd);
+        if (cmp.empty()) return;
+
+        a->app.resetWorkspace();
+        for (const auto &ip : imgs)
+        {
+            DecodedImage img = a->decoder.decodeFile(ip);
+            if (img.ok()) a->app.openImage(img.rgba.data(), img.width, img.height, baseName(ip), ip);
+        }
+        a->app.saveWorkspaceAs(cmp);
+        rememberProject(cmp);
+        a->app.showEditor();
+        gtk_widget_queue_draw(a->area);
+    }
+
     void saveDialog(Host *a)
     {
         if (a->app.imageCount() == 0)
@@ -419,6 +542,30 @@ namespace
         auto *a = static_cast<Host *>(user);
         const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
         const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
+        const bool alt = (e->state & GDK_MOD1_MASK) != 0;
+
+        // Text input first: a focused field (the home-screen search box) gets typed
+        // characters + backspace; if it consumes them, don't run editor shortcuts.
+        if (e->keyval == GDK_KEY_BackSpace)
+        {
+            artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Down; ke.keyCode = 8;
+            ke.shift = shift; ke.ctrl = ctrl; ke.alt = alt;
+            if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
+        }
+        else if (!ctrl && !alt)
+        {
+            const gunichar u = gdk_keyval_to_unicode(e->keyval);
+            if (u >= 0x20 && u != 0x7f)
+            {
+                char buf[8] = {0};
+                const int n = g_unichar_to_utf8(u, buf);
+                artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Text; ke.text = std::string(buf, (size_t)n);
+                if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
+            }
+        }
+        // On the home screen the launcher owns the keyboard — don't leak editor keys.
+        if (a->app.onHomeScreen()) return TRUE;
+
         if (ctrl && (e->keyval == GDK_KEY_z || e->keyval == GDK_KEY_Z))
         {
             if (shift) a->app.redo(); else a->app.undo();
@@ -468,12 +615,25 @@ int main(int argc, char **argv)
     host.app.onSaveWorkspaceRequested = [&host] { saveWorkspaceDialog(&host); };
     host.app.onLoadWorkspaceRequested = [&host] { loadWorkspaceDialog(&host); };
 
+    // Home screen / projects (R-HOME).
+    host.app.onNewProjectRequested   = [&host] { newProjectDialog(&host); };
+    host.app.onOpenProjectRequested  = [&host] { openProjectDialog(&host); };
+    host.app.onImportCatalogRequested = [&host] { importCatalogDialog(&host); };
+    host.app.onOpenRecentRequested = [&host](const std::string &path) {
+        loadWorkspaceFile(&host, path); rememberProject(path); host.app.showEditor();
+    };
+    host.app.onDecodeThumbnail = [&host](int idx, const std::string &imgPath) {
+        DecodedImage img = host.decoder.decodeFile(imgPath);
+        if (img.ok()) host.app.setHomeThumbnail(idx, img.rgba.data(), img.width, img.height);
+    };
+
     host.app.setPresetDir(exeDir() + "/presets");
 
     {
         std::vector<std::string> paths;
         for (int i = 1; i < argc; ++i) paths.emplace_back(argv[i]);
-        openPaths(&host, paths);
+        if (paths.empty()) host.app.showHome();  // start on the launcher (R-HOME-1)
+        else { openPaths(&host, paths); host.app.showEditor(); }
     }
 
     host.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
