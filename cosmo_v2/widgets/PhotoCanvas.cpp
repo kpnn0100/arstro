@@ -21,6 +21,9 @@ namespace cosmo_v2
         clipToBounds = true;
         mImageView = std::make_shared<ImageView>();
         mImageView->setFit(ImageView::Fit::Contain);
+        // PhotoCanvas owns pan/zoom so the after + before(split) views move together;
+        // make the after view click-through so its drag falls through to us (R-ZOOM-3).
+        mImageView->inputTransparent = true;
         addChild(mImageView);
 
         // Split: a left-half clip holding a full-canvas before-image, so it stays
@@ -37,6 +40,11 @@ namespace cosmo_v2
         mDivider->style = {Paint::filled(palette::whiteAlpha(0.55)), 0.0};
         mDivider->inputTransparent = true;
         addChild(mDivider);
+
+        // On-photo mask editor. Added BEFORE the pill so the pill stays clickable
+        // (topmost child wins on overlap); it is click-through until a mask is active.
+        mMaskOverlay = std::make_shared<MaskOverlay>(palette::primary());
+        addChild(mMaskOverlay);
 
         mPill = std::make_shared<SegmentedControl>(std::vector<std::string>{"Before", "Split", "After"});
         mPill->containerBox = {Paint::filledStroked(Color{0x11 / 255.0, 0x11 / 255.0, 0x11 / 255.0, 0.9},
@@ -80,6 +88,12 @@ namespace cosmo_v2
         mDivider->x.set(w * 0.5 - 0.75); mDivider->y.set(0.0);
         mDivider->width.set(1.5); mDivider->height.set(h);
 
+        // The mask overlay fills the canvas; its fitted rect tracks the photo's
+        // display area INCLUDING the current zoom/pan (R-MASK-3, R-ZOOM).
+        mMaskOverlay->x.set(0.0); mMaskOverlay->y.set(0.0);
+        mMaskOverlay->width.set(w); mMaskOverlay->height.set(h);
+        mMaskOverlay->setFittedRect(mImageView->fittedRect());
+
         double pillW = 0.0;
         for (const char *s : {"Before", "Split", "After"})
             pillW += estimateTextWidth(s, kFontPx) + 2 * kSegPadX;
@@ -90,9 +104,44 @@ namespace cosmo_v2
         mPill->layout();
     }
 
+    void PhotoCanvas::zoomAbout(double factor, const Point &localInCanvas)
+    {
+        // ImageView fills PhotoCanvas at (0,0), so PhotoCanvas-local == ImageView-local.
+        mImageView->zoomAbout(factor, localInCanvas);
+        mBeforeView->zoomAbout(factor, localInCanvas);
+    }
+
+    void PhotoCanvas::resetZoom()
+    {
+        mImageView->resetView();
+        mBeforeView->resetView();
+    }
+
     bool PhotoCanvas::handleGesture(const Gesture &g, const Point &local)
     {
         if (g.type == Gesture::Type::RightClick && onContext) { onContext(g.pos.x, g.pos.y); return true; }
+
+        // Drag-to-pan while zoomed (>1x) — pan both views so the split stays aligned.
+        if (mImageView->zoom() > 1.0)
+        {
+            switch (g.type)
+            {
+            case Gesture::Type::Down:
+            case Gesture::Type::DragStart:
+                mPanLast = local;
+                return true;
+            case Gesture::Type::Drag:
+                mImageView->panBy(local.x - mPanLast.x, local.y - mPanLast.y);
+                mBeforeView->panBy(local.x - mPanLast.x, local.y - mPanLast.y);
+                mPanLast = local;
+                return true;
+            case Gesture::Type::Up:
+            case Gesture::Type::Drop:
+                return true;
+            default:
+                break;
+            }
+        }
         return Segment::handleGesture(g, local);
     }
 

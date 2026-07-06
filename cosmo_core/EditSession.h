@@ -167,6 +167,10 @@ namespace cosmo
         arstro::RenderService &renderService() { return mService; }
         /** Back to the base preview resolution (called when switching images). */
         void resetPreviewResolution();
+        /** Base preview render long-edge in px (quality vs. speed). Settings panel
+         *  writes this; it becomes the resolution every subsequent preview renders at. */
+        int previewEdge() const { return mPreviewEdge; }
+        void setPreviewEdge(int edge) { mPreviewEdge = edge < 64 ? 64 : edge; mService.setPreviewSize(mPreviewEdge); submit(); }
         /** Scale the preview resolution with the view's zoom factor (>=1) so a
          *  magnified image stays sharp; caller still calls submit() afterward. */
         void setPreviewZoom(double zoomFactor);

@@ -15,6 +15,8 @@
 #include "widgets/RightColumn.h"
 #include "widgets/HistoryView.h"
 #include "widgets/ContextMenu.h"
+#include "widgets/PresetDialog.h"
+#include "widgets/SettingsDialog.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -105,6 +107,9 @@ namespace cosmo_v2
         void copySettings();        // Develop ▸ Copy Settings
         void pasteSettings(bool toAll);  // Develop ▸ Paste to Selected / to All Images
         void openHistoryView();     // History ▸ Show History Tree… (in-app, like cosmo)
+        void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
+        void presetExportClicked(); // Export Preset -> category picker -> host path dialog
+        void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
 
         double mW, mH;
@@ -126,6 +131,8 @@ namespace cosmo_v2
         std::shared_ptr<RightColumn> mRightColumn;
         std::shared_ptr<HistoryView> mHistoryView;
         std::shared_ptr<ContextMenu> mContextMenu;
+        std::shared_ptr<PresetDialog> mPresetDialog;      // modal category picker (overlay)
+        std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
     };
 }
 }

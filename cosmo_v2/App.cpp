@@ -1,5 +1,7 @@
 #include "App.h"
 #include "../cosmo_core/PresetLibrary.h"
+#include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
+#include "base/Parallel.h"          // par::setThreads() for the settings dialog
 #include <algorithm>
 
 namespace arstro
@@ -63,10 +65,16 @@ namespace cosmo_v2
         mRoot->addChild(mCenterStage);
 
         mRightColumn = std::make_shared<RightColumn>(mSession);
-        mRightColumn->actionBar()->onSave = [this] { if (onSavePresetRequested) onSavePresetRequested(); };
+        mRightColumn->actionBar()->onSave = [this] { presetSaveClicked(); };
         mRightColumn->actionBar()->onImport = [this] { if (onImportPresetRequested) onImportPresetRequested(); };
-        mRightColumn->actionBar()->onExport = [this] { if (onExportPresetRequested) onExportPresetRequested(); };
+        mRightColumn->actionBar()->onExport = [this] { presetExportClicked(); };
         mRoot->addChild(mRightColumn);
+
+        // On-photo mask overlay: a drag writes the dragged geometry back into the
+        // selected mask (R-MASK). The overlay's active state + mask are pushed each
+        // frame from the RightColumn in render().
+        mCenterStage->photo()->maskOverlay()->onChange =
+            [this](const MaskParams &m) { mRightColumn->writeSelectedMask(m); };
 
         // History-tree modal (added last -> topmost for hit-test + overlay). Clicking
         // a node jumps the image to that state; re-highlight the landed node.
@@ -96,6 +104,15 @@ namespace cosmo_v2
             openEditContext(x, y, cell);  // cell < 0 (empty strip) -> photo menu (Add Photo / Group / Ungroup)
         };
 
+        // Modal category picker (preset save/export/import) and engine settings —
+        // added last so they draw + hit-test on top of everything (R-PRESETPICK-3).
+        mPresetDialog = std::make_shared<PresetDialog>(mAccent);
+        mRoot->addChild(mPresetDialog);
+        mSettingsDialog = std::make_shared<SettingsDialog>(mAccent);
+        mSettingsDialog->onPreviewEdge = [this](int edge) { mSession.setPreviewEdge(edge); };
+        mSettingsDialog->onThreads = [this](int n) { arstro::par::setThreads(n); mSession.submit(); };
+        mRoot->addChild(mSettingsDialog);
+
         layout();
     }
 
@@ -105,6 +122,10 @@ namespace cosmo_v2
         mHistoryView->width.set(mW); mHistoryView->height.set(mH);  // full-window modal
         mContextMenu->x.set(0.0); mContextMenu->y.set(0.0);
         mContextMenu->width.set(mW); mContextMenu->height.set(mH);
+        mPresetDialog->x.set(0.0); mPresetDialog->y.set(0.0);
+        mPresetDialog->width.set(mW); mPresetDialog->height.set(mH);       // full-window modal
+        mSettingsDialog->x.set(0.0); mSettingsDialog->y.set(0.0);
+        mSettingsDialog->width.set(mW); mSettingsDialog->height.set(mH);
 
         mTopBar->width.set(mW);
         mTopBar->layout();
@@ -192,7 +213,8 @@ namespace cosmo_v2
             {"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }},
         }});
         ms->addMenu({"Settings", {
-            {"Reset Workspace", [this] { resetWorkspace(); syncControlsToSlot(); }},
+            {"Engine Settings...", [this] { openSettingsDialog(); }},
+            {"Reset Workspace",    [this] { resetWorkspace(); syncControlsToSlot(); }},
         }});
         ms->addMenu({"Develop", {
             {"Copy Settings",        [this] { copySettings(); }},
@@ -207,7 +229,7 @@ namespace cosmo_v2
             {"Show History Tree...", [this] { openHistoryView(); }},
         }});
         ms->addMenu({"Preset", {
-            {"Save Preset...",   [this] { if (onSavePresetRequested) onSavePresetRequested(); }},
+            {"Save Preset...",   [this] { presetSaveClicked(); }},
             {"Import Preset...", [this] { if (onImportPresetRequested) onImportPresetRequested(); }},
         }});
     }
@@ -325,8 +347,27 @@ namespace cosmo_v2
 
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
-        (void)ctrl;
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
+
+        // Ctrl + wheel over the photo = zoom about the cursor (R-ZOOM-1). The photo's
+        // world rect is CenterStage's origin + PhotoCanvas's origin within it.
+        if (ctrl && delta != 0.0)
+        {
+            auto photo = mCenterStage->photo();
+            const double px = mCenterStage->x.value() + photo->x.value();
+            const double py = mCenterStage->y.value() + photo->y.value();
+            const double pw = photo->width.value(), ph = photo->height.value();
+            if (x >= px && x <= px + pw && y >= py && y <= py + ph)
+            {
+                photo->zoomAbout(delta > 0 ? 1.15 : 1.0 / 1.15, Point{x - px, y - py});
+                // Keep a high-res original sharp when magnified; back to base at 1x (R-ZOOM-4).
+                if (photo->zoom() > 1.0) mSession.setPreviewZoom(photo->zoom());
+                else                     mSession.resetPreviewResolution();
+                mSession.submit();  // re-render at the new preview resolution
+            }
+            return;
+        }
+
         const double railX = mLeftRail->x.value(), railY = mLeftRail->y.value();
         if (x >= railX && x <= railX + mLeftRail->width.value() &&
             y >= railY && y <= railY + mLeftRail->height.value())
@@ -353,6 +394,15 @@ namespace cosmo_v2
         // -- matching the design brief's "the edit area reflows in step, it
         // doesn't just get covered or revealed" for the rail toggle.
         layout();
+
+        // Show the on-photo mask editor only while the Mask tab is open with a mask
+        // selected; otherwise it stays click-through (R-MASK-1/2). Mask tab == index 2.
+        {
+            auto ov = mCenterStage->photo()->maskOverlay();
+            const MaskParams *sel = mRightColumn->selectedMaskParams();
+            if (mRightColumn->activeTab() == 2 && sel) ov->setMask(*sel, true);
+            else                                       ov->setMask(MaskParams{}, false);
+        }
 
         RenderService::Frame f;
         if (mSession.renderService().tryAcquire(f) && f.width > 0)
@@ -406,13 +456,52 @@ namespace cosmo_v2
         (void)name;
     }
 
+    namespace
+    {
+        // {category-key -> {key,label,checked=true}} rows for the picker.
+        std::vector<PresetDialog::Row> buildPresetRows(const std::vector<std::string> &keys)
+        {
+            std::vector<PresetDialog::Row> rows;
+            rows.reserve(keys.size());
+            for (const auto &k : keys) rows.push_back({k, cosmo::PresetLibrary::categoryLabel(k), true});
+            return rows;
+        }
+    }
+
     bool App::importPresetFrom(const std::string &path)
     {
         std::vector<std::string> present;
         if (!mSession.importPresetFrom(path, present)) return false;
-        mSession.applyImport(present);
-        syncControlsToSlot();
+        // Category picker: choose which of the present categories to apply (R-PRESETPICK).
+        mPresetDialog->show("Import preset", "Apply", buildPresetRows(present),
+            [this](std::vector<std::string> cats) { mSession.applyImport(cats); syncControlsToSlot(); });
         return true;
+    }
+
+    void App::presetSaveClicked()
+    {
+        if (mSession.imageCount() == 0) return;
+        mPresetDialog->show("Save preset", "Continue", buildPresetRows(arstro::apfImageCategories()),
+            [this](std::vector<std::string> cats) {
+                mSession.setPendingCategories(std::move(cats));
+                if (onSavePresetRequested) onSavePresetRequested();  // host name dialog -> savePreset(name)
+            });
+    }
+
+    void App::presetExportClicked()
+    {
+        if (mSession.imageCount() == 0) return;
+        mPresetDialog->show("Export preset", "Continue", buildPresetRows(arstro::apfImageCategories()),
+            [this](std::vector<std::string> cats) {
+                mSession.setPendingCategories(std::move(cats));
+                if (onExportPresetRequested) onExportPresetRequested();  // host path dialog -> exportPresetTo(path)
+            });
+    }
+
+    void App::openSettingsDialog()
+    {
+        // Raw setting (0 = Auto), not the resolved count, so the Auto chip reads right.
+        mSettingsDialog->show(mSession.previewEdge(), arstro::par::threadsRef());
     }
 
     void App::undo()

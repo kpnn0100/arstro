@@ -43,6 +43,11 @@ namespace cosmo_v2
         void scrollActivePanel(double delta);
         void layout();  // call after width/height changes
 
+        // ── on-photo mask overlay bridge (R-MASK) ──
+        int activeTab() const;                          // edit-stack tab index (Mask == 2)
+        const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
+        void writeSelectedMask(const MaskParams &m);    // overlay drag -> write geometry back + submit
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;  // card body (blends with active tab)
 

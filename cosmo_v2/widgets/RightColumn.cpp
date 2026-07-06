@@ -225,6 +225,28 @@ namespace cosmo_v2
         mXform->setState({p->rotation, p->quarterTurns, p->cropX, p->cropY, p->cropW, p->cropH});
     }
 
+    int RightColumn::activeTab() const { return mTabs->selectedIndex(); }
+
+    const MaskParams *RightColumn::selectedMaskParams() const
+    {
+        const EditParams *p = mSession.curParams();
+        if (!p || mSelectedMask < 0 || mSelectedMask >= (int)p->masks.size()) return nullptr;
+        return &p->masks[mSelectedMask];
+    }
+
+    void RightColumn::writeSelectedMask(const MaskParams &m)
+    {
+        // The overlay is fed the full current mask each frame, so `m` already carries
+        // the panel-owned fields (adjust/feather/inverted) alongside the dragged
+        // geometry — write it back wholesale, then re-render. No setMasks() (would
+        // fight a live drag); the mask count is unchanged so the panel stays in sync.
+        if (auto *p = mSession.curParams(); p && mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+        {
+            p->masks[mSelectedMask] = m;
+            mSession.submit();
+        }
+    }
+
     void RightColumn::scrollActivePanel(double delta)
     {
         switch (mTabs->selectedIndex())
