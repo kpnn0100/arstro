@@ -18,6 +18,11 @@ namespace cosmo_v2
         mSlider->setValue(initial);
         mSlider->setDefault(initial);
         mSlider->height.set(9.0);
+        // Develop sliders are drag-to-set (matching the Figma design): a bare click
+        // does NOT jump the value to the cursor. This also makes double-click reset
+        // to default unambiguous -- there is no deferred click-jump that could fire
+        // around the double-click and slide the thumb toward the cursor.
+        mSlider->setClickJumps(false);
         mSlider->onChange = [this](double v) { if (onChange) onChange(v); };
         addChild(mSlider);
         height.set(kRowHeight);
