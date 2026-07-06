@@ -1,0 +1,11 @@
+{
+  // Pin the CMake Tools extension to ONE build tree (the Ninja `build/` dir).
+  // The earlier "nothing rebuilds" symptom came from a second, stale tree
+  // (cmake-build/, configured before cosmo_v2 existed). Keeping the extension,
+  // the build task, and the launch config all on build/ avoids that split.
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.generator": "Ninja",
+  "cmake.configureOnOpen": true,
+  "cmake.defaultBuildTarget": "cosmo_v2"
+}
