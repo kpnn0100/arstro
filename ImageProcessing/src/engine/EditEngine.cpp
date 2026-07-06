@@ -59,8 +59,18 @@ namespace arstro
     {
         if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].source.empty())
             return;
-        mCurrent = slot;
-        mProxySlot = -1;
+        // Invalidate the cached preview proxy ONLY when the slot actually changes.
+        // RenderService::doPreview() calls selectImage() on every interactive
+        // render; unconditionally clearing mProxySlot forced ensurePreviewProxy()
+        // to box-downscale the full-res source (megapixels) on every slider tick.
+        // A slot's source pixels are never mutated in place, so the proxy stays
+        // valid across same-slot renders (a zoom change still rebuilds it via
+        // mProxyEdge). This is the dominant interactive-edit cost.
+        if (slot != mCurrent)
+        {
+            mCurrent = slot;
+            mProxySlot = -1;
+        }
         applyParams(mSlots[mCurrent].params);
     }
 
