@@ -3,6 +3,7 @@
 #include "../base/Parallel.h"
 #include "MaskStack.h"
 #include <algorithm>
+#include <array>
 
 namespace arstro
 {
@@ -33,12 +34,37 @@ namespace arstro
 
     Image EditEngine::fromEncodedBytes(const uint8_t *rgba, int w, int h, int channels)
     {
-        Image img(w, h, channels, ColorSpace::EncodedSRGB);
-        const size_t n = (size_t)w * h * channels;
+        // The input is 8-bit, so sRGB→linear has only 256 possible results: precompute
+        // a lookup table once and gather, instead of a divide + pow per pixel (the
+        // dominant per-image load cost). Colour channels use the sRGB LUT; alpha is a
+        // plain /255. Output is already linear, so decodeInPlace is not needed.
+        static const std::array<Pixel, 256> kSrgbToLinear = [] {
+            std::array<Pixel, 256> t{};
+            for (int i = 0; i < 256; ++i) t[i] = color::srgbDecode((Pixel)i / (Pixel)255);
+            return t;
+        }();
+        static const std::array<Pixel, 256> kByteToUnit = [] {
+            std::array<Pixel, 256> t{};
+            for (int i = 0; i < 256; ++i) t[i] = (Pixel)i / (Pixel)255;
+            return t;
+        }();
+
+        Image img(w, h, channels, ColorSpace::LinearSRGB);
         Pixel *d = img.data();
-        for (size_t i = 0; i < n; ++i)
-            d[i] = (Pixel)rgba[i] / (Pixel)255;
-        color::decodeInPlace(img);
+        const int rowN = w * channels;
+        const int colorCh = channels >= 3 ? 3 : channels;  // matches decodeInPlace's colour-channel rule
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+            {
+                const uint8_t *s = rgba + (size_t)y * rowN;
+                Pixel *o = d + (size_t)y * rowN;
+                for (int x = 0; x < rowN; x += channels)
+                {
+                    for (int c = 0; c < colorCh; ++c) o[x + c] = kSrgbToLinear[s[x + c]];
+                    for (int c = colorCh; c < channels; ++c) o[x + c] = kByteToUnit[s[x + c]];  // alpha
+                }
+            }
+        });
         return img;
     }
 
@@ -59,19 +85,32 @@ namespace arstro
     {
         if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].source.empty())
             return;
-        // Invalidate the cached preview proxy ONLY when the slot actually changes.
-        // RenderService::doPreview() calls selectImage() on every interactive
-        // render; unconditionally clearing mProxySlot forced ensurePreviewProxy()
-        // to box-downscale the full-res source (megapixels) on every slider tick.
-        // A slot's source pixels are never mutated in place, so the proxy stays
-        // valid across same-slot renders (a zoom change still rebuilds it via
-        // mProxyEdge). This is the dominant interactive-edit cost.
-        if (slot != mCurrent)
-        {
-            mCurrent = slot;
-            mProxySlot = -1;
-        }
+        // Each slot keeps its own preview proxy (see ensurePreviewProxy + the Slot
+        // struct), so switching images does NOT invalidate/re-downscale anything —
+        // the proxy is reused if still cached. Interactive same-slot renders also
+        // reuse it (a slot's source pixels are never mutated in place).
+        mCurrent = slot;
         applyParams(mSlots[mCurrent].params);
+    }
+
+    void EditEngine::touchProxyLRU(int slot)
+    {
+        auto it = std::find(mProxyLRU.begin(), mProxyLRU.end(), slot);
+        if (it != mProxyLRU.end()) mProxyLRU.erase(it);
+        mProxyLRU.insert(mProxyLRU.begin(), slot);  // most-recent first
+        while ((int)mProxyLRU.size() > kMaxProxies)  // evict the oldest proxy to bound memory
+        {
+            const int old = mProxyLRU.back();
+            mProxyLRU.pop_back();
+            if (old >= 0 && old < (int)mSlots.size()) { mSlots[old].proxy = Image{}; mSlots[old].proxyEdge = -1; }
+        }
+    }
+
+    void EditEngine::dropProxy(int slot)
+    {
+        auto it = std::find(mProxyLRU.begin(), mProxyLRU.end(), slot);
+        if (it != mProxyLRU.end()) mProxyLRU.erase(it);
+        if (slot >= 0 && slot < (int)mSlots.size()) { mSlots[slot].proxy = Image{}; mSlots[slot].proxyEdge = -1; }
     }
 
     void EditEngine::releaseImage(int slot)
@@ -80,16 +119,15 @@ namespace arstro
             return;
         mSlots[slot].source = Image{};
         mSlots[slot].params = EditParams{};
-        if (mProxySlot == slot) { mProxySlot = -1; mPreviewProxy = Image{}; }
+        dropProxy(slot);
         if (mCurrent == slot) mCurrent = -1;
     }
 
     void EditEngine::clearImages()
     {
         mSlots.clear();
+        mProxyLRU.clear();
         mCurrent = -1;
-        mProxySlot = -1;
-        mPreviewProxy = Image{};
     }
 
     const EditParams &EditEngine::currentParams() const
@@ -245,38 +283,53 @@ namespace arstro
         int th = (int)(sh * scale + 0.5); if (th < 1) th = 1;
         const int ch = src.channels();
         Image out(tw, th, ch, src.space());
-        for (int ty = 0; ty < th; ++ty)
-        {
-            const int y0 = (int)((double)ty * sh / th);
-            int y1 = (int)((double)(ty + 1) * sh / th); if (y1 <= y0) y1 = y0 + 1;
-            for (int tx = 0; tx < tw; ++tx)
+        // Row-independent box downscale — parallelised over target rows, reading
+        // source rows via row pointers (the dominant per-image + per-switch cost).
+        par::parallelFor(th, [&](int r0, int r1) {
+            for (int ty = r0; ty < r1; ++ty)
             {
-                const int x0 = (int)((double)tx * sw / tw);
-                int x1 = (int)((double)(tx + 1) * sw / tw); if (x1 <= x0) x1 = x0 + 1;
-                for (int c = 0; c < ch; ++c)
+                const int y0 = (int)((double)ty * sh / th);
+                int y1 = (int)((double)(ty + 1) * sh / th); if (y1 <= y0) y1 = y0 + 1;
+                Pixel *o = out.row(ty);
+                for (int tx = 0; tx < tw; ++tx)
                 {
-                    double sum = 0.0; int n = 0;
-                    for (int y = y0; y < y1; ++y)
-                        for (int x = x0; x < x1; ++x) { sum += src.at(x, y, c); ++n; }
-                    out.at(tx, ty, c) = (Pixel)(sum / (n > 0 ? n : 1));
+                    const int x0 = (int)((double)tx * sw / tw);
+                    int x1 = (int)((double)(tx + 1) * sw / tw); if (x1 <= x0) x1 = x0 + 1;
+                    const double inv = 1.0 / ((double)(y1 - y0) * (x1 - x0));
+                    for (int c = 0; c < ch; ++c)
+                    {
+                        double sum = 0.0;
+                        for (int y = y0; y < y1; ++y)
+                        {
+                            const Pixel *s = src.row(y);
+                            for (int x = x0; x < x1; ++x) sum += s[x * ch + c];
+                        }
+                        o[tx * ch + c] = (Pixel)(sum * inv);
+                    }
                 }
             }
-        }
+        });
         return out;
     }
 
     void EditEngine::ensurePreviewProxy()
     {
-        if (mProxySlot == mCurrent && mProxyEdge == mPreviewMaxEdge)
+        Slot &s = mSlots[mCurrent];
+        if (!s.proxy.empty() && s.proxyEdge == mPreviewMaxEdge)  // cached at this preview size -> reuse
+        {
+            touchProxyLRU(mCurrent);
             return;
-        mPreviewProxy = downscaleLinear(mSlots[mCurrent].source, mPreviewMaxEdge);
-        mProxySlot = mCurrent;
-        mProxyEdge = mPreviewMaxEdge;
+        }
+        s.proxy = downscaleLinear(s.source, mPreviewMaxEdge);
+        s.proxyEdge = mPreviewMaxEdge;
+        touchProxyLRU(mCurrent);
     }
 
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes)
     {
-        // Run the three segments, tapping histograms at the boundaries.
+        // Run the three segments, tapping histograms at the boundaries. The
+        // histograms + encode are parallelised (see Histogram.cpp / ColorSpace.cpp)
+        // since they run on every preview render.
         Image preCurve, preMixer, processed;
         mChainPre.apply(linearSource, preCurve);
         mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
@@ -317,7 +370,7 @@ namespace arstro
     {
         if (mCurrent < 0) return PreviewBuffer{};
         ensurePreviewProxy();
-        return renderInto(mPreviewProxy, mPreviewOut);
+        return renderInto(mSlots[mCurrent].proxy, mPreviewOut);
     }
 
     PreviewBuffer EditEngine::renderFull()

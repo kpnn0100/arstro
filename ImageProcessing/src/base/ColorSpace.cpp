@@ -1,4 +1,5 @@
 #include "ColorSpace.h"
+#include "Parallel.h"
 #include <cmath>
 #include <algorithm>
 
@@ -35,13 +36,18 @@ namespace arstro
             const int ch = img.channels();
             const int colorCh = ch >= 3 ? 3 : ch;  // leave alpha untouched
             Pixel *d = img.data();
-            const size_t px = img.pixelCount();
-            for (size_t i = 0; i < px; ++i)
-            {
-                Pixel *p = d + i * ch;
-                for (int c = 0; c < colorCh; ++c)
-                    p[c] = srgbEncode(p[c]);
-            }
+            const int h = img.height(), rowN = img.width() * ch;
+            // Row-independent sRGB encode (pow per channel) — parallelised; this runs
+            // on every preview render, so serialising it stalls switching + edits.
+            par::parallelFor(h, [&](int y0, int y1) {
+                for (int y = y0; y < y1; ++y)
+                {
+                    Pixel *r = d + (size_t)y * rowN;
+                    for (int x = 0; x < rowN; x += ch)
+                        for (int c = 0; c < colorCh; ++c)
+                            r[x + c] = srgbEncode(r[x + c]);
+                }
+            });
             img.setSpace(ColorSpace::EncodedSRGB);
         }
 
@@ -52,13 +58,18 @@ namespace arstro
             const int ch = img.channels();
             const int colorCh = ch >= 3 ? 3 : ch;
             Pixel *d = img.data();
-            const size_t px = img.pixelCount();
-            for (size_t i = 0; i < px; ++i)
-            {
-                Pixel *p = d + i * ch;
-                for (int c = 0; c < colorCh; ++c)
-                    p[c] = srgbDecode(p[c]);
-            }
+            const int h = img.height(), rowN = img.width() * ch;
+            // Row-independent sRGB→linear decode, parallelised (the dominant cost of
+            // decoding an image into the engine on load).
+            par::parallelFor(h, [&](int y0, int y1) {
+                for (int y = y0; y < y1; ++y)
+                {
+                    Pixel *r = d + (size_t)y * rowN;
+                    for (int x = 0; x < rowN; x += ch)
+                        for (int c = 0; c < colorCh; ++c)
+                            r[x + c] = srgbDecode(r[x + c]);
+                }
+            });
             img.setSpace(ColorSpace::LinearSRGB);
         }
 

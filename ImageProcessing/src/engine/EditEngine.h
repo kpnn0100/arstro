@@ -160,20 +160,24 @@ namespace arstro
         void resetAll();
 
     private:
-        struct Slot { Image source; EditParams params; };
+        // Each slot caches its own downscaled preview proxy so SWITCHING between
+        // already-viewed images is instant (no re-downscale); an LRU caps how many
+        // proxies are kept in memory at once.
+        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1; };
 
         void buildPipeline();
         PreviewBuffer renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes);
         void ensurePreviewProxy();
+        void touchProxyLRU(int slot);   // mark `slot`'s proxy most-recently-used; evict the oldest beyond the cap
+        void dropProxy(int slot);       // free a slot's cached proxy + drop it from the LRU
         EditParams *cur() { return mCurrent >= 0 ? &mSlots[mCurrent].params : nullptr; }
+
+        static constexpr int kMaxProxies = 6;  // ~cached preview images (bounds memory)
 
         std::vector<Slot> mSlots;
         int mCurrent = -1;
         int mPreviewMaxEdge = 2048;
-
-        Image mPreviewProxy;
-        int mProxySlot = -1;
-        int mProxyEdge = -1;
+        std::vector<int> mProxyLRU;   // slots holding a live proxy, most-recent first
 
         // pipeline split into three segments so histograms can be tapped at the
         // boundaries: pre (before ToneCurve), mid (before ColorMixer), post.

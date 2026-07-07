@@ -1,6 +1,8 @@
 #include "Histogram.h"
 #include "../base/ColorSpace.h"
+#include "../base/Parallel.h"
 #include <cmath>
+#include <mutex>
 
 namespace arstro
 {
@@ -23,30 +25,40 @@ namespace arstro
         const Pixel *d = image.data();
         const int colorCh = ch >= 3 ? 3 : 1;
 
-        for (size_t i = 0; i < px; ++i)
-        {
-            const Pixel *p = d + i * ch;
-            Pixel rv = p[0];
-            Pixel gv = colorCh >= 3 ? p[1] : p[0];
-            Pixel bv = colorCh >= 3 ? p[2] : p[0];
-            // Luminance from LINEAR rgb, then encode for the display-referred bin.
-            Pixel lin_r = linear ? rv : color::srgbDecode(rv);
-            Pixel lin_g = linear ? gv : color::srgbDecode(gv);
-            Pixel lin_b = linear ? bv : color::srgbDecode(bv);
-            Pixel lumLin = color::luminance(lin_r, lin_g, lin_b);
-            if (linear)
+        // Per-pixel work does up to 4 srgbEncode (pow) calls, so it dominates a
+        // preview render — parallelise it: each chunk accumulates a local histogram
+        // (bin adds are associative -> identical result) then merges once.
+        std::mutex mtx;
+        par::parallelFor((int)px, [&](int i0, int i1) {
+            HistogramData loc;
+            for (int i = i0; i < i1; ++i)
             {
-                rv = color::srgbEncode(rv);
-                gv = color::srgbEncode(gv);
-                bv = color::srgbEncode(bv);
+                const Pixel *p = d + (size_t)i * ch;
+                Pixel rv = p[0];
+                Pixel gv = colorCh >= 3 ? p[1] : p[0];
+                Pixel bv = colorCh >= 3 ? p[2] : p[0];
+                Pixel lin_r = linear ? rv : color::srgbDecode(rv);
+                Pixel lin_g = linear ? gv : color::srgbDecode(gv);
+                Pixel lin_b = linear ? bv : color::srgbDecode(bv);
+                Pixel lumLin = color::luminance(lin_r, lin_g, lin_b);
+                if (linear)
+                {
+                    rv = color::srgbEncode(rv);
+                    gv = color::srgbEncode(gv);
+                    bv = color::srgbEncode(bv);
+                }
+                Pixel lumEnc = color::srgbEncode(lumLin);
+                ++loc.r[binOf(rv)];
+                ++loc.g[binOf(gv)];
+                ++loc.b[binOf(bv)];
+                ++loc.lum[binOf(lumEnc)];
             }
-            Pixel lumEnc = color::srgbEncode(lumLin);
-
-            ++h.r[binOf(rv)];
-            ++h.g[binOf(gv)];
-            ++h.b[binOf(bv)];
-            ++h.lum[binOf(lumEnc)];
-        }
+            std::lock_guard<std::mutex> lk(mtx);
+            for (int b = 0; b < HistogramData::kBins; ++b)
+            {
+                h.r[b] += loc.r[b]; h.g[b] += loc.g[b]; h.b[b] += loc.b[b]; h.lum[b] += loc.lum[b];
+            }
+        });
 
         for (int i = 0; i < HistogramData::kBins; ++i)
         {
@@ -65,16 +77,22 @@ namespace arstro
         if (ch < 3 || image.empty()) return hh;
         const size_t px = image.pixelCount();
         const Pixel *d = image.data();
-        for (size_t i = 0; i < px; ++i)
-        {
-            const Pixel *p = d + i * ch;
-            Pixel h, s, l;
-            color::rgbToHsl(p[0], p[1], p[2], h, s, l);  // linear-space hue, as the mixer keys on
-            if (s <= (Pixel)0) continue;                  // skip greys
-            int bin = (int)(h / (Pixel)360 * HueHistogram::kBins);
-            if (bin < 0) bin = 0; if (bin >= HueHistogram::kBins) bin = HueHistogram::kBins - 1;
-            hh.bins[bin] += (float)s;                     // weight by saturation
-        }
+        std::mutex mtx;
+        par::parallelFor((int)px, [&](int i0, int i1) {
+            HueHistogram loc;
+            for (int i = i0; i < i1; ++i)
+            {
+                const Pixel *p = d + (size_t)i * ch;
+                Pixel h, s, l;
+                color::rgbToHsl(p[0], p[1], p[2], h, s, l);  // linear-space hue, as the mixer keys on
+                if (s <= (Pixel)0) continue;                  // skip greys
+                int bin = (int)(h / (Pixel)360 * HueHistogram::kBins);
+                if (bin < 0) bin = 0; if (bin >= HueHistogram::kBins) bin = HueHistogram::kBins - 1;
+                loc.bins[bin] += (float)s;                    // weight by saturation
+            }
+            std::lock_guard<std::mutex> lk(mtx);
+            for (int b = 0; b < HueHistogram::kBins; ++b) hh.bins[b] += loc.bins[b];
+        });
         float mx = 1e-6f;
         for (float v : hh.bins) if (v > mx) mx = v;
         for (float &v : hh.bins) v /= mx;                 // normalise peak to 1
