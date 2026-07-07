@@ -13,11 +13,14 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 #include <unistd.h>
+#include <atomic>
 #include <cctype>
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 using arstro::cosmo_v2::App;
@@ -28,15 +31,43 @@ namespace
 {
     constexpr int kW = 1440, kH = 900;  // Figma base artboard size
 
-    // A project open in progress: the workspace entries decoded one-per-idle-tick
-    // so the animated loading screen keeps rendering (R-LOADING) instead of the UI
-    // freezing on a synchronous decode-all.
+    // A project open in progress. The heavy image decode runs on a BACKGROUND
+    // THREAD (producer) so it never stalls the UI; the GTK main thread (consumer)
+    // polls finished results and applies them to the session + drives the animated
+    // loading screen (R-LOADING). Results are consumed strictly in entry order so
+    // the group-tree parent indices stay valid.
     struct LoadJob
     {
+        struct Result
+        {
+            bool group = false;
+            std::string name;                 // group name, or leaf display name
+            std::string imagePath;            // source path (image leaves)
+            int parent = -1;
+            arstro::LocalAdjust offset;        // group offset
+            arstro::EditParams params;         // per-image edit params
+            std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
+            int w = 0, h = 0;
+            bool decoded = false;              // false = missing/failed image
+        };
+
         std::vector<App::WorkspaceEntry> entries;
-        size_t i = 0;
         std::string path;
+        std::mutex mu;                         // guards `ready`
+        std::vector<Result> ready;             // produced results, in order
+        std::atomic<bool> producedAll{false};  // worker finished producing
+        std::atomic<bool> stop{false};         // ask the worker to bail out
+        size_t consumed = 0;                   // main-thread applied count
         bool coverSent = false;
+        std::thread worker;
+        guint pollId = 0;
+
+        ~LoadJob()
+        {
+            stop.store(true);
+            if (worker.joinable()) worker.join();
+            if (pollId) g_source_remove(pollId);
+        }
     };
 
     struct Host
@@ -397,59 +428,94 @@ namespace
         arstro::cosmo::ProjectStore::remember(std::move(e));
     }
 
-    // One step of an incremental project load (called from the GTK idle loop, so
-    // draw frames interleave and the loading screen animates). Decodes one entry
-    // per call, feeding the App's cover + progress; on completion reveals the editor.
-    gboolean stepLoad(gpointer user)
+    // Background producer: decode every entry's image (the heavy work) off the UI
+    // thread, pushing results in order. Touches only the job + its own decoder — no
+    // App/GTK access — so there is no data race with the main thread.
+    void decodeWorker(LoadJob *job)
+    {
+        NativeImageDecoder dec;  // worker-local; GdkPixbuf/LibRaw decode is thread-safe per instance
+        for (const auto &e : job->entries)
+        {
+            if (job->stop.load()) return;
+            LoadJob::Result r;
+            r.group = e.group;
+            r.parent = e.parent;
+            r.offset = e.offset;
+            r.params = e.params;
+            if (e.group)
+            {
+                r.name = e.name;
+            }
+            else
+            {
+                r.imagePath = e.imagePath;
+                r.name = baseName(e.imagePath);
+                DecodedImage img = dec.decodeFile(e.imagePath);
+                if (img.ok()) { r.rgba = std::move(img.rgba); r.w = img.width; r.h = img.height; r.decoded = true; }
+            }
+            std::lock_guard<std::mutex> lk(job->mu);
+            job->ready.push_back(std::move(r));
+        }
+        job->producedAll.store(true);
+    }
+
+    // Main-thread consumer (GTK timeout): apply any decoded results in order, feed
+    // the loading cover + progress, and on completion finish + reveal. Runs while
+    // the worker decodes, so the loading screen animates at full frame rate.
+    gboolean pollLoad(gpointer user)
     {
         auto *a = static_cast<Host *>(user);
         LoadJob *job = a->load.get();
         if (!job) return G_SOURCE_REMOVE;
 
-        if (job->i >= job->entries.size())  // done: finish + reveal
+        for (;;)  // drain everything ready this tick
         {
-            a->app.finishWorkspaceLoad(job->path);
-            rememberProject(job->path);
-            a->app.finishOpenTransition();
-            a->load.reset();
-            gtk_widget_queue_draw(a->area);
-            return G_SOURCE_REMOVE;
-        }
-
-        const auto &e = job->entries[job->i];
-        const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
-        if (e.group)
-        {
-            a->app.addWorkspaceGroup(parentNode, e.name, e.offset);
-        }
-        else
-        {
-            DecodedImage img = a->decoder.decodeFile(e.imagePath);
-            if (img.ok())
+            LoadJob::Result r;
             {
-                const int slot = a->app.openImageInto(parentNode, img.rgba.data(), img.width, img.height,
-                                                       baseName(e.imagePath), e.imagePath);
-                a->app.applyParamsToSlot(slot, e.params);
+                std::lock_guard<std::mutex> lk(job->mu);
+                if (job->consumed >= job->ready.size()) break;
+                r = std::move(job->ready[job->consumed]);
+                ++job->consumed;
+            }
+            const int parentNode = r.parent < 0 ? 0 : r.parent + 1;
+            if (r.group)
+            {
+                a->app.addWorkspaceGroup(parentNode, r.name, r.offset);
+            }
+            else if (r.decoded)
+            {
+                const int slot = a->app.openImageInto(parentNode, r.rgba.data(), r.w, r.h, r.name, r.imagePath);
+                a->app.applyParamsToSlot(slot, r.params);
                 if (!job->coverSent)  // first decoded image -> the loading-screen cover
                 {
-                    a->app.setLoadingCover(img.rgba.data(), img.width, img.height);
+                    a->app.setLoadingCover(r.rgba.data(), r.w, r.h);
                     job->coverSent = true;
                 }
             }
             else
             {
-                g_printerr("cosmo_v2: workspace image missing: %s\n", e.imagePath.c_str());
-                a->app.addWorkspaceMissingImage(parentNode, baseName(e.imagePath));
+                g_printerr("cosmo_v2: workspace image missing: %s\n", r.imagePath.c_str());
+                a->app.addWorkspaceMissingImage(parentNode, r.name);
             }
+            a->app.setLoadProgress((int)job->consumed, (int)job->entries.size());
+            gtk_widget_queue_draw(a->area);
         }
-        job->i++;
-        a->app.setLoadProgress((int)job->i, (int)job->entries.size());
-        gtk_widget_queue_draw(a->area);
+
+        if (job->producedAll.load() && job->consumed >= job->entries.size())
+        {
+            a->app.finishWorkspaceLoad(job->path);
+            rememberProject(job->path);
+            a->app.finishOpenTransition();  // signals load done; reveal waits for the intro
+            job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
+            a->load.reset();                // joins the (already-finished) worker
+            return G_SOURCE_REMOVE;
+        }
         return G_SOURCE_CONTINUE;
     }
 
-    // Open a .cmp project with the animated loading transition (R-LOADING): start
-    // the transition, then decode its images incrementally off the idle loop.
+    // Open a .cmp project with the animated loading transition (R-LOADING): start the
+    // transition immediately, decode its images on a background thread, and apply the
+    // results on the UI thread so the heavy work never stalls the animation.
     void startProjectLoad(Host *a, const std::string &path)
     {
         std::vector<App::WorkspaceEntry> entries;
@@ -460,11 +526,14 @@ namespace
         }
         a->app.beginOpenTransition(std::filesystem::path(path).stem().string());
         a->app.resetWorkspace();
+        a->load.reset();  // stop/join any prior load first
         a->load = std::make_unique<LoadJob>();
-        a->load->entries = std::move(entries);
-        a->load->path = path;
-        a->app.setLoadProgress(0, (int)a->load->entries.size());
-        g_idle_add(stepLoad, a);
+        LoadJob *job = a->load.get();
+        job->entries = std::move(entries);
+        job->path = path;
+        a->app.setLoadProgress(0, (int)job->entries.size());
+        job->worker = std::thread(decodeWorker, job);
+        job->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
     }
 
     void addCmpFilter(GtkWidget *d)

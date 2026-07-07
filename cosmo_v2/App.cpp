@@ -666,10 +666,16 @@ namespace cosmo_v2
     // ── open-project transition (R-LOADING) ─────────────────────────────────────
     Rect App::photoStageRect() const
     {
-        auto photo = mCenterStage->photo();  // live editor layout -> exact reveal target
-        return Rect{mCenterStage->x.value() + photo->x.value(),
-                    mCenterStage->y.value() + photo->y.value(),
-                    photo->width.value(), photo->height.value()};
+        // The EXACT rect the editor draws the photo into (aspect-fit within the photo
+        // canvas, in world space) so the expanding cover lands pixel-aligned with the
+        // edit-page image. Requires layout() + the photo image to be set (both true
+        // once renderEditor has run for the reveal frame).
+        auto iv = mCenterStage->photo()->imageView();
+        const Rect fr = iv->fittedRect();
+        const Transform w = iv->worldTransform();
+        const Point tl = w.apply(Point{fr.x, fr.y});
+        const Point br = w.apply(Point{fr.x + fr.w, fr.y + fr.h});
+        return Rect{tl.x, tl.y, br.x - tl.x, br.y - tl.y};
     }
 
     void App::beginOpenTransition(const std::string &projectName)
@@ -680,6 +686,8 @@ namespace cosmo_v2
         mPhase = Phase::Intro;
         mPhaseT0 = mNowMs;
         mCoverReady = false;
+        mCoverIsAfter = false;
+        mLoadComplete = false;
         mCover->clearImage();
         mLoadDone = 0; mLoadTotal = 0;
         mCoverFrom = mOpenFromRect;              // consume the clicked-card rect (empty for Open-dialog)
@@ -711,18 +719,23 @@ namespace cosmo_v2
 
     void App::finishOpenTransition()
     {
-        // Project name into the top bar (like showEditor) so the editor is ready
-        // beneath the reveal; stay on Loading until the cover finishes expanding.
+        // The load is done. Prime the editor beneath (project name), fill the bar,
+        // and flag completion — the reveal itself only begins once the intro
+        // animation has fully played (see renderTransition: "animation first").
         std::string stem = mSession.workspacePath();
         if (auto s = stem.find_last_of("/\\"); s != std::string::npos) stem = stem.substr(s + 1);
         if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
         mTopBar->setProjectName(stem);
         syncControlsToSlot();
-
         mProgress.animateTo(1.0, 120.0, Easing::EaseOutCubic, mNowMs);
+        mLoadComplete = true;
+    }
+
+    void App::beginReveal()
+    {
         mPhase = Phase::Reveal;
         mPhaseT0 = mNowMs;
-        mReveal.set(0.0);   mReveal.animateTo(1.0, kRevealMs, Easing::EaseOutCubic, mNowMs);
+        mReveal.set(0.0);      mReveal.animateTo(1.0, kRevealMs, Easing::EaseOutCubic, mNowMs);
         mScreenFade.set(1.0);  mScreenFade.animateTo(0.0, kRevealMs, Easing::EaseOutCubic, mNowMs);  // editor fades in beneath
     }
 
@@ -730,6 +743,9 @@ namespace cosmo_v2
     {
         mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs); mCoverFade.update(nowMs);
         if (mPhase == Phase::Intro && !mIntro.isAnimating()) mPhase = Phase::Loading;
+        // Animation first, loading later: only reveal once the intro has fully played
+        // AND the (threaded, non-blocking) load is complete.
+        if (mPhase == Phase::Loading && mLoadComplete) beginReveal();
         if (mPhase == Phase::Reveal && !mReveal.isAnimating())  // reveal done -> hand off to the editor
         {
             mScreen = Screen::Editor;
@@ -759,14 +775,21 @@ namespace cosmo_v2
 
         if (mPhase == Phase::Reveal)
         {
-            // Editor beneath (fading in via mScreenFade), the cover expanding from the
-            // centre box into the photo stage — same image, so it "joins" seamlessly.
+            // Editor beneath (fading in via mScreenFade); render it first so its layout
+            // + acquired preview frame are current.
             target.restore();
             renderEditor(target, nowMs);
+            // Swap the cover to the editor's actual preview once available, so the
+            // expanding image matches the edit-page image in CONTENT as well as rect.
+            if (!mCoverIsAfter && mLastAfterFrame.width > 0)
+            {
+                mCover->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
+                mCoverIsAfter = true;
+            }
             target.save();
             target.setTransform(Transform::identity());
             const double rv = mReveal.value();
-            const Rect ps = photoStageRect();
+            const Rect ps = photoStageRect();  // exact fitted world rect -> pixel-aligned landing
             const Rect cr{box.x + (ps.x - box.x) * rv, box.y + (ps.y - box.y) * rv,
                           box.w + (ps.w - box.w) * rv, box.h + (ps.h - box.h) * rv};
             if (mCoverReady) drawCover(cr, 1.0);

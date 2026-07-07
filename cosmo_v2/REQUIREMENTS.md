@@ -36,13 +36,19 @@ on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps 
 
 ## R-LOADING — Animated open-project transition & loading screen — ✅ IMPLEMENTED
 
-Opening a project decodes its images (~1 s for a multi-photo project). That decode is now
-**incremental** (one image per GTK idle tick, `linux_main.cpp` `stepLoad`/`startProjectLoad`)
-instead of a blocking decode-all, so the animated loading screen keeps rendering and the progress
-bar reflects real progress. Applies to the two "open a project" paths — a recent-project card and
-Open Project… — (`onOpenRecentRequested`, `openProjectDialog`). Orchestrated by `App` as a third
-screen state (`Screen::Loading`) drawn in `App::renderTransition`; the star-sky backdrop is
-`widgets/Starfield.h`. Honors `reducedMotion()` (the eases collapse; the load still streams in).
+Opening a project decodes its images (~1 s for a multi-photo project). That decode runs on a
+**background thread** (`linux_main.cpp` `decodeWorker`) so it never stalls the UI; the GTK main
+thread polls finished results (`pollLoad`) and applies them to the session in entry order, so the
+animated loading screen renders at full frame rate and the progress bar reflects real progress.
+Applies to the two "open a project" paths — a recent-project card and Open Project… —
+(`onOpenRecentRequested`, `openProjectDialog`). Orchestrated by `App` as a third screen state
+(`Screen::Loading`) drawn in `App::renderTransition`; the star-sky backdrop is `widgets/Starfield.h`.
+Honors `reducedMotion()` (the eases collapse; the load still streams in).
+
+- **R-LOADING-0 Animation first, loading later.** The intro animation always plays to completion
+  before the reveal begins, regardless of how fast the load finishes (`finishOpenTransition` only
+  flags completion; `renderTransition` starts the reveal once the intro is done AND the load is
+  complete). Combined with the background-thread decode, the transition never hitches on I/O.
 
 - **R-LOADING-1 Intro (home → loading).** On open, the home `cosmo.` wordmark flies to the
   editor top-bar wordmark slot (46 px → 13 px, home position → top-left), the clicked project's
@@ -54,9 +60,11 @@ screen state (`Screen::Loading`) drawn in `App::renderTransition`; the star-sky 
   each randomly fade in and out (twinkle). The project cover sits centred; a colour (accent)
   progress bar is pinned near the bottom and fills 0→1 with the real decode progress
   (`setLoadProgress`), eased so it never jumps backwards visually.
-- **R-LOADING-3 Reveal (loading → editor).** When the load completes, the centred cover expands
-  into the editor's photo-stage rect — the same first image, so it "joins" the first preview
-  seamlessly — while the editor cross-fades in beneath, then the editor takes over.
+- **R-LOADING-3 Reveal (loading → editor).** When the load completes (and the intro has played),
+  the centred cover expands into the editor photo's **exact fitted world rect**
+  (`App::photoStageRect` from `ImageView::fittedRect` × `worldTransform`) and its content is swapped
+  to the editor's rendered preview frame, so it lands **pixel-aligned in both rect and content**
+  with the edit-page image ("expand and join the first preview") while the editor cross-fades in.
 - **R-LOADING-4 Non-interactive.** Input (pointer/keys/wheel) is swallowed during the transition
   so nothing behind the loading screen is touched.
 
