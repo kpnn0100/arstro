@@ -37,19 +37,13 @@ namespace cosmo_v2
     void ActionBar::advance(double nowMs)
     {
         Segment::advance(nowMs);
-        if (!isHovered()) mHoverIndex = -1;
-        const bool hov = mHoverIndex >= 0;
-        if (hov != mHoverPrev)
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
-        mHoverAmt.update(nowMs);
+        if (!isHovered()) mHover.clear();
+        mHover.advance(nowMs);
     }
 
     bool ActionBar::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type == Gesture::Type::Move) { mHoverIndex = btnAt(local); return true; }
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(btnAt(local)); return true; }
         if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
         const int i = btnAt(local);
         if (i == 0 && onSave) onSave();
@@ -69,10 +63,10 @@ namespace cosmo_v2
         {
             const Rect btn{mBtns[i].x, y, mBtns[i].w, kBtnH};
             const bool primary = (i == 0);
-            const double hv = (i == mHoverIndex) ? mHoverAmt.value() : 0.0;
+            const double hv = mHover.amount(i);
 
             // Hover: brighten the primary fill; pull the outline chips' border toward
-            // the accent + a faint fill wash. Eased by mHoverAmt so it never pops (R-G-1).
+            // the accent + a faint fill wash. Each button cross-fades via HoverFade (R-G-3).
             const BoxStyle base = primary
                 ? BoxStyle{Paint::filled(palette::primary()), 2.0}
                 : BoxStyle{Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0), 2.0};

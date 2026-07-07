@@ -8,6 +8,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -41,6 +42,9 @@ namespace cosmo_v2
         // Fills `rects` with the chip boxes for row `row` (0 = quality, 1 = threads).
         void chipRects(int row, std::vector<artboard::Rect> &rects) const;
         void hitTargets(const artboard::Point &p, int &row, int &chip, bool &done) const;
+        // Flat HoverFade ids: row-0 chips 0..2, row-1 chips 3..6, Done last.
+        int chipId(int row, int chip) const { return row == 0 ? chip : (int)kEdges.size() + chip; }
+        int doneId() const { return (int)(kEdges.size() + kThreads.size()); }
 
         static const std::vector<int> kEdges;    // preview long-edge options
         static const std::vector<int> kThreads;  // thread-count options (0 = auto)
@@ -52,10 +56,7 @@ namespace cosmo_v2
         artboard::AnimatedProperty mAppear{0.0};
         int mEdge = 1600;     // current selection (px)
         int mThreadCount = 0; // current selection (0 = auto)
-        int mHoverRow = -1, mHoverChip = -1;        // hovered chip (row, index) under the pointer
-        bool mHoverDone = false;                    // Done button hovered
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
+        HoverFade mHover;     // per-chip / Done hover cross-fade (R-G-3)
     };
 }
 }

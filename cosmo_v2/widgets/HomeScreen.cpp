@@ -263,16 +263,10 @@ namespace cosmo_v2
             layout();
         }
 
-        // Hover feedback fade (R-G-1). isHovered() is false while the pointer is over
-        // the search child, so the region highlight clears cleanly then too.
-        if (!isHovered()) { mHoverKind = Region::None; mHoverIndex = -1; }
-        const bool hov = (mHoverKind != Region::None);
-        if (hov != mHoverPrev)
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
-        mHoverAmt.update(nowMs);
+        // Hover feedback (R-G-3): each region cross-fades independently. isHovered()
+        // is false while the pointer is over the search child, so it clears then too.
+        if (!isHovered()) mHover.clear();
+        mHover.advance(nowMs);
 
         // Ease the grid scroll toward its target so the wheel glides instead of snapping.
         if (mScrollY != mScrollIssued)
@@ -309,9 +303,10 @@ namespace cosmo_v2
 
     bool HomeScreen::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type == Gesture::Type::Move)  // track the hovered region (fades in advance)
+        if (g.type == Gesture::Type::Move)  // track the hovered region (cross-fades in advance)
         {
-            regionAt(local, mHoverKind, mHoverIndex);
+            Region k; int idx; regionAt(local, k, idx);
+            mHover.setHovered(hoverId(k, idx));
             return true;
         }
         if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
@@ -373,7 +368,7 @@ namespace cosmo_v2
         {
             const Rect r = actionRect(i);
             const bool primary = (i == 0);
-            const double hv = (mHoverKind == Region::Action && mHoverIndex == i) ? mHoverAmt.value() : 0.0;
+            const double hv = mHover.amount(hoverId(Region::Action, i));
             // Hover: brighten the primary fill; pull the outline chip's border toward the
             // accent + a faint wash; give the ghost "Import" a wash. Eased so it never pops.
             if (primary)
@@ -402,7 +397,7 @@ namespace cosmo_v2
         for (int i = 0; i < 3; ++i)
         {
             const Rect r = bottomLinkRect(i);
-            const double hv = (mHoverKind == Region::Link && mHoverIndex == i) ? mHoverAmt.value() : 0.0;
+            const double hv = mHover.amount(hoverId(Region::Link, i));
             if (hv > 0.0)  // faint hover row + lift the icon/label toward foreground (R-G-1)
                 drawRoundedRect(t, Rect{r.x - 6.0, r.y - 1.0, r.w + 12.0, r.h + 2.0}, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color lc = lerpColor(palette::mutedForeground(), palette::foreground(), 0.7 * hv);
@@ -450,7 +445,7 @@ namespace cosmo_v2
             if (!c.shown) continue;
             const Rect s = cardScreen(c.rect);
             const double th = s.w * 9.0 / 16.0;
-            const double hv = (mHoverKind == Region::Card && mHoverIndex == ci) ? mHoverAmt.value() : 0.0;
+            const double hv = mHover.amount(hoverId(Region::Card, ci));
             // card border + meta background (thumbnail itself is the ImageView child);
             // hover brightens the surface + lifts the border toward the accent (R-G-1).
             const Color cardBg = brighten(palette::folderChipBg(), 0.06 * hv);
@@ -484,7 +479,7 @@ namespace cosmo_v2
             const Rect s = cardScreen(mNewCardRect);
             const double th = s.w * 9.0 / 16.0;
             const Rect box{s.x, s.y, s.w, th};
-            const double hv = (mHoverKind == Region::NewCard) ? mHoverAmt.value() : 0.0;
+            const double hv = mHover.amount(hoverId(Region::NewCard, -1));
             // hover pulls the dashed border + glyph toward the accent/foreground (R-G-1)
             const Color dash = lerpColor(Color{palette::border().r, palette::border().g, palette::border().b, 0.6},
                                          palette::primary(), 0.5 * hv);

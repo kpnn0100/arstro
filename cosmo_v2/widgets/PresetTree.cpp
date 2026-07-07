@@ -67,15 +67,10 @@ namespace cosmo_v2
         if (mScrollDirty) { mScroll.animateTo(mScrollTarget, kScrollMs, Easing::EaseOutCubic, nowMs); mScrollDirty = false; }
         mScroll.update(nowMs);
 
-        // Row hover: drop it when this widget no longer owns hover, ease in/out.
-        if (!isHovered()) mHoverIndex = -1;
-        const bool hov = mHoverIndex >= 0;
-        if (hov != mHoverPrev)
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
-        mHoverAmt.update(nowMs);
+        // Row hover: drop it when this widget no longer owns hover; each row
+        // cross-fades independently (R-G-3).
+        if (!isHovered()) mHover.clear();
+        mHover.advance(nowMs);
 
         // Fade the selection fill in when the selected preset changes.
         if (mSelected != mSelPrev)
@@ -91,7 +86,7 @@ namespace cosmo_v2
 
     bool PresetTree::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type == Gesture::Type::Move) { mHoverIndex = rowIndexAt(local.y); return true; }  // track hovered row
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(rowIndexAt(local.y)); return true; }  // track hovered row
 
         const int row = rowIndexAt(local.y);
         if (row < 0) return Segment::handleGesture(g, local);
@@ -129,7 +124,6 @@ namespace cosmo_v2
     {
         const double w = width.value();
         const double scroll = mScroll.value();
-        const double hv = mHoverAmt.value();
         const double sel = mSelAmt.value();
         for (size_t i = 0; i < mRows.size(); ++i)
         {
@@ -137,7 +131,8 @@ namespace cosmo_v2
             const double y = (double)i * kRowH - scroll;
             if (y + kRowH < 0 || y > height.value()) continue;  // cheap offscreen skip
 
-            if ((int)i == mHoverIndex && hv > 0.001)  // eased hover wash behind the row (R-G-1)
+            const double hv = mHover.amount((int)i);  // per-row hover wash cross-fades (R-G-3)
+            if (hv > 0.001)
                 drawRoundedRect(t, Rect{0, y, w, kRowH}, 0.0, Paint::filled(palette::whiteAlpha(0.06 * hv)));
 
             const bool selected = !r.folder && r.relPath == mSelected;

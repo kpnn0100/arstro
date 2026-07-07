@@ -48,27 +48,21 @@ namespace cosmo_v2
     void ContextMenu::advance(double nowMs)
     {
         Segment::advance(nowMs);
-        mNowMs = nowMs;
         if (mOpen != mWasOpen)  // ease the popup in on open, out on close
         {
             mWasOpen = mOpen;
             mAppear.animateTo(mOpen ? 1.0 : 0.0, mOpen ? 130.0 : 100.0, Easing::EaseOutCubic, nowMs);
         }
-        const bool hov = mOpen && mHoverIndex >= 0;
-        if (hov != mHoverPrev)  // fade the item highlight in/out
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
+        if (!mOpen) mHover.clear();  // nothing hovered once closed
         mAppear.update(nowMs);
-        mHoverAmt.update(nowMs);
+        mHover.advance(nowMs);  // per-item hover cross-fade
     }
 
     bool ContextMenu::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen) return false;
         using T = Gesture::Type;
-        if (g.type == T::Move) { mHoverIndex = itemAt(local); return true; }  // track hovered item
+        if (g.type == T::Move) { mHover.setHovered(itemAt(local)); return true; }  // track hovered item
         if (g.type == T::Down) return true;  // consume so the press doesn't fall through
         if (g.type == T::Click || g.type == T::RightClick)
         {
@@ -77,7 +71,7 @@ namespace cosmo_v2
             {
                 auto action = mItems[i].action;  // copy before closing
                 mOpen = false;
-                mHoverIndex = -1;
+                mHover.clear();
                 if (action) action();
             }
             else
@@ -100,19 +94,15 @@ namespace cosmo_v2
         body.a *= appear; border.a *= appear;
         drawRoundedRect(t, r, radius::control(), Paint::filledStroked(body, border, 1.0));
 
-        // Hovered-item highlight (faded by mHoverAmt), tracked in mHoverIndex.
-        const double hv = mHoverAmt.value() * appear;
-        if (mHoverIndex >= 0 && mHoverIndex < (int)mItems.size() && hv > 0.001)
-        {
-            const double hy = r.y + kPadY + mHoverIndex * kItemH;
-            drawRoundedRect(t, Rect{r.x + 3, hy, r.w - 6, kItemH}, radius::control(),
-                            Paint::filled(palette::whiteAlpha(0.08 * hv)));
-        }
         for (int i = 0; i < (int)mItems.size(); ++i)
         {
             const double y = r.y + kPadY + i * kItemH;
+            // Per-item hover wash: each item cross-fades independently (R-G-3).
+            const double hv = mHover.amount(i) * appear;
+            if (hv > 0.001)
+                drawRoundedRect(t, Rect{r.x + 3, y, r.w - 6, kItemH}, radius::control(),
+                                Paint::filled(palette::whiteAlpha(0.08 * hv)));
             Color fg = palette::foreground();
-            fg = brighten(fg, (i == mHoverIndex ? 0.0 : 0.0));  // (keep label steady; bg carries hover)
             fg.a *= appear;
             t.setFill(fg);
             t.drawText(mItems[i].label, r.x + kPadX, y + kItemH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());

@@ -54,7 +54,7 @@ namespace cosmo_v2
         // New content (e.g. drilled into a group) starts at scroll 0 — a fresh view,
         // not an animated move of the same list.
         mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
-        mHoverCell = -1;
+        mHover.clear();
         for (auto &iv : mThumbs) iv->visible = false;
         for (int i = 0; i < (int)mCells.size(); ++i)
         {
@@ -97,11 +97,9 @@ namespace cosmo_v2
         mScrollX.update(nowMs);
         positionThumbs();
 
-        // Hover fade for the cell under the pointer.
-        if (!isHovered()) mHoverCell = -1;
-        const bool hov = mHoverCell >= 0;
-        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
-        mHoverAmt.update(nowMs);
+        // Per-cell hover fade for the cell under the pointer.
+        if (!isHovered()) mHover.clear();
+        mHover.advance(nowMs);
 
         Segment::advance(nowMs);
     }
@@ -118,7 +116,7 @@ namespace cosmo_v2
     bool Filmstrip::handleGesture(const Gesture &g, const Point &local)
     {
         const int cell = cellAt(local.x);
-        if (g.type == Gesture::Type::Move) { mHoverCell = cell; return true; }  // track hovered cell
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(cell); return true; }  // track hovered cell
         // Right-click ALWAYS opens the context menu -- even on empty strip space
         // (cell == -1), so "add photo to this group" is reachable anywhere in the
         // browse section, not only on a thumbnail.
@@ -189,11 +187,14 @@ namespace cosmo_v2
         const Color pr = palette::primary();
         const double ry = (kHeight - kCellH) * 0.5;
 
-        // Hover wash on the cell under the pointer (not the primary — it has its ring).
-        const double hv = mHoverAmt.value();
-        if (mHoverCell >= 0 && mHoverCell < (int)mCells.size() && mHoverCell != mPrimary && hv > 0.001)
+        // Per-cell hover wash (each cell cross-fades; the primary has its own ring).
+        for (int i = 0; i < (int)mCells.size(); ++i)
         {
-            const double hx = cellX(mHoverCell), hw = cellW(mHoverCell);
+            if (i == mPrimary) continue;
+            const double hv = mHover.amount(i);
+            if (hv <= 0.001) continue;
+            const double hx = cellX(i), hw = cellW(i);
+            if (hx + hw < 0 || hx > w) continue;
             drawRoundedRect(t, Rect{hx, ry, hw, kCellH}, radius::control(), Paint::filled(palette::hoverWash(hv)));
         }
 

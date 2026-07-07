@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -71,14 +72,10 @@ namespace cosmo_v2
         bool mDropRevealPending = false;       // (re)start the dropdown grow on the next advance
         bool mOpenFromClosed = false;          // this open transition started from nothing open
 
-        // Hover (R-G-1): a non-active title lifts toward white; an open dropdown's
-        // hovered item washes with hoverWash. Both indices tracked from Move.
-        int mHoverTitle = -1;
-        int mHoverItem = -1;
-        bool mTitleHoverPrev = false;
-        bool mItemHoverPrev = false;
-        artboard::AnimatedProperty mTitleHoverAmt{0.0};
-        artboard::AnimatedProperty mItemHoverAmt{0.0};
+        // Hover (R-G-3): a non-active title lifts toward white; an open dropdown's
+        // hovered item washes. Each title/item cross-fades independently.
+        HoverFade mTitleHover;
+        HoverFade mItemHover;
     };
 }
 }

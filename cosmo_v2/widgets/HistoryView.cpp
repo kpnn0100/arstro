@@ -154,19 +154,14 @@ namespace cosmo_v2
     {
         Segment::advance(nowMs);
 
-        if (!isHovered()) { mHoverNode = -1; mCloseHover = false; }  // pointer left the modal
+        if (!isHovered() || !mOpen) { mNodeHover.clear(); mCloseHover = false; }  // pointer left the modal
 
         if (mOpen != mWasOpen)  // ease the card in on open, out on close (like ContextMenu)
         {
             mWasOpen = mOpen;
             mAppear.animateTo(mOpen ? 1.0 : 0.0, mOpen ? 150.0 : 110.0, Easing::EaseOutCubic, nowMs);
         }
-        const bool nodeHov = mOpen && mHoverNode >= 0;  // hovered-node wash fade
-        if (nodeHov != mNodeHoverPrev)
-        {
-            mNodeHoverPrev = nodeHov;
-            mHoverAmt.animateTo(nodeHov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
+        mNodeHover.advance(nowMs);  // each node's wash cross-fades (R-G-3)
         const bool closeHov = mOpen && mCloseHover;  // close-X lift fade
         if (closeHov != mCloseHoverPrev)
         {
@@ -179,7 +174,6 @@ namespace cosmo_v2
         if (mPanY != mPanIssuedY) { mPanYAnim.animateTo(mPanY, mPanDurMs, Easing::EaseOutCubic, nowMs); mPanIssuedY = mPanY; }
 
         mAppear.update(nowMs);
-        mHoverAmt.update(nowMs);
         mCloseAmt.update(nowMs);
         mPanXAnim.update(nowMs);
         mPanYAnim.update(nowMs);
@@ -192,7 +186,7 @@ namespace cosmo_v2
         if (g.type == T::Move)  // track the hovered node / close button (fades in advance)
         {
             mCloseHover = closeBtnRect().contains(local);
-            mHoverNode = mCloseHover ? -1 : nodeAt(local);
+            mNodeHover.setHovered(mCloseHover ? -1 : nodeAt(local));
             return true;
         }
         if (g.type == T::DragStart || g.type == T::Drag)
@@ -249,17 +243,15 @@ namespace cosmo_v2
         t.save();
         t.clipRect(tr.x, tr.y, tr.w, tr.h);
 
-        // hovered-node wash (behind the row), faded by mHoverAmt
-        if (mHoverNode >= 0 && mHoverNode < (int)mNodes.size())
+        // Per-node hover wash — each node cross-fades independently (R-G-3).
+        for (int i = 0; i < (int)mNodes.size(); ++i)
         {
-            const double hv = mHoverAmt.value() * appear;
-            if (hv > 0.001)
-            {
-                const Point hc = nodeCenter(mHoverNode);
-                if (hc.y >= tr.y - kRowH && hc.y <= tr.y + tr.h + kRowH)
-                    drawRoundedRect(t, Rect{tr.x + 2.0, hc.y - kRowH * 0.5 + 3.0, tr.w - 4.0, kRowH - 6.0},
-                                    radius::control(), Paint::filled(palette::hoverWash(hv)));
-            }
+            const double hv = mNodeHover.amount(i) * appear;
+            if (hv <= 0.001) continue;
+            const Point hc = nodeCenter(i);
+            if (hc.y >= tr.y - kRowH && hc.y <= tr.y + tr.h + kRowH)
+                drawRoundedRect(t, Rect{tr.x + 2.0, hc.y - kRowH * 0.5 + 3.0, tr.w - 4.0, kRowH - 6.0},
+                                radius::control(), Paint::filled(palette::hoverWash(hv)));
         }
 
         // edges first (parent -> child)

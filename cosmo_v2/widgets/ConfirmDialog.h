@@ -7,6 +7,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -52,9 +53,7 @@ namespace cosmo_v2
         artboard::AnimatedProperty mAppear{0.0};
         std::string mTitle, mMessage;
         std::vector<Button> mButtons;
-        int mHoverBtn = -1;                         // footer button under the pointer
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
+        HoverFade mHover;  // per-button hover cross-fade (R-G-3)
     };
 }
 }

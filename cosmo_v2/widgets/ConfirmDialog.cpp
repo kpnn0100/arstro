@@ -42,10 +42,8 @@ namespace cosmo_v2
         mLastMs = nowMs;
         mAppear.update(nowMs);
         if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; }
-        if (!isOpen()) mHoverBtn = -1;
-        const bool hov = mHoverBtn >= 0;
-        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
-        mHoverAmt.update(nowMs);
+        if (!isOpen()) mHover.clear();
+        mHover.advance(nowMs);
         Segment::advance(nowMs);
     }
 
@@ -85,7 +83,7 @@ namespace cosmo_v2
     bool ConfirmDialog::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen || mClosing) return false;
-        if (g.type == Gesture::Type::Move) { mHoverBtn = buttonAt(local); return true; }
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(buttonAt(local)); return true; }
         if (g.type != Gesture::Type::Click) return true;
 
         if (!cardRect().contains(local)) { beginClose(); return true; }  // outside = cancel
@@ -129,7 +127,7 @@ namespace cosmo_v2
             else
                 drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
             // Hover: an eased white wash on the button under the pointer (fades with the dialog).
-            const double hv = ((int)i == mHoverBtn) ? mHoverAmt.value() * a : 0.0;
+            const double hv = mHover.amount((int)i) * a;
             if (hv > 0.001)
                 drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color fg = (b.destructive || b.primary) ? palette::primaryForeground() : palette::foreground();

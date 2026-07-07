@@ -10,6 +10,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -78,10 +79,8 @@ namespace cosmo_v2
         artboard::AnimatedProperty mRingPos;
         int mRingTarget = -1;
         bool mRingInit = false;
-        // Hovered cell (hoverWash overlay), tracked from Move; -1 = none.
-        int mHoverCell = -1;
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};
+        // Per-cell hover wash, tracked from Move; each cell cross-fades (R-G-3).
+        HoverFade mHover;
     };
 }
 }

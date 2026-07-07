@@ -14,6 +14,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -79,6 +80,18 @@ namespace cosmo_v2
         double contentX() const;
         double scrollY() const { return mScrollYAnim.value(); }  // eased (drawn) scroll, not the target
         void regionAt(const artboard::Point &local, Region &kind, int &index) const;
+        /** Flat HoverFade id for a region: Action 0..2, Link 3..5, NewCard 6, Card 7+i. */
+        static int hoverId(Region kind, int index)
+        {
+            switch (kind)
+            {
+            case Region::Action:  return index;
+            case Region::Link:    return 3 + index;
+            case Region::NewCard: return 6;
+            case Region::Card:    return 7 + index;
+            default:              return -1;
+            }
+        }
         void relayoutGrid();
         void applyFilter();
         int visibleCount() const;
@@ -92,11 +105,8 @@ namespace cosmo_v2
         double mContentH = 0.0;                // total grid height (for scroll clamp)
         artboard::Rect mNewCardRect{0, 0, 0, 0};
 
-        // hover + eased scroll (R-G-1: everything animates, nothing snaps)
-        Region mHoverKind = Region::None;           // which region the pointer is over
-        int mHoverIndex = -1;                       // index within that region kind
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover-feedback fade
+        // hover + eased scroll (R-G-1/R-G-3: everything animates, nothing snaps)
+        HoverFade mHover;                           // per-region hover cross-fade (flat ids via hoverId)
         double mScrollIssued = 0.0;                 // last scroll target handed to the tween
         artboard::AnimatedProperty mScrollYAnim{0.0};  // eased grid scroll
     };

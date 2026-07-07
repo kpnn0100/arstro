@@ -20,6 +20,7 @@
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
 #include "../../cosmo_core/PresetLibrary.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -74,11 +75,9 @@ namespace cosmo_v2
         double mScrollTarget = 0.0;
         bool mScrollDirty = false;
 
-        // Row hover (self-drawn multi-region): mHoverIndex set from Move, eased by
-        // mHoverAmt; reset when this widget stops owning hover.
-        int mHoverIndex = -1;
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};
+        // Row hover (self-drawn multi-region): each row cross-fades independently
+        // via HoverFade (fade-out old, fade-in new on Move) — R-G-3.
+        HoverFade mHover;
 
         // Selection-fill fade-in: mSelAmt eases 0->1 when mSelected changes.
         std::string mSelPrev;

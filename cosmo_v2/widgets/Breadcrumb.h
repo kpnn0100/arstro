@@ -9,6 +9,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -40,9 +41,7 @@ namespace cosmo_v2
         int crumbAt(const artboard::Point &local) const;  // hovered/clicked crumb (-1, never the last)
 
         std::vector<std::string> mCrumbs;
-        int mHoverIndex = -1;                       // crumb under the pointer
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover-lift fade (R-G-1)
+        HoverFade mHover;  // per-crumb hover cross-fade (R-G-3)
     };
 }
 }

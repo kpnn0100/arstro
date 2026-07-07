@@ -59,16 +59,10 @@ namespace cosmo_v2
             mIndX.update(nowMs); mIndW.update(nowMs);
         }
 
-        // Tab hover: drop it when the pointer isn't on the strip (this widget is no
-        // longer the hover owner), then ease the highlight in/out (R-G-1).
-        if (!isHovered()) mHoverIndex = -1;
-        const bool hov = mHoverIndex >= 0;
-        if (hov != mHoverPrev)
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
-        mHoverAmt.update(nowMs);
+        // Tab hover: drop it when the pointer isn't on the strip, then cross-fade
+        // each tab's highlight independently (R-G-3).
+        if (!isHovered()) mHover.clear();
+        mHover.advance(nowMs);
         mFade.update(nowMs);
 
         Segment::advance(nowMs);
@@ -85,11 +79,14 @@ namespace cosmo_v2
         drawRoundedRect(t, Rect{0, 0, w, tabHeight}, 0.0, Paint::filled(palette::background()));
         drawRoundedRect(t, Rect{mSelected * tw, 0, tw, tabHeight + 2.0}, 0.0, Paint::filled(palette::card()));
 
-        // Faint wash on the hovered idle tab, eased by mHoverAmt so it never pops.
-        const double hv = mHoverAmt.value();
-        if (mHoverIndex >= 0 && mHoverIndex < n && mHoverIndex != mSelected && hv > 0.001)
-            drawRoundedRect(t, Rect{mHoverIndex * tw, 0, tw, tabHeight}, 0.0,
-                            Paint::filled(palette::whiteAlpha(0.06 * hv)));
+        // Faint wash on each hovered idle tab — each cross-fades independently.
+        for (int i = 0; i < n; ++i)
+        {
+            if (i == mSelected) continue;
+            const double hv = mHover.amount(i);
+            if (hv > 0.001)
+                drawRoundedRect(t, Rect{i * tw, 0, tw, tabHeight}, 0.0, Paint::filled(palette::whiteAlpha(0.06 * hv)));
+        }
 
         // Bottom hairline across the idle tabs only (broken under the active tab,
         // which merges with the body).
@@ -104,8 +101,8 @@ namespace cosmo_v2
         {
             const bool active = (i == mSelected);
             Color col = active ? palette::primary() : palette::mutedForeground();
-            if (!active && i == mHoverIndex)  // lift an idle label toward the active colour on hover
-                col = lerpColor(col, palette::primary(), 0.5 * hv);
+            if (!active)  // lift an idle label toward the active colour on hover (cross-fades)
+                col = lerpColor(col, palette::primary(), 0.5 * mHover.amount(i));
             const double textW = estimateTextWidth(mTitles[i], kFontPx);
             const double tx = i * tw + (tw - textW) * 0.5;
             t.setFill(col);
@@ -136,7 +133,7 @@ namespace cosmo_v2
         if (g.type == Gesture::Type::Move)  // track the hovered tab (strip only; skip the active tab)
         {
             int i = (n > 0 && local.y <= tabHeight) ? (int)(local.x / (width.value() / n)) : -1;
-            mHoverIndex = (i >= 0 && i < n && i != mSelected) ? i : -1;
+            mHover.setHovered((i >= 0 && i < n && i != mSelected) ? i : -1);
             return true;
         }
         if (g.type == Gesture::Type::Click && n > 0 && local.y <= tabHeight)

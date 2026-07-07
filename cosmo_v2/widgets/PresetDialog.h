@@ -12,6 +12,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -57,10 +58,10 @@ namespace cosmo_v2
         std::string mTitle, mConfirmLabel;
         std::vector<Row> mRows;
         std::function<void(std::vector<std::string>)> mOnConfirm;
-        int mHoverRow = -2;                         // hovered row (-2 none, -1 select-all, >=0 category)
-        int mHoverBtn = -1;                         // hovered footer button (-1 none, 0 cancel, 1 confirm)
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
+        // Per-item hover cross-fade (R-G-3). Rows: id 0 = Select-all, id i+1 = category i.
+        // Buttons: id 0 = Cancel, id 1 = Confirm.
+        HoverFade mRowHover;
+        HoverFade mBtnHover;
     };
 }
 }

@@ -9,6 +9,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -63,12 +64,11 @@ namespace cosmo_v2
         double mPanDurMs = 0.0;                   // glide duration for the pending pan change
         artboard::Point mDragLast{0, 0};
 
-        // hover + open/close animation (R-G-1: everything animates, nothing snaps)
-        int mHoverNode = -1;                        // node under the pointer (-1 = none)
+        // hover + open/close animation (R-G-1/R-G-3: everything animates, nothing snaps)
+        HoverFade mNodeHover;                       // per-node wash — each cross-fades independently
         bool mCloseHover = false;                   // pointer over the close X
-        bool mNodeHoverPrev = false, mCloseHoverPrev = false, mWasOpen = false;
+        bool mCloseHoverPrev = false, mWasOpen = false;
         artboard::AnimatedProperty mAppear{0.0};    // open/close fade + rise
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hovered-node wash fade
         artboard::AnimatedProperty mCloseAmt{0.0};  // close-X lift fade
         artboard::AnimatedProperty mPanXAnim{0.0};  // eased pan (glides toward mPanX/mPanY)
         artboard::AnimatedProperty mPanYAnim{0.0};

@@ -22,10 +22,12 @@ on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps 
   (`Button`/`PillButton`/`IconButton`/`ComboBox`/`ToggleSwitch`/`Slider`) key off the framework's
   animated `hoverAmount()` via `artboard::hoverBox()`; self-drawn multi-region widgets (menu items,
   breadcrumb crumbs, filmstrip cells, tabs, tree rows, dialog rows/buttons, history nodes, home
-  cards/actions, action-bar buttons) track a hovered-region index from `Gesture::Type::Move`, reset
-  it when `!isHovered()`, and fade a `palette::hoverWash()` (or an accent-tinted border/label lift)
-  in/out — the wash may follow the cursor row-to-row, but its appear/disappear is eased (R-G-1) and
-  collapses under `reducedMotion()`. `Theme::hoverWash()`/`primaryAlpha()` are the shared tokens so
+  cards/actions, action-bar buttons) track a hovered-region id from `Gesture::Type::Move` and drive
+  it through the shared `HoverFade` helper (`widgets/HoverFade.h`), which gives EACH sub-region its
+  own eased 0..1 amount: the hovered one eases toward 1 and every other toward 0, so moving between
+  items CROSS-FADES (the old item fades out while the new fades in) instead of the highlight jumping.
+  The treatment is a `palette::hoverWash()` (or an accent-tinted border/label lift), eased (R-G-1) and
+  collapsing under `reducedMotion()`. `Theme::hoverWash()`/`primaryAlpha()` are the shared tokens so
   hover reads identically app-wide (consistency lock). Known framework limit: true cross-fades
   between sibling children (e.g. Mixer channel editor, per-mask control blocks) need per-subtree
   opacity, which `IRenderTarget`/`Segment` do not expose — those switches are left instant (or given

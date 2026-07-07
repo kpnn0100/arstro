@@ -41,19 +41,13 @@ namespace cosmo_v2
     void Breadcrumb::advance(double nowMs)
     {
         Segment::advance(nowMs);
-        if (!isHovered()) mHoverIndex = -1;  // pointer left the strip
-        const bool hov = mHoverIndex >= 0;
-        if (hov != mHoverPrev)
-        {
-            mHoverPrev = hov;
-            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
-        }
-        mHoverAmt.update(nowMs);
+        if (!isHovered()) mHover.clear();  // pointer left the strip
+        mHover.advance(nowMs);
     }
 
     bool Breadcrumb::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type == Gesture::Type::Move) { mHoverIndex = crumbAt(local); return true; }
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(crumbAt(local)); return true; }
         if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
         const int i = crumbAt(local);
         if (i >= 0) { if (onCrumbClick) onCrumbClick(i); }
@@ -73,7 +67,7 @@ namespace cosmo_v2
         {
             const bool last = (i + 1 == mCrumbs.size());
             // A hovered (clickable) crumb lifts from muted toward foreground, eased.
-            const double hv = ((int)i == mHoverIndex && !last) ? mHoverAmt.value() : 0.0;
+            const double hv = last ? 0.0 : mHover.amount((int)i);
             const Color crumbColor =
                 last ? Color{palette::foreground().r, palette::foreground().g, palette::foreground().b, 0.8}
                      : lerpColor(palette::mutedForeground(), palette::foreground(), hv);

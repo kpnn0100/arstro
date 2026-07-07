@@ -12,6 +12,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -52,12 +53,9 @@ namespace cosmo_v2
         artboard::AnimatedProperty mIndX, mIndW;  // sliding accent-bar position + width
         bool mInit = false, mPending = false;
 
-        // Tab hover (self-drawn multi-region): mHoverIndex is the tab under the
-        // pointer (-1 = none / active tab), set from Move; mHoverAmt eases the
-        // highlight in/out (R-G-1).
-        int mHoverIndex = -1;
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};
+        // Tab hover (self-drawn multi-region): each tab cross-fades independently
+        // via HoverFade (fade-out the old, fade-in the new on Move) — R-G-3.
+        HoverFade mHover;
         // Page-swap cross-fade: 1 = incoming page fully shown, 0 = fully covered by
         // the card scrim at the instant of the switch (see onOverlay).
         artboard::AnimatedProperty mFade{1.0};

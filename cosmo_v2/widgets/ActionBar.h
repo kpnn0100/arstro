@@ -7,6 +7,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 
 namespace arstro
@@ -35,9 +36,7 @@ namespace cosmo_v2
         int btnAt(const artboard::Point &local) const;
 
         Btn mBtns[3];  // Save, Import, Export
-        int mHoverIndex = -1;                       // button under the pointer
-        bool mHoverPrev = false;
-        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
+        HoverFade mHover;  // per-button hover cross-fade (R-G-3)
     };
 }
 }
