@@ -1,5 +1,6 @@
 #include "App.h"
 #include "../cosmo_core/PresetLibrary.h"
+#include "widgets/TextMetrics.h"    // estimateTextWidth() for the transition labels
 #include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
 #include "base/Parallel.h"          // par::setThreads() for the settings dialog
 #include <algorithm>
@@ -12,7 +13,20 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace { constexpr double kRailAnimMs = 200.0; }
+    namespace
+    {
+        constexpr double kRailAnimMs = 200.0;
+        constexpr double kIntroMs = 460.0;    // wordmark fly + name grow + backdrop reveal
+        constexpr double kRevealMs = 520.0;   // cover expands into the editor photo stage
+        constexpr double kProgressMs = 200.0; // progress-bar ease toward the real fraction
+        const Color kLoadingBg{0x0A / 255.0, 0x0A / 255.0, 0x14 / 255.0, 1.0};  // star-sky near-black
+
+        Rect lerpRect(const Rect &a, const Rect &b, double t)
+        {
+            return Rect{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
+                        a.w + (b.w - a.w) * t, a.h + (b.h - a.h) * t};
+        }
+    }
 
     App::App(double width, double height)
         : mW(width), mH(height), mTheme(makeCosmoV2Theme()), mAccent(palette::primary())
@@ -22,7 +36,9 @@ namespace cosmo_v2
         mRoot->height.set(height);
         // Gestures route to whichever screen is active (launcher vs. editor).
         mRecognizer.setSink([this](const Gesture &g) {
-            if (mScreen == Screen::Home) mHome->onGesture(g); else mRoot->onGesture(g);
+            if (mScreen == Screen::Home) mHome->onGesture(g);
+            else if (mScreen == Screen::Editor) mRoot->onGesture(g);
+            // Screen::Loading swallows input — the transition is non-interactive.
         });
 
         mTopBar = std::make_shared<TopBar>();
@@ -130,9 +146,16 @@ namespace cosmo_v2
         mHome->onOpenProject   = [this] { if (onOpenProjectRequested) onOpenProjectRequested(); };
         mHome->onImportCatalog = [this] { if (onImportCatalogRequested) onImportCatalogRequested(); };
         mHome->onOpenRecent    = [this](int idx) {
+            mOpenFromRect = mHome->lastOpenCardRect();  // fly the cover from the clicked card (R-LOADING)
             if (idx >= 0 && idx < (int)mRecents.size() && onOpenRecentRequested) onOpenRecentRequested(mRecents[idx].path);
         };
         mHome->layout();
+
+        // Open-project transition assets (R-LOADING): a centred cover image and a
+        // twinkling star-sky backdrop for the loading screen.
+        mCover = std::make_shared<ImageView>();
+        mCover->setFit(ImageView::Fit::Contain);
+        mStars.init(150);
 
         layout();
     }
@@ -373,6 +396,7 @@ namespace cosmo_v2
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
         if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
+        if (mScreen == Screen::Loading) return;                           // non-interactive transition
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
 
         // Ctrl + wheel over the photo = zoom about the cursor (R-ZOOM-1). The photo's
@@ -432,6 +456,12 @@ namespace cosmo_v2
             return;
         }
 
+        if (mScreen == Screen::Loading) { renderTransition(target, nowMs); return; }
+        renderEditor(target, nowMs);
+    }
+
+    void App::renderEditor(IRenderTarget &target, double nowMs)
+    {
         mSession.tick(nowMs);
         mRoot->advance(nowMs);
         // Re-run manual composite layout every frame (cheap arithmetic) so
@@ -633,6 +663,172 @@ namespace cosmo_v2
         mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
     }
 
+    // ── open-project transition (R-LOADING) ─────────────────────────────────────
+    Rect App::photoStageRect() const
+    {
+        auto photo = mCenterStage->photo();  // live editor layout -> exact reveal target
+        return Rect{mCenterStage->x.value() + photo->x.value(),
+                    mCenterStage->y.value() + photo->y.value(),
+                    photo->width.value(), photo->height.value()};
+    }
+
+    void App::beginOpenTransition(const std::string &projectName)
+    {
+        if (mConfirmDialog) mConfirmDialog->close();
+        mLoadName = projectName;
+        mScreen = Screen::Loading;
+        mPhase = Phase::Intro;
+        mPhaseT0 = mNowMs;
+        mCoverReady = false;
+        mCover->clearImage();
+        mLoadDone = 0; mLoadTotal = 0;
+        mCoverFrom = mOpenFromRect;              // consume the clicked-card rect (empty for Open-dialog)
+        mOpenFromRect = Rect{0, 0, 0, 0};
+        mIntro.set(0.0);    mIntro.animateTo(1.0, kIntroMs, Easing::EaseOutCubic, mNowMs);
+        mReveal.set(0.0);
+        mProgress.set(0.0);
+        mCoverFade.set(0.0);
+    }
+
+    void App::setLoadingCover(const uint8_t *rgba, int w, int h)
+    {
+        if (!rgba || w <= 0 || h <= 0) return;
+        mCover->setImage(rgba, w, h);
+        if (!mCoverReady)  // fade the cover in the first time it becomes available
+        {
+            mCoverReady = true;
+            mCoverFade.set(0.0);
+            mCoverFade.animateTo(1.0, 240.0, Easing::EaseOutCubic, mNowMs);
+        }
+    }
+
+    void App::setLoadProgress(int done, int total)
+    {
+        mLoadDone = done; mLoadTotal = total;
+        const double f = total > 0 ? std::min(1.0, std::max(0.0, (double)done / total)) : 0.0;
+        mProgress.animateTo(f, kProgressMs, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::finishOpenTransition()
+    {
+        // Project name into the top bar (like showEditor) so the editor is ready
+        // beneath the reveal; stay on Loading until the cover finishes expanding.
+        std::string stem = mSession.workspacePath();
+        if (auto s = stem.find_last_of("/\\"); s != std::string::npos) stem = stem.substr(s + 1);
+        if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
+        mTopBar->setProjectName(stem);
+        syncControlsToSlot();
+
+        mProgress.animateTo(1.0, 120.0, Easing::EaseOutCubic, mNowMs);
+        mPhase = Phase::Reveal;
+        mPhaseT0 = mNowMs;
+        mReveal.set(0.0);   mReveal.animateTo(1.0, kRevealMs, Easing::EaseOutCubic, mNowMs);
+        mScreenFade.set(1.0);  mScreenFade.animateTo(0.0, kRevealMs, Easing::EaseOutCubic, mNowMs);  // editor fades in beneath
+    }
+
+    void App::renderTransition(IRenderTarget &target, double nowMs)
+    {
+        mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs); mCoverFade.update(nowMs);
+        if (mPhase == Phase::Intro && !mIntro.isAnimating()) mPhase = Phase::Loading;
+        if (mPhase == Phase::Reveal && !mReveal.isAnimating())  // reveal done -> hand off to the editor
+        {
+            mScreen = Screen::Editor;
+            mPhase = Phase::None;
+            renderEditor(target, nowMs);
+            return;
+        }
+
+        // The centred cover box (16:9), a touch above middle to leave room for the
+        // name + progress bar below.
+        const double bw = std::min(mW * 0.42, mH * 0.62);
+        const double bh = bw * 9.0 / 16.0;
+        const Rect box{(mW - bw) * 0.5, (mH - bh) * 0.5 - 26.0, bw, bh};
+
+        auto drawCover = [&](const Rect &r, double coverAlpha) {
+            mCover->x.set(r.x); mCover->y.set(r.y); mCover->width.set(r.w); mCover->height.set(r.h);
+            mCover->render(target);
+            if (coverAlpha < 0.999)  // fade the cover up out of the dark backdrop
+            {
+                Color s = kLoadingBg; s.a = 1.0 - coverAlpha;
+                drawRoundedRect(target, r, radius::control(), Paint::filled(s));
+            }
+        };
+
+        target.save();
+        target.setTransform(Transform::identity());
+
+        if (mPhase == Phase::Reveal)
+        {
+            // Editor beneath (fading in via mScreenFade), the cover expanding from the
+            // centre box into the photo stage — same image, so it "joins" seamlessly.
+            target.restore();
+            renderEditor(target, nowMs);
+            target.save();
+            target.setTransform(Transform::identity());
+            const double rv = mReveal.value();
+            const Rect ps = photoStageRect();
+            const Rect cr{box.x + (ps.x - box.x) * rv, box.y + (ps.y - box.y) * rv,
+                          box.w + (ps.w - box.w) * rv, box.h + (ps.h - box.h) * rv};
+            if (mCoverReady) drawCover(cr, 1.0);
+            target.restore();
+            return;
+        }
+
+        // Intro / Loading: dark star-sky backdrop.
+        const double intro = mIntro.value();
+        drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
+        mStars.draw(target, Rect{0, 0, mW, mH}, intro, nowMs);  // particles fade in with the intro
+
+        // The cover flies from the clicked card's position (mCoverFrom) to the centre
+        // box as the intro lands; at intro==1 it rests at `box`. Open-dialog opens
+        // (no source card) just settle at `box`.
+        const Rect cbox = (mCoverFrom.w > 0.0) ? lerpRect(mCoverFrom, box, intro) : box;
+        if (mCoverReady) drawCover(cbox, mCoverFade.value());
+        else
+            drawRoundedRect(target, cbox, radius::control(),
+                            Paint::filledStroked(palette::whiteAlpha(0.03), palette::whiteAlpha(0.10), 1.0));
+
+        // Project name, centred below the cover, growing a little as the intro lands.
+        if (!mLoadName.empty())
+        {
+            const double sz = 17.0 + 6.0 * intro;
+            const double tw = estimateTextWidth(mLoadName, sz);
+            Color nameCol = palette::foreground(); nameCol.a *= intro;
+            target.setFill(nameCol);
+            target.drawText(mLoadName, (mW - tw) * 0.5, box.y + box.h + 40.0, sz, font::sansSemiBold());
+        }
+
+        // Flying wordmark: home position (big) -> top-bar slot (small), by intro.
+        {
+            const double sz = 46.0 + (13.0 - 46.0) * intro;
+            const double x = 32.0 + (9.75 /*TopBar left pad*/ - 32.0) * intro;
+            const double base = 96.0 + (19.2 - 96.0) * intro;
+            const double sp = -0.03 * sz;
+            target.setFill(palette::foreground());
+            target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
+            const double wmW = estimateTextWidth("cosmo", sz) + sp * 4.0;
+            target.setFill(palette::primary());
+            target.drawText(".", x + wmW + 2.0, base, sz, font::sansSemiBold());
+        }
+
+        // Progress bar pinned near the bottom, colour = accent, fades in after intro.
+        {
+            const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
+            const double bx = (mW - barW) * 0.5, by = mH - 84.0;
+            const double a = intro;
+            Color track = palette::whiteAlpha(0.12); track.a *= a;
+            drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
+            const double fillW = barW * mProgress.value();
+            if (fillW > 0.5)
+            {
+                Color fill = palette::primary(); fill.a *= a;
+                drawRoundedRect(target, Rect{bx, by, fillW, barH}, barH * 0.5, Paint::filled(fill));
+            }
+        }
+
+        target.restore();
+    }
+
     void App::requestHome()
     {
         // Unsaved edits -> ask to save or discard (discard is destructive/red); a
@@ -648,6 +844,7 @@ namespace cosmo_v2
 
     bool App::key(const artboard::KeyEvent &e)
     {
+        if (mScreen == Screen::Loading) return true;  // swallow keys during the transition
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
         // On Home the launcher owns the keyboard: swallow unhandled keys so the
         // editor's plain-key shortcuts (o/s/Delete) don't fire behind it.

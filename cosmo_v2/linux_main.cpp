@@ -16,6 +16,7 @@
 #include <cctype>
 #include <ctime>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,17 @@ namespace
 {
     constexpr int kW = 1440, kH = 900;  // Figma base artboard size
 
+    // A project open in progress: the workspace entries decoded one-per-idle-tick
+    // so the animated loading screen keeps rendering (R-LOADING) instead of the UI
+    // freezing on a synchronous decode-all.
+    struct LoadJob
+    {
+        std::vector<App::WorkspaceEntry> entries;
+        size_t i = 0;
+        std::string path;
+        bool coverSent = false;
+    };
+
     struct Host
     {
         GtkWidget *window = nullptr;
@@ -35,6 +47,7 @@ namespace
         artboard::CairoTarget target;
         NativeImageDecoder decoder;
         gint64 startUs = 0;
+        std::unique_ptr<LoadJob> load;  // active incremental project load (nullptr when idle)
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -384,6 +397,76 @@ namespace
         arstro::cosmo::ProjectStore::remember(std::move(e));
     }
 
+    // One step of an incremental project load (called from the GTK idle loop, so
+    // draw frames interleave and the loading screen animates). Decodes one entry
+    // per call, feeding the App's cover + progress; on completion reveals the editor.
+    gboolean stepLoad(gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        LoadJob *job = a->load.get();
+        if (!job) return G_SOURCE_REMOVE;
+
+        if (job->i >= job->entries.size())  // done: finish + reveal
+        {
+            a->app.finishWorkspaceLoad(job->path);
+            rememberProject(job->path);
+            a->app.finishOpenTransition();
+            a->load.reset();
+            gtk_widget_queue_draw(a->area);
+            return G_SOURCE_REMOVE;
+        }
+
+        const auto &e = job->entries[job->i];
+        const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
+        if (e.group)
+        {
+            a->app.addWorkspaceGroup(parentNode, e.name, e.offset);
+        }
+        else
+        {
+            DecodedImage img = a->decoder.decodeFile(e.imagePath);
+            if (img.ok())
+            {
+                const int slot = a->app.openImageInto(parentNode, img.rgba.data(), img.width, img.height,
+                                                       baseName(e.imagePath), e.imagePath);
+                a->app.applyParamsToSlot(slot, e.params);
+                if (!job->coverSent)  // first decoded image -> the loading-screen cover
+                {
+                    a->app.setLoadingCover(img.rgba.data(), img.width, img.height);
+                    job->coverSent = true;
+                }
+            }
+            else
+            {
+                g_printerr("cosmo_v2: workspace image missing: %s\n", e.imagePath.c_str());
+                a->app.addWorkspaceMissingImage(parentNode, baseName(e.imagePath));
+            }
+        }
+        job->i++;
+        a->app.setLoadProgress((int)job->i, (int)job->entries.size());
+        gtk_widget_queue_draw(a->area);
+        return G_SOURCE_CONTINUE;
+    }
+
+    // Open a .cmp project with the animated loading transition (R-LOADING): start
+    // the transition, then decode its images incrementally off the idle loop.
+    void startProjectLoad(Host *a, const std::string &path)
+    {
+        std::vector<App::WorkspaceEntry> entries;
+        if (!App::readWorkspaceFile(path, entries))
+        {
+            g_printerr("cosmo_v2: could not read project %s\n", path.c_str());
+            return;
+        }
+        a->app.beginOpenTransition(std::filesystem::path(path).stem().string());
+        a->app.resetWorkspace();
+        a->load = std::make_unique<LoadJob>();
+        a->load->entries = std::move(entries);
+        a->load->path = path;
+        a->app.setLoadProgress(0, (int)a->load->entries.size());
+        g_idle_add(stepLoad, a);
+    }
+
     void addCmpFilter(GtkWidget *d)
     {
         GtkFileFilter *filt = gtk_file_filter_new();
@@ -426,7 +509,7 @@ namespace
         if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
         {
             char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
-            if (path) { loadWorkspaceFile(a, path); rememberProject(path); a->app.showEditor(); }
+            if (path) startProjectLoad(a, path);  // animated loading transition (R-LOADING)
             g_free(path);
         }
         gtk_widget_destroy(d);
@@ -576,8 +659,9 @@ namespace
                 if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
             }
         }
-        // On the home screen the launcher owns the keyboard — don't leak editor keys.
-        if (a->app.onHomeScreen()) return TRUE;
+        // On the home screen the launcher owns the keyboard, and during the open
+        // transition input is swallowed — don't leak editor keys in either case.
+        if (a->app.onHomeScreen() || a->app.inOpenTransition()) return TRUE;
 
         if (ctrl && (e->keyval == GDK_KEY_z || e->keyval == GDK_KEY_Z))
         {
@@ -642,7 +726,7 @@ int main(int argc, char **argv)
     host.app.onOpenProjectRequested  = [&host] { openProjectDialog(&host); };
     host.app.onImportCatalogRequested = [&host] { importCatalogDialog(&host); };
     host.app.onOpenRecentRequested = [&host](const std::string &path) {
-        loadWorkspaceFile(&host, path); rememberProject(path); host.app.showEditor();
+        startProjectLoad(&host, path);  // animated loading transition (R-LOADING)
     };
     host.app.onDecodeThumbnail = [&host](int idx, const std::string &imgPath) {
         DecodedImage img = host.decoder.decodeFile(imgPath);

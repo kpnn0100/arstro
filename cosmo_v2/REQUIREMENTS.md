@@ -34,6 +34,32 @@ on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps 
   an overlay-scrim reveal where practical) pending an Artboard change; scroll offsets, panel/dialog
   open-close, and the edit-stack page swap all animate.
 
+## R-LOADING — Animated open-project transition & loading screen — ✅ IMPLEMENTED
+
+Opening a project decodes its images (~1 s for a multi-photo project). That decode is now
+**incremental** (one image per GTK idle tick, `linux_main.cpp` `stepLoad`/`startProjectLoad`)
+instead of a blocking decode-all, so the animated loading screen keeps rendering and the progress
+bar reflects real progress. Applies to the two "open a project" paths — a recent-project card and
+Open Project… — (`onOpenRecentRequested`, `openProjectDialog`). Orchestrated by `App` as a third
+screen state (`Screen::Loading`) drawn in `App::renderTransition`; the star-sky backdrop is
+`widgets/Starfield.h`. Honors `reducedMotion()` (the eases collapse; the load still streams in).
+
+- **R-LOADING-1 Intro (home → loading).** On open, the home `cosmo.` wordmark flies to the
+  editor top-bar wordmark slot (46 px → 13 px, home position → top-left), the clicked project's
+  cover lifts off its card and moves to the centre of the window over a cleared (dark) backdrop,
+  and the project name grows in centred beneath it. Cover fly-from-card uses the clicked card's
+  screen rect (`HomeScreen::lastOpenCardRect`); Open-dialog opens (no source card) settle the
+  cover at centre.
+- **R-LOADING-2 Loading screen.** A near-black star-sky backdrop of small white particles that
+  each randomly fade in and out (twinkle). The project cover sits centred; a colour (accent)
+  progress bar is pinned near the bottom and fills 0→1 with the real decode progress
+  (`setLoadProgress`), eased so it never jumps backwards visually.
+- **R-LOADING-3 Reveal (loading → editor).** When the load completes, the centred cover expands
+  into the editor's photo-stage rect — the same first image, so it "joins" the first preview
+  seamlessly — while the editor cross-fades in beneath, then the editor takes over.
+- **R-LOADING-4 Non-interactive.** Input (pointer/keys/wheel) is swallowed during the transition
+  so nothing behind the loading screen is touched.
+
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 
 - **R-LOG-1** The app writes a timestamped, levelled log to `~/.config/cosmo_v2/cosmo_v2.log`
@@ -145,12 +171,12 @@ Reference: `cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings tha
 ## R-HOME — Home screen & projects (item 4) — ✅ IMPLEMENTED
 
 Status: implemented. `widgets/HomeScreen.{h,cpp}` (Figma-faithful launcher) + a screen
-state machine in `App` (`Home`/`Editor`, cross-fade scrim on switch) + `cosmo_core/
+state machine in `App` (`Home`/`Loading`/`Editor`, cross-fade scrim on switch) + `cosmo_core/
 ProjectStore.{h,cpp}` (persisted recent index) + host dialogs in `linux_main.cpp`. The app
 starts on Home. Notes vs. the spec below: the recent index is a small **line-based TSV** in
-the config dir (not literally JSON); the Figma **LoadingScreen** is not implemented (the app
-opens straight on Home); a `.cmp` is exactly the existing workspace catalog with a `.cmp`
-extension. Search is a focusable `artboard::TextBox` fed by host key/text events.
+the config dir (not literally JSON); the Figma **LoadingScreen** is implemented as the animated
+open-project transition (see **R-LOADING**); a `.cmp` is exactly the existing workspace catalog
+with a `.cmp` extension. Search is a focusable `artboard::TextBox` fed by host key/text events.
 
 
 Reference Figma: `ref/2/extracted/src/app/App.tsx` → `HomeScreenDesktop` (lines ~214–386) and

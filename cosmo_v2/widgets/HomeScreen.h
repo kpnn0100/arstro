@@ -52,6 +52,9 @@ namespace cosmo_v2
         void setThumbnail(int recentIndex, const uint8_t *rgba, int w, int h);
         /** Scroll the grid by a wheel delta (positive = up). */
         void scrollBy(double delta);
+        /** Screen rect of the recent card most recently clicked-to-open — the start
+         *  point for the App's cover fly-to-centre transition (R-LOADING). */
+        artboard::Rect lastOpenCardRect() const { return mLastOpenRect; }
         void layout();
         void advance(double nowMs) override;  // App drives this (Home is not in the editor tree)
 
@@ -104,6 +107,7 @@ namespace cosmo_v2
         double mScrollY = 0.0;                 // TARGET scroll; eased into place by mScrollYAnim
         double mContentH = 0.0;                // total grid height (for scroll clamp)
         artboard::Rect mNewCardRect{0, 0, 0, 0};
+        artboard::Rect mLastOpenRect{0, 0, 0, 0};  // screen rect of the last-opened recent card
 
         // hover + eased scroll (R-G-1/R-G-3: everything animates, nothing snaps)
         HoverFade mHover;                           // per-region hover cross-fade (flat ids via hoverId)

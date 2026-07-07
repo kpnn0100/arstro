@@ -328,7 +328,13 @@ namespace cosmo_v2
         {
             if (!c.shown) continue;
             const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
-            if (s.contains(local)) { if (onOpenRecent) onOpenRecent(c.info.recentIndex); return true; }
+            if (s.contains(local))
+            {
+                // Remember the 16:9 cover (thumbnail) rect as the fly-to-centre start.
+                mLastOpenRect = Rect{s.x, s.y, s.w, s.w * 9.0 / 16.0};
+                if (onOpenRecent) onOpenRecent(c.info.recentIndex);
+                return true;
+            }
         }
         const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
         if (ns.contains(local)) { if (onNewProject) onNewProject(); return true; }

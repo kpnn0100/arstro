@@ -19,6 +19,7 @@
 #include "widgets/SettingsDialog.h"
 #include "widgets/ConfirmDialog.h"
 #include "widgets/HomeScreen.h"
+#include "widgets/Starfield.h"
 #include "../cosmo_core/ProjectStore.h"
 #include <cstdint>
 #include <functional>
@@ -47,6 +48,22 @@ namespace cosmo_v2
         void showHome();     // leave the editor, show the project launcher (refreshes recents)
         void showEditor();   // enter the editor (after a project is created/opened)
         bool onHomeScreen() const { return mScreen == Screen::Home; }
+
+        // ── animated open-project transition (R-LOADING) ──
+        /** Begin the home→loading transition: the wordmark flies to the top-bar
+         *  slot, the project name grows in centred over a star-sky loading screen.
+         *  The host then decodes the project incrementally, feeding setLoadingCover
+         *  / setLoadProgress, and finally calls finishOpenTransition(). */
+        void beginOpenTransition(const std::string &projectName);
+        /** Push the project's cover (first image) so it can be shown centred while
+         *  loading and then expanded into the editor's first preview. */
+        void setLoadingCover(const uint8_t *rgba, int w, int h);
+        /** Update the loading progress bar (0 = start, done==total = complete). */
+        void setLoadProgress(int done, int total);
+        /** Loading finished: expand the cover into the editor photo stage and reveal
+         *  the editor. */
+        void finishOpenTransition();
+        bool inOpenTransition() const { return mScreen == Screen::Loading; }
         /** Host pushes a decoded cover for recent `recentIndex` (first image). */
         void setHomeThumbnail(int recentIndex, const uint8_t *rgba, int w, int h)
         { if (mHome) mHome->setThumbnail(recentIndex, rgba, w, h); }
@@ -132,8 +149,11 @@ namespace cosmo_v2
         void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
         void requestHome();         // wordmark click: prompt to save/discard if dirty, else go home
 
-        enum class Screen { Home, Editor };
+        enum class Screen { Home, Loading, Editor };
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
+        void renderEditor(artboard::IRenderTarget &target, double nowMs);      // the editor screen body
+        void renderTransition(artboard::IRenderTarget &target, double nowMs);  // the open-project transition
+        artboard::Rect photoStageRect() const;  // editor photo-canvas world rect (Reveal target)
 
         double mW, mH;
         double mNowMs = 0.0;
@@ -162,6 +182,22 @@ namespace cosmo_v2
         std::shared_ptr<HomeScreen> mHome;
         artboard::AnimatedProperty mScreenFade{0.0};      // cross-fade scrim on screen switch (1->0)
         std::vector<cosmo::RecentEntry> mRecents;         // backing the home grid (open-by-index)
+
+        // ── open-project transition (R-LOADING) ──
+        enum class Phase { None, Intro, Loading, Reveal };
+        Phase mPhase = Phase::None;
+        double mPhaseT0 = 0.0;               // start time of the current phase
+        std::string mLoadName;               // project name shown centred
+        Starfield mStars;                    // twinkling loading backdrop
+        std::shared_ptr<artboard::ImageView> mCover;  // project cover (centre -> photo stage)
+        bool mCoverReady = false;
+        int mLoadDone = 0, mLoadTotal = 0;
+        artboard::Rect mOpenFromRect{0, 0, 0, 0};  // pending: clicked-card rect (set by onOpenRecent)
+        artboard::Rect mCoverFrom{0, 0, 0, 0};     // active: cover fly-in start (consumed at begin)
+        artboard::AnimatedProperty mIntro{0.0};      // 0..1 intro (wordmark fly + name grow + backdrop)
+        artboard::AnimatedProperty mReveal{0.0};     // 0..1 reveal (cover expands into the editor)
+        artboard::AnimatedProperty mProgress{0.0};   // eased loading progress bar (0..1)
+        artboard::AnimatedProperty mCoverFade{0.0};  // cover fade-in once it is ready
     };
 }
 }
