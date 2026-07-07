@@ -358,11 +358,13 @@ namespace cosmo_v2
         //    its own copy back into place on return, so it reads as one element)
         if (!mWordmarkHidden)
         {
+            // Same spacing formula as the top-bar wordmark (spacing -0.03*size; the
+            // dot sits at kPad + estimateTextWidth) so the two "cosmo." read identical.
+            const double sp = -0.03 * 46.0;
             t.setFill(palette::foreground());
-            t.drawText("cosmo", kPad, 96.0, 46.0, font::sansSemiBold(), -0.045 * 46.0);
-            const double wm = estimateTextWidth("cosmo", 46.0) - 0.045 * 46.0 * 5;
+            t.drawText("cosmo", kPad, 96.0, 46.0, font::sansSemiBold(), sp);
             t.setFill(palette::primary());
-            t.drawText(".", kPad + wm + 2.0, 96.0, 46.0, font::sansSemiBold());
+            t.drawText(".", kPad + estimateTextWidth("cosmo", 46.0), 96.0, 46.0, font::sansSemiBold(), sp);
         }
         t.setFill(palette::mutedForeground());
         t.drawText("Develop, grade, and export", kPad, 118.0, 11.0, font::sans());

@@ -17,6 +17,18 @@ on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps 
   `artboard::reducedMotion()`.
 - **R-G-2 Figma is the spec.** Screens that reference a Figma frame must match it (spacing,
   type ramp, colors, radii pulled from `Theme`), not approximate it.
+- **R-G-2a One wordmark.** The `cosmo.` wordmark is drawn identically everywhere it appears
+  (home sidebar, editor top bar, the open/return transition): letter-spacing `-0.03 * size` and the
+  accent dot at `x + estimateTextWidth("cosmo", size)`. No per-site spacing tweaks.
+
+## R-EDITSTACK — Right-column edit stack
+
+- **R-EDITSTACK-1 Tabs.** Five merged tabs: **Basic/Detail** (all tone/colour/presence/effects +
+  sharpening/noise/lens sections in one scrollable `ParamPanel`), **Mask**, **Mixer/Curve** (the HSL
+  mixer above the tone curve in one scrollable `StackPanel`), **Grade**, **Xform**. Tab widths size
+  to their label (+ even padding to fill the strip) via `EditStackTabs::tabW/tabX`, so wider merged
+  labels are never clipped. The Mask overlay bridge keys off `RightColumn::maskTabActive()`, not a
+  hard-coded index.
 - **R-G-3 Everything interactive hovers.** Every button and every clickable region shows an
   animated hover treatment under the pointer — never a hard flip. Child-`Segment` controls
   (`Button`/`PillButton`/`IconButton`/`ComboBox`/`ToggleSwitch`/`Slider`) key off the framework's

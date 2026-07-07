@@ -480,8 +480,8 @@ namespace cosmo_v2
         {
             auto ov = mCenterStage->photo()->maskOverlay();
             const MaskParams *sel = mRightColumn->selectedMaskParams();
-            if (mRightColumn->activeTab() == 2 && sel) ov->setMask(*sel, true);
-            else                                       ov->setMask(MaskParams{}, false);
+            if (mRightColumn->maskTabActive() && sel) ov->setMask(*sel, true);
+            else                                      ov->setMask(MaskParams{}, false);
         }
 
         RenderService::Frame f;
@@ -762,14 +762,13 @@ namespace cosmo_v2
         const double sz = 46.0 + (13.0 - 46.0) * p;
         const double x = 32.0 + (9.75 /*TopBar left pad*/ - 32.0) * p;
         const double base = 96.0 + (19.2 - 96.0) * p;
-        const double sp = -0.03 * sz;
+        const double sp = -0.03 * sz;  // same spacing formula as HomeScreen + TopBar (consistent wordmark)
         Color fg = palette::foreground(); fg.a *= alpha;
         Color dot = palette::primary(); dot.a *= alpha;
         target.setFill(fg);
         target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
-        const double wmW = estimateTextWidth("cosmo", sz) + sp * 4.0;
         target.setFill(dot);
-        target.drawText(".", x + wmW + 2.0, base, sz, font::sansSemiBold());
+        target.drawText(".", x + estimateTextWidth("cosmo", sz), base, sz, font::sansSemiBold(), sp);
     }
 
     void App::renderTransition(IRenderTarget &target, double nowMs)

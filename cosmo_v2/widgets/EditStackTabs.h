@@ -47,6 +47,12 @@ namespace cosmo_v2
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
+        // Tabs are sized to their label (+ even padding to fill the strip) rather
+        // than an equal width/n, so wider merged labels (e.g. "Basic/Detail") fit.
+        double tabW(int i) const;
+        double tabX(int i) const;
+        int tabAt(double localX) const;
+
         std::vector<std::string> mTitles;
         std::vector<std::shared_ptr<artboard::Segment>> mPages;
         int mSelected = 0;

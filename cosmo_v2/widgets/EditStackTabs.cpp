@@ -9,9 +9,35 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace { constexpr double kFontPx = 10.0; constexpr double kSlideMs = 200.0; constexpr double kFadeMs = 180.0; }
+    namespace { constexpr double kFontPx = 10.0; constexpr double kSlideMs = 200.0; constexpr double kFadeMs = 180.0; constexpr double kMinTabPad = 6.0; }
 
     EditStackTabs::EditStackTabs() { clipToBounds = false; }
+
+    // Even padding added to each label so the tabs together fill the strip width;
+    // falls back to a minimum pad if the labels are wider than the strip.
+    double EditStackTabs::tabW(int i) const
+    {
+        const int n = (int)mTitles.size();
+        if (n <= 0) return 0.0;
+        double sumText = 0.0;
+        for (const auto &s : mTitles) sumText += estimateTextWidth(s, kFontPx);
+        const double pad = std::max(kMinTabPad, (width.value() - sumText) / (2.0 * n));
+        return estimateTextWidth(mTitles[i], kFontPx) + 2.0 * pad;
+    }
+
+    double EditStackTabs::tabX(int i) const
+    {
+        double x = 0.0;
+        for (int k = 0; k < i; ++k) x += tabW(k);
+        return x;
+    }
+
+    int EditStackTabs::tabAt(double localX) const
+    {
+        for (int i = 0; i < (int)mTitles.size(); ++i)
+            if (localX >= tabX(i) && localX < tabX(i) + tabW(i)) return i;
+        return -1;
+    }
 
     void EditStackTabs::addPage(const std::string &title, std::shared_ptr<Segment> page)
     {
@@ -48,8 +74,7 @@ namespace cosmo_v2
         const int n = (int)mTitles.size();
         if (n > 0)
         {
-            const double tw = width.value() / n;
-            const double targetX = mSelected * tw, targetW = tw;
+            const double targetX = tabX(mSelected), targetW = tabW(mSelected);
             if (!mInit) { mIndX.set(targetX); mIndW.set(targetW); mInit = true; }
             else if (mPending) { mIndX.animateTo(targetX, kSlideMs, Easing::EaseOutCubic, nowMs);
                                  mIndW.animateTo(targetW, kSlideMs, Easing::EaseOutCubic, nowMs);
@@ -72,12 +97,12 @@ namespace cosmo_v2
     {
         const int n = (int)mTitles.size();
         if (n == 0) return;
-        const double w = width.value(), tw = w / n;
+        const double w = width.value();
 
         // Whole strip: the darker background; then the active tab in card, filled
         // down past the strip so it welds into the card panel body below.
         drawRoundedRect(t, Rect{0, 0, w, tabHeight}, 0.0, Paint::filled(palette::background()));
-        drawRoundedRect(t, Rect{mSelected * tw, 0, tw, tabHeight + 2.0}, 0.0, Paint::filled(palette::card()));
+        drawRoundedRect(t, Rect{tabX(mSelected), 0, tabW(mSelected), tabHeight + 2.0}, 0.0, Paint::filled(palette::card()));
 
         // Faint wash on each hovered idle tab — each cross-fades independently.
         for (int i = 0; i < n; ++i)
@@ -85,13 +110,14 @@ namespace cosmo_v2
             if (i == mSelected) continue;
             const double hv = mHover.amount(i);
             if (hv > 0.001)
-                drawRoundedRect(t, Rect{i * tw, 0, tw, tabHeight}, 0.0, Paint::filled(palette::whiteAlpha(0.06 * hv)));
+                drawRoundedRect(t, Rect{tabX(i), 0, tabW(i), tabHeight}, 0.0, Paint::filled(palette::whiteAlpha(0.06 * hv)));
         }
 
         // Bottom hairline across the idle tabs only (broken under the active tab,
         // which merges with the body).
-        t.beginPath(); t.moveTo(0, tabHeight); t.lineTo(mSelected * tw, tabHeight);
-        t.moveTo((mSelected + 1) * tw, tabHeight); t.lineTo(w, tabHeight);
+        const double selL = tabX(mSelected), selR = selL + tabW(mSelected);
+        t.beginPath(); t.moveTo(0, tabHeight); t.lineTo(selL, tabHeight);
+        t.moveTo(selR, tabHeight); t.lineTo(w, tabHeight);
         t.setStroke(palette::border(), 1.0); t.strokePath();
 
         // Sliding accent bar along the top edge of the active tab.
@@ -104,7 +130,7 @@ namespace cosmo_v2
             if (!active)  // lift an idle label toward the active colour on hover (cross-fades)
                 col = lerpColor(col, palette::primary(), 0.5 * mHover.amount(i));
             const double textW = estimateTextWidth(mTitles[i], kFontPx);
-            const double tx = i * tw + (tw - textW) * 0.5;
+            const double tx = tabX(i) + (tabW(i) - textW) * 0.5;
             t.setFill(col);
             t.drawText(mTitles[i], tx, tabHeight * 0.5 + kFontPx * 0.35, kFontPx, font::sansMedium());
         }
@@ -132,14 +158,14 @@ namespace cosmo_v2
         const int n = (int)mTitles.size();
         if (g.type == Gesture::Type::Move)  // track the hovered tab (strip only; skip the active tab)
         {
-            int i = (n > 0 && local.y <= tabHeight) ? (int)(local.x / (width.value() / n)) : -1;
-            mHover.setHovered((i >= 0 && i < n && i != mSelected) ? i : -1);
+            const int i = (n > 0 && local.y <= tabHeight) ? tabAt(local.x) : -1;
+            mHover.setHovered((i >= 0 && i != mSelected) ? i : -1);
             return true;
         }
         if (g.type == Gesture::Type::Click && n > 0 && local.y <= tabHeight)
         {
-            const int i = (int)(local.x / (width.value() / n));
-            if (i >= 0 && i < n) { setSelectedIndex(i); return true; }
+            const int i = tabAt(local.x);
+            if (i >= 0) { setSelectedIndex(i); return true; }
         }
         return Segment::handleGesture(g, local);
     }

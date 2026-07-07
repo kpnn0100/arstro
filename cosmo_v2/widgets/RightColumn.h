@@ -16,6 +16,7 @@
 #include "CurvePanel.h"
 #include "GradePanel.h"
 #include "XformPanel.h"
+#include "StackPanel.h"
 #include "ActionBar.h"
 #include <functional>
 #include <memory>
@@ -27,9 +28,11 @@ namespace cosmo_v2
     class RightColumn : public artboard::Segment
     {
     public:
-        // Wider than the Figma mock's 292px so the 7 edit-stack tab labels sit
+        // Wider than the Figma mock's 292px so the edit-stack tab labels sit
         // comfortably centred (task point 5: "make the edit stack wider").
         static constexpr double kWidth = 324.0;
+        // Merged edit-stack tabs (Basic+Detail, Mask, Mixer+Curve, Grade, Xform).
+        static constexpr int kTabBasicDetail = 0, kTabMask = 1, kTabColor = 2, kTabGrade = 3, kTabXform = 4;
 
         explicit RightColumn(cosmo::EditSession &session);
 
@@ -44,7 +47,8 @@ namespace cosmo_v2
         void layout();  // call after width/height changes
 
         // ── on-photo mask overlay bridge (R-MASK) ──
-        int activeTab() const;                          // edit-stack tab index (Mask == 2)
+        int activeTab() const;                          // edit-stack tab index
+        bool maskTabActive() const;                     // true while the Mask tab is selected
         const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
         void writeSelectedMask(const MaskParams &m);    // overlay drag -> write geometry back + submit
 
@@ -55,9 +59,9 @@ namespace cosmo_v2
         cosmo::EditSession &mSession;
         std::shared_ptr<HistogramWidget> mHistogram;
         std::shared_ptr<EditStackTabs> mTabs;
-        std::shared_ptr<ParamPanel> mBasic;
-        std::shared_ptr<ParamPanel> mDetail;
+        std::shared_ptr<ParamPanel> mBasicDetail;  // merged Basic + Detail (one scrollable list)
         std::shared_ptr<MaskPanel> mMask;
+        std::shared_ptr<StackPanel> mColorTab;     // merged Mixer + Curve (scrollable stack)
         std::shared_ptr<MixerPanel> mMixer;
         std::shared_ptr<CurvePanel> mCurve;
         std::shared_ptr<GradePanel> mGrade;

@@ -9,6 +9,14 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
+    namespace
+    {
+        // Fixed content heights for the merged Mixer/Curve stack tab: Mixer's editor
+        // caps at ~200px + its picker; Curve is header + picker + a 164px plot.
+        constexpr double kMixerStackH = 250.0;
+        constexpr double kCurveStackH = 235.0;
+    }
+
     RightColumn::RightColumn(cosmo::EditSession &session) : mSession(session)
     {
         clipToBounds = true;
@@ -56,9 +64,6 @@ namespace cosmo_v2
                 {"Grain Size", 0, 100, set([](EditParams &p, double v) { p.grainSize = (float)v; })},
             }},
         };
-        mBasic = std::make_shared<ParamPanel>(std::move(basicSections));
-        mTabs->addPage("Basic", mBasic);
-
         std::vector<ParamPanel::Section> detailSections = {
             {"SHARPENING", {
                 {"Amount", 0, 150, set([](EditParams &p, double v) { p.sharpenAmount = (float)v; })},
@@ -75,8 +80,10 @@ namespace cosmo_v2
                 {"Vignette", -100, 100, set([](EditParams &p, double v) { p.lensVignette = (float)v; })},
             }},
         };
-        mDetail = std::make_shared<ParamPanel>(std::move(detailSections));
-        mTabs->addPage("Detail", mDetail);
+        // Merge Basic + Detail into one scrollable tab: all sections stacked in order.
+        for (auto &sec : detailSections) basicSections.push_back(std::move(sec));
+        mBasicDetail = std::make_shared<ParamPanel>(std::move(basicSections));
+        mTabs->addPage("Basic/Detail", mBasicDetail);
 
         mMask = std::make_shared<MaskPanel>();
         mMask->onAddMask = [this](int type) {
@@ -137,13 +144,17 @@ namespace cosmo_v2
         mMixer->onCurveChange = [this](int channel, std::vector<std::pair<float, float>> pts) {
             if (auto *p = mSession.curParams()) { p->mixer[channel] = std::move(pts); mSession.submit(); }
         };
-        mTabs->addPage("Mixer", mMixer);
 
         mCurve = std::make_shared<CurvePanel>();
         mCurve->onCurveChange = [this](std::vector<std::pair<float, float>> pts) {
             if (auto *p = mSession.curParams()) { p->curve = std::move(pts); mSession.submit(); }
         };
-        mTabs->addPage("Curve", mCurve);
+
+        // Merge Mixer + Curve into one scrollable tab (Mixer above, Curve below).
+        mColorTab = std::make_shared<StackPanel>();
+        mColorTab->addItem(mMixer, kMixerStackH, [this] { mMixer->layout(); });
+        mColorTab->addItem(mCurve, kCurveStackH, [this] { mCurve->layout(); });
+        mTabs->addPage("Mixer/Curve", mColorTab);
 
         mGrade = std::make_shared<GradePanel>();
         mGrade->onRegionChange = [this](int region, double hue, double sat, double lum) {
@@ -203,12 +214,11 @@ namespace cosmo_v2
     {
         const EditParams *p = mSession.curParams();
         if (!p) return;
-        mBasic->setValues({
+        // Basic sections then Detail sections, in the merged panel's flattened order.
+        mBasicDetail->setValues({
             fromEv(p->exposure), p->contrast, p->highlights, p->shadows, p->whites, p->blacks,
             fromKelvin(p->temp), fromTint(p->tint), p->vibrance, p->saturation,
             p->texture, p->clarity, p->dehaze, p->grainAmount, p->grainSize,
-        });
-        mDetail->setValues({
             p->sharpenAmount, fromRadiusPx(p->sharpenRadius), p->sharpenMasking,
             p->nrLuminance, p->nrColor,
             p->lensDistortion, p->lensCA, p->lensVignette,
@@ -226,6 +236,7 @@ namespace cosmo_v2
     }
 
     int RightColumn::activeTab() const { return mTabs->selectedIndex(); }
+    bool RightColumn::maskTabActive() const { return mTabs->selectedIndex() == kTabMask; }
 
     const MaskParams *RightColumn::selectedMaskParams() const
     {
@@ -251,11 +262,11 @@ namespace cosmo_v2
     {
         switch (mTabs->selectedIndex())
         {
-            case 0: mBasic->scrollBy(delta); break;
-            case 1: mDetail->scrollBy(delta); break;
-            case 2: mMask->scrollBy(delta); break;
-            case 5: mGrade->scrollBy(delta); break;
-            default: break;  // Mixer/Curve/Xform are fixed-height (no scroll)
+            case kTabBasicDetail: mBasicDetail->scrollBy(delta); break;
+            case kTabMask:        mMask->scrollBy(delta); break;
+            case kTabColor:       mColorTab->scrollBy(delta); break;
+            case kTabGrade:       mGrade->scrollBy(delta); break;
+            default: break;  // Xform is fixed-height (no scroll)
         }
     }
 
@@ -270,11 +281,11 @@ namespace cosmo_v2
         const double tabsH = h - tabsY - actionBarH;
         mTabs->x.set(0.0); mTabs->y.set(tabsY);
         mTabs->width.set(w); mTabs->height.set(std::max(0.0, tabsH));
-        mTabs->layoutPages();  // sizes/positions/visibility of all seven pages
+        mTabs->layoutPages();  // sizes/positions/visibility of all pages
 
-        // Each concrete panel lays out its own internals at the size the tab stack gave it.
-        mBasic->layout(); mDetail->layout(); mMask->layout(); mMixer->layout();
-        mCurve->layout(); mGrade->layout(); mXform->layout();
+        // Each concrete panel lays out its own internals at the size the tab stack gave
+        // it; the merged Mixer/Curve stack lays out its two children via callbacks.
+        mBasicDetail->layout(); mMask->layout(); mColorTab->layout(); mGrade->layout(); mXform->layout();
 
         mActionBar->x.set(0.0); mActionBar->y.set(h - actionBarH);
         mActionBar->width.set(w);
