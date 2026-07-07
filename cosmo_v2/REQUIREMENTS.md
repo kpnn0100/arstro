@@ -76,8 +76,11 @@ sudden jump, and the heavy work is isolated to the middle part:
 - **R-LOADING-5/6 Reverse (project → home), also in 3 parts.** Returning to the launcher (`showHome`
   from the editor → `App::renderReturn`) mirrors the open, through the same dark star-sky:
   - **ReturnEnter** — the editor fades OUT to the star-sky (a dark, matching-bg + stars overlay
-    fades IN over the still-rendered editor).
-  - **ReturnLoad** — a brief full star-sky beat.
+    fades IN over the still-rendered editor). The loading screen appears IMMEDIATELY on click — the
+    launcher prep is deferred (below), so there is no freeze before the fade.
+  - **ReturnLoad** — a brief full star-sky beat, during which `refreshHome()` runs (rebuild recents +
+    thumbnails) BEHIND the shown loading screen instead of as a click-time freeze. Thumbnails are
+    reused from the host cache (no re-decode on return), so this is cheap.
   - **ReturnExit** — the home screen fades IN from the star-sky (home rendered, the dark+stars
     overlay fades OUT on top).
   Across all three the wordmark flies from the top-bar slot back to its big home position

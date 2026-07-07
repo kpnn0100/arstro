@@ -851,6 +851,12 @@ int main(int argc, char **argv)
         startProjectLoad(&host, path);  // animated loading transition (R-LOADING)
     };
     host.app.onDecodeThumbnail = [&host](int idx, const std::string &imgPath) {
+        auto it = host.thumbs.find(imgPath);
+        if (it != host.thumbs.end() && it->second.ok())  // already decoded -> reuse (no re-decode on return)
+        {
+            host.app.setHomeThumbnail(idx, it->second.rgba.data(), it->second.width, it->second.height);
+            return;
+        }
         DecodedImage img = host.decoder.decodeFile(imgPath);
         if (!img.ok()) return;
         DecodedImage thumb = downscaleCover(img, 480);  // small: cheap to cache + reuse

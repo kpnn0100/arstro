@@ -649,10 +649,10 @@ namespace cosmo_v2
     {
         const bool fromProject = (mScreen == Screen::Editor);
         if (mConfirmDialog) mConfirmDialog->close();  // don't leave a modal lingering in the editor tree
-        refreshHome();  // rebuild the launcher now so it is ready to fade in during ReturnExit
 
         if (!fromProject)  // initial launch (or already transitioning): straight to home
         {
+            refreshHome();  // populate the launcher now
             mScreen = Screen::Home;
             mReturning = false;
             mHome->setWordmarkHidden(false);
@@ -664,7 +664,10 @@ namespace cosmo_v2
         // Return transition (reverse of the open, R-LOADING-6): editor fades out to
         // the dark star-sky, a brief beat, then the home fades in — in 3 parts. The
         // wordmark flies from the top-bar slot back to its big home position; the
-        // sidebar wordmark is hidden until it lands.
+        // sidebar wordmark is hidden until it lands. refreshHome() is DEFERRED to the
+        // ReturnLoad phase (see renderReturn) so the loading screen fades in
+        // immediately and the (thumbnail) work happens behind it — not as a freeze
+        // before the transition even starts.
         mScreen = Screen::Loading;   // non-interactive transition; renderTransition -> renderReturn
         mReturning = true;
         mPhase = Phase::ReturnEnter;
@@ -927,6 +930,8 @@ namespace cosmo_v2
         {
             mPhase = Phase::ReturnLoad;
             mPhaseT0 = nowMs;
+            refreshHome();  // "loading later": prepare the launcher (recents + cached thumbnails)
+                            // NOW, behind the fully-shown loading screen — not as a click-time freeze
         }
         if (mPhase == Phase::ReturnLoad && (nowMs - mPhaseT0) >= kReturnHoldMs)
         {
