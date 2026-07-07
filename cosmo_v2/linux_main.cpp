@@ -6,6 +6,7 @@
  *  font-family parameter (Artboard FR-22) resolves to them.
  */
 #include "App.h"
+#include "Log.h"
 #include "../cosmo/decode/NativeImageDecoder.h"
 #include "../Artboard/src/adapter/native/CairoTarget.h"
 #include <fontconfig/fontconfig.h>
@@ -68,6 +69,18 @@ namespace
         if (!FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)path.c_str()))
             g_printerr("cosmo_v2: could not register font %s\n", path.c_str());
     }
+
+    // Route every g_print/g_printerr through the file logger (chomping the
+    // trailing newline the format strings add), so all of the app's console
+    // diagnostics land in the log file too — no per-call-site changes needed.
+    std::string chomp(const char *s)
+    {
+        std::string t = s ? s : "";
+        while (!t.empty() && (t.back() == '\n' || t.back() == '\r')) t.pop_back();
+        return t;
+    }
+    void logPrintHandler(const gchar *s) { arstro::cosmo_v2::log::write(arstro::cosmo_v2::log::Level::Info, chomp(s)); }
+    void logPrinterrHandler(const gchar *s) { arstro::cosmo_v2::log::write(arstro::cosmo_v2::log::Level::Error, chomp(s)); }
 
     void registerBundledFonts()
     {
@@ -600,6 +613,15 @@ namespace
 
 int main(int argc, char **argv)
 {
+    // Logging first: capture startup, every g_print/g_printerr, and any fatal
+    // signal's backtrace to ~/.config/cosmo_v2/cosmo_v2.log.
+    arstro::cosmo_v2::log::init();
+    arstro::cosmo_v2::log::installCrashHandler();
+    g_set_print_handler(logPrintHandler);
+    g_set_printerr_handler(logPrinterrHandler);
+    LOGI("cosmo_v2 starting (%d args, log at %s)", argc - 1,
+         arstro::cosmo_v2::log::path().c_str());
+
     gtk_init(&argc, &argv);
     registerBundledFonts();
 
