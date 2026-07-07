@@ -354,12 +354,16 @@ namespace cosmo_v2
         t.beginPath(); t.moveTo(kSidebarW, 0); t.lineTo(kSidebarW, H); t.strokePath();
         t.beginPath(); t.moveTo(kSidebarW, kHeaderH); t.lineTo(W, kHeaderH); t.strokePath();
 
-        // ── sidebar: wordmark + tagline ──
-        t.setFill(palette::foreground());
-        t.drawText("cosmo", kPad, 96.0, 46.0, font::sansSemiBold(), -0.045 * 46.0);
-        const double wm = estimateTextWidth("cosmo", 46.0) - 0.045 * 46.0 * 5;
-        t.setFill(palette::primary());
-        t.drawText(".", kPad + wm + 2.0, 96.0, 46.0, font::sansSemiBold());
+        // ── sidebar: wordmark + tagline ── (wordmark suppressed while the App flies
+        //    its own copy back into place on return, so it reads as one element)
+        if (!mWordmarkHidden)
+        {
+            t.setFill(palette::foreground());
+            t.drawText("cosmo", kPad, 96.0, 46.0, font::sansSemiBold(), -0.045 * 46.0);
+            const double wm = estimateTextWidth("cosmo", 46.0) - 0.045 * 46.0 * 5;
+            t.setFill(palette::primary());
+            t.drawText(".", kPad + wm + 2.0, 96.0, 46.0, font::sansSemiBold());
+        }
         t.setFill(palette::mutedForeground());
         t.drawText("Develop, grade, and export", kPad, 118.0, 11.0, font::sans());
         t.drawText("your photography.", kPad, 133.0, 11.0, font::sans());

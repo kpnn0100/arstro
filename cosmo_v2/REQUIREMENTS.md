@@ -45,28 +45,38 @@ Applies to the two "open a project" paths — a recent-project card and Open Pro
 (`Screen::Loading`) drawn in `App::renderTransition`; the star-sky backdrop is `widgets/Starfield.h`.
 Honors `reducedMotion()` (the eases collapse; the load still streams in).
 
-- **R-LOADING-0 Animation first, loading later.** The intro animation always plays to completion
-  before the reveal begins, regardless of how fast the load finishes (`finishOpenTransition` only
-  flags completion; `renderTransition` starts the reveal once the intro is done AND the load is
-  complete). Combined with the background-thread decode, the transition never hitches on I/O.
+The transition is split into **three linked parts** so every movement flows into the next with no
+sudden jump, and the heavy work is isolated to the middle part:
 
-- **R-LOADING-1 Intro (home → loading).** On open, the home `cosmo.` wordmark flies to the
-  editor top-bar wordmark slot (46 px → 13 px, home position → top-left), the clicked project's
-  cover lifts off its card and moves to the centre of the window over a cleared (dark) backdrop,
-  and the project name grows in centred beneath it. Cover fly-from-card uses the clicked card's
-  screen rect (`HomeScreen::lastOpenCardRect`); Open-dialog opens (no source card) settle the
-  cover at centre.
-- **R-LOADING-2 Loading screen.** A near-black star-sky backdrop of small white particles that
-  each randomly fade in and out (twinkle). The project cover sits centred; a colour (accent)
-  progress bar is pinned near the bottom and fills 0→1 with the real decode progress
-  (`setLoadProgress`), eased so it never jumps backwards visually.
-- **R-LOADING-3 Reveal (loading → editor).** When the load completes (and the intro has played),
+- **R-LOADING-0 Part 1 — transition (pure animation, no I/O).** The intro plays with NOTHING
+  loading: the home `cosmo.` wordmark flies to the editor top-bar wordmark slot (46 px → 13 px, home
+  position → top-left, `App::drawWordmark`), the clicked project's cover lifts off its card and
+  moves to the centre over a cleared star-sky backdrop, the project name grows in, and the small
+  stars fade in. The decode does NOT start yet. Cover fly-from-card uses the clicked card's screen
+  rect (`HomeScreen::lastOpenCardRect`); Open-dialog opens (no source card) settle at centre.
+- **R-LOADING-1 Part 2 — loading (progress bar only).** When the intro finishes, `App` fires
+  `onLoadingReady` and ONLY THEN does the host start the background decode (so part 1 never hitches
+  on I/O). Everything is already placed; only the accent progress bar (which faded in at the part-1→
+  part-2 hand-off) advances, filling 0→1 with the real decode fraction (`setLoadProgress`), eased.
+  A short minimum keeps the bar from merely flashing on a fast load.
+- **R-LOADING-2 Loading-screen look.** A **gray** star-sky backdrop of **small** twinkling white
+  particles (`widgets/Starfield.h`). The project's **cover thumbnail** (already decoded for the home
+  card and cached by the host, so it needs no I/O in part 1) sits centred, with the project name
+  below and the progress bar near the bottom.
+- **R-LOADING-3 Part 3 — reveal (loading → editor).** When the load completes (and the intro has played),
   the centred cover expands into the editor photo's **exact fitted world rect**
   (`App::photoStageRect` from `ImageView::fittedRect` × `worldTransform`) and its content is swapped
   to the editor's rendered preview frame, so it lands **pixel-aligned in both rect and content**
   with the edit-page image ("expand and join the first preview") while the editor cross-fades in.
+  Throughout the reveal the wordmark is redrawn solid at the top-bar slot so it does **not** fade in
+  again with the editor (it is one continuous element from part 1 through the editor).
 - **R-LOADING-4 Non-interactive.** Input (pointer/keys/wheel) is swallowed during the transition
   so nothing behind the loading screen is touched.
+- **R-LOADING-5 Reverse (project → home).** Returning to the launcher (`showHome` from the editor)
+  plays the reverse: the wordmark flies from the top-bar slot back to its big home position
+  (`mReturn`, `App::drawWordmark`) while the home cross-fades in; the sidebar's own wordmark is
+  hidden (`HomeScreen::setWordmarkHidden`) until the flown copy lands, so it reads as one element.
+  Collapses instantly under `reducedMotion()`.
 
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 

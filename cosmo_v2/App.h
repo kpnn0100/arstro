@@ -64,6 +64,11 @@ namespace cosmo_v2
          *  the editor. */
         void finishOpenTransition();
         bool inOpenTransition() const { return mScreen == Screen::Loading; }
+        /** Fired once the intro animation completes (part 1 → part 2): the host starts
+         *  the actual decode ONLY now, so part 1 is pure animation (no I/O). */
+        std::function<void()> onLoadingReady;
+        /** True once a loading-screen cover image has been supplied. */
+        bool hasLoadingCover() const { return mCoverReady; }
         /** Host pushes a decoded cover for recent `recentIndex` (first image). */
         void setHomeThumbnail(int recentIndex, const uint8_t *rgba, int w, int h)
         { if (mHome) mHome->setThumbnail(recentIndex, rgba, w, h); }
@@ -155,6 +160,7 @@ namespace cosmo_v2
         void renderTransition(artboard::IRenderTarget &target, double nowMs);  // the open-project transition
         void beginReveal();                      // start the cover-expands-into-editor reveal
         artboard::Rect photoStageRect() const;  // editor photo image fitted world rect (Reveal target)
+        void drawWordmark(artboard::IRenderTarget &target, double p) const;  // p: 0=home(big) .. 1=top-bar(small)
 
         double mW, mH;
         double mNowMs = 0.0;
@@ -201,6 +207,11 @@ namespace cosmo_v2
         artboard::AnimatedProperty mReveal{0.0};     // 0..1 reveal (cover expands into the editor)
         artboard::AnimatedProperty mProgress{0.0};   // eased loading progress bar (0..1)
         artboard::AnimatedProperty mCoverFade{0.0};  // cover fade-in once it is ready
+        artboard::AnimatedProperty mBarFade{0.0};    // progress-bar fade-in on entering part 2
+        bool mLoadingStarted = false;                // onLoadingReady fired for this open
+        // return-to-home (reverse) wordmark fly
+        bool mReturning = false;
+        artboard::AnimatedProperty mReturn{0.0};     // 1=top-bar(small) .. 0=home(big)
     };
 }
 }

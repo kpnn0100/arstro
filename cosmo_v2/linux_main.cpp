@@ -13,10 +13,12 @@
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 #include <unistd.h>
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <ctime>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -78,7 +80,8 @@ namespace
         artboard::CairoTarget target;
         NativeImageDecoder decoder;
         gint64 startUs = 0;
-        std::unique_ptr<LoadJob> load;  // active incremental project load (nullptr when idle)
+        std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
+        std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -92,6 +95,34 @@ namespace
     bool endsWith(const std::string &s, const std::string &suf)
     {
         return s.size() >= suf.size() && s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
+    }
+
+    // Box-average downscale of a decoded cover to a small thumbnail (long edge <=
+    // maxEdge). Used for both the home cards and the loading-screen centre image, so
+    // covers cost little memory and the loading thumbnail is available with no I/O.
+    DecodedImage downscaleCover(const DecodedImage &src, int maxEdge)
+    {
+        if (!src.ok() || (src.width <= maxEdge && src.height <= maxEdge)) return src;
+        const double sc = (double)maxEdge / std::max(src.width, src.height);
+        const int nw = std::max(1, (int)(src.width * sc)), nh = std::max(1, (int)(src.height * sc));
+        DecodedImage out; out.width = nw; out.height = nh; out.rgba.resize((size_t)nw * nh * 4);
+        for (int y = 0; y < nh; ++y)
+            for (int x = 0; x < nw; ++x)
+            {
+                const int sx0 = (int)(x / sc), sx1 = std::min(src.width, (int)((x + 1) / sc) + 1);
+                const int sy0 = (int)(y / sc), sy1 = std::min(src.height, (int)((y + 1) / sc) + 1);
+                unsigned long r = 0, g = 0, b = 0, a = 0, n = 0;
+                for (int sy = sy0; sy < sy1; ++sy)
+                    for (int sx = sx0; sx < sx1; ++sx)
+                    {
+                        const uint8_t *p = &src.rgba[((size_t)sy * src.width + sx) * 4];
+                        r += p[0]; g += p[1]; b += p[2]; a += p[3]; ++n;
+                    }
+                uint8_t *o = &out.rgba[((size_t)y * nw + x) * 4];
+                if (n) { o[0] = (uint8_t)(r / n); o[1] = (uint8_t)(g / n); o[2] = (uint8_t)(b / n); o[3] = (uint8_t)(a / n); }
+                else { o[0] = o[1] = o[2] = 0; o[3] = 255; }
+            }
+        return out;
     }
 
     std::string exeDir()
@@ -486,7 +517,9 @@ namespace
             {
                 const int slot = a->app.openImageInto(parentNode, r.rgba.data(), r.w, r.h, r.name, r.imagePath);
                 a->app.applyParamsToSlot(slot, r.params);
-                if (!job->coverSent)  // first decoded image -> the loading-screen cover
+                // Fallback cover only if the thumbnail wasn't already supplied (#3):
+                // normally the loading-screen centre image is the cached thumbnail.
+                if (!job->coverSent && !a->app.hasLoadingCover())
                 {
                     a->app.setLoadingCover(r.rgba.data(), r.w, r.h);
                     job->coverSent = true;
@@ -526,14 +559,34 @@ namespace
         }
         a->app.beginOpenTransition(std::filesystem::path(path).stem().string());
         a->app.resetWorkspace();
+
+        // Loading-screen centre image = the project's already-decoded cover thumbnail
+        // (#3), so it is present in part 1 with no I/O. Falls back to the first full
+        // decode (pollLoad) if the thumbnail wasn't cached yet.
+        for (const auto &e : entries)
+            if (!e.group && !e.imagePath.empty())
+            {
+                auto it = a->thumbs.find(e.imagePath);
+                if (it != a->thumbs.end() && it->second.ok())
+                    a->app.setLoadingCover(it->second.rgba.data(), it->second.width, it->second.height);
+                break;
+            }
+
         a->load.reset();  // stop/join any prior load first
         a->load = std::make_unique<LoadJob>();
         LoadJob *job = a->load.get();
         job->entries = std::move(entries);
         job->path = path;
         a->app.setLoadProgress(0, (int)job->entries.size());
-        job->worker = std::thread(decodeWorker, job);
-        job->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
+
+        // Part 1 is pure animation: start the background decode + poll ONLY when the
+        // intro finishes (#4). App fires onLoadingReady at that point.
+        a->app.onLoadingReady = [a]() {
+            LoadJob *j = a->load.get();
+            if (!j || j->worker.joinable()) return;  // guard against a double-fire
+            j->worker = std::thread(decodeWorker, j);
+            j->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
+        };
     }
 
     void addCmpFilter(GtkWidget *d)
@@ -799,7 +852,10 @@ int main(int argc, char **argv)
     };
     host.app.onDecodeThumbnail = [&host](int idx, const std::string &imgPath) {
         DecodedImage img = host.decoder.decodeFile(imgPath);
-        if (img.ok()) host.app.setHomeThumbnail(idx, img.rgba.data(), img.width, img.height);
+        if (!img.ok()) return;
+        DecodedImage thumb = downscaleCover(img, 480);  // small: cheap to cache + reuse
+        host.app.setHomeThumbnail(idx, thumb.rgba.data(), thumb.width, thumb.height);
+        host.thumbs[imgPath] = std::move(thumb);        // reused as the loading-screen centre image (#3)
     };
 
     host.app.setPresetDir(exeDir() + "/presets");

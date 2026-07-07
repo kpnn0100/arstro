@@ -19,7 +19,9 @@ namespace cosmo_v2
         constexpr double kIntroMs = 460.0;    // wordmark fly + name grow + backdrop reveal
         constexpr double kRevealMs = 520.0;   // cover expands into the editor photo stage
         constexpr double kProgressMs = 200.0; // progress-bar ease toward the real fraction
-        const Color kLoadingBg{0x0A / 255.0, 0x0A / 255.0, 0x14 / 255.0, 1.0};  // star-sky near-black
+        constexpr double kReturnMs = 420.0;   // wordmark flies back to home on return
+        constexpr double kMinLoadingMs = 260.0;  // keep the progress bar visible at least this long
+        const Color kLoadingBg{0x2E / 255.0, 0x2E / 255.0, 0x33 / 255.0, 1.0};  // star-sky gray
 
         Rect lerpRect(const Rect &a, const Rect &b, double t)
         {
@@ -155,7 +157,7 @@ namespace cosmo_v2
         // twinkling star-sky backdrop for the loading screen.
         mCover = std::make_shared<ImageView>();
         mCover->setFit(ImageView::Fit::Contain);
-        mStars.init(150);
+        mStars.init(220);  // more, smaller specks
 
         layout();
     }
@@ -443,6 +445,13 @@ namespace cosmo_v2
         // scrim on top (cross-fades on screen switch — R-HOME-1 / R-G-1).
         if (mScreen == Screen::Home)
         {
+            // Return fly (reverse of the open intro): unhide the sidebar wordmark the
+            // instant the flown copy lands, BEFORE rendering, so there is no 1-frame gap.
+            if (mReturning)
+            {
+                mReturn.update(nowMs);
+                if (!mReturn.isAnimating()) { mReturning = false; mHome->setWordmarkHidden(false); }
+            }
             mHome->width.set(mW); mHome->height.set(mH);
             mHome->layout();
             mHome->advance(nowMs);
@@ -452,6 +461,7 @@ namespace cosmo_v2
             mHome->renderOverlay(target);
             const double a = mScreenFade.value();
             if (a > 0.001) drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
+            if (mReturning) drawWordmark(target, mReturn.value());  // flies top-bar -> home, over the scrim
             target.restore();
             return;
         }
@@ -642,11 +652,22 @@ namespace cosmo_v2
 
     void App::showHome()
     {
+        const bool fromProject = (mScreen == Screen::Editor || mScreen == Screen::Loading);
         if (mConfirmDialog) mConfirmDialog->close();  // don't leave a modal lingering in the editor tree
         mScreen = Screen::Home;
         refreshHome();
         mScreenFade.set(1.0);
         mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
+        // Returning from a project: fly the wordmark back from the top-bar slot to its
+        // big home position (reverse of the open intro); hide the sidebar wordmark
+        // until it lands so it reads as one continuous element (R-LOADING).
+        mReturning = fromProject;
+        mHome->setWordmarkHidden(fromProject);
+        if (fromProject)
+        {
+            mReturn.set(1.0);
+            mReturn.animateTo(0.0, kReturnMs, Easing::EaseOutCubic, mNowMs);
+        }
     }
 
     void App::showEditor()
@@ -692,10 +713,12 @@ namespace cosmo_v2
         mLoadDone = 0; mLoadTotal = 0;
         mCoverFrom = mOpenFromRect;              // consume the clicked-card rect (empty for Open-dialog)
         mOpenFromRect = Rect{0, 0, 0, 0};
+        mLoadingStarted = false;                 // part 1 is pure animation; decode starts at part 2
         mIntro.set(0.0);    mIntro.animateTo(1.0, kIntroMs, Easing::EaseOutCubic, mNowMs);
         mReveal.set(0.0);
         mProgress.set(0.0);
         mCoverFade.set(0.0);
+        mBarFade.set(0.0);
     }
 
     void App::setLoadingCover(const uint8_t *rgba, int w, int h)
@@ -739,13 +762,38 @@ namespace cosmo_v2
         mScreenFade.set(1.0);  mScreenFade.animateTo(0.0, kRevealMs, Easing::EaseOutCubic, mNowMs);  // editor fades in beneath
     }
 
+    void App::drawWordmark(IRenderTarget &target, double p) const
+    {
+        // p: 0 = home sidebar position (46 px) .. 1 = editor top-bar slot (13 px).
+        const double sz = 46.0 + (13.0 - 46.0) * p;
+        const double x = 32.0 + (9.75 /*TopBar left pad*/ - 32.0) * p;
+        const double base = 96.0 + (19.2 - 96.0) * p;
+        const double sp = -0.03 * sz;
+        target.setFill(palette::foreground());
+        target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
+        const double wmW = estimateTextWidth("cosmo", sz) + sp * 4.0;
+        target.setFill(palette::primary());
+        target.drawText(".", x + wmW + 2.0, base, sz, font::sansSemiBold());
+    }
+
     void App::renderTransition(IRenderTarget &target, double nowMs)
     {
-        mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs); mCoverFade.update(nowMs);
-        if (mPhase == Phase::Intro && !mIntro.isAnimating()) mPhase = Phase::Loading;
-        // Animation first, loading later: only reveal once the intro has fully played
-        // AND the (threaded, non-blocking) load is complete.
-        if (mPhase == Phase::Loading && mLoadComplete) beginReveal();
+        mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs);
+        mCoverFade.update(nowMs); mBarFade.update(nowMs);
+
+        // Part 1 (intro) -> Part 2 (loading): the intro is PURE ANIMATION; only now do
+        // we ask the host to start decoding, and begin fading the progress bar in.
+        if (mPhase == Phase::Intro && !mIntro.isAnimating())
+        {
+            mPhase = Phase::Loading;
+            mPhaseT0 = nowMs;
+            mBarFade.animateTo(1.0, 160.0, Easing::EaseOutCubic, nowMs);
+            if (!mLoadingStarted) { mLoadingStarted = true; if (onLoadingReady) onLoadingReady(); }
+        }
+        // Part 2 -> Part 3 (reveal): once the decode finished AND the bar has been
+        // visible long enough (so it never just flashes).
+        if (mPhase == Phase::Loading && mLoadComplete && (nowMs - mPhaseT0) >= kMinLoadingMs)
+            beginReveal();
         if (mPhase == Phase::Reveal && !mReveal.isAnimating())  // reveal done -> hand off to the editor
         {
             mScreen = Screen::Editor;
@@ -754,8 +802,7 @@ namespace cosmo_v2
             return;
         }
 
-        // The centred cover box (16:9), a touch above middle to leave room for the
-        // name + progress bar below.
+        // Centred cover box (16:9), a touch above middle for the name + bar below.
         const double bw = std::min(mW * 0.42, mH * 0.62);
         const double bh = bw * 9.0 / 16.0;
         const Rect box{(mW - bw) * 0.5, (mH - bh) * 0.5 - 26.0, bw, bh};
@@ -763,24 +810,19 @@ namespace cosmo_v2
         auto drawCover = [&](const Rect &r, double coverAlpha) {
             mCover->x.set(r.x); mCover->y.set(r.y); mCover->width.set(r.w); mCover->height.set(r.h);
             mCover->render(target);
-            if (coverAlpha < 0.999)  // fade the cover up out of the dark backdrop
+            if (coverAlpha < 0.999)  // fade the cover up out of the backdrop
             {
                 Color s = kLoadingBg; s.a = 1.0 - coverAlpha;
                 drawRoundedRect(target, r, radius::control(), Paint::filled(s));
             }
         };
 
-        target.save();
-        target.setTransform(Transform::identity());
-
+        // ── Part 3: reveal — the centre image animates to fit the edit section ──
         if (mPhase == Phase::Reveal)
         {
-            // Editor beneath (fading in via mScreenFade); render it first so its layout
-            // + acquired preview frame are current.
-            target.restore();
-            renderEditor(target, nowMs);
-            // Swap the cover to the editor's actual preview once available, so the
-            // expanding image matches the edit-page image in CONTENT as well as rect.
+            renderEditor(target, nowMs);  // editor beneath (fading in via mScreenFade)
+            // Swap the cover to the editor's actual preview once available, so it
+            // matches the edit-page image in CONTENT as well as rect.
             if (!mCoverIsAfter && mLastAfterFrame.width > 0)
             {
                 mCover->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
@@ -793,18 +835,20 @@ namespace cosmo_v2
             const Rect cr{box.x + (ps.x - box.x) * rv, box.y + (ps.y - box.y) * rv,
                           box.w + (ps.w - box.w) * rv, box.h + (ps.h - box.h) * rv};
             if (mCoverReady) drawCover(cr, 1.0);
+            drawWordmark(target, 1.0);  // solid at the top-bar slot — do NOT re-fade with the editor (fix #1)
             target.restore();
             return;
         }
 
-        // Intro / Loading: dark star-sky backdrop.
+        // ── Part 1 (intro) + Part 2 (loading): gray star-sky backdrop ──
         const double intro = mIntro.value();
+        target.save();
+        target.setTransform(Transform::identity());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
-        mStars.draw(target, Rect{0, 0, mW, mH}, intro, nowMs);  // particles fade in with the intro
+        mStars.draw(target, Rect{0, 0, mW, mH}, intro, nowMs);  // small specks fade in with the intro
 
-        // The cover flies from the clicked card's position (mCoverFrom) to the centre
-        // box as the intro lands; at intro==1 it rests at `box`. Open-dialog opens
-        // (no source card) just settle at `box`.
+        // The cover (thumbnail) flies from the clicked card to the centre in part 1;
+        // at intro==1 it rests at `box`. Open-dialog opens (no card) settle at `box`.
         const Rect cbox = (mCoverFrom.w > 0.0) ? lerpRect(mCoverFrom, box, intro) : box;
         if (mCoverReady) drawCover(cbox, mCoverFade.value());
         else
@@ -821,31 +865,23 @@ namespace cosmo_v2
             target.drawText(mLoadName, (mW - tw) * 0.5, box.y + box.h + 40.0, sz, font::sansSemiBold());
         }
 
-        // Flying wordmark: home position (big) -> top-bar slot (small), by intro.
-        {
-            const double sz = 46.0 + (13.0 - 46.0) * intro;
-            const double x = 32.0 + (9.75 /*TopBar left pad*/ - 32.0) * intro;
-            const double base = 96.0 + (19.2 - 96.0) * intro;
-            const double sp = -0.03 * sz;
-            target.setFill(palette::foreground());
-            target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
-            const double wmW = estimateTextWidth("cosmo", sz) + sp * 4.0;
-            target.setFill(palette::primary());
-            target.drawText(".", x + wmW + 2.0, base, sz, font::sansSemiBold());
-        }
+        drawWordmark(target, intro);  // flies home->top-bar in part 1; parked at 1 in part 2
 
-        // Progress bar pinned near the bottom, colour = accent, fades in after intro.
+        // Progress bar — appears in PART 2 only (mBarFade), accent colour.
         {
-            const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
-            const double bx = (mW - barW) * 0.5, by = mH - 84.0;
-            const double a = intro;
-            Color track = palette::whiteAlpha(0.12); track.a *= a;
-            drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
-            const double fillW = barW * mProgress.value();
-            if (fillW > 0.5)
+            const double a = mBarFade.value();
+            if (a > 0.001)
             {
-                Color fill = palette::primary(); fill.a *= a;
-                drawRoundedRect(target, Rect{bx, by, fillW, barH}, barH * 0.5, Paint::filled(fill));
+                const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
+                const double bx = (mW - barW) * 0.5, by = mH - 84.0;
+                Color track = palette::whiteAlpha(0.12); track.a *= a;
+                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
+                const double fillW = barW * mProgress.value();
+                if (fillW > 0.5)
+                {
+                    Color fill = palette::primary(); fill.a *= a;
+                    drawRoundedRect(target, Rect{bx, by, fillW, barH}, barH * 0.5, Paint::filled(fill));
+                }
             }
         }
 

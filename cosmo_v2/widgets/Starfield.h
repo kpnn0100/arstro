@@ -32,10 +32,10 @@ namespace cosmo_v2
                 Star st;
                 st.u = rnd();
                 st.v = rnd();
-                st.size = 0.7 + rnd() * 1.8;                 // px radius-ish
+                st.size = 0.35 + rnd() * 0.8;                // small px radius (fine star specks)
                 st.phase = rnd() * 6.2831853;                // twinkle offset
                 st.speed = 0.4 + rnd() * 1.1;                // twinkle rate
-                st.baseA = 0.25 + rnd() * 0.6;               // peak brightness
+                st.baseA = 0.25 + rnd() * 0.55;              // peak brightness
                 mStars.push_back(st);
             }
         }
