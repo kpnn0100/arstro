@@ -47,6 +47,11 @@ namespace arstro
         /** Free a slot's pixels (e.g. removed from the session); its index is never
          *  reused, so every other slot's id stays valid. */
         void releaseImage(int slot);
+        /** Drop every image and restart slot-id assignment from 0 — for a full
+         *  workspace reset (New/Open/Import). Without this the slot counter keeps
+         *  growing while the session's per-slot vectors are cleared, so the next
+         *  opened image gets an out-of-range id (the reset-then-open segfault). */
+        void reset();
         void setPreviewSize(int maxEdge);
         /** Request a preview render of (slot, params); coalesced to the latest request. */
         void render(int slot, const EditParams &params);
@@ -79,6 +84,7 @@ namespace arstro
 
         std::vector<AddCmd> mAddQueue;   // pending image adds (applied in order)
         std::vector<int> mReleaseQueue;  // pending image releases (applied in order)
+        bool mResetEngine = false;       // drop all engine slots before the next adds
         bool mPendingPreview = false;
         int mPendingSlot = -1;
         EditParams mPendingParams;

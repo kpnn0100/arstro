@@ -279,7 +279,7 @@ namespace cosmo
 
     // ---- develop params ----
 
-    EditParams *EditSession::curParams() { return mCurrentSlot >= 0 ? &mSlotParams[mCurrentSlot] : nullptr; }
+    EditParams *EditSession::curParams() { return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotParams.size()) ? &mSlotParams[mCurrentSlot] : nullptr; }
 
     EditParams EditSession::effectiveParams(int slot) const
     {
@@ -297,7 +297,7 @@ namespace cosmo
 
     void EditSession::applyParams(const EditParams &p)
     {
-        if (mCurrentSlot < 0) return;
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotParams.size()) return;
         mSlotParams[mCurrentSlot] = p;
         submit();
     }
@@ -489,7 +489,7 @@ namespace cosmo
 
     std::string EditSession::currentSourcePath() const
     {
-        return mCurrentSlot >= 0 ? mSlotPaths[mCurrentSlot] : std::string();
+        return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotPaths.size()) ? mSlotPaths[mCurrentSlot] : std::string();
     }
 
     bool EditSession::saveSessionAs(const std::string &path)
@@ -608,8 +608,12 @@ namespace cosmo
 
     void EditSession::resetWorkspace()
     {
-        for (int slot = 0; slot < (int)mSlotParams.size(); ++slot)
-            mService.releaseImage(slot);
+        // Drop every engine slot AND restart slot-id assignment from 0 (not just
+        // release-in-place): the per-slot vectors below are cleared, so if the
+        // service kept its monotonic counter the next opened image would get an
+        // id past the end of these vectors -> out-of-bounds deref (the segfault
+        // on New/Open/Import Catalog after a project is already open).
+        mService.reset();
         mSlotParams.clear(); mSlotHistory.clear(); mSlotNames.clear();
         mSlotPaths.clear(); mSlotSessions.clear(); mSlotThumbs.clear();
         mNodes.clear();

@@ -84,6 +84,14 @@ namespace arstro
         if (mCurrent == slot) mCurrent = -1;
     }
 
+    void EditEngine::clearImages()
+    {
+        mSlots.clear();
+        mCurrent = -1;
+        mProxySlot = -1;
+        mPreviewProxy = Image{};
+    }
+
     const EditParams &EditEngine::currentParams() const
     {
         static const EditParams kEmpty;

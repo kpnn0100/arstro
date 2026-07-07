@@ -70,6 +70,10 @@ namespace arstro
         /** Free a slot's source pixels in place (its index stays valid but unusable) --
          *  for "remove from session" without shifting every other slot's index. */
         void releaseImage(int slot);
+        /** Drop every slot and reset selection — for a full workspace reset, after
+         *  which the next addImage() starts from slot 0 again (restores the
+         *  "slot id == index" invariant the front end relies on). */
+        void clearImages();
         int imageCount() const { return (int)mSlots.size(); }
         int currentSlot() const { return mCurrent; }
         bool hasImage() const { return mCurrent >= 0; }

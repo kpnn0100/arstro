@@ -39,6 +39,21 @@ namespace arstro
         mCv.notify_all();
     }
 
+    void RenderService::reset()
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        // Discard queued work for the workspace being torn down and restart id
+        // assignment; the worker drops all engine slots before applying new adds
+        // (so the next addImage() → slot 0 matches the freshly-cleared vectors).
+        mAddQueue.clear();
+        mReleaseQueue.clear();
+        mResetEngine = true;
+        mNextSlot = 0;
+        mFrameReady = false;
+        mPendingPreview = false;
+        mCv.notify_all();
+    }
+
     void RenderService::setPreviewSize(int maxEdge)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -103,16 +118,17 @@ namespace arstro
         {
             std::vector<AddCmd> adds;
             std::vector<int> releases;
-            bool doPrev = false, doFull = false, fullPreviewOnly = false;
+            bool doPrev = false, doFull = false, fullPreviewOnly = false, doReset = false;
             int slot = -1, fullSlot = -1, maxEdge = 1600;
             EditParams params, fullParams;
             {
                 std::unique_lock<std::mutex> lk(mMu);
                 mCv.wait(lk, [this] {
-                    return mStop || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull;
+                    return mStop || mResetEngine || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull;
                 });
                 if (mStop)
                     return;
+                doReset = mResetEngine; mResetEngine = false;
                 adds.swap(mAddQueue);
                 releases.swap(mReleaseQueue);
                 maxEdge = mPreviewMaxEdge;
@@ -120,6 +136,8 @@ namespace arstro
                 if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; mPendingPreview = false; }
             }
 
+            if (doReset)  // full workspace reset: drop all slots so the next add is slot 0
+                mEngine.clearImages();
             for (auto &a : adds)  // apply queued image adds, in order
                 mEngine.addImage(a.bytes.data(), a.w, a.h, a.ch);
             for (int s : releases)  // apply queued image releases, in order
@@ -179,6 +197,12 @@ namespace arstro
         return slot;
     }
     void RenderService::releaseImage(int slot) { mEngine.releaseImage(slot); }
+    void RenderService::reset()
+    {
+        mEngine.clearImages();
+        mNextSlot = 0;
+        mFrameReady = false;
+    }
     void RenderService::setPreviewSize(int maxEdge)
     {
         mPreviewMaxEdge = maxEdge < 1 ? 1 : maxEdge;

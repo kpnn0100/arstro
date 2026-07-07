@@ -146,7 +146,7 @@ namespace cosmo
         std::string currentSourcePath() const;
         bool saveSessionAs(const std::string &path);
         static bool readSessionFile(const std::string &path, std::string &imagePath, EditParams &params);
-        std::string sessionPath() const { return mCurrentSlot >= 0 ? mSlotSessions[mCurrentSlot] : std::string(); }
+        std::string sessionPath() const { return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotSessions.size()) ? mSlotSessions[mCurrentSlot] : std::string(); }
 
         // ---- workspace (every open image + group tree + settings, .cosmoproj) ----
         struct WorkspaceEntry
