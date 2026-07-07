@@ -59,17 +59,18 @@ sudden jump, and the heavy work is isolated to the middle part:
   on I/O). Everything is already placed; only the accent progress bar (which faded in at the part-1→
   part-2 hand-off) advances, filling 0→1 with the real decode fraction (`setLoadProgress`), eased.
   A short minimum keeps the bar from merely flashing on a fast load.
-- **R-LOADING-2 Loading-screen look.** A **gray** star-sky backdrop of **small** twinkling white
-  particles (`widgets/Starfield.h`). The project's **cover thumbnail** (already decoded for the home
-  card and cached by the host, so it needs no I/O in part 1) sits centred, with the project name
-  below and the progress bar near the bottom.
-- **R-LOADING-3 Part 3 — reveal (loading → editor).** When the load completes (and the intro has played),
-  the centred cover expands into the editor photo's **exact fitted world rect**
-  (`App::photoStageRect` from `ImageView::fittedRect` × `worldTransform`) and its content is swapped
-  to the editor's rendered preview frame, so it lands **pixel-aligned in both rect and content**
-  with the edit-page image ("expand and join the first preview") while the editor cross-fades in.
-  Throughout the reveal the wordmark is redrawn solid at the top-bar slot so it does **not** fade in
-  again with the editor (it is one continuous element from part 1 through the editor).
+- **R-LOADING-2 Loading-screen look.** A **near-black** star-sky backdrop (same colour as the
+  home/editor background so nothing flashes at the hand-off) of **small** twinkling white particles
+  (`widgets/Starfield.h`). The project's **cover thumbnail** (already decoded for the home card and
+  cached by the host, so it needs no I/O in part 1) sits centred and **fades in** when it becomes
+  available (never pops), with the project name below and the progress bar near the bottom.
+- **R-LOADING-3 Part 3 — reveal (loading → editor).** When the load completes (and the intro has
+  played), the editor components **materialise on top of the matching dark backdrop** (fade in),
+  while the loading elements — the centred cover, stars, name and progress bar — **fade out in
+  place** (no move/expand). The wordmark **cross-fades**: the loading copy fades out AS the editor's
+  top-bar wordmark fades in, in the same slot at the same time, so it never doubles and never
+  re-fades from nothing (`drawWordmark` with an alpha; the reveal drives the editor fade itself so
+  `renderEditor` adds no scrim).
 - **R-LOADING-4 Non-interactive.** Input (pointer/keys/wheel) is swallowed during the transition
   so nothing behind the loading screen is touched.
 - **R-LOADING-5 Reverse (project → home).** Returning to the launcher (`showHome` from the editor)

@@ -21,7 +21,7 @@ namespace cosmo_v2
         constexpr double kProgressMs = 200.0; // progress-bar ease toward the real fraction
         constexpr double kReturnMs = 420.0;   // wordmark flies back to home on return
         constexpr double kMinLoadingMs = 260.0;  // keep the progress bar visible at least this long
-        const Color kLoadingBg{0x2E / 255.0, 0x2E / 255.0, 0x33 / 255.0, 1.0};  // star-sky gray
+        const Color kLoadingBg{0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, 1.0};  // near-black, matches the editor/home bg
 
         Rect lerpRect(const Rect &a, const Rect &b, double t)
         {
@@ -685,20 +685,6 @@ namespace cosmo_v2
     }
 
     // ── open-project transition (R-LOADING) ─────────────────────────────────────
-    Rect App::photoStageRect() const
-    {
-        // The EXACT rect the editor draws the photo into (aspect-fit within the photo
-        // canvas, in world space) so the expanding cover lands pixel-aligned with the
-        // edit-page image. Requires layout() + the photo image to be set (both true
-        // once renderEditor has run for the reveal frame).
-        auto iv = mCenterStage->photo()->imageView();
-        const Rect fr = iv->fittedRect();
-        const Transform w = iv->worldTransform();
-        const Point tl = w.apply(Point{fr.x, fr.y});
-        const Point br = w.apply(Point{fr.x + fr.w, fr.y + fr.h});
-        return Rect{tl.x, tl.y, br.x - tl.x, br.y - tl.y};
-    }
-
     void App::beginOpenTransition(const std::string &projectName)
     {
         if (mConfirmDialog) mConfirmDialog->close();
@@ -707,7 +693,6 @@ namespace cosmo_v2
         mPhase = Phase::Intro;
         mPhaseT0 = mNowMs;
         mCoverReady = false;
-        mCoverIsAfter = false;
         mLoadComplete = false;
         mCover->clearImage();
         mLoadDone = 0; mLoadTotal = 0;
@@ -758,21 +743,24 @@ namespace cosmo_v2
     {
         mPhase = Phase::Reveal;
         mPhaseT0 = mNowMs;
-        mReveal.set(0.0);      mReveal.animateTo(1.0, kRevealMs, Easing::EaseOutCubic, mNowMs);
-        mScreenFade.set(1.0);  mScreenFade.animateTo(0.0, kRevealMs, Easing::EaseOutCubic, mNowMs);  // editor fades in beneath
+        mReveal.set(0.0);  mReveal.animateTo(1.0, kRevealMs, Easing::EaseOutCubic, mNowMs);
+        mScreenFade.set(0.0);  // the reveal drives the editor fade-in itself (no renderEditor scrim)
     }
 
-    void App::drawWordmark(IRenderTarget &target, double p) const
+    void App::drawWordmark(IRenderTarget &target, double p, double alpha) const
     {
         // p: 0 = home sidebar position (46 px) .. 1 = editor top-bar slot (13 px).
+        if (alpha <= 0.001) return;
         const double sz = 46.0 + (13.0 - 46.0) * p;
         const double x = 32.0 + (9.75 /*TopBar left pad*/ - 32.0) * p;
         const double base = 96.0 + (19.2 - 96.0) * p;
         const double sp = -0.03 * sz;
-        target.setFill(palette::foreground());
+        Color fg = palette::foreground(); fg.a *= alpha;
+        Color dot = palette::primary(); dot.a *= alpha;
+        target.setFill(fg);
         target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
         const double wmW = estimateTextWidth("cosmo", sz) + sp * 4.0;
-        target.setFill(palette::primary());
+        target.setFill(dot);
         target.drawText(".", x + wmW + 2.0, base, sz, font::sansSemiBold());
     }
 
@@ -817,25 +805,60 @@ namespace cosmo_v2
             }
         };
 
-        // ── Part 3: reveal — the centre image animates to fit the edit section ──
+        // ── Part 3: reveal — the editor materializes over the (matching) dark
+        //    backdrop while the loading elements dissolve in place (no move). ──
         if (mPhase == Phase::Reveal)
         {
-            renderEditor(target, nowMs);  // editor beneath (fading in via mScreenFade)
-            // Swap the cover to the editor's actual preview once available, so it
-            // matches the edit-page image in CONTENT as well as rect.
-            if (!mCoverIsAfter && mLastAfterFrame.width > 0)
-            {
-                mCover->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
-                mCoverIsAfter = true;
-            }
+            const double reveal = mReveal.value();
+            const double fadeOut = std::clamp(reveal / 0.45, 0.0, 1.0);        // loading elements dissolve first
+            const double fadeIn = std::clamp((reveal - 0.40) / 0.60, 0.0, 1.0); // editor materialises after
+
+            // Continuous dark backdrop (matches the editor bg, #1) so nothing flashes.
             target.save();
             target.setTransform(Transform::identity());
-            const double rv = mReveal.value();
-            const Rect ps = photoStageRect();  // exact fitted world rect -> pixel-aligned landing
-            const Rect cr{box.x + (ps.x - box.x) * rv, box.y + (ps.y - box.y) * rv,
-                          box.w + (ps.w - box.w) * rv, box.h + (ps.h - box.h) * rv};
-            if (mCoverReady) drawCover(cr, 1.0);
-            drawWordmark(target, 1.0);  // solid at the top-bar slot — do NOT re-fade with the editor (fix #1)
+            drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
+            target.restore();
+
+            // Editor components fade IN on top of the backdrop (#3).
+            if (fadeIn > 0.001)
+            {
+                renderEditor(target, nowMs);  // mScreenFade==0 -> no internal scrim
+                if (fadeIn < 0.999)
+                {
+                    target.save();
+                    target.setTransform(Transform::identity());
+                    Color s = kLoadingBg; s.a = 1.0 - fadeIn;
+                    drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
+                    target.restore();
+                }
+            }
+
+            // Loading elements fade OUT in place on top — no move (#5). While they
+            // fade the editor is still mostly scrimmed, so they dissolve over dark.
+            target.save();
+            target.setTransform(Transform::identity());
+            if (fadeOut < 0.999)
+            {
+                mStars.draw(target, Rect{0, 0, mW, mH}, 1.0 - fadeOut, nowMs);
+                if (mCoverReady) drawCover(box, 1.0 - fadeOut);
+                if (!mLoadName.empty())
+                {
+                    const double sz = 23.0;
+                    const double tw = estimateTextWidth(mLoadName, sz);
+                    Color nameCol = palette::foreground(); nameCol.a *= (1.0 - fadeOut);
+                    target.setFill(nameCol);
+                    target.drawText(mLoadName, (mW - tw) * 0.5, box.y + box.h + 40.0, sz, font::sansSemiBold());
+                }
+                const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
+                const double bx = (mW - barW) * 0.5, by = mH - 84.0, bo = 1.0 - fadeOut;
+                Color track = palette::whiteAlpha(0.12); track.a *= bo;
+                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
+                Color fill = palette::primary(); fill.a *= bo;
+                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(fill));
+            }
+            // Wordmark cross-fade (#2): the loading wordmark fades out AS the editor's
+            // fades in (via the scrim) — same slot, same time, so it never doubles.
+            drawWordmark(target, 1.0, 1.0 - fadeIn);
             target.restore();
             return;
         }

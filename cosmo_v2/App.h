@@ -158,9 +158,8 @@ namespace cosmo_v2
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
         void renderEditor(artboard::IRenderTarget &target, double nowMs);      // the editor screen body
         void renderTransition(artboard::IRenderTarget &target, double nowMs);  // the open-project transition
-        void beginReveal();                      // start the cover-expands-into-editor reveal
-        artboard::Rect photoStageRect() const;  // editor photo image fitted world rect (Reveal target)
-        void drawWordmark(artboard::IRenderTarget &target, double p) const;  // p: 0=home(big) .. 1=top-bar(small)
+        void beginReveal();                      // start the reveal (editor fades in, loading dissolves)
+        void drawWordmark(artboard::IRenderTarget &target, double p, double alpha = 1.0) const;  // p: 0=home(big) .. 1=top-bar(small)
 
         double mW, mH;
         double mNowMs = 0.0;
@@ -198,7 +197,6 @@ namespace cosmo_v2
         Starfield mStars;                    // twinkling loading backdrop
         std::shared_ptr<artboard::ImageView> mCover;  // project cover (centre -> photo stage)
         bool mCoverReady = false;
-        bool mCoverIsAfter = false;  // cover swapped to the editor's rendered preview (reveal)
         bool mLoadComplete = false;  // host signalled the decode finished (reveal gate)
         int mLoadDone = 0, mLoadTotal = 0;
         artboard::Rect mOpenFromRect{0, 0, 0, 0};  // pending: clicked-card rect (set by onOpenRecent)
