@@ -307,6 +307,7 @@ case "$TARGET" in
         while IFS= read -r -d '' f; do v2_src+=("$f"); done \
           < <(find "$ROOT/cosmo_v2" -name '*.cpp' -print0)
         v2_src+=("$ROOT/cosmo_core/EditSession.cpp" "$ROOT/cosmo_core/PresetLibrary.cpp" \
+                 "$ROOT/cosmo_core/ProjectStore.cpp" \
                  "$ROOT/cosmo/History.cpp" "$ROOT/cosmo/decode/NativeImageDecoder.cpp")
         # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
         # matches; COSMO_V2_SOURCE_DIR lets the binary find assets/fonts by path.
