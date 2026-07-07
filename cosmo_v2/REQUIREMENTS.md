@@ -72,12 +72,18 @@ sudden jump, and the heavy work is isolated to the middle part:
   re-fades from nothing (`drawWordmark` with an alpha; the reveal drives the editor fade itself so
   `renderEditor` adds no scrim).
 - **R-LOADING-4 Non-interactive.** Input (pointer/keys/wheel) is swallowed during the transition
-  so nothing behind the loading screen is touched.
-- **R-LOADING-5 Reverse (project → home).** Returning to the launcher (`showHome` from the editor)
-  plays the reverse: the wordmark flies from the top-bar slot back to its big home position
-  (`mReturn`, `App::drawWordmark`) while the home cross-fades in; the sidebar's own wordmark is
-  hidden (`HomeScreen::setWordmarkHidden`) until the flown copy lands, so it reads as one element.
-  Collapses instantly under `reducedMotion()`.
+  (open AND return) so nothing behind the loading screen is touched.
+- **R-LOADING-5/6 Reverse (project → home), also in 3 parts.** Returning to the launcher (`showHome`
+  from the editor → `App::renderReturn`) mirrors the open, through the same dark star-sky:
+  - **ReturnEnter** — the editor fades OUT to the star-sky (a dark, matching-bg + stars overlay
+    fades IN over the still-rendered editor).
+  - **ReturnLoad** — a brief full star-sky beat.
+  - **ReturnExit** — the home screen fades IN from the star-sky (home rendered, the dark+stars
+    overlay fades OUT on top).
+  Across all three the wordmark flies from the top-bar slot back to its big home position
+  (`mReturn`, `App::drawWordmark`), landing as the exit begins; the sidebar's own wordmark is hidden
+  (`HomeScreen::setWordmarkHidden`) until it lands, so it reads as one element. Collapses instantly
+  under `reducedMotion()`.
 
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 

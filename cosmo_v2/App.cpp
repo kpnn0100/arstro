@@ -19,7 +19,10 @@ namespace cosmo_v2
         constexpr double kIntroMs = 460.0;    // wordmark fly + name grow + backdrop reveal
         constexpr double kRevealMs = 520.0;   // cover expands into the editor photo stage
         constexpr double kProgressMs = 200.0; // progress-bar ease toward the real fraction
-        constexpr double kReturnMs = 420.0;   // wordmark flies back to home on return
+        constexpr double kReturnMs = 480.0;    // wordmark flies back to home (over enter+hold)
+        constexpr double kEnterMs = 300.0;     // return part 1: editor fades to the star-sky
+        constexpr double kReturnHoldMs = 200.0; // return part 2: star-sky beat
+        constexpr double kExitMs = 320.0;      // return part 3: home fades in from the star-sky
         constexpr double kMinLoadingMs = 260.0;  // keep the progress bar visible at least this long
         const Color kLoadingBg{0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, 1.0};  // near-black, matches the editor/home bg
 
@@ -445,13 +448,6 @@ namespace cosmo_v2
         // scrim on top (cross-fades on screen switch — R-HOME-1 / R-G-1).
         if (mScreen == Screen::Home)
         {
-            // Return fly (reverse of the open intro): unhide the sidebar wordmark the
-            // instant the flown copy lands, BEFORE rendering, so there is no 1-frame gap.
-            if (mReturning)
-            {
-                mReturn.update(nowMs);
-                if (!mReturn.isAnimating()) { mReturning = false; mHome->setWordmarkHidden(false); }
-            }
             mHome->width.set(mW); mHome->height.set(mH);
             mHome->layout();
             mHome->advance(nowMs);
@@ -461,7 +457,6 @@ namespace cosmo_v2
             mHome->renderOverlay(target);
             const double a = mScreenFade.value();
             if (a > 0.001) drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
-            if (mReturning) drawWordmark(target, mReturn.value());  // flies top-bar -> home, over the scrim
             target.restore();
             return;
         }
@@ -652,22 +647,32 @@ namespace cosmo_v2
 
     void App::showHome()
     {
-        const bool fromProject = (mScreen == Screen::Editor || mScreen == Screen::Loading);
+        const bool fromProject = (mScreen == Screen::Editor);
         if (mConfirmDialog) mConfirmDialog->close();  // don't leave a modal lingering in the editor tree
-        mScreen = Screen::Home;
-        refreshHome();
-        mScreenFade.set(1.0);
-        mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
-        // Returning from a project: fly the wordmark back from the top-bar slot to its
-        // big home position (reverse of the open intro); hide the sidebar wordmark
-        // until it lands so it reads as one continuous element (R-LOADING).
-        mReturning = fromProject;
-        mHome->setWordmarkHidden(fromProject);
-        if (fromProject)
+        refreshHome();  // rebuild the launcher now so it is ready to fade in during ReturnExit
+
+        if (!fromProject)  // initial launch (or already transitioning): straight to home
         {
-            mReturn.set(1.0);
-            mReturn.animateTo(0.0, kReturnMs, Easing::EaseOutCubic, mNowMs);
+            mScreen = Screen::Home;
+            mReturning = false;
+            mHome->setWordmarkHidden(false);
+            mScreenFade.set(1.0);
+            mScreenFade.animateTo(0.0, 220.0, Easing::EaseOutCubic, mNowMs);
+            return;
         }
+
+        // Return transition (reverse of the open, R-LOADING-6): editor fades out to
+        // the dark star-sky, a brief beat, then the home fades in — in 3 parts. The
+        // wordmark flies from the top-bar slot back to its big home position; the
+        // sidebar wordmark is hidden until it lands.
+        mScreen = Screen::Loading;   // non-interactive transition; renderTransition -> renderReturn
+        mReturning = true;
+        mPhase = Phase::ReturnEnter;
+        mPhaseT0 = mNowMs;
+        mHome->setWordmarkHidden(true);
+        mEnterFade.set(0.0);  mEnterFade.animateTo(1.0, kEnterMs, Easing::EaseOutCubic, mNowMs);
+        mExitFade.set(0.0);
+        mReturn.set(1.0);     mReturn.animateTo(0.0, kReturnMs, Easing::EaseOutCubic, mNowMs);  // lands as exit begins
     }
 
     void App::showEditor()
@@ -766,6 +771,8 @@ namespace cosmo_v2
 
     void App::renderTransition(IRenderTarget &target, double nowMs)
     {
+        if (mReturning) { renderReturn(target, nowMs); return; }  // editor→home reverse
+
         mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs);
         mCoverFade.update(nowMs); mBarFade.update(nowMs);
 
@@ -908,6 +915,73 @@ namespace cosmo_v2
             }
         }
 
+        target.restore();
+    }
+
+    void App::renderReturn(IRenderTarget &target, double nowMs)
+    {
+        mEnterFade.update(nowMs); mExitFade.update(nowMs); mReturn.update(nowMs);
+
+        // Advance the return phases.
+        if (mPhase == Phase::ReturnEnter && !mEnterFade.isAnimating())
+        {
+            mPhase = Phase::ReturnLoad;
+            mPhaseT0 = nowMs;
+        }
+        if (mPhase == Phase::ReturnLoad && (nowMs - mPhaseT0) >= kReturnHoldMs)
+        {
+            mPhase = Phase::ReturnExit;
+            mExitFade.set(0.0);
+            mExitFade.animateTo(1.0, kExitMs, Easing::EaseOutCubic, nowMs);
+        }
+        if (mPhase == Phase::ReturnExit && !mExitFade.isAnimating())  // done -> land on home
+        {
+            mScreen = Screen::Home;
+            mReturning = false;
+            mPhase = Phase::None;
+            mHome->setWordmarkHidden(false);  // the flown copy has landed; hand off to the sidebar
+            mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); mHome->advance(nowMs);
+            target.save(); target.setTransform(Transform::identity());
+            mHome->render(target); mHome->renderOverlay(target);
+            target.restore();
+            return;
+        }
+
+        const double p = mReturn.value();  // 1=top-bar .. 0=home
+        target.save();
+        target.setTransform(Transform::identity());
+
+        if (mPhase == Phase::ReturnExit)
+        {
+            // Home fades IN from the star-sky: render it, then a dark+stars overlay
+            // fading OUT on top.
+            const double out = 1.0 - mExitFade.value();
+            mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); mHome->advance(nowMs);
+            mHome->render(target); mHome->renderOverlay(target);
+            Color s = kLoadingBg; s.a = out;
+            drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
+            mStars.draw(target, Rect{0, 0, mW, mH}, out, nowMs);
+        }
+        else if (mPhase == Phase::ReturnEnter)
+        {
+            // Editor fades OUT to the star-sky: render it, then a dark+stars overlay
+            // fading IN on top (bg matches the editor bg, so no colour flash).
+            const double in = mEnterFade.value();
+            target.restore();
+            renderEditor(target, nowMs);
+            target.save();
+            target.setTransform(Transform::identity());
+            Color s = kLoadingBg; s.a = in;
+            drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
+            mStars.draw(target, Rect{0, 0, mW, mH}, in, nowMs);
+        }
+        else  // ReturnLoad: full star-sky beat
+        {
+            drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
+            mStars.draw(target, Rect{0, 0, mW, mH}, 1.0, nowMs);
+        }
+
+        drawWordmark(target, p);  // flies top-bar -> home across the whole return
         target.restore();
     }
 

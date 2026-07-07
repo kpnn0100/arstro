@@ -158,6 +158,7 @@ namespace cosmo_v2
         void openEditContext(double x, double y, int cell);  // right-click menu (cell<0 = photo area)
         void renderEditor(artboard::IRenderTarget &target, double nowMs);      // the editor screen body
         void renderTransition(artboard::IRenderTarget &target, double nowMs);  // the open-project transition
+        void renderReturn(artboard::IRenderTarget &target, double nowMs);      // the editor→home (reverse) transition
         void beginReveal();                      // start the reveal (editor fades in, loading dissolves)
         void drawWordmark(artboard::IRenderTarget &target, double p, double alpha = 1.0) const;  // p: 0=home(big) .. 1=top-bar(small)
 
@@ -190,7 +191,8 @@ namespace cosmo_v2
         std::vector<cosmo::RecentEntry> mRecents;         // backing the home grid (open-by-index)
 
         // ── open-project transition (R-LOADING) ──
-        enum class Phase { None, Intro, Loading, Reveal };
+        // Open:   Intro → Loading → Reveal.   Return: ReturnEnter → ReturnLoad → ReturnExit.
+        enum class Phase { None, Intro, Loading, Reveal, ReturnEnter, ReturnLoad, ReturnExit };
         Phase mPhase = Phase::None;
         double mPhaseT0 = 0.0;               // start time of the current phase
         std::string mLoadName;               // project name shown centred
@@ -207,9 +209,12 @@ namespace cosmo_v2
         artboard::AnimatedProperty mCoverFade{0.0};  // cover fade-in once it is ready
         artboard::AnimatedProperty mBarFade{0.0};    // progress-bar fade-in on entering part 2
         bool mLoadingStarted = false;                // onLoadingReady fired for this open
-        // return-to-home (reverse) wordmark fly
+        // return-to-home (reverse) transition: editor fades to the star-sky, then the
+        // home fades in; the wordmark flies from the top-bar slot back to its home spot.
         bool mReturning = false;
         artboard::AnimatedProperty mReturn{0.0};     // 1=top-bar(small) .. 0=home(big)
+        artboard::AnimatedProperty mEnterFade{0.0};  // ReturnEnter: editor -> star-sky (0..1)
+        artboard::AnimatedProperty mExitFade{0.0};   // ReturnExit: star-sky -> home (0..1)
     };
 }
 }
