@@ -61,18 +61,27 @@ namespace cosmo_v2
         double cellX(int i) const;
         double cellW(int i) const { return mCells[i].group ? kFolderW : kPhotoW; }
         int cellAt(double localX) const;
+        void positionThumbs();  // re-place visible thumbnails at the current scroll
 
         std::vector<std::shared_ptr<artboard::ImageView>> mThumbs;  // indexed by slot
         std::vector<Cell> mCells;
         std::vector<int> mSel;
         int mPrimary = -1;
-        double mScrollX = 0.0;
+        // Horizontal scroll eases toward mScrollTarget (R-G-1) rather than jumping
+        // per wheel notch; cellX() reads the animated value so cells glide.
+        artboard::AnimatedProperty mScrollX{0.0};
+        double mScrollTarget = 0.0;
+        double mScrollLastTarget = 0.0;
         // The primary-selection ring slides to the newly-selected cell (mRingPos =
         // a fractional cell index, converted to x/width in onPaint so it also
         // follows the cell during scroll).
         artboard::AnimatedProperty mRingPos;
         int mRingTarget = -1;
         bool mRingInit = false;
+        // Hovered cell (hoverWash overlay), tracked from Move; -1 = none.
+        int mHoverCell = -1;
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};
     };
 }
 }

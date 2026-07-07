@@ -68,11 +68,17 @@ namespace cosmo_v2
             artboard::Rect rect{0, 0, 0, 0};  // full card rect (grid space), set in layout
         };
 
+        // One identifier scheme for every hover-able region (sidebar actions, bottom
+        // links, recent cards, the trailing New-Project card) -- see regionAt().
+        enum class Region { None, Action, Link, Card, NewCard };
+
         artboard::Rect actionRect(int i) const;    // 0=New 1=Open 2=Import (sidebar)
         artboard::Rect bottomLinkRect(int i) const; // 0=Settings 1=What's New 2=Help
         artboard::Rect searchRect() const;
         double gridTop() const;
         double contentX() const;
+        double scrollY() const { return mScrollYAnim.value(); }  // eased (drawn) scroll, not the target
+        void regionAt(const artboard::Point &local, Region &kind, int &index) const;
         void relayoutGrid();
         void applyFilter();
         int visibleCount() const;
@@ -82,9 +88,17 @@ namespace cosmo_v2
         std::vector<std::shared_ptr<artboard::ImageView>> mThumbPool; // reused across setRecents (no removeChild)
         std::vector<Card> mCards;              // recents (the New card is drawn, not stored here)
         std::string mLastSearch;
-        double mScrollY = 0.0;
+        double mScrollY = 0.0;                 // TARGET scroll; eased into place by mScrollYAnim
         double mContentH = 0.0;                // total grid height (for scroll clamp)
         artboard::Rect mNewCardRect{0, 0, 0, 0};
+
+        // hover + eased scroll (R-G-1: everything animates, nothing snaps)
+        Region mHoverKind = Region::None;           // which region the pointer is over
+        int mHoverIndex = -1;                       // index within that region kind
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover-feedback fade
+        double mScrollIssued = 0.0;                 // last scroll target handed to the tween
+        artboard::AnimatedProperty mScrollYAnim{0.0};  // eased grid scroll
     };
 }
 }

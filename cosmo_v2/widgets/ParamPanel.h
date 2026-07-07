@@ -47,12 +47,15 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        void advance(double nowMs) override;  // eases the scroll toward its target (R-G-1)
 
     private:
         std::vector<Section> mSections;
         std::vector<std::shared_ptr<SliderRow>> mFlatRows;
         std::vector<double> mSectionHeaderY;  // cached per-section header y, from the last layout()
-        double mScroll = 0.0;
+        // Scroll eases toward mScrollTarget rather than jumping per wheel notch.
+        artboard::AnimatedProperty mScroll{0.0};
+        double mScrollTarget = 0.0, mScrollLastTarget = 0.0;
         double mContentHeight = 0.0;
     };
 }

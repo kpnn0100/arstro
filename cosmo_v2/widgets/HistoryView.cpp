@@ -21,6 +21,10 @@ namespace cosmo_v2
         constexpr double kMargin = 14.0;
         constexpr double kBtn = 22.0;
         constexpr double kCardRadius = 6.0;
+        // Pan glide durations (R-G-1): drag follows the cursor tightly, wheel/jump glide.
+        constexpr double kDragGlideMs = 70.0;
+        constexpr double kScrollGlideMs = 170.0;
+        constexpr double kJumpGlideMs = 260.0;
         double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
     }
 
@@ -30,7 +34,11 @@ namespace cosmo_v2
         mCurrent = current;
         mPanX = mPanY = 0.0;
         relayout();
-        scrollToCurrent();
+        scrollToCurrent();               // sets the pan TARGET on the current node
+        // Open already centred on the current node — the mAppear fade covers the intro,
+        // so the pan itself doesn't visibly jump; later jumps/scrolls glide instead.
+        mPanXAnim.set(mPanX); mPanYAnim.set(mPanY);
+        mPanIssuedX = mPanX; mPanIssuedY = mPanY;
         mOpen = true;
         raise();
     }
@@ -38,20 +46,27 @@ namespace cosmo_v2
     void HistoryView::setCurrent(int current)
     {
         mCurrent = current;
+        mPanDurMs = kJumpGlideMs;  // glide the tree to re-centre on the new current node
         scrollToCurrent();
     }
 
     void HistoryView::scrollBy(double wheelDelta)
     {
+        mPanDurMs = kScrollGlideMs;
         mPanY -= wheelDelta * kRowH;
         clampPan();
     }
+
+    double HistoryView::appearRise() const { return (1.0 - mAppear.value()) * 12.0; }  // rises into place
+    double HistoryView::panX() const { return mPanXAnim.value(); }                     // eased/drawn pan
+    double HistoryView::panY() const { return mPanYAnim.value(); }
 
     Rect HistoryView::cardRect() const
     {
         const double w = clampd(width.value() - 100.0, 360.0, 640.0);
         const double h = clampd(height.value() - 140.0, 300.0, 560.0);
-        return Rect{(width.value() - w) * 0.5, (height.value() - h) * 0.5, w, h};
+        // +appearRise() keeps hit-testing aligned with the drawn card during the fade.
+        return Rect{(width.value() - w) * 0.5, (height.value() - h) * 0.5 + appearRise(), w, h};
     }
 
     Rect HistoryView::treeRect() const
@@ -102,8 +117,19 @@ namespace cosmo_v2
     Point HistoryView::nodeCenter(int i) const
     {
         const Rect tr = treeRect();
-        return Point{tr.x + kPadX + mLane[i] * kLaneW - mPanX,
-                     tr.y + kPadY + mRow[i] * kRowH - mPanY};
+        return Point{tr.x + kPadX + mLane[i] * kLaneW - panX(),
+                     tr.y + kPadY + mRow[i] * kRowH - panY()};
+    }
+
+    int HistoryView::nodeAt(const Point &local) const
+    {
+        if (!treeRect().contains(local)) return -1;
+        for (int i = 0; i < (int)mNodes.size(); ++i)
+        {
+            const Point c = nodeCenter(i);
+            if (std::hypot(local.x - c.x, local.y - c.y) <= kNodeR + 5.0) return i;
+        }
+        return -1;
     }
 
     void HistoryView::clampPan()
@@ -124,13 +150,55 @@ namespace cosmo_v2
         clampPan();
     }
 
+    void HistoryView::advance(double nowMs)
+    {
+        Segment::advance(nowMs);
+
+        if (!isHovered()) { mHoverNode = -1; mCloseHover = false; }  // pointer left the modal
+
+        if (mOpen != mWasOpen)  // ease the card in on open, out on close (like ContextMenu)
+        {
+            mWasOpen = mOpen;
+            mAppear.animateTo(mOpen ? 1.0 : 0.0, mOpen ? 150.0 : 110.0, Easing::EaseOutCubic, nowMs);
+        }
+        const bool nodeHov = mOpen && mHoverNode >= 0;  // hovered-node wash fade
+        if (nodeHov != mNodeHoverPrev)
+        {
+            mNodeHoverPrev = nodeHov;
+            mHoverAmt.animateTo(nodeHov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        const bool closeHov = mOpen && mCloseHover;  // close-X lift fade
+        if (closeHov != mCloseHoverPrev)
+        {
+            mCloseHoverPrev = closeHov;
+            mCloseAmt.animateTo(closeHov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+
+        // Glide the pan toward its target (drag/wheel/jump each set mPanX/mPanY + mPanDurMs).
+        if (mPanX != mPanIssuedX) { mPanXAnim.animateTo(mPanX, mPanDurMs, Easing::EaseOutCubic, nowMs); mPanIssuedX = mPanX; }
+        if (mPanY != mPanIssuedY) { mPanYAnim.animateTo(mPanY, mPanDurMs, Easing::EaseOutCubic, nowMs); mPanIssuedY = mPanY; }
+
+        mAppear.update(nowMs);
+        mHoverAmt.update(nowMs);
+        mCloseAmt.update(nowMs);
+        mPanXAnim.update(nowMs);
+        mPanYAnim.update(nowMs);
+    }
+
     bool HistoryView::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen) return false;
         using T = Gesture::Type;
+        if (g.type == T::Move)  // track the hovered node / close button (fades in advance)
+        {
+            mCloseHover = closeBtnRect().contains(local);
+            mHoverNode = mCloseHover ? -1 : nodeAt(local);
+            return true;
+        }
         if (g.type == T::DragStart || g.type == T::Drag)
         {
             if (g.type == T::DragStart) mDragLast = g.start;
+            mPanDurMs = kDragGlideMs;  // tight follow while the pointer drags
             mPanX -= (g.pos.x - mDragLast.x);
             mPanY -= (g.pos.y - mDragLast.y);
             mDragLast = g.pos;
@@ -142,38 +210,36 @@ namespace cosmo_v2
         const Point p = local;
         if (closeBtnRect().contains(p)) { mOpen = false; return true; }
         if (!cardRect().contains(p)) { mOpen = false; return true; }  // click outside cancels
-        if (treeRect().contains(p))
-        {
-            for (int i = 0; i < (int)mNodes.size(); ++i)
-            {
-                const Point c = nodeCenter(i);
-                if (std::hypot(p.x - c.x, p.y - c.y) <= kNodeR + 5.0)
-                {
-                    if (onSelect) onSelect(i);
-                    return true;
-                }
-            }
-        }
+        const int i = nodeAt(p);
+        if (i >= 0) { if (onSelect) onSelect(i); }
         return true;
     }
 
     void HistoryView::onOverlay(IRenderTarget &t) const
     {
-        if (!mOpen) return;
-        drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(Color{0, 0, 0, 0.5}));
+        const double appear = mAppear.value();
+        if (!mOpen && appear <= 0.001) return;  // fully closed
+        auto fa = [&](Color c) { c.a *= appear; return c; };  // fade every drawn colour by mAppear (R-G-1)
 
-        const Rect c = cardRect();
-        drawRoundedRect(t, c, kCardRadius, Paint::filledStroked(palette::popover(), palette::border(), 1.0));
+        drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(Color{0, 0, 0, 0.5 * appear}));
+
+        const Rect c = cardRect();  // already carries the appear y-rise
+        drawRoundedRect(t, c, kCardRadius, Paint::filledStroked(fa(palette::popover()), fa(palette::border()), 1.0));
 
         // header: title + hint + close button
-        t.setFill(palette::foreground());
+        t.setFill(fa(palette::foreground()));
         t.drawText("HISTORY", c.x + kMargin, c.y + 24.0, 12.0, font::sansSemiBold(), 0.12 * 12.0);
-        t.setFill(palette::mutedForeground());
+        t.setFill(fa(palette::mutedForeground()));
         t.drawText("click a node to jump  .  Ctrl+Z undo  .  Ctrl+Y redo", c.x + kMargin, c.y + 40.0, 10.0, font::sans());
 
-        const Rect close = closeBtnRect();
-        drawRoundedRect(t, close, radius::control(), Paint::filledStroked(palette::secondary(), palette::border(), 1.0));
-        t.setStroke(palette::mutedForeground(), 1.5);
+        // close X: brightens + lifts on hover (mCloseAmt), eased so it never pops (R-G-1)
+        const double ch = mCloseAmt.value();
+        Rect close = closeBtnRect();
+        close.y -= 1.5 * ch;  // subtle hover lift
+        const Color closeFill = brighten(palette::secondary(), 0.18 * ch);
+        const Color closeBorder = lerpColor(palette::border(), palette::primary(), 0.6 * ch);
+        drawRoundedRect(t, close, radius::control(), Paint::filledStroked(fa(closeFill), fa(closeBorder), 1.0));
+        t.setStroke(fa(lerpColor(palette::mutedForeground(), palette::foreground(), ch)), 1.5);
         t.beginPath();
         t.moveTo(close.x + 6, close.y + 6); t.lineTo(close.x + kBtn - 6, close.y + kBtn - 6);
         t.moveTo(close.x + kBtn - 6, close.y + 6); t.lineTo(close.x + 6, close.y + kBtn - 6);
@@ -183,8 +249,21 @@ namespace cosmo_v2
         t.save();
         t.clipRect(tr.x, tr.y, tr.w, tr.h);
 
+        // hovered-node wash (behind the row), faded by mHoverAmt
+        if (mHoverNode >= 0 && mHoverNode < (int)mNodes.size())
+        {
+            const double hv = mHoverAmt.value() * appear;
+            if (hv > 0.001)
+            {
+                const Point hc = nodeCenter(mHoverNode);
+                if (hc.y >= tr.y - kRowH && hc.y <= tr.y + tr.h + kRowH)
+                    drawRoundedRect(t, Rect{tr.x + 2.0, hc.y - kRowH * 0.5 + 3.0, tr.w - 4.0, kRowH - 6.0},
+                                    radius::control(), Paint::filled(palette::hoverWash(hv)));
+            }
+        }
+
         // edges first (parent -> child)
-        t.setStroke(palette::border(), 1.5);
+        t.setStroke(fa(palette::border()), 1.5);
         for (int i = 0; i < (int)mNodes.size(); ++i)
         {
             const int par = mNodes[i].parent;
@@ -205,32 +284,32 @@ namespace cosmo_v2
             if (cn.y < tr.y - kRowH || cn.y > tr.y + tr.h + kRowH) continue;
             const bool cur = (i == mCurrent);
             drawCircle(t, cn.x, cn.y, kNodeR,
-                       cur ? Paint::filled(accent)
-                           : Paint::filledStroked(palette::secondary(), palette::border(), 1.5));
-            if (cur) drawCircle(t, cn.x, cn.y, kNodeR + 3.0, Paint::stroked(accent, 1.5));
-            t.setFill(cur ? palette::foreground() : palette::mutedForeground());
-            const double lx = tr.x + kPadX + mMaxLane * kLaneW + 18.0 - mPanX;
+                       cur ? Paint::filled(fa(accent))
+                           : Paint::filledStroked(fa(palette::secondary()), fa(palette::border()), 1.5));
+            if (cur) drawCircle(t, cn.x, cn.y, kNodeR + 3.0, Paint::stroked(fa(accent), 1.5));
+            t.setFill(fa(cur ? palette::foreground() : palette::mutedForeground()));
+            const double lx = tr.x + kPadX + mMaxLane * kLaneW + 18.0 - panX();
             t.drawText(mNodes[i].label, lx, cn.y + 4.0, 12.0, font::sans());
         }
         t.restore();
 
-        // scrollbars (outside the clip)
+        // scrollbars (outside the clip) — track the eased pan
         const double contentH = kPadY * 2 + mMaxRow * kRowH;
         const double contentW = kPadX * 2 + mMaxLane * kLaneW + kLabelSpace;
         const double maxY = std::max(0.0, contentH - tr.h), maxX = std::max(0.0, contentW - tr.w);
         if (maxY > 0.5)
         {
             const double thumbH = std::max(28.0, tr.h * tr.h / contentH);
-            const double ty = tr.y + (mPanY / maxY) * (tr.h - thumbH);
-            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, tr.y, 4.0, tr.h}, 2.0, Paint::filled(palette::whiteAlpha(0.06)));
-            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, ty, 4.0, thumbH}, 2.0, Paint::filled(palette::whiteAlpha(0.22)));
+            const double ty = tr.y + (panY() / maxY) * (tr.h - thumbH);
+            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, tr.y, 4.0, tr.h}, 2.0, Paint::filled(fa(palette::whiteAlpha(0.06))));
+            drawRoundedRect(t, Rect{tr.x + tr.w - 5.0, ty, 4.0, thumbH}, 2.0, Paint::filled(fa(palette::whiteAlpha(0.22))));
         }
         if (maxX > 0.5)
         {
             const double thumbW = std::max(28.0, tr.w * tr.w / contentW);
-            const double tx = tr.x + (mPanX / maxX) * (tr.w - thumbW);
-            drawRoundedRect(t, Rect{tr.x, tr.y + tr.h - 5.0, tr.w, 4.0}, 2.0, Paint::filled(palette::whiteAlpha(0.06)));
-            drawRoundedRect(t, Rect{tx, tr.y + tr.h - 5.0, thumbW, 4.0}, 2.0, Paint::filled(palette::whiteAlpha(0.22)));
+            const double tx = tr.x + (panX() / maxX) * (tr.w - thumbW);
+            drawRoundedRect(t, Rect{tr.x, tr.y + tr.h - 5.0, tr.w, 4.0}, 2.0, Paint::filled(fa(palette::whiteAlpha(0.06))));
+            drawRoundedRect(t, Rect{tx, tr.y + tr.h - 5.0, thumbW, 4.0}, 2.0, Paint::filled(fa(palette::whiteAlpha(0.22))));
         }
     }
 }

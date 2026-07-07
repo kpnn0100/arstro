@@ -39,6 +39,9 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        // Cross-fade scrim for the page swap; drawn on top of the (already rendered)
+        // incoming page so it can fade in rather than hard-pop.
+        void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
@@ -48,6 +51,16 @@ namespace cosmo_v2
         int mSelected = 0;
         artboard::AnimatedProperty mIndX, mIndW;  // sliding accent-bar position + width
         bool mInit = false, mPending = false;
+
+        // Tab hover (self-drawn multi-region): mHoverIndex is the tab under the
+        // pointer (-1 = none / active tab), set from Move; mHoverAmt eases the
+        // highlight in/out (R-G-1).
+        int mHoverIndex = -1;
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};
+        // Page-swap cross-fade: 1 = incoming page fully shown, 0 = fully covered by
+        // the card scrim at the instant of the switch (see onOverlay).
+        artboard::AnimatedProperty mFade{1.0};
     };
 }
 }

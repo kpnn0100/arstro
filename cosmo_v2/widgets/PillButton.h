@@ -28,6 +28,9 @@ namespace cosmo_v2
         artboard::BoxStyle idleBox, activeBox;
         artboard::TextStyle idleText, activeText;
         double cornerRadius = 2.0;  // used only if idleBox/activeBox paint has no fill/stroke set
+        /** Colour the border/tint eases toward on hover (see interaction::hoverBox).
+         *  Defaults to white; outline chips set it to the accent for an accent-tinted hover. */
+        artboard::Color hoverEmphasis{1.0, 1.0, 1.0, 1.0};
 
         std::function<void()> onClick;
 

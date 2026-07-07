@@ -25,7 +25,17 @@ namespace cosmo_v2
     {
         double x = kPadX;
         for (int k = 0; k < i; ++k) x += cellW(k) + kGap;
-        return x - mScrollX;
+        return x - mScrollX.value();
+    }
+
+    void Filmstrip::positionThumbs()
+    {
+        for (int i = 0; i < (int)mCells.size(); ++i)
+        {
+            const Cell &c = mCells[i];
+            if (c.group || c.thumbSlot < 0 || c.thumbSlot >= (int)mThumbs.size()) continue;
+            mThumbs[c.thumbSlot]->x.set(cellX(i));
+        }
     }
 
     int Filmstrip::cellAt(double localX) const
@@ -41,6 +51,10 @@ namespace cosmo_v2
     void Filmstrip::setCells(std::vector<Cell> cells)
     {
         mCells = std::move(cells);
+        // New content (e.g. drilled into a group) starts at scroll 0 — a fresh view,
+        // not an animated move of the same list.
+        mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
+        mHoverCell = -1;
         for (auto &iv : mThumbs) iv->visible = false;
         for (int i = 0; i < (int)mCells.size(); ++i)
         {
@@ -73,6 +87,22 @@ namespace cosmo_v2
             }
             mRingPos.update(nowMs);
         }
+        // Ease the horizontal scroll toward its target (set by scrollBy) and keep the
+        // thumbnails positioned at the animated offset every frame (R-G-1).
+        if (mScrollTarget != mScrollLastTarget)
+        {
+            mScrollX.animateTo(mScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
+            mScrollLastTarget = mScrollTarget;
+        }
+        mScrollX.update(nowMs);
+        positionThumbs();
+
+        // Hover fade for the cell under the pointer.
+        if (!isHovered()) mHoverCell = -1;
+        const bool hov = mHoverCell >= 0;
+        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        mHoverAmt.update(nowMs);
+
         Segment::advance(nowMs);
     }
 
@@ -81,19 +111,14 @@ namespace cosmo_v2
         double contentW = kPadX;
         for (int i = 0; i < (int)mCells.size(); ++i) contentW += cellW(i) + kGap;
         const double maxScroll = std::max(0.0, contentW - width.value());
-        mScrollX = std::min(maxScroll, std::max(0.0, mScrollX - delta));
-        // Re-run setCells' positioning with the new scroll offset.
-        for (int i = 0; i < (int)mCells.size(); ++i)
-        {
-            const Cell &c = mCells[i];
-            if (c.group || c.thumbSlot < 0 || c.thumbSlot >= (int)mThumbs.size()) continue;
-            mThumbs[c.thumbSlot]->x.set(cellX(i));
-        }
+        // Just move the TARGET; advance() eases mScrollX toward it and repositions thumbs.
+        mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
     }
 
     bool Filmstrip::handleGesture(const Gesture &g, const Point &local)
     {
         const int cell = cellAt(local.x);
+        if (g.type == Gesture::Type::Move) { mHoverCell = cell; return true; }  // track hovered cell
         // Right-click ALWAYS opens the context menu -- even on empty strip space
         // (cell == -1), so "add photo to this group" is reachable anywhere in the
         // browse section, not only on a thumbnail.
@@ -163,6 +188,14 @@ namespace cosmo_v2
         t.clipRect(0, 0, w, kHeight);
         const Color pr = palette::primary();
         const double ry = (kHeight - kCellH) * 0.5;
+
+        // Hover wash on the cell under the pointer (not the primary — it has its ring).
+        const double hv = mHoverAmt.value();
+        if (mHoverCell >= 0 && mHoverCell < (int)mCells.size() && mHoverCell != mPrimary && hv > 0.001)
+        {
+            const double hx = cellX(mHoverCell), hw = cellW(mHoverCell);
+            drawRoundedRect(t, Rect{hx, ry, hw, kCellH}, radius::control(), Paint::filled(palette::hoverWash(hv)));
+        }
 
         for (int i = 0; i < (int)mCells.size(); ++i)
         {

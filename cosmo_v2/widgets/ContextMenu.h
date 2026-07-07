@@ -26,6 +26,8 @@ namespace cosmo_v2
         void close() { mOpen = false; }
         bool isOpen() const { return mOpen; }
 
+        void advance(double nowMs) override;  // drives the open/close + hover fades
+
     protected:
         void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
@@ -38,6 +40,12 @@ namespace cosmo_v2
         std::vector<Item> mItems;
         double mX = 0, mY = 0;
         bool mOpen = false;
+        int mHoverIndex = -1;                       // item under the pointer (-1 = none)
+        double mNowMs = 0.0;
+        bool mWasOpen = false;
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mAppear{0.0};    // open/close fade+rise (R-G-1)
+        artboard::AnimatedProperty mHoverAmt{0.0};  // item-highlight fade
     };
 }
 }

@@ -29,16 +29,34 @@ namespace cosmo_v2
         return spans;
     }
 
-    bool Breadcrumb::handleGesture(const Gesture &g, const Point &local)
+    int Breadcrumb::crumbAt(const Point &local) const
     {
-        if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
         const auto spans = computeSpans();
         for (size_t i = 0; i + 1 < spans.size(); ++i)  // last crumb is inert
             if (local.x >= spans[i].x && local.x <= spans[i].x + spans[i].w)
-            {
-                if (onCrumbClick) onCrumbClick((int)i);
-                return true;
-            }
+                return (int)i;
+        return -1;
+    }
+
+    void Breadcrumb::advance(double nowMs)
+    {
+        Segment::advance(nowMs);
+        if (!isHovered()) mHoverIndex = -1;  // pointer left the strip
+        const bool hov = mHoverIndex >= 0;
+        if (hov != mHoverPrev)
+        {
+            mHoverPrev = hov;
+            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        mHoverAmt.update(nowMs);
+    }
+
+    bool Breadcrumb::handleGesture(const Gesture &g, const Point &local)
+    {
+        if (g.type == Gesture::Type::Move) { mHoverIndex = crumbAt(local); return true; }
+        if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
+        const int i = crumbAt(local);
+        if (i >= 0) { if (onCrumbClick) onCrumbClick(i); }
         return true;
     }
 
@@ -54,8 +72,12 @@ namespace cosmo_v2
         for (size_t i = 0; i < mCrumbs.size(); ++i)
         {
             const bool last = (i + 1 == mCrumbs.size());
-            t.setFill(last ? Color{palette::foreground().r, palette::foreground().g, palette::foreground().b, 0.8}
-                           : palette::mutedForeground());
+            // A hovered (clickable) crumb lifts from muted toward foreground, eased.
+            const double hv = ((int)i == mHoverIndex && !last) ? mHoverAmt.value() : 0.0;
+            const Color crumbColor =
+                last ? Color{palette::foreground().r, palette::foreground().g, palette::foreground().b, 0.8}
+                     : lerpColor(palette::mutedForeground(), palette::foreground(), hv);
+            t.setFill(crumbColor);
             t.drawText(mCrumbs[i], spans[i].x, baseline, kFontPx, font::sans());
             if (!last)
             {

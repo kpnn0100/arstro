@@ -42,7 +42,19 @@ namespace cosmo_v2
         mLastMs = nowMs;
         mAppear.update(nowMs);
         if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; }
+        if (!isOpen()) mHoverBtn = -1;
+        const bool hov = mHoverBtn >= 0;
+        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        mHoverAmt.update(nowMs);
         Segment::advance(nowMs);
+    }
+
+    int ConfirmDialog::buttonAt(const Point &local) const
+    {
+        std::vector<Rect> rects; buttonRects(rects);
+        for (size_t i = 0; i < rects.size() && i < mButtons.size(); ++i)
+            if (rects[i].contains(local)) return (int)i;
+        return -1;
     }
 
     Rect ConfirmDialog::cardRect() const
@@ -73,6 +85,7 @@ namespace cosmo_v2
     bool ConfirmDialog::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen || mClosing) return false;
+        if (g.type == Gesture::Type::Move) { mHoverBtn = buttonAt(local); return true; }
         if (g.type != Gesture::Type::Click) return true;
 
         if (!cardRect().contains(local)) { beginClose(); return true; }  // outside = cancel
@@ -115,6 +128,10 @@ namespace cosmo_v2
                 drawRoundedRect(t, r, radius::control(), Paint::filled(fade(fill, a)));
             else
                 drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
+            // Hover: an eased white wash on the button under the pointer (fades with the dialog).
+            const double hv = ((int)i == mHoverBtn) ? mHoverAmt.value() * a : 0.0;
+            if (hv > 0.001)
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Color fg = (b.destructive || b.primary) ? palette::primaryForeground() : palette::foreground();
             t.setFill(fade(fg, a));
             const double tw = estimateTextWidth(b.label, kFontPx);

@@ -9,6 +9,8 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
+    namespace { constexpr double kScrollMs = 180.0; constexpr double kSelMs = 140.0; }
+
     PresetTree::PresetTree() { clipToBounds = true; }
 
     void PresetTree::setRoots(std::vector<cosmo::PresetNode> roots)
@@ -36,11 +38,16 @@ namespace cosmo_v2
             }
         };
         walk(mRoots, 0);
+
+        // A collapse can shrink the content below the current target — re-clamp so
+        // the scroll never eases into empty space past the end.
+        const double maxScroll = std::max(0.0, (double)mRows.size() * kRowH - height.value());
+        if (mScrollTarget > maxScroll) { mScrollTarget = maxScroll; mScrollDirty = true; }
     }
 
     int PresetTree::rowIndexAt(double localY) const
     {
-        const int idx = (int)((localY + mScroll) / kRowH);
+        const int idx = (int)((localY + mScroll.value()) / kRowH);
         return (idx >= 0 && idx < (int)mRows.size()) ? idx : -1;
     }
 
@@ -49,11 +56,43 @@ namespace cosmo_v2
         const double contentH = (double)mRows.size() * kRowH;
         const double viewH = height.value();
         const double maxScroll = std::max(0.0, contentH - viewH);
-        mScroll = std::min(maxScroll, std::max(0.0, mScroll - delta));
+        // Move the TARGET; advance() eases mScroll toward it so wheel scrolls glide
+        // instead of jumping (R-G-1). Accumulating on the target lets fast repeats stack.
+        mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
+        mScrollDirty = true;
+    }
+
+    void PresetTree::advance(double nowMs)
+    {
+        if (mScrollDirty) { mScroll.animateTo(mScrollTarget, kScrollMs, Easing::EaseOutCubic, nowMs); mScrollDirty = false; }
+        mScroll.update(nowMs);
+
+        // Row hover: drop it when this widget no longer owns hover, ease in/out.
+        if (!isHovered()) mHoverIndex = -1;
+        const bool hov = mHoverIndex >= 0;
+        if (hov != mHoverPrev)
+        {
+            mHoverPrev = hov;
+            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        mHoverAmt.update(nowMs);
+
+        // Fade the selection fill in when the selected preset changes.
+        if (mSelected != mSelPrev)
+        {
+            mSelPrev = mSelected;
+            mSelAmt.set(0.0);
+            mSelAmt.animateTo(1.0, kSelMs, Easing::EaseOutCubic, nowMs);
+        }
+        mSelAmt.update(nowMs);
+
+        Segment::advance(nowMs);
     }
 
     bool PresetTree::handleGesture(const Gesture &g, const Point &local)
     {
+        if (g.type == Gesture::Type::Move) { mHoverIndex = rowIndexAt(local.y); return true; }  // track hovered row
+
         const int row = rowIndexAt(local.y);
         if (row < 0) return Segment::handleGesture(g, local);
         const Row &r = mRows[row];
@@ -89,16 +128,22 @@ namespace cosmo_v2
     void PresetTree::onPaint(IRenderTarget &t) const
     {
         const double w = width.value();
+        const double scroll = mScroll.value();
+        const double hv = mHoverAmt.value();
+        const double sel = mSelAmt.value();
         for (size_t i = 0; i < mRows.size(); ++i)
         {
             const Row &r = mRows[i];
-            const double y = (double)i * kRowH - mScroll;
+            const double y = (double)i * kRowH - scroll;
             if (y + kRowH < 0 || y > height.value()) continue;  // cheap offscreen skip
+
+            if ((int)i == mHoverIndex && hv > 0.001)  // eased hover wash behind the row (R-G-1)
+                drawRoundedRect(t, Rect{0, y, w, kRowH}, 0.0, Paint::filled(palette::whiteAlpha(0.06 * hv)));
 
             const bool selected = !r.folder && r.relPath == mSelected;
             if (selected)
                 drawRoundedRect(t, Rect{0, y, w, kRowH}, 0.0,
-                                Paint::filled(Color{palette::primary().r, palette::primary().g, palette::primary().b, 0.10}));
+                                Paint::filled(Color{palette::primary().r, palette::primary().g, palette::primary().b, 0.10 * sel}));
 
             const double indent = indentFor(r.depth);
             const double chevronCx = indent + 9.75 * 0.5;

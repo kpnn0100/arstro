@@ -88,14 +88,26 @@ namespace cosmo_v2
     void GradePanel::scrollBy(double delta)
     {
         const double maxScroll = std::max(0.0, mContentHeight - height.value());
-        mScroll = std::min(maxScroll, std::max(0.0, mScroll - delta));
-        layout();
+        mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
+    }
+
+    void GradePanel::advance(double nowMs)
+    {
+        if (mScrollTarget != mScrollLastTarget)
+        {
+            mScroll.animateTo(mScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
+            mScrollLastTarget = mScrollTarget;
+        }
+        const bool moving = mScroll.isAnimating();
+        mScroll.update(nowMs);
+        if (moving) layout();
+        Segment::advance(nowMs);
     }
 
     void GradePanel::layout()
     {
         const double w = width.value(), innerW = std::max(0.0, w - 2 * kPadX);
-        double y = -mScroll + kPickerMT;
+        double y = -mScroll.value() + kPickerMT;
         mRegionPicker->x.set(kPadX); mRegionPicker->y.set(y); mRegionPicker->width.set(innerW); mRegionPicker->layout();
         y += kPickerH + kPickerMB;
 
@@ -121,7 +133,7 @@ namespace cosmo_v2
             row->x.set(kPadX); row->y.set(y); row->width.set(innerW); row->layout();
             y += SliderRow::kRowHeight;
         }
-        mContentHeight = y + mScroll + 13.0;
+        mContentHeight = y + mScroll.value() + 13.0;
     }
 
     void GradePanel::onPaint(IRenderTarget &t) const

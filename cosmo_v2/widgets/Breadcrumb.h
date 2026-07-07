@@ -27,6 +27,8 @@ namespace cosmo_v2
         void setPath(std::vector<std::string> crumbs);
         std::function<void(int)> onCrumbClick;  // index into the crumbs passed to setPath (never the last)
 
+        void advance(double nowMs) override;  // drives the crumb-hover fade
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
@@ -35,8 +37,12 @@ namespace cosmo_v2
     private:
         struct Span { double x = 0, w = 0; };
         std::vector<Span> computeSpans() const;
+        int crumbAt(const artboard::Point &local) const;  // hovered/clicked crumb (-1, never the last)
 
         std::vector<std::string> mCrumbs;
+        int mHoverIndex = -1;                       // crumb under the pointer
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover-lift fade (R-G-1)
     };
 }
 }

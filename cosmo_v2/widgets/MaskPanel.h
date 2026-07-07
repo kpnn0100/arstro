@@ -43,6 +43,7 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        void advance(double nowMs) override;  // eases the scroll toward its target (R-G-1)
 
     private:
         static constexpr double kPadX = 9.75;
@@ -59,7 +60,8 @@ namespace cosmo_v2
         std::vector<MaskParams> mMasks;
         int mSelected = -1;
         LocalAdjust mEditing;   // working copy of the selected mask's adjust
-        double mScroll = 0.0;
+        artboard::AnimatedProperty mScroll{0.0};
+        double mScrollTarget = 0.0, mScrollLastTarget = 0.0;
         double mContentHeight = 0.0;
 
         // Cached header y's for onPaint: [0]="Add Mask", [1]="Tone", [2]="Colour",

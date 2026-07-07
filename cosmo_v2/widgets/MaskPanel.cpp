@@ -133,14 +133,26 @@ namespace cosmo_v2
     void MaskPanel::scrollBy(double delta)
     {
         const double maxScroll = std::max(0.0, mContentHeight - height.value());
-        mScroll = std::min(maxScroll, std::max(0.0, mScroll - delta));
-        layout();
+        mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
+    }
+
+    void MaskPanel::advance(double nowMs)
+    {
+        if (mScrollTarget != mScrollLastTarget)
+        {
+            mScroll.animateTo(mScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
+            mScrollLastTarget = mScrollTarget;
+        }
+        const bool moving = mScroll.isAnimating();
+        mScroll.update(nowMs);
+        if (moving) layout();
+        Segment::advance(nowMs);
     }
 
     void MaskPanel::layout()
     {
         const double w = width.value(), innerW = std::max(0.0, w - 2 * kPadX);
-        double y = -mScroll;
+        double y = -mScroll.value();
 
         mHeaderY[0] = y;
         y += kSectionHeaderHeight;  // "Add Mask" header
@@ -184,7 +196,7 @@ namespace cosmo_v2
             mDehaze->x.set(kPadX); mDehaze->y.set(y); mDehaze->width.set(innerW); mDehaze->layout();
             y += SliderRow::kRowHeight;
         }
-        mContentHeight = y + mScroll + 13.0;
+        mContentHeight = y + mScroll.value() + 13.0;
     }
 
     void MaskPanel::onPaint(IRenderTarget &t) const

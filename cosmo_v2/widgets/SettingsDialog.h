@@ -40,6 +40,7 @@ namespace cosmo_v2
         artboard::Rect doneRect() const;
         // Fills `rects` with the chip boxes for row `row` (0 = quality, 1 = threads).
         void chipRects(int row, std::vector<artboard::Rect> &rects) const;
+        void hitTargets(const artboard::Point &p, int &row, int &chip, bool &done) const;
 
         static const std::vector<int> kEdges;    // preview long-edge options
         static const std::vector<int> kThreads;  // thread-count options (0 = auto)
@@ -51,6 +52,10 @@ namespace cosmo_v2
         artboard::AnimatedProperty mAppear{0.0};
         int mEdge = 1600;     // current selection (px)
         int mThreadCount = 0; // current selection (0 = auto)
+        int mHoverRow = -1, mHoverChip = -1;        // hovered chip (row, index) under the pointer
+        bool mHoverDone = false;                    // Done button hovered
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
     };
 }
 }

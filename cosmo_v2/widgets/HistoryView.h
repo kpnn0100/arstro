@@ -30,6 +30,8 @@ namespace cosmo_v2
         void hide() { mOpen = false; }
         bool isOpen() const { return mOpen; }
 
+        void advance(double nowMs) override;  // drives the open/close + hover fades + eased pan (R-G-1)
+
         std::function<void(int)> onSelect;  // a node was clicked -> jump to it
 
     protected:
@@ -42,6 +44,10 @@ namespace cosmo_v2
         artboard::Rect treeRect() const;
         artboard::Rect closeBtnRect() const;
         artboard::Point nodeCenter(int i) const;
+        int nodeAt(const artboard::Point &local) const;  // node under a point (-1 = none)
+        double appearRise() const;                       // open/close y-rise, driven by mAppear
+        double panX() const;                             // eased (drawn) pan, not the target
+        double panY() const;
         void relayout();
         void clampPan();
         void scrollToCurrent();
@@ -52,8 +58,20 @@ namespace cosmo_v2
         std::vector<int> mRow;
         std::vector<int> mLane;
         int mMaxRow = 0, mMaxLane = 0;
-        double mPanX = 0, mPanY = 0;
+        double mPanX = 0, mPanY = 0;              // TARGET pan (clamped); eased into place below
+        double mPanIssuedX = 0, mPanIssuedY = 0;  // last target handed to the pan tweens
+        double mPanDurMs = 0.0;                   // glide duration for the pending pan change
         artboard::Point mDragLast{0, 0};
+
+        // hover + open/close animation (R-G-1: everything animates, nothing snaps)
+        int mHoverNode = -1;                        // node under the pointer (-1 = none)
+        bool mCloseHover = false;                   // pointer over the close X
+        bool mNodeHoverPrev = false, mCloseHoverPrev = false, mWasOpen = false;
+        artboard::AnimatedProperty mAppear{0.0};    // open/close fade + rise
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hovered-node wash fade
+        artboard::AnimatedProperty mCloseAmt{0.0};  // close-X lift fade
+        artboard::AnimatedProperty mPanXAnim{0.0};  // eased pan (glides toward mPanX/mPanY)
+        artboard::AnimatedProperty mPanYAnim{0.0};
     };
 }
 }

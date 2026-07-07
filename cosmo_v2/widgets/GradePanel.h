@@ -43,6 +43,7 @@ namespace cosmo_v2
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        void advance(double nowMs) override;  // eases the scroll toward its target (R-G-1)
 
     private:
         void pushRegionValues();
@@ -55,7 +56,8 @@ namespace cosmo_v2
 
         State mState;
         int mRegion = 0;
-        double mScroll = 0.0, mContentHeight = 0.0;
+        artboard::AnimatedProperty mScroll{0.0};
+        double mScrollTarget = 0.0, mScrollLastTarget = 0.0, mContentHeight = 0.0;
         double mRegionHeaderY = 0.0, mBalanceHeaderY = 0.0, mRemapHeaderY = 0.0, mEnableRowY = 0.0;
     };
 }

@@ -95,6 +95,15 @@ namespace cosmo_v2
             mDropReveal.animateTo(1.0, kExpandMs, Easing::EaseOutCubic, nowMs);
             mDropRevealPending = false;
         }
+        // Hover fades: reset the tracked indices when the pointer leaves, then ease.
+        if (!isHovered()) { mHoverTitle = -1; mHoverItem = -1; }
+        const bool th = mHoverTitle >= 0 && mHoverTitle != mOpen;  // active title already lit
+        if (th != mTitleHoverPrev) { mTitleHoverPrev = th; mTitleHoverAmt.animateTo(th ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        const bool ih = mOpen >= 0 && mHoverItem >= 0;
+        if (ih != mItemHoverPrev) { mItemHoverPrev = ih; mItemHoverAmt.animateTo(ih ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        mTitleHoverAmt.update(nowMs);
+        mItemHoverAmt.update(nowMs);
+
         mHiCenter.update(nowMs);
         mHiW.update(nowMs);
         mDropReveal.update(nowMs);
@@ -128,6 +137,12 @@ namespace cosmo_v2
 
     bool MenuStrip::handleGesture(const Gesture &g, const Point &local)
     {
+        if (g.type == Gesture::Type::Move)  // track hovered title + (open) dropdown item
+        {
+            mHoverTitle = titleAt(local);
+            mHoverItem = mOpen >= 0 ? itemAt(mOpen, local) : -1;
+            return true;
+        }
         if (g.type == Gesture::Type::Down)
             return pointInActiveArea(local);  // consume so the press doesn't dismiss before the Click
         if (g.type != Gesture::Type::Click)
@@ -164,7 +179,9 @@ namespace cosmo_v2
         for (int i = 0; i < (int)mMenus.size(); ++i)
         {
             const bool active = (i == mOpen);
-            const Color col = active ? palette::white() : palette::mutedForeground();
+            const double lift = (i == mHoverTitle && !active) ? mTitleHoverAmt.value() : 0.0;
+            const Color col = active ? palette::white()
+                                     : lerpColor(palette::mutedForeground(), palette::white(), lift);
             const double tw = estimateTextWidth(mMenus[i].title, kFontPx);
             const double tx = titleX(i) + (titleW(i) - tw) * 0.5;
             t.setFill(col);
@@ -188,6 +205,14 @@ namespace cosmo_v2
                         Paint::filledStroked(palette::popover(), palette::border(), 1.0));
         t.save();
         t.clipRect(d.x, d.y, d.w, revH);
+        // Hovered-item wash (tracked in mHoverItem), faded by mItemHoverAmt and the reveal.
+        const double ih = mItemHoverAmt.value() * reveal;
+        if (mHoverItem >= 0 && mHoverItem < (int)mMenus[mOpen].items.size() && ih > 0.001)
+        {
+            const double hy = d.y + 4.0 + mHoverItem * kItemH;
+            drawRoundedRect(t, Rect{d.x + 3.0, hy, d.w - 6.0, kItemH}, radius::control(),
+                            Paint::filled(palette::hoverWash(ih)));
+        }
         for (int i = 0; i < (int)mMenus[mOpen].items.size(); ++i)
         {
             const double y = d.y + 4.0 + i * kItemH;

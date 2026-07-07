@@ -47,6 +47,7 @@ namespace cosmo_v2
         artboard::Rect confirmRect() const;
         artboard::Rect cancelRect() const;
         bool allChecked() const;
+        void hitTargets(const artboard::Point &p, int &row, int &btn) const;  // row: -2 none/-1 selectAll/>=0 category; btn: -1/0 cancel/1 confirm
 
         artboard::Color mAccent;
         bool mOpen = false;
@@ -56,6 +57,10 @@ namespace cosmo_v2
         std::string mTitle, mConfirmLabel;
         std::vector<Row> mRows;
         std::function<void(std::vector<std::string>)> mOnConfirm;
+        int mHoverRow = -2;                         // hovered row (-2 none, -1 select-all, >=0 category)
+        int mHoverBtn = -1;                         // hovered footer button (-1 none, 0 cancel, 1 confirm)
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
     };
 }
 }

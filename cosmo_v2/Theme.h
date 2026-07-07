@@ -68,6 +68,13 @@ namespace cosmo_v2
         inline artboard::Color curvePlotBg() { return artboard::Color::hex(0x0D0D0D); }
         inline artboard::Color white() { return artboard::Color::rgba(255, 255, 255); }
         inline artboard::Color whiteAlpha(double a) { return artboard::Color{1.0, 1.0, 1.0, a}; }
+        inline artboard::Color primaryAlpha(double a) { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, a}; }
+
+        // Canonical hover feedback (consistency lock, R-G-1): self-drawn rows/cells/
+        // items wash the hovered region with hoverWash(hoverAmount); child-Segment
+        // controls (Button/PillButton/IconButton) use artboard::hoverBox() instead.
+        // The framework animates the amount, so these never pop.
+        inline artboard::Color hoverWash(double t) { return whiteAlpha(0.07 * t); }
     }
 
     // Figma uses small literal per-component radii (bracket values), not one

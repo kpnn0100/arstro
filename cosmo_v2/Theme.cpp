@@ -45,18 +45,20 @@ namespace cosmo_v2
         th.toggle.thumb = {Paint::filled(white), radius::pill()};
 
         // Outline buttons (aspect-ratio chips, flip/auto, mask-mode chips):
-        // transparent body, hairline border, muted label; "pressed" approximates
-        // the design's hover/active treatment (accent border+tint) since Artboard
-        // has no hover state to key off of.
+        // transparent body, hairline border, muted label. The design's hover
+        // treatment (accent border+tint) is now driven live by the framework's
+        // animated hoverAmount() via artboard::hoverBox() (see PillButton); the
+        // "pressed" style below remains the active/selected look.
         th.button.idle = {Paint::filledStroked(Color{0, 0, 0, 0}, border, 1.0), radius::control()};
         th.button.pressed = {Paint::filledStroked(Color{primary.r, primary.g, primary.b, 0.10}, primary, 1.0),
                               radius::control()};
         th.button.label = {mutedFg, 10.0, font::sans()};
 
         // Scrollbars: Figma hides them by default and shows a subtle thumb only
-        // on hover (::-webkit-scrollbar-thumb rgba(255,255,255,.12)). Artboard
-        // has no hover state, so the closest fidelity is an always-present but
-        // very faint thumb rather than either "always visible" or "never visible".
+        // on hover (::-webkit-scrollbar-thumb rgba(255,255,255,.12)). We keep an
+        // always-present but very faint thumb (panels are self-drawn regions, not
+        // hover-owning child segments); a container-level hover reveal could key
+        // off isHoverWithin() in a later pass.
         th.scroll.viewport = {Paint::filled(Color{0, 0, 0, 0}), 0.0};
         th.scroll.track = {Paint::filled(Color{0, 0, 0, 0}), 0.0};
         th.scroll.thumb = {Paint::filled(palette::whiteAlpha(0.12)), radius::control()};

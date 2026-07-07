@@ -34,14 +34,27 @@ namespace cosmo_v2
     {
         const double viewH = height.value();
         const double maxScroll = std::max(0.0, mContentHeight - viewH);
-        mScroll = std::min(maxScroll, std::max(0.0, mScroll - delta));
-        layout();
+        // Move the target only; advance() eases mScroll toward it and re-lays out.
+        mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
+    }
+
+    void ParamPanel::advance(double nowMs)
+    {
+        if (mScrollTarget != mScrollLastTarget)
+        {
+            mScroll.animateTo(mScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
+            mScrollLastTarget = mScrollTarget;
+        }
+        const bool moving = mScroll.isAnimating();
+        mScroll.update(nowMs);
+        if (moving) layout();  // reposition rows at the animated scroll offset
+        Segment::advance(nowMs);
     }
 
     void ParamPanel::layout()
     {
         const double w = width.value();
-        double y = -mScroll;
+        double y = -mScroll.value();
         size_t rowIdx = 0;
         mSectionHeaderY.clear();
         for (const auto &section : mSections)
@@ -59,7 +72,7 @@ namespace cosmo_v2
                 y += SliderRow::kRowHeight;
             }
         }
-        mContentHeight = y + mScroll + kPadBottom;
+        mContentHeight = y + mScroll.value() + kPadBottom;
     }
 
     void ParamPanel::onPaint(IRenderTarget &t) const

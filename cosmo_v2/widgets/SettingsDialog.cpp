@@ -55,7 +55,23 @@ namespace cosmo_v2
         mLastMs = nowMs;
         mAppear.update(nowMs);
         if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; }
+        if (!isOpen()) { mHoverRow = -1; mHoverChip = -1; mHoverDone = false; }
+        const bool hov = mHoverChip >= 0 || mHoverDone;
+        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        mHoverAmt.update(nowMs);
         Segment::advance(nowMs);
+    }
+
+    void SettingsDialog::hitTargets(const Point &p, int &row, int &chip, bool &done) const
+    {
+        row = -1; chip = -1; done = false;
+        if (doneRect().contains(p)) { done = true; return; }
+        for (int r = 0; r < 2; ++r)
+        {
+            std::vector<Rect> chips; chipRects(r, chips);
+            for (int i = 0; i < (int)chips.size(); ++i)
+                if (chips[i].contains(p)) { row = r; chip = i; return; }
+        }
     }
 
     Rect SettingsDialog::cardRect() const
@@ -91,6 +107,7 @@ namespace cosmo_v2
     bool SettingsDialog::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen || mClosing) return false;
+        if (g.type == Gesture::Type::Move) { hitTargets(local, mHoverRow, mHoverChip, mHoverDone); return true; }
         if (g.type != Gesture::Type::Click) return true;  // modal: consume everything else
 
         const Point p = local;
@@ -140,6 +157,9 @@ namespace cosmo_v2
                 drawRoundedRect(t, chips[i], radius::control(),
                                 sel ? Paint::filled(fade(mAccent, a))
                                     : Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
+                const double chv = (row == mHoverRow && i == mHoverChip) ? mHoverAmt.value() * a : 0.0;
+                if (chv > 0.001)  // eased hover wash on the chip under the pointer
+                    drawRoundedRect(t, chips[i], radius::control(), Paint::filled(palette::hoverWash(chv)));
                 t.setFill(fade(sel ? palette::primaryForeground() : palette::foreground(), a));
                 const double tw = estimateTextWidth(lbl, kFontPx);
                 t.drawText(lbl, chips[i].x + (chips[i].w - tw) * 0.5, chips[i].y + chips[i].h * 0.5 + 4.0, kFontPx,
@@ -150,6 +170,8 @@ namespace cosmo_v2
         // footer: Done (primary)
         const Rect d = doneRect();
         drawRoundedRect(t, d, radius::control(), Paint::filled(fade(mAccent, a)));
+        if (mHoverDone && mHoverAmt.value() * a > 0.001)
+            drawRoundedRect(t, d, radius::control(), Paint::filled(palette::hoverWash(mHoverAmt.value() * a)));
         t.setFill(fade(palette::primaryForeground(), a));
         const double tw = estimateTextWidth("Done", kFontPx);
         t.drawText("Done", d.x + (d.w - tw) * 0.5, d.y + d.h * 0.5 + 4.0, kFontPx, font::sansMedium());

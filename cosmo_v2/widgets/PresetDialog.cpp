@@ -48,7 +48,24 @@ namespace cosmo_v2
         mLastMs = nowMs;
         mAppear.update(nowMs);
         if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; }
+        if (!isOpen()) { mHoverRow = -2; mHoverBtn = -1; }
+        const bool hov = mHoverRow != -2 || mHoverBtn != -1;
+        if (hov != mHoverPrev) { mHoverPrev = hov; mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs); }
+        mHoverAmt.update(nowMs);
         Segment::advance(nowMs);
+    }
+
+    void PresetDialog::hitTargets(const Point &p, int &row, int &btn) const
+    {
+        row = -2; btn = -1;
+        if (confirmRect().contains(p)) { btn = 1; return; }
+        if (cancelRect().contains(p)) { btn = 0; return; }
+        if (selectAllRect().contains(p)) { row = -1; return; }
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const Rect r{cardRect().x + kPad, rowTop(i), kCardW - 2 * kPad, kRowH};
+            if (r.contains(p)) { row = i; return; }
+        }
     }
 
     Rect PresetDialog::cardRect() const
@@ -92,6 +109,7 @@ namespace cosmo_v2
     bool PresetDialog::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen || mClosing) return false;
+        if (g.type == Gesture::Type::Move) { hitTargets(local, mHoverRow, mHoverBtn); return true; }
         if (g.type != Gesture::Type::Click) return true;  // consume everything else while modal
 
         const Point p = local;  // root child at origin -> local == world
@@ -138,7 +156,10 @@ namespace cosmo_v2
         t.setFill(fade(palette::foreground(), a));
         t.drawText(mTitle, c.x + kPad, c.y + kPad + 16.0, 14.0, font::sansSemiBold());
 
-        auto drawCheckRow = [&](const Rect &row, const std::string &label, bool checked, bool bold) {
+        const double hv = mHoverAmt.value() * a;  // hover wash strength, fades with the modal
+        auto drawCheckRow = [&](const Rect &row, const std::string &label, bool checked, bool bold, bool hovered) {
+            if (hovered && hv > 0.001)
+                drawRoundedRect(t, Rect{row.x - 4.0, row.y, row.w + 8.0, row.h}, radius::control(), Paint::filled(palette::hoverWash(hv)));
             const Rect box{row.x, row.y + (row.h - kBox) * 0.5, kBox, kBox};
             drawRoundedRect(t, box, 3.0,
                             checked ? Paint::filled(fade(mAccent, a))
@@ -158,7 +179,7 @@ namespace cosmo_v2
         };
 
         // "Select all" master row
-        drawCheckRow(selectAllRect(), "Select all", allChecked(), true);
+        drawCheckRow(selectAllRect(), "Select all", allChecked(), true, mHoverRow == -1);
         // hairline under it
         const Rect sa = selectAllRect();
         t.beginPath();
@@ -167,19 +188,21 @@ namespace cosmo_v2
         t.setStroke(fade(palette::border(), a), 1.0); t.strokePath();
 
         for (int i = 0; i < (int)mRows.size(); ++i)
-            drawCheckRow(Rect{c.x + kPad, rowTop(i), c.w - 2 * kPad, kRowH}, mRows[i].label, mRows[i].checked, false);
+            drawCheckRow(Rect{c.x + kPad, rowTop(i), c.w - 2 * kPad, kRowH}, mRows[i].label, mRows[i].checked, false, mHoverRow == i);
 
         // footer buttons
-        auto drawBtn = [&](const Rect &r, const std::string &label, bool primary) {
+        auto drawBtn = [&](const Rect &r, const std::string &label, bool primary, bool hovered) {
             drawRoundedRect(t, r, radius::control(),
                             primary ? Paint::filled(fade(mAccent, a))
                                     : Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
+            if (hovered && hv > 0.001)  // eased white wash on the hovered button
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
             t.setFill(fade(primary ? palette::primaryForeground() : palette::foreground(), a));
             const double tw = estimateTextWidth(label, kFontPx);
             t.drawText(label, r.x + (r.w - tw) * 0.5, r.y + r.h * 0.5 + 4.0, kFontPx, font::sansMedium());
         };
-        drawBtn(cancelRect(), "Cancel", false);
-        drawBtn(confirmRect(), mConfirmLabel, true);
+        drawBtn(cancelRect(), "Cancel", false, mHoverBtn == 0);
+        drawBtn(confirmRect(), mConfirmLabel, true, mHoverBtn == 1);
     }
 }
 }

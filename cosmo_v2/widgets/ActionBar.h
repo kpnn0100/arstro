@@ -23,6 +23,8 @@ namespace cosmo_v2
         std::function<void()> onSave, onImport, onExport;
         void layout();  // call after width changes
 
+        void advance(double nowMs) override;  // drives the button-hover fade
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
@@ -30,7 +32,12 @@ namespace cosmo_v2
 
     private:
         struct Btn { double x = 0, w = 0; };
+        int btnAt(const artboard::Point &local) const;
+
         Btn mBtns[3];  // Save, Import, Export
+        int mHoverIndex = -1;                       // button under the pointer
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
     };
 }
 }

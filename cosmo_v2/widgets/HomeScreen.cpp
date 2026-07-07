@@ -22,6 +22,7 @@ namespace cosmo_v2
         constexpr double kMetaH = 46.0;     // card meta band (name + row)
         constexpr double kActionH = 34.0;
         constexpr double kSearchW = 168.0, kSearchH = 26.0;
+        constexpr double kScrollGlideMs = 180.0;  // grid-scroll ease (R-G-1)
 
         std::string lower(std::string s)
         {
@@ -172,7 +173,8 @@ namespace cosmo_v2
             mCards.push_back(std::move(c));
         }
         for (size_t i = cards.size(); i < mThumbPool.size(); ++i) mThumbPool[i]->visible = false;
-        mScrollY = 0.0;
+        mScrollY = 0.0;  // new list starts at the top (snap, not a glide)
+        mScrollYAnim.set(0.0); mScrollIssued = 0.0;
         applyFilter();
         layout();
     }
@@ -219,7 +221,7 @@ namespace cosmo_v2
             {
                 c.thumb->visible = true;
                 c.thumb->x.set(c.rect.x);
-                c.thumb->y.set(c.rect.y - mScrollY);   // grid-clip local space
+                c.thumb->y.set(c.rect.y - scrollY());   // grid-clip local space (eased scroll)
                 c.thumb->width.set(cardW);
                 c.thumb->height.set(thumbH);
             }
@@ -260,11 +262,58 @@ namespace cosmo_v2
             applyFilter();
             layout();
         }
+
+        // Hover feedback fade (R-G-1). isHovered() is false while the pointer is over
+        // the search child, so the region highlight clears cleanly then too.
+        if (!isHovered()) { mHoverKind = Region::None; mHoverIndex = -1; }
+        const bool hov = (mHoverKind != Region::None);
+        if (hov != mHoverPrev)
+        {
+            mHoverPrev = hov;
+            mHoverAmt.animateTo(hov ? 1.0 : 0.0, interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        mHoverAmt.update(nowMs);
+
+        // Ease the grid scroll toward its target so the wheel glides instead of snapping.
+        if (mScrollY != mScrollIssued)
+        {
+            mScrollYAnim.animateTo(mScrollY, kScrollGlideMs, Easing::EaseOutCubic, nowMs);
+            mScrollIssued = mScrollY;
+        }
+        mScrollYAnim.update(nowMs);
+        for (auto &cd : mCards)  // keep the thumbnail children tracking the eased scroll
+            if (cd.shown && cd.thumb) cd.thumb->y.set(cd.rect.y - scrollY());
+
         Segment::advance(nowMs);
+    }
+
+    void HomeScreen::regionAt(const Point &local, Region &kind, int &index) const
+    {
+        kind = Region::None; index = -1;
+        for (int i = 0; i < 3; ++i)
+            if (actionRect(i).contains(local)) { kind = Region::Action; index = i; return; }
+        for (int i = 0; i < 3; ++i)
+            if (bottomLinkRect(i).contains(local)) { kind = Region::Link; index = i; return; }
+        // grid cards (screen space = grid origin + content rect - eased scroll)
+        const double gridLeft = contentX() + kPad, gy = gridTop();
+        for (int i = 0; i < (int)mCards.size(); ++i)
+        {
+            const Card &c = mCards[i];
+            if (!c.shown) continue;
+            const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
+            if (s.contains(local)) { kind = Region::Card; index = i; return; }
+        }
+        const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
+        if (ns.contains(local)) { kind = Region::NewCard; index = -1; return; }
     }
 
     bool HomeScreen::handleGesture(const Gesture &g, const Point &local)
     {
+        if (g.type == Gesture::Type::Move)  // track the hovered region (fades in advance)
+        {
+            regionAt(local, mHoverKind, mHoverIndex);
+            return true;
+        }
         if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
 
         for (int i = 0; i < 3; ++i)
@@ -278,15 +327,15 @@ namespace cosmo_v2
         // reserved bottom links (Settings / What's New / Help) are inert (R-HOME-8)
         for (int i = 0; i < 3; ++i) if (bottomLinkRect(i).contains(local)) return true;
 
-        // grid cards (screen space = grid origin + content rect - scroll)
+        // grid cards (screen space = grid origin + content rect - eased scroll)
         const double gridLeft = contentX() + kPad, gy = gridTop();
         for (auto &c : mCards)
         {
             if (!c.shown) continue;
-            const Rect s{gridLeft + c.rect.x, gy + c.rect.y - mScrollY, c.rect.w, c.rect.h};
+            const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
             if (s.contains(local)) { if (onOpenRecent) onOpenRecent(c.info.recentIndex); return true; }
         }
-        const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - mScrollY, mNewCardRect.w, mNewCardRect.h};
+        const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
         if (ns.contains(local)) { if (onNewProject) onNewProject(); return true; }
 
         return Segment::handleGesture(g, local);
@@ -324,9 +373,19 @@ namespace cosmo_v2
         {
             const Rect r = actionRect(i);
             const bool primary = (i == 0);
-            if (primary) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::primary()));
-            else if (i == 1) drawRoundedRect(t, r, radius::control(), Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0));
-            const Color fg = primary ? palette::primaryForeground() : palette::mutedForeground();
+            const double hv = (mHoverKind == Region::Action && mHoverIndex == i) ? mHoverAmt.value() : 0.0;
+            // Hover: brighten the primary fill; pull the outline chip's border toward the
+            // accent + a faint wash; give the ghost "Import" a wash. Eased so it never pops.
+            if (primary)
+                drawRoundedRect(t, r, radius::control(), Paint::filled(brighten(palette::primary(), interaction::kHoverFillLift * hv)));
+            else if (i == 1)
+                drawRoundedRect(t, r, radius::control(),
+                                Paint::filledStroked(palette::primaryAlpha(0.10 * hv),
+                                                     lerpColor(palette::border(), palette::primary(), 0.5 * hv), 1.0));
+            else if (hv > 0.0)
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
+            const Color fg = primary ? palette::primaryForeground()
+                                     : lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 * hv);
             const Rect ib{r.x + 14.0, r.y + (r.h - 13.0) / 2, 13.0, 13.0};
             if (acts[i].icon == 0) iconPlus(t, ib, fg, 1.6);
             else if (acts[i].icon == 1) iconFolder(t, ib, fg, 1.2);
@@ -343,11 +402,15 @@ namespace cosmo_v2
         for (int i = 0; i < 3; ++i)
         {
             const Rect r = bottomLinkRect(i);
+            const double hv = (mHoverKind == Region::Link && mHoverIndex == i) ? mHoverAmt.value() : 0.0;
+            if (hv > 0.0)  // faint hover row + lift the icon/label toward foreground (R-G-1)
+                drawRoundedRect(t, Rect{r.x - 6.0, r.y - 1.0, r.w + 12.0, r.h + 2.0}, radius::control(), Paint::filled(palette::hoverWash(hv)));
+            const Color lc = lerpColor(palette::mutedForeground(), palette::foreground(), 0.7 * hv);
             const Rect ib{r.x, r.y + (r.h - 11.0) / 2, 11.0, 11.0};
-            if (i == 0) iconGear(t, ib, palette::mutedForeground(), 1.1);
-            else if (i == 1) iconSpark(t, ib, palette::mutedForeground(), 1.1);
-            else iconHelp(t, ib, palette::mutedForeground(), 1.1);
-            t.setFill(palette::mutedForeground());
+            if (i == 0) iconGear(t, ib, lc, 1.1);
+            else if (i == 1) iconSpark(t, ib, lc, 1.1);
+            else iconHelp(t, ib, lc, 1.1);
+            t.setFill(lc);
             t.drawText(links[i], r.x + 18.0, r.y + r.h / 2 + 4.0, 11.0, font::sans());
         }
         t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.4});
@@ -379,15 +442,20 @@ namespace cosmo_v2
         }
 
         auto cardScreen = [&](const Rect &content) {
-            return Rect{gridLeft + content.x, gy + content.y - mScrollY, content.w, content.h};
+            return Rect{gridLeft + content.x, gy + content.y - scrollY(), content.w, content.h};
         };
-        for (const auto &c : mCards)
+        for (int ci = 0; ci < (int)mCards.size(); ++ci)
         {
+            const Card &c = mCards[ci];
             if (!c.shown) continue;
             const Rect s = cardScreen(c.rect);
             const double th = s.w * 9.0 / 16.0;
-            // card border + meta background (thumbnail itself is the ImageView child)
-            drawRoundedRect(t, s, radius::control(), Paint::filledStroked(palette::folderChipBg(), palette::border(), 1.0));
+            const double hv = (mHoverKind == Region::Card && mHoverIndex == ci) ? mHoverAmt.value() : 0.0;
+            // card border + meta background (thumbnail itself is the ImageView child);
+            // hover brightens the surface + lifts the border toward the accent (R-G-1).
+            const Color cardBg = brighten(palette::folderChipBg(), 0.06 * hv);
+            const Color cardBorder = lerpColor(palette::border(), palette::primaryAlpha(0.7), hv);
+            drawRoundedRect(t, s, radius::control(), Paint::filledStroked(cardBg, cardBorder, 1.0 + 0.5 * hv));
             // thumbnail placeholder fill (shows if no cover decoded yet)
             drawRoundedRect(t, Rect{s.x, s.y, s.w, th}, 0.0, Paint::filled(Color::hex(0x111111)));
             if (c.info.edited)
@@ -416,10 +484,15 @@ namespace cosmo_v2
             const Rect s = cardScreen(mNewCardRect);
             const double th = s.w * 9.0 / 16.0;
             const Rect box{s.x, s.y, s.w, th};
-            dashedRoundRect(t, box, Color{palette::border().r, palette::border().g, palette::border().b, 0.6}, 1.0);
+            const double hv = (mHoverKind == Region::NewCard) ? mHoverAmt.value() : 0.0;
+            // hover pulls the dashed border + glyph toward the accent/foreground (R-G-1)
+            const Color dash = lerpColor(Color{palette::border().r, palette::border().g, palette::border().b, 0.6},
+                                         palette::primary(), 0.5 * hv);
+            dashedRoundRect(t, box, dash, 1.0 + 0.4 * hv);
+            const Color nc = lerpColor(palette::mutedForeground(), palette::foreground(), 0.6 * hv);
             const double cxp = box.x + box.w / 2;
-            iconPlus(t, Rect{cxp - 10, box.y + box.h / 2 - 16, 20, 20}, palette::mutedForeground(), 1.4);
-            t.setFill(palette::mutedForeground());
+            iconPlus(t, Rect{cxp - 10, box.y + box.h / 2 - 16, 20, 20}, nc, 1.4);
+            t.setFill(nc);
             t.drawText("New Project", cxp - estimateTextWidth("New Project", 11.0) / 2, box.y + box.h / 2 + 18.0, 11.0, font::sans());
         }
         t.restore();

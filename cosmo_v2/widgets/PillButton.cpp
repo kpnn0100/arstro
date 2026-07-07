@@ -16,17 +16,25 @@ namespace cosmo_v2
     void PillButton::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        const BoxStyle &box = active ? activeBox : idleBox;
-        const TextStyle &text = active ? activeText : idleText;
+        const double hv = hoverAmount();  // animated 0..1 from the framework (FR-24)
+        const BoxStyle &baseBox = active ? activeBox : idleBox;
+        const TextStyle &baseText = active ? activeText : idleText;
 
+        // Hover: brighten the fill + pull the border toward hoverEmphasis, eased
+        // by hoverAmount() so it never pops (R-G-1). Shared treatment so every
+        // pill reads identically (consistency lock).
+        const BoxStyle box = hoverBox(baseBox, hoverEmphasis, hv);
         if (box.paint.hasFill || box.paint.hasStroke)
             drawRoundedRect(t, Rect{0, 0, w, h}, box.cornerRadius, box.paint);
 
-        const double tw = estimateTextWidth(mLabel, text.sizePx);
+        // An idle label lifts toward its active colour on hover; an active label stays.
+        const Color textColor = active ? baseText.color
+                                       : lerpColor(idleText.color, activeText.color, 0.55 * hv);
+        const double tw = estimateTextWidth(mLabel, baseText.sizePx);
         const double tx = (w - tw) * 0.5;
-        const double ty = h * 0.5 + text.sizePx * 0.35;
-        t.setFill(text.color);
-        t.drawText(mLabel, tx, ty, text.sizePx, text.fontFamily, text.letterSpacingPx);
+        const double ty = h * 0.5 + baseText.sizePx * 0.35;
+        t.setFill(textColor);
+        t.drawText(mLabel, tx, ty, baseText.sizePx, baseText.fontFamily, baseText.letterSpacingPx);
     }
 }
 }

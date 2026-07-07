@@ -39,6 +39,8 @@ namespace cosmo_v2
         void setSelected(const std::string &relPath) { mSelected = relPath; }
         void scrollBy(double delta);
 
+        void advance(double nowMs) override;  // eases the scroll offset + hover/selection fades
+
         std::function<void(std::string)> onApply;                          // double-click a preset (relPath)
         std::function<void(std::string, double, double)> onContext;        // right-click a preset (relPath, x, y)
 
@@ -65,7 +67,22 @@ namespace cosmo_v2
         std::vector<std::string> mExpanded;   // relPaths of expanded folders
         std::vector<Row> mRows;               // flattened, visible-only
         std::string mSelected;
-        double mScroll = 0.0;
+
+        // Scroll offset eases toward mScrollTarget instead of jumping (R-G-1).
+        // mScroll.value() is the live offset read while drawing/hit-testing.
+        artboard::AnimatedProperty mScroll{0.0};
+        double mScrollTarget = 0.0;
+        bool mScrollDirty = false;
+
+        // Row hover (self-drawn multi-region): mHoverIndex set from Move, eased by
+        // mHoverAmt; reset when this widget stops owning hover.
+        int mHoverIndex = -1;
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};
+
+        // Selection-fill fade-in: mSelAmt eases 0->1 when mSelected changes.
+        std::string mSelPrev;
+        artboard::AnimatedProperty mSelAmt{0.0};
     };
 }
 }

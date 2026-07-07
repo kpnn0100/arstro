@@ -43,6 +43,7 @@ namespace cosmo_v2
         void beginClose();
         artboard::Rect cardRect() const;
         void buttonRects(std::vector<artboard::Rect> &out) const;  // right-aligned footer
+        int buttonAt(const artboard::Point &local) const;
 
         artboard::Color mAccent;
         bool mOpen = false;
@@ -51,6 +52,9 @@ namespace cosmo_v2
         artboard::AnimatedProperty mAppear{0.0};
         std::string mTitle, mMessage;
         std::vector<Button> mButtons;
+        int mHoverBtn = -1;                         // footer button under the pointer
+        bool mHoverPrev = false;
+        artboard::AnimatedProperty mHoverAmt{0.0};  // hover fade (R-G-1)
     };
 }
 }

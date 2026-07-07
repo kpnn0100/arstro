@@ -1,4 +1,5 @@
 #include "IconButton.h"
+#include <algorithm>
 
 namespace arstro
 {
@@ -17,9 +18,23 @@ namespace cosmo_v2
     void IconButton::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        if (mPressed && hoverBg.a > 0.0)
-            drawRoundedRect(t, Rect{0, 0, w, h}, 2.0, Paint::filled(hoverBg));
-        const Color glyph = active ? activeColor : idleColor;
+        const double hv = hoverAmount();  // animated 0..1 from the framework (FR-24)
+
+        // Rounded background that eases in under the pointer and reaches full
+        // strength while pressed — never a hard pop (R-G-1). Falls back to a
+        // subtle white wash so every icon button gets hover feedback even when
+        // the caller didn't set an explicit hoverBg.
+        Color bg = hoverBg.a > 0.0 ? hoverBg : Color{1, 1, 1, 0.10};
+        const double bgVis = std::max(hv, mPressed ? 1.0 : 0.0);
+        if (bgVis > 0.001)
+        {
+            Color b = bg; b.a *= bgVis;
+            drawRoundedRect(t, Rect{0, 0, w, h}, 2.0, Paint::filled(b));
+        }
+
+        // The glyph lights up toward white on hover (safe for any idle/active colour).
+        const Color base = active ? activeColor : idleColor;
+        const Color glyph = brighten(base, 0.4 * hv);
         if (mPainter) mPainter(t, Rect{0, 0, w, h}, glyph);
     }
 }

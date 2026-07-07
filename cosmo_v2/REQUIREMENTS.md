@@ -17,6 +17,43 @@ on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps 
   `artboard::reducedMotion()`.
 - **R-G-2 Figma is the spec.** Screens that reference a Figma frame must match it (spacing,
   type ramp, colors, radii pulled from `Theme`), not approximate it.
+- **R-G-3 Everything interactive hovers.** Every button and every clickable region shows an
+  animated hover treatment under the pointer — never a hard flip. Child-`Segment` controls
+  (`Button`/`PillButton`/`IconButton`/`ComboBox`/`ToggleSwitch`/`Slider`) key off the framework's
+  animated `hoverAmount()` via `artboard::hoverBox()`; self-drawn multi-region widgets (menu items,
+  breadcrumb crumbs, filmstrip cells, tabs, tree rows, dialog rows/buttons, history nodes, home
+  cards/actions, action-bar buttons) track a hovered-region index from `Gesture::Type::Move`, reset
+  it when `!isHovered()`, and fade a `palette::hoverWash()` (or an accent-tinted border/label lift)
+  in/out — the wash may follow the cursor row-to-row, but its appear/disappear is eased (R-G-1) and
+  collapses under `reducedMotion()`. `Theme::hoverWash()`/`primaryAlpha()` are the shared tokens so
+  hover reads identically app-wide (consistency lock). Known framework limit: true cross-fades
+  between sibling children (e.g. Mixer channel editor, per-mask control blocks) need per-subtree
+  opacity, which `IRenderTarget`/`Segment` do not expose — those switches are left instant (or given
+  an overlay-scrim reveal where practical) pending an Artboard change; scroll offsets, panel/dialog
+  open-close, and the edit-stack page swap all animate.
+
+## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
+
+- **R-LOG-1** The app writes a timestamped, levelled log to `~/.config/cosmo_v2/cosmo_v2.log`
+  (`ProjectStore::configDir()`), appended across sessions with a per-session header. Every
+  `g_print`/`g_printerr` diagnostic is routed through it (GLib print handlers), so the console
+  output and the file stay in sync. Facility: `cosmo_v2/Log.{h,cpp}` (`log::init`, `LOGI/LOGW/LOGE`).
+  Platform-note: logging does OS I/O, so it lives in the app layer, never in the platform-free
+  Artboard core.
+- **R-LOG-2** A fatal-signal handler (SIGSEGV/SIGABRT/SIGBUS/SIGFPE/SIGILL) appends a backtrace to
+  the log (async-signal-safe `write`/`backtrace_symbols_fd`) and re-raises the default handler, so a
+  field crash leaves a diagnosable trail. Installed at startup (`log::installCrashHandler`).
+
+## R-BUGFIX — Reset-then-open segfault — ✅ FIXED
+
+`EditSession::resetWorkspace()` cleared the per-slot vectors but `RenderService` kept incrementing
+its monotonic slot-id counter, so the first image opened after a reset (New Project / Open Project /
+Import Catalog / Reset Workspace, all of which reset then open) got a slot id past the end of the
+freshly-emptied vectors → out-of-bounds `mSlotPaths[mCurrentSlot]` in `currentSourcePath()`
+(and siblings) → SIGSEGV. Fix: `RenderService::reset()` (+ `EditEngine::clearImages()`) drops all
+engine slots and restarts id assignment from 0 on reset, restoring the "slot id == index, grow-only"
+invariant; the slot accessors also got upper-bound guards as defence in depth. Regression-guarded by
+the reset→open reproduction.
 
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
