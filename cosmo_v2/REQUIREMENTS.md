@@ -123,6 +123,22 @@ engine slots and restarts id assignment from 0 on reset, restoring the "slot id 
 invariant; the slot accessors also got upper-bound guards as defence in depth. Regression-guarded by
 the reset→open reproduction.
 
+## R-BUGFIX-2 — Stale editor during the open reveal — ✅ FIXED
+
+Opening a project after another was already open showed the *previous* project's editor (photo,
+filmstrip thumbnails, breadcrumb) underneath/through the reveal instead of the new one fading in
+from scratch. Cause: `App::resetWorkspace()` reset the `EditSession` but not the editor's *visible*
+state — the photo `ImageView`, the split/before `ImageView`, the cached `mLastAfterFrame`, the
+`Filmstrip` thumbnails, and the `Breadcrumb` path all retained the old project's content until the
+new render landed. Fix: `App::resetWorkspace()` now also `clearImage()`s both photo views, resets
+`mLastAfterFrame`, `Filmstrip::clearThumbs()`, and clears the breadcrumb path, so the editor is blank
+the instant the workspace is reset (which happens right after `beginOpenTransition`, before the new
+decode). `Filmstrip` reuses its `ImageView` child pool (`mThumbCount`) across projects — `Segment`
+has no `removeChild`, so `clearThumbs()` restarts the active count at 0 and `addThumb()` refills the
+pool in lockstep with the engine's reset slot ids (a new project's `thumbSlot` must not index an old
+thumbnail). Headless-verified: red project → reset → editor blank → green project opens fresh, no
+stale photo, no crash.
+
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
 Status: implemented. `cosmo_v2/widgets/MaskOverlay.{h,cpp}` (ported from cosmo), owned by

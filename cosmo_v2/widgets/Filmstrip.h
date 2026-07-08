@@ -37,8 +37,12 @@ namespace cosmo_v2
         Filmstrip();
 
         /** Registers one ImageView per image slot, in slot order (call once per
-         *  newly opened image, matching cosmo's own Filmstrip::addThumb). */
+         *  newly opened image, matching cosmo's own Filmstrip::addThumb). Reuses the
+         *  pool grown by earlier projects (see clearThumbs). */
         void addThumb(const uint8_t *rgba, int w, int h);
+        /** Reset to zero active thumbnails (a new workspace) so addThumb restarts at
+         *  slot 0, in lockstep with the engine's reset slot ids. */
+        void clearThumbs();
         void setCells(std::vector<Cell> cells);
         void setSelection(std::vector<int> selCells, int primaryCell);
         int cellCount() const { return (int)mCells.size(); }
@@ -64,7 +68,8 @@ namespace cosmo_v2
         int cellAt(double localX) const;
         void positionThumbs();  // re-place visible thumbnails at the current scroll
 
-        std::vector<std::shared_ptr<artboard::ImageView>> mThumbs;  // indexed by slot
+        std::vector<std::shared_ptr<artboard::ImageView>> mThumbs;  // pool of ImageView children (child = never removed)
+        int mThumbCount = 0;   // active thumbnails for the current workspace (indexes into mThumbs)
         std::vector<Cell> mCells;
         std::vector<int> mSel;
         int mPrimary = -1;

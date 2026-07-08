@@ -216,6 +216,20 @@ namespace cosmo_v2
         if (thumb) mCenterStage->filmstrip()->addThumb(thumb->rgba.data(), thumb->w, thumb->h);
     }
 
+    void App::resetWorkspace()
+    {
+        mSession.resetWorkspace();
+        // Clear the editor's visible state so opening the next project fades in FRESH
+        // rather than showing the previous session's photo/thumbnails during the reveal.
+        // (resetWorkspace restarts slot ids at 0, so the filmstrip thumb pool must
+        // restart in lockstep or new cells would index the old project's thumbnails.)
+        mLastAfterFrame = RenderService::Frame{};
+        mCenterStage->photo()->imageView()->clearImage();
+        mCenterStage->photo()->beforeView()->clearImage();
+        mCenterStage->filmstrip()->clearThumbs();
+        mCenterStage->breadcrumb()->setPath({});
+    }
+
     void App::refreshPhotoForMode()
     {
         auto photo = mCenterStage->photo();

@@ -124,7 +124,7 @@ namespace cosmo_v2
         bool saveWorkspaceAs(const std::string &path) { return mSession.saveWorkspaceAs(path); }
         void saveWorkspace();
         std::string currentWorkspacePath() const { return mSession.workspacePath(); }
-        void resetWorkspace() { mSession.resetWorkspace(); }
+        void resetWorkspace();  // reset the session AND clear the editor's visible state
         int addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset)
         { return mSession.addWorkspaceGroup(parentNode, name, offset); }
         int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);

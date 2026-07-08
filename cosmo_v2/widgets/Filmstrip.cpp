@@ -13,12 +13,33 @@ namespace cosmo_v2
 
     void Filmstrip::addThumb(const uint8_t *rgba, int w, int h)
     {
-        auto iv = std::make_shared<ImageView>();
-        iv->setFit(ImageView::Fit::Cover);
+        std::shared_ptr<ImageView> iv;
+        if (mThumbCount < (int)mThumbs.size())  // reuse a pooled ImageView (Segment has no removeChild)
+        {
+            iv = mThumbs[mThumbCount];
+        }
+        else
+        {
+            iv = std::make_shared<ImageView>();
+            iv->setFit(ImageView::Fit::Cover);
+            addChild(iv);
+            mThumbs.push_back(iv);
+        }
         iv->setImage(rgba, w, h);
-        iv->visible = false;
-        addChild(iv);
-        mThumbs.push_back(iv);
+        iv->visible = false;  // setCells decides visibility/position
+        ++mThumbCount;
+    }
+
+    void Filmstrip::clearThumbs()
+    {
+        mThumbCount = 0;
+        for (auto &iv : mThumbs) iv->visible = false;  // hide the pool; setCells re-shows the active ones
+        mCells.clear();
+        mSel.clear();
+        mPrimary = -1;
+        mRingInit = false;
+        mHover.clear();
+        mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
     }
 
     double Filmstrip::cellX(int i) const
