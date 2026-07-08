@@ -5,13 +5,14 @@
  *  (0 = no change). Bezier-capable control points (Alt-drag pulls tangent
  *  handles); the curve wraps continuously across the 360/0 seam. In
  *  "mapped-hue" mode (the Hue channel) the line is coloured by the OUTPUT hue.
- *  Emits a dense sampling for the engine (EditParams::mixer[channel]).
+ *  Emits its bezier CONTROL points (EditParams::mixer[channel]) so a reopened
+ *  project restores the exact editable curve; the engine flattens them to a LUT.
  *
  *  Adapted from cosmo/widgets/HueCurveEditor with the cosmo_v2 palette.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
-#include "BezierCurve.h"
+#include "../../ImageProcessing/src/base/CurvePoint.h"
 #include <functional>
 #include <utility>
 #include <vector>
@@ -25,8 +26,8 @@ namespace cosmo_v2
     public:
         HueCurveEditor();
 
-        std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
-        void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
+        std::function<void(const std::vector<CurvePoint> &)> onChange;
+        void setPoints(const std::vector<CurvePoint> &pts);  // bezier control points
         void reset();                                  // back to a flat (no-op) curve
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
 
@@ -48,7 +49,7 @@ namespace cosmo_v2
         bool handleAt(const artboard::Point &local, int &idx, int &kind) const;
         void emit();
 
-        std::vector<CtrlPoint> mPts;  // x in [0,360), y in [-1,1]
+        std::vector<CurvePoint> mPts;  // x in [0,360), y in [-1,1]
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull

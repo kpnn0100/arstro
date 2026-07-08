@@ -12,9 +12,12 @@ namespace arstro
             rebuild(c);  // empty points -> flat 0 (identity)
     }
 
-    void ColorMixer::setCurve(Channel c, const std::vector<std::pair<float, float>> &points)
+    void ColorMixer::setCurve(Channel c, const std::vector<CurvePoint> &points)
     {
-        mPoints[c] = points;
+        // Flatten the bezier control points to a dense polyline (honouring smooth
+        // handles + the cyclic wrap seam), then treat those as the LUT knots. The same
+        // curve::sample the editor draws with, so render == on-screen curve.
+        mPoints[c] = curve::sample(points, /*cyclic*/ true, 360.0f);
         for (auto &p : mPoints[c])
         {
             // wrap hue into [0,360), clamp y into [-1,1]

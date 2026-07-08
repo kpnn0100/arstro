@@ -135,8 +135,8 @@ namespace arstro
         void setCurveLogScale(bool log);
 
         // ── colour mixer (cyclic per-hue curves) ──
-        // points: (hue 0..360, y in [-1,1]); the curve wraps at the 360/0 seam.
-        void setMixerCurve(MixerChannel c, const std::vector<std::pair<float, float>> &points);
+        // points: bezier control points (hue 0..360, y in [-1,1]); the curve wraps at the 360/0 seam.
+        void setMixerCurve(MixerChannel c, const std::vector<CurvePoint> &points);
 
         // ── colour grading (3-way wheels + hue remap) ──
         void setGradeHue(GradeRegion r, float deg);   // 0..360

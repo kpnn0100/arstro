@@ -139,6 +139,27 @@ pool in lockstep with the engine's reset slot ids (a new project's `thumbSlot` m
 thumbnail). Headless-verified: red project → reset → editor blank → green project opens fresh, no
 stale photo, no crash.
 
+## R-BUGFIX-3 — Mixer curve saved as samples, not bezier points — ✅ FIXED
+
+The colour-mixer (Mixer/Curve tab) is edited as a bezier curve with smooth, Alt-dragged tangent
+handles, but the handles were discarded on save: `HueCurveEditor` sampled the curve to a dense
+piecewise-linear polyline (~14 points/segment) and stored *that* in `EditParams.mixer[]`. Reopening a
+project rebuilt those samples as bare CORNER points — the smooth curve came back as a coarse linear
+approximation with no editable handles (the "opens as smaller/linear points" symptom).
+
+Fix: the persisted representation is now the bezier CONTROL points. `EditParams.mixer[]` is
+`std::array<std::vector<CurvePoint>,3>` where `CurvePoint{x,y,ix,iy,ox,oy,smooth}` (new
+`ImageProcessing/src/base/CurvePoint.h`, which also owns the single shared `curve::sample()` so the
+editor's on-screen curve and the engine's LUT can never diverge). `HueCurveEditor` now emits/restores
+control points (handles + smooth flag intact); `ColorMixer::setCurve` flattens the control points with
+`curve::sample()` when building its LUT, so render is unchanged. Serialization writes `x,y` for a
+corner point (identical to the old format → pre-bezier files still load, as corners) or
+`x,y,ix,iy,ox,oy` for a smooth one (field count flags smooth); the `.apf` preset path matches. The
+legacy `cosmo/` v1 editor keeps its sampled-point model via a thin convert-at-the-seam shim in
+`CosmoApp`. Regression-tested (`EditParamsIO_mixer_bezier_roundtrip`) + headless-verified: a smooth
+mixer point round-trips as 3 control points with handles (vs 43 handle-less corners on the old path)
+and the engine renders byte-identically before/after the round-trip.
+
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
 Status: implemented. `cosmo_v2/widgets/MaskOverlay.{h,cpp}` (ported from cosmo), owned by

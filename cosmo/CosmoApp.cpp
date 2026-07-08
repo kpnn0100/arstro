@@ -280,7 +280,15 @@ namespace cosmo
 
         mMixer = std::make_shared<MixerPanel>(mTheme, mAccent);
         mMixer->onChange = [this](int ch, const std::vector<std::pair<float, float>> &pts) {
-            if (auto *p = curParams()) { p->mixer[ch] = pts; submit(); }
+            // EditParams::mixer now holds bezier control points (see cosmo_v2's fix).
+            // This legacy editor still works in sampled points, so store them as corner
+            // control points; the engine re-samples them the same way it always did.
+            if (auto *p = curParams())
+            {
+                p->mixer[ch].clear();
+                for (auto &q : pts) { CurvePoint c; c.x = q.first; c.y = q.second; p->mixer[ch].push_back(c); }
+                submit();
+            }
         };
 
         mCurve = std::make_shared<ToneCurvePanel>(mTheme, mAccent);
@@ -858,7 +866,11 @@ namespace cosmo
         mDetail->setValues({p.sharpenAmount, p.sharpenRadius, p.sharpenMasking,
                             p.nrLuminance, p.nrColor,
                             p.lensDistortion, p.lensCA, p.lensVignette});
-        mMixer->setCurves(p.mixer);
+        // Flatten the bezier control points to a sampled polyline for the legacy
+        // sampled-point mixer editor (it shows the smooth curve as dense corners).
+        std::array<std::vector<std::pair<float, float>>, 3> mixSamples;
+        for (int c = 0; c < 3; ++c) mixSamples[c] = curve::sample(p.mixer[c], /*cyclic*/ true, 360.0f);
+        mMixer->setCurves(mixSamples);
         mCurve->setCurve(p.curve);
         mCurve->setLog(p.curveLog);
 

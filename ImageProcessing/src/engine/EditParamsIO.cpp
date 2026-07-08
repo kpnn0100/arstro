@@ -35,6 +35,45 @@ namespace arstro
             return v;
         }
 
+        // A mixer curve is a list of bezier CONTROL points (not a sampled polyline), so
+        // each point serialises its handles when smooth. A corner point writes just
+        // "x,y" (2 fields) — identical to the old sampled format, so pre-bezier project
+        // files still load (as corner points); a smooth point writes
+        // "x,y,ix,iy,ox,oy" (6 fields) and the field count alone flags it as smooth.
+        std::string mixerStr(const std::vector<CurvePoint> &v)
+        {
+            std::ostringstream o;
+            o.precision(7);
+            for (size_t i = 0; i < v.size(); ++i)
+            {
+                if (i) o << ';';
+                const CurvePoint &p = v[i];
+                o << p.x << ',' << p.y;
+                if (p.smooth) o << ',' << p.ix << ',' << p.iy << ',' << p.ox << ',' << p.oy;
+            }
+            return o.str();
+        }
+
+        std::vector<CurvePoint> parseMixer(const std::string &s)
+        {
+            std::vector<CurvePoint> v;
+            std::stringstream ss(s);
+            std::string seg;
+            while (std::getline(ss, seg, ';'))
+            {
+                std::vector<float> n;
+                std::stringstream fs(seg);
+                std::string tok;
+                while (std::getline(fs, tok, ',')) { try { n.push_back(std::stof(tok)); } catch (...) {} }
+                if (n.size() < 2) continue;
+                CurvePoint p;
+                p.x = n[0]; p.y = n[1];
+                if (n.size() >= 6) { p.smooth = true; p.ix = n[2]; p.iy = n[3]; p.ox = n[4]; p.oy = n[5]; }
+                v.push_back(p);
+            }
+            return v;
+        }
+
         float f(const std::string &s) { try { return std::stof(s); } catch (...) { return 0.f; } }
 
         std::vector<float> floats(const std::string &s, char sep)
@@ -120,8 +159,8 @@ namespace arstro
           << "\nlensDistortion=" << p.lensDistortion << "\nlensCA=" << p.lensCA
           << "\nlensVignette=" << p.lensVignette
           << "\ncurve=" << curveStr(p.curve) << "\ncurveLog=" << (p.curveLog ? 1 : 0)
-          << "\nmixer0=" << curveStr(p.mixer[0]) << "\nmixer1=" << curveStr(p.mixer[1])
-          << "\nmixer2=" << curveStr(p.mixer[2]);
+          << "\nmixer0=" << mixerStr(p.mixer[0]) << "\nmixer1=" << mixerStr(p.mixer[1])
+          << "\nmixer2=" << mixerStr(p.mixer[2]);
         for (int r = 0; r < 3; ++r)
             o << "\ngrade" << r << '=' << p.grade[r].hue << ',' << p.grade[r].sat << ',' << p.grade[r].lum;
         o << "\nbalance=" << p.balance
@@ -170,9 +209,9 @@ namespace arstro
             else if (k == "grainSize") out.grainSize = f(v);
             else if (k == "curve") out.curve = parseCurve(v);
             else if (k == "curveLog") out.curveLog = (v != "0");
-            else if (k == "mixer0") out.mixer[0] = parseCurve(v);
-            else if (k == "mixer1") out.mixer[1] = parseCurve(v);
-            else if (k == "mixer2") out.mixer[2] = parseCurve(v);
+            else if (k == "mixer0") out.mixer[0] = parseMixer(v);
+            else if (k == "mixer1") out.mixer[1] = parseMixer(v);
+            else if (k == "mixer2") out.mixer[2] = parseMixer(v);
             else if (k == "balance") out.balance = f(v);
             else if (k == "remapEnable") out.remapEnable = (v != "0");
             else if (k == "remapSrc") out.remapSrc = f(v);

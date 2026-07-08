@@ -473,6 +473,43 @@ TEST(EditParamsIO_roundtrip)
     CHECK_NEAR(d.temp, 6500.0, 1e-3);
 }
 
+// A mixer curve persists its BEZIER CONTROL points (not a sampled polyline): a
+// smooth point's tangent handles + smooth flag survive the round-trip, and the
+// control-point count is unchanged (no explosion into samples, no collapse to
+// corners). This is the "save by bezier point" fix.
+TEST(EditParamsIO_mixer_bezier_roundtrip)
+{
+    EditParams p;
+    CurvePoint a; a.x = 0.f;   a.y = 0.f;                          // corner
+    CurvePoint m; m.x = 120.f; m.y = 0.5f; m.smooth = true;        // smooth w/ handles
+                  m.ix = -40.f; m.iy = 0.2f; m.ox = 40.f; m.oy = -0.1f;
+    CurvePoint z; z.x = 240.f; z.y = -0.3f;                        // corner
+    p.mixer[0] = {a, m, z};
+
+    EditParams q;
+    CHECK(deserializeParams(serializeParams(p), q));
+
+    CHECK(q.mixer[0].size() == 3);          // control points preserved, not resampled
+    CHECK(!q.mixer[0][0].smooth);
+    CHECK(!q.mixer[0][2].smooth);
+    const CurvePoint &qm = q.mixer[0][1];
+    CHECK(qm.smooth);
+    CHECK_NEAR(qm.x, 120.0, 1e-4);
+    CHECK_NEAR(qm.y, 0.5, 1e-4);
+    CHECK_NEAR(qm.ix, -40.0, 1e-4);
+    CHECK_NEAR(qm.iy, 0.2, 1e-4);
+    CHECK_NEAR(qm.ox, 40.0, 1e-4);
+    CHECK_NEAR(qm.oy, -0.1, 1e-4);
+
+    // a bare "x,y" (pre-bezier / corner) token still parses -> corner point
+    EditParams legacy;
+    CHECK(deserializeParams("mixer0=0,0.1;180,-0.1\n", legacy));
+    CHECK(legacy.mixer[0].size() == 2);
+    CHECK(!legacy.mixer[0][0].smooth);
+    CHECK_NEAR(legacy.mixer[0][1].x, 180.0, 1e-4);
+    CHECK_NEAR(legacy.mixer[0][1].y, -0.1, 1e-4);
+}
+
 // ── .apf generic preset envelope + selective image mapping ──
 TEST(Apf_selective_save_and_apply)
 {

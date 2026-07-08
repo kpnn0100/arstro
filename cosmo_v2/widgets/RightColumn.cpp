@@ -141,7 +141,7 @@ namespace cosmo_v2
         mTabs->addPage("Mask", mMask);
 
         mMixer = std::make_shared<MixerPanel>();
-        mMixer->onCurveChange = [this](int channel, std::vector<std::pair<float, float>> pts) {
+        mMixer->onCurveChange = [this](int channel, std::vector<CurvePoint> pts) {
             if (auto *p = mSession.curParams()) { p->mixer[channel] = std::move(pts); mSession.submit(); }
         };
 

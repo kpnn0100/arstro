@@ -231,7 +231,7 @@ namespace arstro
         if (auto *p = cur()) { p->curveLog = log; mToneCurve.setLogScale(log); }
     }
 
-    void EditEngine::setMixerCurve(MixerChannel c, const std::vector<std::pair<float, float>> &points)
+    void EditEngine::setMixerCurve(MixerChannel c, const std::vector<CurvePoint> &points)
     {
         if (auto *p = cur())
         {

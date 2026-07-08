@@ -29,11 +29,11 @@ namespace cosmo_v2
         MixerPanel();
 
         /** Refresh all three channels' curves and show the active channel. */
-        void setMixer(const std::array<std::vector<std::pair<float, float>>, 3> &mixer);
+        void setMixer(const std::array<std::vector<CurvePoint>, 3> &mixer);
         void layout();
 
-        /** channel: 0=Hue, 1=Sat, 2=Lum; pts = dense sampled curve for that channel. */
-        std::function<void(int channel, std::vector<std::pair<float, float>>)> onCurveChange;
+        /** channel: 0=Hue, 1=Sat, 2=Lum; pts = bezier control points for that channel. */
+        std::function<void(int channel, std::vector<CurvePoint>)> onCurveChange;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

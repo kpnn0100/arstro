@@ -8,6 +8,7 @@
  *  processors and the UI is what makes the core reusable.
  */
 #pragma once
+#include "../base/CurvePoint.h"
 #include <array>
 #include <utility>
 #include <vector>
@@ -66,8 +67,9 @@ namespace arstro
         // tone curve (display-domain control points) + domain
         std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
         bool curveLog = true;
-        // colour mixer: 3 cyclic per-hue curves (hue / sat / lum)
-        std::array<std::vector<std::pair<float, float>>, 3> mixer{};
+        // colour mixer: 3 cyclic per-hue curves (hue / sat / lum), stored as bezier
+        // CONTROL points so a reopened project restores the exact editable curve.
+        std::array<std::vector<CurvePoint>, 3> mixer{};
         // colour grading: 3-way wheels + balance + hue-range remap
         std::array<GradeWheel, 3> grade{};
         float balance = 0;

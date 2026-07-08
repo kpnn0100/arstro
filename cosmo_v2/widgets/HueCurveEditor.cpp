@@ -34,10 +34,12 @@ namespace cosmo_v2
         mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
     }
 
-    void HueCurveEditor::setPoints(const std::vector<std::pair<float, float>> &pts)
+    void HueCurveEditor::setPoints(const std::vector<CurvePoint> &pts)
     {
+        // Restore the control points verbatim (handles + smooth flag preserved), only
+        // wrapping/clamping the anchor position back into range.
         mPts.clear();
-        for (auto &p : pts) { CtrlPoint c; c.x = (float)wrap360(p.first); c.y = (float)clampY(p.second); mPts.push_back(c); }
+        for (auto &p : pts) { CurvePoint c = p; c.x = (float)wrap360(p.x); c.y = (float)clampY(p.y); mPts.push_back(c); }
         if (mPts.size() < 2) mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
     }
 
@@ -81,7 +83,9 @@ namespace cosmo_v2
 
     void HueCurveEditor::emit()
     {
-        if (onChange) onChange(sampleCurve(mPts, /*cyclic*/ true, 360.0f));
+        // Emit the CONTROL points (with handles), not a sampling — the engine flattens
+        // them to its LUT and the file persists them, so the curve round-trips exactly.
+        if (onChange) onChange(mPts);
     }
 
     bool HueCurveEditor::handleGesture(const Gesture &g, const Point &local)
@@ -91,7 +95,7 @@ namespace cosmo_v2
         {
             const int hit = pointAt(local);
             if (hit >= 0 && mPts.size() > 2) mPts.erase(mPts.begin() + hit);
-            else { CtrlPoint c; c.x = (float)nxh(local.x, true); c.y = (float)nyv(local.y); mPts.push_back(c); }
+            else { CurvePoint c; c.x = (float)nxh(local.x, true); c.y = (float)nyv(local.y); mPts.push_back(c); }
             emit();
             return true;
         }
@@ -105,7 +109,7 @@ namespace cosmo_v2
         }
         if ((g.type == T::Drag || g.type == T::DragStart) && mDragIdx >= 0)
         {
-            CtrlPoint &cp = mPts[mDragIdx];
+            CurvePoint &cp = mPts[mDragIdx];
             if (mDragKind == 0) { cp.x = (float)nxh(local.x, true); cp.y = (float)nyv(local.y); }
             else if (mDragKind == 3)
             {
@@ -156,7 +160,7 @@ namespace cosmo_v2
         }
 
         // dense cyclic curve; break the polyline where x wraps so the seam joins continuously
-        const auto dense = sampleCurve(mPts, true, 360.0f);
+        const auto dense = curve::sample(mPts, true, 360.0f);
         for (size_t i = 0; i + 1 < dense.size(); ++i)
         {
             if (dense[i + 1].first < dense[i].first) continue;  // wrap fold -> skip the jump

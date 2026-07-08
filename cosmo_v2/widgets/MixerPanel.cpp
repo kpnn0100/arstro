@@ -37,7 +37,7 @@ namespace cosmo_v2
         {
             mEditors[c] = std::make_shared<HueCurveEditor>();
             const int ch = c;
-            mEditors[c]->onChange = [this, ch](const std::vector<std::pair<float, float>> &pts) {
+            mEditors[c]->onChange = [this, ch](const std::vector<CurvePoint> &pts) {
                 if (onCurveChange) onCurveChange(ch, pts);
             };
             addChild(mEditors[c]);
@@ -62,7 +62,7 @@ namespace cosmo_v2
         for (int c = 0; c < 3; ++c) mEditors[c]->visible = (c == channel);
     }
 
-    void MixerPanel::setMixer(const std::array<std::vector<std::pair<float, float>>, 3> &mixer)
+    void MixerPanel::setMixer(const std::array<std::vector<CurvePoint>, 3> &mixer)
     {
         for (int c = 0; c < 3; ++c) mEditors[c]->setPoints(mixer[c]);
     }
