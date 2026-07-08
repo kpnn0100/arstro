@@ -309,6 +309,16 @@ namespace cosmo
         mSlotHistory[slot].init(p);  // seed history with the LOADED state, not a blank one
     }
 
+    void EditSession::applyParamsToSlot(int slot, const EditParams &p, const History &history)
+    {
+        if (slot < 0 || slot >= (int)mSlotParams.size()) return;
+        mSlotParams[slot] = p;
+        if (history.nodes.empty())
+            mSlotHistory[slot].init(p);  // no saved tree (old project) -> single root
+        else
+            mSlotHistory[slot].restore(history.nodes, history.current, history.maxSteps, history.coalesceMs);
+    }
+
     void EditSession::recordHistory()
     {
         if (mSuppressHistory) return;
@@ -542,6 +552,18 @@ namespace cosmo
                 {
                     f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n'
                       << serializeParams(mSlotParams[g.slot]);
+                    // Branching edit history for this image: tree config + one #hnode
+                    // block per node (parent index / seq / label + a full params snapshot).
+                    // Nodes are written in vector-index order so parent indices stay valid.
+                    const History &h = mSlotHistory[g.slot];
+                    if (!h.nodes.empty())
+                    {
+                        f << "hcurrent=" << h.current << "\nhmax=" << h.maxSteps
+                          << "\nhcoalesce=" << h.coalesceMs << '\n';
+                        for (const auto &n : h.nodes)
+                            f << "#hnode\nhparent=" << n.parent << "\nhseq=" << n.seq
+                              << "\nhlabel=" << n.label << '\n' << serializeParams(n.params);
+                    }
                 }
             }
         };
@@ -557,52 +579,73 @@ namespace cosmo
         if (!f) return false;
         out.clear();
 
-        bool inGroup = false, inImage = false;
-        std::vector<std::string> block;
-        auto flush = [&] {
-            if (!inGroup && !inImage) return;
-            WorkspaceEntry e;
-            e.group = inGroup;
-            std::string blockText;
-            for (const auto &l : block)
-            {
-                blockText += l; blockText += '\n';
-                const auto eq = l.find('=');
-                if (eq == std::string::npos) continue;
-                const std::string k = l.substr(0, eq), v = l.substr(eq + 1);
-                if (k == "parent") { try { e.parent = std::stoi(v); } catch (...) {} }
-                else if (k == "name") e.name = v;
-                else if (k == "path") e.imagePath = v;
-                else if (k == "offset")
-                {
-                    std::stringstream ts(v); std::string t; float vals[12] = {0};
-                    int i = 0;
-                    while (i < 12 && std::getline(ts, t, ',')) { try { vals[i] = std::stof(t); } catch (...) {} ++i; }
-                    arstro::LocalAdjust &o = e.offset;
-                    o.exposure = vals[0]; o.contrast = vals[1]; o.highlights = vals[2]; o.shadows = vals[3];
-                    o.whites = vals[4]; o.blacks = vals[5]; o.temp = vals[6]; o.tint = vals[7];
-                    o.saturation = vals[8]; o.texture = vals[9]; o.clarity = vals[10]; o.dehaze = vals[11];
-                }
-            }
-            if (inImage) deserializeParams(blockText, e.params);
-            out.push_back(std::move(e));
-            block.clear();
+        // One WorkspaceEntry per #group/#image. Inside an #image the lines up to the
+        // first #hnode are the image's CURRENT params (+ history header: hcurrent/hmax/
+        // hcoalesce); each following #hnode is a saved history node (its own params +
+        // hparent/hseq/hlabel). A section's `paramsBuf` collects only the params lines;
+        // the h*/parent/name/offset keys are consumed here and never fed to the parser.
+        WorkspaceEntry cur;
+        bool haveCur = false, inImage = false, inNode = false;
+        std::string paramsBuf;
+        HistoryNode node;
+
+        auto closeParamBlock = [&] {
+            if (inNode) { deserializeParams(paramsBuf, node.params); cur.history.nodes.push_back(node); node = HistoryNode{}; }
+            else if (inImage) deserializeParams(paramsBuf, cur.params);
+            paramsBuf.clear();
+        };
+        auto flushEntry = [&] {
+            if (!haveCur) return;
+            closeParamBlock();
+            out.push_back(std::move(cur));
+            cur = WorkspaceEntry{};
+            haveCur = false; inImage = false; inNode = false;
         };
 
         std::string line;
         while (std::getline(f, line))
         {
+            if (line.rfind("cosmoworkspace=", 0) == 0) continue;
             if (line == "#group" || line == "#image")
             {
-                flush();
-                inGroup = (line == "#group");
+                flushEntry();
+                haveCur = true;
+                cur.group = (line == "#group");
                 inImage = (line == "#image");
+                inNode = false;
                 continue;
             }
-            if (line.rfind("cosmoworkspace=", 0) == 0) continue;
-            block.push_back(line);
+            if (line == "#hnode") { closeParamBlock(); inNode = true; continue; }
+
+            const auto eq = line.find('=');
+            if (eq == std::string::npos) { paramsBuf += line; paramsBuf += '\n'; continue; }
+            const std::string k = line.substr(0, eq), v = line.substr(eq + 1);
+            if (inNode)
+            {
+                if (k == "hparent") { try { node.parent = std::stoi(v); } catch (...) {} }
+                else if (k == "hseq") { try { node.seq = std::stoi(v); } catch (...) {} }
+                else if (k == "hlabel") node.label = v;
+                else { paramsBuf += line; paramsBuf += '\n'; }
+            }
+            else if (k == "parent") { try { cur.parent = std::stoi(v); } catch (...) {} }
+            else if (k == "name") cur.name = v;
+            else if (k == "path") cur.imagePath = v;
+            else if (k == "hcurrent") { try { cur.history.current = std::stoi(v); } catch (...) {} }
+            else if (k == "hmax") { try { cur.history.maxSteps = std::stoi(v); } catch (...) {} }
+            else if (k == "hcoalesce") { try { cur.history.coalesceMs = std::stod(v); } catch (...) {} }
+            else if (k == "offset")
+            {
+                std::stringstream ts(v); std::string t; float vals[12] = {0};
+                int i = 0;
+                while (i < 12 && std::getline(ts, t, ',')) { try { vals[i] = std::stof(t); } catch (...) {} ++i; }
+                arstro::LocalAdjust &o = cur.offset;
+                o.exposure = vals[0]; o.contrast = vals[1]; o.highlights = vals[2]; o.shadows = vals[3];
+                o.whites = vals[4]; o.blacks = vals[5]; o.temp = vals[6]; o.tint = vals[7];
+                o.saturation = vals[8]; o.texture = vals[9]; o.clarity = vals[10]; o.dehaze = vals[11];
+            }
+            else { paramsBuf += line; paramsBuf += '\n'; }  // a params line
         }
-        flush();
+        flushEntry();
         return true;
     }
 

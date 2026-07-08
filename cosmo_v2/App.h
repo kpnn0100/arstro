@@ -131,6 +131,8 @@ namespace cosmo_v2
         int addWorkspaceMissingImage(int parentNode, const std::string &name)
         { return mSession.addWorkspaceMissingImage(parentNode, name); }
         void applyParamsToSlot(int slot, const EditParams &p) { mSession.applyParamsToSlot(slot, p); }
+        void applyParamsToSlot(int slot, const EditParams &p, const cosmo::History &history)
+        { mSession.applyParamsToSlot(slot, p, history); }
         void finishWorkspaceLoad(const std::string &path);
 
     private:

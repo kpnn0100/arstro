@@ -48,6 +48,7 @@ namespace
             int parent = -1;
             arstro::LocalAdjust offset;        // group offset
             arstro::EditParams params;         // per-image edit params
+            arstro::cosmo::History history;    // per-image branching edit timeline
             std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
             int w = 0, h = 0;
             bool decoded = false;              // false = missing/failed image
@@ -289,7 +290,7 @@ namespace
             {
                 const int slot = a->app.openImageInto(parentNode, img.rgba.data(), img.width, img.height,
                                                        baseName(e.imagePath), e.imagePath);
-                a->app.applyParamsToSlot(slot, e.params);
+                a->app.applyParamsToSlot(slot, e.params, e.history);
             }
             else
             {
@@ -473,6 +474,7 @@ namespace
             r.parent = e.parent;
             r.offset = e.offset;
             r.params = e.params;
+            r.history = e.history;
             if (e.group)
             {
                 r.name = e.name;
@@ -516,7 +518,7 @@ namespace
             else if (r.decoded)
             {
                 const int slot = a->app.openImageInto(parentNode, r.rgba.data(), r.w, r.h, r.name, r.imagePath);
-                a->app.applyParamsToSlot(slot, r.params);
+                a->app.applyParamsToSlot(slot, r.params, r.history);
                 // Fallback cover only if the thumbnail wasn't already supplied (#3):
                 // normally the loading-screen centre image is the cached thumbnail.
                 if (!job->coverSent && !a->app.hasLoadingCover())
@@ -794,6 +796,16 @@ namespace
         if (ctrl && (e->keyval == GDK_KEY_y || e->keyval == GDK_KEY_Y))
         {
             a->app.redo();
+            gtk_widget_queue_draw(a->area);
+            return TRUE;
+        }
+        // Ctrl+S = save the project (to its current path, else prompt);
+        // Ctrl+Shift+S = Save As (always prompt for a new path). Both persist the
+        // full workspace: group tree, per-image params, and edit history.
+        if (ctrl && (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S))
+        {
+            if (shift) saveWorkspaceDialog(a);
+            else       a->app.saveWorkspace();
             gtk_widget_queue_draw(a->area);
             return TRUE;
         }

@@ -58,6 +58,12 @@ namespace cosmo
         const EditParams *redo();
         const EditParams *jumpTo(int node);
 
+        /** Adopt a deserialized tree (from a saved project): replace nodes + current
+         *  + limits, rebuild each node's kids[] from its parent (ascending index =
+         *  creation order, matching record()/prune()), and resume seq numbering past
+         *  the highest loaded seq so later edits get fresh, non-colliding ids. */
+        void restore(std::vector<HistoryNode> loadedNodes, int cur, int steps, double coalMs);
+
         void breakCoalesce() { mCanCoalesce = false; }
         void setLimits(int steps, double coalMs);
 

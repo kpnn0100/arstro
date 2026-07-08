@@ -13,6 +13,7 @@
 #include <thread>
 
 using arstro::cosmo::EditSession;
+using arstro::cosmo::History;
 using arstro::cosmo::PresetLibrary;
 
 namespace
@@ -165,6 +166,63 @@ namespace
         std::filesystem::remove(path);
         printf("[PASS] session_save_and_read_roundtrip\n");
     }
+
+    // Saving a project must persist the whole branching edit history, not just the
+    // live params: after reload the tree (nodes, branches, current, seq order) is
+    // intact and undo/redo still walk it.
+    void test_workspace_history_roundtrip()
+    {
+        EditSession s;
+        auto px = solidImage(8, 8, 2, 3, 4);
+        s.tick(0.0);
+        s.openImage(px.data(), 8, 8, "img", "/tmp/hist_src.jpg");
+        s.curParams()->exposure = 1.0f; s.submit();          // node 1
+        s.tick(1000.0);
+        s.curParams()->contrast = 10.0f; s.submit();         // node 2 (child of 1)
+        s.tick(2000.0); s.undo();                            // back to node 1
+        s.tick(3000.0);
+        s.curParams()->saturation = 20.0f; s.submit();       // node 3 (branch off node 1)
+
+        History *h0 = s.currentHistory();
+        assert(h0 && h0->nodes.size() == 4);                 // root + 3 edits
+        const int cur0 = h0->current;
+        assert(h0->nodes[1].kids.size() == 2);               // node 1 branches to 2 and 3
+
+        const std::string path = "/tmp/cosmo_core_ws_hist.cosmoproj";
+        assert(s.saveWorkspaceAs(path));
+
+        std::vector<EditSession::WorkspaceEntry> entries;
+        assert(EditSession::readWorkspaceFile(path, entries));
+
+        EditSession s2;
+        auto px2 = solidImage(8, 8, 0, 0, 0);
+        int images = 0;
+        for (auto &e : entries)
+        {
+            const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
+            if (e.group) { s2.addWorkspaceGroup(parentNode, e.name, e.offset); continue; }
+            const int slot = s2.openImageInto(parentNode, px2.data(), 8, 8, "img", e.imagePath);
+            s2.applyParamsToSlot(slot, e.params, e.history);
+            ++images;
+        }
+        s2.finishWorkspaceLoad(path);
+        assert(images == 1);
+
+        History *h1 = s2.currentHistory();
+        assert(h1 && h1->nodes.size() == 4);                 // full tree restored
+        assert(h1->current == cur0);                         // same current node
+        assert(h1->nodes[1].kids.size() == 2);               // branch preserved
+        assert(std::fabs(s2.curParams()->saturation - 20.0f) < 1e-3f);  // current == branch tip
+
+        const auto *undone = s2.undo();                      // -> node 1
+        assert(undone && std::fabs(s2.curParams()->exposure - 1.0f) < 1e-3f);
+        assert(std::fabs(s2.curParams()->saturation) < 1e-3f);
+        const auto *redone = s2.redo();                      // prefers newest child (node 3)
+        assert(redone && std::fabs(s2.curParams()->saturation - 20.0f) < 1e-3f);
+
+        std::filesystem::remove(path);
+        printf("[PASS] workspace_history_roundtrip\n");
+    }
 }
 
 int main()
@@ -175,6 +233,7 @@ int main()
     test_undo_redo();
     test_preset_save_and_apply_roundtrip();
     test_session_save_and_read_roundtrip();
+    test_workspace_history_roundtrip();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

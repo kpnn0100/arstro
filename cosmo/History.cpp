@@ -120,6 +120,25 @@ namespace cosmo
         return &nodes[current].params;
     }
 
+    void History::restore(std::vector<HistoryNode> loadedNodes, int cur, int steps, double coalMs)
+    {
+        nodes = std::move(loadedNodes);
+        maxSteps = steps > 2 ? steps : 2;
+        coalesceMs = coalMs < 0 ? 0 : coalMs;
+        int maxSeq = -1;
+        for (auto &n : nodes) { n.kids.clear(); if (n.seq > maxSeq) maxSeq = n.seq; }
+        for (int i = 0; i < (int)nodes.size(); ++i)
+        {
+            const int p = nodes[i].parent;
+            if (p >= 0 && p < (int)nodes.size()) nodes[p].kids.push_back(i);
+        }
+        current = (cur >= 0 && cur < (int)nodes.size()) ? cur
+                                                        : (nodes.empty() ? -1 : (int)nodes.size() - 1);
+        mNextSeq = maxSeq + 1;      // don't reuse a persisted seq -> redo preference stays correct
+        mCanCoalesce = false;       // a loaded state never coalesces with the next edit
+        mLastEditMs = -1e30;
+    }
+
     void History::setLimits(int steps, double coalMs)
     {
         maxSteps = steps > 2 ? steps : 2;

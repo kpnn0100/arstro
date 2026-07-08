@@ -273,10 +273,10 @@ namespace cosmo_v2
         ms->onOpenChanged = [this](int open) { if (open >= 0) mTopBar->raise(); };
 
         ms->addMenu({"File", {
-            {"Home",       [this] { showHome(); }},
-            {"Open...",    [this] { if (onOpenRequested) onOpenRequested(); }},
-            {"Save",       [this] { saveSession(); }},
-            {"Save As...", [this] { if (onSaveAsRequested) onSaveAsRequested(); }},
+            {"Home",                     [this] { showHome(); }},
+            {"Open...",                  [this] { if (onOpenRequested) onOpenRequested(); }},
+            {"Save        (Ctrl+S)",     [this] { saveWorkspace(); }},
+            {"Save As...  (Ctrl+Shift+S)", [this] { if (onSaveWorkspaceRequested) onSaveWorkspaceRequested(); }},
         }});
         ms->addMenu({"Settings", {
             {"Engine Settings...", [this] { openSettingsDialog(); }},

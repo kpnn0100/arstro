@@ -98,6 +98,9 @@ namespace cosmo
         EditParams effectiveParams(int slot) const;  // image params + summed ancestor group offsets
         void applyParams(const EditParams &p);        // replace the current slot's params wholesale + submit
         void applyParamsToSlot(int slot, const EditParams &p);  // seed a slot's params + history root (no submit)
+        /** As above, but restore a saved branching history instead of a fresh root
+         *  (empty `history` falls back to a single-node root). Used on project load. */
+        void applyParamsToSlot(int slot, const EditParams &p, const History &history);
         void submit();                                 // record history + re-render the current slot
 
         /** Unsaved-changes flag: true once an edit is submitted, cleared on
@@ -157,6 +160,7 @@ namespace cosmo
             arstro::LocalAdjust offset;    // group scalar offset (groups only)
             std::string imagePath;         // source file path (images only)
             EditParams params;              // develop settings (images only)
+            History history;                // branching edit timeline (images only; empty = none saved)
         };
         static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out);
         bool saveWorkspaceAs(const std::string &path);

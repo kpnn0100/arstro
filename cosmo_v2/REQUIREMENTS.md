@@ -160,6 +160,24 @@ legacy `cosmo/` v1 editor keeps its sampled-point model via a thin convert-at-th
 mixer point round-trips as 3 control points with handles (vs 43 handle-less corners on the old path)
 and the engine renders byte-identically before/after the round-trip.
 
+## R-PERSIST — Save the edit history + save shortcuts — ✅ IMPLEMENTED
+
+- **R-PERSIST-1 History in the project.** A saved project (`.cosmoproj` workspace) persists each
+  image's full branching edit history, not just its live params. `saveWorkspaceAs` writes, after an
+  image's current-params block, a history header (`hcurrent`/`hmax`/`hcoalesce`) then one `#hnode`
+  block per node — `hparent`/`hseq`/`hlabel` + a full params snapshot, in vector-index order so the
+  parent indices stay valid. `readWorkspaceFile` parses these back into `WorkspaceEntry::history`, and
+  the load path restores them via `EditSession::applyParamsToSlot(slot, params, history)` →
+  `History::restore()`, which rebuilds each node's `kids` from its parent, restores `current`, and
+  resumes `seq` numbering past the highest loaded seq (so later edits get fresh, non-colliding ids and
+  redo still prefers the newest branch). Old projects (no `#hnode`) load with a single-node root, as
+  before. Regression-tested (`workspace_history_roundtrip`): a branched tree round-trips with its
+  nodes, branch, current node, and undo/redo intact.
+- **R-PERSIST-2 Save shortcuts.** `Ctrl+S` saves the project to its current path (prompting only if it
+  has none); `Ctrl+Shift+S` is Save As (always prompts). File ▸ Save / Save As… map to the same
+  workspace actions (labels show the shortcuts), so "save" means "save the project" everywhere —
+  group tree, per-image params, and history. (Bare `s` remains the quick PNG export.)
+
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
 Status: implemented. `cosmo_v2/widgets/MaskOverlay.{h,cpp}` (ported from cosmo), owned by
