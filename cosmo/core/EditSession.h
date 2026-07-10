@@ -13,8 +13,8 @@
  *  own methods are synchronous and take the answer once the host has it.
  */
 #pragma once
-#include "../ImageProcessing/src/image_processing.h"
-#include "../cosmo/History.h"
+#include "../../ImageProcessing/src/image_processing.h"
+#include "History.h"
 #include <cstdint>
 #include <string>
 #include <vector>

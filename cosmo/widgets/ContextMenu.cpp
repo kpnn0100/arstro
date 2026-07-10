@@ -1,67 +1,111 @@
 #include "ContextMenu.h"
-#include "../CosmoTheme.h"
+#include "TextMetrics.h"
+#include "../Theme.h"
 #include <algorithm>
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace { constexpr double kItemH = 26.0, kMenuW = 184.0, kVPad = 5.0; }
+    namespace
+    {
+        constexpr double kItemH = 24.0;
+        constexpr double kFontPx = 11.0;
+        constexpr double kPadX = 11.0, kPadY = 4.0;
+        constexpr double kMinW = 150.0;
+    }
 
-    ContextMenu::ContextMenu(const Color &accent) : mAccent(accent) {}
-
-    void ContextMenu::show(double x, double y, std::vector<Item> items)
+    void ContextMenu::open(std::vector<Item> items, double x, double y)
     {
         mItems = std::move(items);
-        mX = x; mY = y; mOpen = true;
-        raise();  // topmost for input + draws last
+        mX = x;
+        mY = y;
+        mOpen = !mItems.empty();
+        if (mOpen) raise();  // topmost -> wins hit-testing over body widgets it overlaps
     }
 
     Rect ContextMenu::menuRect() const
     {
-        const double h = (double)mItems.size() * kItemH + 2 * kVPad;
-        double x = mX, y = mY;
-        if (x + kMenuW > width.value()) x = width.value() - kMenuW - 4;   // clamp on-screen
-        if (y + h > height.value()) y = height.value() - h - 4;
-        if (x < 4) x = 4; if (y < 4) y = 4;
-        return Rect{x, y, kMenuW, h};
+        double w = kMinW;
+        for (const auto &it : mItems) w = std::max(w, estimateTextWidth(it.label, kFontPx) + 2 * kPadX);
+        const double h = (double)mItems.size() * kItemH + 2 * kPadY;
+        // keep it fully on-screen (nudge left/up if it would overflow the window)
+        double x = std::min(mX, width.value() - w);
+        double y = std::min(mY, height.value() - h);
+        return Rect{std::max(0.0, x), std::max(0.0, y), w, h};
     }
 
-    int ContextMenu::itemAt(const Point &world) const
+    int ContextMenu::itemAt(const Point &local) const
     {
         const Rect r = menuRect();
-        if (!r.contains(world)) return -1;
-        const int i = (int)((world.y - (r.y + kVPad)) / kItemH);
+        if (!r.contains(local)) return -1;
+        const int i = (int)((local.y - (r.y + kPadY)) / kItemH);
         return (i >= 0 && i < (int)mItems.size()) ? i : -1;
+    }
+
+    void ContextMenu::advance(double nowMs)
+    {
+        Segment::advance(nowMs);
+        if (mOpen != mWasOpen)  // ease the popup in on open, out on close
+        {
+            mWasOpen = mOpen;
+            mAppear.animateTo(mOpen ? 1.0 : 0.0, mOpen ? 130.0 : 100.0, Easing::EaseOutCubic, nowMs);
+        }
+        if (!mOpen) mHover.clear();  // nothing hovered once closed
+        mAppear.update(nowMs);
+        mHover.advance(nowMs);  // per-item hover cross-fade
     }
 
     bool ContextMenu::handleGesture(const Gesture &g, const Point &local)
     {
         if (!mOpen) return false;
-        if (g.type == Gesture::Type::Click)
+        using T = Gesture::Type;
+        if (g.type == T::Move) { mHover.setHovered(itemAt(local)); return true; }  // track hovered item
+        if (g.type == T::Down) return true;  // consume so the press doesn't fall through
+        if (g.type == T::Click || g.type == T::RightClick)
         {
-            const int i = itemAt(local);  // root child at origin -> local == world
-            mOpen = false;
-            if (i >= 0 && mItems[i].enabled && mItems[i].action) mItems[i].action();
+            const int i = itemAt(local);
+            if (i >= 0)
+            {
+                auto action = mItems[i].action;  // copy before closing
+                mOpen = false;
+                mHover.clear();
+                if (action) action();
+            }
+            else
+            {
+                mOpen = false;  // click outside cancels
+            }
             return true;
         }
-        return true;  // consume everything else while open (modal)
+        return true;  // modal: swallow everything else while open
     }
 
     void ContextMenu::onOverlay(IRenderTarget &t) const
     {
-        if (!mOpen) return;
-        const Rect r = menuRect();
-        drawRoundedRect(t, Rect{r.x - 1, r.y - 1, r.w + 2, r.h + 2}, radius::control() + 1,
-                        Paint::filled(palette::bg()));  // opaque backing
-        drawRoundedRect(t, r, radius::control(), Paint::filledStroked(palette::panel(), palette::line(), 1.0));
+        const double appear = mAppear.value();
+        if (!mOpen && appear <= 0.001) return;  // fully closed
+        Rect r = menuRect();
+        r.y -= (1.0 - appear) * 6.0;  // rise into place as it fades in (R-G-1)
+
+        Color body = palette::popover(), border = palette::border();
+        body.a *= appear; border.a *= appear;
+        drawRoundedRect(t, r, radius::control(), Paint::filledStroked(body, border, 1.0));
+
         for (int i = 0; i < (int)mItems.size(); ++i)
         {
-            const double y = r.y + kVPad + i * kItemH;
-            t.setFill(mItems[i].enabled ? palette::ink() : palette::faint());
-            t.drawText(mItems[i].label, r.x + 12, y + kItemH * 0.5 + 4.0, 12.0);
+            const double y = r.y + kPadY + i * kItemH;
+            // Per-item hover wash: each item cross-fades independently (R-G-3).
+            const double hv = mHover.amount(i) * appear;
+            if (hv > 0.001)
+                drawRoundedRect(t, Rect{r.x + 3, y, r.w - 6, kItemH}, radius::control(),
+                                Paint::filled(palette::whiteAlpha(0.08 * hv)));
+            Color fg = palette::foreground();
+            fg.a *= appear;
+            t.setFill(fg);
+            t.drawText(mItems[i].label, r.x + kPadX, y + kItemH * 0.5 + kFontPx * 0.35, kFontPx, font::sans());
         }
     }
 }

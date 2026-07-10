@@ -1,18 +1,18 @@
 {
-  // Build tasks for the arstro umbrella. The cosmo_v2 build task reconfigures
+  // Build tasks for the arstro umbrella. The cosmo build task reconfigures
   // first (a cheap no-op when the CMake cache is current, but it guarantees a
   // newly-added target/source/option is picked up) and then builds ONLY the
-  // cosmo_v2 target into the Ninja `build/` tree — the single tree the launch
+  // cosmo target into the Ninja `build/` tree — the single tree the launch
   // config and the CMake Tools extension are pinned to (see settings.json).
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "cosmo_v2: build",
+      "label": "cosmo: build",
       "type": "shell",
-      "command": "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" -G Ninja && cmake --build \"${workspaceFolder}/build\" --target cosmo_v2 -j 8",
+      "command": "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" -G Ninja && cmake --build \"${workspaceFolder}/build\" --target cosmo -j 8",
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": ["$gcc"],
-      "detail": "Reconfigure + build the cosmo_v2 GUI into build/cosmo_v2/cosmo_v2"
+      "detail": "Reconfigure + build the cosmo GUI into build/cosmo/cosmo"
     }
   ]
 }

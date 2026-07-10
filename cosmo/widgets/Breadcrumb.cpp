@@ -1,45 +1,87 @@
 #include "Breadcrumb.h"
-#include "../CosmoTheme.h"
+#include "Icons.h"
+#include "TextMetrics.h"
+#include "../Theme.h"
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace { constexpr double kSize = 11.0, kChar = 6.2, kSepW = 14.0; }
+    namespace { constexpr double kPadX = 9.75, kGap = 3.25, kFontPx = 10.0; }
 
-    Breadcrumb::Breadcrumb(const Color &accent) : mAccent(accent) {}
+    Breadcrumb::Breadcrumb() { height.set(kHeight); }
 
-    void Breadcrumb::setPath(std::vector<std::string> names) { mPath = std::move(names); }
+    void Breadcrumb::setPath(std::vector<std::string> crumbs) { mCrumbs = std::move(crumbs); }
 
-    void Breadcrumb::onPaint(IRenderTarget &t) const
+    std::vector<Breadcrumb::Span> Breadcrumb::computeSpans() const
     {
-        mEnds.assign(mPath.size(), 0.0);
-        double x = 0.0;
-        const double y = height.value() * 0.5 + kSize * 0.4;
-        for (size_t i = 0; i < mPath.size(); ++i)
+        std::vector<Span> spans;
+        double x = kPadX;
+        for (size_t i = 0; i < mCrumbs.size(); ++i)
         {
-            const bool last = i + 1 == mPath.size();
-            t.setFill(last ? palette::ink() : palette::muted());
-            t.drawText(mPath[i], x, y, kSize);
-            x += (double)mPath[i].size() * kChar + 4.0;
-            mEnds[i] = x;
-            if (!last)
-            {
-                t.setFill(palette::faint());
-                t.drawText("/", x, y, kSize);
-                x += kSepW;
-            }
+            const double w = estimateTextWidth(mCrumbs[i], kFontPx);
+            spans.push_back({x, w});
+            x += w + kGap;
+            if (i + 1 < mCrumbs.size()) x += 9.0 + kGap;  // chevron (9px) + its own gap
         }
+        return spans;
+    }
+
+    int Breadcrumb::crumbAt(const Point &local) const
+    {
+        const auto spans = computeSpans();
+        for (size_t i = 0; i + 1 < spans.size(); ++i)  // last crumb is inert
+            if (local.x >= spans[i].x && local.x <= spans[i].x + spans[i].w)
+                return (int)i;
+        return -1;
+    }
+
+    void Breadcrumb::advance(double nowMs)
+    {
+        Segment::advance(nowMs);
+        if (!isHovered()) mHover.clear();  // pointer left the strip
+        mHover.advance(nowMs);
     }
 
     bool Breadcrumb::handleGesture(const Gesture &g, const Point &local)
     {
+        if (g.type == Gesture::Type::Move) { mHover.setHovered(crumbAt(local)); return true; }
         if (g.type != Gesture::Type::Click) return Segment::handleGesture(g, local);
-        for (size_t i = 0; i < mEnds.size(); ++i)
-            if (local.x <= mEnds[i]) { if (onNavigate) onNavigate((int)i); return true; }
+        const int i = crumbAt(local);
+        if (i >= 0) { if (onCrumbClick) onCrumbClick(i); }
         return true;
+    }
+
+    void Breadcrumb::onPaint(IRenderTarget &t) const
+    {
+        const double w = width.value(), h = kHeight;
+        drawRoundedRect(t, Rect{0, 0, w, h}, 0.0, Paint::filled(palette::leftRailBg()));
+        t.beginPath(); t.moveTo(0, 0); t.lineTo(w, 0); t.setStroke(palette::border(), 1.0); t.strokePath();
+        t.beginPath(); t.moveTo(0, h); t.lineTo(w, h); t.setStroke(palette::border(), 1.0); t.strokePath();
+
+        const auto spans = computeSpans();
+        const double baseline = h * 0.5 + kFontPx * 0.35;
+        for (size_t i = 0; i < mCrumbs.size(); ++i)
+        {
+            const bool last = (i + 1 == mCrumbs.size());
+            // A hovered (clickable) crumb lifts from muted toward foreground, eased.
+            const double hv = last ? 0.0 : mHover.amount((int)i);
+            const Color crumbColor =
+                last ? Color{palette::foreground().r, palette::foreground().g, palette::foreground().b, 0.8}
+                     : lerpColor(palette::mutedForeground(), palette::foreground(), hv);
+            t.setFill(crumbColor);
+            t.drawText(mCrumbs[i], spans[i].x, baseline, kFontPx, font::sans());
+            if (!last)
+            {
+                const double cx = spans[i].x + spans[i].w + kGap;
+                icon::chevronRight(t, Rect{cx, h * 0.5 - 4.5, 9.0, 9.0},
+                                    Color{palette::mutedForeground().r, palette::mutedForeground().g,
+                                          palette::mutedForeground().b, 0.4},
+                                    1.0);
+            }
+        }
     }
 }
 }

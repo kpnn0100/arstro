@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "../Artboard/include/artboard/artboard.h"
-#include "../cosmo_core/EditSession.h"
+#include "core/EditSession.h"
 #include "Theme.h"
 #include "widgets/TopBar.h"
 #include "widgets/LeftRail.h"
@@ -20,7 +20,7 @@
 #include "widgets/ConfirmDialog.h"
 #include "widgets/HomeScreen.h"
 #include "widgets/Starfield.h"
-#include "../cosmo_core/ProjectStore.h"
+#include "core/ProjectStore.h"
 #include <cstdint>
 #include <functional>
 #include <memory>

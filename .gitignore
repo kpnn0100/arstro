@@ -31,9 +31,6 @@ examples/ui_demo/web/ui_demo.wasm
 pulsar/web/pulsar.js
 pulsar/web/pulsar.wasm
 
-# cosmo wasm output
-cosmo/web/cosmo.js
-cosmo/web/cosmo.wasm
 
 # local reference asset
 src.zip

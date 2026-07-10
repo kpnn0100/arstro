@@ -1,5 +1,5 @@
 #include "App.h"
-#include "../cosmo_core/PresetLibrary.h"
+#include "core/PresetLibrary.h"
 #include "widgets/TextMetrics.h"    // estimateTextWidth() for the transition labels
 #include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
 #include "base/Parallel.h"          // par::setThreads() for the settings dialog

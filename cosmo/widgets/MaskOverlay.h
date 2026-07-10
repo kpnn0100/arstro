@@ -1,13 +1,15 @@
 /*
- *  Cosmo by arstro — MaskOverlay: the interactive layer drawn over the photo for
- *  positioning the SELECTED local-adjustment mask. It draws the mask geometry and
- *  draggable handles and maps pointer drags into the mask's normalised framed-image
- *  coordinates (the same space the engine's maskCoverage uses), reporting edits via
- *  onChange. The UI never touches pixels — it only edits MaskParams geometry.
+ *  cosmo_v2 by arstro — MaskOverlay: the interactive layer drawn over the photo for
+ *  positioning the SELECTED local-adjustment mask (R-MASK). Ported from cosmo's
+ *  MaskOverlay: it draws the mask geometry + draggable handles and maps pointer
+ *  drags into the mask's normalised framed-image coordinates (the same space the
+ *  engine's maskCoverage uses), reporting edits via onChange. The UI never touches
+ *  pixels — it only edits MaskParams geometry.
  *    - Radial: drag the centre to move, the edge handles to resize.
  *    - Linear: drag the two endpoints (the 0% and 100% gradient lines).
  *    - Brush: drag anywhere to paint coverage dabs.
- *  Inactive (no mask selected) it is fully click-through.
+ *  Inactive (no mask selected / Mask tab closed) it is fully click-through, so it
+ *  never steals the zoom/pan drag or the Before/Split/After pill.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
@@ -16,7 +18,7 @@
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     class MaskOverlay : public artboard::Segment
     {
@@ -26,14 +28,15 @@ namespace cosmo
         /** Fired when the selected mask's geometry/dabs change (drag/paint). */
         std::function<void(const arstro::MaskParams &)> onChange;
 
-        /** The photo's display rect in this overlay's local space (from ImageView). */
+        /** The photo's display rect in this overlay's local space (from ImageView,
+         *  including the current zoom/pan — R-MASK-3). */
         void setFittedRect(const artboard::Rect &localFitted) { mFitted = localFitted; }
         void setMask(const arstro::MaskParams &m, bool active) { mMask = m; mActive = active; }
-        /** Keep the overlay's working copy in sync with panel edits (adjust/feather/
-         *  invert) WITHOUT changing visibility, so a later drag writes back the full,
-         *  current mask instead of a stale one. */
+        /** Keep the overlay's working copy in sync WITHOUT changing visibility, so a
+         *  later drag writes back the current mask instead of a stale one. */
         void updateMask(const arstro::MaskParams &m) { mMask = m; }
         void setBrushRadius(double normRadius) { mBrushRadius = normRadius; }
+        bool active() const { return mActive; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;

@@ -5,22 +5,19 @@
 # Artboard dependency, so it stays reusable by a UI that isn't built on Artboard
 # at all.
 #
-# `cosmo/History.cpp` and `cosmo/decode/*.cpp` are already fully UI-free (see
-# their own doc comments), so they are compiled here from their original path
-# rather than duplicated -- true reuse, not a fork.
+# The branching History and the native image decoder are UI-free too, so they
+# live here and are compiled straight in (decode/ is in its own subfolder).
+# Paths are relative to this dir (cosmo/core), so the shared libs are two levels up.
 
 file(GLOB COSMO_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
-set(COSMO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo)
-
 add_library(cosmo_core STATIC
   ${COSMO_CORE_SOURCES}
-  ${COSMO_DIR}/History.cpp
-  ${COSMO_DIR}/decode/NativeImageDecoder.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/decode/NativeImageDecoder.cpp)
 
 target_include_directories(cosmo_core
-  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${COSMO_DIR}
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ImageProcessing/src)
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../ImageProcessing/src)
 
 target_link_libraries(cosmo_core PUBLIC arstro_image)
 
@@ -29,9 +26,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
 target_link_libraries(cosmo_core PRIVATE PkgConfig::GTK3)
 
-# ── LibRaw (optional): native RAW decode. Same detection as cosmo/CMakeLists.txt. ──
+# ── LibRaw (optional): native RAW decode. Same detection as the app build. ──
 pkg_check_modules(LIBRAW IMPORTED_TARGET libraw)
-set(VENDORED_LIBRAW ${CMAKE_CURRENT_SOURCE_DIR}/../ImageProcessing/lib/LibRaw)
+set(VENDORED_LIBRAW ${CMAKE_CURRENT_SOURCE_DIR}/../../ImageProcessing/lib/LibRaw)
 if(LIBRAW_FOUND)
   target_link_libraries(cosmo_core PRIVATE PkgConfig::LIBRAW)
   target_compile_definitions(cosmo_core PRIVATE COSMO_HAVE_LIBRAW)

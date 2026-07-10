@@ -1,9 +1,9 @@
-# cosmo_v2 — Requirements
+# cosmo — Requirements
 
-The single shared source of truth for cosmo_v2 behavior. **Every agent must read this
+The single shared source of truth for cosmo behavior. **Every agent must read this
 before implementing, and check any new/changed requirement here for conflict before writing
-code** (mirrors the `implement_artboard` V-model, step 1). cosmo_v2 is an *application* built
-on the Artboard library + `cosmo_core::EditSession`; the Artboard library keeps its own
+code** (mirrors the `implement_artboard` V-model, step 1). cosmo is an *application* built
+on the Artboard library + `cosmo::EditSession`; the Artboard library keeps its own
 `Artboard/docs/`. Requirements below are numbered `R-<area>-<n>`.
 
 ## Global rules (apply to every requirement)
@@ -102,10 +102,10 @@ sudden jump, and the heavy work is isolated to the middle part:
 
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 
-- **R-LOG-1** The app writes a timestamped, levelled log to `~/.config/cosmo_v2/cosmo_v2.log`
+- **R-LOG-1** The app writes a timestamped, levelled log to `~/.config/cosmo/cosmo.log`
   (`ProjectStore::configDir()`), appended across sessions with a per-session header. Every
   `g_print`/`g_printerr` diagnostic is routed through it (GLib print handlers), so the console
-  output and the file stay in sync. Facility: `cosmo_v2/Log.{h,cpp}` (`log::init`, `LOGI/LOGW/LOGE`).
+  output and the file stay in sync. Facility: `cosmo/Log.{h,cpp}` (`log::init`, `LOGI/LOGW/LOGE`).
   Platform-note: logging does OS I/O, so it lives in the app layer, never in the platform-free
   Artboard core.
 - **R-LOG-2** A fatal-signal handler (SIGSEGV/SIGABRT/SIGBUS/SIGFPE/SIGILL) appends a backtrace to
@@ -180,7 +180,7 @@ and the engine renders byte-identically before/after the round-trip.
 
 ## R-MASK — Mask adjustable inside the photo (item 1) — ✅ IMPLEMENTED
 
-Status: implemented. `cosmo_v2/widgets/MaskOverlay.{h,cpp}` (ported from cosmo), owned by
+Status: implemented. `cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo), owned by
 `PhotoCanvas` (above the image, below the Before/Split/After pill), bridged through
 `RightColumn::{activeTab,selectedMaskParams,writeSelectedMask}` and synced each frame in
 `App::render`. Reference: original cosmo's `cosmo/widgets/MaskOverlay.{h,cpp}`.
@@ -220,11 +220,13 @@ change under the Artboard skill) and is tracked there, not faked at the app laye
 - **R-ZOOM-5** Zoom and pan **animate** toward their target (R-G-1) rather than snapping per
   wheel notch / per drag frame — magnification eases, it does not jump.
 
-## R-PARITY — Feature parity gap vs. original cosmo (item 3)
+## R-PARITY — Backlog carried over from the original cosmo (item 3)
 
-cosmo_v2 must reach behavioral parity with `cosmo/`. The tracked gap list (verified 2026-07-06)
-lives in [PARITY.md](PARITY.md); each row is a requirement to either implement or explicitly
-descope with a reason. PARITY #1 (R-MASK) and #2 (R-ZOOM) are done. Remaining rows:
+This app began as `cosmo_v2` alongside an original `cosmo/` GUI; it has since fully replaced
+that app and been renamed to `cosmo` (the original was removed). A few features from the old
+app were not yet ported — that backlog (verified 2026-07-06 against the original) lives in
+[PARITY.md](PARITY.md); each row is a requirement to either implement or explicitly descope
+with a reason. PARITY #1 (R-MASK) and #2 (R-ZOOM) are done. Remaining rows:
 
 - **R-PARITY-CROP** (PARITY #3) — interactive crop box over the photo (corner/edge handles,
   aspect lock) while the Xform tab is active; writes normalised crop x/y/w/h. *Open.*
@@ -234,8 +236,8 @@ descope with a reason. PARITY #1 (R-MASK) and #2 (R-ZOOM) are done. Remaining ro
 
 ### R-PRESETPICK — Preset category-picker modal (PARITY #4)
 
-Reference: `cosmo/widgets/PresetDialog.{h,cpp}`. Today cosmo_v2 applies every present category of
-a preset immediately (documented stub in `App.h`).
+Reference: the original cosmo's `widgets/PresetDialog.{h,cpp}` (since removed). Today cosmo
+applies every present category of a preset immediately (documented stub in `App.h`).
 
 - **R-PRESETPICK-1** Applying a preset (from the preset tree / Preset menu) opens a modal that
   lists the categories the preset actually contains (e.g. Tone, Colour, Detail, Effects, Curve,
@@ -266,7 +268,7 @@ Reference: `cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings tha
 ## R-HOME — Home screen & projects (item 4) — ✅ IMPLEMENTED
 
 Status: implemented. `widgets/HomeScreen.{h,cpp}` (Figma-faithful launcher) + a screen
-state machine in `App` (`Home`/`Loading`/`Editor`, cross-fade scrim on switch) + `cosmo_core/
+state machine in `App` (`Home`/`Loading`/`Editor`, cross-fade scrim on switch) + `cosmo/core/
 ProjectStore.{h,cpp}` (persisted recent index) + host dialogs in `linux_main.cpp`. The app
 starts on Home. Notes vs. the spec below: the recent index is a small **line-based TSV** in
 the config dir (not literally JSON); the Figma **LoadingScreen** is implemented as the animated
@@ -283,7 +285,7 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
 "New Project" card. Empty-search state shows the "No projects match" placeholder.
 
 - **R-HOME-1 Screen state machine.** App has three screens: `loading → home → editor`. The
-  editor is the current cosmo_v2 UI. Clicking the top-left **`cosmo.` wordmark** in the editor
+  editor is the current cosmo UI. Clicking the top-left **`cosmo.` wordmark** in the editor
   returns to home; if the project has **unsaved changes** (`EditSession::isDirty()`), a modal
   first asks to **Save** (accent) or **Discard** (red/destructive), with Cancel/click-outside to
   stay (`ConfirmDialog`). Screen transitions cross-fade (R-G-1).
@@ -291,7 +293,7 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   centred in the editor top bar; set on New/Open/Import/Recent-open.
 - **R-HOME-2 Project file format `.cmp` = catalog/manifest.** A `.cmp` is a JSON catalog that
   **references the original image files on disk** (absolute/relative paths) plus each image's
-  edit settings and the group tree — i.e. it reuses cosmo_v2's existing workspace serialization
+  edit settings and the group tree — i.e. it reuses cosmo's existing workspace serialization
   (`writeWorkspaceFile`/`readWorkspaceFile`) with a `.cmp` extension and a `name` field.
   Rationale: matches "Import Catalog" (Lightroom model), small/fast, no gigabyte copies.
   Consequence: if an original is moved/renamed the reference is stale (acceptable for now).

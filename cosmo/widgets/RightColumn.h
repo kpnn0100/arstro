@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
-#include "../../cosmo_core/EditSession.h"
+#include "../core/EditSession.h"
 #include "HistogramWidget.h"
 #include "EditStackTabs.h"
 #include "ParamPanel.h"

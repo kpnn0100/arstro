@@ -1,7 +1,8 @@
 /*
- *  Cosmo by arstro — IconButton: a small square button that draws a vector glyph
- *  (currently the rotate-left / rotate-right circular arrows) instead of a text
- *  label, for a cleaner toolbar. Click fires onClick; a press dims the background.
+ *  cosmo_v2 by arstro — IconButton: a small square button that draws a vector
+ *  glyph (see Icons.h) instead of a text label. Generic over which glyph it
+ *  draws (a Painter callback) so one class serves the rail toggle, mask
+ *  delete icons, and the curve/transform reset buttons.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
@@ -9,17 +10,20 @@
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     class IconButton : public artboard::Segment
     {
     public:
-        enum class Icon { RotateCCW, RotateCW, Trash, Sidebar };
-        IconButton(Icon icon, const artboard::Color &accent);
+        using Painter = std::function<void(artboard::IRenderTarget &, const artboard::Rect &, const artboard::Color &)>;
+
+        explicit IconButton(Painter painter) : mPainter(std::move(painter)) {}
 
         std::function<void()> onClick;
-        /** Override the background + glyph colours (e.g. a pastel-red delete). */
-        void setColors(const artboard::Color &bg, const artboard::Color &icon) { mBg = bg; mIconColor = icon; mCustom = true; }
+        bool active = false;              // e.g. the rail toggle's "open" state
+        artboard::Color activeColor;
+        artboard::Color idleColor;
+        artboard::Color hoverBg{0, 0, 0, 0};  // background while pressed (approximates hover)
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -27,10 +31,7 @@ namespace cosmo
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        Icon mIcon;
-        artboard::Color mAccent;
-        artboard::Color mBg, mIconColor;
-        bool mCustom = false;
+        Painter mPainter;
         bool mPressed = false;
     };
 }

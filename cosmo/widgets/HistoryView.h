@@ -1,68 +1,77 @@
 /*
- *  Cosmo by arstro — HistoryView: a modal popup that draws the edit history as a
- *  git-style tree (root = oldest step at the top, branches fanning into lanes).
- *  Click a node to jump the image to that state (back or forward); drag to pan a
- *  tree taller/wider than the card. Draws in the overlay pass on top of everything.
- *
- *  It holds only a lightweight snapshot of the tree structure (parent + label per
- *  node) plus the current index — never the pixel/param data — and reports the
- *  clicked node index through onSelect. Built entirely from existing Artboard
- *  primitives (circles, lines, text, clip); no HAL change.
+ *  cosmo_v2 by arstro — HistoryView: the History ▸ "Show History Tree…" modal,
+ *  ported from cosmo's HistoryView so the menu item is a real, working feature
+ *  (not a dead host seam). Draws the branching edit history as a git-style tree
+ *  (root/oldest at the top, branches fanning into lanes); click a node to jump
+ *  the image to that state, drag to pan. Holds only a lightweight snapshot
+ *  (parent + label per node) + the current index, reporting a click via
+ *  onSelect. Painted in the overlay pass on top of everything; modal while open.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include <functional>
 #include <string>
 #include <vector>
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     class HistoryView : public artboard::Segment
     {
     public:
         struct Node { int parent = -1; std::string label; };
 
-        explicit HistoryView(const artboard::Color &accent);
+        HistoryView() = default;
 
-        /** Show the popup for a tree snapshot with `current` highlighted. */
-        void show(std::vector<Node> nodes, int current);
-        /** Update just the highlighted node (after a jump) while staying open. */
-        void setCurrent(int current);
-        /** Scroll the tree by a mouse-wheel delta (positive = toward older/top steps). */
+        void show(std::vector<Node> nodes, int current);  // open for a tree snapshot
+        void setCurrent(int current);                     // re-highlight after a jump, stay open
         void scrollBy(double wheelDelta);
         void hide() { mOpen = false; }
         bool isOpen() const { return mOpen; }
 
-        std::function<void(int)> onSelect;  // a node was clicked -> jump to it
+        void advance(double nowMs) override;  // drives the open/close + hover fades + eased pan (R-G-1)
 
-        /** World-space centre of node i in the laid-out tree (for tests). */
-        artboard::Point testNodeCenter(int i) const { return nodeCenter(i); }
+        std::function<void(int)> onSelect;  // a node was clicked -> jump to it
 
     protected:
         void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
-        bool hitTestSelf(const artboard::Point &p) const override { return mOpen; }  // modal
+        bool hitTestSelf(const artboard::Point &p) const override { (void)p; return mOpen; }  // modal
 
     private:
         artboard::Rect cardRect() const;
-        artboard::Rect treeRect() const;     // clipped, pannable area inside the card
+        artboard::Rect treeRect() const;
         artboard::Rect closeBtnRect() const;
-        artboard::Point nodeCenter(int i) const;  // world-space, incl. pan
-        void relayout();                     // row + lane per node, content size
+        artboard::Point nodeCenter(int i) const;
+        int nodeAt(const artboard::Point &local) const;  // node under a point (-1 = none)
+        double appearRise() const;                       // open/close y-rise, driven by mAppear
+        double panX() const;                             // eased (drawn) pan, not the target
+        double panY() const;
+        void relayout();
         void clampPan();
         void scrollToCurrent();
 
-        artboard::Color mAccent;
         bool mOpen = false;
         std::vector<Node> mNodes;
         int mCurrent = -1;
-        std::vector<int> mRow;     // unique row per node (git-log order: no two share a line)
-        std::vector<int> mLane;    // graph column (branch lane) per node
+        std::vector<int> mRow;
+        std::vector<int> mLane;
         int mMaxRow = 0, mMaxLane = 0;
-        double mPanX = 0, mPanY = 0;
+        double mPanX = 0, mPanY = 0;              // TARGET pan (clamped); eased into place below
+        double mPanIssuedX = 0, mPanIssuedY = 0;  // last target handed to the pan tweens
+        double mPanDurMs = 0.0;                   // glide duration for the pending pan change
         artboard::Point mDragLast{0, 0};
+
+        // hover + open/close animation (R-G-1/R-G-3: everything animates, nothing snaps)
+        HoverFade mNodeHover;                       // per-node wash — each cross-fades independently
+        bool mCloseHover = false;                   // pointer over the close X
+        bool mCloseHoverPrev = false, mWasOpen = false;
+        artboard::AnimatedProperty mAppear{0.0};    // open/close fade + rise
+        artboard::AnimatedProperty mCloseAmt{0.0};  // close-X lift fade
+        artboard::AnimatedProperty mPanXAnim{0.0};  // eased pan (glides toward mPanX/mPanY)
+        artboard::AnimatedProperty mPanYAnim{0.0};
     };
 }
 }

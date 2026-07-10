@@ -1,5 +1,5 @@
 #include "Log.h"
-#include "../cosmo_core/ProjectStore.h"
+#include "core/ProjectStore.h"
 
 #include <cstdarg>
 #include <cstdio>

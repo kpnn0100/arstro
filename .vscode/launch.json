@@ -1,14 +1,14 @@
 {
-  // F5 (or the Run and Debug view) runs cosmo_v2. `preLaunchTask` rebuilds the
+  // F5 (or the Run and Debug view) runs cosmo. `preLaunchTask` rebuilds the
   // target FIRST, so you never launch a stale binary — this is what was missing
   // (with no build step wired, VSCode just re-ran the old executable).
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "cosmo_v2",
+      "name": "cosmo",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/cosmo_v2/cosmo_v2",
+      "program": "${workspaceFolder}/build/cosmo/cosmo",
       // To open an image on launch, add its path here, e.g.:
       //   "args": ["${workspaceFolder}/some/photo.jpg"],
       "args": [],
@@ -16,7 +16,7 @@
       "stopAtEntry": false,
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "cosmo_v2: build",
+      "preLaunchTask": "cosmo: build",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",

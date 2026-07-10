@@ -1,10 +1,10 @@
 #include "MaskOverlay.h"
-#include "../CosmoTheme.h"
+#include "../Theme.h"
 #include <cmath>
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     using namespace artboard;
     using MP = arstro::MaskParams;
@@ -27,7 +27,7 @@ namespace cosmo
 
     bool MaskOverlay::hitTestSelf(const Point &p) const
     {
-        if (!mActive) return false;
+        if (!mActive) return false;   // click-through when no mask is being edited
         return p.x >= 0 && p.x <= width.value() && p.y >= 0 && p.y <= height.value();
     }
 
@@ -115,7 +115,8 @@ namespace cosmo
     {
         if (!mActive) return;
         const Color line = mAccent;
-        const Paint dot = Paint::filledStroked(mAccent, palette::bg(), 1.5);
+        // A coloured dot ringed by the dark photo-stage colour so handles read on any photo.
+        const Paint dot = Paint::filledStroked(mAccent, palette::canvasBg(), 1.5);
 
         if (mMask.type == MP::Radial)
         {

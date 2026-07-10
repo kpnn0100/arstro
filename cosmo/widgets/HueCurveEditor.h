@@ -1,36 +1,35 @@
 /*
- *  Cosmo by arstro — HueCurveEditor: a CYCLIC 2-axis mapper for the colour mixer.
- *  X = pixel input hue [0,360); Y = adjustment [-1,1] (0 = no change). Bezier-capable
- *  control points (Alt-drag for handles, like CurveEditor -- plain-drag an existing
- *  handle mirrors its opposite; Alt+drag breaks the mirror); the curve wraps
- *  continuously across the 360/0 seam (a point dragged off the left edge rejoins on
- *  the right with no break). In "mapped-hue" mode (the Hue channel) the line is
- *  coloured by the OUTPUT hue, so you see what each input hue maps to. Emits a dense
- *  sampling for the engine.
+ *  cosmo_v2 by arstro — HueCurveEditor: the CYCLIC hue mapper the colour mixer
+ *  edits with (task point 10: "Mixer need to use curve to edit, refer from
+ *  original cosmo"). X = pixel input hue [0,360); Y = adjustment [-1,1]
+ *  (0 = no change). Bezier-capable control points (Alt-drag pulls tangent
+ *  handles); the curve wraps continuously across the 360/0 seam. In
+ *  "mapped-hue" mode (the Hue channel) the line is coloured by the OUTPUT hue.
+ *  Emits its bezier CONTROL points (EditParams::mixer[channel]) so a reopened
+ *  project restores the exact editable curve; the engine flattens them to a LUT.
+ *
+ *  Adapted from cosmo/widgets/HueCurveEditor with the cosmo_v2 palette.
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
-#include "BezierCurve.h"
+#include "../../ImageProcessing/src/base/CurvePoint.h"
 #include <functional>
 #include <utility>
 #include <vector>
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     class HueCurveEditor : public artboard::Segment
     {
     public:
-        explicit HueCurveEditor(const artboard::Color &accent);
+        HueCurveEditor();
 
-        std::function<void(const std::vector<std::pair<float, float>> &)> onChange;
-        void setPoints(const std::vector<std::pair<float, float>> &pts);  // corner points
-        void reset();  // back to a flat (no-op) curve
+        std::function<void(const std::vector<CurvePoint> &)> onChange;
+        void setPoints(const std::vector<CurvePoint> &pts);  // bezier control points
+        void reset();                                  // back to a flat (no-op) curve
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
-        /** Hue distribution of the image (bins over 0..360, normalised 0..1), drawn
-         *  behind the curve so you see which hues the edit affects. */
-        void setHueHistogram(std::vector<float> bins) { mHueHist = std::move(bins); }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -38,8 +37,8 @@ namespace cosmo
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        double plotTop() const { return 12.0; }
-        double plotBot() const { return height.value() - 12.0 - 10.0; }
+        double plotTop() const { return 10.0; }
+        double plotBot() const { return height.value() - 10.0 - 10.0; }
         double midY() const { return (plotTop() + plotBot()) * 0.5; }
         double halfH() const { return (plotBot() - plotTop()) * 0.5; }
         double pxh(double hue) const;
@@ -50,9 +49,7 @@ namespace cosmo
         bool handleAt(const artboard::Point &local, int &idx, int &kind) const;
         void emit();
 
-        std::vector<CtrlPoint> mPts;  // x in [0,360), y in [-1,1]
-        std::vector<float> mHueHist;  // hue distribution background
-        artboard::Color mAccent;
+        std::vector<CurvePoint> mPts;  // x in [0,360), y in [-1,1]
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull

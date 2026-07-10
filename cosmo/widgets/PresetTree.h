@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
-#include "../../cosmo_core/PresetLibrary.h"
+#include "../core/PresetLibrary.h"
 #include "HoverFade.h"
 #include <functional>
 #include <string>

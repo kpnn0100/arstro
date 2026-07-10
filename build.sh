@@ -8,7 +8,7 @@
 #    ./build.sh [--project scope] [--target linux-web-server]
 #    ./build.sh --project ui-demo --target native-example
 #    ./build.sh --project ui-demo --target linux-native-app
-#    ./build.sh --project cosmo_v2 --target linux-native-app   # Figma-exact editor (native-only)
+#    ./build.sh --project cosmo --target linux-native-app   # Figma-exact editor (native-only)
 #    ./build.sh --target native-test     # build + run every repo's tests
 #    ./build.sh --list
 #
@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, cosmo_v2, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; echo "note:     cosmo_v2 is native-only (linux-native-app); it has no web build"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; echo "note:     cosmo is native-only (linux-native-app); it has no web build"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -100,17 +100,6 @@ case "$TARGET" in
         APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/PulsarApp.cpp" "$APP_DIR/OscillatorPanel.cpp" "$APP_DIR/WaveDisplay.cpp" "$APP_DIR/MuteButton.cpp" "$APP_DIR/Stepper.cpp" "$APP_DIR/Chrome.cpp" "$APP_DIR/SubOscPanel.cpp" "$APP_DIR/FilterPanel.cpp" "$APP_DIR/EnvPanel.cpp" "$APP_DIR/LfoPanel.cpp" "$APP_DIR/LfoCurve.cpp" "$APP_DIR/MacroPanel.cpp" "$APP_DIR/Keyboard.cpp" "$APP_DIR/ModSourceBadge.cpp" "$APP_DIR/GainPanel.cpp")
         EXTRA_SRC=()
         EXTRA_INC=()
-        ;;
-      cosmo)
-        # Lightroom-style photo editor: Artboard UI + the ImageProcessing engine.
-        # Web has no GdkPixbuf/LibRaw — the browser decodes (decode/ is native-only).
-        EXPORT=createCosmoModule; OUTNAME=cosmo
-        APP_DIR="$ROOT/cosmo"
-        APP_SRC=("$APP_DIR/web_main.cpp")
-        while IFS= read -r -d '' f; do APP_SRC+=("$f"); done < <(find "$APP_DIR" -name '*.cpp' \
-          ! -name 'web_main.cpp' ! -name 'linux_main.cpp' ! -path '*/decode/*' -print0)
-        EXTRA_SRC=("${ip_src[@]}")
-        EXTRA_INC=(-I"$IP/src")
         ;;
       ui-demo)
         EXPORT=createUiDemoModule; OUTNAME=ui_demo
@@ -221,14 +210,19 @@ case "$TARGET" in
         echo "run:   $OUTDIR/pulsar_linux"
         ;;
       cosmo)
-        if ! pkg-config --exists gtk+-3.0; then
-          echo "error: gtk+-3.0 development files not found." >&2
-          exit 1
-        fi
+        # Figma-exact photo editor. Native-only. UI (cosmo/*.cpp + widgets/) +
+        # the UI-free logic in cosmo/core (session/history/presets/decoder), and
+        # registers vendored DM Sans / JetBrains Mono via Fontconfig at start.
+        for dep in gtk+-3.0 fontconfig; do
+          if ! pkg-config --exists "$dep"; then
+            echo "error: $dep development files not found." >&2
+            exit 1
+          fi
+        done
         OUTDIR="$ROOT/cosmo/build"
         mkdir -p "$OUTDIR"
-        read -r -a COSMO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0)"
-        read -r -a COSMO_LIBS <<< "$(pkg-config --libs gtk+-3.0)"
+        read -r -a COSMO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0 fontconfig)"
+        read -r -a COSMO_LIBS <<< "$(pkg-config --libs gtk+-3.0 fontconfig)"
         # RAW decoding is optional. Prefer a vendored LibRaw source tree under
         # ImageProcessing/lib/LibRaw (built on demand into a static lib); else fall
         # back to a system LibRaw via pkg-config; else build without RAW.
@@ -251,79 +245,25 @@ case "$TARGET" in
         else
           echo "cosmo: RAW disabled (LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only"
         fi
-        # All cosmo .cpp except the web entry (decode/ is native and included here).
+        # Every cosmo .cpp (app + core + decoder) EXCEPT the core unit test's main().
         cosmo_src=()
         while IFS= read -r -d '' f; do cosmo_src+=("$f"); done \
-          < <(find "$ROOT/cosmo" -name '*.cpp' ! -name 'web_main.cpp' -print0)
-        # ARSTRO_ENABLE_THREADS: engine on a worker thread (RenderService) + multicore
-        # pixel pipeline. Defined for EVERY TU so the RenderService layout matches.
+          < <(find "$ROOT/cosmo" -name '*.cpp' ! -path '*/core/tests/*' ! -path '*/build/*' -print0)
+        # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
+        # matches; COSMO_SOURCE_DIR lets the binary find assets/fonts by path.
         c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF \
+          -DCOSMO_SOURCE_DIR="\"$ROOT/cosmo\"" \
           "${cosmo_src[@]}" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" "${ip_src[@]}" \
-          -I"$AB/src" -I"$AB/include" -I"$IP/src" \
+          -I"$AB/src" -I"$AB/include" -I"$IP/src" -I"$ROOT/cosmo" \
           "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" \
           -o "$OUTDIR/cosmo_linux"
         echo "built $OUTDIR/cosmo_linux"
-        echo "run:   $OUTDIR/cosmo_linux [image files...]   (O = open, S = export PNG)"
-        ;;
-      cosmo_v2)
-        # Figma-exact editor. Native-only (no web_main): reuses cosmo_core's
-        # session/editing logic plus cosmo/'s UI-free History + native decoder,
-        # and registers vendored DM Sans / JetBrains Mono via Fontconfig at start.
-        for dep in gtk+-3.0 fontconfig; do
-          if ! pkg-config --exists "$dep"; then
-            echo "error: $dep development files not found." >&2
-            exit 1
-          fi
-        done
-        OUTDIR="$ROOT/cosmo_v2/build"
-        mkdir -p "$OUTDIR"
-        read -r -a V2_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0 fontconfig)"
-        read -r -a V2_LIBS <<< "$(pkg-config --libs gtk+-3.0 fontconfig)"
-        # RAW decoding is optional — same detection as the cosmo case above.
-        RAW_DEF=""; RAW_CFLAGS=(); RAW_LIBS=()
-        LIBRAW_DIR="$IP/lib/LibRaw"
-        if [ -f "$LIBRAW_DIR/libraw/libraw.h" ]; then
-          if [ ! -f "$LIBRAW_DIR/lib/libraw.a" ]; then
-            echo "cosmo_v2: building vendored LibRaw static lib (one-time)…"
-            (cd "$LIBRAW_DIR" && make -f Makefile.dist lib/libraw.a -j"$(nproc)") >/dev/null
-          fi
-          RAW_DEF="-DCOSMO_HAVE_LIBRAW"
-          RAW_CFLAGS=(-I"$LIBRAW_DIR")
-          RAW_LIBS=("$LIBRAW_DIR/lib/libraw.a" -lz)   # default LibRaw build uses zlib
-          echo "cosmo_v2: RAW enabled (vendored LibRaw)"
-        elif pkg-config --exists libraw; then
-          RAW_DEF="-DCOSMO_HAVE_LIBRAW"
-          read -r -a RAW_CFLAGS <<< "$(pkg-config --cflags libraw)"
-          read -r -a RAW_LIBS <<< "$(pkg-config --libs libraw)"
-          echo "cosmo_v2: RAW enabled (system LibRaw)"
-        else
-          echo "cosmo_v2: RAW disabled (LibRaw not found) — JPEG/PNG/TIFF via GdkPixbuf only"
-        fi
-        # cosmo_v2 UI (every .cpp; native-only so nothing to exclude) + shared
-        # cosmo_core session logic + the reused UI-free History/decoder from cosmo/.
-        v2_src=()
-        while IFS= read -r -d '' f; do v2_src+=("$f"); done \
-          < <(find "$ROOT/cosmo_v2" -name '*.cpp' -print0)
-        v2_src+=("$ROOT/cosmo_core/EditSession.cpp" "$ROOT/cosmo_core/PresetLibrary.cpp" \
-                 "$ROOT/cosmo_core/ProjectStore.cpp" \
-                 "$ROOT/cosmo/History.cpp" "$ROOT/cosmo/decode/NativeImageDecoder.cpp")
-        # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
-        # matches; COSMO_V2_SOURCE_DIR lets the binary find assets/fonts by path.
-        c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF \
-          -DCOSMO_V2_SOURCE_DIR="\"$ROOT/cosmo_v2\"" \
-          "${v2_src[@]}" \
-          "$AB/src/adapter/native/CairoTarget.cpp" \
-          "${ab_core[@]}" "${ip_src[@]}" \
-          -I"$AB/src" -I"$AB/include" -I"$IP/src" -I"$ROOT/cosmo_core" -I"$ROOT/cosmo" \
-          "${V2_CFLAGS[@]}" "${V2_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" \
-          -o "$OUTDIR/cosmo_v2_linux"
-        echo "built $OUTDIR/cosmo_v2_linux"
-        echo "run:   $OUTDIR/cosmo_v2_linux [image files...]"
+        echo "run:   $OUTDIR/cosmo_linux [image files...]"
         ;;
       *)
-        echo "linux-native-app currently supports projects 'ui-demo', 'synth', 'pulsar', 'cosmo' and 'cosmo_v2'" >&2
+        echo "linux-native-app currently supports projects 'ui-demo', 'synth', 'pulsar' and 'cosmo'" >&2
         exit 1
         ;;
     esac

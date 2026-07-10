@@ -1,9 +1,10 @@
 #include "PresetDialog.h"
-#include "../CosmoTheme.h"
+#include "TextMetrics.h"
+#include "../Theme.h"
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     using namespace artboard;
 
@@ -17,6 +18,11 @@ namespace cosmo
         constexpr double kFooterH = 40.0;   // Cancel / Confirm band
         constexpr double kBtnW = 92.0, kBtnH = 26.0;
         constexpr double kBox = 15.0;        // checkbox side
+        constexpr double kFontPx = 12.0;
+
+        // Fade a colour's alpha by `a` (the appear progress) so the whole modal
+        // cross-fades in/out rather than popping (R-G-1).
+        inline Color fade(Color c, double a) { return Color{c.r, c.g, c.b, c.a * a}; }
     }
 
     PresetDialog::PresetDialog(const Color &accent) : mAccent(accent) {}
@@ -26,8 +32,39 @@ namespace cosmo
     {
         mTitle = title; mConfirmLabel = confirmLabel;
         mRows = std::move(rows); mOnConfirm = std::move(onConfirm);
-        mOpen = true;
+        mOpen = true; mClosing = false;
+        mAppear.animateTo(1.0, 150.0, Easing::EaseOutCubic, mLastMs);
         raise();  // topmost for input + draws last (overlay)
+    }
+
+    void PresetDialog::beginClose()
+    {
+        mClosing = true;
+        mAppear.animateTo(0.0, 120.0, Easing::EaseOutCubic, mLastMs);
+    }
+
+    void PresetDialog::advance(double nowMs)
+    {
+        mLastMs = nowMs;
+        mAppear.update(nowMs);
+        if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; }
+        if (!isOpen()) { mRowHover.clear(); mBtnHover.clear(); }
+        mRowHover.advance(nowMs);
+        mBtnHover.advance(nowMs);
+        Segment::advance(nowMs);
+    }
+
+    void PresetDialog::hitTargets(const Point &p, int &row, int &btn) const
+    {
+        row = -2; btn = -1;
+        if (confirmRect().contains(p)) { btn = 1; return; }
+        if (cancelRect().contains(p)) { btn = 0; return; }
+        if (selectAllRect().contains(p)) { row = -1; return; }
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const Rect r{cardRect().x + kPad, rowTop(i), kCardW - 2 * kPad, kRowH};
+            if (r.contains(p)) { row = i; return; }
+        }
     }
 
     Rect PresetDialog::cardRect() const
@@ -70,22 +107,29 @@ namespace cosmo
 
     bool PresetDialog::handleGesture(const Gesture &g, const Point &local)
     {
-        if (!mOpen) return false;
+        if (!mOpen || mClosing) return false;
+        if (g.type == Gesture::Type::Move)
+        {
+            int row, btn; hitTargets(local, row, btn);
+            mRowHover.setHovered(row == -2 ? -1 : row + 1);  // -1 none, 0 select-all, i+1 category
+            mBtnHover.setHovered(btn);                        // -1 none, 0 cancel, 1 confirm
+            return true;
+        }
         if (g.type != Gesture::Type::Click) return true;  // consume everything else while modal
 
         const Point p = local;  // root child at origin -> local == world
-        if (!cardRect().contains(p)) { mOpen = false; return true; }  // click outside cancels
+        if (!cardRect().contains(p)) { beginClose(); return true; }  // click outside cancels
 
         if (confirmRect().contains(p))
         {
             std::vector<std::string> sel;
             for (const auto &r : mRows) if (r.checked) sel.push_back(r.key);
             auto cb = mOnConfirm;  // copy: the callback may re-open the dialog
-            mOpen = false;
+            beginClose();
             if (cb) cb(sel);
             return true;
         }
-        if (cancelRect().contains(p)) { mOpen = false; return true; }
+        if (cancelRect().contains(p)) { beginClose(); return true; }
 
         if (selectAllRect().contains(p))
         {
@@ -103,61 +147,68 @@ namespace cosmo
 
     void PresetDialog::onOverlay(IRenderTarget &t) const
     {
-        if (!mOpen) return;
-        // dim the whole screen behind the modal
-        drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(Color{0, 0, 0, 0.45}));
+        const double a = mAppear.value();
+        if (!mOpen || a <= 0.001) return;
+
+        // dim the whole screen behind the modal (fades with the card)
+        drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(fade(Color{0, 0, 0, 0.55}, a)));
 
         const Rect c = cardRect();
-        drawRoundedRect(t, c, radius::panel(), Paint::filledStroked(palette::panel(), palette::line(), 1.0));
+        drawRoundedRect(t, c, radius::control(),
+                        Paint::filledStroked(fade(palette::popover(), a), fade(palette::border(), a), 1.0));
 
         // title
-        t.setFill(palette::ink());
-        for (double ox : {0.0, 0.4})  // faux-bold
-            t.drawText(mTitle, c.x + kPad + ox, c.y + kPad + 16.0, 14.0);
+        t.setFill(fade(palette::foreground(), a));
+        t.drawText(mTitle, c.x + kPad, c.y + kPad + 16.0, 14.0, font::sansSemiBold());
 
-        auto drawCheckRow = [&](const Rect &row, const std::string &label, bool checked, bool bold) {
+        auto drawCheckRow = [&](const Rect &row, const std::string &label, bool checked, bool bold, double hoverAmt) {
+            const double hw = hoverAmt * a;  // wash strength, fades with the modal
+            if (hw > 0.001)
+                drawRoundedRect(t, Rect{row.x - 4.0, row.y, row.w + 8.0, row.h}, radius::control(), Paint::filled(palette::hoverWash(hw)));
             const Rect box{row.x, row.y + (row.h - kBox) * 0.5, kBox, kBox};
             drawRoundedRect(t, box, 3.0,
-                            checked ? Paint::filled(mAccent)
-                                    : Paint::filledStroked(palette::surface(), palette::line(), 1.0));
+                            checked ? Paint::filled(fade(mAccent, a))
+                                    : Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
             if (checked)  // tick mark
             {
                 t.beginPath();
                 t.moveTo(box.x + 3.5, box.y + kBox * 0.55);
                 t.lineTo(box.x + kBox * 0.42, box.y + kBox - 4.0);
                 t.lineTo(box.x + kBox - 3.0, box.y + 4.0);
-                t.setStroke(palette::bg(), 1.8);
+                t.setStroke(fade(palette::primaryForeground(), a), 1.8);
                 t.strokePath();
             }
-            t.setFill(checked ? palette::ink() : palette::muted());
+            t.setFill(fade(checked ? palette::foreground() : palette::mutedForeground(), a));
             const double ty = row.y + row.h * 0.5 + 4.0;
-            t.drawText(label, box.x + kBox + 10.0, ty, 12.0);
-            if (bold) t.drawText(label, box.x + kBox + 10.4, ty, 12.0);
+            t.drawText(label, box.x + kBox + 10.0, ty, kFontPx, bold ? font::sansMedium() : font::sans());
         };
 
         // "Select all" master row
-        drawCheckRow(selectAllRect(), "Select all", allChecked(), true);
+        drawCheckRow(selectAllRect(), "Select all", allChecked(), true, mRowHover.amount(0));
         // hairline under it
         const Rect sa = selectAllRect();
         t.beginPath();
         t.moveTo(c.x + kPad, sa.y + kRowH + kGap * 0.5);
         t.lineTo(c.x + c.w - kPad, sa.y + kRowH + kGap * 0.5);
-        t.setStroke(palette::line(), 1.0); t.strokePath();
+        t.setStroke(fade(palette::border(), a), 1.0); t.strokePath();
 
         for (int i = 0; i < (int)mRows.size(); ++i)
-            drawCheckRow(Rect{c.x + kPad, rowTop(i), c.w - 2 * kPad, kRowH}, mRows[i].label, mRows[i].checked, false);
+            drawCheckRow(Rect{c.x + kPad, rowTop(i), c.w - 2 * kPad, kRowH}, mRows[i].label, mRows[i].checked, false, mRowHover.amount(i + 1));
 
         // footer buttons
-        auto drawBtn = [&](const Rect &r, const std::string &label, bool primary) {
+        auto drawBtn = [&](const Rect &r, const std::string &label, bool primary, double hoverAmt) {
             drawRoundedRect(t, r, radius::control(),
-                            primary ? Paint::filled(mAccent)
-                                    : Paint::filledStroked(palette::surface(), palette::line(), 1.0));
-            t.setFill(primary ? palette::bg() : palette::ink());
-            const double tw = (double)label.size() * 6.6;  // rough centring
-            t.drawText(label, r.x + (r.w - tw) * 0.5, r.y + r.h * 0.5 + 4.0, 12.0);
+                            primary ? Paint::filled(fade(mAccent, a))
+                                    : Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
+            const double hw = hoverAmt * a;  // eased white wash on the hovered button
+            if (hw > 0.001)
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hw)));
+            t.setFill(fade(primary ? palette::primaryForeground() : palette::foreground(), a));
+            const double tw = estimateTextWidth(label, kFontPx);
+            t.drawText(label, r.x + (r.w - tw) * 0.5, r.y + r.h * 0.5 + 4.0, kFontPx, font::sansMedium());
         };
-        drawBtn(cancelRect(), "Cancel", false);
-        drawBtn(confirmRect(), mConfirmLabel, true);
+        drawBtn(cancelRect(), "Cancel", false, mBtnHover.amount(0));
+        drawBtn(confirmRect(), mConfirmLabel, true, mBtnHover.amount(1));
     }
 }
 }

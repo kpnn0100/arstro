@@ -1,11 +1,11 @@
 #include "HueCurveEditor.h"
-#include "../CosmoTheme.h"
+#include "../Theme.h"
 #include <algorithm>
 #include <cmath>
 
 namespace arstro
 {
-namespace cosmo
+namespace cosmo_v2
 {
     using namespace artboard;
 
@@ -28,16 +28,18 @@ namespace cosmo
         }
     }
 
-    HueCurveEditor::HueCurveEditor(const Color &accent) : mAccent(accent)
+    HueCurveEditor::HueCurveEditor()
     {
-        width.set(300.0); height.set(180.0);
+        width.set(300.0); height.set(150.0);
         mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
     }
 
-    void HueCurveEditor::setPoints(const std::vector<std::pair<float, float>> &pts)
+    void HueCurveEditor::setPoints(const std::vector<CurvePoint> &pts)
     {
+        // Restore the control points verbatim (handles + smooth flag preserved), only
+        // wrapping/clamping the anchor position back into range.
         mPts.clear();
-        for (auto &p : pts) { CtrlPoint c; c.x = (float)wrap360(p.first); c.y = (float)clampY(p.second); mPts.push_back(c); }
+        for (auto &p : pts) { CurvePoint c = p; c.x = (float)wrap360(p.x); c.y = (float)clampY(p.y); mPts.push_back(c); }
         if (mPts.size() < 2) mPts = {{0.f, 0.f}, {120.f, 0.f}, {240.f, 0.f}};
     }
 
@@ -81,7 +83,9 @@ namespace cosmo
 
     void HueCurveEditor::emit()
     {
-        if (onChange) onChange(sampleCurve(mPts, /*cyclic*/ true, 360.0f));
+        // Emit the CONTROL points (with handles), not a sampling — the engine flattens
+        // them to its LUT and the file persists them, so the curve round-trips exactly.
+        if (onChange) onChange(mPts);
     }
 
     bool HueCurveEditor::handleGesture(const Gesture &g, const Point &local)
@@ -89,11 +93,9 @@ namespace cosmo
         using T = Gesture::Type;
         if (g.type == T::DoubleClick)
         {
-            // Double-click an existing point to remove it (keeping at least two);
-            // double-click empty space to add a point there.
             const int hit = pointAt(local);
             if (hit >= 0 && mPts.size() > 2) mPts.erase(mPts.begin() + hit);
-            else { CtrlPoint c; c.x = (float)nxh(local.x, true); c.y = (float)nyv(local.y); mPts.push_back(c); }
+            else { CurvePoint c; c.x = (float)nxh(local.x, true); c.y = (float)nyv(local.y); mPts.push_back(c); }
             emit();
             return true;
         }
@@ -107,22 +109,22 @@ namespace cosmo
         }
         if ((g.type == T::Drag || g.type == T::DragStart) && mDragIdx >= 0)
         {
-            CtrlPoint &cp = mPts[mDragIdx];
+            CurvePoint &cp = mPts[mDragIdx];
             if (mDragKind == 0) { cp.x = (float)nxh(local.x, true); cp.y = (float)nyv(local.y); }
-            else if (mDragKind == 3)  // Alt-drag on the corner itself: pull out symmetric handles
+            else if (mDragKind == 3)
             {
                 const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
                 cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy;
             }
-            else  // dragging an existing handle directly
+            else
             {
                 const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
-                if (g.alt)  // Alt: tear it apart -- move only this handle, independently
+                if (g.alt)
                 {
                     if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }
                     else { cp.ox = hx; cp.oy = hy; }
                 }
-                else  // plain drag: mirror the opposite handle so the tangent stays a straight line
+                else
                 {
                     if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; cp.ox = -hx; cp.oy = -hy; }
                     else { cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy; }
@@ -138,51 +140,48 @@ namespace cosmo
     void HueCurveEditor::onPaint(IRenderTarget &t) const
     {
         const double w = width.value(), h = height.value();
-        drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(), Paint::filledStroked(palette::bg(), palette::line(), 1.0));
-        t.beginPath(); t.moveTo(kPad, midY()); t.lineTo(w - kPad, midY()); t.setStroke(Color{1, 1, 1, 0.12}, 1.0); t.strokePath();
+        drawRoundedRect(t, Rect{0, 0, w, h}, radius::control(),
+                        Paint::filledStroked(palette::curvePlotBg(), palette::border(), 1.0));
+        t.beginPath(); t.moveTo(kPad, midY()); t.lineTo(w - kPad, midY());
+        t.setStroke(Color{1, 1, 1, 0.12}, 1.0); t.strokePath();
         for (int d = 60; d < 360; d += 60)
-        { const double gx = pxh(d); t.beginPath(); t.moveTo(gx, plotTop()); t.lineTo(gx, plotBot()); t.setStroke(Color{1, 1, 1, 0.05}, 1.0); t.strokePath(); }
-        // hue context strip
+        {
+            const double gx = pxh(d);
+            t.beginPath(); t.moveTo(gx, plotTop()); t.lineTo(gx, plotBot());
+            t.setStroke(Color{1, 1, 1, 0.05}, 1.0); t.strokePath();
+        }
+        // hue context strip below the plot
         const double sy = plotBot() + 4.0, sh = 8.0;
         for (int i = 0; i < 48; ++i)
-        { const double h0 = (double)i / 48 * 360.0; drawRoundedRect(t, Rect{pxh(h0), sy, pxh((double)(i + 1) / 48 * 360.0) - pxh(h0) + 1.0, sh}, 0.0, Paint::filled(hueColor(h0))); }
-
-        // hue distribution of the image, behind the curve (bars coloured by hue)
-        if (mHueHist.size() >= 2)
         {
-            const int n = (int)mHueHist.size();
-            const double top = plotTop(), bot = plotBot();
-            for (int i = 0; i < n; ++i)
-            {
-                double v = mHueHist[i]; if (v <= 0) continue; if (v > 1) v = 1;
-                const double h0 = (double)i / n * 360.0, h1 = (double)(i + 1) / n * 360.0;
-                const double x0 = pxh(h0), barTop = bot - v * (bot - top) * 0.8;
-                Color c = hueColor((h0 + h1) * 0.5); c.a = 0.30f;
-                drawRoundedRect(t, Rect{x0, barTop, pxh(h1) - x0 + 1.0, bot - barTop}, 0.0, Paint::filled(c));
-            }
+            const double h0 = (double)i / 48 * 360.0;
+            drawRoundedRect(t, Rect{pxh(h0), sy, pxh((double)(i + 1) / 48 * 360.0) - pxh(h0) + 1.0, sh}, 0.0,
+                            Paint::filled(hueColor(h0)));
         }
 
-        // dense cyclic curve; break the polyline where x wraps so the seam joins continuously.
-        const auto dense = sampleCurve(mPts, true, 360.0f);
+        // dense cyclic curve; break the polyline where x wraps so the seam joins continuously
+        const auto dense = curve::sample(mPts, true, 360.0f);
         for (size_t i = 0; i + 1 < dense.size(); ++i)
         {
             if (dense[i + 1].first < dense[i].first) continue;  // wrap fold -> skip the jump
-            const Color col = mMappedHue ? hueColor(dense[i].first + dense[i].second * 180.0) : mAccent;
+            const Color col = mMappedHue ? hueColor(dense[i].first + dense[i].second * 180.0) : palette::primary();
             t.beginPath(); t.moveTo(pxh(dense[i].first), pyv(dense[i].second));
             t.lineTo(pxh(dense[i + 1].first), pyv(dense[i + 1].second));
             t.setStroke(col, 2.0); t.strokePath();
         }
         // handles + nodes
+        const Color accent = palette::primary();
         for (const auto &p : mPts)
         {
             if (p.smooth)
                 for (int side = 0; side < 2; ++side)
                 {
                     const double hx = pxh(p.x + (side ? p.ox : p.ix)), hy = pyv(p.y + (side ? p.oy : p.iy));
-                    t.beginPath(); t.moveTo(pxh(p.x), pyv(p.y)); t.lineTo(hx, hy); t.setStroke(Color{mAccent.r, mAccent.g, mAccent.b, 0.5}, 1.0); t.strokePath();
-                    drawCircle(t, hx, hy, 3.0, Paint::filled(Color{mAccent.r, mAccent.g, mAccent.b, 0.7}));
+                    t.beginPath(); t.moveTo(pxh(p.x), pyv(p.y)); t.lineTo(hx, hy);
+                    t.setStroke(Color{accent.r, accent.g, accent.b, 0.5}, 1.0); t.strokePath();
+                    drawCircle(t, hx, hy, 3.0, Paint::filled(Color{accent.r, accent.g, accent.b, 0.7}));
                 }
-            drawCircle(t, pxh(p.x), pyv(p.y), 4.0, Paint::filled(mAccent));
+            drawCircle(t, pxh(p.x), pyv(p.y), 4.0, Paint::filledStroked(accent, palette::white(), 1.5));
         }
     }
 }

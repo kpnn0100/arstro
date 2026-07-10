@@ -11,7 +11,7 @@
  *  snapshot of it as a git-style tree.
  */
 #pragma once
-#include "../ImageProcessing/src/image_processing.h"
+#include "../../ImageProcessing/src/image_processing.h"
 #include <string>
 #include <vector>
 
