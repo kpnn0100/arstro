@@ -6,6 +6,13 @@ code** (mirrors the `implement_artboard` V-model, step 1). cosmo is an *applicat
 on the Artboard library + `cosmo::EditSession`; the Artboard library keeps its own
 `Artboard/docs/`. Requirements below are numbered `R-<area>-<n>`.
 
+This file is the numbered-requirement / decision ledger (intent + status). For the **detailed,
+source-derived as-built specification and design** — a full functional/non-functional spec,
+architecture, per-class detailed design, design rationale, and a PlantUML model — see
+[`docs/`](docs/): [`requirements.md`](docs/requirements.md), [`architecture.md`](docs/architecture.md),
+[`detailed_design.md`](docs/detailed_design.md), [`design.md`](docs/design.md),
+[`architecture.puml`](docs/architecture.puml).
+
 ## Global rules (apply to every requirement)
 
 - **R-G-1 Everything animates, nothing snaps.** No component may suddenly change size, appear,
@@ -316,5 +323,3 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   substring); no matches shows the empty-state placeholder.
 - **R-HOME-8 Reserved.** Settings / What's New / Help & Documentation are present but inert
   (reserved), matching the Figma affordances without behavior.
-</content>
-</invoke>

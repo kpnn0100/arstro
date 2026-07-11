@@ -1,0 +1,210 @@
+@startuml cosmo-architecture
+title cosmo — Architecture (as-built)
+skinparam classAttributeIconSize 0
+hide empty members
+
+' ─────────────────────────────────────────────────────────────
+' Layers (top = platform edge, bottom = platform-free libraries)
+' ─────────────────────────────────────────────────────────────
+
+package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
+  class GtkMain <<(F,#f88) entry>> {
+    + main()
+    - onDraw/onButton/onMotion/onScroll/onKey/onTick
+  }
+  class LoadJob <<threaded loader>> {
+    + entries : WorkspaceEntry[]
+    + ready : Result[]  <<mutex>>
+    + worker : std::thread
+    - decodeWorker() / pollLoad()
+  }
+  class "file dialogs" as Dialogs <<GTK>>
+  class CairoTarget <<adapter>>
+}
+
+package "app  (namespace arstro::cosmo_v2)" as app {
+  class App {
+    - mScreen : Screen
+    - mPhase : Phase
+    - mSession : cosmo::EditSession
+    + render(target, nowMs)
+    + pointer/wheel/key
+    + beginOpenTransition/finishOpenTransition/beginReveal
+    + showHome/showEditor/resetWorkspace
+    - renderEditor/renderTransition/renderReturn
+    - drawWordmark(p, alpha)
+    .. host callbacks ..
+    + onOpenRecentRequested / onDecodeThumbnail / onLoadingReady ...
+  }
+  enum Screen {
+    Home
+    Loading
+    Editor
+  }
+  enum Phase {
+    None
+    Intro
+    Loading
+    Reveal
+    ReturnEnter
+    ReturnLoad
+    ReturnExit
+  }
+
+  package widgets {
+    class TopBar
+    class MenuStrip
+    class LeftRail
+    class PresetTree
+    class CenterStage
+    class PhotoCanvas
+    class MaskOverlay
+    class Filmstrip
+    class Breadcrumb
+    class RightColumn
+    class EditStackTabs
+    class HistogramWidget
+    class ParamPanel
+    class MixerPanel
+    class HueCurveEditor
+    class CurvePanel
+    class GradePanel
+    class XformPanel
+    class MaskPanel
+    class StackPanel
+    class ActionBar
+    class HomeScreen
+    class HistoryView
+    class ContextMenu
+    class PresetDialog
+    class SettingsDialog
+    class ConfirmDialog
+    class SliderRow
+    class SegmentedControl
+    class PillButton
+    class IconButton
+    class HoverFade <<helper>>
+    class Starfield <<helper>>
+  }
+}
+
+package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
+  class EditSession {
+    - mNodes : GNode[]
+    - mSlotParams/History/Names/Paths/Thumbs : []
+    - mService : RenderService
+    + openImage/openImageInto/selectNode/navigateToGroup
+    + curParams/effectiveParams/applyParams/submit
+    + undo/redo/jumpToHistory
+    + saveWorkspaceAs/readWorkspaceFile/resetWorkspace
+    + savePreset/applyPreset/importPresetFrom
+  }
+  class GNode <<group-tree node>>
+  class History {
+    + nodes : HistoryNode[]
+    + current : int
+    + record/undo/redo/jumpTo/restore/prune
+  }
+  class HistoryNode
+  class ProjectStore <<static>> {
+    + recents() / remember(RecentEntry)
+    + configDir()
+  }
+  class PresetLibrary <<static>> {
+    + scan(dir) : PresetNode[]
+  }
+  interface IImageDecoder
+  class NativeImageDecoder
+  NativeImageDecoder ..|> IImageDecoder
+}
+
+package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
+  class RenderService <<worker thread>> {
+    + addImage/releaseImage/reset/setPreviewSize
+    + render(slot, EditParams)   <<coalesced>>
+    + tryAcquire(Frame&) : bool
+    + renderFull / renderPreviewSync
+  }
+  class Frame
+  class EditEngine <<fixed pipeline>>
+  class EditParams
+  class CurvePoint
+  class MaskParams
+}
+
+package "Artboard  (namespace artboard)  <<platform-free UI framework>>" as artboard {
+  class Segment
+  class "AnimatedProperty" as Prop
+  interface IRenderTarget
+  class GestureRecognizer
+  class ImageView
+  class Slider
+  class Theme
+}
+
+' ─────────────────────────────────────────────────────────────
+' Relationships
+' ─────────────────────────────────────────────────────────────
+GtkMain *--> App
+GtkMain *--> LoadJob
+GtkMain *--> CairoTarget
+GtkMain ..> Dialogs
+LoadJob ..> NativeImageDecoder
+CairoTarget ..|> IRenderTarget
+
+App *--> TopBar
+App *--> LeftRail
+App *--> CenterStage
+App *--> RightColumn
+App *--> HomeScreen
+App *--> HistoryView
+App *--> ContextMenu
+App *--> PresetDialog
+App *--> SettingsDialog
+App *--> ConfirmDialog
+App *--> Starfield
+App o--> Screen
+App o--> Phase
+App *--> EditSession
+
+TopBar *--> MenuStrip
+LeftRail *--> PresetTree
+CenterStage *--> PhotoCanvas
+CenterStage *--> Breadcrumb
+CenterStage *--> Filmstrip
+PhotoCanvas *--> MaskOverlay
+PhotoCanvas *--> SegmentedControl
+RightColumn *--> HistogramWidget
+RightColumn *--> EditStackTabs
+RightColumn *--> ActionBar
+RightColumn --> EditSession : "reads/writes params"
+EditStackTabs *--> ParamPanel
+EditStackTabs *--> StackPanel
+EditStackTabs *--> GradePanel
+EditStackTabs *--> XformPanel
+EditStackTabs *--> MaskPanel
+StackPanel *--> MixerPanel
+StackPanel *--> CurvePanel
+MixerPanel *--> HueCurveEditor
+ParamPanel *--> SliderRow
+GradePanel *--> SliderRow
+MaskPanel *--> SliderRow
+
+widgets --|> Segment
+Segment *--> Prop
+Segment ..> IRenderTarget : emits ops
+Segment ..> Theme
+
+EditSession *--> GNode
+EditSession *--> History
+EditSession *--> RenderService
+History *--> HistoryNode
+App ..> ProjectStore
+App ..> PresetLibrary
+RenderService ..> EditEngine
+RenderService ..> Frame
+EditEngine ..> EditParams
+EditParams *--> CurvePoint
+EditParams *--> MaskParams
+
+@enduml
