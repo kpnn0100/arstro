@@ -208,6 +208,10 @@ about.
 
 ## E. Open decisions (make these in M0)
 
+> These, and every other decision the requirements depend on, are laid out as an answerable
+> checklist in **[questionnaire.md](questionnaire.md)** — answer it and it becomes
+> `requirements.md`.
+
 1. **Nebula on git vs a self-contained store?** (Affects merge/rebase implementation and tooling.)
 2. **AudioConfig: keep singleton, or make render config passable?** (Affects determinism +
    multi-project.)
