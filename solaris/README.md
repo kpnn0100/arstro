@@ -124,6 +124,11 @@ stems; `branch`/`merge`/`rebase` are Nebula operations shared with the other app
 
 ## 8. Roadmap
 
+> **Before implementation starts**, see [docs/prerequisites.md](docs/prerequisites.md) — what
+> must be *defined* (Nebula + Solaris + DSP contracts) and *implemented* (a minimal Nebula, plus
+> DAW-enabling additions to DSP: a serializable processor registry, a deterministic offline
+> render, and library WAV I/O) before `solaris_core`, with a Definition-of-Ready checklist.
+
 1. **CLI + core**: Nebula schema, DSP rack per track, MIDI/note clips, automation, offline
    `render` (master + stems), branch/auto-rebase/merge.
 2. **Interstellar embedding** with live propagation (stems + mixdown, branch-following).
