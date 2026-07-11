@@ -14,6 +14,20 @@ adapter, so it adapts to any screen/OS like a HAL.
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the app creation workflow, build targets, and submodule
 upgrade steps.
 
+## Creative suite (roadmap)
+
+Arstro is growing into a three-app creative suite that shares one project model, version control,
+and resource pool — so a project made in one app can be embedded live into another. See
+[docs/vision.md](docs/vision.md) for the overview and the end-to-end workflow, and
+[docs/shared-core.md](docs/shared-core.md) for the shared **Nebula** core (text projects,
+branch + auto-rebase, semantic merge, cross-app embedding).
+
+- **[cosmo/](cosmo/)** — photo editor (colour/tone on stills). *Exists.*
+- **[interstellar/](interstellar/)** — professional video editor (colour blending & edit).
+  *Spec / CLI-first — see [interstellar/README.md](interstellar/README.md).*
+- **[solaris/](solaris/)** — Digital Audio Workstation. *Spec / CLI-first — see
+  [solaris/README.md](solaris/README.md).*
+
 ## Build
 
 The build picks the **adapter from the target**; the **host is auto-detected**.
