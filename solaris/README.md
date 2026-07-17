@@ -122,14 +122,23 @@ stems; `branch`/`merge`/`rebase` are Nebula operations shared with the other app
   `solaris_core` under an Artboard front-end); Pulsar's oscillator/filter/env/LFO panels are the
   starting point for the instrument editor.
 
-## 8. Roadmap
+## 8. Requirements, plan & roadmap
 
-> **Before implementation starts**, see [docs/prerequisites.md](docs/prerequisites.md) — what
-> must be *defined* (Nebula + Solaris + DSP contracts) and *implemented* (a minimal Nebula, plus
-> DAW-enabling additions to DSP: a serializable processor registry, a deterministic offline
-> render, and library WAV I/O) before `solaris_core`, with a Definition-of-Ready checklist.
+The design is now specified:
 
-1. **CLI + core**: Nebula schema, DSP rack per track, MIDI/note clips, automation, offline
-   `render` (master + stems), branch/auto-rebase/merge.
-2. **Interstellar embedding** with live propagation (stems + mixdown, branch-following).
-3. **Artboard UI**: arrange view, piano roll, mixer, instrument/effect editors (reusing Pulsar).
+- **[docs/requirements.md](docs/requirements.md)** — the numbered `SR-*` requirements (functional +
+  non-functional), each tagged with its target phase.
+- **[docs/plan.md](docs/plan.md)** — the phased implementation + test plan. Guiding principle:
+  **basic workflow first, features later.** The engine is built **offline-first for testability**
+  and real-time playback is added as an early driver on top. Each phase has an acceptance gate
+  ("checked, no bug") and its dependencies/independence are called out.
+- **[docs/prerequisites.md](docs/prerequisites.md)** — the define/implement groundwork (minimal
+  Nebula + DSP enablement) the plan realizes.
+- **[docs/questionnaire.md](docs/questionnaire.md)** — the answered decision checklist the
+  requirements were derived from.
+
+Phase summary (see the plan for gates + dependencies): **P1** model + CLI · **P2** DSP enablement ·
+**P3** MIDI→synth→WAV · **P4** audio clips + rack + mixer · **P5** real-time playback · **P6**
+recording + input matrix · **P7** automation + multichannel/output routing · **P8** Nebula VCS +
+merge · **P9** embedding + bounce/freeze · **P10** advanced (stretch/pitch, sampler, SMF, tempo map,
+VST3). An Artboard UI follows the CLI core.
