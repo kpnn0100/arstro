@@ -15,6 +15,7 @@
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
 #include "HoverFade.h"
+#include "ProjectCard.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -52,9 +53,12 @@ namespace cosmo_v2
         void setThumbnail(int recentIndex, const uint8_t *rgba, int w, int h);
         /** Scroll the grid by a wheel delta (positive = up). */
         void scrollBy(double delta);
-        /** Screen rect of the recent card most recently clicked-to-open — the start
-         *  point for the App's cover fly-to-centre transition (R-LOADING). */
+        /** Full screen rect of the recent card most recently clicked-to-open — the
+         *  start point for the App's card fly-to-centre transition (R-LOADING). */
         artboard::Rect lastOpenCardRect() const { return mLastOpenRect; }
+        /** Info (name/photos/size/date/edited) of that clicked card, so the loading
+         *  screen can render the SAME card at centre. */
+        ProjectCardData lastOpenCardInfo() const { return mLastOpenCard; }
         /** Hide the big sidebar wordmark while the App flies its own copy back on
          *  return (so the wordmark reads as one continuous element, R-LOADING). */
         void setWordmarkHidden(bool h) { mWordmarkHidden = h; }
@@ -110,7 +114,8 @@ namespace cosmo_v2
         double mScrollY = 0.0;                 // TARGET scroll; eased into place by mScrollYAnim
         double mContentH = 0.0;                // total grid height (for scroll clamp)
         artboard::Rect mNewCardRect{0, 0, 0, 0};
-        artboard::Rect mLastOpenRect{0, 0, 0, 0};  // screen rect of the last-opened recent card
+        artboard::Rect mLastOpenRect{0, 0, 0, 0};  // full screen rect of the last-opened recent card
+        ProjectCardData mLastOpenCard;             // its info (name/photos/size/date/edited)
         bool mWordmarkHidden = false;              // suppress the sidebar wordmark during a return fly
 
         // hover + eased scroll (R-G-1/R-G-3: everything animates, nothing snaps)

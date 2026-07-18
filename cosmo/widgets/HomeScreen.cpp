@@ -19,7 +19,7 @@ namespace cosmo_v2
         constexpr double kHeaderH = 60.0;   // recent-projects header band
         constexpr double kGap = 16.0;       // grid gap-4
         constexpr double kMinCard = 220.0;
-        constexpr double kMetaH = 46.0;     // card meta band (name + row)
+        constexpr double kMetaH = projectcard::kMetaH;  // card meta band (name + row), shared with the loading screen
         constexpr double kActionH = 34.0;
         constexpr double kSearchW = 168.0, kSearchH = 26.0;
         constexpr double kScrollGlideMs = 180.0;  // grid-scroll ease (R-G-1)
@@ -330,8 +330,10 @@ namespace cosmo_v2
             const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
             if (s.contains(local))
             {
-                // Remember the 16:9 cover (thumbnail) rect as the fly-to-centre start.
-                mLastOpenRect = Rect{s.x, s.y, s.w, s.w * 9.0 / 16.0};
+                // Remember the FULL card rect + its info as the fly-to-centre start, so
+                // the loading screen shows the same whole item (R-LOADING).
+                mLastOpenRect = s;
+                mLastOpenCard = {c.info.name, c.info.photos, c.info.size, c.info.date, c.info.edited};
                 if (onOpenRecent) onOpenRecent(c.info.recentIndex);
                 return true;
             }
@@ -456,35 +458,9 @@ namespace cosmo_v2
             const Card &c = mCards[ci];
             if (!c.shown) continue;
             const Rect s = cardScreen(c.rect);
-            const double th = s.w * 9.0 / 16.0;
             const double hv = mHover.amount(hoverId(Region::Card, ci));
-            // card border + meta background (thumbnail itself is the ImageView child);
-            // hover brightens the surface + lifts the border toward the accent (R-G-1).
-            const Color cardBg = brighten(palette::folderChipBg(), 0.06 * hv);
-            const Color cardBorder = lerpColor(palette::border(), palette::primaryAlpha(0.7), hv);
-            drawRoundedRect(t, s, radius::control(), Paint::filledStroked(cardBg, cardBorder, 1.0 + 0.5 * hv));
-            // thumbnail placeholder fill (shows if no cover decoded yet)
-            drawRoundedRect(t, Rect{s.x, s.y, s.w, th}, 0.0, Paint::filled(Color::hex(0x111111)));
-            if (c.info.edited)
-            {
-                const double bw = estimateTextWidth("Edited", 8.0) + 10.0;
-                const Rect badge{s.x + s.w - bw - 8.0, s.y + 8.0, bw, 14.0};
-                drawRoundedRect(t, badge, 1.0, Paint::filledStroked(Color{0, 0, 0, 0.6}, Color{palette::primary().r, palette::primary().g, palette::primary().b, 0.3}, 1.0));
-                t.setFill(palette::primary());
-                t.drawText("Edited", badge.x + 5.0, badge.y + 10.0, 8.0, font::sansSemiBold());
-            }
-            // meta
-            const double mx = s.x + 12.0;
-            double my = s.y + th + 18.0;
-            t.setFill(palette::foreground());
-            t.drawText(c.info.name, mx, my, 11.0, font::sansMedium());
-            my += 15.0;
-            t.setFill(palette::mutedForeground());
-            std::string metaLeft = c.info.photos;
-            if (!c.info.size.empty()) metaLeft += "  \xC2\xB7  " + c.info.size;
-            t.drawText(metaLeft, mx, my, 10.0, font::sans());
-            t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.6});
-            t.drawText(c.info.date, s.x + s.w - 12.0 - estimateTextWidth(c.info.date, 9.0), my, 9.0, font::sans());
+            // Shared card chrome (thumbnail itself is the ImageView child, drawn over it).
+            drawProjectCardChrome(t, s, {c.info.name, c.info.photos, c.info.size, c.info.date, c.info.edited}, hv);
         }
         // trailing New-Project card (dashed)
         {

@@ -69,31 +69,35 @@ sudden jump, and the heavy work is isolated to the middle part:
 
 - **R-LOADING-0 Part 1 — transition (pure animation, no I/O).** The intro plays with NOTHING
   loading: the home `cosmo.` wordmark flies to the editor top-bar wordmark slot (46 px → 13 px, home
-  position → top-left, `App::drawWordmark`), the clicked project's **card thumbnail lifts off its
-  card and translates to screen centre AT ITS CARD SIZE — it does NOT expand/zoom into a large hero
-  image** (so the recent item simply glides to the middle), over a cleared star-sky backdrop; the
-  project name grows in beneath it, and the small stars fade in. The decode does NOT start yet.
-  Cover fly-from-card uses the clicked card's thumbnail screen rect (`HomeScreen::lastOpenCardRect`,
-  card width × 16:9); the centred rest rect is the **same size** (a pure move, no scale). Open-dialog
-  opens (no source card) settle at centre at a default card size.
-- **R-LOADING-1 Part 2 — loading (status text + progress bar under the item).** When the intro
+  position → top-left, `App::drawWordmark`), and the clicked project's **WHOLE card — cropped
+  thumbnail + name + photo count + total size + last-edit date — lifts off the grid and translates
+  to screen centre AT ITS CARD SIZE. It does NOT expand/zoom into a large hero image**; the entire
+  recent item simply glides to the middle and fades in over a cleared star-sky backdrop, and the
+  small stars fade in. The decode does NOT start yet. The fly uses the clicked card's **full** screen
+  rect + its info (`HomeScreen::lastOpenCardRect` / `lastOpenCardInfo`); the centred rest rect is the
+  **same size** (a pure move, no scale). The card itself is drawn by the shared
+  `widgets/ProjectCard.h` `drawProjectCardChrome` (+ the cover blitted over its thumbnail band), the
+  SAME renderer the home grid uses, so the flying item is pixel-identical to the grid item.
+  Open-dialog opens (no source card) fade in at centre at a default card size (name only).
+- **R-LOADING-1 Part 2 — loading (status text + progress bar under the card).** When the intro
   finishes, `App` fires `onLoadingReady` and ONLY THEN does the host start the background decode (so
   part 1 never hitches on I/O). Everything is already placed; a **small accent progress bar the
-  width of the centred item, positioned directly UNDER that item** (not a wide bar at the bottom of
-  the screen) fills 0→1 with the real decode fraction (`setLoadProgress`), eased. **Directly above
-  that bar a status line shows what is currently being loaded** (`App::setLoadStatus`, e.g.
-  `Loading  <photo name>` — fed per item by the host as each entry is applied; `Preparing…` before
-  the first). The status line + bar fade in together at the part-1→part-2 hand-off (they never pop).
-  A short minimum keeps the bar from merely flashing on a fast load.
+  SAME WIDTH as the card, positioned directly UNDER it** (not a wide bar at the bottom of the screen)
+  fills 0→1 with the real decode fraction (`setLoadProgress`), eased. **Directly above that bar a
+  status line shows what is currently being loaded** (`App::setLoadStatus`, e.g. `Loading  <photo
+  name>` — fed per item by the host as each entry is applied; `Preparing…` before the first). The
+  status line + bar fade in together at the part-1→part-2 hand-off (they never pop). A short minimum
+  keeps the bar from merely flashing on a fast load.
 - **R-LOADING-2 Loading-screen look.** A **near-black** star-sky backdrop (same colour as the
   home/editor background so nothing flashes at the hand-off) of **small** twinkling white particles
-  (`widgets/Starfield.h`). The project's **cover thumbnail** (already decoded for the home card and
-  cached by the host, so it needs no I/O in part 1) sits centred **at card size** and **fades in**
-  when it becomes available (never pops); below it, top-to-bottom: the project name, the load-status
-  line, and the item-width progress bar (one centred stack).
+  (`widgets/Starfield.h`). The project's whole card sits centred **at card size** with its **cover
+  thumbnail** (already decoded for the home card and cached by the host, so it needs no I/O in part
+  1) **cropped (Cover fit)** into the thumbnail band and **faded in** when available (never pops);
+  below the card, top-to-bottom: the load-status line and the card-width progress bar (one centred
+  stack — the name/meta live inside the card).
 - **R-LOADING-3 Part 3 — reveal (loading → editor).** When the load completes (and the intro has
   played), the editor components **materialise on top of the matching dark backdrop** (fade in),
-  while the loading elements — the centred card thumbnail, stars, name, status line and progress bar
+  while the loading elements — the centred card, stars, status line and progress bar
   — **fade out in place** (no move/expand). The wordmark **cross-fades**: the loading copy fades out AS the editor's
   top-bar wordmark fades in, in the same slot at the same time, so it never doubles and never
   re-fades from nothing (`drawWordmark` with an alpha; the reveal drives the editor fade itself so

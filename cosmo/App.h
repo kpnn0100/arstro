@@ -199,8 +199,10 @@ namespace cosmo_v2
         enum class Phase { None, Intro, Loading, Reveal, ReturnEnter, ReturnLoad, ReturnExit };
         Phase mPhase = Phase::None;
         double mPhaseT0 = 0.0;               // start time of the current phase
-        std::string mLoadName;               // project name shown centred
+        std::string mLoadName;               // project name (also mLoadCard.name)
         std::string mLoadStatus;             // "what is loading" line above the progress bar
+        ProjectCardData mOpenCard;           // clicked recent card info (consumed at begin)
+        ProjectCardData mLoadCard;           // the whole item drawn centred during loading
         Starfield mStars;                    // twinkling loading backdrop
         std::shared_ptr<artboard::ImageView> mCover;  // project cover (centre -> photo stage)
         bool mCoverReady = false;

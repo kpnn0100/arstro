@@ -151,7 +151,8 @@ namespace cosmo_v2
         mHome->onOpenProject   = [this] { if (onOpenProjectRequested) onOpenProjectRequested(); };
         mHome->onImportCatalog = [this] { if (onImportCatalogRequested) onImportCatalogRequested(); };
         mHome->onOpenRecent    = [this](int idx) {
-            mOpenFromRect = mHome->lastOpenCardRect();  // fly the cover from the clicked card (R-LOADING)
+            mOpenFromRect = mHome->lastOpenCardRect();   // fly the whole card from where it sits (R-LOADING)
+            mOpenCard = mHome->lastOpenCardInfo();       // ...showing the same item at centre
             if (idx >= 0 && idx < (int)mRecents.size() && onOpenRecentRequested) onOpenRecentRequested(mRecents[idx].path);
         };
         mHome->layout();
@@ -159,7 +160,7 @@ namespace cosmo_v2
         // Open-project transition assets (R-LOADING): a centred cover image and a
         // twinkling star-sky backdrop for the loading screen.
         mCover = std::make_shared<ImageView>();
-        mCover->setFit(ImageView::Fit::Contain);
+        mCover->setFit(ImageView::Fit::Cover);  // cropped, exactly like the grid card thumbnail
         mStars.init(220);  // more, smaller specks
 
         layout();
@@ -721,6 +722,9 @@ namespace cosmo_v2
         mLoadDone = 0; mLoadTotal = 0;
         mCoverFrom = mOpenFromRect;              // consume the clicked-card rect (empty for Open-dialog)
         mOpenFromRect = Rect{0, 0, 0, 0};
+        mLoadCard = mOpenCard;                   // the whole item to show centred (empty for Open-dialog)
+        mLoadCard.name = projectName;            // ...its name is always the opening project
+        mOpenCard = ProjectCardData{};
         mLoadingStarted = false;                 // part 1 is pure animation; decode starts at part 2
         mIntro.set(0.0);    mIntro.animateTo(1.0, kIntroMs, Easing::EaseOutCubic, mNowMs);
         mReveal.set(0.0);
@@ -819,38 +823,40 @@ namespace cosmo_v2
             return;
         }
 
-        // The centred item is the clicked card thumbnail AT ITS CARD SIZE — the recent
-        // item simply glides to the middle; it never expands into a hero image
-        // (R-LOADING-0). Under it, a centred stack: project name, "what's loading"
-        // status line, then a small item-width progress bar (R-LOADING-1/2). Open-dialog
-        // opens (no source card) use a default card size.
-        const double iw = (mCoverFrom.w > 0.0) ? mCoverFrom.w : std::clamp(mW * 0.22, 220.0, 320.0);
-        const double ih = (mCoverFrom.h > 0.0) ? mCoverFrom.h : iw * 9.0 / 16.0;
-        const double kNameGap = 34.0, kStatusGap = 26.0, kBarGap = 18.0, kBarH = 4.0;
-        const double stackH = ih + kNameGap + kStatusGap + kBarGap;  // thumb + text block + bar
-        const Rect box{(mW - iw) * 0.5, (mH - stackH) * 0.5, iw, ih};
-        const double nameBaseY = box.y + ih + kNameGap;
-        const double statusBaseY = nameBaseY + kStatusGap;
-        const Rect barRect{box.x, statusBaseY + kBarGap, iw, kBarH};
+        // The clicked recent item flies to the centre AS THE WHOLE CARD (cropped
+        // thumbnail + name + photo count + size + last-edit date) at its card size — a
+        // pure move, never an expand (R-LOADING-0). A progress bar the SAME WIDTH as the
+        // card sits under it, with a "what's loading" status line just above the bar
+        // (R-LOADING-1). Open-dialog opens (no source card) use a default card size.
+        const double cw = (mCoverFrom.w > 0.0) ? mCoverFrom.w : std::clamp(mW * 0.22, 220.0, 320.0);
+        const double ch = (mCoverFrom.h > 0.0) ? mCoverFrom.h : cw * 9.0 / 16.0 + projectcard::kMetaH;
+        const double kStatusGap = 30.0, kBarGap = 16.0, kBarH = 4.0;
+        const double stackH = ch + kStatusGap + kBarGap;   // card + status line + bar
+        const Rect card{(mW - cw) * 0.5, (mH - stackH) * 0.5, cw, ch};
+        const double statusBaseY = card.y + ch + kStatusGap;
+        const Rect barRect{card.x, statusBaseY + kBarGap, cw, kBarH};
 
-        auto drawCover = [&](const Rect &r, double coverAlpha) {
-            mCover->x.set(r.x); mCover->y.set(r.y); mCover->width.set(r.w); mCover->height.set(r.h);
-            mCover->render(target);
-            if (coverAlpha < 0.999)  // fade the cover up out of the backdrop
+        // Draw the whole card (shared chrome + the cropped cover over its thumbnail band),
+        // the whole thing faded by `alpha`; the cover also fades in via mCoverFade.
+        auto drawCard = [&](const Rect &cr, double alpha) {
+            if (alpha <= 0.001) return;
+            drawProjectCardChrome(target, cr, mLoadCard, 0.0, alpha);
+            if (mCoverReady)
             {
-                Color s = kLoadingBg; s.a = 1.0 - coverAlpha;
-                drawRoundedRect(target, r, radius::control(), Paint::filled(s));
+                const Rect thumb{cr.x, cr.y, cr.w, cr.w * 9.0 / 16.0};
+                mCover->x.set(thumb.x); mCover->y.set(thumb.y);
+                mCover->width.set(thumb.w); mCover->height.set(thumb.h);
+                mCover->render(target);
+                const double coverA = mCoverFade.value() * alpha;
+                if (coverA < 0.999)  // fade the cover toward the backdrop (card fade + cover fade-in)
+                {
+                    Color s = kLoadingBg; s.a = 1.0 - coverA;
+                    drawRoundedRect(target, thumb, 0.0, Paint::filled(s));
+                }
             }
         };
-        auto drawName = [&](double alpha, double sz) {
-            if (mLoadName.empty() || alpha <= 0.001) return;
-            const double tw = estimateTextWidth(mLoadName, sz);
-            Color c = palette::foreground(); c.a *= alpha;
-            target.setFill(c);
-            target.drawText(mLoadName, (mW - tw) * 0.5, nameBaseY, sz, font::sansSemiBold());
-        };
-        // Status line ("what is loading") + the small item-width progress bar, drawn as
-        // one fading unit directly under the item. `alpha` fades the whole unit in/out.
+        // Status line ("what is loading") + the card-width progress bar, one fading unit
+        // directly under the card. `alpha` fades the whole unit in/out.
         auto drawStatusAndBar = [&](double alpha) {
             if (alpha <= 0.001) return;
             if (!mLoadStatus.empty())
@@ -907,9 +913,8 @@ namespace cosmo_v2
             {
                 const double a = 1.0 - fadeOut;
                 mStars.draw(target, Rect{0, 0, mW, mH}, a, nowMs);
-                if (mCoverReady) drawCover(box, a);
-                drawName(a, 23.0);
-                drawStatusAndBar(a);  // status line + item-width bar, same centred stack
+                drawCard(card, a);       // the whole item, fading out in place
+                drawStatusAndBar(a);     // status line + card-width bar
             }
             // Wordmark cross-fade (#2): the loading wordmark fades out AS the editor's
             // fades in (via the scrim) — same slot, same time, so it never doubles.
@@ -925,21 +930,16 @@ namespace cosmo_v2
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
         mStars.draw(target, Rect{0, 0, mW, mH}, intro, nowMs);  // small specks fade in with the intro
 
-        // The cover (thumbnail) flies from the clicked card to the centre in part 1;
-        // at intro==1 it rests at `box`. Open-dialog opens (no card) settle at `box`.
-        const Rect cbox = (mCoverFrom.w > 0.0) ? lerpRect(mCoverFrom, box, intro) : box;
-        if (mCoverReady) drawCover(cbox, mCoverFade.value());
-        else
-            drawRoundedRect(target, cbox, radius::control(),
-                            Paint::filledStroked(palette::whiteAlpha(0.03), palette::whiteAlpha(0.10), 1.0));
-
-        // Project name, centred below the item, growing a little as the intro lands.
-        drawName(intro, 17.0 + 6.0 * intro);
+        // The whole card flies from where it sat in the grid to the centre in part 1
+        // (same size — a pure move); at intro==1 it rests at `card`. It fades in with the
+        // intro. Open-dialog opens (no source rect) simply fade in at `card`.
+        const Rect cbox = (mCoverFrom.w > 0.0) ? lerpRect(mCoverFrom, card, intro) : card;
+        drawCard(cbox, intro);
 
         drawWordmark(target, intro);  // flies home->top-bar in part 1; parked at 1 in part 2
 
-        // Status line + item-width progress bar — fade in together in PART 2 (mBarFade),
-        // directly under the item; the bar fills with the eased decode fraction.
+        // Status line + card-width progress bar — fade in together in PART 2 (mBarFade),
+        // directly under the card; the bar fills with the eased decode fraction.
         drawStatusAndBar(mBarFade.value());
 
         target.restore();
