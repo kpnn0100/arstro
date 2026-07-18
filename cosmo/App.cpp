@@ -24,7 +24,7 @@ namespace cosmo_v2
         constexpr double kReturnHoldMs = 200.0; // return part 2: star-sky beat
         constexpr double kExitMs = 320.0;      // return part 3: home fades in from the star-sky
         constexpr double kMinLoadingMs = 260.0;  // keep the progress bar visible at least this long
-        const Color kLoadingBg{0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, 1.0};  // near-black, matches the editor/home bg
+        const Color kLoadingBg{0x0A / 255.0, 0x0A / 255.0, 0x0A / 255.0, 1.0};  // deep near-black loading backdrop (darker than the editor/home bg)
 
         Rect lerpRect(const Rect &a, const Rect &b, double t)
         {

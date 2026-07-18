@@ -89,8 +89,10 @@ sudden jump, and the heavy work is isolated to the middle part:
   entry is applied; `Preparing…` before the first). The
   status line + bar fade in together at the part-1→part-2 hand-off (they never pop). A short minimum
   keeps the bar from merely flashing on a fast load.
-- **R-LOADING-2 Loading-screen look.** A **near-black** star-sky backdrop (same colour as the
-  home/editor background so nothing flashes at the hand-off) of **small** twinkling white particles
+- **R-LOADING-2 Loading-screen look.** A **deep near-black** star-sky backdrop (`kLoadingBg`
+  `#0A0A0A`, darker than the home/editor background so the loading screen reads as a dim, focused
+  moment; the editor gently brightens in on reveal rather than matching exactly) of **small**
+  twinkling white particles
   (`widgets/Starfield.h`). The project's whole card sits centred **at card size** with its **cover
   thumbnail** (already decoded for the home card and cached by the host, so it needs no I/O in part
   1) **cropped (Cover fit)** into the thumbnail band and **faded in** when available (never pops);
