@@ -640,3 +640,101 @@ TEST(EditParamsIO_masks_roundtrip)
     CHECK_NEAR(q.masks[1].dabs[1].radius, 0.06, 1e-4);
     CHECK_NEAR(q.masks[1].adjust.temp, -30.0, 1e-4);
 }
+
+// ── GPU compute-backend seam (R-GPU): selection, fallback, availability ──
+// A test double for IComputeBackend (the compute-side analogue of Artboard's
+// RecordingTarget): fills the result with a constant sentinel so an accelerated
+// render is byte-distinguishable from the CPU reference path.
+namespace
+{
+    struct MockBackend : IComputeBackend
+    {
+        bool avail = true;
+        bool accept = true;   // what process() returns
+        int calls = 0;
+        float sentinel = 0.5f;
+        const char *name() const override { return "Mock"; }
+        Kind kind() const override { return Kind::Gpu; }
+        bool available() const override { return avail; }
+        bool process(const Image &src, const EditParams &, ComputeResult &out) override
+        {
+            ++calls;
+            if (!accept) return false;   // decline -> engine falls back to the CPU reference
+            out.processed = Image(src.width(), src.height(), src.channels());
+            Pixel *d = out.processed.data();
+            const size_t n = (size_t)src.width() * src.height() * src.channels();
+            for (size_t i = 0; i < n; ++i) d[i] = sentinel;
+            return true;
+        }
+    };
+}
+
+TEST(EditEngine_gpu_backend_selection_and_fallback)
+{
+    auto bytes = variedRGBA8b(16, 16);
+    EditParams p; p.exposure = 0.4f; p.contrast = 12.f;
+
+    // Baseline: a default engine has no accelerator -> CPU only.
+    EditEngine base;
+    base.addImage(bytes.data(), 16, 16, 4);
+    base.selectImage(0);
+    base.setPreviewSize(4096);
+    base.setCurrentParams(p);
+    CHECK(!base.gpuAvailable());
+    PreviewBuffer cpb = base.renderFull();
+    CHECK(cpb.rgba != nullptr);
+    const std::vector<uint8_t> cpu(cpb.rgba, cpb.rgba + (size_t)cpb.width * cpb.height * 4);
+
+    // Engine with an injected mock accelerator.
+    EditEngine eng;
+    eng.addImage(bytes.data(), 16, 16, 4);
+    eng.selectImage(0);
+    eng.setPreviewSize(4096);
+    eng.setCurrentParams(p);
+    auto mockOwned = std::make_unique<MockBackend>();
+    MockBackend *mock = mockOwned.get();
+    eng.setComputeAccelerator(std::move(mockOwned));
+    CHECK(eng.gpuAvailable());
+
+    // (1) prefer OFF -> CPU path; mock not called; output == CPU baseline.
+    eng.setPreferGpu(false);
+    {
+        PreviewBuffer b = eng.renderFull();
+        const std::vector<uint8_t> out(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+        CHECK(mock->calls == 0);
+        CHECK(out == cpu);
+    }
+
+    // (2) prefer ON + available -> mock USED; output is the sentinel (0.5 -> 128).
+    eng.setPreferGpu(true);
+    {
+        PreviewBuffer b = eng.renderFull();
+        CHECK(mock->calls == 1);
+        CHECK((int)b.rgba[0] == 128);
+        CHECK((int)b.rgba[1] == 128);
+        CHECK((int)b.rgba[2] == 128);
+    }
+
+    // (3) backend DECLINES the job -> CPU fallback == baseline (process was called).
+    mock->accept = false;
+    {
+        PreviewBuffer b = eng.renderFull();
+        const std::vector<uint8_t> out(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+        CHECK(mock->calls == 2);
+        CHECK(out == cpu);
+    }
+
+    // (4) backend UNAVAILABLE -> gpuAvailable() false; process not called; CPU output.
+    mock->accept = true;
+    mock->avail = false;
+    CHECK(!eng.gpuAvailable());
+    {
+        PreviewBuffer b = eng.renderFull();
+        const std::vector<uint8_t> out(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+        CHECK(mock->calls == 2);   // available()==false short-circuits before process()
+        CHECK(out == cpu);
+    }
+
+    // The platform factory returns no accelerator today (CPU-only, R-GPU-1).
+    CHECK(createComputeAccelerator() == nullptr);
+}

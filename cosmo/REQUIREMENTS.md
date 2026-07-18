@@ -279,13 +279,45 @@ Reference: `cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings tha
 `RenderService`.
 
 - **R-SETTINGS-1** A settings surface (opened from the Settings menu) exposes: **Preview
-  quality** — the base preview render resolution (speed vs. detail), and **CPU threads** — the
-  worker count for the multicore engine. Both map directly onto `RenderService` /
-  `EditSession` (`mPreviewEdge` / thread count).
+  quality** — the base preview render resolution (speed vs. detail), **CPU threads** — the
+  worker count for the multicore engine, and **GPU acceleration** — off / on-if-available
+  (see R-GPU). All map directly onto `RenderService` / `EditSession` (`mPreviewEdge` /
+  thread count / prefer-GPU).
 - **R-SETTINGS-2** Changing preview quality updates the base preview edge and re-renders;
   changing thread count reconfigures the engine's parallelism. Values persist for the session.
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
   card, fade+scale open/close, Esc/click-outside dismiss).
+
+## R-GPU — GPU-accelerated image processing (abstract, opt-in) — ✅ IMPLEMENTED (abstraction; concrete backends deferred)
+
+The image engine can process on the GPU when a platform GPU backend is available and the user
+opts in, behind a **cross-platform abstraction** so concrete per-platform GPU implementations
+(Metal / Vulkan / Direct3D / WebGPU / OpenGL) are added later **without touching the engine or the
+UI**. This mirrors Artboard's platform-independence rule: the CPU/software path is the reference and
+the floor, and an accelerator is used only if it matches it.
+
+- **R-GPU-1 Abstract seam.** `ImageProcessing/src/compute/ComputeBackend.h` defines
+  `IComputeBackend` — an *optional* accelerator that renders the per-image edit pipeline (global
+  chain + masks + gamma encode) for a `(linear source Image, EditParams)`, returning the encoded
+  result and the histogram taps; it exposes `name()`, `kind()` (`Cpu`/`Gpu`), `available()`, and
+  `process(...)` which returns **false to decline** a job. A single factory
+  `createComputeAccelerator()` returns the platform backend — **nullptr today** (CPU-only); it is
+  the one per-platform extension point.
+- **R-GPU-2 CPU is the reference & the fallback.** The existing CPU pipeline in `EditEngine` is the
+  guaranteed fallback **and** the correctness reference: a GPU backend that accepts a job MUST
+  produce output matching the CPU path. If no backend is available, the toggle is off, or the
+  backend declines, the engine renders on the CPU exactly as before — **no behavior change**
+  (headless-verified byte-identical). The accelerator branch lives in the single render choke point
+  `EditEngine::renderInto`.
+- **R-GPU-3 Setting (opt-in).** Engine Settings… gains a **GPU acceleration** row (Off / On),
+  shown **disabled + "unavailable"** when no GPU backend is present (today, always). When available
+  and On, the engine *prefers* the GPU backend; otherwise CPU. It is a session/engine setting (not
+  persisted to the project), plumbed `SettingsDialog → App → EditSession::setUseGpu →
+  RenderService::setPreferGpu → EditEngine::setPreferGpu`, mirroring Preview quality / CPU threads.
+- **R-GPU-4 Cross-platform & platform-free.** The seam is platform-free (`ImageProcessing` has no OS
+  deps and compiles under Emscripten); concrete backends live behind the factory per platform, added
+  in a later change. Selection/availability/fallback are regression-tested with a mock backend;
+  concrete GPU shaders are explicitly deferred.
 
 ## R-HOME — Home screen & projects (item 4) — ✅ IMPLEMENTED
 

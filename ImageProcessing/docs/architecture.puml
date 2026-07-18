@@ -175,6 +175,7 @@ package engine {
     + setBypass(b) / resetAll() / setPreviewSize(maxEdge)
     + renderPreview() / renderFull() : PreviewBuffer
     + histogram() : HistogramData
+    + setPreferGpu(b) / gpuAvailable() : bool  ' opt-in GPU accel; CPU is the fallback
   }
   EditEngine *-- ImageBlock
   EditEngine *-- Crop
@@ -191,5 +192,26 @@ package engine {
   EditEngine *-- Grain
   EditEngine ..> Histogram
 }
+
+package compute {
+  interface IComputeBackend {
+    + name() : string
+    + kind() : Cpu|Gpu
+    + available() : bool
+    + process(Image, EditParams, ComputeResult&) : bool  ' false = decline -> CPU
+  }
+  class ComputeResult {
+    + processed : Image
+    + finalHist / preCurveHist : HistogramData
+    + preMixerHue : HueHistogram
+  }
+  class createComputeAccelerator <<factory fn>> {
+    + () : IComputeBackend  ' per-platform; nullptr today (CPU-only)
+  }
+  IComputeBackend ..> ComputeResult
+  createComputeAccelerator ..> IComputeBackend
+}
+' optional accelerator; the CPU pipeline in EditEngine is the reference + guaranteed fallback (R-GPU)
+EditEngine o--> IComputeBackend
 
 @enduml

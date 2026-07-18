@@ -180,6 +180,11 @@ namespace cosmo
          *  writes this; it becomes the resolution every subsequent preview renders at. */
         int previewEdge() const { return mPreviewEdge; }
         void setPreviewEdge(int edge) { mPreviewEdge = edge < 64 ? 64 : edge; mService.setPreviewSize(mPreviewEdge); submit(); }
+        /** GPU-acceleration opt-in (R-GPU): available only when a platform backend exists;
+         *  toggling re-renders. The engine falls back to CPU whenever GPU is off/unavailable. */
+        bool gpuAvailable() const { return mService.gpuAvailable(); }
+        bool useGpu() const { return mUseGpu; }
+        void setUseGpu(bool on) { mUseGpu = on; mService.setPreferGpu(on); submit(); }
         /** Scale the preview resolution with the view's zoom factor (>=1) so a
          *  magnified image stays sharp; caller still calls submit() afterward. */
         void setPreviewZoom(double zoomFactor);
@@ -225,6 +230,7 @@ namespace cosmo
         bool mSuppressHistory = false;
         bool mCropPreviewMode = false;
         int mPreviewEdge = 1600;
+        bool mUseGpu = false;  // R-GPU opt-in (session setting; effective only when a GPU backend is available)
         bool mDirty = false;   // unsaved edits since the last save/load/reset
 
         RenderService::Frame mExportFrame;

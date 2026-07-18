@@ -23,6 +23,7 @@
 #include "../base/Image.h"
 #include "../base/ImageBlock.h"
 #include "../analysis/Histogram.h"
+#include "../compute/ComputeBackend.h"
 #include "EditParams.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
@@ -99,6 +100,18 @@ namespace arstro
          *  Returns engine-owned RGBA8, valid until the next render on this engine. */
         PreviewBuffer renderImage(const Image &linearSrc, const EditParams &p, int maxEdge);
 
+        // ── compute backend (GPU acceleration seam; the CPU pipeline is the reference + fallback, R-GPU) ──
+        /** Opt into the GPU accelerator when one is available; else render on the CPU. */
+        void setPreferGpu(bool prefer) { mPreferGpu = prefer; }
+        bool preferGpu() const { return mPreferGpu; }
+        /** True when a platform GPU accelerator exists and is usable on this device. */
+        bool gpuAvailable() const { return mAccel && mAccel->available(); }
+        /** "CPU" or the accelerator's name — the backend the next render will use. */
+        const char *activeBackendName() const { return (mPreferGpu && gpuAvailable()) ? mAccel->name() : "CPU"; }
+        /** Injection seam (tests / a per-platform host): replace the accelerator the
+         *  ctor installed from createComputeAccelerator(). nullptr forces CPU-only. */
+        void setComputeAccelerator(std::unique_ptr<IComputeBackend> backend) { mAccel = std::move(backend); }
+
         // ── basic tone ──
         void setExposure(float ev);       // -5..+5
         void setContrast(float v);        // -100..+100
@@ -166,7 +179,7 @@ namespace arstro
         struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1; };
 
         void buildPipeline();
-        PreviewBuffer renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes);
+        PreviewBuffer renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes);
         void ensurePreviewProxy();
         void touchProxyLRU(int slot);   // mark `slot`'s proxy most-recently-used; evict the oldest beyond the cap
         void dropProxy(int slot);       // free a slot's cached proxy + drop it from the LRU
@@ -201,6 +214,8 @@ namespace arstro
         Grain mGrain;
 
         std::vector<MaskParams> mMasks;
+        std::unique_ptr<IComputeBackend> mAccel;  // optional accelerator (nullptr = CPU only); the CPU path is the reference
+        bool mPreferGpu = false;                  // user opt-in; only takes effect when mAccel->available()
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;
         HistogramData mLastHistogram;

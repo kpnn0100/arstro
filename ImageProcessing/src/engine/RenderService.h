@@ -53,6 +53,12 @@ namespace arstro
          *  opened image gets an out-of-range id (the reset-then-open segfault). */
         void reset();
         void setPreviewSize(int maxEdge);
+        /** Opt into GPU-accelerated rendering when a backend is available (else CPU).
+         *  A benign scalar the engine re-reads on the next render (like preview size). */
+        void setPreferGpu(bool prefer);
+        /** True when a platform GPU accelerator exists and is usable (queried once at
+         *  construction, so it is safe to read from the UI thread). */
+        bool gpuAvailable() const;
         /** Request a preview render of (slot, params); coalesced to the latest request. */
         void render(int slot, const EditParams &params);
         /** Pick up the most recent completed preview, if any (moves it out). */
@@ -70,6 +76,7 @@ namespace arstro
         EditEngine mEngine;
         int mNextSlot = 0;
         int mPreviewMaxEdge = 1600;
+        bool mGpuAvailable = false;  // cached at construction (engine accel availability)
         Frame mReady;          // latest completed preview (both builds)
         bool mFrameReady = false;
 

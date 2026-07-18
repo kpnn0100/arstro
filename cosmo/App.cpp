@@ -138,6 +138,7 @@ namespace cosmo_v2
         mSettingsDialog = std::make_shared<SettingsDialog>(mAccent);
         mSettingsDialog->onPreviewEdge = [this](int edge) { mSession.setPreviewEdge(edge); };
         mSettingsDialog->onThreads = [this](int n) { arstro::par::setThreads(n); mSession.submit(); };
+        mSettingsDialog->onUseGpu = [this](bool on) { mSession.setUseGpu(on); };  // setUseGpu re-renders (R-GPU)
         mRoot->addChild(mSettingsDialog);
 
         mConfirmDialog = std::make_shared<ConfirmDialog>(mAccent);
@@ -606,7 +607,8 @@ namespace cosmo_v2
     void App::openSettingsDialog()
     {
         // Raw setting (0 = Auto), not the resolved count, so the Auto chip reads right.
-        mSettingsDialog->show(mSession.previewEdge(), arstro::par::threadsRef());
+        mSettingsDialog->show(mSession.previewEdge(), arstro::par::threadsRef(),
+                              mSession.useGpu(), mSession.gpuAvailable());
     }
 
     namespace

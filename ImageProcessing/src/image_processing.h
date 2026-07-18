@@ -60,3 +60,4 @@
 #include "engine/MaskStack.h"
 #include "engine/EditEngine.h"
 #include "engine/RenderService.h"
+#include "compute/ComputeBackend.h"

@@ -7,7 +7,7 @@
 
 namespace arstro
 {
-    EditEngine::EditEngine() { buildPipeline(); }
+    EditEngine::EditEngine() { buildPipeline(); mAccel = createComputeAccelerator(); }
 
     void EditEngine::buildPipeline()
     {
@@ -325,20 +325,44 @@ namespace arstro
         touchProxyLRU(mCurrent);
     }
 
-    PreviewBuffer EditEngine::renderInto(const Image &linearSource, std::vector<uint8_t> &outBytes)
+    PreviewBuffer EditEngine::renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes)
     {
-        // Run the three segments, tapping histograms at the boundaries. The
-        // histograms + encode are parallelised (see Histogram.cpp / ColorSpace.cpp)
-        // since they run on every preview render.
-        Image preCurve, preMixer, processed;
-        mChainPre.apply(linearSource, preCurve);
-        mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
-        mChainMid.apply(preCurve, preMixer);
-        mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
-        mChainPost.apply(preMixer, processed);
-        applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
-        color::encodeInPlace(processed);
-        mLastHistogram = Histogram::compute(processed);
+        Image processed;
+
+        // GPU-accelerated path: only when the user opted in AND a backend is
+        // available AND it accepts the job. The CPU path below is the guaranteed
+        // fallback and the correctness reference (R-GPU-2) — a backend that returns
+        // true must match it. `params` carries the full edit (incl. masks); the CPU
+        // chains are already configured from the same params (setCurrentParams).
+        bool accelerated = false;
+        if (mPreferGpu && mAccel && mAccel->available())
+        {
+            ComputeResult r;
+            if (mAccel->process(linearSource, params, r))
+            {
+                processed = std::move(r.processed);
+                mPreCurveHist = r.preCurveHist;
+                mPreMixerHue = r.preMixerHue;
+                mLastHistogram = r.finalHist;
+                accelerated = true;
+            }
+        }
+
+        if (!accelerated)
+        {
+            // CPU reference path: run the three segments, tapping histograms at the
+            // boundaries. Histograms + encode are parallelised (Histogram.cpp /
+            // ColorSpace.cpp) since they run on every preview render.
+            Image preCurve, preMixer;
+            mChainPre.apply(linearSource, preCurve);
+            mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
+            mChainMid.apply(preCurve, preMixer);
+            mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
+            mChainPost.apply(preMixer, processed);
+            applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
+            color::encodeInPlace(processed);
+            mLastHistogram = Histogram::compute(processed);
+        }
 
         const int w = processed.width(), h = processed.height(), ch = processed.channels();
         outBytes.assign((size_t)w * h * 4, 255);
@@ -370,13 +394,13 @@ namespace arstro
     {
         if (mCurrent < 0) return PreviewBuffer{};
         ensurePreviewProxy();
-        return renderInto(mSlots[mCurrent].proxy, mPreviewOut);
+        return renderInto(mSlots[mCurrent].proxy, mSlots[mCurrent].params, mPreviewOut);
     }
 
     PreviewBuffer EditEngine::renderFull()
     {
         if (mCurrent < 0) return PreviewBuffer{};
-        return renderInto(mSlots[mCurrent].source, mFullOut);
+        return renderInto(mSlots[mCurrent].source, mSlots[mCurrent].params, mFullOut);
     }
 
     PreviewBuffer EditEngine::renderImage(const Image &linearSrc, const EditParams &p, int maxEdge)
@@ -385,6 +409,6 @@ namespace arstro
         if (maxEdge < 1) maxEdge = 1;
         applyParams(p);
         Image src = downscaleLinear(linearSrc, maxEdge);
-        return renderInto(src, mFullOut);  // engine-owned; consume before the next render
+        return renderInto(src, p, mFullOut);  // engine-owned; consume before the next render
     }
 }

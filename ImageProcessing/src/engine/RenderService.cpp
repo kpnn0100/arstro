@@ -4,7 +4,11 @@ namespace arstro
 {
 #ifdef ARSTRO_ENABLE_THREADS
     // ───────────────────────── threaded ─────────────────────────
-    RenderService::RenderService() { mWorker = std::thread([this] { workerLoop(); }); }
+    RenderService::RenderService()
+    {
+        mGpuAvailable = mEngine.gpuAvailable();  // query before the worker starts (single-threaded here)
+        mWorker = std::thread([this] { workerLoop(); });
+    }
 
     RenderService::~RenderService()
     {
@@ -186,7 +190,7 @@ namespace arstro
 
 #else
     // ───────────────────────── synchronous (no threads, e.g. web) ─────────────────────────
-    RenderService::RenderService() {}
+    RenderService::RenderService() { mGpuAvailable = mEngine.gpuAvailable(); }
     RenderService::~RenderService() {}
     bool RenderService::threaded() const { return false; }
 
@@ -253,4 +257,9 @@ namespace arstro
         mFrameReady = true;
     }
 #endif
+
+    // ── build-independent: GPU-preference relay (mirrors setPreviewSize — a plain
+    //    engine scalar the worker re-reads on the next render; no queueing needed) ──
+    void RenderService::setPreferGpu(bool prefer) { mEngine.setPreferGpu(prefer); }
+    bool RenderService::gpuAvailable() const { return mGpuAvailable; }
 }

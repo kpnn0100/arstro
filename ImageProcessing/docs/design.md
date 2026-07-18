@@ -45,6 +45,7 @@ decoding (LibRaw / stb_image / the browser) lives in the app layer behind the
 | Params | `engine/EditParams` (+ `EditParamsIO`) | The UI-independent edit description (plain data): every control's value. `EditParamsIO` serializes it to/from text for session/sidecar files. Built by any front end, handed to the engine. |
 | Engine | `engine/EditEngine` | The facade: slots, flat + whole-`EditParams` API, preview/full render, histogram, and `renderImage(img, params, maxEdge)` — the seam a video editor reuses per frame. |
 | Service | `engine/RenderService` | Runs an EditEngine on its OWN worker thread; the UI submits `(slot, EditParams)` and polls completed frames, never blocking. Synchronous fallback when threads are off. |
+| Compute | `compute/ComputeBackend` | Optional GPU-accelerator **seam**: `IComputeBackend` (an accelerator that renders the pipeline for a `(linear Image, EditParams)` — chains + masks + encode + histogram taps) + the per-platform `createComputeAccelerator()` factory (nullptr today). `EditEngine::renderInto` prefers it when the user opts in *and* it is available; the CPU pipeline is the reference and the guaranteed fallback (see cosmo R-GPU). Platform-free — concrete GPU backends are added behind the factory per platform later. |
 
 See [`architecture.puml`](architecture.puml) for the class diagram.
 
