@@ -1,271 +1,354 @@
 # Solaris — UI Design Brief (for a Figma AI)
 
 Paste this into a Figma AI / generative design tool. It describes the UI for **Solaris**, a
-touch-first Digital Audio Workstation. Design the screens below as a cohesive dark, professional,
-touch-optimized app. Primary form factor: **tablet in landscape** (e.g. 1280×800 to 1600×1000);
-also provide a reduced **phone portrait** layout where noted.
+touch-first Digital Audio Workstation, and is deliberately specific about **how every control
+opens, how components react to each other, and how everything animates**. The look must be
+**clean, minimalist, calm** with **pervasive smooth motion — nothing ever snaps**.
 
-Screens to design: (1) Arrange / Timeline, (2) Mixer, (3) Piano Roll / MIDI editor, (4) Device &
-Rack editor, (5) Routing Matrix / Patchbay, (6) Versions / Branches, (7) Browser, plus the
-persistent (8) Transport bar and (9) App shell / navigation. Design the key states of each.
+Primary form factor: **tablet in landscape** (1280×800 → 1600×1000). Provide a reduced **phone
+portrait** layout where noted.
+
+Screens: (1) Arrange/Timeline, (2) Mixer, (3) Piano Roll/MIDI, (4) Device & Rack editor, (5) Routing
+Matrix, (6) Versions/Branches, (7) Browser, plus the persistent (8) Transport bar and (9) App shell.
+Also design the shared surfaces (bottom sheet, side drawer, inspector, value bubble, context sheet)
+and the key states. **Design the motion, not just the frames** — provide open/close/transition
+states and, where the tool supports it, prototype the animations.
 
 ---
 
-## 1. What it is (one paragraph)
+## 1. What it is
 
-Solaris is a professional multi-track DAW: arrange audio and MIDI clips on tracks, play a synth
-instrument and an effect rack per track, mix through a flexible routing graph, record from multiple
-inputs, and version the whole project like code (branches that auto-update, merges). It is part of
-the **Arstro** creative suite alongside a photo editor (Cosmo) and a video editor (Interstellar), so
-it must feel like a family member of those apps: dark, calm, precise, flat. It is used by scoring
-artists and music producers, on a touch screen — so it must stay dense-yet-tappable, never relying
-on a mouse hover or a right-click.
+Solaris is a professional multi-track DAW: arrange audio and MIDI on tracks, play a synth instrument
+and effect rack per track, mix through a flexible routing graph, record from multiple inputs, and
+version the whole project like code (auto-updating branches, merges). It is part of the **Arstro**
+suite with a photo editor (Cosmo) and a video editor (Interstellar) and must feel like their family
+member: dark, precise, flat, quiet. It runs on a touch screen for scoring artists and producers, so
+it stays dense-yet-tappable and **never relies on hover or right-click**.
 
-## 2. Visual language (make it feel like a precision instrument in a dark studio)
+## 2. Design philosophy — clean, minimalist, progressive
 
-- **Theme: dark only.** Canvas / deep background `#0A0A0A`. Panels `#141414`. Raised surfaces / cards
-  `#1C1C1C`. Hairline borders `rgba(255,255,255,0.08)` — separate with 1px lines and subtle fills,
-  **not** heavy drop shadows (flat, like a modern pro tool).
-- **One accent:** electric blue `#4F7EF7` — active states, playhead, selection, primary buttons, the
-  logo dot. Use it sparingly so it means "active/primary".
-- **Semantic colors:** record / armed = red `#F04747`; solo = amber `#F5A623`; mute = dimmed gray;
-  positive meter = green `#39D98A` → yellow `#F5C518` → red `#F04747` gradient near clip.
-- **Track identity colors:** a palette of ~10 muted, desaturated hues (teal, violet, coral, olive,
-  slate, rose, cyan, amber, indigo, moss) used as a thin color strip on each track/clip — never as
-  large fills.
-- **Typography:** a clean geometric/grotesk sans (DM Sans / Inter feel) for labels and names; a
-  **monospace** (JetBrains Mono feel) for all numbers — time position, tempo, dB, Hz, ms — so
-  digits align.
-- **Wordmark:** `solaris.` in lowercase, the trailing period in the accent blue. Small, top-left.
-- **Shape & spacing:** 8px spacing grid; corner radius 8px for cards/sheets, 4px for small controls,
-  full-round for knobs/faders thumbs. Generous padding.
-- **Icons:** thin (1.5px) line icons, lucide-style, monochrome, tinting to accent when active.
-- **Waveforms/notes:** waveforms drawn in the track's identity color at ~40% on a slightly lighter
-  clip body; MIDI notes as small rounded bars in the track color.
+Design for **calm focus**. The screen should feel mostly empty until the user needs a control.
 
-## 3. Touch-first principles (apply to every screen — this is the core constraint)
+- **Minimal persistent chrome.** Only three things are always on screen: the **left rail**, the **top
+  bar**, and the **transport bar**. Everything else — inspector, sends, device editors, browser,
+  context actions — is **summoned and dismissed** as sheets/drawers, then gone. No permanent panels
+  cluttering the edges.
+- **Progressive disclosure.** Show the few controls used constantly; hide the rest one layer down.
+  A track header shows name + arm/mute/solo + a meter; *everything else* is a long-press away. A
+  device card shows name + bypass; its 20 knobs live inside, opened on demand.
+- **One accent, lots of negative space.** A single blue accent marks "active/primary". Separate with
+  hairlines and spacing, not boxes and shadows. No gradients except meters. Monochrome line icons.
+- **Content over controls.** Waveforms, notes, curves, and meters are the bright/colored elements;
+  chrome recedes (low-contrast grays). The user's music is the UI.
+- **Terse and legible.** Short labels; all numbers in a monospace so digits align; hide a label when
+  an icon is unambiguous (but keep it discoverable — long-press reveals a label).
+- **One surface at a time.** Never stack modals. Opening a new sheet **smoothly hands off** from the
+  previous one (the old dismisses as the new arrives). The user is never lost in layers.
 
-- **Minimum hit target 48×48 dp**; primary transport and faders larger. No control smaller than a
-  fingertip; add invisible padded hit areas around thin visuals (clip edges, note edges, playhead).
-- **No hover-dependent UI.** Everything is reachable by tap, long-press, or drag. Replace right-click
-  with **long-press → context bottom sheet**. Replace hover tooltips with a **value bubble** that
-  appears while dragging.
-- **Gesture vocabulary (use consistently):**
-  - *Tap* = select / toggle / open.
-  - *Double-tap* = reset to default (faders, knobs) or open editor (a clip).
-  - *Long-press* = context menu as a **bottom sheet** of big actions.
-  - *Drag* = move (clips, notes, faders); *drag on an edge handle* = trim/resize.
-  - *Pinch* = zoom (horizontal = time, vertical = track/lane height).
-  - *Two-finger drag* = pan/scroll the canvas.
-  - *Swipe* on a strip/sheet = dismiss.
-- **Fine adjustment without a mouse:** while dragging a knob/fader, a **magnified value bubble**
-  shows the exact value; a **second finger held down** switches to fine (slow) mode; long-press opens
-  a numeric keypad to type an exact value.
-- **Thumb reach:** the **transport bar and primary actions live at the bottom** (or a bottom-anchored
-  cluster) so they are reachable one-handed on a held tablet. Destructive actions are never at a
-  screen edge where a stray touch hits them.
-- **Panels over popovers:** use **bottom sheets** (editors, context actions, pickers) and **side
-  drawers** (browser, sends, inspector) instead of small floating popovers. Sheets are draggable to
-  half / full height.
-- **Modes instead of modifiers:** since there are no keyboard modifiers, expose **tool modes** as a
-  big segmented control (e.g. Select / Draw / Erase in the piano roll; Move / Trim / Split in the
-  arrange view).
-- **Grid & snapping:** a visible time grid; snapping on by default with a large snap toggle and a
-  snap-value selector; dragging shows a snap guide line.
-- **Big handles:** clip trim handles, note resize handles, loop-region ends, and fade handles are
-  drawn as clear grabbable pucks, not 1px edges.
+## 3. Visual language
 
-## 4. App shell & navigation
+- **Dark only.** Canvas `#0A0A0A`; panels `#141414`; raised cards/sheets `#1C1C1C`; hairline borders
+  `rgba(255,255,255,0.08)`. Flat — no heavy shadows; elevation is a 1px border + a barely-lighter fill.
+- **Accent:** electric blue `#4F7EF7` — active state, playhead, selection ring, primary button, the
+  logo dot. Used sparingly.
+- **Semantics:** record/armed red `#F04747`; solo amber `#F5A623`; mute = dimmed; meter gradient
+  green `#39D98A` → yellow `#F5C518` → red `#F04747` near clip.
+- **Track identity:** ~10 muted, desaturated hues as a thin color strip on each track/clip (never
+  large fills).
+- **Type:** geometric grotesk sans (DM Sans / Inter feel) for labels; **monospace** (JetBrains Mono
+  feel) for all numbers. `solaris.` wordmark, trailing period in accent, top-left.
+- **Shape/space:** 8px grid; radius 8px cards, 4px small controls, full-round thumbs; generous
+  padding. Thin (1.5px) line icons, tinting to accent when active.
 
-- **Left rail (primary nav), full height, ~72px wide, big icon tabs** (icon + tiny label), one active
-  at a time, accent highlight slides between them: **Arrange · Mixer · Editor · Routing · Versions ·
-  Browser**. (On phone portrait, move this to a bottom tab bar.)
-- **Top bar (~48px):** `solaris.` wordmark, the **project name** (tap to rename), a **branch chip**
-  showing the current branch + a small status dot (clean = blue, needs-attention = amber), a
-  **Commit / Save** button, and an overflow menu (project settings, sample rate, channel count,
-  export). A subtle **"LIVE / BOUNCED" indicator** shows whether playback is live from the project or
-  from a cached mixdown.
-- **Bottom: the persistent Transport bar** (section 8), visible on Arrange, Mixer, Editor.
-- The main area between rail, top bar, and transport is the active view.
+## 4. Motion & animation system (the heart of the feel)
 
-## 5. Screen — Arrange / Timeline (the home screen)
+**Rule 0 — nothing snaps.** Every change of position, size, opacity, color, or content is animated.
+A value that must change instantly still eases over one or two frames. Motion is **smooth, quick,
+and purposeful** — it shows what changed and where it came from, never decorative jitter.
 
-The core editing surface: tracks stacked vertically, time flowing left→right.
+**Motion tokens (durations + easing):**
+- **Press feedback — 90ms, easeOut.** Any tappable scales to ~0.97 and lightens on touch-down;
+  releases back. Immediate physicality.
+- **Micro — 120ms, easeOutCubic.** Toggles, selection ring in/out, value bubble appear, icon tint,
+  chip label swap.
+- **Standard — 220ms, easeOutCubic.** Sheets/drawers open-close, panel expand/collapse, tab content
+  swap, list insert/remove, snap-guide, meter peak-hold reset.
+- **Large — 360ms, easeInOutCubic (or a soft spring).** View/screen transitions, shared-element
+  morphs (chip→panel, clip→editor), branch reflow.
+- **Continuous — real-time, linear.** Playhead travel, meter ballistics, waveform/scroll under the
+  playhead. These track audio, not a tween.
+- **Spring (soft, ~0.8 damping).** Draggable release settle (fader/knob thumb landing on value,
+  sheet drag-release, elastic overscroll). Gives weight without bounce.
+- **Stagger — 20–30ms per item.** When a list/grid reveals (tracks, device browser, matrix rows),
+  items fade+slide in sequence, not all at once.
 
-- **Track header column (left, ~240px, fixed):** per track, top to bottom of a row —
-  a **color strip** (identity), the **track name** (tap to rename), a row of **big round toggle
-  buttons: Arm (red), Mute, Solo (amber)**, an **input/monitor chip** (for record routing), a
-  **mini gain slider or knob + small meter**, and a **device/rack button** (opens the rack). A
-  **height grip** at the bottom-right of the header drags to resize the track (or pinch vertically).
-  A **"+" add-track** button sits at the bottom of the column; long-press a header = track context
-  sheet (color, duplicate, delete, freeze/bounce).
-- **Ruler (top of timeline):** bars\:beats grid (since time is in beats @ 960 PPQ, single tempo),
-  with a secondary mm\:ss readout; the **loop region** shown as a draggable bar with big end handles;
-  tap the ruler to move the playhead.
-- **Lanes (timeline body):** **clips** are rounded, filled in the track color at low opacity, with
-  the clip name, and content: **audio clips show a waveform**, **MIDI clips show mini note blocks**.
-  Clips can **freely overlap** (draw overlaps with slight transparency + a stacking edge). Each clip
-  has **fade-in/out handles** (top corners) and **trim handles** (left/right edges) as grabbable
-  pucks, and a small **loop badge** if looped.
-- **Playhead:** a thin accent vertical line with a grabbable head in the ruler; smooth motion during
-  playback.
-- **Gestures here:** pinch = zoom time (H) / track height (V); two-finger drag = scroll; drag clip =
-  move (snapping); drag clip edge = trim; drag fade puck = fade; long-press clip = context sheet
-  (Split at playhead, Duplicate, Delete, Color, Rename, Reverse, Properties); double-tap clip =
-  open the Piano Roll (MIDI) or a clip inspector (audio). Tap empty lane = create-clip menu or start
-  drawing a MIDI clip.
-- **Selection:** tap selects; a **Select mode** allows marquee (drag a box). Multi-select shows a
-  floating action bar (bottom sheet) with batch actions.
-- **States:** empty project (a friendly "Add a track" call-to-action card + big + button);
-  recording (armed tracks pulse red, a moving record region draws on the lane); playing (playhead
-  moves, meters live).
+**Choreography (how each transition moves):**
+- **Open a bottom sheet:** a scrim fades in (0→40% black, 220ms) as the sheet slides up from the
+  bottom edge with a soft spring; its content **staggers** in. Drag the handle down to dismiss;
+  release past a threshold springs it closed; the scrim fades out.
+- **Open a side drawer** (browser, inspector, sends): scrim + slide-in from the edge, 220ms easeOut.
+- **Expand in place (shared-element morph):** a **device chip grows into its full editor panel**,
+  its label staying anchored while the body fades/expands around it (360ms). Same for a **track
+  header → expanded header**, a **clip → its inspector**, a **collapsed section → open section**.
+  Reverse on close so the panel visibly returns to the chip it came from.
+- **Selection:** an accent ring/edge eases in (120ms); deselecting eases out; moving the selection
+  between items **cross-fades** the highlight from the old to the new (the highlight slides, it does
+  not jump).
+- **Value change:** a fader/knob thumb **springs** to the new value; the numeric readout **rolls**
+  (odometer count, not a hard replace); a value bubble pops in above the thumb and fades on release.
+- **View switch (rail tabs):** the outgoing view fades and slides ~16px out; the incoming fades and
+  slides in; the **rail, top bar, and transport do NOT animate** — they anchor the change (only the
+  active-tab accent slides between icons, 220ms).
+- **List insert/remove:** adding a track/clip/device — the new item **grows from 0 height and fades
+  in** (220ms), pushing neighbors down smoothly; removing — it collapses and fades, neighbors close
+  the gap.
+- **Playhead & transport:** playhead moves continuously; on **seek** it **eases** to the new spot
+  (140ms) rather than teleporting; play/stop cross-fades the button glyph; loop toggles a soft pulse
+  on the loop region.
+- **Routing connect:** tapping a matrix crosspoint fills it with an accent **ripple** from the touch
+  point; a faint one-shot **signal-flow pulse** runs along the new route so the user sees the
+  connection made.
+- **Meters:** ballistic (fast attack, slow ~300ms release), a peak-hold dot that eases down; clip
+  latches red until tapped, then fades to clear.
+- **Zoom (pinch):** track heights/clip widths ease with the gesture (not stepped); the ruler's beat
+  subdivisions **cross-fade** as they appear/disappear at zoom thresholds.
+- **Empty→content, loading:** skeleton shapes shimmer softly; when data lands, real content
+  cross-fades over the skeleton.
+- **Reduced motion:** provide a variant where these collapse to quick cross-fades / instant final
+  states (respect the OS setting) — but the default is fully animated.
 
-## 6. Screen — Mixer
+## 5. Touch-first principles
 
-A horizontally scrolling row of channel strips; the mixing console.
+- **≥48dp hit targets**; transport and faders larger. Thin visuals (clip edges, note ends, playhead)
+  get invisible padded hit areas.
+- **No hover UI.** Long-press → **context bottom sheet** replaces right-click; a dragging **value
+  bubble** replaces hover tooltips.
+- **Gesture vocabulary (consistent everywhere):** tap = select/toggle/open; double-tap = reset (or
+  open editor on a clip); long-press = context sheet; drag = move; drag-on-handle = trim/resize;
+  pinch = zoom (H time / V lane height); two-finger drag = pan/scroll; swipe = dismiss a sheet.
+- **Fine control without a mouse:** during a knob/fader drag, a magnified value bubble shows the
+  exact value; **hold a second finger** = fine mode; **long-press** = numeric keypad to type a value.
+- **Thumb reach:** transport + primary actions anchored at the **bottom**; destructive actions never
+  at a screen edge.
+- **Panels over popovers; modes over modifiers:** use bottom sheets/drawers, and expose **tool
+  modes** as big segmented controls (Select/Draw/Erase, Move/Trim/Split) since there are no keyboard
+  modifiers.
+- **Visible grid + snapping** with a large snap toggle and a snap-value selector; a snap guide line
+  eases in while dragging. **Big grabbable handles** on clip trims, fades, note ends, and loop ends.
 
-- **Channel strip (each ~120px wide):** top → bottom —
-  **track name + color**, an **input chip** and **output/routing chip** (tap → routing sheet),
-  **insert slots** (a small vertical stack of device chips; tap a slot to open the device editor;
-  "+" to add; drag to reorder; bypass dot each), a **sends** button (opens a sends drawer with send
-  knobs, each pre/post toggle), a **pan control** (a horizontal slider or small arc knob), a **large
-  vertical fader** with a big thumb and a dB scale, a **stereo/multichannel meter** beside the fader
-  (green→yellow→red), and a row of **big Mute / Solo / Arm** buttons with the record indicator.
-- **Master + bus section (pinned right):** the master strip (with the project's channel count, e.g.
-  2 by default, but could be 4+), and any bus strips. Master shows the main output meter.
-- **Touch:** faders are big vertical drags with a value bubble; double-tap fader = 0 dB; long-press =
-  type value; pan is drag with a bubble; strip scroll is horizontal two-finger or edge-swipe.
-- **States:** clipping (meter peak turns red and latches a clip dot until tapped); soloed tracks
-  dim the others; a track being recorded pulses.
-- **Phone portrait:** show one strip at a time as a full-width card, swipe between strips, master
-  reachable via a tab.
+---
 
-## 7. Screen — Piano Roll / MIDI editor (as a full view and as a bottom sheet)
+## 6. App shell & navigation
 
-Opens from a MIDI clip. Notes on a grid against a vertical keyboard.
+- **Left rail** — full height, ~72px, big icon tabs (icon + tiny label), one active. The **accent
+  indicator slides** between tabs (220ms) on switch. Tabs: **Arrange · Mixer · Editor · Routing ·
+  Versions · Browser**. (Phone: becomes a bottom tab bar.)
+- **Top bar (~48px):** `solaris.` wordmark; **project name** (tap → inline rename field that expands
+  in place); a **branch chip** with a status dot (blue = clean/synced, amber = needs attention);
+  **Commit/Save**; overflow menu (sample rate, channel count, export). A small **LIVE / BOUNCED**
+  indicator (tap = toggle) shows whether playback is live from the project or from a cached mixdown;
+  toggling cross-fades the label and the affected clips' tint.
+- **Transport bar** — persistent at the bottom (section 12).
+- **View switches** animate per §4 (content cross-fades/slides; shell anchors).
 
-- **Left: a vertical piano keyboard** (playable — tap a key to audition), scrollable, octave labels.
-- **Center: the note grid** — bar/beat lines, notes as rounded bars in the track color; a
-  **velocity lane** docked below (each note a bar whose height = velocity, draggable).
-- **Tool modes (big segmented control, top):** Draw · Select · Erase. Plus a **snap/quantize**
-  selector and a **note-length** selector.
-- **Gestures:** in Draw mode, tap = add a note (default length) and drag = set length; drag a note =
-  move (snapping); drag note ends = resize (big handles); pinch = zoom; two-finger = scroll;
-  long-press a note/selection = context sheet (Quantize, Delete, Velocity, Duplicate, Legato). In
-  Select mode, drag = marquee; selected notes get a floating batch bar.
-- **Expression lanes (toggleable strips below velocity):** pitch-bend and MIDI CC / mod-wheel drawn
-  as editable **bezier-handled curves** (same curve interaction as automation); per-note expression
-  where enabled.
-- **States:** empty clip (grid with a hint to draw); recording MIDI (incoming notes appear live).
+---
 
-## 8. Screen — Device & Rack editor
+## 7. Control catalogue — how each control opens, interacts, and animates
 
-The per-track processing chain and the instrument.
+Design these as reusable components with explicit open/close and cross-component behavior.
 
-- **Rack header:** a horizontal chain of **device cards** (instrument first, then effects), each with
-  a name, a **bypass toggle**, and a drag handle to reorder; a **"+" add-device** opens a categorized,
-  searchable **device browser** sheet (Instruments: Synth, Sampler(later); Effects: Reverb, EQ,
-  Chorus, Overdrive, Compressor, etc.). Drag a card off / long-press = remove.
-- **Device panel (tap a card to expand full editor):** big, legible controls — **large knobs** and
-  **sliders** with value bubbles, grouped into labeled sections. For the **Synth instrument**, reuse
-  the Pulsar synth layout: Oscillators (waveform, detune, spread, level, tune), Filter (cutoff,
-  resonance), ADSR Envelope, LFO, Macros. For **effects**, expose their parameters as knob/slider
-  clusters (e.g. Reverb: mix, size, decay; EQ: bands).
-- **Knob interaction:** vertical drag over a large hit area, value bubble, double-tap = default,
-  long-press = numeric entry, second-finger = fine mode.
-- **Automation affordance:** a small "A" on each control opens/links its **automation lane** in the
-  arrange view (bezier curve).
-- **States:** bypassed device (dimmed card + strikethrough on the panel).
+- **Button / icon button.** Trigger: tap. Feedback: press-scale 0.97 + lighten (90ms), release back;
+  a soft accent ring for primary. Disabled = 30% opacity (fades when enabled). Fires its action; if
+  it opens a surface, that surface animates in per §4.
+- **Toggle (Mute/Solo/Arm/Bypass/Loop/Metronome).** Tap flips state with a 120ms color/fill ease.
+  Toggling **broadcasts**: Solo dims other tracks (opacity ease) across Arrange **and** Mixer; Mute
+  dims that track's clips; Arm turns the track's record elements red and reveals its input chip.
+- **Segmented control (tool modes, channel picker).** Tap a segment → the **highlight slides**
+  between segments (220ms, blended corner radii) and the view's mode changes; the mode change may
+  cross-fade affected affordances (e.g. Draw mode reveals the pencil cursor hint).
+- **Knob.** Trigger: vertical drag over a large hit area. A **value bubble** pops above (120ms); the
+  indicator arc fills; on release the pointer **springs** to rest. Double-tap = reset (thumb springs
+  to default). Long-press = numeric keypad sheet. Second finger = fine. Editing a device knob
+  **reflects live** in any linked automation lane and the mixer.
+- **Fader (vertical).** Big thumb; drag with a value bubble; double-tap = 0 dB (springs); long-press
+  = type. A Mixer fader and the track-header mini-gain in Arrange are the **same value** — moving one
+  animates the other in real time. Meter beside it responds continuously.
+- **Slider (pan, sends, mini-gain).** Drag with bubble; double-tap = center/default. Pan changes
+  update the meter balance.
+- **Value bubble / numeric keypad.** Bubble: appears on drag, follows the thumb, fades on release.
+  Keypad: long-press opens a compact keypad **bottom sheet**; typing updates the control live; a
+  soft confirm dismisses it downward.
+- **Chip (input / output / routing / send-count).** Compact pill showing current routing. Tap →
+  opens the **Routing sheet** focused on that node. When routing changes elsewhere, the chip's label
+  **cross-fades** to the new value (never hard-swaps).
+- **Device chip → Device panel (shared-element).** In a rack, a device is a small chip (name +
+  bypass). Tap → it **morphs/expands into its full editor** (a bottom sheet or an expanded strip),
+  label anchored, body fading in (360ms). Close → it returns into the chip. Reorder = drag (neighbors
+  ease aside); remove = drag off / long-press → confirm; both animate the rack closing the gap. Add
+  = "+" opens the **device browser sheet**; the chosen device's chip **grows in** at the insert point,
+  and the matching Mixer insert slot appears with the same animation.
+- **Clip (arrange).** Tap = select (accent edge eases in); drag = move (snapping, guide line); drag
+  edge handles = trim; drag top corners = fades; long-press = **context sheet** (Split, Duplicate,
+  Delete, Color, Rename, Reverse, Bounce, Properties); double-tap = open editor (MIDI clip → Piano
+  Roll via shared-element morph; audio clip → clip inspector drawer). Selecting a clip **updates the
+  inspector** (its content cross-fades) and highlights the owning track header.
+- **Note (piano roll).** Draw mode: tap = add (grows in), drag = set length; drag = move; drag ends =
+  resize; long-press = context (Quantize/Delete/Velocity/Legato). Editing a note updates the velocity
+  lane bar (height animates) and any expression curve.
+- **Bottom sheet.** The default surface for editors, context actions, pickers, keypad. Slides up +
+  scrim + staggered content; draggable to half/full; swipe/handle down to dismiss (spring). Only one
+  at a time — opening a second dismisses the first with a handoff.
+- **Side drawer.** Browser (left/edge), Inspector & Sends (right). Slide-in + scrim; edge-swipe to
+  open/close. The main view **shifts/scales slightly** to acknowledge the drawer (or the drawer
+  overlays with scrim — pick one and keep it consistent).
+- **Context sheet (long-press).** A compact bottom sheet of big labeled actions; appears from the
+  touched item's vicinity; actions animate their result (e.g. Split drops a cut line that eases in).
+- **Dialog / confirm (destructive only).** Center card, fade + scale-from-98%, scrim; primary =
+  accent, destructive = red, cancel = ghost; dismiss by tapping the scrim (card scales back out).
+- **Matrix crosspoint cell.** Tap toggles a connection with an accent ripple + signal-flow pulse
+  (§4); long-press = level/latency options sheet.
+- **Meter.** Continuous ballistics; peak-hold dot; clip latch. Never a static bar.
+- **Playhead.** Continuous; grabbable head in the ruler; eases on seek.
+- **Branch/commit node (versions).** Tap a commit = preview/jump (the whole project reflows with
+  eased transitions to that state); long-press = context (branch from here, compare, tag).
 
-## 9. Screen — Routing Matrix / Patchbay (the "audio matrix")
+---
 
-The flexible routing graph, presented as a touch-reliable **matrix grid** (rows × columns of
-tappable crosspoints — easier on touch than dragging cables).
+## 8. Screen — Arrange / Timeline (home)
 
-- **Three stacked matrices (or a section switcher):**
-  1. **Inputs → Tracks** (record routing): hardware input ports as rows, record-armed tracks as
-     columns; tap a cell to wire an input to a track.
-  2. **Tracks / Buses → Buses / Master** (internal routing + sends): tap a crosspoint to route/send;
-     a small pre/post toggle on send cells.
-  3. **Buses / Channels → Hardware Outputs** (output routing): buses/master channels as rows,
-     **hardware output ports as columns — grouped by device**, so *multiple audio devices each
-     carrying different channels* is visible; any bus or channel can be wired directly to any output
-     (the master is not the only path out).
-- **Crosspoint cell:** a big square, clearly on (filled accent + connect glyph) or off (empty);
-  optional small level control on active cells (tap to reveal).
-- **Port groups** are labeled headers (device name, channel names). Support 2/4/multichannel and
-  multiple devices.
-- **Touch:** tap toggles a connection; long-press a cell = level/latency options; the grid scrolls
-  two-finger. Provide a compact overview + a zoom for large matrices.
-- **States:** an invalid/feedback routing attempt shows a clear inline error (cycles rejected).
+Tracks stacked vertically; time left→right. Minimal by default; details on demand.
 
-## 10. Screen — Versions / Branches (project version control)
+- **Track header column (left, ~240px):** color strip · name (tap→inline rename) · **big round
+  Arm/Mute/Solo** · a compact meter · a mini-gain. *That's it* — input chip, rack button, and the
+  rest appear on **long-press → track sheet** or when armed. A **"+" add-track** at the bottom (grows
+  a new empty track in). A **height grip** (or pinch V) resizes the track, eased.
+- **Ruler:** bars\:beats grid + secondary mm\:ss; **loop region** as a bar with big end handles (drag
+  = resize, pulses when active); tap = move playhead (eases).
+- **Lanes:** rounded clips in the track color at low opacity — **audio = waveform, MIDI = mini note
+  blocks** — with fade pucks and trim handles; **free overlap** drawn with slight transparency.
+- **Interactions & motion:** pinch = zoom (heights/widths ease; ruler subdivisions cross-fade);
+  two-finger = scroll; drag clip = move with snap guide; long-press clip = context sheet; double-tap
+  clip = editor (shared-element morph). **Selecting a clip** cross-fades the right **Inspector
+  drawer** to that clip and highlights its header. **Playing** moves the playhead here and in any
+  open Piano Roll simultaneously; meters (if a strip is peeked) respond.
+- **States:** empty (a calm centered "Add your first track" card + big +); recording (armed lanes
+  draw a growing red region with a live waveform, header meters active); soloing dims other tracks.
 
-Version the project like code — the suite's signature feature. Make it approachable, not a git UI.
+## 9. Screen — Mixer
 
-- **Branch bar (top):** the current **branch chip**, a **branch list / switch** button, **New
-  Branch**, and a **Commit** button (opens a sheet to type a short message). A **status line**: clean
-  (blue) or "needs attention" (amber) when an auto-rebase hit a conflict.
-- **History graph (center):** a vertical **git-style tree** of commits (nodes + branch lines in the
-  track/accent colors), newest at top; the current commit highlighted. Tap a commit to **preview /
-  jump**; long-press = context (branch from here, tag, compare).
-- **Living-branch explainer:** show that a feature branch auto-updates when its base advances — a
-  small animated "synced" indicator; when a conflict occurs, list the **flagged items** (which
-  clips/params clash) with a simple **Keep mine / Keep theirs / both** choice per item.
-- **Merge & embed actions:** **Merge two projects** (pick main + imported, choose **Concatenate** —
-  imported song after the main — or **Overlay**); **Embed a project** (import another Solaris project
-  that keeps its own master routed into this one) with a **LIVE / BOUNCED** toggle to play from a
-  cached mixdown for CPU.
-- **Touch:** big buttons, sheets for commit/merge; the graph pans two-finger, pinch to zoom.
-- **States:** clean, uncommitted-changes (a dot on Commit), rebase-conflict (amber banner + the
-  flagged list), merged (confirmation).
+Horizontally scrolling channel strips; the console. Clean columns, lots of vertical breathing room.
 
-## 11. Screen — Browser (side drawer)
+- **Strip (~120px):** name + color · input/output chips (tap→routing sheet) · **insert slots** (small
+  device chips; tap→device panel morph; "+" grows one in; drag reorders; bypass dot) · a **Sends**
+  button (opens the **Sends drawer** with send sliders + pre/post toggles) · **pan** · a **big
+  vertical fader** + dB scale · **meter** · **Mute/Solo/Arm**.
+- **Master + buses pinned right;** master shows the project channel count (default 2, may be 4+).
+- **Cross-component:** a fader here and the Arrange track-header mini-gain move together (real-time);
+  opening a device panel here is the **same** morph as in Arrange; solo/mute dim consistently across
+  both screens.
+- **Motion:** faders spring on release; meters continuous; strip scroll eased with elastic overscroll;
+  opening the Sends drawer slides it over the strip with a scrim.
+- **Phone:** one strip as a full-width card, swipe between (paged, spring), master on a tab.
 
-A slide-in drawer for content, openable from the rail or by an edge-swipe.
+## 10. Screen — Piano Roll / MIDI editor
 
-- Tabs: **Samples** (audio files / the resource pool, searchable, with tiny waveforms — drag into a
-  lane), **Devices/Presets** (instruments/effects to drop on a rack), **Projects** (recent + projects
-  to embed). Big list rows, search field, drag-to-place.
+Opens from a MIDI clip via **shared-element morph** (the clip expands into the editor; closing
+returns to it).
 
-## 12. Transport bar (persistent, bottom)
+- **Left: playable vertical keyboard** (tap = audition, key lights); **note grid** center; **velocity
+  lane** docked below.
+- **Tool modes (segmented, top):** Draw · Select · Erase, plus snap/quantize and note-length
+  selectors (highlight slides on change).
+- **Motion/interactions:** draw = tap-grows a note / drag sets length; move/resize with handles;
+  pinch zoom; long-press = context. Editing a note animates its velocity bar and any **expression
+  curve** (pitch-bend / CC lanes, toggled below) which are **bezier-handled curves** with the same
+  drag feel as automation. Recording MIDI: incoming notes **fade in live**.
 
-Always visible on Arrange/Mixer/Editor; the most-used controls, thumb-reachable.
+## 11. Screen — Device & Rack editor
 
-- **Center cluster (large):** Play / Stop (toggle), **Record (red)**, **Loop** toggle, and a
-  return-to-start.
-- **Position readout (mono font):** `bars:beats:ticks` and `mm:ss:ms`, big and legible; tap to type a
-  location.
-- **Tempo** (BPM, tap-tempo + drag to change), **time signature**, **metronome** toggle, **count-in**
-  toggle.
-- **Right:** master volume (small fader) + master meter, a **CPU / xrun** indicator (turns amber on
-  strain), and the **LIVE / BOUNCED** state.
-- On phone, collapse to Play/Record/Loop + position, with the rest behind a small expander.
+The instrument + effect chain.
 
-## 13. Recording flow (design the active state)
+- **Rack:** a horizontal chain of **device chips** (instrument first). Tap a chip → **morph to full
+  panel** (§7). Reorder = drag (ease aside); add = "+" → device browser sheet.
+- **Device panel:** big knobs/sliders in labeled sections; **Synth reuses Pulsar's layout**
+  (Oscillators, Filter, ADSR, LFO, Macros); effects show their param clusters. Each control has a
+  small **"A"** that opens/links its **automation lane** in Arrange (the lane slides in there).
+  Editing a param **reflects live** in the mixer and automation. Bypass dims the panel (ease +
+  strikethrough).
 
-Arm a track (red), pick its input in the Routing matrix (or the header input chip), enable input
-monitoring, optional count-in, hit Record: the armed lane draws a growing red region with a live
-waveform; a level meter on the header; stop drops a new audio clip. Show a clear "recording"
-banner and make Stop unmistakable.
+## 12. Screen — Routing Matrix / Patchbay
 
-## 14. Global states to design
+Touch-reliable **crosspoint grid** (not draggable cables).
 
-Design each screen's: **empty** (no tracks/clips — inviting call-to-action), **loading** (opening a
-project — a calm branded spinner / skeleton on the dark canvas), **playing**, **recording**,
-**branch-conflict** (amber, actionable), **offline/bounced** (indicator), and **error/relink**
-(a missing sample shown as an offline clip with a Relink action). Everything animates smoothly
-(fades, eased slides) — nothing pops or jumps.
+- **Three matrices (section switcher, cross-fades between them):** Inputs→Tracks (record), Tracks/
+  Buses→Buses/Master (routing + sends, with pre/post on send cells), Buses/Channels→**Hardware
+  Outputs grouped by device** (so multi-device, each carrying different channels, is visible; any
+  bus/channel can go directly out — master isn't the only path).
+- **Cells:** big squares, clearly on (accent + connect glyph) / off; tap toggles with ripple +
+  signal-flow pulse; long-press = level/latency. Cycles rejected with an inline error that eases in.
+- **Cross-component:** any change here **cross-fades the input/output chips** on track headers and
+  mixer strips. The grid pans two-finger; large matrices get a compact overview + eased zoom.
 
-## 15. Responsive
+## 13. Screen — Versions / Branches (Nebula VCS)
 
-- **Primary:** tablet landscape. Full rail + all panels.
-- **Secondary:** phone portrait — rail becomes a bottom tab bar; Mixer shows one strip at a time
-  (swipe); editors open as full-height sheets; the transport collapses to essentials. Keep every
-  action reachable; never hide a primary control behind hover or tiny targets.
+Version the project like code, made approachable — not a git UI.
 
-## 16. Family consistency
+- **Branch bar:** current **branch chip** · switch/new-branch · **Commit** (sheet to type a short
+  message) · a **status line** (clean = blue; "needs attention" = amber when an auto-rebase
+  conflicts).
+- **History graph:** a vertical **git-style tree** (nodes + branch lines in muted colors), current
+  commit highlighted; tap a commit → the **whole project reflows** to that state with eased
+  transitions (clips ease to positions); long-press = branch/compare/tag.
+- **Living branch:** a subtle animated **"synced"** indicator shows a feature branch auto-updating
+  when its base advances; on conflict, a list of **flagged items** appears (which clips/params
+  clash) with per-item **Keep mine / theirs / both**, each resolution animating the item settling.
+- **Merge & embed:** **Merge two projects** (pick main + imported → Concatenate / Overlay, previewed
+  with an eased reflow); **Embed a project** (imported keeps its own master routed into this one),
+  with the **LIVE / BOUNCED** toggle. Bouncing a track fades a "frozen" tint + badge onto its clips
+  and flips the transport indicator.
 
-Match the Arstro suite look (as in Cosmo, the photo editor): the same near-black dark canvas, the
-same blue accent, the flat hairline-bordered panels, the `name.` accent-dot wordmark, thin line
-icons, and the mono-for-numbers rule — so Solaris, Cosmo, and Interstellar read as one product line.
+## 14. Screen — Browser (side drawer)
+
+Slide-in drawer (rail or edge-swipe). Tabs: **Samples** (resource pool, tiny waveforms — drag into a
+lane), **Devices/Presets** (drop onto a rack), **Projects** (recent + embeddable). Big list rows,
+search, drag-to-place (the dragged item shows a ghost; the drop target highlights; on drop the clip/
+device grows into place).
+
+## 15. Transport bar (persistent, bottom)
+
+Thumb-reachable, always visible on Arrange/Mixer/Editor.
+
+- **Center (large):** Play/Stop (glyph cross-fades) · **Record (red)** · **Loop** · return-to-start.
+- **Position (mono):** `bars:beats:ticks` + `mm:ss:ms` (odometer-rolls during playback); tap = type a
+  location (keypad sheet).
+- **Tempo** (tap-tempo + drag) · time signature · **metronome** · count-in.
+- **Right:** master mini-fader + meter · **CPU/xrun** (eases to amber on strain) · **LIVE/BOUNCED**.
+- **Phone:** collapse to Play/Record/Loop + position; the rest behind a small expander (slides up).
+
+## 16. Recording flow (active state)
+
+Arm a track (red) → its input chip appears; pick the input in the header chip or Routing matrix →
+enable monitoring → optional count-in → Record: the armed lane draws a **growing red region with a
+live waveform**, header meter active; a clear "recording" banner; Stop drops a new audio clip
+(grows into place). Make Stop unmistakable.
+
+## 17. Global states
+
+Design each screen's **empty** (calm, inviting CTA card), **loading** (soft skeleton shimmer →
+cross-fade to content), **playing**, **recording**, **branch-conflict** (amber, actionable),
+**offline/bounced** (indicator + frozen tint), **error/relink** (a missing sample = an offline clip
+with a Relink action). Every state change animates — fades and eased slides, never a pop.
+
+## 18. Responsive
+
+- **Primary:** tablet landscape — full rail + summoned sheets/drawers.
+- **Phone portrait:** rail → bottom tab bar; Mixer shows one strip at a time (swipe, paged spring);
+  editors open as full-height sheets; transport collapses to essentials. Every action stays
+  reachable; no hover, no tiny targets.
+
+## 19. Family consistency
+
+Match the Arstro suite look (as in Cosmo): the same near-black canvas, blue accent, flat
+hairline-bordered surfaces, `name.` accent-dot wordmark, thin line icons, mono-for-numbers, and the
+**everything-animates-nothing-snaps** motion feel — so Solaris, Cosmo, and Interstellar read as one
+product line.
