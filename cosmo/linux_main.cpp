@@ -532,6 +532,8 @@ namespace
                 g_printerr("cosmo_v2: workspace image missing: %s\n", r.imagePath.c_str());
                 a->app.addWorkspaceMissingImage(parentNode, r.name);
             }
+            if (!r.name.empty())
+                a->app.setLoadStatus("Loading  " + r.name);  // what's loading, above the bar
             a->app.setLoadProgress((int)job->consumed, (int)job->entries.size());
             gtk_widget_queue_draw(a->area);
         }

@@ -711,6 +711,7 @@ namespace cosmo_v2
     {
         if (mConfirmDialog) mConfirmDialog->close();
         mLoadName = projectName;
+        mLoadStatus = "Preparing\xE2\x80\xA6";  // "Preparing…" until the host reports the first item
         mScreen = Screen::Loading;
         mPhase = Phase::Intro;
         mPhaseT0 = mNowMs;
@@ -745,6 +746,11 @@ namespace cosmo_v2
         mLoadDone = done; mLoadTotal = total;
         const double f = total > 0 ? std::min(1.0, std::max(0.0, (double)done / total)) : 0.0;
         mProgress.animateTo(f, kProgressMs, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::setLoadStatus(const std::string &text)
+    {
+        mLoadStatus = text;  // shown above the progress bar (what is currently loading)
     }
 
     void App::finishOpenTransition()
@@ -813,10 +819,19 @@ namespace cosmo_v2
             return;
         }
 
-        // Centred cover box (16:9), a touch above middle for the name + bar below.
-        const double bw = std::min(mW * 0.42, mH * 0.62);
-        const double bh = bw * 9.0 / 16.0;
-        const Rect box{(mW - bw) * 0.5, (mH - bh) * 0.5 - 26.0, bw, bh};
+        // The centred item is the clicked card thumbnail AT ITS CARD SIZE — the recent
+        // item simply glides to the middle; it never expands into a hero image
+        // (R-LOADING-0). Under it, a centred stack: project name, "what's loading"
+        // status line, then a small item-width progress bar (R-LOADING-1/2). Open-dialog
+        // opens (no source card) use a default card size.
+        const double iw = (mCoverFrom.w > 0.0) ? mCoverFrom.w : std::clamp(mW * 0.22, 220.0, 320.0);
+        const double ih = (mCoverFrom.h > 0.0) ? mCoverFrom.h : iw * 9.0 / 16.0;
+        const double kNameGap = 34.0, kStatusGap = 26.0, kBarGap = 18.0, kBarH = 4.0;
+        const double stackH = ih + kNameGap + kStatusGap + kBarGap;  // thumb + text block + bar
+        const Rect box{(mW - iw) * 0.5, (mH - stackH) * 0.5, iw, ih};
+        const double nameBaseY = box.y + ih + kNameGap;
+        const double statusBaseY = nameBaseY + kStatusGap;
+        const Rect barRect{box.x, statusBaseY + kBarGap, iw, kBarH};
 
         auto drawCover = [&](const Rect &r, double coverAlpha) {
             mCover->x.set(r.x); mCover->y.set(r.y); mCover->width.set(r.w); mCover->height.set(r.h);
@@ -825,6 +840,34 @@ namespace cosmo_v2
             {
                 Color s = kLoadingBg; s.a = 1.0 - coverAlpha;
                 drawRoundedRect(target, r, radius::control(), Paint::filled(s));
+            }
+        };
+        auto drawName = [&](double alpha, double sz) {
+            if (mLoadName.empty() || alpha <= 0.001) return;
+            const double tw = estimateTextWidth(mLoadName, sz);
+            Color c = palette::foreground(); c.a *= alpha;
+            target.setFill(c);
+            target.drawText(mLoadName, (mW - tw) * 0.5, nameBaseY, sz, font::sansSemiBold());
+        };
+        // Status line ("what is loading") + the small item-width progress bar, drawn as
+        // one fading unit directly under the item. `alpha` fades the whole unit in/out.
+        auto drawStatusAndBar = [&](double alpha) {
+            if (alpha <= 0.001) return;
+            if (!mLoadStatus.empty())
+            {
+                const double sz = 13.0;
+                const double tw = estimateTextWidth(mLoadStatus, sz);
+                Color c = palette::whiteAlpha(0.62); c.a *= alpha;
+                target.setFill(c);
+                target.drawText(mLoadStatus, (mW - tw) * 0.5, statusBaseY, sz, font::sansMedium());
+            }
+            Color track = palette::whiteAlpha(0.12); track.a *= alpha;
+            drawRoundedRect(target, barRect, kBarH * 0.5, Paint::filled(track));
+            const double fillW = barRect.w * mProgress.value();
+            if (fillW > 0.5)
+            {
+                Color fill = palette::primary(); fill.a *= alpha;
+                drawRoundedRect(target, Rect{barRect.x, barRect.y, fillW, kBarH}, kBarH * 0.5, Paint::filled(fill));
             }
         };
 
@@ -862,22 +905,11 @@ namespace cosmo_v2
             target.setTransform(Transform::identity());
             if (fadeOut < 0.999)
             {
-                mStars.draw(target, Rect{0, 0, mW, mH}, 1.0 - fadeOut, nowMs);
-                if (mCoverReady) drawCover(box, 1.0 - fadeOut);
-                if (!mLoadName.empty())
-                {
-                    const double sz = 23.0;
-                    const double tw = estimateTextWidth(mLoadName, sz);
-                    Color nameCol = palette::foreground(); nameCol.a *= (1.0 - fadeOut);
-                    target.setFill(nameCol);
-                    target.drawText(mLoadName, (mW - tw) * 0.5, box.y + box.h + 40.0, sz, font::sansSemiBold());
-                }
-                const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
-                const double bx = (mW - barW) * 0.5, by = mH - 84.0, bo = 1.0 - fadeOut;
-                Color track = palette::whiteAlpha(0.12); track.a *= bo;
-                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
-                Color fill = palette::primary(); fill.a *= bo;
-                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(fill));
+                const double a = 1.0 - fadeOut;
+                mStars.draw(target, Rect{0, 0, mW, mH}, a, nowMs);
+                if (mCoverReady) drawCover(box, a);
+                drawName(a, 23.0);
+                drawStatusAndBar(a);  // status line + item-width bar, same centred stack
             }
             // Wordmark cross-fade (#2): the loading wordmark fades out AS the editor's
             // fades in (via the scrim) — same slot, same time, so it never doubles.
@@ -901,35 +933,14 @@ namespace cosmo_v2
             drawRoundedRect(target, cbox, radius::control(),
                             Paint::filledStroked(palette::whiteAlpha(0.03), palette::whiteAlpha(0.10), 1.0));
 
-        // Project name, centred below the cover, growing a little as the intro lands.
-        if (!mLoadName.empty())
-        {
-            const double sz = 17.0 + 6.0 * intro;
-            const double tw = estimateTextWidth(mLoadName, sz);
-            Color nameCol = palette::foreground(); nameCol.a *= intro;
-            target.setFill(nameCol);
-            target.drawText(mLoadName, (mW - tw) * 0.5, box.y + box.h + 40.0, sz, font::sansSemiBold());
-        }
+        // Project name, centred below the item, growing a little as the intro lands.
+        drawName(intro, 17.0 + 6.0 * intro);
 
         drawWordmark(target, intro);  // flies home->top-bar in part 1; parked at 1 in part 2
 
-        // Progress bar — appears in PART 2 only (mBarFade), accent colour.
-        {
-            const double a = mBarFade.value();
-            if (a > 0.001)
-            {
-                const double barW = std::min(mW * 0.36, 520.0), barH = 4.0;
-                const double bx = (mW - barW) * 0.5, by = mH - 84.0;
-                Color track = palette::whiteAlpha(0.12); track.a *= a;
-                drawRoundedRect(target, Rect{bx, by, barW, barH}, barH * 0.5, Paint::filled(track));
-                const double fillW = barW * mProgress.value();
-                if (fillW > 0.5)
-                {
-                    Color fill = palette::primary(); fill.a *= a;
-                    drawRoundedRect(target, Rect{bx, by, fillW, barH}, barH * 0.5, Paint::filled(fill));
-                }
-            }
-        }
+        // Status line + item-width progress bar — fade in together in PART 2 (mBarFade),
+        // directly under the item; the bar fills with the eased decode fraction.
+        drawStatusAndBar(mBarFade.value());
 
         target.restore();
     }

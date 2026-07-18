@@ -60,8 +60,10 @@ namespace cosmo_v2
         void setLoadingCover(const uint8_t *rgba, int w, int h);
         /** Update the loading progress bar (0 = start, done==total = complete). */
         void setLoadProgress(int done, int total);
-        /** Loading finished: expand the cover into the editor photo stage and reveal
-         *  the editor. */
+        /** Set the load-status line shown above the progress bar (what is being loaded,
+         *  e.g. "Loading  IMG_1234.jpg"). The host feeds this per item as it decodes. */
+        void setLoadStatus(const std::string &text);
+        /** Loading finished: reveal the editor (the loading elements fade out in place). */
         void finishOpenTransition();
         bool inOpenTransition() const { return mScreen == Screen::Loading; }
         /** Fired once the intro animation completes (part 1 → part 2): the host starts
@@ -198,6 +200,7 @@ namespace cosmo_v2
         Phase mPhase = Phase::None;
         double mPhaseT0 = 0.0;               // start time of the current phase
         std::string mLoadName;               // project name shown centred
+        std::string mLoadStatus;             // "what is loading" line above the progress bar
         Starfield mStars;                    // twinkling loading backdrop
         std::shared_ptr<artboard::ImageView> mCover;  // project cover (centre -> photo stage)
         bool mCoverReady = false;
