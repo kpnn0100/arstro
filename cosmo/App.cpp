@@ -861,11 +861,10 @@ namespace cosmo_v2
             if (alpha <= 0.001) return;
             if (!mLoadStatus.empty())
             {
-                const double sz = 13.0;
-                const double tw = estimateTextWidth(mLoadStatus, sz);
                 Color c = palette::whiteAlpha(0.62); c.a *= alpha;
                 target.setFill(c);
-                target.drawText(mLoadStatus, (mW - tw) * 0.5, statusBaseY, sz, font::sansMedium());
+                // Left-aligned to the card's (and the bar's) left edge, not centred.
+                target.drawText(mLoadStatus, card.x, statusBaseY, 13.0, font::sansMedium());
             }
             Color track = palette::whiteAlpha(0.12); track.a *= alpha;
             drawRoundedRect(target, barRect, kBarH * 0.5, Paint::filled(track));

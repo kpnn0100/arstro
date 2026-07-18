@@ -84,8 +84,9 @@ sudden jump, and the heavy work is isolated to the middle part:
   part 1 never hitches on I/O). Everything is already placed; a **small accent progress bar the
   SAME WIDTH as the card, positioned directly UNDER it** (not a wide bar at the bottom of the screen)
   fills 0→1 with the real decode fraction (`setLoadProgress`), eased. **Directly above that bar a
-  status line shows what is currently being loaded** (`App::setLoadStatus`, e.g. `Loading  <photo
-  name>` — fed per item by the host as each entry is applied; `Preparing…` before the first). The
+  status line — left-aligned to the card's (and bar's) left edge — shows what is currently being
+  loaded** (`App::setLoadStatus`, e.g. `Loading  <photo name>` — fed per item by the host as each
+  entry is applied; `Preparing…` before the first). The
   status line + bar fade in together at the part-1→part-2 hand-off (they never pop). A short minimum
   keeps the bar from merely flashing on a fast load.
 - **R-LOADING-2 Loading-screen look.** A **near-black** star-sky backdrop (same colour as the
