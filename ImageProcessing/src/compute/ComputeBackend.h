@@ -53,8 +53,10 @@ namespace arstro
         /** Render `linearSource` through the FULL edit pipeline for `params`
          *  (global chain + masks + gamma encode), filling `out` (processed image +
          *  histogram taps). Return false to decline the job (engine falls back to
-         *  the CPU reference path). When it returns true the output MUST match the
-         *  CPU path — the software pipeline is the conformance reference. */
+         *  the CPU reference path). When it returns true the output must match the
+         *  CPU path within a small tolerance (a hardware backend is not bit-exact in
+         *  float) — the software pipeline is the conformance reference. A backend may
+         *  also decline (return false) an edit it does not yet fully support. */
         virtual bool process(const Image &linearSource, const EditParams &params, ComputeResult &out) = 0;
     };
 

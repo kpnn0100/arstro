@@ -21,6 +21,23 @@ target_include_directories(arstro_image PUBLIC src)
 target_compile_definitions(arstro_image PUBLIC ARSTRO_ENABLE_THREADS)
 target_link_libraries(arstro_image PUBLIC Threads::Threads)
 
+# ── GPU compute backend (OpenGL 4.3 compute over surfaceless EGL) — R-GPU ──
+# Optional accelerator: PUBLIC so consumers (cosmo, image_tests) link EGL/GL and
+# see the ARSTRO_GL_COMPUTE define. The CPU pipeline stays the reference + the
+# guaranteed fallback. Skipped (CPU-only) when EGL/GL are not found (e.g. web).
+option(ARSTRO_IMG_GL_COMPUTE "Build the OpenGL compute GPU backend" ON)
+if(ARSTRO_IMG_GL_COMPUTE)
+  find_library(ARSTRO_EGL_LIB EGL)
+  find_library(ARSTRO_GL_LIB GL)
+  if(ARSTRO_EGL_LIB AND ARSTRO_GL_LIB)
+    target_compile_definitions(arstro_image PUBLIC ARSTRO_GL_COMPUTE)
+    target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${ARSTRO_GL_LIB})
+    message(STATUS "arstro_image: GPU compute backend ENABLED (OpenGL ${ARSTRO_GL_LIB})")
+  else()
+    message(STATUS "arstro_image: GPU compute backend disabled (EGL/GL not found) — CPU only")
+  endif()
+endif()
+
 # ── Unit tests (dependency-free MiniTest harness) ──
 enable_testing()
 add_executable(image_tests unittest/imageTests.cpp unittest/engineTests.cpp)

@@ -674,8 +674,10 @@ TEST(EditEngine_gpu_backend_selection_and_fallback)
     auto bytes = variedRGBA8b(16, 16);
     EditParams p; p.exposure = 0.4f; p.contrast = 12.f;
 
-    // Baseline: a default engine has no accelerator -> CPU only.
+    // Baseline: force CPU-only (a default engine may install a real platform
+    // backend, e.g. OpenGL — the mock path below tests selection independently).
     EditEngine base;
+    base.setComputeAccelerator(nullptr);
     base.addImage(bytes.data(), 16, 16, 4);
     base.selectImage(0);
     base.setPreviewSize(4096);
@@ -735,6 +737,86 @@ TEST(EditEngine_gpu_backend_selection_and_fallback)
         CHECK(out == cpu);
     }
 
-    // The platform factory returns no accelerator today (CPU-only, R-GPU-1).
+    // The platform factory returns the GPU backend where built, else nullptr.
+#ifdef ARSTRO_GL_COMPUTE
+    CHECK(createComputeAccelerator() != nullptr);
+#else
     CHECK(createComputeAccelerator() == nullptr);
+#endif
+}
+
+// Real GPU backend (OpenGL 4.3 compute): on a host with a GL compute device
+// (e.g. the AMD/Mesa GPU, or llvmpipe software), the ported subset — exposure,
+// contrast, white balance — must match the CPU within a small tolerance, and an
+// edit outside the subset must decline to the (identical) CPU path. Skips cleanly
+// where no GPU backend is available.
+TEST(EditEngine_gl_backend_matches_cpu)
+{
+    auto bytes = variedRGBA8b(24, 18);
+    EditParams p; p.exposure = 0.7f; p.contrast = 20.f; p.temp = 5200.f; p.tint = 8.f;
+
+    // CPU reference (forced no accelerator).
+    EditEngine cpu; cpu.setComputeAccelerator(nullptr);
+    cpu.addImage(bytes.data(), 24, 18, 4); cpu.selectImage(0); cpu.setPreviewSize(4096);
+    cpu.setCurrentParams(p);
+    PreviewBuffer cb = cpu.renderFull();
+    const std::vector<uint8_t> cref(cb.rgba, cb.rgba + (size_t)cb.width * cb.height * 4);
+
+    // GPU-preferred engine (default factory installs the platform backend).
+    EditEngine gpu;
+    gpu.addImage(bytes.data(), 24, 18, 4); gpu.selectImage(0); gpu.setPreviewSize(4096);
+    gpu.setPreferGpu(true);
+    if (!gpu.gpuAvailable()) { CHECK(true); return; }  // CPU-only host: nothing to verify
+
+    gpu.setCurrentParams(p);
+    PreviewBuffer gb = gpu.renderFull();
+    const std::vector<uint8_t> g(gb.rgba, gb.rgba + (size_t)gb.width * gb.height * 4);
+    CHECK(g.size() == cref.size());
+    int maxd = 0;
+    for (size_t i = 0; i < g.size(); ++i) { int d = (int)g[i] - (int)cref[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
+    CHECK(maxd <= 2);  // GPU vs CPU float, after sRGB encode + round to 8-bit
+
+    // An edit OUTSIDE the ported subset (saturation) must decline -> exact CPU output.
+    EditParams q = p; q.saturation = 40.f;
+    EditEngine cpu2; cpu2.setComputeAccelerator(nullptr);
+    cpu2.addImage(bytes.data(), 24, 18, 4); cpu2.selectImage(0); cpu2.setPreviewSize(4096);
+    cpu2.setCurrentParams(q);
+    PreviewBuffer c2 = cpu2.renderFull();
+    const std::vector<uint8_t> c2ref(c2.rgba, c2.rgba + (size_t)c2.width * c2.height * 4);
+    gpu.setCurrentParams(q);
+    PreviewBuffer g2 = gpu.renderFull();
+    const std::vector<uint8_t> g2b(g2.rgba, g2.rgba + (size_t)g2.width * g2.height * 4);
+    CHECK(g2b == c2ref);
+}
+
+// The cosmo path: RenderService runs the engine (and thus the GPU backend) on its
+// OWN worker thread, so the GL context must init off the main thread. Verify a
+// GPU-preferred service frame matches a CPU service frame within tolerance.
+TEST(RenderService_gpu_worker_matches_cpu)
+{
+    auto bytes = variedRGBA8b(20, 16);
+    EditParams p; p.exposure = 0.5f; p.temp = 5000.f;
+
+    auto renderSvc = [&](bool gpu, RenderService::Frame &out) -> bool {
+        RenderService svc;
+        const int slot = svc.addImage(bytes.data(), 20, 16, 4);
+        svc.setPreviewSize(4096);
+        if (gpu && !svc.gpuAvailable()) return false;  // CPU-only host
+        svc.setPreferGpu(gpu);
+        svc.render(slot, p);
+        for (int i = 0; i < 500; ++i) {
+            if (svc.tryAcquire(out)) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return false;
+    };
+
+    RenderService::Frame cpuF, gpuF;
+    CHECK(renderSvc(false, cpuF));
+    if (!renderSvc(true, gpuF)) { CHECK(true); return; }  // no GPU backend -> skip
+    CHECK(cpuF.width == gpuF.width && cpuF.height == gpuF.height);
+    CHECK(cpuF.rgba.size() == gpuF.rgba.size());
+    int maxd = 0;
+    for (size_t i = 0; i < cpuF.rgba.size(); ++i) { int d = (int)gpuF.rgba[i] - (int)cpuF.rgba[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
+    CHECK(maxd <= 2);
 }

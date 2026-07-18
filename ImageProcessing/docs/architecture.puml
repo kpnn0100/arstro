@@ -93,10 +93,18 @@ package source {
 
 ' ─────────────────────────── Processors ───────────────────────────
 package tone {
-  class Exposure { + setExposureEv(ev)  ' 2^EV (linear) }
-  class Contrast { + setContrast(v)     ' slope around 0.18 pivot }
-  class ToneRegions { + setHighlights/Shadows/Whites/Blacks(v) }
-  class ToneCurve { + setPoints(pts) / setLogScale(b)  ' 1024-LUT }
+  class Exposure {
+    + setExposureEv(ev)  ' 2^EV (linear)
+  }
+  class Contrast {
+    + setContrast(v)  ' slope around 0.18 pivot
+  }
+  class ToneRegions {
+    + setHighlights/Shadows/Whites/Blacks(v)
+  }
+  class ToneCurve {
+    + setPoints(pts) / setLogScale(b)  ' 1024-LUT
+  }
   Exposure --|> PointProcessor
   Contrast --|> PointProcessor
   ToneRegions --|> PointProcessor
@@ -104,10 +112,18 @@ package tone {
 }
 
 package color {
-  class WhiteBalance { + setTemperature(K) / setTint(v) }
-  class Vibrance { + setVibrance(v) / setSaturation(v) }
-  class ColorMixer { + setCurve(Hue|Sat|Lum, points)  ' 3 cyclic per-hue LUTs }
-  class ColorGrading { + setGradeHue/Sat/Lum(region) / setHueRemap(...) }
+  class WhiteBalance {
+    + setTemperature(K) / setTint(v)
+  }
+  class Vibrance {
+    + setVibrance(v) / setSaturation(v)
+  }
+  class ColorMixer {
+    + setCurve(Hue/Sat/Lum, points)  ' 3 cyclic per-hue LUTs
+  }
+  class ColorGrading {
+    + setGradeHue/Sat/Lum(region) / setHueRemap(...)
+  }
   WhiteBalance --|> PointProcessor
   Vibrance --|> PointProcessor
   ColorMixer --|> PointProcessor
@@ -115,10 +131,18 @@ package color {
 }
 
 package effect {
-  class Dehaze { + setAmount(v)  ' dark-channel prior }
-  class Grain { + setAmount(v) / setSize(v) / setSeed(s) }
-  class Texture { + setAmount(v)  ' fine-radius local contrast }
-  class Clarity { + setAmount(v)  ' large-radius midtone local contrast }
+  class Dehaze {
+    + setAmount(v)  ' dark-channel prior
+  }
+  class Grain {
+    + setAmount(v) / setSize(v) / setSeed(s)
+  }
+  class Texture {
+    + setAmount(v)  ' fine-radius local contrast
+  }
+  class Clarity {
+    + setAmount(v)  ' large-radius midtone local contrast
+  }
   Dehaze --|> ImageProcessor
   Grain --|> ImageProcessor
   Texture --|> ImageProcessor
@@ -126,16 +150,26 @@ package effect {
 }
 
 package detail {
-  class Sharpen { + setAmount(v) / setRadius(px) / setMasking(v)  ' unsharp on perceptual luma }
-  class NoiseReduction { + setLuminance(v) / setColor(v)  ' bilateral luma + chroma blur }
+  class Sharpen {
+    + setAmount(v) / setRadius(px) / setMasking(v)  ' unsharp on perceptual luma
+  }
+  class NoiseReduction {
+    + setLuminance(v) / setColor(v)  ' bilateral luma + chroma blur
+  }
   Sharpen --|> ImageProcessor
   NoiseReduction --|> ImageProcessor
 }
 
 package transform {
-  class Crop { + setRect(x,y,w,h)  ' normalized }
-  class Rotate { + setAngle(deg) / setQuarterTurns(n) }
-  class LensCorrection { + setDistortion(v) / setChromaticAberration(v) / setVignette(v) }
+  class Crop {
+    + setRect(x,y,w,h)  ' normalized
+  }
+  class Rotate {
+    + setAngle(deg) / setQuarterTurns(n)
+  }
+  class LensCorrection {
+    + setDistortion(v) / setChromaticAberration(v) / setVignette(v)
+  }
   Crop --|> ImageProcessor
   Rotate --|> ImageProcessor
   LensCorrection --|> ImageProcessor
@@ -163,8 +197,12 @@ package video {
 }
 
 package engine {
-  class MaskParams { + type / inverted / feather / geometry / dabs[] / adjust:LocalAdjust }
-  class MaskStack <<free fn>> { + maskCoverage(m,nx,ny) / applyMaskStack(img, masks[]) }
+  class MaskParams {
+    + type / inverted / feather / geometry / dabs[] / adjust:LocalAdjust
+  }
+  class MaskStack <<free fn>> {
+    + maskCoverage(m,nx,ny) / applyMaskStack(img, masks[])
+  }
   MaskStack ..> MaskParams
   class EditEngine <<facade>> {
     + addImage(rgba, w, h, ch) : int / selectImage(slot)
@@ -196,20 +234,30 @@ package engine {
 package compute {
   interface IComputeBackend {
     + name() : string
-    + kind() : Cpu|Gpu
+    + kind() : Kind
     + available() : bool
-    + process(Image, EditParams, ComputeResult&) : bool  ' false = decline -> CPU
+    + process(src, params, out) : bool
   }
+  note right of IComputeBackend
+    optional accelerator; false = decline -> CPU
+  end note
   class ComputeResult {
     + processed : Image
-    + finalHist / preCurveHist : HistogramData
+    + finalHist : HistogramData
+    + preCurveHist : HistogramData
     + preMixerHue : HueHistogram
   }
-  class createComputeAccelerator <<factory fn>> {
-    + () : IComputeBackend  ' per-platform; nullptr today (CPU-only)
+  class createComputeAccelerator <<factory fn>>
+  class GlComputeBackend {
+    + process(src, params, out) : bool
   }
+  note bottom of GlComputeBackend
+    OpenGL 4.3 compute / surfaceless EGL (Linux/AMD)
+    exposure+contrast+WB+encode on GPU; declines the rest to CPU
+  end note
+  GlComputeBackend ..|> IComputeBackend
   IComputeBackend ..> ComputeResult
-  createComputeAccelerator ..> IComputeBackend
+  createComputeAccelerator ..> GlComputeBackend
 }
 ' optional accelerator; the CPU pipeline in EditEngine is the reference + guaranteed fallback (R-GPU)
 EditEngine o--> IComputeBackend

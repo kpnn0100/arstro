@@ -251,13 +251,17 @@ case "$TARGET" in
           < <(find "$ROOT/cosmo" -name '*.cpp' ! -path '*/core/tests/*' ! -path '*/build/*' -print0)
         # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
         # matches; COSMO_SOURCE_DIR lets the binary find assets/fonts by path.
-        c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF \
+        # GPU compute backend (R-GPU): OpenGL 4.3 compute over surfaceless EGL. Link
+        # EGL/GL and define ARSTRO_GL_COMPUTE so compute/GlComputeBackend.cpp builds;
+        # the CPU pipeline stays the reference + fallback if no GPU is present.
+        GL_DEF="-DARSTRO_GL_COMPUTE"; GL_LIBS=(-lEGL -lGL)
+        c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF $GL_DEF \
           -DCOSMO_SOURCE_DIR="\"$ROOT/cosmo\"" \
           "${cosmo_src[@]}" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" "${ip_src[@]}" \
           -I"$AB/src" -I"$AB/include" -I"$IP/src" -I"$ROOT/cosmo" \
-          "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" \
+          "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" "${GL_LIBS[@]}" \
           -o "$OUTDIR/cosmo_linux"
         echo "built $OUTDIR/cosmo_linux"
         echo "run:   $OUTDIR/cosmo_linux [image files...]"
