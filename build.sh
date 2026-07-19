@@ -248,7 +248,7 @@ case "$TARGET" in
         # Every cosmo .cpp (app + core + decoder) EXCEPT the core unit test's main().
         cosmo_src=()
         while IFS= read -r -d '' f; do cosmo_src+=("$f"); done \
-          < <(find "$ROOT/cosmo" -name '*.cpp' ! -path '*/core/tests/*' ! -path '*/build/*' -print0)
+          < <(find "$ROOT/cosmo" -name '*.cpp' ! -path '*/tests/*' ! -path '*/build/*' -print0)
         # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
         # matches; COSMO_SOURCE_DIR lets the binary find assets/fonts by path.
         # GPU compute backend (R-GPU): OpenGL 4.3 compute over surfaceless EGL. Link

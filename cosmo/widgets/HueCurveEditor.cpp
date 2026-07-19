@@ -12,7 +12,6 @@ namespace cosmo_v2
     namespace
     {
         constexpr double kPad = 12.0;
-        constexpr double kHit = 11.0;
         double clampY(double v) { return v < -1 ? -1 : (v > 1 ? 1 : v); }
         double wrap360(double h) { h = std::fmod(h, 360.0); return h < 0 ? h + 360.0 : h; }
 
@@ -60,23 +59,31 @@ namespace cosmo_v2
 
     int HueCurveEditor::pointAt(const Point &p) const
     {
+        // Nearest anchor within the forgiving pick radius (see metrics::
+        // anchorHitRadius) -- not the first, so overlapping targets resolve to
+        // the anchor the user clicked closest to.
+        const double r2 = metrics::anchorHitRadius() * metrics::anchorHitRadius();
+        int best = -1;
+        double bestD2 = r2;
         for (int i = 0; i < (int)mPts.size(); ++i)
         {
             const double dx = p.x - pxh(mPts[i].x), dy = p.y - pyv(mPts[i].y);
-            if (dx * dx + dy * dy <= kHit * kHit) return i;
+            const double d2 = dx * dx + dy * dy;
+            if (d2 <= bestD2) { bestD2 = d2; best = i; }
         }
-        return -1;
+        return best;
     }
 
     bool HueCurveEditor::handleAt(const Point &p, int &idx, int &kind) const
     {
+        const double r2 = metrics::anchorHitRadius() * metrics::anchorHitRadius();
         for (int i = 0; i < (int)mPts.size(); ++i)
         {
             if (!mPts[i].smooth) continue;
             const double ox = pxh(mPts[i].x + mPts[i].ox), oy = pyv(mPts[i].y + mPts[i].oy);
             const double ix = pxh(mPts[i].x + mPts[i].ix), iy = pyv(mPts[i].y + mPts[i].iy);
-            if ((p.x - ox) * (p.x - ox) + (p.y - oy) * (p.y - oy) <= kHit * kHit) { idx = i; kind = 2; return true; }
-            if ((p.x - ix) * (p.x - ix) + (p.y - iy) * (p.y - iy) <= kHit * kHit) { idx = i; kind = 1; return true; }
+            if ((p.x - ox) * (p.x - ox) + (p.y - oy) * (p.y - oy) <= r2) { idx = i; kind = 2; return true; }
+            if ((p.x - ix) * (p.x - ix) + (p.y - iy) * (p.y - iy) <= r2) { idx = i; kind = 1; return true; }
         }
         return false;
     }

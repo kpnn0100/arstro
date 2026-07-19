@@ -37,3 +37,24 @@ target_link_libraries(cosmo PRIVATE PkgConfig::FONTCONFIG)
 # regardless of the working directory it's launched from.
 target_compile_definitions(cosmo PRIVATE
   COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+# ── Widget unit tests: curve/mixer point-editor hit-testing ──
+# Device-free (no GTK/Cairo, no cosmo_core): the editors are Artboard Segments,
+# so the tests drive their gesture entry point against artboard_core and the few
+# self-contained widget TUs they need. Verifies the anchor pick radius
+# (metrics::anchorHitRadius) and nearest-within-radius resolution. Plain assert().
+add_executable(cosmo_widget_tests
+  widgets/tests/widgetTests.cpp
+  widgets/HueCurveEditor.cpp
+  widgets/CurvePanel.cpp
+  widgets/SegmentedControl.cpp
+  widgets/PillButton.cpp
+  widgets/IconButton.cpp
+  widgets/Icons.cpp)
+target_include_directories(cosmo_widget_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/../Artboard/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/../Artboard/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../ImageProcessing/src)
+target_link_libraries(cosmo_widget_tests PRIVATE artboard_core)
+add_test(NAME cosmo_widget COMMAND cosmo_widget_tests)

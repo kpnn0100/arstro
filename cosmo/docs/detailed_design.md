@@ -334,16 +334,18 @@ vector<CurvePoint>)`. Editor 0 has `setMappedHue(true)`.
 ### 5.3 HueCurveEditor
 Cyclic hue mapper: X = input hue [0,360), Y = adjustment [−1,1], wrapping at the 360/0 seam.
 `onChange(const vector<CurvePoint>&)`, `setPoints` (restores handles + smooth verbatim), `reset`,
-`setMappedHue`. Gestures (`kHit=11`): double-click adds/removes a point (>2 pts to remove); Down
-hit-tests smooth-point handles then the node (Alt = make smooth + symmetric pull); Drag moves the
-anchor or sets in/out handles (Alt = independent, else mirror); each drag `emit()`s the control
+`setMappedHue`. Gestures (pick radius `metrics::anchorHitRadius`=13, nearest-within-radius wins):
+double-click adds/removes a point (>2 pts to remove); Down hit-tests smooth-point handles then the
+node (Alt = make smooth + symmetric pull); Drag moves the anchor or sets in/out handles (Alt =
+independent, else mirror); each drag `emit()`s the control
 points. Paint: rounded plot bg, zero line, 60° gridlines, a 48-swatch hue strip, the dense curve
 via `curve::sample(pts, cyclic=true, 360)` (broken at wrap folds), tangent handle lines + nodes.
 `setMappedHue` colors the line by output hue.
 
 ### 5.4 CurvePanel
 RGB/R/G/B picker + Reset over a draggable tone-curve plot (`kPlotH=164`). `setCurve(vector<pair>)`,
-`onCurveChange(vector<pair>)`, default `{{0,0},{1,1}}`. Gestures (`kHitRadiusPx=7`): DragStart picks
+`onCurveChange(vector<pair>)`, default `{{0,0},{1,1}}`. Gestures (pick radius
+`metrics::anchorHitRadius`=13, nearest-within-radius wins): DragStart picks
 a point, Drag moves it (endpoints locked to x=0/1; interior clamped between neighbors), Click on
 empty space inserts (sorted), double-click removes an interior point. Paint: rounded plot bg,
 quarter gridlines + identity diagonal, a Catmull-Rom `strokeSpline`, point circles. (All 4 channel

@@ -85,5 +85,16 @@ namespace cosmo_v2
         inline double control() { return 2.0; }   // rounded-[2px]: buttons, chips, panels, filmstrip cells
         inline double pill() { return 9999.0; }   // rounded-full: slider track/thumb, before/after pill
     }
+
+    // Interaction hit targets -- the forgiving pick radius (px) around a small
+    // drawn handle. A curve/mixer anchor dot is only ~4px, which is fiddly to
+    // click and drag; the clickable area is deliberately larger than the dot so
+    // points are easy to grab. Cited by every point-editing widget so the feel
+    // is identical across the tone curve and the mixer hue curves (a lone
+    // per-widget literal is a bug -- one token, one feel).
+    namespace metrics
+    {
+        inline double anchorHitRadius() { return 13.0; }  // curve/mixer anchor + bezier handle pick radius
+    }
 }
 }

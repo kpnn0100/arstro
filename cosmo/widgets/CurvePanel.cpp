@@ -15,7 +15,6 @@ namespace cosmo_v2
     {
         constexpr double kPadX = 9.75;
         constexpr double kPickerH = 16.25;  // ~9px*1.3 + 2*py-0.5(1.625)
-        constexpr double kHitRadiusPx = 7.0;
 
         // Catmull-Rom -> cubic bezier, matching scene::Path::spline's algorithm
         // (reimplemented inline: Path is a scene Drawable with its own transform,
@@ -84,13 +83,20 @@ namespace cosmo_v2
 
     int CurvePanel::hitPoint(const Point &plotLocal) const
     {
+        // Return the NEAREST anchor within the forgiving pick radius, not merely
+        // the first -- with a generous radius two close anchors' targets can
+        // overlap, and the user means the one they clicked closest to.
+        const double r2 = metrics::anchorHitRadius() * metrics::anchorHitRadius();
+        int best = -1;
+        double bestD2 = r2;
         for (int i = 0; i < (int)mPoints.size(); ++i)
         {
             const double px = mPoints[i].first * mPlotW, py = kPlotH - mPoints[i].second * kPlotH;
             const double dx = plotLocal.x - px, dy = plotLocal.y - py;
-            if (dx * dx + dy * dy <= kHitRadiusPx * kHitRadiusPx) return i;
+            const double d2 = dx * dx + dy * dy;
+            if (d2 <= bestD2) { bestD2 = d2; best = i; }
         }
-        return -1;
+        return best;
     }
 
     bool CurvePanel::handleGesture(const Gesture &g, const Point &local)

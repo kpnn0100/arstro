@@ -309,6 +309,13 @@ Temperature/Tint rows carry colour-ramp tracks.
   spline). Drag a point, click empty space to add, double-click an interior point to remove;
   endpoints are locked to x=0/1. All four channel buttons currently edit the single shared
   `EditParams::curve` (no per-channel data yet).
+- **Anchor/handle pick radius (both editors).** A drawn anchor dot is only ~4 px, which is
+  fiddly to click and drag. The clickable target is a **forgiving radius, larger than the dot**,
+  taken from ONE shared token (`metrics::anchorHitRadius`, 13 px) so the mixer hue curves and the
+  tone curve feel identical. When two anchors' targets overlap, the **nearest** anchor within the
+  radius wins (not the first found), so a click resolves to the point the user aimed at. The token
+  also governs the bezier tangent-handle grab. Visual dot size is unchanged — only the hit area
+  grew.
 
 ### DR-EDIT-6 Grade (`GradePanel`)
 A Shadows/Midtones/Highlights region picker → hue (0..360) / saturation (0..100) / luminance
