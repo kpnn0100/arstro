@@ -510,12 +510,51 @@ TEST(EditParamsIO_mixer_bezier_roundtrip)
     CHECK_NEAR(legacy.mixer[0][1].y, -0.1, 1e-4);
 }
 
+TEST(EditParamsIO_curve_channel_roundtrip)
+{
+    EditParams p;
+    p.curve = {{0.f, 0.f}, {0.4f, 0.6f}, {1.f, 1.f}};      // RGB master
+    p.curveChannel[0] = {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};  // R
+    p.curveChannel[2] = {{0.f, 0.1f}, {1.f, 0.95f}};             // B
+
+    EditParams q;
+    CHECK(deserializeParams(serializeParams(p), q));
+    CHECK(q.curve.size() == 3);
+    CHECK(q.curveChannel[0].size() == 3);
+    CHECK_NEAR(q.curveChannel[0][1].first, 0.5, 1e-4);
+    CHECK_NEAR(q.curveChannel[0][1].second, 0.9, 1e-4);
+    CHECK(q.curveChannel[1].size() == 2);                 // G left as default identity, round-trips
+    CHECK_NEAR(q.curveChannel[2][0].second, 0.1, 1e-4);
+
+    // A legacy file without curveR/G/B keys leaves the channels at their identity default.
+    EditParams legacy;
+    CHECK(deserializeParams("curve=0,0;1,1\n", legacy));
+    CHECK(legacy.curveChannel[0].size() == 2);
+    CHECK(legacy.curveChannel[0][0].first == 0.f && legacy.curveChannel[0][1].first == 1.f);
+}
+
+TEST(EditEngine_per_channel_tone_curve)
+{
+    std::vector<uint8_t> g((size_t)4 * 4 * 4, 0);          // solid mid-grey RGBA8
+    for (int i = 0; i < 16; ++i) { g[i * 4] = 128; g[i * 4 + 1] = 128; g[i * 4 + 2] = 128; g[i * 4 + 3] = 255; }
+
+    EditEngine eng; eng.setComputeAccelerator(nullptr);   // CPU reference path
+    eng.addImage(g.data(), 4, 4, 4); eng.selectImage(0);
+    eng.setCurveChannelPoints(0, {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}});  // lift ONLY red
+
+    PreviewBuffer b = eng.renderFull();
+    const uint8_t *px = b.rgba;                            // RGBA8
+    CHECK(px[0] > px[1] + 40);   // R lifted well above G
+    CHECK(px[1] == px[2]);       // G == B, untouched
+}
+
 // ── .apf generic preset envelope + selective image mapping ──
 TEST(Apf_selective_save_and_apply)
 {
     EditParams p;
     p.exposure = 1.2f; p.contrast = 30.f; p.temp = 7200.f; p.vibrance = 40.f;
     p.curve = {{0.f, 0.05f}, {1.f, 0.95f}};
+    p.curveChannel[0] = {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};  // a per-channel R curve rides in "curve"
     p.grade[1] = {210.f, 25.f, -6.f};
     MaskParams m; m.type = MaskParams::Radial; m.adjust.exposure = 0.8f; p.masks = {m};
 
@@ -541,10 +580,13 @@ TEST(Apf_selective_save_and_apply)
     CHECK(out.curve.size() == 2 && out.curve[1].second == 1.f);  // curve NOT applied (default identity)
     CHECK_NEAR(out.temp, 6500.0, 1e-3);                          // color not in the file at all
 
-    // apply "curve" too -> curve now changes
+    // apply "curve" too -> master + per-channel curves now change
     CHECK(applyApfToEditParams(rt, {"basic", "curve"}, out));
     CHECK(out.curve.size() == 2);
     CHECK_NEAR(out.curve[0].second, 0.05, 1e-4);
+    CHECK(out.curveChannel[0].size() == 3);            // R curve carried in the "curve" category
+    CHECK_NEAR(out.curveChannel[0][1].second, 0.9, 1e-4);
+    CHECK(out.curveChannel[1].size() == 2);            // G/B stay identity
 
     // a full save carries masks + grade; apply restores them
     apf::Document full = editParamsToApf(p, apfImageCategories(), "Full");
@@ -787,6 +829,18 @@ TEST(EditEngine_gl_backend_matches_cpu)
     PreviewBuffer g2 = gpu.renderFull();
     const std::vector<uint8_t> g2b(g2.rgba, g2.rgba + (size_t)g2.width * g2.height * 4);
     CHECK(g2b == c2ref);
+
+    // A per-channel tone curve is also outside the ported subset -> decline -> exact CPU.
+    EditParams r = p; r.curveChannel[0] = {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};
+    EditEngine cpu3; cpu3.setComputeAccelerator(nullptr);
+    cpu3.addImage(bytes.data(), 24, 18, 4); cpu3.selectImage(0); cpu3.setPreviewSize(4096);
+    cpu3.setCurrentParams(r);
+    PreviewBuffer c3 = cpu3.renderFull();
+    const std::vector<uint8_t> c3ref(c3.rgba, c3.rgba + (size_t)c3.width * c3.height * 4);
+    gpu.setCurrentParams(r);
+    PreviewBuffer g3 = gpu.renderFull();
+    const std::vector<uint8_t> g3b(g3.rgba, g3.rgba + (size_t)g3.width * g3.height * 4);
+    CHECK(g3b == c3ref);
 }
 
 // The cosmo path: RenderService runs the engine (and thus the GPU backend) on its

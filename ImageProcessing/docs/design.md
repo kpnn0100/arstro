@@ -105,7 +105,7 @@ destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncall
 
 | Family | Processors |
 |--------|------------|
-| `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (1024-entry LUT, log/linear domain) |
+| `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (four 1024-entry LUTs — an RGB **master** curve applied to all channels, then an independent **per-channel** R/G/B curve; `out_c = chan_c(master(x_c))`; log/linear domain shared across all four) |
 | `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (3 cyclic per-hue curves: hue-shift/sat/lum over the input hue, wrapping at 360 so it never bands), ColorGrading (3-way wheels + hue-range remap) |
 | `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (smooth two-octave deterministic value noise — quintic fade, so `size` sets grain scale without blocky upscaling), Texture (fine-radius local contrast), Clarity (large-radius midtone local contrast, midtone-masked) |
 | `detail/` | Sharpen (unsharp mask on perceptual luma, amount/radius/edge-masking), NoiseReduction (Gaussian chroma blur for colour speckle + edge-preserving bilateral on luma) |

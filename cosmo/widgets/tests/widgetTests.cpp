@@ -17,6 +17,7 @@
 #include "../HueCurveEditor.h"
 #include "../CurvePanel.h"
 #include "../../Theme.h"
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -125,7 +126,7 @@ namespace
         TestCurve c;
         std::vector<std::pair<float, float>> last;
         int changes = 0;
-        c.onCurveChange = [&](std::vector<std::pair<float, float>> p) { last = p; ++changes; };
+        c.onCurveChange = [&](int, std::vector<std::pair<float, float>> p) { last = p; ++changes; };
 
         // Endpoint (1,1) sits at plot-local (232,0) -> widget-local (241.75,0).
         // Press 10px below it: outside the OLD radius (7), inside the new (13).
@@ -152,9 +153,11 @@ namespace
         std::printf("CurvePanel: overlapping targets resolve to the NEAREST anchor\n");
         TestCurve c;
         // Interior anchors at x=0.5 (plot px 116) and x=0.55 (plot px 127.6), 11.6px apart.
-        c.setCurve({{0.f, 0.f}, {0.5f, 0.5f}, {0.55f, 0.5f}, {1.f, 1.f}});
+        const CurvePanel::Points idc{{0.f, 0.f}, {1.f, 1.f}};
+        c.setCurves({{0.f, 0.f}, {0.5f, 0.5f}, {0.55f, 0.5f}, {1.f, 1.f}},
+                    std::array<CurvePanel::Points, 3>{{idc, idc, idc}});
         std::vector<std::pair<float, float>> last;
-        c.onCurveChange = [&](std::vector<std::pair<float, float>> p) { last = p; };
+        c.onCurveChange = [&](int, std::vector<std::pair<float, float>> p) { last = p; };
 
         // Press at plot px 125 (widget-local 134.75): 9px from idx1, 2.6px from idx2 --
         // both inside r=13. The OLD "first within radius" grabs idx1; nearest grabs idx2.
@@ -165,6 +168,41 @@ namespace
               "the farther anchor (idx1) was NOT grabbed");
         check(!last.empty() && near(last[2].second, 1.0 - 62.0 / 164.0, 1e-3),
               "the nearer anchor (idx2) was grabbed and moved");
+    }
+
+    void curvePerChannelIndependence()
+    {
+        std::printf("CurvePanel: RGB/R/G/B each edit their own independent curve\n");
+        using P = CurvePanel::Points;
+        TestCurve c;
+        int emittedCh = -99;
+        c.onCurveChange = [&](int ch, P) { emittedCh = ch; };
+
+        // Four distinct stored curves.
+        const P master{{0.f, 0.f}, {1.f, 1.f}};
+        const P rC{{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};
+        const P gC{{0.f, 0.f}, {0.5f, 0.1f}, {1.f, 1.f}};
+        const P bC{{0.f, 0.f}, {1.f, 1.f}};
+        c.setCurves(master, std::array<P, 3>{{rC, gC, bC}});
+        check(c.curveFor(0) == master && c.curveFor(1) == rC && c.curveFor(2) == gC && c.curveFor(3) == bC,
+              "setCurves stores four independent curves");
+
+        // On RGB (channel 0): dragging the endpoint emits channel 0 and leaves R/G/B alone.
+        c.showChannel(0);
+        c.handleGesture(ev(Gesture::Type::DragStart), Point{241.75, 10}); // grab the (1,1) endpoint
+        c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 30});
+        check(emittedCh == 0, "editing RGB emits channel 0");
+        check(c.curveFor(1) == rC && c.curveFor(2) == gC && c.curveFor(3) == bC,
+              "editing RGB left R/G/B untouched");
+
+        // Switch to Red: dragging R's mid point (0.5,0.9) emits channel 1 and edits only R.
+        c.showChannel(1);
+        // (0.5,0.9) -> plot-local (116, 16.4) -> widget-local (125.75, 16.4).
+        c.handleGesture(ev(Gesture::Type::DragStart), Point{125.75, 16.4});
+        c.handleGesture(ev(Gesture::Type::Drag), Point{125.75, 40});
+        check(emittedCh == 1, "editing R emits channel 1");
+        check(c.curveFor(1) != rC, "R's own curve changed");
+        check(c.curveFor(2) == gC && c.curveFor(3) == bC, "editing R left G/B untouched");
     }
 }
 
@@ -179,6 +217,7 @@ int main()
     curveEnlargedTargetIsClickable();
     curveFarClickMisses();
     curveNearestWithinRadiusWins();
+    curvePerChannelIndependence();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

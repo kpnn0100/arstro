@@ -159,6 +159,9 @@ namespace arstro
           << "\nlensDistortion=" << p.lensDistortion << "\nlensCA=" << p.lensCA
           << "\nlensVignette=" << p.lensVignette
           << "\ncurve=" << curveStr(p.curve) << "\ncurveLog=" << (p.curveLog ? 1 : 0)
+          << "\ncurveR=" << curveStr(p.curveChannel[0])
+          << "\ncurveG=" << curveStr(p.curveChannel[1])
+          << "\ncurveB=" << curveStr(p.curveChannel[2])
           << "\nmixer0=" << mixerStr(p.mixer[0]) << "\nmixer1=" << mixerStr(p.mixer[1])
           << "\nmixer2=" << mixerStr(p.mixer[2]);
         for (int r = 0; r < 3; ++r)
@@ -209,6 +212,9 @@ namespace arstro
             else if (k == "grainSize") out.grainSize = f(v);
             else if (k == "curve") out.curve = parseCurve(v);
             else if (k == "curveLog") out.curveLog = (v != "0");
+            else if (k == "curveR") out.curveChannel[0] = parseCurve(v);
+            else if (k == "curveG") out.curveChannel[1] = parseCurve(v);
+            else if (k == "curveB") out.curveChannel[2] = parseCurve(v);
             else if (k == "mixer0") out.mixer[0] = parseMixer(v);
             else if (k == "mixer1") out.mixer[1] = parseMixer(v);
             else if (k == "mixer2") out.mixer[2] = parseMixer(v);

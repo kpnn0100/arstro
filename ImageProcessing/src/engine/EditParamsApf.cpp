@@ -116,7 +116,9 @@ namespace arstro
             c.set("lensDistortion", fs(p.lensDistortion)); c.set("lensCA", fs(p.lensCA));
             c.set("lensVignette", fs(p.lensVignette)); }
         if (has(cats, "curve")) { auto &c = d.category("curve");
-            c.set("curve", curveStr(p.curve)); c.set("curveLog", p.curveLog ? "1" : "0"); }
+            c.set("curve", curveStr(p.curve)); c.set("curveLog", p.curveLog ? "1" : "0");
+            c.set("curveR", curveStr(p.curveChannel[0])); c.set("curveG", curveStr(p.curveChannel[1]));
+            c.set("curveB", curveStr(p.curveChannel[2])); }
         if (has(cats, "mixer")) { auto &c = d.category("mixer");
             c.set("mixer0", mixerStr(p.mixer[0])); c.set("mixer1", mixerStr(p.mixer[1])); c.set("mixer2", mixerStr(p.mixer[2])); }
         if (has(cats, "grade")) { auto &c = d.category("grade");
@@ -166,7 +168,10 @@ namespace arstro
             io.lensDistortion = f(val(c, "lensDistortion")); io.lensCA = f(val(c, "lensCA"));
             io.lensVignette = f(val(c, "lensVignette")); }
         if (const apf::Category *c = has(cats, "curve") ? doc.find("curve") : nullptr) {
-            io.curve = parseCurve(val(c, "curve")); io.curveLog = val(c, "curveLog", "1") != "0"; }
+            io.curve = parseCurve(val(c, "curve")); io.curveLog = val(c, "curveLog", "1") != "0";
+            io.curveChannel[0] = parseCurve(val(c, "curveR", "0,0;1,1"));
+            io.curveChannel[1] = parseCurve(val(c, "curveG", "0,0;1,1"));
+            io.curveChannel[2] = parseCurve(val(c, "curveB", "0,0;1,1")); }
         if (const apf::Category *c = has(cats, "mixer") ? doc.find("mixer") : nullptr) {
             io.mixer[0] = parseMixer(val(c, "mixer0")); io.mixer[1] = parseMixer(val(c, "mixer1"));
             io.mixer[2] = parseMixer(val(c, "mixer2")); }

@@ -103,7 +103,9 @@ package tone {
     + setHighlights/Shadows/Whites/Blacks(v)
   }
   class ToneCurve {
-    + setPoints(pts) / setLogScale(b)  ' 1024-LUT
+    + setPoints(pts)  ' RGB master, 1024-LUT
+    + setChannelPoints(ch, pts)  ' per-channel R/G/B
+    + setLogScale(b)
   }
   Exposure --|> PointProcessor
   Contrast --|> PointProcessor

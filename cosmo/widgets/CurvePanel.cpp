@@ -49,6 +49,7 @@ namespace cosmo_v2
         mChannelPicker->padding = 2.0;
         mChannelPicker->gap = 2.0;
         mChannelPicker->height.set(kPickerH);
+        mChannelPicker->onChange = [this](int idx) { showChannel(idx); };  // instant swap to that channel's curve
         addChild(mChannelPicker);
 
         mResetBtn = std::make_shared<IconButton>(
@@ -58,10 +59,38 @@ namespace cosmo_v2
         mResetBtn->width.set(10.0 + 2 * 1.625);
         mResetBtn->height.set(10.0 + 2 * 1.625);
         mResetBtn->onClick = [this] {
-            mPoints = {{0, 0}, {1, 1}};
-            if (onCurveChange) onCurveChange(mPoints);
+            active() = {{0, 0}, {1, 1}};  // reset only the active channel to identity
+            emitChange();
         };
         addChild(mResetBtn);
+    }
+
+    Color CurvePanel::channelColor() const
+    {
+        switch (mChannel)
+        {
+            case 1: return Color{0.90, 0.32, 0.32, 1.0};  // R
+            case 2: return Color{0.38, 0.80, 0.42, 1.0};  // G
+            case 3: return Color{0.42, 0.58, 0.96, 1.0};  // B
+            default: return palette::primary();           // RGB master (accent)
+        }
+    }
+
+    void CurvePanel::emitChange()
+    {
+        if (onCurveChange) onCurveChange(mChannel, active());
+    }
+
+    void CurvePanel::setCurves(const Points &master, const std::array<Points, 3> &channels)
+    {
+        mCurves[0] = master;
+        for (int c = 0; c < 3; ++c) mCurves[c + 1] = channels[c];
+    }
+
+    void CurvePanel::showChannel(int channel)
+    {
+        mChannel = channel < 0 ? 0 : (channel > 3 ? 3 : channel);
+        mDragIndex = -1;  // a channel swap cancels any in-flight drag on the old curve
     }
 
     void CurvePanel::layout()
@@ -87,11 +116,12 @@ namespace cosmo_v2
         // the first -- with a generous radius two close anchors' targets can
         // overlap, and the user means the one they clicked closest to.
         const double r2 = metrics::anchorHitRadius() * metrics::anchorHitRadius();
+        const Points &pts = active();
         int best = -1;
         double bestD2 = r2;
-        for (int i = 0; i < (int)mPoints.size(); ++i)
+        for (int i = 0; i < (int)pts.size(); ++i)
         {
-            const double px = mPoints[i].first * mPlotW, py = kPlotH - mPoints[i].second * kPlotH;
+            const double px = pts[i].first * mPlotW, py = kPlotH - pts[i].second * kPlotH;
             const double dx = plotLocal.x - px, dy = plotLocal.y - py;
             const double d2 = dx * dx + dy * dy;
             if (d2 <= bestD2) { bestD2 = d2; best = i; }
@@ -114,15 +144,16 @@ namespace cosmo_v2
         if (g.type == Gesture::Type::Drag)
         {
             if (mDragIndex < 0) return Segment::handleGesture(g, local);
+            Points &pts = active();
             double x = std::clamp(pl.x / mPlotW, 0.0, 1.0);
             const double y = 1.0 - std::clamp(pl.y / kPlotH, 0.0, 1.0);
-            const double lo = mDragIndex > 0 ? mPoints[mDragIndex - 1].first + 0.01 : 0.0;
-            const double hi = mDragIndex < (int)mPoints.size() - 1 ? mPoints[mDragIndex + 1].first - 0.01 : 1.0;
+            const double lo = mDragIndex > 0 ? pts[mDragIndex - 1].first + 0.01 : 0.0;
+            const double hi = mDragIndex < (int)pts.size() - 1 ? pts[mDragIndex + 1].first - 0.01 : 1.0;
             if (mDragIndex == 0) x = 0.0;
-            else if (mDragIndex == (int)mPoints.size() - 1) x = 1.0;
+            else if (mDragIndex == (int)pts.size() - 1) x = 1.0;
             else x = std::clamp(x, lo, hi);
-            mPoints[mDragIndex] = {(float)x, (float)y};
-            if (onCurveChange) onCurveChange(mPoints);
+            pts[mDragIndex] = {(float)x, (float)y};
+            emitChange();
             return true;
         }
         if (g.type == Gesture::Type::Drop) { mDragIndex = -1; return true; }
@@ -131,22 +162,24 @@ namespace cosmo_v2
             const int hit = hitPoint(pl);
             if (hit < 0)
             {
+                Points &pts = active();
                 const float x = (float)std::clamp(pl.x / mPlotW, 0.0, 1.0);
                 const float y = (float)(1.0 - std::clamp(pl.y / kPlotH, 0.0, 1.0));
-                auto it = std::lower_bound(mPoints.begin(), mPoints.end(), std::make_pair(x, 0.0f),
+                auto it = std::lower_bound(pts.begin(), pts.end(), std::make_pair(x, 0.0f),
                                             [](const auto &a, const auto &b) { return a.first < b.first; });
-                mPoints.insert(it, {x, y});
-                if (onCurveChange) onCurveChange(mPoints);
+                pts.insert(it, {x, y});
+                emitChange();
             }
             return true;
         }
         if (g.type == Gesture::Type::DoubleClick && inPlot)
         {
             const int hit = hitPoint(pl);
-            if (hit > 0 && hit < (int)mPoints.size() - 1)
+            Points &pts = active();
+            if (hit > 0 && hit < (int)pts.size() - 1)
             {
-                mPoints.erase(mPoints.begin() + hit);
-                if (onCurveChange) onCurveChange(mPoints);
+                pts.erase(pts.begin() + hit);
+                emitChange();
             }
             return true;
         }
@@ -179,15 +212,16 @@ namespace cosmo_v2
         t.setStroke(Color{1, 1, 1, 0.08}, 1.0);
         t.strokePath();
 
+        const Color accent = channelColor();  // active channel: accent (RGB) or red/green/blue
         std::vector<Point> plotPts;
-        for (const auto &p : mPoints) plotPts.push_back(Point{ox + p.first * mPlotW, oy + kPlotH - p.second * kPlotH});
+        for (const auto &p : active()) plotPts.push_back(Point{ox + p.first * mPlotW, oy + kPlotH - p.second * kPlotH});
         t.beginPath();
         strokeSpline(t, plotPts);
-        t.setStroke(palette::primary(), 1.5);
+        t.setStroke(accent, 1.5);
         t.strokePath();
 
         for (const auto &pt : plotPts)
-            drawCircle(t, pt.x, pt.y, 4.0, Paint::filledStroked(palette::primary(), palette::white(), 1.5));
+            drawCircle(t, pt.x, pt.y, 4.0, Paint::filledStroked(accent, palette::white(), 1.5));
     }
 }
 }

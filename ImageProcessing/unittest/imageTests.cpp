@@ -421,6 +421,34 @@ TEST(ToneCurve_identity_and_brighten)
     CHECK_NEAR(lin.apply(mid).at(0, 0, 0), 0.18, 2e-3);
 }
 
+TEST(ToneCurve_per_channel_independent)
+{
+    Image mid = solidLinear(1, 1, 3, (Pixel)0.18);  // neutral grey
+
+    // A per-channel R curve lifts ONLY red; green/blue stay put (identity channels).
+    ToneCurve r;
+    r.setChannelPoints(0, {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}});  // 0 = R
+    Image ro = r.apply(mid);
+    CHECK(ro.at(0, 0, 0) > 0.18 + 1e-3);   // R lifted
+    CHECK_NEAR(ro.at(0, 0, 1), 0.18, 2e-3); // G unchanged
+    CHECK_NEAR(ro.at(0, 0, 2), 0.18, 2e-3); // B unchanged
+
+    // Master applies to every channel; a channel curve stacks on top: out_c = chan_c(master(x)).
+    ToneCurve mc;
+    mc.setPoints({{0.f, 0.f}, {0.5f, 0.75f}, {1.f, 1.f}});          // master lifts all channels
+    mc.setChannelPoints(2, {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}}); // B lifted further
+    Image mo = mc.apply(mid);
+    CHECK(mo.at(0, 0, 0) > 0.18);                        // master lifted R
+    CHECK_NEAR(mo.at(0, 0, 0), mo.at(0, 0, 1), 2e-3);    // R == G (both master-only)
+    CHECK(mo.at(0, 0, 2) > mo.at(0, 0, 1) + 1e-3);       // B got master AND its own channel lift
+
+    // Out-of-range channel index is ignored (no crash, no change).
+    ToneCurve oob;
+    oob.setChannelPoints(3, {{0.f, 1.f}, {1.f, 0.f}});
+    oob.setChannelPoints(-1, {{0.f, 1.f}, {1.f, 0.f}});
+    CHECK_NEAR(oob.apply(mid).at(0, 0, 0), 0.18, 2e-3);
+}
+
 // ── ColorMixer (cyclic per-hue curves) ──
 TEST(ColorMixer_hue_curve_localized_and_cyclic)
 {

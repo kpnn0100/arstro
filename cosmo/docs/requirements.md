@@ -307,8 +307,13 @@ Temperature/Tint rows carry colour-ramp tracks.
   active channel.
 - **CurvePanel**: an RGB/R/G/B picker + Reset over a draggable tone-curve plot (Catmull-Rom
   spline). Drag a point, click empty space to add, double-click an interior point to remove;
-  endpoints are locked to x=0/1. All four channel buttons currently edit the single shared
-  `EditParams::curve` (no per-channel data yet).
+  endpoints are locked to x=0/1. Each channel has **its own independent curve**: **RGB** is the
+  master (`EditParams::curve`, applied to all three channels), and **R/G/B** each edit their own
+  `EditParams::curveChannel[0..2]`, applied to that channel after the master
+  (`out_c = channel_c(master(x_c))`). The picker switches which curve is shown/edited (its four
+  curves are held independently, mirroring MixerPanel's channel swap); the plot's spline + anchors
+  are drawn in the active channel's colour (accent for RGB, red/green/blue for R/G/B) for feedback.
+  Reset clears only the active channel. All four round-trip through the session/sidecar file.
 - **Anchor/handle pick radius (both editors).** A drawn anchor dot is only ~4 px, which is
   fiddly to click and drag. The clickable target is a **forgiving radius, larger than the dot**,
   taken from ONE shared token (`metrics::anchorHitRadius`, 13 px) so the mixer hue curves and the

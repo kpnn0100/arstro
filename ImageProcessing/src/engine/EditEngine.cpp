@@ -159,6 +159,8 @@ namespace arstro
         mWhiteBalance.setTint(p.tint);
         mToneCurve.setLogScale(p.curveLog);
         mToneCurve.setPoints(p.curve);
+        for (int ch = 0; ch < 3; ++ch)
+            mToneCurve.setChannelPoints(ch, p.curveChannel[ch]);
         mTexture.setAmount(p.texture);
         mClarity.setAmount(p.clarity);
         mVibrance.setVibrance(p.vibrance);
@@ -225,6 +227,11 @@ namespace arstro
     void EditEngine::setCurvePoints(const std::vector<std::pair<float, float>> &pts)
     {
         if (auto *p = cur()) { p->curve = pts; mToneCurve.setPoints(pts); }
+    }
+    void EditEngine::setCurveChannelPoints(int ch, const std::vector<std::pair<float, float>> &pts)
+    {
+        if (ch < 0 || ch >= 3) return;
+        if (auto *p = cur()) { p->curveChannel[ch] = pts; mToneCurve.setChannelPoints(ch, pts); }
     }
     void EditEngine::setCurveLogScale(bool log)
     {

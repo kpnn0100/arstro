@@ -146,8 +146,13 @@ namespace cosmo_v2
         };
 
         mCurve = std::make_shared<CurvePanel>();
-        mCurve->onCurveChange = [this](std::vector<std::pair<float, float>> pts) {
-            if (auto *p = mSession.curParams()) { p->curve = std::move(pts); mSession.submit(); }
+        mCurve->onCurveChange = [this](int channel, std::vector<std::pair<float, float>> pts) {
+            if (auto *p = mSession.curParams())
+            {
+                if (channel == 0) p->curve = std::move(pts);        // RGB master
+                else p->curveChannel[channel - 1] = std::move(pts); // R / G / B
+                mSession.submit();
+            }
         };
 
         // Merge Mixer + Curve into one scrollable tab (Mixer above, Curve below).
@@ -227,7 +232,7 @@ namespace cosmo_v2
         mSelectedMask = p->masks.empty() ? -1 : std::min(mSelectedMask < 0 ? 0 : mSelectedMask, (int)p->masks.size() - 1);
         mMask->setMasks(p->masks, mSelectedMask);
         mMixer->setMixer(p->mixer);
-        mCurve->setCurve(p->curve);
+        mCurve->setCurves(p->curve, p->curveChannel);
         GradePanel::State gs;
         gs.grade = p->grade; gs.balance = p->balance; gs.remapEnable = p->remapEnable;
         gs.remapSrc = p->remapSrc; gs.remapRange = p->remapRange; gs.remapDst = p->remapDst; gs.remapStrength = p->remapStrength;
