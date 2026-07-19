@@ -332,9 +332,12 @@ Segments positioned by `layout()`.
 ### 5.1 ParamPanel
 `struct Spec{label,min=-100,max=100,onChange,bool hasGradient,Color gradLeft,gradRight}`;
 `struct Section{title, rows}`. Ctor takes `std::vector<Section>`, flattens into child `SliderRow`s.
-`setValues(vector<double>)` (flattened order, no callbacks), `scrollBy`. In `RightColumn` it hosts
+`setValues(vector<double>)` (flattened order, no callbacks), `setSubValues(vector<double>)` (per-row
+green stacked-reach offsets, DR-EDIT-4), `scrollBy`. In `RightColumn` it hosts
 Basic (TONE/COLOUR/PRESENCE/EFFECTS) + Detail (SHARPENING/NOISE REDUCTION/LENS); Temperature/Tint
 carry colour-ramp tracks. Unit conversion is in the `RightColumn` callbacks, not the row.
+`syncToSlot` sets each row's offset = `flat(effectiveEditParams) − flat(own)` so groups' recursive
+contribution shows as the green reach; 0 (no groups) hides it.
 
 ### 5.2 MixerPanel
 Hue/Sat/Lum `SegmentedControl` + one visible `HueCurveEditor` per channel + a Reset `IconButton`
@@ -394,7 +397,9 @@ mask is selected. `setMasks(masks, selected)`.
 ### 6.1 SliderRow
 Label (`kLabelWidth=86`) + bipolar slider + numeric readout (`kValueWidth=22.75`), row height
 `kRowHeight=20`. Wraps `artboard::Slider` (its zero-crossing range-fill gives the bipolar look).
-Ctor `SliderRow(label,min,max,initial)`; `setValue` (no callback), `value`, `setTrackGradient`,
+Ctor `SliderRow(label,min,max,initial)`; `setValue` (no callback), `value`, `setSubValueOffset`
+(green stacked reach, forwards to `Slider::setSubValueOffset`; #4cb573 is the Slider default),
+`setTrackGradient`,
 `layout`; `onChange(double)`. Slider config: `setClickJumps(false)` (drag-to-set only), double-click
 resets to `initial`, arrows step by `(max-min)/20`. Readout is a signed integer (`+%d`/`%d`); unit
 conversion is done by the owner. **No fine-drag modifier exists.**

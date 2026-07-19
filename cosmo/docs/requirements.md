@@ -295,6 +295,12 @@ REDUCTION (Luminance, Colour), LENS (Distortion, CA, Vignette). Unit conversions
 `RightColumn` callbacks, not the row: Exposure `v/80` (−400..400 → −5..+5 EV), Temperature
 `6500 + v/100·3500` K, Tint `v·1.5`, sharpen Radius `v/10`; the reverse on `syncToSlot`.
 Temperature/Tint rows carry colour-ramp tracks.
+**Stacked-value reach (green #4cb573).** Each row's thumb marks the item's *own* value; when the
+edit target sits inside groups, the slider also shows the **effective** value after all recursive
+ancestor-group settings stack on top — a green reach from the thumb to `own + Σ(ancestor deltas)`
+plus a thin end tick (Artboard `Slider::setSubValueOffset`; negative reaches left). `syncToSlot`
+computes each row's offset as `effectiveEditParams − own` in slider units and pushes it via
+`ParamPanel::setSubValues`; with no groups the offset is 0 and no green shows.
 
 ### DR-EDIT-5 Mixer/Curve (`StackPanel` → `MixerPanel` + `CurvePanel`) (R-BUGFIX-3)
 - **MixerPanel**: a Hue/Sat/Lum segmented picker over one visible `HueCurveEditor` per channel

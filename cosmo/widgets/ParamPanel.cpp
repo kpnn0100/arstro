@@ -30,6 +30,14 @@ namespace cosmo_v2
             mFlatRows[i]->setValue(values[i]);
     }
 
+    void ParamPanel::setSubValues(const std::vector<double> &offsets)
+    {
+        // Per-row green stacked reach (the ancestor-group contribution), in the same
+        // flattened Spec order as setValues (DR-EDIT-4).
+        for (size_t i = 0; i < mFlatRows.size() && i < offsets.size(); ++i)
+            mFlatRows[i]->setSubValueOffset(offsets[i]);
+    }
+
     void ParamPanel::scrollBy(double delta)
     {
         const double viewH = height.value();

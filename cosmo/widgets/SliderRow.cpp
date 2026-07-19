@@ -30,6 +30,7 @@ namespace cosmo_v2
 
     void SliderRow::setValue(double v) { mSlider->setValue(v); }
     double SliderRow::value() const { return mSlider->value(); }
+    void SliderRow::setSubValueOffset(double offset) { mSlider->setSubValueOffset(offset); }
     void SliderRow::setTrackGradient(const Color &left, const Color &right) { mSlider->setTrackGradient(left, right); }
 
     void SliderRow::layout()

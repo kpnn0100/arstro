@@ -296,6 +296,23 @@ namespace cosmo
         return e;
     }
 
+    EditParams EditSession::effectiveEditParams() const
+    {
+        if (mEditGroup > 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+        {
+            // A group being edited: its own params stacked with its ancestor groups.
+            EditParams e = mNodes[mEditGroup].params;
+            for (int g = mNodes[mEditGroup].parent; ; g = mNodes[g].parent)
+            {
+                e = composeParams(e, mNodes[g].params);
+                if (g == 0) break;
+            }
+            return e;
+        }
+        if (mEditGroup == 0) return mNodes[0].params;   // root group has no ancestors
+        return effectiveParams(mCurrentSlot);            // an image: its slot's effective params
+    }
+
     void EditSession::applyParams(const EditParams &p)
     {
         if (auto *cur = curParams()) { *cur = p; submit(); }  // group's params or the slot's

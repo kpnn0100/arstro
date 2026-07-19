@@ -97,6 +97,10 @@ namespace cosmo
         // ---- develop params ----
         EditParams *curParams();                     // current image's own params (what controls edit)
         EditParams effectiveParams(int slot) const;  // image params + summed ancestor group offsets
+        /** The current edit target's params composed with its ancestor groups (an image ->
+         *  its slot's effective params; a group -> the group's own composed with ITS ancestors).
+         *  The per-control delta from curParams() is what the sliders show as the stacked reach. */
+        EditParams effectiveEditParams() const;
         void applyParams(const EditParams &p);        // replace the current slot's params wholesale + submit
         void applyParamsToSlot(int slot, const EditParams &p);  // seed a slot's params + history root (no submit)
         /** As above, but restore a saved branching history instead of a fresh root

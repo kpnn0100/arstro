@@ -220,14 +220,24 @@ namespace cosmo_v2
         const EditParams *p = mSession.curParams();
         if (!p) return;
         // Basic sections then Detail sections, in the merged panel's flattened order.
-        mBasicDetail->setValues({
-            fromEv(p->exposure), p->contrast, p->highlights, p->shadows, p->whites, p->blacks,
-            fromKelvin(p->temp), fromTint(p->tint), p->vibrance, p->saturation,
-            p->texture, p->clarity, p->dehaze, p->grainAmount, p->grainSize,
-            p->sharpenAmount, fromRadiusPx(p->sharpenRadius), p->sharpenMasking,
-            p->nrLuminance, p->nrColor,
-            p->lensDistortion, p->lensCA, p->lensVignette,
-        });
+        auto flat = [](const EditParams &q) {
+            return std::vector<double>{
+                fromEv(q.exposure), q.contrast, q.highlights, q.shadows, q.whites, q.blacks,
+                fromKelvin(q.temp), fromTint(q.tint), q.vibrance, q.saturation,
+                q.texture, q.clarity, q.dehaze, q.grainAmount, q.grainSize,
+                q.sharpenAmount, fromRadiusPx(q.sharpenRadius), q.sharpenMasking,
+                q.nrLuminance, q.nrColor,
+                q.lensDistortion, q.lensCA, q.lensVignette,
+            };
+        };
+        const std::vector<double> own = flat(*p);
+        mBasicDetail->setValues(own);
+        // Green stacked reach: how much ancestor groups add on top of each own value
+        // (effective - own, in slider units). Zero (no groups) hides it (DR-EDIT-4).
+        const std::vector<double> effv = flat(mSession.effectiveEditParams());
+        std::vector<double> offsets(own.size(), 0.0);
+        for (size_t i = 0; i < own.size(); ++i) offsets[i] = effv[i] - own[i];
+        mBasicDetail->setSubValues(offsets);
 
         mSelectedMask = p->masks.empty() ? -1 : std::min(mSelectedMask < 0 ? 0 : mSelectedMask, (int)p->masks.size() - 1);
         mMask->setMasks(p->masks, mSelectedMask);

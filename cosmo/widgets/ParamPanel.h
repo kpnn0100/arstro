@@ -42,6 +42,9 @@ namespace cosmo_v2
          *  order the Specs were given in (mirrors cosmo's own setValues). Does
          *  not fire onChange. */
         void setValues(const std::vector<double> &values);
+        /** Per-row stacked-reach offsets (ancestor-group contribution), same order as
+         *  setValues; 0 hides a row's green reach (DR-EDIT-4). */
+        void setSubValues(const std::vector<double> &offsets);
         void scrollBy(double delta);
         void layout();  // call after width/height changes
 
