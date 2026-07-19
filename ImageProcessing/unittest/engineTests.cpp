@@ -569,6 +569,14 @@ TEST(ComposeParams_recursive_fold_and_curve_masks)
     CHECK_NEAR(ec.curve[16].x, 0.5, 1e-4);
     CHECK_NEAR(ec.curve[16].y, 0.7, 1e-3);      // 0.5 + (0.7 - 0.5)
 
+    // With BOTH curves non-identity the final is the SUM of the two curves' adjustments:
+    //   final(x) = item(x) + group(x) - x. Item lifts mid to 0.6 (+0.1), group to 0.7 (+0.2)
+    //   -> final(0.5) = 0.6 + 0.7 - 0.5 = 0.8 (the two lifts add). (NOT literal 0.6+0.7,
+    //   which would double the identity, and NOT composition group(item(0.5))=0.76.)
+    EditParams itemC; itemC.curve = {{0.f, 0.f}, {0.5f, 0.6f}, {1.f, 1.f}};
+    EditParams grpC;  grpC.curve = {{0.f, 0.f}, {0.5f, 0.7f}, {1.f, 1.f}};
+    CHECK_NEAR(composeParams(itemC, grpC).curve[16].y, 0.8, 2e-3);
+
     // Masks concatenate: group masks apply to every member.
     EditParams mm; MaskParams a; a.type = MaskParams::Radial; mm.masks = {a};
     EditParams gg; MaskParams b; b.type = MaskParams::Linear; gg.masks = {b};
