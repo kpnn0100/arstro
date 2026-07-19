@@ -196,6 +196,8 @@ Segment ..> IRenderTarget : emits ops
 Segment ..> Theme
 
 EditSession *--> GNode
+GNode *--> EditParams : own settings (groups)
+GNode *--> History : own timeline (groups)
 EditSession *--> History
 EditSession *--> RenderService
 History *--> HistoryNode

@@ -350,8 +350,9 @@ app these are wired to Save Preset, Import Preset, and Export Preset respectivel
 ## 8. Group tree, selection & clipboard
 
 ### DR-TREE-1 Model
-`EditSession` holds a group tree of `GNode{group,name,parent,slot,offset,kids}` rooted at "All
-Photos" (`EditSession.cpp:27`). Image leaves reference a slot index into the per-slot vectors
+`EditSession` holds a group tree of `GNode{group,name,parent,slot,params,history,kids}` rooted at
+"All Photos" (`EditSession.cpp:27`); a group node carries its own `EditParams`+`History` (its
+settings), an image leaf its `slot`. Image leaves reference a slot index into the per-slot vectors
 (`mSlotParams/History/Names/Paths/Sessions/Thumbs`). The filmstrip renders `currentGroupCells()`;
 the breadcrumb renders `breadcrumbPath()`.
 
@@ -362,11 +363,35 @@ current slot, resets preview resolution, and submits. `navigateToGroup` drills i
 `createGroupFromSelection`/`ungroupSelected` restructure the tree; `deleteSelected` releases
 engine slots for the subtree and re-anchors selection so the next image slides in (root protected).
 
-### DR-TREE-3 Group offsets
-A group carries a `LocalAdjust` **offset**; `effectiveParams(slot)` = the slot's params plus the
-summed offsets of all ancestor groups (temp shifts as `d.temp/100·3500` K)
-(`EditSession.cpp:284-296`). Group edits are applied through the group node while
-image selection edits the slot.
+### DR-TREE-3 Group settings (a group is an editable item; its edits stack onto members)
+A group is itself a selectable, editable item: every `GNode` carries **its own full
+`EditParams`** (not just a scalar offset) and its own branching `History`. Single-clicking a
+group selects it for editing (`mEditGroup = node`); the develop panels then edit the **group's**
+params (`curParams()` returns the group's params while `editGroup() >= 0`), and the canvas
+previews a **representative member** — the group's first descendant image — rendered with the
+stacked result, live, so the effect is visible as the group's sliders move.
+
+`effectiveParams(slot)` = the image's own params **composed** with every ancestor group's params,
+walking child→root (recursive; a nested group's settings stack on top of its parent's). The
+composition (`arstro::composeParams(base, over)`, ImageProcessing) is defined per field so that
+"a group with exposure +1 adds 1 to every member's exposure":
+- **Additive** (the bulk): exposure, contrast, highlights/shadows/whites/blacks, tint, vibrance,
+  saturation, texture, clarity, dehaze, grain amount/size, sharpen amount/masking, NR luma/colour,
+  lens distortion/CA/vignette, grade hue/sat/lum per region, balance, rotation, quarter-turns —
+  `result += over` (each field's neutral is 0). **Temperature** adds the group's Kelvin *offset*
+  from neutral (`over.temp − 6500`); **sharpen radius** its offset from 1.
+- **Tone curves** (RGB master + R/G/B) and the **mixer** curves stack **additively in Y**: at each
+  sampled input the group's deviation-from-identity is added to the member's curve (an identity
+  group curve is a no-op). Resampled for render only — the member's authored control points are
+  untouched.
+- **Masks** concatenate: a group's masks apply to every member (after the member's own).
+- **Crop** does **not** stack (framing is inherently per-image); a group's crop is ignored. This
+  is the one deliberate exception to "all develop settings".
+
+Composition is used only to build the render/export params; each item's stored params stay its
+own. Group params + history persist in the workspace (`#group` block, same params/`#hnode`
+serialization as images); legacy projects with the old 12-scalar `offset=` line still load (mapped
+into the group's `EditParams`).
 
 ### DR-TREE-4 Clipboard
 Copy Settings stashes the current params; Paste to Selected / to All Images applies them to the

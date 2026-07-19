@@ -52,7 +52,8 @@ namespace cosmo
             std::string name;
             int parent = 0;              // parent node index; root (0) is its own parent
             int slot = -1;                // image leaf -> slot index
-            arstro::LocalAdjust offset;   // group's additive scalar offset (groups only)
+            arstro::EditParams params;    // group's own develop settings (groups only)
+            History history;              // group's branching edit timeline (groups only)
             std::vector<int> kids;        // child node indices, in display order
         };
         /** One row of "the current group's children" -- what a filmstrip widget draws. */
@@ -157,17 +158,17 @@ namespace cosmo
             bool group = false;
             int parent = -1;
             std::string name;              // group name (groups only)
-            arstro::LocalAdjust offset;    // group scalar offset (groups only)
             std::string imagePath;         // source file path (images only)
-            EditParams params;              // develop settings (images only)
-            History history;                // branching edit timeline (images only; empty = none saved)
+            EditParams params;              // develop settings (images AND groups)
+            History history;                // branching edit timeline (empty = none saved)
         };
         static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out);
         bool saveWorkspaceAs(const std::string &path);
         std::string workspacePath() const { return mWorkspacePath; }
         /** Release every open image and reset to an empty, single-root session. */
         void resetWorkspace();
-        int addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset);
+        int addWorkspaceGroup(int parentNode, const std::string &name, const EditParams &params,
+                              const History &history = History{});
         /** Rebuild derived state after a batch of addWorkspaceGroup/openImageInto
          *  calls and remember `path` for a plain "Save Workspace". */
         void finishWorkspaceLoad(const std::string &path);
@@ -196,7 +197,9 @@ namespace cosmo
 
     private:
         const EditParams *applyHistoryParams(const EditParams *p);
-        void recordHistory();  // snapshot the current slot's edit (called from submit())
+        void recordHistory();  // snapshot the current edit target (slot or group) into its history
+        int firstImageSlotUnder(int node) const;  // representative member for a group's live preview
+        History *editHistory();  // the History of whatever is being edited (group or current slot)
         static Thumb makeThumb(const uint8_t *rgba, int w, int h, int maxEdge);
 
         arstro::RenderService mService;

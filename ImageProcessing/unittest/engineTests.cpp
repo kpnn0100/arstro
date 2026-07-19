@@ -533,6 +533,56 @@ TEST(EditParamsIO_curve_channel_roundtrip)
     CHECK(legacy.curveChannel[0][0].first == 0.f && legacy.curveChannel[0][1].first == 1.f);
 }
 
+// ── composeParams: group settings stacked onto a member (cosmo group tree) ──
+TEST(ComposeParams_additive_scalars)
+{
+    EditParams member;  member.exposure = 0.5f; member.contrast = 10.f; member.temp = 5000.f;
+    EditParams group;   group.exposure = 1.0f;  group.contrast = 5.f;   group.temp = 8000.f;  // +1500 K warm
+
+    EditParams e = composeParams(member, group);
+    CHECK_NEAR(e.exposure, 1.5, 1e-5);          // 0.5 + 1.0  (the headline example)
+    CHECK_NEAR(e.contrast, 15.0, 1e-4);         // 10 + 5
+    CHECK_NEAR(e.temp, 6500.0, 1e-3);           // 5000 + (8000 - 6500)
+
+    // A neutral group is a no-op.
+    EditParams neutral;
+    EditParams same = composeParams(member, neutral);
+    CHECK_NEAR(same.exposure, 0.5, 1e-6);
+    CHECK_NEAR(same.temp, 5000.0, 1e-3);
+    CHECK(same.curve == member.curve);
+}
+
+TEST(ComposeParams_recursive_fold_and_curve_masks)
+{
+    // Nested groups fold: member + g1 + g2 sums exposure (recursive stacking).
+    EditParams member; member.exposure = 0.25f;
+    EditParams g1; g1.exposure = 1.0f;
+    EditParams g2; g2.exposure = 0.5f;
+    EditParams e = composeParams(composeParams(member, g1), g2);
+    CHECK_NEAR(e.exposure, 1.75, 1e-5);
+
+    // Tone curve stacks additively in Y: identity member + a mid-lift group -> lifted mid.
+    EditParams m2;  // identity curve
+    EditParams grp; grp.curve = {{0.f, 0.f}, {0.5f, 0.7f}, {1.f, 1.f}};
+    EditParams ec = composeParams(m2, grp);
+    CHECK(ec.curve.size() == 33);               // resampled for render
+    CHECK_NEAR(ec.curve[16].first, 0.5, 1e-4);
+    CHECK_NEAR(ec.curve[16].second, 0.7, 1e-3); // 0.5 + (0.7 - 0.5)
+
+    // Masks concatenate: group masks apply to every member.
+    EditParams mm; MaskParams a; a.type = MaskParams::Radial; mm.masks = {a};
+    EditParams gg; MaskParams b; b.type = MaskParams::Linear; gg.masks = {b};
+    EditParams em = composeParams(mm, gg);
+    CHECK(em.masks.size() == 2);
+
+    // Crop is NOT stacked -- framing stays per-item.
+    EditParams mc; mc.cropX = 0.1f; mc.cropY = 0.1f; mc.cropW = 0.8f; mc.cropH = 0.8f;
+    EditParams gc; gc.cropX = 0.f; gc.cropY = 0.f; gc.cropW = 0.5f; gc.cropH = 0.5f;
+    EditParams ex = composeParams(mc, gc);
+    CHECK_NEAR(ex.cropW, 0.8, 1e-6);            // member's crop kept, group's ignored
+    CHECK_NEAR(ex.cropX, 0.1, 1e-6);
+}
+
 TEST(EditEngine_per_channel_tone_curve)
 {
     std::vector<uint8_t> g((size_t)4 * 4 * 4, 0);          // solid mid-grey RGBA8

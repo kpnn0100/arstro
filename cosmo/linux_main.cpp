@@ -46,9 +46,8 @@ namespace
             std::string name;                 // group name, or leaf display name
             std::string imagePath;            // source path (image leaves)
             int parent = -1;
-            arstro::LocalAdjust offset;        // group offset
-            arstro::EditParams params;         // per-image edit params
-            arstro::cosmo::History history;    // per-image branching edit timeline
+            arstro::EditParams params;         // per-item edit params (image or group)
+            arstro::cosmo::History history;    // per-item branching edit timeline
             std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
             int w = 0, h = 0;
             bool decoded = false;              // false = missing/failed image
@@ -282,7 +281,7 @@ namespace
             const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
             if (e.group)
             {
-                a->app.addWorkspaceGroup(parentNode, e.name, e.offset);
+                a->app.addWorkspaceGroup(parentNode, e.name, e.params, e.history);
                 continue;
             }
             DecodedImage img = a->decoder.decodeFile(e.imagePath);
@@ -472,7 +471,6 @@ namespace
             LoadJob::Result r;
             r.group = e.group;
             r.parent = e.parent;
-            r.offset = e.offset;
             r.params = e.params;
             r.history = e.history;
             if (e.group)
@@ -513,7 +511,7 @@ namespace
             const int parentNode = r.parent < 0 ? 0 : r.parent + 1;
             if (r.group)
             {
-                a->app.addWorkspaceGroup(parentNode, r.name, r.offset);
+                a->app.addWorkspaceGroup(parentNode, r.name, r.params, r.history);
             }
             else if (r.decoded)
             {

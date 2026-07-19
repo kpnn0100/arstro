@@ -86,4 +86,16 @@ namespace arstro
         // local adjustments (masks), applied after the global pipeline
         std::vector<MaskParams> masks;
     };
+
+    /** Stack `over`'s adjustments on top of `base`, returning the combined params for
+     *  an item that sits *under* `over` (e.g. an image inside a group whose settings
+     *  are `over`; fold from the item up through its ancestor groups to get the
+     *  effective render params). Scalar adjustments add (temperature by its Kelvin
+     *  offset from 6500, sharpen radius by its offset from 1); tone curves (master +
+     *  R/G/B) and the mixer curves stack additively in Y — the deviation-from-identity
+     *  of `over`'s curve is added to `base`'s; masks concatenate (`over`'s after
+     *  `base`'s). Crop is NOT stacked (framing is per-item), curveLog follows `base`.
+     *  An identity/neutral `over` returns `base` unchanged. Used only to build render/
+     *  export params — each item's own stored params are never mutated. */
+    EditParams composeParams(const EditParams &base, const EditParams &over);
 }

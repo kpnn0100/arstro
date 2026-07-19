@@ -9,22 +9,9 @@ namespace arstro
 {
 namespace cosmo
 {
-    namespace
-    {
-        // Add a group's scalar offset onto an EditParams (one level of the chain).
-        void addOffset(EditParams &e, const arstro::LocalAdjust &d)
-        {
-            e.exposure += d.exposure; e.contrast += d.contrast;
-            e.highlights += d.highlights; e.shadows += d.shadows; e.whites += d.whites; e.blacks += d.blacks;
-            e.temp += d.temp / 100.f * 3500.f;  // relative warm/cool shift in Kelvin
-            e.tint += d.tint; e.saturation += d.saturation;
-            e.texture += d.texture; e.clarity += d.clarity; e.dehaze += d.dehaze;
-        }
-    }
-
     EditSession::EditSession()
     {
-        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}});  // root group (index 0)
+        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}, {}});  // root group (index 0)
     }
 
     EditSession::Thumb EditSession::makeThumb(const uint8_t *rgba, int w, int h, int maxEdge)
@@ -127,10 +114,14 @@ namespace cosmo
             mSelAnchor = cell;
         }
 
-        // setEditTarget: image -> current slot (re-render); group -> offset editing.
+        // setEditTarget: image -> its slot; group -> edit the group's own params, and
+        // preview them live on a representative member (the group's first descendant image).
         if (mNodes[node].group)
         {
             mEditGroup = node;
+            const int rep = firstImageSlotUnder(node);
+            if (rep >= 0) { mCurrentSlot = rep; resetPreviewResolution(); }
+            submit();  // re-render the representative member with the group's settings stacked
         }
         else
         {
@@ -161,6 +152,7 @@ namespace cosmo
         if (mSel.empty()) return;
         int gi = 1; for (const auto &n : mNodes) if (n.group) ++gi;
         GNode grp; grp.group = true; grp.name = "Group " + std::to_string(gi); grp.parent = mCurGroup;
+        grp.history.init(grp.params);  // seed the group's own edit timeline (neutral root)
         const int gnode = (int)mNodes.size();
         mNodes.push_back(grp);
         auto &siblings = mNodes[mCurGroup].kids;
@@ -279,17 +271,26 @@ namespace cosmo
 
     // ---- develop params ----
 
-    EditParams *EditSession::curParams() { return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotParams.size()) ? &mSlotParams[mCurrentSlot] : nullptr; }
+    EditParams *EditSession::curParams()
+    {
+        // While a group is the edit target, the develop panels edit the GROUP's own
+        // params (which then stack onto its members); otherwise the current image's.
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+            return &mNodes[mEditGroup].params;
+        return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotParams.size()) ? &mSlotParams[mCurrentSlot] : nullptr;
+    }
 
     EditParams EditSession::effectiveParams(int slot) const
     {
         if (slot < 0 || slot >= (int)mSlotParams.size()) return EditParams{};
+        // The image's own params, with every ancestor group's params stacked on top,
+        // folded child -> root (recursive: a nested group rides on its parent's).
         EditParams e = mSlotParams[slot];
         int n = nodeForSlot(slot);
         if (n >= 0)
             for (int g = mNodes[n].parent; ; g = mNodes[g].parent)
             {
-                addOffset(e, mNodes[g].offset);
+                e = composeParams(e, mNodes[g].params);
                 if (g == 0) break;
             }
         return e;
@@ -297,9 +298,7 @@ namespace cosmo
 
     void EditSession::applyParams(const EditParams &p)
     {
-        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotParams.size()) return;
-        mSlotParams[mCurrentSlot] = p;
-        submit();
+        if (auto *cur = curParams()) { *cur = p; submit(); }  // group's params or the slot's
     }
 
     void EditSession::applyParamsToSlot(int slot, const EditParams &p)
@@ -319,13 +318,34 @@ namespace cosmo
             mSlotHistory[slot].restore(history.nodes, history.current, history.maxSteps, history.coalesceMs);
     }
 
+    History *EditSession::editHistory()
+    {
+        // The timeline of whatever is being edited: the selected group, else the slot.
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+            return &mNodes[mEditGroup].history;
+        return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size()) ? &mSlotHistory[mCurrentSlot] : nullptr;
+    }
+
+    int EditSession::firstImageSlotUnder(int node) const
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return -1;
+        if (!mNodes[node].group) return mNodes[node].slot;
+        for (int k : mNodes[node].kids)
+        {
+            const int s = firstImageSlotUnder(k);
+            if (s >= 0) return s;
+        }
+        return -1;
+    }
+
     void EditSession::recordHistory()
     {
         if (mSuppressHistory) return;
-        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return;
-        History &h = mSlotHistory[mCurrentSlot];
-        if (h.empty()) h.init(mSlotParams[mCurrentSlot]);
-        h.record(mSlotParams[mCurrentSlot], mNowMs);
+        History *h = editHistory();
+        EditParams *p = curParams();  // group params while editing a group, else the slot's
+        if (!h || !p) return;
+        if (h->empty()) h->init(*p);
+        h->record(*p, mNowMs);
     }
 
     void EditSession::submit()
@@ -362,10 +382,7 @@ namespace cosmo
 
     // ---- history ----
 
-    History *EditSession::currentHistory()
-    {
-        return (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size()) ? &mSlotHistory[mCurrentSlot] : nullptr;
-    }
+    History *EditSession::currentHistory() { return editHistory(); }
 
     void EditSession::recordSlotEdit(int slot)
     {
@@ -378,36 +395,36 @@ namespace cosmo
 
     const EditParams *EditSession::applyHistoryParams(const EditParams *p)
     {
-        if (!p || mCurrentSlot < 0) return nullptr;
-        mSlotParams[mCurrentSlot] = *p;
+        if (!p) return nullptr;
+        // Restore into whatever is being edited (the group's own params, or the slot).
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+            mNodes[mEditGroup].params = *p;
+        else if (mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotParams.size())
+            mSlotParams[mCurrentSlot] = *p;
+        else
+            return nullptr;
         mSuppressHistory = true;
         submit();
         mSuppressHistory = false;
         return p;
     }
 
-    const EditParams *EditSession::undo()
-    {
-        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return nullptr;
-        return applyHistoryParams(mSlotHistory[mCurrentSlot].undo());
-    }
-
-    const EditParams *EditSession::redo()
-    {
-        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return nullptr;
-        return applyHistoryParams(mSlotHistory[mCurrentSlot].redo());
-    }
-
-    const EditParams *EditSession::jumpToHistory(int node)
-    {
-        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotHistory.size()) return nullptr;
-        return applyHistoryParams(mSlotHistory[mCurrentSlot].jumpTo(node));
-    }
+    const EditParams *EditSession::undo() { History *h = editHistory(); return h ? applyHistoryParams(h->undo()) : nullptr; }
+    const EditParams *EditSession::redo() { History *h = editHistory(); return h ? applyHistoryParams(h->redo()) : nullptr; }
+    const EditParams *EditSession::jumpToHistory(int node) { History *h = editHistory(); return h ? applyHistoryParams(h->jumpTo(node)) : nullptr; }
 
     bool EditSession::canUndo() const
-    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canUndo(); }
+    {
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+            return mNodes[mEditGroup].history.canUndo();
+        return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canUndo();
+    }
     bool EditSession::canRedo() const
-    { return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canRedo(); }
+    {
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
+            return mNodes[mEditGroup].history.canRedo();
+        return mCurrentSlot >= 0 && mCurrentSlot < (int)mSlotHistory.size() && mSlotHistory[mCurrentSlot].canRedo();
+    }
 
     void EditSession::setHistoryLimits(int maxSteps, double coalesceMs)
     {
@@ -534,6 +551,20 @@ namespace cosmo
         if (!f) return false;
         f << "cosmoworkspace=1\n";
         int nextId = 0;
+        // A group and an image serialize the same way: a header + full params + an
+        // optional branching-history block (tree config + one #hnode per node, in
+        // vector-index order so parent indices stay valid on load).
+        auto writeParamsAndHistory = [&](const EditParams &p, const History &h) {
+            f << serializeParams(p);
+            if (!h.nodes.empty())
+            {
+                f << "hcurrent=" << h.current << "\nhmax=" << h.maxSteps
+                  << "\nhcoalesce=" << h.coalesceMs << '\n';
+                for (const auto &n : h.nodes)
+                    f << "#hnode\nhparent=" << n.parent << "\nhseq=" << n.seq
+                      << "\nhlabel=" << n.label << '\n' << serializeParams(n.params);
+            }
+        };
         std::function<void(int, int)> walk = [&](int node, int parentId) {
             for (int k : mNodes[node].kids)
             {
@@ -541,29 +572,14 @@ namespace cosmo
                 const int myId = nextId++;
                 if (g.group)
                 {
-                    const arstro::LocalAdjust &o = g.offset;
-                    f << "#group\nparent=" << parentId << "\nname=" << g.name << "\noffset="
-                      << o.exposure << ',' << o.contrast << ',' << o.highlights << ',' << o.shadows << ','
-                      << o.whites << ',' << o.blacks << ',' << o.temp << ',' << o.tint << ','
-                      << o.saturation << ',' << o.texture << ',' << o.clarity << ',' << o.dehaze << '\n';
+                    f << "#group\nparent=" << parentId << "\nname=" << g.name << '\n';
+                    writeParamsAndHistory(g.params, g.history);  // groups carry full settings now
                     walk(k, myId);
                 }
                 else if (g.slot >= 0 && g.slot < (int)mSlotPaths.size())
                 {
-                    f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n'
-                      << serializeParams(mSlotParams[g.slot]);
-                    // Branching edit history for this image: tree config + one #hnode
-                    // block per node (parent index / seq / label + a full params snapshot).
-                    // Nodes are written in vector-index order so parent indices stay valid.
-                    const History &h = mSlotHistory[g.slot];
-                    if (!h.nodes.empty())
-                    {
-                        f << "hcurrent=" << h.current << "\nhmax=" << h.maxSteps
-                          << "\nhcoalesce=" << h.coalesceMs << '\n';
-                        for (const auto &n : h.nodes)
-                            f << "#hnode\nhparent=" << n.parent << "\nhseq=" << n.seq
-                              << "\nhlabel=" << n.label << '\n' << serializeParams(n.params);
-                    }
+                    f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n';
+                    writeParamsAndHistory(mSlotParams[g.slot], mSlotHistory[g.slot]);
                 }
             }
         };
@@ -591,7 +607,7 @@ namespace cosmo
 
         auto closeParamBlock = [&] {
             if (inNode) { deserializeParams(paramsBuf, node.params); cur.history.nodes.push_back(node); node = HistoryNode{}; }
-            else if (inImage) deserializeParams(paramsBuf, cur.params);
+            else if (haveCur) deserializeParams(paramsBuf, cur.params);  // group OR image own params
             paramsBuf.clear();
         };
         auto flushEntry = [&] {
@@ -635,12 +651,15 @@ namespace cosmo
             else if (k == "hcoalesce") { try { cur.history.coalesceMs = std::stod(v); } catch (...) {} }
             else if (k == "offset")
             {
+                // Legacy (pre-full-params) group: a 12-scalar LocalAdjust. Map it into the
+                // group's EditParams so old projects still load (temp was a relative
+                // -100..100 shift -> Kelvin offset from 6500).
                 std::stringstream ts(v); std::string t; float vals[12] = {0};
                 int i = 0;
                 while (i < 12 && std::getline(ts, t, ',')) { try { vals[i] = std::stof(t); } catch (...) {} ++i; }
-                arstro::LocalAdjust &o = cur.offset;
+                EditParams &o = cur.params;
                 o.exposure = vals[0]; o.contrast = vals[1]; o.highlights = vals[2]; o.shadows = vals[3];
-                o.whites = vals[4]; o.blacks = vals[5]; o.temp = vals[6]; o.tint = vals[7];
+                o.whites = vals[4]; o.blacks = vals[5]; o.temp = 6500.f + vals[6] / 100.f * 3500.f; o.tint = vals[7];
                 o.saturation = vals[8]; o.texture = vals[9]; o.clarity = vals[10]; o.dehaze = vals[11];
             }
             else { paramsBuf += line; paramsBuf += '\n'; }  // a params line
@@ -660,17 +679,20 @@ namespace cosmo
         mSlotParams.clear(); mSlotHistory.clear(); mSlotNames.clear();
         mSlotPaths.clear(); mSlotSessions.clear(); mSlotThumbs.clear();
         mNodes.clear();
-        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}});
+        mNodes.push_back(GNode{true, "All Photos", 0, -1, {}, {}, {}});
         mCurGroup = 0; mSel.clear(); mSelAnchor = -1; mEditGroup = -1;
         mCurrentSlot = -1;
         mHasClip = false;
         mDirty = false;
     }
 
-    int EditSession::addWorkspaceGroup(int parentNode, const std::string &name, const arstro::LocalAdjust &offset)
+    int EditSession::addWorkspaceGroup(int parentNode, const std::string &name, const EditParams &params,
+                                       const History &history)
     {
         if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = 0;
-        GNode g; g.group = true; g.name = name.empty() ? "Group" : name; g.parent = parentNode; g.offset = offset;
+        GNode g; g.group = true; g.name = name.empty() ? "Group" : name; g.parent = parentNode; g.params = params;
+        if (history.nodes.empty()) g.history.init(params);  // no saved tree -> single root
+        else g.history.restore(history.nodes, history.current, history.maxSteps, history.coalesceMs);
         const int node = (int)mNodes.size();
         mNodes.push_back(g);
         mNodes[parentNode].kids.push_back(node);

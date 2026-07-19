@@ -206,6 +206,13 @@ package engine {
     + maskCoverage(m,nx,ny) / applyMaskStack(img, masks[])
   }
   MaskStack ..> MaskParams
+  class composeParams <<free fn>> {
+    + (base, over) : EditParams
+  }
+  note bottom of composeParams
+    stack params (cosmo group settings): scalars add,
+    tone/mixer curves add in Y, masks concat, crop per-item
+  end note
   class EditEngine <<facade>> {
     + addImage(rgba, w, h, ch) : int / selectImage(slot)
     + setExposure/Contrast/Highlights/Shadows/Whites/Blacks(v)

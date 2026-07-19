@@ -96,6 +96,110 @@ namespace
         printf("[PASS] group_tree_create_navigate_ungroup\n");
     }
 
+    void test_group_editing_stacks_onto_members()
+    {
+        EditSession s;
+        auto px = solidImage(16, 16, 100, 100, 100);
+        const int slotA = s.openImage(px.data(), 16, 16, "a");
+        const int slotB = s.openImageInto(s.currentGroup(), px.data(), 16, 16, "b", "");
+
+        // image A gets its own exposure so we can see the group's stack ADD onto it
+        s.selectImage(slotA);
+        s.curParams()->exposure = 0.5f; s.submit();
+
+        // group both images, then select the GROUP to edit it
+        s.navigateToGroup(0);
+        s.selectNode(0, false, false);
+        s.selectNode(1, true, false);
+        s.createGroupFromSelection();
+        const int inner = s.currentGroupCells()[0].node;
+        s.selectNode(0, false, false);
+        assert(s.editGroup() == inner);          // a group is now the edit target
+        assert(s.curParams());                    // curParams() returns the GROUP's own params
+        s.curParams()->exposure = 1.0f; s.submit();
+
+        // every member's effective exposure = its own + the group's (the headline behaviour)
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 1.5f) < 1e-4f);  // 0.5 + 1.0
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 1.0f) < 1e-4f);  // 0.0 + 1.0
+
+        // recursion: wrap the group in an OUTER group and edit that too
+        s.navigateToGroup(0);
+        s.selectNode(0, false, false);            // select the inner group
+        s.createGroupFromSelection();             // outer group now contains the inner
+        s.selectNode(0, false, false);            // edit the outer group
+        s.curParams()->exposure = 0.25f; s.submit();
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 1.75f) < 1e-4f);  // 0.5 + 1.0 + 0.25
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 1.25f) < 1e-4f);  // 0.0 + 1.0 + 0.25
+
+        // a member's OWN params are never mutated by group edits
+        s.selectImage(slotA);
+        assert(std::fabs(s.curParams()->exposure - 0.5f) < 1e-4f);
+
+        printf("[PASS] group_editing_stacks_onto_members\n");
+    }
+
+    void test_group_params_persist()
+    {
+        EditSession s;
+        auto px = solidImage(8, 8, 50, 50, 50);
+        const int slot = s.openImage(px.data(), 8, 8, "a"); (void)slot;
+        s.selectNode(0, false, false);
+        s.createGroupFromSelection();
+        s.selectNode(0, false, false);            // edit the group
+        s.curParams()->exposure = 0.75f; s.curParams()->temp = 8000.f; s.submit();
+
+        const std::string path = "/tmp/cosmo_core_group_params.cosmoproj";
+        assert(s.saveWorkspaceAs(path));
+        std::vector<EditSession::WorkspaceEntry> entries;
+        assert(EditSession::readWorkspaceFile(path, entries));
+
+        EditSession s2;
+        auto px2 = solidImage(8, 8, 50, 50, 50);
+        for (auto &e : entries)
+        {
+            const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
+            if (e.group) { s2.addWorkspaceGroup(parentNode, e.name, e.params, e.history); continue; }
+            const int sl = s2.openImageInto(parentNode, px2.data(), 8, 8, "a", e.imagePath);
+            s2.applyParamsToSlot(sl, e.params, e.history);
+        }
+        s2.finishWorkspaceLoad(path);
+
+        // the group's full params (exposure + Kelvin) survived and still stack onto the member
+        assert(std::fabs(s2.effectiveParams(0).exposure - 0.75f) < 1e-3f);
+        assert(std::fabs(s2.effectiveParams(0).temp - 8000.f) < 1.0f);
+
+        std::filesystem::remove(path);
+        printf("[PASS] group_params_persist\n");
+    }
+
+    void test_group_edit_renders_brighter_member()
+    {
+        // End-to-end: editing a group's exposure actually brightens the representative
+        // member's rendered pixels (composition -> effectiveParams -> engine render).
+        EditSession s;
+        auto px = solidImage(24, 24, 90, 90, 90);
+        s.openImage(px.data(), 24, 24, "a", "/tmp/a.png");
+        auto meanR = [&]() -> double {
+            int w = 0, h = 0;
+            const uint8_t *out = s.exportFullRes(w, h);  // synchronous full-res render of effectiveParams
+            assert(out && w > 0 && h > 0);
+            double sum = 0; const size_t n = (size_t)w * h;
+            for (size_t i = 0; i < n; ++i) sum += out[i * 4];
+            return sum / n;
+        };
+        const double base = meanR();
+
+        s.selectNode(0, false, false);
+        s.createGroupFromSelection();
+        s.selectNode(0, false, false);       // edit the group
+        s.curParams()->exposure = 1.0f;      // +1 EV on the group
+        s.submit();
+        const double grouped = meanR();
+
+        assert(grouped > base + 5.0);         // the member renders brighter with the group applied
+        printf("[PASS] group_edit_renders_brighter_member\n");
+    }
+
     void test_undo_redo()
     {
         EditSession s;
@@ -200,7 +304,7 @@ namespace
         for (auto &e : entries)
         {
             const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
-            if (e.group) { s2.addWorkspaceGroup(parentNode, e.name, e.offset); continue; }
+            if (e.group) { s2.addWorkspaceGroup(parentNode, e.name, e.params, e.history); continue; }
             const int slot = s2.openImageInto(parentNode, px2.data(), 8, 8, "img", e.imagePath);
             s2.applyParamsToSlot(slot, e.params, e.history);
             ++images;
@@ -230,6 +334,9 @@ int main()
     test_open_edit_submit_and_poll();
     test_thumbnail_generated();
     test_group_tree_create_navigate_ungroup();
+    test_group_editing_stacks_onto_members();
+    test_group_params_persist();
+    test_group_edit_renders_brighter_member();
     test_undo_redo();
     test_preset_save_and_apply_roundtrip();
     test_session_save_and_read_roundtrip();

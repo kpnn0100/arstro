@@ -112,7 +112,9 @@ scroll), `pointer`/`key` (menu dismissal, gesture feed, Home/Loading key swallow
 The model: group tree + per-slot state + the owned `RenderService`.
 
 - **Group tree**: `struct GNode { bool group; std::string name; int parent; int slot=-1;
-  LocalAdjust offset; std::vector<int> kids; }` rooted at `{true,"All Photos",0,-1,{},{}}`.
+  EditParams params; History history; std::vector<int> kids; }` rooted at
+  `{true,"All Photos",0,-1,{},{},{}}`. A group node carries its **own full `EditParams`+`History`**
+  (its settings + timeline); an image leaf uses `slot`.
   `struct Cell { bool group; int node; int slot; std::string name; int count; }` (a filmstrip row);
   `struct Thumb { std::vector<uint8_t> rgba; int w,h; }`.
 - **Per-slot vectors** (parallel, indexed by engine slot id): `mSlotParams`, `mSlotHistory`,
@@ -139,12 +141,17 @@ clipboard `copyCurrent`, `pasteTo`, `hasClipboard`; history `currentHistory`, `u
 `exportFullRes`, `renderBefore`.
 
 **Key behaviors:**
-- `effectiveParams(slot)` = slot params + summed ancestor group offsets (walk `parent` to root;
-  temp shifts as `d.temp/100·3500` K) (`EditSession.cpp:284-296`).
-- `submit()` = `mDirty=true`, `recordHistory()`, compute `effectiveParams`, crop-preview override,
-  `mService.render(slot, params)`.
-- `selectNode` = shift range / ctrl toggle / plain replace; group→`mEditGroup`; image→current slot
-  + `resetPreviewResolution` + `submit`.
+- `effectiveParams(slot)` = the slot's params **composed** with every ancestor group's params,
+  folded child→root via `arstro::composeParams` (recursive stacking; `EditSession.cpp`).
+- `curParams()` returns the **group's** params while `mEditGroup>=0` (so every develop panel edits
+  the group), else the current slot's — the single seam that makes a group editable.
+- `editHistory()`/`recordHistory`/`undo`/`redo`/`applyHistoryParams`/`canUndo`/`canRedo` route to
+  the group's `History` while a group is the edit target, else the slot's.
+- `submit()` = `mDirty=true`, `recordHistory()` (group or slot), compute `effectiveParams`,
+  crop-preview override, `mService.render(currentSlot, params)`.
+- `selectNode` = shift range / ctrl toggle / plain replace; **group** → `mEditGroup=node` +
+  `mCurrentSlot=firstImageSlotUnder(node)` (a representative member) + `submit` so the group's
+  stacked effect previews live; **image** → current slot + `resetPreviewResolution` + `submit`.
 - `resetWorkspace` = `mService.reset()` (restart slot ids), clear per-slot vectors + `mNodes`,
   re-push root, reset selection/current/clipboard/dirty (the reset-then-open segfault guard).
 - `openImageInto` = `mService.addImage`→slot, push params + a fresh `History.init`, name/path/

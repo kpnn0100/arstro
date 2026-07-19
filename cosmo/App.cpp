@@ -347,7 +347,11 @@ namespace cosmo_v2
     void App::syncControlsToSlot()
     {
         const int slot = mSession.currentSlot();
-        if (slot >= 0)
+        if (mSession.editGroup() >= 0 && mSession.editGroup() < (int)mSession.nodes().size())
+            // Editing a group: name the group (not the representative member's file);
+            // its settings stack onto every member. total<=0 hides the "n of m" counter.
+            mTopBar->setFilename("Group: " + mSession.nodes()[mSession.editGroup()].name, 0, 0);
+        else if (slot >= 0)
             mTopBar->setFilename(filenameOf(mSession.currentSourcePath()), slot + 1, mSession.imageCount());
         else
             mTopBar->setFilename("", 0, 0);
