@@ -783,6 +783,19 @@ namespace
                 if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
             }
         }
+        // Enter / Escape reach a focused in-app field (the group-rename box, DR-TREE-5):
+        // Enter commits, Escape cancels.
+        if (e->keyval == GDK_KEY_Return || e->keyval == GDK_KEY_KP_Enter || e->keyval == GDK_KEY_Escape)
+        {
+            artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Down;
+            ke.keyCode = (e->keyval == GDK_KEY_Escape) ? 27 : 13;
+            ke.shift = shift; ke.ctrl = ctrl; ke.alt = alt;
+            if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
+        }
+        // While an in-app text field is focused, suppress the editor's single-key
+        // shortcuts (Delete, o, s, ...) so those keys edit the text instead.
+        if (a->app.isTextEditing()) { gtk_widget_queue_draw(a->area); return TRUE; }
+
         // On the home screen the launcher owns the keyboard, and during the open
         // transition input is swallowed — don't leak editor keys in either case.
         if (a->app.onHomeScreen() || a->app.inOpenTransition()) return TRUE;

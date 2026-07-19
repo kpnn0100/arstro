@@ -97,6 +97,9 @@ namespace cosmo_v2
         std::function<void()> onSaveWorkspaceRequested;
         std::function<void()> onLoadWorkspaceRequested;
         void renameGroup(const std::string &name);
+        /** True while the in-app rename field is focused — the host suppresses its
+         *  single-key shortcuts so typed keys go to the field (DR-TREE-5). */
+        bool isTextEditing() const;
 
         void setPresetDir(const std::string &dir) { mSession.setPresetDir(dir); refreshPresetTree(); }
         bool savePreset(const std::string &name) { const bool ok = mSession.savePreset(name); if (ok) refreshPresetTree(); return ok; }
@@ -186,6 +189,7 @@ namespace cosmo_v2
         std::shared_ptr<RightColumn> mRightColumn;
         std::shared_ptr<HistoryView> mHistoryView;
         std::shared_ptr<ContextMenu> mContextMenu;
+        int mRenameTargetNode = -1;   // group node the in-app rename currently targets
         std::shared_ptr<PresetDialog> mPresetDialog;      // modal category picker (overlay)
         std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)

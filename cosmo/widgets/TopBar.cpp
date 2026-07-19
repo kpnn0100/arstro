@@ -9,7 +9,23 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
-    namespace { constexpr double kMenuHeight = 21.0; }
+    namespace
+    {
+        constexpr double kMenuHeight = 21.0;
+        constexpr double kNameFontPx = 11.0;
+        constexpr double kNameBoxH = 18.0;
+        constexpr double kNamePadX = 6.0;
+        constexpr double kNameMaxW = 220.0;
+        // "Group: <name>", ellipsized to fit the right slot (R5).
+        std::string groupLabel(const std::string &name)
+        {
+            std::string label = "Group: " + name;
+            if (estimateTextWidth(label, kNameFontPx) <= kNameMaxW) return label;
+            while (label.size() > 8 && estimateTextWidth(label + "\xE2\x80\xA6", kNameFontPx) > kNameMaxW)
+                label.pop_back();
+            return label + "\xE2\x80\xA6";  // …
+        }
+    }
 
     TopBar::TopBar()
     {
@@ -33,7 +49,36 @@ namespace cosmo_v2
     void TopBar::setFilename(const std::string &name, int index, int total)
     {
         mFilename = name; mFileIndex = index; mFileTotal = total;
+        mGroupName.clear();   // showing an image -> not a group
         layout();
+    }
+
+    void TopBar::setGroupName(const std::string &name)
+    {
+        mGroupName = name;
+        mFileTotal = 0;       // hide the filename readout while a group is shown
+        layout();
+    }
+
+    Rect TopBar::groupNameRect() const
+    {
+        if (mGroupName.empty() || !mRailToggle) return Rect{0, 0, 0, 0};
+        const double tw = estimateTextWidth(groupLabel(mGroupName), kNameFontPx);
+        const double w = tw + 2 * kNamePadX;
+        const double rightEdge = mRailToggle->x.value() - 9.75;
+        return Rect{rightEdge - w, (kHeight - kNameBoxH) * 0.5, w, kNameBoxH};
+    }
+
+    void TopBar::advance(double nowMs)
+    {
+        mNowMs = nowMs;
+        if (mNameHovered && !isHovered())  // pointer left the bar -> release the name hover
+        {
+            mNameHovered = false;
+            mNameHover.animateTo(0.0, 120.0, Easing::EaseOutCubic, nowMs);
+        }
+        mNameHover.update(nowMs);
+        Segment::advance(nowMs);
     }
 
     void TopBar::setRailOpen(bool open)
@@ -68,6 +113,17 @@ namespace cosmo_v2
     {
         // Clicking the "cosmo." wordmark returns to the launcher (R-HOME).
         if (g.type == Gesture::Type::Click && onHome && wordmarkRect().contains(local)) { onHome(); return true; }
+        // The group name is a clickable, hovered affordance -> open rename (DR-TREE-5).
+        if (!mGroupName.empty())
+        {
+            const bool over = groupNameRect().contains(local);
+            if (g.type == Gesture::Type::Move && over != mNameHovered)
+            {
+                mNameHovered = over;
+                mNameHover.animateTo(over ? 1.0 : 0.0, 120.0, Easing::EaseOutCubic, mNowMs);
+            }
+            if (g.type == Gesture::Type::Click && over && onNameClick) { onNameClick(); return true; }
+        }
         return Segment::handleGesture(g, local);
     }
 
@@ -100,8 +156,18 @@ namespace cosmo_v2
             t.drawText(mProjectName, (w - nameW) * 0.5, h * 0.5 + 12.0 * 0.35, 12.0, font::sansMedium());
         }
 
+        // Group name (clickable, hovered) in the right slot while editing a group (DR-TOPBAR).
+        if (!mGroupName.empty())
+        {
+            const Rect nr = groupNameRect();
+            const double hv = mNameHover.value();
+            if (hv > 0.001)
+                drawRoundedRect(t, nr, radius::control(), Paint::filled(palette::whiteAlpha(0.07 * hv)));
+            t.setFill(palette::foreground());
+            t.drawText(groupLabel(mGroupName), nr.x + kNamePadX, h * 0.5 + kNameFontPx * 0.35, kNameFontPx, font::sans());
+        }
         // Filename + "(i/n)", right-aligned against the rail toggle.
-        if (mFileTotal > 0)
+        else if (mFileTotal > 0)
         {
             const std::string suffix = " (" + std::to_string(mFileIndex) + "/" + std::to_string(mFileTotal) + ")";
             const double nameW = estimateTextWidth(mFilename, 11.0);

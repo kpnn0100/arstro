@@ -397,6 +397,28 @@ into the group's `EditParams`).
 Copy Settings stashes the current params; Paste to Selected / to All Images applies them to the
 target slots as discrete history steps (`copyCurrent`/`pasteTo`).
 
+### DR-TREE-5 Rename a group (in-app, animated)
+A group is renamed inside the app (no native dialog), through **one** rename affordance — the
+`ContextMenu`'s **rename mode** — reachable two ways:
+- **Right-click a group** → the menu includes **"Rename Group"**; choosing it morphs the menu in
+  place: the other items collapse away so only a **"Rename"** header remains, then an inline
+  **textbox expands below it** (R1: one eased `AnimatedProperty`, ≈260 ms EaseInOut — items fade
+  out in the first half, the box grows in the second; collapses instantly under `reducedMotion()`).
+- **Click the group's name** in the top-right of the top bar (shown while a group is the edit
+  target, DR-TOPBAR) → opens the same rename mode at that spot.
+
+The textbox seeds with the current group name (e.g. "Group 1"), takes **keyboard focus with the
+text selected** (first keystroke replaces it; Backspace clears the selection), and is styled as an
+**elegant light field** — near-white background, near-black text (`palette::inputLight` /
+`inputLightText`), one accent caret + selection wash. **Enter** commits (`onRename` →
+`EditSession::renameGroup(node, name)`, then re-sync), **Escape** or click-away cancels. While a
+rename textbox is focused the app's single-key shortcuts are suppressed (`App::isTextEditing`).
+
+### DR-TOPBAR Group name in the top bar
+When a group is the edit target, the top bar's right slot shows **"Group: <name>"** (in place of a
+photo filename + counter), as a **clickable, hovered** affordance (R-G-3) that opens rename mode
+(DR-TREE-5). For an image it shows the filename + "(i/n)" as before.
+
 ---
 
 ## 9. History (R-PERSIST-1)

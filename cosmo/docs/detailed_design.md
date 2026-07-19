@@ -255,6 +255,9 @@ h `kHeight=29.25`. Owns a `MenuStrip` + an `IconButton` rail toggle (`icon::pane
 `cosmo.` wordmark (13 px, spacing −0.39), a centered project name, and a right-aligned filename +
 `(i/n)`. `setFilename(name,index,total)` (total≤0 hides), `setProjectName`, `setRailOpen`. Callbacks
 `onRailToggle`, `onHome` (Click in `wordmarkRect`).
+While a group is the edit target the right slot instead shows **"Group: <name>"** (`setGroupName`,
+ellipsized to fit, DR-TOPBAR) as a **clickable, eased-hover** affordance (`groupNameRect`,
+`mNameHover`); `onNameClick` → opens rename (DR-TREE-5).
 
 ### 4.2 MenuStrip
 The File/Settings/Develop/History/Preset bar. `struct Item{label,action}`, `struct Menu{title,
@@ -446,6 +449,13 @@ close-X or click-outside to close; eased pan (`mPanXAnim/mPanYAnim`, per-interac
 A right-click popup of `struct Item{label,action}` at the cursor. `open(items,x,y)` (nudged to stay
 on-screen), `close`, `isOpen`. `mAppear` open 130/close 100 ms; per-item `HoverFade`. Fed by the
 photo/filmstrip/preset-tree `onContext` callbacks via the App.
+**Rename mode (DR-TREE-5):** `enterRenameMode(name)` (from the "Rename Group" item — morphs an open
+menu) or `openRename(name,x,y)` (top-bar name click — opens straight to it). One eased
+`AnimatedProperty mRename` (260 ms EaseInOut): the first half collapses the items to a "Rename"
+header (`renameContentH`), the second grows the light textbox (`fieldRect`, `palette::inputLight` /
+`inputLightText`, accent caret + select-all wash). `focusable`; `handleKey` does type/replace-on-
+select-all/Backspace/Enter=commit(`onRename`)/Escape=cancel; click-away cancels. `isRenaming()`
+drives `App::isTextEditing()` (host suppresses single-key shortcuts).
 
 ### 7.4 PresetDialog
 The category-picker modal (R-PRESETPICK). `PresetDialog(accent)`; `struct Row{key,label,bool

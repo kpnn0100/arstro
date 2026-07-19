@@ -50,6 +50,12 @@ namespace cosmo_v2
         mTopBar->width.set(width);
         mTopBar->onRailToggle = [this] { toggleRail(); };
         mTopBar->onHome = [this] { requestHome(); };
+        mTopBar->onNameClick = [this] {  // click the top-right group name -> rename it (DR-TREE-5)
+            const int g = mSession.editGroup();
+            if (g < 0 || g >= (int)mSession.nodes().size()) return;
+            mRenameTargetNode = g;
+            mContextMenu->openRename(mSession.nodes()[g].name, mW - 236.0, TopBar::kHeight + 2.0);
+        };
         buildMenus();  // File/Settings/Develop/History/Preset dropdowns, wired to real actions
         mRoot->addChild(mTopBar);
 
@@ -114,6 +120,7 @@ namespace cosmo_v2
         // Right-click context menu (root child so raising it wins hit-testing).
         // Photo area: group / add photo to the current group; filmstrip cell adds Delete.
         mContextMenu = std::make_shared<ContextMenu>();
+        mContextMenu->onRename = [this](const std::string &name) { renameGroup(name); };
         mRoot->addChild(mContextMenu);
         mCenterStage->photo()->onContext = [this](double x, double y) { openEditContext(x, y, -1); };
         mCenterStage->filmstrip()->onContext = [this](int cell, double x, double y) {
@@ -339,6 +346,17 @@ namespace cosmo_v2
         items.push_back({"Add Photo...",      [this] { if (onOpenRequested) onOpenRequested(); }});
         items.push_back({"Group Selection",   [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }});
         items.push_back({"Ungroup Selection", [this] { mSession.ungroupSelected(); syncControlsToSlot(); }});
+        // Right-clicking a group offers Rename (morphs the menu into the rename field, DR-TREE-5).
+        const auto cells = mSession.currentGroupCells();
+        if (cell >= 0 && cell < (int)cells.size() && cells[cell].group)
+        {
+            const int node = cells[cell].node;
+            const std::string name = cells[cell].name;
+            items.push_back({"Rename Group", [this, node, name] {
+                mRenameTargetNode = node;
+                mContextMenu->enterRenameMode(name);
+            }});
+        }
         if (cell >= 0)
             items.push_back({"Delete",        [this] { deleteSelected(); }});
         mContextMenu->open(std::move(items), x, y);
@@ -348,9 +366,11 @@ namespace cosmo_v2
     {
         const int slot = mSession.currentSlot();
         if (mSession.editGroup() >= 0 && mSession.editGroup() < (int)mSession.nodes().size())
-            // Editing a group: name the group (not the representative member's file);
-            // its settings stack onto every member. total<=0 hides the "n of m" counter.
-            mTopBar->setFilename("Group: " + mSession.nodes()[mSession.editGroup()].name, 0, 0);
+        {
+            // Editing a group: show its (clickable) name; its settings stack onto members.
+            mRenameTargetNode = mSession.editGroup();
+            mTopBar->setGroupName(mSession.nodes()[mSession.editGroup()].name);
+        }
         else if (slot >= 0)
             mTopBar->setFilename(filenameOf(mSession.currentSourcePath()), slot + 1, mSession.imageCount());
         else
@@ -561,10 +581,13 @@ namespace cosmo_v2
 
     void App::renameGroup(const std::string &name)
     {
-        // The rename target is tracked by the (not-yet-built) filmstrip context
-        // menu; until then this is a no-op seam for linux_main.cpp to call into.
-        (void)name;
+        // The rename target is set when rename mode opens (context menu / top-bar name).
+        if (mRenameTargetNode < 0 || mRenameTargetNode >= (int)mSession.nodes().size() || name.empty()) return;
+        mSession.renameGroup(mRenameTargetNode, name);
+        syncControlsToSlot();  // refresh the breadcrumb + top-bar group name
     }
+
+    bool App::isTextEditing() const { return mContextMenu && mContextMenu->isRenaming(); }
 
     namespace
     {

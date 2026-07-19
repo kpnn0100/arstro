@@ -32,12 +32,17 @@ namespace cosmo_v2
 
         std::shared_ptr<MenuStrip> menuStrip() { return mMenuStrip; }
         void setFilename(const std::string &name, int index, int total);  // total<=0 hides it
+        // Show a group's name in the right slot (in place of a filename) as a clickable,
+        // hovered affordance that opens rename (DR-TOPBAR); empty clears back to filenames.
+        void setGroupName(const std::string &name);
         void setProjectName(const std::string &name) { mProjectName = name; }  // shown centred
         void setRailOpen(bool open);
 
         std::function<void()> onRailToggle;
-        std::function<void()> onHome;   // clicking the "cosmo." wordmark returns to the launcher
+        std::function<void()> onHome;       // clicking the "cosmo." wordmark returns to the launcher
+        std::function<void()> onNameClick;  // clicking the group name -> rename (DR-TREE-5)
 
+        void advance(double nowMs) override;  // eases the group-name hover
         void layout();  // call after width changes
 
     protected:
@@ -48,13 +53,18 @@ namespace cosmo_v2
         static constexpr double kPad = 9.75;
 
         artboard::Rect wordmarkRect() const;
+        artboard::Rect groupNameRect() const;  // hit/hover box for the group name (empty if none)
 
         std::shared_ptr<MenuStrip> mMenuStrip;
         std::shared_ptr<IconButton> mRailToggle;
         std::string mFilename;
+        std::string mGroupName;   // non-empty => right slot shows this group name, clickable
         std::string mProjectName;
         int mFileIndex = 0, mFileTotal = 0;
         bool mRailOpen = true;
+        artboard::AnimatedProperty mNameHover{0.0};
+        bool mNameHovered = false;
+        double mNowMs = 0.0;
     };
 }
 }

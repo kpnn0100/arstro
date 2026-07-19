@@ -53,6 +53,10 @@ namespace cosmo_v2
         inline artboard::Color destructive() { return artboard::Color::hex(0xE5534B); }
         inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.072}; }  // rgba(255,255,255,.072)
         inline artboard::Color input() { return artboard::Color::hex(0x252525); }
+        // Elegant light entry field (the inline group-rename box, DR-TREE-5): a deliberate
+        // near-white surface with near-black text -- an inverted island in the dark UI.
+        inline artboard::Color inputLight() { return artboard::Color::hex(0xF4F4F5); }      // near-white field bg
+        inline artboard::Color inputLightText() { return artboard::Color::hex(0x18181B); }  // near-black field text
         inline artboard::Color switchBackground() { return artboard::Color::hex(0x444444); }
         inline artboard::Color ring() { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, 0.5}; }
 
