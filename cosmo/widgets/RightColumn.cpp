@@ -230,11 +230,12 @@ namespace cosmo_v2
                 q.lensDistortion, q.lensCA, q.lensVignette,
             };
         };
+        const EditParams eff = mSession.effectiveEditParams();  // own + ancestor groups (the "final" values)
         const std::vector<double> own = flat(*p);
         mBasicDetail->setValues(own);
         // Green stacked reach: how much ancestor groups add on top of each own value
         // (effective - own, in slider units). Zero (no groups) hides it (DR-EDIT-4).
-        const std::vector<double> effv = flat(mSession.effectiveEditParams());
+        const std::vector<double> effv = flat(eff);
         std::vector<double> offsets(own.size(), 0.0);
         for (size_t i = 0; i < own.size(); ++i) offsets[i] = effv[i] - own[i];
         mBasicDetail->setSubValues(offsets);
@@ -243,6 +244,9 @@ namespace cosmo_v2
         mMask->setMasks(p->masks, mSelectedMask);
         mMixer->setMixer(p->mixer);
         mCurve->setCurves(p->curve, p->curveChannel);
+        // The effective (group-stacked) mixer/tone curves, drawn faint behind the editable ones.
+        mMixer->setReference(eff.mixer);
+        mCurve->setReferenceCurves(eff.curve, eff.curveChannel);
         GradePanel::State gs;
         gs.grade = p->grade; gs.balance = p->balance; gs.remapEnable = p->remapEnable;
         gs.remapSrc = p->remapSrc; gs.remapRange = p->remapRange; gs.remapDst = p->remapDst; gs.remapStrength = p->remapStrength;

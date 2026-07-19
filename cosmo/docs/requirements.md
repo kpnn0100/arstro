@@ -303,6 +303,11 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
 `ParamPanel::setSubValues`; with no groups the offset is 0 and no green shows.
 
 ### DR-EDIT-5 Mixer/Curve (`StackPanel` → `MixerPanel` + `CurvePanel`) (R-BUGFIX-3)
+- **Effective ("final") curve behind (both editors).** Like the sliders' green reach, each curve
+  editor draws the **effective** curve — the item's own curve composed with its ancestor groups'
+  (`effectiveEditParams`) — faint (`#4cb573`) **behind** the editable one, so you see the final
+  result after group stacking. Fed by `RightColumn::syncToSlot` (`MixerPanel::setReference` /
+  `CurvePanel::setReferenceCurves`); when it equals the own curve (no groups) it is not drawn.
 - **MixerPanel**: a Hue/Sat/Lum segmented picker over one visible `HueCurveEditor` per channel
   (`EditParams::mixer[3]`). Each editor is a cyclic hue mapper: X = input hue [0,360), Y =
   adjustment [−1,1], wrapping at the 360/0 seam. Points are **bezier control points**

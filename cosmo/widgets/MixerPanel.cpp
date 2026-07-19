@@ -67,6 +67,11 @@ namespace cosmo_v2
         for (int c = 0; c < 3; ++c) mEditors[c]->setPoints(mixer[c]);
     }
 
+    void MixerPanel::setReference(const std::array<std::vector<CurvePoint>, 3> &refs)
+    {
+        for (int c = 0; c < 3; ++c) mEditors[c]->setReference(refs[c]);
+    }
+
     void MixerPanel::layout()
     {
         const double w = width.value(), innerW = std::max(0.0, w - 2 * kPadX);

@@ -341,12 +341,14 @@ contribution shows as the green reach; 0 (no groups) hides it.
 
 ### 5.2 MixerPanel
 Hue/Sat/Lum `SegmentedControl` + one visible `HueCurveEditor` per channel + a Reset `IconButton`
-(`icon::refreshCw`). `setMixer(array<vector<CurvePoint>,3>)`, `onCurveChange(channel,
-vector<CurvePoint>)`. Editor 0 has `setMappedHue(true)`.
+(`icon::refreshCw`). `setMixer(array<vector<CurvePoint>,3>)`, `setReference(array<...,3>)` (the
+effective/group-stacked curves, per channel), `onCurveChange(channel, vector<CurvePoint>)`. Editor 0
+has `setMappedHue(true)`.
 
 ### 5.3 HueCurveEditor
 Cyclic hue mapper: X = input hue [0,360), Y = adjustment [−1,1], wrapping at the 360/0 seam.
-`onChange(const vector<CurvePoint>&)`, `setPoints` (restores handles + smooth verbatim), `reset`,
+`onChange(const vector<CurvePoint>&)`, `setPoints` (restores handles + smooth verbatim),
+`setReference` (effective/group-stacked curve, drawn faint `#4cb573` behind), `reset`,
 `setMappedHue`. Gestures (pick radius `metrics::anchorHitRadius`=13, nearest-within-radius wins):
 double-click adds/removes a point (>2 pts to remove); Down hit-tests smooth-point handles then the
 node (Alt = make smooth + symmetric pull); Drag moves the anchor or sets in/out handles (Alt =

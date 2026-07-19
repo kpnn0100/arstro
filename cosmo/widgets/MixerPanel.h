@@ -30,6 +30,8 @@ namespace cosmo_v2
 
         /** Refresh all three channels' curves and show the active channel. */
         void setMixer(const std::array<std::vector<CurvePoint>, 3> &mixer);
+        // The effective (group-stacked) mixer curves, drawn faint behind each editor.
+        void setReference(const std::array<std::vector<CurvePoint>, 3> &refs);
         void layout();
 
         /** channel: 0=Hue, 1=Sat, 2=Lum; pts = bezier control points for that channel. */

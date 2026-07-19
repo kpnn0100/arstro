@@ -28,6 +28,7 @@ namespace cosmo_v2
 
         std::function<void(const std::vector<CurvePoint> &)> onChange;
         void setPoints(const std::vector<CurvePoint> &pts);  // bezier control points
+        void setReference(const std::vector<CurvePoint> &ref) { mReference = ref; }  // effective (group-stacked) curve, drawn faint behind
         void reset();                                  // back to a flat (no-op) curve
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
 
@@ -50,6 +51,7 @@ namespace cosmo_v2
         void emit();
 
         std::vector<CurvePoint> mPts;  // x in [0,360), y in [-1,1]
+        std::vector<CurvePoint> mReference;  // effective (group-stacked) curve; empty = none
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull

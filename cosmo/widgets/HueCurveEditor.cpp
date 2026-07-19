@@ -166,6 +166,20 @@ namespace cosmo_v2
                             Paint::filled(hueColor(h0)));
         }
 
+        // The effective (group-stacked) curve, faint (#4cb573), behind the editable one.
+        if (mReference.size() >= 2 && mReference != mPts)
+        {
+            const Color refc{0.298, 0.710, 0.451, 0.5};
+            const auto rd = curve::sample(mReference, true, 360.0f);
+            for (size_t i = 0; i + 1 < rd.size(); ++i)
+            {
+                if (rd[i + 1].first < rd[i].first) continue;  // wrap fold
+                t.beginPath(); t.moveTo(pxh(rd[i].first), pyv(rd[i].second));
+                t.lineTo(pxh(rd[i + 1].first), pyv(rd[i + 1].second));
+                t.setStroke(refc, 1.5); t.strokePath();
+            }
+        }
+
         // dense cyclic curve; break the polyline where x wraps so the seam joins continuously
         const auto dense = curve::sample(mPts, true, 360.0f);
         for (size_t i = 0; i + 1 < dense.size(); ++i)
