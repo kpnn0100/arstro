@@ -28,6 +28,13 @@ namespace arstro
         bool smooth = false;   // false = corner (handles ignored)
     };
 
+    inline bool operator==(const CurvePoint &a, const CurvePoint &b)
+    {
+        return a.x == b.x && a.y == b.y && a.ix == b.ix && a.iy == b.iy &&
+               a.ox == b.ox && a.oy == b.oy && a.smooth == b.smooth;
+    }
+    inline bool operator!=(const CurvePoint &a, const CurvePoint &b) { return !(a == b); }
+
     namespace curve
     {
         inline float cubic(float p0, float p1, float p2, float p3, float t)

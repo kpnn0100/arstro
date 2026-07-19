@@ -17,6 +17,7 @@
  */
 #pragma once
 #include "../base/ImageProcessor.h"
+#include "../base/CurvePoint.h"
 #include <utility>
 #include <vector>
 
@@ -30,10 +31,10 @@ namespace arstro
 
         ToneCurve();
 
-        /** RGB master control points in [0,1]x[0,1] (display domain). Sorted/clamped here. */
-        void setPoints(const std::vector<std::pair<float, float>> &points);
-        /** Per-channel control points for channel ch (0=R,1=G,2=B); identity = no-op. */
-        void setChannelPoints(int ch, const std::vector<std::pair<float, float>> &points);
+        /** RGB master bezier control points in [0,1]x[0,1] (display domain). */
+        void setPoints(const std::vector<CurvePoint> &points);
+        /** Per-channel bezier control points for channel ch (0=R,1=G,2=B); identity = no-op. */
+        void setChannelPoints(int ch, const std::vector<CurvePoint> &points);
         /** true = Log/perceptual (sRGB-encoded) domain (default); false = Linear. */
         void setLogScale(bool log);
         bool logScale() const { return mLog; }

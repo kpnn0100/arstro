@@ -146,7 +146,7 @@ namespace cosmo_v2
         };
 
         mCurve = std::make_shared<CurvePanel>();
-        mCurve->onCurveChange = [this](int channel, std::vector<std::pair<float, float>> pts) {
+        mCurve->onCurveChange = [this](int channel, CurvePanel::Points pts) {
             if (auto *p = mSession.curParams())
             {
                 if (channel == 0) p->curve = std::move(pts);        // RGB master

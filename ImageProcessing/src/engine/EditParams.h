@@ -64,13 +64,16 @@ namespace arstro
         float nrLuminance = 0, nrColor = 0;
         // lens corrections
         float lensDistortion = 0, lensCA = 0, lensVignette = 0;
-        // tone curve (display-domain control points) + domain. `curve` is the RGB
-        // master (applied to every channel); `curveChannel[0..2]` are the independent
-        // R/G/B curves, applied to their channel after the master. Default = identity.
-        std::vector<std::pair<float, float>> curve{{0.f, 0.f}, {1.f, 1.f}};
+        // tone curve (display-domain bezier CONTROL points, same model as the mixer) +
+        // domain. `curve` is the RGB master (applied to every channel); `curveChannel[0..2]`
+        // are the independent R/G/B curves, applied after the master. Points are corners
+        // (straight segments) unless `smooth` (Alt-dragged tangent handles). Default = identity.
+        std::vector<CurvePoint> curve{CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}};
         bool curveLog = true;
-        std::array<std::vector<std::pair<float, float>>, 3> curveChannel{
-            {{{0.f, 0.f}, {1.f, 1.f}}, {{0.f, 0.f}, {1.f, 1.f}}, {{0.f, 0.f}, {1.f, 1.f}}}};
+        std::array<std::vector<CurvePoint>, 3> curveChannel{
+            {{CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}},
+             {CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}},
+             {CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}}}};
         // colour mixer: 3 cyclic per-hue curves (hue / sat / lum), stored as bezier
         // CONTROL points so a reopened project restores the exact editable curve.
         std::array<std::vector<CurvePoint>, 3> mixer{};

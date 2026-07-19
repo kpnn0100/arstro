@@ -144,8 +144,8 @@ namespace arstro
         void setLensVignette(float v);      // -100..+100
 
         // ── tone curve ──
-        void setCurvePoints(const std::vector<std::pair<float, float>> &pts);  // RGB master
-        void setCurveChannelPoints(int ch, const std::vector<std::pair<float, float>> &pts);  // ch 0=R,1=G,2=B
+        void setCurvePoints(const std::vector<CurvePoint> &pts);  // RGB master (bezier control points)
+        void setCurveChannelPoints(int ch, const std::vector<CurvePoint> &pts);  // ch 0=R,1=G,2=B
         void setCurveLogScale(bool log);
 
         // ── colour mixer (cyclic per-hue curves) ──

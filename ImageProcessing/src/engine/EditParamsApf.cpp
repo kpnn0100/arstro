@@ -17,20 +17,6 @@ namespace arstro
             while (std::getline(ss, t, sep)) v.push_back(f(t));
             return v;
         }
-        std::string curveStr(const std::vector<std::pair<float, float>> &v)
-        {
-            std::ostringstream o; o.precision(7);
-            for (size_t i = 0; i < v.size(); ++i) { if (i) o << ';'; o << v[i].first << ',' << v[i].second; }
-            return o.str();
-        }
-        std::vector<std::pair<float, float>> parseCurve(const std::string &s)
-        {
-            std::vector<std::pair<float, float>> v; std::stringstream ss(s); std::string seg;
-            while (std::getline(ss, seg, ';'))
-            { auto c = seg.find(','); if (c == std::string::npos) continue;
-              v.push_back({f(seg.substr(0, c)), f(seg.substr(c + 1))}); }
-            return v;
-        }
         // Mixer curves persist bezier CONTROL points: "x,y" for a corner (2 fields,
         // matching pre-bezier presets) or "x,y,ix,iy,ox,oy" for a smooth point.
         std::string mixerStr(const std::vector<CurvePoint> &v)
@@ -116,9 +102,9 @@ namespace arstro
             c.set("lensDistortion", fs(p.lensDistortion)); c.set("lensCA", fs(p.lensCA));
             c.set("lensVignette", fs(p.lensVignette)); }
         if (has(cats, "curve")) { auto &c = d.category("curve");
-            c.set("curve", curveStr(p.curve)); c.set("curveLog", p.curveLog ? "1" : "0");
-            c.set("curveR", curveStr(p.curveChannel[0])); c.set("curveG", curveStr(p.curveChannel[1]));
-            c.set("curveB", curveStr(p.curveChannel[2])); }
+            c.set("curve", mixerStr(p.curve)); c.set("curveLog", p.curveLog ? "1" : "0");
+            c.set("curveR", mixerStr(p.curveChannel[0])); c.set("curveG", mixerStr(p.curveChannel[1]));
+            c.set("curveB", mixerStr(p.curveChannel[2])); }
         if (has(cats, "mixer")) { auto &c = d.category("mixer");
             c.set("mixer0", mixerStr(p.mixer[0])); c.set("mixer1", mixerStr(p.mixer[1])); c.set("mixer2", mixerStr(p.mixer[2])); }
         if (has(cats, "grade")) { auto &c = d.category("grade");
@@ -168,10 +154,10 @@ namespace arstro
             io.lensDistortion = f(val(c, "lensDistortion")); io.lensCA = f(val(c, "lensCA"));
             io.lensVignette = f(val(c, "lensVignette")); }
         if (const apf::Category *c = has(cats, "curve") ? doc.find("curve") : nullptr) {
-            io.curve = parseCurve(val(c, "curve")); io.curveLog = val(c, "curveLog", "1") != "0";
-            io.curveChannel[0] = parseCurve(val(c, "curveR", "0,0;1,1"));
-            io.curveChannel[1] = parseCurve(val(c, "curveG", "0,0;1,1"));
-            io.curveChannel[2] = parseCurve(val(c, "curveB", "0,0;1,1")); }
+            io.curve = parseMixer(val(c, "curve")); io.curveLog = val(c, "curveLog", "1") != "0";
+            io.curveChannel[0] = parseMixer(val(c, "curveR", "0,0;1,1"));
+            io.curveChannel[1] = parseMixer(val(c, "curveG", "0,0;1,1"));
+            io.curveChannel[2] = parseMixer(val(c, "curveB", "0,0;1,1")); }
         if (const apf::Category *c = has(cats, "mixer") ? doc.find("mixer") : nullptr) {
             io.mixer[0] = parseMixer(val(c, "mixer0")); io.mixer[1] = parseMixer(val(c, "mixer1"));
             io.mixer[2] = parseMixer(val(c, "mixer2")); }

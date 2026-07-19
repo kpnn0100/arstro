@@ -356,17 +356,19 @@ via `curve::sample(pts, cyclic=true, 360)` (broken at wrap folds), tangent handl
 `setMappedHue` colors the line by output hue.
 
 ### 5.4 CurvePanel
-RGB/R/G/B picker + Reset over a draggable tone-curve plot (`kPlotH=164`). Holds **four**
-independent point-sets `mCurves[4]` (0=RGB master, 1=R, 2=G, 3=B), each default `{{0,0},{1,1}}`;
-the picker's `onChange` swaps the active channel `mChannel` (instant, mirroring MixerPanel).
-`setCurves(master, channels[3])` restores all four; `onCurveChange(int channel, vector<pair>)`
-emits the edited channel (0=master→`EditParams::curve`, 1..3→`EditParams::curveChannel[ch-1]`).
-Gestures on the active curve (pick radius `metrics::anchorHitRadius`=13, nearest-within-radius
-wins): DragStart picks a point, Drag moves it (endpoints locked to x=0/1; interior clamped between
-neighbors), Click on empty space inserts (sorted), double-click removes an interior point. Reset
-clears only the active channel. Paint: rounded plot bg, quarter gridlines + identity diagonal, a
-Catmull-Rom `strokeSpline` + point circles both drawn in the active channel's colour
-(`channelColor`: accent for RGB, red/green/blue for R/G/B).
+RGB/R/G/B picker + Reset over a tone-curve plot (`kPlotH=164`) — **same bezier UX as HueCurveEditor**.
+Holds **four** independent `CurvePoint` sets `mCurves[4]` (0=RGB master, 1=R, 2=G, 3=B), default
+identity corners; the picker's `onChange` swaps `mChannel` (instant). `setCurves(master, channels[3])`
+restores all four; `setReferenceCurves(...)` sets the faint effective (group-stacked) overlay;
+`onCurveChange(int channel, vector<CurvePoint>)` emits the edited channel (0=master→`EditParams::curve`,
+1..3→`curveChannel[ch-1]`). Gestures (pick radius `metrics::anchorHitRadius`=13, nearest wins):
+`Down` grabs a smooth node's in/out handle (`handleAt`) else the node (`pointAt`); **Alt on a node**
+makes it smooth + `mDragKind=3` (symmetric handle pull); `Drag` moves the node (endpoints locked
+x=0/1, interior clamped between neighbours) or shapes a handle (Alt breaks symmetry); double-click
+adds a corner on empty space / removes an interior node. Reset clears the active channel. Paint:
+rounded plot bg, quarter gridlines + identity diagonal, the faint reference curve (`#4cb573`),
+then `curve::sample(active, cyclic=false)` polyline + tangent-handle lines/dots + node circles, in
+the active channel's colour (`channelColor`).
 
 ### 5.5 GradePanel
 `struct State{ array<GradeWheel,3> grade; float balance; bool remapEnable; float remapSrc,

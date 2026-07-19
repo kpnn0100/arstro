@@ -12,15 +12,17 @@ namespace arstro
             buildLut({{0.0f, 0.0f}, {1.0f, 1.0f}}, mChanLut[c]);  // identity channels
     }
 
-    void ToneCurve::setPoints(const std::vector<std::pair<float, float>> &points)
+    void ToneCurve::setPoints(const std::vector<CurvePoint> &points)
     {
-        buildLut(points, mLut);
+        // Flatten the bezier control points to a dense polyline (corners = straight,
+        // smooth = bezier) with the SAME sampler the editor draws with, then LUT it.
+        buildLut(curve::sample(points, false, 0.f), mLut);
     }
 
-    void ToneCurve::setChannelPoints(int ch, const std::vector<std::pair<float, float>> &points)
+    void ToneCurve::setChannelPoints(int ch, const std::vector<CurvePoint> &points)
     {
         if (ch < 0 || ch >= kChannels) return;
-        buildLut(points, mChanLut[ch]);
+        buildLut(curve::sample(points, false, 0.f), mChanLut[ch]);
     }
 
     void ToneCurve::setLogScale(bool log) { mLog = log; }

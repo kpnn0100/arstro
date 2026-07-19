@@ -251,10 +251,9 @@ void main() {
             const bool lensId = p.lensDistortion == 0 && p.lensCA == 0 && p.lensVignette == 0;
             const bool geomId = p.rotation == 0 && p.quarterTurns == 0 &&
                                 p.cropX == 0 && p.cropY == 0 && p.cropW == 1 && p.cropH == 1;
-            auto curveIsId = [](const std::vector<std::pair<float, float>> &c)
+            auto curveIsId = [](const std::vector<CurvePoint> &c)
             {
-                return c.size() == 2 && c[0].first == 0 && c[0].second == 0 &&
-                       c[1].first == 1 && c[1].second == 1;
+                return c.size() == 2 && c[0].x == 0 && c[0].y == 0 && c[1].x == 1 && c[1].y == 1;
             };
             const bool curveId = curveIsId(p.curve) && curveIsId(p.curveChannel[0]) &&
                                  curveIsId(p.curveChannel[1]) && curveIsId(p.curveChannel[2]);

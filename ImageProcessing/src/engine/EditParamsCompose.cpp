@@ -14,12 +14,12 @@ namespace arstro
 {
     namespace
     {
-        using Points = std::vector<std::pair<float, float>>;
+        using Points = std::vector<std::pair<float, float>>;  // sampled polyline
+        using CV = std::vector<CurvePoint>;                    // bezier control points
 
-        bool isIdentityCurve(const Points &p)
+        bool isIdentityCurve(const CV &p)
         {
-            return p.size() == 2 && p[0].first == 0 && p[0].second == 0 &&
-                   p[1].first == 1 && p[1].second == 1;
+            return p.size() == 2 && p[0].x == 0 && p[0].y == 0 && p[1].x == 1 && p[1].y == 1;
         }
 
         // Piecewise-linear evaluation of a sorted (x-ascending) polyline, clamped at
@@ -42,21 +42,25 @@ namespace arstro
 
         // Stack two tone curves additively in Y: at each sampled input the deviation
         // of `over` from identity is added to `base`. An identity `over` is a no-op
-        // (returns base untouched, so no resample happens in the common case).
-        Points addCurveDeltaY(Points base, Points over)
+        // (returns base untouched, so no resample happens in the common case). The
+        // result is corner control points (render-only; the item's own curve is intact).
+        CV addCurveDeltaY(const CV &base, const CV &over)
         {
             if (isIdentityCurve(over)) return base;
-            std::sort(base.begin(), base.end(), [](auto &a, auto &b) { return a.first < b.first; });
-            std::sort(over.begin(), over.end(), [](auto &a, auto &b) { return a.first < b.first; });
+            const Points bp = curve::sample(base, false, 0.f);
+            const Points op = curve::sample(over, false, 0.f);
             const int kSamples = 33;
-            Points out;
+            CV out;
             out.reserve(kSamples);
             for (int i = 0; i < kSamples; ++i)
             {
                 const float x = (float)i / (kSamples - 1);
-                float y = interpPoly(base, x) + (interpPoly(over, x) - x);  // base + over's deviation
+                float y = interpPoly(bp, x) + (interpPoly(op, x) - x);  // base + over's deviation
                 y = y < 0 ? 0 : (y > 1 ? 1 : y);
-                out.push_back({x, y});
+                CurvePoint c;
+                c.x = x;
+                c.y = y;
+                out.push_back(c);
             }
             return out;
         }

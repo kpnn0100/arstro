@@ -224,11 +224,11 @@ namespace arstro
     void EditEngine::setLensCA(float v) { if (auto *p = cur()) { p->lensCA = v; mLens.setChromaticAberration(v); } }
     void EditEngine::setLensVignette(float v) { if (auto *p = cur()) { p->lensVignette = v; mLens.setVignette(v); } }
 
-    void EditEngine::setCurvePoints(const std::vector<std::pair<float, float>> &pts)
+    void EditEngine::setCurvePoints(const std::vector<CurvePoint> &pts)
     {
         if (auto *p = cur()) { p->curve = pts; mToneCurve.setPoints(pts); }
     }
-    void EditEngine::setCurveChannelPoints(int ch, const std::vector<std::pair<float, float>> &pts)
+    void EditEngine::setCurveChannelPoints(int ch, const std::vector<CurvePoint> &pts)
     {
         if (ch < 0 || ch >= 3) return;
         if (auto *p = cur()) { p->curveChannel[ch] = pts; mToneCurve.setChannelPoints(ch, pts); }

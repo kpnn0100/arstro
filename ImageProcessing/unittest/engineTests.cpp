@@ -448,8 +448,8 @@ TEST(EditParamsIO_roundtrip)
     CHECK_NEAR(q.temp, 7200.0, 1e-2);
     CHECK_NEAR(q.dehaze, 50.0, 1e-4);
     CHECK(q.curve.size() == 3);
-    CHECK_NEAR(q.curve[1].first, 0.5, 1e-4);
-    CHECK_NEAR(q.curve[1].second, 0.6, 1e-4);
+    CHECK_NEAR(q.curve[1].x, 0.5, 1e-4);
+    CHECK_NEAR(q.curve[1].y, 0.6, 1e-4);
     CHECK(!q.curveLog);
     CHECK(q.mixer[0].size() == 2 && q.mixer[2].size() == 1);
     CHECK_NEAR(q.grade[1].hue, 210.0, 1e-3);
@@ -521,16 +521,16 @@ TEST(EditParamsIO_curve_channel_roundtrip)
     CHECK(deserializeParams(serializeParams(p), q));
     CHECK(q.curve.size() == 3);
     CHECK(q.curveChannel[0].size() == 3);
-    CHECK_NEAR(q.curveChannel[0][1].first, 0.5, 1e-4);
-    CHECK_NEAR(q.curveChannel[0][1].second, 0.9, 1e-4);
+    CHECK_NEAR(q.curveChannel[0][1].x, 0.5, 1e-4);
+    CHECK_NEAR(q.curveChannel[0][1].y, 0.9, 1e-4);
     CHECK(q.curveChannel[1].size() == 2);                 // G left as default identity, round-trips
-    CHECK_NEAR(q.curveChannel[2][0].second, 0.1, 1e-4);
+    CHECK_NEAR(q.curveChannel[2][0].y, 0.1, 1e-4);
 
     // A legacy file without curveR/G/B keys leaves the channels at their identity default.
     EditParams legacy;
     CHECK(deserializeParams("curve=0,0;1,1\n", legacy));
     CHECK(legacy.curveChannel[0].size() == 2);
-    CHECK(legacy.curveChannel[0][0].first == 0.f && legacy.curveChannel[0][1].first == 1.f);
+    CHECK(legacy.curveChannel[0][0].x == 0.f && legacy.curveChannel[0][1].x == 1.f);
 }
 
 // ── composeParams: group settings stacked onto a member (cosmo group tree) ──
@@ -566,8 +566,8 @@ TEST(ComposeParams_recursive_fold_and_curve_masks)
     EditParams grp; grp.curve = {{0.f, 0.f}, {0.5f, 0.7f}, {1.f, 1.f}};
     EditParams ec = composeParams(m2, grp);
     CHECK(ec.curve.size() == 33);               // resampled for render
-    CHECK_NEAR(ec.curve[16].first, 0.5, 1e-4);
-    CHECK_NEAR(ec.curve[16].second, 0.7, 1e-3); // 0.5 + (0.7 - 0.5)
+    CHECK_NEAR(ec.curve[16].x, 0.5, 1e-4);
+    CHECK_NEAR(ec.curve[16].y, 0.7, 1e-3);      // 0.5 + (0.7 - 0.5)
 
     // Masks concatenate: group masks apply to every member.
     EditParams mm; MaskParams a; a.type = MaskParams::Radial; mm.masks = {a};
@@ -627,15 +627,15 @@ TEST(Apf_selective_save_and_apply)
     CHECK(applyApfToEditParams(rt, {"basic"}, out));
     CHECK_NEAR(out.exposure, 1.2, 1e-4);
     CHECK_NEAR(out.contrast, 30.0, 1e-4);
-    CHECK(out.curve.size() == 2 && out.curve[1].second == 1.f);  // curve NOT applied (default identity)
+    CHECK(out.curve.size() == 2 && out.curve[1].y == 1.f);  // curve NOT applied (default identity)
     CHECK_NEAR(out.temp, 6500.0, 1e-3);                          // color not in the file at all
 
     // apply "curve" too -> master + per-channel curves now change
     CHECK(applyApfToEditParams(rt, {"basic", "curve"}, out));
     CHECK(out.curve.size() == 2);
-    CHECK_NEAR(out.curve[0].second, 0.05, 1e-4);
+    CHECK_NEAR(out.curve[0].y, 0.05, 1e-4);
     CHECK(out.curveChannel[0].size() == 3);            // R curve carried in the "curve" category
-    CHECK_NEAR(out.curveChannel[0][1].second, 0.9, 1e-4);
+    CHECK_NEAR(out.curveChannel[0][1].y, 0.9, 1e-4);
     CHECK(out.curveChannel[1].size() == 2);            // G/B stay identity
 
     // a full save carries masks + grade; apply restores them

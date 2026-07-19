@@ -119,90 +119,120 @@ namespace
               "the nearer anchor (idx1) was grabbed and moved");
     }
 
-    // ── The tone-curve editor ─────────────────────────────────────────────────
+    // ── The tone-curve editor (bezier model, same UX as the mixer) ─────────────
+    using P = CurvePanel::Points;
+    const P kIdentity{CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}};
+    CurvePoint cp(float x, float y) { CurvePoint c; c.x = x; c.y = y; return c; }
+
     void curveEnlargedTargetIsClickable()
     {
         std::printf("CurvePanel: enlarged pick radius grabs a near-but-not-on anchor\n");
         TestCurve c;
-        std::vector<std::pair<float, float>> last;
-        int changes = 0;
-        c.onCurveChange = [&](int, std::vector<std::pair<float, float>> p) { last = p; ++changes; };
+        P last; int changes = 0;
+        c.onCurveChange = [&](int, P p) { last = p; ++changes; };
 
-        // Endpoint (1,1) sits at plot-local (232,0) -> widget-local (241.75,0).
-        // Press 10px below it: outside the OLD radius (7), inside the new (13).
-        const bool grabbed = c.handleGesture(ev(Gesture::Type::DragStart), Point{241.75, 10});
-        check(grabbed, "DragStart 10px from the endpoint is caught (was a miss at r=7)");
-
-        // Drag down; the endpoint's x stays locked to 1, y follows the cursor.
+        // Endpoint (1,1) at plot-local (232,0) -> widget-local (241.75,0). Press 10px below.
+        const bool grabbed = c.handleGesture(ev(Gesture::Type::Down), Point{241.75, 10});
+        check(grabbed, "Down 10px from the endpoint is caught");
         c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 30}); // y = 1 - 30/164
         check(changes >= 1 && last.size() == 2, "drag emits the curve points");
-        check(!last.empty() && near(last[1].first, 1.0, 1e-6) && near(last[1].second, 1.0 - 30.0 / 164.0, 1e-3),
-              "the grabbed endpoint (idx1) moved, x locked to 1");
+        check(!last.empty() && near(last[1].x, 1.0, 1e-6) && near(last[1].y, 1.0 - 30.0 / 164.0, 1e-3),
+              "the grabbed endpoint moved, x locked to 1");
     }
 
     void curveFarClickMisses()
     {
-        std::printf("CurvePanel: a click beyond the radius grabs nothing\n");
+        std::printf("CurvePanel: a press beyond the radius grabs nothing\n");
         TestCurve c;
-        const bool grabbed = c.handleGesture(ev(Gesture::Type::DragStart), Point{241.75, 20}); // 20px away
-        check(!grabbed, "DragStart 20px from the endpoint is not caught");
+        int changes = 0;
+        c.onCurveChange = [&](int, P) { ++changes; };
+        c.handleGesture(ev(Gesture::Type::Down), Point{241.75, 20});  // 20px from the endpoint
+        c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 40});  // nothing grabbed -> no emit
+        check(changes == 0, "a press 20px away grabs nothing (no drag emit)");
     }
 
     void curveNearestWithinRadiusWins()
     {
         std::printf("CurvePanel: overlapping targets resolve to the NEAREST anchor\n");
         TestCurve c;
-        // Interior anchors at x=0.5 (plot px 116) and x=0.55 (plot px 127.6), 11.6px apart.
-        const CurvePanel::Points idc{{0.f, 0.f}, {1.f, 1.f}};
-        c.setCurves({{0.f, 0.f}, {0.5f, 0.5f}, {0.55f, 0.5f}, {1.f, 1.f}},
-                    std::array<CurvePanel::Points, 3>{{idc, idc, idc}});
-        std::vector<std::pair<float, float>> last;
-        c.onCurveChange = [&](int, std::vector<std::pair<float, float>> p) { last = p; };
+        // Interior nodes at x=0.5 (plot px 116) and x=0.55 (plot px 127.6), 11.6px apart.
+        c.setCurves({cp(0, 0), cp(0.5f, 0.5f), cp(0.55f, 0.5f), cp(1, 1)},
+                    std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+        P last;
+        c.onCurveChange = [&](int, P p) { last = p; };
 
-        // Press at plot px 125 (widget-local 134.75): 9px from idx1, 2.6px from idx2 --
-        // both inside r=13. The OLD "first within radius" grabs idx1; nearest grabs idx2.
-        const bool grabbed = c.handleGesture(ev(Gesture::Type::DragStart), Point{134.75, 82});
-        check(grabbed, "DragStart between two anchors is caught");
+        // Press at plot px 125 (widget 134.75): 9px from idx1, 2.6px from idx2 -> nearest idx2.
+        c.handleGesture(ev(Gesture::Type::Down), Point{134.75, 82});
         c.handleGesture(ev(Gesture::Type::Drag), Point{134.75, 62}); // to y = 1 - 62/164
-        check(last.size() == 4 && near(last[1].first, 0.5) && near(last[1].second, 0.5),
-              "the farther anchor (idx1) was NOT grabbed");
-        check(!last.empty() && near(last[2].second, 1.0 - 62.0 / 164.0, 1e-3),
-              "the nearer anchor (idx2) was grabbed and moved");
+        check(last.size() == 4 && near(last[1].x, 0.5) && near(last[1].y, 0.5),
+              "the farther node (idx1) was NOT grabbed");
+        check(!last.empty() && near(last[2].y, 1.0 - 62.0 / 164.0, 1e-3),
+              "the nearer node (idx2) was grabbed and moved");
     }
 
     void curvePerChannelIndependence()
     {
         std::printf("CurvePanel: RGB/R/G/B each edit their own independent curve\n");
-        using P = CurvePanel::Points;
         TestCurve c;
         int emittedCh = -99;
         c.onCurveChange = [&](int ch, P) { emittedCh = ch; };
 
-        // Four distinct stored curves.
-        const P master{{0.f, 0.f}, {1.f, 1.f}};
-        const P rC{{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};
-        const P gC{{0.f, 0.f}, {0.5f, 0.1f}, {1.f, 1.f}};
-        const P bC{{0.f, 0.f}, {1.f, 1.f}};
+        const P master{cp(0, 0), cp(1, 1)};
+        const P rC{cp(0, 0), cp(0.5f, 0.9f), cp(1, 1)};
+        const P gC{cp(0, 0), cp(0.5f, 0.1f), cp(1, 1)};
+        const P bC{cp(0, 0), cp(1, 1)};
         c.setCurves(master, std::array<P, 3>{{rC, gC, bC}});
         check(c.curveFor(0) == master && c.curveFor(1) == rC && c.curveFor(2) == gC && c.curveFor(3) == bC,
               "setCurves stores four independent curves");
 
-        // On RGB (channel 0): dragging the endpoint emits channel 0 and leaves R/G/B alone.
         c.showChannel(0);
-        c.handleGesture(ev(Gesture::Type::DragStart), Point{241.75, 10}); // grab the (1,1) endpoint
+        c.handleGesture(ev(Gesture::Type::Down), Point{241.75, 10}); // grab the (1,1) endpoint
         c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 30});
         check(emittedCh == 0, "editing RGB emits channel 0");
         check(c.curveFor(1) == rC && c.curveFor(2) == gC && c.curveFor(3) == bC,
               "editing RGB left R/G/B untouched");
 
-        // Switch to Red: dragging R's mid point (0.5,0.9) emits channel 1 and edits only R.
-        c.showChannel(1);
-        // (0.5,0.9) -> plot-local (116, 16.4) -> widget-local (125.75, 16.4).
-        c.handleGesture(ev(Gesture::Type::DragStart), Point{125.75, 16.4});
+        c.showChannel(1);  // R's mid (0.5,0.9) -> plot (116,16.4) -> widget (125.75,16.4)
+        c.handleGesture(ev(Gesture::Type::Down), Point{125.75, 16.4});
         c.handleGesture(ev(Gesture::Type::Drag), Point{125.75, 40});
         check(emittedCh == 1, "editing R emits channel 1");
         check(c.curveFor(1) != rC, "R's own curve changed");
         check(c.curveFor(2) == gC && c.curveFor(3) == bC, "editing R left G/B untouched");
+    }
+
+    void curveAltDragMakesSmoothSpline()
+    {
+        std::printf("CurvePanel: nodes are corners; Alt-drag pulls tangent handles (spline)\n");
+        // A plain drag keeps the mid node a CORNER (straight segments, no auto-ease).
+        {
+            TestCurve c;
+            c.setCurves({cp(0, 0), cp(0.5f, 0.5f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.handleGesture(ev(Gesture::Type::Down), Point{125.75, 82});  // mid (0.5,0.5) at (125.75,82)
+            c.handleGesture(ev(Gesture::Type::Drag), Point{125.75, 60});
+            check(!c.curveFor(0)[1].smooth, "a plain drag keeps the node a corner");
+        }
+        // Alt-drag makes the node SMOOTH with symmetric tangent handles.
+        {
+            TestCurve c;
+            c.setCurves({cp(0, 0), cp(0.5f, 0.5f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            auto altDown = ev(Gesture::Type::Down); altDown.alt = true;
+            c.handleGesture(altDown, Point{125.75, 82});
+            c.handleGesture(ev(Gesture::Type::Drag), Point{140.0, 60});  // pull the handles out
+            const CurvePoint &m = c.curveFor(0)[1];
+            check(m.smooth, "Alt-drag makes the node smooth (a spline)");
+            check(!near(m.ox, 0.0) || !near(m.oy, 0.0), "tangent handles were pulled out");
+            check(near(m.ix, -m.ox) && near(m.iy, -m.oy), "in/out handles are symmetric");
+        }
+    }
+
+    void curveDoubleClickAddRemove()
+    {
+        std::printf("CurvePanel: double-click adds a corner / removes an interior node\n");
+        TestCurve c;  // default {(0,0),(1,1)}
+        c.handleGesture(ev(Gesture::Type::DoubleClick), Point{125.75, 82});  // empty ~ (0.5,0.5)
+        check(c.curveFor(0).size() == 3, "double-click on empty space adds a point");
+        c.handleGesture(ev(Gesture::Type::DoubleClick), Point{125.75, 82});  // now on that node
+        check(c.curveFor(0).size() == 2, "double-click an interior node removes it");
     }
 }
 
@@ -218,6 +248,8 @@ int main()
     curveFarClickMisses();
     curveNearestWithinRadiusWins();
     curvePerChannelIndependence();
+    curveAltDragMakesSmoothSpline();
+    curveDoubleClickAddRemove();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");
