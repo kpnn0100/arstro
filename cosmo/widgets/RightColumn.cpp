@@ -142,7 +142,12 @@ namespace cosmo_v2
 
         mMixer = std::make_shared<MixerPanel>();
         mMixer->onCurveChange = [this](int channel, std::vector<CurvePoint> pts) {
-            if (auto *p = mSession.curParams()) { p->mixer[channel] = std::move(pts); mSession.submit(); }
+            if (auto *p = mSession.curParams())
+            {
+                p->mixer[channel] = std::move(pts);
+                mSession.submit();
+                refreshCurveReferences();  // the green "final" tracks the edit live
+            }
         };
 
         mCurve = std::make_shared<CurvePanel>();
@@ -152,6 +157,7 @@ namespace cosmo_v2
                 if (channel == 0) p->curve = std::move(pts);        // RGB master
                 else p->curveChannel[channel - 1] = std::move(pts); // R / G / B
                 mSession.submit();
+                refreshCurveReferences();
             }
         };
 
@@ -244,14 +250,21 @@ namespace cosmo_v2
         mMask->setMasks(p->masks, mSelectedMask);
         mMixer->setMixer(p->mixer);
         mCurve->setCurves(p->curve, p->curveChannel);
-        // The effective (group-stacked) mixer/tone curves, drawn faint behind the editable ones.
-        mMixer->setReference(eff.mixer);
-        mCurve->setReferenceCurves(eff.curve, eff.curveChannel);
+        refreshCurveReferences();  // the effective ("final") curves, drawn faint behind
         GradePanel::State gs;
         gs.grade = p->grade; gs.balance = p->balance; gs.remapEnable = p->remapEnable;
         gs.remapSrc = p->remapSrc; gs.remapRange = p->remapRange; gs.remapDst = p->remapDst; gs.remapStrength = p->remapStrength;
         mGrade->setState(gs);
         mXform->setState({p->rotation, p->quarterTurns, p->cropX, p->cropY, p->cropW, p->cropH});
+    }
+
+    void RightColumn::refreshCurveReferences()
+    {
+        // The "final" curve = the edit target's own curve composed with its ancestor
+        // groups' (effectiveEditParams). Recomputed here so it tracks every live edit.
+        const EditParams eff = mSession.effectiveEditParams();
+        mMixer->setReference(eff.mixer);
+        mCurve->setReferenceCurves(eff.curve, eff.curveChannel);
     }
 
     int RightColumn::activeTab() const { return mTabs->selectedIndex(); }

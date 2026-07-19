@@ -234,6 +234,36 @@ namespace
         c.handleGesture(ev(Gesture::Type::DoubleClick), Point{125.75, 82});  // now on that node
         check(c.curveFor(0).size() == 2, "double-click an interior node removes it");
     }
+
+    // Count the green (#4cb573) reference strokes in a rendered frame — that colour is
+    // unique to the "final" reference curve, so its presence proves it was drawn.
+    int greenRefStrokes(artboard::Segment &seg)
+    {
+        artboard::RecordingTarget t; seg.render(t);
+        int n = 0;
+        for (const auto &op : t.ops())
+            if (op.kind == artboard::DrawOp::Kind::SetStroke &&
+                near(op.color.r, 0.298, 0.02) && near(op.color.g, 0.710, 0.02) && near(op.color.b, 0.451, 0.02))
+                ++n;
+        return n;
+    }
+
+    void curveReferenceShownWhenDiffers()
+    {
+        std::printf("CurvePanel: the green 'final' curve is drawn only when it differs from own\n");
+        {   // reference (group-stacked final) differs from the own curve -> green drawn
+            TestCurve c;
+            c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves({cp(0, 0), cp(0.5f, 0.8f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            check(greenRefStrokes(c) >= 1, "green 'final' curve drawn when it differs from own");
+        }
+        {   // reference equals own (no group contribution) -> no green
+            TestCurve c;
+            c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            check(greenRefStrokes(c) == 0, "no green when the final equals the own curve");
+        }
+    }
 }
 
 int main()
@@ -250,6 +280,7 @@ int main()
     curvePerChannelIndependence();
     curveAltDragMakesSmoothSpline();
     curveDoubleClickAddRemove();
+    curveReferenceShownWhenDiffers();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

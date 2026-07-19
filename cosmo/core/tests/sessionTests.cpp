@@ -200,6 +200,35 @@ namespace
         printf("[PASS] group_edit_renders_brighter_member\n");
     }
 
+    void test_effective_curve_is_item_plus_group()
+    {
+        // The green "final" tone curve = effectiveEditParams().curve = the item's curve
+        // SUMMED with the group's (item + group - x), and it tracks live edits.
+        EditSession s;
+        auto px = solidImage(8, 8, 50, 50, 50);
+        s.openImage(px.data(), 8, 8, "a");
+        s.selectNode(0, false, false);
+        s.createGroupFromSelection();
+        s.selectNode(0, false, false);   // edit the GROUP: lift mid to 0.7
+        s.curParams()->curve = {arstro::CurvePoint{0.f, 0.f}, arstro::CurvePoint{0.5f, 0.7f}, arstro::CurvePoint{1.f, 1.f}};
+        s.submit();
+        s.selectImage(0);                // the IMAGE: lift mid to 0.6
+        s.curParams()->curve = {arstro::CurvePoint{0.f, 0.f}, arstro::CurvePoint{0.5f, 0.6f}, arstro::CurvePoint{1.f, 1.f}};
+        s.submit();
+
+        // final mid = item + group - x = 0.6 + 0.7 - 0.5 = 0.8 (curve[16] is x=0.5 of the 33-sample sum)
+        auto midY = [&] { return s.effectiveEditParams().curve[16].y; };
+        assert(s.effectiveEditParams().curve.size() == 33);
+        assert(std::fabs(midY() - 0.8f) < 3e-3f);
+
+        // editing the item curve updates the final: 0.4 + 0.7 - 0.5 = 0.6
+        s.curParams()->curve = {arstro::CurvePoint{0.f, 0.f}, arstro::CurvePoint{0.5f, 0.4f}, arstro::CurvePoint{1.f, 1.f}};
+        s.submit();
+        assert(std::fabs(midY() - 0.6f) < 3e-3f);
+
+        printf("[PASS] effective_curve_is_item_plus_group\n");
+    }
+
     void test_undo_redo()
     {
         EditSession s;
@@ -337,6 +366,7 @@ int main()
     test_group_editing_stacks_onto_members();
     test_group_params_persist();
     test_group_edit_renders_brighter_member();
+    test_effective_curve_is_item_plus_group();
     test_undo_redo();
     test_preset_save_and_apply_roundtrip();
     test_session_save_and_read_roundtrip();

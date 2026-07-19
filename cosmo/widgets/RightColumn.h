@@ -56,6 +56,10 @@ namespace cosmo_v2
         void onPaint(artboard::IRenderTarget &t) const override;  // card body (blends with active tab)
 
     private:
+        // Push the effective (group-stacked) curves to the mixer/curve editors as their
+        // faint green "final" reference — call after every curve/mixer edit so it tracks live.
+        void refreshCurveReferences();
+
         cosmo::EditSession &mSession;
         std::shared_ptr<HistogramWidget> mHistogram;
         std::shared_ptr<EditStackTabs> mTabs;
