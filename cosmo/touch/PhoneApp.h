@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -51,6 +52,13 @@ namespace cosmo_touch
         void poll();
         void setScreen(Screen s, double nowMs);
         artboard::Segment *activeRoot() const;
+        void buildSession(const std::string &name, bool empty);  // (re)build the EditSession
+        void newProject();      // fresh empty project
+        void openProject();     // open the existing project
+        void importCatalog();   // import the source images as a new catalog
+
+        struct SrcImage { std::vector<uint8_t> rgba; int w = 0, h = 0; std::string name; };
+        std::vector<SrcImage> mImgs;   // decoded source images (kept so New/Import can rebuild)
 
         cosmo::EditSession mSession;
         artboard::GestureRecognizer mRecognizer;

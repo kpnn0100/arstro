@@ -164,35 +164,44 @@ namespace
             for (size_t i = 0; i < mPts.size(); ++i)
             {
                 double sx = mPts[i].x * w, sy = plotY + (1 - mPts[i].y) * plotH;
-                t.setFill(STAGE); rrectPath(t, sx - 6, sy - 6, 12, 12, 6); t.fillPath();
-                t.setStroke(line, 2.0); rrectPath(t, sx - 6, sy - 6, 12, 12, 6); t.strokePath();
+                double r = ((int)i == mDrag) ? 10 : 8;   // touch-sized nodes
+                t.setFill(STAGE); rrectPath(t, sx - r, sy - r, 2 * r, 2 * r, r); t.fillPath();
+                t.setStroke(line, 2.5); rrectPath(t, sx - r, sy - r, 2 * r, 2 * r, r); t.strokePath();
             }
         }
+        // Touch-friendly editing: generous grab radius, drag clamps a node BETWEEN its
+        // neighbours (no mid-drag re-sort, so the grabbed index stays valid), tap on empty
+        // space adds a node (only when clearly away from existing ones), double-tap a node
+        // removes it (endpoints excepted).
         bool handleGesture(const Gesture &g, const Point &lp) override
         {
             const double w = width.value(), h = height.value();
             double plotH = hueStrip ? h - 18 : h, plotY = hueStrip ? 18 : 0;
-            auto toNorm = [&](Point p) { return Point{std::clamp(p.x / w, 0.0, 1.0), std::clamp(1 - (p.y - plotY) / plotH, 0.0, 1.0)}; };
-            if (g.type == Gesture::Type::Down)
+            auto toNorm = [&](const Point &p) { return Point{std::clamp(p.x / w, 0.0, 1.0), std::clamp(1 - (p.y - plotY) / plotH, 0.0, 1.0)}; };
+            auto nearest = [&](const Point &p) { int best = -1; double bd = kGrab; for (size_t i = 0; i < mPts.size(); ++i) { double sx = mPts[i].x * w, sy = plotY + (1 - mPts[i].y) * plotH; double d = std::hypot(sx - p.x, sy - p.y); if (d < bd) { bd = d; best = (int)i; } } return best; };
+            if (g.type == Gesture::Type::Down) { mDrag = nearest(lp); return true; }
+            if ((g.type == Gesture::Type::Drag || g.type == Gesture::Type::DragStart) && mDrag >= 0)
             {
-                mDrag = -1;
-                for (size_t i = 0; i < mPts.size(); ++i)
-                { double sx = mPts[i].x * w, sy = plotY + (1 - mPts[i].y) * plotH; if (std::hypot(sx - lp.x, sy - lp.y) < 24) { mDrag = (int)i; break; } }
-                return true;
-            }
-            if (g.type == Gesture::Type::Drag && mDrag >= 0)
-            {
-                Point n = toNorm(g.pos);
+                Point n = toNorm(lp);
                 bool end = (mDrag == 0 || mDrag == (int)mPts.size() - 1);
-                if (!end) mPts[mDrag].x = (float)n.x;
+                if (!end)
+                {
+                    double lo = mPts[mDrag - 1].x + 0.01, hi = mPts[mDrag + 1].x - 0.01;
+                    mPts[mDrag].x = (float)std::clamp(n.x, lo, hi);
+                }
                 mPts[mDrag].y = (float)n.y;
-                std::sort(mPts.begin(), mPts.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
                 if (onChange) onChange(mPts);
                 return true;
             }
-            if (g.type == Gesture::Type::Click && mDrag < 0)
+            if (g.type == Gesture::Type::DoubleClick)
             {
-                Point n = toNorm(lp); CurvePoint p; p.x = (float)n.x; p.y = (float)n.y;
+                int hit = nearest(lp);
+                if (hit > 0 && hit < (int)mPts.size() - 1) { mPts.erase(mPts.begin() + hit); mDrag = -1; if (onChange) onChange(mPts); }
+                return true;
+            }
+            if (g.type == Gesture::Type::Click && mDrag < 0)   // empty tap -> add a node
+            {
+                Point n = toNorm(lp); CurvePoint p; p.x = (float)std::clamp(n.x, 0.02, 0.98); p.y = (float)n.y;
                 mPts.push_back(p);
                 std::sort(mPts.begin(), mPts.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
                 if (onChange) onChange(mPts);
@@ -201,6 +210,7 @@ namespace
             return true;
         }
         bool hitTestSelf(const Point &p) const override { return localBounds().contains(p); }
+        static constexpr double kGrab = 32.0;   // finger-friendly node grab radius
     private:
         static Color hsv(double hh, double s, double v)
         {
@@ -642,6 +652,7 @@ public:
         mTray->setNow(now); mTray->configure(w, h, now);
     }
     void setPhoto(const uint8_t *rgba, int w, int h) { mPhoto->setImage(rgba, w, h); }
+    void setEmpty(bool e) { mPhoto->visible = !e; mThumbIds.clear(); }   // empty project: blank canvas
     void syncControls() { mTray->syncFromSession(); }
     void setNow(double n) { mTray->setNow(n); mDrawer->setNow(n); }
     void setName(const std::string &n) { mName = n; }
@@ -731,7 +742,7 @@ public:
 class HomeScreen : public Segment
 {
 public:
-    std::function<void()> onOpenProject;
+    std::function<void()> onNew, onOpen, onImport;
     void setProject(const std::string &name, int count, const std::string &sizeStr, const std::vector<uint8_t> &thumb, int tw, int th)
     { mName = name; mCount = count; mSize = sizeStr; mThumb = thumb; mTw = tw; mTh = th; mThumbId = -1; }
     const std::string &name() const { return mName; }
@@ -781,11 +792,13 @@ protected:
     }
     bool handleGesture(const Gesture &g, const Point &lp) override
     {
-        if (g.type != Gesture::Type::Click || !onOpenProject) return true;
-        for (auto &b : mActBtns) if (b.contains(lp)) { onOpenProject(); return true; }   // New / Open / Import
-        if (mCardRect.w > 0 && mCardRect.contains(lp)) { onOpenProject(); return true; }  // recent card
-        if (mNewCard.w > 0 && mNewCard.contains(lp)) { onOpenProject(); return true; }    // new-project card
-        return true;   // taps elsewhere (search / footer / empty) do nothing
+        if (g.type != Gesture::Type::Click) return true;
+        for (size_t i = 0; i < mActBtns.size(); ++i)
+            if (mActBtns[i].contains(lp))
+            { if (i == 0 && onNew) onNew(); else if (i == 1 && onOpen) onOpen(); else if (i == 2 && onImport) onImport(); return true; }
+        if (mCardRect.w > 0 && mCardRect.contains(lp)) { if (onOpen) onOpen(); return true; }   // recent card -> open
+        if (mNewCard.w > 0 && mNewCard.contains(lp)) { if (onNew) onNew(); return true; }       // dashed card -> new
+        return true;   // search / footer / empty -> nothing
     }
     bool hitTestSelf(const Point &p) const override { return localBounds().contains(p); }
 private:
@@ -835,7 +848,9 @@ PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
     mHome = std::make_shared<HomeScreen>(); mLoading = std::make_shared<LoadingScreen>(); mEditor = std::make_shared<EditorScreen>(mSession);
     for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); }
     mEditor->resize(width, height, 0.0);
-    mHome->onOpenProject = [this] { setScreen(Screen::Loading, mNowMs); mLoading->begin(mHome->name(), mHome->count(), mNowMs); };
+    mHome->onNew = [this] { newProject(); };
+    mHome->onOpen = [this] { openProject(); };
+    mHome->onImport = [this] { importCatalog(); };
     mLoading->onDone = [this] { setScreen(Screen::Editor, mNowMs); };
     mEditor->onHome = [this] { setScreen(Screen::Home, mNowMs); };
     mRecognizer.setSink([this](const Gesture &g) { if (auto *r = activeRoot()) r->onGesture(g); });
@@ -851,16 +866,35 @@ void PhoneApp::setSize(double width, double height)
 { mW = width; mH = height; for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); } mEditor->resize(width, height, mNowMs); }
 
 void PhoneApp::addProjectImage(const uint8_t *rgba, int w, int h, const std::string &name)
-{ if (mImageCount == 0) mSession.openImage(rgba, w, h, name); else mSession.openImageInto(mSession.currentGroup(), rgba, w, h, name, ""); ++mImageCount; }
+{ mImgs.push_back({std::vector<uint8_t>(rgba, rgba + (size_t)w * h * 4), w, h, name}); }  // keep source
+
+void PhoneApp::buildSession(const std::string &name, bool empty)
+{
+    mSession.resetWorkspace();
+    mImageCount = 0;
+    if (!empty)
+        for (auto &im : mImgs)
+        { if (mImageCount == 0) mSession.openImage(im.rgba.data(), im.w, im.h, im.name);
+          else mSession.openImageInto(mSession.currentGroup(), im.rgba.data(), im.w, im.h, im.name, ""); ++mImageCount; }
+    if (mImageCount > 0) mSession.selectImage(0);
+    mSession.setUseGpu(true);
+    mEditor->setName(name);
+    mEditor->setEmpty(empty);
+    if (!empty)
+    {
+        const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(0);
+        std::vector<uint8_t> tb; int tw = 0, thh = 0; if (th && th->w > 0) { tb = th->rgba; tw = th->w; thh = th->h; }
+        mHome->setProject(name, mImageCount, "demo", tb, tw, thh);
+    }
+    mEditor->syncControls();
+}
 
 void PhoneApp::finishProject(const std::string &projectName)
-{
-    if (mImageCount == 0) return;
-    mSession.selectImage(0); mSession.setUseGpu(true); mEditor->setName(projectName);
-    const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(0);
-    std::vector<uint8_t> tb; int tw = 0, thh = 0; if (th && th->w > 0) { tb = th->rgba; tw = th->w; thh = th->h; }
-    mHome->setProject(projectName, mImageCount, "demo", tb, tw, thh); mEditor->syncControls();
-}
+{ if (!mImgs.empty()) buildSession(projectName, false); }   // startup: build, stay on Home
+
+void PhoneApp::newProject()      { buildSession("Untitled", true);         mLoading->begin("Untitled", 0, mNowMs);          setScreen(Screen::Loading, mNowMs); }
+void PhoneApp::openProject()     { buildSession("Sample Project", false);  mLoading->begin("Sample Project", mImageCount, mNowMs);   setScreen(Screen::Loading, mNowMs); }
+void PhoneApp::importCatalog()   { buildSession("Imported Catalog", false); mLoading->begin("Imported Catalog", mImageCount, mNowMs); setScreen(Screen::Loading, mNowMs); }
 
 bool PhoneApp::gpuAvailable() const { return mSession.gpuAvailable(); }
 
