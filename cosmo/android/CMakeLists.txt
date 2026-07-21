@@ -47,6 +47,7 @@ add_library(cosmo SHARED
   android_main.cpp
   ${PHONE_UI}
   ${COSMO_DIR}/Theme.cpp              # cosmo_v2 palette/font/radius tokens (reused by touch UI)
+  ${COSMO_DIR}/widgets/Icons.cpp      # cosmo_v2::icon:: line glyphs (panelLeft etc.)
   ${COSMO_CORE}
   ${IP_SRC}
   ${AB_DIR}/src/adapter/native/CairoTarget.cpp
