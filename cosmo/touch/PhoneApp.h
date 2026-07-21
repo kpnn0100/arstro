@@ -38,6 +38,7 @@ namespace cosmo_touch
         void pointer(int kind, double x, double y, int button, double timeMs,
                      bool alt = false, bool shift = false, bool ctrl = false);
         void wheel(double x, double y, double delta, bool ctrl);
+        void longPress(double x, double y);   // synthesized by the host; -> multi-select toggle
         void setSize(double width, double height);
 
         // Build the project: add each decoded image (straight RGBA8). The first becomes

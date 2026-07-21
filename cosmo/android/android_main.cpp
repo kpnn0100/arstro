@@ -21,6 +21,7 @@
 
 #include <cairo/cairo.h>
 
+#include <cmath>
 #include <cstdio>
 #include <ctime>
 #include <memory>
@@ -227,6 +228,10 @@ struct AppState
 {
     Renderer *r = nullptr;
     bool hasFocus = false;
+    // long-press synthesis (touch has no right-button; hold -> RightClick)
+    bool touchDown = false, moved = false, longFired = false;
+    float downX = 0, downY = 0;
+    double downT = 0;
 };
 
 void onCmd(android_app *app, int32_t cmd)
@@ -272,9 +277,9 @@ int32_t onInput(android_app *app, AInputEvent *ev)
     float x = AMotionEvent_getX(ev, 0), y = AMotionEvent_getY(ev, 0);
     double t = nowMsMonotonic();
     int kind = -1;
-    if (action == AMOTION_EVENT_ACTION_DOWN) kind = 0;
-    else if (action == AMOTION_EVENT_ACTION_MOVE) kind = 1;
-    else if (action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL) kind = 2;
+    if (action == AMOTION_EVENT_ACTION_DOWN) { kind = 0; st->touchDown = true; st->moved = false; st->longFired = false; st->downX = x; st->downY = y; st->downT = t; }
+    else if (action == AMOTION_EVENT_ACTION_MOVE) { kind = 1; if (std::hypot(x - st->downX, y - st->downY) > 16.f) st->moved = true; }
+    else if (action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL) { kind = 2; st->touchDown = false; }
     if (kind < 0) return 1;
     st->r->app->pointer(kind, (double)x, (double)y, 0, t, false, false, false);
     return 1;
@@ -299,5 +304,7 @@ void android_main(android_app *app)
             if (app->destroyRequested) { if (st.r) { st.r->teardown(); delete st.r; } return; }
         }
         if (st.hasFocus && st.r) st.r->drawFrame();
+        if (st.touchDown && !st.moved && !st.longFired && st.r && st.r->app && nowMsMonotonic() - st.downT > 500.0)
+        { st.r->app->longPress(st.downX, st.downY); st.longFired = true; }
     }
 }

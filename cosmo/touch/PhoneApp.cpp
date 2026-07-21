@@ -43,6 +43,7 @@ namespace
 
     constexpr double kTopBar = 48.0, kCrumb = 24.0, kFilm = 72.0, kToolBar = 56.0, kAction = 52.0;
     constexpr double kHandle = 20.0, kHeader = 36.0, kRowH = 48.0, kLabelW = 120.0, kValueW = 40.0, kHist = 60.0;
+    constexpr double kRail = kToolBar + 8.0;   // collapsed tray height (tool bar); keep filmstrip above it
 
     const char *kTabLabels[5] = {"Basic", "Mask", "Curve", "Grade", "Xform"};
 
@@ -819,7 +820,7 @@ public:
     void resize(double w, double h, double now)
     {
         width.set(w); height.set(h);
-        double py = kTopBar, ph = h - kTopBar - kCrumb - kFilm;
+        double py = kTopBar, ph = h - kTopBar - kCrumb - kFilm - kRail;   // keep filmstrip above the rail tray
         mPhoto->x.set(0); mPhoto->y.set(py); mPhoto->width.set(w); mPhoto->height.set(ph);
         mPill->x.set((w - mPill->width.value()) * 0.5); mPill->y.set(py + ph - mPill->height.value() - 12);
         mDrawer->x.set(0); mDrawer->y.set(0); mDrawer->width.set(w); mDrawer->height.set(h);
@@ -837,37 +838,59 @@ protected:
     {
         const double w = width.value(), h = height.value();
         t.setFill(STAGE); rectPath(t, 0, kTopBar, w, h - kTopBar); t.fillPath();
-        double crumbY = h - kFilm - kCrumb;
+        double crumbY = h - kRail - kFilm - kCrumb;
         t.setFill(BG); rectPath(t, 0, crumbY, w, kCrumb); t.fillPath(); hline(t, 0, w, crumbY, BORDER); hline(t, 0, w, crumbY + kCrumb, BORDER);
         drawBreadcrumb(t, crumbY);
-        double filmY = h - kFilm; t.setFill(BG); rectPath(t, 0, filmY, w, kFilm); t.fillPath(); drawFilmstrip(t, filmY, w);
+        double filmY = h - kRail - kFilm; t.setFill(BG); rectPath(t, 0, filmY, w, kFilm); t.fillPath(); drawFilmstrip(t, filmY, w);
         t.setFill(BG); rectPath(t, 0, 0, w, kTopBar); t.fillPath(); hline(t, 0, w, kTopBar, BORDER);
         double c = kTopBar * 0.5;
         ci::panelLeft(t, Rect{10, c - 10, 20, 20}, FG, 1.5);
         icon::back(t, Rect{54, c - 10, 20, 20}, FG, 1.75);
-        txtC(t, mName.empty() ? "Untitled" : mName, w * 0.5, c + 5, 14, fnt::sansMedium(), FG);
+        int eg = mSession.editGroup();
+        std::string title = (eg >= 0 && eg < (int)mSession.nodes().size() && mSession.nodes()[eg].group)
+                                ? "Group: " + mSession.nodes()[eg].name
+                                : (mName.empty() ? "Untitled" : mName);
+        txtC(t, title, w * 0.5, c + 5, 14, fnt::sansMedium(), eg >= 0 ? ACCENT : FG);
         icon::undo(t, Rect{w - 132, c - 10, 20, 20}, mSession.canUndo() ? FG : MUTED, 1.75);
         icon::redo(t, Rect{w - 88, c - 10, 20, 20}, mSession.canRedo() ? FG : MUTED, 1.75);
         icon::more(t, Rect{w - 44, c - 10, 20, 20}, FG, 1.75);
     }
     bool handleGesture(const Gesture &g, const Point &lp) override
     {
-        if (g.type != Gesture::Type::Click) return true;
         const double w = width.value(), h = height.value();
-        if (lp.y <= kTopBar)
+        const bool click = g.type == Gesture::Type::Click, dbl = g.type == Gesture::Type::DoubleClick, rc = g.type == Gesture::Type::RightClick;
+        if (!click && !dbl && !rc) return true;
+        if (click && lp.y <= kTopBar)
         {
             if (lp.x < 44) mDrawer->open(mNow);                                  // panel -> preset drawer
             else if (lp.x < 88) { if (onHome) onHome(); }                         // back -> home
-            else if (lp.x >= w - 140 && lp.x < w - 96) { if (mSession.canUndo()) { mSession.undo(); syncControls(); } }  // undo
-            else if (lp.x >= w - 96 && lp.x < w - 52) { if (mSession.canRedo()) { mSession.redo(); syncControls(); } }   // redo
-            else if (lp.x >= w - 52) mSheets->open(SheetLayer::Mode::Overflow, mNow);   // more -> menu
+            else if (lp.x >= w - 140 && lp.x < w - 96) { if (mSession.canUndo()) { mSession.undo(); syncControls(); } }
+            else if (lp.x >= w - 96 && lp.x < w - 52) { if (mSession.canRedo()) { mSession.redo(); syncControls(); } }
+            else if (lp.x >= w - 52) mSheets->open(SheetLayer::Mode::Overflow, mNow);
             return true;
         }
-        double filmY = h - kFilm, cy = filmY + (kFilm - 54) * 0.5;
+        double filmY = h - kRail - kFilm;
         if (lp.y >= filmY && lp.y <= filmY + kFilm)
         {
             auto cells = mSession.currentGroupCells(); double x = 8;
-            for (auto &cc : cells) { if (lp.x >= x && lp.x <= x + 72 && lp.y >= cy && lp.y <= cy + 54) { if (!cc.group && cc.slot >= 0) { mSession.selectImage(cc.slot); syncControls(); } break; } x += 78; }
+            for (size_t i = 0; i < cells.size(); ++i)
+            {
+                if (lp.x >= x && lp.x <= x + 72)
+                {
+                    if (dbl && cells[i].group) mSession.navigateToGroup(cells[i].node);  // drill into group
+                    else if (rc) mSession.selectNode((int)i, false, true);                // long-press -> multi-select toggle
+                    else mSession.selectNode((int)i, false, false);                       // tap -> select (image, or group as edit target)
+                    syncControls();
+                    break;
+                }
+                x += 78;
+            }
+            return true;
+        }
+        double crumbY = h - kRail - kFilm - kCrumb;
+        if (click && lp.y >= crumbY && lp.y < crumbY + kCrumb)
+        {
+            for (auto &z : mCrumbZones) if (z.first.contains(lp)) { mSession.navigateToGroup(z.second); syncControls(); break; }
             return true;
         }
         return true;
@@ -876,15 +899,32 @@ protected:
 private:
     void drawBreadcrumb(IRenderTarget &t, double y) const
     {
-        auto path = mSession.breadcrumbPath(); if (path.empty()) path.push_back(mName.empty() ? "Photo" : mName);
+        mCrumbZones.clear();
+        std::vector<int> path;                       // group node path: root -> ... -> current group
+        for (int g = mSession.currentGroup(); g >= 0;) { path.push_back(g); if (g == 0) break; g = mSession.nodes()[g].parent; }
+        std::reverse(path.begin(), path.end());
         double x = 12, bl = y + kCrumb * 0.5 + 4;
         for (size_t i = 0; i < path.size(); ++i)
-        { bool last = i + 1 == path.size(); txt(t, path[i], x, bl, 11, fnt::sans(), last ? FG : MUTED); x += t.measureText(path[i], 11, fnt::sans()) + 6;
-          if (!last) { txt(t, ">", x, bl, 10, fnt::sans(), MUTED); x += 12; } }
+        {
+            int n = path[i]; bool last = i + 1 == path.size();
+            std::string nm = mSession.nodes()[n].name.empty() ? (n == 0 ? "All Photos" : "Group") : mSession.nodes()[n].name;
+            double wpx = t.measureText(nm, 11, fnt::sans());
+            txt(t, nm, x, bl, 11, fnt::sans(), last ? FG : MUTED);
+            mCrumbZones.push_back({Rect{x - 4, y, wpx + 8, kCrumb}, n});
+            x += wpx + 6;
+            if (!last) { txt(t, ">", x, bl, 10, fnt::sans(), MUTED); x += 12; }
+        }
     }
     void drawFilmstrip(IRenderTarget &t, double y, double w) const
     {
-        (void)w; auto cells = mSession.currentGroupCells(); int cur = mSession.currentSlot();
+        (void)w; auto cells = mSession.currentGroupCells();
+        int cur = mSession.currentSlot(), eg = mSession.editGroup();
+        const auto &sel = mSession.selection();
+        auto selected = [&](const cosmo::EditSession::Cell &c) {
+            if (std::find(sel.begin(), sel.end(), c.node) != sel.end()) return true;
+            if (c.group) return c.node == eg;
+            return c.slot == cur && eg < 0;
+        };
         double x = 8, cw = 72, ch = 54, cy = y + (kFilm - ch) * 0.5;
         for (auto &c : cells)
         {
@@ -893,8 +933,8 @@ private:
               char b[24]; std::snprintf(b, sizeof b, "%s . %d", c.name.c_str(), c.count); txtC(t, b, x + cw * 0.5, cy + ch - 7, 9, fnt::sans(), MUTED); }
             else
             { t.setFill(INPUT); rrectPath(t, x, cy, cw, ch, 2); t.fillPath(); int id = thumbId(t, c.slot);
-              if (id >= 0) { t.save(); t.clipRect(x, cy, cw, ch); t.drawImage(id, Rect{x, cy, cw, ch}); t.restore(); }
-              if (c.slot == cur) { t.setStroke(ACCENT, 2.0); rrectPath(t, x, cy, cw, ch, 2); t.strokePath(); } }
+              if (id >= 0) { t.save(); t.clipRect(x, cy, cw, ch); t.drawImage(id, Rect{x, cy, cw, ch}); t.restore(); } }
+            if (selected(c)) { t.setStroke(ACCENT, 2.0); rrectPath(t, x, cy, cw, ch, 2); t.strokePath(); }
             x += 78;
         }
     }
@@ -913,6 +953,7 @@ private:
     std::string mName;
     double mNow = 0;
     mutable std::map<int, int> mThumbIds;
+    mutable std::vector<std::pair<Rect, int>> mCrumbZones;
 public:
     void setNowAll(double n) { mNow = n; setNow(n); }
 };
@@ -1101,5 +1142,11 @@ void PhoneApp::pointer(int kind, double x, double y, int button, double timeMs, 
     mRecognizer.feed(rp);
 }
 void PhoneApp::wheel(double x, double y, double delta, bool ctrl) { (void)x; (void)y; (void)delta; (void)ctrl; }
+
+void PhoneApp::longPress(double x, double y)
+{
+    Gesture g; g.type = Gesture::Type::RightClick; g.pos = Point{x, y};
+    if (auto *r = activeRoot()) r->onGesture(g);
+}
 }  // namespace cosmo_touch
 }  // namespace arstro
