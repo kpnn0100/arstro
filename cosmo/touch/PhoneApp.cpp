@@ -5,7 +5,9 @@
 #include "base/Parallel.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <map>
@@ -40,7 +42,7 @@ namespace
     const Color CHR = Color::rgba(0xe6, 0x52, 0x52), CHG = Color::rgba(0x61, 0xcc, 0x6b), CHB = Color::rgba(0x6b, 0x94, 0xf5);
 
     constexpr double kTopBar = 48.0, kCrumb = 24.0, kFilm = 72.0, kToolBar = 56.0, kAction = 52.0;
-    constexpr double kHandle = 20.0, kHeader = 36.0, kRowH = 48.0, kLabelW = 120.0, kValueW = 40.0;
+    constexpr double kHandle = 20.0, kHeader = 36.0, kRowH = 48.0, kLabelW = 120.0, kValueW = 40.0, kHist = 60.0;
 
     const char *kTabLabels[5] = {"Basic", "Mask", "Curve", "Grade", "Xform"};
 
@@ -267,6 +269,7 @@ public:
     explicit Tray(cosmo::EditSession &s) : mSession(s) { clipToBounds = true; rebuildBody(); }
     void configure(double w, double h, double now) { mScreenW = w; mScreenH = h; mNowMs = now; x.set(0); width.set(w); applyDetent(now); layoutBody(); }
     void setNow(double n) { mNowMs = n; }
+    void setHist(const HistogramData &h) { mHist = h; mHasHist = true; }
 
     void syncFromSession()
     {
@@ -293,6 +296,8 @@ protected:
             txt(t, title, 16, kHandle + kHeader * 0.5 + 4, 13, fnt::sansSemiBold(), FG);
             icon::chevronUp(t, Rect{w - 40, kHandle + 6, 24, 24}, MUTED, 1.6);
             hline(t, 0, w, kHandle + kHeader, BORDER);
+            drawHistogram(t, 12, kHandle + kHeader + 6, w - 24, kHist - 12);   // DR-EDIT-3
+            hline(t, 0, w, bodyTop(), BORDER);
             switch (mTab)
             {
             case 0: paintBasic(t, w); break;
@@ -377,7 +382,24 @@ private:
         zoneRect(x, y, 44, 26, id);
     }
 
-    double bodyTop() const { return kHandle + kHeader; }
+    double bodyTop() const { return kHandle + kHeader + kHist; }
+
+    void drawHistogram(IRenderTarget &t, double x, double y, double w, double h) const
+    {
+        t.setFill(Color::rgba(0x0f, 0x0f, 0x0f)); rrectPath(t, x, y, w, h, 2); t.fillPath();
+        if (!mHasHist) return;
+        double maxc = std::log(1.0 + std::max<uint32_t>(1, mHist.maxCount));
+        auto plot = [&](const std::array<uint32_t, 256> &ch, Color c, bool fill) {
+            t.beginPath();
+            if (fill) t.moveTo(x, y + h);
+            for (int i = 0; i < 256; ++i)
+            { double v = std::log(1.0 + ch[i]) / maxc, px = x + i / 255.0 * w, py = y + h - v * h;
+              if (i == 0 && !fill) t.moveTo(px, py); else t.lineTo(px, py); }
+            if (fill) { t.lineTo(x + w, y + h); t.closePath(); t.setFill(Color(c.r, c.g, c.b, 0.45)); t.fillPath(); }
+            else { t.setStroke(c, 1.2); t.strokePath(); }
+        };
+        plot(mHist.r, CHR, true); plot(mHist.g, CHG, true); plot(mHist.b, CHB, true); plot(mHist.lum, WHITE, false);
+    }
 
     void paintBasic(IRenderTarget &t, double w) const
     {
@@ -565,6 +587,8 @@ private:
     std::vector<Row> mRows;
     std::shared_ptr<CurveEditor> mCurve;
     mutable std::vector<std::pair<Rect, int>> mZones;
+    HistogramData mHist{};
+    bool mHasHist = false;
 };
 
 // ── PresetDrawer: left slide-over showing the preset tree ────────────────────────
@@ -630,6 +654,152 @@ private:
     double mNow = 0;
 };
 
+// ── SheetLayer: overflow menu / settings / history tree / confirm (DR-SHELL-3, HIST) ─
+class SheetLayer : public Segment
+{
+public:
+    enum class Mode { None, Overflow, Settings, History, Confirm };
+    std::function<void()> onChanged;   // sync editor after a session-mutating action
+    std::function<void()> onReset;     // reset workspace -> host (go home)
+    explicit SheetLayer(cosmo::EditSession &s) : mSession(s) { visible = false; }
+    void open(Mode m, double now) { mMode = m; visible = true; mClosing = false; mScrim.set(0); mScrim.animateTo(0.55, 180, Easing::EaseOutCubic, now); mRise.set(1); mRise.animateTo(0, 240, Easing::EaseOutCubic, now); }
+    void close(double now) { mScrim.animateTo(0, 140, Easing::EaseInCubic, now); mClosing = true; }
+    bool isOpen() const { return visible && !mClosing; }
+    void setNow(double n) { mNow = n; }
+    void advance(double now) override { Segment::advance(now); mScrim.update(now); mRise.update(now); if (mClosing && mScrim.value() < 0.02) { visible = false; mClosing = false; mMode = Mode::None; } }
+
+protected:
+    void onPaint(IRenderTarget &t) const override
+    {
+        mZones.clear();
+        const double w = width.value(), h = height.value();
+        t.setFill(Color(0, 0, 0, mScrim.value())); rectPath(t, 0, 0, w, h); t.fillPath();
+        if (mMode == Mode::Overflow) paintOverflow(t, w, h);
+        else if (mMode == Mode::Settings) paintSettings(t, w, h);
+        else if (mMode == Mode::History) paintHistory(t, w, h);
+        else if (mMode == Mode::Confirm) paintConfirm(t, w, h);
+    }
+    bool handleGesture(const Gesture &g, const Point &lp) override
+    {
+        if (g.type != Gesture::Type::Click) return true;
+        for (auto it = mZones.rbegin(); it != mZones.rend(); ++it) if (it->first.contains(lp)) { onZone(it->second); return true; }
+        close(mNow);   // tap outside any zone (scrim) dismisses
+        return true;
+    }
+    bool hitTestSelf(const Point &p) const override { return visible && localBounds().contains(p); }
+
+private:
+    void zoneRect(double x, double y, double w, double h, int id) const { mZones.push_back({Rect{x, y, w, h}, id}); }
+    std::vector<int> allImageSlots() const { std::vector<int> v; for (auto &n : mSession.nodes()) if (!n.group && n.slot >= 0) v.push_back(n.slot); return v; }
+
+    void seg(IRenderTarget &t, double x, double y, double w, double h, const std::vector<const char *> &labels, int sel, int base) const
+    {
+        t.setFill(INPUT); rrectPath(t, x, y, w, h, 2); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, x, y, w, h, 2); t.strokePath();
+        double sw = w / labels.size();
+        for (size_t i = 0; i < labels.size(); ++i)
+        { bool on = (int)i == sel; if (on) { t.setFill(ACCENT); rrectPath(t, x + i * sw + 1, y + 1, sw - 2, h - 2, 2); t.fillPath(); }
+          txtC(t, labels[i], x + i * sw + sw * 0.5, y + h * 0.5 + 4, 11, fnt::sansMedium(), on ? WHITE : MUTED); zoneRect(x + i * sw, y, sw, h, base + (int)i); }
+    }
+
+    void paintOverflow(IRenderTarget &t, double w, double h) const
+    {
+        struct It { const char *l; int id; bool danger; };
+        static const It items[] = {{"Undo", 1, false}, {"Redo", 2, false}, {"Copy Settings", 3, false}, {"Paste to All Images", 4, false},
+                                   {"Group Selection", 5, false}, {"Ungroup Selection", 6, false}, {"Show History Tree", 7, false},
+                                   {"Engine Settings", 8, false}, {"Reset Workspace", 9, true}};
+        int n = 9; double rowH = 48, sheetH = 24 + n * rowH + 16, sy = h - sheetH + mRise.value() * sheetH;
+        t.setFill(POP); rrectPath(t, 0, sy, w, sheetH + 40, 12); t.fillPath();
+        t.setFill(Color(0x8a / 255.0, 0x8a / 255.0, 0x8a / 255.0, 0.4)); rrectPath(t, w / 2 - 18, sy + 8, 36, 4, 2); t.fillPath();
+        double y = sy + 24;
+        for (auto &it : items)
+        { bool dis = (it.id == 1 && !mSession.canUndo()) || (it.id == 2 && !mSession.canRedo());
+          txt(t, it.l, 24, y + rowH * 0.5 + 5, 15, fnt::sans(), dis ? Color(FG.r, FG.g, FG.b, 0.35) : it.danger ? DESTRUCT : FG);
+          hline(t, 20, w - 20, y + rowH, BORDER); if (!dis) zoneRect(0, y, w, rowH, it.id); y += rowH; }
+    }
+    void paintSettings(IRenderTarget &t, double w, double h) const
+    {
+        double sheetH = 260, sy = h - sheetH + mRise.value() * sheetH;
+        t.setFill(POP); rrectPath(t, 0, sy, w, sheetH + 40, 12); t.fillPath();
+        t.setFill(Color(0x8a / 255.0, 0x8a / 255.0, 0x8a / 255.0, 0.4)); rrectPath(t, w / 2 - 18, sy + 8, 36, 4, 2); t.fillPath();
+        txt(t, "Engine Settings", 20, sy + 40, 15, fnt::sansSemiBold(), FG);
+        int q = mSession.previewEdge() <= 1200 ? 0 : mSession.previewEdge() <= 2000 ? 1 : 2;
+        txt(t, "PREVIEW QUALITY", 20, sy + 74, 11, fnt::sansMedium(), MUTED);
+        seg(t, 20, sy + 84, w - 40, 30, {"Draft", "Standard", "High"}, q, 100);
+        int th = par::threadsRef() == 0 ? 0 : par::threadsRef() == 2 ? 1 : par::threadsRef() == 4 ? 2 : 3;
+        txt(t, "CPU THREADS", 20, sy + 138, 11, fnt::sansMedium(), MUTED);
+        seg(t, 20, sy + 148, w - 40, 30, {"Auto", "2", "4", "8"}, th, 200);
+        bool avail = mSession.gpuAvailable(), on = mSession.useGpu();
+        txt(t, avail ? "GPU Acceleration" : "GPU Acceleration . unavailable", 20, sy + 214, 14, fnt::sans(), avail ? FG : MUTED);
+        t.setFill(on && avail ? ACCENT : INPUT); rrectPath(t, w - 60, sy + 198, 44, 26, 13); t.fillPath();
+        t.setFill(WHITE); rrectPath(t, w - 60 + (on && avail ? 21 : 3), sy + 201, 20, 20, 10); t.fillPath();
+        if (avail) zoneRect(w - 60, sy + 198, 44, 26, 300);
+    }
+    void paintHistory(IRenderTarget &t, double w, double h) const
+    {
+        double cw = w - 48, ch = h * 0.7, cx = 24, cy = (h - ch) * 0.5 + mRise.value() * 30;
+        t.setFill(CARD); rrectPath(t, cx, cy, cw, ch, 4); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, cx, cy, cw, ch, 4); t.strokePath();
+        txt(t, "History", cx + 16, cy + 30, 15, fnt::sansSemiBold(), FG);
+        icon::back(t, Rect{cx + cw - 36, cy + 12, 20, 20}, MUTED, 1.6); zoneRect(cx + cw - 44, cy + 8, 40, 32, 9000);   // close
+        cosmo::History *hy = mSession.currentHistory(); if (!hy) return;
+        double y = cy + 56;
+        for (size_t i = 0; i < hy->nodes.size() && y < cy + ch - 20; ++i)
+        {
+            int depth = 0; for (int p = hy->nodes[i].parent; p >= 0; p = hy->nodes[p].parent) ++depth;
+            double nx = cx + 24 + depth * 24, cur = ((int)i == hy->current);
+            if (hy->nodes[i].parent >= 0) { t.setStroke(BORDER, 1.0); t.beginPath(); t.moveTo(nx - 12, y - 20); t.lineTo(nx, y); t.strokePath(); }
+            t.setFill(cur ? ACCENT : Color(0x25 / 255.0, 0x25 / 255.0, 0x25 / 255.0, 1)); rrectPath(t, nx - 5, y - 5, 10, 10, 5); t.fillPath();
+            std::string lbl = hy->nodes[i].label.empty() ? "Edit" : hy->nodes[i].label;
+            txt(t, lbl, nx + 14, y + 5, 13, fnt::sans(), cur ? ACCENT : FG);
+            zoneRect(cx, y - 16, cw, 32, 1000 + (int)i); y += 34;
+        }
+    }
+    void paintConfirm(IRenderTarget &t, double w, double h) const
+    {
+        double cw = w - 80, cardH = 150, cx = 40, cy = (h - cardH) * 0.5 + mRise.value() * 20;
+        t.setFill(CARD); rrectPath(t, cx, cy, cw, cardH, 4); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, cx, cy, cw, cardH, 4); t.strokePath();
+        txt(t, "Reset workspace?", cx + 20, cy + 34, 15, fnt::sansSemiBold(), FG);
+        txt(t, "This clears all photos and edits.", cx + 20, cy + 62, 13, fnt::sans(), MUTED);
+        double bw = 90, bh = 36, by = cy + cardH - bh - 16;
+        t.setStroke(BORDER, 1.0); rrectPath(t, cx + cw - 2 * bw - 28, by, bw, bh, 2); t.strokePath();
+        txtC(t, "Cancel", cx + cw - 2 * bw - 28 + bw / 2, by + bh * 0.5 + 4.5, 13, fnt::sans(), FG); zoneRect(cx + cw - 2 * bw - 28, by, bw, bh, 2000);
+        t.setFill(DESTRUCT); rrectPath(t, cx + cw - bw - 20, by, bw, bh, 2); t.fillPath();
+        txtC(t, "Reset", cx + cw - bw - 20 + bw / 2, by + bh * 0.5 + 4.5, 13, fnt::sansSemiBold(), WHITE); zoneRect(cx + cw - bw - 20, by, bw, bh, 2001);
+    }
+
+    void onZone(int id)
+    {
+        switch (id)
+        {
+        case 1: mSession.undo(); done(); break;
+        case 2: mSession.redo(); done(); break;
+        case 3: mSession.copyCurrent(); close(mNow); break;
+        case 4: mSession.pasteTo(allImageSlots()); done(); break;
+        case 5: mSession.createGroupFromSelection(); done(); break;
+        case 6: mSession.ungroupSelected(); done(); break;
+        case 7: open(Mode::History, mNow); break;
+        case 8: open(Mode::Settings, mNow); break;
+        case 9: open(Mode::Confirm, mNow); break;
+        case 100: case 101: case 102: mSession.setPreviewEdge(id == 100 ? 1000 : id == 101 ? 1600 : 2400); break;
+        case 200: case 201: case 202: case 203: par::setThreads(id == 200 ? 0 : id == 201 ? 2 : id == 202 ? 4 : 8); mSession.submit(); break;
+        case 300: mSession.setUseGpu(!mSession.useGpu()); break;
+        case 2000: close(mNow); break;
+        case 2001: mSession.resetWorkspace(); close(mNow); if (onReset) onReset(); break;
+        case 9000: close(mNow); break;
+        default:
+            if (id >= 1000 && id < 2000) { mSession.jumpToHistory(id - 1000); done(); }
+            break;
+        }
+    }
+    void done() { if (onChanged) onChanged(); close(mNow); }
+
+    cosmo::EditSession &mSession;
+    Mode mMode = Mode::None;
+    Property mScrim{0.0}, mRise{1.0};
+    bool mClosing = false;
+    double mNow = 0;
+    mutable std::vector<std::pair<Rect, int>> mZones;
+};
+
 // ── EditorScreen ─────────────────────────────────────────────────────────────────
 class EditorScreen : public Segment
 {
@@ -641,6 +811,10 @@ public:
         mPill = std::make_shared<BeforeAfterPill>(); addChild(mPill);
         mTray = std::make_shared<Tray>(s); addChild(mTray);
         mDrawer = std::make_shared<PresetDrawer>(); addChild(mDrawer);
+        mSheets = std::make_shared<SheetLayer>(s);
+        mSheets->onChanged = [this] { syncControls(); };
+        mSheets->onReset = [this] { if (onHome) onHome(); };
+        addChild(mSheets);
     }
     void resize(double w, double h, double now)
     {
@@ -649,12 +823,14 @@ public:
         mPhoto->x.set(0); mPhoto->y.set(py); mPhoto->width.set(w); mPhoto->height.set(ph);
         mPill->x.set((w - mPill->width.value()) * 0.5); mPill->y.set(py + ph - mPill->height.value() - 12);
         mDrawer->x.set(0); mDrawer->y.set(0); mDrawer->width.set(w); mDrawer->height.set(h);
+        mSheets->x.set(0); mSheets->y.set(0); mSheets->width.set(w); mSheets->height.set(h);
         mTray->setNow(now); mTray->configure(w, h, now);
     }
     void setPhoto(const uint8_t *rgba, int w, int h) { mPhoto->setImage(rgba, w, h); }
     void setEmpty(bool e) { mPhoto->visible = !e; mThumbIds.clear(); }   // empty project: blank canvas
+    void setHist(const HistogramData &h) { mTray->setHist(h); }          // DR-EDIT-3
     void syncControls() { mTray->syncFromSession(); }
-    void setNow(double n) { mTray->setNow(n); mDrawer->setNow(n); }
+    void setNow(double n) { mTray->setNow(n); mDrawer->setNow(n); mSheets->setNow(n); }
     void setName(const std::string &n) { mName = n; }
 protected:
     void onPaint(IRenderTarget &t) const override
@@ -670,8 +846,8 @@ protected:
         ci::panelLeft(t, Rect{10, c - 10, 20, 20}, FG, 1.5);
         icon::back(t, Rect{54, c - 10, 20, 20}, FG, 1.75);
         txtC(t, mName.empty() ? "Untitled" : mName, w * 0.5, c + 5, 14, fnt::sansMedium(), FG);
-        icon::undo(t, Rect{w - 132, c - 10, 20, 20}, MUTED, 1.75);
-        icon::redo(t, Rect{w - 88, c - 10, 20, 20}, FG, 1.75);
+        icon::undo(t, Rect{w - 132, c - 10, 20, 20}, mSession.canUndo() ? FG : MUTED, 1.75);
+        icon::redo(t, Rect{w - 88, c - 10, 20, 20}, mSession.canRedo() ? FG : MUTED, 1.75);
         icon::more(t, Rect{w - 44, c - 10, 20, 20}, FG, 1.75);
     }
     bool handleGesture(const Gesture &g, const Point &lp) override
@@ -680,9 +856,11 @@ protected:
         const double w = width.value(), h = height.value();
         if (lp.y <= kTopBar)
         {
-            if (lp.x < 44) { mDrawer->open(mNow); }             // panel -> preset drawer
-            else if (lp.x < 88) { if (onHome) onHome(); }        // back -> home
-            else if (lp.x >= w - 100 && lp.x < w - 56) { mSession.redo(); syncControls(); }
+            if (lp.x < 44) mDrawer->open(mNow);                                  // panel -> preset drawer
+            else if (lp.x < 88) { if (onHome) onHome(); }                         // back -> home
+            else if (lp.x >= w - 140 && lp.x < w - 96) { if (mSession.canUndo()) { mSession.undo(); syncControls(); } }  // undo
+            else if (lp.x >= w - 96 && lp.x < w - 52) { if (mSession.canRedo()) { mSession.redo(); syncControls(); } }   // redo
+            else if (lp.x >= w - 52) mSheets->open(SheetLayer::Mode::Overflow, mNow);   // more -> menu
             return true;
         }
         double filmY = h - kFilm, cy = filmY + (kFilm - 54) * 0.5;
@@ -731,6 +909,7 @@ private:
     std::shared_ptr<BeforeAfterPill> mPill;
     std::shared_ptr<Tray> mTray;
     std::shared_ptr<PresetDrawer> mDrawer;
+    std::shared_ptr<SheetLayer> mSheets;
     std::string mName;
     double mNow = 0;
     mutable std::map<int, int> mThumbIds;
@@ -898,7 +1077,12 @@ void PhoneApp::importCatalog()   { buildSession("Imported Catalog", false); mLoa
 
 bool PhoneApp::gpuAvailable() const { return mSession.gpuAvailable(); }
 
-void PhoneApp::poll() { RenderService::Frame f; if (mSession.renderService().tryAcquire(f) && f.width > 0) mEditor->setPhoto(f.rgba.data(), f.width, f.height); }
+void PhoneApp::poll()
+{
+    RenderService::Frame f;
+    if (mSession.renderService().tryAcquire(f) && f.width > 0)
+    { mEditor->setPhoto(f.rgba.data(), f.width, f.height); mEditor->setHist(f.hist); }
+}
 
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
