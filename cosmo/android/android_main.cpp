@@ -1,21 +1,19 @@
 /*
  *  cosmo — Android (NativeActivity) host.
  *
- *  The platform seam for the Android build. Mirrors what cosmo/linux_main.cpp does for
- *  GTK, but for Android: it owns the app lifecycle, an EGL/GLES surface on the
- *  ANativeWindow, a Cairo image surface it renders the Artboard UI into (via the reused
- *  artboard::CairoTarget), and it blits that ARGB buffer to the screen as a textured
- *  quad. Touch/lifecycle events from android_native_app_glue are translated to the app.
- *
- *  M0 milestone: this file draws a fixed *test scene* through CairoTarget to prove the
- *  toolchain + EGL + Cairo-blit + font pipeline on-device. Later milestones swap the
- *  scene for arstro::cosmo_v2 PhoneApp and wire input/decoding.
+ *  The platform seam for the Android build (the counterpart of cosmo/linux_main.cpp).
+ *  Owns the app lifecycle, an EGL/GLES surface on the ANativeWindow, and a Cairo image
+ *  surface the phone UI (arstro::cosmo_touch::PhoneApp) renders into via the reused
+ *  artboard::CairoTarget; the ARGB buffer is blitted to the screen as a textured quad.
+ *  Touch/lifecycle events from android_native_app_glue are translated to the app.
  */
 #include "CairoTarget.h"
+#include "PhoneApp.h"
 #include "core/decode/AndroidImageDecoder.h"
 
 #include <android/log.h>
 #include <android/asset_manager.h>
+#include <android/input.h>
 #include <android_native_app_glue.h>
 
 #include <EGL/egl.h>
@@ -23,19 +21,24 @@
 
 #include <cairo/cairo.h>
 
-#include <cmath>
 #include <cstdio>
+#include <ctime>
+#include <memory>
 #include <string>
-#include <vector>
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "cosmo", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "cosmo", __VA_ARGS__)
 
 namespace
 {
+double nowMsMonotonic()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
+}
+
 // ─── Fonts: extract bundled TTFs from APK assets and register them with CairoTarget ──
-// (the Android cairo build has no fontconfig, so cairo_select_font_face can't resolve
-//  family names — see CairoTarget::registerFontFile).
 void extractAssetTo(AAssetManager *am, const char *assetPath, const std::string &outPath)
 {
     AAsset *a = AAssetManager_open(am, assetPath, AASSET_MODE_BUFFER);
@@ -53,27 +56,24 @@ void extractAssetTo(AAssetManager *am, const char *assetPath, const std::string 
 void registerFonts(android_app *app)
 {
     AAssetManager *am = app->activity->assetManager;
-    const std::string dir = std::string(app->activity->internalDataPath ? app->activity->internalDataPath : ".");
+    const std::string dir = app->activity->internalDataPath ? app->activity->internalDataPath : ".";
     struct FontFile { const char *asset; const char *family; };
     const FontFile fonts[] = {
-        {"fonts/DMSans-Regular.ttf",       "DM Sans"},
-        {"fonts/DMSans-Medium.ttf",        "DM Sans Medium"},
-        {"fonts/DMSans-SemiBold.ttf",      "DM Sans SemiBold"},
-        {"fonts/JetBrainsMono-Regular.ttf","JetBrains Mono"},
-        {"fonts/JetBrainsMono-Medium.ttf", "JetBrains Mono Medium"},
+        {"fonts/DMSans-Regular.ttf",        "DM Sans"},
+        {"fonts/DMSans-Medium.ttf",         "DM Sans Medium"},
+        {"fonts/DMSans-SemiBold.ttf",       "DM Sans SemiBold"},
+        {"fonts/JetBrainsMono-Regular.ttf", "JetBrains Mono"},
+        {"fonts/JetBrainsMono-Medium.ttf",  "JetBrains Mono Medium"},
     };
     for (const auto &ff : fonts)
     {
         std::string base = ff.asset; base = base.substr(base.find_last_of('/') + 1);
-        std::string out = dir + "/" + base;
-        extractAssetTo(am, ff.asset, out);
-        artboard::CairoTarget::registerFontFile(ff.family, out);
+        extractAssetTo(am, ff.asset, dir + "/" + base);
+        artboard::CairoTarget::registerFontFile(ff.family, dir + "/" + base);
     }
     LOGI("fonts registered");
 }
 
-// Extract a bundled asset image and decode it with the Android decoder (M2 check:
-// proves stb/LibRaw decode on-device). Returns straight RGBA8.
 arstro::cosmo::DecodedImage decodeAsset(android_app *app, const char *assetName)
 {
     const std::string dir = app->activity->internalDataPath ? app->activity->internalDataPath : ".";
@@ -83,65 +83,6 @@ arstro::cosmo::DecodedImage decodeAsset(android_app *app, const char *assetName)
     arstro::cosmo::DecodedImage img = dec.decodeFile(out);
     LOGI("decoded %s -> %dx%d ok=%d", assetName, img.width, img.height, (int)img.ok());
     return img;
-}
-
-// ─── The M0/M2 test scene, drawn through the Artboard render HAL (CairoTarget) ───────
-// photoImg is a CairoTarget image id (-1 if none); when present it's drawn Contain-fit
-// in the card to prove the decode + image blit path.
-void renderTestScene(artboard::IRenderTarget &t, int w, int h, double tSec,
-                     int photoImg, int photoW, int photoH)
-{
-    using artboard::Color;
-    auto rrect = [&](double x, double y, double rw, double rh, double r) {
-        t.beginPath();
-        t.moveTo(x + r, y);
-        t.lineTo(x + rw - r, y);
-        t.quadTo(x + rw, y, x + rw, y + r);
-        t.lineTo(x + rw, y + rh - r);
-        t.quadTo(x + rw, y + rh, x + rw - r, y + rh);
-        t.lineTo(x + r, y + rh);
-        t.quadTo(x, y + rh, x, y + rh - r);
-        t.lineTo(x, y + r);
-        t.quadTo(x, y, x + r, y);
-        t.closePath();
-    };
-
-    // background #141414
-    t.setFill(Color{0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, 1.0});
-    t.beginPath(); t.moveTo(0, 0); t.lineTo(w, 0); t.lineTo(w, h); t.lineTo(0, h); t.closePath(); t.fillPath();
-
-    // a card #1C1C1C
-    double m = w * 0.08;
-    t.setFill(Color{0x1C / 255.0, 0x1C / 255.0, 0x1C / 255.0, 1.0});
-    rrect(m, h * 0.30, w - 2 * m, h * 0.40, 8); t.fillPath();
-
-    // an accent bar #4F7EF7, pulsing width to prove per-frame rendering
-    double pulse = 0.5 + 0.5 * std::sin(tSec * 2.0);
-    t.setFill(Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, 1.0});
-    rrect(m + 24, h * 0.30 + 24, (w - 2 * m - 48) * (0.3 + 0.7 * pulse), 6, 3); t.fillPath();
-
-    // wordmark: "cosmo" in fg, "." in accent
-    t.setFill(Color{0xDB / 255.0, 0xDB / 255.0, 0xDB / 255.0, 1.0});
-    t.drawText("cosmo", m + 24, h * 0.30 + 90, 44, "DM Sans SemiBold", -1.3);
-    t.setFill(Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, 1.0});
-    t.drawText(".", m + 24 + 150, h * 0.30 + 90, 44, "DM Sans SemiBold");
-
-    // status lines (mono + sans) to prove both families
-    t.setFill(Color{0x8A / 255.0, 0x8A / 255.0, 0x8A / 255.0, 1.0});
-    t.drawText("Android render OK", m + 24, h * 0.30 + 140, 16, "DM Sans");
-    char buf[64]; std::snprintf(buf, sizeof buf, "%dx%d  cairo+GLES", w, h);
-    t.drawText(buf, m + 24, h * 0.30 + 170, 14, "JetBrains Mono");
-
-    // decoded sample photo, Contain-fit into the lower card region (M2 proof)
-    if (photoImg >= 0 && photoW > 0 && photoH > 0)
-    {
-        double rx = m + 24, ry = h * 0.30 + 190;
-        double rw = w - 2 * m - 48, rh = (h * 0.30 + h * 0.40) - ry - 24;
-        double s = std::min(rw / photoW, rh / photoH);
-        double dw = photoW * s, dh = photoH * s;
-        double dx = rx + (rw - dw) / 2, dy = ry + (rh - dh) / 2;
-        t.drawImage(photoImg, artboard::Rect{dx, dy, dw, dh});
-    }
 }
 
 // ─── GLES blit of a Cairo ARGB32 (premultiplied BGRA, strided) buffer ────────────────
@@ -176,20 +117,10 @@ struct Renderer
     int w = 0, h = 0;
     GLuint prog = 0, tex = 0, vbo = 0;
 
-    // Cairo target reused across frames; surface recreated on resize.
     artboard::CairoTarget target;
     cairo_surface_t *cairoSurf = nullptr;
     cairo_t *cr = nullptr;
-
-    // decoded sample photo (M2) registered as a CairoTarget image
-    arstro::cosmo::DecodedImage photo;
-    int photoImg = -1;
-
-    void setPhoto(arstro::cosmo::DecodedImage d)
-    {
-        photo = std::move(d);
-        photoImg = photo.ok() ? target.registerImage(photo.rgba.data(), photo.width, photo.height) : -1;
-    }
+    std::unique_ptr<arstro::cosmo_touch::PhoneApp> app;
 
     bool initEgl(ANativeWindow *win)
     {
@@ -239,19 +170,21 @@ struct Renderer
         target.setContext(cr);
     }
 
-    void drawFrame(double tSec)
+    void drawFrame()
     {
-        if (ctx == EGL_NO_CONTEXT) return;
+        if (ctx == EGL_NO_CONTEXT || !app) return;
+        // Re-bind the window context every frame: the engine's GPU-availability probe runs
+        // on this (main) thread and ends by releasing EGL to NO_CONTEXT, which would leave
+        // our blit with no current context (black screen). Cheap and robust to re-assert it.
+        eglMakeCurrent(dpy, surf, surf, ctx);
         ensureCairo();
-        // clear cairo surface, render the scene
         cairo_save(cr);
         cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR); cairo_paint(cr);
         cairo_restore(cr);
         cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-        renderTestScene(target, w, h, tSec, photoImg, photo.width, photo.height);
+        app->render(target, nowMsMonotonic());
         cairo_surface_flush(cairoSurf);
 
-        // upload cairo buffer (BGRA premultiplied, strided) to the texture
         unsigned char *data = cairo_image_surface_get_data(cairoSurf);
         int stride = cairo_image_surface_get_stride(cairoSurf);
         glBindTexture(GL_TEXTURE_2D, tex);
@@ -275,6 +208,7 @@ struct Renderer
 
     void teardown()
     {
+        app.reset();
         if (cr) { cairo_destroy(cr); cr = nullptr; }
         if (cairoSurf) { cairo_surface_destroy(cairoSurf); cairoSurf = nullptr; }
         target.setContext(nullptr);
@@ -293,7 +227,6 @@ struct AppState
 {
     Renderer *r = nullptr;
     bool hasFocus = false;
-    long startNs = 0;
 };
 
 void onCmd(android_app *app, int32_t cmd)
@@ -306,7 +239,11 @@ void onCmd(android_app *app, int32_t cmd)
         {
             st->r = new Renderer();
             st->r->initEgl(app->window);
-            st->r->setPhoto(decodeAsset(app, "sample.jpg"));  // M2: decode + blit on device
+            st->r->app = std::make_unique<arstro::cosmo_touch::PhoneApp>((double)st->r->w, (double)st->r->h);
+            arstro::cosmo::DecodedImage img = decodeAsset(app, "sample.jpg");
+            if (img.ok())
+                st->r->app->openImage(img.rgba.data(), img.width, img.height, img.name);
+            LOGI("GPU compute backend available=%d (GLES 3.1)", (int)st->r->app->gpuAvailable());
             st->hasFocus = true;
         }
         break;
@@ -319,6 +256,25 @@ void onCmd(android_app *app, int32_t cmd)
     default: break;
     }
 }
+
+// Touch -> PhoneApp::pointer (single primary pointer; the Artboard input HAL is
+// single-pointer, so multi-finger is collapsed to pointer 0).
+int32_t onInput(android_app *app, AInputEvent *ev)
+{
+    auto *st = static_cast<AppState *>(app->userData);
+    if (!st->r || !st->r->app) return 0;
+    if (AInputEvent_getType(ev) != AINPUT_EVENT_TYPE_MOTION) return 0;
+    int32_t action = AMotionEvent_getAction(ev) & AMOTION_EVENT_ACTION_MASK;
+    float x = AMotionEvent_getX(ev, 0), y = AMotionEvent_getY(ev, 0);
+    double t = nowMsMonotonic();
+    int kind = -1;
+    if (action == AMOTION_EVENT_ACTION_DOWN) kind = 0;
+    else if (action == AMOTION_EVENT_ACTION_MOVE) kind = 1;
+    else if (action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL) kind = 2;
+    if (kind < 0) return 1;
+    st->r->app->pointer(kind, (double)x, (double)y, 0, t, false, false, false);
+    return 1;
+}
 }  // namespace
 
 void android_main(android_app *app)
@@ -326,23 +282,18 @@ void android_main(android_app *app)
     AppState st;
     app->userData = &st;
     app->onAppCmd = onCmd;
+    app->onInputEvent = onInput;
     registerFonts(app);
 
-    double tSec = 0.0;
     while (true)
     {
         int events;
         android_poll_source *source;
-        // non-blocking when we have a window to animate, blocking otherwise
         while (ALooper_pollOnce(st.hasFocus ? 0 : -1, nullptr, &events, (void **)&source) >= 0)
         {
             if (source) source->process(app, source);
             if (app->destroyRequested) { if (st.r) { st.r->teardown(); delete st.r; } return; }
         }
-        if (st.hasFocus && st.r)
-        {
-            tSec += 1.0 / 60.0;
-            st.r->drawFrame(tSec);
-        }
+        if (st.hasFocus && st.r) st.r->drawFrame();
     }
 }
