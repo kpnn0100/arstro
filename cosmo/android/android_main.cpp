@@ -240,9 +240,13 @@ void onCmd(android_app *app, int32_t cmd)
             st->r = new Renderer();
             st->r->initEgl(app->window);
             st->r->app = std::make_unique<arstro::cosmo_touch::PhoneApp>((double)st->r->w, (double)st->r->h);
-            arstro::cosmo::DecodedImage img = decodeAsset(app, "sample.jpg");
-            if (img.ok())
-                st->r->app->openImage(img.rgba.data(), img.width, img.height, img.name);
+            // Build a real multi-image project (same EditSession model as desktop cosmo).
+            for (const char *nm : {"sample.jpg", "sample2.jpg", "sample3.jpg"})
+            {
+                arstro::cosmo::DecodedImage img = decodeAsset(app, nm);
+                if (img.ok()) st->r->app->addProjectImage(img.rgba.data(), img.width, img.height, img.name);
+            }
+            st->r->app->finishProject("Sample Project");
             LOGI("GPU compute backend available=%d (GLES 3.1)", (int)st->r->app->gpuAvailable());
             st->hasFocus = true;
         }
