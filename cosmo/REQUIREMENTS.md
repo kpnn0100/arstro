@@ -339,6 +339,19 @@ accelerator is used only when its result matches it.
     edit is unsupported, it falls back to CPU. Verified on the AMD (Mesa `radeonsi`) GPU — GPU output
     matches CPU ≤ 2/255, on both the direct engine path and the RenderService worker path
     (`EditEngine_gl_backend_matches_cpu`, `RenderService_gpu_worker_matches_cpu`).
+- **R-GPU-6 OpenGL ES 3.1 compute backend (Android).**
+  `ImageProcessing/src/compute/GlesComputeBackend.cpp` is the Android sibling of the desktop GL
+  backend, selected by the same factory (`#elif defined(ARSTRO_GLES_COMPUTE)`). It shares the
+  accepted-edit predicate and the compute-shader body with the desktop backend
+  (`compute/GlComputeShared.h`) so the accepted subset and per-pixel math cannot drift; only the EGL
+  context (an **ES 3.1** context over a 1×1 pbuffer, `EGL_OPENGL_ES_API`) and the shader header
+  (`#version 310 es` + `precision highp`) differ. ES 3.1 exposes compute / SSBOs / `glMapBufferRange`
+  as core, so no proc-address loader is needed. Built when `ARSTRO_GLES_COMPUTE` is defined and
+  EGL/GLESv3 link (the Android app CMake sets it; the umbrella `android-app` target links GPU); the
+  CPU pipeline stays the reference + guaranteed fallback exactly as R-GPU-2/5. Verified GPU==CPU
+  ≤ 2/255 on desktop Mesa GLES (`EditEngine_gles_backend_matches_cpu`, skips cleanly with no ES 3.1
+  device) and on-device on an Android GLES 3.2 GPU (Mali). The GLES backend cross-compiles for
+  arm64-v8a with the NDK.
   - **Deferred:** the remaining pipeline stages (moving encode + histograms fully onto the GPU too),
     and other APIs (Vulkan/Metal/D3D/WebGPU) — each an incremental add behind the same seam.
 

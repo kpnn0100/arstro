@@ -4,6 +4,7 @@
  */
 #include "MiniTest.h"
 #include "image_processing.h"
+#include "compute/GlesComputeBackend.h"  // createGlesComputeAccelerator (ARSTRO_GLES_COMPUTE)
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -899,6 +900,56 @@ TEST(EditEngine_gl_backend_matches_cpu)
     PreviewBuffer g3 = gpu.renderFull();
     const std::vector<uint8_t> g3b(g3.rgba, g3.rgba + (size_t)g3.width * g3.height * 4);
     CHECK(g3b == c3ref);
+}
+
+// The OpenGL ES 3.1 backend (Android's GPU path), here exercised on desktop Mesa GLES.
+// Same contract as EditEngine_gl_backend_matches_cpu: the ported subset (exposure/
+// contrast/white balance + sRGB encode) matches the CPU reference within tolerance, and
+// an edit outside the subset declines -> exact CPU output. Skips cleanly when the GLES
+// backend isn't built (desktop default) or no ES 3.1 device is present.
+TEST(EditEngine_gles_backend_matches_cpu)
+{
+#ifdef ARSTRO_GLES_COMPUTE
+    auto bytes = variedRGBA8b(24, 18);
+    EditParams p; p.exposure = 0.7f; p.contrast = 20.f; p.temp = 5200.f; p.tint = 8.f;
+
+    // CPU reference (forced no accelerator).
+    EditEngine cpu; cpu.setComputeAccelerator(nullptr);
+    cpu.addImage(bytes.data(), 24, 18, 4); cpu.selectImage(0); cpu.setPreviewSize(4096);
+    cpu.setCurrentParams(p);
+    PreviewBuffer cb = cpu.renderFull();
+    const std::vector<uint8_t> cref(cb.rgba, cb.rgba + (size_t)cb.width * cb.height * 4);
+
+    // GLES-preferred engine (inject the GLES backend directly — the default factory
+    // prefers desktop GL when both are built).
+    EditEngine gpu;
+    gpu.setComputeAccelerator(createGlesComputeAccelerator());
+    gpu.addImage(bytes.data(), 24, 18, 4); gpu.selectImage(0); gpu.setPreviewSize(4096);
+    gpu.setPreferGpu(true);
+    if (!gpu.gpuAvailable()) { CHECK(true); return; }  // no ES 3.1 device: nothing to verify
+
+    gpu.setCurrentParams(p);
+    PreviewBuffer gb = gpu.renderFull();
+    const std::vector<uint8_t> g(gb.rgba, gb.rgba + (size_t)gb.width * gb.height * 4);
+    CHECK(g.size() == cref.size());
+    int maxd = 0;
+    for (size_t i = 0; i < g.size(); ++i) { int d = (int)g[i] - (int)cref[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
+    CHECK(maxd <= 2);  // GPU vs CPU float, after sRGB encode + round to 8-bit
+
+    // An edit OUTSIDE the ported subset (saturation) must decline -> exact CPU output.
+    EditParams q = p; q.saturation = 40.f;
+    EditEngine cpu2; cpu2.setComputeAccelerator(nullptr);
+    cpu2.addImage(bytes.data(), 24, 18, 4); cpu2.selectImage(0); cpu2.setPreviewSize(4096);
+    cpu2.setCurrentParams(q);
+    PreviewBuffer c2 = cpu2.renderFull();
+    const std::vector<uint8_t> c2ref(c2.rgba, c2.rgba + (size_t)c2.width * c2.height * 4);
+    gpu.setCurrentParams(q);
+    PreviewBuffer g2 = gpu.renderFull();
+    const std::vector<uint8_t> g2b(g2.rgba, g2.rgba + (size_t)g2.width * g2.height * 4);
+    CHECK(g2b == c2ref);
+#else
+    CHECK(true);  // GLES backend not built in this configuration
+#endif
 }
 
 // The cosmo path: RenderService runs the engine (and thus the GPU backend) on its

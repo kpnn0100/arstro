@@ -264,9 +264,28 @@ package compute {
     OpenGL 4.3 compute / surfaceless EGL (Linux/AMD)
     exposure+contrast+WB+encode on GPU; declines the rest to CPU
   end note
+  class GlesComputeBackend {
+    + process(src, params, out) : bool
+  }
+  note bottom of GlesComputeBackend
+    OpenGL ES 3.1 compute / EGL pbuffer (Android)
+    same algorithm as GlComputeBackend
+  end note
+  class GlComputeShared <<shared>> {
+    + shaderBody() : string
+    + computeSupports(params) : bool
+  }
+  note right of GlComputeShared
+    accepted subset + shader body,
+    shared so GL/GLES never drift
+  end note
   GlComputeBackend ..|> IComputeBackend
+  GlesComputeBackend ..|> IComputeBackend
+  GlComputeBackend ..> GlComputeShared
+  GlesComputeBackend ..> GlComputeShared
   IComputeBackend ..> ComputeResult
   createComputeAccelerator ..> GlComputeBackend
+  createComputeAccelerator ..> GlesComputeBackend
 }
 ' optional accelerator; the CPU pipeline in EditEngine is the reference + guaranteed fallback (R-GPU)
 EditEngine o--> IComputeBackend

@@ -38,6 +38,24 @@ if(ARSTRO_IMG_GL_COMPUTE)
   endif()
 endif()
 
+# ── GPU compute backend, OpenGL ES 3.1 (Android; also runs on desktop Mesa) — R-GPU ──
+# The Android sibling of the desktop GL backend. Default OFF (desktop uses GL). The
+# host unit-test build turns it ON as well (-DARSTRO_IMG_GLES_COMPUTE=ON) so the
+# GLES-vs-CPU test can exercise it against Mesa GLES; the factory prefers desktop GL when
+# both are built, and the test injects the GLES backend directly.
+option(ARSTRO_IMG_GLES_COMPUTE "Build the OpenGL ES 3.1 compute GPU backend" OFF)
+if(ARSTRO_IMG_GLES_COMPUTE)
+  find_library(ARSTRO_EGL_LIB EGL)
+  find_library(ARSTRO_GLES_LIB GLESv2)   # Mesa's libGLESv2 exports ES 3.1 entry points
+  if(ARSTRO_EGL_LIB AND ARSTRO_GLES_LIB)
+    target_compile_definitions(arstro_image PUBLIC ARSTRO_GLES_COMPUTE)
+    target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${ARSTRO_GLES_LIB})
+    message(STATUS "arstro_image: GLES compute backend ENABLED (${ARSTRO_GLES_LIB})")
+  else()
+    message(STATUS "arstro_image: GLES compute backend disabled (EGL/GLESv2 not found)")
+  endif()
+endif()
+
 # ── Unit tests (dependency-free MiniTest harness) ──
 enable_testing()
 add_executable(image_tests unittest/imageTests.cpp unittest/engineTests.cpp)
