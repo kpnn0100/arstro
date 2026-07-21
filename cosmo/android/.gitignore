@@ -1,0 +1,4 @@
+# Android build outputs (reproducible via build_apk.sh)
+build-apk/
+debug.keystore
+*.apk

@@ -1,0 +1,5 @@
+# Android dependency build artifacts — reproducible via build_deps.sh, not committed.
+downloads/
+build/
+prefix/
+android-arm64.cross

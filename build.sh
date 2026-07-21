@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app"; echo "note:     cosmo is native-only (linux-native-app); it has no web build"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app, android-app"; echo "note:     cosmo runs native (linux-native-app), Android (android-app), no web build"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -270,6 +270,20 @@ case "$TARGET" in
         echo "linux-native-app currently supports projects 'ui-demo', 'synth', 'pulsar' and 'cosmo'" >&2
         exit 1
         ;;
+    esac
+    ;;
+  android-app)
+    # Android (arm64-v8a) native app. cosmo only. Cross-compiles the graphics deps
+    # (cairo/pixman/freetype/libraw) once, builds libcosmo.so with the NDK CMake
+    # toolchain, packages/signs an APK with the SDK build-tools, and installs it.
+    # The system gradle (4.4.1) is too old for modern AGP, so packaging is manual.
+    case "$PROJECT" in
+      cosmo)
+        # Pick the install target with COSMO_ANDROID_DEVICE=<adb-serial> (or --no-install
+        # via COSMO_ANDROID_NO_INSTALL=1). build_apk.sh has finer-grained flags.
+        exec "$ROOT/cosmo/android/build_apk.sh"
+        ;;
+      *) echo "android-app currently supports only project 'cosmo'" >&2; exit 1;;
     esac
     ;;
   *) echo "unknown target '$TARGET'" >&2; exit 1;;
