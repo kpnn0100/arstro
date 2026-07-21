@@ -28,6 +28,7 @@ file(GLOB_RECURSE AB_CORE
 
 add_library(cosmo SHARED
   android_main.cpp
+  ${COSMO_DIR}/core/decode/AndroidImageDecoder.cpp
   ${AB_DIR}/src/adapter/native/CairoTarget.cpp
   ${GLUE_DIR}/android_native_app_glue.c
   ${AB_CORE})
@@ -35,21 +36,26 @@ add_library(cosmo SHARED
 target_include_directories(cosmo PRIVATE
   ${AB_DIR}/src ${AB_DIR}/include
   ${AB_DIR}/src/adapter/native
+  ${COSMO_DIR}                        # core/decode/... includes
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party   # stb_image.h
   ${GLUE_DIR}
   ${DEPS_PREFIX}/include
   ${DEPS_PREFIX}/include/cairo
   ${DEPS_PREFIX}/include/pixman-1
   ${DEPS_PREFIX}/include/freetype2)
 
-# ARTBOARD_CAIRO_FT switches CairoTarget to cairo-ft font faces (no fontconfig on Android).
-target_compile_definitions(cosmo PRIVATE ARTBOARD_CAIRO_FT)
+# ARTBOARD_CAIRO_FT: cairo-ft font faces (no fontconfig on Android).
+# COSMO_HAVE_LIBRAW: enable RAW decode via the cross-built LibRaw.
+target_compile_definitions(cosmo PRIVATE ARTBOARD_CAIRO_FT COSMO_HAVE_LIBRAW)
 
-# Static graphics deps (order matters: cairo -> pixman/freetype).
+# Static deps. Order matters (cairo -> pixman/freetype). libraw needs zlib (-lz,
+# provided by Android) for its default USE_ZLIB build.
 target_link_libraries(cosmo
   ${DEPS_PREFIX}/lib/libcairo.a
   ${DEPS_PREFIX}/lib/libpixman-1.a
   ${DEPS_PREFIX}/lib/libfreetype.a
-  EGL GLESv3 android log m)
+  ${DEPS_PREFIX}/lib/libraw.a
+  z EGL GLESv3 android log m)
 
 # Keep the NativeActivity entry the glue defines (nothing references it directly).
 target_link_options(cosmo PRIVATE -u ANativeActivity_onCreate)

@@ -97,20 +97,25 @@ build_cairo() {
 }
 
 build_libraw() {
-  [ -f "$PREFIX/lib/libraw_r.a" ] || [ -f "$PREFIX/lib/libraw.a" ] && { echo "libraw: already built"; return; }
+  [ -f "$PREFIX/lib/libraw.a" ] && { echo "libraw: already built"; return; }
   echo "== libraw (arm64) =="
   local LR="$HERE/../../../ImageProcessing/lib/LibRaw"
   [ -f "$LR/libraw/libraw.h" ] || { echo "libraw source missing at $LR"; return 1; }
-  # LibRaw has no build system prereq beyond a compiler; compile the amalgamated lib
-  # sources directly to a static archive with the cross compiler (no LCMS/jpeg/zlib).
-  rm -rf "$BUILD/libraw"; mkdir -p "$BUILD/libraw/obj"
-  local FLAGS="-O2 -fPIC -std=c++17 -DLIBRAW_NODLL -DNO_LCMS -DNO_JASPER -DNO_JPEG -DNO_ZLIB -I$LR"
-  # LibRaw's single-file build unit:
-  "$CXX" $FLAGS -c "$LR/src/libraw_c_api.cpp" -o "$BUILD/libraw/obj/c_api.o" 2>/dev/null || true
-  "$CXX" $FLAGS -c "$LR/src/libraw_datastream.cpp" -o "$BUILD/libraw/obj/ds.o" 2>/dev/null || true
-  # The bulk of LibRaw is included via internal/*.cpp aggregated by these units:
-  for u in $(ls "$LR"/src/**/*.cpp 2>/dev/null); do :; done
-  echo "libraw: (staged separately — see note)"; return 0
+  # Build OUT OF TREE: the vendored LibRaw already holds x86_64 objects + lib/libraw.a
+  # from the desktop build, which must not be clobbered. Copy the sources, headers and
+  # Makefile.dist into deps/build and cross-compile the static lib there with the NDK
+  # compiler (zlib from the NDK sysroot; no libjpeg/LCMS — core RAW decoders only).
+  local B="$BUILD/libraw"
+  rm -rf "$B"; mkdir -p "$B/object" "$B/lib"
+  cp -r "$LR/src" "$LR/libraw" "$LR/internal" "$LR/Makefile.dist" "$B/"
+  [ -d "$LR/GoPro" ] && cp -r "$LR/GoPro" "$B/"   # some decoders #include "GoPro/..."
+  ( cd "$B" && make -f Makefile.dist lib/libraw.a -j"$NPROC" \
+       CXX="$CXX" \
+       CFLAGS="-O2 -I. -w -DUSE_ZLIB -fPIC -std=c++17" )
+  cp "$B/lib/libraw.a" "$PREFIX/lib/"
+  mkdir -p "$PREFIX/include/libraw"
+  cp "$LR"/libraw/*.h "$PREFIX/include/libraw/"
+  echo "libraw: OK"
 }
 
 case "${1:-all}" in

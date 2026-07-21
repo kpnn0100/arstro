@@ -12,6 +12,7 @@
  *  scene for arstro::cosmo_v2 PhoneApp and wire input/decoding.
  */
 #include "CairoTarget.h"
+#include "core/decode/AndroidImageDecoder.h"
 
 #include <android/log.h>
 #include <android/asset_manager.h>
@@ -71,8 +72,24 @@ void registerFonts(android_app *app)
     LOGI("fonts registered");
 }
 
-// ─── The M0 test scene, drawn through the Artboard render HAL (CairoTarget) ──────────
-void renderTestScene(artboard::IRenderTarget &t, int w, int h, double tSec)
+// Extract a bundled asset image and decode it with the Android decoder (M2 check:
+// proves stb/LibRaw decode on-device). Returns straight RGBA8.
+arstro::cosmo::DecodedImage decodeAsset(android_app *app, const char *assetName)
+{
+    const std::string dir = app->activity->internalDataPath ? app->activity->internalDataPath : ".";
+    const std::string out = dir + "/" + assetName;
+    extractAssetTo(app->activity->assetManager, assetName, out);
+    arstro::cosmo::AndroidImageDecoder dec;
+    arstro::cosmo::DecodedImage img = dec.decodeFile(out);
+    LOGI("decoded %s -> %dx%d ok=%d", assetName, img.width, img.height, (int)img.ok());
+    return img;
+}
+
+// ─── The M0/M2 test scene, drawn through the Artboard render HAL (CairoTarget) ───────
+// photoImg is a CairoTarget image id (-1 if none); when present it's drawn Contain-fit
+// in the card to prove the decode + image blit path.
+void renderTestScene(artboard::IRenderTarget &t, int w, int h, double tSec,
+                     int photoImg, int photoW, int photoH)
 {
     using artboard::Color;
     auto rrect = [&](double x, double y, double rw, double rh, double r) {
@@ -114,6 +131,17 @@ void renderTestScene(artboard::IRenderTarget &t, int w, int h, double tSec)
     t.drawText("Android render OK", m + 24, h * 0.30 + 140, 16, "DM Sans");
     char buf[64]; std::snprintf(buf, sizeof buf, "%dx%d  cairo+GLES", w, h);
     t.drawText(buf, m + 24, h * 0.30 + 170, 14, "JetBrains Mono");
+
+    // decoded sample photo, Contain-fit into the lower card region (M2 proof)
+    if (photoImg >= 0 && photoW > 0 && photoH > 0)
+    {
+        double rx = m + 24, ry = h * 0.30 + 190;
+        double rw = w - 2 * m - 48, rh = (h * 0.30 + h * 0.40) - ry - 24;
+        double s = std::min(rw / photoW, rh / photoH);
+        double dw = photoW * s, dh = photoH * s;
+        double dx = rx + (rw - dw) / 2, dy = ry + (rh - dh) / 2;
+        t.drawImage(photoImg, artboard::Rect{dx, dy, dw, dh});
+    }
 }
 
 // ─── GLES blit of a Cairo ARGB32 (premultiplied BGRA, strided) buffer ────────────────
@@ -152,6 +180,16 @@ struct Renderer
     artboard::CairoTarget target;
     cairo_surface_t *cairoSurf = nullptr;
     cairo_t *cr = nullptr;
+
+    // decoded sample photo (M2) registered as a CairoTarget image
+    arstro::cosmo::DecodedImage photo;
+    int photoImg = -1;
+
+    void setPhoto(arstro::cosmo::DecodedImage d)
+    {
+        photo = std::move(d);
+        photoImg = photo.ok() ? target.registerImage(photo.rgba.data(), photo.width, photo.height) : -1;
+    }
 
     bool initEgl(ANativeWindow *win)
     {
@@ -210,7 +248,7 @@ struct Renderer
         cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR); cairo_paint(cr);
         cairo_restore(cr);
         cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-        renderTestScene(target, w, h, tSec);
+        renderTestScene(target, w, h, tSec, photoImg, photo.width, photo.height);
         cairo_surface_flush(cairoSurf);
 
         // upload cairo buffer (BGRA premultiplied, strided) to the texture
@@ -268,6 +306,7 @@ void onCmd(android_app *app, int32_t cmd)
         {
             st->r = new Renderer();
             st->r->initEgl(app->window);
+            st->r->setPhoto(decodeAsset(app, "sample.jpg"));  // M2: decode + blit on device
             st->hasFocus = true;
         }
         break;

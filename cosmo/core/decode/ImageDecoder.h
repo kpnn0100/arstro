@@ -4,6 +4,7 @@
  *  into straight RGBA8 bytes that both the EditEngine and an ImageView consume.
  *
  *  Native: NativeImageDecoder (GdkPixbuf for JPEG/PNG/TIFF, LibRaw for RAW).
+ *  Android: AndroidImageDecoder (stb_image for JPEG/PNG/…, LibRaw for RAW).
  *  Web: the browser decodes in JS and feeds bytes through CosmoApp::openImage —
  *  no IImageDecoder is used on the web.
  */

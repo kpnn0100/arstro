@@ -47,6 +47,8 @@ cp "$FDIR/DMSans/DMSans-Medium.ttf"         "$STAGE/assets/fonts/"
 cp "$FDIR/DMSans/DMSans-SemiBold.ttf"       "$STAGE/assets/fonts/"
 cp "$FDIR/JetBrainsMono/JetBrainsMono-Regular.ttf" "$STAGE/assets/fonts/"
 cp "$FDIR/JetBrainsMono/JetBrainsMono-Medium.ttf"  "$STAGE/assets/fonts/"
+# any other bundled assets (sample image, etc.)
+[ -d "$HERE/assets" ] && cp -r "$HERE/assets/." "$STAGE/assets/"
 
 # 3) link a base APK (manifest + assets; no compiled resources needed)
 echo "== aapt2 link =="
