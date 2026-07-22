@@ -297,7 +297,7 @@ protected:
         {
             std::string title = kTabLabels[mTab]; for (auto &c : title) c = (char)toupper(c);
             txt(t, title, 16, kHandle + kHeader * 0.5 + 4, 13, fnt::sansSemiBold(), FG);
-            icon::chevronUp(t, Rect{w - 40, kHandle + 6, 24, 24}, MUTED, 1.6);
+            ci::chevronDown(t, Rect{w - 40, kHandle + 6, 24, 24}, MUTED, 1.6);   // close
             hline(t, 0, w, kHandle + kHeader, BORDER);
             drawHistogram(t, 12, kHandle + kHeader + 6, w - 24, kHist - 12);   // DR-EDIT-3
             hline(t, 0, w, bodyTop(), BORDER);
@@ -340,11 +340,12 @@ protected:
         // grab handle: drag to resize / slide down to close
         if (g.type == Gesture::Type::DragStart) { mDragging = (lp.y <= kHandle + 14); return true; }
         if (g.type == Gesture::Type::Drag && mDragging)
-        { double t = std::clamp(mScreenH - g.pos.y, kRail, mScreenH * 0.92); height.set(t); y.set(mScreenH - t); return true; }
+        { double t = std::clamp(mScreenH - g.pos.y, kRail, openHeight()); height.set(t); y.set(mScreenH - t); return true; }
         if (g.type == Gesture::Type::Drop && mDragging) { mDragging = false; snapDetent(); return true; }
         if (g.type != Gesture::Type::Click) return true;
         if (lp.y >= tbY) { onTab(std::min(4, std::max(0, (int)(lp.x / (w / 5.0))))); return true; }
         if (lp.y <= kHandle) { setDetent(mDetent == Detent::Rail ? Detent::Half : Detent::Rail); return true; }  // tap handle: open/close
+        if (mDetent != Detent::Rail && lp.x >= w - 48 && lp.y > kHandle && lp.y <= kHandle + kHeader) { setDetent(Detent::Rail); return true; }  // header chevron: close
         for (auto it = mZones.rbegin(); it != mZones.rend(); ++it)
             if (it->first.contains(lp)) { onZone(it->second); return true; }
         return true;
@@ -584,16 +585,14 @@ private:
         if (mTab == 4) mXBtnY = bodyTop() + 8 + kRowH + 8;
         if (mCurve) { mCurve->x.set(16); mCurve->y.set(bodyTop() + 84); mCurve->width.set(w - 32); mCurve->height.set(std::max(120.0, height.value() - kToolBar - kAction - bodyTop() - 96)); }
     }
-    void cycleDetent() { setDetent(mDetent == Detent::Full ? Detent::Half : mDetent == Detent::Half ? Detent::Rail : Detent::Half); }
-    void snapDetent()   // after a drag: snap to the nearest detent
+    double openHeight() const { return mScreenH * 0.62; }   // the single "open" height
+    void snapDetent()   // after a drag: snap to whichever of the TWO states is nearer
     {
-        double cur = height.value();
-        double rail = kRail, half = mScreenH * 0.5, full = mScreenH * 0.92;
-        double dr = std::fabs(cur - rail), dh = std::fabs(cur - half), df = std::fabs(cur - full);
-        setDetent(dr <= dh && dr <= df ? Detent::Rail : dh <= df ? Detent::Half : Detent::Full);
+        double cur = height.value(), mid = (kRail + openHeight()) * 0.5;
+        setDetent(cur < mid ? Detent::Rail : Detent::Half);
     }
     void setDetent(Detent d) { mDetent = d; applyDetent(mNowMs); bool vis = d != Detent::Rail; for (auto &r : mRows) r.w->visible = vis; if (mCurve) mCurve->visible = vis; }
-    void applyDetent(double now) { double tg = mDetent == Detent::Rail ? kToolBar + 8 : mDetent == Detent::Half ? mScreenH * 0.5 : mScreenH * 0.92; height.animateTo(tg, 280.0, Easing::EaseOutCubic, now); }
+    void applyDetent(double now) { double tg = mDetent == Detent::Rail ? kRail : openHeight(); height.animateTo(tg, 280.0, Easing::EaseOutCubic, now); }
 
     cosmo::EditSession &mSession;
     Detent mDetent = Detent::Half;
