@@ -2,9 +2,11 @@
 #include "Theme.h"
 #include "TouchIcons.h"
 #include "widgets/Icons.h"
+#include "core/decode/AndroidImageDecoder.h"
 #include "base/Parallel.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -334,10 +336,15 @@ protected:
 
     bool handleGesture(const Gesture &g, const Point &lp) override
     {
-        if (g.type != Gesture::Type::Click) return true;
         const double w = width.value(), h = height.value(), tbY = h - kToolBar;
+        // grab handle: drag to resize / slide down to close
+        if (g.type == Gesture::Type::DragStart) { mDragging = (lp.y <= kHandle + 14); return true; }
+        if (g.type == Gesture::Type::Drag && mDragging)
+        { double t = std::clamp(mScreenH - g.pos.y, kRail, mScreenH * 0.92); height.set(t); y.set(mScreenH - t); return true; }
+        if (g.type == Gesture::Type::Drop && mDragging) { mDragging = false; snapDetent(); return true; }
+        if (g.type != Gesture::Type::Click) return true;
         if (lp.y >= tbY) { onTab(std::min(4, std::max(0, (int)(lp.x / (w / 5.0))))); return true; }
-        if (lp.y <= kHandle) { cycleDetent(); return true; }
+        if (lp.y <= kHandle) { setDetent(mDetent == Detent::Rail ? Detent::Half : Detent::Rail); return true; }  // tap handle: open/close
         for (auto it = mZones.rbegin(); it != mZones.rend(); ++it)
             if (it->first.contains(lp)) { onZone(it->second); return true; }
         return true;
@@ -578,6 +585,13 @@ private:
         if (mCurve) { mCurve->x.set(16); mCurve->y.set(bodyTop() + 84); mCurve->width.set(w - 32); mCurve->height.set(std::max(120.0, height.value() - kToolBar - kAction - bodyTop() - 96)); }
     }
     void cycleDetent() { setDetent(mDetent == Detent::Full ? Detent::Half : mDetent == Detent::Half ? Detent::Rail : Detent::Half); }
+    void snapDetent()   // after a drag: snap to the nearest detent
+    {
+        double cur = height.value();
+        double rail = kRail, half = mScreenH * 0.5, full = mScreenH * 0.92;
+        double dr = std::fabs(cur - rail), dh = std::fabs(cur - half), df = std::fabs(cur - full);
+        setDetent(dr <= dh && dr <= df ? Detent::Rail : dh <= df ? Detent::Half : Detent::Full);
+    }
     void setDetent(Detent d) { mDetent = d; applyDetent(mNowMs); bool vis = d != Detent::Rail; for (auto &r : mRows) r.w->visible = vis; if (mCurve) mCurve->visible = vis; }
     void applyDetent(double now) { double tg = mDetent == Detent::Rail ? kToolBar + 8 : mDetent == Detent::Half ? mScreenH * 0.5 : mScreenH * 0.92; height.animateTo(tg, 280.0, Easing::EaseOutCubic, now); }
 
@@ -590,6 +604,7 @@ private:
     mutable std::vector<std::pair<Rect, int>> mZones;
     HistogramData mHist{};
     bool mHasHist = false;
+    bool mDragging = false;
 };
 
 // ── PresetDrawer: left slide-over showing the preset tree ────────────────────────
@@ -963,7 +978,7 @@ class HomeScreen : public Segment
 {
 public:
     struct Card { std::string name, meta; std::vector<uint8_t> thumb; int tw = 0, th = 0; mutable int id = -1; };
-    std::function<void()> onNew, onImport, onSearchFocus;
+    std::function<void()> onNew, onOpen, onImport, onSearchFocus;
     std::function<void(int)> onOpenRecent;   // index into the FULL cards list
     void setCards(std::vector<Card> c) { mCards = std::move(c); }
     void setNow(double n) { mNow = n; }
@@ -1036,7 +1051,7 @@ protected:
         if (mSearchRect.contains(lp)) { mSearchFocused = true; if (onSearchFocus) onSearchFocus(); return true; }
         for (size_t i = 0; i < mActBtns.size(); ++i)
             if (mActBtns[i].contains(lp))
-            { if (i == 0 && onNew) onNew(); else if (i == 1) { if (onOpenRecent && !mCards.empty()) onOpenRecent(0); } else if (i == 2 && onImport) onImport(); return true; }
+            { if (i == 0 && onNew) onNew(); else if (i == 1 && onOpen) onOpen(); else if (i == 2 && onImport) onImport(); return true; }
         for (auto &h : mCardHits) if (h.first.contains(lp)) { if (onOpenRecent) onOpenRecent(h.second); return true; }
         if (mNewCard.w > 0 && mNewCard.contains(lp)) { if (onNew) onNew(); return true; }
         return true;
@@ -1095,6 +1110,134 @@ private:
     std::string mName; int mCount = 0; double mStart = 0, mProgress = 0, mNow = 0; bool mFired = false;
 };
 
+// ── FileBrowser: in-app native file explorer for Open / Import (DR-HOME-3) ───────
+class FileBrowser : public Segment
+{
+public:
+    enum class Mode { OpenImage, ImportFolder };
+    std::function<void(const std::vector<std::string> &, const std::string &)> onPick;
+    FileBrowser() { visible = false; }
+    void open(Mode m, double now) { mMode = m; visible = true; mClosing = false; mScrim.set(0); mScrim.animateTo(0.6, 180, Easing::EaseOutCubic, now); setDir(startDir()); }
+    void close(double now) { mScrim.animateTo(0, 140, Easing::EaseInCubic, now); mClosing = true; }
+    bool isOpen() const { return visible && !mClosing; }
+    void setNow(double n) { mNow = n; }
+    void advance(double now) override { Segment::advance(now); mScrim.update(now); if (mClosing && mScrim.value() < 0.02) { visible = false; mClosing = false; } }
+
+protected:
+    void onPaint(IRenderTarget &t) const override
+    {
+        mZones.clear();
+        const double w = width.value(), h = height.value();
+        t.setFill(Color(0, 0, 0, mScrim.value())); rectPath(t, 0, 0, w, h); t.fillPath();
+        double px = 24, py = 60, pw = w - 48, ph = h - 120;
+        t.setFill(CARD); rrectPath(t, px, py, pw, ph, 4); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, px, py, pw, ph, 4); t.strokePath();
+        txt(t, mMode == Mode::OpenImage ? "Open Image" : "Import Folder", px + 16, py + 30, 15, fnt::sansSemiBold(), FG);
+        icon::back(t, Rect{px + pw - 38, py + 12, 20, 20}, MUTED, 1.6); zoneRect(px + pw - 44, py + 8, 40, 34, -2);
+        std::string path = mDir; if (t.measureText(path, 11, fnt::mono()) > pw - 32) path = "..." + path.substr(path.size() > 30 ? path.size() - 30 : 0);
+        txt(t, path, px + 16, py + 52, 11, fnt::mono(), MUTED);
+        double top = py + 66, rowH = 44, listH = ph - 66 - (mMode == Mode::ImportFolder ? 52 : 0);
+        // import-folder action
+        if (mMode == Mode::ImportFolder)
+        {
+            double by = py + ph - 46; int n = (int)folderImages().size();
+            t.setFill(n > 0 ? ACCENT : INPUT); rrectPath(t, px + 16, by, pw - 32, 36, 2); t.fillPath();
+            char b[48]; std::snprintf(b, sizeof b, "Import this folder (%d)", n);
+            txtC(t, b, px + pw * 0.5, by + 23, 13, fnt::sansSemiBold(), n > 0 ? WHITE : MUTED);
+            if (n > 0) zoneRect(px + 16, by, pw - 32, 36, -3);
+        }
+        // entries (scrollable)
+        t.save(); t.clipRect(px, top, pw, listH);
+        double y = top - mScroll;
+        for (size_t i = 0; i < mEntries.size(); ++i)
+        {
+            if (y + rowH >= top && y <= top + listH)
+            {
+                const Ent &e = mEntries[i];
+                if (e.dir) icon::folderOpen(t, Rect{px + 16, y + rowH / 2 - 9, 18, 18}, e.name == ".." ? FG : ACCENT, 1.4);
+                else { t.setFill(INPUT); rrectPath(t, px + 16, y + 8, 28, 28, 2); t.fillPath(); }
+                txt(t, e.name, px + 52, y + rowH / 2 + 5, 13, fnt::sans(), FG);
+                hline(t, px + 16, px + pw - 16, y + rowH, BORDER);
+                zoneRect(px, y, pw, rowH, (int)i);
+            }
+            y += rowH;
+        }
+        t.restore();
+        mContentH = mEntries.size() * rowH; mViewH = listH;
+    }
+    bool handleGesture(const Gesture &g, const Point &lp) override
+    {
+        if (g.type == Gesture::Type::DragStart) { mDragY = lp.y; mScroll0 = mScroll; mDragging = true; return true; }
+        if (g.type == Gesture::Type::Drag && mDragging)
+        { double maxS = std::max(0.0, mContentH - mViewH); mScroll = std::clamp(mScroll0 - (lp.y - mDragY), 0.0, maxS); return true; }
+        if (g.type == Gesture::Type::Drop) { mDragging = false; return true; }
+        if (g.type != Gesture::Type::Click) return true;
+        for (auto it = mZones.rbegin(); it != mZones.rend(); ++it)
+            if (it->first.contains(lp)) { onZone(it->second); return true; }
+        return true;
+    }
+    bool hitTestSelf(const Point &p) const override { return visible && localBounds().contains(p); }
+
+private:
+    struct Ent { bool dir; std::string name; };
+    void zoneRect(double x, double y, double w, double h, int id) const { mZones.push_back({Rect{x, y, w, h}, id}); }
+    static std::string startDir()
+    {
+        namespace fs = std::filesystem; std::error_code ec;
+        const char *e = getenv("EXTERNAL_STORAGE");
+        for (std::string s : {e ? std::string(e) : std::string(), std::string("/sdcard"), std::string("/storage/emulated/0"), std::string("/storage"), std::string("/")})
+            if (!s.empty() && fs::is_directory(s, ec)) return s;
+        return "/";
+    }
+    static bool isImage(const std::string &n)
+    {
+        auto d = n.find_last_of('.'); if (d == std::string::npos) return false;
+        std::string e = n.substr(d + 1); for (auto &c : e) c = (char)tolower((unsigned char)c);
+        for (const char *x : {"jpg", "jpeg", "png", "bmp", "gif", "webp", "tga", "rw2", "arw", "cr2", "cr3", "nef", "dng", "orf", "raf", "pef", "srw", "raw"})
+            if (e == x) return true;
+        return false;
+    }
+    void setDir(const std::string &dir)
+    {
+        namespace fs = std::filesystem; mDir = dir; mEntries.clear(); mScroll = 0;
+        if (dir != "/") mEntries.push_back({true, ".."});
+        std::vector<Ent> dirs, files; std::error_code ec;
+        for (auto it = fs::directory_iterator(dir, fs::directory_options::skip_permission_denied, ec); !ec && it != fs::directory_iterator(); it.increment(ec))
+        {
+            const auto &p = it->path(); std::string nm = p.filename().string();
+            if (!nm.empty() && nm[0] == '.') continue;
+            std::error_code ec2;
+            if (fs::is_directory(p, ec2)) dirs.push_back({true, nm});
+            else if (isImage(nm)) files.push_back({false, nm});
+        }
+        auto byName = [](const Ent &a, const Ent &b) { return a.name < b.name; };
+        std::sort(dirs.begin(), dirs.end(), byName); std::sort(files.begin(), files.end(), byName);
+        for (auto &d : dirs) mEntries.push_back(d);
+        for (auto &f : files) mEntries.push_back(f);
+    }
+    std::vector<std::string> folderImages() const
+    {
+        std::vector<std::string> v; for (auto &e : mEntries) if (!e.dir) v.push_back(mDir + "/" + e.name); return v;
+    }
+    void onZone(int id)
+    {
+        namespace fs = std::filesystem;
+        if (id == -2) { close(mNow); return; }                                   // close
+        if (id == -3) { if (onPick) onPick(folderImages(), fs::path(mDir).filename().string()); close(mNow); return; }  // import folder
+        if (id < 0 || id >= (int)mEntries.size()) return;
+        const Ent &e = mEntries[id];
+        if (e.dir) { setDir(e.name == ".." ? fs::path(mDir).parent_path().string() : (mDir == "/" ? "/" + e.name : mDir + "/" + e.name)); return; }
+        if (mMode == Mode::OpenImage && onPick) { onPick({mDir + "/" + e.name}, e.name); close(mNow); }
+    }
+    Mode mMode = Mode::OpenImage;
+    std::string mDir;
+    std::vector<Ent> mEntries;
+    double mScroll = 0, mDragY = 0, mScroll0 = 0, mNow = 0;
+    mutable double mContentH = 0, mViewH = 0;
+    bool mDragging = false, mClosing = false;
+    Property mScrim{0.0};
+    mutable std::vector<std::pair<Rect, int>> mZones;
+};
+
 // ── PhoneApp ─────────────────────────────────────────────────────────────────────
 PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
 {
@@ -1102,13 +1245,17 @@ PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
     mHome = std::make_shared<HomeScreen>(); mLoading = std::make_shared<LoadingScreen>(); mEditor = std::make_shared<EditorScreen>(mSession);
     for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); }
     mEditor->resize(width, height, 0.0);
+    mBrowser = std::make_shared<FileBrowser>();
+    mBrowser->width.set(width); mBrowser->height.set(height);
+    mBrowser->onPick = [this](const std::vector<std::string> &paths, const std::string &name) { loadImagesAsProject(paths, name); };
     mHome->onNew = [this] { newProject(); };
-    mHome->onImport = [this] { importCatalog(); };
+    mHome->onOpen = [this] { mBrowser->open(FileBrowser::Mode::OpenImage, mNowMs); };
+    mHome->onImport = [this] { mBrowser->open(FileBrowser::Mode::ImportFolder, mNowMs); };
     mHome->onOpenRecent = [this](int i) { openRecent(i); };
     mHome->onSearchFocus = [this] { if (onKeyboard) onKeyboard(true); };
     mLoading->onDone = [this] { setScreen(Screen::Editor, mNowMs); };
     mEditor->onHome = [this] { setScreen(Screen::Home, mNowMs); if (onKeyboard) onKeyboard(false); };
-    mRecognizer.setSink([this](const Gesture &g) { if (auto *r = activeRoot()) r->onGesture(g); });
+    mRecognizer.setSink([this](const Gesture &g) { if (mBrowser->isOpen()) mBrowser->onGesture(g); else if (auto *r = activeRoot()) r->onGesture(g); });
 }
 PhoneApp::~PhoneApp() = default;
 
@@ -1118,7 +1265,7 @@ artboard::Segment *PhoneApp::activeRoot() const
 void PhoneApp::setScreen(Screen s, double now) { mScreen = s; if (s == Screen::Editor) mEditor->syncControls(); mFade.set(1.0); mFade.animateTo(0.0, 320.0, Easing::EaseOutCubic, now); }
 
 void PhoneApp::setSize(double width, double height)
-{ mW = width; mH = height; for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); } mEditor->resize(width, height, mNowMs); }
+{ mW = width; mH = height; for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get(), (Segment *)mBrowser.get()}) { s->width.set(width); s->height.set(height); } mEditor->resize(width, height, mNowMs); }
 
 void PhoneApp::addProjectImage(const uint8_t *rgba, int w, int h, const std::string &name)
 { mImgs.push_back({std::vector<uint8_t>(rgba, rgba + (size_t)w * h * 4), w, h, name}); }  // keep source
@@ -1178,6 +1325,17 @@ void PhoneApp::openProject()   { enterProject("Sample Project", false); }
 void PhoneApp::importCatalog() { enterProject("Imported Catalog", false); }
 void PhoneApp::openRecent(int i) { if (i >= 0 && i < (int)mRecents.size()) enterProject(mRecents[i].name, mRecents[i].empty); }
 
+void PhoneApp::loadImagesAsProject(const std::vector<std::string> &paths, const std::string &name)
+{
+    cosmo::AndroidImageDecoder dec;
+    std::vector<SrcImage> imgs;
+    for (const auto &p : paths)
+    { cosmo::DecodedImage d = dec.decodeFile(p); if (d.ok()) imgs.push_back({std::move(d.rgba), d.width, d.height, d.name}); }
+    if (imgs.empty()) return;                 // nothing decoded (permission / unsupported)
+    mImgs = std::move(imgs);
+    enterProject(name, false);
+}
+
 void PhoneApp::charInput(unsigned int cp) { if (mScreen == Screen::Home) mHome->searchChar(cp); }
 void PhoneApp::backspace() { if (mScreen == Screen::Home) mHome->searchBackspace(); }
 
@@ -1192,11 +1350,12 @@ void PhoneApp::poll()
 
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
-    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mSession.tick(nowMs); poll();
+    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); mSession.tick(nowMs); poll();
     Segment *r = activeRoot(); r->advance(nowMs); r->render(t); r->renderOverlay(t);
     double a = mFade.update(nowMs);
     if (a > 0.002) { t.save(); t.setTransform(Transform::identity()); t.setFill(Color(0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, a));
         t.beginPath(); t.moveTo(0, 0); t.lineTo(mW, 0); t.lineTo(mW, mH); t.lineTo(0, mH); t.closePath(); t.fillPath(); t.restore(); }
+    if (mBrowser->visible) { mBrowser->advance(nowMs); mBrowser->render(t); mBrowser->renderOverlay(t); }   // file browser on top
 }
 
 void PhoneApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)

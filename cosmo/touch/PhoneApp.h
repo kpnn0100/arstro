@@ -26,6 +26,7 @@ namespace cosmo_touch
     class HomeScreen;
     class LoadingScreen;
     class EditorScreen;
+    class FileBrowser;
 
     enum class Screen { Home, Loading, Editor };
 
@@ -67,6 +68,7 @@ namespace cosmo_touch
         void openRecent(int index);
         void pushRecent(const std::string &name, int count, bool empty);
         void refreshHome();
+        void loadImagesAsProject(const std::vector<std::string> &paths, const std::string &name);  // from the file browser
 
         struct SrcImage { std::vector<uint8_t> rgba; int w = 0, h = 0; std::string name; };
         std::vector<SrcImage> mImgs;   // decoded source images (kept so New/Import can rebuild)
@@ -78,6 +80,7 @@ namespace cosmo_touch
         std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<LoadingScreen> mLoading;
         std::shared_ptr<EditorScreen> mEditor;
+        std::shared_ptr<FileBrowser> mBrowser;
         Screen mScreen = Screen::Home;
         artboard::Property mFade{0.0};   // cross-fade scrim on screen change
         double mW, mH, mNowMs = 0.0;
