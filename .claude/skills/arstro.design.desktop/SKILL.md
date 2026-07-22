@@ -80,6 +80,21 @@ primitive and **eased**, never linear:
 - Data is not motion: a counter or a committed value (e.g. a mask's numeric params) updates as
   data; only its *rendered* position/size/colour eases.
 
+**R1a — the transitions that MUST animate (no exceptions):**
+- **Tab / segmented-control selection** — the highlight must *travel*, never teleport. Either the
+  highlight box / underline **slides** to the newly-selected item (animate its x/width via
+  `Property`/`Spring`), or the selected item **cross-fades** from the old highlight colour to the
+  new. Repainting the active pill/underline at the new spot in one frame is a bug.
+- **Tab / section content swap** — when the active tab or section changes, the incoming content
+  **slides in** (short horizontal translate, ≈160–220 ms, eased) and/or cross-fades; never an
+  instant content replace.
+- **Every button / tappable** — gives an immediate **animated press response** on press-down (a
+  background wash that fades, or a subtle scale), not merely a static pressed colour; a released or
+  cancelled press eases back.
+- **Panels / sheets / drawers** — open, close, and **drag-snap** through an eased tween, and a
+  fixed bar (e.g. a bottom tab/nav bar) **stays put while the attached sheet slides behind it** —
+  the chrome does not ride up and down with the sheet.
+
 ### R2 — Every action responds immediately; if it can't, show loading
 A click/keypress must produce a visible response **this frame** (press feedback, selection, the
 panel starting to open). If the real work can't finish in-frame (decode, file I/O, export, a long

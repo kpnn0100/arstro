@@ -270,7 +270,7 @@ class Tray : public Segment
 public:
     enum class Detent { Rail, Half, Full };
     explicit Tray(cosmo::EditSession &s) : mSession(s) { clipToBounds = true; rebuildBody(); }
-    void configure(double w, double h, double now) { mScreenW = w; mScreenH = h; mNowMs = now; x.set(0); width.set(w); applyDetent(now); layoutBody(); }
+    void configure(double w, double h, double now) { mScreenW = w; mScreenH = h; mNowMs = now; x.set(0); width.set(w); mTabX.set((mTab + 0.5) * (w / 5.0)); applyDetent(now); layoutBody(); }
     void setNow(double n) { mNowMs = n; }
     void setHist(const HistogramData &h) { mHist = h; mHasHist = true; }
 
@@ -281,7 +281,19 @@ public:
         for (auto &r : mRows) { double own = r.get(*p); r.w->setValue(own); r.w->setDefault(r.def); r.w->setSubOffset(r.get(eff) - own); }
         if (mCurve) syncCurve();
     }
-    void advance(double nowMs) override { Segment::advance(nowMs); y.set(mScreenH - height.value()); }
+    void advance(double nowMs) override
+    {
+        Segment::advance(nowMs);
+        y.set(mScreenH - height.value());
+        mTabX.update(nowMs); mBodySlide.update(nowMs); mPressWash.update(nowMs);
+        for (auto &kv : mSegX) kv.second.update(nowMs);
+        for (auto &kv : mChipOn) kv.second.update(nowMs);
+        double sl = mBodySlide.value();   // slide the tab body content in
+        for (auto &r : mRows) r.w->x.set(sl);
+        if (mCurve) mCurve->x.set(16 + sl);
+    }
+    void slideIn() { mBodySlide.set(width.value() * 0.10); mBodySlide.animateTo(0.0, 200.0, Easing::EaseOutCubic, mNowMs); }
+    void pressAt(const Rect &r) { mPressRect = r; mPressWash.set(0.30); mPressWash.animateTo(0.0, 300.0, Easing::EaseOutCubic, mNowMs); }
 
 protected:
     void onPaint(IRenderTarget &t) const override
@@ -320,18 +332,20 @@ protected:
             for (const char *lbl : {"Import", "Export"})
             { t.setStroke(BORDER, 1.0); rrectPath(t, ix, by, sideW, bh, 2); t.strokePath(); txtC(t, lbl, ix + sideW * 0.5, by + bh * 0.5 + 4.5, 13, fnt::sans(), FG); zoneRect(ix, by, sideW, bh, zid++); ix += sideW + gap; }
         }
-        // tool bar
+        // tool bar (fixed at the bottom; the panel slides behind it)
         hline(t, 0, w, tbY, BORDER);
         double tabW = w / 5.0;
+        if (expanded) { t.setFill(ACCENT); rrectPath(t, mTabX.value() - 14, tbY, 28, 2, 1); t.fillPath(); }   // sliding underline
         for (int i = 0; i < 5; ++i)
         {
             bool active = (i == mTab) && expanded; double tx = i * tabW; Color icn = active ? ACCENT : MUTED;
-            if (active) { t.setFill(ACCENT); rrectPath(t, tx + tabW / 2 - 14, tbY, 28, 2, 1); t.fillPath(); }
             Rect ib{tx + tabW / 2 - 10, tbY + 8, 20, 20};
             switch (i) { case 0: icon::tabBasic(t, ib, icn, 1.6); break; case 1: icon::tabMask(t, ib, icn, 1.6); break;
                          case 2: icon::tabCurve(t, ib, icn, 1.6); break; case 3: icon::tabGrade(t, ib, icn, 1.6); break; default: icon::tabXform(t, ib, icn, 1.6); }
             txtC(t, kTabLabels[i], tx + tabW * 0.5, tbY + 44, 10, active ? fnt::sansSemiBold() : fnt::sans(), icn);
         }
+        double pw = mPressWash.value();   // animated press feedback (R1a)
+        if (pw > 0.004) { t.setFill(Color(1, 1, 1, pw)); rrectPath(t, mPressRect.x, mPressRect.y, mPressRect.w, mPressRect.h, 2); t.fillPath(); }
     }
 
     bool handleGesture(const Gesture &g, const Point &lp) override
@@ -342,6 +356,12 @@ protected:
         if (g.type == Gesture::Type::Drag && mDragging)
         { double t = std::clamp(mScreenH - g.pos.y, kRail, openHeight()); height.set(t); y.set(mScreenH - t); return true; }
         if (g.type == Gesture::Type::Drop && mDragging) { mDragging = false; snapDetent(); return true; }
+        if (g.type == Gesture::Type::Down)   // animated press feedback on any tab/button
+        {
+            if (lp.y >= tbY) pressAt(Rect{(double)std::min(4, std::max(0, (int)(lp.x / (w / 5.0)))) * (w / 5.0), tbY, w / 5.0, kToolBar});
+            else for (auto it = mZones.rbegin(); it != mZones.rend(); ++it) if (it->first.contains(lp)) { pressAt(it->first); break; }
+            return true;
+        }
         if (g.type != Gesture::Type::Click) return true;
         if (lp.y >= tbY) { onTab(std::min(4, std::max(0, (int)(lp.x / (w / 5.0))))); return true; }
         if (lp.y <= kHandle) { setDetent(mDetent == Detent::Rail ? Detent::Half : Detent::Rail); return true; }  // tap handle: open/close
@@ -358,30 +378,43 @@ private:
     void zoneRect(double x, double y, double w, double h, int id) const { mZones.push_back({Rect{x, y, w, h}, id}); }
 
     // segmented picker: equal segments, returns nothing; registers zones base+i
+    // Segmented control with a highlight box that SLIDES to the selected segment (R1a).
     void seg(IRenderTarget &t, double x, double y, double w, double h, const std::vector<const char *> &labels, int sel, int base, const std::vector<Color> *cols = nullptr) const
     {
         t.setFill(INPUT); rrectPath(t, x, y, w, h, 2); t.fillPath();
         t.setStroke(BORDER, 1.0); rrectPath(t, x, y, w, h, 2); t.strokePath();
-        double sw = w / labels.size();
+        double sw = w / labels.size(), targetX = x + sel * sw;
+        auto itT = mSegT.find(base);
+        if (itT == mSegT.end()) { mSegX[base] = Property(targetX); mSegT[base] = targetX; }
+        else if (std::fabs(itT->second - targetX) > 0.5) { mSegX[base].animateTo(targetX, 200.0, Easing::EaseOutCubic, mNowMs); mSegT[base] = targetX; }
+        Color ac = cols ? (*cols)[sel] : ACCENT;
+        t.setFill(ac); rrectPath(t, mSegX[base].value() + 1, y + 1, sw - 2, h - 2, 2); t.fillPath();   // sliding highlight
         for (size_t i = 0; i < labels.size(); ++i)
         {
-            bool on = (int)i == sel; Color ac = cols ? (*cols)[i] : ACCENT;
-            if (on) { t.setFill(ac); rrectPath(t, x + i * sw + 1, y + 1, sw - 2, h - 2, 2); t.fillPath(); }
-            txtC(t, labels[i], x + i * sw + sw * 0.5, y + h * 0.5 + 4, 11, fnt::sansMedium(), on ? WHITE : MUTED);
+            txtC(t, labels[i], x + i * sw + sw * 0.5, y + h * 0.5 + 4, 11, fnt::sansMedium(), (int)i == sel ? WHITE : MUTED);
             zoneRect(x + i * sw, y, sw, h, base + (int)i);
         }
     }
-    // variable-width chips
+    static Color lerpC(const Color &a, const Color &b, double t)
+    { return Color(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t); }
+    // variable-width chips — the selected chip fades to the highlight color (R1a)
     void chips(IRenderTarget &t, double x, double y, const std::vector<std::string> &labels, int sel, int base) const
     {
         double cx = x;
         for (size_t i = 0; i < labels.size(); ++i)
         {
-            double cw = 20 + t.measureText(labels[i], 11, fnt::sansMedium()); bool on = (int)i == sel;
-            t.setFill(on ? ACCENT15 : CARD); rrectPath(t, cx, y, cw, 28, 2); t.fillPath();
-            t.setStroke(on ? ACCENT : BORDER, 1.0); rrectPath(t, cx, y, cw, 28, 2); t.strokePath();
-            txt(t, labels[i], cx + 10, y + 18, 11, fnt::sansMedium(), on ? ACCENT : MUTED);
-            zoneRect(cx, y, cw, 28, base + (int)i); cx += cw + 6;
+            int key = base + (int)i; double target = (int)i == sel ? 1.0 : 0.0;
+            auto it = mChipOn.find(key);
+            if (it == mChipOn.end()) mChipOn[key] = Property(target);
+            else if (std::fabs(it->second.value() - target) > 0.001 && std::fabs(mChipT[key] - target) > 0.001)
+            { mChipOn[key].animateTo(target, 180.0, Easing::EaseOutCubic, mNowMs); }
+            mChipT[key] = target;
+            double on = mChipOn[key].value();
+            double cw = 20 + t.measureText(labels[i], 11, fnt::sansMedium());
+            t.setFill(lerpC(CARD, ACCENT15, on)); rrectPath(t, cx, y, cw, 28, 2); t.fillPath();
+            t.setStroke(lerpC(BORDER, ACCENT, on), 1.0); rrectPath(t, cx, y, cw, 28, 2); t.strokePath();
+            txt(t, labels[i], cx + 10, y + 18, 11, fnt::sansMedium(), lerpC(MUTED, ACCENT, on));
+            zoneRect(cx, y, cw, 28, key); cx += cw + 6;
         }
     }
     void toggle(IRenderTarget &t, double x, double y, bool on, int id) const
@@ -477,19 +510,25 @@ private:
 
     std::vector<std::string> sectionNames() const { std::vector<std::string> v; for (auto &s : basicSections()) v.push_back(s.name); return v; }
 
-    void onTab(int tab) { if (tab == mTab && mDetent != Detent::Rail) { setDetent(Detent::Rail); return; } mTab = tab; setDetent(Detent::Half); rebuildBody(); layoutBody(); syncFromSession(); }
+    void onTab(int tab)
+    {
+        if (tab == mTab && mDetent != Detent::Rail) { setDetent(Detent::Rail); return; }
+        mTab = tab; setDetent(Detent::Half);
+        mTabX.animateTo((tab + 0.5) * (width.value() / 5.0), 220.0, Easing::EaseOutCubic, mNowMs);   // slide underline
+        rebuildBody(); layoutBody(); syncFromSession(); slideIn();                                    // slide content in
+    }
     void onZone(int id)
     {
         auto *p = mSession.curParams();
-        if (id >= 100 && id < 120) { if (id - 100 != mSection) { mSection = id - 100; rebuildBody(); layoutBody(); syncFromSession(); } }
-        else if (id == 200 || id == 201) { mCurveMode = id - 200; rebuildBody(); layoutBody(); syncFromSession(); }
+        if (id >= 100 && id < 120) { if (id - 100 != mSection) { mSection = id - 100; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
+        else if (id == 200 || id == 201) { if (id - 200 != mCurveMode) { mCurveMode = id - 200; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
         else if (id >= 300 && id < 304) { mCurveCh = id - 300; syncCurve(); }
         else if (id >= 320 && id < 323) { mMixerCh = id - 320; syncCurve(); }
-        else if (id >= 400 && id < 403) { mGradeRegion = id - 400; rebuildBody(); layoutBody(); syncFromSession(); }
+        else if (id >= 400 && id < 403) { if (id - 400 != mGradeRegion) { mGradeRegion = id - 400; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
         else if (id == 900 && p) { EditParams np = *p; np.remapEnable = !np.remapEnable; mSession.applyParams(np); rebuildBody(); layoutBody(); syncFromSession(); }
         else if (id == 901 && p && mMaskSel >= 0 && mMaskSel < (int)p->masks.size()) { EditParams np = *p; np.masks[mMaskSel].inverted = !np.masks[mMaskSel].inverted; mSession.applyParams(np); }
         else if (id >= 700 && id < 703 && p) { EditParams np = *p; MaskParams m; m.type = id - 700; np.masks.push_back(m); mSession.applyParams(np); mMaskSel = (int)np.masks.size() - 1; rebuildBody(); layoutBody(); syncFromSession(); }
-        else if (id >= 800 && id < 900) { mMaskSel = id - 800; rebuildBody(); layoutBody(); syncFromSession(); }
+        else if (id >= 800 && id < 900) { if (id - 800 != mMaskSel) { mMaskSel = id - 800; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
         else if (id >= 600 && id < 603 && p) { EditParams np = *p; if (id == 600) np.quarterTurns = (np.quarterTurns + 3) % 4; else if (id == 601) np.quarterTurns = (np.quarterTurns + 1) % 4; else { np.rotation = 0; np.quarterTurns = 0; } mSession.applyParams(np); }
         else if (id >= 500 && id < 506 && p) { mAspect = id - 500; EditParams np = *p; setAspect(np, mAspect); mSession.applyParams(np); }
         else if (id == 950 && p) { EditParams np = *p; resetCurve(np); mSession.applyParams(np); syncCurve(); }
@@ -604,6 +643,14 @@ private:
     HistogramData mHist{};
     bool mHasHist = false;
     bool mDragging = false;
+    // animation state (R1a): sliding tab underline, sliding seg highlights, content
+    // slide-in on tab/section change, button press wash.
+    Property mTabX{0.0}, mBodySlide{0.0}, mPressWash{0.0};
+    Rect mPressRect{};
+    mutable std::map<int, Property> mSegX;   // per-segmented-control animated highlight x
+    mutable std::map<int, double> mSegT;     // its last target (to re-arm the tween only on change)
+    mutable std::map<int, Property> mChipOn;  // per-chip selected-ness (0..1) for the color cross-fade
+    mutable std::map<int, double> mChipT;     // its last target
 };
 
 // ── PresetDrawer: left slide-over showing the preset tree ────────────────────────
