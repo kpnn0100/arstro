@@ -14,6 +14,7 @@
 #include "core/EditSession.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +42,11 @@ namespace cosmo_touch
         void longPress(double x, double y);   // synthesized by the host; -> multi-select toggle
         void setSize(double width, double height);
 
+        // text entry (host feeds soft-keyboard events; app requests show/hide via onKeyboard)
+        void charInput(unsigned int codepoint);
+        void backspace();
+        std::function<void(bool)> onKeyboard;   // set by the host: show(true)/hide(false) the IME
+
         // Build the project: add each decoded image (straight RGBA8). The first becomes
         // the project root's first image; the rest are added to the same group. Call
         // finishProject() once all are added. The app starts on the Home screen.
@@ -54,12 +60,18 @@ namespace cosmo_touch
         void setScreen(Screen s, double nowMs);
         artboard::Segment *activeRoot() const;
         void buildSession(const std::string &name, bool empty);  // (re)build the EditSession
+        void enterProject(const std::string &name, bool empty);  // build + push recent + loading
         void newProject();      // fresh empty project
         void openProject();     // open the existing project
         void importCatalog();   // import the source images as a new catalog
+        void openRecent(int index);
+        void pushRecent(const std::string &name, int count, bool empty);
+        void refreshHome();
 
         struct SrcImage { std::vector<uint8_t> rgba; int w = 0, h = 0; std::string name; };
         std::vector<SrcImage> mImgs;   // decoded source images (kept so New/Import can rebuild)
+        struct Recent { std::string name; int count = 0; bool empty = false; std::vector<uint8_t> thumb; int tw = 0, th = 0; };
+        std::vector<Recent> mRecents;  // newest first (DR-HOME-4)
 
         cosmo::EditSession mSession;
         artboard::GestureRecognizer mRecognizer;

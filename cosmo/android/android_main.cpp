@@ -252,6 +252,11 @@ void onCmd(android_app *app, int32_t cmd)
                 if (img.ok()) st->r->app->addProjectImage(img.rgba.data(), img.width, img.height, img.name);
             }
             st->r->app->finishProject("Sample Project");
+            // show/hide the soft keyboard on request (search field, rename, ...)
+            st->r->app->onKeyboard = [app](bool show) {
+                if (show) ANativeActivity_showSoftInput(app->activity, ANATIVEACTIVITY_SHOW_SOFT_INPUT_FORCED);
+                else ANativeActivity_hideSoftInput(app->activity, 0);
+            };
             LOGI("GPU compute backend available=%d (GLES 3.1)", (int)st->r->app->gpuAvailable());
             st->hasFocus = true;
         }
@@ -272,6 +277,18 @@ int32_t onInput(android_app *app, AInputEvent *ev)
 {
     auto *st = static_cast<AppState *>(app->userData);
     if (!st->r || !st->r->app) return 0;
+    if (AInputEvent_getType(ev) == AINPUT_EVENT_TYPE_KEY)
+    {
+        if (AKeyEvent_getAction(ev) != AKEY_EVENT_ACTION_DOWN) return 1;
+        int32_t kc = AKeyEvent_getKeyCode(ev);
+        bool shift = AKeyEvent_getMetaState(ev) & AMETA_SHIFT_ON;
+        if (kc == AKEYCODE_DEL) { st->r->app->backspace(); return 1; }
+        if (kc == AKEYCODE_ENTER) { ANativeActivity_hideSoftInput(app->activity, 0); return 1; }
+        if (kc == AKEYCODE_SPACE) { st->r->app->charInput(' '); return 1; }
+        if (kc >= AKEYCODE_A && kc <= AKEYCODE_Z) { char c = (char)('a' + (kc - AKEYCODE_A)); if (shift) c = (char)('A' + (kc - AKEYCODE_A)); st->r->app->charInput((unsigned)c); return 1; }
+        if (kc >= AKEYCODE_0 && kc <= AKEYCODE_9) { st->r->app->charInput((unsigned)('0' + (kc - AKEYCODE_0))); return 1; }
+        return 0;   // let the system handle BACK etc.
+    }
     if (AInputEvent_getType(ev) != AINPUT_EVENT_TYPE_MOTION) return 0;
     int32_t action = AMotionEvent_getAction(ev) & AMOTION_EVENT_ACTION_MASK;
     float x = AMotionEvent_getX(ev, 0), y = AMotionEvent_getY(ev, 0);

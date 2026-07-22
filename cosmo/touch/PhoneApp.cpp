@@ -962,11 +962,15 @@ public:
 class HomeScreen : public Segment
 {
 public:
-    std::function<void()> onNew, onOpen, onImport;
-    void setProject(const std::string &name, int count, const std::string &sizeStr, const std::vector<uint8_t> &thumb, int tw, int th)
-    { mName = name; mCount = count; mSize = sizeStr; mThumb = thumb; mTw = tw; mTh = th; mThumbId = -1; }
-    const std::string &name() const { return mName; }
-    int count() const { return mCount; }
+    struct Card { std::string name, meta; std::vector<uint8_t> thumb; int tw = 0, th = 0; mutable int id = -1; };
+    std::function<void()> onNew, onImport, onSearchFocus;
+    std::function<void(int)> onOpenRecent;   // index into the FULL cards list
+    void setCards(std::vector<Card> c) { mCards = std::move(c); }
+    void setNow(double n) { mNow = n; }
+    void searchChar(unsigned int cp) { if (cp >= 32 && cp < 127) mSearch.push_back((char)cp); }
+    void searchBackspace() { if (!mSearch.empty()) mSearch.pop_back(); }
+    void setSearchFocused(bool f) { mSearchFocused = f; }
+
 protected:
     void onPaint(IRenderTarget &t) const override
     {
@@ -984,25 +988,41 @@ protected:
           if (a.ic == 0) icon::plusCircle(t, ib, ic, 1.75); else if (a.ic == 1) icon::folderOpen(t, ib, ic, 1.6); else icon::importDown(t, ib, ic, 1.6);
           txt(t, a.l, 64, y + 32, 15, fnt::sansMedium(), ic); mActBtns.push_back(Rect{16, y, w - 32, 52}); y += 60; }
         y += 12;
+        // filtered recents
+        std::vector<int> filtered;
+        for (size_t i = 0; i < mCards.size(); ++i) if (matches(mCards[i].name)) filtered.push_back((int)i);
         txt(t, "Recent Projects", 16, y + 14, 15, fnt::sansSemiBold(), FG);
         double cx = 16 + t.measureText("Recent Projects", 15, fnt::sansSemiBold()) + 10;
+        char cb[8]; std::snprintf(cb, sizeof cb, "%d", (int)filtered.size());
         t.setFill(CARD); rrectPath(t, cx, y, 22, 18, 2); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, cx, y, 22, 18, 2); t.strokePath();
-        txtC(t, mCount > 0 ? "1" : "0", cx + 11, y + 13, 11, fnt::mono(), MUTED);
+        txtC(t, cb, cx + 11, y + 13, 11, fnt::mono(), MUTED);
         y += 30;
-        t.setFill(INPUT); rrectPath(t, 16, y, w - 32, 40, 2); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, 16, y, w - 32, 40, 2); t.strokePath();
-        icon::search(t, Rect{26, y + 10, 18, 18}, MUTED, 1.5); txt(t, "Search projects", 52, y + 25, 14, fnt::sans(), MUTED);
+        // search field (focusable, filters recents — DR-HOME-5)
+        mSearchRect = Rect{16, y, w - 32, 40};
+        t.setFill(INPUT); rrectPath(t, 16, y, w - 32, 40, 2); t.fillPath();
+        t.setStroke(mSearchFocused ? ACCENT : BORDER, 1.0); rrectPath(t, 16, y, w - 32, 40, 2); t.strokePath();
+        icon::search(t, Rect{26, y + 10, 18, 18}, MUTED, 1.5);
+        if (mSearch.empty() && !mSearchFocused) txt(t, "Search projects", 52, y + 25, 14, fnt::sans(), MUTED);
+        else
+        { txt(t, mSearch, 52, y + 25, 14, fnt::sans(), FG);
+          if (mSearchFocused && std::fmod(mNow, 1000.0) < 500.0)   // blinking caret
+          { double cxr = 52 + t.measureText(mSearch, 14, fnt::sans()) + 1; t.setStroke(ACCENT, 1.5); t.beginPath(); t.moveTo(cxr, y + 11); t.lineTo(cxr, y + 29); t.strokePath(); } }
         y += 52;
-        mCardRect = Rect{0, 0, 0, 0};
-        if (mCount > 0)
+        // cards list
+        mCardHits.clear();
+        if (filtered.empty())
+        { txtC(t, mCards.empty() ? "No recent projects" : "No projects match your search", w * 0.5, y + 30, 13, fnt::sans(), MUTED); y += 64; }
+        for (int fi : filtered)
         {
+            const Card &c = mCards[fi];
             t.setFill(CARD); rrectPath(t, 16, y, w - 32, 80, 2); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, 16, y, w - 32, 80, 2); t.strokePath();
-            int id = thumbId(t); t.setFill(INPUT); rrectPath(t, 28, y + 12, 80, 56, 1); t.fillPath();
+            t.setFill(INPUT); rrectPath(t, 28, y + 12, 80, 56, 1); t.fillPath();
+            int id = thumbId(t, c);
             if (id >= 0) { t.save(); t.clipRect(28, y + 12, 80, 56); t.drawImage(id, Rect{28, y + 12, 80, 56}); t.restore(); }
-            txt(t, mName, 120, y + 30, 14, fnt::sansMedium(), FG);
-            t.setFill(ACCENT); rrectPath(t, 120 + t.measureText(mName, 14, fnt::sansMedium()) + 8, y + 22, 6, 6, 3); t.fillPath();
-            char meta[64]; std::snprintf(meta, sizeof meta, "%d photos . %s . Opened recently", mCount, mSize.c_str());
-            txt(t, meta, 120, y + 50, 12, fnt::sans(), MUTED);
-            mCardRect = Rect{16, y, w - 32, 80}; y += 88;
+            txt(t, c.name, 120, y + 30, 14, fnt::sansMedium(), FG);
+            txt(t, c.meta, 120, y + 50, 12, fnt::sans(), MUTED);
+            mCardHits.push_back({Rect{16, y, w - 32, 80}, fi});
+            y += 88;
         }
         t.setStroke(BORDER, 1.5); rrectPath(t, 16, y, w - 32, 72, 2); t.strokePath();
         icon::plusCircle(t, Rect{w / 2 - 62, y + 27, 18, 18}, MUTED, 1.6); txt(t, "New Project", w / 2 - 36, y + 41, 14, fnt::sans(), MUTED);
@@ -1013,19 +1033,33 @@ protected:
     bool handleGesture(const Gesture &g, const Point &lp) override
     {
         if (g.type != Gesture::Type::Click) return true;
+        if (mSearchRect.contains(lp)) { mSearchFocused = true; if (onSearchFocus) onSearchFocus(); return true; }
         for (size_t i = 0; i < mActBtns.size(); ++i)
             if (mActBtns[i].contains(lp))
-            { if (i == 0 && onNew) onNew(); else if (i == 1 && onOpen) onOpen(); else if (i == 2 && onImport) onImport(); return true; }
-        if (mCardRect.w > 0 && mCardRect.contains(lp)) { if (onOpen) onOpen(); return true; }   // recent card -> open
-        if (mNewCard.w > 0 && mNewCard.contains(lp)) { if (onNew) onNew(); return true; }       // dashed card -> new
-        return true;   // search / footer / empty -> nothing
+            { if (i == 0 && onNew) onNew(); else if (i == 1) { if (onOpenRecent && !mCards.empty()) onOpenRecent(0); } else if (i == 2 && onImport) onImport(); return true; }
+        for (auto &h : mCardHits) if (h.first.contains(lp)) { if (onOpenRecent) onOpenRecent(h.second); return true; }
+        if (mNewCard.w > 0 && mNewCard.contains(lp)) { if (onNew) onNew(); return true; }
+        return true;
     }
     bool hitTestSelf(const Point &p) const override { return localBounds().contains(p); }
+
 private:
-    int thumbId(IRenderTarget &t) const { if (mThumbId >= 0 || mTw <= 0) return mThumbId; mThumbId = t.registerImage(mThumb.data(), mTw, mTh); return mThumbId; }
-    std::string mName, mSize; int mCount = 0, mTw = 0, mTh = 0; std::vector<uint8_t> mThumb;
-    mutable int mThumbId = -1;
-    mutable std::vector<Rect> mActBtns; mutable Rect mCardRect{}, mNewCard{};
+    bool matches(const std::string &name) const
+    {
+        if (mSearch.empty()) return true;
+        std::string a = name, b = mSearch;
+        auto low = [](std::string &s) { for (auto &c : s) c = (char)tolower((unsigned char)c); };
+        low(a); low(b);
+        return a.find(b) != std::string::npos;
+    }
+    int thumbId(IRenderTarget &t, const Card &c) const { if (c.id >= 0 || c.tw <= 0) return c.id; c.id = t.registerImage(c.thumb.data(), c.tw, c.th); return c.id; }
+    std::vector<Card> mCards;
+    std::string mSearch;
+    bool mSearchFocused = false;
+    double mNow = 0;
+    mutable std::vector<Rect> mActBtns;
+    mutable std::vector<std::pair<Rect, int>> mCardHits;
+    mutable Rect mSearchRect{}, mNewCard{};
 };
 
 // ── LoadingScreen ────────────────────────────────────────────────────────────────
@@ -1069,10 +1103,11 @@ PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
     for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); }
     mEditor->resize(width, height, 0.0);
     mHome->onNew = [this] { newProject(); };
-    mHome->onOpen = [this] { openProject(); };
     mHome->onImport = [this] { importCatalog(); };
+    mHome->onOpenRecent = [this](int i) { openRecent(i); };
+    mHome->onSearchFocus = [this] { if (onKeyboard) onKeyboard(true); };
     mLoading->onDone = [this] { setScreen(Screen::Editor, mNowMs); };
-    mEditor->onHome = [this] { setScreen(Screen::Home, mNowMs); };
+    mEditor->onHome = [this] { setScreen(Screen::Home, mNowMs); if (onKeyboard) onKeyboard(false); };
     mRecognizer.setSink([this](const Gesture &g) { if (auto *r = activeRoot()) r->onGesture(g); });
 }
 PhoneApp::~PhoneApp() = default;
@@ -1100,21 +1135,51 @@ void PhoneApp::buildSession(const std::string &name, bool empty)
     mSession.setUseGpu(true);
     mEditor->setName(name);
     mEditor->setEmpty(empty);
-    if (!empty)
-    {
-        const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(0);
-        std::vector<uint8_t> tb; int tw = 0, thh = 0; if (th && th->w > 0) { tb = th->rgba; tw = th->w; thh = th->h; }
-        mHome->setProject(name, mImageCount, "demo", tb, tw, thh);
-    }
     mEditor->syncControls();
 }
 
-void PhoneApp::finishProject(const std::string &projectName)
-{ if (!mImgs.empty()) buildSession(projectName, false); }   // startup: build, stay on Home
+void PhoneApp::pushRecent(const std::string &name, int count, bool empty)
+{
+    mRecents.erase(std::remove_if(mRecents.begin(), mRecents.end(), [&](const Recent &r) { return r.name == name; }), mRecents.end());
+    Recent r; r.name = name; r.count = count; r.empty = empty;
+    if (!empty) { const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(0); if (th && th->w > 0) { r.thumb = th->rgba; r.tw = th->w; r.th = th->h; } }
+    mRecents.insert(mRecents.begin(), std::move(r));
+    if (mRecents.size() > 24) mRecents.resize(24);
+    refreshHome();
+}
 
-void PhoneApp::newProject()      { buildSession("Untitled", true);         mLoading->begin("Untitled", 0, mNowMs);          setScreen(Screen::Loading, mNowMs); }
-void PhoneApp::openProject()     { buildSession("Sample Project", false);  mLoading->begin("Sample Project", mImageCount, mNowMs);   setScreen(Screen::Loading, mNowMs); }
-void PhoneApp::importCatalog()   { buildSession("Imported Catalog", false); mLoading->begin("Imported Catalog", mImageCount, mNowMs); setScreen(Screen::Loading, mNowMs); }
+void PhoneApp::refreshHome()
+{
+    std::vector<HomeScreen::Card> cards;
+    for (auto &r : mRecents)
+    {
+        HomeScreen::Card c; c.name = r.name; c.thumb = r.thumb; c.tw = r.tw; c.th = r.th;
+        double mb = 0; for (auto &im : mImgs) mb += (double)im.w * im.h * 4; mb = r.empty ? 0 : mb / (1024.0 * 1024.0);
+        char m[64]; std::snprintf(m, sizeof m, "%d photo%s . %.1f MB . Just now", r.count, r.count == 1 ? "" : "s", mb);
+        c.meta = m; cards.push_back(std::move(c));
+    }
+    mHome->setCards(std::move(cards));
+}
+
+void PhoneApp::enterProject(const std::string &name, bool empty)
+{
+    buildSession(name, empty);
+    pushRecent(name, empty ? 0 : mImageCount, empty);
+    mLoading->begin(name, empty ? 0 : mImageCount, mNowMs);
+    setScreen(Screen::Loading, mNowMs);
+    if (onKeyboard) onKeyboard(false);
+}
+
+void PhoneApp::finishProject(const std::string &projectName)   // startup: build + seed recents, stay on Home
+{ if (!mImgs.empty()) { buildSession(projectName, false); pushRecent(projectName, mImageCount, false); } }
+
+void PhoneApp::newProject()    { enterProject("Untitled", true); }
+void PhoneApp::openProject()   { enterProject("Sample Project", false); }
+void PhoneApp::importCatalog() { enterProject("Imported Catalog", false); }
+void PhoneApp::openRecent(int i) { if (i >= 0 && i < (int)mRecents.size()) enterProject(mRecents[i].name, mRecents[i].empty); }
+
+void PhoneApp::charInput(unsigned int cp) { if (mScreen == Screen::Home) mHome->searchChar(cp); }
+void PhoneApp::backspace() { if (mScreen == Screen::Home) mHome->searchBackspace(); }
 
 bool PhoneApp::gpuAvailable() const { return mSession.gpuAvailable(); }
 
@@ -1127,7 +1192,7 @@ void PhoneApp::poll()
 
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
-    mNowMs = nowMs; mEditor->setNowAll(nowMs); mSession.tick(nowMs); poll();
+    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mSession.tick(nowMs); poll();
     Segment *r = activeRoot(); r->advance(nowMs); r->render(t); r->renderOverlay(t);
     double a = mFade.update(nowMs);
     if (a > 0.002) { t.save(); t.setTransform(Transform::identity()); t.setFill(Color(0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, a));
