@@ -1,0 +1,74 @@
+/*
+ *  arstro-android-shell — SurfaceHost (M1.2).
+ *
+ *  Wraps ONE GTK top-level (a gtk-layer-shell surface where available, else a plain
+ *  window under --windowed) + its Artboard CairoTarget + one Artboard root segment,
+ *  and renders the root on the GTK draw signal — mirroring the cosmo GTK->Cairo glue
+ *  (cosmo/linux_main.cpp). The multi-surface orchestration, the shared frame clock,
+ *  GDK->RawPointer input, and ShellState all arrive in M1.3–M1.6; M1.2 is just this
+ *  single-surface draw path, plus a headless paint() the golden-image tests reuse.
+ *
+ *  See launcher/docs/android-theme-plan.md §3.1 for the surface model.
+ */
+#pragma once
+#include <gtk/gtk.h>
+#include <cairo/cairo.h>
+#include "adapter/native/CairoTarget.h"
+#include "artboard/artboard.h"
+
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace arstro
+{
+namespace androidshell
+{
+    // Which compositor layer a surface lives on + how it is anchored/sized. Consumed only
+    // when gtk-layer-shell is present; under plain --windowed it degrades to a normal
+    // top-level of width x height (0 on an axis = "stretch / let the WM decide").
+    struct SurfaceConfig
+    {
+        enum class Layer { Background, Top, Overlay };
+        std::string name = "surface";
+        Layer layer = Layer::Top;
+        bool anchorLeft = false, anchorRight = false, anchorTop = false, anchorBottom = false;
+        int width = 0, height = 0;            // px; 0 = stretch along an anchored axis / WM default
+        int exclusiveZone = 0;                // reserve this many px so maximized apps avoid us
+        artboard::Color background{0, 0, 0, 1};  // placeholder fill until real content (M2/M1.6)
+    };
+
+    // The M1 surface set (plan §3.1). Defined once here so --surface=N and the M1.6
+    // multi-surface creation share one table. Placeholder background colours make each
+    // surface visually distinct until the theme + real content land (M2+).
+    const std::vector<SurfaceConfig> &defaultSurfaces();
+
+    class SurfaceHost
+    {
+    public:
+        explicit SurfaceHost(SurfaceConfig config);
+
+        // Build the GTK window: a layer-shell surface when gtk-layer-shell is compiled in
+        // and !forceWindowed, otherwise a plain top-level window.
+        void create(bool forceWindowed);
+        void setRoot(std::shared_ptr<artboard::Segment> root) { mRoot = std::move(root); }
+        void show();
+        GtkWidget *window() const { return mWindow; }
+
+        // Pure draw path (no GTK): fill the surface background, size the root to w x h, then
+        // render it (and its overlay pass). Used by the GTK draw signal AND by headless
+        // golden-image rendering, so both produce identical pixels.
+        void paint(cairo_t *cr, int w, int h);
+
+    private:
+        static gboolean onDraw(GtkWidget *area, cairo_t *cr, gpointer self);
+
+        SurfaceConfig mConfig;
+        GtkWidget *mWindow = nullptr;
+        GtkWidget *mArea = nullptr;
+        artboard::CairoTarget mTarget;
+        std::shared_ptr<artboard::Segment> mRoot;
+    };
+
+} // namespace androidshell
+} // namespace arstro

@@ -17,6 +17,10 @@ pkg_check_modules(GTK_LAYER_SHELL IMPORTED_TARGET gtk-layer-shell-0)  # optional
 
 add_executable(arstro-android-shell
   shell/main.cpp
+  shell/SurfaceHost.cpp
+  # Artboard's native Cairo adapter is NOT part of artboard_core (which is platform-free);
+  # each host compiles it in, exactly as cosmo does.
+  ${CMAKE_SOURCE_DIR}/Artboard/src/adapter/native/CairoTarget.cpp
 )
 
 # artboard_core (from the Artboard subproject, added earlier in the umbrella build)

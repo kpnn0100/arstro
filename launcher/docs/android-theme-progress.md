@@ -15,17 +15,21 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. Next task: M1.2 (`shell/SurfaceHost` — wrap one
-layer-shell toplevel + its `CairoTarget` + one Artboard root; `--windowed` + `--surface=N`
-debug modes; copy the GTK3→Cairo glue from `cosmo/linux_main.cpp`).**
+**Milestone M1 — Shell host skeleton. Next task: M1.3 (one shared frame clock ticks every
+surface's Artboard root `advance(nowMs)` + `GestureRecognizer::advance(nowMs)`; per-surface
+dirty flag so idle = zero redraws).**
 
-Note for M1.2: this machine lacks `gtk-layer-shell` (see M1.1 verification note). Either install
-`libgtk-layer-shell-dev`, or build `SurfaceHost`'s layer-shell paths behind `#ifdef
-HAVE_GTK_LAYER_SHELL` with the `--windowed` plain-GTK fallback as the here-testable path, and
-mark the layer-shell path `[!]` until a machine with it (or nested KWin) verifies it.
+Note for M1.3: `SurfaceHost` (M1.2) currently draws only on GTK expose (no timer). M1.3 adds the
+shared `g_timeout_add(16, …)` tick that calls `advance()` on each surface's root + recognizer and
+`gtk_widget_queue_draw`s **only** surfaces whose root reports it changed (a dirty flag), so an idle
+shell does zero redraws (matters on 4K). Copy the tick shape from cosmo's `onTick`
+(`cosmo/linux_main.cpp:723`), but gate the queue_draw on dirtiness.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.1 android-shell
-scaffold). Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
+Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` renders any surface headlessly
+(no display) — this is the L1 golden mechanism M2.5/M3.4+ will use.
+
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.2 SurfaceHost).
+Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
 
@@ -34,7 +38,7 @@ scaffold). Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | in progress (M1.1 done) | shared |
+| M1 | Shell host skeleton | in progress (M1.1–M1.2 done) | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
@@ -84,9 +88,15 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
   the umbrella root `CMakeLists.txt` (option `ARSTRO_BUILD_ANDROID_SHELL`, default ON). Builds clean;
   `arstro-android-shell --self-test` passes (GTK 3.24.33 inits, artboard_core links). gtk-layer-shell
   made OPTIONAL (absent here) — window path compiled but on-screen display unverified headless.
-- [ ] **M1.2** `shell/SurfaceHost` — wrap one layer-shell toplevel + its `CairoTarget` + one Artboard
+- [x] **M1.2** `shell/SurfaceHost` — wrap one layer-shell toplevel + its `CairoTarget` + one Artboard
   root; `--windowed` debug mode (plain GTK window, no layer shell) and `--surface=N` single-surface
   mode for goldens. Copy the GTK3→Cairo glue from `cosmo/linux_main.cpp`.
+  → Done: `shell/SurfaceHost.{h,cpp}` (one toplevel + CairoTarget + root, a shared pure `paint()`
+  used by both the GTK draw signal and headless rendering) + `defaultSurfaces()` (the 5 §3.1 surface
+  configs). `main.cpp` gains `--windowed`, `--surface=N`, `--size=WxH`, `--render-png=PATH`.
+  CairoTarget.cpp compiled into the binary (not in artboard_core), like cosmo. **Verified L1-style:**
+  `--render-png` produces correct-dimension PNGs with the surface drawn (dark bg + placeholder
+  title) — the draw path is real-pixel-confirmed headless. See Verification notes for what's not.
 - [ ] **M1.3** One shared frame clock ticks every surface's Artboard root `advance(nowMs)` +
   `GestureRecognizer::advance(nowMs)`; per-surface dirty flag so idle = zero redraws.
 - [ ] **M1.4** GDK input → `RawPointer` (set `.touch` from GDK source device; map buttons/modifiers).
@@ -235,6 +245,10 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.2: added a headless `--render-png` mode (renders any surface to PNG with no
+  display, via a `SurfaceHost::paint()` shared with the GTK draw signal). This IS the L1 golden-image
+  mechanism — later golden milestones (M2.5, M3.4, …) render + diff through it rather than needing a
+  compositor. Design choice: the pure `paint()` split lets on-screen and headless produce identical pixels.
 - 2026-07-24 — M1.1: `gtk-layer-shell` made an OPTIONAL CMake dependency (it is absent on the
   current dev machine). M1.1 only needs a plain GTK window, so it builds without it; from M1.2 the
   layer-shell paths go behind `#ifdef HAVE_GTK_LAYER_SHELL` with a `--windowed` fallback. Real
@@ -260,3 +274,10 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   **not visually confirmed** (no display in this env) — it is a standard 4-line GTK call and will
   first be seen on screen at M1.6. gtk-layer-shell absent here, so the layer-shell build variant is
   entirely unbuilt/untested on this machine (plain-window mode only).
+- M1.2: the `SurfaceHost` **draw path is real-pixel-verified headless** (`--render-png` output
+  inspected: correct dims, dark surface bg + placeholder title rendered). **NOT verified:** (a) the
+  on-screen GTK window path (`create`/`show`/`gtk_main`) — no display, same as M1.1; (b) the
+  **entire layer-shell code path** (`#ifdef HAVE_GTK_LAYER_SHELL` in `SurfaceHost::create`) — it is
+  not compiled on this machine (gtk-layer-shell absent), so `gtk_layer_*` calls, anchors, layers,
+  and exclusive zones are **unbuilt and untested**. First real verification of both at M1.6 in nested
+  KWin (needs `libgtk-layer-shell-dev` + `kwin_wayland`, neither present here).
