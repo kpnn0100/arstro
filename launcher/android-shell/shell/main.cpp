@@ -21,6 +21,7 @@
 #include "SurfaceHost.h"
 #include "FrameClock.h"
 #include "ShellState.h"
+#include "theme/AndroidColors.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -307,7 +308,23 @@ namespace
             multiOk = n == 7 && clock.count() == n && (int)hosts.size() == n && allPaint;
         }
 
-        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk;
+        // ---- M2.1: Android M3 colour role table (L0) ----
+        bool themeOk = true;
+        {
+            using arstro::androidshell::colors;
+            const auto &light = colors(ThemeMode::Light);
+            const auto &dark = colors(ThemeMode::Dark);
+            // exact role values (plan §2.2) + light != dark for a key surface role
+            themeOk = light.surface == artboard::Color::hex(0xFEF7FF) &&
+                      dark.surface == artboard::Color::hex(0x141218) &&
+                      light.primary == artboard::Color::hex(0x6750A4) &&
+                      dark.primary == artboard::Color::hex(0xD0BCFF) &&
+                      dark.onSurface == artboard::Color::hex(0xE6E0E9) &&
+                      !(light.surface == dark.surface) &&
+                      !(light.primary == dark.primary);
+        }
+
+        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -318,9 +335,10 @@ namespace
         std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
                     haveLayerShell ? "yes" : "no (plain-window mode)", defaultSurfaces().size());
-        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
+        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s, colors: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
-                    inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
+                    inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error",
+                    themeOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }

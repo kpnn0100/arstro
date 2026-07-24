@@ -15,22 +15,27 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M2 — `android_theme` module. First task: M2.1 (`theme/AndroidColors.h` — the M3 role
-table from plan §2.2, light + dark, exposed via the `ShellState` `Observable<ThemeMode>`).**
+**Milestone M2 — `android_theme` module. Next task: M2.2 (`theme/Type` — vendor Roboto +
+Roboto Flex via app-private fontconfig registration like cosmo's DM Sans + the type ramp;
+`theme/Shape` radius scale; `theme/Motion` binding the AB-6 tokens).**
 
-Note for M2.1: this is a shell-app task (route: `arstro.design.desktop` design language + plan §2.2
-values). Create `launcher/android-shell/theme/AndroidColors.h` with the full M3 role table (surface/
-onSurface/primary/primaryContainer/outline/… — copy the exact hex values from plan §2.2), for BOTH
-light and dark, as `artboard::Color`. Provide `const AndroidColors& colors(ThemeMode)` returning the
-right set, so a surface does `colors(state.themeMode.get())`. Keep it pure data (header-only). Verify
-L0: assert a couple of role values per mode + that Light≠Dark for `surface`. This unblocks every
-surface's real styling (M3+). (M2 overall is L1-golden work — none of it needs L2, so M1.6's pending
-L2 check does not block M2.)
+Note for M2.2: shell-app task (route: `arstro.design.desktop` + plan §2.2). Three small pieces:
+(1) `theme/Type.h` — the type ramp from plan §2.2 (display 45/36, headline 32/28/24, title
+22/16-Medium/14-Medium, body 16/14/12, label 14/12/11-Medium) as named `artboard::TextStyle`s
+(size + family). Font FILES: vendor Roboto + Roboto Flex (Apache-2.0) into `assets/fonts/` and
+register them app-private with Fontconfig at startup — copy the exact pattern from
+`cosmo/linux_main.cpp` (it does this for DM Sans / JetBrains Mono via `FcConfigAppFontAddFile`).
+Note the fonts must actually be present in `assets/fonts/` to render by family name; if they can't
+be fetched here, define the ramp with family names + wire the registration call, and mark the
+"real glyphs render" part `[!]` until the TTFs are added. (2) `theme/Shape.h` — the radius scale
+(xs 4, sm 8, md 12, lg 16, xl 28, full). (3) `theme/Motion.h` — thin bindings/aliases over the
+AB-6 `artboard::motion::` tokens + the 5 named easings, named for shell use. Verify L0: ramp sizes,
+radius values; fontconfig registration is L1/L2 (needs the TTFs + a render).
 
-Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden, works for all 7
-surfaces); default run (no `--surface`) opens ALL surfaces; `--self-test` runs the L0 checks.
+Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); default run opens
+ALL surfaces; `--self-test` runs the L0 checks.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.6 all surfaces).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.1 AndroidColors).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -41,7 +46,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
-| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (starting M2.1) | shared |
+| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (M2.1 done) | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
@@ -148,8 +153,13 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
 **Goal:** the named design system. **DoD:** token sample-sheet golden PNGs (light+dark) committed as
 L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices. **Test:** L1.
 
-- [ ] **M2.1** `theme/AndroidColors.h` — the M3 role table (plan §2.2), light + dark, as `Observable`
+- [x] **M2.1** `theme/AndroidColors.h` — the M3 role table (plan §2.2), light + dark, as `Observable`
   theme mode.
+  → Done: `theme/AndroidColors.h` — the 20-role M3 table (`AndroidColors` struct) as `kLightColors`/
+  `kDarkColors` (exact plan §2.2 hex via `Color::hex`) + `colors(ThemeMode)`. `ThemeMode` moved to its
+  own `theme/ThemeMode.h` (theme layer owns it; `ShellState` now includes it) so a surface does
+  `colors(state.themeMode.get())`. **Fully verified L0** (`--self-test` `colors: ok`): exact
+  surface/primary/onSurface values per mode + light≠dark. Pure data — L0 is the complete DoD.
 - [ ] **M2.2** `theme/Type` — vendor Roboto + Roboto Flex (app-private fontconfig registration like
   cosmo's DM Sans) + the type ramp. `theme/Shape` (radius scale) + `theme/Motion` (bind AB-6 tokens).
 - [ ] **M2.3** Icon codegen: `assets/icons-src/*.svg` → build-time Python script → `theme/icons/*.h`
@@ -284,6 +294,10 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M2.1: `ThemeMode` moved from `shell/ShellState.h` to `theme/ThemeMode.h` (the theme
+  layer owns it, since the colour tables key off it and theme is below ShellState). `ShellState.h`
+  now includes it; same namespace, so no call sites changed. Colours use `Color::hex(0xRRGGBB)` for
+  1:1 correspondence with the plan §2.2 table.
 - 2026-07-24 — M1.6: default run (no `--surface`) now opens ALL 7 surfaces (the real shell);
   `--surface=N` is the single-surface goldens/debug mode. `SurfaceHost` made non-copyable/non-movable
   (its recognizer sink captures `this`), so instances live behind `unique_ptr`/`static` — never in a

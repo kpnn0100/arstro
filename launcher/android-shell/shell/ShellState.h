@@ -16,6 +16,7 @@
 #include "artboard/artboard.h"
 #include "compositor/CompositorBridge.h"
 #include "system/SystemServices.h"
+#include "theme/ThemeMode.h"
 
 #include <vector>
 
@@ -23,8 +24,6 @@ namespace arstro
 {
 namespace androidshell
 {
-    enum class ThemeMode { Light, Dark };
-
     struct ShellState
     {
         // Which colour scheme every surface renders in (bound by status bar, QS, launcher, …).
