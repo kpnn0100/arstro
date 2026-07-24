@@ -106,6 +106,33 @@ namespace androidshell
             mRoot->render(mTarget);
             mRoot->renderOverlay(mTarget);
         }
+
+        mDirty = false;   // this frame is now on screen; go idle unless something re-dirties us
+        ++mPaintCount;
+    }
+
+    bool SurfaceHost::frameTick(double nowMs)
+    {
+        // Advance animation + input timing every frame (cheap; no drawing).
+        if (mRoot) mRoot->advance(nowMs);
+        mRecognizer.advance(nowMs);   // drives the long-press timeout (FR-28); sink wired in M1.4
+
+        // Stay/become dirty while content reports it is animating.
+        if (mAnimating && mAnimating(nowMs))
+            mDirty = true;
+
+        // Redraw ONLY when dirty — a static surface does zero redraws once painted.
+        if (mDirty && mArea)
+            gtk_widget_queue_draw(mArea);
+
+        return mDirty;
+    }
+
+    void SurfaceHost::markDirty()
+    {
+        mDirty = true;
+        if (mArea)
+            gtk_widget_queue_draw(mArea);
     }
 
 } // namespace androidshell

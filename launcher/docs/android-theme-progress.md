@@ -15,20 +15,22 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. Next task: M1.3 (one shared frame clock ticks every
-surface's Artboard root `advance(nowMs)` + `GestureRecognizer::advance(nowMs)`; per-surface
-dirty flag so idle = zero redraws).**
+**Milestone M1 — Shell host skeleton. Next task: M1.4 (GDK input → `RawPointer`: set `.touch`
+from the GDK source device; map buttons/modifiers; feed each surface's `GestureRecognizer`).**
 
-Note for M1.3: `SurfaceHost` (M1.2) currently draws only on GTK expose (no timer). M1.3 adds the
-shared `g_timeout_add(16, …)` tick that calls `advance()` on each surface's root + recognizer and
-`gtk_widget_queue_draw`s **only** surfaces whose root reports it changed (a dirty flag), so an idle
-shell does zero redraws (matters on 4K). Copy the tick shape from cosmo's `onTick`
-(`cosmo/linux_main.cpp:723`), but gate the queue_draw on dirtiness.
+Note for M1.4: each `SurfaceHost` already owns a `GestureRecognizer` (M1.3, advanced every frame,
+sink not yet wired). M1.4 wires it: add GDK event masks to the drawing area and `button/motion/
+touch` handlers that build an `artboard::RawPointer` (mapping GDK button + `GDK_MOD1/SHIFT/CONTROL`
+modifiers, and `.touch = true` when the source device is `GDK_SOURCE_TOUCHSCREEN`), feed the
+surface's recognizer, and `markDirty()` so input causes a redraw. Copy the handler shapes from
+cosmo (`onButton`/`onMotion`, `cosmo/linux_main.cpp:724+`) but route into the recognizer (not an
+App). GDK3 touch: `GDK_TOUCH_BEGIN/UPDATE/END` events + `gdk_event_get_source_device`.
 
 Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` renders any surface headlessly
-(no display) — this is the L1 golden mechanism M2.5/M3.4+ will use.
+(no display) — the L1 golden mechanism. `--self-test` runs the headless L0 checks (draw path +
+frame-clock/dirty logic).
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.2 SurfaceHost).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.3 FrameClock).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -38,7 +40,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | in progress (M1.1–M1.2 done) | shared |
+| M1 | Shell host skeleton | in progress (M1.1–M1.3 done) | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
@@ -97,8 +99,16 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
   CairoTarget.cpp compiled into the binary (not in artboard_core), like cosmo. **Verified L1-style:**
   `--render-png` produces correct-dimension PNGs with the surface drawn (dark bg + placeholder
   title) — the draw path is real-pixel-confirmed headless. See Verification notes for what's not.
-- [ ] **M1.3** One shared frame clock ticks every surface's Artboard root `advance(nowMs)` +
+- [x] **M1.3** One shared frame clock ticks every surface's Artboard root `advance(nowMs)` +
   `GestureRecognizer::advance(nowMs)`; per-surface dirty flag so idle = zero redraws.
+  → Done: `shell/FrameClock.{h,cpp}` (one ~60Hz GLib timeout fans a monotonic `nowMs` to every
+  registered surface; `tick(nowMs)` for headless tests). `SurfaceHost::frameTick()` advances the
+  root + its owned `GestureRecognizer`, and `queue_draw`s ONLY when dirty; `paint()` clears the
+  dirty flag + counts; `markDirty()` for external invalidation; `setAnimatingQuery()` lets content
+  opt into continuous redraw. **Verified L0** (`--self-test` `frame-clock: ok`): static surface →
+  idle after 1 paint (zero redraws); animating surface → redraws until its predicate settles;
+  `markDirty` forces one; one clock fans out to N surfaces. GTK `g_timeout_add` on-screen loop
+  wired in `main.cpp` but not verifiable headlessly (see Verification notes).
 - [ ] **M1.4** GDK input → `RawPointer` (set `.touch` from GDK source device; map buttons/modifiers).
   Feed each surface's recognizer.
 - [ ] **M1.5** `ShellState` (Artboard `Observable`s: theme mode, panel expansion fractions, notif
@@ -245,6 +255,12 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.3: per-surface dirtiness for animation is driven by a content-supplied
+  `setAnimatingQuery()` predicate (returns true while animating), because Artboard's `Segment` has no
+  tree-wide "is anything animating?" aggregate. Static content (no predicate) goes idle after one
+  paint. **Candidate future AB task:** add `Segment::isAnimating()` (aggregate of child
+  Property/Spring/hover activity) so the host can auto-detect animation and drop the per-content
+  predicate — an `implement_artboard` mini-cycle, deferred (not needed until animated surfaces, M2+).
 - 2026-07-24 — M1.2: added a headless `--render-png` mode (renders any surface to PNG with no
   display, via a `SurfaceHost::paint()` shared with the GTK draw signal). This IS the L1 golden-image
   mechanism — later golden milestones (M2.5, M3.4, …) render + diff through it rather than needing a
@@ -274,6 +290,10 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   **not visually confirmed** (no display in this env) — it is a standard 4-line GTK call and will
   first be seen on screen at M1.6. gtk-layer-shell absent here, so the layer-shell build variant is
   entirely unbuilt/untested on this machine (plain-window mode only).
+- M1.3: the frame-clock + dirty-gating **logic is verified headless (L0, `--self-test`)** — static
+  idle, animating redraws, markDirty, N-surface fan-out. **NOT verified:** the actual GLib
+  `g_timeout_add` → `gtk_widget_queue_draw` → on-screen redraw loop (needs a display/main loop);
+  first seen at M1.6 in nested KWin.
 - M1.2: the `SurfaceHost` **draw path is real-pixel-verified headless** (`--render-png` output
   inspected: correct dims, dark surface bg + placeholder title rendered). **NOT verified:** (a) the
   on-screen GTK window path (`create`/`show`/`gtk_main`) — no display, same as M1.1; (b) the

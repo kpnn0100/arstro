@@ -16,6 +16,7 @@
 #include "adapter/native/CairoTarget.h"
 #include "artboard/artboard.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -57,8 +58,31 @@ namespace androidshell
 
         // Pure draw path (no GTK): fill the surface background, size the root to w x h, then
         // render it (and its overlay pass). Used by the GTK draw signal AND by headless
-        // golden-image rendering, so both produce identical pixels.
+        // golden-image rendering, so both produce identical pixels. Clears the dirty flag and
+        // bumps the paint counter.
         void paint(cairo_t *cr, int w, int h);
+
+        // ---- frame clock (M1.3) ----
+        // Called once per frame by the shared FrameClock. Advances this surface's Artboard root
+        // and its GestureRecognizer to `nowMs`, then queues a GTK redraw ONLY if the surface is
+        // dirty (an external invalidation via markDirty(), or the animating predicate reporting
+        // it is mid-animation). A surface with static content therefore does zero redraws once it
+        // has painted its first frame. Returns whether the surface was dirty (for headless tests).
+        bool frameTick(double nowMs);
+
+        // Force a one-shot redraw next frame (resize, and — from M1.4 — input). Also queues an
+        // immediate GTK draw when a window exists.
+        void markDirty();
+
+        // Content opts into continuous redraw by supplying a predicate that returns true while it
+        // is animating (so the clock keeps redrawing until it settles). Empty (default) = static
+        // content = idle after the first paint. A future Artboard `Segment::isAnimating()`
+        // aggregate could make this automatic; until then content declares it (see ledger).
+        void setAnimatingQuery(std::function<bool(double nowMs)> q) { mAnimating = std::move(q); }
+
+        artboard::GestureRecognizer &recognizer() { return mRecognizer; }
+        long paintCount() const { return mPaintCount; }
+        bool dirty() const { return mDirty; }
 
     private:
         static gboolean onDraw(GtkWidget *area, cairo_t *cr, gpointer self);
@@ -68,6 +92,10 @@ namespace androidshell
         GtkWidget *mArea = nullptr;
         artboard::CairoTarget mTarget;
         std::shared_ptr<artboard::Segment> mRoot;
+        artboard::GestureRecognizer mRecognizer;        // per-surface; sink wired in M1.4
+        std::function<bool(double)> mAnimating;         // content's "am I animating?" predicate
+        bool mDirty = true;                             // starts true so the first frame paints
+        long mPaintCount = 0;
     };
 
 } // namespace androidshell

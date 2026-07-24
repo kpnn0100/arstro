@@ -19,6 +19,7 @@
 #include <cairo/cairo.h>
 #include "artboard/artboard.h"
 #include "SurfaceHost.h"
+#include "FrameClock.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,6 +27,7 @@
 #include <memory>
 #include <string>
 
+using arstro::androidshell::FrameClock;
 using arstro::androidshell::SurfaceConfig;
 using arstro::androidshell::SurfaceHost;
 using arstro::androidshell::defaultSurfaces;
@@ -117,6 +119,17 @@ namespace
         return 0;
     }
 
+    // Paint a host into a throwaway 4x4 image (headless), so a test can model "this frame
+    // reached the screen" — it clears the dirty flag and bumps the paint counter.
+    void flush(SurfaceHost &h)
+    {
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 4, 4);
+        cairo_t *cr = cairo_create(s);
+        h.paint(cr, 4, 4);
+        cairo_destroy(cr);
+        cairo_surface_destroy(s);
+    }
+
     int selfTest()
     {
         // artboard_core links + runs.
@@ -134,18 +147,65 @@ namespace
         cairo_destroy(cr);
         cairo_surface_destroy(s);
 
+        // ---- M1.3: frame-clock + dirty-gating logic (headless L0 check) ----
+        bool clockOk = true;
+
+        // (A) A static surface goes idle after its first paint: dirty for frame 1, then a paint
+        //     clears it, and subsequent ticks report NOT dirty (zero further redraws).
+        {
+            SurfaceHost h(defaultSurfaces()[0]);
+            h.setRoot(makeRoot(defaultSurfaces()[0]));
+            const bool d1 = h.frameTick(0.0);   // initial dirty
+            flush(h);                            // painted -> dirty cleared, count = 1
+            const bool d2 = h.frameTick(16.0);  // static -> not dirty
+            clockOk = clockOk && d1 && !d2 && h.paintCount() == 1;
+        }
+        // (B) An animating surface stays dirty (keeps redrawing) until its predicate settles.
+        {
+            SurfaceHost h(defaultSurfaces()[0]);
+            h.setRoot(makeRoot(defaultSurfaces()[0]));
+            h.setAnimatingQuery([](double now) { return now < 50.0; });
+            flush(h);                            // count = 1
+            const bool a1 = h.frameTick(16.0);   // animating -> dirty
+            flush(h);                            // count = 2
+            const bool a2 = h.frameTick(48.0);   // animating -> dirty
+            flush(h);                            // count = 3
+            const bool a3 = h.frameTick(60.0);   // settled -> not dirty (no more redraws)
+            clockOk = clockOk && a1 && a2 && !a3 && h.paintCount() == 3;
+        }
+        // (C) markDirty() forces a one-shot redraw request even for static content.
+        {
+            SurfaceHost h(defaultSurfaces()[0]);
+            h.setRoot(makeRoot(defaultSurfaces()[0]));
+            flush(h);
+            const bool idle = h.frameTick(16.0);  // static -> not dirty
+            h.markDirty();
+            const bool redraw = h.frameTick(32.0);  // dirty again
+            clockOk = clockOk && !idle && redraw;
+        }
+        // (D) ONE shared clock fans a single tick out to every registered surface.
+        {
+            FrameClock clock;
+            int a = 0, b = 0;
+            clock.add([&](double) { ++a; });
+            clock.add([&](double) { ++b; });
+            clock.tick(0.0);
+            clockOk = clockOk && clock.count() == 2 && a == 1 && b == 1;
+        }
+
+        const bool ok = paintOk && clockOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
 #else
             false;
 #endif
-        std::printf("arstro-android-shell: self-test %s\n", paintOk ? "OK" : "FAILED");
-        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu, draw-path: %s\n",
+        std::printf("arstro-android-shell: self-test %s\n", ok ? "OK" : "FAILED");
+        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu, draw-path: %s, frame-clock: %s\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
                     haveLayerShell ? "yes" : "no (plain-window mode)",
-                    defaultSurfaces().size(), paintOk ? "ok" : "error");
-        return paintOk ? 0 : 2;
+                    defaultSurfaces().size(), paintOk ? "ok" : "error", clockOk ? "ok" : "error");
+        return ok ? 0 : 2;
     }
 }
 
@@ -169,6 +229,14 @@ int main(int argc, char **argv)
     host.setRoot(makeRoot(cfg));
     host.show();
 
+    // One shared ~60Hz clock drives every surface's advance() + dirty-gated redraw (M1.3).
+    // With one static placeholder surface it paints once and then goes idle (zero redraws).
+    FrameClock clock;
+    clock.add([&host](double nowMs) { host.frameTick(nowMs); });
+    clock.start();
+
     gtk_main();
+
+    clock.stop();
     return 0;
 }
