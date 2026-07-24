@@ -84,8 +84,15 @@ namespace androidshell
         long paintCount() const { return mPaintCount; }
         bool dirty() const { return mDirty; }
 
+        // Feed one low-level pointer sample into this surface's recognizer (M1.4). The GDK
+        // button/motion handlers translate into this; headless tests call it directly. The
+        // recognizer's synthesized gestures are routed to the root (see the sink in the ctor).
+        void feedPointer(const artboard::RawPointer &rp) { mRecognizer.feed(rp); }
+
     private:
         static gboolean onDraw(GtkWidget *area, cairo_t *cr, gpointer self);
+        static gboolean onButton(GtkWidget *area, GdkEventButton *e, gpointer self);
+        static gboolean onMotion(GtkWidget *area, GdkEventMotion *e, gpointer self);
 
         SurfaceConfig mConfig;
         GtkWidget *mWindow = nullptr;

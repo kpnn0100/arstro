@@ -15,22 +15,25 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. Next task: M1.4 (GDK input → `RawPointer`: set `.touch`
-from the GDK source device; map buttons/modifiers; feed each surface's `GestureRecognizer`).**
+**Milestone M1 — Shell host skeleton. Next task: M1.5 (`ShellState` — shared Artboard
+`Observable`s: theme mode, panel expansion fractions, notification store, tile states, window
+list — across surfaces; wire `NullBridge` + fake `SystemServices`).**
 
-Note for M1.4: each `SurfaceHost` already owns a `GestureRecognizer` (M1.3, advanced every frame,
-sink not yet wired). M1.4 wires it: add GDK event masks to the drawing area and `button/motion/
-touch` handlers that build an `artboard::RawPointer` (mapping GDK button + `GDK_MOD1/SHIFT/CONTROL`
-modifiers, and `.touch = true` when the source device is `GDK_SOURCE_TOUCHSCREEN`), feed the
-surface's recognizer, and `markDirty()` so input causes a redraw. Copy the handler shapes from
-cosmo (`onButton`/`onMotion`, `cosmo/linux_main.cpp:724+`) but route into the recognizer (not an
-App). GDK3 touch: `GDK_TOUCH_BEGIN/UPDATE/END` events + `gdk_event_get_source_device`.
+Note for M1.5: create `shell/ShellState.h` holding the cross-surface state as `ui::Observable<T>`
+(FR-23) so several surfaces bind ONE source of truth (e.g. status bar + QS both read theme mode).
+Define the seam interfaces `compositor/CompositorBridge.h` (plan §3.2 — list/activate/close/tile/
+back/…) with a `NullBridge` no-op impl, and `system/SystemServices.h` (plan §3.3 — wifi/battery/
+bt/brightness/volume/…) with a `FakeSystemServices` returning canned values. M1.5 is just the
+interfaces + null/fake impls + a `ShellState` owning them; real NM/UPower/etc clients are M3. Keep
+them behind interfaces so shared milestones stay desktop-agnostic. Pass `ShellState&` to
+`SurfaceHost` (or hold it in main and let surfaces read it) — the real per-surface binding lands
+as each surface is built (M3+). Verify L0: an `Observable` change notifies bound observers; the
+fakes return their canned values.
 
-Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` renders any surface headlessly
-(no display) — the L1 golden mechanism. `--self-test` runs the headless L0 checks (draw path +
-frame-clock/dirty logic).
+Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
+runs the headless L0 checks (draw path, frame-clock/dirty, input plumbing).
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.3 FrameClock).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.4 GDK input).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -40,7 +43,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | in progress (M1.1–M1.3 done) | shared |
+| M1 | Shell host skeleton | in progress (M1.1–M1.4 done) | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
@@ -109,8 +112,16 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
   idle after 1 paint (zero redraws); animating surface → redraws until its predicate settles;
   `markDirty` forces one; one clock fans out to N surfaces. GTK `g_timeout_add` on-screen loop
   wired in `main.cpp` but not verifiable headlessly (see Verification notes).
-- [ ] **M1.4** GDK input → `RawPointer` (set `.touch` from GDK source device; map buttons/modifiers).
+- [x] **M1.4** GDK input → `RawPointer` (set `.touch` from GDK source device; map buttons/modifiers).
   Feed each surface's recognizer.
+  → Done: `SurfaceHost::onButton`/`onMotion` translate GDK button/motion events into
+  `artboard::RawPointer` (button map, `GDK_MOD1/SHIFT/CONTROL` modifiers, `.touch` from
+  `gdk_device_get_source() == GDK_SOURCE_TOUCHSCREEN`) and `feedPointer()` them into the surface's
+  recognizer; the recognizer's sink routes gestures to the root and `markDirty()`s. Chose the
+  emulated-pointer path (no `GDK_TOUCH_MASK`) so mouse + finger share one handler with a correct
+  `.touch` and no double events (v1 is single-pointer per plan). **Verified L0** (`--self-test`
+  `input: ok`): a synthesized touch tap yields Down+Click at the root, both `touch=true`, surface
+  dirtied. GDK-event translation itself not drivable headlessly (see Verification notes).
 - [ ] **M1.5** `ShellState` (Artboard `Observable`s: theme mode, panel expansion fractions, notif
   store, tile states, window list) shared across surfaces. `NullBridge` + fake `SystemServices` wired.
 - [ ] **M1.6** All five surfaces (launcher/statusbar/shade/edge-strips per plan §3.1 table) created at
@@ -255,6 +266,11 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.4: touch is detected from the GDK **source device** on emulated pointer events
+  (no `GDK_TOUCH_MASK`, no separate touch handler), so mouse and finger share one code path with a
+  correct `.touch` flag and no double-reporting. True multi-touch (independent finger sequences) is
+  intentionally out of scope — plan v1 needs no multi-finger gestures; a single pointer covers the
+  matrix. Revisit only if a future surface needs 2-finger input.
 - 2026-07-24 — M1.3: per-surface dirtiness for animation is driven by a content-supplied
   `setAnimatingQuery()` predicate (returns true while animating), because Artboard's `Segment` has no
   tree-wide "is anything animating?" aggregate. Static content (no predicate) goes idle after one
@@ -294,6 +310,10 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   idle, animating redraws, markDirty, N-surface fan-out. **NOT verified:** the actual GLib
   `g_timeout_add` → `gtk_widget_queue_draw` → on-screen redraw loop (needs a display/main loop);
   first seen at M1.6 in nested KWin.
+- M1.4: the **`RawPointer` → recognizer → root → markDirty** chain is verified headless (L0,
+  `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
+  translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
+  GDK events from a display/compositor; first exercised at M1.6 in nested KWin.
 - M1.2: the `SurfaceHost` **draw path is real-pixel-verified headless** (`--render-png` output
   inspected: correct dims, dark surface bg + placeholder title rendered). **NOT verified:** (a) the
   on-screen GTK window path (`create`/`show`/`gtk_main`) — no display, same as M1.1; (b) the

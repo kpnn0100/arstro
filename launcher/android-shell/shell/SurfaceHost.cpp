@@ -36,7 +36,38 @@ namespace androidshell
         return surfaces;
     }
 
-    SurfaceHost::SurfaceHost(SurfaceConfig config) : mConfig(std::move(config)) {}
+    namespace
+    {
+        artboard::PointerButton mapGdkButton(guint b)
+        {
+            switch (b)
+            {
+            case 2:  return artboard::PointerButton::Middle;
+            case 3:  return artboard::PointerButton::Right;
+            default: return artboard::PointerButton::Left;
+            }
+        }
+
+        // True when the event's source device is a touchscreen. GDK reports the real source
+        // device even on the pointer events it EMULATES from touch, so reading it here gives a
+        // correct .touch flag for both mouse and finger without separately handling touch events
+        // (which would double-report). v1 is single-pointer (plan: no multi-finger needed).
+        bool isTouchSource(GdkEvent *ev)
+        {
+            GdkDevice *d = gdk_event_get_source_device(ev);
+            return d && gdk_device_get_source(d) == GDK_SOURCE_TOUCHSCREEN;
+        }
+    }
+
+    SurfaceHost::SurfaceHost(SurfaceConfig config) : mConfig(std::move(config))
+    {
+        // Route every synthesized gesture to the current root and mark the surface dirty so
+        // input causes exactly one redraw. Reads mRoot at call time (set later via setRoot).
+        mRecognizer.setSink([this](const artboard::Gesture &g) {
+            if (mRoot) mRoot->onGesture(g);
+            markDirty();
+        });
+    }
 
     void SurfaceHost::create(bool forceWindowed)
     {
@@ -74,8 +105,16 @@ namespace androidshell
         gtk_window_set_default_size(GTK_WINDOW(mWindow), defW, defH);
 
         mArea = gtk_drawing_area_new();
+        gtk_widget_set_can_focus(mArea, TRUE);
+        // Pointer events only: GTK emulates button/motion for touch too (with the touchscreen
+        // as source device), so we do NOT add GDK_TOUCH_MASK and get both from one path (M1.4).
+        gtk_widget_add_events(mArea, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
+                                         GDK_POINTER_MOTION_MASK);
         gtk_container_add(GTK_CONTAINER(mWindow), mArea);
         g_signal_connect(mArea, "draw", G_CALLBACK(onDraw), this);
+        g_signal_connect(mArea, "button-press-event", G_CALLBACK(onButton), this);
+        g_signal_connect(mArea, "button-release-event", G_CALLBACK(onButton), this);
+        g_signal_connect(mArea, "motion-notify-event", G_CALLBACK(onMotion), this);
         g_signal_connect(mWindow, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
     }
 
@@ -86,6 +125,37 @@ namespace androidshell
         auto *h = static_cast<SurfaceHost *>(self);
         h->paint(cr, gtk_widget_get_allocated_width(area), gtk_widget_get_allocated_height(area));
         return FALSE;
+    }
+
+    gboolean SurfaceHost::onButton(GtkWidget *, GdkEventButton *e, gpointer self)
+    {
+        artboard::RawPointer rp;
+        rp.kind = (e->type == GDK_BUTTON_PRESS) ? artboard::RawPointer::Kind::Down
+                                                : artboard::RawPointer::Kind::Up;
+        rp.pos = {e->x, e->y};
+        rp.button = mapGdkButton(e->button);
+        rp.timeMs = (double)e->time;
+        rp.alt = (e->state & GDK_MOD1_MASK) != 0;
+        rp.shift = (e->state & GDK_SHIFT_MASK) != 0;
+        rp.ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        rp.touch = isTouchSource(reinterpret_cast<GdkEvent *>(e));
+        static_cast<SurfaceHost *>(self)->feedPointer(rp);
+        return TRUE;
+    }
+
+    gboolean SurfaceHost::onMotion(GtkWidget *, GdkEventMotion *e, gpointer self)
+    {
+        artboard::RawPointer rp;
+        rp.kind = artboard::RawPointer::Kind::Move;
+        rp.pos = {e->x, e->y};
+        rp.button = artboard::PointerButton::Left;  // motion carries no button; recognizer uses the press's
+        rp.timeMs = (double)e->time;
+        rp.alt = (e->state & GDK_MOD1_MASK) != 0;
+        rp.shift = (e->state & GDK_SHIFT_MASK) != 0;
+        rp.ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        rp.touch = isTouchSource(reinterpret_cast<GdkEvent *>(e));
+        static_cast<SurfaceHost *>(self)->feedPointer(rp);
+        return TRUE;
     }
 
     void SurfaceHost::paint(cairo_t *cr, int w, int h)

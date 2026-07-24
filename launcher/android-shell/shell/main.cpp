@@ -193,7 +193,48 @@ namespace
             clockOk = clockOk && clock.count() == 2 && a == 1 && b == 1;
         }
 
-        const bool ok = paintOk && clockOk;
+        // ---- M1.4: input plumbing (GDK->RawPointer path is exercised via feedPointer) ----
+        bool inputOk = true;
+        {
+            // A root that records the gestures the recognizer routes to it.
+            struct GestureCounter : artboard::Segment
+            {
+                int downs = 0, clicks = 0, moves = 0;
+                bool lastTouch = false;
+                bool handleGesture(const artboard::Gesture &g, const artboard::Point &) override
+                {
+                    using T = artboard::Gesture::Type;
+                    if (g.type == T::Down) ++downs;
+                    else if (g.type == T::Click) ++clicks;
+                    else if (g.type == T::Move) ++moves;
+                    lastTouch = g.touch;
+                    return true;
+                }
+            };
+            auto root = std::make_shared<GestureCounter>();
+            root->width.set(200);
+            root->height.set(200);
+            SurfaceHost h(defaultSurfaces()[0]);
+            h.setRoot(root);
+            flush(h);  // clear the initial dirty so we can observe input re-dirtying it
+
+            // A touch tap: Down then Up at the same point -> the recognizer emits Down + Click,
+            // both carrying touch=true, routed to the root; the surface goes dirty.
+            artboard::RawPointer down;
+            down.kind = artboard::RawPointer::Kind::Down;
+            down.pos = {10, 10};
+            down.timeMs = 100.0;
+            down.touch = true;
+            artboard::RawPointer up = down;
+            up.kind = artboard::RawPointer::Kind::Up;
+            up.timeMs = 120.0;
+            h.feedPointer(down);
+            h.feedPointer(up);
+
+            inputOk = root->downs == 1 && root->clicks == 1 && root->lastTouch && h.dirty();
+        }
+
+        const bool ok = paintOk && clockOk && inputOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -201,10 +242,11 @@ namespace
             false;
 #endif
         std::printf("arstro-android-shell: self-test %s\n", ok ? "OK" : "FAILED");
-        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu, draw-path: %s, frame-clock: %s\n",
+        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu, draw-path: %s, frame-clock: %s, input: %s\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
                     haveLayerShell ? "yes" : "no (plain-window mode)",
-                    defaultSurfaces().size(), paintOk ? "ok" : "error", clockOk ? "ok" : "error");
+                    defaultSurfaces().size(), paintOk ? "ok" : "error", clockOk ? "ok" : "error",
+                    inputOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
