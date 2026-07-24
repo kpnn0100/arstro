@@ -22,6 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
+option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (launcher/android-shell)" ON)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
 
@@ -34,4 +35,11 @@ add_subdirectory(ImageProcessing)
 # logic lives in cosmo/core (target cosmo_core), added by cosmo/CMakeLists.txt.
 if(ARSTRO_BUILD_COSMO)
   add_subdirectory(cosmo)
+endif()
+
+# arstro-android-shell: the Android-theme touch shell (launcher, status bar, quick
+# settings, notifications, gesture nav) for GNOME/Plasma. Depends only on artboard_core
+# + GTK3/Cairo. See launcher/docs/android-theme-plan.md and android-theme-progress.md.
+if(ARSTRO_BUILD_ANDROID_SHELL)
+  add_subdirectory(launcher/android-shell)
 endif()

@@ -1,0 +1,5 @@
+# packaging/
+#
+# M9: debian/, rpm/arstro-android-shell.spec, sessions/, systemd-user/.
+#
+# Placeholder so the directory is tracked; replaced by real files in the milestone above.

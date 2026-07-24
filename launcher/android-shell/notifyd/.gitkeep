@@ -1,0 +1,5 @@
+# notifyd/
+#
+# M4: in-process org.freedesktop.Notifications GDBus service + NotificationStore.
+#
+# Placeholder so the directory is tracked; replaced by real files in the milestone above.

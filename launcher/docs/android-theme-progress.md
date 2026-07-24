@@ -15,11 +15,17 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. First task: M1.1 (scaffold `launcher/android-shell/` +
-CMake, wired into the umbrella build).**
+**Milestone M1 — Shell host skeleton. Next task: M1.2 (`shell/SurfaceHost` — wrap one
+layer-shell toplevel + its `CairoTarget` + one Artboard root; `--windowed` + `--surface=N`
+debug modes; copy the GTK3→Cairo glue from `cosmo/linux_main.cpp`).**
 
-Last updated: 2026-07-24 · Last commit touching this project: Artboard `feature/1.0.0` e9c64e4
-(AB-4 kinetic scrolling). Umbrella: this ledger's introduction.
+Note for M1.2: this machine lacks `gtk-layer-shell` (see M1.1 verification note). Either install
+`libgtk-layer-shell-dev`, or build `SurfaceHost`'s layer-shell paths behind `#ifdef
+HAVE_GTK_LAYER_SHELL` with the `--windowed` plain-GTK fallback as the here-testable path, and
+mark the layer-shell path `[!]` until a machine with it (or nested KWin) verifies it.
+
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.1 android-shell
+scaffold). Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
 
@@ -28,7 +34,7 @@ Last updated: 2026-07-24 · Last commit touching this project: Artboard `feature
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | not started | shared |
+| M1 | Shell host skeleton | in progress (M1.1 done) | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
@@ -71,9 +77,13 @@ Artboard surfaces from one frame clock and feeds GDK touch/pointer as `RawPointe
 **DoD:** placeholder-colored surfaces at correct geometry render in nested KWin (test L2); a drag-box
 demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
 
-- [ ] **M1.1** Scaffold `launcher/android-shell/` dir tree (plan §3.4) + root `CMakeLists.txt`, added
+- [x] **M1.1** Scaffold `launcher/android-shell/` dir tree (plan §3.4) + root `CMakeLists.txt`, added
   to the umbrella build via `add_subdirectory`. Links `artboard_core`, GTK3, gtk-layer-shell, Cairo,
   fontconfig via pkg-config. Builds an empty `arstro-android-shell` that opens one GTK window.
+  → Done: `launcher/android-shell/{CMakeLists.txt, shell/main.cpp}` + §3.4 subdir stubs; wired into
+  the umbrella root `CMakeLists.txt` (option `ARSTRO_BUILD_ANDROID_SHELL`, default ON). Builds clean;
+  `arstro-android-shell --self-test` passes (GTK 3.24.33 inits, artboard_core links). gtk-layer-shell
+  made OPTIONAL (absent here) — window path compiled but on-screen display unverified headless.
 - [ ] **M1.2** `shell/SurfaceHost` — wrap one layer-shell toplevel + its `CairoTarget` + one Artboard
   root; `--windowed` debug mode (plain GTK window, no layer shell) and `--surface=N` single-surface
   mode for goldens. Copy the GTK3→Cairo glue from `cosmo/linux_main.cpp`.
@@ -225,6 +235,13 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.1: `gtk-layer-shell` made an OPTIONAL CMake dependency (it is absent on the
+  current dev machine). M1.1 only needs a plain GTK window, so it builds without it; from M1.2 the
+  layer-shell paths go behind `#ifdef HAVE_GTK_LAYER_SHELL` with a `--windowed` fallback. Real
+  layer surfaces need `libgtk-layer-shell-dev` installed (or verification in nested KWin).
+- 2026-07-24 — The umbrella now builds `arstro-android-shell` by default (`ARSTRO_BUILD_ANDROID_SHELL`
+  ON). It depends only on `artboard_core` + GTK3/Cairo/fontconfig, all already required by cosmo, so
+  this does not add a new hard dependency to the umbrella build.
 - 2026-07-24 — Artboard work committed to `feature/1.0.0`, not `main` — that branch was already
   checked out and is the repo's real active line; `main` is a stale 3-commit branch.
 - 2026-07-24 — `launcher/` tracked inside the umbrella `arstro` repo (android17 gitignored) rather
@@ -238,3 +255,8 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   build env when written. Native/Cairo + RecordingTarget paths verified (128 tests, 100% coverage).
 - No visual/on-screen rendering has been checked for anything yet (headless env); only op-stream
   correctness + native compile. First real pixels happen at M1.6 (nested KWin).
+- M1.1: `arstro-android-shell` builds + links + `--self-test` passes headless (GTK inits,
+  artboard_core usable). The actual `gtk_widget_show_all` window-display path is compiled but
+  **not visually confirmed** (no display in this env) — it is a standard 4-line GTK call and will
+  first be seen on screen at M1.6. gtk-layer-shell absent here, so the layer-shell build variant is
+  entirely unbuilt/untested on this machine (plain-window mode only).
