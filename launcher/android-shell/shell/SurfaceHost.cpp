@@ -29,8 +29,14 @@ namespace androidshell
             // 3 quick-settings shade — full-screen overlay (M5)
             {"shade-quicksettings", L::Overlay, true, true, true, true, 0, 0, 0,
              artboard::Color::rgba(43, 41, 48, 235)},
-            // 4 gesture edge strips — overlay; the real 3 strips (L/R/bottom) split out in M1.6/M7
-            {"edge-strips", L::Overlay, true, true, false, true, 0, 0, 0,
+            // 4 gesture edge strip: LEFT — overlay, full height, 32px wide (back gesture, plan §2.7)
+            {"edge-left", L::Overlay, true, false, true, true, 32, 0, 0,
+             artboard::Color::rgba(0, 0, 0, 40)},
+            // 5 gesture edge strip: RIGHT — overlay, full height, 32px wide (back gesture)
+            {"edge-right", L::Overlay, false, true, true, true, 32, 0, 0,
+             artboard::Color::rgba(0, 0, 0, 40)},
+            // 6 gesture edge strip: BOTTOM — overlay, full width, 24px tall (home/overview/quick-switch)
+            {"edge-bottom", L::Overlay, true, true, false, true, 0, 24, 0,
              artboard::Color::rgba(0, 0, 0, 40)},
         };
         return surfaces;

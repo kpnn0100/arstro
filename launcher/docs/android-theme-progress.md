@@ -15,24 +15,22 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. Next (LAST M1) task: M1.6 (create ALL five surfaces per
-plan §3.1 at correct layer/anchor/exclusive-zone with placeholder fills; verify geometry in nested
-KWin — L2). This is where the layer-shell + on-screen + GDK-event paths get their first real check.**
+**Milestone M2 — `android_theme` module. First task: M2.1 (`theme/AndroidColors.h` — the M3 role
+table from plan §2.2, light + dark, exposed via the `ShellState` `Observable<ThemeMode>`).**
 
-Note for M1.6: `defaultSurfaces()` already holds the 5 configs and `SurfaceHost` consumes them
-(incl. the `#ifdef HAVE_GTK_LAYER_SHELL` anchors/layer/exclusive-zone). M1.6 = create a `SurfaceHost`
-per config, give each a placeholder root + the shared `ShellState`, register all with the one
-`FrameClock`, show all. **BLOCKER on this machine:** M1.6's DoD is L2 (nested KWin) and needs
-`libgtk-layer-shell-dev` + `kwin_wayland`, **neither installed here** (see Verification notes). Options:
-(a) install both, then verify; (b) do the multi-surface wiring + `--windowed` multi-window fallback
-(all 5 as plain windows, verifiable on any display) and mark the layer-shell/nested-KWin parts `[!]`
-until a capable machine runs them. Split the edge-strips config into the real 3 strips (L/R/bottom)
-here too.
+Note for M2.1: this is a shell-app task (route: `arstro.design.desktop` design language + plan §2.2
+values). Create `launcher/android-shell/theme/AndroidColors.h` with the full M3 role table (surface/
+onSurface/primary/primaryContainer/outline/… — copy the exact hex values from plan §2.2), for BOTH
+light and dark, as `artboard::Color`. Provide `const AndroidColors& colors(ThemeMode)` returning the
+right set, so a surface does `colors(state.themeMode.get())`. Keep it pure data (header-only). Verify
+L0: assert a couple of role values per mode + that Light≠Dark for `surface`. This unblocks every
+surface's real styling (M3+). (M2 overall is L1-golden work — none of it needs L2, so M1.6's pending
+L2 check does not block M2.)
 
-Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
-runs the headless L0 checks (draw-path, frame-clock, input, shell-state).
+Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden, works for all 7
+surfaces); default run (no `--surface`) opens ALL surfaces; `--self-test` runs the L0 checks.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.5 ShellState).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.6 all surfaces).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -42,8 +40,8 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | in progress (M1.1–M1.5 done) | shared |
-| M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
+| M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
+| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (starting M2.1) | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
@@ -133,8 +131,17 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
   notify + no-op-set guard; fakes canned + setter round-trip + airplane cascade + power counts;
   NullBridge callable + ShellState mirrors its empty window list. (Pure interfaces/fakes — L0 is the
   complete DoD, nothing display-dependent.)
-- [ ] **M1.6** All five surfaces (launcher/statusbar/shade/edge-strips per plan §3.1 table) created at
+- [!] **M1.6** All five surfaces (launcher/statusbar/shade/edge-strips per plan §3.1 table) created at
   correct layer/anchor/exclusive-zone with placeholder fills. Verify geometry in nested KWin (L2).
+  → Done (wiring): edge-strips split into the real 3 (edge-left/right 32×full-height, edge-bottom
+  full-width×24) → **7 surfaces** total; default run (no `--surface`) creates a `SurfaceHost` per
+  config (heap-stable `unique_ptr` — `SurfaceHost` is now non-copyable since its sink captures
+  `this`), each with a placeholder root + the shared `ShellState`, all on ONE `FrameClock`, shown.
+  `--surface=N` stays single-surface mode. **Verified L0+L1** (`--self-test` `all-surfaces: ok`: 7
+  hosts, 1 clock, 1 state, each paints + has shellState wired; `--render-png` of all 7 → correct
+  config-driven dims + alpha: overlays RGBA-transparent, opaque surfaces RGB). **`[!]` because the
+  DoD's L2 (nested-KWin geometry) could NOT run here** — see Verification notes; the layer-shell
+  anchoring/exclusive-zone + on-screen multi-window display are unverified pending a capable machine.
 
 ## M2 — `android_theme` module  (plan §2.2)
 
@@ -256,6 +263,8 @@ passes on nested `gnome-shell --nested --wayland` (L3) within its input limits, 
 - [ ] M9 green — deb + rpm build in CI, VM matrix passes the 15-point smoke checklist on Ubuntu-GNOME,
   Fedora-GNOME, Fedora-KDE, Kubuntu; uninstall clean.
 - [ ] M0 web-adapter verification gap cleared.
+- [ ] M1 on-screen/layer-shell L2 verification cleared (7 surfaces anchor correctly + take input in
+      nested KWin — see M1.6 Verification note; was code-complete but built/tested only headless).
 - [ ] The 7 user deliverables all demonstrably working on **both** GNOME and Plasma: launcher · quick
   settings (right-half swipe) · status bar (wifi/battery/clock) · notification panel (left-half swipe)
   · gesture nav (back/home/recents) · all animation+icons · fullscreen + intentional split.
@@ -275,6 +284,10 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.6: default run (no `--surface`) now opens ALL 7 surfaces (the real shell);
+  `--surface=N` is the single-surface goldens/debug mode. `SurfaceHost` made non-copyable/non-movable
+  (its recognizer sink captures `this`), so instances live behind `unique_ptr`/`static` — never in a
+  relocating value container. Edge-strips split into 3 real strips per plan §3.1/§2.7.
 - 2026-07-24 — M1.5: `ShellState` deliberately ships only themeMode + the two shade expansions +
   the window list (+ the two seam refs). The notification store (M4) and QS tile states (M5) that
   the task note mentioned are **added to ShellState when those surfaces are built**, not
@@ -327,7 +340,17 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
 - M1.4: the **`RawPointer` → recognizer → root → markDirty** chain is verified headless (L0,
   `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
   translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
-  GDK events from a display/compositor; first exercised at M1.6 in nested KWin.
+  GDK events from a display/compositor.
+- M1.6 / **the standing M1 gap**: the multi-surface WIRING is verified L0+L1 (7 hosts, 1 clock, 1
+  state, all render at correct dims). **NOT verified on this machine — the whole on-screen + layer-
+  shell side of M1** (accumulates the M1.1–M1.4 on-screen caveats): (a) the `#ifdef
+  HAVE_GTK_LAYER_SHELL` anchoring/layer/exclusive-zone code is **not even compiled** (gtk-layer-shell
+  absent), so surfaces positioning at screen edges is untested; (b) the on-screen multi-window
+  display + real GDK events + the GLib-timeout redraw loop need a display/compositor; (c) L2
+  nested-KWin geometry needs `kwin_wayland`. **To clear:** on a machine with `libgtk-layer-shell-dev`
+  + `kwin_wayland`, run `dbus-run-session -- env XDG_RUNTIME_DIR=$(mktemp -d) kwin_wayland --width
+  1600 --height 1000 ./arstro-android-shell` and confirm the 7 surfaces anchor correctly + respond to
+  input. Until then M1 is code-complete but not L2-verified (does not block M2–M6, which are L0/L1).
 - M1.2: the `SurfaceHost` **draw path is real-pixel-verified headless** (`--render-png` output
   inspected: correct dims, dark surface bg + placeholder title rendered). **NOT verified:** (a) the
   on-screen GTK window path (`create`/`show`/`gtk_main`) — no display, same as M1.1; (b) the

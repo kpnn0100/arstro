@@ -27,6 +27,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
 
 using arstro::androidshell::FrameClock;
 using arstro::androidshell::SurfaceConfig;
@@ -57,6 +58,7 @@ namespace
         bool selfTest = false;
         bool windowed = false;
         int surface = 0;
+        bool surfaceGiven = false;      // --surface=N passed -> single-surface mode; else all surfaces
         int width = 0, height = 0;      // 0 = use config default
         std::string renderPng;          // non-empty = headless PNG render mode
     };
@@ -69,7 +71,7 @@ namespace
             const std::string a = argv[i];
             if (a == "--self-test") o.selfTest = true;
             else if (a == "--windowed") o.windowed = true;
-            else if (a.rfind("--surface=", 0) == 0) o.surface = std::atoi(a.c_str() + 10);
+            else if (a.rfind("--surface=", 0) == 0) { o.surface = std::atoi(a.c_str() + 10); o.surfaceGiven = true; }
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
             else if (a.rfind("--size=", 0) == 0)
             {
@@ -272,7 +274,40 @@ namespace
             stateOk = init && changed && noRefire && canned && roundTrip && airplane && power && nullBridge;
         }
 
-        const bool ok = paintOk && clockOk && inputOk && stateOk;
+        // ---- M1.6: all surfaces share ONE clock + ONE ShellState and each renders (L0+L1) ----
+        bool multiOk = true;
+        {
+            NullBridge bridge;
+            FakeSystemServices services;
+            ShellState state(bridge, services);
+            FrameClock clock;
+            std::vector<std::unique_ptr<SurfaceHost>> hosts;
+            for (const auto &cfg : defaultSurfaces())
+            {
+                auto h = std::make_unique<SurfaceHost>(cfg);  // heap-stable (sink captures `this`)
+                h->setRoot(makeRoot(cfg));
+                h->setShellState(&state);
+                SurfaceHost *hp = h.get();
+                clock.add([hp](double now) { hp->frameTick(now); });
+                hosts.push_back(std::move(h));
+            }
+            clock.tick(0.0);  // one shared tick advances every surface
+
+            bool allPaint = true;  // every surface renders (paint path) without a display
+            for (auto &h : hosts)
+            {
+                cairo_surface_t *cs = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 32, 32);
+                cairo_t *ccr = cairo_create(cs);
+                h->paint(ccr, 32, 32);
+                allPaint = allPaint && cairo_status(ccr) == CAIRO_STATUS_SUCCESS && h->shellState() == &state;
+                cairo_destroy(ccr);
+                cairo_surface_destroy(cs);
+            }
+            const int n = (int)defaultSurfaces().size();
+            multiOk = n == 7 && clock.count() == n && (int)hosts.size() == n && allPaint;
+        }
+
+        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -283,9 +318,9 @@ namespace
         std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
                     haveLayerShell ? "yes" : "no (plain-window mode)", defaultSurfaces().size());
-        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s\n",
+        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
-                    inputOk ? "ok" : "error", stateOk ? "ok" : "error");
+                    inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
@@ -304,20 +339,44 @@ int main(int argc, char **argv)
     }
     if (o.selfTest) return selfTest();
 
-    const SurfaceConfig &cfg = pickSurface(o.surface);
-    SurfaceHost host(cfg);
-    host.create(o.windowed);
-    host.setRoot(makeRoot(cfg));
-    host.show();
-
     // One shared ~60Hz clock drives every surface's advance() + dirty-gated redraw (M1.3).
-    // With one static placeholder surface it paints once and then goes idle (zero redraws).
     FrameClock clock;
-    clock.add([&host](double nowMs) { host.frameTick(nowMs); });
+
+    // --surface=N: single-surface mode (goldens / focused debugging). Default: the real shell —
+    // ALL surfaces (M1.6), each a layer-shell surface where available, else a plain window.
+    if (o.surfaceGiven)
+    {
+        const SurfaceConfig &cfg = pickSurface(o.surface);
+        static SurfaceHost host(cfg);  // static: fixed address for the sink's captured `this`
+        host.create(o.windowed);
+        host.setRoot(makeRoot(cfg));
+        host.show();
+        clock.add([](double nowMs) { host.frameTick(nowMs); });
+        clock.start();
+        gtk_main();
+        clock.stop();
+        return 0;
+    }
+
+    // All surfaces. ShellState + the seams live for the whole run; SurfaceHosts are heap-stable
+    // (unique_ptr) because each one's recognizer sink captures `this`.
+    static NullBridge bridge;
+    static FakeSystemServices services;
+    static ShellState state(bridge, services);
+    static std::vector<std::unique_ptr<SurfaceHost>> hosts;
+    for (const auto &cfg : defaultSurfaces())
+    {
+        auto h = std::make_unique<SurfaceHost>(cfg);
+        h->create(o.windowed);
+        h->setRoot(makeRoot(cfg));
+        h->setShellState(&state);
+        h->show();
+        SurfaceHost *hp = h.get();
+        clock.add([hp](double nowMs) { hp->frameTick(nowMs); });
+        hosts.push_back(std::move(h));
+    }
     clock.start();
-
     gtk_main();
-
     clock.stop();
     return 0;
 }

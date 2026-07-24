@@ -25,6 +25,8 @@ namespace arstro
 {
 namespace androidshell
 {
+    struct ShellState;  // fwd — a surface reads shared state through it (bound per-surface at M3+)
+
     // Which compositor layer a surface lives on + how it is anchored/sized. Consumed only
     // when gtk-layer-shell is present; under plain --windowed it degrades to a normal
     // top-level of width x height (0 on an axis = "stretch / let the WM decide").
@@ -49,10 +51,20 @@ namespace androidshell
     public:
         explicit SurfaceHost(SurfaceConfig config);
 
+        // Non-copyable / non-movable: the recognizer's sink (set in the ctor) captures `this`,
+        // so the object must stay at a fixed address for its whole life. Hold them behind
+        // unique_ptr (or on the stack) — never in a value container that could relocate them.
+        SurfaceHost(const SurfaceHost &) = delete;
+        SurfaceHost &operator=(const SurfaceHost &) = delete;
+
         // Build the GTK window: a layer-shell surface when gtk-layer-shell is compiled in
         // and !forceWindowed, otherwise a plain top-level window.
         void create(bool forceWindowed);
         void setRoot(std::shared_ptr<artboard::Segment> root) { mRoot = std::move(root); }
+        // The shared cross-surface state (M1.5). Stored for surfaces to read as they are built
+        // (M3+); the M1.6 placeholder roots do not consume it yet.
+        void setShellState(ShellState *state) { mShellState = state; }
+        ShellState *shellState() const { return mShellState; }
         void show();
         GtkWidget *window() const { return mWindow; }
 
@@ -103,6 +115,7 @@ namespace androidshell
         std::function<bool(double)> mAnimating;         // content's "am I animating?" predicate
         bool mDirty = true;                             // starts true so the first frame paints
         long mPaintCount = 0;
+        ShellState *mShellState = nullptr;              // shared state (M1.5); consumed at M3+
     };
 
 } // namespace androidshell
