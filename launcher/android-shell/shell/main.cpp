@@ -20,6 +20,7 @@
 #include "artboard/artboard.h"
 #include "SurfaceHost.h"
 #include "FrameClock.h"
+#include "ShellState.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -31,6 +32,10 @@ using arstro::androidshell::FrameClock;
 using arstro::androidshell::SurfaceConfig;
 using arstro::androidshell::SurfaceHost;
 using arstro::androidshell::defaultSurfaces;
+using arstro::androidshell::ShellState;
+using arstro::androidshell::ThemeMode;
+using arstro::androidshell::NullBridge;
+using arstro::androidshell::FakeSystemServices;
 
 namespace
 {
@@ -234,7 +239,40 @@ namespace
             inputOk = root->downs == 1 && root->clicks == 1 && root->lastTouch && h.dirty();
         }
 
-        const bool ok = paintOk && clockOk && inputOk;
+        // ---- M1.5: ShellState (Observable) + NullBridge + FakeSystemServices (L0) ----
+        bool stateOk = true;
+        {
+            NullBridge bridge;
+            FakeSystemServices services;
+            ShellState state(bridge, services);
+
+            // (F) An Observable notifies bound observers on change, and fireNow initialises in sync.
+            ThemeMode seen = ThemeMode::Light;
+            int fires = 0;
+            state.themeMode.observe([&](const ThemeMode &m) { seen = m; ++fires; });  // fireNow -> 1
+            const bool init = (fires == 1 && seen == ThemeMode::Dark);
+            state.themeMode.set(ThemeMode::Light);                                     // change -> 2
+            const bool changed = (fires == 2 && seen == ThemeMode::Light);
+            state.themeMode.set(ThemeMode::Light);                                     // no-op, no fire
+            const bool noRefire = (fires == 2);
+
+            // (G) FakeSystemServices returns canned values and round-trips a setter.
+            const bool canned = services.battery().percent == 72 && services.wifi().strength == 3;
+            services.setWifiEnabled(false);
+            const bool roundTrip = !services.wifi().enabled && services.wifi().ssid.empty();
+            services.setAirplaneMode(true);  // also turns wifi + bt off
+            const bool airplane = services.airplaneMode() && !services.bluetooth().powered;
+            services.suspend();
+            const bool power = services.suspendCalls == 1;
+
+            // (H) NullBridge is callable and reports no windows; ShellState mirrors it.
+            bridge.onWindowsChanged();  // triggers windows.set(listWindows()) == empty (no change)
+            const bool nullBridge = bridge.listWindows().empty() && state.windows.get().empty();
+
+            stateOk = init && changed && noRefire && canned && roundTrip && airplane && power && nullBridge;
+        }
+
+        const bool ok = paintOk && clockOk && inputOk && stateOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -242,11 +280,12 @@ namespace
             false;
 #endif
         std::printf("arstro-android-shell: self-test %s\n", ok ? "OK" : "FAILED");
-        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu, draw-path: %s, frame-clock: %s, input: %s\n",
+        std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
-                    haveLayerShell ? "yes" : "no (plain-window mode)",
-                    defaultSurfaces().size(), paintOk ? "ok" : "error", clockOk ? "ok" : "error",
-                    inputOk ? "ok" : "error");
+                    haveLayerShell ? "yes" : "no (plain-window mode)", defaultSurfaces().size());
+        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s\n",
+                    paintOk ? "ok" : "error", clockOk ? "ok" : "error",
+                    inputOk ? "ok" : "error", stateOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }

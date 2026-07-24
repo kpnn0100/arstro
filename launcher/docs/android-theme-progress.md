@@ -15,25 +15,24 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M1 — Shell host skeleton. Next task: M1.5 (`ShellState` — shared Artboard
-`Observable`s: theme mode, panel expansion fractions, notification store, tile states, window
-list — across surfaces; wire `NullBridge` + fake `SystemServices`).**
+**Milestone M1 — Shell host skeleton. Next (LAST M1) task: M1.6 (create ALL five surfaces per
+plan §3.1 at correct layer/anchor/exclusive-zone with placeholder fills; verify geometry in nested
+KWin — L2). This is where the layer-shell + on-screen + GDK-event paths get their first real check.**
 
-Note for M1.5: create `shell/ShellState.h` holding the cross-surface state as `ui::Observable<T>`
-(FR-23) so several surfaces bind ONE source of truth (e.g. status bar + QS both read theme mode).
-Define the seam interfaces `compositor/CompositorBridge.h` (plan §3.2 — list/activate/close/tile/
-back/…) with a `NullBridge` no-op impl, and `system/SystemServices.h` (plan §3.3 — wifi/battery/
-bt/brightness/volume/…) with a `FakeSystemServices` returning canned values. M1.5 is just the
-interfaces + null/fake impls + a `ShellState` owning them; real NM/UPower/etc clients are M3. Keep
-them behind interfaces so shared milestones stay desktop-agnostic. Pass `ShellState&` to
-`SurfaceHost` (or hold it in main and let surfaces read it) — the real per-surface binding lands
-as each surface is built (M3+). Verify L0: an `Observable` change notifies bound observers; the
-fakes return their canned values.
+Note for M1.6: `defaultSurfaces()` already holds the 5 configs and `SurfaceHost` consumes them
+(incl. the `#ifdef HAVE_GTK_LAYER_SHELL` anchors/layer/exclusive-zone). M1.6 = create a `SurfaceHost`
+per config, give each a placeholder root + the shared `ShellState`, register all with the one
+`FrameClock`, show all. **BLOCKER on this machine:** M1.6's DoD is L2 (nested KWin) and needs
+`libgtk-layer-shell-dev` + `kwin_wayland`, **neither installed here** (see Verification notes). Options:
+(a) install both, then verify; (b) do the multi-surface wiring + `--windowed` multi-window fallback
+(all 5 as plain windows, verifiable on any display) and mark the layer-shell/nested-KWin parts `[!]`
+until a capable machine runs them. Split the edge-strips config into the real 3 strips (L/R/bottom)
+here too.
 
 Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
-runs the headless L0 checks (draw path, frame-clock/dirty, input plumbing).
+runs the headless L0 checks (draw-path, frame-clock, input, shell-state).
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.4 GDK input).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M1.5 ShellState).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -43,7 +42,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M | Milestone | State | Track |
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
-| M1 | Shell host skeleton | in progress (M1.1–M1.4 done) | shared |
+| M1 | Shell host skeleton | in progress (M1.1–M1.5 done) | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | not started | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
@@ -122,8 +121,18 @@ demo holds 60fps; CPU ≈0% idle. **Test level:** L1 smoke golden + L2 manual.
   `.touch` and no double events (v1 is single-pointer per plan). **Verified L0** (`--self-test`
   `input: ok`): a synthesized touch tap yields Down+Click at the root, both `touch=true`, surface
   dirtied. GDK-event translation itself not drivable headlessly (see Verification notes).
-- [ ] **M1.5** `ShellState` (Artboard `Observable`s: theme mode, panel expansion fractions, notif
+- [x] **M1.5** `ShellState` (Artboard `Observable`s: theme mode, panel expansion fractions, notif
   store, tile states, window list) shared across surfaces. `NullBridge` + fake `SystemServices` wired.
+  → Done: `compositor/CompositorBridge.h` (plan §3.2 interface + `WindowInfo`/`TopWindowHint`/`PngSink`
+  + `NullBridge` no-op); `system/SystemServices.h` (plan §3.3 read/toggle/power interface +
+  `FakeSystemServices` canned values, airplane cascades wifi+bt off, power actions counted);
+  `shell/ShellState.h` (`Observable` themeMode + 2 shade expansions + window list, holding
+  `CompositorBridge&`+`SystemServices&`, mirroring the bridge's window list). Notification store
+  (M4) + QS tile states (M5) get added to ShellState as those surfaces are built (noted in the
+  header). **Fully verified L0** (`--self-test` `shell-state: ok`): Observable fireNow + change-only
+  notify + no-op-set guard; fakes canned + setter round-trip + airplane cascade + power counts;
+  NullBridge callable + ShellState mirrors its empty window list. (Pure interfaces/fakes — L0 is the
+  complete DoD, nothing display-dependent.)
 - [ ] **M1.6** All five surfaces (launcher/statusbar/shade/edge-strips per plan §3.1 table) created at
   correct layer/anchor/exclusive-zone with placeholder fills. Verify geometry in nested KWin (L2).
 
@@ -266,6 +275,11 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M1.5: `ShellState` deliberately ships only themeMode + the two shade expansions +
+  the window list (+ the two seam refs). The notification store (M4) and QS tile states (M5) that
+  the task note mentioned are **added to ShellState when those surfaces are built**, not
+  speculatively now — avoids designing a store/tile model before its consumer exists. Not a plan
+  deviation; the plan lists them as ShellState's eventual contents, and M1.5 is the skeleton.
 - 2026-07-24 — M1.4: touch is detected from the GDK **source device** on emulated pointer events
   (no `GDK_TOUCH_MASK`, no separate touch handler), so mouse and finger share one code path with a
   correct `.touch` flag and no double-reporting. True multi-touch (independent finger sequences) is
