@@ -23,6 +23,7 @@ endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (launcher/android-shell)" ON)
+option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
 
@@ -30,6 +31,14 @@ enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` s
 # by the app. Each subproject also defines its own unit-test executable.
 add_subdirectory(Artboard)
 add_subdirectory(ImageProcessing)
+
+# arstro_dsp: the channel-aware DSP/synth library (ESP32DigitalSynth) — physical-
+# modeling piano (physical/PianoVoice), oscillators, effects. Also defines the
+# arstro_kitchen_sink and arstro_piano_demo executables (selectable/launchable
+# targets) and a `demo` convenience target that renders the piano showcase WAV.
+if(ARSTRO_BUILD_DSP)
+  add_subdirectory(DigitalSignalProcessing)
+endif()
 
 # cosmo: the Figma-exact editor GUI. Its UI-free session/editing/history/decode
 # logic lives in cosmo/core (target cosmo_core), added by cosmo/CMakeLists.txt.
