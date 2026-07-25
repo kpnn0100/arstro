@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2;;
     --target)  TARGET="$2";  shift 2;;
-    --list)    echo "projects: scope, studio, synth, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app, android-app"; echo "note:     cosmo runs native (linux-native-app), Android (android-app), no web build"; exit 0;;
+    --list)    echo "projects: scope, studio, synth, piano, pulsar, cosmo, ui-demo"; echo "targets:  linux-web-server, native-test, native-example, linux-native-app, android-app"; echo "note:     cosmo runs native (linux-native-app), Android (android-app), no web build; piano is native-only too"; exit 0;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -186,6 +186,28 @@ case "$TARGET" in
           -o "$OUTDIR/synth_linux"
         echo "built $OUTDIR/synth_linux"
         echo "run:   $OUTDIR/synth_linux"
+        ;;
+      piano)
+        for dep in gtk+-3.0 alsa; do
+          if ! pkg-config --exists "$dep"; then
+            echo "error: $dep development files not found." >&2
+            exit 1
+          fi
+        done
+        OUTDIR="$ROOT/examples/piano/build"
+        mkdir -p "$OUTDIR"
+        read -r -a PIANO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0 alsa)"
+        read -r -a PIANO_LIBS <<< "$(pkg-config --libs gtk+-3.0 alsa)"
+        c++ -std=c++17 -O2 \
+          "$ROOT/examples/piano/linux_main.cpp" "$ROOT/examples/piano/PianoApp.cpp" \
+          "$DSP/apps/piano_demo/PianoEngine.cpp" \
+          "$AB/src/adapter/native/CairoTarget.cpp" \
+          "${ab_core[@]}" "${dsp_src[@]}" \
+          -I"$AB/src" -I"$AB/include" -I"$DSP/src" \
+          "${PIANO_CFLAGS[@]}" "${PIANO_LIBS[@]}" -lpthread \
+          -o "$OUTDIR/piano_linux"
+        echo "built $OUTDIR/piano_linux"
+        echo "run:   $OUTDIR/piano_linux"
         ;;
       pulsar)
         if ! pkg-config --exists gtk+-3.0; then

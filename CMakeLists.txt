@@ -24,6 +24,7 @@ endif()
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (launcher/android-shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
+option(ARSTRO_BUILD_PIANO_UI "Build the interactive piano-keyboard UI demo (examples/piano; needs GTK3+ALSA, skipped gracefully if absent)" ON)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
 
@@ -38,6 +39,14 @@ add_subdirectory(ImageProcessing)
 # targets) and a `demo` convenience target that renders the piano showcase WAV.
 if(ARSTRO_BUILD_DSP)
   add_subdirectory(DigitalSignalProcessing)
+endif()
+
+# examples/piano: play PianoVoice live off the computer keyboard (Artboard UI +
+# ALSA audio thread). Depends on artboard_core + arstro_dsp, so it's added
+# after both; the target itself is optional and self-skips without GTK3/ALSA
+# (see examples/piano/CMakeLists.txt) rather than failing this configure.
+if(ARSTRO_BUILD_PIANO_UI AND ARSTRO_BUILD_DSP)
+  add_subdirectory(examples/piano)
 endif()
 
 # cosmo: the Figma-exact editor GUI. Its UI-free session/editing/history/decode
