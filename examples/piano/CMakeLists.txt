@@ -7,9 +7,12 @@ find_package(Threads)
 if(PkgConfig_FOUND)
   pkg_check_modules(PIANO_GTK3 IMPORTED_TARGET gtk+-3.0)
   pkg_check_modules(PIANO_ALSA IMPORTED_TARGET alsa)
+  # x11: needed for XkbSetDetectableAutoRepeat (linux_main.cpp) — GTK3 doesn't
+  # re-export -lX11 via its own pkg-config --libs.
+  pkg_check_modules(PIANO_X11 IMPORTED_TARGET x11)
 endif()
 
-if(PIANO_GTK3_FOUND AND PIANO_ALSA_FOUND AND Threads_FOUND)
+if(PIANO_GTK3_FOUND AND PIANO_ALSA_FOUND AND PIANO_X11_FOUND AND Threads_FOUND)
   add_executable(arstro_piano_ui
     linux_main.cpp
     PianoApp.cpp
@@ -23,7 +26,7 @@ if(PIANO_GTK3_FOUND AND PIANO_ALSA_FOUND AND Threads_FOUND)
   )
   target_link_libraries(arstro_piano_ui PRIVATE
     artboard_core arstro_dsp Threads::Threads
-    PkgConfig::PIANO_GTK3 PkgConfig::PIANO_ALSA)
+    PkgConfig::PIANO_GTK3 PkgConfig::PIANO_ALSA PkgConfig::PIANO_X11)
 else()
-  message(STATUS "examples/piano: skipped (needs gtk+-3.0 and alsa dev packages)")
+  message(STATUS "examples/piano: skipped (needs gtk+-3.0, alsa, and x11 dev packages)")
 endif()
