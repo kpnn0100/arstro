@@ -63,8 +63,10 @@ namespace examples
 
     void PianoApp::enqueue(Cmd c)
     {
-        std::lock_guard<std::mutex> lock(mCmdMutex);
-        mPendingCmds.push_back(c);
+        // Drops silently if the queue is somehow full (256 pending key events
+        // would mean the audio thread has been stalled for seconds — losing a
+        // keystroke is the right failure there, and blocking would be the wrong one).
+        mCmds.push(c);
     }
 
     // ───────────────────────── input (UI thread) ─────────────────────────
@@ -93,13 +95,9 @@ namespace examples
     void PianoApp::renderAudio(float *interleaved, int frames)
     {
         // Drain queued UI commands here — the ONLY thread that ever touches
-        // mEngine (see class-doc threading note).
-        std::vector<Cmd> cmds;
-        {
-            std::lock_guard<std::mutex> lock(mCmdMutex);
-            cmds.swap(mPendingCmds);
-        }
-        for (const auto &c : cmds)
+        // mEngine (see class-doc threading note). Lock-free pop, no allocation.
+        Cmd c;
+        while (mCmds.pop(c))
         {
             switch (c.type)
             {
@@ -111,23 +109,22 @@ namespace examples
             }
         }
 
-        std::vector<uint8_t> pcm;
-        mEngine.renderBlockBytes(pcm, frames); // interleaved stereo S16LE (includes headroom + soft limiter)
+        // Straight into the caller's buffer: no allocation, and no round trip
+        // through 16-bit PCM just to convert back to float for the sink.
+        mEngine.renderBlockFloat(interleaved, frames);
 
-        std::lock_guard<std::mutex> lock(mAudioMutex);
         double peakL = 0, peakR = 0;
         for (int i = 0; i < frames; ++i)
         {
-            int16_t l = (int16_t)(pcm[i * 4 + 0] | (pcm[i * 4 + 1] << 8));
-            int16_t r = (int16_t)(pcm[i * 4 + 2] | (pcm[i * 4 + 3] << 8));
-            float fl = l / 32768.0f, fr = r / 32768.0f;
-            interleaved[i * 2] = fl;
-            interleaved[i * 2 + 1] = fr;
-            peakL = std::max(peakL, (double)std::fabs(fl));
-            peakR = std::max(peakR, (double)std::fabs(fr));
+            peakL = std::max(peakL, (double)std::fabs(interleaved[i * 2]));
+            peakR = std::max(peakR, (double)std::fabs(interleaved[i * 2 + 1]));
         }
-        mMeterL += (peakL - mMeterL) * 0.3;
-        mMeterR += (peakR - mMeterR) * 0.3;
+        const double smoothL = mMeterL.load(std::memory_order_relaxed) +
+                               (peakL - mMeterL.load(std::memory_order_relaxed)) * 0.3;
+        const double smoothR = mMeterR.load(std::memory_order_relaxed) +
+                               (peakR - mMeterR.load(std::memory_order_relaxed)) * 0.3;
+        mMeterL.store(smoothL, std::memory_order_relaxed);
+        mMeterR.store(smoothR, std::memory_order_relaxed);
     }
 
     // ───────────────────────── drawing ─────────────────────────
@@ -194,8 +191,8 @@ namespace examples
 
     void PianoApp::drawMeter(IRenderTarget &t)
     {
-        double mL, mR;
-        { std::lock_guard<std::mutex> lock(mAudioMutex); mL = mMeterL; mR = mMeterR; }
+        const double mL = mMeterL.load(std::memory_order_relaxed);
+        const double mR = mMeterR.load(std::memory_order_relaxed);
         const double x0 = kKbX0 + 3 * (180 + 16) + 8, y0 = kKbY0 + kWhiteH + 18, w = 130, h = 14;
         const char *label[2] = {"L", "R"};
         double val[2] = {mL, mR};

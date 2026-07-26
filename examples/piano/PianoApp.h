@@ -12,17 +12,22 @@
  *  Threading: unlike SynthEngine, PianoEngine has no internal lock-free queue —
  *  DigitalSignalProcessing/apps/piano_demo/main.cpp only ever drives it from one
  *  thread. This app has two (GTK UI thread + ALSA audio thread), so key()
- *  (UI thread) only enqueues a Cmd into a small mutex-guarded queue; ALL
+ *  (UI thread) only enqueues a Cmd into the library's SPSC LockFreeQueue; ALL
  *  PianoEngine mutation (noteOnMidi/noteOff/pedals) happens inside
  *  renderAudio() on the audio thread, which drains the queue first. This keeps
  *  every PianoEngine/PianoVoice access on a single thread without needing to
  *  touch PianoEngine itself.
+ *
+ *  The audio thread does not lock, allocate, or convert through 16-bit PCM —
+ *  docs/design.md's "audio thread never locks" rule, which this app used to
+ *  break in three places at once (two mutexes and a per-block std::vector).
  */
 #pragma once
 #include "../../Artboard/include/artboard/artboard.h"
 #include "../../DigitalSignalProcessing/apps/piano_demo/PianoEngine.h"
+#include "../../DigitalSignalProcessing/src/base/LockFreeQueue.h"
 #include <array>
-#include <mutex>
+#include <atomic>
 #include <vector>
 
 namespace arstro
@@ -58,9 +63,10 @@ namespace examples
         // Commands enqueued by key() (UI thread), applied to mEngine exclusively
         // inside renderAudio() (audio thread) — see class-doc threading note.
         enum class CmdType { NoteOn, NoteOff, Sustain, Sostenuto, UnaCorda };
-        struct Cmd { CmdType type; int note = 0; double vel = 0.0; bool on = false; };
-        std::mutex mCmdMutex;
-        std::vector<Cmd> mPendingCmds;
+        struct Cmd { CmdType type = CmdType::NoteOn; int note = 0; double vel = 0.0; bool on = false; };
+        // SPSC: UI thread pushes, audio thread pops. Same mechanism SynthEngine
+        // already uses for its control events (docs/design.md).
+        LockFreeQueue<Cmd> mCmds{256};
         void enqueue(Cmd c);
 
         double mW, mH;
@@ -70,8 +76,10 @@ namespace examples
         bool mSustain = false, mUnaCorda = false, mSostenuto = false;
         std::array<bool, kSemitones> mKeyHeld{}; // UI-thread-only, for drawing
 
-        std::mutex mAudioMutex;
-        double mMeterL = 0.0, mMeterR = 0.0;
+        // Written by the audio thread, read by the UI thread for the meter. A
+        // torn read would at worst draw one wrong meter frame, so a relaxed atomic
+        // is the right tool — a mutex here would let the UI thread block audio.
+        std::atomic<double> mMeterL{0.0}, mMeterR{0.0};
     };
 }
 }

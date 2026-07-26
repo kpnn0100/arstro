@@ -16,6 +16,7 @@
 #include <X11/XKBlib.h>
 #include <alsa/asoundlib.h>
 #include <atomic>
+#include <cstdlib>
 #include <thread>
 #include <vector>
 #include <map>
@@ -26,7 +27,16 @@ namespace
 {
     constexpr int kW = 800, kH = 340;
     constexpr unsigned kRate = 48000;
-    constexpr int kAudioFrames = 512;
+    // Latency, not throughput, is what makes a software piano feel wrong: a
+    // pianist notices past ~15 ms between keypress and sound. This app used to ask
+    // ALSA for a 50 ms buffer and write 512-frame periods, i.e. ~50-60 ms — the
+    // single reason it felt laggy. Measured, the engine needs only ~19 % of the
+    // real-time budget at 128 frames (0.51 ms of work per 2.67 ms block), so the
+    // buffer can come down by 5x and still have 5x headroom against xruns.
+    // Override at runtime with ARSTRO_PIANO_FRAMES / ARSTRO_PIANO_LATENCY_US if a
+    // particular machine needs more slack.
+    constexpr int kAudioFrames = 128;         // ~2.67 ms period
+    constexpr unsigned kLatencyUs = 10000;    // ~10 ms total buffer
 
     struct App
     {
@@ -90,18 +100,31 @@ namespace
             g_warning("piano: no ALSA device — running silent");
             return;
         }
+        int frames = kAudioFrames;
+        unsigned latencyUs = kLatencyUs;
+        if (const char *e = std::getenv("ARSTRO_PIANO_FRAMES"))
+        {
+            const int v = std::atoi(e);
+            if (v >= 16 && v <= 4096) frames = v;
+        }
+        if (const char *e = std::getenv("ARSTRO_PIANO_LATENCY_US"))
+        {
+            const long v = std::atol(e);
+            if (v >= 1000 && v <= 200000) latencyUs = (unsigned)v;
+        }
         if (snd_pcm_set_params(pcm, SND_PCM_FORMAT_FLOAT_LE, SND_PCM_ACCESS_RW_INTERLEAVED,
-                               2, kRate, 1, 50000) < 0)
+                               2, kRate, 1, latencyUs) < 0)
         {
             g_warning("piano: ALSA params failed — running silent");
             snd_pcm_close(pcm);
             return;
         }
-        std::vector<float> buf((size_t)kAudioFrames * 2);
+        g_message("piano: audio %d frames/period, ~%.1f ms buffer", frames, latencyUs / 1000.0);
+        std::vector<float> buf((size_t)frames * 2);
         while (a->running.load(std::memory_order_relaxed))
         {
-            a->piano.renderAudio(buf.data(), kAudioFrames);
-            snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), kAudioFrames);
+            a->piano.renderAudio(buf.data(), frames);
+            snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), frames);
             if (w < 0)
                 snd_pcm_recover(pcm, (int)w, 1); // recover from xrun/underrun
         }
