@@ -277,7 +277,19 @@ int main(int argc, char **argv)
     gtk_widget_grab_focus(app.area);
 
     app.audioThread = std::thread(audioLoop, &app);
-    g_timeout_add(16, onTick, &app); // ~60 fps redraw
+    // 33 ms (~30 fps), not 16 ms (~60 fps). Every tick repaints the whole
+    // keyboard through Cairo's software rasteriser on the UI thread, and that
+    // thread shares a core with a NON-realtime audio thread (rtprio is usually 0
+    // on a desktop). Halving the repaint rate halves that contention, and a
+    // keyboard with a decaying level meter has nothing that needs 60 fps.
+    // Override with ARSTRO_PIANO_UI_MS.
+    int uiIntervalMs = 33;
+    if (const char *e = std::getenv("ARSTRO_PIANO_UI_MS"))
+    {
+        const int v = std::atoi(e);
+        if (v >= 8 && v <= 200) uiIntervalMs = v;
+    }
+    g_timeout_add((guint)uiIntervalMs, onTick, &app);
     gtk_main();
 
     app.running.store(false);
