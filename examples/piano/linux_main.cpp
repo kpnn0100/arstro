@@ -17,6 +17,11 @@
 #include <alsa/asoundlib.h>
 #include <atomic>
 #include <cstdlib>
+#include <sched.h>
+#include <pthread.h>
+#include <cerrno>
+#include <chrono>
+#include <algorithm>
 #include <thread>
 #include <vector>
 #include <map>
@@ -28,15 +33,34 @@ namespace
     constexpr int kW = 800, kH = 340;
     constexpr unsigned kRate = 48000;
     // Latency, not throughput, is what makes a software piano feel wrong: a
-    // pianist notices past ~15 ms between keypress and sound. This app used to ask
-    // ALSA for a 50 ms buffer and write 512-frame periods, i.e. ~50-60 ms — the
-    // single reason it felt laggy. Measured, the engine needs only ~19 % of the
-    // real-time budget at 128 frames (0.51 ms of work per 2.67 ms block), so the
-    // buffer can come down by 5x and still have 5x headroom against xruns.
-    // Override at runtime with ARSTRO_PIANO_FRAMES / ARSTRO_PIANO_LATENCY_US if a
-    // particular machine needs more slack.
-    constexpr int kAudioFrames = 128;         // ~2.67 ms period
-    constexpr unsigned kLatencyUs = 10000;    // ~10 ms total buffer
+    // pianist notices past ~15 ms between keypress and sound. This app originally
+    // asked ALSA for a 50 ms buffer with 512-frame periods (~50-60 ms), which was
+    // the whole reason it felt laggy.
+    //
+    // The DSP has plenty of room: measured worst case, a block containing a
+    // six-note chord costs 1.1 ms of a 2.67 ms budget at 128 frames (41 %). What a
+    // very small buffer actually runs out of is not CPU but SCHEDULING slack — a
+    // normal-priority thread sharing a laptop with GTK/Cairo redraw and cpufreq
+    // will occasionally not be run for several ms, and at a 10 ms buffer that is
+    // an underrun. (It was, which is why these numbers are no longer 10 ms.)
+    //
+    // So: keep the buffer modest but give it real cushion (4 periods), and ask for
+    // real-time scheduling, which is the thing that actually lets a small buffer
+    // work. Still ~2.4x lower latency than the original. Push it lower with
+    // ARSTRO_PIANO_FRAMES / ARSTRO_PIANO_LATENCY_US once RT priority is granted.
+    // Sized for the common desktop case, which is what this machine is: rtprio
+    // limit 0 (so SCHED_FIFO is refused) AND PulseAudio between us and the
+    // hardware, whose ALSA plugin adds its own scheduling and does not honour
+    // very small buffers for a non-realtime client. 30 ms is comfortably
+    // glitch-free there and still 40 % better than the 50 ms this started at.
+    //
+    // To go lower, remove one of those two constraints:
+    //   * grant rtprio (add yourself to a group with an rtprio limit, e.g.
+    //     /etc/security/limits.d/audio.conf: "@audio - rtprio 95"), then
+    //     ARSTRO_PIANO_LATENCY_US=8000 is realistic; or
+    //   * bypass PulseAudio: ARSTRO_PIANO_DEVICE=plughw:0
+    constexpr int kAudioFrames = 256;         // ~5.33 ms period
+    constexpr unsigned kLatencyUs = 30000;    // ~30 ms total buffer
 
     struct App
     {
@@ -92,12 +116,37 @@ namespace
                       "held notes may chatter instead of sustaining");
     }
 
+    // Ask the kernel to schedule this thread as real-time. This is the fix that
+    // actually makes a small buffer safe: without it the audio thread competes
+    // with the UI on equal terms and a few ms of jitter becomes an audible glitch.
+    // Requires rtprio limits (usually membership of the `audio` group, or
+    // /etc/security/limits.d/audio.conf). Degrades silently to normal priority —
+    // which is why the default buffer above is sized to survive without it.
+    void requestRealtimePriority()
+    {
+        sched_param sp{};
+        const int policy = SCHED_FIFO;
+        const int lo = sched_get_priority_min(policy), hi = sched_get_priority_max(policy);
+        // Mid-range: high enough to beat the UI, low enough to stay under drivers.
+        sp.sched_priority = lo + (hi - lo) / 2;
+        if (pthread_setschedparam(pthread_self(), policy, &sp) == 0)
+            g_message("piano: audio thread running SCHED_FIFO at priority %d", sp.sched_priority);
+        else
+            g_message("piano: no real-time priority (needs rtprio limits / `audio` group) — "
+                      "using the safe default buffer; if you hear glitches, raise "
+                      "ARSTRO_PIANO_LATENCY_US");
+    }
+
     void audioLoop(App *a)
     {
+        requestRealtimePriority();
+        const char *device = std::getenv("ARSTRO_PIANO_DEVICE");
+        if (!device || !*device)
+            device = "default";
         snd_pcm_t *pcm = nullptr;
-        if (snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0)
+        if (snd_pcm_open(&pcm, device, SND_PCM_STREAM_PLAYBACK, 0) < 0)
         {
-            g_warning("piano: no ALSA device — running silent");
+            g_warning("piano: cannot open ALSA device '%s' — running silent", device);
             return;
         }
         int frames = kAudioFrames;
@@ -119,14 +168,40 @@ namespace
             snd_pcm_close(pcm);
             return;
         }
-        g_message("piano: audio %d frames/period, ~%.1f ms buffer", frames, latencyUs / 1000.0);
+        g_message("piano: audio on '%s', %d frames/period, ~%.1f ms buffer",
+                  device, frames, latencyUs / 1000.0);
         std::vector<float> buf((size_t)frames * 2);
+
+        // Prefill so the very first periods are never starved while the render
+        // thread is still warming up (first-touch page faults, cold caches).
+        std::fill(buf.begin(), buf.end(), 0.0f);
+        for (int i = 0; i < 2; ++i)
+            snd_pcm_writei(pcm, buf.data(), frames);
+
+        // Count underruns instead of recovering silently: a glitch you cannot see
+        // is a glitch you cannot tune away. Reported at most once a second.
+        long xruns = 0, reported = 0;
+        auto lastReport = std::chrono::steady_clock::now();
         while (a->running.load(std::memory_order_relaxed))
         {
             a->piano.renderAudio(buf.data(), frames);
             snd_pcm_sframes_t w = snd_pcm_writei(pcm, buf.data(), frames);
             if (w < 0)
+            {
+                if (w == -EPIPE)
+                    ++xruns;
                 snd_pcm_recover(pcm, (int)w, 1); // recover from xrun/underrun
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (xruns != reported &&
+                std::chrono::duration_cast<std::chrono::seconds>(now - lastReport).count() >= 1)
+            {
+                g_warning("piano: %ld audio underrun(s) — raise ARSTRO_PIANO_LATENCY_US "
+                          "(currently %.1f ms) or grant real-time priority",
+                          xruns - reported, latencyUs / 1000.0);
+                reported = xruns;
+                lastReport = now;
+            }
         }
         snd_pcm_drain(pcm);
         snd_pcm_close(pcm);
