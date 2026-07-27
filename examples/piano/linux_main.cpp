@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <sched.h>
 #include <pthread.h>
+#include <sys/mman.h>
 #include <cerrno>
 #include <chrono>
 #include <algorithm>
@@ -60,7 +61,17 @@ namespace
     //     ARSTRO_PIANO_LATENCY_US=8000 is realistic; or
     //   * bypass PulseAudio: ARSTRO_PIANO_DEVICE=plughw:0
     constexpr int kAudioFrames = 256;         // ~5.33 ms period
-    constexpr unsigned kLatencyUs = 30000;    // ~30 ms total buffer
+    // Two default buffers, picked at runtime by whether SCHED_FIFO was granted.
+    // The DSP is NOT the constraint — measured worst case on a fast desktop is a
+    // 1.8 ms render of a 5.33 ms period (3x headroom, zero missed deadlines over
+    // 20 s). Underruns are purely scheduling: a normal-priority (rtprio 0) audio
+    // thread can be denied the CPU for several ms by the UI / cpufreq / a sound
+    // server, and at a small buffer that is an xrun. With RT priority the thread
+    // wins that race and a small buffer is safe; without it the only defence is a
+    // deeper buffer, so we widen it rather than glitch. (ARSTRO_PIANO_LATENCY_US
+    // overrides either.)
+    constexpr unsigned kLatencyUsRealtime = 30000; // ~30 ms — safe once SCHED_FIFO is granted
+    constexpr unsigned kLatencyUsShared = 60000;   // ~60 ms — glitch-safe on a preempted thread
 
     struct App
     {
@@ -122,7 +133,7 @@ namespace
     // Requires rtprio limits (usually membership of the `audio` group, or
     // /etc/security/limits.d/audio.conf). Degrades silently to normal priority —
     // which is why the default buffer above is sized to survive without it.
-    void requestRealtimePriority()
+    bool requestRealtimePriority()
     {
         sched_param sp{};
         const int policy = SCHED_FIFO;
@@ -130,16 +141,31 @@ namespace
         // Mid-range: high enough to beat the UI, low enough to stay under drivers.
         sp.sched_priority = lo + (hi - lo) / 2;
         if (pthread_setschedparam(pthread_self(), policy, &sp) == 0)
+        {
             g_message("piano: audio thread running SCHED_FIFO at priority %d", sp.sched_priority);
-        else
-            g_message("piano: no real-time priority (needs rtprio limits / `audio` group) — "
-                      "using the safe default buffer; if you hear glitches, raise "
-                      "ARSTRO_PIANO_LATENCY_US");
+            return true;
+        }
+        g_message("piano: no real-time priority (needs rtprio limits, e.g. add yourself to the "
+                  "`audio` group or /etc/security/limits.d/audio.conf: \"@audio - rtprio 95\") — "
+                  "using the wider shared-scheduler buffer instead");
+        return false;
+    }
+
+    // Pin the process's pages in RAM so the audio thread can never stall on a major
+    // page fault mid-render — a classic, silent cause of xruns that is independent of
+    // scheduling priority (it bites even a SCHED_FIFO thread the first time it touches
+    // a page). Best-effort: needs an RLIMIT_MEMLOCK budget, and degrades to a warning.
+    void lockMemory()
+    {
+        if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0)
+            g_message("piano: could not lock memory (RLIMIT_MEMLOCK too low) — harmless, "
+                      "but a page fault could cause an occasional glitch");
     }
 
     void audioLoop(App *a)
     {
-        requestRealtimePriority();
+        const bool realtime = requestRealtimePriority();
+        lockMemory();
         const char *device = std::getenv("ARSTRO_PIANO_DEVICE");
         if (!device || !*device)
             device = "default";
@@ -150,7 +176,10 @@ namespace
             return;
         }
         int frames = kAudioFrames;
-        unsigned latencyUs = kLatencyUs;
+        // Without real-time priority the audio thread can be preempted for several ms,
+        // so it needs the deeper buffer; with it, the small one is safe. An explicit
+        // ARSTRO_PIANO_LATENCY_US overrides the choice.
+        unsigned latencyUs = realtime ? kLatencyUsRealtime : kLatencyUsShared;
         if (const char *e = std::getenv("ARSTRO_PIANO_FRAMES"))
         {
             const int v = std::atoi(e);
