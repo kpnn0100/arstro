@@ -13,6 +13,8 @@
 #include "SynthApp.h"
 #include "../../Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
+#include <gdk/gdkx.h>
+#include <X11/XKBlib.h>
 #include <alsa/asoundlib.h>
 #include <atomic>
 #include <thread>
@@ -57,6 +59,24 @@ namespace
     double nowMs(const App &a)
     {
         return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0;
+    }
+
+    // Without this, X11 simulates a held key via rapid synthetic release+press
+    // pairs rather than one press + a real release on key-up — the `held`
+    // repeat-guard then sees a spurious release mid-hold and re-triggers a
+    // note-off/note-on, so a held key chatters instead of sustaining. See the
+    // identical fix + longer comment in examples/piano/linux_main.cpp.
+    void enableDetectableKeyAutoRepeat()
+    {
+        GdkDisplay *display = gdk_display_get_default();
+        if (!display || !GDK_IS_X11_DISPLAY(display))
+            return; // no-op under Wayland
+        Display *xdisplay = GDK_DISPLAY_XDISPLAY(display);
+        Bool supported = False;
+        XkbSetDetectableAutoRepeat(xdisplay, True, &supported);
+        if (!supported)
+            g_warning("synth: XKB detectable autorepeat not supported by this X server — "
+                      "held notes may chatter instead of sustaining");
     }
 
     void audioLoop(App *a)
@@ -146,6 +166,7 @@ namespace
 int main(int argc, char **argv)
 {
     gtk_init(&argc, &argv);
+    enableDetectableKeyAutoRepeat();
 
     App app;
     app.synth.setSampleRate(kRate);
