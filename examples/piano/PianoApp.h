@@ -48,6 +48,11 @@ namespace examples
         // also recognizes 16=Shift, 17=Ctrl, 32=Space for the three pedals.
         void key(int code, bool down);
 
+        // UI thread: live voicing control. Enqueues a tuning change applied to the
+        // engine on the audio thread (same SPSC path as key()). `param` indexes
+        // PianoEngine::Tune; use PianoEngine::tuneSpec()/TuneCount to build controls.
+        void setTuning(int param, double value);
+
     private:
         static constexpr int kSemitones = 13; // one octave inclusive, C..C
         static constexpr double DW = 720.0, DH = 300.0; // design space
@@ -62,7 +67,8 @@ namespace examples
 
         // Commands enqueued by key() (UI thread), applied to mEngine exclusively
         // inside renderAudio() (audio thread) — see class-doc threading note.
-        enum class CmdType { NoteOn, NoteOff, Sustain, Sostenuto, UnaCorda };
+        enum class CmdType { NoteOn, NoteOff, Sustain, Sostenuto, UnaCorda, SetTuning };
+        // For SetTuning, `note` carries the PianoEngine::Tune index and `vel` the value.
         struct Cmd { CmdType type = CmdType::NoteOn; int note = 0; double vel = 0.0; bool on = false; };
         // SPSC: UI thread pushes, audio thread pops. Same mechanism SynthEngine
         // already uses for its control events (docs/design.md).

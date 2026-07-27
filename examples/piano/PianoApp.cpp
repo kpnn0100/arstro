@@ -69,6 +69,15 @@ namespace examples
         mCmds.push(c);
     }
 
+    void PianoApp::setTuning(int param, double value)
+    {
+        Cmd c;
+        c.type = CmdType::SetTuning;
+        c.note = param; // Tune index
+        c.vel = value;
+        enqueue(c);
+    }
+
     // ───────────────────────── input (UI thread) ─────────────────────────
     void PianoApp::key(int code, bool down)
     {
@@ -106,6 +115,7 @@ namespace examples
             case CmdType::Sustain: mEngine.setSustainPedal(c.on); break;
             case CmdType::Sostenuto: mEngine.setSostenutoPedal(c.on); break;
             case CmdType::UnaCorda: mEngine.setUnaCorda(c.on); break;
+            case CmdType::SetTuning: mEngine.setTuning(c.note, c.vel); break;
             }
         }
 

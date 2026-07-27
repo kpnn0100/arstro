@@ -26,6 +26,8 @@
 #include <thread>
 #include <vector>
 #include <map>
+#include <utility>
+#include <cstdio>
 
 using arstro::examples::PianoApp;
 
@@ -83,7 +85,107 @@ namespace
         std::thread audioThread;
         std::atomic<bool> running{true};
         std::map<guint, int> held; // keyval -> repeat guard
+        // Voicing sliders, for the Reset button: (GtkScale, default value).
+        std::vector<std::pair<GtkWidget *, double>> voicingSliders;
     };
+
+    // Per-slider context: which App and which PianoEngine::Tune param it drives, plus
+    // the little value-readout label to update. One `new`ed per slider; lives for the
+    // process (a demo tool — no teardown bookkeeping needed).
+    struct SliderCtx
+    {
+        App *app;
+        int param;
+        GtkWidget *valueLabel;
+        const char *unit;
+    };
+
+    void formatTuneValue(char *buf, size_t n, double v, const char *unit)
+    {
+        if (unit && unit[0])
+            std::snprintf(buf, n, "%.3g %s", v, unit);
+        else
+            std::snprintf(buf, n, "%.3g", v);
+    }
+
+    void onSliderChanged(GtkRange *range, gpointer user)
+    {
+        auto *c = static_cast<SliderCtx *>(user);
+        const double v = gtk_range_get_value(range);
+        c->app->piano.setTuning(c->param, v); // enqueued to the audio thread (SPSC)
+        char buf[48];
+        formatTuneValue(buf, sizeof buf, v, c->unit);
+        gtk_label_set_text(GTK_LABEL(c->valueLabel), buf);
+    }
+
+    void onResetVoicing(GtkButton *, gpointer user)
+    {
+        auto *a = static_cast<App *>(user);
+        for (auto &s : a->voicingSliders)
+            gtk_range_set_value(GTK_RANGE(s.first), s.second); // fires value-changed -> setTuning
+    }
+
+    // Builds the voicing panel: one labelled slider per PianoEngine::Tune param, laid
+    // out from the engine's own metadata so the control list never drifts from the DSP.
+    GtkWidget *buildVoicingPanel(App &app)
+    {
+        GtkWidget *grid = gtk_grid_new();
+        gtk_grid_set_row_spacing(GTK_GRID(grid), 2);
+        gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
+        gtk_widget_set_margin_start(grid, 10);
+        gtk_widget_set_margin_end(grid, 10);
+        gtk_widget_set_margin_top(grid, 8);
+
+        int row = 0;
+        GtkWidget *title = gtk_label_new(nullptr);
+        gtk_label_set_markup(GTK_LABEL(title), "<b>VOICING</b>  — live, affects held notes too");
+        gtk_widget_set_halign(title, GTK_ALIGN_START);
+        gtk_grid_attach(GTK_GRID(grid), title, 0, row++, 3, 1);
+
+        for (int p = 0; p < arstro::PianoEngine::TuneCount; ++p)
+        {
+            const auto spec = arstro::PianoEngine::tuneSpec(p);
+            const double cur = spec.def; // a fresh engine is at the neutral defaults
+
+            GtkWidget *name = gtk_label_new(spec.name);
+            gtk_widget_set_halign(name, GTK_ALIGN_START);
+
+            GtkWidget *scale = gtk_scale_new_with_range(
+                GTK_ORIENTATION_HORIZONTAL, spec.min, spec.max,
+                (spec.max - spec.min) / 200.0);
+            gtk_range_set_value(GTK_RANGE(scale), cur);
+            gtk_scale_set_draw_value(GTK_SCALE(scale), FALSE);
+            gtk_widget_set_hexpand(scale, TRUE);
+            gtk_widget_set_size_request(scale, 180, -1);
+
+            GtkWidget *val = gtk_label_new(nullptr);
+            gtk_widget_set_halign(val, GTK_ALIGN_END);
+            gtk_widget_set_size_request(val, 72, -1);
+            char buf[48];
+            formatTuneValue(buf, sizeof buf, cur, spec.unit);
+            gtk_label_set_text(GTK_LABEL(val), buf);
+
+            auto *ctx = new SliderCtx{&app, p, val, spec.unit};
+            g_signal_connect(scale, "value-changed", G_CALLBACK(onSliderChanged), ctx);
+
+            gtk_grid_attach(GTK_GRID(grid), name, 0, row, 1, 1);
+            gtk_grid_attach(GTK_GRID(grid), scale, 1, row, 1, 1);
+            gtk_grid_attach(GTK_GRID(grid), val, 2, row, 1, 1);
+            ++row;
+            app.voicingSliders.emplace_back(scale, spec.def);
+        }
+
+        GtkWidget *reset = gtk_button_new_with_label("Reset voicing");
+        g_signal_connect(reset, "clicked", G_CALLBACK(onResetVoicing), &app);
+        gtk_grid_attach(GTK_GRID(grid), reset, 0, row++, 3, 1);
+
+        GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+        gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller),
+                                       GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+        gtk_container_add(GTK_CONTAINER(scroller), grid);
+        gtk_widget_set_size_request(scroller, 340, -1);
+        return scroller;
+    }
 
     // GTK keyval -> PianoApp key code: modifiers/space get their own codes
     // (16/17/32, matching common DOM keyCode values), letters -> ASCII.
@@ -288,8 +390,9 @@ int main(int argc, char **argv)
 
     app.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(app.window), "Arstro Piano");
-    gtk_window_set_default_size(GTK_WINDOW(app.window), kW, kH);
-    gtk_window_set_resizable(GTK_WINDOW(app.window), FALSE);
+    // Room for the keyboard plus the voicing panel to its right.
+    gtk_window_set_default_size(GTK_WINDOW(app.window), kW + 360, kH);
+    gtk_window_set_resizable(GTK_WINDOW(app.window), TRUE);
 
     app.area = gtk_drawing_area_new();
     gtk_widget_set_size_request(app.area, kW, kH);
@@ -301,7 +404,11 @@ int main(int argc, char **argv)
     g_signal_connect(app.window, "key-press-event", G_CALLBACK(onKeyPress), &app);
     g_signal_connect(app.window, "key-release-event", G_CALLBACK(onKeyRelease), &app);
 
-    gtk_container_add(GTK_CONTAINER(app.window), app.area);
+    // Keyboard on the left, the live voicing/tuning panel on the right.
+    GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), app.area, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(hbox), buildVoicingPanel(app), TRUE, TRUE, 0);
+    gtk_container_add(GTK_CONTAINER(app.window), hbox);
     gtk_widget_show_all(app.window);
     gtk_widget_grab_focus(app.area);
 
