@@ -22,6 +22,10 @@
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "theme/AndroidColors.h"
+#include "theme/Type.h"
+#include "theme/Shape.h"
+#include "theme/Motion.h"
+#include "theme/Fonts.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +42,7 @@ using arstro::androidshell::ShellState;
 using arstro::androidshell::ThemeMode;
 using arstro::androidshell::NullBridge;
 using arstro::androidshell::FakeSystemServices;
+using arstro::androidshell::registerBundledFonts;
 
 namespace
 {
@@ -324,7 +329,27 @@ namespace
                       !(light.primary == dark.primary);
         }
 
-        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk;
+        // ---- M2.2: type ramp + radius scale + motion aliases (L0) ----
+        bool typeShapeMotionOk = true;
+        {
+            namespace ty = arstro::androidshell::type;
+            namespace sh = arstro::androidshell::shape;
+            namespace mo = arstro::androidshell::motion;
+            typeShapeMotionOk =
+                // type ramp (plan §2.2): sizes + weight-as-family
+                ty::displayLarge.sizePx == 45.0 && ty::displayLarge.fontFamily == "Roboto" &&
+                ty::titleMedium.sizePx == 16.0 && ty::titleMedium.fontFamily == "Roboto Medium" &&
+                ty::bodyMedium.sizePx == 14.0 && ty::labelSmall.sizePx == 11.0 &&
+                ty::styled(ty::labelSmall, artboard::Color::hex(0x123456)).color == artboard::Color::hex(0x123456) &&
+                // radius scale
+                sh::kRadiusXL == 28.0 && sh::kRadiusSM == 8.0 && sh::radiusFull(48.0) == 24.0 &&
+                // motion aliases map to the AB-6 tokens
+                mo::kPanelOpenMs == 350.0 && mo::kPressMs == 100.0 &&
+                mo::kEmphasizedDecel == artboard::Easing::EmphasizedDecel &&
+                mo::kSpatialDefault == artboard::motion::kSpatialDefault;
+        }
+
+        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk && typeShapeMotionOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -335,10 +360,11 @@ namespace
         std::printf("  GTK %d.%d.%d, gtk-layer-shell: %s, surfaces: %zu\n",
                     gtk_get_major_version(), gtk_get_minor_version(), gtk_get_micro_version(),
                     haveLayerShell ? "yes" : "no (plain-window mode)", defaultSurfaces().size());
-        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s, colors: %s\n",
+        std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
-                    inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error",
-                    themeOk ? "ok" : "error");
+                    inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
+        std::printf("  colors: %s, type/shape/motion: %s\n",
+                    themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
@@ -346,6 +372,10 @@ namespace
 int main(int argc, char **argv)
 {
     const Options o = parseArgs(argc, argv);
+
+    // Register the app-private bundled fonts so the type-ramp family names resolve. No-op-safe
+    // if the TTFs are absent (logs, falls back to generic sans). Done before any rendering.
+    registerBundledFonts();
 
     // Headless modes need no display.
     if (!o.renderPng.empty()) return renderToPng(o);

@@ -15,27 +15,30 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M2 — `android_theme` module. Next task: M2.2 (`theme/Type` — vendor Roboto +
-Roboto Flex via app-private fontconfig registration like cosmo's DM Sans + the type ramp;
-`theme/Shape` radius scale; `theme/Motion` binding the AB-6 tokens).**
+**Milestone M2 — `android_theme` module. Next task: M2.3 (icon codegen — `assets/icons-src/*.svg`
+→ a build-time Python script → `theme/icons/*.h` cubic-path tables; start with the ~44 glyphs
+listed in plan §2.2).**
 
-Note for M2.2: shell-app task (route: `arstro.design.desktop` + plan §2.2). Three small pieces:
-(1) `theme/Type.h` — the type ramp from plan §2.2 (display 45/36, headline 32/28/24, title
-22/16-Medium/14-Medium, body 16/14/12, label 14/12/11-Medium) as named `artboard::TextStyle`s
-(size + family). Font FILES: vendor Roboto + Roboto Flex (Apache-2.0) into `assets/fonts/` and
-register them app-private with Fontconfig at startup — copy the exact pattern from
-`cosmo/linux_main.cpp` (it does this for DM Sans / JetBrains Mono via `FcConfigAppFontAddFile`).
-Note the fonts must actually be present in `assets/fonts/` to render by family name; if they can't
-be fetched here, define the ramp with family names + wire the registration call, and mark the
-"real glyphs render" part `[!]` until the TTFs are added. (2) `theme/Shape.h` — the radius scale
-(xs 4, sm 8, md 12, lg 16, xl 28, full). (3) `theme/Motion.h` — thin bindings/aliases over the
-AB-6 `artboard::motion::` tokens + the 5 named easings, named for shell use. Verify L0: ramp sizes,
-radius values; fontconfig registration is L1/L2 (needs the TTFs + a render).
+Note for M2.3: shell-app task (route: plan §2.2 icon set). Build a small, self-contained Python
+script (`assets/icons-svg-to-header.py` or similar) that reads each SVG's single path, flattens
+arcs to cubic béziers (Artboard's HAL has no arc primitive — cubics only), and emits a C++ header
+with a static path table per icon (a list of move/line/cubic/close ops in a 24×24 or 0..1 viewbox)
+that a shell `IconDrawable` can replay through `beginPath/moveTo/cubicTo/…` + fill. Wire it as a
+**CMake build step** (custom command) so the headers regenerate from the SVGs. Start with a handful
+of the ~44 glyphs (plan §2.2 lists them: wifi levels, battery, bluetooth, settings gear, back-arrow,
+close, check, chevrons, …) — you do NOT need all 44 in one task; get the pipeline + a few icons
+working, the rest are mechanical. Icons can be hand-authored SVGs or Material Symbols (Apache-2.0).
+Verify L0: the codegen produces a header with the expected op count for a known SVG; an `IconDrawable`
+replays it into a RecordingTarget with the right op stream. L1: render one icon to PNG.
 
-Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); default run opens
-ALL surfaces; `--self-test` runs the L0 checks.
+**Also pending from M2.2:** the Roboto/Roboto Flex TTFs are NOT vendored (registration is wired +
+falls back gracefully). Before M2.5 goldens are baked, drop the TTFs into `assets/fonts/` (see its
+README) so the golden PNGs use real Roboto, not generic sans — else the baselines bake the wrong font.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.1 AndroidColors).
+Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
+runs the L0 checks (now incl. `colors`, `type/shape/motion`).
+
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.2 Type/Shape/Motion).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -160,8 +163,17 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   own `theme/ThemeMode.h` (theme layer owns it; `ShellState` now includes it) so a surface does
   `colors(state.themeMode.get())`. **Fully verified L0** (`--self-test` `colors: ok`): exact
   surface/primary/onSurface values per mode + light≠dark. Pure data — L0 is the complete DoD.
-- [ ] **M2.2** `theme/Type` — vendor Roboto + Roboto Flex (app-private fontconfig registration like
+- [!] **M2.2** `theme/Type` — vendor Roboto + Roboto Flex (app-private fontconfig registration like
   cosmo's DM Sans) + the type ramp. `theme/Shape` (radius scale) + `theme/Motion` (bind AB-6 tokens).
+  → Done + L0-verified (`--self-test` `type/shape/motion: ok`): `theme/Type.h` (M3 ramp as named
+  `TextStyle`s, weight-as-family per FR-22, `styled()` to apply a role colour), `theme/Shape.h`
+  (radius scale xs4/sm8/md12/lg16/xl28 + `radiusFull`), `theme/Motion.h` (shell-named aliases over
+  the AB-6 `motion::` tokens + 5 easings). `theme/Fonts.{h,cpp}` registers the TTFs app-private
+  (`FcConfigAppFontAddFile`, source-dir baked by CMake), called at startup. **`[!]` because the
+  Roboto/Roboto Flex TTFs are NOT vendored** — registration is wired and falls back gracefully
+  (logs "font not registered", uses generic sans); real Roboto glyphs pending the font files (see
+  `assets/fonts/README.md` + Verification notes). Not fetched here (external download, and the
+  ledger anticipated deferring it).
 - [ ] **M2.3** Icon codegen: `assets/icons-src/*.svg` → build-time Python script → `theme/icons/*.h`
   cubic-path tables (flatten arcs to cubics). Start with the ~44 glyphs listed in plan §2.2.
 - [ ] **M2.4** Adaptive-icon masker: mask path (circle + squircle options) + `clipPath` + `registerImage`
@@ -273,6 +285,8 @@ passes on nested `gnome-shell --nested --wayland` (L3) within its input limits, 
 - [ ] M9 green — deb + rpm build in CI, VM matrix passes the 15-point smoke checklist on Ubuntu-GNOME,
   Fedora-GNOME, Fedora-KDE, Kubuntu; uninstall clean.
 - [ ] M0 web-adapter verification gap cleared.
+- [ ] Roboto / Roboto Flex TTFs vendored into `assets/fonts/` (M2.2 wired the registration; the font
+      files are absent, so text is generic sans until added — do before M2.5 goldens + M9 licenses).
 - [ ] M1 on-screen/layer-shell L2 verification cleared (7 surfaces anchor correctly + take input in
       nested KWin — see M1.6 Verification note; was code-complete but built/tested only headless).
 - [ ] The 7 user deliverables all demonstrably working on **both** GNOME and Plasma: launcher · quick
@@ -355,6 +369,12 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
   translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
   GDK events from a display/compositor.
+- M2.2: `theme/Type`/`Shape`/`Motion` are **L0-verified** (ramp sizes, weight-as-family, radius
+  scale, motion aliases → AB-6 tokens). Font registration is wired + graceful-fallback verified.
+  **NOT done: the Roboto / Roboto Flex TTFs are not vendored** — so text renders in the adapter's
+  generic sans, not real Roboto. **To clear:** drop the TTFs into `assets/fonts/` (paths per its
+  README) — then family names resolve and glyphs are correct. **Must happen before M2.5 goldens**
+  are committed, or the baselines bake generic sans.
 - M1.6 / **the standing M1 gap**: the multi-surface WIRING is verified L0+L1 (7 hosts, 1 clock, 1
   state, all render at correct dims). **NOT verified on this machine — the whole on-screen + layer-
   shell side of M1** (accumulates the M1.1–M1.4 on-screen caveats): (a) the `#ifdef

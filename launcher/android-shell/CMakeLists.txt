@@ -19,10 +19,15 @@ add_executable(arstro-android-shell
   shell/main.cpp
   shell/SurfaceHost.cpp
   shell/FrameClock.cpp
+  theme/Fonts.cpp
   # Artboard's native Cairo adapter is NOT part of artboard_core (which is platform-free);
   # each host compiles it in, exactly as cosmo does.
   ${CMAKE_SOURCE_DIR}/Artboard/src/adapter/native/CairoTarget.cpp
 )
+
+# Locate assets/ (fonts, later icons/wallpaper) independent of the build dir / CWD, like cosmo.
+target_compile_definitions(arstro-android-shell PRIVATE
+  ANDROID_SHELL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 # artboard_core (from the Artboard subproject, added earlier in the umbrella build)
 # exposes its src/ and include/ dirs PUBLIC, so linking it provides <artboard/artboard.h>.
