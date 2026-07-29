@@ -1,0 +1,16 @@
+arstro-android-shell — third-party asset notices
+=================================================
+
+This shell bundles (or will bundle, as assets are vendored) the following third-party
+assets, all under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0):
+
+  Roboto             © Google  — https://fonts.google.com/specimen/Roboto
+  Roboto Flex        © Google  — https://fonts.google.com/specimen/Roboto+Flex
+  Material Symbols   © Google  — https://fonts.google.com/icons  (icon glyph references)
+
+When the font TTFs are vendored into ../assets/fonts/ (see that dir's README), place the
+upstream LICENSE (Apache-2.0 text) alongside them and keep this NOTICE in sync. The icon
+path tables under ../assets/icons-src/ are hand-authored for this project; any that are
+traced from Material Symbols inherit the Apache-2.0 terms above.
+
+The default wallpaper (when added) is original CC0 work by this project.

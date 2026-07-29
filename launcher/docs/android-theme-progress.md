@@ -15,28 +15,32 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M2 — `android_theme` module. LAST task: M2.5 (token sample-sheet screen → commit L1
-golden PNGs light+dark; ship `licenses/` Apache-2.0 notices). Completing this closes M2.**
+**Milestone M3 — Status bar + services. First task: M3.1 (`SystemServices` real D-Bus clients:
+NetworkManager (wifi), UPower (battery), BlueZ (bt) — plan §3.3 — behind the existing interface,
+with the `FakeSystemServices` staying for tests).**
 
-⚠ **M2.5 has a hard prerequisite: the Roboto / Roboto Flex TTFs must be vendored first** (see
-`assets/fonts/README.md`), or the golden PNGs bake the adapter's generic sans instead of Roboto and
-become wrong baselines. Options when starting M2.5: (a) drop the TTFs in and bake correct goldens;
-(b) if the fonts still can't be obtained, either defer committing the golden baselines (build the
-sample-sheet screen + the golden-diff harness, mark the committed-baseline part `[!]`) or bake them
-with generic sans and a loud note that they must be regenerated once fonts land. Decide at M2.5 start.
+Note for M3.1: host/services task (route: plan §3.3; keep behind the `system/SystemServices.h`
+interface from M1.5). Add a `DbusSystemServices : SystemServices` that talks to the real buses via
+GDBus (GLib is already linked): UPower `org.freedesktop.UPower` DisplayDevice `Percentage`/`State`
+→ `battery()`; NetworkManager `org.freedesktop.NetworkManager` `PrimaryConnection`→AP `Strength` +
+`WirelessEnabled` → `wifi()`/`setWifiEnabled`; BlueZ `org.bluez` Adapter1 `Powered`/Device1
+`Connected` → `bluetooth()`. Brightness/volume/power can land in M3.2/M5 (status bar only needs
+battery+wifi+bt); stub the rest to the fake's behaviour or leave for later — but wire battery/wifi/bt
+for real. **Likely partial on this machine:** the system buses may be limited/unavailable in this
+env — do the client code, unit-test the parsing/mapping against fakes (L0), and mark the "live
+D-Bus values" part `[!]` if the daemons aren't reachable here (verify in a VM/session at L4). Prefer
+GDBus (`g_dbus_proxy_*`) so there's no new dependency.
 
-Note for M2.5: shell-app task (plan §2.2, DoD "sample sheet golden PNGs (light+dark)"). Build a
-sample-sheet surface/screen that lays out the whole `android_theme` — the colour role swatches, the
-type ramp, the radius scale, a few icons (incl. a masked one), a themed icon — render it via the
-existing headless `CairoTarget→PNG` path (or a `--render-png` surface), and commit the light+dark
-PNGs as L1 baselines under `tests/`. Add a tiny golden-diff harness (`tests/` + an update script).
-Ship `licenses/` with the Apache-2.0 NOTICE for Roboto / Material Symbols.
+⚠ **Carried into M3 (do not lose):** two provisional/pending items from M2 —
+(1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
+regenerated (`tests/update-goldens.sh`) once the TTFs land; (2) all the standing finish-line gaps
+(M0 web adapter, M1 layer-shell L2, Roboto TTFs) still open. See §"Whole-project done" + Verification.
 
-Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
-runs the L0 checks (now incl. `colors`, `type/shape/motion`, `icons`, `icon-mask`). Add more of the
-~44 icons by dropping SVGs in `assets/icons-src/` (mechanical).
+Handy: `arstro-android-shell --self-test` (L0 checks); `--sample-sheet=light|dark --render-png=P`
+(theme sheet); `--surface=N --render-png=P` (surface goldens). `tests/update-goldens.sh` regenerates
+the theme goldens.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.4 icon masker).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.5 sample sheet).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -47,8 +51,8 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
-| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (M2.1–M2.4 done) | shared |
-| M3 | Status bar + system services | not started | shared |
+| M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
+| M3 | Status bar + system services | in progress (starting M3.1) | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
@@ -194,7 +198,15 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   L0** (`--self-test` `icon-mask: ok`: circle 4-cubics, squircle op count, drawMaskedImage clip-before-
   draw ordering, themed-icon fill+stroke) **and L1** (masked a 4-quadrant image → clean circle + the
   correct Android squircle, confirming clip + arc-flatten). Display-independent.
-- [ ] **M2.5** Token sample-sheet screen → commit L1 golden PNGs (light+dark). Ship `licenses/` notices.
+- [!] **M2.5** Token sample-sheet screen → commit L1 golden PNGs (light+dark). Ship `licenses/` notices.
+  → Done: `theme/SampleSheet.h` (a Segment laying out colour swatches + type ramp + radius scale +
+  icons + circle/squircle/themed masks from ONLY the theme tokens) + a `--sample-sheet=light|dark
+  --render-png=P` mode. `tests/update-goldens.sh` regenerates the baselines; `tests/golden/
+  samplesheet_{light,dark}.png` committed; `licenses/NOTICE` (Apache-2.0: Roboto/Roboto Flex/Material
+  Symbols). **Verified L1** (rendered + eyeballed both schemes: palettes correct + distinct, ramp
+  sizes/radii/icons/masks all compose). **`[!]` because the committed goldens bake DejaVu, not
+  Roboto** (fonts unvendored, M2.2) — colours/radii/icons/masks are final; only letterforms change.
+  **Regenerate via `tests/update-goldens.sh` once the TTFs land.**
 
 ## M3 — Status bar + services  (plan §2.3, §3.3)
 
@@ -391,6 +403,10 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
   translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
   GDK events from a display/compositor.
+- M2.5: sample-sheet renders correctly for both schemes (L1, eyeballed) — colours/radii/icons/masks
+  final. **The committed golden PNGs (`tests/golden/`) bake DejaVu Sans, not Roboto** (fonts
+  unvendored) — text letterforms are provisional. **Regenerate `tests/update-goldens.sh` after
+  vendoring the TTFs**; the sheet layout/sizes won't change, only glyph shapes.
 - M2.2: `theme/Type`/`Shape`/`Motion` are **L0-verified** (ramp sizes, weight-as-family, radius
   scale, motion aliases → AB-6 tokens). Font registration is wired + graceful-fallback verified.
   **NOT done: the Roboto / Roboto Flex TTFs are not vendored** — so text renders in the adapter's

@@ -28,6 +28,7 @@
 #include "theme/Fonts.h"
 #include "theme/IconDrawable.h"
 #include "theme/IconMask.h"
+#include "theme/SampleSheet.h"
 #include "theme/icons/GeneratedIcons.h"
 
 #include <cmath>
@@ -44,6 +45,7 @@ using arstro::androidshell::SurfaceHost;
 using arstro::androidshell::defaultSurfaces;
 using arstro::androidshell::ShellState;
 using arstro::androidshell::ThemeMode;
+using arstro::androidshell::SampleSheet;
 using arstro::androidshell::NullBridge;
 using arstro::androidshell::FakeSystemServices;
 using arstro::androidshell::registerBundledFonts;
@@ -71,6 +73,7 @@ namespace
         bool surfaceGiven = false;      // --surface=N passed -> single-surface mode; else all surfaces
         int width = 0, height = 0;      // 0 = use config default
         std::string renderPng;          // non-empty = headless PNG render mode
+        std::string sampleSheet;        // "light"/"dark": render the token sample sheet instead of a surface
     };
 
     Options parseArgs(int argc, char **argv)
@@ -83,6 +86,7 @@ namespace
             else if (a == "--windowed") o.windowed = true;
             else if (a.rfind("--surface=", 0) == 0) { o.surface = std::atoi(a.c_str() + 10); o.surfaceGiven = true; }
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
+            else if (a.rfind("--sample-sheet=", 0) == 0) o.sampleSheet = a.substr(15);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -145,6 +149,36 @@ namespace
         h.paint(cr, 4, 4);
         cairo_destroy(cr);
         cairo_surface_destroy(s);
+    }
+
+    // Render the android_theme token sample sheet (light/dark) to a PNG with no display — the M2.5
+    // L1 golden. Returns 0 on success.
+    int renderSampleSheet(const Options &o)
+    {
+        const int w = o.width > 0 ? o.width : 620;
+        const int h = o.height > 0 ? o.height : 960;
+        SampleSheet sheet;
+        sheet.mode = (o.sampleSheet == "light") ? ThemeMode::Light : ThemeMode::Dark;
+        sheet.width.set((double)w);
+        sheet.height.set((double)h);
+
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        artboard::CairoTarget target;
+        target.setContext(cr);
+        sheet.render(target);
+        const cairo_status_t drawStatus = cairo_status(cr);
+        const cairo_status_t writeStatus = cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr);
+        cairo_surface_destroy(s);
+        if (drawStatus != CAIRO_STATUS_SUCCESS || writeStatus != CAIRO_STATUS_SUCCESS)
+        {
+            std::fprintf(stderr, "arstro-android-shell: sample-sheet render failed\n");
+            return 2;
+        }
+        std::printf("arstro-android-shell: rendered %s sample sheet (%dx%d) -> %s\n",
+                    sheet.mode == ThemeMode::Dark ? "dark" : "light", w, h, o.renderPng.c_str());
+        return 0;
     }
 
     int selfTest()
@@ -472,6 +506,7 @@ int main(int argc, char **argv)
     registerBundledFonts();
 
     // Headless modes need no display.
+    if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))
