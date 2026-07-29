@@ -27,6 +27,7 @@
 #include "theme/Motion.h"
 #include "theme/Fonts.h"
 #include "theme/IconDrawable.h"
+#include "theme/IconMask.h"
 #include "theme/icons/GeneratedIcons.h"
 
 #include <cmath>
@@ -386,8 +387,62 @@ namespace
             iconsOk = tables && replay && coordOk;
         }
 
+        // ---- M2.4: adaptive-icon masker (clipPath + drawImage) + themed icon (L0) ----
+        bool maskOk = true;
+        {
+            using arstro::androidshell::MaskShape;
+            using arstro::androidshell::drawMaskedImage;
+            using arstro::androidshell::emitMaskPath;
+            using arstro::androidshell::drawThemedIcon;
+            using K = artboard::DrawOp::Kind;
+            const artboard::Rect r{0, 0, 48, 48};
+
+            // circle mask outline: beginPath + 4 cubics + close, no fill/stroke on its own
+            {
+                artboard::RecordingTarget rec;
+                emitMaskPath(rec, r, MaskShape::Circle);
+                maskOk = maskOk && rec.count(K::BeginPath) == 1 && rec.count(K::CubicTo) == 4 &&
+                         rec.count(K::ClosePath) == 1;
+            }
+            // squircle mask == the generated kSquircle table (scaled), so it emits its op count
+            {
+                artboard::RecordingTarget rec;
+                emitMaskPath(rec, r, MaskShape::Squircle);
+                maskOk = maskOk && rec.count(K::BeginPath) == 1 &&
+                         (rec.count(K::MoveTo) + rec.count(K::LineTo) + rec.count(K::CubicTo) +
+                          rec.count(K::ClosePath)) == arstro::androidshell::icons::kSquircle.count;
+            }
+            // drawMaskedImage: Save, (mask path), ClipPath, DrawImage, Restore — clip BEFORE draw.
+            {
+                artboard::RecordingTarget rec;
+                const uint8_t px[4] = {200, 100, 50, 255};  // 1x1 image
+                const int id = rec.registerImage(px, 1, 1);
+                drawMaskedImage(rec, id, r, MaskShape::Circle);
+                const auto &ops = rec.ops();
+                int clipIdx = -1, drawIdx = -1, saveIdx = -1, restoreIdx = -1;
+                for (int i = 0; i < (int)ops.size(); ++i)
+                {
+                    if (ops[i].kind == K::ClipPath) clipIdx = i;
+                    if (ops[i].kind == K::DrawImage) drawIdx = i;
+                    if (ops[i].kind == K::Save && saveIdx < 0) saveIdx = i;
+                    if (ops[i].kind == K::Restore) restoreIdx = i;
+                }
+                maskOk = maskOk && saveIdx >= 0 && clipIdx > saveIdx && drawIdx > clipIdx &&
+                         restoreIdx > drawIdx && rec.count(K::ClipPath) == 1 &&
+                         rec.count(K::DrawImage) == 1;
+            }
+            // themed icon: a filled background (FillPath) then the glyph painted on top.
+            {
+                artboard::RecordingTarget rec;
+                drawThemedIcon(rec, arstro::androidshell::icons::kCheck, r, MaskShape::Circle,
+                               artboard::Color::hex(0x4F378B), artboard::Color::hex(0xEADDFF), 10.0);
+                // bg fill (circle) + glyph stroke (kCheck is a line icon)
+                maskOk = maskOk && rec.count(K::FillPath) == 1 && rec.count(K::StrokePath) == 1;
+            }
+        }
+
         const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
-                        typeShapeMotionOk && iconsOk;
+                        typeShapeMotionOk && iconsOk && maskOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -401,9 +456,9 @@ namespace
         std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
                     inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
-        std::printf("  colors: %s, type/shape/motion: %s, icons: %s\n",
+        std::printf("  colors: %s, type/shape/motion: %s, icons: %s, icon-mask: %s\n",
                     themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error",
-                    iconsOk ? "ok" : "error");
+                    iconsOk ? "ok" : "error", maskOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }

@@ -14,6 +14,35 @@ namespace arstro
 {
 namespace androidshell
 {
+    // Emit an icon path table as the CURRENT path (beginPath + ops), scaled from its viewSize into
+    // `rect`, in the target's current transform. No fill/stroke — the caller paints or clips. Shared
+    // by IconDrawable (fills/strokes it) and IconMask (clips or fills the squircle with it), so both
+    // respect the active transform (unlike a Drawable, which sets an absolute transform).
+    inline void emitIconPath(artboard::IRenderTarget &t, const icons::IconPath &p,
+                             const artboard::Rect &rect)
+    {
+        if (p.count <= 0 || p.viewSize <= 0.0f)
+            return;
+        const double sx = rect.w / p.viewSize;
+        const double sy = rect.h / p.viewSize;
+        const auto X = [&](float x) { return rect.x + x * sx; };
+        const auto Y = [&](float y) { return rect.y + y * sy; };
+        t.beginPath();
+        for (int i = 0; i < p.count; ++i)
+        {
+            const icons::IconOp &op = p.ops[i];
+            switch (op.kind)
+            {
+            case icons::IconOp::Move: t.moveTo(X(op.v[0]), Y(op.v[1])); break;
+            case icons::IconOp::Line: t.lineTo(X(op.v[0]), Y(op.v[1])); break;
+            case icons::IconOp::Cubic:
+                t.cubicTo(X(op.v[0]), Y(op.v[1]), X(op.v[2]), Y(op.v[3]), X(op.v[4]), Y(op.v[5]));
+                break;
+            case icons::IconOp::Close: t.closePath(); break;
+            }
+        }
+    }
+
     class IconDrawable : public artboard::Drawable
     {
     public:
@@ -30,27 +59,9 @@ namespace androidshell
     protected:
         void onDraw(artboard::IRenderTarget &t) const override
         {
-            if (!mPath || mPath->count <= 0 || mPath->viewSize <= 0.0f)
+            if (!mPath)
                 return;
-            const double sx = rect.w / mPath->viewSize;
-            const double sy = rect.h / mPath->viewSize;
-            const auto X = [&](float x) { return rect.x + x * sx; };
-            const auto Y = [&](float y) { return rect.y + y * sy; };
-
-            t.beginPath();
-            for (int i = 0; i < mPath->count; ++i)
-            {
-                const icons::IconOp &op = mPath->ops[i];
-                switch (op.kind)
-                {
-                case icons::IconOp::Move: t.moveTo(X(op.v[0]), Y(op.v[1])); break;
-                case icons::IconOp::Line: t.lineTo(X(op.v[0]), Y(op.v[1])); break;
-                case icons::IconOp::Cubic:
-                    t.cubicTo(X(op.v[0]), Y(op.v[1]), X(op.v[2]), Y(op.v[3]), X(op.v[4]), Y(op.v[5]));
-                    break;
-                case icons::IconOp::Close: t.closePath(); break;
-                }
-            }
+            emitIconPath(t, *mPath, rect);
             if (mPath->stroke)
             {
                 t.setStroke(color, strokeWidth);

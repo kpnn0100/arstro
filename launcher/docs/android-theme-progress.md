@@ -15,31 +15,28 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M2 — `android_theme` module. Next task: M2.4 (adaptive-icon masker — mask path
-(circle + squircle options) + `clipPath` + `registerImage` pipeline, using AB-1; themed/monochrome
-icon tinting).**
+**Milestone M2 — `android_theme` module. LAST task: M2.5 (token sample-sheet screen → commit L1
+golden PNGs light+dark; ship `licenses/` Apache-2.0 notices). Completing this closes M2.**
 
-Note for M2.4: shell-app task (plan §2.2 / §2.6 app icons). Two things. (1) An **adaptive-icon
-masker**: take a source RGBA image (an app icon, M6) and clip it to the Android mask — circle
-(default) OR the squircle path (`config_icon_mask`, the exact path is in plan §2.2). Use AB-1
-`clipPath()`: build the mask path, `clipPath()`, then `drawImage()` the icon (registered via
-`registerImage`, AB-19). Provide `theme/IconMask.h` with `enum MaskShape { Circle, Squircle }` +
-a helper that emits the mask path into an `IRenderTarget`. Squircle: the plan's `config_icon_mask`
-is an SVG path in a 100×100 viewbox — reuse the M2.3 codegen (drop it in `icons-src/`?) or hand-
-port it to a path emitter; scale to the icon rect. (2) **Themed/monochrome icon tinting**: an
-`IconDrawable` already fills in a role colour (M2.3) — add the M3 themed-icon convention (glyph
-`onPrimaryContainer` on a `primaryContainer` circle) as a small helper. Verify L0: the mask emits
-a clip op stream (RecordingTarget shows `ClipPath` after the mask path, then the image draw); L1:
-render a masked test image (a solid colour block) → PNG shows the masked shape.
+⚠ **M2.5 has a hard prerequisite: the Roboto / Roboto Flex TTFs must be vendored first** (see
+`assets/fonts/README.md`), or the golden PNGs bake the adapter's generic sans instead of Roboto and
+become wrong baselines. Options when starting M2.5: (a) drop the TTFs in and bake correct goldens;
+(b) if the fonts still can't be obtained, either defer committing the golden baselines (build the
+sample-sheet screen + the golden-diff harness, mark the committed-baseline part `[!]`) or bake them
+with generic sans and a loud note that they must be regenerated once fonts land. Decide at M2.5 start.
 
-**Also pending from M2.2:** Roboto/Roboto Flex TTFs still NOT vendored — drop them into
-`assets/fonts/` before M2.5 goldens (see its README) or baselines bake generic sans.
+Note for M2.5: shell-app task (plan §2.2, DoD "sample sheet golden PNGs (light+dark)"). Build a
+sample-sheet surface/screen that lays out the whole `android_theme` — the colour role swatches, the
+type ramp, the radius scale, a few icons (incl. a masked one), a themed icon — render it via the
+existing headless `CairoTarget→PNG` path (or a `--render-png` surface), and commit the light+dark
+PNGs as L1 baselines under `tests/`. Add a tiny golden-diff harness (`tests/` + an update script).
+Ship `licenses/` with the Apache-2.0 NOTICE for Roboto / Material Symbols.
 
 Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
-runs the L0 checks (now incl. `colors`, `type/shape/motion`, `icons`). To add more of the ~44 icons:
-drop SVGs in `assets/icons-src/` and rebuild (mechanical).
+runs the L0 checks (now incl. `colors`, `type/shape/motion`, `icons`, `icon-mask`). Add more of the
+~44 icons by dropping SVGs in `assets/icons-src/` (mechanical).
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.2 Type/Shape/Motion).
+Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.4 icon masker).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
@@ -50,7 +47,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 |---|---|---|---|
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
-| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (M2.1 done) | shared |
+| M2 | `android_theme` module (color/type/shape/motion/icons) | in progress (M2.1–M2.4 done) | shared |
 | M3 | Status bar + system services | not started | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
@@ -186,8 +183,17 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   `icons: ok`: generated tables' op counts/kinds + IconDrawable replays kCheck into RecordingTarget
   with the exact op stream + scaled coords) **and L1** (rendered kCheck → clean checkmark, kDot →
   proper solid circle, confirming the arc→cubic flatten is visually correct). Fully display-independent.
-- [ ] **M2.4** Adaptive-icon masker: mask path (circle + squircle options) + `clipPath` + `registerImage`
+- [x] **M2.4** Adaptive-icon masker: mask path (circle + squircle options) + `clipPath` + `registerImage`
   pipeline (uses AB-1). Themed/monochrome icon tinting.
+  → Done: `theme/IconMask.h` — `MaskShape{Circle,Squircle}`, `emitMaskPath` (circle = 4 cubic quarter-
+  arcs; squircle = the generated `kSquircle` table from `assets/icons-src/squircle.svg`, the exact
+  `config_icon_mask` path arc-flattened by the M2.3 codegen), `drawMaskedImage` (save → mask path →
+  `clipPath` (AB-1) → `drawImage` (AB-19) → restore), `fillMask`, and `drawThemedIcon` (M3 monochrome:
+  filled mask-shape bg + tinted glyph). Refactored `IconDrawable` to share a free `emitIconPath()`
+  (transform-correct, reused by the masker) instead of resetting to an absolute transform. **Verified
+  L0** (`--self-test` `icon-mask: ok`: circle 4-cubics, squircle op count, drawMaskedImage clip-before-
+  draw ordering, themed-icon fill+stroke) **and L1** (masked a 4-quadrant image → clean circle + the
+  correct Android squircle, confirming clip + arc-flatten). Display-independent.
 - [ ] **M2.5** Token sample-sheet screen → commit L1 golden PNGs (light+dark). Ship `licenses/` notices.
 
 ## M3 — Status bar + services  (plan §2.3, §3.3)
