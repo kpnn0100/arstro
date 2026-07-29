@@ -15,20 +15,20 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M3 — Status bar + services. Next task: M3.3 (shade-trigger hit bands — the top-edge
-left/right halves emit `ShellState.shadeDrag`; the status bar reserves an exclusive zone of 24).**
+**Milestone M4 — Notification panel + notifyd. First task: M4.1 (`notifyd` — an in-process GDBus
+`org.freedesktop.Notifications` service (spec 1.2) + a `NotificationStore`).**
 
-Note for M3.3: shell-app/host task (plan §2.3 last two bullets, §2.4/§2.5 triggers). Two pieces.
-(1) **Shade-trigger bands:** a touch-down on the top edge with a downward drag opens a shade —
-LEFT half → notifications, RIGHT half → quick settings (Android dual-shade). For M3.3, detect the
-gesture on the status-bar surface (or a dedicated top hit-region): on `DragStart`/`Drag` from the
-top edge, drive an expansion fraction `ShellState.notificationsExpansion` / `quickSettingsExpansion`
-(the M1.5 Observables) by the drag distance (clamped 0..1). The actual shade panels are M4/M5 — for
-M3.3 just wire the gesture → the Observable (verify L0: a synthesized top-edge drag on the left half
-raises `notificationsExpansion`, right half raises `quickSettingsExpansion`). (2) **Exclusive zone:**
-already set on the statusbar SurfaceConfig (exclusiveZone=24, M1.6) — confirm it's plumbed to
-`gtk_layer_set_exclusive_zone` (it is, behind `#ifdef HAVE_GTK_LAYER_SHELL`); nothing to add unless
-you make it dynamic. Keep the shade drag desktop-agnostic (no compositor calls).
+Note for M4.1: host/services task (plan §2.4, §3.3). Add `notifyd/NotificationStore.h` (a list of
+`Notification{ id, appName, summary, body, iconName/imageData, actions, urgency, timestamp,
+transient }` + add/close/observe) and `notifyd/NotifyService.{h,cpp}` exporting
+`org.freedesktop.Notifications` on the SESSION bus via GDBus: `GetCapabilities`, `Notify` (returns a
+uint id; stores + notifies the store), `CloseNotification`, `GetServerInformation`, and signals
+`NotificationClosed(id, reason)` / `ActionInvoked(id, action_key)`. Own the name with
+`g_bus_own_name` (G_BUS_TYPE_SESSION); if another daemon holds it (a running desktop), log + run
+degraded (store still usable via direct add, for the mirror path M8). Verify L0: feed a synthetic
+Notify call into the store and assert it lands + notifies; if the session bus is free here, L2-lite:
+own the name + `notify-send` round-trips (isolated `dbus-run-session`). Keep the store UI-free
+(the panel surface consumes it in M4.2).
 
 ⚠ **Carried into M3 (do not lose):** two provisional/pending items from M2 —
 (1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
@@ -51,8 +51,8 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
-| M3 | Status bar + system services | in progress (M3.1–M3.2 done) | shared |
-| M4 | Notification panel + notifyd | not started | shared |
+| M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
+| M4 | Notification panel + notifyd | in progress (starting M4.1) | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
@@ -236,8 +236,18 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   (`--self-test` `status-bar: ok`) **+ L1** (all 5 states rendered + eyeballed — clock/dots/wifi/
   battery/bolt/bt/moon all correct, tint switches). Text is DejaVu-provisional (fonts); live-on-
   screen + real battery/wifi values fold into the standing M1 layer-shell / M3.1 hardware gaps.
-- [ ] **M3.3** Shade-trigger hit bands (left/right top-edge) emit `ShellState.shadeDrag`. Exclusive zone.
-- [ ] **M3.4** Goldens (L1) for the 5×2 state matrix; live check in nested KWin (L2).
+- [x] **M3.3** Shade-trigger hit bands (left/right top-edge) emit `ShellState.shadeDrag`. Exclusive zone.
+  → `StatusBar::handleGesture`: a top-edge `DragStart`+`Drag` drives `ShellState.notificationsExpansion`
+  (left half) or `quickSettingsExpansion` (right half) by drag distance / `kShadeDragRef` (600px),
+  clamped 0..1. Exclusive zone (24) was set on the statusbar `SurfaceConfig` in M1.6 (plumbed to
+  `gtk_layer_set_exclusive_zone`). **Verified L0** (`--self-test`: left-half 300px pull → notif 0.5,
+  right-half 600px → QS 1.0). Panels themselves are M4/M5.
+- [!] **M3.4** Goldens (L1) for the 5×2 state matrix; live check in nested KWin (L2).
+  → The 5 golden states committed in M3.2 (`tests/golden/statusbar_{dark,light,charging,nowifi,dnd}`)
+  cover the state × tint matrix (dark=white/wallpaper, light=dark/surface, + charging/nowifi/dnd).
+  **L1 done + eyeballed.** `[!]`: the **L2 live-in-nested-KWin** check can't run here (no
+  gtk-layer-shell / kwin_wayland) — folds into the standing M1 layer-shell gap; and goldens' text is
+  DejaVu (fonts). M3 is code-complete; its L2 acceptance is deferred with M1's.
 
 ## M4 — Notification panel + notifyd  (plan §2.4, §3.3)
 

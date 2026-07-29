@@ -563,6 +563,7 @@ namespace
         bool statusBarOk = true;
         {
             using K = artboard::DrawOp::Kind;
+            using K2 = artboard::Gesture::Type;
             // charging + bt + dnd + airplane state -> expect clock text, battery %, and several icons.
             arstro::androidshell::StatusBar bar;
             bar.width.set(720.0);
@@ -586,6 +587,21 @@ namespace
             artboard::RecordingTarget rec2;
             nowifi.render(rec2);
             statusBarOk = hasText && clockDrawn && hasStrokes && rec2.count(K::DrawText) >= 2;
+
+            // M3.3: a top-edge drag drives the dual-shade Observables (left=notif, right=QS).
+            NullBridge nb; FakeSystemServices fs; ShellState st(nb, fs);
+            arstro::androidshell::StatusBar bar2;
+            bar2.width.set(720.0); bar2.height.set(24.0); bar2.setState(&st);
+            bar2.onGesture({K2::DragStart, {100, 2}, {100, 2}, artboard::PointerButton::Left}); // left half
+            bar2.onGesture({K2::Drag, {100, 302}, {100, 2}, artboard::PointerButton::Left});      // pull 300
+            const bool leftShade = std::fabs(st.notificationsExpansion.get() - 0.5) < 1e-6 &&
+                                   st.quickSettingsExpansion.get() == 0.0;
+            arstro::androidshell::StatusBar bar3;
+            bar3.width.set(720.0); bar3.height.set(24.0); bar3.setState(&st);
+            bar3.onGesture({K2::DragStart, {600, 2}, {600, 2}, artboard::PointerButton::Left}); // right half
+            bar3.onGesture({K2::Drag, {600, 602}, {600, 2}, artboard::PointerButton::Left});      // pull 600 -> 1.0
+            const bool rightShade = std::fabs(st.quickSettingsExpansion.get() - 1.0) < 1e-6;
+            statusBarOk = statusBarOk && leftShade && rightShade;
         }
 
         const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
@@ -666,7 +682,7 @@ int main(int argc, char **argv)
         auto h = std::make_unique<SurfaceHost>(cfgs[i]);
         h->create(o.windowed);
         // surface 1 is the status bar (defaultSurfaces order); the rest keep placeholders for now.
-        if (cfgs[i].name == "statusbar") h->setRoot(statusBar);
+        if (cfgs[i].name == "statusbar") { statusBar->setState(&state); h->setRoot(statusBar); }
         else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);
         h->show();

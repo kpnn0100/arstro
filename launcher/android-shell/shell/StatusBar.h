@@ -11,6 +11,7 @@
  */
 #pragma once
 #include "artboard/artboard.h"
+#include "ShellState.h"
 #include "theme/ThemeMode.h"
 #include "theme/AndroidColors.h"
 #include "theme/Type.h"
@@ -44,7 +45,39 @@ namespace androidshell
         ThemeMode mode = ThemeMode::Dark;
         bool scrim = true;  // subtle top scrim so white glyphs read over a bright wallpaper
 
+        // Dual-shade trigger (M3.3): a top-edge drag drives one shade's expansion Observable.
+        // Left half -> notifications, right half -> quick settings (Android dual shade). The panels
+        // themselves are M4/M5; here we only move the fraction the bands own.
+        void setState(ShellState *s) { mState = s; }
+        static constexpr double kShadeDragRef = 600.0;  // drag px for a fully-open shade
+
     protected:
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &) override
+        {
+            using T = artboard::Gesture::Type;
+            if (!mState) return false;
+            if (g.type == T::DragStart)
+            {
+                mDragging = true;
+                mLeftHalf = g.start.x < width.value() * 0.5;
+                return true;
+            }
+            if (g.type == T::Drag && mDragging)
+            {
+                const double dy = g.pos.y - g.start.y;  // downward pull
+                double frac = dy / kShadeDragRef;
+                frac = frac < 0.0 ? 0.0 : (frac > 1.0 ? 1.0 : frac);
+                (mLeftHalf ? mState->notificationsExpansion : mState->quickSettingsExpansion).set(frac);
+                return true;
+            }
+            if (g.type == T::Up || g.type == T::Drop)
+            {
+                mDragging = false;
+                return true;
+            }
+            return false;
+        }
+
         void onPaint(artboard::IRenderTarget &t) const override
         {
             const AndroidColors &c = colors(mode);
@@ -170,6 +203,10 @@ namespace androidshell
             t.setStroke(col, width);
             t.strokePath();
         }
+
+        ShellState *mState = nullptr;
+        bool mDragging = false;
+        bool mLeftHalf = true;
     };
 
 } // namespace androidshell
