@@ -15,16 +15,27 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M8 — GNOME track. Build the companion GNOME Shell extension (`gnome-extension/`):
-host the shell client via Meta.WaylandClient, expose the same org.arstro.AndroidShell.Compositor
-D-Bus API via Meta.Window/global.display, hide stock chrome, mirror notifications, + degraded mode.**
-Then M9 packaging.
+**ALL M0–M9 CODE IS COMPLETE.** Every milestone's code is implemented and committed. What remains is
+**verification on capable hardware** — the gaps this dev machine could not exercise (no gtk-layer-shell,
+no kwin_wayland, no nested gnome-shell, no VMs, no emcc, and the Roboto TTFs unvendored). The next
+"task" is the finish-line verification pass, not more code. In priority order:
 
-Note: GNOME track (plan §3.2.2). Mostly UNVERIFIABLE here (no nested gnome-shell for extensions) —
-write the extension.js + metadata.json + the D-Bus bridge, mark L3/L4 [!].
+1. **Vendor the Roboto / Roboto Flex TTFs** into `assets/fonts/` (see its README), then
+   `tests/update-goldens.sh` — every committed golden currently bakes DejaVu, not Roboto.
+2. **Install `libgtk-layer-shell-dev` + `kwin_wayland`** and run the shell in nested KWin (L2):
+   `dbus-run-session -- env XDG_RUNTIME_DIR=$(mktemp -d) kwin_wayland --width 1600 --height 1000
+   ./build/launcher/android-shell/arstro-android-shell` — confirm the 7 surfaces anchor, the status
+   bar/shades/launcher/recents show on screen, input works, and the KWin script drives windows.
+3. **Nested gnome-shell (L3) + GNOME VM (L4)** — load `gnome-extension/`, confirm parity + chrome-hide
+   + notification mirror; the degraded fallback.
+4. **VM matrix (L4)** — install the `.deb`/`.rpm` on Ubuntu-GNOME, Fedora-GNOME, Fedora-KDE, Kubuntu;
+   run the 15-point smoke checklist; confirm both desktops.
+5. **Web adapter (M0 gap)** — `./build.sh --target linux-web-server` once emcc is available.
 
-Last updated: 2026-07-29 · Last commit: umbrella `main` (M7 recents + KWin bridge).
-Artboard: `feature/1.0.0` e9c64e4.
+See §"Whole-project done" (all the checkboxes) + the Verification notes for the exact list. Every
+shell surface is L0+L1 verified (rendered PNGs eyeballed); notifyd is live-verified; the .deb builds.
+
+Last updated: 2026-07-29 · Last commit: umbrella `main` (M9 packaging). Artboard: `feature/1.0.0` e9c64e4.
 
 
 ---
@@ -37,7 +48,7 @@ Artboard: `feature/1.0.0` e9c64e4.
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
 | M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
-| M4 | Notification panel + notifyd | code-complete (swipe-dismiss physics simplified) | shared |
+| M4 | Notification panel + notifyd | code-complete (daemon LIVE-verified; panel L1) | shared |
 | M5 | Quick settings | code-complete (panel/sliders/tiles/morph; pagination v2) | shared |
 | M6 | Launcher (home + drawer + folders) | code-complete (folders/drag-rearrange + real icon pixmaps deferred) | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | UI done (L1); KWin bridge/gestures code-complete, L2 UNVERIFIED | Plasma |
