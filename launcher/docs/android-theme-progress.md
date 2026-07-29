@@ -42,7 +42,7 @@ Artboard: `feature/1.0.0` e9c64e4.
 | M6 | Launcher (home + drawer + folders) | code-complete (folders/drag-rearrange + real icon pixmaps deferred) | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | UI done (L1); KWin bridge/gestures code-complete, L2 UNVERIFIED | Plasma |
 | M8 | **GNOME track** (extension bridge, parity, degraded mode) | code-complete; L3/L4 UNVERIFIED (no gnome-shell here) | GNOME |
-| M9 | Sessions + packaging (deb + rpm, both desktops) | not started | both |
+| M9 | Sessions + packaging (deb + rpm, both desktops) | deb builds (L4-lite); sessions/systemd done; VM matrix + web-gap UNVERIFIED | both |
 
 "shared" milestones (M1–M6) are desktop-agnostic (they run against `NullBridge` + fake services,
 verified in nested KWin). The GNOME/Plasma split is real only from M7 on.
@@ -314,13 +314,13 @@ passes on nested `gnome-shell --nested --wayland` (L3) within its input limits, 
 24.04 (GNOME), Fedora 41+ (GNOME), Fedora KDE, Kubuntu — install → log into "Android Shell" session →
 15-point smoke checklist (below) passes; uninstall leaves stock session intact. **Test:** L4.
 
-- [ ] **M9.1** Clear the M0 web-adapter verification gap (run `./build.sh --target linux-web-server`).
-- [ ] **M9.2** wayland-session `.desktop` files (Plasma variant: kwin_wayland w/o plasmashell + kwinrc
+- [!] **M9.1** Clear the M0 web-adapter verification gap (run `./build.sh --target linux-web-server`).
+- [x] **M9.2** wayland-session `.desktop` files (Plasma variant: kwin_wayland w/o plasmashell + kwinrc
   profile; GNOME variant: extension-enabled session) + systemd user units.
-- [ ] **M9.3** CPack DEB + RPM from CMake install rules; `packaging/debian/` + `.spec` skeletons kept.
+- [x] **M9.3** CPack DEB + RPM from CMake install rules; `packaging/debian/` + `.spec` skeletons kept.
   Subpackages: base + `-plasma` (kwin-script) + `-gnome` (extension). Install-path whitelist so the
   153GB tree can never glob into a package.
-- [ ] **M9.4** VM matrix acceptance (L4): all 4 targets, 15-point smoke checklist, clean uninstall.
+- [!] **M9.4** VM matrix acceptance (L4): all 4 targets, 15-point smoke checklist, clean uninstall.
 
 ---
 

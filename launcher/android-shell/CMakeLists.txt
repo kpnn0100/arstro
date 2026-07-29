@@ -70,3 +70,35 @@ else()
   message(WARNING "arstro-android-shell: gtk-layer-shell NOT found — building in plain-window mode "
                   "(fine for M1.1). Install libgtk-layer-shell-dev / gtk-layer-shell for M1.2+ surfaces.")
 endif()
+
+# ── Install + packaging (M9) ──
+include(GNUInstallDirs)
+install(TARGETS arstro-android-shell RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY assets/ DESTINATION ${CMAKE_INSTALL_DATADIR}/arstro-android-shell/assets
+        PATTERN "icons-src" EXCLUDE PATTERN "*.py" EXCLUDE)
+install(DIRECTORY licenses/ DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES packaging/sessions/android-shell-plasma.desktop
+              packaging/sessions/android-shell-gnome.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/wayland-sessions)
+install(PROGRAMS packaging/android-shell-plasma-session.sh
+        DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME arstro-android-shell-plasma-session)
+install(FILES packaging/systemd/arstro-android-shell.service
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/systemd/user)
+install(DIRECTORY kwin-script/ DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts/arstro-android-shell/contents/code
+        FILES_MATCHING PATTERN "*.js")
+install(FILES kwin-script/metadata.json
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts/arstro-android-shell)
+install(DIRECTORY gnome-extension/ DESTINATION ${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions/android-shell@arstro)
+
+# CPack (DEB + RPM) — enabled only when building android-shell standalone as the top project.
+if(CMAKE_PROJECT_NAME STREQUAL "arstro-android-shell" OR ARSTRO_ANDROID_SHELL_PACKAGING)
+  set(CPACK_PACKAGE_NAME "arstro-android-shell")
+  set(CPACK_PACKAGE_VERSION "0.1.0")
+  set(CPACK_PACKAGE_CONTACT "arstro <noreply@arstro>")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Android-theme touch shell for GNOME/Plasma")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgtk-3-0, libcairo2, libglib2.0-0, fontconfig")
+  set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "gtk-layer-shell, kwin-wayland | gnome-shell")
+  set(CPACK_RPM_PACKAGE_REQUIRES "gtk3, cairo, glib2, fontconfig")
+  set(CPACK_GENERATOR "DEB")
+  include(CPack)
+endif()

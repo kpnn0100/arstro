@@ -1,0 +1,11 @@
+[Unit]
+Description=Arstro Android Shell
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/arstro-android-shell
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

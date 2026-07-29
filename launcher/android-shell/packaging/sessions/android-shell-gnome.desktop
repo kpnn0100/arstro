@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Android Shell (GNOME)
+Comment=Android-theme touch shell on GNOME Shell (extension)
+Exec=/usr/bin/gnome-session --session=android-shell-gnome
+Type=Application
+DesktopNames=android-shell-gnome

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Android Shell (Plasma)
+Comment=Android-theme touch shell on KWin
+Exec=/usr/bin/arstro-android-shell-plasma-session
+Type=Application
+DesktopNames=android-shell
