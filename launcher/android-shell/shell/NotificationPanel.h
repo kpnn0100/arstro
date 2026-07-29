@@ -18,6 +18,7 @@
 #include "theme/icons/GeneratedIcons.h"
 #include "notifyd/NotificationStore.h"
 
+#include <cmath>
 #include <string>
 
 namespace arstro
@@ -32,6 +33,8 @@ namespace androidshell
         ThemeMode mode = ThemeMode::Dark;
         std::string dateText = "Wed, Jul 29";
         double scrollOffset = 0.0;
+        bool headsUp = false;        // render only the newest card, floating at top (no scrim/header)
+        double swipeX = 0.0;         // horizontal dismiss offset of the front card (M4.3)
 
         double expansion() const
         {
@@ -43,6 +46,23 @@ namespace androidshell
         {
             const AndroidColors &c = colors(mode);
             const double W = width.value(), H = height.value();
+
+            // Heads-up: a single floating card near the top, no scrim/header (plan §2.4). Slides
+            // out horizontally by swipeX (swipe-to-dismiss, M4.3), fading as it goes.
+            if (headsUp)
+            {
+                if (!store || store->count() == 0) return;
+                const double cw = W - 24 < 420 ? W - 24 : 420;
+                const double cx = (W - cw) / 2.0 + swipeX;
+                const double alpha = 1.0 - std::fmin(std::fabs(swipeX) / (cw * 0.6), 1.0);
+                if (alpha <= 0.01) return;
+                t.pushLayer(alpha);
+                artboard::drawElevation(t, {cx, 12, cw, 84}, shape::kRadiusXL, 8.0);
+                drawCard(t, c, {cx, 12, cw, 84}, store->items().back());
+                t.popLayer();
+                return;
+            }
+
             const double e = expansion();
             if (e <= 0.001) return;
 
