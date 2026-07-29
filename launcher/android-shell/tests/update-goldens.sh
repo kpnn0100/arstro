@@ -10,4 +10,7 @@ BIN="$(find "$REPO_ROOT/build" -name arstro-android-shell -type f 2>/dev/null | 
 [ -z "${BIN:-}" ] && { echo "build arstro-android-shell first: cmake --build build"; exit 1; }
 "$BIN" --sample-sheet=dark  --render-png="$GOLDEN/samplesheet_dark.png"
 "$BIN" --sample-sheet=light --render-png="$GOLDEN/samplesheet_light.png"
+for st in dark light charging nowifi dnd; do
+  "$BIN" --status-bar="$st" --render-png="$GOLDEN/statusbar_$st.png"
+done
 echo "goldens -> $GOLDEN"

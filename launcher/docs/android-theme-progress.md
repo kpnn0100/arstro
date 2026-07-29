@@ -15,21 +15,20 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M3 — Status bar + services. Next task: M3.2 (the status-bar surface — plan §2.3:
-height 24, clock (locale 12/24h), battery glyph+percent, wifi glyph, bt/dnd/airplane conditional
-icons; tint modes wallpaper-vs-surface).**
+**Milestone M3 — Status bar + services. Next task: M3.3 (shade-trigger hit bands — the top-edge
+left/right halves emit `ShellState.shadeDrag`; the status bar reserves an exclusive zone of 24).**
 
-Note for M3.2: shell-app task (route: `arstro.design.desktop` + plan §2.3). Build the status-bar
-surface's root Segment (or draw directly in a `StatusBar` Segment set as surface 1's root): left
-cluster = clock (`strftime` `%H:%M`/`%I:%M`, locale) + notification dots (stub for now); right
-cluster = wifi glyph (0–4 bars from `services.wifi().strength`), battery glyph + percent, bt/dnd/
-airplane conditional icons — all from `ShellState`/`SystemServices` (use `FakeSystemServices` for
-goldens so values are deterministic, `DbusSystemServices` at runtime). Draw the battery as the
-Android vertical rounded body + cap + fill + bolt (plan §2.3). Poll services on a timer (few
-seconds), not per frame. Tint: `onSurface` icons over a light surface, white over wallpaper (a
-`ShellState` field / TopWindowHint later — for now a `bool darkIcons`). Icons come from M2.3
-(need to add wifi/battery/bluetooth SVGs to `assets/icons-src/` — mechanical). Verify L0 (op stream
-for a known fake state) + L1 (golden PNGs: {light,dark,charging,no-wifi,dnd}×tint per the M3 DoD).
+Note for M3.3: shell-app/host task (plan §2.3 last two bullets, §2.4/§2.5 triggers). Two pieces.
+(1) **Shade-trigger bands:** a touch-down on the top edge with a downward drag opens a shade —
+LEFT half → notifications, RIGHT half → quick settings (Android dual-shade). For M3.3, detect the
+gesture on the status-bar surface (or a dedicated top hit-region): on `DragStart`/`Drag` from the
+top edge, drive an expansion fraction `ShellState.notificationsExpansion` / `quickSettingsExpansion`
+(the M1.5 Observables) by the drag distance (clamped 0..1). The actual shade panels are M4/M5 — for
+M3.3 just wire the gesture → the Observable (verify L0: a synthesized top-edge drag on the left half
+raises `notificationsExpansion`, right half raises `quickSettingsExpansion`). (2) **Exclusive zone:**
+already set on the statusbar SurfaceConfig (exclusiveZone=24, M1.6) — confirm it's plumbed to
+`gtk_layer_set_exclusive_zone` (it is, behind `#ifdef HAVE_GTK_LAYER_SHELL`); nothing to add unless
+you make it dynamic. Keep the shade drag desktop-agnostic (no compositor calls).
 
 ⚠ **Carried into M3 (do not lose):** two provisional/pending items from M2 —
 (1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
@@ -52,7 +51,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
-| M3 | Status bar + system services | in progress (M3.1 done) | shared |
+| M3 | Status bar + system services | in progress (M3.1–M3.2 done) | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
@@ -224,8 +223,19 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   M3.2/M5). Null/failure-tolerant (runs on a bare session). **Verified LIVE** (`--probe-services`:
   system bus connected; battery/wifi/bt all read real values — see Verification note); `--self-test`
   stays daemon-free (fakes).
-- [ ] **M3.2** Status bar surface (plan §2.3): height 24, clock (locale 12/24h), battery glyph+percent,
+- [x] **M3.2** Status bar surface (plan §2.3): height 24, clock (locale 12/24h), battery glyph+percent,
   wifi glyph, bt/dnd/airplane conditional icons; tint modes (wallpaper vs surface).
+  → Done: `shell/StatusBar.h` — a Segment rendering from a deterministic `StatusBarData` snapshot:
+  left = clock (`strftime %H:%M`) + notif dots (stub); right = wifi fan (0–4 bars, dimmed unlit / -1
+  disabled), battery (Android vertical body+cap, level fill or charging bolt) + `%`, and bt/dnd/
+  airplane icons (new `assets/icons-src/{bluetooth,airplane,dnd_moon}.svg`). `darkIcons` picks
+  onSurface vs white + a wallpaper scrim. Live shell (`runAllSurfaces`) sets surface 1's root to the
+  StatusBar, uses the **real `DbusSystemServices`**, and refreshes from services+clock ~1/s
+  (throttled). `--status-bar=STATE --render-png` mode + 5 states added to `tests/update-goldens.sh`;
+  committed `tests/golden/statusbar_{dark,light,charging,nowifi,dnd}.png`. **Verified L0**
+  (`--self-test` `status-bar: ok`) **+ L1** (all 5 states rendered + eyeballed — clock/dots/wifi/
+  battery/bolt/bt/moon all correct, tint switches). Text is DejaVu-provisional (fonts); live-on-
+  screen + real battery/wifi values fold into the standing M1 layer-shell / M3.1 hardware gaps.
 - [ ] **M3.3** Shade-trigger hit bands (left/right top-edge) emit `ShellState.shadeDrag`. Exclusive zone.
 - [ ] **M3.4** Goldens (L1) for the 5×2 state matrix; live check in nested KWin (L2).
 
@@ -419,6 +429,12 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
   translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
   GDK events from a display/compositor.
+- M3.2: the status bar is **L1-verified** — all 5 golden states rendered + eyeballed (clock, notif
+  dots, wifi fan, battery glyph incl. charging bolt, bt/dnd/moon icons, light/dark tint) look correct
+  and Android-like. Not verified on this machine: (a) the goldens' TEXT (clock + %) is DejaVu not
+  Roboto (same provisional as M2.5 — regenerate with `tests/update-goldens.sh` once fonts land);
+  (b) the live status bar on-screen over a real wallpaper/window (folds into the standing M1 layer-
+  shell L2 gap); (c) real battery-%/wifi-bars values (folds into the M3.1 no-battery/wired-only note).
 - M3.1: `DbusSystemServices` is **live-verified** on the system bus (`--probe-services`: bus
   connected; battery/wifi/bt all round-trip real values). This box happens to have **no battery**
   (UPower IsPresent=false → percent 0) and is **Ethernet-only** (NM PrimaryConnection is wired →

@@ -19,6 +19,7 @@
 #include <cairo/cairo.h>
 #include "artboard/artboard.h"
 #include "SurfaceHost.h"
+#include "StatusBar.h"
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
@@ -36,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <memory>
 #include <string>
 #include <vector>
@@ -49,6 +51,7 @@ using arstro::androidshell::ThemeMode;
 using arstro::androidshell::SampleSheet;
 using arstro::androidshell::NullBridge;
 using arstro::androidshell::FakeSystemServices;
+using arstro::androidshell::DbusSystemServices;
 using arstro::androidshell::registerBundledFonts;
 
 namespace
@@ -76,6 +79,7 @@ namespace
         int width = 0, height = 0;      // 0 = use config default
         std::string renderPng;          // non-empty = headless PNG render mode
         std::string sampleSheet;        // "light"/"dark": render the token sample sheet instead of a surface
+        std::string statusBar;          // a state name: render the status bar in that state
     };
 
     Options parseArgs(int argc, char **argv)
@@ -90,6 +94,7 @@ namespace
             else if (a.rfind("--surface=", 0) == 0) { o.surface = std::atoi(a.c_str() + 10); o.surfaceGiven = true; }
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
             else if (a.rfind("--sample-sheet=", 0) == 0) o.sampleSheet = a.substr(15);
+            else if (a.rfind("--status-bar=", 0) == 0) o.statusBar = a.substr(13);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -196,6 +201,67 @@ namespace
         std::printf("  battery: %d%% charging=%d present=%d\n", b.percent, b.charging, b.present);
         std::printf("  wifi:    enabled=%d ssid=\"%s\" bars=%d/4\n", w.enabled, w.ssid.c_str(), w.strength);
         std::printf("  bt:      powered=%d connected=%d\n", bt.powered, bt.connected);
+        return 0;
+    }
+
+    // Fill a StatusBar's snapshot from live services + the wall clock (runtime refresh).
+    void refreshStatusBar(arstro::androidshell::StatusBar &bar, arstro::androidshell::SystemServices &sv)
+    {
+        std::time_t now = std::time(nullptr);
+        std::tm tmv{};
+        localtime_r(&now, &tmv);
+        char buf[16];
+        std::strftime(buf, sizeof buf, "%H:%M", &tmv);  // TODO(M5): honour 12/24h locale pref
+        bar.data.clock = buf;
+        const auto b = sv.battery();
+        bar.data.batteryPercent = b.percent;
+        bar.data.charging = b.charging;
+        const auto w = sv.wifi();
+        bar.data.wifiBars = w.enabled ? w.strength : -1;
+        bar.data.bluetooth = sv.bluetooth().connected;
+        bar.data.dnd = sv.doNotDisturb();
+        bar.data.airplane = sv.airplaneMode();
+    }
+
+    // Build a StatusBar snapshot for a named golden state (deterministic, no live services).
+    arstro::androidshell::StatusBar makeStatusBar(const std::string &state)
+    {
+        arstro::androidshell::StatusBar bar;
+        bar.width.set(720.0);
+        bar.height.set(24.0);
+        auto &d = bar.data;
+        d.clock = "12:30";
+        d.wifiBars = 3;
+        d.batteryPercent = 72;
+        if (state == "light") { d.darkIcons = true; bar.mode = ThemeMode::Light; }
+        else if (state == "dark") { d.darkIcons = false; bar.mode = ThemeMode::Dark; }
+        else if (state == "charging") { d.charging = true; d.batteryPercent = 45; }
+        else if (state == "nowifi") { d.wifiBars = -1; }
+        else if (state == "dnd") { d.dnd = true; d.bluetooth = true; d.airplane = false; }
+        return bar;
+    }
+
+    int renderStatusBar(const Options &o)
+    {
+        arstro::androidshell::StatusBar bar = makeStatusBar(o.statusBar);
+        const int w = o.width > 0 ? o.width : (int)bar.width.value();
+        const int h = o.height > 0 ? o.height : (int)bar.height.value();
+        bar.width.set((double)w);
+        bar.height.set((double)h);
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        // paint a backdrop so white-icon (wallpaper) mode is visible: dark for dark, light for light
+        if (bar.data.darkIcons) { cairo_set_source_rgb(cr, 0.97, 0.94, 0.98); }
+        else { cairo_set_source_rgb(cr, 0.22, 0.16, 0.28); }
+        cairo_paint(cr);
+        artboard::CairoTarget target;
+        target.setContext(cr);
+        bar.render(target);
+        cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr);
+        cairo_surface_destroy(s);
+        std::printf("arstro-android-shell: rendered status bar '%s' -> %s\n", o.statusBar.c_str(),
+                    o.renderPng.c_str());
         return 0;
     }
 
@@ -493,8 +559,37 @@ namespace
             }
         }
 
+        // ---- M3.2: status bar draws clock + battery + wifi + conditional icons (L0) ----
+        bool statusBarOk = true;
+        {
+            using K = artboard::DrawOp::Kind;
+            // charging + bt + dnd + airplane state -> expect clock text, battery %, and several icons.
+            arstro::androidshell::StatusBar bar;
+            bar.width.set(720.0);
+            bar.height.set(24.0);
+            bar.data.charging = true;
+            bar.data.bluetooth = true;
+            bar.data.dnd = true;
+            bar.data.airplane = true;
+            bar.data.wifiBars = 3;
+            artboard::RecordingTarget rec;
+            bar.render(rec);
+            // two text runs at least (clock + battery %), the wifi arcs (strokes), icon fills/strokes
+            const bool hasText = rec.count(K::DrawText) >= 2;
+            bool clockDrawn = false;
+            for (const auto &op : rec.ops())
+                if (op.kind == K::DrawText && op.text == "12:30") clockDrawn = true;
+            const bool hasStrokes = rec.count(K::StrokePath) >= 3;  // wifi arcs + battery outline + bt
+            // no-wifi vs full-wifi differ (dimmed colours change the SetStroke count/colours)
+            arstro::androidshell::StatusBar nowifi;
+            nowifi.width.set(720.0); nowifi.height.set(24.0); nowifi.data.wifiBars = -1;
+            artboard::RecordingTarget rec2;
+            nowifi.render(rec2);
+            statusBarOk = hasText && clockDrawn && hasStrokes && rec2.count(K::DrawText) >= 2;
+        }
+
         const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
-                        typeShapeMotionOk && iconsOk && maskOk;
+                        typeShapeMotionOk && iconsOk && maskOk && statusBarOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -508,9 +603,9 @@ namespace
         std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
                     inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
-        std::printf("  colors: %s, type/shape/motion: %s, icons: %s, icon-mask: %s\n",
+        std::printf("  colors: %s, type/shape/motion: %s, icons: %s, icon-mask: %s, status-bar: %s\n",
                     themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error",
-                    iconsOk ? "ok" : "error", maskOk ? "ok" : "error");
+                    iconsOk ? "ok" : "error", maskOk ? "ok" : "error", statusBarOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
@@ -526,6 +621,7 @@ int main(int argc, char **argv)
     // Headless modes need no display.
     if (o.probeServices) return probeServices();
     if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
+    if (!o.renderPng.empty() && !o.statusBar.empty()) return renderStatusBar(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))
@@ -555,22 +651,41 @@ int main(int argc, char **argv)
     }
 
     // All surfaces. ShellState + the seams live for the whole run; SurfaceHosts are heap-stable
-    // (unique_ptr) because each one's recognizer sink captures `this`.
+    // (unique_ptr) because each one's recognizer sink captures `this`. The live shell uses the
+    // real D-Bus backend (tests use the fake).
     static NullBridge bridge;
-    static FakeSystemServices services;
+    static DbusSystemServices services;
     static ShellState state(bridge, services);
     static std::vector<std::unique_ptr<SurfaceHost>> hosts;
-    for (const auto &cfg : defaultSurfaces())
+    static auto statusBar = std::make_shared<arstro::androidshell::StatusBar>();
+    statusBar->mode = state.themeMode.get() == ThemeMode::Light ? ThemeMode::Light : ThemeMode::Dark;
+
+    const auto &cfgs = defaultSurfaces();
+    for (size_t i = 0; i < cfgs.size(); ++i)
     {
-        auto h = std::make_unique<SurfaceHost>(cfg);
+        auto h = std::make_unique<SurfaceHost>(cfgs[i]);
         h->create(o.windowed);
-        h->setRoot(makeRoot(cfg));
+        // surface 1 is the status bar (defaultSurfaces order); the rest keep placeholders for now.
+        if (cfgs[i].name == "statusbar") h->setRoot(statusBar);
+        else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);
         h->show();
         SurfaceHost *hp = h.get();
-        clock.add([hp](double nowMs) { hp->frameTick(nowMs); });
+        const bool isBar = (cfgs[i].name == "statusbar");
+        clock.add([hp, isBar](double nowMs) {
+            // Refresh the status bar from services + clock ~once a second (not per frame).
+            static double lastRefresh = -1e9;
+            if (isBar && nowMs - lastRefresh > 1000.0)
+            {
+                lastRefresh = nowMs;
+                refreshStatusBar(*statusBar, services);
+                hp->markDirty();
+            }
+            hp->frameTick(nowMs);
+        });
         hosts.push_back(std::move(h));
     }
+    refreshStatusBar(*statusBar, services);  // initial fill so the first frame is live
     clock.start();
     gtk_main();
     clock.stop();
