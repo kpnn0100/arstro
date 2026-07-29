@@ -1,0 +1,13 @@
+{
+  "KPlugin": {
+    "Id": "arstro-android-shell",
+    "Name": "Arstro Android Shell Compositor Bridge",
+    "Description": "Exposes org.arstro.AndroidShell.Compositor over D-Bus so the Android-theme shell can list/activate/close/tile windows and drive gesture navigation on KWin (Plasma 6).",
+    "Version": "0.1",
+    "Authors": [{ "Name": "arstro" }],
+    "License": "Apache-2.0",
+    "EnabledByDefault": true
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "main.js"
+}

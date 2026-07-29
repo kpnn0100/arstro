@@ -24,6 +24,8 @@
 #include "QuickSettings.h"
 #include "Launcher.h"
 #include "AppList.h"
+#include "Recents.h"
+#include "compositor/KWinBridge.h"
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
@@ -90,6 +92,7 @@ namespace
         std::string notifPanel;         // a state name: render the notification panel
         std::string qs;                 // a state name: render quick settings
         std::string launcher;           // "home"/"drawer": render the launcher
+        std::string recents;            // "some"/"empty": render recents overview
     };
 
     Options parseArgs(int argc, char **argv)
@@ -109,6 +112,7 @@ namespace
             else if (a.rfind("--notif-panel=", 0) == 0) o.notifPanel = a.substr(14);
             else if (a.rfind("--qs=", 0) == 0) o.qs = a.substr(5);
             else if (a.rfind("--launcher=", 0) == 0) o.launcher = a.substr(11);
+            else if (a.rfind("--recents=", 0) == 0) o.recents = a.substr(10);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -272,6 +276,27 @@ namespace
             N p; p.appName = "Files"; p.summary = "Copying…"; p.body = "photos/"; p.hasProgress = true;
             p.progress = 62; s.addOrReplace(p);
         }
+    }
+
+    int renderRecents(const Options &o)
+    {
+        arstro::androidshell::Recents R; R.mode = ThemeMode::Dark; R.visible_ = true;
+        if (o.recents != "empty")
+            R.windowsOverride = { {"w1","firefox","Mozilla Firefox",true,false},
+                                  {"w2","code","project — Code",false,false},
+                                  {"w3","dolphin","Home — Dolphin",false,false} };
+        const int w = o.width > 0 ? o.width : 480;
+        const int h = o.height > 0 ? o.height : 900;
+        R.width.set((double)w); R.height.set((double)h);
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        cairo_set_source_rgb(cr, 0.14, 0.11, 0.18); cairo_paint(cr);
+        artboard::CairoTarget tgt; tgt.setContext(cr);
+        R.render(tgt);
+        cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr); cairo_surface_destroy(s);
+        std::printf("arstro-android-shell: rendered recents '%s' -> %s\n", o.recents.c_str(), o.renderPng.c_str());
+        return 0;
     }
 
     int renderLauncher(const Options &o)
@@ -778,6 +803,7 @@ int main(int argc, char **argv)
     if (!o.renderPng.empty() && !o.notifPanel.empty()) return renderNotifPanel(o);
     if (!o.renderPng.empty() && !o.qs.empty()) return renderQuickSettings(o);
     if (!o.renderPng.empty() && !o.launcher.empty()) return renderLauncher(o);
+    if (!o.renderPng.empty() && !o.recents.empty()) return renderRecents(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))

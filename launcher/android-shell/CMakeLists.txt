@@ -23,6 +23,7 @@ add_executable(arstro-android-shell
   theme/Fonts.cpp
   system/DbusSystemServices.cpp
   notifyd/NotifyService.cpp
+  compositor/KWinBridge.cpp
   # Artboard's native Cairo adapter is NOT part of artboard_core (which is platform-free);
   # each host compiles it in, exactly as cosmo does.
   ${CMAKE_SOURCE_DIR}/Artboard/src/adapter/native/CairoTarget.cpp

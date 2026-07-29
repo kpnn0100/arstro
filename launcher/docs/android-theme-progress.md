@@ -15,20 +15,15 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M6 — Launcher (home). First task: M6.1 (wallpaper layer + scrim; 5-col home grid +
-dock + page indicator; JSON layout store).** Then M6.2 icon pipeline (GAppInfo enumeration +
-GtkIconTheme → masked icons), M6.3 press/long-press/drag, M6.4 all-apps drawer + search, M6.5
-folders, M6.6 tests.
+**Milestone M8 — GNOME track. Build the companion GNOME Shell extension (`gnome-extension/`):
+host the shell client via Meta.WaylandClient, expose the same org.arstro.AndroidShell.Compositor
+D-Bus API via Meta.Window/global.display, hide stock chrome, mirror notifications, + degraded mode.**
+Then M9 packaging.
 
-Note: shell-app task (plan §2.6). Build `shell/Launcher.h` as the launcher (surface 0) root:
-wallpaper `drawImage` + 12% scrim, a 5-col grid of app icons (masked via M2.4) + labels, a bottom
-dock, a page-dot indicator. Enumerate apps with GIO `GDesktopAppInfo` (M6.2). Layout persisted to
-`~/.config/arstro-android-shell/home.json`. Verify L0 (grid layout op stream) + L1 (home render).
+Note: GNOME track (plan §3.2.2). Mostly UNVERIFIABLE here (no nested gnome-shell for extensions) —
+write the extension.js + metadata.json + the D-Bus bridge, mark L3/L4 [!].
 
-Handy: `--self-test`; render modes `--sample-sheet=`, `--status-bar=`, `--notif-panel=`, `--qs=`
-(all + `--render-png=P`). `tests/update-goldens.sh` regenerates all goldens.
-
-Last updated: 2026-07-29 · Last commit: umbrella `main` (M5 quick settings).
+Last updated: 2026-07-29 · Last commit: umbrella `main` (M7 recents + KWin bridge).
 Artboard: `feature/1.0.0` e9c64e4.
 
 
@@ -45,7 +40,7 @@ Artboard: `feature/1.0.0` e9c64e4.
 | M4 | Notification panel + notifyd | code-complete (swipe-dismiss physics simplified) | shared |
 | M5 | Quick settings | code-complete (panel/sliders/tiles/morph; pagination v2) | shared |
 | M6 | Launcher (home + drawer + folders) | code-complete (folders/drag-rearrange + real icon pixmaps deferred) | shared |
-| M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
+| M7 | Gestures + recents + split — **Plasma/KWin bridge** | UI done (L1); KWin bridge/gestures code-complete, L2 UNVERIFIED | Plasma |
 | M8 | **GNOME track** (extension bridge, parity, degraded mode) | not started | GNOME |
 | M9 | Sessions + packaging (deb + rpm, both desktops) | not started | both |
 
@@ -289,14 +284,14 @@ token); goldens {home, drawer-mid, drawer-open, folder-open, search}; drag-rearr
 arrow goldens @ protrusion 0/50/100%; home/overview/quick-switch thresholds honored (replay); split
 50:50→drag→67:33; `kwinrc` gesture suppression documented. **Test:** L1, L2 (+ scripted input).
 
-- [ ] **M7.1** `compositor/CompositorBridge.h` interface (plan §3.2) + `KWinBridge` + the `kwin-script/`
+- [!] **M7.1** `compositor/CompositorBridge.h` interface (plan §3.2) + `KWinBridge` + the `kwin-script/`
   (JS) exposing `org.arstro.AndroidShell.Compositor` D-Bus (list/activate/close/tile/ratio/back).
-- [ ] **M7.2** Edge strips (invisible layer-shell overlays) + back-arrow affordance + commit/cancel + back semantics (plan §3.2.4).
-- [ ] **M7.3** Home pill + swipe-up (home vs overview via pause-detect vs quick-switch) — thresholds per plan §2.7.2.
-- [ ] **M7.4** Overview/recents: MRU card row (icon-cards v1), swipe-up-to-close, tap-to-activate, clear-all.
-- [ ] **M7.5** Split-screen: pair-picker, divider drag + snap points, dissolve; fullscreen bar hide/reveal.
-- [ ] **M7.6** Open-maximized default rule; `kwinrc` gesture-suppression profile. L1 goldens + L2 scripted-input.
-- [ ] **M7.7** (v1.5, optional) per-window thumbnails via `org.kde.KWin.ScreenShot2`.
+- [!] **M7.2** Edge strips (invisible layer-shell overlays) + back-arrow affordance + commit/cancel + back semantics (plan §3.2.4).
+- [!] **M7.3** Home pill + swipe-up (home vs overview via pause-detect vs quick-switch) — thresholds per plan §2.7.2.
+- [x] **M7.4** Overview/recents: MRU card row (icon-cards v1), swipe-up-to-close, tap-to-activate, clear-all.
+- [!] **M7.5** Split-screen: pair-picker, divider drag + snap points, dissolve; fullscreen bar hide/reveal.
+- [!] **M7.6** Open-maximized default rule; `kwinrc` gesture-suppression profile. L1 goldens + L2 scripted-input.
+- [!] **M7.7** (v1.5, optional) per-window thumbnails via `org.kde.KWin.ScreenShot2`.
 
 ## M8 — GNOME track  (plan §3.2.2)
 
