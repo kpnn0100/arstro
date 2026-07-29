@@ -22,6 +22,8 @@
 #include "StatusBar.h"
 #include "NotificationPanel.h"
 #include "QuickSettings.h"
+#include "Launcher.h"
+#include "AppList.h"
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
@@ -87,6 +89,7 @@ namespace
         std::string statusBar;          // a state name: render the status bar in that state
         std::string notifPanel;         // a state name: render the notification panel
         std::string qs;                 // a state name: render quick settings
+        std::string launcher;           // "home"/"drawer": render the launcher
     };
 
     Options parseArgs(int argc, char **argv)
@@ -105,6 +108,7 @@ namespace
             else if (a.rfind("--status-bar=", 0) == 0) o.statusBar = a.substr(13);
             else if (a.rfind("--notif-panel=", 0) == 0) o.notifPanel = a.substr(14);
             else if (a.rfind("--qs=", 0) == 0) o.qs = a.substr(5);
+            else if (a.rfind("--launcher=", 0) == 0) o.launcher = a.substr(11);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -268,6 +272,24 @@ namespace
             N p; p.appName = "Files"; p.summary = "Copying…"; p.body = "photos/"; p.hasProgress = true;
             p.progress = 62; s.addOrReplace(p);
         }
+    }
+
+    int renderLauncher(const Options &o)
+    {
+        static arstro::androidshell::AppList apps; apps.loadFake();
+        arstro::androidshell::Launcher L; L.apps = &apps; L.mode = ThemeMode::Dark;
+        if (o.launcher == "drawer") { L.drawerOpen = true; L.drawerFraction = 1.0; }
+        const int w = o.width > 0 ? o.width : 480;
+        const int h = o.height > 0 ? o.height : 900;
+        L.width.set((double)w); L.height.set((double)h);
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        artboard::CairoTarget tgt; tgt.setContext(cr);
+        L.render(tgt);
+        cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr); cairo_surface_destroy(s);
+        std::printf("arstro-android-shell: rendered launcher '%s' -> %s\n", o.launcher.c_str(), o.renderPng.c_str());
+        return 0;
     }
 
     int renderQuickSettings(const Options &o)
@@ -755,6 +777,7 @@ int main(int argc, char **argv)
     if (!o.renderPng.empty() && !o.statusBar.empty()) return renderStatusBar(o);
     if (!o.renderPng.empty() && !o.notifPanel.empty()) return renderNotifPanel(o);
     if (!o.renderPng.empty() && !o.qs.empty()) return renderQuickSettings(o);
+    if (!o.renderPng.empty() && !o.launcher.empty()) return renderLauncher(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))
@@ -820,6 +843,14 @@ int main(int argc, char **argv)
             qs->state = &state; qs->services = &services;
             h->setRoot(qs);
             h->setAnimatingQuery([](double) { return state.quickSettingsExpansion.get() > 0.001; });
+        }
+        else if (cfgs[i].name == "launcher")
+        {
+            static arstro::androidshell::AppList appList; appList.loadInstalled();
+            static auto launcher = std::make_shared<arstro::androidshell::Launcher>();
+            launcher->apps = &appList; launcher->mode = ThemeMode::Dark;
+            h->setRoot(launcher);
+            h->setAnimatingQuery([](double) { return true; });  // launcher animates (drawer ease)
         }
         else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);

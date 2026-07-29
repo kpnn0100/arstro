@@ -19,4 +19,7 @@ done
 for st in on off; do
   "$BIN" --qs="$st" --render-png="$GOLDEN/qs_$st.png"
 done
+for st in home drawer; do
+  "$BIN" --launcher="$st" --render-png="$GOLDEN/launcher_$st.png"
+done
 echo "goldens -> $GOLDEN"

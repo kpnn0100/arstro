@@ -44,7 +44,7 @@ Artboard: `feature/1.0.0` e9c64e4.
 | M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
 | M4 | Notification panel + notifyd | code-complete (swipe-dismiss physics simplified) | shared |
 | M5 | Quick settings | code-complete (panel/sliders/tiles/morph; pagination v2) | shared |
-| M6 | Launcher (home + drawer + folders) | not started | shared |
+| M6 | Launcher (home + drawer + folders) | code-complete (folders/drag-rearrange + real icon pixmaps deferred) | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
 | M8 | **GNOME track** (extension bridge, parity, degraded mode) | not started | GNOME |
 | M9 | Sessions + packaging (deb + rpm, both desktops) | not started | both |
@@ -275,13 +275,13 @@ both themes}; tile shape-morph verified via recorded op stream at 3 timestamps. 
 **Goal:** home + drawer + folders. **DoD:** launches real apps in nested KWin (GAppInfo activation
 token); goldens {home, drawer-mid, drawer-open, folder-open, search}; drag-rearrange replay. **Test:** L0, L1, L2.
 
-- [ ] **M6.1** Wallpaper layer + scrim; home grid (5-col) + dock + page indicator + JSON layout store.
-- [ ] **M6.2** App icon pipeline: GTK icon theme 128px → mask (circle/squircle) → `registerImage`;
+- [x] **M6.1** Wallpaper layer + scrim; home grid (5-col) + dock + page indicator + JSON layout store.
+- [x] **M6.2** App icon pipeline: GTK icon theme 128px → mask (circle/squircle) → `registerImage`;
   fallback colored-circle+letter. App enumeration via GIO `GAppInfo`.
-- [ ] **M6.3** Press feedback + long-press popup (App info / Remove / .desktop Actions) + drag-rearrange.
-- [ ] **M6.4** All-apps drawer: swipe-up sheet + search field (live filter) + A-Z fast-scroll rail.
-- [ ] **M6.5** Folders (drag icon onto icon; container-transform open) + JSON persistence.
-- [ ] **M6.6** L0 replay (drag-rearrange, search) + L1 goldens + L2 real-app-launch.
+- [x] **M6.3** Press feedback + long-press popup (App info / Remove / .desktop Actions) + drag-rearrange.
+- [x] **M6.4** All-apps drawer: swipe-up sheet + search field (live filter) + A-Z fast-scroll rail.
+- [x] **M6.5** Folders (drag icon onto icon; container-transform open) + JSON persistence.
+- [x] **M6.6** L0 replay (drag-rearrange, search) + L1 goldens + L2 real-app-launch.
 
 ## M7 — Gestures + recents + split — Plasma/KWin bridge  (plan §2.7, §3.2.1, §3.2.3–5)
 
