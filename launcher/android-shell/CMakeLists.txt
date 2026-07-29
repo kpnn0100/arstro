@@ -29,6 +29,23 @@ add_executable(arstro-android-shell
 target_compile_definitions(arstro-android-shell PRIVATE
   ANDROID_SHELL_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+# ── Icon codegen (M2.3): assets/icons-src/*.svg -> generated cubic-path header ──
+# A build step runs the Python codegen; the header lands in the build tree (not committed).
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(ICON_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/icons-src)
+set(ICON_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/assets/icons-svg-to-header.py)
+set(ICON_GEN_HEADER ${CMAKE_CURRENT_BINARY_DIR}/gen/theme/icons/GeneratedIcons.h)
+file(GLOB ICON_SVGS CONFIGURE_DEPENDS ${ICON_SRC_DIR}/*.svg)
+add_custom_command(
+  OUTPUT ${ICON_GEN_HEADER}
+  COMMAND ${Python3_EXECUTABLE} ${ICON_SCRIPT} ${ICON_SRC_DIR} ${ICON_GEN_HEADER}
+  DEPENDS ${ICON_SCRIPT} ${ICON_SVGS}
+  COMMENT "Generating Android-theme icon path tables from SVGs"
+  VERBATIM)
+add_custom_target(android-shell-icons DEPENDS ${ICON_GEN_HEADER})
+add_dependencies(arstro-android-shell android-shell-icons)
+target_include_directories(arstro-android-shell PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen)
+
 # artboard_core (from the Artboard subproject, added earlier in the umbrella build)
 # exposes its src/ and include/ dirs PUBLIC, so linking it provides <artboard/artboard.h>.
 target_link_libraries(arstro-android-shell PRIVATE

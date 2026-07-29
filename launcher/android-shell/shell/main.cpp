@@ -26,7 +26,10 @@
 #include "theme/Shape.h"
 #include "theme/Motion.h"
 #include "theme/Fonts.h"
+#include "theme/IconDrawable.h"
+#include "theme/icons/GeneratedIcons.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -349,7 +352,42 @@ namespace
                 mo::kSpatialDefault == artboard::motion::kSpatialDefault;
         }
 
-        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk && typeShapeMotionOk;
+        // ---- M2.3: icon codegen + IconDrawable replay (L0) ----
+        bool iconsOk = true;
+        {
+            namespace ic = arstro::androidshell::icons;
+            // generated tables: a line icon and the arc-flattened solid icon
+            const bool tables =
+                ic::kCheck.count == 3 && ic::kCheck.stroke &&
+                ic::kCheck.ops[0].kind == ic::IconOp::Move && ic::kCheck.ops[1].kind == ic::IconOp::Line &&
+                ic::kDot.count == 6 && !ic::kDot.stroke &&      // 2 SVG arcs -> 4 cubics + Move + Close
+                ic::kDot.ops[1].kind == ic::IconOp::Cubic;
+
+            // IconDrawable replays kCheck (rect 0,0,24,24 -> scale 1, coords unchanged) into a
+            // RecordingTarget: beginPath, moveTo, 2x lineTo, setStroke, strokePath — nothing else.
+            arstro::androidshell::IconDrawable icon(ic::kCheck);
+            icon.rect = artboard::Rect{0, 0, 24, 24};
+            artboard::RecordingTarget irec;
+            icon.render(irec);
+            const auto &ops = irec.ops();
+            using K = artboard::DrawOp::Kind;
+            const bool replay =
+                irec.count(K::BeginPath) == 1 && irec.count(K::MoveTo) == 1 &&
+                irec.count(K::LineTo) == 2 && irec.count(K::StrokePath) == 1 &&
+                irec.count(K::FillPath) == 0 && irec.count(K::CubicTo) == 0;
+            // first Move op at the icon's (5,13)
+            bool coordOk = false;
+            for (const auto &op : ops)
+                if (op.kind == K::MoveTo)
+                {
+                    coordOk = std::fabs(op.args[0] - 5.0) < 1e-6 && std::fabs(op.args[1] - 13.0) < 1e-6;
+                    break;
+                }
+            iconsOk = tables && replay && coordOk;
+        }
+
+        const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
+                        typeShapeMotionOk && iconsOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -363,8 +401,9 @@ namespace
         std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
                     inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
-        std::printf("  colors: %s, type/shape/motion: %s\n",
-                    themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error");
+        std::printf("  colors: %s, type/shape/motion: %s, icons: %s\n",
+                    themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error",
+                    iconsOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }

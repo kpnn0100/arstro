@@ -15,28 +15,29 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M2 — `android_theme` module. Next task: M2.3 (icon codegen — `assets/icons-src/*.svg`
-→ a build-time Python script → `theme/icons/*.h` cubic-path tables; start with the ~44 glyphs
-listed in plan §2.2).**
+**Milestone M2 — `android_theme` module. Next task: M2.4 (adaptive-icon masker — mask path
+(circle + squircle options) + `clipPath` + `registerImage` pipeline, using AB-1; themed/monochrome
+icon tinting).**
 
-Note for M2.3: shell-app task (route: plan §2.2 icon set). Build a small, self-contained Python
-script (`assets/icons-svg-to-header.py` or similar) that reads each SVG's single path, flattens
-arcs to cubic béziers (Artboard's HAL has no arc primitive — cubics only), and emits a C++ header
-with a static path table per icon (a list of move/line/cubic/close ops in a 24×24 or 0..1 viewbox)
-that a shell `IconDrawable` can replay through `beginPath/moveTo/cubicTo/…` + fill. Wire it as a
-**CMake build step** (custom command) so the headers regenerate from the SVGs. Start with a handful
-of the ~44 glyphs (plan §2.2 lists them: wifi levels, battery, bluetooth, settings gear, back-arrow,
-close, check, chevrons, …) — you do NOT need all 44 in one task; get the pipeline + a few icons
-working, the rest are mechanical. Icons can be hand-authored SVGs or Material Symbols (Apache-2.0).
-Verify L0: the codegen produces a header with the expected op count for a known SVG; an `IconDrawable`
-replays it into a RecordingTarget with the right op stream. L1: render one icon to PNG.
+Note for M2.4: shell-app task (plan §2.2 / §2.6 app icons). Two things. (1) An **adaptive-icon
+masker**: take a source RGBA image (an app icon, M6) and clip it to the Android mask — circle
+(default) OR the squircle path (`config_icon_mask`, the exact path is in plan §2.2). Use AB-1
+`clipPath()`: build the mask path, `clipPath()`, then `drawImage()` the icon (registered via
+`registerImage`, AB-19). Provide `theme/IconMask.h` with `enum MaskShape { Circle, Squircle }` +
+a helper that emits the mask path into an `IRenderTarget`. Squircle: the plan's `config_icon_mask`
+is an SVG path in a 100×100 viewbox — reuse the M2.3 codegen (drop it in `icons-src/`?) or hand-
+port it to a path emitter; scale to the icon rect. (2) **Themed/monochrome icon tinting**: an
+`IconDrawable` already fills in a role colour (M2.3) — add the M3 themed-icon convention (glyph
+`onPrimaryContainer` on a `primaryContainer` circle) as a small helper. Verify L0: the mask emits
+a clip op stream (RecordingTarget shows `ClipPath` after the mask path, then the image draw); L1:
+render a masked test image (a solid colour block) → PNG shows the masked shape.
 
-**Also pending from M2.2:** the Roboto/Roboto Flex TTFs are NOT vendored (registration is wired +
-falls back gracefully). Before M2.5 goldens are baked, drop the TTFs into `assets/fonts/` (see its
-README) so the golden PNGs use real Roboto, not generic sans — else the baselines bake the wrong font.
+**Also pending from M2.2:** Roboto/Roboto Flex TTFs still NOT vendored — drop them into
+`assets/fonts/` before M2.5 goldens (see its README) or baselines bake generic sans.
 
 Handy: `arstro-android-shell --surface=N --size=WxH --render-png=PATH` (L1 golden); `--self-test`
-runs the L0 checks (now incl. `colors`, `type/shape/motion`).
+runs the L0 checks (now incl. `colors`, `type/shape/motion`, `icons`). To add more of the ~44 icons:
+drop SVGs in `assets/icons-src/` and rebuild (mechanical).
 
 Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.2 Type/Shape/Motion).
 Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
@@ -174,8 +175,17 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
   (logs "font not registered", uses generic sans); real Roboto glyphs pending the font files (see
   `assets/fonts/README.md` + Verification notes). Not fetched here (external download, and the
   ledger anticipated deferring it).
-- [ ] **M2.3** Icon codegen: `assets/icons-src/*.svg` → build-time Python script → `theme/icons/*.h`
+- [x] **M2.3** Icon codegen: `assets/icons-src/*.svg` → build-time Python script → `theme/icons/*.h`
   cubic-path tables (flatten arcs to cubics). Start with the ~44 glyphs listed in plan §2.2.
+  → Done: `assets/icons-svg-to-header.py` (self-contained SVG-path parser: M/L/H/V/C/S/Q/T/A/Z →
+  Move/Line/Cubic/Close, quads + arcs flattened to cubics) → generates `theme/icons/GeneratedIcons.h`
+  into the build dir via a CMake `add_custom_command` (SVGs + script are the deps). `theme/icons/
+  IconTypes.h` (hand-written op/path structs) + `theme/IconDrawable.h` (replays a table scaled into
+  a rect, fill or stroke). 6 seed icons committed (check/close/chevron_right/add/back_arrow line +
+  dot arc-fill); remaining ~38 are mechanical (drop SVGs, rebuild). **Verified L0** (`--self-test`
+  `icons: ok`: generated tables' op counts/kinds + IconDrawable replays kCheck into RecordingTarget
+  with the exact op stream + scaled coords) **and L1** (rendered kCheck → clean checkmark, kDot →
+  proper solid circle, confirming the arc→cubic flatten is visually correct). Fully display-independent.
 - [ ] **M2.4** Adaptive-icon masker: mask path (circle + squircle options) + `clipPath` + `registerImage`
   pipeline (uses AB-1). Themed/monochrome icon tinting.
 - [ ] **M2.5** Token sample-sheet screen → commit L1 golden PNGs (light+dark). Ship `licenses/` notices.
@@ -308,6 +318,12 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M2.3: the generated icon header (`GeneratedIcons.h`) lives in the **build dir**
+  (`build/launcher/android-shell/gen/theme/icons/`), NOT committed — the committed source of truth is
+  the SVGs (`assets/icons-src/`) + the codegen script; a CMake `add_custom_command` regenerates it.
+  Icons are one square path table (viewSize from viewBox); `fill="none"` in the SVG → stroke icon,
+  else fill. Everything flattens to cubics because Artboard's HAL has no arc/quad-preserving op in the
+  icon table (uniform op stream).
 - 2026-07-24 — M2.1: `ThemeMode` moved from `shell/ShellState.h` to `theme/ThemeMode.h` (the theme
   layer owns it, since the colour tables key off it and theme is below ShellState). `ShellState.h`
   now includes it; same namespace, so no call sites changed. Colours use `Color::hex(0xRRGGBB)` for
