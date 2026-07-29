@@ -50,7 +50,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
 | M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
-| M4 | Notification panel + notifyd | in progress (M4.1 done) | shared |
+| M4 | Notification panel + notifyd | in progress (M4.1-M4.2 done) | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
@@ -261,7 +261,7 @@ expanded, heads-up}; swipe-dismiss physics via scripted `RawPointer` replay. **T
   `g_bus_own_name_on_connection`, degrades if already owned). `--notifyd` runs it standalone.
   **Verified L0** (`--self-test` `notif-store: ok`) **+ LIVE L2-lite** (isolated `dbus-run-session`:
   owns the name; `gdbus Notify` round-trips → stored + observer fired + returns id; GetServerInfo ok).
-- [ ] **M4.2** Notification panel surface (plan §2.4): trigger/geometry/scrim, card anatomy, sections,
+- [x] **M4.2** Notification panel surface (plan §2.4): trigger/geometry/scrim, card anatomy, sections,
   kinetic list (AB-4), header + clear-all.
 - [ ] **M4.3** Swipe-to-dismiss physics + heads-up (auto-dismiss, drag-to-open) + DND + empty state.
 - [ ] **M4.4** L0 replay tests for dismissal, L1 goldens, L2 in isolated `dbus-run-session`.

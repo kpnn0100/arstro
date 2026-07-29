@@ -13,4 +13,7 @@ BIN="$(find "$REPO_ROOT/build" -name arstro-android-shell -type f 2>/dev/null | 
 for st in dark light charging nowifi dnd; do
   "$BIN" --status-bar="$st" --render-png="$GOLDEN/statusbar_$st.png"
 done
+for st in empty three expanded; do
+  "$BIN" --notif-panel="$st" --render-png="$GOLDEN/notifpanel_$st.png"
+done
 echo "goldens -> $GOLDEN"

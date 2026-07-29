@@ -20,6 +20,7 @@
 #include "artboard/artboard.h"
 #include "SurfaceHost.h"
 #include "StatusBar.h"
+#include "NotificationPanel.h"
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
@@ -83,6 +84,7 @@ namespace
         std::string renderPng;          // non-empty = headless PNG render mode
         std::string sampleSheet;        // "light"/"dark": render the token sample sheet instead of a surface
         std::string statusBar;          // a state name: render the status bar in that state
+        std::string notifPanel;         // a state name: render the notification panel
     };
 
     Options parseArgs(int argc, char **argv)
@@ -99,6 +101,7 @@ namespace
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
             else if (a.rfind("--sample-sheet=", 0) == 0) o.sampleSheet = a.substr(15);
             else if (a.rfind("--status-bar=", 0) == 0) o.statusBar = a.substr(13);
+            else if (a.rfind("--notif-panel=", 0) == 0) o.notifPanel = a.substr(14);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -246,6 +249,44 @@ namespace
         bar.data.bluetooth = sv.bluetooth().connected;
         bar.data.dnd = sv.doNotDisturb();
         bar.data.airplane = sv.airplaneMode();
+    }
+
+    // Fill a store with a fixed set of notifications for a named golden state.
+    void fillNotifStore(arstro::androidshell::NotificationStore &s, const std::string &state)
+    {
+        using N = arstro::androidshell::Notification;
+        if (state == "empty") return;
+        N a; a.appName = "Messages"; a.summary = "Alex"; a.body = "See you at 6?"; s.addOrReplace(a);
+        N b; b.appName = "Calendar"; b.summary = "Standup"; b.body = "in 15 minutes"; s.addOrReplace(b);
+        N d; d.appName = "System"; d.summary = "Update available"; d.body = "critical security patch";
+        d.urgency = 2; s.addOrReplace(d);
+        if (state == "expanded")
+        {
+            N p; p.appName = "Files"; p.summary = "Copying…"; p.body = "photos/"; p.hasProgress = true;
+            p.progress = 62; s.addOrReplace(p);
+        }
+    }
+
+    int renderNotifPanel(const Options &o)
+    {
+        static arstro::androidshell::NotificationStore store;
+        fillNotifStore(store, o.notifPanel);
+        arstro::androidshell::NotificationPanel panel;
+        panel.store = &store;
+        panel.mode = ThemeMode::Dark;
+        const int w = o.width > 0 ? o.width : 480;
+        const int h = o.height > 0 ? o.height : 700;
+        panel.width.set((double)w); panel.height.set((double)h);
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        cairo_set_source_rgb(cr, 0.14, 0.11, 0.18); cairo_paint(cr);  // wallpaper behind the scrim
+        artboard::CairoTarget tgt; tgt.setContext(cr);
+        panel.render(tgt);
+        cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr); cairo_surface_destroy(s);
+        std::printf("arstro-android-shell: rendered notif panel '%s' -> %s\n", o.notifPanel.c_str(),
+                    o.renderPng.c_str());
+        return 0;
     }
 
     // Build a StatusBar snapshot for a named golden state (deterministic, no live services).
@@ -688,6 +729,7 @@ int main(int argc, char **argv)
     if (o.probeServices) return probeServices();
     if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
     if (!o.renderPng.empty() && !o.statusBar.empty()) return renderStatusBar(o);
+    if (!o.renderPng.empty() && !o.notifPanel.empty()) return renderNotifPanel(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))
@@ -726,13 +768,27 @@ int main(int argc, char **argv)
     static auto statusBar = std::make_shared<arstro::androidshell::StatusBar>();
     statusBar->mode = state.themeMode.get() == ThemeMode::Light ? ThemeMode::Light : ThemeMode::Dark;
 
+    // Notifications: our daemon + store, and the panel bound to both (M4).
+    static arstro::androidshell::NotificationStore notifStore;
+    static arstro::androidshell::NotifyService notifSvc(notifStore);
+    notifSvc.start();
+    static auto notifPanel = std::make_shared<arstro::androidshell::NotificationPanel>();
+    notifPanel->store = &notifStore;
+    notifPanel->state = &state;
+
     const auto &cfgs = defaultSurfaces();
     for (size_t i = 0; i < cfgs.size(); ++i)
     {
         auto h = std::make_unique<SurfaceHost>(cfgs[i]);
         h->create(o.windowed);
-        // surface 1 is the status bar (defaultSurfaces order); the rest keep placeholders for now.
+        // bind the real surfaces; the rest keep placeholders for now.
         if (cfgs[i].name == "statusbar") { statusBar->setState(&state); h->setRoot(statusBar); }
+        else if (cfgs[i].name == "shade-notifications")
+        {
+            h->setRoot(notifPanel);
+            // redraw the shade while it is open (drag animation + arriving notifications), idle closed.
+            h->setAnimatingQuery([](double) { return state.notificationsExpansion.get() > 0.001; });
+        }
         else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);
         h->show();
