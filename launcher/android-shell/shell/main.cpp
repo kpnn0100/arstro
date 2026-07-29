@@ -21,6 +21,7 @@
 #include "SurfaceHost.h"
 #include "StatusBar.h"
 #include "NotificationPanel.h"
+#include "QuickSettings.h"
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
@@ -85,6 +86,7 @@ namespace
         std::string sampleSheet;        // "light"/"dark": render the token sample sheet instead of a surface
         std::string statusBar;          // a state name: render the status bar in that state
         std::string notifPanel;         // a state name: render the notification panel
+        std::string qs;                 // a state name: render quick settings
     };
 
     Options parseArgs(int argc, char **argv)
@@ -102,6 +104,7 @@ namespace
             else if (a.rfind("--sample-sheet=", 0) == 0) o.sampleSheet = a.substr(15);
             else if (a.rfind("--status-bar=", 0) == 0) o.statusBar = a.substr(13);
             else if (a.rfind("--notif-panel=", 0) == 0) o.notifPanel = a.substr(14);
+            else if (a.rfind("--qs=", 0) == 0) o.qs = a.substr(5);
             else if (a.rfind("--size=", 0) == 0)
             {
                 const char *v = a.c_str() + 7;
@@ -265,6 +268,27 @@ namespace
             N p; p.appName = "Files"; p.summary = "Copying…"; p.body = "photos/"; p.hasProgress = true;
             p.progress = 62; s.addOrReplace(p);
         }
+    }
+
+    int renderQuickSettings(const Options &o)
+    {
+        static arstro::androidshell::FakeSystemServices svc;
+        if (o.qs == "on") { svc.setWifiEnabled(true); svc.setBluetoothPowered(true); svc.setDoNotDisturb(true); }
+        else if (o.qs == "off") { svc.setWifiEnabled(false); svc.setBluetoothPowered(false); }
+        arstro::androidshell::QuickSettings qs;
+        qs.services = &svc; qs.mode = ThemeMode::Dark;
+        const int w = o.width > 0 ? o.width : 480;
+        const int h = o.height > 0 ? o.height : 640;
+        qs.width.set((double)w); qs.height.set((double)h);
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(s);
+        cairo_set_source_rgb(cr, 0.14, 0.11, 0.18); cairo_paint(cr);
+        artboard::CairoTarget tgt; tgt.setContext(cr);
+        qs.render(tgt);
+        cairo_surface_write_to_png(s, o.renderPng.c_str());
+        cairo_destroy(cr); cairo_surface_destroy(s);
+        std::printf("arstro-android-shell: rendered quick settings '%s' -> %s\n", o.qs.c_str(), o.renderPng.c_str());
+        return 0;
     }
 
     int renderNotifPanel(const Options &o)
@@ -730,6 +754,7 @@ int main(int argc, char **argv)
     if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
     if (!o.renderPng.empty() && !o.statusBar.empty()) return renderStatusBar(o);
     if (!o.renderPng.empty() && !o.notifPanel.empty()) return renderNotifPanel(o);
+    if (!o.renderPng.empty() && !o.qs.empty()) return renderQuickSettings(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 
     if (!gtk_init_check(&argc, &argv))
@@ -788,6 +813,13 @@ int main(int argc, char **argv)
             h->setRoot(notifPanel);
             // redraw the shade while it is open (drag animation + arriving notifications), idle closed.
             h->setAnimatingQuery([](double) { return state.notificationsExpansion.get() > 0.001; });
+        }
+        else if (cfgs[i].name == "shade-quicksettings")
+        {
+            static auto qs = std::make_shared<arstro::androidshell::QuickSettings>();
+            qs->state = &state; qs->services = &services;
+            h->setRoot(qs);
+            h->setAnimatingQuery([](double) { return state.quickSettingsExpansion.get() > 0.001; });
         }
         else h->setRoot(makeRoot(cfgs[i]));
         h->setShellState(&state);

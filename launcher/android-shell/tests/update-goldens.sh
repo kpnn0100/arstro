@@ -16,4 +16,7 @@ done
 for st in empty three expanded; do
   "$BIN" --notif-panel="$st" --render-png="$GOLDEN/notifpanel_$st.png"
 done
+for st in on off; do
+  "$BIN" --qs="$st" --render-png="$GOLDEN/qs_$st.png"
+done
 echo "goldens -> $GOLDEN"

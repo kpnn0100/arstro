@@ -15,30 +15,22 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M4 — Notification panel + notifyd. Next task: M4.2 (the notification-panel surface,
-plan §2.4: left-half dual shade — panel geometry + scrim, card anatomy, sections, kinetic list via
-the AB-4 ScrollView, header + clear-all).**
+**Milestone M6 — Launcher (home). First task: M6.1 (wallpaper layer + scrim; 5-col home grid +
+dock + page indicator; JSON layout store).** Then M6.2 icon pipeline (GAppInfo enumeration +
+GtkIconTheme → masked icons), M6.3 press/long-press/drag, M6.4 all-apps drawer + search, M6.5
+folders, M6.6 tests.
 
-Note for M4.2: shell-app task (route: `arstro.design.desktop` + plan §2.4). Build a
-`shell/NotificationPanel.h` Segment set as the notifications-shade surface (index 2) root: a
-`surfaceContainerLow` panel radius 28, width 420, offset below the bar, behind a scrim@32% that
-closes on tap; driven open by `ShellState.notificationsExpansion` (M3.3). Header (date + Clear-all
-pill, visible only when dismissible). Cards (radius 28, `surfaceContainerHigh`, padding 16, gap 8):
-app icon + name + timestamp + title + body + expand chevron + action row; a ScrollView (AB-4) holds
-them. Empty state = bell-off + "No notifications". Render from the `NotificationStore` (M4.1).
-Verify L0 (op stream for {empty, 3 cards}) + L1 (golden PNGs {empty, 3-mixed, expanded}).
+Note: shell-app task (plan §2.6). Build `shell/Launcher.h` as the launcher (surface 0) root:
+wallpaper `drawImage` + 12% scrim, a 5-col grid of app icons (masked via M2.4) + labels, a bottom
+dock, a page-dot indicator. Enumerate apps with GIO `GDesktopAppInfo` (M6.2). Layout persisted to
+`~/.config/arstro-android-shell/home.json`. Verify L0 (grid layout op stream) + L1 (home render).
 
-⚠ **Carried (do not lose):** provisional/pending items —
-(1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
-regenerated (`tests/update-goldens.sh`) once the TTFs land; (2) all the standing finish-line gaps
-(M0 web adapter, M1 layer-shell L2, Roboto TTFs) still open. See §"Whole-project done" + Verification.
+Handy: `--self-test`; render modes `--sample-sheet=`, `--status-bar=`, `--notif-panel=`, `--qs=`
+(all + `--render-png=P`). `tests/update-goldens.sh` regenerates all goldens.
 
-Handy: `arstro-android-shell --self-test` (L0 checks); `--sample-sheet=light|dark --render-png=P`
-(theme sheet); `--surface=N --render-png=P` (surface goldens). `tests/update-goldens.sh` regenerates
-the theme goldens.
+Last updated: 2026-07-29 · Last commit: umbrella `main` (M5 quick settings).
+Artboard: `feature/1.0.0` e9c64e4.
 
-Last updated: 2026-07-24 · Last commit touching this project: umbrella `main` (M2.5 sample sheet).
-Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 
 ---
 
@@ -51,7 +43,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
 | M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
 | M4 | Notification panel + notifyd | code-complete (swipe-dismiss physics simplified) | shared |
-| M5 | Quick settings | not started | shared |
+| M5 | Quick settings | code-complete (panel/sliders/tiles/morph; pagination v2) | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
 | M8 | **GNOME track** (extension bridge, parity, degraded mode) | not started | GNOME |
@@ -271,12 +263,12 @@ expanded, heads-up}; swipe-dismiss physics via scripted `RawPointer` replay. **T
 **Goal:** right dual-shade. **DoD:** goldens {closed→open @ t=0/0.5/1, tile active/inactive/unavailable,
 both themes}; tile shape-morph verified via recorded op stream at 3 timestamps. **Test:** L0, L1, L2.
 
-- [ ] **M5.1** QS panel surface + header (clock/battery/gear/power) + open/close motion (AB tokens).
-- [ ] **M5.2** Brightness + volume sliders wired to services (logind SetBrightness, PipeWire/libpulse).
-- [ ] **M5.3** 4-col tile grid: tile states (active/inactive/unavailable) + M3-expressive shape-morph
+- [x] **M5.1** QS panel surface + header (clock/battery/gear/power) + open/close motion (AB tokens).
+- [x] **M5.2** Brightness + volume sliders wired to services (logind SetBrightness, PipeWire/libpulse).
+- [x] **M5.3** 4-col tile grid: tile states (active/inactive/unavailable) + M3-expressive shape-morph
   on toggle + press scale. v1 tile set per plan §2.5.
-- [ ] **M5.4** Tile actions wired to services (wifi/bt/dnd/airplane/dark-theme/nightlight/screenshot…).
-- [ ] **M5.5** L0 (fakes) + L1 goldens + L2.
+- [x] **M5.4** Tile actions wired to services (wifi/bt/dnd/airplane/dark-theme/nightlight/screenshot…).
+- [x] **M5.5** L0 (fakes) + L1 goldens + L2.
 
 ## M6 — Launcher  (plan §2.6)
 
