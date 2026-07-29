@@ -15,22 +15,20 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M4 — Notification panel + notifyd. First task: M4.1 (`notifyd` — an in-process GDBus
-`org.freedesktop.Notifications` service (spec 1.2) + a `NotificationStore`).**
+**Milestone M4 — Notification panel + notifyd. Next task: M4.2 (the notification-panel surface,
+plan §2.4: left-half dual shade — panel geometry + scrim, card anatomy, sections, kinetic list via
+the AB-4 ScrollView, header + clear-all).**
 
-Note for M4.1: host/services task (plan §2.4, §3.3). Add `notifyd/NotificationStore.h` (a list of
-`Notification{ id, appName, summary, body, iconName/imageData, actions, urgency, timestamp,
-transient }` + add/close/observe) and `notifyd/NotifyService.{h,cpp}` exporting
-`org.freedesktop.Notifications` on the SESSION bus via GDBus: `GetCapabilities`, `Notify` (returns a
-uint id; stores + notifies the store), `CloseNotification`, `GetServerInformation`, and signals
-`NotificationClosed(id, reason)` / `ActionInvoked(id, action_key)`. Own the name with
-`g_bus_own_name` (G_BUS_TYPE_SESSION); if another daemon holds it (a running desktop), log + run
-degraded (store still usable via direct add, for the mirror path M8). Verify L0: feed a synthetic
-Notify call into the store and assert it lands + notifies; if the session bus is free here, L2-lite:
-own the name + `notify-send` round-trips (isolated `dbus-run-session`). Keep the store UI-free
-(the panel surface consumes it in M4.2).
+Note for M4.2: shell-app task (route: `arstro.design.desktop` + plan §2.4). Build a
+`shell/NotificationPanel.h` Segment set as the notifications-shade surface (index 2) root: a
+`surfaceContainerLow` panel radius 28, width 420, offset below the bar, behind a scrim@32% that
+closes on tap; driven open by `ShellState.notificationsExpansion` (M3.3). Header (date + Clear-all
+pill, visible only when dismissible). Cards (radius 28, `surfaceContainerHigh`, padding 16, gap 8):
+app icon + name + timestamp + title + body + expand chevron + action row; a ScrollView (AB-4) holds
+them. Empty state = bell-off + "No notifications". Render from the `NotificationStore` (M4.1).
+Verify L0 (op stream for {empty, 3 cards}) + L1 (golden PNGs {empty, 3-mixed, expanded}).
 
-⚠ **Carried into M3 (do not lose):** two provisional/pending items from M2 —
+⚠ **Carried (do not lose):** provisional/pending items —
 (1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
 regenerated (`tests/update-goldens.sh`) once the TTFs land; (2) all the standing finish-line gaps
 (M0 web adapter, M1 layer-shell L2, Roboto TTFs) still open. See §"Whole-project done" + Verification.
@@ -52,7 +50,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
 | M3 | Status bar + system services | code-complete (L2 live-KWin deferred with M1) | shared |
-| M4 | Notification panel + notifyd | in progress (starting M4.1) | shared |
+| M4 | Notification panel + notifyd | in progress (M4.1 done) | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | not started | Plasma |
@@ -255,7 +253,14 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
 (urgency/actions/image/transient) render per spec; action round-trip works; goldens {empty, 3-mixed,
 expanded, heads-up}; swipe-dismiss physics via scripted `RawPointer` replay. **Test:** L0, L1, L2.
 
-- [ ] **M4.1** `notifyd` — in-process GDBus `org.freedesktop.Notifications` (spec 1.2) + `NotificationStore`.
+- [x] **M4.1** `notifyd` — in-process GDBus `org.freedesktop.Notifications` (spec 1.2) + `NotificationStore`.
+  → `notifyd/NotificationStore.h` (UI-free model: add/replace-by-id/close/clearAll/observe;
+  `Notification{id,app,summary,body,icon,actions,urgency,transient,resident,progress}`) +
+  `notifyd/NotifyService.{h,cpp}` (GDBus object exporting Notify/CloseNotification/GetCapabilities/
+  GetServerInformation + NotificationClosed/ActionInvoked signals; owns the name via
+  `g_bus_own_name_on_connection`, degrades if already owned). `--notifyd` runs it standalone.
+  **Verified L0** (`--self-test` `notif-store: ok`) **+ LIVE L2-lite** (isolated `dbus-run-session`:
+  owns the name; `gdbus Notify` round-trips → stored + observer fired + returns id; GetServerInfo ok).
 - [ ] **M4.2** Notification panel surface (plan §2.4): trigger/geometry/scrim, card anatomy, sections,
   kinetic list (AB-4), header + clear-all.
 - [ ] **M4.3** Swipe-to-dismiss physics + heads-up (auto-dismiss, drag-to-open) + DND + empty state.

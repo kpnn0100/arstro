@@ -23,6 +23,8 @@
 #include "FrameClock.h"
 #include "ShellState.h"
 #include "system/DbusSystemServices.h"
+#include "notifyd/NotificationStore.h"
+#include "notifyd/NotifyService.h"
 #include "theme/AndroidColors.h"
 #include "theme/Type.h"
 #include "theme/Shape.h"
@@ -73,6 +75,7 @@ namespace
     {
         bool selfTest = false;
         bool probeServices = false;
+        bool notifyd = false;
         bool windowed = false;
         int surface = 0;
         bool surfaceGiven = false;      // --surface=N passed -> single-surface mode; else all surfaces
@@ -90,6 +93,7 @@ namespace
             const std::string a = argv[i];
             if (a == "--self-test") o.selfTest = true;
             else if (a == "--probe-services") o.probeServices = true;
+            else if (a == "--notifyd") o.notifyd = true;
             else if (a == "--windowed") o.windowed = true;
             else if (a.rfind("--surface=", 0) == 0) { o.surface = std::atoi(a.c_str() + 10); o.surfaceGiven = true; }
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
@@ -191,6 +195,27 @@ namespace
 
     // Live D-Bus smoke check (M3.1): construct the real backend and print battery/wifi/bt readings.
     // Kept OUT of --self-test so that stays daemon-free (L0). Returns 0 always (it is a probe).
+    // Run notifyd standalone: own org.freedesktop.Notifications, print each notification as it
+    // arrives, and spin a GLib main loop. For a live round-trip test inside dbus-run-session.
+    int runNotifyd()
+    {
+        arstro::androidshell::NotificationStore store;
+        store.observe([&] {
+            const auto &it = store.items();
+            if (!it.empty())
+                std::printf("notifyd: [%u] %s — %s | %s (total %d)\n", it.back().id,
+                            it.back().appName.c_str(), it.back().summary.c_str(),
+                            it.back().body.c_str(), store.count());
+            std::fflush(stdout);
+        });
+        arstro::androidshell::NotifyService svc(store);
+        if (!svc.start()) { std::fprintf(stderr, "notifyd: no session bus\n"); return 1; }
+        GMainLoop *loop = g_main_loop_new(nullptr, FALSE);
+        g_main_loop_run(loop);
+        g_main_loop_unref(loop);
+        return 0;
+    }
+
     int probeServices()
     {
         arstro::androidshell::DbusSystemServices svc;
@@ -604,8 +629,31 @@ namespace
             statusBarOk = statusBarOk && leftShade && rightShade;
         }
 
+        // ---- M4.1: NotificationStore add/replace/close/clear + observe (L0) ----
+        bool notifOk = true;
+        {
+            arstro::androidshell::NotificationStore store;
+            int fires = 0;
+            store.observe([&] { ++fires; });
+            arstro::androidshell::Notification n;
+            n.appName = "Mail"; n.summary = "New message"; n.urgency = 1;
+            const uint32_t id = store.addOrReplace(n);
+            const bool added = store.count() == 1 && id == 1 && fires == 1;
+            arstro::androidshell::Notification n2; n2.id = id; n2.summary = "edited";
+            store.addOrReplace(n2);  // replace by id
+            const bool replaced = store.count() == 1 && fires == 2 &&
+                                  store.items()[0].summary == "edited";
+            arstro::androidshell::Notification crit; crit.urgency = 2; crit.resident = true;
+            store.addOrReplace(crit);  // id 2
+            const bool dismissible = store.count() == 2 && store.dismissibleCount() == 1;
+            store.clearAll();  // removes non-resident only
+            const bool cleared = store.count() == 1 && store.items()[0].resident;
+            const bool closed = store.close(id) == false;  // already cleared
+            notifOk = added && replaced && dismissible && cleared && closed;
+        }
+
         const bool ok = paintOk && clockOk && inputOk && stateOk && multiOk && themeOk &&
-                        typeShapeMotionOk && iconsOk && maskOk && statusBarOk;
+                        typeShapeMotionOk && iconsOk && maskOk && statusBarOk && notifOk;
         const bool haveLayerShell =
 #ifdef HAVE_GTK_LAYER_SHELL
             true;
@@ -619,9 +667,10 @@ namespace
         std::printf("  draw-path: %s, frame-clock: %s, input: %s, shell-state: %s, all-surfaces: %s\n",
                     paintOk ? "ok" : "error", clockOk ? "ok" : "error",
                     inputOk ? "ok" : "error", stateOk ? "ok" : "error", multiOk ? "ok" : "error");
-        std::printf("  colors: %s, type/shape/motion: %s, icons: %s, icon-mask: %s, status-bar: %s\n",
+        std::printf("  colors: %s, type/shape/motion: %s, icons: %s, icon-mask: %s, status-bar: %s, notif-store: %s\n",
                     themeOk ? "ok" : "error", typeShapeMotionOk ? "ok" : "error",
-                    iconsOk ? "ok" : "error", maskOk ? "ok" : "error", statusBarOk ? "ok" : "error");
+                    iconsOk ? "ok" : "error", maskOk ? "ok" : "error", statusBarOk ? "ok" : "error",
+                    notifOk ? "ok" : "error");
         return ok ? 0 : 2;
     }
 }
@@ -635,6 +684,7 @@ int main(int argc, char **argv)
     registerBundledFonts();
 
     // Headless modes need no display.
+    if (o.notifyd) return runNotifyd();
     if (o.probeServices) return probeServices();
     if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
     if (!o.renderPng.empty() && !o.statusBar.empty()) return renderStatusBar(o);
