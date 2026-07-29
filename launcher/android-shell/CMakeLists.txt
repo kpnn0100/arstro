@@ -13,6 +13,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
 pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo)
 pkg_check_modules(FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
+pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)  # GDBus (system services, M3.1)
 pkg_check_modules(GTK_LAYER_SHELL IMPORTED_TARGET gtk-layer-shell-0)  # optional (see above)
 
 add_executable(arstro-android-shell
@@ -20,6 +21,7 @@ add_executable(arstro-android-shell
   shell/SurfaceHost.cpp
   shell/FrameClock.cpp
   theme/Fonts.cpp
+  system/DbusSystemServices.cpp
   # Artboard's native Cairo adapter is NOT part of artboard_core (which is platform-free);
   # each host compiles it in, exactly as cosmo does.
   ${CMAKE_SOURCE_DIR}/Artboard/src/adapter/native/CairoTarget.cpp
@@ -53,6 +55,7 @@ target_link_libraries(arstro-android-shell PRIVATE
   PkgConfig::GTK3
   PkgConfig::CAIRO
   PkgConfig::FONTCONFIG
+  PkgConfig::GIO
 )
 target_include_directories(arstro-android-shell PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

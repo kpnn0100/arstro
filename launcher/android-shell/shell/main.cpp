@@ -21,6 +21,7 @@
 #include "SurfaceHost.h"
 #include "FrameClock.h"
 #include "ShellState.h"
+#include "system/DbusSystemServices.h"
 #include "theme/AndroidColors.h"
 #include "theme/Type.h"
 #include "theme/Shape.h"
@@ -68,6 +69,7 @@ namespace
     struct Options
     {
         bool selfTest = false;
+        bool probeServices = false;
         bool windowed = false;
         int surface = 0;
         bool surfaceGiven = false;      // --surface=N passed -> single-surface mode; else all surfaces
@@ -83,6 +85,7 @@ namespace
         {
             const std::string a = argv[i];
             if (a == "--self-test") o.selfTest = true;
+            else if (a == "--probe-services") o.probeServices = true;
             else if (a == "--windowed") o.windowed = true;
             else if (a.rfind("--surface=", 0) == 0) { o.surface = std::atoi(a.c_str() + 10); o.surfaceGiven = true; }
             else if (a.rfind("--render-png=", 0) == 0) o.renderPng = a.substr(13);
@@ -178,6 +181,21 @@ namespace
         }
         std::printf("arstro-android-shell: rendered %s sample sheet (%dx%d) -> %s\n",
                     sheet.mode == ThemeMode::Dark ? "dark" : "light", w, h, o.renderPng.c_str());
+        return 0;
+    }
+
+    // Live D-Bus smoke check (M3.1): construct the real backend and print battery/wifi/bt readings.
+    // Kept OUT of --self-test so that stays daemon-free (L0). Returns 0 always (it is a probe).
+    int probeServices()
+    {
+        arstro::androidshell::DbusSystemServices svc;
+        std::printf("arstro-android-shell: system bus %s\n", svc.connected() ? "connected" : "NOT connected");
+        const auto b = svc.battery();
+        const auto w = svc.wifi();
+        const auto bt = svc.bluetooth();
+        std::printf("  battery: %d%% charging=%d present=%d\n", b.percent, b.charging, b.present);
+        std::printf("  wifi:    enabled=%d ssid=\"%s\" bars=%d/4\n", w.enabled, w.ssid.c_str(), w.strength);
+        std::printf("  bt:      powered=%d connected=%d\n", bt.powered, bt.connected);
         return 0;
     }
 
@@ -506,6 +524,7 @@ int main(int argc, char **argv)
     registerBundledFonts();
 
     // Headless modes need no display.
+    if (o.probeServices) return probeServices();
     if (!o.renderPng.empty() && !o.sampleSheet.empty()) return renderSampleSheet(o);
     if (!o.renderPng.empty()) return renderToPng(o);
 

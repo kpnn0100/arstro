@@ -15,21 +15,21 @@ done" is fully checked for **both GNOME and Plasma**.
 
 ## ► NEXT
 
-**Milestone M3 — Status bar + services. First task: M3.1 (`SystemServices` real D-Bus clients:
-NetworkManager (wifi), UPower (battery), BlueZ (bt) — plan §3.3 — behind the existing interface,
-with the `FakeSystemServices` staying for tests).**
+**Milestone M3 — Status bar + services. Next task: M3.2 (the status-bar surface — plan §2.3:
+height 24, clock (locale 12/24h), battery glyph+percent, wifi glyph, bt/dnd/airplane conditional
+icons; tint modes wallpaper-vs-surface).**
 
-Note for M3.1: host/services task (route: plan §3.3; keep behind the `system/SystemServices.h`
-interface from M1.5). Add a `DbusSystemServices : SystemServices` that talks to the real buses via
-GDBus (GLib is already linked): UPower `org.freedesktop.UPower` DisplayDevice `Percentage`/`State`
-→ `battery()`; NetworkManager `org.freedesktop.NetworkManager` `PrimaryConnection`→AP `Strength` +
-`WirelessEnabled` → `wifi()`/`setWifiEnabled`; BlueZ `org.bluez` Adapter1 `Powered`/Device1
-`Connected` → `bluetooth()`. Brightness/volume/power can land in M3.2/M5 (status bar only needs
-battery+wifi+bt); stub the rest to the fake's behaviour or leave for later — but wire battery/wifi/bt
-for real. **Likely partial on this machine:** the system buses may be limited/unavailable in this
-env — do the client code, unit-test the parsing/mapping against fakes (L0), and mark the "live
-D-Bus values" part `[!]` if the daemons aren't reachable here (verify in a VM/session at L4). Prefer
-GDBus (`g_dbus_proxy_*`) so there's no new dependency.
+Note for M3.2: shell-app task (route: `arstro.design.desktop` + plan §2.3). Build the status-bar
+surface's root Segment (or draw directly in a `StatusBar` Segment set as surface 1's root): left
+cluster = clock (`strftime` `%H:%M`/`%I:%M`, locale) + notification dots (stub for now); right
+cluster = wifi glyph (0–4 bars from `services.wifi().strength`), battery glyph + percent, bt/dnd/
+airplane conditional icons — all from `ShellState`/`SystemServices` (use `FakeSystemServices` for
+goldens so values are deterministic, `DbusSystemServices` at runtime). Draw the battery as the
+Android vertical rounded body + cap + fill + bolt (plan §2.3). Poll services on a timer (few
+seconds), not per frame. Tint: `onSurface` icons over a light surface, white over wallpaper (a
+`ShellState` field / TopWindowHint later — for now a `bool darkIcons`). Icons come from M2.3
+(need to add wifi/battery/bluetooth SVGs to `assets/icons-src/` — mechanical). Verify L0 (op stream
+for a known fake state) + L1 (golden PNGs: {light,dark,charging,no-wifi,dnd}×tint per the M3 DoD).
 
 ⚠ **Carried into M3 (do not lose):** two provisional/pending items from M2 —
 (1) the M2.5 sample-sheet goldens are baked with **DejaVu, not Roboto** (fonts unvendored) — must be
@@ -52,7 +52,7 @@ Artboard: `feature/1.0.0` e9c64e4 (AB-4, unchanged).
 | M0 | Artboard primitives AB-1…AB-6 | **DONE** ✅ | Artboard repo |
 | M1 | Shell host skeleton | code-complete; on-screen/layer-shell L2 verify PENDING | shared |
 | M2 | `android_theme` module (color/type/shape/motion/icons) | code-complete (M2.5 goldens provisional: DejaVu not Roboto) | shared |
-| M3 | Status bar + system services | in progress (starting M3.1) | shared |
+| M3 | Status bar + system services | in progress (M3.1 done) | shared |
 | M4 | Notification panel + notifyd | not started | shared |
 | M5 | Quick settings | not started | shared |
 | M6 | Launcher (home + drawer + folders) | not started | shared |
@@ -213,8 +213,17 @@ L1 baselines; icon codegen is a CMake step; `licenses/` ships Apache-2.0 notices
 **Goal:** live status bar. **DoD:** clock/battery/wifi live over nested-KWin wallpaper; goldens for
 {light,dark,charging,no-wifi,dnd}×{wallpaper-tint,surface-tint}. **Test:** L0 (service fakes), L1, L2.
 
-- [ ] **M3.1** `system/SystemServices` aggregate interface + **fakes** (for tests) + real clients:
+- [x] **M3.1** `system/SystemServices` aggregate interface + **fakes** (for tests) + real clients:
   NetworkManager (wifi), UPower (battery), BlueZ (bt) — D-Bus surface per plan §3.3.
+  → Interface + `FakeSystemServices` were M1.5; M3.1 adds `system/DbusSystemServices.{h,cpp}` — the
+  real backend over the system bus via GDBus (linked gio-2.0, no new dep). battery = UPower
+  DisplayDevice Percentage/State/IsPresent; wifi = NM WirelessEnabled + PrimaryConnection→Active.Id
+  (ssid) → SpecificObject→AP.Strength (0–4 bars); bluetooth = BlueZ ObjectManager scan for any
+  Adapter1.Powered / Device1.Connected; `setWifiEnabled`/`setBluetoothPowered` write back;
+  airplane = wireless-off heuristic. Brightness/volume/power/dnd/dark/nightlight stubbed (wired at
+  M3.2/M5). Null/failure-tolerant (runs on a bare session). **Verified LIVE** (`--probe-services`:
+  system bus connected; battery/wifi/bt all read real values — see Verification note); `--self-test`
+  stays daemon-free (fakes).
 - [ ] **M3.2** Status bar surface (plan §2.3): height 24, clock (locale 12/24h), battery glyph+percent,
   wifi glyph, bt/dnd/airplane conditional icons; tint modes (wallpaper vs surface).
 - [ ] **M3.3** Shade-trigger hit bands (left/right top-edge) emit `ShellState.shadeDrag`. Exclusive zone.
@@ -336,6 +345,13 @@ from recents · 13 split two windows + drag divider · 14 all transitions animat
 Record any decision that departs from the plan, or resolves an open item, here (newest first) so a
 future session on another machine doesn't re-litigate it. Format: `YYYY-MM-DD — decision — why`.
 
+- 2026-07-24 — M3.1: real system backend uses **GDBus** (`g_dbus_connection_call_sync` Properties.Get
+  + ObjectManager) rather than adding libnm/libupower/libbluetooth — no new dependency (gio-2.0 comes
+  with GTK). Reads are synchronous per-poll Gets (the shell polls on a timer, not per frame). Airplane
+  mode is approximated as wireless-off (full rfkill/WWAN deferred to M5). Brightness=logind and
+  volume=PipeWire are stubbed until their consumers (M3.2 status bar doesn't need them; M5 QS does).
+  A live D-Bus smoke check lives in `--probe-services`, kept OUT of `--self-test` so that stays
+  daemon-free for CI.
 - 2026-07-24 — M2.3: the generated icon header (`GeneratedIcons.h`) lives in the **build dir**
   (`build/launcher/android-shell/gen/theme/icons/`), NOT committed — the committed source of truth is
   the SVGs (`assets/icons-src/`) + the codegen script; a CMake `add_custom_command` regenerates it.
@@ -403,6 +419,13 @@ What has actually been run vs. only written. Keep this truthful — a `[!]` in t
   `--self-test` `input: ok`), incl. the touch flag carrying through. **NOT verified:** the GDK-event
   translation layer (`onButton`/`onMotion`, `gdk_device_get_source` touch detection) — needs real
   GDK events from a display/compositor.
+- M3.1: `DbusSystemServices` is **live-verified** on the system bus (`--probe-services`: bus
+  connected; battery/wifi/bt all round-trip real values). This box happens to have **no battery**
+  (UPower IsPresent=false → percent 0) and is **Ethernet-only** (NM PrimaryConnection is wired →
+  wifi ssid="Wired connection 1", 0 bars, no AP), so the **battery-percent>0 and wifi-strength-bars
+  value paths were not exercised by real hardware here** — the code + D-Bus calls are in place and
+  succeed; those specific values will show on a device with a battery / Wi-Fi (or a VM at L4). The
+  stubbed methods (brightness/volume/power/dnd/dark/nightlight) are NOT wired yet (M3.2/M5).
 - M2.5: sample-sheet renders correctly for both schemes (L1, eyeballed) — colours/radii/icons/masks
   final. **The committed golden PNGs (`tests/golden/`) bake DejaVu Sans, not Roboto** (fonts
   unvendored) — text letterforms are provisional. **Regenerate `tests/update-goldens.sh` after
