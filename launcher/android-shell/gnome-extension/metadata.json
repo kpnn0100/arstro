@@ -1,0 +1,9 @@
+{
+  "uuid": "android-shell@arstro",
+  "name": "Arstro Android Shell",
+  "description": "Companion extension for the Arstro Android-theme shell on GNOME: hosts the shell's layer surfaces via Meta.WaylandClient, exposes org.arstro.AndroidShell.Compositor for window management, hides the stock top bar/dash, and mirrors notifications to the shell.",
+  "shell-version": ["46", "47", "48", "49"],
+  "url": "https://github.com/kpnn0100/arstro",
+  "settings-schema": "org.gnome.shell.extensions.android-shell",
+  "session-modes": ["user"]
+}

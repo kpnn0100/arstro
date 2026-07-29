@@ -41,7 +41,7 @@ Artboard: `feature/1.0.0` e9c64e4.
 | M5 | Quick settings | code-complete (panel/sliders/tiles/morph; pagination v2) | shared |
 | M6 | Launcher (home + drawer + folders) | code-complete (folders/drag-rearrange + real icon pixmaps deferred) | shared |
 | M7 | Gestures + recents + split — **Plasma/KWin bridge** | UI done (L1); KWin bridge/gestures code-complete, L2 UNVERIFIED | Plasma |
-| M8 | **GNOME track** (extension bridge, parity, degraded mode) | not started | GNOME |
+| M8 | **GNOME track** (extension bridge, parity, degraded mode) | code-complete; L3/L4 UNVERIFIED (no gnome-shell here) | GNOME |
 | M9 | Sessions + packaging (deb + rpm, both desktops) | not started | both |
 
 "shared" milestones (M1–M6) are desktop-agnostic (they run against `NullBridge` + fake services,
@@ -299,14 +299,14 @@ arrow goldens @ protrusion 0/50/100%; home/overview/quick-switch thresholds hono
 passes on nested `gnome-shell --nested --wayland` (L3) within its input limits, and fully in a GNOME VM
 (L4); extension passes `gnome-extensions pack` lint. **Test:** L3 + L4.
 
-- [ ] **M8.1** `gnome-extension/` (ESM, GNOME 46–49): host our shell client via `Meta.WaylandClient`,
+- [!] **M8.1** `gnome-extension/` (ESM, GNOME 46–49): host our shell client via `Meta.WaylandClient`,
   pin surfaces at their §3.1 geometry, keep-above overlays.
-- [ ] **M8.2** `GnomeBridge` D-Bus parity — same `org.arstro.AndroidShell.Compositor` API via
+- [!] **M8.2** `GnomeBridge` D-Bus parity — same `org.arstro.AndroidShell.Compositor` API via
   `Meta.Window`/`global.display` (list/activate/close/tile, maximize-on-map).
-- [ ] **M8.3** Hide stock chrome (panel/dash/hot-corner), restore on disable.
-- [ ] **M8.4** Notification mirror: `Main.messageTray` sources → our D-Bus → same `NotificationStore` (M4).
-- [ ] **M8.5** Degraded GNOME mode (plan §3.2.2) implemented + documented (for when WaylandClient breaks).
-- [ ] **M8.6** L3 nested-gnome smoke + L4 GNOME VM full run; `gnome-extensions pack` lint clean.
+- [!] **M8.3** Hide stock chrome (panel/dash/hot-corner), restore on disable.
+- [!] **M8.4** Notification mirror: `Main.messageTray` sources → our D-Bus → same `NotificationStore` (M4).
+- [!] **M8.5** Degraded GNOME mode (plan §3.2.2) implemented + documented (for when WaylandClient breaks).
+- [!] **M8.6** L3 nested-gnome smoke + L4 GNOME VM full run; `gnome-extensions pack` lint clean.
 
 ## M9 — Sessions + packaging  (plan §7)
 
