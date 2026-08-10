@@ -9,6 +9,17 @@
 # live here and are compiled straight in (decode/ is in its own subfolder).
 # Paths are relative to this dir (cosmo/core), so the shared libs are two levels up.
 
+# pkg-config itself (not just gtk+-3.0) is optional here: on native Windows (no
+# MSYS2) there simply is no pkg-config, and cosmo — a GTK3-only native GUI, see
+# cosmo/CMakeLists.txt — can't be built there, so this (and the `cosmo` app that
+# depends on it) is skipped gracefully instead of hard-failing the whole tree's
+# configure. Once pkg-config IS present (Linux, or Windows via MSYS2) gtk+-3.0
+# stays REQUIRED as before, so a genuinely missing dev package still fails loudly.
+find_package(PkgConfig)
+if(NOT PkgConfig_FOUND)
+  message(STATUS "cosmo_core: skipped (no pkg-config — needed for GTK3; on Windows install MSYS2, or pass -DARSTRO_BUILD_COSMO=OFF)")
+else()
+
 file(GLOB COSMO_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 add_library(cosmo_core STATIC
@@ -22,7 +33,6 @@ target_include_directories(cosmo_core
 target_link_libraries(cosmo_core PUBLIC arstro_image)
 
 # ── GdkPixbuf (via GTK3) for JPEG/PNG/TIFF decode in NativeImageDecoder ──
-find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
 target_link_libraries(cosmo_core PRIVATE PkgConfig::GTK3)
 
@@ -46,3 +56,5 @@ endif()
 add_executable(cosmo_core_tests tests/sessionTests.cpp)
 target_link_libraries(cosmo_core_tests PRIVATE cosmo_core)
 add_test(NAME cosmo_core COMMAND cosmo_core_tests)
+
+endif()  # PkgConfig_FOUND

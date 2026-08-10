@@ -58,6 +58,15 @@ endif()
 # arstro-android-shell: the Android-theme touch shell (launcher, status bar, quick
 # settings, notifications, gesture nav) for GNOME/Plasma. Depends only on artboard_core
 # + GTK3/Cairo. See launcher/docs/android-theme-plan.md and android-theme-progress.md.
+# It's a Linux desktop shell by nature (GNOME Shell/KWin bridges, D-Bus system
+# services, systemd unit, .deb/.rpm packaging) — nothing here has a Windows
+# equivalent, so it's skipped outright on other hosts rather than attempted and
+# failing partway through (unlike cosmo, which genuinely can build on Windows
+# via MSYS2 and so degrades per-dependency instead — see cosmo/core/CMakeLists.txt).
 if(ARSTRO_BUILD_ANDROID_SHELL)
-  add_subdirectory(launcher/android-shell)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_subdirectory(launcher/android-shell)
+  else()
+    message(STATUS "arstro-android-shell: skipped (Linux-only GNOME/Plasma desktop shell; host is ${CMAKE_SYSTEM_NAME})")
+  endif()
 endif()

@@ -1,5 +1,5 @@
 #include "GlComputeBackend.h"
-#ifdef ARSTRO_GL_COMPUTE
+#if defined(ARSTRO_GL_COMPUTE) && !defined(_WIN32)
 
 #include "../analysis/Histogram.h"
 #include "../base/ColorSpace.h"
@@ -256,4 +256,4 @@ namespace
     }
 }  // namespace arstro
 
-#endif  // ARSTRO_GL_COMPUTE
+#endif  // ARSTRO_GL_COMPUTE && !_WIN32

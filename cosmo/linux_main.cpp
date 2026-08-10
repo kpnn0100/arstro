@@ -12,7 +12,11 @@
 #include <fontconfig/fontconfig.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -96,6 +100,15 @@ namespace
     {
         return s.size() >= suf.size() && s.compare(s.size() - suf.size(), suf.size(), suf) == 0;
     }
+    // Case-insensitive suffix check, for sniffing a user-typed export extension
+    // (".PNG"/".png"/".Jpg" should all be recognized the same way).
+    bool endsWithCI(const std::string &s, const std::string &suf)
+    {
+        if (s.size() < suf.size()) return false;
+        return std::equal(suf.rbegin(), suf.rend(), s.rbegin(), [](char a, char b) {
+            return std::tolower((unsigned char)a) == std::tolower((unsigned char)b);
+        });
+    }
 
     // Box-average downscale of a decoded cover to a small thumbnail (long edge <=
     // maxEdge). Used for both the home cards and the loading-screen centre image, so
@@ -128,11 +141,17 @@ namespace
     std::string exeDir()
     {
         char buf[4096];
+#ifdef _WIN32
+        DWORD n = GetModuleFileNameA(nullptr, buf, sizeof(buf) - 1);
+        if (n == 0 || n >= sizeof(buf) - 1) return ".";
+        buf[n] = '\0';
+#else
         ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
         if (n <= 0) return ".";
         buf[n] = '\0';
+#endif
         std::string exe(buf);
-        auto s = exe.find_last_of('/');
+        auto s = exe.find_last_of("/\\");  // Windows paths use '\\'
         return s == std::string::npos ? std::string(".") : exe.substr(0, s);
     }
 
@@ -684,6 +703,12 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    // File -> Export... (and the bare 's' shortcut): renders the CURRENT
+    // selection at full resolution with its edits baked in (App::exportFullRes)
+    // and writes it out as PNG or JPEG, chosen by the extension of the typed/
+    // picked filename (defaulting to PNG when neither is recognized). JPEG has
+    // no alpha channel, so that path packs a tight RGB copy for GdkPixbuf's saver
+    // rather than handing it the RGBA buffer PNG uses directly.
     void saveDialog(Host *a)
     {
         if (a->app.imageCount() == 0)
@@ -693,22 +718,61 @@ namespace
             "_Cancel", GTK_RESPONSE_CANCEL, "_Export", GTK_RESPONSE_ACCEPT, nullptr);
         gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
         gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "cosmo_export.png");
+
+        GtkFileFilter *pngFilter = gtk_file_filter_new();
+        gtk_file_filter_set_name(pngFilter, "PNG image (*.png)");
+        gtk_file_filter_add_pattern(pngFilter, "*.png");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), pngFilter);
+
+        GtkFileFilter *jpegFilter = gtk_file_filter_new();
+        gtk_file_filter_set_name(jpegFilter, "JPEG image (*.jpg, *.jpeg)");
+        gtk_file_filter_add_pattern(jpegFilter, "*.jpg");
+        gtk_file_filter_add_pattern(jpegFilter, "*.jpeg");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), jpegFilter);
+
+        gtk_file_chooser_set_filter(GTK_FILE_CHOOSER(d), pngFilter);
+
         if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
         {
-            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            char *rawPath = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            std::string path = rawPath;
+            g_free(rawPath);
+
+            const bool jpeg = endsWithCI(path, ".jpg") || endsWithCI(path, ".jpeg");
+            if (!jpeg && !endsWithCI(path, ".png"))
+                path += ".png";  // no recognized extension typed -> default to PNG
+
             int w = 0, h = 0;
             const uint8_t *px = a->app.exportFullRes(w, h);
             if (px && w > 0 && h > 0)
             {
-                GdkPixbuf *pb = gdk_pixbuf_new_from_data(px, GDK_COLORSPACE_RGB, TRUE, 8, w, h,
-                                                         w * 4, nullptr, nullptr);
                 GError *err = nullptr;
-                gdk_pixbuf_savev(pb, path, "png", nullptr, nullptr, &err);
+                if (jpeg)
+                {
+                    std::vector<uint8_t> rgb((size_t)w * h * 3);
+                    for (size_t i = 0, n = (size_t)w * h; i < n; ++i)
+                    {
+                        rgb[i * 3 + 0] = px[i * 4 + 0];
+                        rgb[i * 3 + 1] = px[i * 4 + 1];
+                        rgb[i * 3 + 2] = px[i * 4 + 2];
+                    }
+                    GdkPixbuf *pb = gdk_pixbuf_new_from_data(rgb.data(), GDK_COLORSPACE_RGB, FALSE, 8,
+                                                             w, h, w * 3, nullptr, nullptr);
+                    gchar *optKeys[] = {const_cast<gchar *>("quality"), nullptr};
+                    gchar *optVals[] = {const_cast<gchar *>("92"), nullptr};
+                    gdk_pixbuf_savev(pb, path.c_str(), "jpeg", optKeys, optVals, &err);
+                    g_object_unref(pb);
+                }
+                else
+                {
+                    GdkPixbuf *pb = gdk_pixbuf_new_from_data(px, GDK_COLORSPACE_RGB, TRUE, 8, w, h,
+                                                             w * 4, nullptr, nullptr);
+                    gdk_pixbuf_savev(pb, path.c_str(), "png", nullptr, nullptr, &err);
+                    g_object_unref(pb);
+                }
                 if (err) { g_printerr("cosmo_v2: export failed: %s\n", err->message); g_error_free(err); }
-                else g_print("cosmo_v2: exported %s (%dx%d)\n", path, w, h);
-                g_object_unref(pb);
+                else g_print("cosmo_v2: exported %s (%dx%d)\n", path.c_str(), w, h);
             }
-            g_free(path);
         }
         gtk_widget_destroy(d);
     }
@@ -861,6 +925,7 @@ int main(int argc, char **argv)
 
     host.app.onOpenRequested = [&host] { openDialog(&host); };
     host.app.onSaveAsRequested = [&host] { saveSessionDialog(&host); };
+    host.app.onExportRequested = [&host] { saveDialog(&host); };
     host.app.onSavePresetRequested = [&host] { savePresetDialog(&host); };
     host.app.onExportPresetRequested = [&host] { exportPresetDialog(&host); };
     host.app.onImportPresetRequested = [&host] { importPresetDialog(&host); };

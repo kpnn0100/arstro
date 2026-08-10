@@ -90,6 +90,7 @@ namespace cosmo_v2
         std::function<void()> onOpenRequested;
         std::function<void()> onSaveRequested;
         std::function<void()> onSaveAsRequested;
+        std::function<void()> onExportRequested;   // host: PNG/JPG export dialog -> exportFullRes
         std::function<void()> onSavePresetRequested;
         std::function<void()> onExportPresetRequested;
         std::function<void()> onImportPresetRequested;

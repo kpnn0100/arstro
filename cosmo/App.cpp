@@ -286,6 +286,7 @@ namespace cosmo_v2
             {"Open...",                  [this] { if (onOpenRequested) onOpenRequested(); }},
             {"Save        (Ctrl+S)",     [this] { saveWorkspace(); }},
             {"Save As...  (Ctrl+Shift+S)", [this] { if (onSaveWorkspaceRequested) onSaveWorkspaceRequested(); }},
+            {"Export...",                [this] { if (onExportRequested) onExportRequested(); }},
         }});
         ms->addMenu({"Settings", {
             {"Engine Settings...", [this] { openSettingsDialog(); }},

@@ -47,6 +47,21 @@ cmake -S . -B build && cmake --build build
 (cd build && ctest --output-on-failure)
 ```
 
+Builds natively on Linux and Windows (MSVC or MinGW) — no code changes needed either
+way, `CMakeLists.txt` picks the right toolchain bits per OS:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+(cd build; ctest -C Release --output-on-failure)
+```
+
+The GPU compute backend (`ARSTRO_IMG_GL_COMPUTE`, on by default) accelerates
+exposure/contrast/white-balance point ops via OpenGL 4.3 compute shaders on both:
+surfaceless EGL on Linux, native WGL (`opengl32`, no extra install) on Windows. Any
+edit outside that ported subset — and any host with no GL 4.3 device — falls back to
+the CPU reference path automatically; nothing to configure.
+
 See [`docs/design.md`](docs/design.md) for the full design, the DSP→image mapping,
 and the processor roadmap.
 

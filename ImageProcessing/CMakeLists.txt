@@ -21,20 +21,33 @@ target_include_directories(arstro_image PUBLIC src)
 target_compile_definitions(arstro_image PUBLIC ARSTRO_ENABLE_THREADS)
 target_link_libraries(arstro_image PUBLIC Threads::Threads)
 
-# ── GPU compute backend (OpenGL 4.3 compute over surfaceless EGL) — R-GPU ──
-# Optional accelerator: PUBLIC so consumers (cosmo, image_tests) link EGL/GL and
+# ── GPU compute backend (OpenGL 4.3 compute over a headless context) — R-GPU ──
+# Optional accelerator: PUBLIC so consumers (cosmo, image_tests) link the GL libs and
 # see the ARSTRO_GL_COMPUTE define. The CPU pipeline stays the reference + the
-# guaranteed fallback. Skipped (CPU-only) when EGL/GL are not found (e.g. web).
+# guaranteed fallback. `createGlComputeAccelerator()` has one implementation per OS
+# (src/compute/GlComputeBackend.cpp on Linux over surfaceless EGL, src/compute/
+# WglComputeBackend.cpp on Windows over WGL/a hidden window — see GlComputeBackend.h);
+# both are picked up by the src/*.cpp glob above and self-guard on ARSTRO_GL_COMPUTE
+# plus the OS, so only the right one compiles. Skipped (CPU-only) when the platform's
+# GL libs aren't found (e.g. the web build, or a Linux box without EGL/GL dev libs).
 option(ARSTRO_IMG_GL_COMPUTE "Build the OpenGL compute GPU backend" ON)
 if(ARSTRO_IMG_GL_COMPUTE)
-  find_library(ARSTRO_EGL_LIB EGL)
-  find_library(ARSTRO_GL_LIB GL)
-  if(ARSTRO_EGL_LIB AND ARSTRO_GL_LIB)
+  if(WIN32)
+    # Windows ships OpenGL natively (opengl32 + the vendor ICD via WGL) — no EGL
+    # needed and nothing extra to install; this is always available to find.
     target_compile_definitions(arstro_image PUBLIC ARSTRO_GL_COMPUTE)
-    target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${ARSTRO_GL_LIB})
-    message(STATUS "arstro_image: GPU compute backend ENABLED (OpenGL ${ARSTRO_GL_LIB})")
+    target_link_libraries(arstro_image PUBLIC opengl32 gdi32 user32)
+    message(STATUS "arstro_image: GPU compute backend ENABLED (OpenGL via WGL)")
   else()
-    message(STATUS "arstro_image: GPU compute backend disabled (EGL/GL not found) — CPU only")
+    find_library(ARSTRO_EGL_LIB EGL)
+    find_library(ARSTRO_GL_LIB GL)
+    if(ARSTRO_EGL_LIB AND ARSTRO_GL_LIB)
+      target_compile_definitions(arstro_image PUBLIC ARSTRO_GL_COMPUTE)
+      target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${ARSTRO_GL_LIB})
+      message(STATUS "arstro_image: GPU compute backend ENABLED (OpenGL ${ARSTRO_GL_LIB})")
+    else()
+      message(STATUS "arstro_image: GPU compute backend disabled (EGL/GL not found) — CPU only")
+    endif()
   endif()
 endif()
 
@@ -42,9 +55,10 @@ endif()
 # The Android sibling of the desktop GL backend. Default OFF (desktop uses GL). The
 # host unit-test build turns it ON as well (-DARSTRO_IMG_GLES_COMPUTE=ON) so the
 # GLES-vs-CPU test can exercise it against Mesa GLES; the factory prefers desktop GL when
-# both are built, and the test injects the GLES backend directly.
+# both are built, and the test injects the GLES backend directly. EGL/GLESv2 are a
+# Linux/Android thing (Windows has no stock EGL), so this is skipped outright on WIN32.
 option(ARSTRO_IMG_GLES_COMPUTE "Build the OpenGL ES 3.1 compute GPU backend" OFF)
-if(ARSTRO_IMG_GLES_COMPUTE)
+if(ARSTRO_IMG_GLES_COMPUTE AND NOT WIN32)
   find_library(ARSTRO_EGL_LIB EGL)
   find_library(ARSTRO_GLES_LIB GLESv2)   # Mesa's libGLESv2 exports ES 3.1 entry points
   if(ARSTRO_EGL_LIB AND ARSTRO_GLES_LIB)
@@ -54,6 +68,8 @@ if(ARSTRO_IMG_GLES_COMPUTE)
   else()
     message(STATUS "arstro_image: GLES compute backend disabled (EGL/GLESv2 not found)")
   endif()
+elseif(ARSTRO_IMG_GLES_COMPUTE)
+  message(STATUS "arstro_image: GLES compute backend disabled (Windows has no EGL)")
 endif()
 
 # ── Unit tests (dependency-free MiniTest harness) ──

@@ -5,6 +5,11 @@ namespace arstro
 {
     namespace
     {
+        // <cmath> doesn't guarantee M_PI (MSVC only defines it when _USE_MATH_DEFINES
+        // is set before the first include of <cmath>/<math.h>, which is order-fragile
+        // across translation units) — define it locally instead.
+        constexpr double kPi = 3.14159265358979323846;
+
         // k clockwise 90-degree turns of `in` into `out` (lossless index remap).
         void quarterTurn(const Image &in, Image &out, int k)
         {
@@ -42,7 +47,7 @@ namespace arstro
         Image turned;
         quarterTurn(in, turned, (int)(getProperty(quarterTurnsID) + (Pixel)0.5));
 
-        const double angle = (double)getProperty(angleID) * M_PI / 180.0;
+        const double angle = (double)getProperty(angleID) * kPi / 180.0;
         if (std::fabs(angle) < 1e-9)
         {
             out = std::move(turned);

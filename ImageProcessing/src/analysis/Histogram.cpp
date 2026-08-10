@@ -1,8 +1,11 @@
 #include "Histogram.h"
 #include "../base/ColorSpace.h"
 #include "../base/Parallel.h"
+#include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <utility>
+#include <vector>
 
 namespace arstro
 {
@@ -77,7 +80,16 @@ namespace arstro
         if (ch < 3 || image.empty()) return hh;
         const size_t px = image.pixelCount();
         const Pixel *d = image.data();
+
+        // Merge order matters here (unlike compute() above): bins are float sums,
+        // and float addition is not associative, so folding chunks in whatever order
+        // their threads happen to finish would make the result depend on scheduling
+        // — the same render could produce slightly different bins from one call to
+        // the next. Each chunk's partial result is tagged with its start offset and
+        // reduced into `hh` in a fixed (start-offset) order after every thread has
+        // joined, so the result is reproducible regardless of thread timing.
         std::mutex mtx;
+        std::vector<std::pair<int, HueHistogram>> parts;
         par::parallelFor((int)px, [&](int i0, int i1) {
             HueHistogram loc;
             for (int i = i0; i < i1; ++i)
@@ -91,8 +103,12 @@ namespace arstro
                 loc.bins[bin] += (float)s;                    // weight by saturation
             }
             std::lock_guard<std::mutex> lk(mtx);
-            for (int b = 0; b < HueHistogram::kBins; ++b) hh.bins[b] += loc.bins[b];
+            parts.emplace_back(i0, loc);
         });
+        std::sort(parts.begin(), parts.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+        for (const auto &part : parts)
+            for (int b = 0; b < HueHistogram::kBins; ++b) hh.bins[b] += part.second.bins[b];
+
         float mx = 1e-6f;
         for (float v : hh.bins) if (v > mx) mx = v;
         for (float &v : hh.bins) v /= mx;                 // normalise peak to 1

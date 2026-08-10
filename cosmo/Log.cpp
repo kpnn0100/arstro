@@ -8,9 +8,14 @@
 #include <mutex>
 #include <vector>
 
-#include <execinfo.h>
 #include <signal.h>
+#ifdef _WIN32
+#include <io.h>       // _write
+#include <process.h>  // _getpid
+#else
+#include <execinfo.h>
 #include <unistd.h>
+#endif
 
 namespace arstro
 {
@@ -44,7 +49,11 @@ namespace log
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
             struct tm tmv;
+#ifdef _WIN32
+            localtime_s(&tmv, &ts.tv_sec);  // MSVC/MinGW-ucrt param order: (dest, source)
+#else
             localtime_r(&ts.tv_sec, &tmv);
+#endif
             char base[20];
             strftime(base, sizeof base, "%Y-%m-%d %H:%M:%S", &tmv);
             snprintf(buf, n, "%s.%03ld", base, ts.tv_nsec / 1000000);
@@ -53,20 +62,50 @@ namespace log
         // Signal-handler-safe: write() only, no malloc/printf.
         void safeWrite(int fd, const char *s)
         {
+#ifdef _WIN32
+            if (fd >= 0) { int r = _write(fd, s, (unsigned)std::strlen(s)); (void)r; }
+#else
             if (fd >= 0) { ssize_t r = ::write(fd, s, std::strlen(s)); (void)r; }
+#endif
         }
 
         volatile sig_atomic_t gInCrash = 0;
+
+        // strsignal() isn't available on Windows/MinGW; name only the signals
+        // installCrashHandler() actually installs below.
+#ifdef _WIN32
+        const char *signalName(int sig)
+        {
+            switch (sig)
+            {
+            case SIGSEGV: return "SIGSEGV";
+            case SIGABRT: return "SIGABRT";
+            case SIGFPE:  return "SIGFPE";
+            case SIGILL:  return "SIGILL";
+            default:      return nullptr;
+            }
+        }
+#endif
 
         void crashHandler(int sig)
         {
             if (gInCrash) _exit(128 + sig);  // re-entrancy guard
             gInCrash = 1;
 
+#ifdef _WIN32
+            const char *name = signalName(sig);
+#else
             const char *name = strsignal(sig);
+#endif
             const char *hdr = "\n==== cosmo_v2 FATAL SIGNAL ";
             safeWrite(gFd, hdr); safeWrite(2, hdr);
             safeWrite(gFd, name ? name : "signal"); safeWrite(2, name ? name : "signal");
+#ifdef _WIN32
+            // No POSIX backtrace()/execinfo.h on Windows; a real symbolized stack
+            // (CaptureStackBackTrace + DbgHelp) needs a dependency this file doesn't
+            // otherwise have, so just note the signal and skip the frame dump.
+            safeWrite(gFd, " ====\n"); safeWrite(2, " ====\n");
+#else
             safeWrite(gFd, " — backtrace ====\n"); safeWrite(2, " — backtrace ====\n");
 
             void *frames[64];
@@ -74,6 +113,7 @@ namespace log
             if (gFd >= 0) backtrace_symbols_fd(frames, n, gFd);
             backtrace_symbols_fd(frames, n, 2);
             safeWrite(gFd, "==== end backtrace ====\n");
+#endif
 
             // Re-raise with the default handler so the OS still cores/exits normally.
             signal(sig, SIG_DFL);
@@ -97,7 +137,12 @@ namespace log
 
         char ts[40];
         timestamp(ts, sizeof ts);
-        std::fprintf(gFile, "\n===== cosmo_v2 session start %s (pid %ld) =====\n", ts, (long)getpid());
+#ifdef _WIN32
+        const long pid = (long)_getpid();
+#else
+        const long pid = (long)getpid();
+#endif
+        std::fprintf(gFile, "\n===== cosmo_v2 session start %s (pid %ld) =====\n", ts, pid);
         std::fflush(gFile);
     }
 
@@ -135,7 +180,12 @@ namespace log
 
     void installCrashHandler()
     {
+        // SIGBUS is a POSIX bus-error signal with no Windows equivalent.
+#ifdef _WIN32
+        for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGILL})
+#else
         for (int sig : {SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL})
+#endif
             signal(sig, crashHandler);
     }
 }
