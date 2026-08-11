@@ -395,6 +395,118 @@ namespace
         for (size_t i = 1; i < slots.size(); ++i)
             check(slots[i - 1] < slots[i], "slots come back in tree (pre-order) order");
     }
+
+    // ── ExportDialog: drag (R-EXPORT-8) and the export beats (R-EXPORT-6) ───────
+
+    void feedDialog(std::shared_ptr<ExportDialog> d, Gesture::Type type, double x, double y)
+    {
+        Gesture g; g.type = type; g.pos = Point{x, y}; g.start = Point{x, y};
+        d->onGesture(g);
+    }
+    void tickDialog(std::shared_ptr<ExportDialog> d, int frames, double &now)
+    {
+        std::shared_ptr<artboard::Segment> seg = d;
+        for (int i = 0; i < frames; ++i) { seg->advance(now); now += 16.0; }
+    }
+
+    /** Press the real Export button through the gesture path. Its y depends on the card
+     *  height, so sweep UPWARD from the bottom of the window — the footer is the card's
+     *  lowest band, so the first click that lands inside it is the button. A miss lands
+     *  outside and closes the dialog, so rebuild and carry on. */
+    void pressExport(std::shared_ptr<ExportDialog> &d, double &now)
+    {
+        const double bx = (1280.0 + 560.0) * 0.5 - 80.0;
+        for (double y = 798.0; y > 400.0; y -= 2.0)
+        {
+            feedDialog(d, Gesture::Type::Click, bx, y);
+            if (d->isExporting()) return;
+            if (!d->isOpen()) { d = makeTree(); tickDialog(d, 30, now); }
+        }
+    }
+
+    void exportDragMovesTheCard()
+    {
+        double now = 0.0;
+        auto d = makeTree();
+        tickDialog(d, 30, now);
+        // The window centre starts INSIDE the card, so clicking there does not dismiss.
+        feedDialog(d, Gesture::Type::Click, 640.0, 400.0);
+        check(d->isOpen(), "a click inside the centred card does not close it");
+
+        // Drag the card far to the right by its header, then the same point is outside.
+        feedDialog(d, Gesture::Type::Down, 640.0, 30.0);   // header band
+        feedDialog(d, Gesture::Type::Move, 900.0, 30.0);
+        feedDialog(d, Gesture::Type::Up,   900.0, 30.0);
+        feedDialog(d, Gesture::Type::Click, 900.0, 30.0);  // the click a drag ends with
+        check(d->isOpen(), "the click that terminates a drag is swallowed, not acted on");
+        tickDialog(d, 4, now);
+        feedDialog(d, Gesture::Type::Click, 400.0, 400.0);
+        check(!d->isOpen(), "after the drag, a point the card used to cover is outside it");
+    }
+
+    void exportDragIsClamped()
+    {
+        double now = 0.0;
+        auto d = makeTree();
+        tickDialog(d, 30, now);
+        // Fling it far past the window edge; the header must still be grabbable, which
+        // means a drag from the clamped position still works.
+        feedDialog(d, Gesture::Type::Down, 640.0, 30.0);
+        feedDialog(d, Gesture::Type::Move, 9000.0, 9000.0);
+        feedDialog(d, Gesture::Type::Up, 9000.0, 9000.0);
+        tickDialog(d, 4, now);
+        check(d->isOpen(), "a wild drag never dismisses the dialog");
+        // Grab the header at its clamped resting place and pull it back to centre.
+        feedDialog(d, Gesture::Type::Down, 1200.0, 780.0);
+        feedDialog(d, Gesture::Type::Move, 640.0, 30.0);
+        feedDialog(d, Gesture::Type::Up, 640.0, 30.0);
+        tickDialog(d, 4, now);
+        feedDialog(d, Gesture::Type::Click, 640.0, 400.0);
+        check(d->isOpen(), "the card can be dragged back into view after being flung");
+    }
+
+    void exportBeatsRunToCompletionAndClose()
+    {
+        double now = 0.0;
+        auto d = makeTree();
+        tickDialog(d, 30, now);
+        check(!d->isExporting(), "not exporting until the button is pressed");
+        pressExport(d, now);
+        check(d->isExporting(), "pressing Export enters the progress face");
+        tickDialog(d, 30, now);                     // let the collapse settle
+
+        // Partial progress keeps the dialog up and writing.
+        d->setExportProgress(2, 5, "river_02.jpg");
+        tickDialog(d, 20, now);
+        check(d->isOpen() && d->isExporting(), "mid-batch the dialog stays open");
+
+        // The last file switches to the confirmation, which holds before dismissing.
+        d->setExportProgress(5, 5, "");
+        tickDialog(d, 20, now);
+        check(d->isOpen(), "the confirmation is shown, not skipped");
+        tickDialog(d, 80, now);                     // > the ~950ms hold + the close fade
+        check(!d->isOpen(), "the dialog closes itself once the confirmation has been read");
+    }
+
+    void exportProgressIgnoresInputAndReopensClean()
+    {
+        double now = 0.0;
+        auto d = makeTree();
+        tickDialog(d, 30, now);
+        pressExport(d, now);
+        tickDialog(d, 30, now);
+        // Modal + non-cancellable: neither a click outside nor Escape abandons a batch.
+        feedDialog(d, Gesture::Type::Click, 20.0, 20.0);
+        check(d->isOpen(), "a click outside cannot abandon a running export");
+        artboard::KeyEvent esc; esc.type = artboard::KeyEvent::Type::Down; esc.keyCode = 27;
+        d->dispatchKey(esc);
+        check(d->isOpen(), "Escape cannot abandon a running export");
+
+        // Re-opening returns a clean, centred picker.
+        d->cancelExport();
+        tickDialog(d, 20, now);
+        check(!d->isExporting(), "cancelExport returns to the form");
+    }
 }
 
 int main()
@@ -420,6 +532,10 @@ int main()
     exportSelectingLastChildTicksParent();
     exportMasterToggleAndCollapse();
     exportSelectedSlotsAreInTreeOrder();
+    exportDragMovesTheCard();
+    exportDragIsClamped();
+    exportBeatsRunToCompletionAndClose();
+    exportProgressIgnoresInputAndReopensClean();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

@@ -51,6 +51,13 @@ namespace cosmo_v2
         inline artboard::Color muted() { return artboard::Color::hex(0x191919); }
         inline artboard::Color mutedForeground() { return artboard::Color::hex(0x636363); }
         inline artboard::Color destructive() { return artboard::Color::hex(0xE5534B); }
+        // The other semantic state colour alongside destructive (neither is "the accent",
+        // which stays reserved for interactive/selected state): a confirmation green for
+        // "this finished successfully" -- the export-complete tick and the per-file
+        // written wash (R-EXPORT-6).
+        inline artboard::Color success() { return artboard::Color::hex(0x3FB950); }
+        inline artboard::Color successAlpha(double a)
+        { return artboard::Color{0x3F / 255.0, 0xB9 / 255.0, 0x50 / 255.0, a}; }
         inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.072}; }  // rgba(255,255,255,.072)
         inline artboard::Color input() { return artboard::Color::hex(0x252525); }
         // Elegant light entry field (the inline group-rename box, DR-TREE-5): a deliberate

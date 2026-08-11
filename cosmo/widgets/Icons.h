@@ -2,8 +2,8 @@
  *  cosmo_v2 by arstro — small stroke-only line icons matching the glyphs used
  *  in the Figma export (lucide-react: ChevronRight, ChevronDown, PanelLeft,
  *  Save, Upload, Download, RefreshCw, Trash2, RotateCcw, FolderOpen, Image, X,
- *  Ban). Artboard has no icon library or SVG-path loader, so these are
- *  hand-drawn approximations of each
+ *  Ban, Check, CheckCircle). Artboard has no icon library or SVG-path loader,
+ *  so these are hand-drawn approximations of each
  *  glyph's silhouette using plain IRenderTarget path primitives -- not a HAL
  *  change, just composition (per the platform-independence rule's first
  *  preference: express new capability with existing primitives). At the
@@ -41,6 +41,10 @@ namespace icon
     void close(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.3);
     /** lucide Ban (circle + slash) — the "filter disabled" badge (R-BYPASS-4/5). */
     void ban(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
+    /** lucide Check — the per-file "written" tick in the export manifest (R-EXPORT-6). */
+    void check(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.6);
+    /** lucide CheckCircle — the export-complete confirmation (R-EXPORT-6 beat 3). */
+    void checkCircle(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.4);
 }
 }
 }

@@ -299,6 +299,39 @@ namespace icon
         t.lineTo(cx + d, cy + d);
         t.strokePath();
     }
+
+    void check(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        t.beginPath();
+        t.moveTo(f.x(0.18), f.y(0.52));
+        t.lineTo(f.x(0.42), f.y(0.76));
+        t.lineTo(f.x(0.84), f.y(0.26));
+        t.strokePath();
+    }
+
+    void checkCircle(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        const double cx = f.x(0.5), cy = f.y(0.5);
+        const double r = box.w * 0.42;
+        t.setStroke(c, strokeWidth);
+        t.beginPath();
+        t.moveTo(cx + r, cy);
+        t.quadTo(cx + r, cy + r, cx, cy + r);
+        t.quadTo(cx - r, cy + r, cx - r, cy);
+        t.quadTo(cx - r, cy - r, cx, cy - r);
+        t.quadTo(cx + r, cy - r, cx + r, cy);
+        t.closePath();
+        t.strokePath();
+        // The tick, inset so it sits comfortably inside the ring.
+        t.beginPath();
+        t.moveTo(cx - r * 0.46, cy + r * 0.04);
+        t.lineTo(cx - r * 0.10, cy + r * 0.42);
+        t.lineTo(cx + r * 0.50, cy - r * 0.38);
+        t.strokePath();
+    }
 }
 }
 }

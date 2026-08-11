@@ -26,7 +26,11 @@ namespace cosmo_v2
         constexpr double kHeaderH = 40.0;
         constexpr double kFooterH = 46.0;
         constexpr double kMargin = 24.0;      // min gap to the window edge
-        constexpr double kProgressBodyH = 96.0;  // body height in the progress state
+        constexpr double kCompleteBodyH = 92.0;  // body height once the batch is done
+        // Beat 3 lingers briefly on the tick so the confirmation is readable, then the
+        // dialog dismisses itself.
+        constexpr double kCompleteHoldMs = 950.0;
+        constexpr double kBarH = 4.0;
 
         // ── body rhythm (one type ramp, one spacing scale) ──
         constexpr double kSecH = 24.0;        // section-header band
@@ -131,6 +135,10 @@ namespace cosmo_v2
         mDraggingQuality = false;
         mExporting = false; mDone = mTotal = 0; mProgressName.clear();
         mPhase.set(0.0); mProgress.set(0.0);
+        mComplete = false; mCompleteAmt.set(0.0); mCompleteAtMs = 0.0;
+        mExportRows.clear(); mExportSeq.clear(); mRowFade.clear(); mRowFadeLastMs = -1.0;
+        mCardOffset = Point{0.0, 0.0};   // a fresh open is centred again (R-EXPORT-8)
+        mDraggingCard = false; mSuppressClick = false;
         for (int i = 0; i < 3; ++i) mMetaKnob[i].set(mMeta[i] ? 1.0 : 0.0);
         // R-EXPORT-3: default the explicit destination to the first selected image's
         // folder, so unticking "Same as source" lands somewhere sensible immediately.
@@ -165,14 +173,135 @@ namespace cosmo_v2
         mProgressName = name;
         mProgress.animateTo(mTotal > 0 ? (double)mDone / (double)mTotal : 0.0, 180.0,
                             Easing::EaseOutCubic, mLastMs);
-        if (mTotal > 0 && mDone >= mTotal) beginClose();  // batch finished -> dismiss
+        if (mTotal > 0 && mDone >= mTotal) beginComplete();   // beat 3, then auto-close
     }
 
     void ExportDialog::cancelExport()
     {
         if (!mExporting) return;
         mExporting = false;
+        mComplete = false;
+        mCompleteAmt.set(0.0);
         mPhase.animateTo(0.0, 200.0, Easing::EaseInOutCubic, mLastMs);
+    }
+
+    // ── R-EXPORT-6 beat 1: collapse the form into the progress card ──
+    void ExportDialog::beginExport()
+    {
+        mExporting = true;
+        mComplete = false;
+        mDone = 0;
+        mTotal = (int)checkedSlots().size();
+        mProgressName.clear();
+        mProgress.set(0.0);
+        mCompleteAmt.set(0.0);
+        mFocusField = -1;
+        mDraggingQuality = false;
+        mHover.clear();
+        buildExportRows();
+        // The manifest is a different list from the picker's, so start it at the top
+        // rather than inheriting the picker's scroll.
+        mTreeScroll.set(0.0); mTreeScrollTarget = 0.0;
+        mPhase.animateTo(1.0, 260.0, Easing::EaseInOutCubic, mLastMs);
+    }
+
+    // ── R-EXPORT-6 beat 3: the green tick, then dismiss ──
+    void ExportDialog::beginComplete()
+    {
+        if (mComplete) return;
+        mComplete = true;
+        mCompleteAtMs = mLastMs;
+        mCompleteAmt.animateTo(1.0, 260.0, Easing::EaseInOutCubic, mLastMs);
+    }
+
+    void ExportDialog::buildExportRows()
+    {
+        // Walk the FULL tree in pre-order and keep a node only if it is a selected image
+        // or an ancestor of one -- the manifest then reads as exactly what is being
+        // written, with the group structure that gives each file its context.
+        mExportRows.clear();
+        mExportSeq.clear();
+        int seq = 0;
+        std::function<void(int, int)> walk = [&](int node, int depth) {
+            if (mNodes[node].group)
+            {
+                std::vector<int> leaves;
+                collectLeaves(node, leaves);
+                bool any = false;
+                for (int l : leaves) if (mLeafChecked[l]) { any = true; break; }
+                if (!any) return;                       // nothing under here is being written
+                mExportRows.push_back({node, depth});
+                mExportSeq.push_back(-1);               // a group is not itself a file
+                for (int k : mKids[node]) walk(k, depth + 1);
+                return;
+            }
+            if (mNodes[node].slot < 0 || !mLeafChecked[node]) return;
+            mExportRows.push_back({node, depth});
+            mExportSeq.push_back(seq++);                // matches checkedSlots() order
+        };
+        for (int r : mRoots) walk(r, 0);
+        mRowFade.assign(mExportRows.size(), 0.0);
+        mRowFadeLastMs = -1.0;
+    }
+
+    void ExportDialog::advanceRowFades(double nowMs)
+    {
+        if (mRowFade.size() != mExportRows.size()) mRowFade.assign(mExportRows.size(), 0.0);
+        constexpr double kDurMs = 220.0;
+        const bool rm = artboard::reducedMotion();
+        const double dt = (mRowFadeLastMs < 0.0) ? 0.0 : (nowMs - mRowFadeLastMs);
+        const double step = rm ? 1.0 : std::min(1.0, std::max(0.0, dt / kDurMs));
+        mRowFadeLastMs = nowMs;
+        for (size_t i = 0; i < mRowFade.size(); ++i)
+        {
+            // A file row is "written" once the batch has passed it; a group row lights up
+            // only when every one of its own members has been written.
+            bool done = false;
+            if (mExportSeq[i] >= 0) done = mExportSeq[i] < mDone;
+            else
+            {
+                done = true;
+                for (size_t j = i + 1; j < mExportRows.size(); ++j)
+                {
+                    if (mExportRows[j].depth <= mExportRows[i].depth) break;   // left the subtree
+                    if (mExportSeq[j] >= 0 && mExportSeq[j] >= mDone) { done = false; break; }
+                }
+            }
+            const double tgt = done ? 1.0 : 0.0;
+            if (mRowFade[i] < tgt) mRowFade[i] = std::min(tgt, mRowFade[i] + step);
+            else if (mRowFade[i] > tgt) mRowFade[i] = std::max(tgt, mRowFade[i] - step);
+        }
+    }
+
+    void ExportDialog::followActiveRow()
+    {
+        // Keep the file currently being written inside the manifest's viewport, so a
+        // long batch doesn't leave the user staring at rows that finished minutes ago.
+        const Rect box = progressTreeRect();
+        const double view = box.h - 2.0;
+        const double contentH = mExportRows.size() * kTreeRowH;
+        if (view <= 0.0 || contentH <= view) return;
+        int active = -1;
+        for (size_t i = 0; i < mExportSeq.size(); ++i)
+            if (mExportSeq[i] == mDone) { active = (int)i; break; }
+        if (active < 0) active = (int)mExportRows.size() - 1;
+        const double top = active * kTreeRowH, bottom = top + kTreeRowH;
+        double target = mTreeScrollTarget;
+        if (top < target) target = top;
+        else if (bottom > target + view) target = bottom - view;
+        target = std::min(contentH - view, std::max(0.0, target));
+        if (std::fabs(target - mTreeScrollTarget) > 0.5)
+        {
+            mTreeScrollTarget = target;
+            mTreeScroll.animateTo(target, 220.0, Easing::EaseOutCubic, mLastMs);
+        }
+    }
+
+    double ExportDialog::rowDoneAmount(int i) const
+    {
+        if (i < 0 || i >= (int)mRowFade.size()) return 0.0;
+        const double t = mRowFade[i];
+        return t * t * (3.0 - 2.0 * t);   // smoothstep, matching HoverFade's ease
     }
 
     void ExportDialog::advance(double nowMs)
@@ -181,10 +310,23 @@ namespace cosmo_v2
         mAppear.update(nowMs);
         mPhase.update(nowMs);
         mProgress.update(nowMs);
+        mCompleteAmt.update(nowMs);
         mTreeScroll.update(nowMs);
         mBodyScroll.update(nowMs);
         for (auto &k : mMetaKnob) k.update(nowMs);
-        if (mClosing && !mAppear.isAnimating()) { mOpen = false; mClosing = false; mExporting = false; }
+
+        if (mExporting)
+        {
+            advanceRowFades(nowMs);
+            if (!mComplete) followActiveRow();
+            // Beat 3 holds on the tick just long enough to read, then dismisses itself.
+            else if (!mClosing && nowMs - mCompleteAtMs >= kCompleteHoldMs) beginClose();
+        }
+
+        if (mClosing && !mAppear.isAnimating())
+        {
+            mOpen = false; mClosing = false; mExporting = false; mComplete = false;
+        }
         if (!isOpen()) mHover.clear();
         mHover.advance(nowMs);
         Segment::advance(nowMs);
@@ -389,23 +531,74 @@ namespace cosmo_v2
 
     double ExportDialog::formContentH() const { return layoutForm(0.0).contentH; }
 
-    double ExportDialog::cardX() const { return std::max(4.0, (width.value() - kCardW) * 0.5); }
+    double ExportDialog::cardX() const
+    {
+        // R-EXPORT-8: centred, plus the drag offset, clamped so a good chunk of the
+        // header stays grabbable no matter how far it was flung.
+        constexpr double kKeepVisible = 120.0;
+        const double x = (width.value() - kCardW) * 0.5 + mCardOffset.x;
+        const double lo = std::min(4.0, width.value() - kKeepVisible);
+        const double hi = std::max(lo, width.value() - kKeepVisible);
+        return std::min(hi, std::max(lo - (kCardW - kKeepVisible), x));
+    }
+
+    double ExportDialog::progressTreeH() const
+    {
+        // The manifest sizes to its own rows (capped), which is what makes beat 1 a
+        // real shrink rather than a swap of equally tall panels.
+        const double rows = std::max(1.0, (double)mExportRows.size());
+        return std::min((double)kTreeRows, rows) * kTreeRowH + 2.0;
+    }
+
+    Rect ExportDialog::headerRect() const
+    {
+        const Rect c = cardRect();
+        return Rect{c.x, c.y, c.w, kHeaderH};
+    }
+
+    Rect ExportDialog::progressTreeRect() const
+    {
+        // The SAME box the form drew, tweened to the manifest's place and size: in the
+        // form the tree sits below the master button, in the progress face it sits
+        // directly under the section header, and it shrinks to the manifest's rows.
+        // Interpolating one box (rather than cross-fading two) is what keeps beat 1
+        // reading as the dialog shedding its controls instead of two lists overlapping.
+        const double p = mPhase.value();
+        const Rect b = bodyRect();
+        const double y = b.y + kSecH + (kBtnH + kGapM) * (1.0 - p);
+        const double h = kTreeH + (progressTreeH() - kTreeH) * p;
+        return Rect{cardX() + kPad, y, kCardW - 2.0 * kPad, h};
+    }
+
+    Rect ExportDialog::progressBarRect() const
+    {
+        const Rect tr = progressTreeRect();
+        return Rect{tr.x, tr.y + tr.h + 12.0, tr.w, kBarH};
+    }
 
     Rect ExportDialog::cardRect() const
     {
         const double formBody = formContentH();
         const double avail = std::max(120.0, height.value() - 2.0 * kMargin - kHeaderH - kFooterH);
-        // The form's viewport is the content height clamped to what the window can
-        // hold (R4: derived from mH, never a baked-in card height); the progress state
-        // collapses to a compact band, and the two cross-fade through mPhase (R-G-1).
-        const double bodyH = (1.0 - mPhase.value()) * std::min(formBody, avail) +
-                             mPhase.value() * std::min(kProgressBodyH, avail);
+        // Three body heights, tweened through in order (R-EXPORT-6): the form, the
+        // progress card (section header + manifest + bar + status line), then the
+        // compact confirmation. Each is clamped to what the window can hold (R4:
+        // derived from mH, never a baked-in card height).
+        const double progressBody = kSecH + progressTreeH() + 12.0 + kBarH + 8.0 + 14.0 + 8.0;
+        const double formH = (1.0 - mPhase.value()) * std::min(formBody, avail) +
+                             mPhase.value() * std::min(progressBody, avail);
+        const double bodyH = (1.0 - mCompleteAmt.value()) * formH +
+                             mCompleteAmt.value() * std::min(kCompleteBodyH, avail);
         const double h = kHeaderH + bodyH + kFooterH;
         // The card rises 8px into place as it fades in (R-G-1). Folding the offset in
         // HERE (rather than shifting only the paint) keeps layout, hit-testing and
         // drawing on one rect, so a click can never land where the card isn't drawn.
-        const double y = (height.value() - h) * 0.5 + (1.0 - mAppear.value()) * 8.0;
-        return Rect{cardX(), std::max(4.0, y), kCardW, h};
+        // R-EXPORT-8: the drag offset moves the card; y is clamped so the header band
+        // (the drag handle) can never be pushed off the top or bottom of the window.
+        const double y = (height.value() - h) * 0.5 + mCardOffset.y + (1.0 - mAppear.value()) * 8.0;
+        const double loY = 4.0;
+        const double hiY = std::max(loY, height.value() - kHeaderH - 4.0);
+        return Rect{cardX(), std::min(hiY, std::max(loY, y)), kCardW, h};
     }
 
     Rect ExportDialog::bodyRect() const
@@ -480,8 +673,19 @@ namespace cosmo_v2
 
     void ExportDialog::scrollBy(double delta, double x, double y)
     {
-        if (!isOpen() || mExporting) return;
+        if (!isOpen()) return;
         const Point p{x, y};
+        if (mExporting)
+        {
+            // Only the manifest scrolls in the progress face; there is no form behind it.
+            if (mComplete) return;
+            const Rect box = progressTreeRect();
+            if (!box.contains(p)) return;
+            const double maxScroll = std::max(0.0, mExportRows.size() * kTreeRowH - (box.h - 2.0));
+            mTreeScrollTarget = std::min(maxScroll, std::max(0.0, mTreeScrollTarget - delta * 3.0 * kTreeRowH));
+            mTreeScroll.animateTo(mTreeScrollTarget, 160.0, Easing::EaseOutCubic, mLastMs);
+            return;
+        }
         const Rect tree = treeRect();
         if (tree.contains(p))
         {
@@ -524,10 +728,43 @@ namespace cosmo_v2
         if (!mOpen || mClosing) return false;
         using T = Gesture::Type;
 
+        // ── R-EXPORT-8: drag the card by its header, in every state ──
+        // Handled before anything else so it works mid-export too, and so a drag that
+        // began on the header keeps receiving Move even once the pointer leaves it.
+        if (mDraggingCard)
+        {
+            if (g.type == T::Move || g.type == T::Drag || g.type == T::DragStart)
+            {
+                mCardOffset.x += local.x - mDragGrab.x;
+                mCardOffset.y += local.y - mDragGrab.y;
+                mDragGrab = local;
+                mSuppressClick = true;    // this gesture ends in a Click; it must not act
+                return true;
+            }
+            if (g.type == T::Up || g.type == T::Drop) { mDraggingCard = false; return true; }
+            if (g.type == T::Click || g.type == T::DoubleClick)
+            {
+                mDraggingCard = false; mSuppressClick = false;
+                return true;             // swallow the click the drag ended with
+            }
+        }
+        if (g.type == T::Down && headerRect().contains(local) && !closeRect().contains(local))
+        {
+            mDraggingCard = true;
+            mDragGrab = local;
+            mSuppressClick = false;
+            return true;
+        }
+        if (mSuppressClick && (g.type == T::Click || g.type == T::DoubleClick))
+        {
+            mSuppressClick = false;
+            return true;                 // the click that terminated a drag
+        }
+
         if (mExporting)
         {
             // Modal and non-cancellable while the batch is being written (R-EXPORT-6):
-            // swallow everything so nothing behind the card is touched.
+            // swallow everything else so nothing behind the card is touched.
             if (g.type == T::Move) mHover.clear();
             return true;
         }
@@ -559,12 +796,9 @@ namespace cosmo_v2
         if (exportRect().contains(local))
         {
             if (checkedCount() == 0) return true;    // disabled: nothing selected
-            mExporting = true;
-            mDone = 0; mTotal = (int)checkedSlots().size(); mProgressName.clear();
-            mProgress.set(0.0);
-            mFocusField = -1;
-            mPhase.animateTo(1.0, 220.0, Easing::EaseInOutCubic, mLastMs);
-            if (onExport) onExport(buildRequest());
+            const Request req = buildRequest();       // snapshot BEFORE the face changes
+            beginExport();
+            if (onExport) onExport(req);
             return true;
         }
         if (!bodyRect().contains(local)) return true;   // header/footer dead space
@@ -643,9 +877,14 @@ namespace cosmo_v2
         const double a = mAppear.value();
         if (!mOpen || a <= 0.001) return;
 
+        // Three faces, in order: the form, the progress card, the confirmation. Each
+        // fades as the next comes up, and the card height tweens between them, so the
+        // whole sequence is one continuous shrink (R-EXPORT-6).
         const double phase = mPhase.value();          // 0 = form, 1 = progress
-        const double formA = (1.0 - phase) * a;
-        const double progA = phase * a;
+        const double doneAmt = mCompleteAmt.value();  // 0 = writing, 1 = confirmation
+        const double formA = (1.0 - phase) * (1.0 - doneAmt) * a;
+        const double progA = phase * (1.0 - doneAmt) * a;
+        const double doneA = doneAmt * a;
 
         drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0,
                         Paint::filled(fade(Color{0, 0, 0, 0.6}, a)));
@@ -676,12 +915,13 @@ namespace cosmo_v2
         t.save();
         t.clipRect(body.x, body.y, body.w, body.h);
         if (formA > 0.004) drawForm(t, formA);
-        if (progA > 0.004) drawProgress(t, progA, body);
+        if (progA > 0.004) drawProgress(t, progA);
+        if (doneA > 0.004) drawComplete(t, doneA, body);
 
         // "More below" affordance: at a short window the body scrolls, and without a
         // hint the cut-off content reads as the end of the dialog. A short fade to the
         // card colour at each overflowing edge says otherwise (and the wheel scrolls it).
-        if (formA > 0.004)
+        if (formA > 0.004 && !mExporting)
         {
             const double maxScroll = std::max(0.0, formContentH() - body.h);
             const double sc = mBodyScroll.value();
@@ -807,11 +1047,12 @@ namespace cosmo_v2
 
     // ── the tree (R-EXPORT-2) ──────────────────────────────────────────────────
 
-    void ExportDialog::drawTree(IRenderTarget &t, double a, const Rect &box) const
+    void ExportDialog::drawTree(IRenderTarget &t, double a, const Rect &box,
+                                const std::vector<Row> &rows, double progress) const
     {
         drawRoundedRect(t, box, radius::control(),
                         Paint::filledStroked(fade(palette::background(), a), fade(palette::border(), a), 1.0));
-        if (mRows.empty())
+        if (rows.empty())
         {
             // Empty state: an open project with no images still has to say so.
             const std::string msg = "No images in this project";
@@ -824,31 +1065,52 @@ namespace cosmo_v2
         t.save();
         t.clipRect(box.x + 1.0, box.y + 1.0, box.w - 2.0, box.h - 2.0);
         const double scroll = mTreeScroll.value();
-        for (int i = 0; i < (int)mRows.size(); ++i)
+        // In the progress face the checkbox fades out and everything to its RIGHT slides
+        // left into the freed space, so the picker becomes a manifest without a jump.
+        // The indent and chevron keep their place: shifting those too would push a
+        // depth-0 chevron out through the box's left edge.
+        const double checkSlot = 13.0 + 7.0;
+        for (int i = 0; i < (int)rows.size(); ++i)
         {
             const double ry = box.y + 1.0 + i * kTreeRowH - scroll;
             if (ry + kTreeRowH < box.y || ry > box.y + box.h) continue;   // offscreen
-            const Row &row = mRows[i];
+            const Row &row = rows[i];
             const Node &n = mNodes[row.node];
             const int state = n.group ? checkState(row.node) : (mLeafChecked[row.node] ? 1 : 0);
 
-            const double hv = mHover.amount(kIdTree + i) * a;
+            const double hv = progress < 0.5 ? mHover.amount(kIdTree + i) * a * (1.0 - progress) : 0.0;
             if (hv > 0.001)
                 drawRoundedRect(t, Rect{box.x + 1.0, ry, box.w - 2.0, kTreeRowH}, 0.0,
                                 Paint::filled(palette::hoverWash(hv)));
+
+            // R-EXPORT-6 beat 2: a written row's background lights up (and the row being
+            // written right now carries the accent), eased in per row so nothing pops.
+            double doneAmt = 0.0;
+            if (progress > 0.004)
+            {
+                doneAmt = rowDoneAmount(i);
+                const bool active = mExportSeq[i] >= 0 && mExportSeq[i] == mDone && !mComplete;
+                const Rect rowRect{box.x + 1.0, ry, box.w - 2.0, kTreeRowH};
+                if (doneAmt > 0.004)
+                    drawRoundedRect(t, rowRect, 0.0, Paint::filled(palette::successAlpha(0.13 * doneAmt * a)));
+                else if (active)
+                    drawRoundedRect(t, rowRect, 0.0, Paint::filled(palette::primaryAlpha(0.14 * a * progress)));
+            }
 
             double x = box.x + 6.0 + row.depth * kIndent;
             if (n.group)   // chevron: its own hit slot, toggles expand/collapse
             {
                 const Rect chev{x, ry + (kTreeRowH - 10.0) * 0.5, 10.0, 10.0};
                 const Color cc = fade(palette::mutedForeground(), a);
-                if (mExpanded[row.node]) icon::chevronDown(t, chev, cc);
-                else                     icon::chevronRight(t, chev, cc);
+                const bool open = progress > 0.004 ? true : (bool)mExpanded[row.node];
+                if (open) icon::chevronDown(t, chev, cc);
+                else      icon::chevronRight(t, chev, cc);
             }
             x += kChevW + 2.0;
 
-            drawCheck(t, Rect{x, ry + (kTreeRowH - 13.0) * 0.5, 13.0, 13.0}, state, a);
-            x += 13.0 + 7.0;
+            if (progress < 0.996)
+                drawCheck(t, Rect{x, ry + (kTreeRowH - 13.0) * 0.5, 13.0, 13.0}, state, a * (1.0 - progress));
+            x += checkSlot * (1.0 - progress);   // the slot closes up as the box fades out
 
             const Color iconC = fade(palette::whiteAlpha(state ? 0.42 : 0.22), a);
             if (n.group) icon::folder(t, Rect{x, ry + (kTreeRowH - 11.0) * 0.5, 11.0, 11.0}, iconC, 1.1);
@@ -867,7 +1129,9 @@ namespace cosmo_v2
             constexpr double kCountRight = 14.0;   // clears the scroll thumb at box.w - 4
             const double suffixW = suffix.empty() ? 0.0 : estimateTextWidth(suffix, kSmallPx) + 10.0;
             const double nameW = box.x + box.w - kCountRight - suffixW - x;
-            t.setFill(fade(state ? palette::foreground() : palette::mutedForeground(), a));
+            const Color nameC = lerpColor(state ? palette::foreground() : palette::mutedForeground(),
+                                          palette::success(), doneAmt * 0.55);
+            t.setFill(fade(nameC, a));
             t.drawText(fitEnd(n.name, nameW, kFontPx), x, ry + kTreeRowH * 0.5 + 4.0, kFontPx,
                        n.group ? font::sansMedium() : font::sans());
             if (!suffix.empty())
@@ -876,11 +1140,14 @@ namespace cosmo_v2
                 t.drawText(suffix, box.x + box.w - kCountRight - estimateTextWidth(suffix, kSmallPx),
                            ry + kTreeRowH * 0.5 + 3.5, kSmallPx, font::mono());
             }
+            if (doneAmt > 0.004)   // the written tick, right-aligned in the same column
+                icon::check(t, Rect{box.x + box.w - kCountRight - 9.0, ry + (kTreeRowH - 9.0) * 0.5, 9.0, 9.0},
+                            palette::successAlpha(0.95 * doneAmt * a), 1.5);
         }
         t.restore();
 
         // Scroll thumb, only while the content actually overflows.
-        const double contentH = mRows.size() * kTreeRowH;
+        const double contentH = rows.size() * kTreeRowH;
         if (contentH > box.h - 2.0)
         {
             const double frac = (box.h - 2.0) / contentH;
@@ -899,13 +1166,21 @@ namespace cosmo_v2
         const Layout L = layoutForm(bodyTop());
         const double ix = cardX() + kPad, iw = kCardW - 2.0 * kPad;
 
-        // ── Images to Export ──
-        drawSectionHeader(t, ix, L.masterBtn.y - kSecH, iw, "IMAGES TO EXPORT", a);
+        // Only the section header and the tree survive the collapse (R-EXPORT-6 beat 1);
+        // everything below fades with `rest` while the card height tweens down.
         const int total = leafCount(), sel = checkedCount();
         const bool allOn = total > 0 && sel == total;
-        drawChip(t, L.masterBtn, allOn ? "Select none" : "Select all (" + std::to_string(total) + ")",
-                 allOn, a, mHover.amount(kIdMaster), kFontPx);
-        drawTree(t, a, L.tree);
+        // The master button is gone well before the tree slides up into its row, so the
+        // two never occupy the same pixels.
+        const double btnA = a * (1.0 - clamp01(mPhase.value() * 2.5));
+        if (btnA > 0.004)
+            drawChip(t, L.masterBtn, allOn ? "Select none" : "Select all (" + std::to_string(total) + ")",
+                     allOn, btnA, mHover.amount(kIdMaster), kFontPx);
+        if (!mExporting)   // once exporting, drawProgress owns the header + tree pair
+        {
+            drawSectionHeader(t, ix, L.masterBtn.y - kSecH, iw, "IMAGES TO EXPORT", a);
+            drawTree(t, a, L.tree, mRows, 0.0);
+        }
 
         {
             const std::string countTxt = std::to_string(sel);
@@ -1035,54 +1310,85 @@ namespace cosmo_v2
         }
     }
 
-    // ── the progress state (R-EXPORT-6) ────────────────────────────────────────
+    // ── the progress face (R-EXPORT-6 beats 2 & 3) ─────────────────────────────
 
-    void ExportDialog::drawProgress(IRenderTarget &t, double a, const Rect &body) const
+    void ExportDialog::drawProgress(IRenderTarget &t, double a) const
     {
-        const double bx = body.x + kPad, bw = body.w - 2.0 * kPad;
-        const double cy = body.y + body.h * 0.5;
+        const double ix = cardX() + kPad, iw = kCardW - 2.0 * kPad;
+        const Rect tree = progressTreeRect();
+        const double phase = mPhase.value();
 
-        const std::string head = "Exporting " + std::to_string(mTotal) +
-                                 (mTotal == 1 ? " photo…" : " photos…");
-        t.setFill(fade(palette::foreground(), a));
-        t.drawText(head, bx, cy - 18.0, 12.0, font::sansMedium());
+        // Beat 2 keeps the SAME two elements the form kept -- the section header and the
+        // tree. They are NOT faded by the phase (the form already stopped drawing them),
+        // so they simply survive the collapse; only the outer modal alpha applies, plus
+        // the completion fade the caller has already folded into `a`.
+        const double keepA = mAppear.value() * (1.0 - mCompleteAmt.value());
+        drawSectionHeader(t, ix, tree.y - kSecH, iw, "IMAGES TO EXPORT", keepA);
+        drawTree(t, keepA, tree, mExportRows, phase);
 
-        const std::string right = std::to_string(mDone) + " / " + std::to_string(mTotal);
-        t.setFill(fade(palette::mutedForeground(), a));
-        t.drawText(right, bx + bw - estimateTextWidth(right, kSmallPx), cy - 18.0, kSmallPx, font::mono());
-
-        // Determinate accent bar, eased toward the real fraction (never a jump).
-        const Rect bar{bx, cy - 1.0, bw, 4.0};
-        drawRoundedRect(t, bar, radius::pill(), Paint::filled(fade(palette::secondary(), a)));
+        // The determinate bar and its status line arrive only in the BACK HALF of the
+        // collapse, once the form's own content has faded: shed first, then reveal, so
+        // two different strings never share the same pixels mid-cross-fade.
+        const double revealA = a * clamp01((phase - 0.55) / 0.45);
+        if (revealA <= 0.004) return;
+        const Rect bar = progressBarRect();
+        drawRoundedRect(t, bar, radius::pill(), Paint::filled(fade(palette::secondary(), revealA)));
         drawRoundedRect(t, Rect{bar.x, bar.y, bar.w * clamp01(mProgress.value()), bar.h}, radius::pill(),
-                        Paint::filled(fade(mAccent, a)));
+                        Paint::filled(fade(mAccent, revealA)));
 
-        // What is being written right now, so a long batch is never a blank wait.
+        // ...above a status line naming the file in flight, with the count on the right.
+        const double ty = bar.y + bar.h + 8.0 + 10.0;
         const std::string name = mProgressName.empty() ? std::string("Preparing…") : mProgressName;
-        t.setFill(fade(palette::whiteAlpha(0.4), a));
-        t.drawText(fitFront(name, bw, kMonoPx), bx, cy + 20.0, kMonoPx, font::mono());
+        const std::string count = std::to_string(mDone) + " / " + std::to_string(mTotal);
+        const double countW = estimateTextWidth(count, kSmallPx);
+        t.setFill(fade(palette::whiteAlpha(0.42), revealA));
+        t.drawText(fitFront(name, iw - countW - 12.0, kMonoPx), ix, ty, kMonoPx, font::mono());
+        t.setFill(fade(palette::mutedForeground(), revealA));
+        t.drawText(count, ix + iw - countW, ty, kSmallPx, font::mono());
+    }
+
+    void ExportDialog::drawComplete(IRenderTarget &t, double a, const Rect &body) const
+    {
+        // Beat 3: everything else has faded; all that is left is the confirmation.
+        const double cx = body.x + body.w * 0.5;
+        const double cy = body.y + body.h * 0.5;
+        const double r = 15.0;
+        icon::checkCircle(t, Rect{cx - r, cy - r - 8.0, r * 2.0, r * 2.0}, fade(palette::success(), a), 1.5);
+        const std::string msg = "Exported " + std::to_string(mTotal) +
+                                (mTotal == 1 ? " photo" : " photos");
+        t.setFill(fade(palette::foreground(), a));
+        t.drawText(msg, cx - estimateTextWidth(msg, 12.0) * 0.5, cy + r + 8.0, 12.0, font::sansMedium());
     }
 
     // ── the footer ─────────────────────────────────────────────────────────────
 
     void ExportDialog::drawFooter(IRenderTarget &t, double a, const Rect &foot) const
     {
+        // Beat 3 fades the footer's content out with everything else; the band itself is
+        // chrome and stays, so the card keeps its shape while it shrinks.
+        const double a0 = a * (1.0 - mCompleteAmt.value());
+        if (a0 <= 0.004) return;
+        a = a0;
         const double phase = mPhase.value();
         const int sel = checkedCount();
 
-        // Summary (form) / status (progress) cross-fade in the same slot.
-        if (phase < 0.996)
+        // Summary + buttons leave first, the "writing" line arrives after — they share
+        // the footer's right-hand slot, so overlapping their fades would smear two
+        // strings over each other.
+        const double leaveA = a * (1.0 - clamp01(phase / 0.45));
+        const double arriveA = a * clamp01((phase - 0.55) / 0.45);
+        if (leaveA > 0.004)
         {
             std::string summary = std::to_string(sel) + (sel == 1 ? " photo · " : " photos · ") +
                                   kFormats[mFormat] + " · " + kSizes[mSize];
             if (mUsePrefix && !mPrefix.empty()) summary += " · prefix: " + mPrefix;
-            t.setFill(fade(palette::mutedForeground(), a * (1.0 - phase)));
+            t.setFill(fade(palette::mutedForeground(), leaveA));
             t.drawText(fitEnd(summary, cancelRect().x - foot.x - kPad - 12.0, kSmallPx),
                        foot.x + kPad, foot.y + foot.h * 0.5 + 3.5, kSmallPx, font::sans());
         }
 
         auto btn = [&](const Rect &r, const std::string &label, bool primary, double hoverAmt, bool disabled) {
-            const double ba = a * (1.0 - phase);
+            const double ba = leaveA;
             if (ba <= 0.004) return;
             Color fill = primary ? mAccent : palette::secondary();
             Color border = primary ? mAccent : palette::border();
@@ -1103,17 +1409,17 @@ namespace cosmo_v2
             t.drawText(label, tx, r.y + r.h * 0.5 + 4.0, kFontPx, font::sansMedium());
         };
 
-        if (phase < 0.996)
+        if (leaveA > 0.004)
         {
             btn(cancelRect(), "Cancel", false, mHover.amount(kIdCancel), false);
             const std::string exp = "Export " + std::to_string(sel) + (sel == 1 ? " photo" : " photos");
             btn(exportRect(), exp, true, mHover.amount(kIdExport), sel == 0);
         }
-        if (phase > 0.004)
+        if (arriveA > 0.004)
         {
             // Mid-batch the footer says so instead of offering buttons that would
             // abandon a half-written export.
-            t.setFill(fade(palette::mutedForeground(), a * phase));
+            t.setFill(fade(palette::mutedForeground(), arriveA));
             const std::string msg = "Writing files — please wait";
             t.drawText(msg, foot.x + foot.w - kPad - estimateTextWidth(msg, kSmallPx),
                        foot.y + foot.h * 0.5 + 3.5, kSmallPx, font::sans());

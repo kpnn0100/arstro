@@ -511,10 +511,29 @@ to this app's tree model per the deltas called out below.
 - **R-EXPORT-6 Footer + progress (R2).** The footer shows a live summary — `n photos · FMT · SIZE`
   (+ `· prefix: …` when one is set) — and **Cancel** / **Export n photos**. Export is disabled while
   nothing is selected. Because a batch full-res render is far slower than a frame, pressing Export
-  **does not freeze the UI**: the dialog switches to an in-place **progress state** (a determinate
-  accent bar + the name of the file being written), driven by the host feeding
-  `setExportProgress(done, total, name)` one image per main-loop idle step, and closes itself when
-  the batch finishes. The dialog stays modal (and non-cancellable mid-write) for the duration.
+  **does not freeze the UI**: the host feeds `setExportProgress(done, total, name)` one image per
+  main-loop idle step. The dialog stays modal (and non-cancellable mid-write) for the duration.
+  Pressing Export plays a **three-beat animation**, every beat eased and reduced-motion-safe:
+  1. **Collapse.** The card *shrinks in place* to a progress card: the header and the
+     **Images to Export** section survive; the master button, the selection count, Destination,
+     the modifiers, Format/Size/Quality and Metadata all **fade out** and the card height tweens
+     down to what is left. The tree's **checkboxes fade away** and each row's chevron/icon/label
+     slides left into the space they occupied, so the list reads as a manifest rather than a
+     picker. The tree itself is rebuilt to the **participating rows only** — the selected images
+     plus the groups that contain them — so what is on screen is exactly what is being written.
+  2. **Writing.** A determinate accent **progress bar sits directly under the tree section**, above
+     a mono status line naming the file in flight. As each file lands, **that row's background
+     highlights** (a success-tinted wash + a small tick, eased in per row, never popping) and a
+     group's row highlights once every one of its members is written. The tree auto-scrolls to keep
+     the in-flight row visible.
+  3. **Done.** On the last file the tree, bar and footer content **fade out together**, the card
+     shrinks again to a compact panel showing a **green tick and `Exported n photos`**, and after a
+     short hold the dialog closes itself.
+- **R-EXPORT-8 The modal is draggable.** The card can be **dragged by its header band** (anywhere
+  but the ✕) and stays where it is put, so it can be moved off whatever the photographer wants to
+  look at — including mid-export, since the header is the drag handle in every state. The offset is
+  clamped so the header always stays reachable on screen, survives a window resize, and resets when
+  the dialog is next opened. A drag never fires the click under it.
 - **R-EXPORT-7 Bypass is honoured.** Batch export renders each slot through
   `EditSession::exportFullResSlot(slot,…)`, which composes exactly the same `effectiveParams(slot)`
   the preview uses — so a bypassed image or group exports without those edits (R-BYPASS-2), and

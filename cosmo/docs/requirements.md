@@ -632,12 +632,42 @@ EXIF copies the source JPEG's APP1 into a JPEG output; Strip GPS removes IFD0's 
 that copy; sRGB writes an APP2 `ICC_PROFILE` (JPEG) / an ICC tag (TIFF) / `sRGB`+`gAMA` chunks
 (PNG, whose GdkPixbuf saver rejects `icc-profile`).
 
-### DR-EXPORT-6 Progress
-Export switches the card to a compact progress face (`mPhase` cross-fade + card-height tween) with a
-determinate eased bar and the name of the file being written. The host (`exportStep`, a `g_idle_add`
-pump) renders and writes ONE image per main-loop step and calls `setExportProgress(done,total,name)`,
-so the UI keeps painting; `done == total` closes the dialog. It is modal and non-cancellable for the
-duration.
+### DR-EXPORT-6 The three export beats
+The host (`exportStep`, a `g_idle_add` pump) renders and writes ONE image per main-loop step and
+calls `setExportProgress(done,total,name)`, so the UI keeps painting. The dialog is modal and
+non-cancellable (click-outside and Escape are both swallowed) for the duration. Three faces, tweened
+through in order by `mPhase` then `mCompleteAmt`; `cardRect()` lerps the body height across all
+three, so the whole sequence is one continuous shrink:
+
+1. **Collapse** (`beginExport`, 260 ms `EaseInOutCubic`). The section header + tree survive; the
+   master button leaves fast (`1 - clamp01(phase/0.4)`) and everything below it fades with the form.
+   `progressTreeRect()` interpolates the tree's box from its form position/size to the manifest's, so
+   exactly ONE tree is on screen — `drawForm` stops drawing the pair the moment `mExporting` is set,
+   and `drawProgress` owns it. In `drawTree`, `progress` fades the checkboxes out and closes their
+   slot so the icon + label slide left; the indent and chevron keep their place (shifting those too
+   would push a depth-0 chevron out through the box's left edge).
+   `buildExportRows()` rebuilds the row list as the **manifest** — selected images plus the groups
+   that contain them — which is what makes the box genuinely shrink.
+2. **Writing.** `progressBarRect()` sits under the tree, with a mono status line (file in flight,
+   left; `done / total`, right) below it. Both appear only in the BACK half of the collapse
+   (`clamp01((phase-0.55)/0.45)`), and the footer's buttons leave in the FRONT half — two strings
+   sharing one slot must not cross-fade through each other. `advanceRowFades` eases a per-row
+   "written" amount (a file row once the batch passes it, a group row once every member has landed);
+   a written row gets a `successAlpha` wash, a green tick and a green-tinted name, the row in flight
+   gets a `primaryAlpha` wash, and `followActiveRow()` scrolls the manifest to keep it visible.
+3. **Done** (`beginComplete`, 260 ms). The tree, bar and footer content fade out, the card shrinks to
+   `kCompleteBodyH`, and a green `checkCircle` + `Exported n photos` fades in. After
+   `kCompleteHoldMs` (950 ms) `advance()` calls `beginClose()`.
+
+`cancelExport()` returns to the form (a write that failed outright), leaving the picker intact.
+
+### DR-EXPORT-8 Draggable card
+`headerRect()` is the drag handle in every state. A `Down` there (outside `closeRect()`) starts a
+drag; subsequent `Move`/`Drag` accumulate into `mCardOffset`, which `cardX()`/`cardRect()` apply so
+layout, hit-testing and paint all move together. `cardX()` clamps so ≥120 px of the card stays on
+screen and `cardRect()` clamps y so the header band is always reachable, which also keeps a dragged
+card usable after a window resize. `mSuppressClick` swallows the `Click` a drag terminates with, so
+releasing over the ✕ (or outside the card) never dismisses it. The offset resets on `show()`.
 
 ### DR-EXPORT-7 Bypass honoured
 `EditSession::exportFullResSlot(slot,…)` composes the same `effectiveParams(slot)` the preview uses,

@@ -118,6 +118,10 @@ namespace cosmo_v2
         bool hitTestSelf(const artboard::Point &p) const override { return mOpen && !mClosing; }  // modal
 
     private:
+        /** One visible tree row: which node it shows and how deep it sits. Declared
+         *  before the helpers that take a `std::vector<Row>`. */
+        struct Row { int node = 0; int depth = 0; };
+
         // ── tree model (R-EXPORT-2) ──
         void rebuildRows();                          // flatten to the visible rows
         void collectLeaves(int node, std::vector<int> &out) const;  // descendant image leaves of `node`
@@ -161,12 +165,29 @@ namespace cosmo_v2
 
         void beginClose();
         void applyQualityAt(double localX);
+        void beginExport();              // form -> progress face (R-EXPORT-6 beat 1)
+        void beginComplete();            // progress -> the green-tick face (beat 3)
+        /** Rebuild the progress face's row list: ONLY the selected images and the groups
+         *  that contain them, so the manifest shows exactly what is being written. */
+        void buildExportRows();
+        void advanceRowFades(double nowMs);
+        void followActiveRow();      // auto-scroll the manifest to the file in flight
+        double rowDoneAmount(int exportRow) const;   // eased 0..1 "this row is written"
+        artboard::Rect headerRect() const;           // the drag handle (R-EXPORT-8)
+        double progressTreeH() const;
+        artboard::Rect progressTreeRect() const;
+        artboard::Rect progressBarRect() const;
         // Paint helpers: the body has two mutually-exclusive faces (the form and the
         // progress panel) that cross-fade through mPhase, so each owns its own pass.
         void drawForm(artboard::IRenderTarget &t, double a) const;
-        void drawProgress(artboard::IRenderTarget &t, double a, const artboard::Rect &body) const;
+        void drawProgress(artboard::IRenderTarget &t, double a) const;
+        void drawComplete(artboard::IRenderTarget &t, double a, const artboard::Rect &body) const;
         void drawFooter(artboard::IRenderTarget &t, double a, const artboard::Rect &foot) const;
-        void drawTree(artboard::IRenderTarget &t, double a, const artboard::Rect &box) const;
+        /** One tree renderer for both faces. `rows` is the picker's list in the form face
+         *  and the export manifest in the progress face; `progress` fades the checkboxes
+         *  out, slides the rest left into their space, and washes written rows. */
+        void drawTree(artboard::IRenderTarget &t, double a, const artboard::Rect &box,
+                      const std::vector<Row> &rows, double progress) const;
         /** Shared checkbox: `state` 0 = empty, 1 = ticked, 2 = indeterminate (a dash --
          *  the group "some children selected" case, R-EXPORT-2). */
         void drawCheck(artboard::IRenderTarget &t, const artboard::Rect &box, int state, double a,
@@ -179,8 +200,6 @@ namespace cosmo_v2
                                const std::string &label, double a) const;
         int hitId(const artboard::Point &p) const;   // HoverFade / click id under the pointer
         Request buildRequest() const;
-
-        struct Row { int node = 0; int depth = 0; };
 
         artboard::Color mAccent;
         bool mOpen = false, mClosing = false;
@@ -216,8 +235,24 @@ namespace cosmo_v2
         bool mExporting = false;
         int mDone = 0, mTotal = 0;
         std::string mProgressName;
-        artboard::AnimatedProperty mPhase{0.0};      // 0 = form, 1 = progress (cross-fade + card resize)
+        artboard::AnimatedProperty mPhase{0.0};      // 0 = form, 1 = progress (collapse + card resize)
         artboard::AnimatedProperty mProgress{0.0};   // eased 0..1 bar fill
+        std::vector<Row> mExportRows;                // the manifest: participating rows only
+        std::vector<int> mExportSeq;                 // per mExportRows entry: its position in the
+                                                     // write order (-1 for a group row)
+        std::vector<double> mRowFade;                // per mExportRows entry: eased "written" amount
+        double mRowFadeLastMs = -1.0;
+        bool mComplete = false;                      // beat 3: the green-tick face
+        artboard::AnimatedProperty mCompleteAmt{0.0};
+        double mCompleteAtMs = 0.0;                  // when beat 3 began (drives the auto-close hold)
+
+        // ── drag (R-EXPORT-8) ──
+        // The card is moved by its header band; the offset is applied inside cardX()/
+        // cardRect() so layout, hit-testing and paint all move together.
+        artboard::Point mCardOffset{0.0, 0.0};
+        bool mDraggingCard = false;
+        artboard::Point mDragGrab{0.0, 0.0};         // pointer position at the grab, in card space
+        bool mSuppressClick = false;                 // a finished drag must not fire the click under it
 
         HoverFade mHover;                            // every region cross-fades (R-G-3)
 
