@@ -113,11 +113,14 @@ Project "size" on a card is the sum of the referenced files' byte sizes
 ### DR-HOME-3 New / Open / Import
 - **New Project** → SAVE dialog for a `.cmp` name, `ensureCmp` appends the extension,
   `resetWorkspace()`, `saveWorkspaceAs`, remember, `showEditor()` (`linux_main.cpp:602-625`).
-- **Open Project…** → OPEN dialog filtered to `*.cmp` → `startProjectLoad` (the animated
-  threaded load) (`linux_main.cpp:627-641`).
-- **Import Catalog…** → multi-select image dialog, then a SAVE for a new `.cmp`;
-  `resetWorkspace()`, `openImage` each, `saveWorkspaceAs`, remember, `showEditor()`
-  (`linux_main.cpp:643-685`).
+- **Open Project…** → OPEN dialog filtered to `*.cmp` → `startProjectLoad`, which reads the
+  entries and hands them to `startEntriesLoad(…, saveOnFinish=false)`.
+- **Import Catalog…** → multi-select image dialog, then a SAVE for a new `.cmp`; the picked paths
+  become root-level `WorkspaceEntry`s and go through the SAME `startEntriesLoad(…,
+  saveOnFinish=true)`, so an import plays the full R-LOADING transition and decodes on the
+  background thread instead of freezing the UI inline. `saveOnFinish` makes `pollLoad` write the
+  `.cmp` after the last image lands, since the file does not exist yet; the loading cover falls back
+  to the first decoded image (no cached thumbnail for a never-opened catalog).
 
 ### DR-HOME-4 Recent projects (persisted) (R-HOME-6)
 Recents persist in a tab-separated `recent.tsv` in the config dir, newest first, capped at 24

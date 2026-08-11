@@ -394,8 +394,16 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   and opens the editor on it, where the user adds photos (the current editor screen / import).
 - **R-HOME-4 Open Project.** "Open Project…" shows a native file dialog filtered to `.cmp` and
   opens the chosen project in the editor.
-- **R-HOME-5 Import Catalog.** "Import Catalog…" shows a native multi-select image dialog and
-  opens the selected images inside a new project.
+- **R-HOME-5 Import Catalog.** "Import Catalog…" shows a native multi-select image dialog, asks
+  where to save the new project, and opens the selected images inside it **through the same
+  animated open-project transition a recent project uses (R-LOADING)** — the picked images become
+  root-level workspace entries and stream in on the background decode thread behind the loading
+  screen, with the real progress bar and per-image status line. It must NOT decode inline on the UI
+  thread: a catalog of large frames would otherwise freeze the app for the whole import with no
+  feedback. The one difference from opening an existing project is that the `.cmp` does not exist
+  yet, so it is written once the last image has landed (`LoadJob::saveOnFinish`); the loading-screen
+  cover falls back to the first decoded image, since no thumbnail is cached for a never-opened
+  catalog.
 - **R-HOME-6 Recent Projects (real, persisted).** The grid lists recent projects from a
   **persisted recent-projects index** (a JSON file in the app config dir), each entry storing
   the project name, `.cmp` path, photo count, last-opened time, and a cached thumbnail of the

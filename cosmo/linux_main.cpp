@@ -61,6 +61,9 @@ namespace
 
         std::vector<App::WorkspaceEntry> entries;
         std::string path;
+        // Import Catalog builds a project that has no .cmp on disk yet, so the file is
+        // written once every image has landed (an open just records the path).
+        bool saveOnFinish = false;
         std::mutex mu;                         // guards `ready`
         std::vector<Result> ready;             // produced results, in order
         std::atomic<bool> producedAll{false};  // worker finished producing
@@ -605,6 +608,8 @@ namespace
         if (job->producedAll.load() && job->consumed >= job->entries.size())
         {
             a->app.finishWorkspaceLoad(job->path);
+            if (job->saveOnFinish && !a->app.saveWorkspaceAs(job->path))
+                g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
             rememberProject(job->path);
             a->app.finishOpenTransition();  // signals load done; reveal waits for the intro
             job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
@@ -614,17 +619,15 @@ namespace
         return G_SOURCE_CONTINUE;
     }
 
-    // Open a .cmp project with the animated loading transition (R-LOADING): start the
-    // transition immediately, decode its images on a background thread, and apply the
-    // results on the UI thread so the heavy work never stalls the animation.
-    void startProjectLoad(Host *a, const std::string &path)
+    // Bring a set of workspace entries up with the animated loading transition
+    // (R-LOADING): start the transition immediately, decode on a background thread, and
+    // apply the results on the UI thread so the heavy work never stalls the animation.
+    // Shared by "open a .cmp" and "import a catalog" — the only difference is whether
+    // the .cmp already exists (`saveOnFinish`).
+    void startEntriesLoad(Host *a, std::vector<App::WorkspaceEntry> entries,
+                          const std::string &path, bool saveOnFinish)
     {
-        std::vector<App::WorkspaceEntry> entries;
-        if (!App::readWorkspaceFile(path, entries))
-        {
-            g_printerr("cosmo_v2: could not read project %s\n", path.c_str());
-            return;
-        }
+        if (entries.empty()) return;
         a->app.beginOpenTransition(std::filesystem::path(path).stem().string());
         a->app.resetWorkspace();
 
@@ -645,6 +648,7 @@ namespace
         LoadJob *job = a->load.get();
         job->entries = std::move(entries);
         job->path = path;
+        job->saveOnFinish = saveOnFinish;
         a->app.setLoadProgress(0, (int)job->entries.size());
 
         // Part 1 is pure animation: start the background decode + poll ONLY when the
@@ -655,6 +659,18 @@ namespace
             j->worker = std::thread(decodeWorker, j);
             j->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
         };
+    }
+
+    // Open an existing .cmp through the shared animated load.
+    void startProjectLoad(Host *a, const std::string &path)
+    {
+        std::vector<App::WorkspaceEntry> entries;
+        if (!App::readWorkspaceFile(path, entries))
+        {
+            g_printerr("cosmo_v2: could not read project %s\n", path.c_str());
+            return;
+        }
+        startEntriesLoad(a, std::move(entries), path, false);
     }
 
     void addCmpFilter(GtkWidget *d)
@@ -738,15 +754,23 @@ namespace
         gtk_widget_destroy(sd);
         if (cmp.empty()) return;
 
-        a->app.resetWorkspace();
+        // Import runs the SAME animated open transition as a recent project (R-HOME-5):
+        // the picked images become root-level workspace entries and go through the
+        // shared background loader, so a big catalog streams in behind the loading
+        // screen instead of freezing the UI for the length of every decode. The .cmp
+        // does not exist yet, so it is written once the last image has landed.
+        std::vector<App::WorkspaceEntry> entries;
+        entries.reserve(imgs.size());
         for (const auto &ip : imgs)
         {
-            DecodedImage img = a->decoder.decodeFile(ip);
-            if (img.ok()) a->app.openImage(img.rgba.data(), img.width, img.height, baseName(ip), ip);
+            App::WorkspaceEntry e;
+            e.group = false;
+            e.parent = -1;            // flat, at the project root
+            e.imagePath = ip;
+            e.name = baseName(ip);
+            entries.push_back(std::move(e));
         }
-        a->app.saveWorkspaceAs(cmp);
-        rememberProject(cmp);
-        a->app.showEditor();
+        startEntriesLoad(a, std::move(entries), cmp, true);
         gtk_widget_queue_draw(a->area);
     }
 

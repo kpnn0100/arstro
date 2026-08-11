@@ -223,7 +223,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 
 | Path | Layer | Responsibility |
 |------|-------|----------------|
-| `cosmo/linux_main.cpp` | host | GTK app, events, dialogs, threaded loader, fonts, logging |
+| `cosmo/linux_main.cpp` | host | GTK app, events, dialogs, threaded loader (`startEntriesLoad`, shared by Open and Import Catalog), threaded batch exporter, fonts, logging |
 | `cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `cosmo/Theme.{h,cpp}` | app | palette, radii, fonts, type ramp |
 | `cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
