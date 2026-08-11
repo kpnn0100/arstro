@@ -64,6 +64,7 @@ add_executable(cosmo_widget_tests
   widgets/SegmentedControl.cpp
   widgets/PillButton.cpp
   widgets/IconButton.cpp
+  widgets/ExportDialog.cpp
   widgets/Icons.cpp)
 target_include_directories(cosmo_widget_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}

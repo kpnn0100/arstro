@@ -356,6 +356,140 @@ namespace
         std::filesystem::remove(path);
         printf("[PASS] workspace_history_roundtrip\n");
     }
+
+    // ── R-BYPASS: per-node filter bypass ──────────────────────────────────────
+
+    void test_bypass_skips_only_the_bypassed_node()
+    {
+        EditSession s;
+        auto px = solidImage(16, 16, 100, 100, 100);
+        const int slotA = s.openImage(px.data(), 16, 16, "a");
+        const int slotB = s.openImageInto(s.currentGroup(), px.data(), 16, 16, "b", "");
+
+        s.selectImage(slotA);
+        s.curParams()->exposure = 0.5f; s.submit();
+        s.selectImage(slotB);
+        s.curParams()->exposure = 0.25f; s.submit();
+
+        // Wrap both in a group carrying its own +1.0 offset.
+        s.navigateToGroup(0);
+        s.selectNode(0, false, false);
+        s.selectNode(1, true, false);
+        s.createGroupFromSelection();
+        const int group = s.currentGroupCells()[0].node;
+        s.selectNode(0, false, false);
+        s.curParams()->exposure = 1.0f; s.submit();
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 1.5f) < 1e-4f);
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 1.25f) < 1e-4f);
+
+        // Bypass image A's OWN leaf: its 0.5 drops out, the group's +1.0 still applies,
+        // and image B is untouched (R-BYPASS-2).
+        const int nodeA = s.nodeForSlot(slotA);
+        s.setBypassed(nodeA, true);
+        assert(s.isBypassed(nodeA));
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 1.0f) < 1e-4f);
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 1.25f) < 1e-4f);
+
+        // Bypass the GROUP as well: now A has nothing at all, B keeps only its own.
+        s.setBypassed(group, true);
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 0.0f) < 1e-4f);
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 0.25f) < 1e-4f);
+
+        // Re-enabling restores the composition exactly -- nothing was destroyed.
+        s.setBypassed(nodeA, false);
+        s.setBypassed(group, false);
+        assert(std::fabs(s.effectiveParams(slotA).exposure - 1.5f) < 1e-4f);
+        assert(std::fabs(s.effectiveParams(slotB).exposure - 1.25f) < 1e-4f);
+
+        // toggleBypass flips, and editTargetBypassed() tracks whatever is being edited.
+        s.selectImage(slotA);
+        assert(!s.editTargetBypassed());
+        s.toggleBypass(s.editTargetNode());
+        assert(s.editTargetBypassed());
+        s.toggleBypass(s.editTargetNode());
+        assert(!s.editTargetBypassed());
+        printf("[PASS] bypass_skips_only_the_bypassed_node\n");
+    }
+
+    void test_bypass_keeps_own_values_in_the_panel_view()
+    {
+        // effectiveEditParams() drives the panel's green "stacked reach" (effective -
+        // own), so it honours bypass on the ANCESTORS but keeps the edit target's own
+        // values -- otherwise every slider would show a bogus negative reach while the
+        // target is disabled (R-BYPASS-2).
+        EditSession s;
+        auto px = solidImage(8, 8, 10, 10, 10);
+        const int slot = s.openImage(px.data(), 8, 8, "a");
+        s.curParams()->exposure = 0.5f; s.submit();
+        s.navigateToGroup(0);
+        s.selectNode(0, false, false);
+        s.createGroupFromSelection();
+        const int group = s.currentGroupCells()[0].node;
+        s.selectNode(0, false, false);
+        s.curParams()->exposure = 1.0f; s.submit();
+
+        s.selectImage(slot);
+        assert(std::fabs(s.effectiveEditParams().exposure - 1.5f) < 1e-4f);
+
+        // The image's own bypass must NOT erase its own 0.5 from the panel view...
+        s.setBypassed(s.nodeForSlot(slot), true);
+        assert(std::fabs(s.effectiveEditParams().exposure - 1.5f) < 1e-4f);
+        // ...but what actually renders drops it.
+        assert(std::fabs(s.effectiveParams(slot).exposure - 1.0f) < 1e-4f);
+
+        // A bypassed ANCESTOR really does contribute nothing to the reach.
+        s.setBypassed(group, true);
+        assert(std::fabs(s.effectiveEditParams().exposure - 0.5f) < 1e-4f);
+        printf("[PASS] bypass_keeps_own_values_in_the_panel_view\n");
+    }
+
+    void test_bypass_workspace_roundtrip()
+    {
+        EditSession s;
+        auto px = solidImage(8, 8, 5, 6, 7);
+        s.openImage(px.data(), 8, 8, "img", "/tmp/bypass_src.jpg");
+        s.openImageInto(s.currentGroup(), px.data(), 8, 8, "img2", "/tmp/bypass_src2.jpg");
+        s.navigateToGroup(0);
+        s.selectNode(0, false, false);
+        s.selectNode(1, true, false);
+        s.createGroupFromSelection();
+        const int group = s.currentGroupCells()[0].node;
+        s.navigateToGroup(group);
+        const int leaf0 = s.currentGroupCells()[0].node;
+        s.setBypassed(leaf0, true);      // one image disabled
+        s.setBypassed(group, true);      // ...and the group around it
+
+        const std::string path = "/tmp/cosmo_core_ws_bypass.cosmoproj";
+        assert(s.saveWorkspaceAs(path));
+
+        std::vector<EditSession::WorkspaceEntry> entries;
+        assert(EditSession::readWorkspaceFile(path, entries));
+        int bypassedGroups = 0, bypassedImages = 0;
+        for (const auto &e : entries)
+            if (e.bypass) { if (e.group) ++bypassedGroups; else ++bypassedImages; }
+        assert(bypassedGroups == 1);
+        assert(bypassedImages == 1);
+
+        EditSession s2;
+        auto px2 = solidImage(8, 8, 0, 0, 0);
+        for (const auto &e : entries)
+        {
+            const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
+            if (e.group) { s2.addWorkspaceGroup(parentNode, e.name, e.params, e.history, e.bypass); continue; }
+            const int slot = s2.openImageInto(parentNode, px2.data(), 8, 8, "img", e.imagePath);
+            s2.applyParamsToSlot(slot, e.params, e.history);
+            s2.setSlotBypass(slot, e.bypass);
+        }
+        s2.finishWorkspaceLoad(path);
+
+        // The reloaded tree has exactly the same two nodes disabled.
+        int off = 0;
+        for (int n = 0; n < (int)s2.nodes().size(); ++n) off += s2.isBypassed(n) ? 1 : 0;
+        assert(off == 2);
+        assert(s2.isBypassed(1));   // node 1 = the group (root's first child)
+        assert(s2.isBypassed(2));   // node 2 = its first image leaf
+        printf("[PASS] bypass_workspace_roundtrip\n");
+    }
 }
 
 int main()
@@ -371,6 +505,9 @@ int main()
     test_preset_save_and_apply_roundtrip();
     test_session_save_and_read_roundtrip();
     test_workspace_history_roundtrip();
+    test_bypass_skips_only_the_bypassed_node();
+    test_bypass_keeps_own_values_in_the_panel_view();
+    test_bypass_workspace_roundtrip();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

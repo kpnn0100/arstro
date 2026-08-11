@@ -55,6 +55,9 @@ namespace cosmo
             arstro::EditParams params;    // group's own develop settings (groups only)
             History history;              // group's branching edit timeline (groups only)
             std::vector<int> kids;        // child node indices, in display order
+            /** R-BYPASS-1: this node's OWN params are skipped while true. Kept on the
+             *  node (not the slot) so a group and an image bypass identically. */
+            bool bypass = false;
         };
         /** One row of "the current group's children" -- what a filmstrip widget draws. */
         struct Cell
@@ -64,6 +67,7 @@ namespace cosmo
             int slot = -1;   // image leaf only
             std::string name;
             int count = 0;   // group leaf only (child count)
+            bool bypassed = false;  // R-BYPASS-5: filmstrip draws a "filter off" badge
         };
 
         /** A small pre-downscaled copy of a slot's image, generated once on open --
@@ -93,6 +97,19 @@ namespace cosmo
         void renameGroup(int node, const std::string &name);
         void collectSubtree(int node, std::vector<int> &out) const;  // node + every descendant, pre-order
         std::vector<int> selectedImageSlots() const;  // selection expanded to leaf image slots (groups -> their images)
+
+        // ---- filter bypass (R-BYPASS) ----
+        /** True while `node`'s OWN develop params are excluded from the composition. */
+        bool isBypassed(int node) const;
+        void setBypassed(int node, bool on);
+        void toggleBypass(int node);   // flips, re-renders, marks dirty
+        /** The node the develop panels are currently editing (a group, or the current
+         *  image's leaf); -1 when nothing is open. */
+        int editTargetNode() const;
+        /** Convenience for the UI: is the current edit target bypassed? (R-BYPASS-4) */
+        bool editTargetBypassed() const;
+        /** Set the bypass flag on the leaf that owns `slot` (workspace load path). */
+        void setSlotBypass(int slot, bool on);
 
         // ---- develop params ----
         EditParams *curParams();                     // current image's own params (what controls edit)
@@ -165,6 +182,7 @@ namespace cosmo
             std::string imagePath;         // source file path (images only)
             EditParams params;              // develop settings (images AND groups)
             History history;                // branching edit timeline (empty = none saved)
+            bool bypass = false;            // R-BYPASS-6: node's filter disabled
         };
         static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out);
         bool saveWorkspaceAs(const std::string &path);
@@ -172,7 +190,7 @@ namespace cosmo
         /** Release every open image and reset to an empty, single-root session. */
         void resetWorkspace();
         int addWorkspaceGroup(int parentNode, const std::string &name, const EditParams &params,
-                              const History &history = History{});
+                              const History &history = History{}, bool bypass = false);
         /** Rebuild derived state after a batch of addWorkspaceGroup/openImageInto
          *  calls and remember `path` for a plain "Save Workspace". */
         void finishWorkspaceLoad(const std::string &path);
@@ -194,6 +212,14 @@ namespace cosmo
          *  magnified image stays sharp; caller still calls submit() afterward. */
         void setPreviewZoom(double zoomFactor);
         const uint8_t *exportFullRes(int &w, int &h);
+        /** As exportFullRes but for ANY slot, not just the current one -- the batch
+         *  export path (R-EXPORT-7). Composes the same effectiveParams(slot) the
+         *  preview uses, so bypass (R-BYPASS-2) is honoured identically. */
+        const uint8_t *exportFullResSlot(int slot, int &w, int &h);
+        /** Source file path / display name of a slot (empty when out of range) --
+         *  the batch exporter needs them to resolve per-image destinations. */
+        std::string sourcePathForSlot(int slot) const;
+        std::string nameForSlot(int slot) const;
         /** No-edit (geometry-only) baseline for a before/after compare view; caches
          *  internally and only re-renders when the geometry actually changed.
          *  Returns nullptr if there is no current image. */

@@ -32,6 +32,7 @@ namespace cosmo_v2
             int thumbSlot = -1;   // image leaf only -- index into addThumb() order
             std::string name;
             int count = 0;        // group leaf only
+            bool bypassed = false;  // R-BYPASS-5: this node's filter is disabled
         };
 
         Filmstrip();
@@ -86,6 +87,14 @@ namespace cosmo_v2
         bool mRingInit = false;
         // Per-cell hover wash, tracked from Move; each cell cross-fades (R-G-3).
         HoverFade mHover;
+        // R-BYPASS-5: per-cell "filter disabled" amount, eased 0..1 so toggling a
+        // cell's bypass fades its badge + wash in/out instead of popping (R-G-1).
+        // HoverFade can't back this (it models ONE hovered item; any number of cells
+        // can be bypassed at once), so it's a plain per-cell fade of the same shape.
+        std::vector<double> mByAmt;
+        double mByLastMs = -1.0;
+        void advanceBypassFades(double nowMs);
+        double bypassAmount(int cell) const;
     };
 }
 }

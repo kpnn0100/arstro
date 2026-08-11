@@ -219,6 +219,86 @@ namespace icon
         t.lineTo(cx + r * 0.4, cy - r * 1.2);
         t.strokePath();
     }
+
+    void folder(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        // Folder silhouette: a tab along the top-left, then the body.
+        t.beginPath();
+        t.moveTo(f.x(0.08), f.y(0.82));
+        t.lineTo(f.x(0.08), f.y(0.2));
+        t.lineTo(f.x(0.42), f.y(0.2));
+        t.lineTo(f.x(0.52), f.y(0.34));
+        t.lineTo(f.x(0.92), f.y(0.34));
+        t.lineTo(f.x(0.92), f.y(0.82));
+        t.closePath();
+        t.strokePath();
+    }
+
+    void image(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        // Frame.
+        t.beginPath();
+        t.moveTo(f.x(0.12), f.y(0.16));
+        t.lineTo(f.x(0.88), f.y(0.16));
+        t.lineTo(f.x(0.88), f.y(0.84));
+        t.lineTo(f.x(0.12), f.y(0.84));
+        t.closePath();
+        t.strokePath();
+        // Sun + the mountain ridge that reads as "photo".
+        t.beginPath();
+        t.moveTo(f.x(0.42), f.y(0.36));
+        t.quadTo(f.x(0.42), f.y(0.28), f.x(0.34), f.y(0.28));
+        t.quadTo(f.x(0.26), f.y(0.28), f.x(0.26), f.y(0.36));
+        t.quadTo(f.x(0.26), f.y(0.44), f.x(0.34), f.y(0.44));
+        t.quadTo(f.x(0.42), f.y(0.44), f.x(0.42), f.y(0.36));
+        t.strokePath();
+        t.beginPath();
+        t.moveTo(f.x(0.14), f.y(0.78));
+        t.lineTo(f.x(0.42), f.y(0.5));
+        t.lineTo(f.x(0.62), f.y(0.7));
+        t.lineTo(f.x(0.74), f.y(0.58));
+        t.lineTo(f.x(0.87), f.y(0.72));
+        t.strokePath();
+    }
+
+    void close(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        t.beginPath();
+        t.moveTo(f.x(0.22), f.y(0.22));
+        t.lineTo(f.x(0.78), f.y(0.78));
+        t.moveTo(f.x(0.78), f.y(0.22));
+        t.lineTo(f.x(0.22), f.y(0.78));
+        t.strokePath();
+    }
+
+    void ban(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        const double cx = f.x(0.5), cy = f.y(0.5);
+        const double r = box.w * 0.38;
+        // Circle, as four quad segments (no arc primitive in the path API).
+        t.beginPath();
+        t.moveTo(cx + r, cy);
+        t.quadTo(cx + r, cy + r, cx, cy + r);
+        t.quadTo(cx - r, cy + r, cx - r, cy);
+        t.quadTo(cx - r, cy - r, cx, cy - r);
+        t.quadTo(cx + r, cy - r, cx + r, cy);
+        t.closePath();
+        t.strokePath();
+        // The slash through it.
+        const double d = r * 0.707;
+        t.beginPath();
+        t.moveTo(cx - d, cy - d);
+        t.lineTo(cx + d, cy + d);
+        t.strokePath();
+    }
 }
 }
 }

@@ -19,6 +19,18 @@ package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
     - decodeWorker() / pollLoad()
   }
   class "file dialogs" as Dialogs <<GTK>>
+  class ExportWriter <<namespace exporter>> {
+    + resolvePath(req, sourcePath, fallbackName) : string
+    + write(req, rgba, w, h, path, sourcePath, error) : bool
+    - readJpegApp1/stripGps/injectApp1
+    - addPngSrgbChunks
+    - kSrgbIcc : byte[468]
+  }
+  class ExportJob <<idle pump>> {
+    + req : ExportDialog::Request
+    + index : size_t
+    - exportStep()  ' one image per main-loop step (R-EXPORT-6)
+  }
   class CairoTarget <<adapter>>
 }
 
@@ -79,6 +91,19 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class PresetDialog
     class SettingsDialog
     class ConfirmDialog
+    class ExportDialog {
+      + show(nodes, preselect)
+      + rowCount/rowIsGroup/rowState
+      + toggleRow/toggleExpand/setAllChecked
+      + selectedSlots() : int[]
+      + setDestination/setExportProgress/cancelExport
+      + onChooseDestination : cb
+      + onExport(Request) : cb
+      - mLeafChecked : char[]   ' leaves are authoritative; groups derive
+      - mRows/mKids/mExpanded
+    }
+    class "ExportDialog::Node" as ExportNode <<struct>>
+    class "ExportDialog::Request" as ExportRequest <<struct>>
     class SliderRow
     class SegmentedControl
     class PillButton
@@ -95,6 +120,10 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     - mService : RenderService
     + openImage/openImageInto/selectNode/navigateToGroup
     + curParams/effectiveParams/applyParams/submit
+    + isBypassed/setBypassed/toggleBypass/setSlotBypass
+    + editTargetNode/editTargetBypassed
+    + exportFullRes/exportFullResSlot
+    + sourcePathForSlot/nameForSlot
     + undo/redo/jumpToHistory
     + saveWorkspaceAs/readWorkspaceFile/resetWorkspace
     + savePreset/applyPreset/importPresetFrom
@@ -161,6 +190,7 @@ App *--> HistoryView
 App *--> ContextMenu
 App *--> PresetDialog
 App *--> SettingsDialog
+App *--> ExportDialog
 App *--> ConfirmDialog
 App *--> Starfield
 App o--> Screen
@@ -195,7 +225,14 @@ Segment *--> Prop
 Segment ..> IRenderTarget : emits ops
 Segment ..> Theme
 
+ExportDialog *--> ExportNode
+ExportDialog ..> ExportRequest : emits on Export
+ExportWriter ..> ExportRequest : encodes per
+ExportJob ..> ExportWriter : one image per idle step
+ExportJob ..> ExportRequest
+
 EditSession *--> GNode
+GNode : + bypass : bool   ' R-BYPASS-1
 GNode *--> EditParams : own settings (groups)
 GNode *--> History : own timeline (groups)
 EditSession *--> History

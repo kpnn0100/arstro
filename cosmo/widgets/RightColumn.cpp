@@ -1,5 +1,7 @@
 #include "RightColumn.h"
 #include "../Theme.h"
+#include "Icons.h"
+#include "TextMetrics.h"
 #include "UnitConversions.h"
 #include <algorithm>
 
@@ -15,6 +17,17 @@ namespace cosmo_v2
         // caps at ~200px + its picker; Curve is header + picker + a 164px plot.
         constexpr double kMixerStackH = 250.0;
         constexpr double kCurveStackH = 235.0;
+
+        // R-BYPASS-4 "filter disabled" scrim over the edit stack.
+        constexpr double kDimMs = 180.0;        // fade in/out duration
+        constexpr double kDimAlpha = 0.62;      // scrim strength at rest
+        constexpr double kPillH = 19.0;         // the FILTER DISABLED pill
+        constexpr double kPillTop = 8.0;        // its inset below the TAB STRIP (not the band top:
+                                                //  sitting it at the band top would cover the tab
+                                                //  labels -- siblings snap, they don't stack)
+        constexpr double kPillFontPx = 9.0;
+        constexpr double kPillPadX = 9.0;
+        const char *kPillLabel = "FILTER DISABLED";
     }
 
     RightColumn::RightColumn(cosmo::EditSession &session) : mSession(session)
@@ -330,6 +343,64 @@ namespace cosmo_v2
         // panel body shows it directly and the active tab is filled with the same
         // card colour, so the highlighted tab blends into the editing section.
         drawRoundedRect(t, Rect{0, 0, width.value(), height.value()}, 0.0, Paint::filled(palette::card()));
+    }
+
+    // ── R-BYPASS-4: the "filter disabled" scrim ──
+
+    void RightColumn::setBypassed(bool on)
+    {
+        if (mBypassed == on) return;
+        mBypassed = on;
+        // Eased, never a flip (R-G-1); AnimatedProperty collapses this to the end
+        // state by itself under artboard::reducedMotion().
+        mDim.animateTo(on ? 1.0 : 0.0, kDimMs, Easing::EaseInOutCubic, mLastMs);
+    }
+
+    void RightColumn::advance(double nowMs)
+    {
+        mLastMs = nowMs;
+        mDim.update(nowMs);
+        Segment::advance(nowMs);
+    }
+
+    Rect RightColumn::editStackRect() const
+    {
+        // Exactly the band the tab strip + panel body occupy: from the histogram's
+        // bottom edge down to the top of the pinned action bar. The histogram and the
+        // action bar are deliberately left undimmed (R-BYPASS-4).
+        const double top = HistogramWidget::kHeight;
+        const double bottom = std::max(top, height.value() - ActionBar::kHeight);
+        return Rect{0.0, top, width.value(), bottom - top};
+    }
+
+    void RightColumn::onOverlay(IRenderTarget &t) const
+    {
+        const double a = mDim.value();
+        if (a <= 0.001) return;
+        const Rect band = editStackRect();
+        if (band.h <= 0.0 || band.w <= 0.0) return;
+
+        // Dark wash over the whole edit stack: the sliders/labels underneath stay
+        // visible but read as inert, which is the point -- the values are still there,
+        // they just are not being applied.
+        drawRoundedRect(t, band, 0.0, Paint::filled(Color{0.02, 0.02, 0.02, kDimAlpha * a}));
+
+        // A small, non-interactive pill naming the state, centred just BELOW the tab
+        // strip so it never overlaps a tab label.
+        const double tw = estimateTextWidth(kPillLabel, kPillFontPx);
+        const double pw = tw + 2.0 * kPillPadX;
+        const double pillY = band.y + mTabs->tabHeight + kPillTop;
+        if (pillY + kPillH > band.y + band.h) return;   // too short to place it: scrim only
+        const Rect pill{band.x + (band.w - pw) * 0.5, pillY, pw, kPillH};
+        Color pillBg = palette::secondary(); pillBg.a *= a;
+        Color pillBorder = palette::border(); pillBorder.a *= a;
+        drawRoundedRect(t, pill, radius::control(), Paint::filledStroked(pillBg, pillBorder, 1.0));
+        icon::ban(t, Rect{pill.x + kPillPadX - 2.0, pill.y + (kPillH - 9.0) * 0.5, 9.0, 9.0},
+                  palette::whiteAlpha(0.55 * a), 1.1);
+        // Near-white on the dark scrim rather than mutedForeground -- the wash sits
+        // under it, so the muted grey would drop below a legible contrast (WCAG AA).
+        t.setFill(palette::whiteAlpha(0.66 * a));
+        t.drawText(kPillLabel, pill.x + kPillPadX + 11.0, pill.y + kPillH * 0.5 + 3.0, kPillFontPx, font::sansMedium());
     }
 }
 }

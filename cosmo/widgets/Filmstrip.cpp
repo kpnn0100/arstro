@@ -1,5 +1,6 @@
 #include "Filmstrip.h"
 #include "../Theme.h"
+#include "Icons.h"
 #include <algorithm>
 #include <cmath>
 
@@ -76,6 +77,11 @@ namespace cosmo_v2
         // not an animated move of the same list.
         mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
         mHover.clear();
+        // Re-seed the bypass fades to the new cells' resting state: a rebuilt strip is
+        // a fresh view, so an already-disabled cell reads disabled immediately rather
+        // than fading in from nothing (R-BYPASS-5).
+        mByAmt.assign(mCells.size(), 0.0);
+        for (size_t i = 0; i < mCells.size(); ++i) mByAmt[i] = mCells[i].bypassed ? 1.0 : 0.0;
         for (auto &iv : mThumbs) iv->visible = false;
         for (int i = 0; i < (int)mCells.size(); ++i)
         {
@@ -121,6 +127,7 @@ namespace cosmo_v2
         // Per-cell hover fade for the cell under the pointer.
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
+        advanceBypassFades(nowMs);  // R-BYPASS-5
 
         Segment::advance(nowMs);
     }
@@ -219,6 +226,23 @@ namespace cosmo_v2
             drawRoundedRect(t, Rect{hx, ry, hw, kCellH}, radius::control(), Paint::filled(palette::hoverWash(hv)));
         }
 
+        // R-BYPASS-5: a cell whose filter is disabled is washed dark and badged, so
+        // the state reads from the strip without opening the context menu. Eased in
+        // and out by advanceBypassFades() (R-G-1).
+        for (int i = 0; i < (int)mCells.size(); ++i)
+        {
+            const double by = bypassAmount(i);
+            if (by <= 0.001) continue;
+            const double bx = cellX(i), bw = cellW(i);
+            if (bx + bw < 0 || bx > w) continue;
+            drawRoundedRect(t, Rect{bx, ry, bw, kCellH}, radius::control(),
+                            Paint::filled(Color{0.02, 0.02, 0.02, 0.52 * by}));
+            const Rect badge{bx + 4.0, ry + 4.0, 12.0, 12.0};
+            drawRoundedRect(t, badge, radius::control(), Paint::filled(Color{0.02, 0.02, 0.02, 0.72 * by}));
+            icon::ban(t, Rect{badge.x + 2.0, badge.y + 2.0, badge.w - 4.0, badge.h - 4.0},
+                      palette::whiteAlpha(0.72 * by), 1.1);
+        }
+
         for (int i = 0; i < (int)mCells.size(); ++i)
         {
             if (mCells[i].group || i == mPrimary) continue;
@@ -226,7 +250,11 @@ namespace cosmo_v2
             if (x + cw < 0 || x > w) continue;
             const bool selected = std::find(mSel.begin(), mSel.end(), i) != mSel.end();
             const double o = selected ? 2.0 : 1.0;
-            t.setStroke(selected ? Color{pr.r, pr.g, pr.b, 0.65} : Color{1, 1, 1, 0.08}, selected ? 2.0 : 1.0);
+            // A bypassed cell's ring fades from accent toward neutral grey: the accent
+            // means "active", which a disabled filter is not (R-BYPASS-5).
+            const Color selRing = lerpColor(Color{pr.r, pr.g, pr.b, 0.65},
+                                            palette::whiteAlpha(0.3), bypassAmount(i));
+            t.setStroke(selected ? selRing : Color{1, 1, 1, 0.08}, selected ? 2.0 : 1.0);
             t.beginPath();
             t.moveTo(x - o, ry - o); t.lineTo(x + cw + o, ry - o);
             t.lineTo(x + cw + o, ry + kCellH + o); t.lineTo(x - o, ry + kCellH + o); t.closePath();
@@ -243,7 +271,7 @@ namespace cosmo_v2
             const double rx = cellX(a) + (cellX(b) - cellX(a)) * f;
             const double rw = cellW(a) + (cellW(b) - cellW(a)) * f;
             const double o = 3.0;
-            t.setStroke(pr, 2.0);
+            t.setStroke(lerpColor(pr, palette::whiteAlpha(0.42), bypassAmount(mPrimary)), 2.0);
             t.beginPath();
             t.moveTo(rx - o, ry - o); t.lineTo(rx + rw + o, ry - o);
             t.lineTo(rx + rw + o, ry + kCellH + o); t.lineTo(rx - o, ry + kCellH + o); t.closePath();
@@ -252,12 +280,38 @@ namespace cosmo_v2
             {
                 const std::string &label = mCells[mPrimary].name;
                 drawRoundedRect(t, Rect{rx, ry + kCellH - 12.0, rw, 12.0}, 0.0,
-                                Paint::filled(Color{pr.r, pr.g, pr.b, 0.8}));
+                                Paint::filled(lerpColor(Color{pr.r, pr.g, pr.b, 0.8},
+                                                        Color{0.16, 0.16, 0.16, 0.85}, bypassAmount(mPrimary))));
                 t.setFill(palette::white());
                 t.drawText(label, rx + rw * 0.5 - label.size() * 7.0 * 0.3, ry + kCellH - 3.0, 7.0, font::sansMedium());
             }
         }
         t.restore();
+    }
+
+    // ── R-BYPASS-5: per-cell "filter disabled" fade ──
+
+    void Filmstrip::advanceBypassFades(double nowMs)
+    {
+        if (mByAmt.size() != mCells.size()) mByAmt.resize(mCells.size(), 0.0);
+        constexpr double kDurMs = 160.0;
+        const bool rm = artboard::reducedMotion();
+        const double dt = (mByLastMs < 0.0) ? 0.0 : (nowMs - mByLastMs);
+        const double step = rm ? 1.0 : std::min(1.0, std::max(0.0, dt / kDurMs));
+        mByLastMs = nowMs;
+        for (size_t i = 0; i < mByAmt.size(); ++i)
+        {
+            const double tgt = mCells[i].bypassed ? 1.0 : 0.0;
+            if (mByAmt[i] < tgt) mByAmt[i] = std::min(tgt, mByAmt[i] + step);
+            else if (mByAmt[i] > tgt) mByAmt[i] = std::max(tgt, mByAmt[i] - step);
+        }
+    }
+
+    double Filmstrip::bypassAmount(int cell) const
+    {
+        if (cell < 0 || cell >= (int)mByAmt.size()) return 0.0;
+        const double t = mByAmt[cell];
+        return t * t * (3.0 - 2.0 * t);  // smoothstep, same ease as HoverFade
     }
 }
 }

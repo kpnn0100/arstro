@@ -66,6 +66,7 @@ namespace cosmo
             const GNode &g = mNodes[n];
             Cell c;
             c.group = g.group; c.node = n; c.name = g.name;
+            c.bypassed = g.bypass;  // R-BYPASS-5
             if (g.group) c.count = (int)g.kids.size();
             else c.slot = g.slot;
             cells.push_back(c);
@@ -269,6 +270,39 @@ namespace cosmo
         return slots;
     }
 
+    // ---- filter bypass (R-BYPASS) ----
+
+    bool EditSession::isBypassed(int node) const
+    {
+        return node >= 0 && node < (int)mNodes.size() && mNodes[node].bypass;
+    }
+
+    void EditSession::setBypassed(int node, bool on)
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return;
+        if (mNodes[node].bypass == on) return;
+        mNodes[node].bypass = on;
+        mDirty = true;               // a bypass toggle is an unsaved change (R-BYPASS-6)
+        if (mCurrentSlot >= 0)       // re-render whatever is on screen through the new composition
+            mService.render(mCurrentSlot, effectiveParams(mCurrentSlot));
+    }
+
+    void EditSession::toggleBypass(int node) { setBypassed(node, !isBypassed(node)); }
+
+    int EditSession::editTargetNode() const
+    {
+        if (mEditGroup >= 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group) return mEditGroup;
+        return mCurrentSlot >= 0 ? nodeForSlot(mCurrentSlot) : -1;
+    }
+
+    bool EditSession::editTargetBypassed() const { return isBypassed(editTargetNode()); }
+
+    void EditSession::setSlotBypass(int slot, bool on)
+    {
+        const int n = nodeForSlot(slot);
+        if (n >= 0) mNodes[n].bypass = on;
+    }
+
     // ---- develop params ----
 
     EditParams *EditSession::curParams()
@@ -285,12 +319,15 @@ namespace cosmo
         if (slot < 0 || slot >= (int)mSlotParams.size()) return EditParams{};
         // The image's own params, with every ancestor group's params stacked on top,
         // folded child -> root (recursive: a nested group rides on its parent's).
-        EditParams e = mSlotParams[slot];
-        int n = nodeForSlot(slot);
+        // R-BYPASS-2: a bypassed node contributes EditParams{} instead of its own
+        // params -- the leaf's own edits and each ancestor group's offsets drop out
+        // independently, so bypass composes down the whole chain.
+        const int n = nodeForSlot(slot);
+        EditParams e = (n >= 0 && mNodes[n].bypass) ? EditParams{} : mSlotParams[slot];
         if (n >= 0)
             for (int g = mNodes[n].parent; ; g = mNodes[g].parent)
             {
-                e = composeParams(e, mNodes[g].params);
+                if (!mNodes[g].bypass) e = composeParams(e, mNodes[g].params);
                 if (g == 0) break;
             }
         return e;
@@ -301,16 +338,31 @@ namespace cosmo
         if (mEditGroup > 0 && mEditGroup < (int)mNodes.size() && mNodes[mEditGroup].group)
         {
             // A group being edited: its own params stacked with its ancestor groups.
+            // R-BYPASS-2: bypass is honoured on the ANCESTORS (a disabled group really
+            // adds nothing to the green "stacked reach") but never on the edit target
+            // itself -- the reach measures what sits ON TOP of the shown values, and
+            // the target's own bypass is communicated by the dim scrim (R-BYPASS-4).
             EditParams e = mNodes[mEditGroup].params;
             for (int g = mNodes[mEditGroup].parent; ; g = mNodes[g].parent)
             {
-                e = composeParams(e, mNodes[g].params);
+                if (!mNodes[g].bypass) e = composeParams(e, mNodes[g].params);
                 if (g == 0) break;
             }
             return e;
         }
         if (mEditGroup == 0) return mNodes[0].params;   // root group has no ancestors
-        return effectiveParams(mCurrentSlot);            // an image: its slot's effective params
+        // An image: its own params (kept even when bypassed, see above) stacked with
+        // its non-bypassed ancestor groups.
+        if (mCurrentSlot < 0 || mCurrentSlot >= (int)mSlotParams.size()) return EditParams{};
+        EditParams e = mSlotParams[mCurrentSlot];
+        const int n = nodeForSlot(mCurrentSlot);
+        if (n >= 0)
+            for (int g = mNodes[n].parent; ; g = mNodes[g].parent)
+            {
+                if (!mNodes[g].bypass) e = composeParams(e, mNodes[g].params);
+                if (g == 0) break;
+            }
+        return e;
     }
 
     void EditSession::applyParams(const EditParams &p)
@@ -590,12 +642,14 @@ namespace cosmo
                 if (g.group)
                 {
                     f << "#group\nparent=" << parentId << "\nname=" << g.name << '\n';
+                    if (g.bypass) f << "bypass=1\n";   // R-BYPASS-6 (absent = enabled)
                     writeParamsAndHistory(g.params, g.history);  // groups carry full settings now
                     walk(k, myId);
                 }
                 else if (g.slot >= 0 && g.slot < (int)mSlotPaths.size())
                 {
                     f << "#image\nparent=" << parentId << "\npath=" << mSlotPaths[g.slot] << '\n';
+                    if (g.bypass) f << "bypass=1\n";   // R-BYPASS-6
                     writeParamsAndHistory(mSlotParams[g.slot], mSlotHistory[g.slot]);
                 }
             }
@@ -663,6 +717,7 @@ namespace cosmo
             else if (k == "parent") { try { cur.parent = std::stoi(v); } catch (...) {} }
             else if (k == "name") cur.name = v;
             else if (k == "path") cur.imagePath = v;
+            else if (k == "bypass") cur.bypass = (v != "0");   // R-BYPASS-6
             else if (k == "hcurrent") { try { cur.history.current = std::stoi(v); } catch (...) {} }
             else if (k == "hmax") { try { cur.history.maxSteps = std::stoi(v); } catch (...) {} }
             else if (k == "hcoalesce") { try { cur.history.coalesceMs = std::stod(v); } catch (...) {} }
@@ -704,10 +759,11 @@ namespace cosmo
     }
 
     int EditSession::addWorkspaceGroup(int parentNode, const std::string &name, const EditParams &params,
-                                       const History &history)
+                                       const History &history, bool bypass)
     {
         if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = 0;
         GNode g; g.group = true; g.name = name.empty() ? "Group" : name; g.parent = parentNode; g.params = params;
+        g.bypass = bypass;   // R-BYPASS-6
         if (history.nodes.empty()) g.history.init(params);  // no saved tree -> single root
         else g.history.restore(history.nodes, history.current, history.maxSteps, history.coalesceMs);
         const int node = (int)mNodes.size();
@@ -777,12 +833,27 @@ namespace cosmo
         mService.setPreviewSize(eff);
     }
 
-    const uint8_t *EditSession::exportFullRes(int &w, int &h)
+    const uint8_t *EditSession::exportFullRes(int &w, int &h) { return exportFullResSlot(mCurrentSlot, w, h); }
+
+    const uint8_t *EditSession::exportFullResSlot(int slot, int &w, int &h)
     {
-        if (mCurrentSlot < 0) { w = h = 0; return nullptr; }
-        if (!mService.renderFull(mCurrentSlot, effectiveParams(mCurrentSlot), mExportFrame)) { w = h = 0; return nullptr; }
+        // R-EXPORT-7: the batch exporter renders each selected slot through exactly the
+        // composition the preview uses, so bypass (R-BYPASS-2) is honoured identically
+        // and what the photographer saw is what lands on disk.
+        if (slot < 0 || slot >= (int)mSlotParams.size()) { w = h = 0; return nullptr; }
+        if (!mService.renderFull(slot, effectiveParams(slot), mExportFrame)) { w = h = 0; return nullptr; }
         w = mExportFrame.width; h = mExportFrame.height;
         return mExportFrame.rgba.data();
+    }
+
+    std::string EditSession::sourcePathForSlot(int slot) const
+    {
+        return (slot >= 0 && slot < (int)mSlotPaths.size()) ? mSlotPaths[slot] : std::string();
+    }
+
+    std::string EditSession::nameForSlot(int slot) const
+    {
+        return (slot >= 0 && slot < (int)mSlotNames.size()) ? mSlotNames[slot] : std::string();
     }
 
     const RenderService::Frame *EditSession::renderBefore()

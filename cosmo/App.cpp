@@ -148,6 +148,16 @@ namespace cosmo_v2
         mSettingsDialog->onUseGpu = [this](bool on) { mSession.setUseGpu(on); };  // setUseGpu re-renders (R-GPU)
         mRoot->addChild(mSettingsDialog);
 
+        // Batch export modal (R-EXPORT). Its two host seams: a native folder chooser
+        // for "Change…", and the batch write itself (which the host runs incrementally
+        // so the UI never blocks -- R-EXPORT-6).
+        mExportDialog = std::make_shared<ExportDialog>(mAccent);
+        mExportDialog->onChooseDestination = [this] { if (onChooseExportFolderRequested) onChooseExportFolderRequested(); };
+        mExportDialog->onExport = [this](ExportDialog::Request r) {
+            if (onExportBatchRequested) onExportBatchRequested(std::move(r));
+        };
+        mRoot->addChild(mExportDialog);
+
         mConfirmDialog = std::make_shared<ConfirmDialog>(mAccent);
         mRoot->addChild(mConfirmDialog);
 
@@ -184,6 +194,8 @@ namespace cosmo_v2
         mPresetDialog->width.set(mW); mPresetDialog->height.set(mH);       // full-window modal
         mSettingsDialog->x.set(0.0); mSettingsDialog->y.set(0.0);
         mSettingsDialog->width.set(mW); mSettingsDialog->height.set(mH);
+        mExportDialog->x.set(0.0); mExportDialog->y.set(0.0);
+        mExportDialog->width.set(mW); mExportDialog->height.set(mH);       // full-window modal
         mConfirmDialog->x.set(0.0); mConfirmDialog->y.set(0.0);
         mConfirmDialog->width.set(mW); mConfirmDialog->height.set(mH);
 
@@ -286,7 +298,7 @@ namespace cosmo_v2
             {"Open...",                  [this] { if (onOpenRequested) onOpenRequested(); }},
             {"Save        (Ctrl+S)",     [this] { saveWorkspace(); }},
             {"Save As...  (Ctrl+Shift+S)", [this] { if (onSaveWorkspaceRequested) onSaveWorkspaceRequested(); }},
-            {"Export...",                [this] { if (onExportRequested) onExportRequested(); }},
+            {"Export...",                [this] { openExportDialog(); }},
         }});
         ms->addMenu({"Settings", {
             {"Engine Settings...", [this] { openSettingsDialog(); }},
@@ -325,6 +337,41 @@ namespace cosmo_v2
         syncControlsToSlot();
     }
 
+    void App::openExportDialog()
+    {
+        // R-EXPORT: snapshot the group tree into the modal in PRE-ORDER, skipping the
+        // root group itself (the "Select all" button already covers "everything") so
+        // the tree opens on the project's own top-level groups and photos.
+        if (mSession.imageCount() == 0) return;   // nothing to export
+        const auto &nodes = mSession.nodes();
+        std::vector<ExportDialog::Node> out;
+        std::function<void(int, int)> walk = [&](int node, int parentIdx) {
+            for (int k : nodes[node].kids)
+            {
+                ExportDialog::Node n;
+                n.parent = parentIdx;
+                n.group = nodes[k].group;
+                n.name = nodes[k].group ? nodes[k].name : mSession.nameForSlot(nodes[k].slot);
+                if (!nodes[k].group)
+                {
+                    n.slot = nodes[k].slot;
+                    n.sourcePath = mSession.sourcePathForSlot(nodes[k].slot);
+                    if (n.name.empty()) n.name = "(missing image)";
+                }
+                const int myIdx = (int)out.size();
+                out.push_back(std::move(n));
+                if (nodes[k].group) walk(k, myIdx);
+            }
+        };
+        walk(0, -1);
+
+        // Seed the ticks from an explicit selection when there is one; otherwise every
+        // image (the reference modal's default, and the useful one for a batch).
+        std::vector<int> preselect;
+        if (!mSession.selection().empty()) preselect = mSession.selectedImageSlots();
+        mExportDialog->show(std::move(out), preselect);
+    }
+
     void App::openHistoryView()
     {
         // Snapshot the current image's branching history (parent + label per node)
@@ -347,8 +394,20 @@ namespace cosmo_v2
         items.push_back({"Add Photo...",      [this] { if (onOpenRequested) onOpenRequested(); }});
         items.push_back({"Group Selection",   [this] { mSession.createGroupFromSelection(); syncControlsToSlot(); }});
         items.push_back({"Ungroup Selection", [this] { mSession.ungroupSelected(); syncControlsToSlot(); }});
-        // Right-clicking a group offers Rename (morphs the menu into the rename field, DR-TREE-5).
         const auto cells = mSession.currentGroupCells();
+        // R-BYPASS-3: right-clicking any cell (group OR image) offers a filter
+        // disable/enable toggle. The label names the CURRENT state's inverse, so the
+        // item always reads as what the click will do.
+        if (cell >= 0 && cell < (int)cells.size())
+        {
+            const int node = cells[cell].node;
+            const bool off = mSession.isBypassed(node);
+            items.push_back({off ? "Enable Filter" : "Disable Filter", [this, node] {
+                mSession.toggleBypass(node);
+                syncControlsToSlot();   // repaint the dim scrim, the badge and the strip
+            }});
+        }
+        // Right-clicking a group offers Rename (morphs the menu into the rename field, DR-TREE-5).
         if (cell >= 0 && cell < (int)cells.size() && cells[cell].group)
         {
             const int node = cells[cell].node;
@@ -388,10 +447,13 @@ namespace cosmo_v2
         }
         mCenterStage->breadcrumb()->setPath(crumbs);
 
+        // R-BYPASS-4: dim the edit stack while the item being edited has its filter off.
+        mRightColumn->setBypassed(mSession.editTargetBypassed());
+
         // Filmstrip: the current group's children + which cell(s) are selected.
         std::vector<Filmstrip::Cell> cells;
         for (const auto &c : mSession.currentGroupCells())
-            cells.push_back({c.group, c.node, c.slot, c.name, c.count});
+            cells.push_back({c.group, c.node, c.slot, c.name, c.count, c.bypassed});
         mCenterStage->filmstrip()->setCells(cells);
 
         const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
@@ -444,6 +506,7 @@ namespace cosmo_v2
         if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
         if (mScreen == Screen::Loading) return;                           // non-interactive transition
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
+        if (mExportDialog->isOpen()) { mExportDialog->scrollBy(delta, x, y); return; }  // R-EXPORT-2 tree/body scroll
 
         // Ctrl + wheel over the photo = zoom about the cursor (R-ZOOM-1). The photo's
         // world rect is CenterStage's origin + PhotoCanvas's origin within it.
@@ -588,7 +651,15 @@ namespace cosmo_v2
         syncControlsToSlot();  // refresh the breadcrumb + top-bar group name
     }
 
-    bool App::isTextEditing() const { return mContextMenu && mContextMenu->isRenaming(); }
+    bool App::isTextEditing() const
+    {
+        // "The in-app keyboard is busy": the group-rename field (DR-TREE-5), or the
+        // Export modal, which is keyboard-modal whether or not one of its two text
+        // fields is focused -- either way the host must not fire its plain-key
+        // shortcuts (o / s / Delete) behind it.
+        if (mContextMenu && mContextMenu->isRenaming()) return true;
+        return mExportDialog && mExportDialog->isOpen();
+    }
 
     namespace
     {

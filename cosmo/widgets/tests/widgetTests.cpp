@@ -16,11 +16,14 @@
 
 #include "../HueCurveEditor.h"
 #include "../CurvePanel.h"
+#include "../ExportDialog.h"
 #include "../../Theme.h"
 #include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -264,6 +267,134 @@ namespace
             check(greenRefStrokes(c) == 0, "no green when the final equals the own curve");
         }
     }
+
+    // ── ExportDialog tree propagation (R-EXPORT-2) ────────────────────────────
+    //
+    // The four rules the requirement spells out, driven through the widget's own
+    // model surface (the same calls handleGesture makes for a row click):
+    //   select parent   -> select all children
+    //   deselect parent -> deselect all children
+    //   deselect child  -> untick parent
+    //   select all children -> tick parent
+    // Group state is DERIVED (0 = none, 1 = all, 2 = indeterminate), so a stored
+    // flag can never drift out of step with the leaves.
+
+    using arstro::cosmo_v2::ExportDialog;
+
+    // Rows for the fixture, in the order show() flattens them (pre-order):
+    //   0 Rivers        (group)
+    //   1   river_01    slot 0
+    //   2   river_02    slot 1
+    //   3   Dusk        (group, nested)
+    //   4     dusk_a    slot 2
+    //   5     dusk_b    slot 3
+    //   6 loose.jpg     slot 4
+    enum { kRivers = 0, kR1, kR2, kDusk, kD1, kD2, kLoose };
+
+    std::shared_ptr<ExportDialog> makeTree()
+    {
+        std::vector<ExportDialog::Node> n;
+        auto add = [&](int parent, bool group, int slot, const char *name, const char *path) {
+            ExportDialog::Node e;
+            e.parent = parent; e.group = group; e.slot = slot; e.name = name; e.sourcePath = path;
+            n.push_back(e);
+            return (int)n.size() - 1;
+        };
+        const int rivers = add(-1, true, -1, "Rivers", "");
+        add(rivers, false, 0, "river_01.jpg", "/pics/rivers/river_01.jpg");
+        add(rivers, false, 1, "river_02.jpg", "/pics/rivers/river_02.jpg");
+        const int dusk = add(rivers, true, -1, "Dusk", "");
+        add(dusk, false, 2, "dusk_a.jpg", "/pics/rivers/dusk_a.jpg");
+        add(dusk, false, 3, "dusk_b.jpg", "/pics/rivers/dusk_b.jpg");
+        add(-1, false, 4, "loose.jpg", "/pics/loose.jpg");
+
+        auto d = std::make_shared<ExportDialog>(arstro::cosmo_v2::palette::primary());
+        d->width.set(1280); d->height.set(800);
+        d->show(std::move(n), {});          // empty preselect == everything ticked
+        return d;
+    }
+
+    void exportTreeStartsFullySelected()
+    {
+        auto d = makeTree();
+        check(d->rowCount() == 7, "every node is a visible row (groups start expanded)");
+        check(d->rowState(kRivers) == 1, "a fully-ticked group reads ticked");
+        check(d->rowState(kDusk) == 1, "a fully-ticked nested group reads ticked");
+        check(d->selectedSlots().size() == 5, "all five image leaves are selected");
+    }
+
+    void exportDeselectParentClearsChildren()
+    {
+        auto d = makeTree();
+        d->toggleRow(kRivers);   // ticked -> untick the whole subtree
+        check(d->rowState(kRivers) == 0, "deselecting a parent leaves it unticked");
+        check(d->rowState(kR1) == 0 && d->rowState(kR2) == 0, "its direct children are unticked");
+        check(d->rowState(kDusk) == 0, "its nested group is unticked");
+        check(d->rowState(kD1) == 0 && d->rowState(kD2) == 0, "the nested group's leaves too");
+        check(d->rowState(kLoose) == 1, "a sibling outside the subtree is untouched");
+        check(d->selectedSlots().size() == 1, "only the loose image is left selected");
+    }
+
+    void exportSelectParentSelectsChildren()
+    {
+        auto d = makeTree();
+        d->toggleRow(kRivers);   // clear it first
+        d->toggleRow(kRivers);   // ...then select the parent again
+        check(d->rowState(kRivers) == 1, "selecting a parent ticks it");
+        check(d->rowState(kR1) == 1 && d->rowState(kR2) == 1, "every direct child is ticked");
+        check(d->rowState(kD1) == 1 && d->rowState(kD2) == 1, "every nested descendant is ticked");
+        check(d->selectedSlots().size() == 5, "the whole tree is selected again");
+    }
+
+    void exportDeselectChildUnticksParent()
+    {
+        auto d = makeTree();
+        d->toggleRow(kD2);       // untick ONE leaf deep in the tree
+        check(d->rowState(kD2) == 0, "the clicked leaf is unticked");
+        check(d->rowState(kDusk) == 2, "its parent group goes indeterminate, not ticked");
+        check(d->rowState(kRivers) == 2, "the grandparent goes indeterminate too");
+        check(d->rowState(kRivers) != 1, "an ancestor is never ticked while a descendant is not");
+        check(d->selectedSlots().size() == 4, "one image dropped out of the selection");
+    }
+
+    void exportSelectingLastChildTicksParent()
+    {
+        auto d = makeTree();
+        d->toggleRow(kD1);
+        d->toggleRow(kD2);       // both nested leaves off -> the group is empty
+        check(d->rowState(kDusk) == 0, "a group with no ticked descendants reads unticked");
+        check(d->rowState(kRivers) == 2, "the grandparent still has river_01/02 -> indeterminate");
+        d->toggleRow(kD1);
+        check(d->rowState(kDusk) == 2, "one of two ticked -> indeterminate");
+        d->toggleRow(kD2);       // ...and now the LAST child
+        check(d->rowState(kDusk) == 1, "ticking the last child ticks the parent");
+        check(d->rowState(kRivers) == 1, "and the ancestor above it, once it is complete");
+    }
+
+    void exportMasterToggleAndCollapse()
+    {
+        auto d = makeTree();
+        d->setAllChecked(false);
+        check(d->selectedSlots().empty(), "Select none clears every leaf");
+        check(d->rowState(kRivers) == 0, "groups follow the leaves down");
+        d->setAllChecked(true);
+        check(d->selectedSlots().size() == 5, "Select all ticks every leaf");
+
+        d->toggleExpand(kRivers);
+        check(d->rowCount() == 2, "collapsing a group hides its whole subtree (Rivers + loose)");
+        check(d->selectedSlots().size() == 5, "collapsing changes visibility, never selection");
+        d->toggleExpand(kRivers);
+        check(d->rowCount() == 7, "re-expanding restores every row");
+    }
+
+    void exportSelectedSlotsAreInTreeOrder()
+    {
+        auto d = makeTree();
+        const std::vector<int> slots = d->selectedSlots();
+        check(slots.size() == 5, "five slots");
+        for (size_t i = 1; i < slots.size(); ++i)
+            check(slots[i - 1] < slots[i], "slots come back in tree (pre-order) order");
+    }
 }
 
 int main()
@@ -281,6 +412,14 @@ int main()
     curveAltDragMakesSmoothSpline();
     curveDoubleClickAddRemove();
     curveReferenceShownWhenDiffers();
+
+    exportTreeStartsFullySelected();
+    exportDeselectParentClearsChildren();
+    exportSelectParentSelectsChildren();
+    exportDeselectChildUnticksParent();
+    exportSelectingLastChildTicksParent();
+    exportMasterToggleAndCollapse();
+    exportSelectedSlotsAreInTreeOrder();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

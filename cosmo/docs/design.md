@@ -58,6 +58,31 @@ many clickable regions in one Segment, so they can't use per-Segment hover; they
 region id and drive it through the shared `HoverFade` helper, which cross-fades (old region fades
 out as the new fades in) rather than snapping the highlight between siblings.
 
+## Why a bypassed node only drops its OWN params
+
+`bypass` could have meant "this group and everything under it renders raw". It does not: it removes
+exactly the bypassed node's own contribution from `effectiveParams`, leaving its descendants' and
+its other ancestors' contributions alone. That keeps bypass **compositional** — every node in a
+chain can be toggled independently, and the result is always predictable from the flags you can see
+— where a subtree-wide meaning would make a group's toggle silently override choices made on the
+images inside it, with no way to express "the group's offset is off but the photo's own grade is
+on". The one deliberate asymmetry is `effectiveEditParams()`, which powers the panel's green
+"stacked reach" (effective − own): it honours bypass on the ancestors but never zeroes the edit
+target's own values, because the reach measures what sits ON TOP of the numbers being shown. The
+target's own bypass is communicated by the dim scrim instead of by faking a negative reach on every
+slider.
+
+## Why the export tree derives group state instead of storing it
+
+The Export modal's tree has to satisfy four rules at once: selecting a parent selects its children,
+deselecting a parent deselects them, deselecting any child unticks the parent, and ticking the last
+child ticks the parent. Storing a tick per node means maintaining all four as separate propagation
+passes, and any missed path leaves a group ticked while a child inside it is not. Instead only the
+**image leaves** hold state and a group's state is computed from its descendants (all → ticked,
+some → indeterminate, none → unticked). All four rules then fall out of one definition, the
+indeterminate state comes for free, and there is no second copy of the truth to drift. It costs a
+subtree walk per drawn row, which at project-tree sizes is nothing.
+
 ## Consistency locks
 One accent, one radius scale, one type ramp, one wordmark renderer — all from `Theme`. A widget
 that invents its own blue or radius is a bug. The wordmark in particular is drawn by one function

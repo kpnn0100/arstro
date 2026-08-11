@@ -144,8 +144,14 @@ mRoot
 │   └─ ActionBar             (Save / Import / Export)
 ├─ HistoryView   (modal, overlay pass)
 ├─ ContextMenu   (modal, overlay pass)
-├─ PresetDialog / SettingsDialog / ConfirmDialog   (modals, overlay pass)
+├─ PresetDialog / SettingsDialog / ExportDialog / ConfirmDialog   (modals, overlay pass)
 ```
+
+`RightColumn` also paints a **bypass scrim** in the overlay pass (R-BYPASS-4): a dark wash over
+the tab strip + panel body (the histogram and the pinned ActionBar stay clear) plus a
+`FILTER DISABLED` pill under the tabs, whose opacity is an eased `AnimatedProperty`. It is drawn in
+the overlay pass rather than `onPaint` because `onPaint` runs BEFORE a Segment's children — a scrim
+there would land under the very controls it has to mute.
 
 `HomeScreen` is **not** in this tree — the App advances/renders it separately depending on the
 screen. Modals draw in Artboard's second `renderOverlay` pass so they escape parent clipping, and
@@ -221,6 +227,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `cosmo/Theme.{h,cpp}` | app | palette, radii, fonts, type ramp |
 | `cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
+| `cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |
 | `cosmo/widgets/*` | app | ~40 `Segment` widgets (chrome, panels, controls, overlays, dialogs) |
 | `cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam |
 | `cosmo/core/History.{h,cpp}` | core | branching undo tree |

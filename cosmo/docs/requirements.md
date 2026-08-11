@@ -492,10 +492,12 @@ cosmoworkspace=1
 #group
 parent=<id>
 name=<name>
+bypass=1                                ; optional (R-BYPASS-6); absent = filter enabled
 offset=<12 comma-separated LocalAdjust scalars>
 #image
 parent=<id>
 path=<source path>
+bypass=1                                ; optional (R-BYPASS-6)
 <serializeParams(params) …>            ; current params
 hcurrent=<i>  hmax=<n>  hcoalesce=<ms>  ; history header (optional)
 #hnode                                  ; one per history node, vector-index order
@@ -553,3 +555,90 @@ srw/rwl/raw) via LibRaw. `openPaths` prefers a RAW over a same-stem JPEG when bo
   currently a no-op seam even though the dialog exists.
 - **CurvePanel R/G/B** buttons all edit one shared curve; **XformPanel Flip/Auto** are inert;
   **HistogramWidget** has no Log/Linear toggle (always log). These are intentional per the source.
+
+## 14. Filter bypass (R-BYPASS)
+
+### DR-BYPASS-1 Model
+`EditSession::GNode` carries `bypass`. `isBypassed(node)` / `setBypassed(node,on)` /
+`toggleBypass(node)` read and write it; `editTargetNode()` / `editTargetBypassed()` answer for
+whatever the develop panels are currently editing; `setSlotBypass(slot,on)` restores it on load.
+Setting it marks the session dirty and re-renders the current slot immediately.
+
+### DR-BYPASS-2 Composition
+`effectiveParams(slot)` is the ONLY place bypass is applied for rendering: a bypassed leaf
+contributes `EditParams{}` instead of its own params, and a bypassed ancestor group is skipped in
+the fold. Preview, histogram, before/after and export therefore agree by construction.
+`effectiveEditParams()` (panel "stacked reach" only) honours bypass on the ancestors but keeps the
+edit target's own values — see `design.md`.
+
+### DR-BYPASS-3 Context menu
+`App::openEditContext` adds **Disable Filter** / **Enable Filter** for any cell (group or image);
+the label names the current state's inverse. The action calls `toggleBypass` then
+`syncControlsToSlot()`.
+
+### DR-BYPASS-4 Edit-stack scrim
+`RightColumn::setBypassed(bool)` drives an eased `AnimatedProperty` (180 ms, `EaseInOutCubic`,
+`reducedMotion()`-safe). `RightColumn::onOverlay` washes `editStackRect()` — histogram bottom to
+ActionBar top — at 62 % black and draws a `FILTER DISABLED` pill (ban icon + label) centred just
+below the tab strip. Controls stay enabled: a bypassed item is still editable.
+
+### DR-BYPASS-5 Filmstrip badge
+`Filmstrip::Cell::bypassed` drives a per-cell eased amount (`advanceBypassFades`, 160 ms,
+smoothstep). A bypassed cell gets a 52 % dark wash, a ban badge in its top-left, and its selection /
+primary ring lerps from accent toward neutral grey.
+
+### DR-BYPASS-6 Persistence
+`bypass=1` is written on a node's `#group` / `#image` section in the `.cosmoproj`; absent means
+enabled, so older projects load unchanged. `WorkspaceEntry::bypass` carries it to the host, which
+passes it to `addWorkspaceGroup(..., bypass)` / `setSlotBypass(slot, bypass)` on both the
+synchronous and the threaded load paths.
+
+## 15. Export modal (R-EXPORT)
+
+### DR-EXPORT-1 Chrome
+`widgets/ExportDialog` — a focusable, self-drawn modal `Segment` on the PresetDialog chrome: scrim,
+centred 560 px card, header (download icon + "Export" + ✕), clipped scrolling body, pinned footer.
+Opens with an eased fade + 8 px rise folded into `cardRect()` itself, so layout, hit-testing and
+paint can never disagree. Click-outside / ✕ / Cancel / **Esc** close it; it takes keyboard focus on
+`show()` because `dispatchKey` only reaches the focused Segment. `App::isTextEditing()` reports true
+while it is open so the host's plain-key shortcuts stay suppressed.
+
+### DR-EXPORT-2 Tree
+`show(nodes, preselect)` takes the group tree in pre-order (`App::openExportDialog` walks
+`EditSession::nodes()` from the root's children). State lives on the image leaves
+(`mLeafChecked`); `checkState(node)` derives a group's 0/1/2. The public model surface —
+`rowCount()`, `rowIsGroup()`, `rowState()`, `toggleRow()`, `toggleExpand()`, `setAllChecked()`,
+`selectedSlots()` — is what `handleGesture` calls after mapping a pixel to a row, and is what the
+unit tests drive. The box shows exactly `kTreeRows`(8) whole rows and scrolls (eased) beyond that.
+
+### DR-EXPORT-3 Destination
+A **Same as source** checkbox sits at the right of the destination row (default on). On: each image
+is written beside its own original and the path field is an inert hint. Off: one folder is used,
+seeded from the first selected image's folder, changed via `onChooseDestination` →
+host folder chooser → `setDestination()`. Two optional modifiers below — **Filename prefix** and
+**Export to subfolder** — each a checkbox + label + hand-rolled text field (focus + `handleKey`, as
+in `ContextMenu`'s rename box); the field is drawn muted and inert while its checkbox is off. A mono
+preview line under the row shows the resolved path + example filename, front-ellipsized.
+
+### DR-EXPORT-4 Format / size / quality
+Format chips **JPEG · PNG · TIFF** (exactly what the GdkPixbuf writer produces). Size chips
+**Original · 2048 · 1080 · 720 px** cap the long edge, downscale only. Quality is JPEG-only and is
+laid out as **two rows**: a label row (`Quality` left, `NN%` right) and the slider on its own row.
+The whole block disappears for PNG/TIFF.
+
+### DR-EXPORT-5 Metadata
+Three toggles with eased knobs, honoured by `ExportWriter` where the container can carry them:
+EXIF copies the source JPEG's APP1 into a JPEG output; Strip GPS removes IFD0's `0x8825` entry from
+that copy; sRGB writes an APP2 `ICC_PROFILE` (JPEG) / an ICC tag (TIFF) / `sRGB`+`gAMA` chunks
+(PNG, whose GdkPixbuf saver rejects `icc-profile`).
+
+### DR-EXPORT-6 Progress
+Export switches the card to a compact progress face (`mPhase` cross-fade + card-height tween) with a
+determinate eased bar and the name of the file being written. The host (`exportStep`, a `g_idle_add`
+pump) renders and writes ONE image per main-loop step and calls `setExportProgress(done,total,name)`,
+so the UI keeps painting; `done == total` closes the dialog. It is modal and non-cancellable for the
+duration.
+
+### DR-EXPORT-7 Bypass honoured
+`EditSession::exportFullResSlot(slot,…)` composes the same `effectiveParams(slot)` the preview uses,
+so a bypassed image or group exports without those edits.

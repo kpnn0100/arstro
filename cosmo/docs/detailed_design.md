@@ -487,6 +487,40 @@ The pinned Save/Import/Export row (`kHeight=39`). `onSave`, `onImport`, `onExpor
 accent button; the others outline. Per-button `HoverFade` + `hoverBox`. Icons `save`/`upload`/
 `download`. (Wired in the app to Save/Import/Export **Preset**.)
 
+### 7.8b ExportDialog
+The batch-export modal (R-EXPORT). `ExportDialog(accent)`; `struct Node{parent,group,slot,name,
+sourcePath}` (pre-order, `parent` indexes the vector) and `struct Request{slots, sameAsSource,
+destination, usePrefix/prefix, useSubfolder/subfolder, format, quality, longEdge, embedExif,
+stripGps, embedProfile}`; `show(nodes, preselect)`, `setDestination`, `setExportProgress(done,
+total,name)`, `cancelExport`, `scrollBy(delta,x,y)`; seams `onChooseDestination`, `onExport(Request)`.
+`kCardW=560`, `kTreeRows=8 × kTreeRowH=22`.
+
+Tree model (public, and what the tests drive): `rowCount`, `rowIsGroup`, `rowState` (0/1/2),
+`toggleRow`, `toggleExpand`, `setAllChecked`, `selectedSlots`. Ticks live on the image leaves;
+`checkState(node)` derives a group's state from `collectLeaves`, which is what makes the four
+propagation rules hold without a second copy of the truth (see `design.md`).
+
+Geometry: one `Layout layoutForm(top)` walks a single running cursor so no row can overlap its
+neighbour, and returns `contentH` for the scroll extent. `cardX()` is deliberately split out of
+`cardRect()` — the card's HEIGHT depends on the form's content height, which depends on the layout,
+which only needs the card's X; routing the layout through `cardRect()` makes the two mutually
+recursive. `cardRect()` height = `kHeaderH + lerp(min(formH,avail), progressH, mPhase) + kFooterH`,
+clamped to the window with a 24 px margin (R4), and folds the fade-in rise in so hit-testing and
+paint share one rect. The body is clipped and scrolls, with a gradient fade at each overflowing
+edge. Two hand-rolled text fields take focus via `mFocusField` + `handleKey`. Hover ids are a flat
+enum with tree rows at `kIdTree + row`.
+
+### 7.8c ExportWriter (`cosmo/ExportWriter.{h,cpp}`, host layer)
+`resolvePath(req, sourcePath, fallbackName)` → destination dir (created with
+`g_mkdir_with_parents`) + prefix + stem + the format's extension. `write(req, rgba, w, h, path,
+sourcePath, error)` packs RGB for JPEG (no alpha) or hands RGBA straight to PNG/TIFF, applies the
+long-edge cap with `gdk_pixbuf_scale_simple` (downscale only), saves via `gdk_pixbuf_savev`
+(`quality` for JPEG, `icc-profile` with a 468-byte embedded sRGB v2 profile for JPEG/TIFF), then
+post-processes: `addPngSrgbChunks` splices `sRGB`+`gAMA` after IHDR for PNG (whose GdkPixbuf saver
+rejects `icc-profile`), and `readJpegApp1`/`stripGps`/`injectApp1` copy the source JPEG's Exif APP1
+into a JPEG output, optionally dropping IFD0's `0x8825` GPS pointer (a fixed 12-byte entry, so
+removing it and decrementing the count keeps every other offset valid).
+
 ### 7.8 PresetTree
 The left-rail browser (Artboard has no tree control, so it is built from primitives). `kRowH=20`.
 `setRoots(vector<PresetNode>)` (preserves expanded folders by relPath), `setSelected(relPath)`,

@@ -1,8 +1,9 @@
 /*
  *  cosmo_v2 by arstro — small stroke-only line icons matching the glyphs used
  *  in the Figma export (lucide-react: ChevronRight, ChevronDown, PanelLeft,
- *  Save, Upload, Download, RefreshCw, Trash2, RotateCcw). Artboard has no icon
- *  library or SVG-path loader, so these are hand-drawn approximations of each
+ *  Save, Upload, Download, RefreshCw, Trash2, RotateCcw, FolderOpen, Image, X,
+ *  Ban). Artboard has no icon library or SVG-path loader, so these are
+ *  hand-drawn approximations of each
  *  glyph's silhouette using plain IRenderTarget path primitives -- not a HAL
  *  change, just composition (per the platform-independence rule's first
  *  preference: express new capability with existing primitives). At the
@@ -32,6 +33,14 @@ namespace icon
     void refreshCw(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
     void trash2(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.1);
     void rotateCcw(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
+    /** lucide FolderOpen — the Export modal's tree group rows + destination row (R-EXPORT). */
+    void folder(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
+    /** lucide Image — the Export modal's tree image rows (R-EXPORT-2). */
+    void image(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
+    /** lucide X — a dialog's close button (R-EXPORT-1). */
+    void close(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.3);
+    /** lucide Ban (circle + slash) — the "filter disabled" badge (R-BYPASS-4/5). */
+    void ban(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.2);
 }
 }
 }

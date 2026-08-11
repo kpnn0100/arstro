@@ -406,3 +406,116 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   substring); no matches shows the empty-state placeholder.
 - **R-HOME-8 Reserved.** Settings / What's New / Help & Documentation are present but inert
   (reserved), matching the Figma affordances without behavior.
+
+## R-BYPASS — Per-node filter bypass (disable/enable a group's or photo's edits)
+
+A photographer needs to see what an item looks like *without* its own develop settings without
+throwing those settings away. Any node of the group tree — an image leaf **or** a group — can
+therefore be **bypassed**: its own `EditParams` stop contributing to what is rendered, while the
+values themselves stay intact and stay editable, so re-enabling restores the look exactly.
+
+- **R-BYPASS-1 Model (one flag per node).** `EditSession::GNode` carries a `bypass` flag
+  (`isBypassed(node)` / `setBypassed(node,on)` / `toggleBypass(node)`). It is a property of the
+  **node**, not of the slot, so an image leaf and a group are bypassed the same way.
+- **R-BYPASS-2 Semantics — a node's OWN params only.** Bypass removes exactly the bypassed node's
+  own contribution from the composition, nothing else:
+  - a bypassed **image leaf** contributes `EditParams{}` instead of its own params; its ancestor
+    groups still stack onto it;
+  - a bypassed **group** contributes `EditParams{}` instead of its own offsets; its members' own
+    params and its *other* ancestors are unaffected.
+  Bypass therefore composes: each node in a chain can be bypassed independently, and bypassing a
+  group does **not** implicitly bypass the images inside it. `effectiveParams(slot)` is the single
+  place this is applied for everything that renders — preview, histogram, before/after and export
+  all agree by construction.
+  `effectiveEditParams()` (which exists only to derive the panel's green "stacked reach" =
+  effective − own) honours bypass on the **ancestors** but never zeroes the edit target's *own*
+  values, because that reach measures what the ancestors add on top: a bypassed ancestor correctly
+  contributes nothing, while the target's own bypass is communicated by the dim scrim (R-BYPASS-4)
+  rather than by faking a negative reach on every slider.
+- **R-BYPASS-3 Right-click toggle.** The filmstrip/photo context menu (`App::openEditContext`) gains
+  a **Disable Filter** / **Enable Filter** item whenever the click landed on a cell (group or image).
+  The label reads the target's current state, so the item always names what the click will do.
+  Toggling re-renders immediately (R2) and marks the session dirty.
+- **R-BYPASS-4 The edit section dims.** While the item currently being edited is bypassed, the
+  right column's **edit stack** (the tab strip + the panel body between the histogram and the action
+  bar) is covered by a dark scrim and its content is muted, so it reads at a glance as "these values
+  will not be applied". A small non-interactive **FILTER DISABLED** pill sits at the top of the
+  dimmed area naming the state. The controls stay live — a bypassed item is still editable.
+  The scrim's opacity is an `AnimatedProperty` eased in/out (R-G-1); it never pops, and it collapses
+  instantly under `reducedMotion()`. The histogram and the pinned action bar are NOT dimmed (they
+  are not part of the edit stack).
+- **R-BYPASS-5 Filmstrip indicator.** A bypassed cell draws a muted "no entry" badge in its
+  top-left corner and its thumbnail ring reads muted rather than accent, so the state is visible
+  from the strip without opening the menu. `Filmstrip::Cell` carries a `bypassed` flag fed by
+  `App::syncControlsToSlot`.
+- **R-BYPASS-6 Persistence.** The flag round-trips through the `.cosmoproj` workspace as a
+  `bypass=1` line on the node's `#group` / `#image` section (absent = not bypassed, so older
+  projects load unchanged). `WorkspaceEntry::bypass` carries it to the host loader, which passes it
+  to `addWorkspaceGroup` / `setSlotBypass`.
+
+## R-EXPORT — In-app Export modal (batch export with a group tree)
+
+File ▸ Export… opens an **in-app modal**, styled exactly like the rest of the editor, that exports
+one or many images in one action. It replaces the old "immediately show a native save dialog for the
+current image" behaviour of that menu item. The **bare `s` shortcut keeps its quick single-image
+PNG/JPEG export** through the native save dialog (R-PERSIST-1's note stands) — the modal is the
+deliberate, batch path, `s` is the fast path.
+
+Reference design: `ref/cosmo/File Reader Design(1).zip` → `src/app/App.tsx` `ExportModal`, adapted
+to this app's tree model per the deltas called out below.
+
+- **R-EXPORT-1 Chrome.** A modal `ExportDialog` Segment drawn in the overlay pass on the same
+  chrome as R-PRESETPICK-3 / `PresetDialog`: dim scrim over the whole window, one centred card on
+  `palette::popover()` with a `radius::control()` border, a header band carrying the **download
+  icon + the title "Export"** and a close **✕**, a scrollable body, and a pinned footer. It fades +
+  rises in and out (R-G-1), and click-outside / **Esc** cancels. Every region hovers (R-G-3).
+- **R-EXPORT-2 Images to export — a checkbox TREE (delta from the reference).** The reference's
+  group chips + flat thumbnail grid are replaced by the **real group tree**: one row per node,
+  indented by depth, groups carrying an expand/collapse chevron + child count, images carrying their
+  filename. **Every row has a checkbox**, and the check state propagates:
+  - **select a parent → select all its children** (recursively);
+  - **deselect a parent → deselect all its children** (recursively);
+  - **deselect any child → the parent is unticked**;
+  - **when every child is selected → the parent is ticked**.
+  This is realised by keeping the **image leaves** authoritative and *deriving* every group's state
+  from its descendants — ticked when all descendant images are ticked, **indeterminate** (a dash,
+  not a tick) when only some are, unticked when none — which satisfies all four rules by
+  construction and cannot drift. A **Select all / Select none** master button sits above the tree,
+  and a "`n` of `m` photos selected" line below it. Rows only count toward `m` if they are real
+  image leaves (a group is a container, never an export target). The tree scrolls (eased, R-G-1)
+  when it is taller than its box.
+- **R-EXPORT-3 Destination (delta from the reference).** The destination row carries a **checkbox
+  on its right, "Same as source"**, ticked by default:
+  - **ticked** → each image is written next to its own original file, so a mixed selection lands
+    beside each source. The path field shows `<source folder>/` greyed as a non-editable hint;
+  - **unticked** → one explicit output folder is used for everything. It **defaults to the folder of
+    the first selected image**, and a **Change…** button asks the host for a native folder chooser
+    (`onChooseDestination` → `setDestination(path)`).
+  Below it, two optional modifiers, each a checkbox + label + text field (the field is disabled and
+  muted while its checkbox is off): **Filename prefix** (prepended to each output name) and
+  **Export to subfolder** (a folder created under the resolved destination). The resolved path +
+  example filename is previewed live in mono under the destination row, ellipsized to fit (R5).
+- **R-EXPORT-4 Format / size / quality.** Format chips: **JPEG · PNG · TIFF** — the three the host
+  writer can actually produce (GdkPixbuf); WebP from the reference is dropped rather than shipped
+  broken. Size chips: **Original · 2048 px · 1080 px · 720 px** (long edge; downscale only, never
+  upscale). **Quality** applies to JPEG only and is laid out as **two rows** (delta from the
+  reference, which put the value inline with the slider): a **label row** — `Quality` left, the
+  current `NN%` right — and the **slider on its own row** below it, full width. The quality block
+  fades out entirely for PNG/TIFF, which have no quality knob.
+- **R-EXPORT-5 Metadata.** Three toggles, matching the reference: **Embed EXIF data**,
+  **Strip GPS coordinates**, **Embed colour profile (sRGB)**. They are honoured by the host writer
+  for the formats that can carry them: EXIF/GPS operate on the JPEG `APP1` segment copied from a
+  JPEG source, and the sRGB profile is written as a JPEG `APP2` `ICC_PROFILE` segment / a PNG
+  `iCCP` chunk. A toggle that a chosen format cannot carry is simply not applied (no silent
+  failure, and the footer summary never claims otherwise).
+- **R-EXPORT-6 Footer + progress (R2).** The footer shows a live summary — `n photos · FMT · SIZE`
+  (+ `· prefix: …` when one is set) — and **Cancel** / **Export n photos**. Export is disabled while
+  nothing is selected. Because a batch full-res render is far slower than a frame, pressing Export
+  **does not freeze the UI**: the dialog switches to an in-place **progress state** (a determinate
+  accent bar + the name of the file being written), driven by the host feeding
+  `setExportProgress(done, total, name)` one image per main-loop idle step, and closes itself when
+  the batch finishes. The dialog stays modal (and non-cancellable mid-write) for the duration.
+- **R-EXPORT-7 Bypass is honoured.** Batch export renders each slot through
+  `EditSession::exportFullResSlot(slot,…)`, which composes exactly the same `effectiveParams(slot)`
+  the preview uses — so a bypassed image or group exports without those edits (R-BYPASS-2), and
+  what you see is what is written.

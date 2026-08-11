@@ -16,6 +16,7 @@
 #include "widgets/HistoryView.h"
 #include "widgets/ContextMenu.h"
 #include "widgets/PresetDialog.h"
+#include "widgets/ExportDialog.h"
 #include "widgets/SettingsDialog.h"
 #include "widgets/ConfirmDialog.h"
 #include "widgets/HomeScreen.h"
@@ -85,12 +86,28 @@ namespace cosmo_v2
         void deleteSelected();
         int imageCount() const { return mSession.imageCount(); }
         const uint8_t *exportFullRes(int &w, int &h) { return mSession.exportFullRes(w, h); }
+        /** Batch-export passthroughs (R-EXPORT): the host renders one selected slot
+         *  per idle step and reports back through setExportProgress(). */
+        const uint8_t *exportFullResSlot(int slot, int &w, int &h) { return mSession.exportFullResSlot(slot, w, h); }
+        std::string sourcePathForSlot(int slot) const { return mSession.sourcePathForSlot(slot); }
+        std::string nameForSlot(int slot) const { return mSession.nameForSlot(slot); }
 
         // ── File-menu actions wired by the host (it owns the file dialogs) ──
         std::function<void()> onOpenRequested;
         std::function<void()> onSaveRequested;
         std::function<void()> onSaveAsRequested;
-        std::function<void()> onExportRequested;   // host: PNG/JPG export dialog -> exportFullRes
+        std::function<void()> onExportRequested;   // host: quick single-image save dialog (bare 's') -> exportFullRes
+        /** The Export modal's "Change…" (R-EXPORT-3): the host shows a native folder
+         *  chooser and answers with setExportDestination(). */
+        std::function<void()> onChooseExportFolderRequested;
+        /** The Export modal's Export button (R-EXPORT-6): the host writes the batch
+         *  incrementally, feeding setExportProgress() so the UI keeps painting. */
+        using ExportRequest = ExportDialog::Request;
+        std::function<void(ExportRequest)> onExportBatchRequested;
+        void setExportDestination(const std::string &dir) { if (mExportDialog) mExportDialog->setDestination(dir); }
+        void setExportProgress(int done, int total, const std::string &name)
+        { if (mExportDialog) mExportDialog->setExportProgress(done, total, name); }
+        void cancelExport() { if (mExportDialog) mExportDialog->cancelExport(); }
         std::function<void()> onSavePresetRequested;
         std::function<void()> onExportPresetRequested;
         std::function<void()> onImportPresetRequested;
@@ -132,14 +149,16 @@ namespace cosmo_v2
         std::string currentWorkspacePath() const { return mSession.workspacePath(); }
         void resetWorkspace();  // reset the session AND clear the editor's visible state
         int addWorkspaceGroup(int parentNode, const std::string &name, const arstro::EditParams &params,
-                              const cosmo::History &history = cosmo::History{})
-        { return mSession.addWorkspaceGroup(parentNode, name, params, history); }
+                              const cosmo::History &history = cosmo::History{}, bool bypass = false)
+        { return mSession.addWorkspaceGroup(parentNode, name, params, history, bypass); }
         int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);
         int addWorkspaceMissingImage(int parentNode, const std::string &name)
         { return mSession.addWorkspaceMissingImage(parentNode, name); }
         void applyParamsToSlot(int slot, const EditParams &p) { mSession.applyParamsToSlot(slot, p); }
         void applyParamsToSlot(int slot, const EditParams &p, const cosmo::History &history)
         { mSession.applyParamsToSlot(slot, p, history); }
+        /** R-BYPASS-6: restore a loaded image leaf's "filter disabled" flag. */
+        void setSlotBypass(int slot, bool on) { mSession.setSlotBypass(slot, on); }
         void finishWorkspaceLoad(const std::string &path);
 
     private:
@@ -160,6 +179,7 @@ namespace cosmo_v2
         void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
         void presetExportClicked(); // Export Preset -> category picker -> host path dialog
         void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
+        void openExportDialog();    // File ▸ Export… (R-EXPORT): snapshot the tree into the modal
         void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
         void requestHome();         // wordmark click: prompt to save/discard if dirty, else go home
 
@@ -193,6 +213,7 @@ namespace cosmo_v2
         int mRenameTargetNode = -1;   // group node the in-app rename currently targets
         std::shared_ptr<PresetDialog> mPresetDialog;      // modal category picker (overlay)
         std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
+        std::shared_ptr<ExportDialog> mExportDialog;      // modal batch export (overlay, R-EXPORT)
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher

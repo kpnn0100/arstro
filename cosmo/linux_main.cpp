@@ -6,6 +6,7 @@
  *  font-family parameter (Artboard FR-22) resolves to them.
  */
 #include "App.h"
+#include "ExportWriter.h"
 #include "Log.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../Artboard/src/adapter/native/CairoTarget.h"
@@ -55,6 +56,7 @@ namespace
             std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
             int w = 0, h = 0;
             bool decoded = false;              // false = missing/failed image
+            bool bypass = false;               // R-BYPASS-6: node's filter disabled
         };
 
         std::vector<App::WorkspaceEntry> entries;
@@ -76,6 +78,16 @@ namespace
         }
     };
 
+    // R-EXPORT-6: a batch export writes ONE image per main-loop idle step rather
+    // than looping inline, so the modal keeps painting its progress bar and the app
+    // never appears frozen (R2). The job holds the request + the cursor into it.
+    struct ExportJob
+    {
+        App::ExportRequest req;
+        size_t index = 0;
+        int failures = 0;
+    };
+
     struct Host
     {
         GtkWidget *window = nullptr;
@@ -86,6 +98,7 @@ namespace
         gint64 startUs = 0;
         std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
+        std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -300,7 +313,7 @@ namespace
             const int parentNode = e.parent < 0 ? 0 : e.parent + 1;
             if (e.group)
             {
-                a->app.addWorkspaceGroup(parentNode, e.name, e.params, e.history);
+                a->app.addWorkspaceGroup(parentNode, e.name, e.params, e.history, e.bypass);
                 continue;
             }
             DecodedImage img = a->decoder.decodeFile(e.imagePath);
@@ -309,6 +322,7 @@ namespace
                 const int slot = a->app.openImageInto(parentNode, img.rgba.data(), img.width, img.height,
                                                        baseName(e.imagePath), e.imagePath);
                 a->app.applyParamsToSlot(slot, e.params, e.history);
+                a->app.setSlotBypass(slot, e.bypass);   // R-BYPASS-6
             }
             else
             {
@@ -492,6 +506,7 @@ namespace
             r.parent = e.parent;
             r.params = e.params;
             r.history = e.history;
+            r.bypass = e.bypass;               // R-BYPASS-6
             if (e.group)
             {
                 r.name = e.name;
@@ -530,12 +545,13 @@ namespace
             const int parentNode = r.parent < 0 ? 0 : r.parent + 1;
             if (r.group)
             {
-                a->app.addWorkspaceGroup(parentNode, r.name, r.params, r.history);
+                a->app.addWorkspaceGroup(parentNode, r.name, r.params, r.history, r.bypass);
             }
             else if (r.decoded)
             {
                 const int slot = a->app.openImageInto(parentNode, r.rgba.data(), r.w, r.h, r.name, r.imagePath);
                 a->app.applyParamsToSlot(slot, r.params, r.history);
+                a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
                 // Fallback cover only if the thumbnail wasn't already supplied (#3):
                 // normally the loading-screen centre image is the cached thumbnail.
                 if (!job->coverSent && !a->app.hasLoadingCover())
@@ -777,6 +793,80 @@ namespace
         gtk_widget_destroy(d);
     }
 
+    // ── Export modal host seams (R-EXPORT) ────────────────────────────────────
+
+    // "Change…": pick the one output folder used when "Same as source" is unticked.
+    void chooseExportFolderDialog(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Export to folder", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Select", GTK_RESPONSE_ACCEPT, nullptr);
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            gchar *dir = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (dir) { a->app.setExportDestination(dir); g_free(dir); }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    // One image per idle step: render it full-res through the session (which composes
+    // the same params the preview did, so bypass is honoured -- R-EXPORT-7), encode it
+    // via ExportWriter, then report progress so the modal's bar advances (R-EXPORT-6).
+    gboolean exportStep(gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (!a->exportJob) return G_SOURCE_REMOVE;
+        ExportJob &job = *a->exportJob;
+        const auto &slots = job.req.slots;
+
+        if (job.index >= slots.size())
+        {
+            LOGI("cosmo_v2: export finished (%zu written, %d failed)", slots.size() - job.failures, job.failures);
+            a->app.setExportProgress((int)slots.size(), (int)slots.size(), "");
+            a->exportJob.reset();
+            gtk_widget_queue_draw(a->area);
+            return G_SOURCE_REMOVE;
+        }
+
+        const int slot = slots[job.index];
+        const std::string src = a->app.sourcePathForSlot(slot);
+        const std::string name = a->app.nameForSlot(slot);
+        const std::string out = arstro::cosmo_v2::exporter::resolvePath(job.req, src, name);
+
+        int w = 0, h = 0;
+        const uint8_t *px = a->app.exportFullResSlot(slot, w, h);
+        std::string err;
+        if (!px || !arstro::cosmo_v2::exporter::write(job.req, px, w, h, out, src, err))
+        {
+            ++job.failures;
+            g_printerr("cosmo_v2: export failed for %s: %s\n", out.c_str(),
+                       err.empty() ? "no rendered frame" : err.c_str());
+        }
+        else
+            g_print("cosmo_v2: exported %s (%dx%d)\n", out.c_str(), w, h);
+
+        ++job.index;
+        // Report the count DONE plus the name of the one now in flight, so the status
+        // line names what is being written rather than what already finished.
+        const std::string next = job.index < slots.size()
+                                     ? a->app.nameForSlot(slots[job.index])
+                                     : std::string();
+        a->app.setExportProgress((int)job.index, (int)slots.size(), next);
+        gtk_widget_queue_draw(a->area);
+        return G_SOURCE_CONTINUE;
+    }
+
+    void startExportBatch(Host *a, App::ExportRequest req)
+    {
+        if (req.slots.empty()) return;
+        if (a->exportJob) return;   // one batch at a time
+        LOGI("cosmo_v2: exporting %zu image(s) as %s", req.slots.size(), req.format.c_str());
+        a->exportJob = std::make_unique<ExportJob>();
+        a->exportJob->req = std::move(req);
+        g_idle_add(exportStep, a);
+    }
+
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
@@ -925,7 +1015,9 @@ int main(int argc, char **argv)
 
     host.app.onOpenRequested = [&host] { openDialog(&host); };
     host.app.onSaveAsRequested = [&host] { saveSessionDialog(&host); };
-    host.app.onExportRequested = [&host] { saveDialog(&host); };
+    host.app.onExportRequested = [&host] { saveDialog(&host); };   // bare 's': quick single-image export
+    host.app.onChooseExportFolderRequested = [&host] { chooseExportFolderDialog(&host); };
+    host.app.onExportBatchRequested = [&host](App::ExportRequest r) { startExportBatch(&host, std::move(r)); };
     host.app.onSavePresetRequested = [&host] { savePresetDialog(&host); };
     host.app.onExportPresetRequested = [&host] { exportPresetDialog(&host); };
     host.app.onImportPresetRequested = [&host] { importPresetDialog(&host); };
