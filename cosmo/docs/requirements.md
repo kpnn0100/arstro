@@ -633,9 +633,16 @@ that copy; sRGB writes an APP2 `ICC_PROFILE` (JPEG) / an ICC tag (TIFF) / `sRGB`
 (PNG, whose GdkPixbuf saver rejects `icc-profile`).
 
 ### DR-EXPORT-6 The three export beats
-The host (`exportStep`, a `g_idle_add` pump) renders and writes ONE image per main-loop step and
-calls `setExportProgress(done,total,name)`, so the UI keeps painting. The dialog is modal and
-non-cancellable (click-outside and Escape are both swallowed) for the duration. Three faces, tweened
+**Animate first, export after.** `beginExport()` snapshots the `Request` and starts the collapse;
+`advance()` fires `onExport` only once `mPhase` has stopped animating, so beat 1 is pure animation
+with no I/O behind it (the split R-LOADING-0/1 uses). The host then runs the batch on a **worker
+thread** (`ExportJob::worker`) — `exportFullResSlot()` blocks its caller inside
+`RenderService::renderFull()`, so on the UI thread it would freeze a frame per image — and the UI
+thread drains finished results via `pollExport` (`g_timeout_add(15)`), calling
+`setExportProgress(done,total,name)`. `App::render` skips its own `tryAcquire`/`refreshPhotoForMode`
+path while `App::exportInProgress()`, since `renderBefore()` re-enters the engine's single-slot
+full-render channel that the worker is using. The dialog is modal and non-cancellable
+(click-outside and Escape are both swallowed) for the duration. Three faces, tweened
 through in order by `mPhase` then `mCompleteAmt`; `cardRect()` lerps the body height across all
 three, so the whole sequence is one continuous shrink:
 

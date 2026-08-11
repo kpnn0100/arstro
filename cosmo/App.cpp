@@ -588,8 +588,14 @@ namespace cosmo_v2
             else                                      ov->setMask(MaskParams{}, false);
         }
 
+        // While a batch export is running, the host's worker owns RenderService's
+        // full-render channel; refreshPhotoForMode() can re-enter that same channel via
+        // renderBefore()/renderPreviewSync, which holds only ONE pending request, so two
+        // callers would steal each other's frame. Nothing can submit a new preview
+        // behind the modal anyway, so simply leave the last frame on screen until the
+        // export finishes.
         RenderService::Frame f;
-        if (mSession.renderService().tryAcquire(f) && f.width > 0)
+        if (!exportInProgress() && mSession.renderService().tryAcquire(f) && f.width > 0)
         {
             mLastAfterFrame = f;
             refreshPhotoForMode();

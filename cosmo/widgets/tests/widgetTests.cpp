@@ -22,6 +22,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -413,14 +414,24 @@ namespace
      *  height, so sweep UPWARD from the bottom of the window — the footer is the card's
      *  lowest band, so the first click that lands inside it is the button. A miss lands
      *  outside and closes the dialog, so rebuild and carry on. */
-    void pressExport(std::shared_ptr<ExportDialog> &d, double &now)
+    void pressExport(std::shared_ptr<ExportDialog> &d, double &now,
+                     std::function<void(ExportDialog::Request)> onExport = {},
+                     std::function<void(std::shared_ptr<ExportDialog> &)> reseed = {})
     {
         const double bx = (1280.0 + 560.0) * 0.5 - 80.0;
         for (double y = 798.0; y > 400.0; y -= 2.0)
         {
             feedDialog(d, Gesture::Type::Click, bx, y);
             if (d->isExporting()) return;
-            if (!d->isOpen()) { d = makeTree(); tickDialog(d, 30, now); }
+            if (!d->isOpen())
+            {
+                // A probe miss dismissed it; rebuild AND restore whatever the caller set
+                // up on the dialog, or the assertions would run against a bare one.
+                d = makeTree();
+                if (onExport) d->onExport = onExport;
+                if (reseed) reseed(d);
+                tickDialog(d, 30, now);
+            }
         }
     }
 
@@ -488,6 +499,51 @@ namespace
         check(!d->isOpen(), "the dialog closes itself once the confirmation has been read");
     }
 
+    void exportAnimationPlaysBeforeAnyExportWork()
+    {
+        // The crux of "animate first, export later" (R-EXPORT-6 beat 1): pressing
+        // Export must start the collapse and hand the host NOTHING until that tween has
+        // finished, so the first full-resolution render can never stall the animation.
+        double now = 0.0;
+        auto d = makeTree();
+        int fired = 0;
+        std::vector<int> firedSlots;
+        auto cb = [&](ExportDialog::Request r) { ++fired; firedSlots = r.slots; };
+        d->onExport = cb;
+        tickDialog(d, 30, now);
+        pressExport(d, now, cb);
+        check(d->isExporting(), "the collapse starts immediately");
+        check(fired == 0, "no export work is handed over on the click itself");
+
+        tickDialog(d, 6, now);            // ~96ms into the 260ms collapse
+        check(fired == 0, "still nothing while the collapse is mid-flight");
+
+        tickDialog(d, 20, now);           // past the end of the collapse
+        check(fired == 1, "the batch is handed over exactly once, after the collapse");
+        check(firedSlots.size() == 5, "the request carries the ticked images");
+
+        tickDialog(d, 30, now);
+        check(fired == 1, "and it is never handed over a second time");
+    }
+
+    void exportRequestIsSnapshotAtPressTime()
+    {
+        // The request is captured when Export is pressed, so the collapse (which stops
+        // drawing the picker) cannot change what gets written.
+        double now = 0.0;
+        auto d = makeTree();
+        ExportDialog::Request got;
+        int fired = 0;
+        auto cb = [&](ExportDialog::Request r) { ++fired; got = std::move(r); };
+        d->onExport = cb;
+        tickDialog(d, 30, now);
+        d->toggleRow(kD2);                // untick one leaf -> 4 of 5
+        pressExport(d, now, cb, [](std::shared_ptr<ExportDialog> &nd) { nd->toggleRow(kD2); });
+        tickDialog(d, 40, now);
+        check(fired == 1, "handed over once");
+        check(got.slots.size() == 4, "the snapshot honours the ticks at press time");
+    }
+
     void exportProgressIgnoresInputAndReopensClean()
     {
         double now = 0.0;
@@ -535,6 +591,8 @@ int main()
     exportDragMovesTheCard();
     exportDragIsClamped();
     exportBeatsRunToCompletionAndClose();
+    exportAnimationPlaysBeforeAnyExportWork();
+    exportRequestIsSnapshotAtPressTime();
     exportProgressIgnoresInputAndReopensClean();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",

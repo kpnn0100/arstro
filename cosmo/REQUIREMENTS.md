@@ -513,7 +513,17 @@ to this app's tree model per the deltas called out below.
   nothing is selected. Because a batch full-res render is far slower than a frame, pressing Export
   **does not freeze the UI**: the host feeds `setExportProgress(done, total, name)` one image per
   main-loop idle step. The dialog stays modal (and non-cancellable mid-write) for the duration.
-  Pressing Export plays a **three-beat animation**, every beat eased and reduced-motion-safe:
+  Pressing Export plays a **three-beat animation**, every beat eased and reduced-motion-safe.
+  **The animation plays first and the export starts after it** — pressing Export snapshots the
+  request but hands the host nothing until the collapse has finished (`onExport` fires from
+  `advance()` when the tween settles), exactly the split R-LOADING-0/1 uses so its intro never
+  hitches on I/O. And the batch itself runs on a **worker thread**: `exportFullResSlot()` goes
+  through `RenderService::renderFull()`, which *blocks its caller* until the engine finishes, so
+  running it on the UI thread would freeze every frame for the length of each image. The UI thread
+  only drains finished results (~1 poll per frame), so the dialog animates at full framerate from
+  the first frame to the last. While a batch is running `App::render` skips its own full-render
+  path (`renderBefore`), because the engine's full-render channel holds one request at a time and
+  two callers would steal each other's frame.
   1. **Collapse.** The card *shrinks in place* to a progress card: the header and the
      **Images to Export** section survive; the master button, the selection count, Destination,
      the modifiers, Format/Size/Quality and Metadata all **fade out** and the card height tweens

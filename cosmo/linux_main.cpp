@@ -78,14 +78,45 @@ namespace
         }
     };
 
-    // R-EXPORT-6: a batch export writes ONE image per main-loop idle step rather
-    // than looping inline, so the modal keeps painting its progress bar and the app
-    // never appears frozen (R2). The job holds the request + the cursor into it.
+    // R-EXPORT-6 / R2: a batch export runs on its OWN thread, exactly like the
+    // project loader above. It has to: EditSession::exportFullResSlot() renders at full
+    // resolution through RenderService::renderFull(), which BLOCKS its caller until the
+    // engine's worker finishes — doing that on the UI thread freezes every frame for the
+    // length of each image, which is what made the collapse animation stutter. Here the
+    // worker blocks instead, and the UI thread only drains finished results, so the
+    // dialog animates at full framerate from the first frame to the last.
+    //
+    // Safe because the dialog is modal for the batch's duration: nothing can submit an
+    // edit, and App::render() skips its own full-render path while
+    // App::exportInProgress() (RenderService's full-render channel holds one request at
+    // a time). The worker never touches GTK — it only renders, encodes and writes, and
+    // hands plain results back for the UI thread to report.
     struct ExportJob
     {
+        struct Result
+        {
+            std::string name;      // display name of the image just written
+            std::string path;      // where it landed
+            bool ok = false;
+            std::string error;     // why not, when !ok
+        };
+
         App::ExportRequest req;
-        size_t index = 0;
+        std::mutex mu;                         // guards `ready`
+        std::vector<Result> ready;             // produced results, in order
+        std::atomic<bool> producedAll{false};
+        std::atomic<bool> stop{false};
+        size_t consumed = 0;                   // main-thread reported count
         int failures = 0;
+        std::thread worker;
+        guint pollId = 0;
+
+        ~ExportJob()
+        {
+            stop.store(true);
+            if (worker.joinable()) worker.join();
+            if (pollId) g_source_remove(pollId);
+        }
     };
 
     struct Host
@@ -810,61 +841,86 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
-    // One image per idle step: render it full-res through the session (which composes
-    // the same params the preview did, so bypass is honoured -- R-EXPORT-7), encode it
-    // via ExportWriter, then report progress so the modal's bar advances (R-EXPORT-6).
-    gboolean exportStep(gpointer user)
+    // Main thread: drain whatever the export worker has finished and report it to the
+    // modal, one poll per frame. This is the ONLY place export results touch the UI.
+    gboolean pollExport(gpointer user)
     {
         auto *a = static_cast<Host *>(user);
         if (!a->exportJob) return G_SOURCE_REMOVE;
         ExportJob &job = *a->exportJob;
-        const auto &slots = job.req.slots;
+        const size_t total = job.req.slots.size();
 
-        if (job.index >= slots.size())
+        for (;;)
         {
-            LOGI("cosmo_v2: export finished (%zu written, %d failed)", slots.size() - job.failures, job.failures);
-            a->app.setExportProgress((int)slots.size(), (int)slots.size(), "");
-            a->exportJob.reset();
+            ExportJob::Result r;
+            {
+                std::lock_guard<std::mutex> lk(job.mu);
+                if (job.consumed >= job.ready.size()) break;
+                r = std::move(job.ready[job.consumed]);
+                ++job.consumed;
+            }
+            if (r.ok) g_print("cosmo_v2: exported %s\n", r.path.c_str());
+            else
+            {
+                ++job.failures;
+                g_printerr("cosmo_v2: export failed for %s: %s\n", r.path.c_str(), r.error.c_str());
+            }
+            // Report the count DONE plus the name of the one now in flight, so the
+            // status line names what is being written rather than what just finished.
+            const std::string next = job.consumed < total
+                                         ? a->app.nameForSlot(job.req.slots[job.consumed])
+                                         : std::string();
+            a->app.setExportProgress((int)job.consumed, (int)total, next);
+            gtk_widget_queue_draw(a->area);
+        }
+
+        if (job.producedAll.load() && job.consumed >= total)
+        {
+            LOGI("cosmo_v2: export finished (%zu written, %d failed)", total - job.failures, job.failures);
+            job.pollId = 0;                 // we are returning REMOVE; don't double-remove
+            a->exportJob.reset();           // joins the worker
             gtk_widget_queue_draw(a->area);
             return G_SOURCE_REMOVE;
         }
-
-        const int slot = slots[job.index];
-        const std::string src = a->app.sourcePathForSlot(slot);
-        const std::string name = a->app.nameForSlot(slot);
-        const std::string out = arstro::cosmo_v2::exporter::resolvePath(job.req, src, name);
-
-        int w = 0, h = 0;
-        const uint8_t *px = a->app.exportFullResSlot(slot, w, h);
-        std::string err;
-        if (!px || !arstro::cosmo_v2::exporter::write(job.req, px, w, h, out, src, err))
-        {
-            ++job.failures;
-            g_printerr("cosmo_v2: export failed for %s: %s\n", out.c_str(),
-                       err.empty() ? "no rendered frame" : err.c_str());
-        }
-        else
-            g_print("cosmo_v2: exported %s (%dx%d)\n", out.c_str(), w, h);
-
-        ++job.index;
-        // Report the count DONE plus the name of the one now in flight, so the status
-        // line names what is being written rather than what already finished.
-        const std::string next = job.index < slots.size()
-                                     ? a->app.nameForSlot(slots[job.index])
-                                     : std::string();
-        a->app.setExportProgress((int)job.index, (int)slots.size(), next);
-        gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
     }
 
+    // Fired by the modal only AFTER its collapse animation has finished (R-EXPORT-6
+    // beat 1 is pure animation, no I/O — the same split R-LOADING-0/1 uses), so the
+    // first full-res render can never stall the tween.
     void startExportBatch(Host *a, App::ExportRequest req)
     {
         if (req.slots.empty()) return;
         if (a->exportJob) return;   // one batch at a time
         LOGI("cosmo_v2: exporting %zu image(s) as %s", req.slots.size(), req.format.c_str());
         a->exportJob = std::make_unique<ExportJob>();
-        a->exportJob->req = std::move(req);
-        g_idle_add(exportStep, a);
+        ExportJob *job = a->exportJob.get();
+        job->req = std::move(req);
+
+        job->worker = std::thread([a, job] {
+            for (size_t i = 0; i < job->req.slots.size(); ++i)
+            {
+                if (job->stop.load()) break;
+                const int slot = job->req.slots[i];
+                const std::string src = a->app.sourcePathForSlot(slot);
+                const std::string name = a->app.nameForSlot(slot);
+
+                ExportJob::Result r;
+                r.name = name;
+                r.path = arstro::cosmo_v2::exporter::resolvePath(job->req, src, name);
+
+                int w = 0, h = 0;
+                const uint8_t *px = a->app.exportFullResSlot(slot, w, h);   // blocks HERE, off the UI thread
+                if (!px) { r.ok = false; r.error = "no rendered frame"; }
+                else       r.ok = arstro::cosmo_v2::exporter::write(job->req, px, w, h, r.path, src, r.error);
+
+                std::lock_guard<std::mutex> lk(job->mu);
+                job->ready.push_back(std::move(r));
+            }
+            job->producedAll.store(true);
+        });
+
+        job->pollId = g_timeout_add(15, pollExport, a);   // ~1 poll per frame
     }
 
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)

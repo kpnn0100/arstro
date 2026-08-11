@@ -502,7 +502,8 @@ propagation rules hold without a second copy of the truth (see `design.md`).
 
 Progress state: `mPhase` (form → progress), `mCompleteAmt` (progress → confirmation),
 `mExportRows`/`mExportSeq`/`mRowFade` (the manifest, each row's place in the write order, and its
-eased "written" amount), `mCardOffset`/`mDraggingCard`/`mSuppressClick` (the drag). See
+eased "written" amount), `mPendingRequest`/`mFirePending` (the snapshot handed to the host only once
+the collapse has played out), `mCardOffset`/`mDraggingCard`/`mSuppressClick` (the drag). See
 `docs/requirements.md` DR-EXPORT-6/8 for the beat-by-beat contract.
 
 Geometry: one `Layout layoutForm(top)` walks a single running cursor so no row can overlap its

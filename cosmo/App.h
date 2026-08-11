@@ -108,6 +108,11 @@ namespace cosmo_v2
         void setExportProgress(int done, int total, const std::string &name)
         { if (mExportDialog) mExportDialog->setExportProgress(done, total, name); }
         void cancelExport() { if (mExportDialog) mExportDialog->cancelExport(); }
+        /** True while a batch is being written. The host's export worker calls
+         *  exportFullResSlot() off the UI thread, and RenderService's full/sync render
+         *  channel holds ONE pending request at a time — so while this is true the UI
+         *  thread must not enter that channel itself (see App::render). */
+        bool exportInProgress() const { return mExportDialog && mExportDialog->isExporting(); }
         std::function<void()> onSavePresetRequested;
         std::function<void()> onExportPresetRequested;
         std::function<void()> onImportPresetRequested;

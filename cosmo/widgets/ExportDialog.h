@@ -90,7 +90,10 @@ namespace cosmo_v2
         void setDestination(const std::string &dir);
         /** Host progress pump. `done == total` finishes and closes the dialog. */
         void setExportProgress(int done, int total, const std::string &name);
-        /** Abort the progress state (a write failed outright) and return to the form. */
+        /** Abort the progress state (a write failed outright) and return to the form.
+         *  The host must have STOPPED its export worker before calling this: while
+         *  isExporting() is true the app keeps its own UI thread out of the engine's
+         *  full-render channel, which the worker is using. */
         void cancelExport();
 
         // ── tree model, as a public surface (R-EXPORT-2) ──
@@ -242,6 +245,12 @@ namespace cosmo_v2
                                                      // write order (-1 for a group row)
         std::vector<double> mRowFade;                // per mExportRows entry: eased "written" amount
         double mRowFadeLastMs = -1.0;
+        // R-EXPORT-6 beat 1 is PURE ANIMATION: the request is snapshotted when Export is
+        // pressed but only handed to the host once the collapse has finished playing, so
+        // the batch's first full-res render can never stall the tween (the same split
+        // R-LOADING-0/1 uses for the open-project intro).
+        Request mPendingRequest;
+        bool mFirePending = false;
         bool mComplete = false;                      // beat 3: the green-tick face
         artboard::AnimatedProperty mCompleteAmt{0.0};
         double mCompleteAtMs = 0.0;                  // when beat 3 began (drives the auto-close hold)

@@ -136,6 +136,7 @@ namespace cosmo_v2
         mExporting = false; mDone = mTotal = 0; mProgressName.clear();
         mPhase.set(0.0); mProgress.set(0.0);
         mComplete = false; mCompleteAmt.set(0.0); mCompleteAtMs = 0.0;
+        mFirePending = false;
         mExportRows.clear(); mExportSeq.clear(); mRowFade.clear(); mRowFadeLastMs = -1.0;
         mCardOffset = Point{0.0, 0.0};   // a fresh open is centred again (R-EXPORT-8)
         mDraggingCard = false; mSuppressClick = false;
@@ -181,13 +182,19 @@ namespace cosmo_v2
         if (!mExporting) return;
         mExporting = false;
         mComplete = false;
+        mFirePending = false;
         mCompleteAmt.set(0.0);
         mPhase.animateTo(0.0, 200.0, Easing::EaseInOutCubic, mLastMs);
     }
 
     // ── R-EXPORT-6 beat 1: collapse the form into the progress card ──
+    // Nothing is exported yet. The request is snapshotted here and handed to the host
+    // from advance() once the collapse has finished, so the animation plays against an
+    // idle main loop instead of competing with a full-resolution render.
     void ExportDialog::beginExport()
     {
+        mPendingRequest = buildRequest();
+        mFirePending = true;
         mExporting = true;
         mComplete = false;
         mDone = 0;
@@ -317,6 +324,12 @@ namespace cosmo_v2
 
         if (mExporting)
         {
+            // Beat 1 finished -> ONLY NOW does the host start writing (R-EXPORT-6).
+            if (mFirePending && !mPhase.isAnimating())
+            {
+                mFirePending = false;
+                if (onExport) onExport(mPendingRequest);
+            }
             advanceRowFades(nowMs);
             if (!mComplete) followActiveRow();
             // Beat 3 holds on the tick just long enough to read, then dismisses itself.
@@ -796,9 +809,7 @@ namespace cosmo_v2
         if (exportRect().contains(local))
         {
             if (checkedCount() == 0) return true;    // disabled: nothing selected
-            const Request req = buildRequest();       // snapshot BEFORE the face changes
-            beginExport();
-            if (onExport) onExport(req);
+            beginExport();   // snapshots the request; fires onExport when beat 1 ends
             return true;
         }
         if (!bodyRect().contains(local)) return true;   // header/footer dead space
