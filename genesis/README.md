@@ -80,6 +80,27 @@ log deg rad turns pct rgb rgba fade mix`.
 Division by zero is `0`, not NaN — a preview never silently draws nothing, and the emitted
 C++ reproduces that exactly.
 
+## Sector: a circle can be a pie, a ring, or a pac-man
+
+Circles carry `arcStart` and `arcEnd` **in degrees** (0 = right, growing clockwise) and
+`arcInner`, a hollow centre as a fraction of the radius. The shape kept is the wedge between
+the two rays from the centre:
+
+```
+arcStart =  30,  arcEnd = 330               # a pac-man: a 60-degree mouth at 0
+arcStart =   0,  arcEnd =  90               # a quarter pie
+arcInner = 0.76                             # hollow: a ring segment instead of a pie
+arcEnd   = -90 + 360 * base.display         # a ring gauge that follows the value
+```
+
+`samples/PacmanLoader.genesis` chomps by animating the two angles against each other;
+`samples/DonutGauge.genesis` is a ring gauge.
+
+This is a different tool from trim, and the difference matters: **arc** chooses which part of
+the *disk* the shape is — a fillable region cut by rays from the centre. **Trim** chooses how
+much of that shape's *outline* is drawn. They compose: a trimmed pie is a pie whose edge
+draws itself in.
+
 ## Trim: any shape can become a partial one
 
 Every rect, circle, and path has `trimStart`, `trimEnd`, and `trimOffset` — in fractions of
@@ -92,7 +113,9 @@ trimOffset animate 0 -> 1     # the trimmed span travels around the outline, wra
 ```
 
 `samples/ArcSpinner.genesis` is the classic arc spinner built from it: the arc's length
-breathes while the whole ring spins, so it reads as one object rather than two.
+breathes while the whole ring spins, so it reads as one object rather than two. (That one is
+a stroked circle whose outline is partly drawn — for a *filled* wedge, use the sector fields
+above.)
 
 ## Verify: the preview is the code
 

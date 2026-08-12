@@ -500,6 +500,21 @@ namespace genesis
                 o << "        inline artboard::Color genesisMix(const artboard::Color &a, const artboard::Color &b, double t)\n";
                 o << "        {\n            return artboard::Color{a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t,\n";
                 o << "                                  a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t};\n        }\n";
+                o << "        // Sector angles are authored in DEGREES, from one angle to another; Artboard's\n";
+                o << "        // Arc takes radians and a signed sweep. An end at or before the start wraps\n";
+                o << "        // forward a turn, so 330 -> 30 is a 60-degree wedge rather than nothing.\n";
+                o << "        inline artboard::Arc genesisArc(double startDeg, double endDeg, double innerRatio)\n";
+                o << "        {\n";
+                o << "            double sweep = endDeg - startDeg;\n";
+                o << "            if (sweep <= 0.0) sweep += 360.0;\n";
+                o << "            if (sweep > 360.0) sweep = 360.0;\n";
+                o << "            constexpr double kDeg = 3.14159265358979324 / 180.0;\n";
+                o << "            artboard::Arc a;\n";
+                o << "            a.start = startDeg * kDeg;\n";
+                o << "            a.sweep = sweep * kDeg;\n";
+                o << "            a.innerRatio = innerRatio;\n";
+                o << "            return a;\n";
+                o << "        }\n";
                 o << "    }\n\n";
 
                 emitCtor(o);
@@ -711,6 +726,11 @@ namespace genesis
                         if (s.kind == ShapeKind::Rect)
                             o << "            " << memberOf(s.id) << "->style.cornerRadius = " << stylePropOf(s.id, "cornerRadius") << ".value();\n";
                     }
+                    if (s.kind == ShapeKind::Circle)
+                        o << "            " << memberOf(s.id) << "->arc = genesisArc("
+                          << stylePropOf(s.id, "arcStart") << ".value(), "
+                          << stylePropOf(s.id, "arcEnd") << ".value(), "
+                          << stylePropOf(s.id, "arcInner") << ".value());\n";
                     o << "            " << memberOf(s.id) << "->trim = {"
                       << stylePropOf(s.id, "trimStart") << ".value(), "
                       << stylePropOf(s.id, "trimEnd") << ".value(), "

@@ -1,0 +1,35 @@
+{
+  "genesis": 1,
+  // A pac-man: a disk with a wedge cut out of it by two rays from the centre. arcStart/arcEnd
+  // are DEGREES — keeping 30 -> 330 leaves a 60-degree mouth at 0 (pointing right).
+  //
+  // This is arc, not trim: arc says which part of the DISK the shape is (fillable, a pie),
+  // while trim says how much of an OUTLINE is drawn (a stroke that draws itself in).
+  "component": { "name": "PacmanLoader", "base": "VisualLoop", "namespace": "app", "designSize": [72, 72] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "bite", "type": "number", "default": "60", "range": [0, 160] }
+  ],
+  "shapes": [
+    { "id": "body", "type": "circle",
+      "bind": { "w": "minSide", "h": "minSide",
+                "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
+                "fill": "accent",
+                "opacity": "0",
+                "arcStart": "bite / 2",
+                "arcEnd": "360 - bite / 2" },
+      "animated": ["opacity", "rotation", "arcStart", "arcEnd"] }
+  ],
+  "reactions": [
+    { "on": "loopStart", "cancel": "restart", "steps": [
+        [ { "target": "body.opacity", "to": "1", "ms": 240, "easing": "EaseOutCubic" } ],
+        [ { "target": "body.arcStart", "from": "2", "to": "bite / 2", "ms": 320,
+            "easing": "EaseInOutCubic", "repeat": -1, "yoyo": true },
+          { "target": "body.arcEnd", "from": "358", "to": "360 - bite / 2", "ms": 320,
+            "easing": "EaseInOutCubic", "repeat": -1, "yoyo": true },
+          { "target": "body.rotation", "from": "0", "to": "turns(1)", "ms": 2600,
+            "easing": "Linear", "repeat": -1 } ] ] },
+    { "on": "loopEnd", "steps": [
+        [ { "target": "body.opacity", "to": "0", "ms": 240, "easing": "EaseInCubic" } ] ] }
+  ]
+}

@@ -98,6 +98,20 @@ snaps (placing a component into a layout is not a change the user should see ani
 binding that reads `base.*` shall be re-evaluated every frame; one that does not shall be
 re-evaluated only when the size changes.
 
+### G-17 Sector: a circle can be a pie, a ring, or a pac-man
+
+A circle shall carry `arcStart` and `arcEnd` — animatable fields **in degrees**, 0 pointing
+right and growing clockwise — plus `arcInner`, a hollow centre as a fraction of the radius.
+The kept region is the wedge between the two rays from the centre, so `30 -> 330` leaves a
+60-degree mouth: a pac-man. `arcInner` above 0 makes it a ring segment instead of a pie, and
+a full sweep with `arcInner` makes a donut. An end at or before the start wraps forward one
+turn, so `330 -> 30` is a 60-degree wedge rather than nothing.
+
+This is **not** the same field as `trimStart`/`trimEnd` (G-16), and the two must not be
+conflated: `arc*` chooses which part of the DISK the shape is (a fillable region, cut by rays
+from the centre); `trim*` chooses how much of that shape's OUTLINE is drawn (a stroke that
+draws itself in). They compose — a trimmed pie is a pie whose edge draws itself in.
+
 ### G-16 Trim: any shape can become a partial one
 
 A rect, circle, or path shall carry `trimStart`, `trimEnd`, and `trimOffset` — animatable

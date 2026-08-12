@@ -114,6 +114,21 @@ int main(int argc, char **argv)
         a.selectShape("arc");
         settle(a, now, 1400.0);   // a trimmed circle: an arc, mid-spin
     });
+    shoot(dir + "/genesis-pacman.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
+        a.openDocument("genesis/samples/PacmanLoader.genesis");
+        a.selectShape("body");
+        settle(a, now, 900.0);   // a sector: a disk with a wedge cut out by two rays
+    });
+    shoot(dir + "/genesis-donut.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
+        a.openDocument("genesis/samples/DonutGauge.genesis");
+        a.runtime().setProgress(0.68);
+        a.selectShape("fill");
+        settle(a, now, 1400.0);   // a ring segment following base.display
+    });
     // The launch splash, rendered on its own (the host shows it in its own window).
     {
         genesis::ui::SplashScreen splash;

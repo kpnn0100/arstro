@@ -25,6 +25,10 @@
 
 namespace genesis
 {
+    /** Degrees + from/to (what an author types) -> Artboard's radians + signed sweep. Shared
+     *  with the emitter so the preview and the generated code agree exactly. */
+    artboard::Arc arcFromDegrees(double startDeg, double endDeg, double innerRatio);
+
     class Runtime
     {
     public:

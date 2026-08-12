@@ -127,6 +127,25 @@ namespace genesis
         }
     }
 
+    /*  Authors think in degrees and in "from this angle to that one", so that is what the
+     *  fields are; Artboard's Arc takes radians and a signed sweep. An end at or before the
+     *  start wraps forward a turn, so 330 -> 30 is a 60-degree wedge rather than nothing.
+     */
+    artboard::Arc arcFromDegrees(double startDeg, double endDeg, double innerRatio)
+    {
+        constexpr double kDeg = 3.14159265358979324 / 180.0;
+        double sweep = endDeg - startDeg;
+        if (sweep <= 0.0)
+            sweep += 360.0;
+        if (sweep > 360.0)
+            sweep = 360.0;
+        artboard::Arc a;
+        a.start = startDeg * kDeg;
+        a.sweep = sweep * kDeg;
+        a.innerRatio = innerRatio;
+        return a;
+    }
+
     Runtime::Runtime() = default;
     Runtime::~Runtime() = default;
 
@@ -616,6 +635,9 @@ namespace genesis
                 auto *cs = static_cast<artboard::CircleSegment *>(n->seg.get());
                 cs->style.paint = p;
                 cs->trim = trim;
+                cs->arc = arcFromDegrees(n->styleProps["arcStart"].value(),
+                                         n->styleProps["arcEnd"].value(),
+                                         n->styleProps["arcInner"].value());
             }
             else
             {
