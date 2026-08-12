@@ -364,7 +364,7 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
                 else if (ev.action == "indeterminate") rt.setIndeterminate(ev.arg != 0);
                 else if (ev.action == "press") rt.setPressed(true);
                 else if (ev.action == "release") rt.setPressed(false);
-                else if (ev.action == "check") rt.setChecked(!(ev.arg != 0));
+                else if (ev.action == "check") rt.toggleChecked();
                 else if (ev.action == "slider") rt.setSliderValue(ev.arg);
                 else if (ev.action == "hover") rt.setHovered(ev.arg != 0);
                 else if (ev.action == "resize") rt.setSize(ev.arg, ev.arg);

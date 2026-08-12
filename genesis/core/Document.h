@@ -154,7 +154,8 @@ namespace genesis
         std::string uniqueShapeId(const std::string &stem) const;
 
         // ---- mutation ----
-        void addShape(Shape s);
+        /** Add `s`, de-duplicating its id; returns the id actually assigned. */
+        std::string addShape(Shape s);
         void removeShape(const std::string &id);   // also removes descendants + their tracks
 
         // ---- persistence ----

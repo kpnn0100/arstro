@@ -158,6 +158,9 @@ namespace genesis
             return false;
         }
         mRootSegment = mRootOwner.get();
+        // The authored shapes ARE the component's appearance (FR-41): the base contributes
+        // behaviour only, or its stock look would show through underneath the authored one.
+        mRootSegment->drawsBuiltInVisuals = false;
         mRootSegment->width.set(mDoc.designW);
         mRootSegment->height.set(mDoc.designH);
 
@@ -255,6 +258,10 @@ namespace genesis
             n.id = s.id;
             n.kind = s.kind;
             n.seg = makeShapeSegment(s.kind);
+            // Authored shapes are decoration: input belongs to the authored BASE. Without
+            // this, a press lands on the topmost drawn shape and the control's own signals
+            // (pressDown, checkedChanged, dragStart) never fire.
+            n.seg->inputTransparent = true;
             for (const auto *fd : fieldsFor(s.kind))
             {
                 if (fd->type == FieldType::Number && !*fd->segmentProperty)
@@ -624,6 +631,84 @@ namespace genesis
         return it != mReactions.end() && it->second.running;
     }
 
+    double Runtime::reactionDurationMs(const std::string &signal) const
+    {
+        const Reaction *r = nullptr;
+        for (const auto &cand : mDoc.reactions)
+            if (cand.signal == signal) { r = &cand; break; }
+        if (!r) return 0.0;
+        double total = 0.0;
+        for (const auto &step : r->steps)
+        {
+            double longest = 0.0;
+            for (const auto &t : step.tracks)
+            {
+                const size_t dot = t.target.find('.');
+                const std::string owner = dot == std::string::npos ? std::string() : t.target.substr(0, dot);
+                const gene::Scope sc = liveScope(owner);
+                const double d = evalNumber(t.durationMs, sc, 0.0) + evalNumber(t.delayMs, sc, 0.0);
+                longest = std::max(longest, d);
+            }
+            total += longest;
+        }
+        return total;
+    }
+
+    void Runtime::scrub(const std::string &signal, double t)
+    {
+        const double total = reactionDurationMs(signal);
+        if (total <= 0.0) return;
+        // Replay from here rather than winding backwards: a Tween is a pure function of
+        // elapsed time from its start, so re-firing and advancing forward is exact.
+        //
+        // Advance in FRAMES, not one jump: a step chain hands off inside a completion
+        // callback, so a single large step would start step 2 at the jump time instead of at
+        // the moment step 1 actually finished, and every later step would be wrong.
+        const double base = mNowMs;
+        hostSignal(signal);
+        const double target = base + std::min(1.0, std::max(0.0, t)) * total;
+
+        // Land exactly on each step boundary. A step hands off inside a completion callback,
+        // which fires on the first advance at or after the tween's end — so an advance that
+        // straddles a boundary starts the next step late, and every later step inherits the
+        // error. Stepping to the boundary makes a scrub agree with playback exactly.
+        std::vector<double> stops;
+        for (const auto &cand : mDoc.reactions)
+            if (cand.signal == signal)
+            {
+                double acc = 0.0;
+                for (const auto &step : cand.steps)
+                {
+                    double longest = 0.0;
+                    for (const auto &tr : step.tracks)
+                    {
+                        const size_t dot = tr.target.find('.');
+                        const std::string owner = dot == std::string::npos ? std::string()
+                                                                           : tr.target.substr(0, dot);
+                        const gene::Scope sc = liveScope(owner);
+                        longest = std::max(longest, evalNumber(tr.durationMs, sc, 0.0) +
+                                                        evalNumber(tr.delayMs, sc, 0.0));
+                    }
+                    acc += longest;
+                    if (base + acc < target)
+                        stops.push_back(base + acc);
+                }
+                break;
+            }
+
+        double at = base;
+        size_t next = 0;
+        while (at < target)
+        {
+            double step = std::min(target, at + 16.0);
+            if (next < stops.size() && stops[next] <= step)
+                step = stops[next++];
+            at = step;
+            advance(at);
+        }
+        advance(target);
+    }
+
     void Runtime::startReaction(const Reaction &r)
     {
         ReactionState &st = mReactions[r.signal];
@@ -800,12 +885,18 @@ namespace genesis
     {
         if (auto *c = dynamic_cast<artboard::Checkbox *>(mRootSegment))
             if (c->checked() != on)
-            {
-                const artboard::Gesture g{artboard::Gesture::Type::Click,
-                                          {c->width.value() * 0.5, c->height.value() * 0.5},
-                                          {0, 0}, artboard::PointerButton::Left};
-                c->onGesture(g);
-            }
+                toggleChecked();
+    }
+
+    void Runtime::toggleChecked()
+    {
+        if (auto *c = dynamic_cast<artboard::Checkbox *>(mRootSegment))
+        {
+            const artboard::Gesture g{artboard::Gesture::Type::Click,
+                                      {c->width.value() * 0.5, c->height.value() * 0.5},
+                                      {0, 0}, artboard::PointerButton::Left};
+            c->onGesture(g);
+        }
     }
     void Runtime::setHovered(bool on)
     {

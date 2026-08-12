@@ -202,10 +202,12 @@ namespace genesis
         return stem + "_x";
     }
 
-    void Document::addShape(Shape s)
+    std::string Document::addShape(Shape s)
     {
         s.id = uniqueShapeId(s.id.empty() ? shapeKindName(s.kind) : s.id);
+        const std::string id = s.id;
         shapes.push_back(std::move(s));
+        return id;
     }
 
     void Document::removeShape(const std::string &id)
@@ -791,26 +793,256 @@ namespace genesis
         return true;
     }
 
+    namespace
+    {
+        Param numberParam(const std::string &name, const std::string &def, double lo, double hi)
+        {
+            Param p;
+            p.name = name;
+            p.type = ParamType::Number;
+            p.defaultExpr = def;
+            p.hasRange = true;
+            p.minimum = lo;
+            p.maximum = hi;
+            return p;
+        }
+        Param colorParam(const std::string &name, const std::string &def)
+        {
+            Param p;
+            p.name = name;
+            p.type = ParamType::Color;
+            p.defaultExpr = def;
+            return p;
+        }
+        Track track(const std::string &target, const std::string &from, const std::string &to,
+                    const std::string &ms, const std::string &easing, int repeat = 0, bool yoyo = false)
+        {
+            Track t;
+            t.target = target;
+            t.from = from;
+            t.to = to;
+            t.durationMs = ms;
+            t.easing = easing;
+            t.repeat = repeat;
+            t.yoyo = yoyo;
+            return t;
+        }
+        Reaction reaction(const std::string &signal, std::vector<Step> steps,
+                          Cancel cancel = Cancel::Restart)
+        {
+            Reaction r;
+            r.signal = signal;
+            r.cancel = cancel;
+            r.steps = std::move(steps);
+            return r;
+        }
+    }
+
+    /*  A new project must be a working, idiomatic EXAMPLE of its base — the fastest way to
+     *  learn the tool is to open something that already moves and take it apart. Each starter
+     *  therefore ships the design size that suits its base, shapes bound responsively, and
+     *  reactions on the signals that base expects.
+     */
     Document Document::starter(const std::string &baseName, const std::string &componentName)
     {
         Document d;
         d.base = baseName;
         d.name = componentName.empty() ? "MyComponent" : componentName;
+        d.params.push_back(colorParam("accent", "#9a7bff"));
 
-        Param accent;
-        accent.name = "accent";
-        accent.type = ParamType::Color;
-        accent.defaultExpr = "#3ac7ff";
-        d.params.push_back(accent);
+        if (baseName == "ProgressIndicator")
+        {
+            d.designW = 260.0;
+            d.designH = 10.0;
+            d.params.push_back(colorParam("trackColor", "#232029"));
 
-        Param thickness;
-        thickness.name = "thickness";
-        thickness.type = ParamType::Number;
-        thickness.defaultExpr = "4";
-        thickness.hasRange = true;
-        thickness.minimum = 1;
-        thickness.maximum = 24;
-        d.params.push_back(thickness);
+            Shape rail;
+            rail.id = "track";
+            rail.kind = ShapeKind::Rect;
+            rail.setField("x", "0");
+            rail.setField("y", "0");
+            rail.setField("w", "w");
+            rail.setField("h", "h");
+            rail.setField("fill", "trackColor");
+            rail.setField("cornerRadius", "h / 2");
+            d.shapes.push_back(rail);
+
+            Shape fill;
+            fill.id = "fill";
+            fill.kind = ShapeKind::Rect;
+            fill.setField("x", "0");
+            fill.setField("y", "0");
+            fill.setField("w", "w * base.display");   // the bar IS the base's smoothed value
+            fill.setField("h", "h");
+            fill.setField("fill", "accent");
+            fill.setField("cornerRadius", "h / 2");
+            fill.setAnimated("scaleY", true);
+            fill.setField("pivotY", "self.h / 2");
+            d.shapes.push_back(fill);
+
+            Step pop;
+            pop.tracks.push_back(track("fill.scaleY", "1", "1.6", "140", "EaseOutBack"));
+            Step settle;
+            settle.tracks.push_back(track("fill.scaleY", "", "1", "220", "EaseOutCubic"));
+            d.reactions.push_back(reaction("complete", {pop, settle}));
+            return d;
+        }
+
+        if (baseName == "Button")
+        {
+            d.designW = 132.0;
+            d.designH = 36.0;
+            d.params.push_back(colorParam("surface", "#232029"));
+
+            Shape body;
+            body.id = "body";
+            body.kind = ShapeKind::Rect;
+            body.setField("x", "0");
+            body.setField("y", "0");
+            body.setField("w", "w");
+            body.setField("h", "h");
+            body.setField("fill", "mix(surface, accent, base.hover * 0.5)");   // hover cross-fade
+            body.setField("cornerRadius", "6");
+            body.setField("pivotX", "self.w / 2");
+            body.setField("pivotY", "self.h / 2");
+            body.setAnimated("scaleX", true);
+            body.setAnimated("scaleY", true);
+            d.shapes.push_back(body);
+
+            Shape wash;
+            wash.id = "wash";
+            wash.kind = ShapeKind::Rect;
+            wash.parent = "body";
+            wash.setField("x", "0");
+            wash.setField("y", "0");
+            wash.setField("w", "self.h * 0");        // grows from the centre on press
+            wash.setField("h", "body.h");
+            wash.setField("fill", "fade(#ffffff, 0.18)");
+            wash.setField("cornerRadius", "6");
+            wash.setField("opacity", "0");
+            wash.setAnimated("opacity", true);
+            d.shapes.push_back(wash);
+
+            Step press;
+            press.tracks.push_back(track("body.scaleX", "", "0.96", "90", "EaseOutCubic"));
+            press.tracks.push_back(track("body.scaleY", "", "0.96", "90", "EaseOutCubic"));
+            press.tracks.push_back(track("wash.opacity", "0", "1", "90", "EaseOutCubic"));
+            d.reactions.push_back(reaction("pressDown", {press}));
+
+            Step release;
+            release.tracks.push_back(track("body.scaleX", "", "1", "180", "EaseOutBack"));
+            release.tracks.push_back(track("body.scaleY", "", "1", "180", "EaseOutBack"));
+            release.tracks.push_back(track("wash.opacity", "", "0", "180", "EaseOutCubic"));
+            d.reactions.push_back(reaction("release", {release}));
+            d.reactions.push_back(reaction("cancel", {release}));
+            return d;
+        }
+
+        if (baseName == "Slider")
+        {
+            d.designW = 220.0;
+            d.designH = 24.0;
+            d.params.push_back(colorParam("trackColor", "#232029"));
+
+            Shape rail;
+            rail.id = "rail";
+            rail.kind = ShapeKind::Rect;
+            rail.setField("x", "0");
+            rail.setField("y", "(h - 4) / 2");
+            rail.setField("w", "w");
+            rail.setField("h", "4");
+            rail.setField("fill", "trackColor");
+            rail.setField("cornerRadius", "2");
+            d.shapes.push_back(rail);
+
+            Shape fill;
+            fill.id = "fill";
+            fill.kind = ShapeKind::Rect;
+            fill.setField("x", "0");
+            fill.setField("y", "(h - 4) / 2");
+            fill.setField("w", "w * base.norm");
+            fill.setField("h", "4");
+            fill.setField("fill", "accent");
+            fill.setField("cornerRadius", "2");
+            d.shapes.push_back(fill);
+
+            Shape thumb;
+            thumb.id = "thumb";
+            thumb.kind = ShapeKind::Circle;
+            thumb.setField("w", "14");
+            thumb.setField("h", "14");
+            thumb.setField("x", "w * base.norm - self.w / 2");
+            thumb.setField("y", "(h - self.h) / 2");
+            thumb.setField("fill", "#ffffff");
+            thumb.setField("pivotX", "self.w / 2");
+            thumb.setField("pivotY", "self.h / 2");
+            thumb.setAnimated("scaleX", true);
+            thumb.setAnimated("scaleY", true);
+            d.shapes.push_back(thumb);
+
+            Step grab;
+            grab.tracks.push_back(track("thumb.scaleX", "", "1.35", "120", "EaseOutBack"));
+            grab.tracks.push_back(track("thumb.scaleY", "", "1.35", "120", "EaseOutBack"));
+            d.reactions.push_back(reaction("dragStart", {grab}));
+
+            Step let;
+            let.tracks.push_back(track("thumb.scaleX", "", "1", "160", "EaseOutCubic"));
+            let.tracks.push_back(track("thumb.scaleY", "", "1", "160", "EaseOutCubic"));
+            d.reactions.push_back(reaction("dragEnd", {let}));
+            return d;
+        }
+
+        if (baseName == "Checkbox")
+        {
+            d.designW = 22.0;
+            d.designH = 22.0;
+            d.params.push_back(colorParam("surface", "#232029"));
+
+            Shape box;
+            box.id = "box";
+            box.kind = ShapeKind::Rect;
+            box.setField("x", "0");
+            box.setField("y", "0");
+            box.setField("w", "minSide");
+            box.setField("h", "minSide");
+            box.setField("fill", "mix(surface, accent, base.checked)");
+            box.setField("cornerRadius", "5");
+            box.setField("pivotX", "self.w / 2");
+            box.setField("pivotY", "self.h / 2");
+            box.setAnimated("scaleX", true);
+            box.setAnimated("scaleY", true);
+            d.shapes.push_back(box);
+
+            Shape tick;
+            tick.id = "tick";
+            tick.kind = ShapeKind::Path;
+            tick.parent = "box";
+            tick.setField("x", "0");
+            tick.setField("y", "0");
+            tick.setField("w", "box.w");
+            tick.setField("h", "box.h");
+            tick.setField("stroke", "#ffffff");
+            tick.setField("strokeWidth", "2.2");
+            tick.setField("opacity", "0");
+            tick.setAnimated("opacity", true);
+            tick.path.push_back({'M', {"self.w * 0.26", "self.h * 0.52"}});
+            tick.path.push_back({'L', {"self.w * 0.44", "self.h * 0.70"}});
+            tick.path.push_back({'L', {"self.w * 0.76", "self.h * 0.32"}});
+            d.shapes.push_back(tick);
+
+            Step check;
+            check.tracks.push_back(track("box.scaleX", "0.86", "1", "180", "EaseOutBack"));
+            check.tracks.push_back(track("box.scaleY", "0.86", "1", "180", "EaseOutBack"));
+            check.tracks.push_back(track("tick.opacity", "", "base.checked", "140", "EaseOutCubic"));
+            d.reactions.push_back(reaction("checkedChanged", {check}));
+            return d;
+        }
+
+        // VisualLoop — the default, and the example from the brief: a ring that fades in,
+        // then spins forever, and fades out when the loop ends.
+        d.designW = 160.0;
+        d.designH = 160.0;
+        d.params.push_back(numberParam("thickness", "4", 1, 24));
 
         Shape ring;
         ring.id = "ring";
@@ -826,24 +1058,15 @@ namespace genesis
         ring.setAnimated("rotation", true);
         d.shapes.push_back(ring);
 
-        if (baseName == "VisualLoop")
-        {
-            Reaction start;
-            start.signal = "loopStart";
-            Step fade;
-            fade.tracks.push_back({"ring.opacity", "", "1", "300", "0", "EaseOutCubic", 0, false});
-            Step spin;
-            spin.tracks.push_back({"ring.rotation", "0", "turns(1)", "1200", "0", "Linear", -1, false});
-            start.steps = {fade, spin};
-            d.reactions.push_back(start);
+        Step fade;
+        fade.tracks.push_back(track("ring.opacity", "", "1", "300", "EaseOutCubic"));
+        Step spin;
+        spin.tracks.push_back(track("ring.rotation", "0", "turns(1)", "1200", "Linear", -1));
+        d.reactions.push_back(reaction("loopStart", {fade, spin}));
 
-            Reaction end;
-            end.signal = "loopEnd";
-            Step out;
-            out.tracks.push_back({"ring.opacity", "", "0", "300", "0", "EaseInCubic", 0, false});
-            end.steps = {out};
-            d.reactions.push_back(end);
-        }
+        Step out;
+        out.tracks.push_back(track("ring.opacity", "", "0", "300", "EaseInCubic"));
+        d.reactions.push_back(reaction("loopEnd", {out}));
         return d;
     }
 }

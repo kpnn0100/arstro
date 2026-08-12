@@ -537,6 +537,9 @@ namespace genesis
                         o << "        " << paramMember(p.name) << " = " << (err.empty() ? v : std::string("0.0")) << ";\n";
                     }
                 }
+                o << "        // The authored shapes are this component's whole appearance: the base\n";
+                o << "        // supplies behaviour only (FR-41).\n";
+                o << "        drawsBuiltInVisuals = false;\n";
                 o << "        width.set(" << numLit(doc.designW) << ");\n";
                 o << "        height.set(" << numLit(doc.designH) << ");\n";
                 o << "        buildTree();\n";
@@ -549,9 +552,12 @@ namespace genesis
             void emitBuildTree(std::ostringstream &o) const
             {
                 o << "    void " << doc.name << "::buildTree()\n    {\n";
+                o << "        // Authored shapes are decoration: input belongs to the base control, or a\n";
+                o << "        // press would land on the topmost drawn shape and its signals would never fire.\n";
                 for (const auto &s : doc.shapes)
                 {
                     o << "        " << memberOf(s.id) << " = std::make_shared<" << segmentClassFor(s.kind) << ">();\n";
+                    o << "        " << memberOf(s.id) << "->inputTransparent = true;\n";
                     if (s.kind == ShapeKind::Label)
                     {
                         const bool isParam = s.text.size() > 2 && s.text.front() == '{' && s.text.back() == '}';

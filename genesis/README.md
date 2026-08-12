@@ -1,17 +1,140 @@
 # Genesis
 
-An animation designer for Arstro **Artboard** whose deliverable is source code.
+**An animation designer for Arstro Artboard whose deliverable is source code.**
 
-Pick an abstract control to inherit from (`VisualLoop`, `ProgressIndicator`, `Button`,
-`Slider`, `Checkbox`), draw the component, bind its geometry to expressions, wire
-animations to the base class's events — Genesis writes a `.h` / `.cpp` pair that compiles
-against `artboard::` and nothing else. No Genesis runtime ships with your app.
+Pick an abstract control to inherit from, draw the component, bind its geometry to
+expressions, wire animations to the base class's events — Genesis writes a `.h`/`.cpp` pair
+that compiles against `artboard` and nothing else.
 
-**Status: proposal, nothing implemented.**
+```
+genesis                       # the editor
+genesis samples/RingLoader.genesis
+genesis-cc --new VisualLoop CoolVisualLoop
+genesis-cc CoolVisualLoop.genesis --verify
+```
 
-- [docs/brief.md](docs/brief.md) — the product brief (mental model, language, codegen,
-  the Artboard changes it needs, milestones, open decisions).
+## The one bet: Genesis ships no runtime
 
-Artboard-side work (`Segment::opacity`, `Segment::rotation`, the `VisualLoop` base, …) is
-tracked as proposed FR-32…FR-37 in the brief §9 and lands via `/implement_artboard` in the
-`Artboard/` repo.
+Nothing in the generated file mentions Genesis. No library, no registry, no init call, no
+JSON parsed at startup. A component is a normal class you can read, review as a diff, and
+hand-edit — and it works in every Artboard adapter (Cairo, Canvas2D/WASM, the headless test
+target) because it *is* Artboard code.
+
+## Five nouns, and no sixth
+
+1. **Component** — a name, an authorable **base**, a design size, and **params**.
+2. **Shape** — rect / circle / path / label, nested into a tree.
+3. **Binding** — *every numeric and colour field is an expression, not a number.* Type `40`
+   and it is one; type `min(w, h) * 0.5` and it still is. This is where responsiveness comes
+   from.
+4. **Signal** — something the base tells you happened: `loopStart`, `pressDown`,
+   `valueChanged`, `checkedChanged`.
+5. **Reaction** — *when* `<signal>`, *animate* `<field>` *to* `<expr>* over* `<ms>` with
+   `<easing>` — chained with steps, so "then" is literally the previous step's completion.
+
+There is no global timeline. A UI component is not a movie; it is a set of responses to
+events that interrupt each other. The event graph is the source of truth, and the scrubber
+is per reaction.
+
+## The bases
+
+| Base | For | Signals |
+| --- | --- | --- |
+| `VisualLoop` | spinners, busy pulses, loading screens | `loopStart` `cycle` `loopEnd` |
+| `ProgressIndicator` | bars, rings, meters | `valueChanged` `complete` `indeterminate` `determinate` |
+| `Button` | press/click controls | `pressDown` `release` `cancel` `clicked` |
+| `Slider` | ranged controls | `dragStart` `valueChanged` `dragEnd` |
+| `Checkbox` | toggles | `checkedChanged` |
+
+Every base also has `attach`, `resize`, `hoverEnter`, `hoverExit`, `focusGained`,
+`focusLost`, and publishes read-only values as `base.*` (`base.phase`, `base.display`,
+`base.hover`, `base.checked`, `base.norm`, …). `genesis-cc --bases` prints the full contract.
+
+## Gene, the binding language
+
+One type family (`double` and `Color`), no statements, no loops, no user functions.
+
+```
+minSide * 0.7                 # responsive geometry
+(w - self.w) / 2              # centre me in my parent
+w * base.display              # a progress bar IS the base's smoothed value
+mix(surface, accent, base.hover * 0.5)     # hover cross-fade, as a formula
+0.25 + 0.75 * max(0, sin((base.phase - spread) * TAU))    # a pulse, with no reaction at all
+turns(1)                      # one full rotation, in radians
+raw{ myHelper(w) }            # verbatim C++ when you need the escape hatch
+```
+
+Names: `w` `h` `minSide` `maxSide` `aspect` `PI` `TAU`, any param, `self.<field>`,
+`<shape>.<field>`, `base.<read>`, `theme.<role>`.
+Functions: `min max abs clamp lerp floor ceil round sign sqrt pow mod sin cos tan atan2 exp
+log deg rad turns pct rgb rgba fade mix`.
+
+Division by zero is `0`, not NaN — a preview never silently draws nothing, and the emitted
+C++ reproduces that exactly.
+
+## Verify: the preview is the code
+
+The editor interprets; the export compiles. Two implementations of one semantics drift, and
+a design tool that lies is worthless. So **Verify** emits the code, compiles it, drives both
+the compiled class and the interpreter through the same signal script, renders both into an
+`artboard::RecordingTarget`, and diffs the op streams:
+
+```
+$ genesis-cc samples/TrackSlider.genesis --verify
+verified: 9 frames, 423 ops, preview == compiled
+```
+
+Without a C++ toolchain it reports **unavailable** — never a pass.
+
+## genesis-cc
+
+```
+genesis-cc <file.genesis> [-o <dir>] [--verify] [--check] [--print] [--stale]
+genesis-cc --new <Base> <Name> [-o <dir>]
+genesis-cc --bases
+```
+
+`--stale` exits non-zero when the generated files on disk differ from what would be emitted,
+so a build can assert its checked-in sources are current. Emission is deterministic: the same
+document always produces byte-identical output.
+
+## Samples
+
+`samples/` holds one verified component per base, plus `PulseDots` — a loop authored with
+**no reactions at all**, purely as a binding on `base.phase`, to show that the animation can
+be a formula.
+
+## Keyboard
+
+`Ctrl+N` new · `Ctrl+O` open · `Ctrl+S` save · `Ctrl+E` export · `Ctrl+R` verify ·
+`Ctrl+Z` undo · `Ctrl+Shift+Z` / `Ctrl+Y` redo · `Esc` closes a dialog.
+
+## Editing
+
+- **Inspector** — the component's name/namespace/design size, the selected shape's id (rename
+  carries every reference with it) and fields, a label's text, a path's commands, the params
+  (add by clicking `number` / `color` / `text`, remove with the ×), and a **Problems** list of
+  every validator diagnostic.
+- **Reactions** — per track: `target`, `from` (blank = wherever it is now), `to`, `ms`,
+  `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a delete.
+  The scrubber replays the selected reaction to any point in its own timeline.
+- Every edit is undoable; rapid typing collapses into one undo step.
+
+## Building
+
+Genesis builds with the Arstro umbrella:
+
+```
+cmake -S . -B build && cmake --build build -j
+./build/genesis/genesis
+```
+
+`genesis_core`, `genesis-cc` and the tests need only `artboard_core`. The editor additionally
+needs GTK3 + Cairo + Fontconfig, and self-skips if they are absent.
+
+## Docs
+
+- [docs/requirements.md](docs/requirements.md) — the contract (G-1…G-14, the R-G design rules)
+- [docs/architecture.md](docs/architecture.md) — the shape of the system and why
+- [docs/detailed_design.md](docs/detailed_design.md) — how each piece works
+- [docs/brief.md](docs/brief.md) — the original product brief

@@ -1,0 +1,237 @@
+# Genesis — Software Requirements
+
+## 1. Purpose
+
+Genesis shall let a designer author an animated UI component for the Arstro **Artboard**
+framework visually, and shall deliver that component as **C++ source code** that compiles
+against `artboard` alone.
+
+## 2. Scope
+
+Covered:
+
+- A component document: a name, an authorable **base class**, a design size, **params**, a
+  tree of **shapes**, and **reactions**.
+- **Gene**, an expression language in which every numeric and colour field is written.
+- A **code emitter** producing a `.h`/`.cpp` pair with no dependency on Genesis.
+- A **live preview** that runs the authored component as the real base class.
+- A **verifier** that proves the preview and the emitted code draw the same thing.
+- A desktop editor (GTK3 + Cairo) and a headless compiler (`genesis-cc`).
+
+Not covered: general vector illustration, application layout, runtime document loading,
+general-purpose scripting, cross-component orchestration (screen/shared-element transitions).
+
+## 3. Functional Requirements
+
+### G-1 No runtime
+
+The generated `.h`/`.cpp` shall include `<artboard/artboard.h>` and the C++ standard library
+and **nothing else**. No Genesis header, library, registry, initialisation call, or document
+file shall be required to build or run a generated component. A generated file shall be
+valid to read, review, diff, and hand-edit as ordinary source.
+
+### G-2 The document model
+
+A component shall consist of exactly:
+
+- **name**, **base**, **namespace**, **design size**;
+- **params** — typed knobs (`number` with an optional range, `color`, `text`) that become a
+  public setter/getter pair on the generated class;
+- **shapes** — a tree of `rect` / `circle` / `path` / `label`, each with a parent;
+- **reactions** — `signal → [step, …]`, each step a set of tracks that start together.
+
+No sixth concept shall be introduced. Field names, types, defaults, which shape kinds they
+apply to, whether they are animatable, and which Artboard `Property` they drive shall be
+declared in **one table** consumed by the inspector, the emitter, the runtime, and the
+validator, so a new field is a table row rather than five parallel edits.
+
+### G-3 Gene: every field is an expression
+
+Every numeric and colour field shall hold a Gene expression, never a bare number. A literal
+(`40`) is a valid expression, so the rule costs the author nothing and buys responsiveness
+by construction.
+
+- **Types.** Two: `double` and `Color`. Booleans are doubles. Arithmetic on a colour is a
+  type error.
+- **Scope.** `w`/`h` (the component's live size), `minSide`/`maxSide`/`aspect`, `PI`/`TAU`;
+  any param by name; `self.<field>`; `<shape>.<field>`; `base.<name>` (what the base class
+  publishes); `theme.<role>`.
+- **Functions.** `min max abs clamp lerp floor ceil round sign sqrt pow mod sin cos tan
+  atan2 exp log deg rad turns pct rgb rgba fade mix`, and no others. No user-defined
+  functions, statements, or loops.
+- **Totality.** Division or modulo by zero yields `0`, and `sqrt`/`log` of a non-positive
+  value yields `0` — a preview shall never produce a NaN and silently draw nothing. The
+  emitted C++ shall reproduce these definitions exactly.
+- **Escape hatch.** `raw{ … }` passes C++ through verbatim to the emitter. It cannot be
+  previewed; the author is told so rather than shown a wrong result.
+
+### G-4 Authorable bases
+
+Genesis shall support authoring against `VisualLoop`, `ProgressIndicator`, `Button`,
+`Slider`, and `Checkbox`. Each base's signals, its `base.*` reads, its summary, and what the
+author is responsible for drawing shall be held as **data** (`BaseCatalog`), so adding a base
+is a table entry plus the Artboard class — never a new branch in the emitter or the runtime.
+
+An authored component supplies the component's **whole appearance**: the base contributes
+behaviour only (Artboard FR-41), and the authored shapes take no input (the base owns it).
+
+### G-5 Reactions
+
+A reaction is `signal → steps`. A step's tracks start together; step *N+1* begins when step
+*N* completes. A track is `(target, from, to, durationMs, delayMs, easing, repeat, yoyo)` —
+a literal `artboard::Tween` plus a target — where `from` (empty = the field's current value),
+`to`, `durationMs` and `delayMs` are Gene expressions, so a `speed` param genuinely re-times
+a component.
+
+- A track with `repeat == -1` never completes and therefore never chains; a step whose tracks
+  all repeat forever ends the chain.
+- Every reaction carries a **cancellation policy** — `restart` (default), `ignoreIfRunning`,
+  or `queue` — because interruption is what event-driven motion gets wrong.
+- Only a field marked **animatable** on its shape may be a track target.
+
+### G-6 Bind-versus-animate
+
+A field's binding is its resting value; a reaction's target is its motion. Layout shall
+assert a bound value on build and on resize, but **not** once a reaction has driven that
+field, so a resize cannot stomp an animation's result. A resize eases; the first sizing
+snaps (placing a component into a layout is not a change the user should see animate). A
+binding that reads `base.*` shall be re-evaluated every frame; one that does not shall be
+re-evaluated only when the size changes.
+
+### G-7 Validation
+
+The document shall be validated on every edit. **Errors** block export: unknown base,
+unknown/duplicate/missing shape id, unparsable expression, unknown name or field, a binding
+**cycle**, a reaction on a signal the base lacks, a track targeting an unknown shape, a
+non-animatable field, a colour field, or a field not marked animatable, an unknown easing, a
+malformed path command, a param shadowing a built-in. **Warnings** do not block: an expected
+signal nothing reacts to, an empty reaction or step, a component that draws nothing, a
+`raw{ }` that cannot be previewed. Every diagnostic names where it is.
+
+### G-8 Live preview
+
+The editor shall run the authored component as a real `artboard::Segment` tree whose root
+**is** the authored base class, so base behaviour (cycle signals, the progress spring, press
+handling) is the real thing. The preview shall be resizable independently of the window,
+because a component that only works at its design size is broken and this is the only way to
+see it.
+
+### G-9 Verification — the preview is the code
+
+Genesis shall be able to prove that its preview and its output agree:
+
+1. emit the `.h`/`.cpp`;
+2. compile them with a generated harness against `artboard_core`;
+3. drive the compiled class **and** the interpreter through one signal script;
+4. render both into an `artboard::RecordingTarget` at each sampled frame;
+5. diff the op streams field-wise.
+
+A divergence shall be reported with its frame, op index, and field. Where no compiler or
+built `artboard_core` is available the result shall be reported as **unavailable** — an
+unavailable check shall never be reported as a pass. A verify step shall mean the same thing
+on both sides (a driver that differs between them is a defect in the verifier, not a finding).
+
+### G-10 Determinism
+
+The same document shall always emit byte-identical output, and saving shall always produce a
+byte-identical file, so a build can regenerate components and a stale generated file is a CI
+failure rather than a mystery (`genesis-cc --stale`).
+
+### G-11 Generated code quality
+
+The emitted file is the product. It shall: fold constant subexpressions; emit the shortest
+literal that reads back exactly; emit the minimum parentheses C++ needs; omit a zero-divisor
+guard where the divisor is a non-zero literal; carry the authored expression as a trailing
+comment on each binding; and name members after the authored ids. The test is not "does it
+compile" but "would a person have written this".
+
+### G-12 The headless compiler
+
+`genesis-cc` shall provide, with no display: generate, `--check` (validate only), `--print`,
+`--verify`, `--stale`, `--new <Base> <Name>`, and `--bases`.
+
+### G-13 The editor
+
+The editor shall present: the shape tree with add/delete; the live preview with a
+base-appropriate transport and a reduced-motion switch; the inspector (every field as an
+editable expression plus an animate toggle, and the params with live controls); the reactions
+panel (signal, cancellation policy, steps, tracks, a per-reaction scrubber, and Fire); and
+New/Open/Save/Export/Verify. Editing a field shall update the preview as it is typed.
+
+There shall be **no global timeline**: a component is a set of responses to events, not a
+linear movie, so the event graph is the source of truth and the scrubber is per reaction.
+
+### G-14 A new project is an example
+
+Creating a component shall produce a working, idiomatic component for its base — bound
+responsively, with reactions on the signals that base expects — because the fastest way to
+learn the tool is to open something that already moves and take it apart.
+
+## 4. Design rules (the app's UI)
+
+Genesis is an Arstro desktop app and follows that design system; these are its `R-G` rules.
+
+### R-G-1 Nothing snaps
+
+Every visible change — position, size, show/hide (fade), colour, radius, scroll, panel
+open/close — goes through `Property`/`AnimatedProperty`/`Spring`, is eased, and collapses
+under `artboard::reducedMotion()`. Direct manipulation (dragging the preview's resize
+handle) is exempt: the pointer is the animation.
+
+### R-G-2 Tokens only
+
+Every colour, radius, type size, and layout constant comes from `app/Theme.h`
+(`palette::`/`radius::`/`type::`/`metrics::`). ONE accent, ONE radius scale, ONE type ramp.
+A raw hex or magic size in a widget is a bug.
+
+### R-G-3 One hover language
+
+Every interactive element has an animated hover treatment: child-Segment controls via
+`artboard::hoverBox()`, self-drawn regions via `palette::hoverWash(amount)` driven by
+`ui::RowHover`.
+
+### R-G-4 Responsive
+
+Geometry derives from the live window size and measured content. The rails shrink to a
+usable minimum before the canvas is squeezed; the canvas absorbs the slack. Verified at two
+or more window sizes.
+
+### R-G-5 Text fits
+
+Every string is measured against the live render target (`ui::textWidth`) and either sized to
+fit or ellipsized (`ui::ellipsize`). Clipping is the backstop, not the plan.
+
+### R-G-6 Every state is drawn
+
+Idle, hover, pressed, disabled, **empty**, **loading**, and **error** — each panel draws its
+empty state with a sentence saying what to do, and the preview draws its error state with the
+diagnostic rather than a blank frame.
+
+## 5. Non-functional Requirements
+
+### NG-1 Headless core
+
+`genesis_core` shall contain no UI and no display dependency: document, language, emitter,
+runtime, and verifier are all testable without a window.
+
+### NG-2 Dependency floor
+
+`genesis_core` shall depend only on `artboard_core` and the C++17 standard library — no JSON
+library, no scripting engine. The editor adds only GTK3 + Cairo + Fontconfig.
+
+### NG-3 Testability
+
+Every drawing claim shall be asserted through `artboard::RecordingTarget`, and the editor
+shall be renderable headlessly to a PNG for design review.
+
+### NG-4 SOLID
+
+Adding a base, a shape kind, a field, or an easing shall be data, not a new code path.
+
+## 6. Verification Outline
+
+- `genesis_tests` covers the document model, Gene (parse/fold/interpret/emit), the emitter,
+  the runtime, and the verifier's comparison, asserting through `RecordingTarget`.
+- `genesis_shots` renders the editor headlessly at two or more window sizes and in its empty,
+  error, modal, and per-base states for design review.
+- `genesis-cc --verify` proves preview/codegen agreement for every sample component.

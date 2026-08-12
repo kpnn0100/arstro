@@ -1,0 +1,139 @@
+@startuml
+' Genesis — structure. The arrow never points upward, and nothing below
+' `genesis_core` knows the editor exists.
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+package "genesis (editor)" {
+  class App {
+    + documentChanged()  ' the ONE edit funnel
+    + newDocument() / openDocument() / saveDocument()
+    + exportCode() / startVerify()
+    + selectShape() / selectReaction()
+    + status(msg, level)
+  }
+  class Chrome
+  class ShapeTree
+  class CanvasView {
+    + frameW() / frameH()  ' the preview frame, resized independently of the window
+    + setHoverSim(on)
+  }
+  class Inspector
+  class ReactionsPanel
+  class Modal {
+    + openNew() / openBrowse() / openSaveAs() / openReport()
+    + coversApp()  ' overlay-pass panels check this
+  }
+  class RowHover
+  class TextUtil <<utility>> {
+    + setMeasureTarget(t)
+    + textWidth() / ellipsize()
+  }
+  class "ui::Theme" as UiTheme <<tokens>> {
+    palette:: radius:: type:: metrics::
+  }
+}
+
+package genesis_core {
+  class Document {
+    + params / shapes / reactions
+    + validate() : Diagnostic[]
+    + toJson() / fromJson() / load() / save()
+    + {static} starter(base, name)
+  }
+  class Shape
+  class Param
+  class Reaction
+  class Step
+  class Track
+  class FieldDef <<the one field table>>
+  class BaseDef
+  class SignalDef
+  class BaseRead
+  class Json
+  class "gene::Node" as GeneNode
+  class "gene::Value" as GeneValue
+  class "gene::" as Gene <<namespace>> {
+    + parse(src) : Node
+    + fold(node)
+    + evaluate(node, scope) : Value
+    + emitCpp(node, names) : string
+    + collectMembers() / collectIdents()
+  }
+  class CppEmitter {
+    + emitCpp(doc) : EmittedCode
+    + writeEmitted(code, dir)
+  }
+  class Runtime {
+    + build(doc) : bool
+    + root() : Segment
+    + advance(nowMs) / setSize(w,h)
+    + fire(signal) / isRunning(signal)
+    + loopStart() / setProgress() / setPressed() / toggleChecked()
+    + setParamNumber() / setParamColor()
+  }
+  class Verifier {
+    + verify(doc, plan, cfg) : VerifyResult
+    + opsToText(ops)
+  }
+  class "Host<Base>" as Host
+}
+
+package artboard_core {
+  class Segment
+  class Property
+  class Tween
+  class RecordingTarget
+  class VisualLoop
+  class ProgressIndicator
+}
+
+App *--> Chrome
+App *--> ShapeTree
+App *--> CanvasView
+App *--> Inspector
+App *--> ReactionsPanel
+App *--> Modal
+App *--> Document
+App *--> Runtime
+ShapeTree ..> RowHover
+Inspector ..> RowHover
+ReactionsPanel ..> RowHover
+Modal ..> RowHover
+Chrome ..> UiTheme
+CanvasView ..> TextUtil
+
+Document *--> Shape
+Document *--> Param
+Document *--> Reaction
+Reaction *--> Step
+Step *--> Track
+Document ..> FieldDef
+Document ..> Json
+Document ..> Gene
+BaseDef *--> SignalDef
+BaseDef *--> BaseRead
+Document ..> BaseDef
+
+Gene ..> GeneNode
+Gene ..> GeneValue
+
+' The central decision: ONE grammar, TWO consumers, and a proof that they agree.
+Gene <.. CppEmitter : emit
+Gene <.. Runtime : interpret
+Verifier ..> CppEmitter
+Verifier ..> Runtime
+Verifier ..> RecordingTarget : diffs op streams
+
+Runtime *--> Host
+Host --|> VisualLoop
+Host --|> ProgressIndicator
+Runtime ..> Segment
+Runtime ..> Property
+Runtime ..> Tween
+
+note bottom of CppEmitter
+  Emits C++ that depends on artboard ALONE.
+  Nothing in the generated file mentions genesis.
+end note
+@enduml

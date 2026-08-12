@@ -1,0 +1,91 @@
+/*
+ *  Genesis — headless screenshot harness.
+ *
+ *  Renders the real app through the real Cairo adapter into a PNG, with no display, so a
+ *  design change can be INSPECTED rather than assumed. Drives the app to a given state
+ *  (selection, panel, modal, window size) before the shot, because "draw every state" is
+ *  only checkable if every state can be rendered.
+ */
+#include "App.h"
+#include "adapter/native/CairoTarget.h"
+#include "widgets/Modal.h"
+#include <cairo/cairo.h>
+#include <cstdio>
+#include <functional>
+#include <string>
+
+namespace
+{
+    void shoot(const std::string &name, int w, int h,
+               const std::function<void(genesis::ui::App &, double &)> &drive)
+    {
+        genesis::ui::App app;
+        app.setSize(w, h);
+        double now = 0.0;
+        drive(app, now);
+
+        cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(surface);
+        artboard::CairoTarget target;
+        target.setContext(cr);
+        app.advance(now);
+        app.render(target);
+        cairo_surface_write_to_png(surface, name.c_str());
+        cairo_destroy(cr);
+        cairo_surface_destroy(surface);
+        std::printf("wrote %s (%dx%d)\n", name.c_str(), w, h);
+    }
+
+    /** Settle animations by ticking real frames, the way the host does. */
+    void settle(genesis::ui::App &app, double &now, double ms)
+    {
+        for (double t = 0; t < ms; t += 16.0)
+        {
+            now += 16.0;
+            app.advance(now);
+        }
+    }
+}
+
+int main(int argc, char **argv)
+{
+    const std::string dir = argc > 1 ? argv[1] : ".";
+
+    shoot(dir + "/genesis-1360x860.png", 1360, 860, [](genesis::ui::App &a, double &now) {
+        settle(a, now, 900.0);   // the starter loop has faded in and is spinning
+    });
+    shoot(dir + "/genesis-1024x640.png", 1024, 640, [](genesis::ui::App &a, double &now) {
+        settle(a, now, 900.0);   // the same app, reflowed for a smaller window (R4)
+    });
+    shoot(dir + "/genesis-empty.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.doc().shapes.clear();
+        a.doc().reactions.clear();
+        a.selectShape("");
+        a.documentChanged();
+        settle(a, now, 400.0);   // the empty state: no shapes, no reactions
+    });
+    shoot(dir + "/genesis-error.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.doc().findShape("ring")->setField("w", "mystery * 2");
+        a.documentChanged();
+        settle(a, now, 400.0);   // an authoring error: the preview says so instead of lying
+    });
+    shoot(dir + "/genesis-modal.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.modal()->openNew();
+        settle(a, now, 400.0);   // the New dialog, over a dimmed app
+    });
+    shoot(dir + "/genesis-progress.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.newDocument("ProgressIndicator", "SweepBar");
+        a.selectShape("fill");
+        a.runtime().setProgress(0.65);
+        settle(a, now, 1200.0);   // a different base, driven to a partial value
+    });
+    shoot(dir + "/genesis-button.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.newDocument("Button", "PillButton");
+        a.selectShape("body");
+        a.setPreviewHover(true);
+        settle(a, now, 400.0);
+        a.runtime().setPressed(true);
+        settle(a, now, 120.0);    // a Button starter, hovered and caught mid-press
+    });
+    return 0;
+}

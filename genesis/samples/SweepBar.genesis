@@ -1,0 +1,79 @@
+{
+  "genesis": 1,
+  "component": {
+    "name": "SweepBar",
+    "base": "ProgressIndicator",
+    "namespace": "app",
+    "designSize": [
+      260,
+      10
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "#9a7bff"
+    },
+    {
+      "name": "trackColor",
+      "type": "color",
+      "default": "#232029"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "track",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "0",
+        "w": "w",
+        "h": "h",
+        "fill": "trackColor",
+        "cornerRadius": "h / 2"
+      }
+    },
+    {
+      "id": "fill",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "0",
+        "w": "w * base.display",
+        "h": "h",
+        "fill": "accent",
+        "cornerRadius": "h / 2",
+        "pivotY": "self.h / 2"
+      },
+      "animated": [
+        "scaleY"
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "on": "complete",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "fill.scaleY",
+            "from": "1",
+            "to": "1.6",
+            "ms": "140",
+            "easing": "EaseOutBack"
+          }
+        ],
+        [
+          {
+            "target": "fill.scaleY",
+            "to": "1",
+            "ms": "220",
+            "easing": "EaseOutCubic"
+          }
+        ]
+      ]
+    }
+  ]
+}

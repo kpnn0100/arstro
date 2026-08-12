@@ -45,6 +45,13 @@ namespace genesis
         void fire(const std::string &signal);
         /** True while `signal`'s reaction chain is running. */
         bool isRunning(const std::string &signal) const;
+        /** Total length of a reaction in ms: the sum over steps of the longest finite track
+         *  (delay + duration). An infinite track counts as one cycle, so a looping step still
+         *  has a scrubbable length. 0 when the signal has no reaction. */
+        double reactionDurationMs(const std::string &signal) const;
+        /** Replay `signal` and advance to `t` (0..1) through its own timeline, so the editor
+         *  can scrub one reaction without a global clock. */
+        void scrub(const std::string &signal, double t);
 
         // ---- driving the base, from the preview transport ----
         void loopStart();
@@ -54,7 +61,10 @@ namespace genesis
         void setIndeterminate(bool on);
         void setPressed(bool on);          // Button: synthesised press
         void setSliderValue(double v);     // Slider
-        void setChecked(bool on);          // Checkbox
+        void setChecked(bool on);          // Checkbox: click only if it is not already there
+        /** Checkbox: always dispatch the click. A verify step must mean the same thing on
+         *  both sides, so the plan's `check` action toggles rather than assigns. */
+        void toggleChecked();
         void setHovered(bool on);
 
         // ---- live param overrides (the inspector's sliders) ----

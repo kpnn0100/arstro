@@ -1,0 +1,87 @@
+{
+  "genesis": 1,
+  "component": {
+    "name": "RingLoader",
+    "base": "VisualLoop",
+    "namespace": "app",
+    "designSize": [
+      160,
+      160
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "#9a7bff"
+    },
+    {
+      "name": "thickness",
+      "type": "number",
+      "default": "4",
+      "range": [
+        1,
+        24
+      ]
+    }
+  ],
+  "shapes": [
+    {
+      "id": "ring",
+      "type": "circle",
+      "bind": {
+        "w": "minSide * 0.7",
+        "h": "minSide * 0.7",
+        "x": "(w - self.w) / 2",
+        "y": "(h - self.h) / 2",
+        "stroke": "accent",
+        "strokeWidth": "thickness",
+        "opacity": "0"
+      },
+      "animated": [
+        "opacity",
+        "rotation"
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "on": "loopStart",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "ring.opacity",
+            "to": "1",
+            "ms": "300",
+            "easing": "EaseOutCubic"
+          }
+        ],
+        [
+          {
+            "target": "ring.rotation",
+            "from": "0",
+            "to": "turns(1)",
+            "ms": "1200",
+            "easing": "Linear",
+            "repeat": -1
+          }
+        ]
+      ]
+    },
+    {
+      "on": "loopEnd",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "ring.opacity",
+            "to": "0",
+            "ms": "300",
+            "easing": "EaseInCubic"
+          }
+        ]
+      ]
+    }
+  ]
+}

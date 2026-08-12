@@ -589,18 +589,18 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
         rect.setField("fill", "theme.card");
         rect.setField("cornerRadius", "6");
         rect.setAnimated("cornerRadius", true);
-        d.addShape(rect);
+        const std::string boxId = d.addShape(rect);   // may be de-duplicated per base
         Shape path;
         path.id = "tick";
         path.kind = ShapeKind::Path;
-        path.parent = "box";
+        path.parent = boxId;
         path.setField("stroke", "theme.foreground");
         path.path.push_back({'M', {"0", "0"}});
         path.path.push_back({'L', {"self.w", "self.h"}});
         path.path.push_back({'Q', {"0", "0", "1", "1"}});
         path.path.push_back({'C', {"0", "0", "1", "1", "2", "2"}});
         path.path.push_back({'Z', {}});
-        d.addShape(path);
+        const std::string tickId = d.addShape(path);
         Shape label;
         label.id = "cap";
         label.kind = ShapeKind::Label;
@@ -622,7 +622,7 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
             r.cancel = sd.name == "cycle" ? Cancel::IgnoreIfRunning
                                           : (sd.name == "resize" ? Cancel::Queue : Cancel::Restart);
             Step st;
-            st.tracks.push_back({"box.cornerRadius", "0", "8", "120", "10", "EaseOutBack", 0, true});
+            st.tracks.push_back({boxId + ".cornerRadius", "0", "8", "120", "10", "EaseOutBack", 0, true});
             r.steps.push_back(st);
             bool already = false;
             for (const auto &existing : d.reactions)
@@ -639,18 +639,20 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
         CHECK(c.source.find("artboard::LabelSegment") != std::string::npos);
         CHECK(c.source.find(".cubicTo(") != std::string::npos);
         CHECK(c.source.find("mCaption") != std::string::npos);
+        CHECK(c.source.find("inputTransparent = true") != std::string::npos);
+        CHECK(c.source.find("drawsBuiltInVisuals = false") != std::string::npos);
+        CHECK(!tickId.empty());
     }
 }
 TEST(Emitter_layout_runs_every_frame_only_when_a_binding_reads_base_state)
 {
-    Document plain = Document::starter("ProgressIndicator", "Bar");
-    const EmittedCode a = emitCpp(plain);
+    // The VisualLoop starter reads no base state: its layout only runs on resize.
+    const EmittedCode a = emitCpp(Document::starter("VisualLoop", "Loop"));
     CHECK(a.ok());
     CHECK(a.source.find("if (resized)\n            layout(sizeMs);") != std::string::npos);
 
-    Document live = plain;
-    live.shapes[0].setField("w", "w * base.display");
-    const EmittedCode b = emitCpp(live);
+    // The ProgressIndicator starter's fill IS base.display, so it must track every frame.
+    const EmittedCode b = emitCpp(Document::starter("ProgressIndicator", "Bar"));
     CHECK(b.ok());
     CHECK(b.source.find("layout(resized ? sizeMs : 0.0);") != std::string::npos);
     CHECK(b.source.find("displayValue()") != std::string::npos);
@@ -848,53 +850,73 @@ TEST(Runtime_live_params_retarget_the_bindings)
 }
 TEST(Runtime_drives_every_base_kind)
 {
-    {   // ProgressIndicator
+    {   // ProgressIndicator — its starter's fill tracks base.display
         Document d = Document::starter("ProgressIndicator", "P");
-        d.shapes[0].setField("w", "w * base.display");
         Runtime rt;
         std::string err;
         CHECK(rt.build(d, &err));
-        rt.setSize(200, 20);
+        CHECK(rt.segmentFor("fill") != nullptr);
+        rt.setSize(200, 10);
         rt.advance(0.0);
         rt.setProgress(1.0);
         for (int i = 1; i <= 60; ++i)
             rt.advance(i * 20.0);
-        CHECK(rt.segmentFor("ring")->width.value() > 150.0);   // it followed base.display
+        CHECK(rt.segmentFor("fill")->width.value() > 150.0);   // it followed base.display
         rt.setIndeterminate(true);
         rt.advance(1400.0);
     }
-    {   // Button
+    {   // Button — press squashes the body and washes it, release springs back
         Document d = Document::starter("Button", "B");
         Runtime rt;
         std::string err;
         CHECK(rt.build(d, &err));
+        rt.setSize(132, 36);
         rt.advance(0.0);
         rt.setPressed(true);
+        for (int i = 1; i <= 8; ++i)
+            rt.advance(i * 20.0);
+        CHECK(rt.segmentFor("body")->scaleX.value() < 1.0);
+        CHECK(rt.segmentFor("wash")->opacity.value() > 0.5);
         rt.setPressed(false);
+        for (int i = 9; i <= 40; ++i)
+            rt.advance(i * 20.0);
+        CHECK_NEAR(rt.segmentFor("body")->scaleX.value(), 1.0, 1e-3);
+        CHECK(rt.segmentFor("wash")->opacity.value() < 0.05);
         rt.setHovered(true);
-        rt.advance(50.0);
+        rt.advance(900.0);
         rt.setHovered(false);
-        rt.advance(100.0);
+        rt.advance(1000.0);
     }
-    {   // Slider
+    {   // Slider — the thumb pops on drag-start and settles on drag-end
         Document d = Document::starter("Slider", "S");
         Runtime rt;
         std::string err;
         CHECK(rt.build(d, &err));
+        rt.setSize(220, 24);
         rt.advance(0.0);
         rt.setSliderValue(0.75);
-        rt.advance(50.0);
+        rt.advance(60.0);
+        CHECK(rt.segmentFor("thumb")->scaleX.value() > 1.0);
+        for (int i = 1; i <= 30; ++i)
+            rt.advance(60.0 + i * 20.0);
+        CHECK(rt.segmentFor("fill")->width.value() > 100.0);   // followed base.norm
     }
-    {   // Checkbox
+    {   // Checkbox — the tick fades in on check
         Document d = Document::starter("Checkbox", "K");
         Runtime rt;
         std::string err;
         CHECK(rt.build(d, &err));
+        rt.setSize(22, 22);
         rt.advance(0.0);
+        CHECK_NEAR(rt.segmentFor("tick")->opacity.value(), 0.0, 1e-9);
         rt.setChecked(true);
-        rt.advance(50.0);
+        for (int i = 1; i <= 20; ++i)
+            rt.advance(i * 20.0);
+        CHECK(rt.segmentFor("tick")->opacity.value() > 0.9);
         rt.setChecked(false);
-        rt.advance(100.0);
+        for (int i = 21; i <= 40; ++i)
+            rt.advance(i * 20.0);
+        CHECK(rt.segmentFor("tick")->opacity.value() < 0.1);
     }
 }
 TEST(Runtime_notes_unpreviewable_raw_escapes)

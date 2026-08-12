@@ -1,0 +1,109 @@
+{
+  "genesis": 1,
+  "component": {
+    "name": "TrackSlider",
+    "base": "Slider",
+    "namespace": "app",
+    "designSize": [
+      220,
+      24
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "#9a7bff"
+    },
+    {
+      "name": "trackColor",
+      "type": "color",
+      "default": "#232029"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "rail",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "(h - 4) / 2",
+        "w": "w",
+        "h": "4",
+        "fill": "trackColor",
+        "cornerRadius": "2"
+      }
+    },
+    {
+      "id": "fill",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "(h - 4) / 2",
+        "w": "w * base.norm",
+        "h": "4",
+        "fill": "accent",
+        "cornerRadius": "2"
+      }
+    },
+    {
+      "id": "thumb",
+      "type": "circle",
+      "bind": {
+        "w": "14",
+        "h": "14",
+        "x": "w * base.norm - self.w / 2",
+        "y": "(h - self.h) / 2",
+        "fill": "#ffffff",
+        "pivotX": "self.w / 2",
+        "pivotY": "self.h / 2"
+      },
+      "animated": [
+        "scaleX",
+        "scaleY"
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "on": "dragStart",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "thumb.scaleX",
+            "to": "1.35",
+            "ms": "120",
+            "easing": "EaseOutBack"
+          },
+          {
+            "target": "thumb.scaleY",
+            "to": "1.35",
+            "ms": "120",
+            "easing": "EaseOutBack"
+          }
+        ]
+      ]
+    },
+    {
+      "on": "dragEnd",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "thumb.scaleX",
+            "to": "1",
+            "ms": "160",
+            "easing": "EaseOutCubic"
+          },
+          {
+            "target": "thumb.scaleY",
+            "to": "1",
+            "ms": "160",
+            "easing": "EaseOutCubic"
+          }
+        ]
+      ]
+    }
+  ]
+}

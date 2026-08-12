@@ -1,0 +1,108 @@
+{
+  "genesis": 1,
+  "component": {
+    "name": "TickBox",
+    "base": "Checkbox",
+    "namespace": "app",
+    "designSize": [
+      22,
+      22
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "#9a7bff"
+    },
+    {
+      "name": "surface",
+      "type": "color",
+      "default": "#232029"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "box",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "0",
+        "w": "minSide",
+        "h": "minSide",
+        "fill": "mix(surface, accent, base.checked)",
+        "cornerRadius": "5",
+        "pivotX": "self.w / 2",
+        "pivotY": "self.h / 2"
+      },
+      "animated": [
+        "scaleX",
+        "scaleY"
+      ]
+    },
+    {
+      "id": "tick",
+      "type": "path",
+      "parent": "box",
+      "bind": {
+        "x": "0",
+        "y": "0",
+        "w": "box.w",
+        "h": "box.h",
+        "stroke": "#ffffff",
+        "strokeWidth": "2.2",
+        "opacity": "0"
+      },
+      "animated": [
+        "opacity"
+      ],
+      "d": [
+        [
+          "M",
+          "self.w * 0.26",
+          "self.h * 0.52"
+        ],
+        [
+          "L",
+          "self.w * 0.44",
+          "self.h * 0.70"
+        ],
+        [
+          "L",
+          "self.w * 0.76",
+          "self.h * 0.32"
+        ]
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "on": "checkedChanged",
+      "cancel": "restart",
+      "steps": [
+        [
+          {
+            "target": "box.scaleX",
+            "from": "0.86",
+            "to": "1",
+            "ms": "180",
+            "easing": "EaseOutBack"
+          },
+          {
+            "target": "box.scaleY",
+            "from": "0.86",
+            "to": "1",
+            "ms": "180",
+            "easing": "EaseOutBack"
+          },
+          {
+            "target": "tick.opacity",
+            "to": "base.checked",
+            "ms": "140",
+            "easing": "EaseOutCubic"
+          }
+        ]
+      ]
+    }
+  ]
+}
