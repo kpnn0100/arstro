@@ -30,6 +30,9 @@ namespace cosmo_v2
         constexpr double kReturnHoldMs = 200.0; // return part 2: star-sky beat
         constexpr double kExitMs = 320.0;      // return part 3: home fades in from the star-sky
         constexpr double kMinLoadingMs = 260.0;  // keep the progress bar visible at least this long
+        // A catalog too big to wait for gets in anyway after this, and streams the rest
+        // behind the editor (R-LOADPERF-3).
+        constexpr double kMaxLoadingMs = 2500.0;
         const Color kLoadingBg{0x0A / 255.0, 0x0A / 255.0, 0x0A / 255.0, 1.0};  // deep near-black loading backdrop (darker than the editor/home bg)
 
         Rect lerpRect(const Rect &a, const Rect &b, double t)
@@ -86,6 +89,9 @@ namespace cosmo_v2
         mCenterStage->filmstrip()->onSelect = [this](int cell, bool shift, bool ctrl) {
             mSession.selectNode(cell, shift, ctrl);
             syncControlsToSlot();
+            // A click on a cell that is only half in view brings it fully in; one on a
+            // cell already shown just moves the selector (R-BROWSE-2).
+            mCenterStage->filmstrip()->scrollCellIntoView(cell);
         };
         mCenterStage->filmstrip()->onActivate = [this](int cell) {
             const auto cells = mSession.currentGroupCells();
@@ -149,9 +155,23 @@ namespace cosmo_v2
         mPresetDialog = std::make_shared<PresetDialog>(mAccent);
         mRoot->addChild(mPresetDialog);
         mSettingsDialog = std::make_shared<SettingsDialog>(mAccent);
-        mSettingsDialog->onPreviewEdge = [this](int edge) { mSession.setPreviewEdge(edge); };
-        mSettingsDialog->onThreads = [this](int n) { arstro::par::setThreads(n); mSession.submit(); };
-        mSettingsDialog->onUseGpu = [this](bool on) { mSession.setUseGpu(on); };  // setUseGpu re-renders (R-GPU)
+        // R-SETTINGS-4: every change is applied AND persisted, so the choice survives
+        // the next launch instead of silently reverting.
+        mSettingsDialog->onPreviewEdge = [this](int edge) {
+            mSession.setPreviewEdge(edge);
+            mSettings.previewEdge = edge;
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
+        mSettingsDialog->onThreads = [this](int n) {
+            arstro::par::setThreads(n); mSession.submit();
+            mSettings.threads = n;
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
+        mSettingsDialog->onUseGpu = [this](bool on) {
+            mSession.setUseGpu(on);   // setUseGpu re-renders (R-GPU)
+            mSettings.useGpu = on;
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
         mRoot->addChild(mSettingsDialog);
 
         // Batch export modal (R-EXPORT). Its two host seams: a native folder chooser
@@ -804,6 +824,16 @@ namespace cosmo_v2
             });
     }
 
+    void App::applySettings(const cosmo::AppSettings &s)
+    {
+        // R-SETTINGS-4. Applied before the first render so the app runs with what the
+        // user last chose; the dialog then opens seeded with what is actually in force.
+        mSettings = s;
+        mSession.setPreviewEdge(s.previewEdge);
+        arstro::par::setThreads(s.threads);
+        mSession.setUseGpu(s.useGpu);   // no-op when no GPU backend exists (R-GPU-3)
+    }
+
     void App::openSettingsDialog()
     {
         // Raw setting (0 = Auto), not the resolved count, so the Auto chip reads right.
@@ -920,6 +950,7 @@ namespace cosmo_v2
         mPhaseT0 = mNowMs;
         mCoverReady = false;
         mLoadComplete = false;
+        mLoadUsable = false;
         mCover->clearImage();
         mLoadDone = 0; mLoadTotal = 0;
         mCoverFrom = mOpenFromRect;              // consume the clicked-card rect (empty for Open-dialog)
@@ -927,7 +958,12 @@ namespace cosmo_v2
         mLoadCard = mOpenCard;                   // the whole item to show centred (empty for Open-dialog)
         mLoadCard.name = projectName;            // ...its name is always the opening project
         mOpenCard = ProjectCardData{};
-        mLoadingStarted = false;                 // part 1 is pure animation; decode starts at part 2
+        // R-LOADING-1 (amended): the host starts the decode WITH the transition, right
+        // after this returns. It runs on a worker pool and its per-image apply is off the
+        // UI thread, so it cannot hitch the intro — and deferring it only bought a dead
+        // progress bar reading "Preparing…" for the length of the intro. The
+        // minimum-visible time therefore runs from HERE.
+        mLoadStartMs = mNowMs;
         mIntro.set(0.0);    mIntro.animateTo(1.0, kIntroMs, Easing::EaseOutCubic, mNowMs);
         mReveal.set(0.0);
         mProgress.set(0.0);
@@ -1014,12 +1050,22 @@ namespace cosmo_v2
             mPhase = Phase::Loading;
             mPhaseT0 = nowMs;
             mBarFade.animateTo(1.0, 160.0, Easing::EaseOutCubic, nowMs);
-            if (!mLoadingStarted) { mLoadingStarted = true; if (onLoadingReady) onLoadingReady(); }
         }
         // Part 2 -> Part 3 (reveal): once the decode finished AND the bar has been
         // visible long enough (so it never just flashes).
-        if (mPhase == Phase::Loading && mLoadComplete && (nowMs - mPhaseT0) >= kMinLoadingMs)
-            beginReveal();
+        // Reveal when the load is COMPLETE (so the bar actually filled and meant
+        // something), or -- for a catalog too big to sit through -- once the cap has
+        // passed and at least one photo is usable, with the rest streaming in behind the
+        // editor (R-LOADPERF-3). The minimum-visible time runs from when the DECODE
+        // began, not from the end of the intro: they overlap now, so the intro already
+        // gave the bar its time on screen.
+        if (mPhase == Phase::Loading)
+        {
+            const double sinceLoad = nowMs - mLoadStartMs;
+            if ((mLoadComplete && sinceLoad >= kMinLoadingMs) ||
+                (mLoadUsable && sinceLoad >= kMaxLoadingMs))
+                beginReveal();
+        }
         if (mPhase == Phase::Reveal && !mReveal.isAnimating())  // reveal done -> hand off to the editor
         {
             mScreen = Screen::Editor;

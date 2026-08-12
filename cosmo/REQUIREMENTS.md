@@ -67,8 +67,8 @@ Honors `reducedMotion()` (the eases collapse; the load still streams in).
 The transition is split into **three linked parts** so every movement flows into the next with no
 sudden jump, and the heavy work is isolated to the middle part:
 
-- **R-LOADING-0 Part 1 — transition (pure animation, no I/O).** The intro plays with NOTHING
-  loading: the home `cosmo.` wordmark flies to the editor top-bar wordmark slot (46 px → 13 px, home
+- **R-LOADING-0 Part 1 — transition (animation, decode running behind it).** The intro plays while
+  the background decode streams in behind it (see R-LOADING-1's amendment): the home `cosmo.` wordmark flies to the editor top-bar wordmark slot (46 px → 13 px, home
   position → top-left, `App::drawWordmark`), and the clicked project's **WHOLE card — cropped
   thumbnail + name + photo count + total size + last-edit date — lifts off the grid and translates
   to screen centre AT ITS CARD SIZE. It does NOT expand/zoom into a large hero image**; the entire
@@ -79,9 +79,14 @@ sudden jump, and the heavy work is isolated to the middle part:
   `widgets/ProjectCard.h` `drawProjectCardChrome` (+ the cover blitted over its thumbnail band), the
   SAME renderer the home grid uses, so the flying item is pixel-identical to the grid item.
   Open-dialog opens (no source card) fade in at centre at a default card size (name only).
-- **R-LOADING-1 Part 2 — loading (status text + progress bar under the card).** When the intro
-  finishes, `App` fires `onLoadingReady` and ONLY THEN does the host start the background decode (so
-  part 1 never hitches on I/O). Everything is already placed; a **small accent progress bar the
+- **R-LOADING-1 Part 2 — loading (status text + progress bar under the card).**
+  **AMENDED (R-LOADPERF):** the decode now starts with the transition, not after the intro.
+  `onLoadingReady` fires as part 1 BEGINS. The deferral existed so a full-resolution decode on the
+  UI thread could not hitch the intro — but decoding moved to a worker pool and the per-image apply
+  moved off the UI thread with it (R-LOADPERF-1/2), so there is nothing left to hitch on, and
+  deferring only bought 460 ms of a dead progress bar reading "Preparing…". Overlapping them means
+  the bar is already filling and the status line already naming real photos by the time the intro
+  lands. Everything is already placed; a **small accent progress bar the
   SAME WIDTH as the card, positioned directly UNDER it** (not a wide bar at the bottom of the screen)
   fills 0→1 with the real decode fraction (`setLoadProgress`), eased. **Directly above that bar a
   status line — left-aligned to the card's (and bar's) left edge — shows what is currently being
@@ -144,11 +149,16 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   **moved** into the engine (`RenderService::addImage(std::vector&&)`) instead of copied. What is
   left on the UI thread per image is bookkeeping, so the loading screen keeps animating instead of
   hitching once per photo.
-- **R-LOADPERF-3 Progressive reveal.** The editor no longer waits for the whole catalog: it is
-  revealed as soon as the **first image** has been applied (still gated on the intro having played,
-  R-LOADING-0), and the remaining images stream into the session and filmstrip behind it. A project
-  therefore opens in roughly the time of ONE image rather than all of them. The growing filmstrip
-  and the top bar's `n/total` count are the feedback while the rest arrive.
+- **R-LOADPERF-3 Reveal — complete, or capped.** **AMENDED (R-LOADUX):** revealing on the *first*
+  image made the loading screen meaningless — it flashed "Preparing…", showed a bar at zero and
+  jumped to the editor, so nothing ever reported how long the wait would be. The editor is now
+  revealed when the load **completes**, so the progress bar actually fills and means something —
+  **or**, for a catalog too big to wait for, once `kMaxLoadingMs` has elapsed AND at least one image
+  is usable, after which the rest stream in behind the editor with the rack's spinner cells and its
+  own progress bar (R-LOADUX-2/3). The minimum-visible time is measured from when the DECODE
+  started, not from the end of the intro: with the two overlapped the intro already gave the bar
+  time on screen, so a small project reveals the moment the intro lands instead of sitting through
+  a further hold.
   `finishWorkspaceLoad` consequently must **not** steal the selection — it auto-selects the first
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
@@ -318,6 +328,14 @@ Reference: `cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings tha
   changing thread count reconfigures the engine's parallelism. Values persist for the session.
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
   card, fade+scale open/close, Esc/click-outside dismiss).
+- **R-SETTINGS-4 Settings persist across launches.** Preview quality, CPU threads and GPU
+  acceleration are statements about the **machine**, not about the session — reverting them on every
+  launch makes the panel feel broken. They round-trip through `cosmo::AppSettings`, a plain
+  `key=value` file in the same user config dir as the recent-projects index (the same file
+  convention the workspace format uses). They are **loaded before the first render** and applied to
+  the session/engine at startup, and **saved whenever one changes**, so the Settings dialog always
+  opens seeded with what is actually in force. A missing, partial or corrupt file falls back to the
+  defaults per field rather than failing to start.
 
 ## R-GPU — GPU-accelerated image processing (abstract, opt-in) — ✅ IMPLEMENTED (abstraction + OpenGL/Linux backend; more stages + platforms deferred)
 

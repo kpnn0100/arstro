@@ -791,3 +791,44 @@ points the editor at the photo if it is the one selected.
 edge and `Loading n of N` bottom-right — the one band the cells and their selection rings never
 reach — eased in while streaming and out when the last photo lands. The host feeds it alongside the
 loading screen's own `setLoadProgress`, so both phases report the project's real total.
+
+## 20. Follow-up fixes (browse animation, load legibility, settings)
+
+### DR-BROWSE-2a Why arrow navigation was broken
+`Filmstrip::setCells` reset the scroll to 0 unconditionally — and the same cell list is re-pushed on
+**every** selection change (and once per photo while a project streams in), so each arrow press
+snapped the rack back to the start. It now compares the incoming list's node ids with the current
+one and only treats a genuinely different list as a new view. `scrollCellIntoView` is a **no-op when
+the cell is already fully visible** (the selector just moves) and otherwise scrolls the MINIMUM,
+which lands the cell flush against the edge it came in from rather than yanking it to the middle;
+`cellFullyVisible` is the shared predicate. The click path calls the same thing, so a click on a
+half-hidden cell brings it in and a click on a visible one scrolls nothing. The rack's viewport is
+its own `width.value()`: it is laid out inside the centre stage, so the right column never covers
+it.
+
+### DR-LOADUX-4 Why the loading screen said nothing
+Two compounding causes: the decode was deferred until the intro finished (R-LOADING-0's original
+"pure animation, no I/O"), so the bar sat at zero reading "Preparing…" for the whole intro; and the
+editor was then revealed on the FIRST image, so the bar jumped from empty straight to gone.
+
+Both are fixed by the same reasoning. The deferral existed to stop a UI-thread decode hitching the
+intro — but decoding moved to a worker pool and the per-image apply moved off the UI thread with it
+(R-LOADPERF-1/2), so there is nothing left to hitch on. `beginOpenTransition` therefore starts the
+decode immediately (the host starts the pipeline right after it returns; the `onLoadingReady` hook
+is gone), and `App` reveals when the load **completes** — or, past `kMaxLoadingMs` with at least one
+image usable (`setLoadUsable`), for a catalog too big to sit through, after which the rest stream in
+behind the editor with the rack's spinners and progress bar. `kMinLoadingMs` is measured from
+`mLoadStartMs` (decode start) rather than the end of the intro, since the overlap already gave the
+bar its time on screen.
+
+Effect on a 12 × 24 MP project: reveal at **~1093 ms → ~460 ms**, and the floor is now the intro
+animation itself rather than anything I/O-bound. What remains for a much bigger or RAW-heavy catalog
+is decode itself; the next lever there is a two-tier decode (preview-resolution first, full
+resolution on demand for the photo being edited or exported).
+
+### DR-SETTINGS-4 Persisted preferences
+`cosmo::AppSettings` (`core/AppSettings.{h,cpp}`) — `previewEdge` / `threads` / `useGpu` in a plain
+`key=value` file at `ProjectStore::configDir()/settings.txt`. `AppSettings::load()` falls back per
+field, so a truncated or garbled file cannot stop the app starting. The host applies it via
+`App::applySettings` **before the first render**, and each `SettingsDialog` callback updates the
+in-force copy and fires `App::onSettingsChanged`, which the host saves.

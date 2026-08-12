@@ -616,6 +616,61 @@ namespace
         check(settledScroll(f, now) < 1.0, "cannot scroll before the first photo");
     }
 
+    void filmstripKeepsScrollWhenTheSameListIsRepushed()
+    {
+        // The regression that broke arrow navigation outright: the same cell list gets
+        // re-pushed on EVERY selection change (and once per photo while a project
+        // streams in), and setCells was resetting the scroll each time — so the rack
+        // snapped back to the start on every arrow press.
+        double now = 0.0;
+        auto f = makeStrip(20, 400.0);
+        f->scrollCellIntoView(19);
+        const double scrolled = settledScroll(f, now);
+        check(scrolled > 1.0, "walked to the end");
+
+        std::vector<Filmstrip::Cell> same;
+        for (int i = 0; i < 20; ++i)
+            same.push_back({false, i + 1, -1, "p" + std::to_string(i) + ".jpg", 0, false, false});
+        f->setCells(same);
+        check(std::fabs(settledScroll(f, now) - scrolled) < 0.5,
+              "re-pushing the same list keeps the scroll where it was");
+
+        // A genuinely different list (drilling into a group) IS a fresh view.
+        std::vector<Filmstrip::Cell> other;
+        for (int i = 0; i < 5; ++i)
+            other.push_back({false, 100 + i, -1, "q.jpg", 0, false, false});
+        f->setCells(other);
+        check(settledScroll(f, now) < 1.0, "a different list starts at the left edge again");
+    }
+
+    void filmstripLandsTheCellAtTheEdgeItCameFrom()
+    {
+        // R-BROWSE-2: an off-screen cell is brought flush to the edge it entered from —
+        // not centred, and not over-scrolled.
+        double now = 0.0;
+        auto f = makeStrip(20, 400.0);
+        settledScroll(f, now);
+        const int firstHidden = [&] {
+            for (int i = 0; i < 20; ++i) if (!f->cellFullyVisible(i)) return i;
+            return -1;
+        }();
+        check(firstHidden > 0, "with 20 photos in a 400px rack something is off-screen");
+
+        f->scrollCellIntoView(firstHidden);
+        settledScroll(f, now);
+        check(f->cellFullyVisible(firstHidden), "it is now fully shown");
+        // Flush against the right edge: its right side sits at the viewport edge (minus
+        // the strip's own padding), so nothing beyond it is revealed.
+        const double right = f->cellXForTest(firstHidden) + 86.0;
+        check(std::fabs(right - (400.0 - 9.75)) < 1.5, "and it landed AT the edge, not in the middle");
+
+        // A cell already fully in view must not move the rack at all.
+        const double before = settledScroll(f, now);
+        f->scrollCellIntoView(firstHidden);
+        check(std::fabs(settledScroll(f, now) - before) < 0.5,
+              "an already-visible cell scrolls nothing");
+    }
+
     void filmstripShortRackNeverScrolls()
     {
         double now = 0.0;
@@ -655,6 +710,8 @@ int main()
     exportRequestIsSnapshotAtPressTime();
     filmstripScrollsIntoViewBothWays();
     filmstripScrollIsClampedAtBothEnds();
+    filmstripKeepsScrollWhenTheSameListIsRepushed();
+    filmstripLandsTheCellAtTheEdgeItCameFrom();
     filmstripShortRackNeverScrolls();
     exportProgressIgnoresInputAndReopensClean();
 

@@ -55,8 +55,11 @@ namespace cosmo_v2
         /** R-LOADUX-3: a slim determinate bar along the strip's top edge while a project
          *  is still streaming in, with the count beside it. `done == total` fades it out. */
         void setLoadProgress(int done, int total);
-        /** R-BROWSE-2: scroll the minimum needed to bring `cell` fully into view, so
-         *  arrow-key navigation walks the whole rack instead of stopping at its edge. */
+        /** True when `cell` is wholly inside the rack's viewport right now. */
+        bool cellFullyVisible(int cell) const;
+        /** R-BROWSE-2: no-op when `cell` is already fully shown (the selector just
+         *  moves); otherwise scroll the MINIMUM, which lands the cell flush against the
+         *  edge it came in from rather than yanking it to the middle. */
         void scrollCellIntoView(int cell);
 
         std::function<void(int cell, bool shift, bool ctrl)> onSelect;

@@ -46,7 +46,7 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     - renderEditor/renderTransition/renderReturn
     - drawWordmark(p, alpha)
     .. host callbacks ..
-    + onOpenRecentRequested / onDecodeThumbnail / onLoadingReady ...
+    + onOpenRecentRequested / onDecodeThumbnail / onSettingsChanged ...
   }
   enum Screen {
     Home

@@ -74,16 +74,29 @@ namespace cosmo_v2
 
     void Filmstrip::setCells(std::vector<Cell> cells)
     {
+        // Only a genuinely DIFFERENT list is a new view. The same list gets re-pushed
+        // constantly — every selection change, and once per photo while a project
+        // streams in — and resetting the scroll on those snapped the rack back to the
+        // start on every arrow press, which is what broke arrow navigation entirely.
+        const bool sameList = cells.size() == mCells.size() &&
+                              std::equal(cells.begin(), cells.end(), mCells.begin(),
+                                         [](const Cell &a, const Cell &b) { return a.node == b.node; });
         mCells = std::move(cells);
-        // New content (e.g. drilled into a group) starts at scroll 0 — a fresh view,
-        // not an animated move of the same list.
-        mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
-        mHover.clear();
+        if (!sameList)
+        {
+            // New content (e.g. drilled into a group) starts at scroll 0 — a fresh view,
+            // not an animated move of the same list.
+            mScrollX.set(0.0); mScrollTarget = 0.0; mScrollLastTarget = 0.0;
+            mHover.clear();
+        }
         // Re-seed the bypass fades to the new cells' resting state: a rebuilt strip is
         // a fresh view, so an already-disabled cell reads disabled immediately rather
         // than fading in from nothing (R-BYPASS-5).
-        mByAmt.assign(mCells.size(), 0.0);
-        for (size_t i = 0; i < mCells.size(); ++i) mByAmt[i] = mCells[i].bypassed ? 1.0 : 0.0;
+        if (!sameList)
+        {
+            mByAmt.assign(mCells.size(), 0.0);
+            for (size_t i = 0; i < mCells.size(); ++i) mByAmt[i] = mCells[i].bypassed ? 1.0 : 0.0;
+        }
         for (auto &iv : mThumbs) iv->visible = false;
         for (int i = 0; i < (int)mCells.size(); ++i)
         {
@@ -155,19 +168,33 @@ namespace cosmo_v2
         mLoadFade.animateTo(streaming ? 1.0 : 0.0, streaming ? 160.0 : 320.0, Easing::EaseOutCubic, mLastMs);
     }
 
+    bool Filmstrip::cellFullyVisible(int cell) const
+    {
+        if (cell < 0 || cell >= (int)mCells.size()) return false;
+        const double x = cellX(cell);              // includes the live scroll offset
+        // The rack's viewport is its own width: it is laid out inside the centre stage,
+        // so the right column never covers it — the edge really is width.value().
+        return x >= 0.0 && x + cellW(cell) <= width.value();
+    }
+
     void Filmstrip::scrollCellIntoView(int cell)
     {
         if (cell < 0 || cell >= (int)mCells.size()) return;
-        // cellX() includes the live scroll, so work in unscrolled content space.
+        if (cellFullyVisible(cell)) return;        // already shown: move the ring only
+
+        // Out (or half out) of view: scroll the MINIMUM, which lands the cell flush
+        // against whichever edge it came in from (R-BROWSE-2) rather than yanking it to
+        // the middle. cellX() includes the live scroll, so work in unscrolled space.
         double left = kPadX;
         for (int i = 0; i < cell; ++i) left += cellW(i) + kGap;
         const double right = left + cellW(cell);
         const double view = width.value();
-        double target = mScrollTarget;
-        if (left - kPadX < target) target = std::max(0.0, left - kPadX);
-        else if (right + kPadX > target + view) target = right + kPadX - view;
         double contentW = kPadX;
         for (int i = 0; i < (int)mCells.size(); ++i) contentW += cellW(i) + kGap;
+
+        double target = mScrollTarget;
+        if (left - kPadX < target) target = left - kPadX;              // flush to the left edge
+        else if (right + kPadX > target + view) target = right + kPadX - view;  // flush to the right
         mScrollTarget = std::min(std::max(0.0, contentW - view), std::max(0.0, target));
     }
 

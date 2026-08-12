@@ -21,6 +21,7 @@
 #include "widgets/ConfirmDialog.h"
 #include "widgets/HomeScreen.h"
 #include "widgets/Starfield.h"
+#include "core/AppSettings.h"
 #include "core/ProjectStore.h"
 #include <cstdint>
 #include <functional>
@@ -66,10 +67,10 @@ namespace cosmo_v2
         void setLoadStatus(const std::string &text);
         /** Loading finished: reveal the editor (the loading elements fade out in place). */
         void finishOpenTransition();
+        /** At least one image has landed, so revealing would show a real photo. Gates the
+         *  capped reveal for catalogs too big to wait for (R-LOADPERF-3). */
+        void setLoadUsable() { mLoadUsable = true; }
         bool inOpenTransition() const { return mScreen == Screen::Loading; }
-        /** Fired once the intro animation completes (part 1 → part 2): the host starts
-         *  the actual decode ONLY now, so part 1 is pure animation (no I/O). */
-        std::function<void()> onLoadingReady;
         /** True once a loading-screen cover image has been supplied. */
         bool hasLoadingCover() const { return mCoverReady; }
         /** Host pushes a decoded cover for recent `recentIndex` (first image). */
@@ -132,6 +133,12 @@ namespace cosmo_v2
         /** True while the in-app rename field is focused — the host suppresses its
          *  single-key shortcuts so typed keys go to the field (DR-TREE-5). */
         bool isTextEditing() const;
+
+        /** R-SETTINGS-4: apply the persisted engine preferences at startup, before the
+         *  first render, so the app runs with what the user last chose. */
+        void applySettings(const cosmo::AppSettings &s);
+        /** Fired whenever a setting changes, so the host can persist it. */
+        std::function<void(cosmo::AppSettings)> onSettingsChanged;
 
         void setPresetDir(const std::string &dir) { mSession.setPresetDir(dir); refreshPresetTree(); }
         bool savePreset(const std::string &name) { const bool ok = mSession.savePreset(name); if (ok) refreshPresetTree(); return ok; }
@@ -235,6 +242,7 @@ namespace cosmo_v2
         // highlight and the rail width both observe() it so they can't desync.
         artboard::Observable<bool> mRailOpen{true};
         cosmo::EditSession mSession;
+        cosmo::AppSettings mSettings;   // R-SETTINGS-4: what is in force + what gets saved
         EditParams mClipboard;       // Develop ▸ Copy/Paste Settings clipboard
         bool mHasClipboard = false;
         RenderService::Frame mLastAfterFrame;
@@ -272,6 +280,8 @@ namespace cosmo_v2
         std::shared_ptr<artboard::ImageView> mCover;  // project cover (centre -> photo stage)
         bool mCoverReady = false;
         bool mLoadComplete = false;  // host signalled the decode finished (reveal gate)
+        bool mLoadUsable = false;    // at least one image landed (capped-reveal gate)
+        double mLoadStartMs = 0.0;   // when the decode began — the min-visible time runs from here
         int mLoadDone = 0, mLoadTotal = 0;
         artboard::Rect mOpenFromRect{0, 0, 0, 0};  // pending: clicked-card rect (set by onOpenRecent)
         artboard::Rect mCoverFrom{0, 0, 0, 0};     // active: cover fly-in start (consumed at begin)
@@ -280,7 +290,6 @@ namespace cosmo_v2
         artboard::AnimatedProperty mProgress{0.0};   // eased loading progress bar (0..1)
         artboard::AnimatedProperty mCoverFade{0.0};  // cover fade-in once it is ready
         artboard::AnimatedProperty mBarFade{0.0};    // progress-bar fade-in on entering part 2
-        bool mLoadingStarted = false;                // onLoadingReady fired for this open
         // return-to-home (reverse) transition: editor fades to the star-sky, then the
         // home fades in; the wordmark flies from the top-bar slot back to its home spot.
         bool mReturning = false;

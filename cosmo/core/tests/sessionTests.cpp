@@ -3,6 +3,7 @@
 // full behavioral contract is still verified by the wider cosmo app it was
 // extracted from. Plain assert()-based, no external test framework.
 #include "../EditSession.h"
+#include "../AppSettings.h"
 #include "../OrderedParallelLoad.h"
 #include "../PresetLibrary.h"
 #include <cassert>
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
@@ -672,6 +674,38 @@ namespace
         assert(s.currentSlot() == slot && "the photo the user is sitting on takes over when it lands");
         printf("[PASS] selecting_a_pending_image_keeps_the_stage\n");
     }
+
+    // ── R-SETTINGS-4: engine preferences survive a restart ────────────────────
+
+    void test_settings_roundtrip_and_survive_a_bad_file()
+    {
+        using arstro::cosmo::AppSettings;
+        const std::string path = AppSettings::path();
+        std::string backup;
+        {   // don't clobber a real user's settings while testing
+            std::ifstream in(path);
+            if (in) backup.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        }
+
+        AppSettings s;
+        s.previewEdge = 2400; s.threads = 6; s.useGpu = true;
+        assert(s.save());
+        const AppSettings back = AppSettings::load();
+        assert(back.previewEdge == 2400);
+        assert(back.threads == 6);
+        assert(back.useGpu && "GPU acceleration is still on next launch");
+
+        // A truncated / garbled file must fall back per field, never stop the app.
+        { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuseGpu=1\npreviewEdge=notanumber\nthre"; }
+        const AppSettings partial = AppSettings::load();
+        assert(partial.useGpu && "the readable field is still honoured");
+        assert(partial.previewEdge == 1600 && "the garbled one falls back to its default");
+        assert(partial.threads == 0);
+
+        { std::ofstream f(path, std::ios::trunc); f << backup; }
+        if (backup.empty()) std::filesystem::remove(path);
+        printf("[PASS] settings_roundtrip_and_survive_a_bad_file\n");
+    }
 }
 
 int main()
@@ -696,6 +730,7 @@ int main()
     test_finish_workspace_load_keeps_an_existing_selection();
     test_pending_images_appear_then_attach();
     test_selecting_a_pending_image_keeps_the_stage();
+    test_settings_roundtrip_and_survive_a_bad_file();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

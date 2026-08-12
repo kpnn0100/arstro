@@ -633,9 +633,13 @@ namespace
                     // the editor, visibly, as their placeholder cells fill in.
                     if (!job->revealed)
                     {
+                        // The FIRST photo makes the project showable, but it no longer
+                        // reveals on its own: the loading screen stays so its progress
+                        // bar means something, and App reveals on completion (or on its
+                        // cap, for a catalog too big to wait for) -- R-LOADPERF-3.
                         job->revealed = true;
-                        a->app.selectImage(slot);   // give the revealed editor something to show
-                        a->app.finishOpenTransition();
+                        a->app.selectImage(slot);
+                        a->app.setLoadUsable();
                     }
                     else
                         a->app.refreshLibrary();    // the arrived photo replaces its spinner
@@ -664,7 +668,7 @@ namespace
                 g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
             rememberProject(job->path);
             // A project whose images all failed to decode never revealed above.
-            if (!job->revealed) a->app.finishOpenTransition();
+            a->app.finishOpenTransition();   // the bar has filled; reveal (min-visible aside)
             job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
             a->load.reset();                // joins the (already-finished) workers
             return G_SOURCE_REMOVE;
@@ -708,20 +712,17 @@ namespace
         a->app.setLoadProgress(0, (int)job->entries.size());
         a->app.setStreamProgress(0, (int)job->entries.size());
 
-        // Part 1 is pure animation: start the background decode + poll ONLY when the
-        // intro finishes (#4). App fires onLoadingReady at that point.
-        a->app.onLoadingReady = [a]() {
-            LoadJob *j = a->load.get();
-            if (!j || j->pollId) return;  // guard against a double-fire
-            // One worker per core (capped): decode is CPU-bound and independent per
-            // image, and the pipeline bounds how far they may run ahead.
-            const unsigned hc = std::thread::hardware_concurrency();
-            const int n = std::max(2, std::min((int)(hc ? hc : 2), kMaxDecodeWorkers));
-            j->pipe.start(j->entries.size(), n, kDecodeWindow, kMaxInFlightBytes,
-                          [j](size_t i) { return decodeEntry(j, i); },
-                          [](const LoadJob::Result &r) { return r.rgba.size(); });
-            j->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
-        };
+        // R-LOADING-1 (amended): decode starts NOW, alongside the intro, so the progress
+        // bar and status line are already live by the time the intro lands. It runs on a
+        // worker pool whose per-image apply is off the UI thread, so it cannot hitch the
+        // animation. One worker per core (capped); the pipeline bounds how far they run
+        // ahead of the applier.
+        const unsigned hc = std::thread::hardware_concurrency();
+        const int workers = std::max(2, std::min((int)(hc ? hc : 2), kMaxDecodeWorkers));
+        job->pipe.start(job->entries.size(), workers, kDecodeWindow, kMaxInFlightBytes,
+                        [job](size_t i) { return decodeEntry(job, i); },
+                        [](const LoadJob::Result &r) { return r.rgba.size(); });
+        job->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
     }
 
     // Open an existing .cmp through the shared animated load.
@@ -1305,6 +1306,14 @@ int main(int argc, char **argv)
         DecodedImage thumb = downscaleCover(img, 480);  // small: cheap to cache + reuse
         host.app.setHomeThumbnail(idx, thumb.rgba.data(), thumb.width, thumb.height);
         host.thumbs[imgPath] = std::move(thumb);        // reused as the loading-screen centre image (#3)
+    };
+
+    // R-SETTINGS-4: what the user last chose is in force before the first frame, and
+    // every later change is written straight back.
+    host.app.applySettings(arstro::cosmo::AppSettings::load());
+    host.app.onSettingsChanged = [](arstro::cosmo::AppSettings s) {
+        if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
+                                  arstro::cosmo::AppSettings::path().c_str());
     };
 
     host.app.setPresetDir(exeDir() + "/presets");
