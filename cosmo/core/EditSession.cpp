@@ -784,7 +784,32 @@ namespace cosmo
         mSlotNames.push_back(name);
         mSlotPaths.push_back(path);
         mSlotSessions.push_back("");
-        mSlotThumbs.push_back(makeThumb(rgba, w, h, 110));
+        mSlotThumbs.push_back(makeThumb(rgba, w, h, kThumbEdge));
+
+        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = parentNode; leaf.slot = slot;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(leaf);
+        mNodes[parentNode].kids.push_back(node);
+        return slot;
+    }
+
+    int EditSession::openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,
+                                   const std::string &name, const std::string &path, Thumb &&thumb)
+    {
+        // R-LOADPERF-2: the caller (a loader thread) already downsampled the thumbnail and
+        // owns a buffer it will never touch again, so neither the ~100 MB copy nor the
+        // full-image downsample is charged to whichever thread calls this.
+        if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = mCurGroup;
+        const int slot = mService.addImage(std::move(rgba), w, h, 4);
+        if (slot < 0) return -1;
+        mSlotParams.push_back(EditParams{});
+        History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
+        hist.init(EditParams{});
+        mSlotHistory.push_back(std::move(hist));
+        mSlotNames.push_back(name);
+        mSlotPaths.push_back(path);
+        mSlotSessions.push_back("");
+        mSlotThumbs.push_back(std::move(thumb));
 
         GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = parentNode; leaf.slot = slot;
         const int node = (int)mNodes.size();
@@ -806,10 +831,15 @@ namespace cosmo
     void EditSession::finishWorkspaceLoad(const std::string &path)
     {
         mWorkspacePath = path;
-        if (!mSlotParams.empty())
-            selectImage(0);
-        else
-            mCurGroup = 0;
+        // R-LOADPERF-3: with a progressive reveal the editor has been usable since the
+        // FIRST image landed, so by the time the last one arrives the photographer may
+        // already be working on a different photo. Only pick image 0 when nothing has
+        // been selected yet -- otherwise finishing the load would yank them back.
+        if (mCurrentSlot < 0 && mEditGroup < 0)
+        {
+            if (!mSlotParams.empty()) selectImage(0);
+            else mCurGroup = 0;
+        }
         mDirty = false;   // freshly loaded == clean
     }
 

@@ -230,6 +230,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |
 | `cosmo/widgets/*` | app | ~40 `Segment` widgets (chrome, panels, controls, overlays, dialogs) |
 | `cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam |
+| `cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1) |
 | `cosmo/core/History.{h,cpp}` | core | branching undo tree |
 | `cosmo/core/ProjectStore.{h,cpp}` | core | recents index (config dir) |
 | `cosmo/core/PresetLibrary.{h,cpp}` | core | `.apf` preset tree scan |

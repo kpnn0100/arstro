@@ -157,6 +157,12 @@ namespace cosmo_v2
                               const cosmo::History &history = cosmo::History{}, bool bypass = false)
         { return mSession.addWorkspaceGroup(parentNode, name, params, history, bypass); }
         int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);
+        /** Loader fast path (R-LOADPERF-2): the decoded buffer is MOVED into the engine
+         *  and the filmstrip thumbnail was already built on the loader thread, so the UI
+         *  thread pays neither the ~100 MB copy nor the downsample. */
+        int openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,
+                          const std::string &name, const std::string &path,
+                          cosmo::EditSession::Thumb &&thumb);
         int addWorkspaceMissingImage(int parentNode, const std::string &name)
         { return mSession.addWorkspaceMissingImage(parentNode, name); }
         void applyParamsToSlot(int slot, const EditParams &p) { mSession.applyParamsToSlot(slot, p); }
@@ -171,6 +177,13 @@ namespace cosmo_v2
         /** Push the current slot's params into every panel that isn't backed by
          *  live queries -- filled in as each panel lands (no-op until then). */
         void syncControlsToSlot();
+    public:
+        /** Re-push ONLY the browse chrome (filmstrip cells + selection + the top bar's
+         *  n/total). The host calls this per image while a project streams in behind the
+         *  already-revealed editor (R-LOADPERF-3), so newly arrived photos appear in the
+         *  filmstrip without disturbing the develop panels mid-edit. */
+        void refreshLibrary();
+    private:
         void refreshPresetTree();
         void toggleRail();
         void registerThumb(int slot);

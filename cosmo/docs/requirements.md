@@ -682,3 +682,38 @@ releasing over the ✕ (or outside the card) never dismisses it. The offset rese
 ### DR-EXPORT-7 Bypass honoured
 `EditSession::exportFullResSlot(slot,…)` composes the same `effectiveParams(slot)` the preview uses,
 so a bypassed image or group exports without those edits.
+
+## 16. Project-load performance (R-LOADPERF)
+
+Measured on this machine (24 cores) with a 12 x 24 MP JPEG catalog: **2512 ms → 478 ms total**
+(5.3x), **830 ms → ~0 ms of UI-thread work**, and — because the editor is now revealed on the first
+image rather than the last — **2512 ms → ~225 ms before the project is usable**. First-image latency
+alone rose slightly (181 → 225 ms): eight decoders share memory bandwidth, so image 0 no longer has
+the machine to itself. That is the deliberate trade.
+
+### DR-LOADPERF-1 Ordered parallel pipeline
+`cosmo/core/OrderedParallelLoad.h` — a UI-free, header-only template: `start(count, workers, window,
+maxInFlightBytes, produce, weigh)` runs `produce(i)` on a pool, and `tryConsume(out)` hands items to
+a single consumer **strictly in index order**. Ordering is mandatory because a `.cosmoproj` names a
+node's parent by entry index. Back-pressure is two-fold — a window of entries ahead of the consumer
+AND a cap on decoded-but-unapplied bytes — because a decoded 24 MP frame is ~100 MB.
+
+**Deadlock-freedom:** workers claim indices with a monotonic counter, so a worker holding `i`
+implies every index below `i` is already claimed; the index the consumer needs next is therefore
+always either produced or held by a worker, and that worker is **exempt** from both limits. Verified
+by `cosmo_core_tests` over 60 randomised (workers × window × byte-cap) combinations — with caps
+deliberately smaller than a single item — and separately under ThreadSanitizer.
+
+### DR-LOADPERF-2 Off-thread apply
+`EditSession::makeThumb` is public and re-entrant so the loader builds the filmstrip thumbnail on its
+own thread, and `EditSession::openImageInto(int, vector<uint8_t>&&, …, Thumb&&)` +
+`RenderService::addImage(vector<uint8_t>&&, …)` **move** the decoded buffer into the engine instead
+of copying it. What is left on the UI thread per image is bookkeeping.
+
+### DR-LOADPERF-3 Progressive reveal
+`pollLoad` calls `selectImage` + `finishOpenTransition` on the **first** decoded image; the rest
+stream in behind the revealed editor, each calling `App::refreshLibrary()` (browse chrome only — the
+develop panels are not re-pushed under the user's hands). `EditSession::finishWorkspaceLoad` only
+auto-selects image 0 when nothing is selected yet, so finishing a load cannot yank a photographer
+who started working during the stream. A project whose images all fail to decode still reveals, via
+the completion branch.

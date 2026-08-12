@@ -38,6 +38,8 @@ namespace cosmo
         /** Add an image leaf under `parentNode` without selecting it (batch-friendly
          *  companion to openImage, used when loading a workspace). */
         int openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path);
+        /** A move + prebuilt-thumbnail variant of this exists below, next to `Thumb`
+         *  (which it needs, and which is declared with the group tree). */
         /** Add a placeholder leaf (no engine slot) for an image that failed to decode,
          *  so later workspace entries' `parent` indices stay aligned. */
         int addWorkspaceMissingImage(int parentNode, const std::string &name);
@@ -77,6 +79,18 @@ namespace cosmo
             std::vector<uint8_t> rgba;
             int w = 0, h = 0;
         };
+        /** Long edge of a filmstrip thumbnail. Public so a loader thread can build one
+         *  itself and hand it over ready-made (R-LOADPERF-2) rather than making the UI
+         *  thread downsample a full-resolution frame. */
+        static constexpr int kThumbEdge = 110;
+        /** Box-filter downsample to `maxEdge`. Pure and re-entrant, so it is safe to run
+         *  on a loader thread. */
+        static Thumb makeThumb(const uint8_t *rgba, int w, int h, int maxEdge);
+        /** openImageInto, but MOVES the decoded pixels into the engine and takes a
+         *  thumbnail the caller already built -- both of which a project loader can do on
+         *  its own thread, leaving the UI thread only bookkeeping (R-LOADPERF-2). */
+        int openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,
+                          const std::string &name, const std::string &path, Thumb &&thumb);
 
         const std::vector<GNode> &nodes() const { return mNodes; }
         int currentGroup() const { return mCurGroup; }
@@ -230,7 +244,6 @@ namespace cosmo
         void recordHistory();  // snapshot the current edit target (slot or group) into its history
         int firstImageSlotUnder(int node) const;  // representative member for a group's live preview
         History *editHistory();  // the History of whatever is being edited (group or current slot)
-        static Thumb makeThumb(const uint8_t *rgba, int w, int h, int maxEdge);
 
         arstro::RenderService mService;
 

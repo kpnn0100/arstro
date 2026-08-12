@@ -450,7 +450,20 @@ namespace cosmo_v2
         // R-BYPASS-4: dim the edit stack while the item being edited has its filter off.
         mRightColumn->setBypassed(mSession.editTargetBypassed());
 
-        // Filmstrip: the current group's children + which cell(s) are selected.
+        refreshLibrary();
+        mRightColumn->syncToSlot();
+    }
+
+    void App::refreshLibrary()
+    {
+        // The browse chrome only: the filmstrip's cells + selection, and the top bar's
+        // n/total. Split out of syncControlsToSlot so a project STREAMING IN behind the
+        // revealed editor (R-LOADPERF-3) can show each newly arrived photo without
+        // re-pushing every develop panel under the photographer's hands.
+        const int slot = mSession.currentSlot();
+        if (mSession.editGroup() < 0 && slot >= 0)
+            mTopBar->setFilename(filenameOf(mSession.currentSourcePath()), slot + 1, mSession.imageCount());
+
         std::vector<Filmstrip::Cell> cells;
         for (const auto &c : mSession.currentGroupCells())
             cells.push_back({c.group, c.node, c.slot, c.name, c.count, c.bypassed});
@@ -467,8 +480,6 @@ namespace cosmo_v2
                 (mSession.editGroup() < 0 && !mSession.nodes()[kids[c]].group && mSession.nodes()[kids[c]].slot == slot))
                 primary = c;
         mCenterStage->filmstrip()->setSelection(selCells, primary);
-
-        mRightColumn->syncToSlot();
     }
 
     void App::setSize(double width, double height)
@@ -633,6 +644,15 @@ namespace cosmo_v2
     int App::openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
         const int slot = mSession.openImageInto(parentNode, rgba, w, h, name, path);
+        if (slot >= 0) registerThumb(slot);
+        return slot;
+    }
+
+    int App::openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,
+                           const std::string &name, const std::string &path,
+                           cosmo::EditSession::Thumb &&thumb)
+    {
+        const int slot = mSession.openImageInto(parentNode, std::move(rgba), w, h, name, path, std::move(thumb));
         if (slot >= 0) registerThumb(slot);
         return slot;
     }
@@ -869,9 +889,12 @@ namespace cosmo_v2
         // The load is done. Prime the editor beneath (project name), fill the bar,
         // and flag completion — the reveal itself only begins once the intro
         // animation has fully played (see renderTransition: "animation first").
+        // With a progressive reveal (R-LOADPERF-3) this runs BEFORE finishWorkspaceLoad
+        // has recorded the path, so fall back to the name the transition started with.
         std::string stem = mSession.workspacePath();
         if (auto s = stem.find_last_of("/\\"); s != std::string::npos) stem = stem.substr(s + 1);
         if (auto d = stem.find_last_of('.'); d != std::string::npos) stem = stem.substr(0, d);
+        if (stem.empty()) stem = mLoadName;
         mTopBar->setProjectName(stem);
         syncControlsToSlot();
         mProgress.animateTo(1.0, 120.0, Easing::EaseOutCubic, mNowMs);

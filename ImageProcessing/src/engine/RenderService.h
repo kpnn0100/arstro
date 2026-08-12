@@ -16,6 +16,7 @@
 #include "EditParams.h"
 #include "../analysis/Histogram.h"
 #include <cstdint>
+#include <utility>
 #include <vector>
 #ifdef ARSTRO_ENABLE_THREADS
 #include <condition_variable>
@@ -44,6 +45,12 @@ namespace arstro
 
         /** Add an image (copied); returns its slot id (assigned sequentially). */
         int addImage(const uint8_t *rgba, int w, int h, int channels = 4);
+        /** As above but TAKES the buffer instead of copying it. A full-resolution frame
+         *  is ~100 MB, and a project loader already owns a freshly decoded vector it will
+         *  never touch again, so the copy is pure cost on the thread that can least
+         *  afford it. Falls back to a copy on the non-threaded build, where the engine
+         *  consumes the pixels inline. */
+        int addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels = 4);
         /** Free a slot's pixels (e.g. removed from the session); its index is never
          *  reused, so every other slot's id stays valid. */
         void releaseImage(int slot);

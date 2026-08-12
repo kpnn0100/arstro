@@ -36,6 +36,19 @@ namespace arstro
         return mNextSlot++;  // engine assigns the same id (queue is FIFO)
     }
 
+    int RenderService::addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels)
+    {
+        if (w <= 0 || h <= 0 || channels < 1) return -1;
+        if (bytes.size() < (size_t)w * h * channels) return -1;
+        std::lock_guard<std::mutex> lk(mMu);
+        AddCmd c;
+        c.bytes = std::move(bytes);   // the whole point: no ~100 MB copy
+        c.w = w; c.h = h; c.ch = channels;
+        mAddQueue.push_back(std::move(c));
+        mCv.notify_all();
+        return mNextSlot++;
+    }
+
     void RenderService::releaseImage(int slot)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -199,6 +212,13 @@ namespace arstro
         const int slot = mEngine.addImage(rgba, w, h, channels);
         if (slot >= 0) mNextSlot = slot + 1;
         return slot;
+    }
+    int RenderService::addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels)
+    {
+        // No worker to hand ownership to: the engine consumes the pixels inline here,
+        // so there is nothing to move into and this is just the copying path.
+        if (bytes.size() < (size_t)w * h * channels) return -1;
+        return addImage(bytes.data(), w, h, channels);
     }
     void RenderService::releaseImage(int slot) { mEngine.releaseImage(slot); }
     void RenderService::reset()

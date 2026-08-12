@@ -8,6 +8,7 @@
 #include "App.h"
 #include "ExportWriter.h"
 #include "Log.h"
+#include "core/OrderedParallelLoad.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../Artboard/src/adapter/native/CairoTarget.h"
 #include <fontconfig/fontconfig.h>
@@ -20,6 +21,7 @@
 #endif
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <cctype>
 #include <ctime>
 #include <filesystem>
@@ -43,6 +45,21 @@ namespace
     // polls finished results and applies them to the session + drives the animated
     // loading screen (R-LOADING). Results are consumed strictly in entry order so
     // the group-tree parent indices stay valid.
+    // ── Project loading (R-LOADING + R-LOADPERF) ──────────────────────────────
+    //
+    // Decoding is CPU-bound and independent per image, so it runs on a POOL of workers
+    // (R-LOADPERF-1). They finish out of order, but each result is stored AT ITS ENTRY
+    // INDEX and the UI thread applies them strictly in order: the .cosmoproj format
+    // identifies a node's parent by entry index, so applying out of order would reparent
+    // the tree. Each worker also builds the filmstrip thumbnail and hands the decoded
+    // buffer over to be MOVED into the engine, so the UI thread pays neither the
+    // downsample nor the ~100 MB copy (R-LOADPERF-2).
+    constexpr int kMaxDecodeWorkers = 8;
+    // A decoded 24 MP frame is ~100 MB and N workers outrun one applier, so without a
+    // bound a big catalog would be decoded into RAM all at once (R-LOADPERF-1a).
+    constexpr size_t kDecodeWindow = 8;                        // entries ahead of the applier
+    constexpr size_t kMaxInFlightBytes = 512ull * 1024 * 1024; // decoded-but-unapplied
+
     struct LoadJob
     {
         struct Result
@@ -54,6 +71,7 @@ namespace
             arstro::EditParams params;         // per-item edit params (image or group)
             arstro::cosmo::History history;    // per-item branching edit timeline
             std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
+            arstro::cosmo::EditSession::Thumb thumb;  // built on the worker (R-LOADPERF-2)
             int w = 0, h = 0;
             bool decoded = false;              // false = missing/failed image
             bool bypass = false;               // R-BYPASS-6: node's filter disabled
@@ -64,19 +82,18 @@ namespace
         // Import Catalog builds a project that has no .cmp on disk yet, so the file is
         // written once every image has landed (an open just records the path).
         bool saveOnFinish = false;
-        std::mutex mu;                         // guards `ready`
-        std::vector<Result> ready;             // produced results, in order
-        std::atomic<bool> producedAll{false};  // worker finished producing
-        std::atomic<bool> stop{false};         // ask the worker to bail out
-        size_t consumed = 0;                   // main-thread applied count
-        bool coverSent = false;
-        std::thread worker;
+
+        // The pool, the strict in-order hand-off and the back-pressure all live in
+        // cosmo_core's OrderedParallelLoad, which is UI-free and therefore actually
+        // unit-testable (see cosmo_core_tests) — this is just the binding.
+        arstro::cosmo::OrderedParallelLoad<Result> pipe;
         guint pollId = 0;
+        bool coverSent = false;
+        bool revealed = false;                 // R-LOADPERF-3: editor already shown
 
         ~LoadJob()
         {
-            stop.store(true);
-            if (worker.joinable()) worker.join();
+            pipe.stop();
             if (pollId) g_source_remove(pollId);
         }
     };
@@ -529,33 +546,37 @@ namespace
     // Background producer: decode every entry's image (the heavy work) off the UI
     // thread, pushing results in order. Touches only the job + its own decoder — no
     // App/GTK access — so there is no data race with the main thread.
-    void decodeWorker(LoadJob *job)
+    // Runs on a pool thread: decode entry `i` and build its filmstrip thumbnail, so the
+    // UI thread is left with nothing but bookkeeping (R-LOADPERF-1/2).
+    LoadJob::Result decodeEntry(LoadJob *job, size_t i)
     {
-        NativeImageDecoder dec;  // worker-local; GdkPixbuf/LibRaw decode is thread-safe per instance
-        for (const auto &e : job->entries)
+        NativeImageDecoder dec;  // stateless; a per-call instance is free and provably per-thread
+        const App::WorkspaceEntry &e = job->entries[i];
+        LoadJob::Result r;
+        r.group = e.group;
+        r.parent = e.parent;
+        r.params = e.params;
+        r.history = e.history;
+        r.bypass = e.bypass;               // R-BYPASS-6
+        if (e.group)
         {
-            if (job->stop.load()) return;
-            LoadJob::Result r;
-            r.group = e.group;
-            r.parent = e.parent;
-            r.params = e.params;
-            r.history = e.history;
-            r.bypass = e.bypass;               // R-BYPASS-6
-            if (e.group)
-            {
-                r.name = e.name;
-            }
-            else
-            {
-                r.imagePath = e.imagePath;
-                r.name = baseName(e.imagePath);
-                DecodedImage img = dec.decodeFile(e.imagePath);
-                if (img.ok()) { r.rgba = std::move(img.rgba); r.w = img.width; r.h = img.height; r.decoded = true; }
-            }
-            std::lock_guard<std::mutex> lk(job->mu);
-            job->ready.push_back(std::move(r));
+            r.name = e.name;
         }
-        job->producedAll.store(true);
+        else
+        {
+            r.imagePath = e.imagePath;
+            r.name = baseName(e.imagePath);
+            DecodedImage img = dec.decodeFile(e.imagePath);
+            if (img.ok())
+            {
+                r.w = img.width; r.h = img.height; r.decoded = true;
+                // Downsample HERE, not on the UI thread (R-LOADPERF-2).
+                r.thumb = arstro::cosmo::EditSession::makeThumb(
+                    img.rgba.data(), img.width, img.height, arstro::cosmo::EditSession::kThumbEdge);
+                r.rgba = std::move(img.rgba);
+            }
+        }
+        return r;
     }
 
     // Main-thread consumer (GTK timeout): apply any decoded results in order, feed
@@ -567,15 +588,11 @@ namespace
         LoadJob *job = a->load.get();
         if (!job) return G_SOURCE_REMOVE;
 
-        for (;;)  // drain everything ready this tick
+        for (;;)  // drain everything ready this tick, strictly in entry order
         {
             LoadJob::Result r;
-            {
-                std::lock_guard<std::mutex> lk(job->mu);
-                if (job->consumed >= job->ready.size()) break;
-                r = std::move(job->ready[job->consumed]);
-                ++job->consumed;
-            }
+            if (!job->pipe.tryConsume(r)) break;   // in entry order, or nothing ready yet
+
             const int parentNode = r.parent < 0 ? 0 : r.parent + 1;
             if (r.group)
             {
@@ -583,15 +600,33 @@ namespace
             }
             else if (r.decoded)
             {
-                const int slot = a->app.openImageInto(parentNode, r.rgba.data(), r.w, r.h, r.name, r.imagePath);
-                a->app.applyParamsToSlot(slot, r.params, r.history);
-                a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
                 // Fallback cover only if the thumbnail wasn't already supplied (#3):
                 // normally the loading-screen centre image is the cached thumbnail.
+                // Must run BEFORE the buffer is moved into the engine.
                 if (!job->coverSent && !a->app.hasLoadingCover())
                 {
                     a->app.setLoadingCover(r.rgba.data(), r.w, r.h);
                     job->coverSent = true;
+                }
+                const int slot = a->app.openImageInto(parentNode, std::move(r.rgba), r.w, r.h,
+                                                      r.name, r.imagePath, std::move(r.thumb));
+                a->app.applyParamsToSlot(slot, r.params, r.history);
+                a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
+
+                // R-LOADPERF-3: reveal on the FIRST image and let the rest stream in
+                // behind the editor, so a project opens in the time of one photo rather
+                // than all of them. finishOpenTransition still waits for the intro.
+                if (!job->revealed && slot >= 0)
+                {
+                    job->revealed = true;
+                    a->app.selectImage(slot);       // give the revealed editor something to show
+                    a->app.finishOpenTransition();
+                }
+                else if (job->revealed)
+                {
+                    // Already in the editor: show this photo in the filmstrip as it
+                    // arrives, without re-pushing the develop panels (R-LOADPERF-3).
+                    a->app.refreshLibrary();
                 }
             }
             else
@@ -601,19 +636,20 @@ namespace
             }
             if (!r.name.empty())
                 a->app.setLoadStatus("Loading  " + r.name);  // what's loading, above the bar
-            a->app.setLoadProgress((int)job->consumed, (int)job->entries.size());
+            a->app.setLoadProgress((int)job->pipe.consumed(), (int)job->entries.size());
             gtk_widget_queue_draw(a->area);
         }
 
-        if (job->producedAll.load() && job->consumed >= job->entries.size())
+        if (job->pipe.finished())
         {
-            a->app.finishWorkspaceLoad(job->path);
+            a->app.finishWorkspaceLoad(job->path);   // records the path; keeps any selection
             if (job->saveOnFinish && !a->app.saveWorkspaceAs(job->path))
                 g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
             rememberProject(job->path);
-            a->app.finishOpenTransition();  // signals load done; reveal waits for the intro
+            // A project whose images all failed to decode never revealed above.
+            if (!job->revealed) a->app.finishOpenTransition();
             job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
-            a->load.reset();                // joins the (already-finished) worker
+            a->load.reset();                // joins the (already-finished) workers
             return G_SOURCE_REMOVE;
         }
         return G_SOURCE_CONTINUE;
@@ -655,8 +691,14 @@ namespace
         // intro finishes (#4). App fires onLoadingReady at that point.
         a->app.onLoadingReady = [a]() {
             LoadJob *j = a->load.get();
-            if (!j || j->worker.joinable()) return;  // guard against a double-fire
-            j->worker = std::thread(decodeWorker, j);
+            if (!j || j->pollId) return;  // guard against a double-fire
+            // One worker per core (capped): decode is CPU-bound and independent per
+            // image, and the pipeline bounds how far they may run ahead.
+            const unsigned hc = std::thread::hardware_concurrency();
+            const int n = std::max(2, std::min((int)(hc ? hc : 2), kMaxDecodeWorkers));
+            j->pipe.start(j->entries.size(), n, kDecodeWindow, kMaxInFlightBytes,
+                          [j](size_t i) { return decodeEntry(j, i); },
+                          [](const LoadJob::Result &r) { return r.rgba.size(); });
             j->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
         };
     }

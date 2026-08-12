@@ -122,6 +122,37 @@ sudden jump, and the heavy work is isolated to the middle part:
   (`HomeScreen::setWordmarkHidden`) until it lands, so it reads as one element. Collapses instantly
   under `reducedMotion()`.
 
+## R-LOADPERF — Opening a project is parallel, off-thread and progressive
+
+Opening a catalog of large frames was bounded by three serial costs, all avoidable
+(measured on a 24 MP JPEG: ~109 ms to decode, ~72 ms to apply):
+
+- **R-LOADPERF-1 Decode in parallel.** The loader decodes on a **pool** of worker threads
+  (`std::thread::hardware_concurrency()`, clamped to 2..8) instead of one, since decoding is
+  CPU-bound and independent per image. Workers claim entries with an atomic counter, so they
+  finish out of order, but each result is stored **at its entry index** and the UI thread still
+  applies them strictly in order — the `.cosmoproj` format identifies a node's parent by entry
+  index, so out-of-order application would reparent the tree.
+- **R-LOADPERF-1a Bounded in flight.** A decoded 24 MP frame is ~100 MB and N workers outrun the
+  single applier, so an unbounded pool would decode a whole catalog into RAM. A worker waits before
+  claiming work until the batch is within a small window of the apply cursor **and** total decoded-
+  but-unapplied bytes are under a cap. The worker holding the entry the applier needs next is
+  always exempt from both limits, so the pipeline can never deadlock against its own cap.
+- **R-LOADPERF-2 Apply off the UI thread.** The two costs inside the old apply — the ~100 MB pixel
+  copy into the engine and the filmstrip thumbnail's full-image downsample — both move to the
+  decode worker: the thumbnail is built there and handed over ready-made, and the decoded buffer is
+  **moved** into the engine (`RenderService::addImage(std::vector&&)`) instead of copied. What is
+  left on the UI thread per image is bookkeeping, so the loading screen keeps animating instead of
+  hitching once per photo.
+- **R-LOADPERF-3 Progressive reveal.** The editor no longer waits for the whole catalog: it is
+  revealed as soon as the **first image** has been applied (still gated on the intro having played,
+  R-LOADING-0), and the remaining images stream into the session and filmstrip behind it. A project
+  therefore opens in roughly the time of ONE image rather than all of them. The growing filmstrip
+  and the top bar's `n/total` count are the feedback while the rest arrive.
+  `finishWorkspaceLoad` consequently must **not** steal the selection — it auto-selects the first
+  image only when nothing is selected yet, so a photographer who started working during the stream
+  is not yanked back to image 1 when the last one lands.
+
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 
 - **R-LOG-1** The app writes a timestamped, levelled log to `~/.config/cosmo/cosmo.log`

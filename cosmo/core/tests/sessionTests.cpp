@@ -3,12 +3,14 @@
 // full behavioral contract is still verified by the wider cosmo app it was
 // extracted from. Plain assert()-based, no external test framework.
 #include "../EditSession.h"
+#include "../OrderedParallelLoad.h"
 #include "../PresetLibrary.h"
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 #include <filesystem>
 #include <thread>
 
@@ -490,6 +492,110 @@ namespace
         assert(s2.isBypassed(2));   // node 2 = its first image leaf
         printf("[PASS] bypass_workspace_roundtrip\n");
     }
+
+    // ── R-LOADPERF: parallel decode, off-thread apply, progressive reveal ──────
+
+    void test_ordered_parallel_load_is_in_order_and_never_stalls()
+    {
+        // The project loader decodes on a pool but MUST apply in entry order (a
+        // .cosmoproj names a node's parent by entry index), and must not run so far
+        // ahead that a catalog is decoded into RAM all at once. Randomised over worker
+        // counts, windows and deliberately tiny byte caps, since the interesting failure
+        // is a deadlock against the pipeline's own back-pressure.
+        for (int trial = 0; trial < 60; ++trial)
+        {
+            const size_t count = 1 + (size_t)(trial * 7 % 37);
+            const int workers = 1 + trial % 8;
+            const size_t window = 1 + (size_t)(trial % 4);
+            const size_t cap = 1 + (size_t)(trial * 13 % 900);   // often smaller than one item
+            arstro::cosmo::OrderedParallelLoad<size_t> pipe;
+            std::atomic<int> produced{0};
+            pipe.start(count, workers, window, cap,
+                       [&produced](size_t i) {
+                           ++produced;
+                           // Jitter derived from `i`: a shared RNG would itself be a race.
+                           std::this_thread::sleep_for(std::chrono::microseconds((i * 2654435761u) % 120));
+                           return i;
+                       },
+                       [](const size_t &v) { return (size_t)(500 + (v * 40503u) % 1500); });
+
+            size_t expect = 0;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+            while (expect < count)
+            {
+                size_t got = 0;
+                if (pipe.tryConsume(got)) { assert(got == expect); ++expect; }
+                else std::this_thread::sleep_for(std::chrono::microseconds(100));
+                assert(std::chrono::steady_clock::now() < deadline && "pipeline stalled");
+            }
+            assert(pipe.finished());
+            assert(produced.load() == (int)count);
+        }
+        printf("[PASS] ordered_parallel_load_is_in_order_and_never_stalls\n");
+    }
+
+    void test_ordered_parallel_load_stops_cleanly_midway()
+    {
+        // Abandoning a load (the user goes Home, or another project is opened) must join
+        // the pool without waiting for the whole catalog.
+        arstro::cosmo::OrderedParallelLoad<size_t> pipe;
+        pipe.start(500, 4, 4, 4096,
+                   [](size_t i) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); return i; },
+                   [](const size_t &) { return (size_t)1024; });
+        size_t got = 0;
+        while (!pipe.tryConsume(got)) std::this_thread::sleep_for(std::chrono::microseconds(200));
+        const auto t0 = std::chrono::steady_clock::now();
+        pipe.stop();
+        const auto dt = std::chrono::steady_clock::now() - t0;
+        assert(dt < std::chrono::seconds(3) && "stop() must not wait for the whole batch");
+        assert(!pipe.finished());
+        printf("[PASS] ordered_parallel_load_stops_cleanly_midway\n");
+    }
+
+    void test_open_image_move_and_prebuilt_thumb_match_the_copying_path()
+    {
+        // The loader's fast path must land exactly what the copying path did.
+        auto px = solidImage(64, 40, 30, 200, 90);
+        EditSession a;
+        const int slotA = a.openImageInto(0, px.data(), 64, 40, "x.jpg", "/tmp/x.jpg");
+
+        EditSession b;
+        auto moved = px;   // the loader owns a decoded buffer it will not touch again
+        EditSession::Thumb thumb = EditSession::makeThumb(px.data(), 64, 40, EditSession::kThumbEdge);
+        const int slotB = b.openImageInto(0, std::move(moved), 64, 40, "x.jpg", "/tmp/x.jpg", std::move(thumb));
+
+        assert(slotA == slotB);
+        assert(a.imageCount() == b.imageCount());
+        assert(a.nodes().size() == b.nodes().size());
+        assert(a.sourcePathForSlot(slotA) == b.sourcePathForSlot(slotB));
+        assert(a.nameForSlot(slotA) == b.nameForSlot(slotB));
+        const auto *ta = a.thumbForSlot(slotA);
+        const auto *tb = b.thumbForSlot(slotB);
+        assert(ta && tb);
+        assert(ta->w == tb->w && ta->h == tb->h);
+        assert(ta->rgba == tb->rgba);   // identical thumbnails, wherever they were built
+        printf("[PASS] open_image_move_and_prebuilt_thumb_match_the_copying_path\n");
+    }
+
+    void test_finish_workspace_load_keeps_an_existing_selection()
+    {
+        // R-LOADPERF-3: with a progressive reveal the photographer can be working on a
+        // photo before the last one lands, so finishing the load must not yank them back
+        // to image 0 -- but a plain (unselected) load must still land on image 0.
+        auto px = solidImage(8, 8, 1, 2, 3);
+        EditSession s;
+        s.openImageInto(0, px.data(), 8, 8, "a", "/tmp/a.jpg");
+        s.openImageInto(0, px.data(), 8, 8, "b", "/tmp/b.jpg");
+        s.selectImage(1);                       // the user moved to the second photo
+        s.finishWorkspaceLoad("/tmp/p.cosmoproj");
+        assert(s.currentSlot() == 1 && "the load must not steal the selection");
+
+        EditSession t;
+        t.openImageInto(0, px.data(), 8, 8, "a", "/tmp/a.jpg");
+        t.finishWorkspaceLoad("/tmp/q.cosmoproj");
+        assert(t.currentSlot() == 0 && "with nothing selected it still lands on image 0");
+        printf("[PASS] finish_workspace_load_keeps_an_existing_selection\n");
+    }
 }
 
 int main()
@@ -508,6 +614,10 @@ int main()
     test_bypass_skips_only_the_bypassed_node();
     test_bypass_keeps_own_values_in_the_panel_view();
     test_bypass_workspace_roundtrip();
+    test_ordered_parallel_load_is_in_order_and_never_stalls();
+    test_ordered_parallel_load_stops_cleanly_midway();
+    test_open_image_move_and_prebuilt_thumb_match_the_copying_path();
+    test_finish_workspace_load_keeps_an_existing_selection();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }
