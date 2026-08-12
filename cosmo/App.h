@@ -80,6 +80,11 @@ namespace cosmo_v2
         std::function<void()> onImportCatalogRequested;   // host: multi-image dialog -> new project
         std::function<void(const std::string &cmpPath)> onOpenRecentRequested;  // host: load that .cmp
         std::function<void(int recentIndex, const std::string &imagePath)> onDecodeThumbnail;  // host decodes -> setHomeThumbnail
+        /** Display name of a recent project, so the launch splash can say WHICH project
+         *  it is currently reading a cover for (R-SPLASH-2a). Empty if out of range. */
+        std::string recentName(int index) const
+        { return (index >= 0 && index < (int)mRecents.size()) ? mRecents[index].name : std::string(); }
+        int recentCount() const { return (int)mRecents.size(); }
 
         int openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path = "");
         void selectImage(int slot);

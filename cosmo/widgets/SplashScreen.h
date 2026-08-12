@@ -42,6 +42,11 @@ namespace cosmo_v2
         bool introDone() const { return mNowMs - mT0 >= kIntroMs; }
         /** Real startup progress, 0..1, shown by the bottom bar. */
         void setProgress(double p);
+        /** R-SPLASH-2a: name what is being loaded right now. The FIRST call hands the
+         *  slot over from the pulsing dots to a spinner + this text (a cross-fade, so
+         *  nothing jumps); later calls just change the string, because the text is data,
+         *  not motion — cross-fading each swap would flicker at the rate items land. */
+        void setStatus(const std::string &text);
         /** Begin the fade-out; `isGone()` turns true when the host may destroy us. */
         void beginExit();
         bool isGone() const { return mExiting && mExit.value() <= 0.001; }
@@ -56,7 +61,9 @@ namespace cosmo_v2
         bool mStarted = false, mExiting = false;
         artboard::AnimatedProperty mRise{0.0};      // wordmark: opacity + rise + scale
         artboard::AnimatedProperty mTag{0.0};       // tagline, staggered behind it
-        artboard::AnimatedProperty mDots{0.0};      // the pulsing dot row
+        artboard::AnimatedProperty mDots{0.0};      // the pulsing dot row (pre-status)
+        artboard::AnimatedProperty mStatusMix{0.0}; // 0 = dots hold the slot, 1 = status line
+        std::string mStatus;
         artboard::AnimatedProperty mProgress{0.0};  // eased real progress
         artboard::AnimatedProperty mExit{1.0};      // whole-splash fade-out
     };

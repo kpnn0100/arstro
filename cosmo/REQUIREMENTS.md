@@ -624,10 +624,22 @@ It now opens the way a project does: **animation first, work after**.
   dots** pulse in sequence; and a **2 px accent progress bar is pinned to the bottom edge** of the
   window, filling as startup proceeds. Every part is an eased `AnimatedProperty`; the whole thing
   collapses under `reducedMotion()`.
+- **R-SPLASH-2a It says what it is loading.** A launch that only shows a bar tells you *how far*
+  but never *what*. The dots therefore **hand off to a status line**: while there is nothing
+  specific to report (during the intro) the reference's pulsing dots hold the slot; the moment the
+  host reports its first item they **cross-fade out** and a **spinner + status text** cross-fades in
+  in the same slot — `Scanning projects…`, then `Loading  <project name>` per cover thumbnail, then
+  `Ready`. One activity affordance at a time (never dots *and* a spinner: that is the same
+  affordance twice), and the slot never jumps. The spinner is the same rotating arc the filmstrip's
+  loading cells use (R-LOADUX-2), so "work is happening" reads identically across the app.
+  The **text itself is data, not motion** (R-G-1): the line fades in once and out at the end, while
+  the string inside it simply changes — cross-fading every string swap would flicker, since items
+  are reported as fast as they complete.
 - **R-SPLASH-3 Animate first, load after.** The intro plays against an idle main loop. Only when it
   finishes does the host do the deferred startup work (scanning recents and decoding their cover
-  thumbnails), reporting real progress into the splash bar; the splash then fades out, is destroyed,
-  and the main window is shown. A launch with images on the command line skips straight through.
+  thumbnails), reporting real progress **and the current item's name** into the splash; the splash
+  then fades out, is destroyed, and the main window is shown. A launch with images on the command
+  line skips straight through.
 - **R-SPLASH-4 Non-interactive.** The splash takes no input and cannot be dismissed; it is chrome
   for a fixed, short moment.
 

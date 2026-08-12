@@ -1039,6 +1039,7 @@ namespace
             // The intro has played; NOW do the work it was covering. showHome() fills
             // thumbQueue rather than decoding inline, because startupPhase is set.
             a->startupWorkBegun = true;
+            a->splash->setStatus("Scanning projects…");     // R-SPLASH-2a: name the work
             if (a->app.onHomeScreen()) a->app.showHome();   // rebuild recents -> queue thumbs
         }
         if (a->startupWorkBegun)
@@ -1048,6 +1049,10 @@ namespace
             if (a->thumbDone < a->thumbQueue.size())
             {
                 const auto &job = a->thumbQueue[a->thumbDone];
+                // Name the project whose cover is being read, not the raw file path —
+                // the launcher's unit is a project (R-SPLASH-2a).
+                const std::string who = a->app.recentName(job.first);
+                a->splash->setStatus(who.empty() ? std::string("Loading covers…") : "Loading  " + who);
                 DecodedImage img = a->decoder.decodeFile(job.second);
                 if (img.ok())
                 {
@@ -1059,7 +1064,11 @@ namespace
             }
             const size_t total = a->thumbQueue.size();
             a->splash->setProgress(total == 0 ? 1.0 : (double)a->thumbDone / (double)total);
-            if (a->thumbDone >= total) a->splash->beginExit();
+            if (a->thumbDone >= total)
+            {
+                a->splash->setStatus("Ready");
+                a->splash->beginExit();
+            }
         }
 
         gtk_widget_queue_draw(a->splashArea);

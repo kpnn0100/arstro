@@ -748,6 +748,16 @@ rise+scale, tagline, dot row — plus `setProgress()` for the 2 px bottom bar an
 measureText` for centring (mixing a measured width with an estimated one is what put it off-centre
 first time round).
 
+### DR-SPLASH-2a The activity slot
+`setStatus(text)` shares ONE slot with the pulsing dots: the first non-empty call eases `mStatusMix`
+0→1, cross-fading the dots out and a **spinner + status line** in; afterwards only the string
+changes, because the text is data rather than motion (cross-fading each swap would flicker at the
+rate items land). The spinner is the same rotating quarter-arc the filmstrip's loading cells use, so
+one activity affordance reads identically app-wide — and never two at once. The line is centred as a
+unit (spinner + gap + text) and ellipsizes at `kStatusMaxFrac` of the window. **Ellipsize against
+the room available, not against the string's own measured width** — the latter truncates *every*
+string, since appending `…` always makes it wider.
+
 Host: `startSplash` creates a **borderless, non-resizable, centred** `GTK_WINDOW_TOPLEVEL`
 (`gtk_window_set_decorated(FALSE)`, `GDK_WINDOW_TYPE_HINT_SPLASHSCREEN`) with its own drawing area
 and 16 ms tick. The main window is constructed but **not shown**. `onSplashTick` plays the intro;
@@ -755,8 +765,10 @@ only once `introDone()` does it call `showHome()`, whose `onDecodeThumbnail` req
 rather than decoded because `Host::startupPhase` is set — the tick then decodes ONE cover per frame
 (each is a full-resolution decode; a loop here would stall the very animation this exists to
 protect), feeding `setProgress`. When the queue drains it calls `beginExit()`, and on `isGone()`
-destroys the splash window and calls `showMainWindow`. A launch with image paths on the command line
-goes straight to the editor with no splash.
+destroys the splash window and calls `showMainWindow`. Along the way it names the work —
+`Scanning projects…`, `Loading  <project name>` (via `App::recentName`, the launcher's unit is a
+project, not a file path), then `Ready`. A launch with image paths on the command line goes straight
+to the editor with no splash.
 
 ## 19. Load legibility (R-LOADUX)
 

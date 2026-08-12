@@ -1,5 +1,6 @@
 #include "SplashScreen.h"
 #include "../Theme.h"
+#include <algorithm>
 #include <cmath>
 
 namespace arstro
@@ -18,6 +19,14 @@ namespace cosmo_v2
         constexpr double kDotGap = 12.0;
         constexpr double kDotPulseMs = 1400.0;
         constexpr double kDotStaggerMs = 180.0;
+        // The status line that takes the dots' slot once there is something to name.
+        constexpr double kStatusPx = 10.0;
+        // The status line never spans the whole window: a splash reads as calm only if
+        // the line stays visually centred rather than running to both edges.
+        constexpr double kStatusMaxFrac = 0.72;
+        constexpr double kSpinR = 5.5;
+        constexpr double kSpinGap = 8.0;
+        constexpr double kSpinMs = 900.0;   // one turn — the same rate as the rack's cells
         const char *kTagline = "PROFESSIONAL PHOTO EDITOR";
         const char *kVersion = "v1.0.0";
 
@@ -44,6 +53,15 @@ namespace cosmo_v2
         mProgress.animateTo(clamp01(p), 220.0, Easing::EaseOutCubic, mNowMs);
     }
 
+    void SplashScreen::setStatus(const std::string &text)
+    {
+        const bool first = mStatus.empty();
+        mStatus = text;
+        // The dots and the status line share one slot and one affordance: the first real
+        // item swaps them over, and after that only the string changes (R-SPLASH-2a).
+        if (first && !text.empty()) mStatusMix.animateTo(1.0, 280.0, Easing::EaseInOutCubic, mNowMs);
+    }
+
     void SplashScreen::beginExit()
     {
         if (mExiting) return;
@@ -58,6 +76,7 @@ namespace cosmo_v2
         mRise.update(nowMs);
         mTag.update(nowMs);
         mDots.update(nowMs);
+        mStatusMix.update(nowMs);
         mProgress.update(nowMs);
         mExit.update(nowMs);
         Segment::advance(nowMs);
@@ -100,11 +119,14 @@ namespace cosmo_v2
             t.drawText(kTagline, (w - tw) * 0.5, wy + 22.0, kTagPx, font::sans(), kTagTrack);
         }
 
-        // ── three pulsing dots ──
-        const double dotsA = mDots.value() * a;
+        // ── the activity slot: dots until there is something to name, then the
+        //    spinner + status line, cross-faded (R-SPLASH-2a) ──
+        const double mix = mStatusMix.value();
+        const double cx = w * 0.5, cy = h - 46.0;
+
+        const double dotsA = mDots.value() * (1.0 - mix) * a;
         if (dotsA > 0.004)
         {
-            const double cx = w * 0.5, cy = h - 46.0;
             for (int i = 0; i < 3; ++i)
             {
                 // Each dot runs the same 1.4s pulse, staggered — opacity .3 -> 1 and a
@@ -116,6 +138,51 @@ namespace cosmo_v2
                 drawRoundedRect(t, Rect{x - r, cy - r, r * 2.0, r * 2.0}, radius::pill(),
                                 Paint::filled(palette::primaryAlpha((0.3 + 0.7 * k) * dotsA)));
             }
+        }
+
+        const double statusA = mix * a;
+        if (statusA > 0.004 && !mStatus.empty())
+        {
+            // Spinner + text, centred as one unit so the line stays balanced however
+            // long the name is. Ellipsize ONLY when the text actually exceeds the room
+            // available — comparing against its own measured width (as a first cut did)
+            // truncates every string, because adding "…" always makes it wider (R5).
+            const double avail = w * kStatusMaxFrac - kSpinR * 2.0 - kSpinGap;
+            std::string shown = mStatus;
+            if (t.measureText(shown, kStatusPx, font::sans()) > avail)
+            {
+                while (!shown.empty() && t.measureText(shown + "…", kStatusPx, font::sans()) > avail)
+                    shown.pop_back();
+                shown += "…";
+            }
+            const double tw = t.measureText(shown, kStatusPx, font::sans());
+            const double total = kSpinR * 2.0 + kSpinGap + tw;
+            const double sx = cx - total * 0.5 + kSpinR;
+
+            // The same rotating quarter-arc the filmstrip's loading cells use, so "work
+            // is happening" reads identically everywhere in the app (R-LOADUX-2).
+            const double a0 = std::fmod(mNowMs, kSpinMs) / kSpinMs * 6.28318530718;
+            t.setStroke(palette::whiteAlpha(0.12 * statusA), 1.6);
+            t.beginPath();
+            t.moveTo(sx + kSpinR, cy);
+            t.quadTo(sx + kSpinR, cy + kSpinR, sx, cy + kSpinR);
+            t.quadTo(sx - kSpinR, cy + kSpinR, sx - kSpinR, cy);
+            t.quadTo(sx - kSpinR, cy - kSpinR, sx, cy - kSpinR);
+            t.quadTo(sx + kSpinR, cy - kSpinR, sx + kSpinR, cy);
+            t.closePath();
+            t.strokePath();
+            t.setStroke(palette::primaryAlpha(0.9 * statusA), 1.6);
+            t.beginPath();
+            for (int i = 0; i <= 8; ++i)
+            {
+                const double ang = a0 + (double)i / 8.0 * 1.5707963268;   // a quarter turn
+                const double px = sx + std::cos(ang) * kSpinR, py = cy + std::sin(ang) * kSpinR;
+                if (i == 0) t.moveTo(px, py); else t.lineTo(px, py);
+            }
+            t.strokePath();
+
+            t.setFill(palette::whiteAlpha(0.55 * statusA));
+            t.drawText(shown, sx + kSpinR + kSpinGap, cy + kStatusPx * 0.36, kStatusPx, font::sans());
         }
 
         // ── version, bottom-right ──
