@@ -587,3 +587,70 @@ to this app's tree model per the deltas called out below.
   `EditSession::exportFullResSlot(slot,…)`, which composes exactly the same `effectiveParams(slot)`
   the preview uses — so a bypassed image or group exports without those edits (R-BYPASS-2), and
   what you see is what is written.
+
+## R-BROWSE — Navigating the photo rack
+
+- **R-BROWSE-1 The filmstrip scrolls on the wheel.** The photo rack is a scroll view like every
+  other overflowing surface: a wheel over it scrolls it horizontally to reach photos beyond the
+  viewport (it already eased its offset for the sliding selection ring — it simply was never given
+  the wheel). `App::wheel` routes to it by hit-testing the strip's world rect, before the
+  right-column branch. One notch moves one cell + gap, so a notch is one photo.
+- **R-BROWSE-2 Arrow keys walk the rack.** **Left/Right** select the previous/next cell of the
+  current group — image or group chip alike, in display order — and the selection ring slides
+  (R-G-1) rather than jumping. The strip **auto-scrolls to keep the newly selected cell in view**,
+  so holding an arrow walks the whole rack. Navigation is clamped at both ends (no wrap: wrapping
+  from the last photo back to the first is disorienting in a cull). Arrow keys are ignored while a
+  modal is open or a text field has focus (`App::isTextEditing`), and while the loading transition
+  is playing (R-LOADING-4).
+- **R-BROWSE-3 Edit-section scroll intensity.** The develop panels scrolled **one pixel per wheel
+  notch** (`scrollBy` took the raw wheel delta as pixels), which reads as broken. One notch now
+  moves `kEditScrollStep` = **10 px** — ten times the old step — via one named constant, so the
+  feel is tunable in one place rather than per panel.
+
+## R-SPLASH — Application open animation (windowless)
+
+Starting the app decoded every recent project's cover thumbnail on the UI thread **before the first
+window was even shown** (`refreshHome` → `onDecodeThumbnail`), so cosmo appeared to hang on launch.
+It now opens the way a project does: **animation first, work after**.
+
+- **R-SPLASH-1 A small, windowless splash.** On launch cosmo shows a **compact undecorated window**
+  (no titlebar, no border, centred, ~`kSplashW`×`kSplashH`) — not a fullscreen screen — rendering an
+  Artboard `SplashScreen` through the same `CairoTarget` as the editor. The main window is not
+  created until the splash is done, so the first thing on screen is the animation.
+- **R-SPLASH-2 The animation** follows the reference design's `LoadingScreen`
+  (`ref/cosmo/File Reader Design(1).zip` → `src/app/App.tsx`), scaled to the small window: the
+  **`cosmo.` wordmark** (accent dot, R-G-2a spacing) rises 8 px and scales 0.96→1 while fading in;
+  the **`PROFESSIONAL PHOTO EDITOR`** tagline (letter-spaced, muted) fades in behind it; **three
+  dots** pulse in sequence; and a **2 px accent progress bar is pinned to the bottom edge** of the
+  window, filling as startup proceeds. Every part is an eased `AnimatedProperty`; the whole thing
+  collapses under `reducedMotion()`.
+- **R-SPLASH-3 Animate first, load after.** The intro plays against an idle main loop. Only when it
+  finishes does the host do the deferred startup work (scanning recents and decoding their cover
+  thumbnails), reporting real progress into the splash bar; the splash then fades out, is destroyed,
+  and the main window is shown. A launch with images on the command line skips straight through.
+- **R-SPLASH-4 Non-interactive.** The splash takes no input and cannot be dismissed; it is chrome
+  for a fixed, short moment.
+
+## R-LOADUX — A project load says what it is doing
+
+Revealing the editor on the first decoded image (R-LOADPERF-3) made opening fast but **opaque**: the
+loading screen flashed "Preparing…", the editor appeared with one photo, and the rest arrived with no
+indication that anything was still coming or how much. Fast is not the same as understandable. The
+load is therefore made **visible** rather than slower:
+
+- **R-LOADUX-1 The whole rack exists immediately.** The group tree is built from the project's
+  entries **up front, on the UI thread, before any decoding** — groups and one **placeholder leaf per
+  image** (`EditSession::addPendingImage`, a node with no engine slot, the same shape
+  `addWorkspaceMissingImage` already produced). So the filmstrip shows the project's real size from
+  the first frame and photos fill in where they belong. As each image decodes it is **attached** to
+  its waiting node (`EditSession::attachImage`), which also removes the need to apply results in
+  entry order — the parent indices were resolved before any of it started.
+- **R-LOADUX-2 Placeholder cells show they are loading.** A `Filmstrip::Cell` that has no image yet
+  draws as a dimmed cell with a **spinning indicator** (a rotating arc — the placeholder for the
+  supplied loading animation) instead of a thumbnail, so an un-arrived photo reads as *pending*, not
+  as *missing*. The spinner is driven from the frame clock and stops as soon as the cell has pixels.
+- **R-LOADUX-3 Progress that means something.** The loading screen's bar and status line report
+  **`n of N`** against the project's real total, not an unlabelled fraction; and because the editor
+  is revealed early, a **slim determinate progress bar remains along the top edge of the filmstrip**
+  while images are still arriving, with the count beside it. It fades out when the last one lands.
+  A photographer can therefore always tell how much is left, in both phases.

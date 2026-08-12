@@ -67,6 +67,7 @@ namespace cosmo
             Cell c;
             c.group = g.group; c.node = n; c.name = g.name;
             c.bypassed = g.bypass;  // R-BYPASS-5
+            c.loading = g.pending;  // R-LOADUX-2
             if (g.group) c.count = (int)g.kids.size();
             else c.slot = g.slot;
             cells.push_back(c);
@@ -127,9 +128,16 @@ namespace cosmo
         else
         {
             mEditGroup = -1;
-            mCurrentSlot = mNodes[node].slot;
-            resetPreviewResolution();
-            submit();
+            // R-LOADUX-2: a still-loading leaf has no slot yet. Move the selection (the
+            // ring travels, the name updates) but DON'T blank the stage -- keep showing
+            // whatever was there until this photo's pixels actually arrive, at which
+            // point attachImage() points the editor at it.
+            if (mNodes[node].slot >= 0)
+            {
+                mCurrentSlot = mNodes[node].slot;
+                resetPreviewResolution();
+                submit();
+            }
         }
     }
 
@@ -791,6 +799,54 @@ namespace cosmo
         mNodes.push_back(leaf);
         mNodes[parentNode].kids.push_back(node);
         return slot;
+    }
+
+    // ── R-LOADUX-1: the rack exists before the pixels do ──────────────────────
+
+    int EditSession::addPendingImage(int parentNode, const std::string &name)
+    {
+        if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = mCurGroup;
+        GNode leaf; leaf.group = false; leaf.name = name; leaf.parent = parentNode;
+        leaf.slot = -1; leaf.pending = true;
+        const int node = (int)mNodes.size();
+        mNodes.push_back(leaf);
+        mNodes[parentNode].kids.push_back(node);
+        return node;
+    }
+
+    int EditSession::attachImage(int node, std::vector<uint8_t> &&rgba, int w, int h,
+                                 const std::string &path, Thumb &&thumb)
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return -1;
+        GNode &leaf = mNodes[node];
+        if (leaf.group || !leaf.pending || leaf.slot >= 0) return -1;
+        const int slot = mService.addImage(std::move(rgba), w, h, 4);
+        if (slot < 0) return -1;
+        mSlotParams.push_back(EditParams{});
+        History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
+        hist.init(EditParams{});
+        mSlotHistory.push_back(std::move(hist));
+        mSlotNames.push_back(leaf.name);
+        mSlotPaths.push_back(path);
+        mSlotSessions.push_back("");
+        mSlotThumbs.push_back(std::move(thumb));
+        leaf.slot = slot;
+        leaf.pending = false;
+        // If this is the photo the user is sitting on (they clicked its spinner, or an
+        // arrow walked onto it), show it now that it exists.
+        if (mEditGroup < 0 && std::find(mSel.begin(), mSel.end(), node) != mSel.end())
+        {
+            mCurrentSlot = slot;
+            resetPreviewResolution();
+            submit();
+        }
+        return slot;
+    }
+
+    void EditSession::markImageFailed(int node)
+    {
+        if (node < 0 || node >= (int)mNodes.size()) return;
+        mNodes[node].pending = false;   // slot stays -1: it reads as missing, not coming
     }
 
     int EditSession::openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,

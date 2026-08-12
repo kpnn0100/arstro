@@ -17,6 +17,7 @@
 #include "../HueCurveEditor.h"
 #include "../CurvePanel.h"
 #include "../ExportDialog.h"
+#include "../Filmstrip.h"
 #include "../../Theme.h"
 #include <array>
 #include <cassert>
@@ -563,6 +564,65 @@ namespace
         tickDialog(d, 20, now);
         check(!d->isExporting(), "cancelExport returns to the form");
     }
+
+    // ── Filmstrip: the rack as a scroll view (R-BROWSE-1/2) ───────────────────
+
+    using arstro::cosmo_v2::Filmstrip;
+
+    std::shared_ptr<Filmstrip> makeStrip(int photos, double viewW)
+    {
+        auto f = std::make_shared<Filmstrip>();
+        f->width.set(viewW);
+        f->height.set(Filmstrip::kHeight);
+        std::vector<Filmstrip::Cell> cells;
+        for (int i = 0; i < photos; ++i)
+            cells.push_back({false, i + 1, -1, "p" + std::to_string(i) + ".jpg", 0, false, false});
+        f->setCells(std::move(cells));
+        return f;
+    }
+    // The eased scroll settles over a few frames; read it after it has.
+    double settledScroll(std::shared_ptr<Filmstrip> f, double &now)
+    {
+        std::shared_ptr<artboard::Segment> seg = f;
+        for (int i = 0; i < 40; ++i) { seg->advance(now); now += 16.0; }
+        // cellX(0) is kPadX minus the scroll offset, so the offset is recoverable.
+        return 9.75 - f->cellXForTest(0);
+    }
+
+    void filmstripScrollsIntoViewBothWays()
+    {
+        double now = 0.0;
+        auto f = makeStrip(20, 400.0);          // ~4 cells visible of 20
+        settledScroll(f, now);
+        check(settledScroll(f, now) < 1.0, "a fresh rack starts at the left edge");
+
+        f->scrollCellIntoView(19);              // the last photo
+        const double atEnd = settledScroll(f, now);
+        check(atEnd > 1.0, "walking to the end scrolls the rack");
+
+        f->scrollCellIntoView(0);               // back to the first
+        check(settledScroll(f, now) < 1.0, "and walking back scrolls it home again");
+    }
+
+    void filmstripScrollIsClampedAtBothEnds()
+    {
+        double now = 0.0;
+        auto f = makeStrip(20, 400.0);
+        f->scrollBy(-100000.0);                 // fling right, far past the end
+        const double maxed = settledScroll(f, now);
+        f->scrollBy(-100000.0);
+        check(std::fabs(settledScroll(f, now) - maxed) < 0.5, "cannot scroll past the last photo");
+        f->scrollBy(100000.0);                  // fling back left
+        check(settledScroll(f, now) < 1.0, "cannot scroll before the first photo");
+    }
+
+    void filmstripShortRackNeverScrolls()
+    {
+        double now = 0.0;
+        auto f = makeStrip(2, 800.0);           // everything already fits
+        f->scrollCellIntoView(1);
+        check(settledScroll(f, now) < 1.0, "a rack that fits its viewport stays put");
+    }
 }
 
 int main()
@@ -593,6 +653,9 @@ int main()
     exportBeatsRunToCompletionAndClose();
     exportAnimationPlaysBeforeAnyExportWork();
     exportRequestIsSnapshotAtPressTime();
+    filmstripScrollsIntoViewBothWays();
+    filmstripScrollIsClampedAtBothEnds();
+    filmstripShortRackNeverScrolls();
     exportProgressIgnoresInputAndReopensClean();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",

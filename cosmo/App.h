@@ -120,6 +120,10 @@ namespace cosmo_v2
         std::function<void()> onSaveWorkspaceRequested;
         std::function<void()> onLoadWorkspaceRequested;
         void renameGroup(const std::string &name);
+        /** R-BROWSE-2: select the previous/next cell of the current group (`dir` -1/+1),
+         *  image or group chip alike, and scroll the rack to keep it in view. Clamped at
+         *  both ends — no wrap. Returns false when it could not move. */
+        bool stepSelection(int dir);
         /** True while the in-app rename field is focused — the host suppresses its
          *  single-key shortcuts so typed keys go to the field (DR-TREE-5). */
         bool isTextEditing() const;
@@ -183,6 +187,17 @@ namespace cosmo_v2
          *  already-revealed editor (R-LOADPERF-3), so newly arrived photos appear in the
          *  filmstrip without disturbing the develop panels mid-edit. */
         void refreshLibrary();
+        /** R-LOADUX-1: build the project's whole tree BEFORE any decoding, so the rack
+         *  shows its real size from the first frame. Returns the node index per entry
+         *  (groups included) so the host can attach pixels to the right leaf later. */
+        std::vector<int> buildPendingTree(const std::vector<WorkspaceEntry> &entries);
+        /** R-LOADUX-1: give a pending leaf its decoded pixels + prebuilt thumbnail. */
+        int attachImage(int node, std::vector<uint8_t> &&rgba, int w, int h,
+                        const std::string &path, cosmo::EditSession::Thumb &&thumb);
+        void markImageFailed(int node) { mSession.markImageFailed(node); }
+        /** R-LOADUX-3: streaming progress shown along the top of the photo rack. */
+        void setStreamProgress(int done, int total)
+        { mCenterStage->filmstrip()->setLoadProgress(done, total); }
     private:
         void refreshPresetTree();
         void toggleRail();

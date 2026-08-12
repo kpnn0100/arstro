@@ -9,6 +9,7 @@
 #include "ExportWriter.h"
 #include "Log.h"
 #include "core/OrderedParallelLoad.h"
+#include "widgets/SplashScreen.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../Artboard/src/adapter/native/CairoTarget.h"
 #include <fontconfig/fontconfig.h>
@@ -64,6 +65,7 @@ namespace
     {
         struct Result
         {
+            size_t index = 0;                 // which entry this is (R-LOADUX-1)
             bool group = false;
             std::string name;                 // group name, or leaf display name
             std::string imagePath;            // source path (image leaves)
@@ -78,6 +80,7 @@ namespace
         };
 
         std::vector<App::WorkspaceEntry> entries;
+        std::vector<int> nodeOf;               // entry index -> tree node (R-LOADUX-1)
         std::string path;
         // Import Catalog builds a project that has no .cmp on disk yet, so the file is
         // written once every image has landed (an open just records the path).
@@ -150,6 +153,19 @@ namespace
         std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
         std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
+
+        // ── R-SPLASH: the application-open animation, in its OWN borderless window ──
+        GtkWidget *splashWindow = nullptr;
+        GtkWidget *splashArea = nullptr;
+        std::shared_ptr<arstro::cosmo_v2::SplashScreen> splash;
+        artboard::CairoTarget splashTarget;
+        // While true, cover-thumbnail requests are QUEUED instead of decoded, so the
+        // intro plays against an idle main loop and the work happens after it
+        // (R-SPLASH-3) -- the same "animation first" split the project open uses.
+        bool startupPhase = false;
+        std::vector<std::pair<int, std::string>> thumbQueue;
+        size_t thumbDone = 0;
+        bool startupWorkBegun = false;
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -553,6 +569,7 @@ namespace
         NativeImageDecoder dec;  // stateless; a per-call instance is free and provably per-thread
         const App::WorkspaceEntry &e = job->entries[i];
         LoadJob::Result r;
+        r.index = i;
         r.group = e.group;
         r.parent = e.parent;
         r.params = e.params;
@@ -593,12 +610,10 @@ namespace
             LoadJob::Result r;
             if (!job->pipe.tryConsume(r)) break;   // in entry order, or nothing ready yet
 
-            const int parentNode = r.parent < 0 ? 0 : r.parent + 1;
-            if (r.group)
-            {
-                a->app.addWorkspaceGroup(parentNode, r.name, r.params, r.history, r.bypass);
-            }
-            else if (r.decoded)
+            // R-LOADUX-1: the node already exists (built before any decoding), so this
+            // is an ATTACH, not a create -- groups need nothing at all here.
+            const int node = r.index < job->nodeOf.size() ? job->nodeOf[r.index] : -1;
+            if (!r.group && r.decoded && node >= 0)
             {
                 // Fallback cover only if the thumbnail wasn't already supplied (#3):
                 // normally the loading-screen centre image is the cached thumbnail.
@@ -608,40 +623,42 @@ namespace
                     a->app.setLoadingCover(r.rgba.data(), r.w, r.h);
                     job->coverSent = true;
                 }
-                const int slot = a->app.openImageInto(parentNode, std::move(r.rgba), r.w, r.h,
-                                                      r.name, r.imagePath, std::move(r.thumb));
-                a->app.applyParamsToSlot(slot, r.params, r.history);
-                a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
-
-                // R-LOADPERF-3: reveal on the FIRST image and let the rest stream in
-                // behind the editor, so a project opens in the time of one photo rather
-                // than all of them. finishOpenTransition still waits for the intro.
-                if (!job->revealed && slot >= 0)
+                const int slot = a->app.attachImage(node, std::move(r.rgba), r.w, r.h,
+                                                    r.imagePath, std::move(r.thumb));
+                if (slot >= 0)
                 {
-                    job->revealed = true;
-                    a->app.selectImage(slot);       // give the revealed editor something to show
-                    a->app.finishOpenTransition();
-                }
-                else if (job->revealed)
-                {
-                    // Already in the editor: show this photo in the filmstrip as it
-                    // arrives, without re-pushing the develop panels (R-LOADPERF-3).
-                    a->app.refreshLibrary();
+                    a->app.applyParamsToSlot(slot, r.params, r.history);
+                    a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
+                    // R-LOADPERF-3: reveal on the FIRST image; the rest stream in behind
+                    // the editor, visibly, as their placeholder cells fill in.
+                    if (!job->revealed)
+                    {
+                        job->revealed = true;
+                        a->app.selectImage(slot);   // give the revealed editor something to show
+                        a->app.finishOpenTransition();
+                    }
+                    else
+                        a->app.refreshLibrary();    // the arrived photo replaces its spinner
                 }
             }
-            else
+            else if (!r.group && node >= 0)
             {
                 g_printerr("cosmo_v2: workspace image missing: %s\n", r.imagePath.c_str());
-                a->app.addWorkspaceMissingImage(parentNode, r.name);
+                a->app.markImageFailed(node);       // stops spinning; reads as missing
+                a->app.refreshLibrary();
             }
+
+            const size_t doneN = job->pipe.consumed(), totalN = job->entries.size();
             if (!r.name.empty())
                 a->app.setLoadStatus("Loading  " + r.name);  // what's loading, above the bar
-            a->app.setLoadProgress((int)job->pipe.consumed(), (int)job->entries.size());
+            a->app.setLoadProgress((int)doneN, (int)totalN);
+            a->app.setStreamProgress((int)doneN, (int)totalN);   // R-LOADUX-3, in the editor
             gtk_widget_queue_draw(a->area);
         }
 
         if (job->pipe.finished())
         {
+            a->app.setStreamProgress((int)job->entries.size(), (int)job->entries.size());  // fades out
             a->app.finishWorkspaceLoad(job->path);   // records the path; keeps any selection
             if (job->saveOnFinish && !a->app.saveWorkspaceAs(job->path))
                 g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
@@ -685,7 +702,11 @@ namespace
         job->entries = std::move(entries);
         job->path = path;
         job->saveOnFinish = saveOnFinish;
+        // R-LOADUX-1: the whole rack exists before a single pixel is decoded, so the
+        // filmstrip shows the project's real size (as spinners) from the first frame.
+        job->nodeOf = a->app.buildPendingTree(job->entries);
         a->app.setLoadProgress(0, (int)job->entries.size());
+        a->app.setStreamProgress(0, (int)job->entries.size());
 
         // Part 1 is pure animation: start the background decode + poll ONLY when the
         // intro finishes (#4). App fires onLoadingReady at that point.
@@ -989,6 +1010,102 @@ namespace
         job->pollId = g_timeout_add(15, pollExport, a);   // ~1 poll per frame
     }
 
+    // ── R-SPLASH: the application-open animation ──────────────────────────────
+
+    gboolean onSplashDraw(GtkWidget *, cairo_t *cr, gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (!a->splash) return FALSE;
+        a->splashTarget.setContext(cr);
+        a->splash->render(a->splashTarget);
+        a->splash->renderOverlay(a->splashTarget);
+        return FALSE;
+    }
+
+    void showMainWindow(Host *a);
+    gboolean onTick(gpointer user);
+
+    /** Runs once per frame while the splash is up: play the intro, then (and only then)
+     *  do the startup work, feeding real progress into the bar; finally fade out, drop
+     *  the borderless window and bring the real one up (R-SPLASH-3). */
+    gboolean onSplashTick(gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (!a->splash) return G_SOURCE_REMOVE;
+        a->splash->advance(nowMs(*a));
+
+        if (a->splash->introDone() && !a->startupWorkBegun)
+        {
+            // The intro has played; NOW do the work it was covering. showHome() fills
+            // thumbQueue rather than decoding inline, because startupPhase is set.
+            a->startupWorkBegun = true;
+            if (a->app.onHomeScreen()) a->app.showHome();   // rebuild recents -> queue thumbs
+        }
+        if (a->startupWorkBegun)
+        {
+            // One cover thumbnail per frame: each is a full-resolution decode, so doing
+            // them in a loop here would stall the very animation this exists to protect.
+            if (a->thumbDone < a->thumbQueue.size())
+            {
+                const auto &job = a->thumbQueue[a->thumbDone];
+                DecodedImage img = a->decoder.decodeFile(job.second);
+                if (img.ok())
+                {
+                    DecodedImage thumb = downscaleCover(img, 480);
+                    a->app.setHomeThumbnail(job.first, thumb.rgba.data(), thumb.width, thumb.height);
+                    a->thumbs[job.second] = std::move(thumb);
+                }
+                ++a->thumbDone;
+            }
+            const size_t total = a->thumbQueue.size();
+            a->splash->setProgress(total == 0 ? 1.0 : (double)a->thumbDone / (double)total);
+            if (a->thumbDone >= total) a->splash->beginExit();
+        }
+
+        gtk_widget_queue_draw(a->splashArea);
+        if (a->splash->isGone())
+        {
+            a->startupPhase = false;
+            gtk_widget_destroy(a->splashWindow);
+            a->splashWindow = nullptr; a->splashArea = nullptr;
+            a->splash.reset();
+            showMainWindow(a);
+            return G_SOURCE_REMOVE;
+        }
+        return G_SOURCE_CONTINUE;
+    }
+
+    void startSplash(Host *a)
+    {
+        a->startupPhase = true;
+        a->splash = std::make_shared<arstro::cosmo_v2::SplashScreen>();
+        a->splash->width.set(arstro::cosmo_v2::SplashScreen::kWidth);
+        a->splash->height.set(arstro::cosmo_v2::SplashScreen::kHeight);
+        a->splash->begin(nowMs(*a));
+
+        // R-SPLASH-1: small, undecorated, centred — a splash, not a screen.
+        a->splashWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+        gtk_window_set_decorated(GTK_WINDOW(a->splashWindow), FALSE);
+        gtk_window_set_resizable(GTK_WINDOW(a->splashWindow), FALSE);
+        gtk_window_set_position(GTK_WINDOW(a->splashWindow), GTK_WIN_POS_CENTER);
+        gtk_window_set_type_hint(GTK_WINDOW(a->splashWindow), GDK_WINDOW_TYPE_HINT_SPLASHSCREEN);
+        gtk_window_set_default_size(GTK_WINDOW(a->splashWindow),
+                                    (int)arstro::cosmo_v2::SplashScreen::kWidth,
+                                    (int)arstro::cosmo_v2::SplashScreen::kHeight);
+        a->splashArea = gtk_drawing_area_new();
+        g_signal_connect(a->splashArea, "draw", G_CALLBACK(onSplashDraw), a);
+        gtk_container_add(GTK_CONTAINER(a->splashWindow), a->splashArea);
+        gtk_widget_show_all(a->splashWindow);
+        g_timeout_add(16, onSplashTick, a);
+    }
+
+    void showMainWindow(Host *a)
+    {
+        gtk_widget_show_all(a->window);
+        gtk_widget_grab_focus(a->area);
+        g_timeout_add(16, onTick, a);
+    }
+
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
@@ -997,6 +1114,7 @@ namespace
         return FALSE;
     }
     gboolean onTick(gpointer user) { gtk_widget_queue_draw(static_cast<Host *>(user)->area); return G_SOURCE_CONTINUE; }
+
     gboolean onButton(GtkWidget *w, GdkEventButton *e, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
@@ -1058,6 +1176,15 @@ namespace
                 artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Text; ke.text = std::string(buf, (size_t)n);
                 if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
             }
+        }
+        // Arrow keys walk the photo rack (R-BROWSE-2). Sent before the plain-key
+        // shortcuts so the app can claim them; if it doesn't, GTK keeps its own default.
+        if (e->keyval == GDK_KEY_Left || e->keyval == GDK_KEY_Right)
+        {
+            artboard::KeyEvent ke; ke.type = artboard::KeyEvent::Type::Down;
+            ke.keyCode = (e->keyval == GDK_KEY_Left) ? 37 : 39;
+            ke.shift = shift; ke.ctrl = ctrl; ke.alt = alt;
+            if (a->app.key(ke)) { gtk_widget_queue_draw(a->area); return TRUE; }
         }
         // Enter / Escape reach a focused in-app field (the group-rename box, DR-TREE-5):
         // Enter commits, Escape cancels.
@@ -1161,6 +1288,9 @@ int main(int argc, char **argv)
             host.app.setHomeThumbnail(idx, it->second.rgba.data(), it->second.width, it->second.height);
             return;
         }
+        // R-SPLASH-3: during launch these are QUEUED and decoded one per frame by the
+        // splash tick. Decoding here would be the very stall the splash exists to hide.
+        if (host.startupPhase) { host.thumbQueue.emplace_back(idx, imgPath); return; }
         DecodedImage img = host.decoder.decodeFile(imgPath);
         if (!img.ok()) return;
         DecodedImage thumb = downscaleCover(img, 480);  // small: cheap to cache + reuse
@@ -1170,11 +1300,14 @@ int main(int argc, char **argv)
 
     host.app.setPresetDir(exeDir() + "/presets");
 
+    // R-SPLASH-3: the launcher's recents + their cover thumbnails are NOT built here —
+    // showHome() runs from the splash tick once the intro has played, so nothing heavy
+    // happens before the first thing on screen is the animation.
+    bool straightToEditor = false;
     {
         std::vector<std::string> paths;
         for (int i = 1; i < argc; ++i) paths.emplace_back(argv[i]);
-        if (paths.empty()) host.app.showHome();  // start on the launcher (R-HOME-1)
-        else { openPaths(&host, paths); host.app.showEditor(); }
+        if (!paths.empty()) { openPaths(&host, paths); host.app.showEditor(); straightToEditor = true; }
     }
 
     host.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -1197,9 +1330,10 @@ int main(int argc, char **argv)
     g_signal_connect(host.area, "size-allocate", G_CALLBACK(onSizeAllocate), &host);
 
     gtk_container_add(GTK_CONTAINER(host.window), host.area);
-    gtk_widget_show_all(host.window);
-    gtk_widget_grab_focus(host.area);
-    g_timeout_add(16, onTick, &host);
+    // The main window is built but NOT shown: the splash owns the screen until its
+    // animation has played and the startup work behind it is done (R-SPLASH-1/3).
+    if (straightToEditor) showMainWindow(&host);
+    else startSplash(&host);
     gtk_main();
     return 0;
 }

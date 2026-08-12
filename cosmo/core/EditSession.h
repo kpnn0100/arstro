@@ -43,6 +43,14 @@ namespace cosmo
         /** Add a placeholder leaf (no engine slot) for an image that failed to decode,
          *  so later workspace entries' `parent` indices stay aligned. */
         int addWorkspaceMissingImage(int parentNode, const std::string &name);
+        /** R-LOADUX-1: add an image leaf that is KNOWN but not decoded yet, so the whole
+         *  rack exists from the first frame and every photo lands where it belongs.
+         *  Returns the node index; feed it back to attachImage()/markImageFailed(). */
+        int addPendingImage(int parentNode, const std::string &name);
+        /** The decode failed: the leaf stops being "still coming" and reads as missing. */
+        void markImageFailed(int node);
+        /** attachImage() — giving a pending leaf its pixels — is declared below with
+         *  `Thumb`, which it needs and which lives with the group tree. */
         int imageCount() const { return (int)mSlotParams.size(); }
         /** Remove every selected node (images and/or groups, with their contents). */
         void deleteSelected();
@@ -60,6 +68,10 @@ namespace cosmo
             /** R-BYPASS-1: this node's OWN params are skipped while true. Kept on the
              *  node (not the slot) so a group and an image bypass identically. */
             bool bypass = false;
+            /** R-LOADUX-1: an image leaf that exists in the tree but whose pixels have
+             *  not been decoded yet. `slot` is still -1, exactly like a missing image —
+             *  `pending` is what tells "still coming" apart from "gone". */
+            bool pending = false;
         };
         /** One row of "the current group's children" -- what a filmstrip widget draws. */
         struct Cell
@@ -70,6 +82,7 @@ namespace cosmo
             std::string name;
             int count = 0;   // group leaf only (child count)
             bool bypassed = false;  // R-BYPASS-5: filmstrip draws a "filter off" badge
+            bool loading = false;   // R-LOADUX-2: pixels still decoding -> spinner cell
         };
 
         /** A small pre-downscaled copy of a slot's image, generated once on open --
@@ -91,6 +104,11 @@ namespace cosmo
          *  its own thread, leaving the UI thread only bookkeeping (R-LOADPERF-2). */
         int openImageInto(int parentNode, std::vector<uint8_t> &&rgba, int w, int h,
                           const std::string &name, const std::string &path, Thumb &&thumb);
+        /** Give a pending leaf (addPendingImage) its pixels: moves the buffer into the
+         *  engine and takes a thumbnail the caller already built (R-LOADPERF-2 /
+         *  R-LOADUX-1). Returns the new slot, or -1 if `node` was not a pending leaf. */
+        int attachImage(int node, std::vector<uint8_t> &&rgba, int w, int h,
+                        const std::string &path, Thumb &&thumb);
 
         const std::vector<GNode> &nodes() const { return mNodes; }
         int currentGroup() const { return mCurGroup; }

@@ -24,6 +24,9 @@ namespace cosmo_v2
     {
     public:
         static constexpr double kHeight = 86.0;
+        /** Pixels the rack scrolls per wheel notch (R-BROWSE-1): one photo cell + its
+         *  gap, so a notch is exactly one photo. */
+        static constexpr double kWheelStep = 86.0 + 4.875;
 
         struct Cell
         {
@@ -33,6 +36,7 @@ namespace cosmo_v2
             std::string name;
             int count = 0;        // group leaf only
             bool bypassed = false;  // R-BYPASS-5: this node's filter is disabled
+            bool loading = false;   // R-LOADUX-2: pixels still decoding -> spinner cell
         };
 
         Filmstrip();
@@ -48,10 +52,21 @@ namespace cosmo_v2
         void setSelection(std::vector<int> selCells, int primaryCell);
         int cellCount() const { return (int)mCells.size(); }
         void scrollBy(double delta);
+        /** R-LOADUX-3: a slim determinate bar along the strip's top edge while a project
+         *  is still streaming in, with the count beside it. `done == total` fades it out. */
+        void setLoadProgress(int done, int total);
+        /** R-BROWSE-2: scroll the minimum needed to bring `cell` fully into view, so
+         *  arrow-key navigation walks the whole rack instead of stopping at its edge. */
+        void scrollCellIntoView(int cell);
 
         std::function<void(int cell, bool shift, bool ctrl)> onSelect;
         std::function<void(int cell)> onActivate;                         // double-click (drill into a group)
         std::function<void(int cell, double x, double y)> onContext;      // right-click
+
+        /** A cell's current x in strip-local space, including the live scroll offset.
+         *  Read-only; exposed so the scroll behaviour is assertable without duplicating
+         *  the layout maths in a test. */
+        double cellXForTest(int i) const { return cellX(i); }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -87,6 +102,13 @@ namespace cosmo_v2
         bool mRingInit = false;
         // Per-cell hover wash, tracked from Move; each cell cross-fades (R-G-3).
         HoverFade mHover;
+        // R-LOADUX-2/3: the spinner phase for not-yet-decoded cells, and the streaming
+        // progress bar (an eased fraction + its own fade so it never pops in or out).
+        double mSpinMs = 0.0;
+        int mLoadDone = 0, mLoadTotal = 0;
+        artboard::AnimatedProperty mLoadFrac{0.0};
+        artboard::AnimatedProperty mLoadFade{0.0};
+        double mLastMs = 0.0;
         // R-BYPASS-5: per-cell "filter disabled" amount, eased 0..1 so toggling a
         // cell's bypass fades its badge + wash in/out instead of popping (R-G-1).
         // HoverFade can't back this (it models ONE hovered item; any number of cells

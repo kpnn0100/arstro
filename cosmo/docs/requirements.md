@@ -717,3 +717,65 @@ develop panels are not re-pushed under the user's hands). `EditSession::finishWo
 auto-selects image 0 when nothing is selected yet, so finishing a load cannot yank a photographer
 who started working during the stream. A project whose images all fail to decode still reveals, via
 the completion branch.
+
+## 17. Browse navigation (R-BROWSE)
+
+### DR-BROWSE-1 The rack scrolls
+`App::wheel` hit-tests the filmstrip's world rect **before** the right-column branch and calls
+`Filmstrip::scrollBy(delta * Filmstrip::kWheelStep)`, where `kWheelStep` is one photo cell + its gap
+— so a notch is one photo. The offset was already eased for the sliding selection ring; it simply
+had no wheel route.
+
+### DR-BROWSE-2 Arrow keys
+The host maps Left/Right to key codes 37/39 (matching the 8/13/27 it already sends) and offers them
+to `App::key` before its own single-key shortcuts. `App::stepSelection(dir)` moves to the adjacent
+cell of the current group and calls `Filmstrip::scrollCellIntoView`, which scrolls the minimum
+needed. It steps from the **selection**, not the edit target: arrowing onto a still-loading photo
+moves the selection without changing the edit target (DR-LOADUX-2), and stepping from the edit
+target would then stick on the last ready photo. Clamped at both ends; ignored while a modal or a
+text field has the keyboard (`App::isTextEditing`).
+
+### DR-BROWSE-3 Scroll intensity
+The develop panels' `scrollBy` treats its argument as pixels and was handed the raw wheel delta —
+**one pixel per notch**. `App::kEditScrollStep` (10 px) now scales it, in one named place.
+
+## 18. Application-open splash (R-SPLASH)
+
+`SplashScreen` (`widgets/SplashScreen.{h,cpp}`) is a self-drawn, `inputTransparent` Segment sized
+`kWidth`×`kHeight` (420×260). `begin(nowMs)` starts three staggered eased properties — wordmark
+rise+scale, tagline, dot row — plus `setProgress()` for the 2 px bottom bar and `beginExit()` /
+`isGone()` for the fade-out. The wordmark uses the R-G-2a spacing formula and `IRenderTarget::
+measureText` for centring (mixing a measured width with an estimated one is what put it off-centre
+first time round).
+
+Host: `startSplash` creates a **borderless, non-resizable, centred** `GTK_WINDOW_TOPLEVEL`
+(`gtk_window_set_decorated(FALSE)`, `GDK_WINDOW_TYPE_HINT_SPLASHSCREEN`) with its own drawing area
+and 16 ms tick. The main window is constructed but **not shown**. `onSplashTick` plays the intro;
+only once `introDone()` does it call `showHome()`, whose `onDecodeThumbnail` requests are **queued**
+rather than decoded because `Host::startupPhase` is set — the tick then decodes ONE cover per frame
+(each is a full-resolution decode; a loop here would stall the very animation this exists to
+protect), feeding `setProgress`. When the queue drains it calls `beginExit()`, and on `isGone()`
+destroys the splash window and calls `showMainWindow`. A launch with image paths on the command line
+goes straight to the editor with no splash.
+
+## 19. Load legibility (R-LOADUX)
+
+### DR-LOADUX-1 The tree before the pixels
+`App::buildPendingTree(entries)` runs on the UI thread **before any decoding**, creating groups
+(`addWorkspaceGroup`) and one `EditSession::addPendingImage` leaf per image, and returns the node
+index per entry. `GNode::pending` marks "still coming" — distinct from a slotless leaf that is
+genuinely missing. `EditSession::attachImage(node, rgba&&, w, h, path, thumb&&)` later gives a
+pending leaf its pixels; `markImageFailed(node)` stops it spinning. Because parents were resolved up
+front, arrival order can no longer reparent anything.
+
+### DR-LOADUX-2 Spinner cells
+`Filmstrip::Cell::loading` draws a dim plate plus a rotating quarter-arc (900 ms per turn, driven
+from the frame clock) instead of a thumbnail. `EditSession::selectNode` on a pending leaf moves the
+selection but leaves `mCurrentSlot` alone, so the stage keeps what it was showing; `attachImage`
+points the editor at the photo if it is the one selected.
+
+### DR-LOADUX-3 Meaningful progress
+`Filmstrip::setLoadProgress(done,total)` draws a 2 px determinate accent bar along the strip's top
+edge and `Loading n of N` bottom-right — the one band the cells and their selection rings never
+reach — eased in while streaming and out when the last photo lands. The host feeds it alongside the
+loading screen's own `setLoadProgress`, so both phases report the project's real total.

@@ -15,6 +15,12 @@ namespace cosmo_v2
 
     namespace
     {
+        // R-BROWSE-3: pixels the develop panels scroll per wheel notch. One named
+        // constant so the feel is tuned in one place rather than per panel.
+        constexpr double kEditScrollStep = 10.0;
+        // Key codes the host maps arrows onto (the DOM values, matching the 8/13/27 the
+        // host already sends for Backspace/Enter/Escape).
+        constexpr int kKeyLeft = 37, kKeyRight = 39;
         constexpr double kRailAnimMs = 200.0;
         constexpr double kIntroMs = 460.0;    // wordmark fly + name grow + backdrop reveal
         constexpr double kRevealMs = 520.0;   // cover expands into the editor photo stage
@@ -454,6 +460,31 @@ namespace cosmo_v2
         mRightColumn->syncToSlot();
     }
 
+    std::vector<int> App::buildPendingTree(const std::vector<WorkspaceEntry> &entries)
+    {
+        // R-LOADUX-1: groups and one placeholder leaf per image, created up front on the
+        // UI thread. Entry `i` becomes node `nodeOf[i]`, so parents resolve here — which
+        // is also why decoded results no longer have to be APPLIED in entry order.
+        std::vector<int> nodeOf(entries.size(), 0);
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            const auto &e = entries[i];
+            const int parent = (e.parent < 0 || e.parent >= (int)i) ? 0 : nodeOf[e.parent];
+            nodeOf[i] = e.group ? mSession.addWorkspaceGroup(parent, e.name, e.params, e.history, e.bypass)
+                                : mSession.addPendingImage(parent, e.name);
+        }
+        refreshLibrary();
+        return nodeOf;
+    }
+
+    int App::attachImage(int node, std::vector<uint8_t> &&rgba, int w, int h,
+                         const std::string &path, cosmo::EditSession::Thumb &&thumb)
+    {
+        const int slot = mSession.attachImage(node, std::move(rgba), w, h, path, std::move(thumb));
+        if (slot >= 0) registerThumb(slot);
+        return slot;
+    }
+
     void App::refreshLibrary()
     {
         // The browse chrome only: the filmstrip's cells + selection, and the top bar's
@@ -466,7 +497,7 @@ namespace cosmo_v2
 
         std::vector<Filmstrip::Cell> cells;
         for (const auto &c : mSession.currentGroupCells())
-            cells.push_back({c.group, c.node, c.slot, c.name, c.count, c.bypassed});
+            cells.push_back({c.group, c.node, c.slot, c.name, c.count, c.bypassed, c.loading});
         mCenterStage->filmstrip()->setCells(cells);
 
         const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
@@ -545,11 +576,27 @@ namespace cosmo_v2
             mLeftRail->scrollBy(delta);
             return;
         }
+        // R-BROWSE-1: the photo rack is a scroll view too. Checked before the right
+        // column so a wheel over the strip reaches photos beyond the viewport.
+        {
+            auto strip = mCenterStage->filmstrip();
+            const double sx = mCenterStage->x.value() + strip->x.value();
+            const double sy = mCenterStage->y.value() + strip->y.value();
+            if (x >= sx && x <= sx + strip->width.value() &&
+                y >= sy && y <= sy + strip->height.value())
+            {
+                strip->scrollBy(delta * Filmstrip::kWheelStep);   // one notch = one cell
+                return;
+            }
+        }
+
         const double colX = mRightColumn->x.value(), colY = mRightColumn->y.value();
         if (x >= colX && x <= colX + mRightColumn->width.value() &&
             y >= colY && y <= colY + mRightColumn->height.value())
         {
-            mRightColumn->scrollActivePanel(delta);
+            // R-BROWSE-3: the panels took the raw wheel delta as PIXELS, i.e. one pixel
+            // per notch, which reads as broken. One notch is now kEditScrollStep px.
+            mRightColumn->scrollActivePanel(delta * kEditScrollStep);
         }
         // Center-stage ctrl+scroll zoom wires in with mask/crop tool support.
     }
@@ -655,6 +702,34 @@ namespace cosmo_v2
         const int slot = mSession.openImageInto(parentNode, std::move(rgba), w, h, name, path, std::move(thumb));
         if (slot >= 0) registerThumb(slot);
         return slot;
+    }
+
+    bool App::stepSelection(int dir)
+    {
+        // R-BROWSE-2. The "current cell" is whichever cell the edit target sits in: the
+        // group being edited, or the node owning the current slot.
+        const auto &kids = mSession.nodes()[mSession.currentGroup()].kids;
+        if (kids.empty()) return false;
+        // Walk from the SELECTION, not the edit target: arrowing onto a still-loading
+        // cell moves the selection without changing the edit target (R-LOADUX-2), and
+        // stepping from the edit target would then get stuck on the last ready photo.
+        const auto &sel = mSession.selection();
+        int cur = -1;
+        for (int c = 0; c < (int)kids.size() && cur < 0; ++c)
+            if (std::find(sel.begin(), sel.end(), kids[c]) != sel.end()) cur = c;
+        if (cur < 0)
+        {
+            const int target = mSession.editTargetNode();
+            for (int c = 0; c < (int)kids.size(); ++c)
+                if (kids[c] == target) { cur = c; break; }
+        }
+        // Nothing identifiable selected yet: an arrow lands on the first (or last) cell.
+        int next = (cur < 0) ? (dir > 0 ? 0 : (int)kids.size() - 1) : cur + dir;
+        if (next < 0 || next >= (int)kids.size()) return false;   // clamp; no wrap
+        mSession.selectNode(next, false, false);
+        syncControlsToSlot();
+        mCenterStage->filmstrip()->scrollCellIntoView(next);
+        return true;
     }
 
     void App::selectImage(int slot)
@@ -1160,6 +1235,14 @@ namespace cosmo_v2
     {
         if (mScreen == Screen::Loading) return true;  // swallow keys during the transition
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
+        // R-BROWSE-2: Left/Right walk the rack — but only once nothing in the tree wanted
+        // the key (a focused field, an open modal) has claimed it.
+        if (!handled && mScreen == Screen::Editor && e.type == artboard::KeyEvent::Type::Down &&
+            !isTextEditing() && (e.keyCode == kKeyLeft || e.keyCode == kKeyRight))
+        {
+            stepSelection(e.keyCode == kKeyRight ? 1 : -1);
+            return true;
+        }
         // On Home the launcher owns the keyboard: swallow unhandled keys so the
         // editor's plain-key shortcuts (o/s/Delete) don't fire behind it.
         return handled || mScreen == Screen::Home;

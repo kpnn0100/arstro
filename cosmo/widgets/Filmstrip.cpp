@@ -10,6 +10,8 @@ namespace cosmo_v2
 {
     using namespace artboard;
 
+    namespace { double clamp01(double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); } }
+
     Filmstrip::Filmstrip() { clipToBounds = true; height.set(kHeight); }
 
     void Filmstrip::addThumb(const uint8_t *rgba, int w, int h)
@@ -128,6 +130,10 @@ namespace cosmo_v2
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         advanceBypassFades(nowMs);  // R-BYPASS-5
+        mLastMs = nowMs;
+        mSpinMs = nowMs;            // R-LOADUX-2: drives the pending-cell spinner
+        mLoadFrac.update(nowMs);
+        mLoadFade.update(nowMs);
 
         Segment::advance(nowMs);
     }
@@ -139,6 +145,30 @@ namespace cosmo_v2
         const double maxScroll = std::max(0.0, contentW - width.value());
         // Just move the TARGET; advance() eases mScrollX toward it and repositions thumbs.
         mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - delta));
+    }
+
+    void Filmstrip::setLoadProgress(int done, int total)
+    {
+        mLoadDone = done; mLoadTotal = total;
+        const bool streaming = total > 0 && done < total;
+        mLoadFrac.animateTo(total > 0 ? (double)done / total : 0.0, 200.0, Easing::EaseOutCubic, mLastMs);
+        mLoadFade.animateTo(streaming ? 1.0 : 0.0, streaming ? 160.0 : 320.0, Easing::EaseOutCubic, mLastMs);
+    }
+
+    void Filmstrip::scrollCellIntoView(int cell)
+    {
+        if (cell < 0 || cell >= (int)mCells.size()) return;
+        // cellX() includes the live scroll, so work in unscrolled content space.
+        double left = kPadX;
+        for (int i = 0; i < cell; ++i) left += cellW(i) + kGap;
+        const double right = left + cellW(cell);
+        const double view = width.value();
+        double target = mScrollTarget;
+        if (left - kPadX < target) target = std::max(0.0, left - kPadX);
+        else if (right + kPadX > target + view) target = right + kPadX - view;
+        double contentW = kPadX;
+        for (int i = 0; i < (int)mCells.size(); ++i) contentW += cellW(i) + kGap;
+        mScrollTarget = std::min(std::max(0.0, contentW - view), std::max(0.0, target));
     }
 
     bool Filmstrip::handleGesture(const Gesture &g, const Point &local)
@@ -196,6 +226,37 @@ namespace cosmo_v2
                 const std::string countStr = std::to_string(c.count) + " items";
                 t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.4});
                 t.drawText(countStr, x + cw * 0.5 - countStr.size() * 8.0 * 0.3, y + kCellH * 0.5 + 11.0, 8.0, font::sans());
+            }
+            else if (c.loading)
+            {
+                // R-LOADUX-2: the photo is known but its pixels have not arrived. A dim
+                // plate + a rotating arc reads as "still coming", where an empty cell
+                // would read as "missing". (Placeholder for the supplied animation.)
+                const Rect r{x, y, cw, kCellH};
+                drawRoundedRect(t, r, radius::control(), Paint::filled(palette::folderChipBg()));
+                const double cx = x + cw * 0.5, cy = y + kCellH * 0.5;
+                const double rad = 9.0;
+                t.setStroke(palette::whiteAlpha(0.10), 2.0);
+                t.beginPath();
+                t.moveTo(cx + rad, cy);
+                t.quadTo(cx + rad, cy + rad, cx, cy + rad);
+                t.quadTo(cx - rad, cy + rad, cx - rad, cy);
+                t.quadTo(cx - rad, cy - rad, cx, cy - rad);
+                t.quadTo(cx + rad, cy - rad, cx + rad, cy);
+                t.closePath();
+                t.strokePath();
+                // The travelling head of the arc: one quadrant sweeping once per 900ms.
+                const double a0 = std::fmod(mSpinMs, 900.0) / 900.0 * 6.28318530718;
+                t.setStroke(palette::primaryAlpha(0.85), 2.0);
+                t.beginPath();
+                const int kSeg = 8;
+                for (int sgi = 0; sgi <= kSeg; ++sgi)
+                {
+                    const double a = a0 + (double)sgi / kSeg * 1.5707963268;   // a quarter turn
+                    const double px = cx + std::cos(a) * rad, py = cy + std::sin(a) * rad;
+                    if (sgi == 0) t.moveTo(px, py); else t.lineTo(px, py);
+                }
+                t.strokePath();
             }
             // Photo cells: the thumbnail is a child ImageView; its selection outline,
             // sliding primary ring and name bar are drawn in onOverlay (below) so
@@ -285,6 +346,24 @@ namespace cosmo_v2
                 t.setFill(palette::white());
                 t.drawText(label, rx + rw * 0.5 - label.size() * 7.0 * 0.3, ry + kCellH - 3.0, 7.0, font::sansMedium());
             }
+        }
+
+        // R-LOADUX-3: while a project is still streaming in, a slim determinate bar along
+        // the strip's top edge with the count beside it, so there is always an answer to
+        // "how much is left?". Eased in and out; gone once the last photo lands.
+        const double lf = mLoadFade.value();
+        if (lf > 0.004)
+        {
+            const Color acc = palette::primary();
+            drawRoundedRect(t, Rect{0, 0, w, 2.0}, 0.0, Paint::filled(palette::whiteAlpha(0.07 * lf)));
+            drawRoundedRect(t, Rect{0, 0, w * clamp01(mLoadFrac.value()), 2.0}, 0.0,
+                            Paint::filled(Color{acc.r, acc.g, acc.b, 0.9 * lf}));
+            // Bottom-right: the one band the cells and their rings never reach (cells sit
+            // 12..74 of 86, and the primary ring extends to 77).
+            const std::string txt = "Loading " + std::to_string(mLoadDone) + " of " + std::to_string(mLoadTotal);
+            const double tw = t.measureText(txt, 9.0, font::sansMedium());
+            t.setFill(palette::whiteAlpha(0.5 * lf));
+            t.drawText(txt, w - kPadX - tw, kHeight - 3.0, 9.0, font::sansMedium());
         }
         t.restore();
     }

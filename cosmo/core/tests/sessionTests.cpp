@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <atomic>
 #include <filesystem>
 #include <thread>
@@ -596,6 +597,81 @@ namespace
         assert(t.currentSlot() == 0 && "with nothing selected it still lands on image 0");
         printf("[PASS] finish_workspace_load_keeps_an_existing_selection\n");
     }
+
+    // ── R-LOADUX: the rack exists before the pixels do ────────────────────────
+
+    void test_pending_images_appear_then_attach()
+    {
+        EditSession s;
+        auto px = solidImage(20, 12, 9, 40, 80);
+        // The whole project is created up front: a group + three not-yet-decoded leaves.
+        const int g = s.addWorkspaceGroup(0, "Shoot", arstro::EditParams{});
+        const int n0 = s.addPendingImage(g, "a.jpg");
+        const int n1 = s.addPendingImage(g, "b.jpg");
+        const int n2 = s.addPendingImage(g, "c.jpg");
+        s.navigateToGroup(g);
+
+        auto cells = s.currentGroupCells();
+        assert(cells.size() == 3);
+        for (const auto &c : cells) { assert(c.loading); assert(c.slot < 0); }
+        assert(s.imageCount() == 0 && "no engine slots until pixels arrive");
+
+        // Attach OUT of order: the tree already fixed where each photo belongs, so
+        // arrival order cannot reparent anything.
+        auto thumb = EditSession::makeThumb(px.data(), 20, 12, EditSession::kThumbEdge);
+        auto buf = px;
+        const int slot1 = s.attachImage(n1, std::move(buf), 20, 12, "/tmp/b.jpg", std::move(thumb));
+        assert(slot1 == 0);
+        cells = s.currentGroupCells();
+        assert(!cells[1].loading && cells[1].slot == slot1);
+        assert(cells[0].loading && cells[2].loading && "its siblings are still coming");
+        assert(s.nodes()[n1].parent == g && "attaching does not move the node");
+
+        buf = px;
+        thumb = EditSession::makeThumb(px.data(), 20, 12, EditSession::kThumbEdge);
+        const int slot0 = s.attachImage(n0, std::move(buf), 20, 12, "/tmp/a.jpg", std::move(thumb));
+        assert(slot0 == 1);
+        assert(s.sourcePathForSlot(slot0) == "/tmp/a.jpg");
+        assert(s.nameForSlot(slot0) == "a.jpg");
+        assert(s.thumbForSlot(slot0) && s.thumbForSlot(slot0)->w > 0);
+
+        // A failed decode stops spinning and reads as missing, not as still-coming.
+        s.markImageFailed(n2);
+        cells = s.currentGroupCells();
+        assert(!cells[2].loading && cells[2].slot < 0);
+
+        // Attaching twice, or to a group, is refused rather than corrupting the tree.
+        buf = px;
+        assert(s.attachImage(n1, std::move(buf), 20, 12, "/tmp/x.jpg", EditSession::Thumb{}) == -1);
+        buf = px;
+        assert(s.attachImage(g, std::move(buf), 20, 12, "/tmp/x.jpg", EditSession::Thumb{}) == -1);
+        printf("[PASS] pending_images_appear_then_attach\n");
+    }
+
+    void test_selecting_a_pending_image_keeps_the_stage()
+    {
+        // R-LOADUX-2: clicking (or arrowing onto) a photo that has not arrived moves the
+        // selection but must NOT blank the editor; when its pixels land it takes over.
+        EditSession s;
+        auto px = solidImage(16, 16, 60, 60, 60);
+        s.openImageInto(0, px.data(), 16, 16, "ready.jpg", "/tmp/ready.jpg");
+        const int pend = s.addPendingImage(0, "later.jpg");
+        s.selectImage(0);
+        assert(s.currentSlot() == 0);
+
+        // cell 1 is the pending leaf
+        s.selectNode(1, false, false);
+        assert(s.currentSlot() == 0 && "the stage keeps the photo it was showing");
+        assert(std::find(s.selection().begin(), s.selection().end(), pend) != s.selection().end() &&
+               "but the selection did move to the pending photo");
+
+        auto thumb = EditSession::makeThumb(px.data(), 16, 16, EditSession::kThumbEdge);
+        auto buf = px;
+        const int slot = s.attachImage(pend, std::move(buf), 16, 16, "/tmp/later.jpg", std::move(thumb));
+        assert(slot >= 0);
+        assert(s.currentSlot() == slot && "the photo the user is sitting on takes over when it lands");
+        printf("[PASS] selecting_a_pending_image_keeps_the_stage\n");
+    }
 }
 
 int main()
@@ -618,6 +694,8 @@ int main()
     test_ordered_parallel_load_stops_cleanly_midway();
     test_open_image_move_and_prebuilt_thumb_match_the_copying_path();
     test_finish_workspace_load_keeps_an_existing_selection();
+    test_pending_images_appear_then_attach();
+    test_selecting_a_pending_image_keeps_the_stage();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }
