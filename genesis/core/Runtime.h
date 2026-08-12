@@ -1,0 +1,135 @@
+/*
+ *  Genesis — Runtime: the live preview interpreter.
+ *
+ *  Builds a real artboard::Segment tree from a Document and runs the authored bindings
+ *  and reactions against it, so the editor's canvas shows the actual component rather
+ *  than a sketch of it. The root really IS the authored base class (VisualLoop, Button,
+ *  …), so base behaviour — cycle signals, press visuals, the progress spring — is the
+ *  real thing, not a simulation.
+ *
+ *  This is the SECOND implementation of Gene semantics; `CppEmitter` is the first. Two
+ *  implementations of one semantics drift, and a design tool that lies about the result
+ *  is worthless — so `Verifier` diffs this runtime's RecordingTarget op stream against
+ *  the compiled class's. Every rule here (bind-unless-owned, step chaining on completion,
+ *  infinite tracks never completing, cancellation policy) mirrors the emitter exactly;
+ *  change one and you must change both, and the verifier will tell you if you didn't.
+ */
+#pragma once
+#include "Document.h"
+#include "gene/Gene.h"
+#include <artboard/artboard.h>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace genesis
+{
+    class Runtime
+    {
+    public:
+        Runtime();
+        ~Runtime();
+
+        /** Rebuild the whole tree from `doc`. False + `error` when the document has errors. */
+        bool build(const Document &doc, std::string *error);
+        /** The live root; null before a successful build(). */
+        artboard::Segment *root() const { return mRootSegment; }
+        const Document &document() const { return mDoc; }
+
+        void setSize(double w, double h);
+        void advance(double nowMs);
+        double nowMs() const { return mNowMs; }
+
+        /** Fire an authored signal directly — the editor's "test this reaction" action. */
+        void fire(const std::string &signal);
+        /** True while `signal`'s reaction chain is running. */
+        bool isRunning(const std::string &signal) const;
+
+        // ---- driving the base, from the preview transport ----
+        void loopStart();
+        void loopStop();
+        bool loopRunning() const;
+        void setProgress(double v);
+        void setIndeterminate(bool on);
+        void setPressed(bool on);          // Button: synthesised press
+        void setSliderValue(double v);     // Slider
+        void setChecked(bool on);          // Checkbox
+        void setHovered(bool on);
+
+        // ---- live param overrides (the inspector's sliders) ----
+        void setParamNumber(const std::string &name, double v);
+        void setParamColor(const std::string &name, const artboard::Color &c);
+        void setParamText(const std::string &name, const std::string &s);
+        bool paramNumber(const std::string &name, double &out) const;
+        bool paramColor(const std::string &name, artboard::Color &out) const;
+
+        /** Per-shape live segment, for hit-testing / selection in the canvas. */
+        artboard::Segment *segmentFor(const std::string &shapeId) const;
+        /** The shape whose segment is (or contains) `seg`; "" when none. */
+        std::string shapeIdFor(const artboard::Segment *seg) const;
+
+        /** Non-fatal notes from the last build (unpreviewable raw{}, etc.). */
+        const std::vector<std::string> &notes() const { return mNotes; }
+
+        // ---- internals used by the base-class hosts (public so the hosts can call them) ----
+        void hostSignal(const std::string &signal);
+        bool readBase(const std::string &name, double &out) const;
+        void hostAdvance(double nowMs);
+
+    private:
+        struct ShapeNode
+        {
+            std::string id;
+            ShapeKind kind = ShapeKind::Rect;
+            std::shared_ptr<artboard::Segment> seg;
+            std::map<std::string, artboard::Property> styleProps;   // strokeWidth, cornerRadius, ...
+            std::map<std::string, artboard::Color> colors;          // fill, stroke
+            std::map<std::string, bool> owned;                      // fields motion has taken over
+        };
+        struct ReactionState
+        {
+            int token = 0;
+            int pending = 0;
+            bool running = false;
+            bool queued = false;
+        };
+
+        ShapeNode *node(const std::string &id);
+        const ShapeNode *node(const std::string &id) const;
+        artboard::Property *propertyFor(const std::string &shapeId, const std::string &field);
+
+        void buildTree();
+        void layout(double transitionMs);
+        void applyStyles();
+        void bindProp(artboard::Property &p, double v, double ms, bool owned);
+        void startReaction(const Reaction &r);
+        void playStep(const Reaction &r, size_t stepIndex);
+
+        gene::Scope layoutScope(const std::string &owner) const;
+        gene::Scope liveScope(const std::string &owner) const;
+        bool lookupIdent(const std::string &name, gene::Value &out) const;
+        bool lookupTheme(const std::string &role, gene::Value &out) const;
+
+        double evalNumber(const std::string &src, const gene::Scope &sc, double fallback) const;
+        bool evalColor(const std::string &src, const gene::Scope &sc, artboard::Color &out) const;
+
+        Document mDoc;
+        std::shared_ptr<artboard::Segment> mRootOwner;
+        artboard::Segment *mRootSegment = nullptr;
+        std::vector<ShapeNode> mNodes;
+        std::vector<std::pair<std::string, std::string>> mOrder;   // (shape, field) evaluation order
+        mutable std::map<std::string, gene::Value> mLocals;        // during layout
+        std::map<std::string, ReactionState> mReactions;
+        std::map<std::string, double> mParamNumbers;
+        std::map<std::string, artboard::Color> mParamColors;
+        std::map<std::string, std::string> mParamTexts;
+        std::vector<std::string> mNotes;
+        double mNowMs = 0.0;
+        double mLastW = -1.0, mLastH = -1.0;
+        bool mAttached = false;
+        bool mLayoutEveryFrame = false;
+        int mSeq = 0;
+        bool mInLayout = false;
+    };
+}

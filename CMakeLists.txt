@@ -22,6 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
+option(ARSTRO_BUILD_GENESIS "Build Genesis (animation designer: genesis_core, genesis-cc, GUI)" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (launcher/android-shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
 option(ARSTRO_BUILD_PIANO_UI "Build the interactive piano-keyboard UI demo (examples/piano; needs GTK3+ALSA, skipped gracefully if absent)" ON)
@@ -47,6 +48,13 @@ endif()
 # (see examples/piano/CMakeLists.txt) rather than failing this configure.
 if(ARSTRO_BUILD_PIANO_UI AND ARSTRO_BUILD_DSP)
   add_subdirectory(examples/piano)
+endif()
+
+# genesis: the animation designer whose deliverable is source code. genesis_core (model +
+# Gene language + code emitter + preview runtime + verifier) is UI-free and depends only on
+# artboard_core, so it is added right after Artboard; the GUI self-skips without GTK3.
+if(ARSTRO_BUILD_GENESIS)
+  add_subdirectory(genesis)
 endif()
 
 # cosmo: the Figma-exact editor GUI. Its UI-free session/editing/history/decode
