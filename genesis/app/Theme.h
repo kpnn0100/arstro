@@ -34,53 +34,58 @@ namespace ui
 
     namespace palette
     {
-        inline artboard::Color background() { return artboard::Color::hex(0x121114); }
-        inline artboard::Color foreground() { return artboard::Color::hex(0xE4E2E8); }
-        inline artboard::Color card() { return artboard::Color::hex(0x1A181E); }
-        inline artboard::Color popover() { return artboard::Color::hex(0x221F28); }
-        inline artboard::Color primary() { return artboard::Color::hex(0x9A7BFF); }        // the single accent
-        inline artboard::Color primaryForeground() { return artboard::Color::hex(0x16121F); }
-        inline artboard::Color secondary() { return artboard::Color::hex(0x232029); }
-        inline artboard::Color secondaryForeground() { return artboard::Color::hex(0xA9A5B4); }
-        inline artboard::Color muted() { return artboard::Color::hex(0x1B191F); }
-        inline artboard::Color mutedForeground() { return artboard::Color::hex(0x6E6A78); }
-        inline artboard::Color destructive() { return artboard::Color::hex(0xE5615B); }
-        inline artboard::Color success() { return artboard::Color::hex(0x4CC38A); }
+        // The Arstro desktop palette, taken from cosmo (the reference implementation) so the
+        // two apps read as one family: a near-black neutral ramp, ONE accent used only for
+        // interactive/selected state, and a border that is a white alpha rather than a grey.
+        inline artboard::Color background() { return artboard::Color::hex(0x141414); }
+        inline artboard::Color foreground() { return artboard::Color::hex(0xDBDBDB); }
+        inline artboard::Color card() { return artboard::Color::hex(0x1C1C1C); }
+        inline artboard::Color popover() { return artboard::Color::hex(0x222222); }
+        inline artboard::Color primary() { return artboard::Color::hex(0x4F7EF7); }   // the single accent
+        inline artboard::Color primaryForeground() { return artboard::Color::hex(0xFFFFFF); }
+        inline artboard::Color secondary() { return artboard::Color::hex(0x252525); }
+        inline artboard::Color secondaryForeground() { return artboard::Color::hex(0xAAAAAA); }
+        inline artboard::Color muted() { return artboard::Color::hex(0x191919); }
+        inline artboard::Color mutedForeground() { return artboard::Color::hex(0x636363); }
+        inline artboard::Color destructive() { return artboard::Color::hex(0xE5534B); }
+        inline artboard::Color success() { return artboard::Color::hex(0x3FB950); }
         inline artboard::Color warning() { return artboard::Color::hex(0xE0A64B); }
-        inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.075}; }
-        inline artboard::Color input() { return artboard::Color::hex(0x232029); }
+        inline artboard::Color border() { return artboard::Color{1.0, 1.0, 1.0, 0.072}; }
+        inline artboard::Color input() { return artboard::Color::hex(0x252525); }
 
         // Per-surface literals, named here so no widget re-hardcodes one.
-        inline artboard::Color stageBg() { return artboard::Color::hex(0x0C0B0E); }   // the preview stage
-        inline artboard::Color railBg() { return artboard::Color::hex(0x161419); }    // left/right columns
-        inline artboard::Color chromeBg() { return artboard::Color::hex(0x141217); }  // top bar + bottom panel
-        inline artboard::Color gridLine() { return artboard::Color{1.0, 1.0, 1.0, 0.045}; }
+        inline artboard::Color stageBg() { return artboard::Color::hex(0x0A0A0A); }    // the preview stage
+        inline artboard::Color railBg() { return artboard::Color::hex(0x161616); }     // left/right columns
+        inline artboard::Color chromeBg() { return artboard::Color::hex(0x121212); }   // top bar + bottom panel
+        inline artboard::Color gridLine() { return artboard::Color{1.0, 1.0, 1.0, 0.04}; }
         inline artboard::Color frameEdge() { return artboard::Color{1.0, 1.0, 1.0, 0.16}; }
 
         inline artboard::Color white() { return artboard::Color::rgba(255, 255, 255); }
         inline artboard::Color whiteAlpha(double a) { return artboard::Color{1.0, 1.0, 1.0, a}; }
         inline artboard::Color primaryAlpha(double a)
-        { return artboard::Color{0x9A / 255.0, 0x7B / 255.0, 0xFF / 255.0, a}; }
+        { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, a}; }
         inline artboard::Color destructiveAlpha(double a)
-        { return artboard::Color{0xE5 / 255.0, 0x61 / 255.0, 0x5B / 255.0, a}; }
+        { return artboard::Color{0xE5 / 255.0, 0x53 / 255.0, 0x4B / 255.0, a}; }
         inline artboard::Color successAlpha(double a)
-        { return artboard::Color{0x4C / 255.0, 0xC3 / 255.0, 0x8A / 255.0, a}; }
+        { return artboard::Color{0x3F / 255.0, 0xB9 / 255.0, 0x50 / 255.0, a}; }
         inline artboard::Color warningAlpha(double a)
         { return artboard::Color{0xE0 / 255.0, 0xA6 / 255.0, 0x4B / 255.0, a}; }
 
-        /** Canonical hover feedback for self-drawn regions. Child-Segment controls use
-         *  artboard::hoverBox() instead; both are driven by the animated hoverAmount, so
-         *  neither can pop. */
-        inline artboard::Color hoverWash(double t) { return whiteAlpha(0.065 * t); }
+        /** Canonical hover feedback for self-drawn regions (cosmo's R-G-3 value). Child-
+         *  Segment controls use artboard::hoverBox() instead; both are driven by the
+         *  animated hoverAmount, so neither can pop. */
+        inline artboard::Color hoverWash(double t) { return whiteAlpha(0.07 * t); }
         /** Canonical selected-row wash. */
         inline artboard::Color selectedWash(double t) { return primaryAlpha(0.16 * t); }
     }
 
+    // cosmo uses small literal per-component radii rather than one uniform scale; Genesis
+    // cites the same constants so the two apps' corners agree.
     namespace radius
     {
-        inline double hairline() { return 2.0; }
-        inline double control() { return 4.0; }
-        inline double panel() { return 8.0; }
+        inline double hairline() { return 1.0; }
+        inline double control() { return 2.0; }
+        inline double panel() { return 4.0; }
         inline double pill() { return 9999.0; }
     }
 

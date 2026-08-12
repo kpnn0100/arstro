@@ -150,6 +150,24 @@ compile" but "would a person have written this".
 `genesis-cc` shall provide, with no display: generate, `--check` (validate only), `--print`,
 `--verify`, `--stale`, `--new <Base> <Name>`, and `--bases`.
 
+### G-15 Launcher, launch moment, and recents
+
+The editor shall open on a **home screen**, not on a blank document: a fixed sidebar
+(wordmark, tagline, an Open action, the version) and a grid of **recent components** followed
+by one card per authorable base, so "carry on with something" and "start something new" are
+the same gesture in the same place. Recents persist across sessions under the user's config
+directory; an entry whose file has vanished is shown as missing rather than silently dropped.
+
+The application shall show a **launch splash** in its own undecorated window while it does its
+startup work: the wordmark rises and scales in, the tagline follows, three dots pulse until
+there is something to name, and a 2px accent bar reports REAL progress with the step named.
+The main window is not shown until the intro has played and the work behind it is done, so the
+first thing on screen is never a blank frame. Opening a file from the command line skips
+straight to the editor.
+
+Home and editor are one window with two screens that **cross-fade** as groups (never cut), and
+whichever is faded out takes no input.
+
 ### G-13 The editor
 
 The editor shall present: the shape tree with add/delete; the live preview with a
@@ -178,11 +196,18 @@ open/close — goes through `Property`/`AnimatedProperty`/`Spring`, is eased, an
 under `artboard::reducedMotion()`. Direct manipulation (dragging the preview's resize
 handle) is exempt: the pointer is the animation.
 
-### R-G-2 Tokens only
+### R-G-2 Tokens only, and the tokens are cosmo's
 
 Every colour, radius, type size, and layout constant comes from `app/Theme.h`
 (`palette::`/`radius::`/`type::`/`metrics::`). ONE accent, ONE radius scale, ONE type ramp.
 A raw hex or magic size in a widget is a bug.
+
+The token VALUES are cosmo's — the same near-black ramp, the same blue accent, the same small
+literal radii, the same DM Sans + JetBrains Mono ramp — so the two apps read as one family
+rather than as two products that happen to share a framework. `genesis::themeColor` publishes
+the same palette to Gene as `theme.*`, so a colour an author types and a colour the app draws
+are the same colour, and a starter component follows the palette in force instead of baking a
+literal.
 
 ### R-G-3 One hover language
 

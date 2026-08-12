@@ -10,6 +10,7 @@
 #include "App.h"
 #include "Theme.h"
 #include "widgets/Modal.h"
+#include "widgets/SplashScreen.h"
 #include "adapter/native/CairoTarget.h"
 #include <artboard/artboard.h>
 #include <fontconfig/fontconfig.h>
@@ -32,6 +33,13 @@ namespace
         artboard::InputRouter router;
         GtkWidget *window = nullptr;
         GtkWidget *area = nullptr;
+        // The splash owns the screen while startup work happens behind it, so the first
+        // thing drawn is never a blank frame (the pattern cosmo uses).
+        genesis::ui::SplashScreen splash;
+        artboard::CairoTarget splashTarget;
+        GtkWidget *splashWindow = nullptr;
+        GtkWidget *splashArea = nullptr;
+        bool startupDone = false;
         std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
         double nowMs() const
         {
@@ -86,6 +94,55 @@ namespace
         h->gestures.feed(p);   // the sink routes each synthesized gesture
     }
 
+    gboolean onTick(gpointer user);
+    void showMainWindow(Host *h);
+    void startSplash(Host *h);
+
+    gboolean onSplashDraw(GtkWidget *, cairo_t *cr, gpointer user)
+    {
+        auto *h = static_cast<Host *>(user);
+        h->splashTarget.setContext(cr);
+        h->splash.advance(h->nowMs());
+        h->splash.render(h->splashTarget);
+        return FALSE;
+    }
+
+    gboolean onSplashTick(gpointer user)
+    {
+        auto *h = static_cast<Host *>(user);
+        gtk_widget_queue_draw(h->splashArea);
+
+        // Do the startup work behind the animation, one step per tick, naming each step —
+        // the bar shows real progress rather than a decorative sweep.
+        if (!h->startupDone && h->splash.introDone())
+        {
+            struct Step { const char *label; double progress; };
+            static const Step steps[] = {
+                {"Loading component bases", 0.35},
+                {"Preparing the preview", 0.7},
+                {"Reading recent components", 1.0},
+            };
+            static size_t next = 0;
+            if (next < sizeof steps / sizeof steps[0])
+            {
+                h->splash.setStatus(steps[next].label);
+                h->splash.setProgress(steps[next].progress);
+                ++next;
+                return G_SOURCE_CONTINUE;
+            }
+            h->startupDone = true;
+            h->splash.beginExit();
+        }
+        if (h->startupDone && h->splash.isGone())
+        {
+            gtk_widget_destroy(h->splashWindow);
+            h->splashWindow = nullptr;
+            showMainWindow(h);
+            return G_SOURCE_REMOVE;
+        }
+        return G_SOURCE_CONTINUE;
+    }
+
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
         auto *h = static_cast<Host *>(user);
@@ -95,6 +152,29 @@ namespace
         h->app.advance(now);
         h->app.render(h->target);
         return FALSE;
+    }
+
+    void showMainWindow(Host *h)
+    {
+        gtk_widget_show_all(h->window);
+        gtk_widget_grab_focus(h->area);
+        g_timeout_add(16, onTick, h);
+    }
+
+    void startSplash(Host *h)
+    {
+        h->splashWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+        gtk_window_set_decorated(GTK_WINDOW(h->splashWindow), FALSE);
+        gtk_window_set_position(GTK_WINDOW(h->splashWindow), GTK_WIN_POS_CENTER);
+        gtk_window_set_type_hint(GTK_WINDOW(h->splashWindow), GDK_WINDOW_TYPE_HINT_SPLASHSCREEN);
+        gtk_window_set_default_size(GTK_WINDOW(h->splashWindow),
+                                    (int)genesis::ui::SplashScreen::kWidth,
+                                    (int)genesis::ui::SplashScreen::kHeight);
+        h->splashArea = gtk_drawing_area_new();
+        g_signal_connect(h->splashArea, "draw", G_CALLBACK(onSplashDraw), h);
+        gtk_container_add(GTK_CONTAINER(h->splashWindow), h->splashArea);
+        gtk_widget_show_all(h->splashWindow);
+        g_timeout_add(16, onSplashTick, h);
     }
 
     gboolean onTick(gpointer user)
@@ -203,10 +283,13 @@ int main(int argc, char **argv)
     host.router.add(&host.app);
     host.gestures.setSink([](const artboard::Gesture &g) { host.router.route(g); });
     host.app.setSize(kDefaultW, kDefaultH);
+    bool openedFromArgv = false;
     for (int i = 1; i < argc; ++i)
         if (argv[i][0] != '-')
         {
-            host.app.openDocument(argv[i]);
+            openedFromArgv = host.app.openDocument(argv[i]);
+            if (openedFromArgv)
+                host.app.showEditor();
             break;
         }
 
@@ -229,9 +312,13 @@ int main(int argc, char **argv)
     g_signal_connect(host.area, "size-allocate", G_CALLBACK(onSizeAllocate), &host);
 
     gtk_container_add(GTK_CONTAINER(host.window), host.area);
-    gtk_widget_show_all(host.window);
-    gtk_widget_grab_focus(host.area);
-    g_timeout_add(16, onTick, &host);
+
+    // Built but NOT shown: the splash owns the screen until its animation has played and the
+    // startup work behind it is done. Opening a file on the command line skips straight in.
+    if (openedFromArgv)
+        showMainWindow(&host);
+    else
+        startSplash(&host);
     gtk_main();
     return 0;
 }

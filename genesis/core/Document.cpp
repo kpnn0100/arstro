@@ -598,6 +598,7 @@ namespace genesis
             out.push_back({Diagnostic::Severity::Error, "component", "the design size must be positive"});
 
         std::set<std::string> ids;
+        NameChecker rootNc{*this, b, ""};
         for (const auto &p : params)
         {
             if (p.name.empty())
@@ -606,7 +607,34 @@ namespace genesis
             if (std::find(bi.begin(), bi.end(), p.name) != bi.end())
                 out.push_back({Diagnostic::Severity::Error, "param " + p.name,
                                "'" + p.name + "' is a built-in name"});
+            // A default is a root: it may name a theme role, but not a shape or another param.
+            if (p.type != ParamType::Text)
+            {
+                std::string err;
+                gene::NodePtr n = gene::parse(p.defaultExpr, &err);
+                if (!n)
+                    out.push_back({Diagnostic::Severity::Error, "param " + p.name, err});
+                else
+                {
+                    std::vector<std::string> idents;
+                    gene::collectIdents(n, idents);
+                    for (const auto &id : idents)
+                    {
+                        const auto &bb = gene::builtinIdents();
+                        if (std::find(bb.begin(), bb.end(), id) == bb.end())
+                            out.push_back({Diagnostic::Severity::Error, "param " + p.name,
+                                           "a default cannot read '" + id + "'"});
+                    }
+                    std::vector<std::pair<std::string, std::string>> ms;
+                    gene::collectMembers(n, ms);
+                    for (const auto &m : ms)
+                        if (m.first != "theme")
+                            out.push_back({Diagnostic::Severity::Error, "param " + p.name,
+                                           "a default may only read theme.*, not '" + m.first + "'"});
+                }
+            }
         }
+        (void)rootNc;
 
         NameChecker nc{*this, b, ""};
         for (const auto &s : shapes)
@@ -848,13 +876,13 @@ namespace genesis
         Document d;
         d.base = baseName;
         d.name = componentName.empty() ? "MyComponent" : componentName;
-        d.params.push_back(colorParam("accent", "#9a7bff"));
+        d.params.push_back(colorParam("accent", "theme.accent"));
 
         if (baseName == "ProgressIndicator")
         {
             d.designW = 260.0;
             d.designH = 10.0;
-            d.params.push_back(colorParam("trackColor", "#232029"));
+            d.params.push_back(colorParam("trackColor", "theme.secondary"));
 
             Shape rail;
             rail.id = "track";
@@ -892,7 +920,7 @@ namespace genesis
         {
             d.designW = 132.0;
             d.designH = 36.0;
-            d.params.push_back(colorParam("surface", "#232029"));
+            d.params.push_back(colorParam("surface", "theme.secondary"));
 
             Shape body;
             body.id = "body";
@@ -942,7 +970,7 @@ namespace genesis
         {
             d.designW = 220.0;
             d.designH = 24.0;
-            d.params.push_back(colorParam("trackColor", "#232029"));
+            d.params.push_back(colorParam("trackColor", "theme.secondary"));
 
             Shape rail;
             rail.id = "rail";
@@ -973,7 +1001,7 @@ namespace genesis
             thumb.setField("h", "14");
             thumb.setField("x", "w * base.norm - self.w / 2");
             thumb.setField("y", "(h - self.h) / 2");
-            thumb.setField("fill", "#ffffff");
+            thumb.setField("fill", "theme.foreground");
             thumb.setField("pivotX", "self.w / 2");
             thumb.setField("pivotY", "self.h / 2");
             thumb.setAnimated("scaleX", true);
@@ -996,7 +1024,7 @@ namespace genesis
         {
             d.designW = 22.0;
             d.designH = 22.0;
-            d.params.push_back(colorParam("surface", "#232029"));
+            d.params.push_back(colorParam("surface", "theme.secondary"));
 
             Shape box;
             box.id = "box";
@@ -1021,7 +1049,7 @@ namespace genesis
             tick.setField("y", "0");
             tick.setField("w", "box.w");
             tick.setField("h", "box.h");
-            tick.setField("stroke", "#ffffff");
+            tick.setField("stroke", "theme.primaryForeground");
             tick.setField("strokeWidth", "2.2");
             tick.setField("opacity", "0");
             tick.setAnimated("opacity", true);

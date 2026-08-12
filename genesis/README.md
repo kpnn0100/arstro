@@ -36,6 +36,14 @@ There is no global timeline. A UI component is not a movie; it is a set of respo
 events that interrupt each other. The event graph is the source of truth, and the scrubber
 is per reaction.
 
+## Opening it
+
+Genesis opens on a launcher: your recent components first, then a card per base. Picking
+either crosses into the editor. A launch splash plays while startup work happens behind it,
+naming each step — the first thing on screen is never a blank frame.
+
+Passing a file on the command line skips straight to the editor.
+
 ## The bases
 
 | Base | For | Signals |

@@ -5,6 +5,7 @@
 ```
                     ┌───────────────────────────────────────────┐
    author ────────► │  genesis (GTK3 + Cairo editor)            │
+                    │  SplashScreen → HomeScreen ⇄ the editor   │
                     │  App · Chrome · ShapeTree · CanvasView ·  │
                     │  Inspector · ReactionsPanel · Modal        │
                     └───────────────┬───────────────────────────┘
@@ -95,6 +96,14 @@ Layout is fixed chrome + fixed rails + a flexing centre, all from named constant
 `Modal` is the app's last child and draws its scrim and card in the **normal** pass, so its
 own controls — ordinary child Segments — sit on top of the card rather than under it; panels
 that paint in the overlay pass check `Modal::coversApp()` so nothing floats over a dialog.
+
+**Two screens, one window.** The app opens on `HomeScreen` (sidebar + a grid of recents and
+base cards) and crosses to the editor as a group fade on `Segment::opacity` (FR-32) — so
+neither screen ever cuts, and whichever is faded out stops taking input for free. `Recents`
+persists the list under the user's config dir. Before either, the host shows `SplashScreen` in
+its own undecorated window and does its startup work behind it, naming each step into the
+progress bar; the main window is not shown until that is done. This is cosmo's launch shape,
+which is the point: the two apps should feel like one product.
 
 Text is measured against the live render target: the app publishes it once per frame
 (`ui::setMeasureTarget`), so every panel measures with the metrics it will draw with (R-G-5).

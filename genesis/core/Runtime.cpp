@@ -167,9 +167,13 @@ namespace genesis
         // Param values start at their authored defaults; the inspector overrides them live.
         for (const auto &p : mDoc.params)
         {
+            // A param default is a root: no shape or param references, but theme roles must
+            // resolve — that is how a starter follows the palette in force (mirrors the emitter).
             gene::Scope sc;
             sc.lookupIdent = [](const std::string &, gene::Value &) { return false; };
-            sc.lookupMember = [](const std::string &, const std::string &, gene::Value &) { return false; };
+            sc.lookupMember = [this](const std::string &obj, const std::string &f, gene::Value &v) {
+                return obj == "theme" && lookupTheme(f, v);
+            };
             if (p.type == ParamType::Text)
             {
                 mParamTexts[p.name] = p.defaultExpr;

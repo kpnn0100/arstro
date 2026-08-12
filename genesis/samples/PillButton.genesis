@@ -13,12 +13,12 @@
     {
       "name": "accent",
       "type": "color",
-      "default": "#9a7bff"
+      "default": "theme.accent"
     },
     {
       "name": "surface",
       "type": "color",
-      "default": "#232029"
+      "default": "theme.secondary"
     }
   ],
   "shapes": [

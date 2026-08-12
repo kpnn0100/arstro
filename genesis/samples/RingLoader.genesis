@@ -13,7 +13,7 @@
     {
       "name": "accent",
       "type": "color",
-      "default": "#9a7bff"
+      "default": "theme.accent"
     },
     {
       "name": "thickness",

@@ -531,7 +531,16 @@ namespace genesis
                             o << "        // param '" << p.name << "': unparsable default\n";
                             continue;
                         }
+                        // A param default is a root: it cannot read a shape or another
+                        // param, but it MUST be able to name a theme role, which is how a
+                        // starter follows the palette in force instead of baking a literal.
                         gene::CppNames names;
+                        names.member = [](const std::string &obj, const std::string &f) -> std::string {
+                            if (obj != "theme") return std::string();
+                            double r, g, b, a;
+                            if (!themeColor(f, r, g, b, a)) return std::string();
+                            return colorLit(r, g, b, a);
+                        };
                         std::string err;
                         const std::string v = gene::emitCpp(n, names, &err);
                         o << "        " << paramMember(p.name) << " = " << (err.empty() ? v : std::string("0.0")) << ";\n";

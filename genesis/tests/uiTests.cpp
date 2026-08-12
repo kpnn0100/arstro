@@ -9,6 +9,13 @@
 #include "MiniTest.h"
 #include "App.h"
 #include "widgets/CanvasView.h"
+#include "widgets/Chrome.h"
+#include "widgets/HomeScreen.h"
+#include "widgets/Inspector.h"
+#include "widgets/ReactionsPanel.h"
+#include "widgets/ShapeTree.h"
+#include "widgets/SplashScreen.h"
+#include "Recents.h"
 #include "widgets/Modal.h"
 #include "Runtime.h"
 #include <cmath>
@@ -31,14 +38,24 @@ namespace
         }
     }
 
-    /** Every op's translation, for coarse "did anything get drawn here" checks. */
+    /** The editor's five tiles. The home screen and the modal are full-window by design and
+     *  are not part of the tiling. */
     std::vector<artboard::Rect> panelBounds(App &app)
     {
         std::vector<artboard::Rect> out;
-        for (const auto &child : app.children())
-            out.push_back({child->x.value(), child->y.value(), child->width.value(),
-                           child->height.value()});
+        for (artboard::Segment *p : app.editorPanels())
+            out.push_back({p->x.value(), p->y.value(), p->width.value(), p->height.value()});
         return out;
+    }
+    /** Put the app on the editor screen and let the transition finish. */
+    void toEditor(App &app, double &now)
+    {
+        app.showEditor();
+        for (double t = 0; t < 900.0; t += 16.0)
+        {
+            now += 16.0;
+            app.advance(now);
+        }
     }
 
     bool overlaps(const artboard::Rect &a, const artboard::Rect &b)
@@ -72,11 +89,10 @@ TEST(App_panels_tile_the_window_and_never_overlap)
             double now = 0.0;
             settle(app, now, 60.0);
             const auto rects = panelBounds(app);
-            // The modal is the app's deliberate overlay; every other panel is a tile.
-            for (size_t i = 0; i + 1 < rects.size(); ++i)
-                for (size_t j = i + 1; j + 1 < rects.size(); ++j)
+            for (size_t i = 0; i < rects.size(); ++i)
+                for (size_t j = i + 1; j < rects.size(); ++j)
                     CHECK(!overlaps(rects[i], rects[j]));
-            for (size_t i = 0; i + 1 < rects.size(); ++i)
+            for (size_t i = 0; i < rects.size(); ++i)
             {
                 CHECK(rects[i].w > 0.0);
                 CHECK(rects[i].h > 0.0);
@@ -97,8 +113,8 @@ TEST(App_reflows_so_the_canvas_absorbs_the_slack)
     const auto narrow = panelBounds(app);
     CHECK(wide.size() == narrow.size());
     // The rails shrink, but by less than the centre does: the canvas takes the hit (R-G-4).
-    const double railWide = wide[1].w, railNarrow = narrow[1].w;
-    const double canvasWide = wide[2].w, canvasNarrow = narrow[2].w;
+    const double railWide = wide[1].w, railNarrow = narrow[1].w;     // the shape tree
+    const double canvasWide = wide[2].w, canvasNarrow = narrow[2].w;  // the canvas
     CHECK(railNarrow <= railWide);
     CHECK(canvasNarrow < canvasWide);
     CHECK(canvasWide - canvasNarrow > railWide - railNarrow);
@@ -111,7 +127,7 @@ TEST(App_draws_something_at_every_window_size)
     {
         app.setSize(w, w * 0.62);
         double now = 0.0;
-        settle(app, now, 400.0);
+        toEditor(app, now);
         artboard::RecordingTarget t;
         app.render(t);
         CHECK(t.count(K::FillPath) > 20);   // the whole chrome, not a blank window
@@ -123,7 +139,7 @@ TEST(App_edit_funnel_revalidates_rebuilds_and_reports)
     App app;
     app.setSize(1200, 760);
     double now = 0.0;
-    settle(app, now, 100.0);
+    toEditor(app, now);
     CHECK(app.previewOk());
 
     app.doc().shapes.front().setField("w", "mystery * 2");
@@ -158,7 +174,7 @@ TEST(App_draws_its_empty_state_with_guidance)
     app.selectShape("");
     app.documentChanged();
     double now = 0.0;
-    settle(app, now, 200.0);
+    toEditor(app, now);
 
     artboard::RecordingTarget t;
     app.render(t);
@@ -207,6 +223,7 @@ TEST(App_selection_drives_the_inspector_and_the_canvas)
     app.setSize(1280, 800);
     double now = 0.0;
     settle(app, now, 100.0);
+    toEditor(app, now);
     const std::string first = app.doc().shapes.front().id;
     app.selectShape(first);
     CHECK(app.selectedShape() == first);
@@ -227,6 +244,7 @@ TEST(App_new_document_switches_base_transport_and_preview)
     App app;
     app.setSize(1280, 800);
     double now = 0.0;
+    toEditor(app, now);
     for (const char *base : {"ProgressIndicator", "Button", "Slider", "Checkbox", "VisualLoop"})
     {
         app.newDocument(base, std::string("Demo") + base);
@@ -431,8 +449,10 @@ TEST(App_keeps_drawing_while_a_verify_runs)
     app.startVerify();                 // a second request while running is ignored
     CHECK(app.verifyRunning());
 
+    // Loop long enough to outlast a real compile; every iteration is a real frame, which is
+    // the point — the window must keep drawing the whole time.
     int framesDrawn = 0;
-    for (int i = 0; i < 4000 && app.verifyRunning(); ++i)
+    for (int i = 0; i < 200000 && app.verifyRunning(); ++i)
     {
         now += 16.0;
         app.advance(now);
@@ -510,10 +530,10 @@ TEST(Panels_only_hit_test_inside_their_own_bounds)
     app.setSize(1360, 860);
     double now = 0.0;
     settle(app, now, 100.0);
-    const auto &kids = app.children();
-    for (size_t i = 0; i + 1 < kids.size(); ++i)   // all but the modal
+    toEditor(app, now);
+    for (artboard::Segment *panel : app.editorPanels())
     {
-        const artboard::Segment &p = *kids[i];
+        const artboard::Segment &p = *panel;
         const artboard::Point outside{p.x.value() + p.width.value() + 20.0,
                                       p.y.value() + p.height.value() + 20.0};
         CHECK(!p.hitTest(outside));
@@ -525,10 +545,10 @@ TEST(Chrome_buttons_respond_to_a_real_click)
     App app;
     app.setSize(1360, 860);
     double now = 0.0;
-    settle(app, now, 100.0);
+    toEditor(app, now);
     Driver drv(app);
 
-    const artboard::Segment &chrome = *app.children()[0];
+    const artboard::Segment &chrome = *app.chrome();
     CHECK(chrome.childCount() >= 5);
     const artboard::Point p = centreOf(app, chrome);   // just to touch the helper
     (void)p;
@@ -552,10 +572,10 @@ TEST(Add_shape_buttons_add_a_shape)
     App app;
     app.setSize(1360, 860);
     double now = 0.0;
-    settle(app, now, 100.0);
+    toEditor(app, now);
     Driver drv(app);
 
-    const artboard::Segment &tree = *app.children()[1];
+    const artboard::Segment &tree = *app.tree();
     const int before = (int)app.doc().shapes.size();
     for (int i = 0; i < 4; ++i)            // rect, circle, path, label
     {
@@ -575,9 +595,9 @@ TEST(Typing_into_a_field_keeps_focus_and_reaches_the_document)
     App app;
     app.setSize(1360, 860);
     double now = 0.0;
-    settle(app, now, 100.0);
+    toEditor(app, now);
 
-    artboard::Segment *inspector = app.children()[3].get();
+    artboard::Segment *inspector = app.inspector();
     int index = 7;                          // name, namespace, dw, dh, id, x, y, then w
     artboard::TextBox *box = nthBox(inspector, index);
     CHECK(box != nullptr);
@@ -612,6 +632,107 @@ TEST(Typing_into_a_field_keeps_focus_and_reaches_the_document)
     CHECK(still->text != startText);
     CHECK(app.doc().shapes.front().field("w") == still->text);   // and it reached the document
     CHECK(app.previewOk());
+}
+
+TEST(App_opens_on_the_home_screen_and_crosses_to_the_editor)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 400.0);
+    CHECK(app.screen() == App::Screen::Home);
+    CHECK_NEAR(app.editorAmount(), 0.0, 1e-9);
+
+    // The home screen draws; the editor behind it does not (it is faded to zero, so its
+    // whole subtree is skipped, FR-32).
+    artboard::RecordingTarget home;
+    app.render(home);
+    CHECK(home.count(K::DrawText) > 8);
+    for (artboard::Segment *p : app.editorPanels())
+        CHECK(p->isFadedOut());
+
+    app.showEditor();
+    settle(app, now, 100.0);
+    CHECK(app.editorAmount() > 0.0);
+    CHECK(app.editorAmount() < 1.0);        // it crosses over, it does not cut
+    settle(app, now, 900.0);
+    CHECK_NEAR(app.editorAmount(), 1.0, 1e-9);
+    CHECK(!app.home()->isFadedOut() == false);   // the home screen faded out
+
+    artboard::RecordingTarget editor;
+    app.render(editor);
+    CHECK(editor.count(K::FillPath) > 20);
+
+    app.showHome();
+    settle(app, now, 900.0);
+    CHECK(app.screen() == App::Screen::Home);
+    CHECK_NEAR(app.editorAmount(), 0.0, 1e-9);
+}
+TEST(Home_screen_cards_start_a_component_of_each_base)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 500.0);
+    Driver drv(app);
+
+    // The five base cards sit in the grid to the right of the sidebar; clicking one starts
+    // that component and crosses to the editor.
+    HomeScreen *home = app.home();
+    CHECK(home != nullptr);
+    drv.click(424.0, 144.0);               // the first card
+    settle(app, now, 900.0);
+    CHECK(app.screen() == App::Screen::Editor);
+    CHECK(app.previewOk());
+    for (const auto &d : app.diagnostics())
+        CHECK(!d.isError());
+}
+TEST(Splash_plays_its_intro_and_exits)
+{
+    SplashScreen splash;
+    splash.begin(0.0);
+    CHECK(!splash.introDone());
+
+    artboard::RecordingTarget early;
+    splash.advance(0.0);
+    splash.render(early);
+    const int atStart = early.count(K::DrawText);
+
+    for (double t = 0; t <= SplashScreen::kIntroMs + 32.0; t += 16.0)
+        splash.advance(t);
+    CHECK(splash.introDone());
+
+    splash.setStatus("Preparing the preview");
+    splash.setProgress(0.6);
+    for (double t = SplashScreen::kIntroMs; t <= SplashScreen::kIntroMs + 400.0; t += 16.0)
+        splash.advance(t);
+
+    artboard::RecordingTarget mid;
+    splash.render(mid);
+    CHECK(mid.count(K::DrawText) >= atStart);
+    bool namedTheStep = false;
+    for (const auto &op : mid.ops())
+        if (op.kind == K::DrawText && op.text == "Preparing the preview") namedTheStep = true;
+    CHECK(namedTheStep);        // the bar names what it is doing, it is not decorative
+
+    CHECK(!splash.isGone());
+    splash.beginExit();
+    for (double t = 0; t <= 600.0; t += 16.0)
+        splash.advance(SplashScreen::kIntroMs + 400.0 + t);
+    CHECK(splash.isGone());
+    artboard::RecordingTarget gone;
+    splash.render(gone);
+    for (const auto &op : gone.ops())
+        CHECK(op.kind != K::DrawText);   // fully exited: it draws nothing at all
+}
+TEST(Recents_relative_age_reads_naturally)
+{
+    CHECK(Recents::relativeAge(0, 1000) == "—");
+    CHECK(Recents::relativeAge(1000, 1030) == "just now");
+    CHECK(Recents::relativeAge(1000, 1000 + 60 * 5) == "5m ago");
+    CHECK(Recents::relativeAge(1000, 1000 + 3600 * 3) == "3h ago");
+    CHECK(Recents::relativeAge(1000, 1000 + 86400 * 2) == "2d ago");
+    CHECK(Recents::relativeAge(1000, 1000 + 86400 * 90) == "3mo ago");
 }
 
 int main() { return mini::runAll(); }

@@ -229,19 +229,25 @@ namespace ui
     {
         artboard::Segment::render(t, parent);
         // The previewed component is rendered here, inside the frame, AFTER the stage but
-        // before the panel's own overlay pass — it is content, not chrome.
-        if (!mApp.previewOk()) return;
+        // before the panel's own overlay pass — it is content, not chrome. It has to obey
+        // this panel's own group opacity too, or it would keep showing through while the
+        // editor is faded out behind another screen.
+        if (isFadedOut() || !mApp.previewOk()) return;
+        const double alpha = opacity.value();
+        const bool layered = alpha < 1.0 - kOpacityEpsilon;
         artboard::Segment *root = const_cast<App &>(mApp).runtime().root();
         if (!root) return;
         const artboard::Rect f = frameRect();
         const artboard::Transform world =
             parent.mul(localTransform()).mul(artboard::Transform::translation(f.x, f.y));
+        if (layered) t.pushLayer(alpha);
         t.save();
         t.setTransform(world);
         t.clipRect(0, 0, f.w, f.h);
         root->render(t, world);
         t.restore();
         root->renderOverlay(t, world);
+        if (layered) t.popLayer();
     }
 
     void CanvasView::onPaint(artboard::IRenderTarget &t) const

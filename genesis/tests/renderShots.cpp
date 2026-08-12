@@ -8,7 +8,9 @@
  */
 #include "App.h"
 #include "adapter/native/CairoTarget.h"
+#include "widgets/HomeScreen.h"
 #include "widgets/Modal.h"
+#include "widgets/SplashScreen.h"
 #include <cairo/cairo.h>
 #include <cstdio>
 #include <functional>
@@ -51,13 +53,26 @@ int main(int argc, char **argv)
 {
     const std::string dir = argc > 1 ? argv[1] : ".";
 
+    // The launcher, which is what opens first.
+    shoot(dir + "/genesis-home.png", 1360, 860, [](genesis::ui::App &a, double &now) {
+        settle(a, now, 900.0);
+    });
     shoot(dir + "/genesis-1360x860.png", 1360, 860, [](genesis::ui::App &a, double &now) {
-        settle(a, now, 900.0);   // the starter loop has faded in and is spinning
+        a.showEditor();
+        settle(a, now, 1200.0);   // the starter loop has faded in and is spinning
+    });
+    // Mid-transition between the two screens: they cross-fade, neither pops.
+    shoot(dir + "/genesis-transition.png", 1360, 860, [](genesis::ui::App &a, double &now) {
+        settle(a, now, 400.0);
+        a.showEditor();
+        settle(a, now, 150.0);
     });
     shoot(dir + "/genesis-1024x640.png", 1024, 640, [](genesis::ui::App &a, double &now) {
-        settle(a, now, 900.0);   // the same app, reflowed for a smaller window (R4)
+        a.showEditor();
+        settle(a, now, 1200.0);   // the same app, reflowed for a smaller window (R4)
     });
     shoot(dir + "/genesis-empty.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
         a.doc().shapes.clear();
         a.doc().reactions.clear();
         a.selectShape("");
@@ -65,21 +80,26 @@ int main(int argc, char **argv)
         settle(a, now, 400.0);   // the empty state: no shapes, no reactions
     });
     shoot(dir + "/genesis-error.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
         a.doc().findShape("ring")->setField("w", "mystery * 2");
         a.documentChanged();
         settle(a, now, 400.0);   // an authoring error: the preview says so instead of lying
     });
     shoot(dir + "/genesis-modal.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
         a.modal()->openNew();
         settle(a, now, 400.0);   // the New dialog, over a dimmed app
     });
     shoot(dir + "/genesis-progress.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
         a.newDocument("ProgressIndicator", "SweepBar");
         a.selectShape("fill");
         a.runtime().setProgress(0.65);
         settle(a, now, 1200.0);   // a different base, driven to a partial value
     });
     shoot(dir + "/genesis-button.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
         a.newDocument("Button", "PillButton");
         a.selectShape("body");
         a.setPreviewHover(true);
@@ -87,5 +107,25 @@ int main(int argc, char **argv)
         a.runtime().setPressed(true);
         settle(a, now, 120.0);    // a Button starter, hovered and caught mid-press
     });
+    // The launch splash, rendered on its own (the host shows it in its own window).
+    {
+        genesis::ui::SplashScreen splash;
+        const int w = (int)genesis::ui::SplashScreen::kWidth;
+        const int h = (int)genesis::ui::SplashScreen::kHeight;
+        splash.setStatus("Preparing the preview");
+        splash.setProgress(0.7);
+        cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+        cairo_t *cr = cairo_create(surface);
+        artboard::CairoTarget target;
+        target.setContext(cr);
+        for (double t = 0; t <= 700.0; t += 16.0)
+            splash.advance(t);
+        splash.render(target);
+        const std::string name = dir + "/genesis-splash.png";
+        cairo_surface_write_to_png(surface, name.c_str());
+        cairo_destroy(cr);
+        cairo_surface_destroy(surface);
+        std::printf("wrote %s (%dx%d)\n", name.c_str(), w, h);
+    }
     return 0;
 }

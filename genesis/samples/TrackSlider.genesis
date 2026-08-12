@@ -13,12 +13,12 @@
     {
       "name": "accent",
       "type": "color",
-      "default": "#9a7bff"
+      "default": "theme.accent"
     },
     {
       "name": "trackColor",
       "type": "color",
-      "default": "#232029"
+      "default": "theme.secondary"
     }
   ],
   "shapes": [
@@ -54,7 +54,7 @@
         "h": "14",
         "x": "w * base.norm - self.w / 2",
         "y": "(h - self.h) / 2",
-        "fill": "#ffffff",
+        "fill": "theme.foreground",
         "pivotX": "self.w / 2",
         "pivotY": "self.h / 2"
       },

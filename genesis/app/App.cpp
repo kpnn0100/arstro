@@ -4,6 +4,8 @@
 #include "widgets/CanvasView.h"
 #include "widgets/Chrome.h"
 #include "widgets/Inspector.h"
+#include "Recents.h"
+#include "widgets/HomeScreen.h"
 #include "widgets/Modal.h"
 #include "widgets/ReactionsPanel.h"
 #include "widgets/ShapeTree.h"
@@ -31,7 +33,18 @@ namespace ui
         mCanvas = std::make_shared<CanvasView>(*this);
         mInspector = std::make_shared<Inspector>(*this);
         mReactions = std::make_shared<ReactionsPanel>(*this);
+        mHome = std::make_shared<HomeScreen>();
         mModal = std::make_shared<Modal>(*this);
+        mHome->onNewComponent = [this](const std::string &base) {
+            newDocument(base, "My" + base);
+            showEditor();
+        };
+        mHome->onOpen = [this] { mModal->openBrowse(); };
+        mHome->onOpenRecent = [this](const std::string &path) {
+            if (openDocument(path)) showEditor();
+        };
+        mHome->setRecents(Recents::load());
+        addChild(mHome);
         addChild(mChrome);
         addChild(mTree);
         addChild(mCanvas);
@@ -46,6 +59,30 @@ namespace ui
         mUndo.clear();
         mRedo.clear();
         status("Ready — a starter VisualLoop is loaded", StatusLevel::Info);
+    }
+
+    std::vector<artboard::Segment *> App::editorPanels()
+    {
+        return {mChrome.get(), mTree.get(), mCanvas.get(), mReactions.get(), mInspector.get()};
+    }
+
+    void App::showHome()
+    {
+        if (mScreen == Screen::Home) return;
+        mScreen = Screen::Home;
+        mHome->setRecents(Recents::load());   // reflect anything saved since we left
+        mScreenMix.animateTo(0.0, artboard::motion::kDurationMedium2,
+                             artboard::Easing::EmphasizedAccel, mNowMs);
+        layout();
+    }
+
+    void App::showEditor()
+    {
+        if (mScreen == Screen::Editor) return;
+        mScreen = Screen::Editor;
+        mScreenMix.animateTo(1.0, artboard::motion::kDurationMedium4,
+                             artboard::Easing::EmphasizedDecel, mNowMs);
+        layout();
     }
 
     // ───────────────────────── the single edit funnel ─────────────────────────
@@ -231,6 +268,7 @@ namespace ui
         mUndo.clear();
         mRedo.clear();
         mDirty = false;
+        Recents::remember(mPath, mDoc.name, mDoc.base);
         status("Opened " + path, StatusLevel::Good);
         return true;
     }
@@ -258,6 +296,7 @@ namespace ui
         }
         mPath = p;
         mDirty = false;
+        Recents::remember(mPath, mDoc.name, mDoc.base);
         status("Saved " + p, StatusLevel::Good);
         return true;
     }
@@ -398,6 +437,12 @@ namespace ui
     void App::layout()
     {
         if (!mChrome) return;
+        if (mHome)
+        {
+            mHome->x.set(0);
+            mHome->y.set(0);
+            mHome->layout(mW, mH);
+        }
         // Fixed chrome + rails from named constants; the canvas absorbs every spare pixel.
         // The rails shrink (never below a usable minimum) before the canvas is squeezed.
         const double chromeH = metrics::chromeH();
@@ -437,6 +482,14 @@ namespace ui
     {
         mNowMs = nowMs;
         mStatusFade.update(nowMs);
+        mScreenMix.update(nowMs);
+        // The two screens cross-fade as one group each (FR-32), so neither ever pops and
+        // whichever is faded out stops taking input.
+        const double mix = mScreenMix.value();
+        if (mHome)
+            mHome->opacity.set(1.0 - mix);
+        for (artboard::Segment *panel : editorPanels())
+            if (panel) panel->opacity.set(mix);
         if (mVerifyRunning && mVerifyDone)
             finishVerify();
         if (mPreviewOk && mCanvas)

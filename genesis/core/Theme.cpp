@@ -11,18 +11,26 @@ namespace genesis
     {
         // The Arstro desktop language: near-black neutral surfaces, ONE accent, a restrained
         // grey ramp. An app that themes differently overrides these by passing params.
+        // The Arstro desktop palette, matching cosmo's tokens so a component authored here
+        // and a control drawn by the app agree on what "accent" means.
         static const std::vector<ThemeColor> t = {
-            {"background",  c(20),  c(20),  c(20),  1.0},
-            {"surface",     c(28),  c(28),  c(30),  1.0},
-            {"card",        c(34),  c(34),  c(37),  1.0},
-            {"foreground",  c(244), c(244), c(245), 1.0},
-            {"muted",       c(150), c(152), c(158), 1.0},
-            {"border",      c(58),  c(58),  c(63),  1.0},
-            {"accent",      c(58),  c(199), c(255), 1.0},
-            {"accentSoft",  c(58),  c(199), c(255), 0.22},
-            {"success",     c(78),  c(201), c(139), 1.0},
-            {"warning",     c(232), c(178), c(70),  1.0},
-            {"danger",      c(233), c(94),  c(94),  1.0},
+            {"background",         c(0x14), c(0x14), c(0x14), 1.0},
+            {"foreground",         c(0xDB), c(0xDB), c(0xDB), 1.0},
+            {"card",               c(0x1C), c(0x1C), c(0x1C), 1.0},
+            {"popover",            c(0x22), c(0x22), c(0x22), 1.0},
+            {"accent",             c(0x4F), c(0x7E), c(0xF7), 1.0},
+            {"primary",            c(0x4F), c(0x7E), c(0xF7), 1.0},
+            {"primaryForeground",  1.0,     1.0,     1.0,     1.0},
+            {"accentSoft",         c(0x4F), c(0x7E), c(0xF7), 0.22},
+            {"secondary",          c(0x25), c(0x25), c(0x25), 1.0},
+            {"secondaryForeground",c(0xAA), c(0xAA), c(0xAA), 1.0},
+            {"surface",            c(0x25), c(0x25), c(0x25), 1.0},
+            {"muted",              c(0x19), c(0x19), c(0x19), 1.0},
+            {"mutedForeground",    c(0x63), c(0x63), c(0x63), 1.0},
+            {"border",             1.0,     1.0,     1.0,     0.072},
+            {"success",            c(0x3F), c(0xB9), c(0x50), 1.0},
+            {"warning",            c(0xE0), c(0xA6), c(0x4B), 1.0},
+            {"danger",             c(0xE5), c(0x53), c(0x4B), 1.0},
         };
         return t;
     }

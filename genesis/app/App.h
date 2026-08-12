@@ -31,6 +31,7 @@ namespace ui
     class Inspector;
     class ReactionsPanel;
     class Modal;
+    class HomeScreen;
 
     class App : public artboard::Segment
     {
@@ -43,6 +44,16 @@ namespace ui
         void advance(double nowMs) override;
         void render(artboard::IRenderTarget &t,
                     const artboard::Transform &parent = artboard::Transform::identity()) const override;
+
+        // ---- screens ----
+        // The launcher and the editor are one window with two screens, cross-faded — the
+        // same shape cosmo has, so "where am I" is never a surprise.
+        enum class Screen { Home, Editor };
+        Screen screen() const { return mScreen; }
+        void showHome();
+        void showEditor();
+        /** 0 = fully home, 1 = fully editor. */
+        double editorAmount() const { return mScreenMix.value(); }
 
         // ---- document ----
         Document &doc() { return mDoc; }
@@ -94,6 +105,17 @@ namespace ui
 
         /** Show a modal (owned by the app so it always draws in the overlay pass). */
         Modal *modal() { return mModal.get(); }
+
+        // Named accessors rather than child indices: the child ORDER is a z-order decision,
+        // and nothing outside layout() should depend on it.
+        HomeScreen *home() { return mHome.get(); }
+        Chrome *chrome() { return mChrome.get(); }
+        ShapeTree *tree() { return mTree.get(); }
+        CanvasView *canvas() { return mCanvas.get(); }
+        Inspector *inspector() { return mInspector.get(); }
+        ReactionsPanel *reactions() { return mReactions.get(); }
+        /** The editor's five panels, in layout order — for tiling checks and bulk fades. */
+        std::vector<artboard::Segment *> editorPanels();
 
         const VerifyResult &lastVerify() const { return mVerify; }
         bool verifyRunning() const { return mVerifyRunning; }
@@ -148,7 +170,10 @@ namespace ui
         std::shared_ptr<CanvasView> mCanvas;
         std::shared_ptr<Inspector> mInspector;
         std::shared_ptr<ReactionsPanel> mReactions;
+        std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<Modal> mModal;
+        Screen mScreen = Screen::Home;
+        artboard::Property mScreenMix{0.0};
     };
 }
 }
