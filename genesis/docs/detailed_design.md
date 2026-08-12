@@ -182,6 +182,15 @@ tree, then runs the overlay pass, then clears the target.
 
 ### 7.2 Panels
 
+**Nothing overlaps, and it is checked.** Panels that scroll set `clipToBounds` (which clips
+their child widgets) *and* clip in `onPaint` (which clips their self-drawn labels), and they
+set `visible = false` on the widgets of rows that scrolled out — a clipped row still records
+its draw calls, and its child Segments would still take input. `ReactionsPanel::columns()`
+sheds columns as the window narrows rather than squeezing them into each other, and reports
+how many rows are out of view. The rule is enforced by a test that replays the op stream with
+transform and clip tracking; see requirements R-G-5.
+
+
 - **Chrome** — identity, status, and the five actions. The Verify button reads "Verifying…"
   and disables while a check runs (R2: never dead).
 - **ShapeTree** — a depth-first flattening of the tree with per-depth indent and a kind

@@ -38,6 +38,8 @@ namespace ui
         /** True while the scrim is drawn at all (including the closing fade) — panels that
          *  paint in the overlay pass check this so nothing floats over the dialog. */
         bool coversApp() const { return mReveal.value() > 0.01; }
+        /** The dialog card's rect in app space — what "inside the dialog" means. */
+        artboard::Rect cardBounds() const { return cardRect(); }
 
     protected:
         // Drawn in the NORMAL pass, not the overlay pass: the modal is the app's last child,

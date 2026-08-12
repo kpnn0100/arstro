@@ -27,6 +27,8 @@ namespace ui
     {
     public:
         static std::string path();
+        /** `file` made absolute against the current directory, so it survives a cd. */
+        static std::string absolute(const std::string &file);
         /** Load, dropping entries whose file has vanished. */
         static std::vector<RecentEntry> load();
         static bool save(const std::vector<RecentEntry> &entries);

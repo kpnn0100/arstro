@@ -711,6 +711,10 @@ namespace genesis
                         if (s.kind == ShapeKind::Rect)
                             o << "            " << memberOf(s.id) << "->style.cornerRadius = " << stylePropOf(s.id, "cornerRadius") << ".value();\n";
                     }
+                    o << "            " << memberOf(s.id) << "->trim = {"
+                      << stylePropOf(s.id, "trimStart") << ".value(), "
+                      << stylePropOf(s.id, "trimEnd") << ".value(), "
+                      << stylePropOf(s.id, "trimOffset") << ".value()};\n";
                     o << "        }\n";
                 }
                 o << "    }\n\n";

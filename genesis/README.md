@@ -80,6 +80,20 @@ log deg rad turns pct rgb rgba fade mix`.
 Division by zero is `0`, not NaN — a preview never silently draws nothing, and the emitted
 C++ reproduces that exactly.
 
+## Trim: any shape can become a partial one
+
+Every rect, circle, and path has `trimStart`, `trimEnd`, and `trimOffset` — in fractions of
+the outline's length, and animatable like anything else.
+
+```
+trimEnd    = sweep / 360      # a circle drawn to N degrees IS an arc
+trimEnd    animate 0 -> 1     # the shape draws itself in
+trimOffset animate 0 -> 1     # the trimmed span travels around the outline, wrapping
+```
+
+`samples/ArcSpinner.genesis` is the classic arc spinner built from it: the arc's length
+breathes while the whole ring spins, so it reads as one object rather than two.
+
 ## Verify: the preview is the code
 
 The editor interprets; the export compiles. Two implementations of one semantics drift, and

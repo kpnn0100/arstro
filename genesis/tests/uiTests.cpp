@@ -678,14 +678,25 @@ TEST(Home_screen_cards_start_a_component_of_each_base)
 
     // The five base cards sit in the grid to the right of the sidebar; clicking one starts
     // that component and crosses to the editor.
+    // Locate a card by the base it starts rather than by pixel guess — the grid also holds
+    // however many recents this machine happens to have.
     HomeScreen *home = app.home();
     CHECK(home != nullptr);
-    drv.click(424.0, 144.0);               // the first card
-    settle(app, now, 900.0);
-    CHECK(app.screen() == App::Screen::Editor);
-    CHECK(app.previewOk());
-    for (const auto &d : app.diagnostics())
-        CHECK(!d.isError());
+    for (const char *base : {"VisualLoop", "Button", "Checkbox"})
+    {
+        const int i = home->cardForBase(base);
+        CHECK(i >= 0);
+        const artboard::Rect r = home->cardRect(i);
+        drv.click(r.x + r.w * 0.5, r.y + r.h * 0.5);
+        settle(app, now, 900.0);
+        CHECK(app.screen() == App::Screen::Editor);
+        CHECK(app.doc().base == base);
+        CHECK(app.previewOk());
+        for (const auto &d : app.diagnostics())
+            CHECK(!d.isError());
+        app.showHome();
+        settle(app, now, 900.0);
+    }
 }
 TEST(Splash_plays_its_intro_and_exits)
 {
@@ -733,6 +744,179 @@ TEST(Recents_relative_age_reads_naturally)
     CHECK(Recents::relativeAge(1000, 1000 + 3600 * 3) == "3h ago");
     CHECK(Recents::relativeAge(1000, 1000 + 86400 * 2) == "2d ago");
     CHECK(Recents::relativeAge(1000, 1000 + 86400 * 90) == "3mo ago");
+}
+
+namespace
+{
+    struct DrawnText
+    {
+        artboard::Rect box;
+        std::string text;
+    };
+
+    artboard::Rect intersect(const artboard::Rect &a, const artboard::Rect &b)
+    {
+        const double x = std::max(a.x, b.x), y = std::max(a.y, b.y);
+        const double r = std::min(a.right(), b.right()), bo = std::min(a.bottom(), b.bottom());
+        return {x, y, std::max(0.0, r - x), std::max(0.0, bo - y)};
+    }
+
+    /*  Every drawn string's world-space box, by replaying the op stream.
+     *
+     *  The replay tracks the transform AND the clip stack, because a panel that clips its
+     *  scrolling list still RECORDS the rows it clipped away — counting those would report
+     *  overlaps the user can never see. Widths are measured with the SAME target the app drew
+     *  into, so positions and widths live in one metric space, which is the property that has
+     *  to hold on any adapter.
+     */
+    std::vector<DrawnText> drawnText(const artboard::RecordingTarget &rt, double w, double h)
+    {
+        std::vector<DrawnText> out;
+        artboard::Transform cur = artboard::Transform::identity();
+        artboard::Rect clip{0, 0, w, h};
+        std::vector<std::pair<artboard::Transform, artboard::Rect>> stack;
+        for (const auto &op : rt.ops())
+        {
+            switch (op.kind)
+            {
+            case K::Save:
+            case K::PushLayer:
+                stack.emplace_back(cur, clip);
+                continue;
+            case K::Restore:
+            case K::PopLayer:
+                if (!stack.empty()) { cur = stack.back().first; clip = stack.back().second; stack.pop_back(); }
+                continue;
+            case K::SetTransform:
+                cur = op.transform;
+                continue;
+            case K::ClipRect:
+            {
+                const artboard::Point a = cur.apply({op.args[0], op.args[1]});
+                const artboard::Point b = cur.apply({op.args[0] + op.args[2], op.args[1] + op.args[3]});
+                clip = intersect(clip, {std::min(a.x, b.x), std::min(a.y, b.y),
+                                        std::fabs(b.x - a.x), std::fabs(b.y - a.y)});
+                continue;
+            }
+            default: break;
+            }
+            if (op.kind != K::DrawText || op.text.empty()) continue;
+            const double size = op.args[2];
+            const double tw = rt.measureText(op.text, size, op.fontFamily, op.letterSpacingPx);
+            const artboard::Point o = cur.apply({op.args[0], op.args[1]});
+            const artboard::Rect box{o.x, o.y - size * 0.78, tw, size};
+            const artboard::Rect shown = intersect(box, clip);
+            if (shown.w <= 0.5 || shown.h <= 0.5)
+                continue;   // clipped away: the user never sees it
+            out.push_back({shown, op.text});
+        }
+        return out;
+    }
+    bool boxesOverlap(const artboard::Rect &a, const artboard::Rect &b)
+    {
+        const double e = 1.0;   // a pixel of slack: adjacent labels may share an edge
+        return a.x + e < b.right() && b.x + e < a.right() && a.y + e < b.bottom() &&
+               b.y + e < a.bottom();
+    }
+    /** Render `app` and return how many pairs of drawn strings overlap. */
+    int overlappingText(App &app, std::string *first = nullptr)
+    {
+        artboard::RecordingTarget rt;
+        setMeasureTarget(&rt);
+        app.render(rt);
+        setMeasureTarget(nullptr);
+        const auto boxes = drawnText(rt, app.width.value(), app.height.value());
+        int bad = 0;
+        for (size_t i = 0; i < boxes.size(); ++i)
+            for (size_t j = i + 1; j < boxes.size(); ++j)
+                if (boxesOverlap(boxes[i].box, boxes[j].box))
+                {
+                    if (first && first->empty())
+                        *first = "\"" + boxes[i].text + "\" over \"" + boxes[j].text + "\"";
+                    ++bad;
+                }
+        return bad;
+    }
+}
+
+TEST(No_two_strings_ever_overlap_at_any_window_size)
+{
+    // "Text overlaps everywhere" is a class of bug, not one bug, so it is checked as a class:
+    // render the real app and assert that no two drawn strings share pixels. The reactions
+    // panel sheds columns at narrow widths precisely so this holds.
+    const double sizes[][2] = {{1440, 900}, {1360, 860}, {1200, 780}, {1024, 640}, {900, 620}, {820, 560}};
+    for (const auto &wh : sizes)
+    {
+        App app;
+        app.setSize(wh[0], wh[1]);
+        double now = 0.0;
+
+        settle(app, now, 700.0);                 // the launcher
+        std::string where;
+        CHECK(overlappingText(app, &where) == 0);
+
+        toEditor(app, now);                      // the editor
+        where.clear();
+        CHECK(overlappingText(app, &where) == 0);
+
+        // A modal is a DELIBERATE overlay: the design rule allows it to sit over the app, and
+        // the translucent scrim is what announces that. So the app behind it legitimately
+        // shows through — what must not overlap is the dialog's OWN content, which is checked
+        // by rendering the modal subtree on its own.
+        app.modal()->openNew();
+        settle(app, now, 400.0);
+        artboard::RecordingTarget only;
+        setMeasureTarget(&only);
+        app.modal()->render(only);
+        setMeasureTarget(nullptr);
+        const auto card = drawnText(only, app.width.value(), app.height.value());
+        for (size_t i = 0; i < card.size(); ++i)
+            for (size_t j = i + 1; j < card.size(); ++j)
+                CHECK(!boxesOverlap(card[i].box, card[j].box));
+        CHECK(card.size() >= 5);   // the dialog really did draw its list and its buttons
+        app.modal()->close();
+        settle(app, now, 400.0);
+    }
+}
+TEST(No_string_is_drawn_outside_the_window)
+{
+    App app;
+    app.setSize(1024, 640);
+    double now = 0.0;
+    toEditor(app, now);
+
+    artboard::RecordingTarget rt;
+    setMeasureTarget(&rt);
+    app.render(rt);
+    setMeasureTarget(nullptr);
+    for (const auto &d : drawnText(rt, app.width.value(), app.height.value()))
+    {
+        CHECK(d.box.x >= -1.0);
+        CHECK(d.box.y >= -1.0);
+        CHECK(d.box.right() <= app.width.value() + 1.0);
+        CHECK(d.box.bottom() <= app.height.value() + 1.0);
+    }
+}
+TEST(Reactions_panel_sheds_columns_instead_of_letting_them_collide)
+{
+    // Every track row's widgets must stay inside the panel and clear of the chip gutter,
+    // at every width — which is what dropping `delay`, then `from`, then the chips achieves.
+    for (double w : {1440.0, 1200.0, 1024.0, 900.0, 820.0})
+    {
+        App app;
+        app.setSize(w, 760.0);
+        double now = 0.0;
+        toEditor(app, now);
+
+        const artboard::Segment &panel = *app.reactions();
+        for (const auto &child : panel.children())
+        {
+            if (!child->visible) continue;
+            CHECK(child->x.value() >= -0.5);
+            CHECK(child->x.value() + child->width.value() <= panel.width.value() + 0.5);
+            CHECK(child->y.value() + child->height.value() <= panel.height.value() + 0.5);
+        }
+    }
 }
 
 int main() { return mini::runAll(); }

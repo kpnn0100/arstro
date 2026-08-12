@@ -28,6 +28,9 @@ namespace genesis
             {"stroke",       FieldType::Color,    "",       kAll,    false, "",         "Stroke colour; empty draws no stroke."},
             {"strokeWidth",  FieldType::Number,   "1",      kAll,    true,  "",         "Stroke width in px."},
             {"cornerRadius", FieldType::Number,   "0",      kRect,   true,  "",         "Corner radius, clamped to half the shorter side."},
+            {"trimStart",    FieldType::Number,   "0",      kRect | kCircle | kPath, true, "", "Where the drawn outline STARTS, as a fraction of its length (angle / 360 for a circle)."},
+            {"trimEnd",      FieldType::Number,   "1",      kRect | kCircle | kPath, true, "", "Where it ENDS. Animate 0 -> 1 to make the shape draw itself in."},
+            {"trimOffset",   FieldType::Number,   "0",      kRect | kCircle | kPath, true, "", "Rotates the trimmed span around the outline; wraps, so an arc can cross the seam."},
             {"fontSize",     FieldType::Number,   "14",     kLabel,  true,  "",         "Text size in px."},
             {"letterSpacing",FieldType::Number,   "0",      kLabel,  true,  "",         "Extra advance between glyphs."},
         };

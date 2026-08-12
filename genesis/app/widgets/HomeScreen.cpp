@@ -114,6 +114,26 @@ namespace ui
         }
     }
 
+    artboard::Rect HomeScreen::cardRect(int i) const
+    {
+        if (i < 0 || i >= (int)mCards.size()) return {};
+        return mCards[(size_t)i].rect;
+    }
+
+    std::string HomeScreen::cardBase(int i) const
+    {
+        if (i < 0 || i >= (int)mCards.size() || mCards[(size_t)i].isRecent) return {};
+        return mCards[(size_t)i].base;
+    }
+
+    int HomeScreen::cardForBase(const std::string &base) const
+    {
+        for (int i = 0; i < (int)mCards.size(); ++i)
+            if (!mCards[(size_t)i].isRecent && mCards[(size_t)i].base == base)
+                return i;
+        return -1;
+    }
+
     void HomeScreen::layout(double w, double h)
     {
         width.set(w);

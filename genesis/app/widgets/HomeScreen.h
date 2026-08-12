@@ -33,6 +33,13 @@ namespace ui
         std::function<void(const std::string &path)> onOpenRecent;
 
         void setRecents(std::vector<RecentEntry> recents);
+        /** Cards in display order — recents first, then one per base. */
+        int cardCount() const { return (int)mCards.size(); }
+        artboard::Rect cardRect(int i) const;
+        /** The base a card starts, or "" for a recent. */
+        std::string cardBase(int i) const;
+        /** The index of the card that starts `base`, or -1. */
+        int cardForBase(const std::string &base) const;
         void layout(double w, double h);
         void advance(double nowMs) override;
 

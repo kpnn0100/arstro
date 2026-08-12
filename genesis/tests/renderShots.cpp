@@ -107,6 +107,13 @@ int main(int argc, char **argv)
         a.runtime().setPressed(true);
         settle(a, now, 120.0);    // a Button starter, hovered and caught mid-press
     });
+    shoot(dir + "/genesis-arc.png", 1200, 780, [&dir](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
+        a.openDocument("genesis/samples/ArcSpinner.genesis");
+        a.selectShape("arc");
+        settle(a, now, 1400.0);   // a trimmed circle: an arc, mid-spin
+    });
     // The launch splash, rendered on its own (the host shows it in its own window).
     {
         genesis::ui::SplashScreen splash;

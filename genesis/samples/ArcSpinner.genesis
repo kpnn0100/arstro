@@ -1,0 +1,38 @@
+{
+  "genesis": 1,
+  // The classic arc spinner, and the reason path trim exists: a circle drawn only between two
+  // points of its own outline is an arc. The arc's length breathes while the whole ring spins,
+  // so the motion reads as one object rather than two.
+  //
+  // trimStart/trimEnd/trimOffset are fractions of the outline's length — for a circle that is
+  // simply angle / 360, so `sweep` below is "how many degrees of arc".
+  "component": { "name": "ArcSpinner", "base": "VisualLoop", "namespace": "app", "designSize": [64, 64] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "thickness", "type": "number", "default": "5", "range": [1, 16] },
+    { "name": "sweep", "type": "number", "default": "80", "range": [10, 340] }
+  ],
+  "shapes": [
+    { "id": "track", "type": "circle",
+      "bind": { "w": "minSide - thickness", "h": "minSide - thickness",
+                "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
+                "stroke": "fade(accent, 0.16)", "strokeWidth": "thickness" } },
+    { "id": "arc", "type": "circle",
+      "bind": { "w": "minSide - thickness", "h": "minSide - thickness",
+                "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
+                "stroke": "accent", "strokeWidth": "thickness",
+                "opacity": "0",
+                "trimStart": "0",
+                "trimEnd": "sweep / 360" },
+      "animated": ["opacity", "rotation", "trimEnd", "trimOffset"] }
+  ],
+  "reactions": [
+    { "on": "loopStart", "cancel": "restart", "steps": [
+        [ { "target": "arc.opacity", "to": "1", "ms": 240, "easing": "EaseOutCubic" } ],
+        [ { "target": "arc.rotation", "from": "0", "to": "turns(1)", "ms": 1100, "easing": "Linear", "repeat": -1 },
+          { "target": "arc.trimEnd", "from": "0.06", "to": "sweep / 360", "ms": 550,
+            "easing": "EaseInOutCubic", "repeat": -1, "yoyo": true } ] ] },
+    { "on": "loopEnd", "steps": [
+        [ { "target": "arc.opacity", "to": "0", "ms": 240, "easing": "EaseInCubic" } ] ] }
+  ]
+}

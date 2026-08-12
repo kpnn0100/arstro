@@ -98,6 +98,14 @@ snaps (placing a component into a layout is not a change the user should see ani
 binding that reads `base.*` shall be re-evaluated every frame; one that does not shall be
 re-evaluated only when the size changes.
 
+### G-16 Trim: any shape can become a partial one
+
+A rect, circle, or path shall carry `trimStart`, `trimEnd`, and `trimOffset` — animatable
+fields, in **fractions of the outline's length**, so a trimmed circle is an arc (the fraction
+is simply `angle / 360`), a trimmed rounded rect is a border that draws itself in, and a
+trimmed path is a line that grows. `trimOffset` wraps, so an arc can sit across the outline's
+seam. These map directly onto Artboard's `Trim` (FR-42); Genesis adds no geometry of its own.
+
 ### G-7 Validation
 
 The document shall be validated on every edit. **Errors** block export: unknown base,
@@ -176,6 +184,11 @@ editable expression plus an animate toggle, and the params with live controls); 
 panel (signal, cancellation policy, steps, tracks, a per-reaction scrubber, and Fire); and
 New/Open/Save/Export/Verify. Editing a field shall update the preview as it is typed.
 
+The reactions panel shall **shed columns** rather than let them collide as the window
+narrows: `delay` first, then `from`, then the repeat/yoyo/delete chips, then `easing`
+narrows — in reverse order of how often each is edited. Rows that fall outside the visible
+area shall be hidden and the count reported, never silently dropped.
+
 There shall be **no global timeline**: a component is a set of responses to events, not a
 linear movie, so the event graph is the source of truth and the scrubber is per reaction.
 
@@ -221,10 +234,17 @@ Geometry derives from the live window size and measured content. The rails shrin
 usable minimum before the canvas is squeezed; the canvas absorbs the slack. Verified at two
 or more window sizes.
 
-### R-G-5 Text fits
+### R-G-5 Text fits, and no two strings ever overlap
 
 Every string is measured against the live render target (`ui::textWidth`) and either sized to
-fit or ellipsized (`ui::ellipsize`). Clipping is the backstop, not the plan.
+fit or ellipsized (`ui::ellipsize`). Any panel that scrolls also **clips**, and hides the
+widgets of rows that scrolled out — a clipped row still records its draw calls and its child
+Segments would still take input.
+
+This is enforced, not assumed: a test renders the real app at six window sizes, on both
+screens, replays the op stream (tracking the transform AND the clip stack), and asserts that
+no two drawn strings share pixels and that none is drawn outside the window. A modal is the
+one permitted overlay, so its own content is checked in isolation.
 
 ### R-G-6 Every state is drawn
 

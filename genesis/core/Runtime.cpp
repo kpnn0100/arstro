@@ -602,15 +602,27 @@ namespace genesis
                 p.stroke = n->colors["stroke"];
                 p.strokeWidth = n->styleProps["strokeWidth"].value();
             }
+            const artboard::Trim trim{n->styleProps["trimStart"].value(),
+                                      n->styleProps["trimEnd"].value(),
+                                      n->styleProps["trimOffset"].value()};
             if (s.kind == ShapeKind::Path)
-                static_cast<artboard::PathSegment *>(n->seg.get())->path.paint = p;
+            {
+                auto *ps = static_cast<artboard::PathSegment *>(n->seg.get());
+                ps->path.paint = p;
+                ps->trim = trim;
+            }
             else if (s.kind == ShapeKind::Circle)
-                static_cast<artboard::CircleSegment *>(n->seg.get())->style.paint = p;
+            {
+                auto *cs = static_cast<artboard::CircleSegment *>(n->seg.get());
+                cs->style.paint = p;
+                cs->trim = trim;
+            }
             else
             {
                 auto *rect = static_cast<artboard::RectangleSegment *>(n->seg.get());
                 rect->style.paint = p;
                 rect->style.cornerRadius = n->styleProps["cornerRadius"].value();
+                rect->trim = trim;
             }
         }
     }

@@ -50,10 +50,18 @@ namespace ui
         /** The chips at a row's right edge: repeat count, yoyo, delete. */
         enum class Chip { None, Repeat, Yoyo, Remove };
         Chip chipAt(const artboard::Point &p, int &rowIndex) const;
-        struct Columns { double target, from, to, ms, delay, easing, gap; };
+        /** Track-row column widths. A width of 0 means the column is DROPPED at this size:
+         *  the panel sheds detail rather than letting columns run into each other. */
+        struct Columns
+        {
+            double target = 0, from = 0, to = 0, ms = 0, delay = 0, easing = 0, gap = 6.0;
+            bool showChips = true;
+            double total() const;
+        };
         Columns columns(double panelW) const;
         Reaction *current();
         const Reaction *current() const;
+        double maxListScroll() const;
         void commit();
         void rebuildRows();
         /** Structure only (which rows exist), never their values — see Inspector. */

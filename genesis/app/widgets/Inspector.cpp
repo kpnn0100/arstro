@@ -24,7 +24,13 @@ namespace ui
         }
     }
 
-    Inspector::Inspector(App &app) : mApp(app) { refresh(); }
+    Inspector::Inspector(App &app) : mApp(app)
+    {
+        // The list scrolls, so it must clip: without this its rows keep drawing past the
+        // bottom of the panel and out of the window entirely.
+        clipToBounds = true;
+        refresh();
+    }
 
     double Inspector::boxLeft() const { return metrics::pad() + kLabelW; }
     double Inspector::boxWidth() const
@@ -350,6 +356,14 @@ namespace ui
             // width because nothing else lives in that gutter.
             const bool hasRemove = r.kind == RowKind::Param || r.kind == RowKind::PathCmd;
             const double single = hasRemove ? bw : bw + kToggleW;
+            // A row scrolled out of view is HIDDEN, not merely unpainted: its widgets are
+            // real Segments and would otherwise draw (and take input) outside the panel.
+            const bool onScreen = y + r.height > 0.0 && y < h;
+            for (auto &b : r.boxes)
+                b->visible = onScreen;
+            if (r.slider)
+                r.slider->visible = onScreen;
+
             if (r.slider)
             {
                 r.slider->x.set(boxLeft());
@@ -601,6 +615,8 @@ namespace ui
         artboard::drawRoundedRect(t, {0, 0, 1, h}, 0.0, artboard::Paint::filled(palette::border()));
 
         const Shape *shape = mApp.doc().findShape(mShownShape);
+        t.save();
+        t.clipRect(0, 0, w, h);   // the scrolling list never draws past the panel
         for (int i = 0; i < (int)mRows.size(); ++i)
         {
             const Row &r = mRows[(size_t)i];
@@ -725,6 +741,7 @@ namespace ui
                 break;
             }
         }
+        t.restore();
     }
 }
 }

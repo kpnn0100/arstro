@@ -7,6 +7,8 @@
 #include <sstream>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <cstdlib>
+#include <unistd.h>
 
 namespace genesis
 {
@@ -79,8 +81,23 @@ namespace ui
         return true;
     }
 
-    void Recents::remember(const std::string &file, const std::string &name, const std::string &base)
+    std::string Recents::absolute(const std::string &file)
     {
+        if (file.empty() || file[0] == '/') return file;
+        char resolved[4096];
+        if (::realpath(file.c_str(), resolved))
+            return resolved;
+        char cwd[4096];
+        if (::getcwd(cwd, sizeof cwd))
+            return std::string(cwd) + "/" + file;
+        return file;
+    }
+
+    void Recents::remember(const std::string &rawFile, const std::string &name, const std::string &base)
+    {
+        // Store an ABSOLUTE path: a recent opened from one working directory has to be
+        // reopenable from another, and the launcher is exactly where that happens.
+        const std::string file = absolute(rawFile);
         if (file.empty()) return;
         std::vector<RecentEntry> list = load();
         list.erase(std::remove_if(list.begin(), list.end(),

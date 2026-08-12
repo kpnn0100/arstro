@@ -120,28 +120,59 @@ namespace ui
         refresh();
     }
 
-    /** One place that decides the track columns, so the captions, the fields and the
-     *  hit-testing cannot drift apart when the panel is resized. */
+    double ReactionsPanel::Columns::total() const
+    {
+        double n = 0.0, sum = 0.0;
+        for (double c : {target, from, to, ms, delay, easing})
+            if (c > 0.0) { sum += c; n += 1.0; }
+        return sum + (n > 1.0 ? (n - 1.0) * gap : 0.0);
+    }
+
+    /*  One place decides the track columns, so the captions, the fields and the hit-testing
+     *  cannot drift apart when the panel is resized.
+     *
+     *  Narrow widths SHED COLUMNS rather than squeezing everything until the text collides:
+     *  `delay` goes first, then `from`, then the chips, then `easing` — in reverse order of
+     *  how often they are edited. What remains always fits, so nothing ever overlaps.
+     */
     ReactionsPanel::Columns ReactionsPanel::columns(double panelW) const
     {
         Columns c;
-        const double rightW = panelW - (kListW + metrics::pad()) - metrics::pad() - kChipW * kChips;
-        c.gap = 6.0;
-        c.easing = std::min(132.0, std::max(80.0, rightW * 0.20));
-        c.ms = 54.0;
-        c.delay = 48.0;
-        c.from = std::max(50.0, rightW * 0.14);
-        c.to = std::max(56.0, rightW * 0.16);
-        c.target = std::max(78.0, rightW - c.easing - c.ms - c.delay - c.from - c.to - c.gap * 5.0);
+        const double avail = panelW - (kListW + metrics::pad()) - metrics::pad();
+
+        c.easing = 112.0;
+        c.ms = 52.0;
+        c.delay = 46.0;
+        c.from = 62.0;
+        c.to = 68.0;
+        c.target = 132.0;
+
+        auto fits = [&] { return c.total() + (c.showChips ? kChipW * kChips : 0.0) <= avail; };
+        if (!fits()) c.delay = 0.0;
+        if (!fits()) c.from = 0.0;
+        if (!fits()) c.showChips = false;
+        if (!fits()) c.easing = std::max(64.0, c.easing - (c.total() - avail));
+        if (!fits()) c.to = std::max(40.0, c.to - (c.total() - avail));
+        if (!fits()) c.ms = std::max(34.0, c.ms - (c.total() - avail));
+        if (!fits()) c.target = std::max(52.0, c.target - (c.total() - avail));
+
+        // Whatever is left over goes to the target column, which is the one worth the room.
+        const double slack = avail - (c.total() + (c.showChips ? kChipW * kChips : 0.0));
+        if (slack > 0.0)
+            c.target += slack;
         return c;
     }
 
     ReactionsPanel::Chip ReactionsPanel::chipAt(const artboard::Point &p, int &rowIndex) const
     {
+        rowIndex = -1;
+        if (!columns(width.value()).showChips)
+            return Chip::None;   // dropped at this width: nothing to hit
         const double right = width.value() - metrics::pad();
         for (int i = 0; i < (int)mRows.size(); ++i)
         {
             const TrackRow &row = mRows[(size_t)i];
+            if (!row.target->visible) continue;   // a hidden row has no chips either
             if (p.y < row.y || p.y > row.y + kRowH - 2.0) continue;
             rowIndex = i;
             if (p.x >= right - kChipW) return Chip::Remove;
@@ -149,7 +180,6 @@ namespace ui
             if (p.x >= right - kChipW * kChips) return Chip::Repeat;
             return Chip::None;
         }
-        rowIndex = -1;
         return Chip::None;
     }
 
@@ -303,29 +333,36 @@ namespace ui
         mDeleteReaction->y.set(h - pad - 22.0);
         mDeleteReaction->width.set(kListW * 0.45 - 6.0);
 
-        mSignal->x.set(rightX);
-        mSignal->y.set(pad - 2.0);
-        mSignal->width.set(std::min(150.0, rightW * 0.3));
-        mCancel->x.set(rightX + mSignal->width.value() + 8.0);
-        mCancel->y.set(pad - 2.0);
-        mCancel->width.set(std::min(140.0, rightW * 0.28));
-
+        // The buttons claim their space first (they are fixed, and their labels must fit),
+        // then the two dropdowns share whatever is left — so they can never collide.
         double bx = w - pad;
         for (auto *b : {&mFire, &mAddTrack, &mAddStep})
         {
-            const double bw = std::max(56.0, textWidth((*b)->text, type::body(), font::sansMedium()) + 18.0);
+            const double bw = std::max(52.0, textWidth((*b)->text, type::body(), font::sansMedium()) + 16.0);
             bx -= bw;
             (*b)->x.set(bx);
             (*b)->y.set(pad - 2.0);
             (*b)->width.set(bw);
             bx -= 6.0;
         }
+        const double dropdownRoom = std::max(0.0, bx - 8.0 - rightX);
+        const double signalW = std::min(150.0, dropdownRoom * 0.55);
+        const double cancelW = std::min(140.0, dropdownRoom - signalW - 8.0);
+        mSignal->x.set(rightX);
+        mSignal->y.set(pad - 2.0);
+        mSignal->width.set(std::max(0.0, signalW));
+        mSignal->visible = signalW > 40.0;
+        mCancel->x.set(rightX + signalW + 8.0);
+        mCancel->y.set(pad - 2.0);
+        mCancel->width.set(std::max(0.0, cancelW));
+        mCancel->visible = cancelW > 40.0;
 
         // Track columns: target | to | ms | easing — sized as fractions so they reflow.
         const double y0 = pad + kHeadH;
         double y = y0 - mListScroll;
         int lastStep = -1;
         const Columns c = columns(w);
+        const double lastRowBottom = h - pad - 30.0 - kScrubH;
         for (auto &row : mRows)
         {
             if (row.step != lastStep)   // reserve the step header's own row
@@ -334,8 +371,15 @@ namespace ui
                 y += kStepH;
             }
             row.y = y;
+            // A row that would fall past the list area is HIDDEN, not just skipped when
+            // painting — its widgets are real Segments and would otherwise sit on top of
+            // the scrubber below.
+            const bool visibleRow = y >= y0 - kRowH && y + kRowH <= lastRowBottom;
             double x = rightX;
             auto place = [&](const std::shared_ptr<artboard::Segment> &seg, double cw) {
+                seg->visible = visibleRow && cw > 0.0;
+                if (!seg->visible)
+                    return;
                 seg->x.set(x); seg->y.set(y + 3.0); seg->width.set(cw);
                 x += cw + c.gap;
             };
@@ -347,6 +391,16 @@ namespace ui
             place(row.easing, c.easing);
             y += kRowH;
         }
+    }
+
+    /** How far the track list can scroll before its last row is flush with the bottom. */
+    double ReactionsPanel::maxListScroll() const
+    {
+        const Reaction *r = current();
+        if (!r) return 0.0;
+        const double content = (double)mRows.size() * kRowH + (double)r->steps.size() * kStepH;
+        const double view = height.value() - metrics::pad() - kHeadH - 30.0 - kScrubH;
+        return std::max(0.0, content - view);
     }
 
     void ReactionsPanel::commit()
@@ -440,6 +494,18 @@ namespace ui
                 }
             }
         }
+        // Dragging the track area scrolls it, so a reaction with more steps than fit is
+        // still reachable rather than silently truncated.
+        if (p.x >= kListW && g.type == artboard::Gesture::Type::Drag)
+        {
+            const double scrubTop = height.value() - pad - 22.0 - kScrubH;
+            if (p.y < scrubTop)
+            {
+                mListScroll = std::max(0.0, std::min(maxListScroll(), mListScroll - (p.y - g.start.y) * 0.4));
+                layout(width.value(), height.value());
+                return true;
+            }
+        }
         // The scrubber strip: drag to scrub the selected reaction's motion.
         const double scrubY = height.value() - pad - 22.0 - kScrubH;
         if (p.x >= kListW + pad && p.y >= scrubY && p.y <= scrubY + kScrubH)
@@ -530,12 +596,14 @@ namespace ui
             const double widths[] = {c.target, c.from, c.to, c.ms, c.delay, c.easing};
             for (int i = 0; i < 6; ++i)
             {
+                if (widths[i] <= 0.0) continue;   // this column was dropped at this width
                 drawFitted(t, caps[i], cx, capY, widths[i], type::micro(),
                            palette::mutedForeground(), font::sans());
                 cx += widths[i] + c.gap;
             }
-            drawFitted(t, "repeat", w - pad - kChipW * kChips, capY, kChipW * kChips - 4.0,
-                       type::micro(), palette::mutedForeground(), font::sans());
+            if (c.showChips)
+                drawFitted(t, "repeat", w - pad - kChipW * kChips, capY, kChipW * kChips - 4.0,
+                           type::micro(), palette::mutedForeground(), font::sans());
         }
 
         double ry = y0 - mListScroll;
@@ -559,7 +627,7 @@ namespace ui
             }
             // The three chips at the row's right edge: repeat count, yoyo, remove.
             const Reaction *rr = current();
-            if (rr && row.step < (int)rr->steps.size() &&
+            if (c.showChips && rr && row.step < (int)rr->steps.size() &&
                 row.track < (int)rr->steps[(size_t)row.step].tracks.size())
             {
                 const Track &tr = rr->steps[(size_t)row.step].tracks[(size_t)row.track];
@@ -596,6 +664,17 @@ namespace ui
         if (mRows.empty())
             drawFitted(t, "No tracks yet — add one, then pick what it animates.", rightX, y0 + 14.0,
                        rightW, type::small(), palette::mutedForeground(), font::sans());
+
+        // Say when rows are out of view instead of dropping them silently.
+        {
+            int hidden = 0;
+            for (const auto &row : mRows)
+                if (!row.target->visible) ++hidden;
+            if (hidden > 0)
+                drawFittedRight(t, std::to_string(hidden) + " more — drag to scroll",
+                                w - pad - 190.0, h - pad - 22.0 - kScrubH - 6.0, 190.0,
+                                type::micro(), palette::mutedForeground(), font::sans());
+        }
 
         // The scrubber. Local to this reaction, because the model is an event graph, not a
         // global timeline; the chip beside it names what can interrupt this reaction.
