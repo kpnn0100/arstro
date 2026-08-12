@@ -5,7 +5,11 @@ You pick an abstract control to inherit from, draw the component, bind its geome
 expressions, wire animations to the base class's events, and Genesis writes you a
 `.h` / `.cpp` pair that compiles against `artboard::` and nothing else.
 
-Status: proposal. Nothing implemented. Read with §14 (decisions) open.
+**Status: implemented.** This document is kept as the original proposal; what actually
+shipped is described in [requirements.md](requirements.md), [architecture.md](architecture.md)
+and [../README.md](../README.md). Where the two differ, those win — notably the milestone
+list below was completed in one pass, and Artboard grew ten features (FR-32…FR-41) rather
+than the six anticipated in §9.
 
 ---
 

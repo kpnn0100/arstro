@@ -243,10 +243,10 @@ namespace ui
         for (auto &r : mRows)
         {
             r.y = y;
-            const double single = r.kind == RowKind::Param || r.kind == RowKind::DocName ||
-                                          r.kind == RowKind::DocNamespace
-                                      ? bw + kToggleW
-                                      : bw;
+            // Rows with a remove affordance stop short of it; the rest may use the full
+            // width because nothing else lives in that gutter.
+            const bool hasRemove = r.kind == RowKind::Param || r.kind == RowKind::PathCmd;
+            const double single = hasRemove ? bw : bw + kToggleW;
             if (r.slider)
             {
                 r.slider->x.set(boxLeft());
@@ -256,7 +256,7 @@ namespace ui
             else if (r.kind == RowKind::PathCmd && !r.boxes.empty())
             {
                 // Coordinates share the row evenly, so a cubic's six values all stay legible.
-                const double each = (bw + kToggleW - 4.0 * (double)(r.boxes.size() - 1)) /
+                const double each = (bw - 4.0 * (double)(r.boxes.size() - 1)) /
                                     (double)r.boxes.size();
                 double x = boxLeft();
                 for (auto &b : r.boxes)
