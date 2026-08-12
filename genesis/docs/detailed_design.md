@@ -160,6 +160,11 @@ component in the same state at the same frames. The harness is compiled `-O0
 -ffp-contract=off`: the compiled arithmetic must follow the same order the interpreter uses,
 or a fused multiply-add would surface as a false mismatch.
 
+`verifyCompile` / `verifyCompare` split the work by thread-safety, not by convenience: the
+first touches no Artboard object and is safe on a worker; the second constructs Segments,
+which register in the process-wide focus and hover slots, and so must run on the UI thread.
+`verify()` is the two in order, which is what `genesis-cc` uses.
+
 Comparison is token-wise with a relative tolerance of `1e-9`, so a last-bit difference is not
 reported as a semantic one while any real divergence is. The scan stops after 40 differences —
 enough to diagnose, and the rest would be noise.

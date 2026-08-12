@@ -293,15 +293,41 @@ namespace ui
         return true;
     }
 
+    App::~App()
+    {
+        if (mVerifyThread.joinable())
+            mVerifyThread.join();
+    }
+
     void App::startVerify()
     {
+        if (mVerifyRunning)
+            return;
+        if (mVerifyThread.joinable())
+            mVerifyThread.join();
         mVerifyRunning = true;
+        mVerifyDone = false;
+        mVerifyStartedMs = mNowMs;
+        // Snapshot the document: the worker must not read one the author is still editing.
+        mVerifyDoc = mDoc;
+        mVerifyPlan = VerifyPlan::defaultFor(mVerifyDoc);
         status("Verifying — compiling the generated class…", StatusLevel::Info);
-        // Synchronous by design: verification compiles a translation unit, which takes about
-        // as long as a frame budget allows anyway, and a half-verified answer is worse than a
-        // brief wait. The button reads "Verifying…" and is disabled while it runs (R2).
-        mVerify = verify(mDoc, VerifyPlan::defaultFor(mDoc), VerifyConfig::defaults());
+        const VerifyConfig cfg = VerifyConfig::defaults();
+        mVerifyThread = std::thread([this, cfg] {
+            mVerifyRun = verifyCompile(mVerifyDoc, mVerifyPlan, cfg);
+            mVerifyDone = true;   // published last: advance() only reads mVerifyRun after this
+        });
+    }
+
+    /** Called from advance() once the worker has finished: the comparison half needs the UI
+     *  thread, and so does showing the report. */
+    void App::finishVerify()
+    {
+        if (mVerifyThread.joinable())
+            mVerifyThread.join();
         mVerifyRunning = false;
+        mVerifyDone = false;
+        mVerify = verifyCompare(mVerifyDoc, mVerifyPlan, mVerifyRun);
 
         std::vector<std::string> lines{mVerify.summary()};
         if (!mVerify.available)
@@ -411,6 +437,8 @@ namespace ui
     {
         mNowMs = nowMs;
         mStatusFade.update(nowMs);
+        if (mVerifyRunning && mVerifyDone)
+            finishVerify();
         if (mPreviewOk && mCanvas)
         {
             mRuntime.setSize(mCanvas->frameW(), mCanvas->frameH());

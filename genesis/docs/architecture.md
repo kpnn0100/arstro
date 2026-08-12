@@ -124,8 +124,10 @@ the Android shell independently of Genesis — which is the test of whether it b
 
 - Verification needs a C++ toolchain at authoring time; without one it reports *unavailable*
   rather than passing (G-9).
-- Verification is synchronous: compiling one translation unit takes long enough to notice,
-  and a half-verified answer is worse than a brief wait. The button reads "Verifying…" and is
-  disabled while it runs.
+- Verification splits across two threads because its two halves have different constraints:
+  `verifyCompile` (emit → write → compile → run the harness) touches no Artboard object and
+  runs on a worker, while `verifyCompare` builds a `Runtime` whose Segments touch
+  process-wide focus/hover state and must run on the UI thread. `App::advance` collects the
+  worker's result, so the window keeps drawing while the compiler works.
 - `raw{ }` is exported but not previewable, by construction — the interpreter cannot run C++.
 - There is no undo stack yet; the document is a plain value, so one is a stack of copies.

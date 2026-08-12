@@ -82,6 +82,23 @@ namespace genesis
     /** Run the full check. Never throws; a missing toolchain yields available == false. */
     VerifyResult verify(const Document &doc, const VerifyPlan &plan, const VerifyConfig &cfg);
 
+    /*  Verification splits in two so a GUI never has to freeze while a compiler runs.
+     *
+     *  `verifyCompile` is the slow half — emit, write, compile, run the harness — and touches
+     *  no Artboard object, so it is safe on a worker thread. `verifyCompare` is the fast half:
+     *  it builds a Runtime, whose Segments touch process-wide focus/hover state, so it must
+     *  run on the thread that owns the UI. `verify()` is simply the two called in order.
+     */
+    struct CompiledRun
+    {
+        bool available = false;
+        std::string error;
+        std::string compilerOutput;
+        std::string opText;     // the harness's op stream, ready to compare
+    };
+    CompiledRun verifyCompile(const Document &doc, const VerifyPlan &plan, const VerifyConfig &cfg);
+    VerifyResult verifyCompare(const Document &doc, const VerifyPlan &plan, const CompiledRun &run);
+
     /** The op-stream text the two sides compare. Exposed for unit tests. */
     std::string opsToText(const std::vector<artboard::DrawOp> &ops);
 }

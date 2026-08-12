@@ -10,7 +10,8 @@ cmake_minimum_required(VERSION 3.16)
 file(GLOB_RECURSE GENESIS_CORE CONFIGURE_DEPENDS core/*.cpp)
 add_library(genesis_core STATIC ${GENESIS_CORE})
 target_include_directories(genesis_core PUBLIC core)
-target_link_libraries(genesis_core PUBLIC artboard_core)
+find_package(Threads REQUIRED)   # the editor verifies on a worker thread
+target_link_libraries(genesis_core PUBLIC artboard_core Threads::Threads)
 
 # The verifier compiles a generated component at runtime, so it needs to know where the
 # Artboard headers and the built core library are. Baked in here rather than guessed.

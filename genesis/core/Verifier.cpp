@@ -417,21 +417,22 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
         }
     }
 
-    VerifyResult verify(const Document &doc, const VerifyPlan &plan, const VerifyConfig &cfg)
+    CompiledRun verifyCompile(const Document &doc, const VerifyPlan &plan, const VerifyConfig &cfg)
     {
-        VerifyResult r;
+        CompiledRun run;
         std::string why;
         if (!cfg.usable(&why))
         {
-            r.error = why;
-            return r;
+            run.error = why;
+            return run;
         }
+        run.available = true;
+
         const EmittedCode code = emitCpp(doc);
         if (!code.ok())
         {
-            r.available = true;
-            r.error = "cannot emit: " + code.error;
-            return r;
+            run.error = "cannot emit: " + code.error;
+            return run;
         }
 
         const std::string dir = cfg.workDir;
@@ -441,9 +442,8 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
             !writeFile(dir + "/" + code.sourceName, code.source, &ioError) ||
             !writeFile(dir + "/harness.cpp", buildHarness(doc, plan), &ioError))
         {
-            r.available = true;
-            r.error = ioError;
-            return r;
+            run.error = ioError;
+            return run;
         }
 
         // -O0 with contraction off: the compiled arithmetic must follow the SAME order the
@@ -458,21 +458,32 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
             << " " << shellQuote(dir + "/" + code.sourceName)
             << " -L" << shellQuote(cfg.artboardLibDir) << " -lartboard_core";
         std::string compileOut;
-        const int rc = runCommand(cmd.str(), compileOut);
-        r.compilerOutput = compileOut;
-        if (rc != 0)
+        if (runCommand(cmd.str(), compileOut) != 0)
         {
-            r.available = true;
-            r.error = "the generated code did not compile";
-            return r;
+            run.compilerOutput = compileOut;
+            run.error = "the generated code did not compile";
+            return run;
         }
+        run.compilerOutput = compileOut;
 
-        std::string compiledText;
-        if (runCommand(shellQuote(dir + "/harness"), compiledText) != 0)
+        if (runCommand(shellQuote(dir + "/harness"), run.opText) != 0)
         {
-            r.available = true;
-            r.error = "the compiled component crashed while being driven";
-            r.compilerOutput = compiledText;
+            run.compilerOutput = run.opText;
+            run.opText.clear();
+            run.error = "the compiled component crashed while being driven";
+            return run;
+        }
+        return run;
+    }
+
+    VerifyResult verifyCompare(const Document &doc, const VerifyPlan &plan, const CompiledRun &run)
+    {
+        VerifyResult r;
+        r.available = run.available;
+        r.compilerOutput = run.compilerOutput;
+        if (!run.available || !run.error.empty())
+        {
+            r.error = run.error;
             return r;
         }
 
@@ -480,14 +491,12 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
         const std::string previewText = runPreview(doc, plan, &previewError);
         if (!previewError.empty())
         {
-            r.available = true;
             r.error = "preview failed: " + previewError;
             return r;
         }
 
         const std::vector<std::string> a = splitLines(previewText);
-        const std::vector<std::string> b = splitLines(compiledText);
-        r.available = true;
+        const std::vector<std::string> b = splitLines(run.opText);
         double frame = 0.0;
         int opIndex = 0;
         const size_t n = std::max(a.size(), b.size());
@@ -514,5 +523,10 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
         }
         r.matched = r.differences.empty();
         return r;
+    }
+
+    VerifyResult verify(const Document &doc, const VerifyPlan &plan, const VerifyConfig &cfg)
+    {
+        return verifyCompare(doc, plan, verifyCompile(doc, plan, cfg));
     }
 }

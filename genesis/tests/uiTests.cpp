@@ -417,4 +417,39 @@ TEST(Inspector_edits_reach_the_document)
         CHECK(!d.isError());
 }
 
+TEST(App_keeps_drawing_while_a_verify_runs)
+{
+    // The compile half runs on a worker; the window must keep rendering, and the result must
+    // be collected on the UI thread (design rule R2: never freeze).
+    App app;
+    app.setSize(1200, 760);
+    double now = 0.0;
+    settle(app, now, 100.0);
+
+    app.startVerify();
+    CHECK(app.verifyRunning());
+    app.startVerify();                 // a second request while running is ignored
+    CHECK(app.verifyRunning());
+
+    int framesDrawn = 0;
+    for (int i = 0; i < 4000 && app.verifyRunning(); ++i)
+    {
+        now += 16.0;
+        app.advance(now);
+        artboard::RecordingTarget t;
+        app.render(t);
+        if (!t.ops().empty()) ++framesDrawn;
+    }
+    CHECK(framesDrawn > 0);            // it drew during the compile rather than freezing
+    CHECK(!app.verifyRunning());       // and the result was collected
+
+    // Whatever the toolchain situation, the outcome is reported, never silently green.
+    const VerifyResult &r = app.lastVerify();
+    CHECK(!r.summary().empty());
+    if (!r.available)
+        CHECK(!r.matched);
+    else
+        CHECK(r.matched || !r.differences.empty() || !r.error.empty());
+}
+
 int main() { return mini::runAll(); }

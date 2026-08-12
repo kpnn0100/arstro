@@ -15,7 +15,9 @@
 #include "Theme.h"
 #include "Verifier.h"
 #include <artboard/artboard.h>
+#include <atomic>
 #include <memory>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -34,6 +36,7 @@ namespace ui
     {
     public:
         App();
+        ~App();
 
         /** Reflow for a new window size (R4). */
         void setSize(double w, double h);
@@ -63,6 +66,7 @@ namespace ui
         bool saveDocumentAs(const std::string &path);
         bool exportCode();
         void startVerify();
+        void finishVerify();
 
         // ---- selection ----
         const std::string &selectedShape() const { return mSelected; }
@@ -128,7 +132,16 @@ namespace ui
         artboard::Property mStatusFade{0.0};
 
         VerifyResult mVerify;
+        // The compile half runs on a worker; the compare half needs the UI thread (it builds
+        // Segments, which touch process-wide focus/hover state). advance() collects the
+        // result, so the window keeps drawing while the compiler works (design rule R2).
         bool mVerifyRunning = false;
+        std::thread mVerifyThread;
+        std::atomic<bool> mVerifyDone{false};
+        CompiledRun mVerifyRun;
+        Document mVerifyDoc;
+        VerifyPlan mVerifyPlan;
+        double mVerifyStartedMs = 0.0;
 
         std::shared_ptr<Chrome> mChrome;
         std::shared_ptr<ShapeTree> mTree;
