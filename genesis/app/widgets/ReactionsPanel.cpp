@@ -222,6 +222,42 @@ namespace ui
             }
     }
 
+    std::string ReactionsPanel::structureKey() const
+    {
+        std::string k = "r:" + std::to_string(mApp.selectedReaction()) + "/" +
+                        std::to_string(mApp.doc().reactions.size());
+        if (const Reaction *r = current())
+            for (const auto &st : r->steps)
+                k += "|" + std::to_string(st.tracks.size());
+        return k;
+    }
+
+    void ReactionsPanel::syncValues()
+    {
+        const Reaction *r = current();
+        if (!r) return;
+        auto put = [](const std::shared_ptr<artboard::TextBox> &b, const std::string &v) {
+            if (b->hasFocus() || b->text == v) return;
+            b->text = v;
+            b->caretToEnd();
+        };
+        for (auto &row : mRows)
+        {
+            if (row.step >= (int)r->steps.size()) continue;
+            const auto &tracks = r->steps[(size_t)row.step].tracks;
+            if (row.track >= (int)tracks.size()) continue;
+            const Track &t = tracks[(size_t)row.track];
+            put(row.target, t.target);
+            put(row.from, t.from);
+            put(row.to, t.to);
+            put(row.ms, t.durationMs);
+            put(row.delay, t.delayMs);
+            for (int e = 0; e < (int)easingNames().size(); ++e)
+                if (easingNames()[(size_t)e] == t.easing && row.easing->selectedIndex() != e)
+                    row.easing->setSelectedIndex(e);
+        }
+    }
+
     void ReactionsPanel::refresh()
     {
         const BaseDef *base = findBase(mApp.doc().base);
@@ -240,6 +276,15 @@ namespace ui
             mCancel->setSelectedIndex(r->cancel == Cancel::IgnoreIfRunning ? 1
                                                                            : (r->cancel == Cancel::Queue ? 2 : 0));
         }
+        // Keep the widgets (and the focus, and the caret) while the row structure is the
+        // same — rebuilding would destroy the field being typed into.
+        const std::string key = structureKey();
+        if (key == mStructure && !mRows.empty())
+        {
+            syncValues();
+            return;
+        }
+        mStructure = key;
         rebuildRows();
     }
 

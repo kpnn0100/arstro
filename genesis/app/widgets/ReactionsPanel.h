@@ -33,7 +33,6 @@ namespace ui
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
-        bool hitTestSelf(const artboard::Point &) const override { return true; }
 
     private:
         struct TrackRow
@@ -57,6 +56,9 @@ namespace ui
         const Reaction *current() const;
         void commit();
         void rebuildRows();
+        /** Structure only (which rows exist), never their values — see Inspector. */
+        std::string structureKey() const;
+        void syncValues();
 
         App &mApp;
         std::vector<TrackRow> mRows;
@@ -72,6 +74,7 @@ namespace ui
         double mScrubT = 0.0;         // 0..1 through the selected reaction, for the scrubber
         bool mScrubbing = false;
         double mListScroll = 0.0;
+        std::string mStructure;
     };
 }
 }

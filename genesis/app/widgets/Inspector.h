@@ -41,7 +41,6 @@ namespace ui
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
-        bool hitTestSelf(const artboard::Point &) const override { return true; }
 
     private:
         enum class RowKind
@@ -70,6 +69,14 @@ namespace ui
             std::shared_ptr<artboard::Slider> slider;
         };
 
+        /** A key for the row STRUCTURE (which rows exist), deliberately excluding their
+         *  values. While it is unchanged, refresh() updates values in place instead of
+         *  rebuilding — rebuilding destroys the very TextBox the author is typing into, which
+         *  is what made every keystroke drop focus. */
+        std::string structureKey() const;
+        void rebuildRows();
+        void syncValues();
+        void rebuildProblems();
         void addSection(const std::string &title);
         std::shared_ptr<artboard::TextBox> makeBox(const std::string &value, const std::string &hint);
         void commitRow(const Row &row);
@@ -87,6 +94,7 @@ namespace ui
         RowHover mHover;
         double mNowMs = 0.0;
         double mScroll = 0.0;
+        std::string mStructure;
     };
 }
 }

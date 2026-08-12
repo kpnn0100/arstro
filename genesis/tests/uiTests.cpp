@@ -452,4 +452,166 @@ TEST(App_keeps_drawing_while_a_verify_runs)
         CHECK(r.matched || !r.differences.empty() || !r.error.empty());
 }
 
+namespace
+{
+    /** Feed a click the way the host does: raw pointer → recognizer → router → tree. */
+    struct Driver
+    {
+        artboard::GestureRecognizer rec;
+        artboard::InputRouter router;
+        double t = 0.0;
+        explicit Driver(App &app)
+        {
+            router.add(&app);
+            rec.setSink([this](const artboard::Gesture &g) { router.route(g); });
+        }
+        void click(double x, double y)
+        {
+            artboard::RawPointer d;
+            d.kind = artboard::RawPointer::Kind::Down;
+            d.pos = {x, y};
+            d.timeMs = (t += 10);
+            rec.feed(d);
+            artboard::RawPointer u;
+            u.kind = artboard::RawPointer::Kind::Up;
+            u.pos = {x, y};
+            u.timeMs = (t += 10);
+            rec.feed(u);
+        }
+    };
+    artboard::Point centreOf(const artboard::Segment &parent, const artboard::Segment &child)
+    {
+        return {parent.x.value() + child.x.value() + child.width.value() * 0.5,
+                parent.y.value() + child.y.value() + child.height.value() * 0.5};
+    }
+    artboard::TextBox *focusedBox(artboard::Segment *s)
+    {
+        if (auto *tb = dynamic_cast<artboard::TextBox *>(s))
+            if (tb->hasFocus()) return tb;
+        for (const auto &c : s->children())
+            if (auto *f = focusedBox(c.get())) return f;
+        return nullptr;
+    }
+    artboard::TextBox *nthBox(artboard::Segment *s, int &n)
+    {
+        if (auto *tb = dynamic_cast<artboard::TextBox *>(s))
+            if (n-- == 0) return tb;
+        for (const auto &c : s->children())
+            if (auto *f = nthBox(c.get(), n)) return f;
+        return nullptr;
+    }
+}
+
+TEST(Panels_only_hit_test_inside_their_own_bounds)
+{
+    // A panel that answered `true` regardless of the point made the topmost one swallow every
+    // click in the window — every button in the app was dead.
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 100.0);
+    const auto &kids = app.children();
+    for (size_t i = 0; i + 1 < kids.size(); ++i)   // all but the modal
+    {
+        const artboard::Segment &p = *kids[i];
+        const artboard::Point outside{p.x.value() + p.width.value() + 20.0,
+                                      p.y.value() + p.height.value() + 20.0};
+        CHECK(!p.hitTest(outside));
+        CHECK(p.hitTest({p.x.value() + p.width.value() * 0.5, p.y.value() + p.height.value() * 0.5}));
+    }
+}
+TEST(Chrome_buttons_respond_to_a_real_click)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 100.0);
+    Driver drv(app);
+
+    const artboard::Segment &chrome = *app.children()[0];
+    CHECK(chrome.childCount() >= 5);
+    const artboard::Point p = centreOf(app, chrome);   // just to touch the helper
+    (void)p;
+
+    const artboard::Point newBtn = centreOf(chrome, *chrome.children()[0]);
+    drv.click(newBtn.x, newBtn.y);
+    settle(app, now, 60.0);
+    CHECK(app.modal()->isOpen());          // "New" opened its dialog
+    app.modal()->close();
+    settle(app, now, 400.0);
+
+    const artboard::Point openBtn = centreOf(chrome, *chrome.children()[1]);
+    drv.click(openBtn.x, openBtn.y);
+    settle(app, now, 60.0);
+    CHECK(app.modal()->isOpen());          // and "Open" opened its own
+    app.modal()->close();
+    settle(app, now, 400.0);
+}
+TEST(Add_shape_buttons_add_a_shape)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 100.0);
+    Driver drv(app);
+
+    const artboard::Segment &tree = *app.children()[1];
+    const int before = (int)app.doc().shapes.size();
+    for (int i = 0; i < 4; ++i)            // rect, circle, path, label
+    {
+        const artboard::Point p = centreOf(tree, *tree.children()[(size_t)i]);
+        drv.click(p.x, p.y);
+        settle(app, now, 60.0);
+    }
+    CHECK((int)app.doc().shapes.size() == before + 4);
+    CHECK(app.previewOk());
+    for (const auto &d : app.diagnostics())
+        CHECK(!d.isError());               // every added shape is valid on arrival
+}
+TEST(Typing_into_a_field_keeps_focus_and_reaches_the_document)
+{
+    // Every edit re-validates and refreshes the panels. Rebuilding the rows destroyed the very
+    // TextBox being typed into, so each keystroke dropped focus.
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    settle(app, now, 100.0);
+
+    artboard::Segment *inspector = app.children()[3].get();
+    int index = 7;                          // name, namespace, dw, dh, id, x, y, then w
+    artboard::TextBox *box = nthBox(inspector, index);
+    CHECK(box != nullptr);
+    box->requestFocus();
+    box->caretToEnd();
+    const std::string startText = box->text;
+    CHECK(!startText.empty());
+
+    auto key = [&](int code) {
+        artboard::KeyEvent k;
+        k.type = artboard::KeyEvent::Type::Down;
+        k.keyCode = code;
+        app.dispatchKey(k);
+    };
+    auto type = [&](const char *text) {
+        artboard::KeyEvent k;
+        k.type = artboard::KeyEvent::Type::Text;
+        k.text = text;
+        app.dispatchKey(k);
+    };
+
+    for (int i = 0; i < 5; ++i)
+    {
+        key(8);                             // backspace
+        settle(app, now, 20.0);
+        CHECK(focusedBox(inspector) != nullptr);   // focus survives every keystroke
+    }
+    type("* 2");
+    settle(app, now, 20.0);
+    artboard::TextBox *still = focusedBox(inspector);
+    CHECK(still != nullptr);
+    CHECK(still->text != startText);
+    CHECK(app.doc().shapes.front().field("w") == still->text);   // and it reached the document
+    CHECK(app.previewOk());
+}
+
 int main() { return mini::runAll(); }

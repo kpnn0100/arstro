@@ -44,7 +44,12 @@ namespace ui
         // so its scrim and card already cover every panel, and drawing here keeps its own
         // controls (which are ordinary child Segments) ON TOP of the card rather than under it.
         void onPaint(artboard::IRenderTarget &t) const override;
-        bool hitTestSelf(const artboard::Point &) const override { return mOpen; }
+        /** Only while open — and still only inside our bounds, so a closed modal is
+         *  completely out of the way. */
+        bool hitTestSelf(const artboard::Point &p) const override
+        {
+            return mOpen && artboard::Segment::hitTestSelf(p);
+        }
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
 
     private:

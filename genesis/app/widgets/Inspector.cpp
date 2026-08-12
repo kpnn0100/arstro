@@ -54,7 +54,7 @@ namespace ui
         return b;
     }
 
-    void Inspector::refresh()
+    void Inspector::rebuildRows()
     {
         clearChildren();
         mRows.clear();
@@ -210,20 +210,123 @@ namespace ui
             mRows.push_back(note);
         }
 
-        // ── Problems ─────────────────────────────────────────────────────────────
-        if (!mApp.diagnostics().empty())
+        rebuildProblems();
+    }
+
+    /*  Problems are rebuilt on their own because they change as an expression is typed — and
+     *  they carry no widgets, so replacing them cannot disturb focus.
+     */
+    void Inspector::rebuildProblems()
+    {
+        while (!mRows.empty() && (mRows.back().kind == RowKind::Problem ||
+                                  (mRows.back().kind == RowKind::SectionTitle &&
+                                   mRows.back().label == "Problems")))
+            mRows.pop_back();
+        if (mApp.diagnostics().empty())
+            return;
+        addSection("Problems");
+        for (const auto &d : mApp.diagnostics())
         {
-            addSection("Problems");
-            for (const auto &d : mApp.diagnostics())
+            Row r;
+            r.kind = RowKind::Problem;
+            r.label = d.where + ": " + d.message;
+            r.index = d.isError() ? 1 : 0;
+            r.height = kNoteH * 2.0;
+            mRows.push_back(r);
+        }
+    }
+
+    std::string Inspector::structureKey() const
+    {
+        const Document &doc = mApp.doc();
+        std::string k = "s:" + mApp.selectedShape();
+        if (const Shape *s = doc.findShape(mApp.selectedShape()))
+        {
+            k += "|k:" + shapeKindName(s->kind);
+            k += "|p:" + std::to_string(s->path.size());
+            for (const auto &c : s->path)
+                k += c.op;
+        }
+        for (const auto &p : doc.params)
+            k += "|P:" + p.name + std::to_string((int)p.type) + (p.hasRange ? "r" : "");
+        return k;
+    }
+
+    /** Push document values into the boxes the author is NOT currently editing. */
+    void Inspector::syncValues()
+    {
+        const Document &doc = mApp.doc();
+        const Shape *s = doc.findShape(mShownShape);
+        auto put = [](const std::shared_ptr<artboard::TextBox> &b, const std::string &v) {
+            if (b->hasFocus() || b->text == v)
+                return;
+            b->text = v;
+            b->caretToEnd();
+        };
+        for (auto &r : mRows)
+        {
+            if (r.boxes.empty()) continue;
+            switch (r.kind)
             {
-                Row r;
-                r.kind = RowKind::Problem;
-                r.label = d.where + ": " + d.message;
-                r.index = d.isError() ? 1 : 0;
-                r.height = kNoteH * 2.0;
-                mRows.push_back(r);
+            case RowKind::DocName: put(r.boxes[0], doc.name); break;
+            case RowKind::DocNamespace: put(r.boxes[0], doc.nameSpace); break;
+            case RowKind::DocWidth: put(r.boxes[0], numToText(doc.designW)); break;
+            case RowKind::DocHeight: put(r.boxes[0], numToText(doc.designH)); break;
+            case RowKind::ShapeId: if (s) put(r.boxes[0], s->id); break;
+            case RowKind::ShapeText: if (s) put(r.boxes[0], s->text); break;
+            case RowKind::Field: if (s) put(r.boxes[0], s->field(r.key)); break;
+            case RowKind::PathCmd:
+                if (s && r.index < (int)s->path.size())
+                    for (size_t i = 0; i < r.boxes.size() && i < s->path[(size_t)r.index].args.size(); ++i)
+                        put(r.boxes[i], s->path[(size_t)r.index].args[i]);
+                break;
+            case RowKind::Param:
+                for (const auto &p : doc.params)
+                    if (p.name == r.key) put(r.boxes[0], p.defaultExpr);
+                break;
+            default: break;
             }
         }
+    }
+
+    void Inspector::refresh()
+    {
+        const std::string key = structureKey();
+        if (key == mStructure && !mRows.empty() && mShownShape == mApp.selectedShape())
+        {
+            // Same rows: keep the widgets (and the focus, and the caret) and just re-read
+            // the values that changed elsewhere.
+            syncValues();
+            rebuildProblems();
+            layout(width.value(), height.value());
+            return;
+        }
+        // The structure really changed. Remember where focus was so it can be restored to the
+        // equivalent row rather than simply lost.
+        int focusRow = -1, focusBox = -1, focusCaret = 0;
+        for (int i = 0; i < (int)mRows.size(); ++i)
+            for (int b = 0; b < (int)mRows[(size_t)i].boxes.size(); ++b)
+                if (mRows[(size_t)i].boxes[(size_t)b]->hasFocus())
+                {
+                    focusRow = i;
+                    focusBox = b;
+                    focusCaret = mRows[(size_t)i].boxes[(size_t)b]->caret();
+                }
+        const RowKind focusKind = focusRow >= 0 ? mRows[(size_t)focusRow].kind : RowKind::Note;
+        const std::string focusKey = focusRow >= 0 ? mRows[(size_t)focusRow].key : std::string();
+
+        mStructure = key;
+        rebuildRows();
+
+        if (focusRow >= 0)
+            for (auto &r : mRows)
+                if (r.kind == focusKind && r.key == focusKey && focusBox < (int)r.boxes.size())
+                {
+                    r.boxes[(size_t)focusBox]->requestFocus();
+                    r.boxes[(size_t)focusBox]->setCaret(focusCaret);
+                    break;
+                }
+        layout(width.value(), height.value());
     }
 
     double Inspector::contentHeight() const

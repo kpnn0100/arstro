@@ -45,7 +45,6 @@ namespace ui
         void onPaint(artboard::IRenderTarget &t) const override;
         void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
-        bool hitTestSelf(const artboard::Point &) const override { return true; }
 
     private:
         artboard::Rect stageRect() const;
