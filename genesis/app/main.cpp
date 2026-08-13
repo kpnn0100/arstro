@@ -122,6 +122,7 @@ namespace
         h->splashTarget.setContext(cr);
         h->splash.advance(h->nowMs());
         h->splash.render(h->splashTarget);
+        h->splashTarget.setContext(nullptr);   // valid only for this frame
         return FALSE;
     }
 
@@ -169,6 +170,10 @@ namespace
         h->target.setContext(cr);
         h->app.advance(now);
         h->app.render(h->target);
+        // GTK owns this cairo_t and destroys it when the handler returns, so drop it: a
+        // target held past its frame is a dangling context, and anything that measured text
+        // through it between frames would read garbage.
+        h->target.setContext(nullptr);
         return FALSE;
     }
 
