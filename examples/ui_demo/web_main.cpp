@@ -1,5 +1,5 @@
 #include "UiDemoApp.h"
-#include "../../Artboard/src/adapter/web/Canvas2DTarget.h"
+#include "../../core/Artboard/src/adapter/web/Canvas2DTarget.h"
 #include <emscripten/bind.h>
 #include <memory>
 

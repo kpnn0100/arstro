@@ -1,5 +1,5 @@
 #include "UiDemoApp.h"
-#include "../../Artboard/include/artboard/artboard.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
 #include <cmath>
 #include <cstdio>
 

@@ -8,7 +8,7 @@
       "name": "cosmo",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/cosmo/cosmo",
+      "program": "${workspaceFolder}/build/apps/cosmo/cosmo",
       // To open an image on launch, add its path here, e.g.:
       //   "args": ["${workspaceFolder}/some/photo.jpg"],
       "args": [],

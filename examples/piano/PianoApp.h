@@ -2,7 +2,7 @@
  *  Arstro Piano — a one-octave playable keyboard UI: draws a piano keyboard with
  *  Artboard and sounds it with the physical-modeling PianoEngine (8-voice pool
  *  of PianoVoice sharing one PianoBridge — see
- *  DigitalSignalProcessing/src/physical/README.md).
+ *  core/DigitalSignalProcessing/src/physical/README.md).
  *
  *  Platform-free: only Artboard's IRenderTarget + PianoEngine. Mirrors
  *  examples/synth/SynthApp's shape (same render()/renderAudio()/key() split) so
@@ -10,7 +10,7 @@
  *  pages/knobs, just the keyboard + pedal indicators + a small output meter.
  *
  *  Threading: unlike SynthEngine, PianoEngine has no internal lock-free queue —
- *  DigitalSignalProcessing/apps/piano_demo/main.cpp only ever drives it from one
+ *  core/DigitalSignalProcessing/apps/piano_demo/main.cpp only ever drives it from one
  *  thread. This app has two (GTK UI thread + ALSA audio thread), so key()
  *  (UI thread) only enqueues a Cmd into the library's SPSC LockFreeQueue; ALL
  *  PianoEngine mutation (noteOnMidi/noteOff/pedals) happens inside
@@ -23,9 +23,9 @@
  *  break in three places at once (two mutexes and a per-block std::vector).
  */
 #pragma once
-#include "../../Artboard/include/artboard/artboard.h"
-#include "../../DigitalSignalProcessing/apps/piano_demo/PianoEngine.h"
-#include "../../DigitalSignalProcessing/src/base/LockFreeQueue.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
+#include "../../core/DigitalSignalProcessing/apps/piano_demo/PianoEngine.h"
+#include "../../core/DigitalSignalProcessing/src/base/LockFreeQueue.h"
 #include <array>
 #include <atomic>
 #include <vector>

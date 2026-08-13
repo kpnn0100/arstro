@@ -1,7 +1,7 @@
 # Native GTK3 + ALSA playable piano-keyboard UI (Artboard + PianoEngine).
 # Optional: skipped (with a status message, not a hard failure) if gtk+-3.0 or
 # alsa dev packages aren't present — same pattern as the libsndfile-gated
-# wav_demo target in DigitalSignalProcessing/CMakeLists.txt.
+# wav_demo target in core/DigitalSignalProcessing/CMakeLists.txt.
 find_package(PkgConfig)
 find_package(Threads)
 if(PkgConfig_FOUND)
@@ -16,13 +16,13 @@ if(PIANO_GTK3_FOUND AND PIANO_ALSA_FOUND AND PIANO_X11_FOUND AND Threads_FOUND)
   add_executable(arstro_piano_ui
     linux_main.cpp
     PianoApp.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Artboard/src/adapter/native/CairoTarget.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../DigitalSignalProcessing/apps/piano_demo/PianoEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/DigitalSignalProcessing/apps/piano_demo/PianoEngine.cpp
   )
   target_include_directories(arstro_piano_ui PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Artboard/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Artboard/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../DigitalSignalProcessing/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/DigitalSignalProcessing/src
   )
   target_link_libraries(arstro_piano_ui PRIVATE
     artboard_core arstro_dsp Threads::Threads

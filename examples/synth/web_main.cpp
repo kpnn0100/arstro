@@ -5,7 +5,7 @@
  *  Compiled only by the web (emcc) build.
  */
 #include "SynthApp.h"
-#include "../../Artboard/src/adapter/web/Canvas2DTarget.h"
+#include "../../core/Artboard/src/adapter/web/Canvas2DTarget.h"
 #include <emscripten/bind.h>
 #include <memory>
 #include <vector>

@@ -16,6 +16,15 @@ It sits on top of, and never replaces, `implement_artboard`: the reusable contro
 primitives, and the render/input HAL live in **Artboard** and are changed with `implement_artboard`.
 Apps **compose** those pieces under the rules below.
 
+**Where things live.** The umbrella splits into `arstro/core/` (the libraries — `core/Artboard/`,
+`core/DigitalSignalProcessing/`, `core/ImageProcessing/`) and `arstro/apps/` (the applications —
+`apps/cosmo`, `apps/genesis`, `apps/pulsar`, `apps/launcher`, plus spec-stage `apps/solaris` and
+`apps/interstellar`); the small demos stay at `arstro/examples/` (`examples/studio`,
+`examples/synth`, `examples/ui_demo`, `examples/scope`, `examples/piano`). So the apps this skill
+governs are `apps/cosmo`, `apps/pulsar`, `apps/genesis`, `apps/launcher/android-shell` and the
+`examples/*` demos — and an app includes Artboard via a relative path into `core/Artboard/`
+(e.g. from `apps/cosmo/widgets/`: `../../../core/Artboard/include/artboard/artboard.h`).
+
 ## 0. Orient (what "the Arstro desktop look" is)
 
 - **Built on Artboard.** A desktop app builds a tree of `artboard::Segment`s (controls) + layout
@@ -30,7 +39,7 @@ Apps **compose** those pieces under the rules below.
   structure may not.**
 - **Reference files to read before you start** (in the app you're touching):
   - `Theme.h` — the app's design tokens (`palette::`, `radius::`, `font::`). Read cosmo's
-    (`cosmo/Theme.h`) as the canonical shape.
+    (`apps/cosmo/Theme.h`) as the canonical shape.
   - `REQUIREMENTS.md` — the app's requirements, including its **global design rules** (cosmo calls
     them `R-G-1…R-G-3`; see §2). Read them first, every time — they are the app's contract.
   - the `widgets/` a similar screen already uses, so a new one matches existing rhythm.
@@ -59,7 +68,7 @@ its own blue, radius, or font weight breaks the family.
 
 These are the standing rules for every desktop app. The first five are the product requirements;
 the rest are the transferable taste from `implement_artboard` §2A, adapted to the app layer. cosmo
-already encodes the spirit of these as `R-G-1…R-G-3` in `cosmo/REQUIREMENTS.md` — mirror that rule
+already encodes the spirit of these as `R-G-1…R-G-3` in `apps/cosmo/REQUIREMENTS.md` — mirror that rule
 block into any app that lacks it.
 
 ### R1 — Every transition is smooth; nothing snaps (ease-in-out)

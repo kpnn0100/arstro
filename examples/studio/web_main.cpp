@@ -3,7 +3,7 @@
  *  and exposes init/frame/audio/notes to JS. Compiled only by the web (emcc) build.
  */
 #include "StudioApp.h"
-#include "../../Artboard/src/adapter/web/Canvas2DTarget.h"
+#include "../../core/Artboard/src/adapter/web/Canvas2DTarget.h"
 #include <emscripten/bind.h>
 #include <memory>
 #include <vector>

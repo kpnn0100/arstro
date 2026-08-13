@@ -4,7 +4,7 @@
  *  (CTest target `scope_smoke`; no browser/audio device needed.)
  */
 #include "ScopeApp.h"
-#include "../../Artboard/include/artboard/artboard.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
 #include <cstdio>
 #include <vector>
 #include <cmath>

@@ -1,5 +1,5 @@
 #include "UiDemoApp.h"
-#include "../../Artboard/src/adapter/native/CairoTarget.h"
+#include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 
 using arstro::examples::UiDemoApp;

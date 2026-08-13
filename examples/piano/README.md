@@ -3,7 +3,7 @@
 A **playable** one-octave keyboard UI: press computer keys, hear a physically-modeled piano —
 hammer felt compressing a string, inharmonic partials, a shared soundboard, real damper/pedal
 behavior — not a sample player. The DSP is `arstro::PianoEngine` /
-[`PianoVoice`](../../DigitalSignalProcessing/src/physical/README.md) (8-voice pool sharing one
+[`PianoVoice`](../../core/DigitalSignalProcessing/src/physical/README.md) (8-voice pool sharing one
 `PianoBridge`); the UI is drawn with **Arstro Artboard**.
 
 `PianoApp` is platform-free (only `IRenderTarget` + `PianoEngine`), same shape as

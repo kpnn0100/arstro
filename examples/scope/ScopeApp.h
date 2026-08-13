@@ -7,8 +7,8 @@
  *  DSP engine — never a platform API — so any adapter (web today) can render it.
  */
 #pragma once
-#include "../../Artboard/include/artboard/artboard.h"
-#include "../../DigitalSignalProcessing/src/synth_dsp.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
+#include "../../core/DigitalSignalProcessing/src/synth_dsp.h"
 #include <memory>
 #include <vector>
 

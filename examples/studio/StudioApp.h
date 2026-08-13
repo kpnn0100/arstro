@@ -8,8 +8,8 @@
  *  IRenderTarget and the DSP engine.
  */
 #pragma once
-#include "../../Artboard/include/artboard/artboard.h"
-#include "../../DigitalSignalProcessing/src/synth_dsp.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
+#include "../../core/DigitalSignalProcessing/src/synth_dsp.h"
 #include <array>
 #include <cstdint>
 #include <memory>

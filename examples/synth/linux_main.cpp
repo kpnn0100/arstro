@@ -11,7 +11,7 @@
  *  (audio) thread share it safely. If no audio device opens, the UI still runs.
  */
 #include "SynthApp.h"
-#include "../../Artboard/src/adapter/native/CairoTarget.h"
+#include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <X11/XKBlib.h>

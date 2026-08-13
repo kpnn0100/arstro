@@ -8,9 +8,13 @@ This guide covers three common workflows in the umbrella repository:
 
 ## Repository layout
 
-- `Artboard/`: rendering, animation, input, UI framework, and adapters.
-- `DigitalSignalProcessing/`: DSP engine and supporting audio processing modules.
-- `examples/`: application entry points and platform glue.
+- `core/`: the Arstro core libraries — the reusable engines every app links against.
+  - `core/Artboard/`: rendering, animation, input, UI framework, and adapters.
+  - `core/DigitalSignalProcessing/`: DSP engine and supporting audio processing modules.
+  - `core/ImageProcessing/`: the image/video edit engine (tone, colour, masks, compute backends).
+- `apps/`: the Arstro applications — `cosmo`, `genesis`, `pulsar`, `launcher`, and the
+  spec-stage `solaris` and `interstellar`.
+- `examples/`: demo apps and platform glue, kept small on purpose.
 - `build.sh`: umbrella build entry point.
 
 ## 1. Create a new app
@@ -40,8 +44,8 @@ Keep the application logic in the app class, not in the platform entry point.
 
 The shared app class should:
 
-- Depend on `Artboard/include/artboard/artboard.h`.
-- Depend on `DigitalSignalProcessing/src/...` only if audio/DSP is needed.
+- Depend on `core/Artboard/include/artboard/artboard.h`.
+- Depend on `core/DigitalSignalProcessing/src/...` only if audio/DSP is needed.
 - Expose `render(...)` for drawing.
 - Expose pointer and keyboard input methods when interactive.
 - Avoid direct OS, browser, or toolkit APIs.

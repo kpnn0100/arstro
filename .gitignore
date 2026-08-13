@@ -28,18 +28,18 @@ examples/ui_demo/web/ui_demo.js
 examples/ui_demo/web/ui_demo.wasm
 
 # pulsar wasm output
-pulsar/web/pulsar.js
-pulsar/web/pulsar.wasm
+apps/pulsar/web/pulsar.js
+apps/pulsar/web/pulsar.wasm
 
 
 # local reference asset
 src.zip
 
 # Android-theme project: the 153GB AOSP reference checkout is reference-only,
-# never built/packaged, never committed (see launcher/docs/android-theme-plan.md).
-launcher/plasma.android/
+# never built/packaged, never committed (see apps/launcher/docs/android-theme-plan.md).
+apps/launcher/plasma.android/
 # root-level reference/scratch trees (user-managed, not part of the build)
 /ref/
 
 # vendored LibRaw source tree (user-managed; build.sh builds its static lib on demand)
-# ImageProcessing/lib/
+# core/ImageProcessing/lib/

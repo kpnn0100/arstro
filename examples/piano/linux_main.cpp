@@ -10,7 +10,7 @@
  *  for the general pattern this follows.
  */
 #include "PianoApp.h"
-#include "../../Artboard/src/adapter/native/CairoTarget.h"
+#include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
 #include <X11/XKBlib.h>

@@ -11,26 +11,26 @@ stop on one computer, `git pull` on another, invoke this skill, and it knows exa
 
 ## The three source-of-truth files (all committed, all travel via git)
 
-1. **The plan** — `launcher/docs/android-theme-plan.md`. The full design: every milestone, every
+1. **The plan** — `apps/launcher/docs/android-theme-plan.md`. The full design: every milestone, every
    concrete value (sizes, colors, durations, D-Bus interfaces), the architecture, the risks. **Read
    the relevant milestone's plan section before starting that milestone.**
-2. **The progress ledger** — `launcher/docs/android-theme-progress.md`. *What is done and what to do
+2. **The progress ledger** — `apps/launcher/docs/android-theme-progress.md`. *What is done and what to do
    next.* Has a **► NEXT** pointer at the top, granular checkboxes per milestone (M0–M9), a decisions
    log, and a verification "honesty ledger". **This is the file you read first and update last, every
    session.**
 3. **This skill** — the procedure below.
 
-Everything the project produces (shell code under `launcher/android-shell/`, docs, this skill, the
+Everything the project produces (shell code under `apps/launcher/android-shell/`, docs, this skill, the
 ledger) lives in the **`arstro` umbrella repo** (remote `kpnn0100/arstro`). The 153GB
-`launcher/plasma.android/android17` AOSP reference tree is **gitignored** — it is reference only,
+`apps/launcher/plasma.android/android17` AOSP reference tree is **gitignored** — it is reference only,
 never built, never committed, and you must **never** `grep`/`find`/`du` its root (see plan §0).
 Artboard-library changes go to the **Artboard repo** on its `feature/1.0.0` branch (see §Routing).
 
 ## The loop (do this every invocation)
 
-1. **Orient.** Read `launcher/docs/android-theme-progress.md` — specifically the **► NEXT** line and
+1. **Orient.** Read `apps/launcher/docs/android-theme-progress.md` — specifically the **► NEXT** line and
    the current milestone's checklist. Read that milestone's section in
-   `launcher/docs/android-theme-plan.md`. If NEXT is unclear or the ledger looks stale vs. the actual
+   `apps/launcher/docs/android-theme-plan.md`. If NEXT is unclear or the ledger looks stale vs. the actual
    repo (e.g. a task marked `[ ]` whose code already exists), reconcile the ledger to reality first
    and say so.
 2. **Scope one task.** Take the single next unchecked (`[ ]`) task under the current milestone (top to
@@ -58,9 +58,19 @@ Artboard-library changes go to the **Artboard repo** on its `feature/1.0.0` bran
 Do not skip step 5. A finished task whose ledger was not updated is the one failure mode that breaks
 "resume on another computer".
 
+## Where things live (umbrella layout)
+
+`arstro/` splits into `core/` (the libraries: `core/Artboard/`, `core/DigitalSignalProcessing/`,
+`core/ImageProcessing/`), `apps/` (the applications: `apps/cosmo`, `apps/genesis`, `apps/pulsar`,
+`apps/launcher`, plus spec-stage `apps/solaris`, `apps/interstellar`), and `examples/` (demos).
+This project's code is `apps/launcher/android-shell/`; its docs are `apps/launcher/docs/`; its
+CMake target is added by the root `CMakeLists.txt` as `add_subdirectory(apps/launcher/android-shell)`
+and therefore builds into `build/apps/launcher/android-shell/`. Artboard work happens inside
+`core/Artboard/` (its own repo).
+
 ## Routing — which sub-workflow a task uses
 
-- **Task changes the Artboard library** (`Artboard/` — namespace `artboard`, the render/UI/input core,
+- **Task changes the Artboard library** (`core/Artboard/` — namespace `artboard`, the render/UI/input core,
   any `IRenderTarget` primitive, a new control, a gesture-recognizer change): use the
   **`implement_artboard`** skill (its full V-model: requirements → architecture → detailed_design →
   puml → code → RecordingTarget tests at 100% core coverage → build all adapters → commit to Artboard
@@ -68,7 +78,7 @@ Do not skip step 5. A finished task whose ledger was not updated is the one fail
   active line — see the ledger's decisions log). M0 is entirely this. Later milestones occasionally
   need a new Artboard primitive — when they do, it is a mini `implement_artboard` cycle, never an
   inline hack in an app or adapter.
-- **Task builds/styles the shell app UI** (`launcher/android-shell/` surfaces, widgets, screens,
+- **Task builds/styles the shell app UI** (`apps/launcher/android-shell/` surfaces, widgets, screens,
   panels — the launcher, status bar, QS, notifications, recents, drawn with Artboard segments): follow
   the **`arstro.design.desktop`** skill's design language (tokens, motion, layout, states) but with the
   Android-theme palette/metrics from the plan. This is app code, not library code — it consumes

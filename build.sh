@@ -26,7 +26,7 @@ done
 
 HOST_OS=$(uname -s); HOST_ARCH=$(uname -m)
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-DSP="$ROOT/DigitalSignalProcessing"; AB="$ROOT/Artboard"; IP="$ROOT/ImageProcessing"
+DSP="$ROOT/core/DigitalSignalProcessing"; AB="$ROOT/core/Artboard"; IP="$ROOT/core/ImageProcessing"
 echo "host: ${HOST_OS}/${HOST_ARCH}   project: ${PROJECT}   target: ${TARGET}"
 
 dsp_src=()
@@ -96,7 +96,7 @@ case "$TARGET" in
         ;;
       pulsar)
         EXPORT=createPulsarModule; OUTNAME=pulsar
-        APP_DIR="$ROOT/pulsar"
+        APP_DIR="$ROOT/apps/pulsar"
         APP_SRC=("$APP_DIR/web_main.cpp" "$APP_DIR/PulsarApp.cpp" "$APP_DIR/OscillatorPanel.cpp" "$APP_DIR/WaveDisplay.cpp" "$APP_DIR/MuteButton.cpp" "$APP_DIR/Stepper.cpp" "$APP_DIR/Chrome.cpp" "$APP_DIR/SubOscPanel.cpp" "$APP_DIR/FilterPanel.cpp" "$APP_DIR/EnvPanel.cpp" "$APP_DIR/LfoPanel.cpp" "$APP_DIR/LfoCurve.cpp" "$APP_DIR/MacroPanel.cpp" "$APP_DIR/Keyboard.cpp" "$APP_DIR/ModSourceBadge.cpp" "$APP_DIR/GainPanel.cpp")
         EXTRA_SRC=()
         EXTRA_INC=()
@@ -214,15 +214,15 @@ case "$TARGET" in
           echo "error: gtk+-3.0 development files not found." >&2
           exit 1
         fi
-        OUTDIR="$ROOT/pulsar/build"
+        OUTDIR="$ROOT/apps/pulsar/build"
         mkdir -p "$OUTDIR"
         read -r -a PULSAR_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0)"
         read -r -a PULSAR_LIBS <<< "$(pkg-config --libs gtk+-3.0)"
         c++ -std=c++17 -O2 \
-          "$ROOT/pulsar/linux_main.cpp" "$ROOT/pulsar/PulsarApp.cpp" \
-          "$ROOT/pulsar/OscillatorPanel.cpp" "$ROOT/pulsar/WaveDisplay.cpp" "$ROOT/pulsar/MuteButton.cpp" "$ROOT/pulsar/Stepper.cpp" \
-          "$ROOT/pulsar/Chrome.cpp" "$ROOT/pulsar/SubOscPanel.cpp" "$ROOT/pulsar/FilterPanel.cpp" \
-          "$ROOT/pulsar/EnvPanel.cpp" "$ROOT/pulsar/LfoPanel.cpp" "$ROOT/pulsar/LfoCurve.cpp" "$ROOT/pulsar/MacroPanel.cpp" "$ROOT/pulsar/Keyboard.cpp" "$ROOT/pulsar/ModSourceBadge.cpp" "$ROOT/pulsar/GainPanel.cpp" \
+          "$ROOT/apps/pulsar/linux_main.cpp" "$ROOT/apps/pulsar/PulsarApp.cpp" \
+          "$ROOT/apps/pulsar/OscillatorPanel.cpp" "$ROOT/apps/pulsar/WaveDisplay.cpp" "$ROOT/apps/pulsar/MuteButton.cpp" "$ROOT/apps/pulsar/Stepper.cpp" \
+          "$ROOT/apps/pulsar/Chrome.cpp" "$ROOT/apps/pulsar/SubOscPanel.cpp" "$ROOT/apps/pulsar/FilterPanel.cpp" \
+          "$ROOT/apps/pulsar/EnvPanel.cpp" "$ROOT/apps/pulsar/LfoPanel.cpp" "$ROOT/apps/pulsar/LfoCurve.cpp" "$ROOT/apps/pulsar/MacroPanel.cpp" "$ROOT/apps/pulsar/Keyboard.cpp" "$ROOT/apps/pulsar/ModSourceBadge.cpp" "$ROOT/apps/pulsar/GainPanel.cpp" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" \
           -I"$AB/src" -I"$AB/include" \
@@ -232,8 +232,8 @@ case "$TARGET" in
         echo "run:   $OUTDIR/pulsar_linux"
         ;;
       cosmo)
-        # Figma-exact photo editor. Native-only. UI (cosmo/*.cpp + widgets/) +
-        # the UI-free logic in cosmo/core (session/history/presets/decoder), and
+        # Figma-exact photo editor. Native-only. UI (apps/cosmo/*.cpp + widgets/) +
+        # the UI-free logic in apps/cosmo/core (session/history/presets/decoder), and
         # registers vendored DM Sans / JetBrains Mono via Fontconfig at start.
         for dep in gtk+-3.0 fontconfig; do
           if ! pkg-config --exists "$dep"; then
@@ -241,12 +241,12 @@ case "$TARGET" in
             exit 1
           fi
         done
-        OUTDIR="$ROOT/cosmo/build"
+        OUTDIR="$ROOT/apps/cosmo/build"
         mkdir -p "$OUTDIR"
         read -r -a COSMO_CFLAGS <<< "$(pkg-config --cflags gtk+-3.0 fontconfig)"
         read -r -a COSMO_LIBS <<< "$(pkg-config --libs gtk+-3.0 fontconfig)"
         # RAW decoding is optional. Prefer a vendored LibRaw source tree under
-        # ImageProcessing/lib/LibRaw (built on demand into a static lib); else fall
+        # core/ImageProcessing/lib/LibRaw (built on demand into a static lib); else fall
         # back to a system LibRaw via pkg-config; else build without RAW.
         RAW_DEF=""; RAW_CFLAGS=(); RAW_LIBS=()
         LIBRAW_DIR="$IP/lib/LibRaw"
@@ -270,7 +270,7 @@ case "$TARGET" in
         # Every cosmo .cpp (app + core + decoder) EXCEPT the core unit test's main().
         cosmo_src=()
         while IFS= read -r -d '' f; do cosmo_src+=("$f"); done \
-          < <(find "$ROOT/cosmo" -name '*.cpp' ! -path '*/tests/*' ! -path '*/build/*' \
+          < <(find "$ROOT/apps/cosmo" -name '*.cpp' ! -path '*/tests/*' ! -path '*/build/*' \
                 ! -path '*/android/*' ! -path '*/touch/*' ! -name 'AndroidImageDecoder.cpp' -print0)
         # ARSTRO_ENABLE_THREADS + RAW_DEF on EVERY TU so the RenderService layout
         # matches; COSMO_SOURCE_DIR lets the binary find assets/fonts by path.
@@ -279,11 +279,11 @@ case "$TARGET" in
         # the CPU pipeline stays the reference + fallback if no GPU is present.
         GL_DEF="-DARSTRO_GL_COMPUTE"; GL_LIBS=(-lEGL -lGL)
         c++ -std=c++17 -O2 -pthread -DARSTRO_ENABLE_THREADS $RAW_DEF $GL_DEF \
-          -DCOSMO_SOURCE_DIR="\"$ROOT/cosmo\"" \
+          -DCOSMO_SOURCE_DIR="\"$ROOT/apps/cosmo\"" \
           "${cosmo_src[@]}" \
           "$AB/src/adapter/native/CairoTarget.cpp" \
           "${ab_core[@]}" "${ip_src[@]}" \
-          -I"$AB/src" -I"$AB/include" -I"$IP/src" -I"$ROOT/cosmo" \
+          -I"$AB/src" -I"$AB/include" -I"$IP/src" -I"$ROOT/apps/cosmo" \
           "${COSMO_CFLAGS[@]}" "${COSMO_LIBS[@]}" "${RAW_CFLAGS[@]}" "${RAW_LIBS[@]}" "${GL_LIBS[@]}" \
           -o "$OUTDIR/cosmo_linux"
         echo "built $OUTDIR/cosmo_linux"
@@ -304,7 +304,7 @@ case "$TARGET" in
       cosmo)
         # Pick the install target with COSMO_ANDROID_DEVICE=<adb-serial> (or --no-install
         # via COSMO_ANDROID_NO_INSTALL=1). build_apk.sh has finer-grained flags.
-        exec "$ROOT/cosmo/android/build_apk.sh"
+        exec "$ROOT/apps/cosmo/android/build_apk.sh"
         ;;
       *) echo "android-app currently supports only project 'cosmo'" >&2; exit 1;;
     esac

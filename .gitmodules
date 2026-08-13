@@ -1,9 +1,9 @@
 [submodule "DigitalSignalProcessing"]
-	path = DigitalSignalProcessing
+	path = core/DigitalSignalProcessing
 	url = https://github.com/kpnn0100/DigitalSignalProcessing.git
 [submodule "Artboard"]
-	path = Artboard
+	path = core/Artboard
 	url = https://github.com/kpnn0100/artboard.git
 [submodule "ImageProcessing/lib/LibRaw"]
-	path = ImageProcessing/lib/LibRaw
+	path = core/ImageProcessing/lib/LibRaw
 	url = https://github.com/LibRaw/LibRaw.git

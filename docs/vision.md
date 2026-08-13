@@ -32,8 +32,8 @@ conflict). That is what turns three separate tools into one workflow.
 
 This document makes that idea concrete. The shared machinery lives in
 [shared-core.md](shared-core.md) (the **Nebula** core); the two new apps are detailed in
-[interstellar/README.md](../interstellar/README.md) and
-[solaris/README.md](../solaris/README.md).
+[interstellar/README.md](../apps/interstellar/README.md) and
+[solaris/README.md](../apps/solaris/README.md).
 
 ## 3. The shared foundation
 
@@ -140,6 +140,6 @@ survives after the UI ships.
 
 - [shared-core.md](shared-core.md) — **Nebula**: the text project format, the branch + auto-rebase
   engine, semantic merge, cross-app embedding + propagation, and the resource pool.
-- [../interstellar/README.md](../interstellar/README.md) — the video editor.
-- [../solaris/README.md](../solaris/README.md) — the DAW.
-- [../cosmo/docs/](../cosmo/docs/) — the existing Cosmo app (reference for the app shape).
+- [../apps/interstellar/README.md](../apps/interstellar/README.md) — the video editor.
+- [../apps/solaris/README.md](../apps/solaris/README.md) — the DAW.
+- [../apps/cosmo/docs/](../apps/cosmo/docs/) — the existing Cosmo app (reference for the app shape).

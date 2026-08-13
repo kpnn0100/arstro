@@ -228,5 +228,5 @@ Nebula is generic; each app registers a **schema** (node types + fields) and **t
 
 All three get the same **text format**, **living branches**, **semantic merge**, **embedding**,
 and **resource pool** for free from Nebula. The app-specific details are in
-[../interstellar/README.md](../interstellar/README.md) and
-[../solaris/README.md](../solaris/README.md); the product story is in [vision.md](vision.md).
+[../apps/interstellar/README.md](../apps/interstellar/README.md) and
+[../apps/solaris/README.md](../apps/solaris/README.md); the product story is in [vision.md](vision.md).

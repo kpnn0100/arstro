@@ -12,8 +12,8 @@
  *  thread may drive it while a separate audio thread calls renderAudio().
  */
 #pragma once
-#include "../../Artboard/include/artboard/artboard.h"
-#include "../../DigitalSignalProcessing/src/synth_dsp.h"
+#include "../../core/Artboard/include/artboard/artboard.h"
+#include "../../core/DigitalSignalProcessing/src/synth_dsp.h"
 #include <array>
 #include <cstdint>
 #include <mutex>

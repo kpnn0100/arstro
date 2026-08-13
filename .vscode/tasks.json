@@ -12,7 +12,7 @@
       "command": "cmake -S \"${workspaceFolder}\" -B \"${workspaceFolder}/build\" -G Ninja && cmake --build \"${workspaceFolder}/build\" --target cosmo -j 8",
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": ["$gcc"],
-      "detail": "Reconfigure + build the cosmo GUI into build/cosmo/cosmo"
+      "detail": "Reconfigure + build the cosmo GUI into build/apps/cosmo/cosmo"
     }
   ]
 }
