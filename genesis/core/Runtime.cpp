@@ -264,8 +264,8 @@ namespace genesis
                 visit(k);
         }
 
-        for (const auto &r : mDoc.reactions)
-            mReactions[r.signal] = ReactionState{};
+        for (const auto &pair : mDoc.allReactions())
+            mReactions[reactionKey(pair.first->id, pair.second->signal)] = ReactionState{};
 
         layout(0.0);
         applyStyles();
@@ -651,28 +651,41 @@ namespace genesis
 
     // ───────────────────────── reactions ─────────────────────────
 
+    std::string Runtime::reactionKey(const std::string &shapeId, const std::string &signal)
+    {
+        return shapeId + "\x1f" + signal;
+    }
+
     void Runtime::hostSignal(const std::string &signal)
     {
-        for (const auto &r : mDoc.reactions)
-            if (r.signal == signal)
-            {
-                startReaction(r);
-                return;
-            }
+        // A signal is a component-level event: EVERY object that reacts to it runs.
+        for (const auto &pair : mDoc.allReactions())
+            if (pair.second->signal == signal)
+                startReaction(pair.first->id, *pair.second);
     }
 
     void Runtime::fire(const std::string &signal) { hostSignal(signal); }
 
     bool Runtime::isRunning(const std::string &signal) const
     {
-        auto it = mReactions.find(signal);
+        for (const auto &pair : mDoc.allReactions())
+            if (pair.second->signal == signal && isRunning(pair.first->id, signal))
+                return true;
+        return false;
+    }
+
+    bool Runtime::isRunning(const std::string &shapeId, const std::string &signal) const
+    {
+        auto it = mReactions.find(reactionKey(shapeId, signal));
         return it != mReactions.end() && it->second.running;
     }
 
-    double Runtime::reactionDurationMs(const std::string &signal) const
+    double Runtime::reactionDurationMs(const std::string &shapeId, const std::string &signal) const
     {
+        const Shape *host = mDoc.findShape(shapeId);
+        if (!host) return 0.0;
         const Reaction *r = nullptr;
-        for (const auto &cand : mDoc.reactions)
+        for (const auto &cand : host->reactions)
             if (cand.signal == signal) { r = &cand; break; }
         if (!r) return 0.0;
         double total = 0.0;
@@ -681,8 +694,8 @@ namespace genesis
             double longest = 0.0;
             for (const auto &t : step.tracks)
             {
-                const size_t dot = t.target.find('.');
-                const std::string owner = dot == std::string::npos ? std::string() : t.target.substr(0, dot);
+                std::string owner, field;
+                Document::splitTarget(t.target, shapeId, owner, field);
                 const gene::Scope sc = liveScope(owner);
                 const double d = evalNumber(t.durationMs, sc, 0.0) + evalNumber(t.delayMs, sc, 0.0);
                 longest = std::max(longest, d);
@@ -692,9 +705,9 @@ namespace genesis
         return total;
     }
 
-    void Runtime::scrub(const std::string &signal, double t)
+    void Runtime::scrub(const std::string &shapeId, const std::string &signal, double t)
     {
-        const double total = reactionDurationMs(signal);
+        const double total = reactionDurationMs(shapeId, signal);
         if (total <= 0.0) return;
         // Replay from here rather than winding backwards: a Tween is a pure function of
         // elapsed time from its start, so re-firing and advancing forward is exact.
@@ -711,7 +724,8 @@ namespace genesis
         // straddles a boundary starts the next step late, and every later step inherits the
         // error. Stepping to the boundary makes a scrub agree with playback exactly.
         std::vector<double> stops;
-        for (const auto &cand : mDoc.reactions)
+        const Shape *scrubHost = mDoc.findShape(shapeId);
+        for (const auto &cand : scrubHost ? scrubHost->reactions : std::vector<Reaction>{})
             if (cand.signal == signal)
             {
                 double acc = 0.0;
@@ -720,9 +734,8 @@ namespace genesis
                     double longest = 0.0;
                     for (const auto &tr : step.tracks)
                     {
-                        const size_t dot = tr.target.find('.');
-                        const std::string owner = dot == std::string::npos ? std::string()
-                                                                           : tr.target.substr(0, dot);
+                        std::string owner, field;
+                        Document::splitTarget(tr.target, shapeId, owner, field);
                         const gene::Scope sc = liveScope(owner);
                         longest = std::max(longest, evalNumber(tr.durationMs, sc, 0.0) +
                                                         evalNumber(tr.delayMs, sc, 0.0));
@@ -747,9 +760,9 @@ namespace genesis
         advance(target);
     }
 
-    void Runtime::startReaction(const Reaction &r)
+    void Runtime::startReaction(const std::string &owner, const Reaction &r)
     {
-        ReactionState &st = mReactions[r.signal];
+        ReactionState &st = mReactions[reactionKey(owner, r.signal)];
         if (r.cancel == Cancel::IgnoreIfRunning && st.running)
             return;
         if (r.cancel == Cancel::Queue && st.running)
@@ -759,18 +772,19 @@ namespace genesis
         }
         st.token = ++mSeq;
         st.running = true;
-        playStep(r, 0);
+        playStep(owner, r, 0);
     }
 
-    void Runtime::playStep(const Reaction &r, size_t stepIndex)
+    void Runtime::playStep(const std::string &owner, const Reaction &r, size_t stepIndex)
     {
+        const std::string key = reactionKey(owner, r.signal);
         if (stepIndex >= r.steps.size())
         {
-            mReactions[r.signal].running = false;
+            mReactions[key].running = false;
             return;
         }
         const Step &step = r.steps[stepIndex];
-        ReactionState &st = mReactions[r.signal];
+        ReactionState &st = mReactions[key];
         const int token = st.token;
         const std::string signal = r.signal;
 
@@ -781,16 +795,14 @@ namespace genesis
 
         for (const auto &t : step.tracks)
         {
-            const size_t dot = t.target.find('.');
-            if (dot == std::string::npos) continue;
-            const std::string owner = t.target.substr(0, dot);
-            const std::string field = t.target.substr(dot + 1);
-            artboard::Property *p = propertyFor(owner, field);
+            std::string shapeId, field;
+            Document::splitTarget(t.target, owner, shapeId, field);
+            artboard::Property *p = propertyFor(shapeId, field);
             if (!p) continue;
-            if (ShapeNode *n = node(owner))
+            if (ShapeNode *n = node(shapeId))
                 n->owned[field] = true;   // motion owns this field from now on
 
-            const gene::Scope sc = liveScope(owner);
+            const gene::Scope sc = liveScope(shapeId);
             const double from = t.from.empty() ? p->value() : evalNumber(t.from, sc, p->value());
             const double to = evalNumber(t.to, sc, 0.0);
             const double dur = evalNumber(t.durationMs, sc, 200.0);
@@ -802,26 +814,29 @@ namespace genesis
                 p->animate(spec, mNowMs);   // repeats forever: never completes, never chains
                 continue;
             }
-            p->animate(spec, mNowMs, [this, signal, token, stepIndex] {
-                auto it = mReactions.find(signal);
+            const std::string ownerId = owner;
+            p->animate(spec, mNowMs, [this, key, ownerId, signal, token, stepIndex] {
+                auto it = mReactions.find(key);
                 if (it == mReactions.end() || it->second.token != token)
                     return;   // a newer run of this reaction superseded us
                 if (--it->second.pending > 0)
                     return;
+                const Shape *host = mDoc.findShape(ownerId);
                 const Reaction *rr = nullptr;
-                for (const auto &cand : mDoc.reactions)
-                    if (cand.signal == signal) { rr = &cand; break; }
+                if (host)
+                    for (const auto &cand : host->reactions)
+                        if (cand.signal == signal) { rr = &cand; break; }
                 if (!rr) return;
                 if (stepIndex + 1 < rr->steps.size())
                 {
-                    playStep(*rr, stepIndex + 1);
+                    playStep(ownerId, *rr, stepIndex + 1);
                     return;
                 }
                 it->second.running = false;
                 if (rr->cancel == Cancel::Queue && it->second.queued)
                 {
                     it->second.queued = false;
-                    startReaction(*rr);
+                    startReaction(ownerId, *rr);
                 }
             });
         }

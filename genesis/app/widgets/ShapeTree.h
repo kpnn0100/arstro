@@ -44,6 +44,7 @@ namespace ui
         App &mApp;
         std::vector<Row> mRows;
         std::vector<std::shared_ptr<artboard::Button>> mAdd;
+        std::shared_ptr<artboard::Button> mDuplicate;
         std::shared_ptr<artboard::Button> mDelete;
         RowHover mHover;
         double mNowMs = 0.0;

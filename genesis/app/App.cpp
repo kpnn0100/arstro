@@ -185,8 +185,11 @@ namespace ui
         mDiagnostics = mDoc.validate();
         if (!mDoc.findShape(mSelected))
             mSelected.clear();
-        if (mSelectedReaction >= (int)mDoc.reactions.size())
-            mSelectedReaction = (int)mDoc.reactions.size() - 1;
+        // The selected reaction is an index into the SELECTED OBJECT's list.
+        const Shape *sel = mDoc.findShape(mSelected);
+        const int count = sel ? (int)sel->reactions.size() : 0;
+        if (mSelectedReaction >= count)
+            mSelectedReaction = count - 1;
         if (mCanvas)
         {
             mLastDesignW = mDoc.designW;
@@ -403,8 +406,28 @@ namespace ui
     {
         if (mSelected == id) return;
         mSelected = id;
+        // Reactions belong to the object, so the panel follows the selection — and its index
+        // is into the NEW object's list, so it starts at the top.
+        mSelectedReaction = 0;
         if (mInspector) mInspector->refresh();
+        if (mReactions) mReactions->refresh();
         layout();
+    }
+
+    void App::duplicateSelected()
+    {
+        if (mSelected.empty())
+        {
+            status("Select an object to duplicate", StatusLevel::Warn);
+            return;
+        }
+        const std::string from = mSelected;
+        const std::string copy = mDoc.duplicateShape(from);
+        if (copy.empty())
+            return;
+        documentChanged();
+        selectShape(copy);
+        status("Duplicated " + from + " as " + copy, StatusLevel::Good);
     }
 
     void App::selectReaction(int index)

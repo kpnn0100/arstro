@@ -72,6 +72,13 @@ namespace ui
             addChild(b);
             mAdd.push_back(b);
         }
+        App *app_ = &mApp;
+        mDuplicate = std::make_shared<artboard::Button>("Duplicate", theme().button);
+        mDuplicate->height.set(kAddH);
+        mDuplicate->focusable = true;
+        mDuplicate->onClick = [app_] { app_->duplicateSelected(); };
+        addChild(mDuplicate);
+
         mDelete = std::make_shared<artboard::Button>("Delete", theme().button);
         mDelete->height.set(kAddH);
         mDelete->focusable = true;
@@ -132,9 +139,12 @@ namespace ui
             mAdd[(size_t)i]->y.set(addTop + (i / 2) * (kAddH + 6.0));
             mAdd[(size_t)i]->width.set(cell);
         }
-        mDelete->x.set(pad);
+        mDuplicate->x.set(pad);
+        mDuplicate->y.set(addTop - kAddH - 10.0);
+        mDuplicate->width.set(cell);
+        mDelete->x.set(pad + cell + 6.0);
         mDelete->y.set(addTop - kAddH - 10.0);
-        mDelete->width.set(innerW);
+        mDelete->width.set(cell);
     }
 
     int ShapeTree::rowAt(double localY) const

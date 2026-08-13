@@ -63,7 +63,24 @@ emitter, the runtime and the validator all read it, so a new field is one row.
 `Shape::effectiveField` returns the authored expression or the table default, so an unset
 field is not a special case anywhere downstream.
 
-### 3.2 `removeShape`
+### 3.2 Reactions and duplication
+
+`Reaction` lives on `Shape`. `splitTarget(target, owner, shape, field)` is the one place a
+target is resolved: no dot means the owning object, a dot names another. `allReactions()`
+flattens `(shape, reaction)` pairs in document order — what the emitter and the runtime
+iterate, because a signal can be handled by several objects at once.
+
+Both consumers therefore key reaction state by **(object, signal)**: the emitter's generated
+names carry the owner (`mTokRingLoopStart`, `playRingLoopStartStep0`) and its `startReactions`
+emits one block per handling object inside a single hook; the runtime keys `mReactions` by
+`shape\x1fsignal`. Neither has a notion of "the reaction for this signal" any more.
+
+`duplicateShape` names every copy first, so remapping can see the whole mapping, then rewrites
+parent links and any target that lands inside the subtree. A target pointing outside is
+deliberately left alone: the copy should still drive whatever external object the original
+drove.
+
+### 3.2b `removeShape`
 
 Collects the shape and every descendant, drops them, then drops any track targeting one of
 them and any step left empty — an orphaned track would emit code referring to a deleted

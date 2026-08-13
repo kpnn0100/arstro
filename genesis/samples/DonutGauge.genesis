@@ -1,29 +1,96 @@
 {
   "genesis": 1,
-  // A ring gauge: arcInner hollows the centre, so the sector is a ring segment rather than a
-  // pie, and the sweep follows the base's own smoothed value.
-  "component": { "name": "DonutGauge", "base": "ProgressIndicator", "namespace": "app", "designSize": [96, 96] },
+  "component": {
+    "name": "DonutGauge",
+    "base": "ProgressIndicator",
+    "namespace": "app",
+    "designSize": [
+      96,
+      96
+    ]
+  },
   "params": [
-    { "name": "accent", "type": "color", "default": "theme.accent" },
-    { "name": "thickness", "type": "number", "default": "0.24", "range": [0.05, 0.6] }
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "theme.accent"
+    },
+    {
+      "name": "thickness",
+      "type": "number",
+      "default": "0.24",
+      "range": [
+        0.05,
+        0.6
+      ]
+    }
   ],
   "shapes": [
-    { "id": "track", "type": "circle",
-      "bind": { "w": "minSide", "h": "minSide", "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
-                "fill": "fade(accent, 0.15)", "arcInner": "1 - thickness" } },
-    { "id": "fill", "type": "circle",
-      "bind": { "w": "minSide", "h": "minSide", "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
-                "fill": "accent",
-                "arcInner": "1 - thickness",
-                "arcStart": "-90",
-                "arcEnd": "-90 + 360 * base.display" },
-      "animated": ["scaleX", "scaleY"] }
-  ],
-  "reactions": [
-    { "on": "complete", "cancel": "restart", "steps": [
-        [ { "target": "fill.scaleX", "to": "1.08", "ms": 140, "easing": "EaseOutBack" },
-          { "target": "fill.scaleY", "to": "1.08", "ms": 140, "easing": "EaseOutBack" } ],
-        [ { "target": "fill.scaleX", "to": "1", "ms": 220, "easing": "EaseOutCubic" },
-          { "target": "fill.scaleY", "to": "1", "ms": 220, "easing": "EaseOutCubic" } ] ] }
+    {
+      "id": "track",
+      "type": "circle",
+      "bind": {
+        "w": "minSide",
+        "h": "minSide",
+        "x": "(w - self.w) / 2",
+        "y": "(h - self.h) / 2",
+        "fill": "fade(accent, 0.15)",
+        "arcInner": "1 - thickness"
+      }
+    },
+    {
+      "id": "fill",
+      "type": "circle",
+      "bind": {
+        "w": "minSide",
+        "h": "minSide",
+        "x": "(w - self.w) / 2",
+        "y": "(h - self.h) / 2",
+        "fill": "accent",
+        "arcInner": "1 - thickness",
+        "arcStart": "-90",
+        "arcEnd": "-90 + 360 * base.display"
+      },
+      "animated": [
+        "scaleX",
+        "scaleY"
+      ],
+      "reactions": [
+        {
+          "on": "complete",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "fill.scaleX",
+                "to": "1.08",
+                "ms": "140",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "fill.scaleY",
+                "to": "1.08",
+                "ms": "140",
+                "easing": "EaseOutBack"
+              }
+            ],
+            [
+              {
+                "target": "fill.scaleX",
+                "to": "1",
+                "ms": "220",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "fill.scaleY",
+                "to": "1",
+                "ms": "220",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
+      ]
+    }
   ]
 }

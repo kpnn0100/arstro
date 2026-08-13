@@ -41,46 +41,46 @@
       "animated": [
         "opacity",
         "rotation"
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "loopStart",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "ring.opacity",
-            "to": "1",
-            "ms": "300",
-            "easing": "EaseOutCubic"
-          }
-        ],
-        [
-          {
-            "target": "ring.rotation",
-            "from": "0",
-            "to": "turns(1)",
-            "ms": "1200",
-            "easing": "Linear",
-            "repeat": -1
-          }
-        ]
-      ]
-    },
-    {
-      "on": "loopEnd",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "ring.opacity",
-            "to": "0",
-            "ms": "300",
-            "easing": "EaseInCubic"
-          }
-        ]
+      ],
+      "reactions": [
+        {
+          "on": "loopStart",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "ring.opacity",
+                "to": "1",
+                "ms": "300",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "ring.rotation",
+                "from": "0",
+                "to": "turns(1)",
+                "ms": "1200",
+                "easing": "Linear",
+                "repeat": -1
+              }
+            ]
+          ]
+        },
+        {
+          "on": "loopEnd",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "ring.opacity",
+                "to": "0",
+                "ms": "300",
+                "easing": "EaseInCubic"
+              }
+            ]
+          ]
+        }
       ]
     }
   ]

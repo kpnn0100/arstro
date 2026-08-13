@@ -38,6 +38,36 @@
       "animated": [
         "scaleX",
         "scaleY"
+      ],
+      "reactions": [
+        {
+          "on": "checkedChanged",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "box.scaleX",
+                "from": "0.86",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "box.scaleY",
+                "from": "0.86",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "tick.opacity",
+                "to": "base.checked",
+                "ms": "140",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
       ]
     },
     {
@@ -71,36 +101,6 @@
           "L",
           "self.w * 0.76",
           "self.h * 0.32"
-        ]
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "checkedChanged",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "box.scaleX",
-            "from": "0.86",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "box.scaleY",
-            "from": "0.86",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "tick.opacity",
-            "to": "base.checked",
-            "ms": "140",
-            "easing": "EaseOutCubic"
-          }
         ]
       ]
     }

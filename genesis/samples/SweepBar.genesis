@@ -48,31 +48,31 @@
       },
       "animated": [
         "scaleY"
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "complete",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "fill.scaleY",
-            "from": "1",
-            "to": "1.6",
-            "ms": "140",
-            "easing": "EaseOutBack"
-          }
-        ],
-        [
-          {
-            "target": "fill.scaleY",
-            "to": "1",
-            "ms": "220",
-            "easing": "EaseOutCubic"
-          }
-        ]
+      ],
+      "reactions": [
+        {
+          "on": "complete",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "fill.scaleY",
+                "from": "1",
+                "to": "1.6",
+                "ms": "140",
+                "easing": "EaseOutBack"
+              }
+            ],
+            [
+              {
+                "target": "fill.scaleY",
+                "to": "1",
+                "ms": "220",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
       ]
     }
   ]

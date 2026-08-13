@@ -29,8 +29,13 @@ target) because it *is* Artboard code.
    from.
 4. **Signal** — something the base tells you happened: `loopStart`, `pressDown`,
    `valueChanged`, `checkedChanged`.
-5. **Reaction** — *when* `<signal>`, *animate* `<field>` *to* `<expr>* over* `<ms>` with
+5. **Reaction** — *when* `<signal>`, *animate* `<field>` *to* `<expr>` over `<ms>` with
    `<easing>` — chained with steps, so "then" is literally the previous step's completion.
+
+Reactions belong to the **object**: select one and the panel shows its reactions and nothing
+else, so a track just names a field (`opacity`). A signal is still a component-level event, so
+several objects can react to the same one and all of them run. Need to reach a sibling? Qualify
+the target — `halo.opacity`.
 
 There is no global timeline. A UI component is not a movie; it is a set of responses to
 events that interrupt each other. The event graph is the source of truth, and the scrubber
@@ -168,6 +173,8 @@ remove a word.
 - **Reactions** — per track: `target`, `from` (blank = wherever it is now), `to`, `ms`,
   `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a delete.
   The scrubber replays the selected reaction to any point in its own timeline.
+- **Duplicate** (or `Ctrl+D`) copies an object and its children as `<id>_copy` — with its
+  reactions, so the copy animates itself rather than sharing the original's motion.
 - Every edit is undoable; rapid typing collapses into one undo step.
 
 ## Building

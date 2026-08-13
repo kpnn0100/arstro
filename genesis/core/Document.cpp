@@ -208,6 +208,77 @@ namespace genesis
         return stem + "_x";
     }
 
+    void Document::splitTarget(const std::string &target, const std::string &owner,
+                               std::string &shape, std::string &field)
+    {
+        const size_t dot = target.find('.');
+        if (dot == std::string::npos)
+        {
+            shape = owner;      // a bare field belongs to the reaction's own object
+            field = target;
+            return;
+        }
+        shape = target.substr(0, dot);
+        field = target.substr(dot + 1);
+    }
+
+    std::vector<std::pair<const Shape *, const Reaction *>> Document::allReactions() const
+    {
+        std::vector<std::pair<const Shape *, const Reaction *>> out;
+        for (const auto &s : shapes)
+            for (const auto &r : s.reactions)
+                out.emplace_back(&s, &r);
+        return out;
+    }
+
+    std::string Document::duplicateShape(const std::string &id)
+    {
+        const Shape *root = findShape(id);
+        if (!root)
+            return {};
+
+        // The subtree, parents before children (document order already guarantees that).
+        std::vector<std::string> subtree{id};
+        for (size_t i = 0; i < subtree.size(); ++i)
+            for (const auto &s : shapes)
+                if (s.parent == subtree[i] &&
+                    std::find(subtree.begin(), subtree.end(), s.id) == subtree.end())
+                    subtree.push_back(s.id);
+
+        // Name every copy first, so remapping can see the whole mapping.
+        std::map<std::string, std::string> renamed;
+        for (const auto &old : subtree)
+            renamed[old] = uniqueShapeId(old + "_copy");
+
+        std::vector<Shape> copies;
+        for (const auto &old : subtree)
+        {
+            Shape c = *findShape(old);
+            c.id = renamed[old];
+            auto p = renamed.find(c.parent);
+            if (p != renamed.end())
+                c.parent = p->second;     // an inner link follows the copy
+            // Remap every target INSIDE the subtree; one pointing outside is left alone, so a
+            // copy still drives whatever external object the original drove.
+            for (auto &r : c.reactions)
+                for (auto &step : r.steps)
+                    for (auto &t : step.tracks)
+                    {
+                        std::string shape, field;
+                        splitTarget(t.target, old, shape, field);
+                        auto m = renamed.find(shape);
+                        if (m == renamed.end())
+                            continue;
+                        t.target = t.target.find('.') == std::string::npos ? field
+                                                                          : m->second + "." + field;
+                    }
+            copies.push_back(std::move(c));
+        }
+        for (auto &c : copies)
+            shapes.push_back(std::move(c));
+        return renamed[id];
+    }
+
     std::string Document::addShape(Shape s)
     {
         s.id = uniqueShapeId(s.id.empty() ? shapeKindName(s.kind) : s.id);
@@ -231,19 +302,25 @@ namespace genesis
                      }),
                      shapes.end());
 
-        for (auto &r : reactions)
-        {
-            for (auto &step : r.steps)
-                step.tracks.erase(std::remove_if(step.tracks.begin(), step.tracks.end(), [&](const Track &t) {
-                                      const size_t dot = t.target.find('.');
-                                      const std::string owner = dot == std::string::npos ? t.target : t.target.substr(0, dot);
-                                      return std::find(doomed.begin(), doomed.end(), owner) != doomed.end();
-                                  }),
-                                  step.tracks.end());
-            r.steps.erase(std::remove_if(r.steps.begin(), r.steps.end(),
-                                         [](const Step &s) { return s.tracks.empty(); }),
-                          r.steps.end());
-        }
+        // A track pointing at a shape that no longer exists would emit code referring to a
+        // deleted member, so surviving objects drop those tracks (and any step left empty).
+        for (auto &owner : shapes)
+            for (auto &r : owner.reactions)
+            {
+                for (auto &step : r.steps)
+                    step.tracks.erase(
+                        std::remove_if(step.tracks.begin(), step.tracks.end(),
+                                       [&](const Track &t) {
+                                           std::string shape, field;
+                                           splitTarget(t.target, owner.id, shape, field);
+                                           return std::find(doomed.begin(), doomed.end(), shape) !=
+                                                  doomed.end();
+                                       }),
+                        step.tracks.end());
+                r.steps.erase(std::remove_if(r.steps.begin(), r.steps.end(),
+                                             [](const Step &s) { return s.tracks.empty(); }),
+                              r.steps.end());
+            }
     }
 
     // ───────────────────────── persistence ─────────────────────────
@@ -266,6 +343,88 @@ namespace genesis
             if (s == "color") { out = ParamType::Color; return true; }
             if (s == "text") { out = ParamType::Text; return true; }
             return false;
+        }
+    }
+
+    namespace
+    {
+        Json reactionsToJson(const std::vector<Reaction> &reactions)
+        {
+            Json rs = Json::array();
+            for (const auto &r : reactions)
+            {
+                Json j = Json::object();
+                j.set("on", Json::string(r.signal));
+                j.set("cancel", Json::string(cancelName(r.cancel)));
+                Json steps = Json::array();
+                for (const auto &st : r.steps)
+                {
+                    Json tracks = Json::array();
+                    for (const auto &t : st.tracks)
+                    {
+                        Json tj = Json::object();
+                        tj.set("target", Json::string(t.target));
+                        if (!t.from.empty())
+                            tj.set("from", Json::string(t.from));
+                        tj.set("to", Json::string(t.to));
+                        tj.set("ms", Json::string(t.durationMs));
+                        if (t.delayMs != "0" && !t.delayMs.empty())
+                            tj.set("delayMs", Json::string(t.delayMs));
+                        tj.set("easing", Json::string(t.easing));
+                        if (t.repeat != 0)
+                            tj.set("repeat", Json::number(t.repeat));
+                        if (t.yoyo)
+                            tj.set("yoyo", Json::boolean(true));
+                        tracks.push(tj);
+                    }
+                    steps.push(tracks);
+                }
+                j.set("steps", steps);
+                rs.push(j);
+            }
+            return rs;
+        }
+
+        std::vector<Reaction> reactionsFromJson(const Json &rs, std::string *error)
+        {
+            std::vector<Reaction> out;
+            for (int i = 0; i < rs.size(); ++i)
+            {
+                const Json &rj = rs.at(i);
+                Reaction r;
+                r.signal = rj["on"].asString("");
+                if (rj.has("cancel") && !parseCancel(rj["cancel"].asString("restart"), r.cancel))
+                    if (error && error->empty())
+                        *error = "reaction \"" + r.signal + "\": unknown cancel policy";
+                const Json &steps = rj["steps"];
+                for (int k = 0; k < steps.size(); ++k)
+                {
+                    Step st;
+                    const Json &tracks = steps.at(k);
+                    for (int m = 0; m < tracks.size(); ++m)
+                    {
+                        const Json &tj = tracks.at(m);
+                        Track t;
+                        t.target = tj["target"].asString("");
+                        t.from = tj["from"].asString("");
+                        t.to = tj["to"].asString("0");
+                        // `ms` may be written as a number for convenience; it is stored as an
+                        // expression so a `speed` param can re-time the whole component.
+                        t.durationMs = tj["ms"].isNumber() ? Json::number(tj["ms"].asNumber()).dump()
+                                                           : tj["ms"].asString("200");
+                        t.delayMs = tj["delayMs"].isNumber()
+                                        ? Json::number(tj["delayMs"].asNumber()).dump()
+                                        : tj["delayMs"].asString("0");
+                        t.easing = tj["easing"].asString("EaseOutCubic");
+                        t.repeat = (int)tj["repeat"].asNumber(0);
+                        t.yoyo = tj["yoyo"].asBool(false);
+                        st.tracks.push_back(t);
+                    }
+                    r.steps.push_back(std::move(st));
+                }
+                out.push_back(std::move(r));
+            }
+            return out;
         }
     }
 
@@ -336,43 +495,12 @@ namespace genesis
             }
             if (s.kind == ShapeKind::Label)
                 j.set("text", Json::string(s.text));
+            if (!s.reactions.empty())
+                j.set("reactions", reactionsToJson(s.reactions));
             ss.push(j);
         }
         root.set("shapes", ss);
 
-        Json rs = Json::array();
-        for (const auto &r : reactions)
-        {
-            Json j = Json::object();
-            j.set("on", Json::string(r.signal));
-            j.set("cancel", Json::string(cancelName(r.cancel)));
-            Json steps = Json::array();
-            for (const auto &st : r.steps)
-            {
-                Json tracks = Json::array();
-                for (const auto &t : st.tracks)
-                {
-                    Json tj = Json::object();
-                    tj.set("target", Json::string(t.target));
-                    if (!t.from.empty())
-                        tj.set("from", Json::string(t.from));
-                    tj.set("to", Json::string(t.to));
-                    tj.set("ms", Json::string(t.durationMs));
-                    if (t.delayMs != "0" && !t.delayMs.empty())
-                        tj.set("delayMs", Json::string(t.delayMs));
-                    tj.set("easing", Json::string(t.easing));
-                    if (t.repeat != 0)
-                        tj.set("repeat", Json::number(t.repeat));
-                    if (t.yoyo)
-                        tj.set("yoyo", Json::boolean(true));
-                    tracks.push(tj);
-                }
-                steps.push(tracks);
-            }
-            j.set("steps", steps);
-            rs.push(j);
-        }
-        root.set("reactions", rs);
         return root;
     }
 
@@ -452,42 +580,35 @@ namespace genesis
                 s.path.push_back(c);
             }
             s.text = sj["text"].asString("");
+            s.reactions = reactionsFromJson(sj["reactions"], error);
             d.shapes.push_back(std::move(s));
         }
 
-        const Json &rs = j["reactions"];
-        for (int i = 0; i < rs.size(); ++i)
+        // Reactions live inside their shape. A document written before that still has them at
+        // the top level with fully-qualified targets, so migrate: each reaction goes to the
+        // object its first track drives, which is the object it was always about.
+        const Json &legacy = j["reactions"];
+        if (legacy.size() > 0)
         {
-            const Json &rj = rs.at(i);
-            Reaction r;
-            r.signal = rj["on"].asString("");
-            if (rj.has("cancel") && !parseCancel(rj["cancel"].asString("restart"), r.cancel))
-                fail("reaction \"" + r.signal + "\": unknown cancel policy");
-            const Json &steps = rj["steps"];
-            for (int k = 0; k < steps.size(); ++k)
+            for (auto &r : reactionsFromJson(legacy, error))
             {
-                Step st;
-                const Json &tracks = steps.at(k);
-                for (int m = 0; m < tracks.size(); ++m)
-                {
-                    const Json &tj = tracks.at(m);
-                    Track t;
-                    t.target = tj["target"].asString("");
-                    t.from = tj["from"].asString("");
-                    t.to = tj["to"].asString("0");
-                    // `ms` may be written as a number for convenience; it is stored as an
-                    // expression so a `speed` param can re-time the whole component.
-                    t.durationMs = tj["ms"].isNumber() ? Json::number(tj["ms"].asNumber()).dump() : tj["ms"].asString("200");
-                    t.delayMs = tj["delayMs"].isNumber() ? Json::number(tj["delayMs"].asNumber()).dump() : tj["delayMs"].asString("0");
-                    t.easing = tj["easing"].asString("EaseOutCubic");
-                    t.repeat = (int)tj["repeat"].asNumber(0);
-                    t.yoyo = tj["yoyo"].asBool(false);
-                    st.tracks.push_back(t);
-                }
-                r.steps.push_back(std::move(st));
+                std::string owner;
+                for (const auto &st : r.steps)
+                    for (const auto &t : st.tracks)
+                        if (owner.empty())
+                        {
+                            std::string shape, field;
+                            splitTarget(t.target, std::string(), shape, field);
+                            owner = shape;
+                        }
+                Shape *host = owner.empty() ? nullptr : d.findShape(owner);
+                if (!host && !d.shapes.empty())
+                    host = &d.shapes.front();
+                if (host)
+                    host->reactions.push_back(std::move(r));
             }
-            d.reactions.push_back(std::move(r));
         }
+
         return d;
     }
 
@@ -745,69 +866,75 @@ namespace genesis
         }
 
         std::set<std::string> handled;
-        for (const auto &r : reactions)
-        {
-            const std::string where = "reaction " + (r.signal.empty() ? "<none>" : r.signal);
-            handled.insert(r.signal);
-            if (b)
+        for (const auto &owner : shapes)
+            for (const auto &r : owner.reactions)
             {
-                bool known = false;
-                for (const auto &sd : b->signals)
-                    if (sd.name == r.signal) { known = true; break; }
-                if (!known)
-                    out.push_back({Diagnostic::Severity::Error, where,
-                                   "'" + base + "' has no signal '" + r.signal + "'"});
-            }
-            if (r.steps.empty())
-                out.push_back({Diagnostic::Severity::Warning, where, "reaction has no steps: it does nothing"});
-            for (size_t si = 0; si < r.steps.size(); ++si)
-            {
-                const std::string sw = where + " step " + std::to_string(si + 1);
-                if (r.steps[si].tracks.empty())
-                    out.push_back({Diagnostic::Severity::Warning, sw, "step has no tracks"});
-                for (const auto &t : r.steps[si].tracks)
+                const std::string where =
+                    owner.id + " / " + (r.signal.empty() ? "<no signal>" : r.signal);
+                handled.insert(r.signal);
+                if (b)
                 {
-                    const size_t dot = t.target.find('.');
-                    if (dot == std::string::npos)
+                    bool known = false;
+                    for (const auto &sd : b->signals)
+                        if (sd.name == r.signal) known = true;
+                    if (!known)
+                        out.push_back({Diagnostic::Severity::Error, where,
+                                       "'" + base + "' has no signal '" + r.signal + "'"});
+                }
+                if (r.steps.empty())
+                    out.push_back({Diagnostic::Severity::Warning, where,
+                                   "reaction has no steps: it does nothing"});
+                for (size_t si = 0; si < r.steps.size(); ++si)
+                {
+                    const std::string sw = where + " step " + std::to_string(si + 1);
+                    if (r.steps[si].tracks.empty())
+                        out.push_back({Diagnostic::Severity::Warning, sw, "step has no tracks"});
+                    for (const auto &t : r.steps[si].tracks)
                     {
-                        out.push_back({Diagnostic::Severity::Error, sw,
-                                       "target '" + t.target + "' must be <shape>.<field>"});
-                        continue;
+                        // A bare field targets the owning object; a qualified one may reach
+                        // a sibling.
+                        std::string shapeId, field;
+                        splitTarget(t.target, owner.id, shapeId, field);
+                        if (field.empty())
+                        {
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "track has no target field"});
+                            continue;
+                        }
+                        const Shape *s = findShape(shapeId);
+                        if (!s)
+                        {
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "unknown shape '" + shapeId + "'"});
+                            continue;
+                        }
+                        const FieldDef *fd = findField(field);
+                        if (!fd || !fd->animatable)
+                        {
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "'" + t.target + "' is not an animatable field"});
+                            continue;
+                        }
+                        if (fd->type != FieldType::Number)
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "'" + t.target + "' is a colour; only numbers animate"});
+                        if (!s->isAnimated(field))
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "'" + t.target + "' must be marked animated on " + s->id});
+                        if (!isEasingName(t.easing))
+                            out.push_back({Diagnostic::Severity::Error, sw,
+                                           "unknown easing '" + t.easing + "'"});
+                        NameChecker tnc{*this, b, shapeId};
+                        checkExpr(t.to, sw + " to", FieldType::Number, tnc, out);
+                        if (!t.from.empty())
+                            checkExpr(t.from, sw + " from", FieldType::Number, tnc, out);
+                        checkExpr(t.durationMs, sw + " duration", FieldType::Number, tnc, out);
+                        checkExpr(t.delayMs, sw + " delay", FieldType::Number, tnc, out);
+                        if (t.repeat < -1)
+                            out.push_back({Diagnostic::Severity::Error, sw, "repeat must be >= -1"});
                     }
-                    const std::string owner = t.target.substr(0, dot);
-                    const std::string field = t.target.substr(dot + 1);
-                    const Shape *s = findShape(owner);
-                    if (!s)
-                    {
-                        out.push_back({Diagnostic::Severity::Error, sw, "unknown shape '" + owner + "'"});
-                        continue;
-                    }
-                    const FieldDef *fd = findField(field);
-                    if (!fd || !fd->animatable)
-                    {
-                        out.push_back({Diagnostic::Severity::Error, sw,
-                                       "'" + t.target + "' is not an animatable field"});
-                        continue;
-                    }
-                    if (fd->type != FieldType::Number)
-                        out.push_back({Diagnostic::Severity::Error, sw,
-                                       "'" + t.target + "' is a colour; only numbers animate"});
-                    if (!s->isAnimated(field))
-                        out.push_back({Diagnostic::Severity::Error, sw,
-                                       "'" + t.target + "' must be marked animated on the shape"});
-                    if (!isEasingName(t.easing))
-                        out.push_back({Diagnostic::Severity::Error, sw, "unknown easing '" + t.easing + "'"});
-                    NameChecker tnc{*this, b, owner};
-                    checkExpr(t.to, sw + " to", FieldType::Number, tnc, out);
-                    if (!t.from.empty())
-                        checkExpr(t.from, sw + " from", FieldType::Number, tnc, out);
-                    checkExpr(t.durationMs, sw + " duration", FieldType::Number, tnc, out);
-                    checkExpr(t.delayMs, sw + " delay", FieldType::Number, tnc, out);
-                    if (t.repeat < -1)
-                        out.push_back({Diagnostic::Severity::Error, sw, "repeat must be >= -1"});
                 }
             }
-        }
 
         if (shapes.empty())
             out.push_back({Diagnostic::Severity::Warning, "shapes", "the component draws nothing"});
@@ -915,10 +1042,10 @@ namespace genesis
             d.shapes.push_back(fill);
 
             Step pop;
-            pop.tracks.push_back(track("fill.scaleY", "1", "1.6", "140", "EaseOutBack"));
+            pop.tracks.push_back(track("scaleY", "1", "1.6", "140", "EaseOutBack"));
             Step settle;
-            settle.tracks.push_back(track("fill.scaleY", "", "1", "220", "EaseOutCubic"));
-            d.reactions.push_back(reaction("complete", {pop, settle}));
+            settle.tracks.push_back(track("scaleY", "", "1", "220", "EaseOutCubic"));
+            d.shapes.back().reactions.push_back(reaction("complete", {pop, settle}));
             return d;
         }
 
@@ -958,17 +1085,17 @@ namespace genesis
             d.shapes.push_back(wash);
 
             Step press;
-            press.tracks.push_back(track("body.scaleX", "", "0.96", "90", "EaseOutCubic"));
-            press.tracks.push_back(track("body.scaleY", "", "0.96", "90", "EaseOutCubic"));
+            press.tracks.push_back(track("scaleX", "", "0.96", "90", "EaseOutCubic"));
+            press.tracks.push_back(track("scaleY", "", "0.96", "90", "EaseOutCubic"));
             press.tracks.push_back(track("wash.opacity", "0", "1", "90", "EaseOutCubic"));
-            d.reactions.push_back(reaction("pressDown", {press}));
+            d.findShape("body")->reactions.push_back(reaction("pressDown", {press}));
 
             Step release;
-            release.tracks.push_back(track("body.scaleX", "", "1", "180", "EaseOutBack"));
-            release.tracks.push_back(track("body.scaleY", "", "1", "180", "EaseOutBack"));
+            release.tracks.push_back(track("scaleX", "", "1", "180", "EaseOutBack"));
+            release.tracks.push_back(track("scaleY", "", "1", "180", "EaseOutBack"));
             release.tracks.push_back(track("wash.opacity", "", "0", "180", "EaseOutCubic"));
-            d.reactions.push_back(reaction("release", {release}));
-            d.reactions.push_back(reaction("cancel", {release}));
+            d.findShape("body")->reactions.push_back(reaction("release", {release}));
+            d.findShape("body")->reactions.push_back(reaction("cancel", {release}));
             return d;
         }
 
@@ -1015,14 +1142,14 @@ namespace genesis
             d.shapes.push_back(thumb);
 
             Step grab;
-            grab.tracks.push_back(track("thumb.scaleX", "", "1.35", "120", "EaseOutBack"));
-            grab.tracks.push_back(track("thumb.scaleY", "", "1.35", "120", "EaseOutBack"));
-            d.reactions.push_back(reaction("dragStart", {grab}));
+            grab.tracks.push_back(track("scaleX", "", "1.35", "120", "EaseOutBack"));
+            grab.tracks.push_back(track("scaleY", "", "1.35", "120", "EaseOutBack"));
+            d.findShape("thumb")->reactions.push_back(reaction("dragStart", {grab}));
 
             Step let;
-            let.tracks.push_back(track("thumb.scaleX", "", "1", "160", "EaseOutCubic"));
-            let.tracks.push_back(track("thumb.scaleY", "", "1", "160", "EaseOutCubic"));
-            d.reactions.push_back(reaction("dragEnd", {let}));
+            let.tracks.push_back(track("scaleX", "", "1", "160", "EaseOutCubic"));
+            let.tracks.push_back(track("scaleY", "", "1", "160", "EaseOutCubic"));
+            d.findShape("thumb")->reactions.push_back(reaction("dragEnd", {let}));
             return d;
         }
 
@@ -1065,10 +1192,10 @@ namespace genesis
             d.shapes.push_back(tick);
 
             Step check;
-            check.tracks.push_back(track("box.scaleX", "0.86", "1", "180", "EaseOutBack"));
-            check.tracks.push_back(track("box.scaleY", "0.86", "1", "180", "EaseOutBack"));
+            check.tracks.push_back(track("scaleX", "0.86", "1", "180", "EaseOutBack"));
+            check.tracks.push_back(track("scaleY", "0.86", "1", "180", "EaseOutBack"));
             check.tracks.push_back(track("tick.opacity", "", "base.checked", "140", "EaseOutCubic"));
-            d.reactions.push_back(reaction("checkedChanged", {check}));
+            d.findShape("box")->reactions.push_back(reaction("checkedChanged", {check}));
             return d;
         }
 
@@ -1093,14 +1220,14 @@ namespace genesis
         d.shapes.push_back(ring);
 
         Step fade;
-        fade.tracks.push_back(track("ring.opacity", "", "1", "300", "EaseOutCubic"));
+        fade.tracks.push_back(track("opacity", "", "1", "300", "EaseOutCubic"));
         Step spin;
-        spin.tracks.push_back(track("ring.rotation", "0", "turns(1)", "1200", "Linear", -1));
-        d.reactions.push_back(reaction("loopStart", {fade, spin}));
+        spin.tracks.push_back(track("rotation", "0", "turns(1)", "1200", "Linear", -1));
+        d.shapes.back().reactions.push_back(reaction("loopStart", {fade, spin}));
 
         Step out;
-        out.tracks.push_back(track("ring.opacity", "", "0", "300", "EaseInCubic"));
-        d.reactions.push_back(reaction("loopEnd", {out}));
+        out.tracks.push_back(track("opacity", "", "0", "300", "EaseInCubic"));
+        d.shapes.back().reactions.push_back(reaction("loopEnd", {out}));
         return d;
     }
 }

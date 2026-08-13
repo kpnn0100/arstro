@@ -63,7 +63,13 @@ namespace ui
             addChild(b);
             return b;
         };
-        mAddReaction = mkButton("+ Reaction", [a] {
+        mAddReaction = mkButton("+ Reaction", [a, this] {
+            Shape *host = owner();
+            if (!host)
+            {
+                a->status("Select an object to give it a reaction", StatusLevel::Warn);
+                return;
+            }
             const BaseDef *base = findBase(a->doc().base);
             if (!base) return;
             // Default to the first EXPECTED signal that nothing handles yet — the thing the
@@ -72,22 +78,23 @@ namespace ui
             for (const auto &s : base->signals)
             {
                 bool handled = false;
-                for (const auto &r : a->doc().reactions)
+                for (const auto &r : host->reactions)
                     if (r.signal == s.name) handled = true;
                 if (s.expected && !handled) { want = s.name; break; }
             }
             Reaction r;
             r.signal = want;
-            a->doc().reactions.push_back(r);
-            a->selectReaction((int)a->doc().reactions.size() - 1);
+            host->reactions.push_back(r);
+            a->selectReaction((int)host->reactions.size() - 1);
             a->documentChanged();
         });
-        mDeleteReaction = mkButton("Delete", [a] {
-            auto &rs = a->doc().reactions;
+        mDeleteReaction = mkButton("Delete", [a, this] {
+            Shape *host = owner();
+            if (!host) return;
             const int i = a->selectedReaction();
-            if (i < 0 || i >= (int)rs.size()) return;
-            rs.erase(rs.begin() + i);
-            a->selectReaction(std::min(i, (int)rs.size() - 1));
+            if (i < 0 || i >= (int)host->reactions.size()) return;
+            host->reactions.erase(host->reactions.begin() + i);
+            a->selectReaction(std::min(i, (int)host->reactions.size() - 1));
             a->documentChanged();
         });
         mAddStep = mkButton("+ Step", [a, this] {
@@ -102,10 +109,12 @@ namespace ui
             if (!r) return;
             if (r->steps.empty()) r->steps.push_back(Step{});
             Track t;
-            // Prefill with a target that is already legal, so a new track is never born broken.
-            for (const auto &s : a->doc().shapes)
-                if (!s.animated.empty()) { t.target = s.id + "." + s.animated.front(); break; }
-            if (t.target.empty())
+            // Prefill with a field of THIS object, so a new track is never born broken — and
+            // the target is bare, because the owner is the selected object.
+            const Shape *host = owner();
+            if (host && !host->animated.empty())
+                t.target = host->animated.front();
+            else
                 a->status("Mark a field animatable in the inspector first", StatusLevel::Warn);
             r->steps.back().tracks.push_back(t);
             a->documentChanged();
@@ -183,17 +192,30 @@ namespace ui
         return Chip::None;
     }
 
+    /*  The panel is scoped to the SELECTED object: a reaction belongs to a shape, so
+     *  selecting one shows its reactions and nothing else. With the owner implied, a track's
+     *  target is just a field name.
+     */
+    Shape *ReactionsPanel::owner()
+    {
+        return mApp.doc().findShape(mApp.selectedShape());
+    }
+    const Shape *ReactionsPanel::owner() const
+    {
+        return mApp.doc().findShape(mApp.selectedShape());
+    }
+
     Reaction *ReactionsPanel::current()
     {
-        auto &rs = mApp.doc().reactions;
+        Shape *s = owner();
         const int i = mApp.selectedReaction();
-        return (i >= 0 && i < (int)rs.size()) ? &rs[(size_t)i] : nullptr;
+        return (s && i >= 0 && i < (int)s->reactions.size()) ? &s->reactions[(size_t)i] : nullptr;
     }
     const Reaction *ReactionsPanel::current() const
     {
-        const auto &rs = mApp.doc().reactions;
+        const Shape *s = owner();
         const int i = mApp.selectedReaction();
-        return (i >= 0 && i < (int)rs.size()) ? &rs[(size_t)i] : nullptr;
+        return (s && i >= 0 && i < (int)s->reactions.size()) ? &s->reactions[(size_t)i] : nullptr;
     }
 
     void ReactionsPanel::rebuildRows()
@@ -254,8 +276,9 @@ namespace ui
 
     std::string ReactionsPanel::structureKey() const
     {
-        std::string k = "r:" + std::to_string(mApp.selectedReaction()) + "/" +
-                        std::to_string(mApp.doc().reactions.size());
+        std::string k = "o:" + mApp.selectedShape() + " r:" + std::to_string(mApp.selectedReaction());
+        if (const Shape *host = owner())
+            k += "/" + std::to_string(host->reactions.size());
         if (const Reaction *r = current())
             for (const auto &st : r->steps)
                 k += "|" + std::to_string(st.tracks.size());
@@ -448,13 +471,15 @@ namespace ui
         const double listTop = pad + 18.0;
         if (p.x < kListW)
         {
+            const Shape *host = owner();
+            const int count = host ? (int)host->reactions.size() : 0;
             const int i = (int)std::floor((p.y - listTop) / kRowH);
             if (g.type == artboard::Gesture::Type::Move)
             {
-                mHover.setHovered(i >= 0 && i < (int)mApp.doc().reactions.size() ? i : -1);
+                mHover.setHovered(i >= 0 && i < count ? i : -1);
                 return true;
             }
-            if (g.type == artboard::Gesture::Type::Click && i >= 0 && i < (int)mApp.doc().reactions.size())
+            if (g.type == artboard::Gesture::Type::Click && i >= 0 && i < count)
             {
                 mApp.selectReaction(i);
                 return true;
@@ -518,7 +543,8 @@ namespace ui
                 mScrubbing = true;
                 mScrubT = std::min(1.0, std::max(0.0, (p.x - x0) / std::max(1.0, w)));
                 if (const Reaction *r = current())
-                    mApp.runtime().scrub(r->signal, mScrubT);   // replay to that point
+                    if (const Shape *host = owner())
+                        mApp.runtime().scrub(host->id, r->signal, mScrubT);   // replay to that point
                 return true;
             }
             if (g.type == artboard::Gesture::Type::Drop)
@@ -538,9 +564,16 @@ namespace ui
         artboard::drawRoundedRect(t, {0, 0, w, 1}, 0.0, artboard::Paint::filled(palette::border()));
         artboard::drawRoundedRect(t, {kListW, 0, 1, h}, 0.0, artboard::Paint::filled(palette::border()));
 
-        drawSectionTitle(t, "Reactions", pad, pad + 8.0);
+        // The heading names the object, because the panel IS that object's reactions.
+        const Shape *titleHost = owner();
+        drawSectionTitle(t, titleHost ? titleHost->id : std::string("Reactions"), pad, pad + 8.0);
+        if (titleHost)
+            drawFitted(t, "reactions", pad + textWidth(titleHost->id, type::micro(), font::sansSemiBold(), 1.1) + 8.0,
+                       pad + 8.0, kListW - pad * 2.0, type::micro(), palette::mutedForeground(), font::sans());
 
-        const auto &rs = mApp.doc().reactions;
+        const Shape *host = owner();
+        static const std::vector<Reaction> kNone;
+        const auto &rs = host ? host->reactions : kNone;
         const double listTop = pad + 18.0;
         double y = listTop;
         for (int i = 0; i < (int)rs.size(); ++i, y += kRowH)
@@ -555,7 +588,8 @@ namespace ui
                 artboard::drawRoundedRect(t, {4, y, kListW - 8, kRowH - 3}, radius::hairline(),
                                           artboard::Paint::filled(palette::hoverWash(hover)));
             // Only claim a reaction is running when the preview is actually live.
-            const bool running = mApp.previewOk() && mApp.runtime().isRunning(rs[(size_t)i].signal);
+            const bool running = mApp.previewOk() && host &&
+                                 mApp.runtime().isRunning(host->id, rs[(size_t)i].signal);
             if (running)
                 artboard::drawCircle(t, 12.0, y + kRowH * 0.5 - 1.0, 3.0,
                                      artboard::Paint::filled(palette::success()));
@@ -568,12 +602,19 @@ namespace ui
                             kListW - pad - 46.0, centreBaseline(y, kRowH - 3, type::micro()), 46.0,
                             type::micro(), palette::mutedForeground(), font::sans());
         }
-        if (rs.empty())
+        if (!host)
+        {
+            drawFitted(t, "No object selected", pad, listTop + 14.0, kListW - pad * 2.0,
+                       type::small(), palette::mutedForeground(), font::sans());
+            drawFitted(t, "Pick one to see its reactions.", pad, listTop + 30.0, kListW - pad * 2.0,
+                       type::micro(), palette::mutedForeground(), font::sans());
+        }
+        else if (rs.empty())
         {
             drawFitted(t, "No reactions", pad, listTop + 14.0, kListW - pad * 2.0, type::small(),
                        palette::mutedForeground(), font::sans());
-            drawFitted(t, "Add one to make it move.", pad, listTop + 30.0, kListW - pad * 2.0,
-                       type::micro(), palette::mutedForeground(), font::sans());
+            drawFitted(t, "Add one to make " + host->id + " move.", pad, listTop + 30.0,
+                       kListW - pad * 2.0, type::micro(), palette::mutedForeground(), font::sans());
         }
 
         const double rightX = kListW + pad;

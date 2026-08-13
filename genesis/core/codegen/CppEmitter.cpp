@@ -274,8 +274,8 @@ namespace genesis
                             if (n && readsBase(n)) layoutEveryFrame = true;
                         }
 
-                for (const auto &r : doc.reactions)
-                    handlesSignal[r.signal] = true;
+                for (const auto &pair : doc.allReactions())
+                    handlesSignal[pair.second->signal] = true;
             }
 
             static bool readsBase(const gene::NodePtr &n)
@@ -287,11 +287,15 @@ namespace genesis
                 return false;
             }
 
-            const Reaction *reactionFor(const std::string &signal) const
+            /** Every (object, reaction) pair handling `signal` — a signal is a component-level
+             *  event, so they all run. */
+            std::vector<std::pair<const Shape *, const Reaction *>> reactionsFor(
+                const std::string &signal) const
             {
-                for (const auto &r : doc.reactions)
-                    if (r.signal == signal) return &r;
-                return nullptr;
+                std::vector<std::pair<const Shape *, const Reaction *>> out;
+                for (const auto &pair : doc.allReactions())
+                    if (pair.second->signal == signal) out.push_back(pair);
+                return out;
             }
 
             /** The hook a signal overrides, and whether two signals share it. */
@@ -309,14 +313,20 @@ namespace genesis
                 return false;
             }
 
-            std::string reactionFn(const std::string &signal, int step) const
+            /** Several objects may react to one signal, so every generated name carries the
+             *  owning object as well. */
+            static std::string tag(const std::string &shapeId, const std::string &signal)
             {
-                return "play" + upperFirst(ident(signal)) + "Step" + std::to_string(step);
+                return upperFirst(ident(shapeId)) + upperFirst(ident(signal));
             }
-            std::string tokenMember(const std::string &signal) const { return "mTok" + upperFirst(ident(signal)); }
-            std::string pendingMember(const std::string &signal) const { return "mPending" + upperFirst(ident(signal)); }
-            std::string runningMember(const std::string &signal) const { return "mRunning" + upperFirst(ident(signal)); }
-            std::string queuedMember(const std::string &signal) const { return "mQueued" + upperFirst(ident(signal)); }
+            std::string reactionFn(const std::string &shapeId, const std::string &signal, int step) const
+            {
+                return "play" + tag(shapeId, signal) + "Step" + std::to_string(step);
+            }
+            std::string tokenMember(const std::string &sh, const std::string &sg) const { return "mTok" + tag(sh, sg); }
+            std::string pendingMember(const std::string &sh, const std::string &sg) const { return "mPending" + tag(sh, sg); }
+            std::string runningMember(const std::string &sh, const std::string &sg) const { return "mRunning" + tag(sh, sg); }
+            std::string queuedMember(const std::string &sh, const std::string &sg) const { return "mQueued" + tag(sh, sg); }
 
             // ---- header -------------------------------------------------------------
             std::string emitHeader() const
@@ -377,9 +387,10 @@ namespace genesis
                     o << "        void applyStyles();\n";
                 o << "        /** Assign a bound value unless motion owns the field (see the .cpp). */\n";
                 o << "        void bindProp(artboard::Property &p, double v, double ms, bool owned);\n";
-                for (const auto &r : doc.reactions)
-                    for (size_t i = 0; i < r.steps.size(); ++i)
-                        o << "        void " << reactionFn(r.signal, (int)i) << "();\n";
+                for (const auto &pair : doc.allReactions())
+                    for (size_t i = 0; i < pair.second->steps.size(); ++i)
+                        o << "        void " << reactionFn(pair.first->id, pair.second->signal, (int)i)
+                          << "();\n";
 
                 o << "\n";
                 for (const auto &p : doc.params)
@@ -407,15 +418,16 @@ namespace genesis
                 for (const auto &s : doc.shapes)
                     for (const auto &a : s.animated)
                         o << "        bool " << ownFlag(s.id, a) << " = false;\n";
-                for (const auto &r : doc.reactions)
+                for (const auto &pair : doc.allReactions())
                 {
-                    o << "        int " << tokenMember(r.signal) << " = 0;\n";
-                    o << "        int " << pendingMember(r.signal) << " = 0;\n";
-                    o << "        bool " << runningMember(r.signal) << " = false;\n";
-                    if (r.cancel == Cancel::Queue)
-                        o << "        bool " << queuedMember(r.signal) << " = false;\n";
+                    const std::string sh = pair.first->id, sg = pair.second->signal;
+                    o << "        int " << tokenMember(sh, sg) << " = 0;\n";
+                    o << "        int " << pendingMember(sh, sg) << " = 0;\n";
+                    o << "        bool " << runningMember(sh, sg) << " = false;\n";
+                    if (pair.second->cancel == Cancel::Queue)
+                        o << "        bool " << queuedMember(sh, sg) << " = false;\n";
                 }
-                if (!doc.reactions.empty())
+                if (!doc.allReactions().empty())
                     o << "        int mSeq = 0;   // monotonic token: a restarted reaction ignores stale callbacks\n";
                 o << "    };\n}\n";
                 return o.str();
@@ -764,8 +776,10 @@ namespace genesis
             void emitReactions(std::ostringstream &o) const
             {
                 Emitter &self = const_cast<Emitter &>(*this);
-                for (const auto &r : doc.reactions)
+                for (const auto &pair : doc.allReactions())
                 {
+                    const Shape &host = *pair.first;
+                    const Reaction &r = *pair.second;
                     for (size_t si = 0; si < r.steps.size(); ++si)
                     {
                         const Step &step = r.steps[si];
@@ -773,19 +787,19 @@ namespace genesis
                         for (const auto &t : step.tracks)
                             if (t.repeat >= 0) ++finite;
 
-                        o << "    void " << doc.name << "::" << reactionFn(r.signal, (int)si) << "()\n    {\n";
+                        o << "    void " << doc.name << "::" << reactionFn(host.id, r.signal, (int)si)
+                          << "()\n    {\n";
                         o << "        const double w = width.value(), h = height.value();\n";
                         o << "        (void)w; (void)h;\n";
                         if (finite > 0)
                         {
-                            o << "        const int token = " << tokenMember(r.signal) << ";\n";
-                            o << "        " << pendingMember(r.signal) << " = " << finite << ";\n";
+                            o << "        const int token = " << tokenMember(host.id, r.signal) << ";\n";
+                            o << "        " << pendingMember(host.id, r.signal) << " = " << finite << ";\n";
                         }
                         for (const auto &t : step.tracks)
                         {
-                            const size_t dot = t.target.find('.');
-                            const std::string owner = t.target.substr(0, dot);
-                            const std::string field = t.target.substr(dot + 1);
+                            std::string owner, field;
+                            Document::splitTarget(t.target, host.id, owner, field);
                             const Shape *s = doc.findShape(owner);
                             const FieldDef *fd = findField(field);
                             if (!s || !fd) continue;
@@ -793,37 +807,45 @@ namespace genesis
                                                          ? memberOf(owner) + "->" + fd->segmentProperty
                                                          : stylePropOf(owner, field);
                             const gene::CppNames names = liveNames(owner);
-                            const std::string where = "reaction " + r.signal + " " + t.target;
+                            const std::string where = host.id + " " + r.signal + " " + t.target;
                             const std::string from = t.from.empty() ? prop + ".value()"
                                                                     : self.expr(t.from, names, where + " from");
                             const std::string to = self.expr(t.to, names, where + " to");
                             const std::string dur = self.expr(t.durationMs, names, where + " duration");
                             const std::string delay = self.expr(t.delayMs, names, where + " delay");
                             o << "        " << ownFlag(owner, field) << " = true;   // motion now owns "
-                              << t.target << "\n";
+                              << owner << "." << field << "\n";
                             o << "        " << prop << ".animate(\n";
-                            o << "            artboard::Tween(" << from << ", " << to << ", " << dur << ", " << delay
-                              << ",\n                            artboard::Easing::" << t.easing << ", " << t.repeat
-                              << ", " << (t.yoyo ? "true" : "false") << "),\n";
+                            o << "            artboard::Tween(" << from << ", " << to << ", " << dur
+                              << ", " << delay << ",\n                            artboard::Easing::"
+                              << t.easing << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false")
+                              << "),\n";
                             o << "            mNowMs";
                             if (t.repeat >= 0)
                             {
                                 o << ",\n            [this, token] {\n";
-                                o << "                if (token != " << tokenMember(r.signal) << ")\n";
+                                o << "                if (token != " << tokenMember(host.id, r.signal) << ")\n";
                                 o << "                    return;   // a newer run of this reaction superseded us\n";
-                                o << "                if (--" << pendingMember(r.signal) << " > 0)\n                    return;\n";
+                                o << "                if (--" << pendingMember(host.id, r.signal)
+                                  << " > 0)\n                    return;\n";
                                 if (si + 1 < r.steps.size())
-                                    o << "                " << reactionFn(r.signal, (int)si + 1) << "();\n";
+                                    o << "                " << reactionFn(host.id, r.signal, (int)si + 1)
+                                      << "();\n";
                                 else
                                 {
-                                    o << "                " << runningMember(r.signal) << " = false;\n";
+                                    o << "                " << runningMember(host.id, r.signal) << " = false;\n";
                                     if (r.cancel == Cancel::Queue)
                                     {
-                                        o << "                if (" << queuedMember(r.signal) << ")\n                {\n";
-                                        o << "                    " << queuedMember(r.signal) << " = false;\n";
-                                        o << "                    " << tokenMember(r.signal) << " = ++mSeq;\n";
-                                        o << "                    " << runningMember(r.signal) << " = true;\n";
-                                        o << "                    " << reactionFn(r.signal, 0) << "();\n                }\n";
+                                        o << "                if (" << queuedMember(host.id, r.signal)
+                                          << ")\n                {\n";
+                                        o << "                    " << queuedMember(host.id, r.signal)
+                                          << " = false;\n";
+                                        o << "                    " << tokenMember(host.id, r.signal)
+                                          << " = ++mSeq;\n";
+                                        o << "                    " << runningMember(host.id, r.signal)
+                                          << " = true;\n";
+                                        o << "                    " << reactionFn(host.id, r.signal, 0)
+                                          << "();\n                }\n";
                                     }
                                 }
                                 o << "            }";
@@ -833,7 +855,7 @@ namespace genesis
                         if (finite == 0)
                         {
                             o << "        // every track in this step repeats forever: the chain ends here.\n";
-                            o << "        " << runningMember(r.signal) << " = false;\n";
+                            o << "        " << runningMember(host.id, r.signal) << " = false;\n";
                         }
                         o << "    }\n\n";
                     }
@@ -841,25 +863,46 @@ namespace genesis
             }
 
             /** The body that starts a reaction, honouring its cancellation policy. */
-            std::string startReaction(const Reaction &r, const std::string &indent) const
+            /** Start every object that reacts to `signal` — a signal is a component-level
+             *  event, so one hook may set several objects moving. */
+            std::string startReactions(const std::string &signal, const std::string &indent) const
             {
                 std::ostringstream o;
-                if (r.cancel == Cancel::IgnoreIfRunning)
+                for (const auto &pair : reactionsFor(signal))
                 {
-                    o << indent << "if (" << runningMember(r.signal) << ")\n";
-                    o << indent << "    return;   // cancel policy: ignore while running\n";
-                }
-                else if (r.cancel == Cancel::Queue)
-                {
-                    o << indent << "if (" << runningMember(r.signal) << ")\n";
-                    o << indent << "{\n";
-                    o << indent << "    " << queuedMember(r.signal) << " = true;   // cancel policy: run again after\n";
-                    o << indent << "    return;\n";
+                    const std::string sh = pair.first->id;
+                    const Reaction &r = *pair.second;
+                    o << indent << "{   // " << sh << "\n";
+                    const std::string in = indent + "    ";
+                    if (r.cancel == Cancel::IgnoreIfRunning)
+                    {
+                        o << in << "if (!" << runningMember(sh, signal) << ")\n";
+                        o << in << "{   // cancel policy: ignore while running\n";
+                        o << in << "    " << tokenMember(sh, signal) << " = ++mSeq;\n";
+                        o << in << "    " << runningMember(sh, signal) << " = true;\n";
+                        o << in << "    " << reactionFn(sh, signal, 0) << "();\n";
+                        o << in << "}\n";
+                    }
+                    else if (r.cancel == Cancel::Queue)
+                    {
+                        o << in << "if (" << runningMember(sh, signal) << ")\n";
+                        o << in << "    " << queuedMember(sh, signal)
+                          << " = true;   // cancel policy: run again after\n";
+                        o << in << "else\n";
+                        o << in << "{\n";
+                        o << in << "    " << tokenMember(sh, signal) << " = ++mSeq;\n";
+                        o << in << "    " << runningMember(sh, signal) << " = true;\n";
+                        o << in << "    " << reactionFn(sh, signal, 0) << "();\n";
+                        o << in << "}\n";
+                    }
+                    else
+                    {
+                        o << in << tokenMember(sh, signal) << " = ++mSeq;   // supersede any in-flight run\n";
+                        o << in << runningMember(sh, signal) << " = true;\n";
+                        o << in << reactionFn(sh, signal, 0) << "();\n";
+                    }
                     o << indent << "}\n";
                 }
-                o << indent << tokenMember(r.signal) << " = ++mSeq;   // supersede any in-flight run\n";
-                o << indent << runningMember(r.signal) << " = true;\n";
-                o << indent << reactionFn(r.signal, 0) << "();\n";
                 return o.str();
             }
 
@@ -876,29 +919,27 @@ namespace genesis
                     {
                         const std::string onSig = h.name == "onHoverChanged" ? "hoverEnter" : "focusGained";
                         const std::string offSig = h.name == "onHoverChanged" ? "hoverExit" : "focusLost";
-                        const Reaction *on = reactionFor(onSig);
-                        const Reaction *off = reactionFor(offSig);
+                        const bool anyOn = !reactionsFor(onSig).empty();
+                        const bool anyOff = !reactionsFor(offSig).empty();
                         const std::string arg = h.name == "onHoverChanged" ? "hovered" : "focused";
                         o << "        " << base->cppClass << "::" << h.name << "(" << arg << ");\n";
-                        if (on)
+                        if (anyOn)
                         {
                             o << "        if (" << arg << ")\n        {\n";
-                            o << startReaction(*on, "            ");
+                            o << startReactions(onSig, "            ");
                             o << "        }\n";
                         }
-                        if (off)
+                        if (anyOff)
                         {
-                            o << "        " << (on ? "else " : "if (!" + arg + ")\n        ") << (on ? "\n        " : "");
-                            o << "{\n" << startReaction(*off, "            ") << "        }\n";
+                            o << "        " << (anyOn ? "else\n        " : "if (!" + arg + ")\n        ");
+                            o << "{\n" << startReactions(offSig, "            ") << "        }\n";
                         }
                         o << "    }\n\n";
                         continue;
                     }
                     o << "        " << base->cppClass << "::" << h.name << "("
                       << (h.argName.empty() ? std::string() : h.argName) << ");\n";
-                    const Reaction *r = reactionFor(h.signals.front());
-                    if (r)
-                        o << startReaction(*r, "        ");
+                    o << startReactions(h.signals.front(), "        ");
                     o << "    }\n\n";
                 }
             }
@@ -928,21 +969,21 @@ namespace genesis
                         o << "        " << stylePropOf(s.id, fd->name) << ".update(nowMs);\n";
                 if (anyStyleProps() || anyColorMember())
                     o << "        applyStyles();\n";
-                const Reaction *attach = reactionFor("attach");
-                const Reaction *resize = reactionFor("resize");
-                if (attach)
+                const bool anyAttach = !reactionsFor("attach").empty();
+                const bool anyResize = !reactionsFor("resize").empty();
+                if (anyAttach)
                 {
                     o << "        if (!mAttached)\n        {\n";
                     o << "            mAttached = true;\n";
-                    o << startReaction(*attach, "            ");
+                    o << startReactions("attach", "            ");
                     o << "        }\n";
                 }
-                else if (resize)
+                else if (anyResize)
                     o << "        mAttached = true;\n";
-                if (resize)
+                if (anyResize)
                 {
                     o << "        if (resized && mAttached)\n        {\n";
-                    o << startReaction(*resize, "            ");
+                    o << startReactions("resize", "            ");
                     o << "        }\n";
                 }
                 o << "        " << base->cppClass << "::advance(nowMs);\n";

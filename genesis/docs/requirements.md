@@ -98,6 +98,31 @@ snaps (placing a component into a layout is not a change the user should see ani
 binding that reads `base.*` shall be re-evaluated every frame; one that does not shall be
 re-evaluated only when the size changes.
 
+### G-18 Reactions belong to an object
+
+A reaction shall be owned by a **shape**, not by the document. Selecting an object shows that
+object's reactions and nothing else, and the reactions panel names whose they are.
+
+- Because the owner is implied, a track's target is a **bare field name** (`opacity`). A
+  qualified `other.opacity` still reaches a different object, so a reaction can drive its
+  siblings; the two forms differ only in whether a name is given.
+- A signal remains a **component-level event**: several objects may each react to the same
+  one, and they all run. The generated hook for a signal starts every object that handles it,
+  and each keeps its own cancellation state, token and pending count.
+- Renaming an object rewrites only qualified targets; bare ones already mean "my own field"
+  and follow for free.
+- A document written with a top-level reaction list shall still load: each reaction migrates
+  to the object its first track drives, which is the object it was always about.
+
+### G-19 Duplicating an object
+
+`duplicateShape(id)` shall copy an object **and its whole subtree**, naming the copies
+`<id>_copy`, then `<id>_copy2`, `<id>_copy3` — the same numbering ids already use. Parent links
+inside the subtree follow the copies, and so do reaction targets that point inside it; a target
+pointing OUTSIDE is left alone, so a copy still drives whatever external object the original
+drove. The result is independent: it animates itself rather than sharing the original's motion.
+The editor offers it as **Duplicate** beside Delete and as `Ctrl+D`, and selects the copy.
+
 ### G-17 Sector: a circle can be a pie, a ring, or a pac-man
 
 A circle shall carry `arcStart` and `arcEnd` — animatable fields **in degrees**, 0 pointing

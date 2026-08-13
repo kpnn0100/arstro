@@ -59,6 +59,9 @@ namespace ui
             double total() const;
         };
         Columns columns(double panelW) const;
+        /** The selected object — a reaction belongs to a shape, so the panel is scoped to it. */
+        Shape *owner();
+        const Shape *owner() const;
         Reaction *current();
         const Reaction *current() const;
         double maxListScroll() const;

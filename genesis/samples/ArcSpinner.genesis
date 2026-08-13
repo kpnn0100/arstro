@@ -66,55 +66,55 @@
         "rotation",
         "trimEnd",
         "trimOffset"
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "loopStart",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "arc.opacity",
-            "to": "1",
-            "ms": "240",
-            "easing": "EaseOutCubic"
-          }
-        ],
-        [
-          {
-            "target": "arc.rotation",
-            "from": "0",
-            "to": "turns(1)",
-            "ms": "1100",
-            "easing": "Linear",
-            "repeat": -1
-          },
-          {
-            "target": "arc.trimEnd",
-            "from": "0.06",
-            "to": "sweep / 360",
-            "ms": "550",
-            "easing": "EaseInOutCubic",
-            "repeat": -1,
-            "yoyo": true
-          }
-        ]
-      ]
-    },
-    {
-      "on": "loopEnd",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "arc.opacity",
-            "to": "0",
-            "ms": "240",
-            "easing": "EaseInCubic"
-          }
-        ]
+      ],
+      "reactions": [
+        {
+          "on": "loopStart",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "arc.opacity",
+                "to": "1",
+                "ms": "240",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "arc.rotation",
+                "from": "0",
+                "to": "turns(1)",
+                "ms": "1100",
+                "easing": "Linear",
+                "repeat": -1
+              },
+              {
+                "target": "arc.trimEnd",
+                "from": "0.06",
+                "to": "sweep / 360",
+                "ms": "550",
+                "easing": "EaseInOutCubic",
+                "repeat": -1,
+                "yoyo": true
+              }
+            ]
+          ]
+        },
+        {
+          "on": "loopEnd",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "arc.opacity",
+                "to": "0",
+                "ms": "240",
+                "easing": "EaseInCubic"
+              }
+            ]
+          ]
+        }
       ]
     }
   ]

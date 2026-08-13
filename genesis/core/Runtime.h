@@ -47,15 +47,17 @@ namespace genesis
 
         /** Fire an authored signal directly — the editor's "test this reaction" action. */
         void fire(const std::string &signal);
-        /** True while `signal`'s reaction chain is running. */
+        /** True while any object's chain for `signal` is running. */
         bool isRunning(const std::string &signal) const;
+        /** True while THIS object's chain for `signal` is running. */
+        bool isRunning(const std::string &shapeId, const std::string &signal) const;
         /** Total length of a reaction in ms: the sum over steps of the longest finite track
          *  (delay + duration). An infinite track counts as one cycle, so a looping step still
          *  has a scrubbable length. 0 when the signal has no reaction. */
-        double reactionDurationMs(const std::string &signal) const;
+        double reactionDurationMs(const std::string &shapeId, const std::string &signal) const;
         /** Replay `signal` and advance to `t` (0..1) through its own timeline, so the editor
          *  can scrub one reaction without a global clock. */
-        void scrub(const std::string &signal, double t);
+        void scrub(const std::string &shapeId, const std::string &signal, double t);
 
         // ---- driving the base, from the preview transport ----
         void loopStart();
@@ -117,8 +119,11 @@ namespace genesis
         void layout(double transitionMs);
         void applyStyles();
         void bindProp(artboard::Property &p, double v, double ms, bool owned);
-        void startReaction(const Reaction &r);
-        void playStep(const Reaction &r, size_t stepIndex);
+        /** Reactions are keyed by (object, signal): several objects may react to one signal,
+         *  and each keeps its own token, pending count and cancellation state. */
+        static std::string reactionKey(const std::string &shapeId, const std::string &signal);
+        void startReaction(const std::string &owner, const Reaction &r);
+        void playStep(const std::string &owner, const Reaction &r, size_t stepIndex);
 
         gene::Scope layoutScope(const std::string &owner) const;
         gene::Scope liveScope(const std::string &owner) const;

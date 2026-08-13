@@ -75,7 +75,7 @@ int main(int argc, char **argv)
     shoot(dir + "/genesis-empty.png", 1200, 780, [](genesis::ui::App &a, double &now) {
         a.showEditor();
         a.doc().shapes.clear();
-        a.doc().reactions.clear();
+        for (auto &sh : a.doc().shapes) sh.reactions.clear();
         a.selectShape("");
         a.documentChanged();
         settle(a, now, 400.0);   // the empty state: no shapes, no reactions

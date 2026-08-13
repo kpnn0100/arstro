@@ -38,6 +38,87 @@
       "animated": [
         "scaleX",
         "scaleY"
+      ],
+      "reactions": [
+        {
+          "on": "pressDown",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "body.scaleX",
+                "to": "0.96",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "body.scaleY",
+                "to": "0.96",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "wash.opacity",
+                "from": "0",
+                "to": "1",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "release",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "body.scaleX",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "body.scaleY",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "wash.opacity",
+                "to": "0",
+                "ms": "180",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "cancel",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "body.scaleX",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "body.scaleY",
+                "to": "1",
+                "ms": "180",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "wash.opacity",
+                "to": "0",
+                "ms": "180",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
       ]
     },
     {
@@ -55,87 +136,6 @@
       },
       "animated": [
         "opacity"
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "pressDown",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "body.scaleX",
-            "to": "0.96",
-            "ms": "90",
-            "easing": "EaseOutCubic"
-          },
-          {
-            "target": "body.scaleY",
-            "to": "0.96",
-            "ms": "90",
-            "easing": "EaseOutCubic"
-          },
-          {
-            "target": "wash.opacity",
-            "from": "0",
-            "to": "1",
-            "ms": "90",
-            "easing": "EaseOutCubic"
-          }
-        ]
-      ]
-    },
-    {
-      "on": "release",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "body.scaleX",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "body.scaleY",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "wash.opacity",
-            "to": "0",
-            "ms": "180",
-            "easing": "EaseOutCubic"
-          }
-        ]
-      ]
-    },
-    {
-      "on": "cancel",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "body.scaleX",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "body.scaleY",
-            "to": "1",
-            "ms": "180",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "wash.opacity",
-            "to": "0",
-            "ms": "180",
-            "easing": "EaseOutCubic"
-          }
-        ]
       ]
     }
   ]

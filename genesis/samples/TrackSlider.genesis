@@ -61,48 +61,48 @@
       "animated": [
         "scaleX",
         "scaleY"
-      ]
-    }
-  ],
-  "reactions": [
-    {
-      "on": "dragStart",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "thumb.scaleX",
-            "to": "1.35",
-            "ms": "120",
-            "easing": "EaseOutBack"
-          },
-          {
-            "target": "thumb.scaleY",
-            "to": "1.35",
-            "ms": "120",
-            "easing": "EaseOutBack"
-          }
-        ]
-      ]
-    },
-    {
-      "on": "dragEnd",
-      "cancel": "restart",
-      "steps": [
-        [
-          {
-            "target": "thumb.scaleX",
-            "to": "1",
-            "ms": "160",
-            "easing": "EaseOutCubic"
-          },
-          {
-            "target": "thumb.scaleY",
-            "to": "1",
-            "ms": "160",
-            "easing": "EaseOutCubic"
-          }
-        ]
+      ],
+      "reactions": [
+        {
+          "on": "dragStart",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "thumb.scaleX",
+                "to": "1.35",
+                "ms": "120",
+                "easing": "EaseOutBack"
+              },
+              {
+                "target": "thumb.scaleY",
+                "to": "1.35",
+                "ms": "120",
+                "easing": "EaseOutBack"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "dragEnd",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "thumb.scaleX",
+                "to": "1",
+                "ms": "160",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "thumb.scaleY",
+                "to": "1",
+                "ms": "160",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
       ]
     }
   ]

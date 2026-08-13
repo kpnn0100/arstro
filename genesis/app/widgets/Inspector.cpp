@@ -428,11 +428,14 @@ namespace ui
             s->id = want;
             for (auto &other : doc.shapes)
                 if (other.parent == old) other.parent = want;
-            for (auto &r : doc.reactions)
-                for (auto &st : r.steps)
-                    for (auto &tr : st.tracks)
-                        if (tr.target.rfind(old + ".", 0) == 0)
-                            tr.target = want + tr.target.substr(old.size());
+            // Only QUALIFIED targets carry a name; a bare one already means "my own field"
+            // and follows the rename for free.
+            for (auto &host : doc.shapes)
+                for (auto &r : host.reactions)
+                    for (auto &st : r.steps)
+                        for (auto &tr : st.tracks)
+                            if (tr.target.rfind(old + ".", 0) == 0)
+                                tr.target = want + tr.target.substr(old.size());
             mShownShape = want;
             mApp.selectShape(want);
             mApp.documentChanged();

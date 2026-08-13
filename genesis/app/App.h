@@ -82,6 +82,8 @@ namespace ui
         // ---- selection ----
         const std::string &selectedShape() const { return mSelected; }
         void selectShape(const std::string &id);
+        /** Copy the selected object (and its children) as `<id>_copy`, and select the copy. */
+        void duplicateSelected();
         int selectedReaction() const { return mSelectedReaction; }
         void selectReaction(int index);
 

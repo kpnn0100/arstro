@@ -74,7 +74,7 @@ TEST(App_starts_on_a_working_example_with_no_errors)
     settle(app, now, 200.0);
     // A new project must be something that already moves (G-14).
     CHECK(!app.doc().shapes.empty());
-    CHECK(!app.doc().reactions.empty());
+    CHECK(!app.doc().allReactions().empty());
     CHECK(app.previewOk());
     for (const auto &d : app.diagnostics())
         CHECK(!d.isError());
@@ -170,7 +170,7 @@ TEST(App_draws_its_empty_state_with_guidance)
     App app;
     app.setSize(1200, 760);
     app.doc().shapes.clear();
-    app.doc().reactions.clear();
+    for (auto &s : app.doc().shapes) s.reactions.clear();
     app.selectShape("");
     app.documentChanged();
     double now = 0.0;
@@ -178,16 +178,17 @@ TEST(App_draws_its_empty_state_with_guidance)
 
     artboard::RecordingTarget t;
     app.render(t);
-    bool noShapes = false, noReactions = false, selectPrompt = false;
+    bool noShapes = false, noObject = false, selectPrompt = false;
     for (const auto &op : t.ops())
     {
         if (op.kind != K::DrawText) continue;
         if (op.text.find("No shapes") != std::string::npos) noShapes = true;
-        if (op.text.find("No reactions") != std::string::npos) noReactions = true;
+        // Reactions belong to an object now, so with nothing selected the panel says so.
+        if (op.text.find("No object selected") != std::string::npos) noObject = true;
         if (op.text.find("Select a shape") != std::string::npos) selectPrompt = true;
     }
     CHECK(noShapes);        // an empty panel says what to do, rather than showing nothing
-    CHECK(noReactions);
+    CHECK(noObject);
     CHECK(selectPrompt);
 }
 TEST(App_modal_dims_the_app_and_traps_input)
@@ -385,19 +386,20 @@ TEST(Runtime_reaction_duration_and_scrub)
     CHECK(rt.build(Document::starter("VisualLoop", "C"), &err));
     rt.setSize(120, 120);
     rt.advance(0.0);
-    CHECK_NEAR(rt.reactionDurationMs("loopStart"), 1500.0, 1e-6);
-    CHECK_NEAR(rt.reactionDurationMs("loopEnd"), 300.0, 1e-6);
-    CHECK(rt.reactionDurationMs("nosuch") == 0.0);
+    CHECK_NEAR(rt.reactionDurationMs("ring", "loopStart"), 1500.0, 1e-6);
+    CHECK_NEAR(rt.reactionDurationMs("ring", "loopEnd"), 300.0, 1e-6);
+    CHECK(rt.reactionDurationMs("ring", "nosuch") == 0.0);
+    CHECK(rt.reactionDurationMs("nosuch", "loopStart") == 0.0);
 
-    rt.scrub("loopStart", 0.0);
+    rt.scrub("ring", "loopStart", 0.0);
     CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 0.0, 1e-6);
-    rt.scrub("loopStart", 0.2);      // 300ms in: the fade has just finished
+    rt.scrub("ring", "loopStart", 0.2);      // 300ms in: the fade has just finished
     CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 1.0, 1e-6);
-    rt.scrub("loopStart", 0.6);      // 900ms in: half a turn into the spin
+    rt.scrub("ring", "loopStart", 0.6);      // 900ms in: half a turn into the spin
     CHECK_NEAR(rt.segmentFor("ring")->rotation.value(), 3.14159265358979324, 1e-4);
-    rt.scrub("loopStart", 0.99);     // just short of one full turn
+    rt.scrub("ring", "loopStart", 0.99);     // just short of one full turn
     CHECK(rt.segmentFor("ring")->rotation.value() > 6.2);
-    rt.scrub("loopStart", 1.0);      // exactly one turn: a repeating track has WRAPPED
+    rt.scrub("ring", "loopStart", 1.0);      // exactly one turn: a repeating track has WRAPPED
     CHECK_NEAR(rt.segmentFor("ring")->rotation.value(), 0.0, 1e-4);
 }
 TEST(Inspector_edits_reach_the_document)
@@ -423,11 +425,12 @@ TEST(Inspector_edits_reach_the_document)
     Document &doc = app.doc();
     const std::string old = doc.shapes.front().id;
     doc.shapes.front().id = "halo";
-    for (auto &r : doc.reactions)
-        for (auto &st : r.steps)
-            for (auto &tr : st.tracks)
-                if (tr.target.rfind(old + ".", 0) == 0)
-                    tr.target = "halo" + tr.target.substr(old.size());
+    for (auto &host : doc.shapes)
+        for (auto &r : host.reactions)
+            for (auto &st : r.steps)
+                for (auto &tr : st.tracks)
+                    if (tr.target.rfind(old + ".", 0) == 0)
+                        tr.target = "halo" + tr.target.substr(old.size());
     app.selectShape("halo");
     app.documentChanged();
     CHECK(app.previewOk());
@@ -917,6 +920,108 @@ TEST(Reactions_panel_sheds_columns_instead_of_letting_them_collide)
             CHECK(child->y.value() + child->height.value() <= panel.height.value() + 0.5);
         }
     }
+}
+
+TEST(Reactions_panel_shows_only_the_selected_objects_reactions)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    toEditor(app, now);
+
+    // Give a second object its own reaction, then check the panel follows the selection.
+    Shape dot;
+    dot.id = "dot";
+    dot.kind = ShapeKind::Circle;
+    dot.setField("fill", "accent");
+    dot.setAnimated("opacity", true);
+    Reaction r;
+    r.signal = "cycle";
+    Step st;
+    st.tracks.push_back({"opacity", "0", "1", "150", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    dot.reactions.push_back(r);
+    app.doc().addShape(dot);
+    app.documentChanged();
+
+    auto signalsShown = [&] {
+        artboard::RecordingTarget t;
+        setMeasureTarget(&t);
+        app.reactions()->render(t);
+        setMeasureTarget(nullptr);
+        std::vector<std::string> out;
+        for (const auto &op : t.ops())
+            if (op.kind == K::DrawText) out.push_back(op.text);
+        return out;
+    };
+    // Section titles are drawn uppercased by the design system, so compare case-insensitively.
+    auto shows = [](const std::vector<std::string> &v, const std::string &s) {
+        auto lower = [](std::string x) {
+            for (char &c : x)
+                if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+            return x;
+        };
+        for (const auto &x : v)
+            if (lower(x) == lower(s)) return true;
+        return false;
+    };
+
+    app.selectShape("ring");
+    settle(app, now, 60.0);
+    auto shown = signalsShown();
+    CHECK(shows(shown, "loopStart"));      // ring's own
+    CHECK(shows(shown, "ring"));           // the panel names whose reactions these are
+    CHECK(!shows(shown, "cycle"));         // dot's reaction is NOT listed here
+
+    app.selectShape("dot");
+    settle(app, now, 60.0);
+    shown = signalsShown();
+    CHECK(shows(shown, "cycle"));
+    CHECK(shows(shown, "dot"));
+    CHECK(!shows(shown, "loopStart"));
+
+    app.selectShape("");
+    settle(app, now, 60.0);
+    shown = signalsShown();
+    CHECK(shows(shown, "No object selected"));
+}
+TEST(Duplicating_an_object_names_the_copy_and_selects_it)
+{
+    App app;
+    app.setSize(1360, 860);
+    double now = 0.0;
+    toEditor(app, now);
+
+    const size_t before = app.doc().shapes.size();
+    app.selectShape("ring");
+    app.duplicateSelected();
+    settle(app, now, 100.0);
+
+    CHECK(app.doc().shapes.size() == before + 1);
+    CHECK(app.doc().findShape("ring_copy") != nullptr);
+    CHECK(app.selectedShape() == "ring_copy");      // the copy becomes the selection
+    CHECK(app.previewOk());
+    for (const auto &d : app.diagnostics())
+        CHECK(!d.isError());
+
+    // The copy brought its own reactions, so it animates independently of the original.
+    CHECK(app.doc().findShape("ring_copy")->reactions.size() ==
+          app.doc().findShape("ring")->reactions.size());
+
+    app.duplicateSelected();
+    settle(app, now, 100.0);
+    CHECK(app.doc().findShape("ring_copy_copy") != nullptr);
+
+    // Undo puts it back.
+    now += 2000.0;
+    app.advance(now);
+    app.undo();
+    CHECK(app.doc().findShape("ring_copy_copy") == nullptr);
+
+    // Nothing selected: it says so rather than doing something surprising.
+    app.selectShape("");
+    app.duplicateSelected();
+    CHECK(app.statusLevel() == StatusLevel::Warn);
 }
 
 int main() { return mini::runAll(); }

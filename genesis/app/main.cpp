@@ -244,6 +244,7 @@ namespace
             case GDK_KEY_n: case GDK_KEY_N: h->app.modal()->openNew(); return TRUE;
             case GDK_KEY_e: case GDK_KEY_E: h->app.exportCode(); return TRUE;
             case GDK_KEY_r: case GDK_KEY_R: h->app.startVerify(); return TRUE;
+            case GDK_KEY_d: case GDK_KEY_D: h->app.duplicateSelected(); return TRUE;
             case GDK_KEY_a: case GDK_KEY_A:
             case GDK_KEY_c: case GDK_KEY_C:
             case GDK_KEY_x: case GDK_KEY_X:

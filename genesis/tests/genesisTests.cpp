@@ -371,8 +371,8 @@ TEST(Document_starter_is_valid_and_exportable)
         CHECK(!diag.isError());
     CHECK(d.isExportable());
     CHECK(d.name == "CoolVisualLoop");
-    CHECK(d.reactions.size() == 2);
-    CHECK(d.reactions[0].steps.size() == 2);    // fade, THEN spin
+    CHECK(d.shapes.front().reactions.size() == 2);
+    CHECK(d.shapes.front().reactions[0].steps.size() == 2);   // fade, THEN spin
 }
 TEST(Document_json_round_trips_byte_for_byte)
 {
@@ -384,7 +384,7 @@ TEST(Document_json_round_trips_byte_for_byte)
     const std::string twice = back.toJson().dump();
     CHECK(once == twice);                        // determinism: a save is stable
     CHECK(back.shapes.size() == d.shapes.size());
-    CHECK(back.reactions.size() == d.reactions.size());
+    CHECK(back.allReactions().size() == d.allReactions().size());
     CHECK(back.params.size() == d.params.size());
     CHECK(back.shapes[0].animated.size() == d.shapes[0].animated.size());
 }
@@ -418,14 +418,175 @@ TEST(Document_removing_a_shape_removes_descendants_and_their_tracks)
     Step st;
     st.tracks.push_back({"dot.opacity", "", "1", "100", "0", "Linear", 0, false});
     r.steps.push_back(st);
-    d.reactions.push_back(r);
+    d.findShape("ring")->reactions.push_back(r);
 
     d.removeShape("ring");
     CHECK(d.shapes.empty());                     // the child went with its parent
     // The orphaned track went too: emitting it would reference a deleted member.
-    for (const auto &re : d.reactions)
-        for (const auto &s : re.steps)
-            CHECK(s.tracks.empty());
+    for (const auto &sh : d.shapes)
+        for (const auto &re : sh.reactions)
+            for (const auto &st : re.steps)
+                CHECK(st.tracks.empty());
+}
+TEST(Document_reactions_belong_to_their_object)
+{
+    const Document d = Document::starter("VisualLoop", "C");
+    // Selecting an object is what scopes the panel, so a reaction has to live ON one.
+    CHECK(d.shapes.front().reactions.size() == 2);
+    CHECK(d.allReactions().size() == 2);
+    for (const auto &pair : d.allReactions())
+        CHECK(pair.first->id == "ring");
+
+    // A bare target means "my own field"; a qualified one still reaches a sibling.
+    std::string shape, field;
+    Document::splitTarget("opacity", "ring", shape, field);
+    CHECK(shape == "ring");
+    CHECK(field == "opacity");
+    Document::splitTarget("halo.opacity", "ring", shape, field);
+    CHECK(shape == "halo");
+    CHECK(field == "opacity");
+}
+TEST(Document_several_objects_can_react_to_one_signal)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    Shape dot;
+    dot.id = "dot";
+    dot.kind = ShapeKind::Circle;
+    dot.setField("fill", "accent");
+    dot.setAnimated("opacity", true);
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"opacity", "0", "1", "200", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    dot.reactions.push_back(r);
+    d.addShape(dot);
+
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    // A signal is a component-level event: both objects handle it, and the generated hook
+    // starts both.
+    int loopStartHandlers = 0;
+    for (const auto &pair : d.allReactions())
+        if (pair.second->signal == "loopStart") ++loopStartHandlers;
+    CHECK(loopStartHandlers == 2);
+
+    const EmittedCode c = emitCpp(d);
+    CHECK(c.ok());
+    CHECK(c.source.find("playRingLoopStartStep0();") != std::string::npos);
+    CHECK(c.source.find("playDotLoopStartStep0();") != std::string::npos);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(120, 120);
+    rt.advance(0.0);
+    rt.loopStart();
+    rt.advance(0.0);
+    CHECK(rt.isRunning("ring", "loopStart"));
+    CHECK(rt.isRunning("dot", "loopStart"));
+    rt.advance(200.0);
+    CHECK_NEAR(rt.segmentFor("dot")->opacity.value(), 1.0, 1e-9);
+}
+TEST(Document_duplicate_copies_the_subtree_and_its_reactions)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    Shape child;
+    child.id = "dot";
+    child.parent = "ring";
+    child.kind = ShapeKind::Circle;
+    child.setField("fill", "accent");
+    child.setAnimated("opacity", true);
+    Reaction r;
+    r.signal = "cycle";
+    Step st;
+    st.tracks.push_back({"opacity", "0", "1", "120", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    child.reactions.push_back(r);
+    d.addShape(child);
+
+    const std::string copy = d.duplicateShape("ring");
+    CHECK(copy == "ring_copy");
+    CHECK(d.shapes.size() == 4);                       // ring, dot, ring_copy, dot_copy
+    CHECK(d.findShape("ring_copy") != nullptr);
+    CHECK(d.findShape("dot_copy") != nullptr);
+    // The inner parent link follows the copy rather than pointing back at the original.
+    CHECK(d.findShape("dot_copy")->parent == "ring_copy");
+    // The copy brings its own reactions, so it animates itself.
+    CHECK(d.findShape("ring_copy")->reactions.size() == 2);
+    CHECK(d.findShape("dot_copy")->reactions.size() == 1);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    // A second copy is _copy2, a third _copy3 — the same numbering ids already use.
+    CHECK(d.duplicateShape("ring") == "ring_copy2");
+    CHECK(d.duplicateShape("ring") == "ring_copy3");
+    CHECK(d.duplicateShape("nosuch").empty());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));                          // and the whole thing still builds
+}
+TEST(Document_duplicate_remaps_only_targets_inside_the_copied_subtree)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    Shape outside;
+    outside.id = "halo";
+    outside.kind = ShapeKind::Circle;
+    outside.setField("fill", "accent");
+    outside.setAnimated("opacity", true);
+    d.addShape(outside);
+
+    // ring's reaction drives BOTH itself and the outside object.
+    Step st;
+    st.tracks.push_back({"opacity", "0", "1", "100", "0", "Linear", 0, false});
+    st.tracks.push_back({"halo.opacity", "0", "1", "100", "0", "Linear", 0, false});
+    Reaction r;
+    r.signal = "cycle";
+    r.steps.push_back(st);
+    d.findShape("ring")->reactions.push_back(r);
+
+    d.duplicateShape("ring");
+    const Shape *copy = d.findShape("ring_copy");
+    CHECK(copy != nullptr);
+    const Reaction &copied = copy->reactions.back();
+    // Its own field stays bare (so it means the COPY), and the external target is untouched.
+    CHECK(copied.steps[0].tracks[0].target == "opacity");
+    CHECK(copied.steps[0].tracks[1].target == "halo.opacity");
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+}
+TEST(Document_migrates_a_legacy_top_level_reaction_list)
+{
+    // Documents written before reactions belonged to objects keep loading: each reaction goes
+    // to the object its first track drives, which is the object it was always about.
+    const std::string legacy = R"({
+      "genesis": 1,
+      "component": { "name": "Old", "base": "VisualLoop", "namespace": "app", "designSize": [80, 80] },
+      "params": [],
+      "shapes": [
+        { "id": "ring", "type": "circle",
+          "bind": { "w": "minSide", "h": "minSide", "stroke": "#ffffff", "opacity": "0" },
+          "animated": ["opacity"] }
+      ],
+      "reactions": [
+        { "on": "loopStart", "steps": [ [ { "target": "ring.opacity", "to": "1", "ms": 200,
+                                            "easing": "Linear" } ] ] }
+      ]
+    })";
+    std::string err;
+    const Document d = Document::fromJson(Json::parse(legacy, &err), &err);
+    CHECK(err.empty());
+    CHECK(d.shapes.size() == 1);
+    CHECK(d.shapes.front().reactions.size() == 1);      // moved onto the object it drives
+    CHECK(d.allReactions().size() == 1);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    // And it re-saves in the new shape: no top-level list.
+    CHECK(d.toJson()["reactions"].isNull());
+    CHECK(d.toJson()["shapes"].at(0)["reactions"].size() == 1);
 }
 TEST(Document_validate_catches_every_class_of_authoring_mistake)
 {
@@ -468,7 +629,7 @@ TEST(Document_validate_catches_every_class_of_authoring_mistake)
     }
     {   // a reaction on a signal the base does not have
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions[0].signal = "onFire";
+        d.shapes.front().reactions[0].signal = "onFire";
         CHECK(errorsOf(d) > 0);
     }
     {   // a track targeting a field that was never marked animated
@@ -478,22 +639,22 @@ TEST(Document_validate_catches_every_class_of_authoring_mistake)
     }
     {   // a track targeting a colour
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions[0].steps[0].tracks[0].target = "ring.fill";
+        d.shapes.front().reactions[0].steps[0].tracks[0].target = "ring.fill";
         CHECK(errorsOf(d) > 0);
     }
     {   // a malformed target
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions[0].steps[0].tracks[0].target = "ring";
+        d.shapes.front().reactions[0].steps[0].tracks[0].target = "ghost.";
         CHECK(errorsOf(d) > 0);
     }
     {   // an unknown shape in a target
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions[0].steps[0].tracks[0].target = "ghost.opacity";
+        d.shapes.front().reactions[0].steps[0].tracks[0].target = "ghost.opacity";
         CHECK(errorsOf(d) > 0);
     }
     {   // an unknown easing
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions[0].steps[0].tracks[0].easing = "EaseOutBanana";
+        d.shapes.front().reactions[0].steps[0].tracks[0].easing = "EaseOutBanana";
         CHECK(errorsOf(d) > 0);
     }
     {   // a bad path command
@@ -521,7 +682,7 @@ TEST(Document_validate_catches_every_class_of_authoring_mistake)
 TEST(Document_validate_warns_about_unhandled_expected_signals)
 {
     Document d = Document::starter("VisualLoop", "C");
-    d.reactions.clear();
+    for (auto &sh : d.shapes) sh.reactions.clear();
     bool warned = false;
     for (const auto &diag : d.validate())
         if (!diag.isError() && diag.message.find("loopStart") != std::string::npos)
@@ -556,8 +717,9 @@ TEST(Emitter_generates_the_expected_shape_of_class)
 
     // The binding is a readable line, not machine soup.
     CHECK(c.source.find("std::min(w, h) * 0.7") != std::string::npos);
-    // "then" is the completion callback of the previous step.
-    CHECK(c.source.find("playLoopStartStep1();") != std::string::npos);
+    // "then" is the completion callback of the previous step. Generated names carry the
+    // OWNING object, because several objects can react to one signal.
+    CHECK(c.source.find("playRingLoopStartStep1();") != std::string::npos);
     // An infinite track never chains.
     CHECK(c.source.find("every track in this step repeats forever") != std::string::npos);
 }
@@ -625,9 +787,9 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
             st.tracks.push_back({boxId + ".cornerRadius", "0", "8", "120", "10", "EaseOutBack", 0, true});
             r.steps.push_back(st);
             bool already = false;
-            for (const auto &existing : d.reactions)
-                if (existing.signal == sd.name) already = true;
-            if (!already) d.reactions.push_back(r);
+            for (const auto &pair : d.allReactions())
+                if (pair.second->signal == sd.name) already = true;
+            if (!already) d.findShape(boxId)->reactions.push_back(r);
         }
 
         for (const auto &diag : d.validate())
@@ -756,14 +918,14 @@ TEST(Runtime_honours_cancellation_policies)
 {
     auto make = [](Cancel policy) {
         Document d = Document::starter("VisualLoop", "C");
-        d.reactions.clear();
+        for (auto &sh : d.shapes) sh.reactions.clear();
         Reaction r;
         r.signal = "cycle";
         r.cancel = policy;
         Step st;
         st.tracks.push_back({"ring.opacity", "0", "1", "200", "0", "Linear", 0, false});
         r.steps.push_back(st);
-        d.reactions.push_back(r);
+        d.findShape("ring")->reactions.push_back(r);
         return d;
     };
     {   // restart: a second fire supersedes the first and starts over

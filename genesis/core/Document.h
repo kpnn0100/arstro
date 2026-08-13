@@ -62,23 +62,6 @@ namespace genesis
         static int argCount(char op);
     };
 
-    struct Shape
-    {
-        std::string id;
-        ShapeKind kind = ShapeKind::Rect;
-        std::string parent;               // "" = a direct child of the component
-        std::vector<std::pair<std::string, std::string>> fields;  // ordered: name -> Gene source
-        std::vector<std::string> animated;                        // fields promoted to Property
-        std::vector<PathCmd> path;        // Path only
-        std::string text;                 // Label only (literal, or a text param name in {braces})
-
-        std::string field(const std::string &name) const;   // "" when unset -> the default applies
-        std::string effectiveField(const std::string &name) const;  // set value, else the default
-        void setField(const std::string &name, const std::string &expr);
-        bool isAnimated(const std::string &name) const;
-        void setAnimated(const std::string &name, bool on);
-    };
-
     enum class ParamType { Number, Color, Text };
 
     struct Param
@@ -99,7 +82,10 @@ namespace genesis
      *  param genuinely re-times the whole component. */
     struct Track
     {
-        std::string target;              // "ring.opacity"
+        /** A bare field name ("opacity") targets the OWNING shape — the common case now that
+         *  reactions belong to a shape. A qualified "other.opacity" still reaches a different
+         *  shape, so a reaction can drive its siblings. */
+        std::string target;
         std::string from;                // "" = start from the field's current value
         std::string to = "0";
         std::string durationMs = "200";
@@ -115,11 +101,32 @@ namespace genesis
         std::vector<Track> tracks;
     };
 
+    /** A reaction belongs to a SHAPE: selecting an object shows its reactions and nothing
+     *  else. The signal is still a component-level event, so several shapes may each react to
+     *  the same one — they all run. */
     struct Reaction
     {
         std::string signal;              // a BaseDef signal name
         Cancel cancel = Cancel::Restart;
         std::vector<Step> steps;
+    };
+
+    struct Shape
+    {
+        std::string id;
+        ShapeKind kind = ShapeKind::Rect;
+        std::string parent;               // "" = a direct child of the component
+        std::vector<std::pair<std::string, std::string>> fields;  // ordered: name -> Gene source
+        std::vector<std::string> animated;                        // fields promoted to Property
+        std::vector<PathCmd> path;        // Path only
+        std::string text;                 // Label only (literal, or a text param name in {braces})
+        std::vector<Reaction> reactions;  // this object's own reactions
+
+        std::string field(const std::string &name) const;   // "" when unset -> the default applies
+        std::string effectiveField(const std::string &name) const;  // set value, else the default
+        void setField(const std::string &name, const std::string &expr);
+        bool isAnimated(const std::string &name) const;
+        void setAnimated(const std::string &name, bool on);
     };
 
     struct Diagnostic
@@ -141,12 +148,17 @@ namespace genesis
         double designH = 160.0;
         std::vector<Param> params;
         std::vector<Shape> shapes;        // parents always precede their children
-        std::vector<Reaction> reactions;
 
         // ---- lookup ----
         const Shape *findShape(const std::string &id) const;
         Shape *findShape(const std::string &id);
         const Param *findParam(const std::string &name) const;
+        /** Split a track target into (shape, field); a bare field belongs to `owner`. */
+        static void splitTarget(const std::string &target, const std::string &owner,
+                                std::string &shape, std::string &field);
+        /** Every (shape, reaction) pair in document order — what the emitter and the runtime
+         *  iterate, since a signal can now be handled by several objects at once. */
+        std::vector<std::pair<const Shape *, const Reaction *>> allReactions() const;
         int shapeIndex(const std::string &id) const;
         /** Ids of `parent`'s direct children, in document order ("" = component root). */
         std::vector<std::string> childrenOf(const std::string &parent) const;
@@ -156,6 +168,11 @@ namespace genesis
         // ---- mutation ----
         /** Add `s`, de-duplicating its id; returns the id actually assigned. */
         std::string addShape(Shape s);
+        /** Copy `id` and its whole subtree, naming the copies `<id>_copy` (then `_copy2`,
+         *  `_copy3`, …). Parent links and every reaction target are remapped onto the copies,
+         *  so the duplicate animates itself rather than the original. Returns the new root's
+         *  id, or "" if `id` is unknown. */
+        std::string duplicateShape(const std::string &id);
         void removeShape(const std::string &id);   // also removes descendants + their tracks
 
         // ---- persistence ----
