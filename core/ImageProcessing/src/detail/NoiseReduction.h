@@ -1,7 +1,7 @@
 /*
  *  Arstro ImageProcessing Library
  *
- *  NoiseReduction: two independent denoisers, mirroring Lightroom's Detail panel.
+ *  NoiseReduction: two independent denoisers, mirroring a Detail panel's split.
  *    - Colour NR smooths the chroma (per-channel offset from luminance) with a
  *      Gaussian, removing colour speckle while keeping luminance detail intact.
  *    - Luminance NR runs an edge-preserving bilateral filter on a perceptual

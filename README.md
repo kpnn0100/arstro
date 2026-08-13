@@ -30,7 +30,7 @@ adapter, so it adapts to any screen or OS the same way a driver adapts to hardwa
 
 | App | What it is | State |
 |---|---|---|
-| [`apps/cosmo`](apps/cosmo/) | Lightroom-style photo editor | **Building** — Linux desktop, plus an Android build path |
+| [`apps/cosmo`](apps/cosmo/) | Professional photo editor | **Building** — Linux desktop, plus an Android build path |
 | [`apps/genesis`](apps/genesis/) | Animation designer whose deliverable is source code — draw a control, bind its geometry, and it emits a `.h`/`.cpp` pair that compiles against Artboard | **Building** — editor, CLI and core |
 | [`apps/pulsar`](apps/pulsar/) | Synthesiser UI over the DSP engine | **Building** — Linux desktop |
 | [`apps/launcher`](apps/launcher/) | An Android-style touch shell for GNOME and KDE Plasma, drawn entirely with Artboard | **Building** — milestones code-complete, live-desktop verification pending |
@@ -92,11 +92,14 @@ submodule upgrade steps.
 
 ## Repos
 
-| Path | Remote |
-|------|--------|
-| (this) | https://github.com/kpnn0100/arstro.git |
-| `core/Artboard/` | https://github.com/kpnn0100/artboard.git |
-| `core/DigitalSignalProcessing/` | https://github.com/kpnn0100/DigitalSignalProcessing.git |
+Each core library is developed in its own repository and can be used without the rest of Arstro.
+
+| Path | Remote | Linked as |
+|------|--------|-----------|
+| (this) | https://github.com/kpnn0100/arstro.git | — |
+| `core/Artboard/` | https://github.com/kpnn0100/artboard.git | submodule |
+| `core/DigitalSignalProcessing/` | https://github.com/kpnn0100/DigitalSignalProcessing.git | submodule |
+| `core/ImageProcessing/` | https://github.com/kpnn0100/ImageProcessing.git | vendored — its sources are committed into this repo directly, so a plain clone already has it |
 
 ## Licence
 

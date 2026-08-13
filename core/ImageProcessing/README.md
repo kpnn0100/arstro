@@ -3,8 +3,13 @@
 A headless image-processing library by Arstro — the image-domain mirror of the
 [Arstro DSP library](../DigitalSignalProcessing). It provides a composable, modular
 edit engine (namespace `arstro`): **parameters in, pixels out**. It powers the
-`cosmo` Lightroom-style photo editor (built on the Artboard UI framework), but the
+`cosmo` professional photo editor (built on the Artboard UI framework), but the
 library itself is UI-free and codec-free, so it compiles natively and to WebAssembly.
+
+Inside the [Arstro](https://github.com/kpnn0100/arstro) umbrella this repo lives at
+`arstro/core/ImageProcessing/`, alongside the other core libraries (`core/Artboard/`,
+`core/DigitalSignalProcessing/`); the applications that consume them live under
+`arstro/apps/`. It also stands alone — nothing here depends on the umbrella.
 
 ## Design in one paragraph
 

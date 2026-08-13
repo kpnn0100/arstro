@@ -2,7 +2,7 @@
  *  Arstro ImageProcessing Library
  *
  *  ImageBlock: an ordered chain of ImageProcessors — the image-domain analogue
- *  of the DSP library's Block, and the concrete form of a Lightroom-style EDIT
+ *  of the DSP library's Block, and the concrete form of a professional EDIT
  *  STACK. process(in, out) runs every (non-bypassed) stage in order, feeding
  *  each stage's output into the next. Two scratch Images are ping-ponged so a
  *  long stack does not allocate a fresh buffer per stage; stages may change the

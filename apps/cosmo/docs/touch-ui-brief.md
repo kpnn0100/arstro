@@ -261,7 +261,7 @@ Because there are ~20 sliders across 7 sections, do NOT dump them in one long sc
   - **LENS:** Distortion · Chromatic Aberration · Vignette
 - *(Optional touch upgrade, note as optional):* tapping a slider's **label** promotes it to a single
   **focused slider** docked at the very bottom with a big value + wide track, so you drag it while the
-  photo is maximally visible — Lightroom‑mobile style. Keep the scroll list as the default.
+  photo is maximally visible — mobile photo-editor style. Keep the scroll list as the default.
 
 ### 8.4 Mixer/Curve tray (opens tall/Full — needs a big plot)
 Two stacked editors in one scroll (Mixer above, Curve below), each expandable:

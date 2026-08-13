@@ -1,8 +1,8 @@
 /*
  *  Arstro ImageProcessing Library
  *
- *  ToneRegions: the Highlights / Shadows / Whites / Blacks adjustments (Lightroom's
- *  Basic-panel tone sliders below Exposure/Contrast). A point op driven by the
+ *  ToneRegions: the Highlights / Shadows / Whites / Blacks adjustments (the basic-panel
+ *  tone sliders that sit below Exposure/Contrast). A point op driven by the
  *  pixel's luminance: smooth weight masks select each tonal region, and the
  *  adjustment is applied as a luminance RATIO so chroma is preserved.
  */

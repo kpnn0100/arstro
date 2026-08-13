@@ -434,7 +434,7 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   **references the original image files on disk** (absolute/relative paths) plus each image's
   edit settings and the group tree — i.e. it reuses cosmo's existing workspace serialization
   (`writeWorkspaceFile`/`readWorkspaceFile`) with a `.cmp` extension and a `name` field.
-  Rationale: matches "Import Catalog" (Lightroom model), small/fast, no gigabyte copies.
+  Rationale: matches the reference-by-catalogue import model, small/fast, no gigabyte copies.
   Consequence: if an original is moved/renamed the reference is stale (acceptable for now).
   Project "size" shown on cards = sum of the referenced files' sizes. All create/open/save go
   through one `ProjectStore` seam so the format can evolve without touching the UI.

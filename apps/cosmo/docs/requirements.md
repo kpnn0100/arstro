@@ -22,7 +22,7 @@ Requirements are grouped `DR-<AREA>-<n>` (Detailed Requirement).
 
 ## 1. Product scope
 
-cosmo is a native desktop, Lightroom-style non-destructive raster photo editor. It manages
+cosmo is a native desktop, professional non-destructive raster photo editor. It manages
 **projects** (catalogs that reference image files on disk), organizes images in a **group
 tree**, and edits each image through a fixed non-destructive engine pipeline with a **branching
 undo history**. It is a GTK3 + Cairo application built on the platform-free `artboard` 2D UI
