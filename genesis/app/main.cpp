@@ -58,6 +58,24 @@ namespace
         return slash == std::string::npos ? "." : p.substr(0, slash);
     }
 
+    /** Bind Artboard's clipboard seam to the system one (FR-44), so copy/paste crosses
+     *  applications rather than only working inside this process. */
+    void installSystemClipboard()
+    {
+        GtkClipboard *board = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+        artboard::Clipboard::install(
+            [board] {
+                gchar *text = gtk_clipboard_wait_for_text(board);
+                if (!text) return std::string();
+                std::string out = text;
+                g_free(text);
+                return out;
+            },
+            [board](const std::string &text) {
+                gtk_clipboard_set_text(board, text.c_str(), (gint)text.size());
+            });
+    }
+
     /** Register the vendored UI fonts so drawText's family names resolve (Artboard FR-22).
      *  Missing fonts are not fatal: the adapter falls back to a generic sans. */
     void registerFonts()
@@ -221,6 +239,21 @@ namespace
             case GDK_KEY_n: case GDK_KEY_N: h->app.modal()->openNew(); return TRUE;
             case GDK_KEY_e: case GDK_KEY_E: h->app.exportCode(); return TRUE;
             case GDK_KEY_r: case GDK_KEY_R: h->app.startVerify(); return TRUE;
+            case GDK_KEY_a: case GDK_KEY_A:
+            case GDK_KEY_c: case GDK_KEY_C:
+            case GDK_KEY_x: case GDK_KEY_X:
+            case GDK_KEY_v: case GDK_KEY_V:
+            {
+                // Selection and clipboard belong to a focused field. Only fall through to the
+                // app when nothing is focused to consume them.
+                artboard::KeyEvent k;
+                k.type = artboard::KeyEvent::Type::Down;
+                k.ctrl = true;
+                k.shift = (e->state & GDK_SHIFT_MASK) != 0;
+                k.keyCode = gdk_keyval_to_upper(e->keyval) - GDK_KEY_A + 65;
+                h->app.dispatchKey(k);
+                return TRUE;
+            }
             case GDK_KEY_z: case GDK_KEY_Z:
                 if ((e->state & GDK_SHIFT_MASK) != 0) h->app.redo();
                 else h->app.undo();
@@ -232,6 +265,9 @@ namespace
 
         artboard::KeyEvent ke;
         ke.type = artboard::KeyEvent::Type::Down;
+        ke.ctrl = ctrl;
+        ke.shift = (e->state & GDK_SHIFT_MASK) != 0;
+        ke.alt = (e->state & GDK_MOD1_MASK) != 0;
         switch (e->keyval)
         {
         case GDK_KEY_BackSpace: ke.keyCode = 8; break;
@@ -276,6 +312,7 @@ int main(int argc, char **argv)
 {
     gtk_init(&argc, &argv);
     registerFonts();
+    installSystemClipboard();
 
     static Host host;
     // The recognizer turns raw pointer events into gestures; the router hit-tests the

@@ -154,6 +154,11 @@ be a formula.
 `Ctrl+N` new · `Ctrl+O` open · `Ctrl+S` save · `Ctrl+E` export · `Ctrl+R` verify ·
 `Ctrl+Z` undo · `Ctrl+Shift+Z` / `Ctrl+Y` redo · `Esc` closes a dialog.
 
+Expression fields are real text fields: click to place the caret, drag or shift-click to
+select, double-click to take a word, `Ctrl+←/→` to move by words, `Ctrl+A` select all,
+`Ctrl+C/X/V` copy/cut/paste against the system clipboard, `Ctrl+Backspace`/`Ctrl+Delete` to
+remove a word.
+
 ## Editing
 
 - **Inspector** — the component's name/namespace/design size, the selected shape's id (rename

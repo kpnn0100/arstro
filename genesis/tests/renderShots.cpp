@@ -9,6 +9,7 @@
 #include "App.h"
 #include "adapter/native/CairoTarget.h"
 #include "widgets/HomeScreen.h"
+#include "widgets/Inspector.h"
 #include "widgets/Modal.h"
 #include "widgets/SplashScreen.h"
 #include <cairo/cairo.h>
@@ -128,6 +129,26 @@ int main(int argc, char **argv)
         a.runtime().setProgress(0.68);
         a.selectShape("fill");
         settle(a, now, 1400.0);   // a ring segment following base.display
+    });
+    shoot(dir + "/genesis-selection.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 900.0);
+        // Focus the inspector's `w` field and select part of its expression.
+        std::function<artboard::TextBox *(artboard::Segment *, int &)> nth =
+            [&](artboard::Segment *s, int &n) -> artboard::TextBox * {
+            if (auto *tb = dynamic_cast<artboard::TextBox *>(s))
+                if (n-- == 0) return tb;
+            for (const auto &c : s->children())
+                if (auto *f = nth(c.get(), n)) return f;
+            return nullptr;
+        };
+        int index = 7;
+        if (artboard::TextBox *box = nth(a.inspector(), index))
+        {
+            box->requestFocus();
+            box->setSelection(0, 7);   // "minSide"
+        }
+        settle(a, now, 200.0);
     });
     // The launch splash, rendered on its own (the host shows it in its own window).
     {

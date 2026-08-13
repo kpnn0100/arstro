@@ -1,0 +1,12 @@
+# Build output (carried over from the umbrella's ignore rules, scoped to this repo)
+**/build/
+**/build-cov/
+cmake-build*/
+CMakeUserPresets.json
+*.o
+*.a
+*.gcno
+*.gcda
+*.gcov
+
+.DS_Store

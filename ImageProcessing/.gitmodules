@@ -1,0 +1,8 @@
+# LibRaw provides camera-RAW decode. It is vendored as a submodule rather than
+# copied in: the build only needs its static lib, which build.sh compiles on
+# demand, and tracking upstream by ref keeps that provenance explicit.
+# The umbrella (arstro) declares the same submodule at ImageProcessing/lib/LibRaw;
+# this entry is what makes a STANDALONE clone of this repo able to init it too.
+[submodule "lib/LibRaw"]
+	path = lib/LibRaw
+	url = https://github.com/LibRaw/LibRaw.git
