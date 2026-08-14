@@ -89,7 +89,7 @@ caller needs to know.
 
 ### 3.3 `validate`
 
-Runs in one pass over params, shapes (fields, animated flags, path commands), the binding
+Runs in one pass over params, shapes (fields, path commands), the binding
 graph, and reactions; see G-7 for the list. The cycle check builds the `(shape.field)` graph,
 including `self.` resolved to the owning shape, and runs a colour-marked DFS per node,
 reporting the shape that closes a cycle once.
@@ -101,6 +101,32 @@ ring (VisualLoop), a track + `base.display`-bound fill that pops on completion
 (ProgressIndicator), a body that cross-fades on hover and squashes with a wash on press
 (Button), a rail/fill/thumb that pops on grab (Slider), a box with a path tick that fades in
 (Checkbox).
+
+### 3a. What moves, and what `all` means (G-21, G-22, G-23)
+
+Three functions on `Document`, and every consumer reads them rather than keeping its own answer:
+
+| | |
+| --- | --- |
+| `expandSteps(r, ownerId)` | `r`'s steps with each `all` target replaced by one track per animatable field of the object it names, in field-table order, every copy inheriting the row's `from`/`to`/`ms`/`delay`/`easing`/`repeat`/`yoyo`. A qualified `dot.all` stays qualified, so it still reaches the other object. |
+| `animatedFields(shapeId)` | The fields some track animates, in field-table order. There is no animate mark: a track IS the mark (G-21). It scans **every** object's reactions, because a track on A may target `B.opacity`, and it runs **after** expansion, since `all` is what makes a whole object animated. |
+| `moveTrack(r, fromStep, fromTrack, toStep, toIndex)` | Rearranges (G-23). `toStep == steps.size()` appends a new final step; a step left empty is erased; a move that changes nothing returns false so it never reaches the undo history. |
+
+Two ordering rules are load-bearing rather than tidiness:
+
+- **Field-table order, not authoring order.** `animatedFields` and `expandSteps` both sort by the
+  field table, because the emitter writes member declarations and animate calls from them. Insertion
+  order would make the generated source depend on the order the author happened to drag rows into,
+  and the byte-stability test (`Document_json_round_trips_byte_for_byte`, plus the Verifier's
+  op-stream diff) would start flapping.
+- **Expand before you ask what is animated.** The other order reports `all` itself as an animated
+  field called "all", which resolves to no `FieldDef` and emits nothing.
+
+`Runtime` and `CppEmitter` both walk `expandSteps` at every place they used to walk `r.steps` —
+including the runtime's completion callback and the emitter's `si + 1 < steps.size()` chain test —
+so the compiled class and the preview always run identical track lists. That is exactly what the
+Verifier diffs, and `samples/SnapBack.genesis` (built on both `all` and `original`) reports
+`preview == compiled`.
 
 ## 4. `CppEmitter`
 
@@ -141,7 +167,7 @@ disagreed.
 
 Two rules make `x = w / 4 * 3 - self.w / 2` follow an animating `w` (G-6a):
 
-- **An owned field's local is its live value.** For a field marked animated, the local is
+- **An owned field's local is its live value.** For an animated field, the local is
   `owned ? property.value() : (binding)`. Until a reaction has driven it the binding is its
   value — that is its resting state — and after that the animated value is, because `self.w`
   means "my width".
@@ -187,13 +213,24 @@ question:
 | --- | --- | --- |
 | **layout** | shape fields as the locals just computed | a shape's field bindings |
 | **live** | shape fields as their current animated values | a reaction's expressions |
-| **track** | live, plus `current` | a track's `from`/`to`/`ms`/`delay` |
+| **track** | live, plus `current` and `original` | a track's `from`/`to`/`ms`/`delay` |
 
 `parent.<field>` is resolved in all three: for a nested object it becomes the parent shape's
 local (layout) or live value (live/track); for a top-level object the parent is the COMPONENT,
 so only `w` and `h` answer and anything else is an error rather than a silent zero. `parent`
 also joins the dependency graph in three places — the emitter's `analyse()`, the runtime's
 `build()`, and `validate()`'s cycle check — so a loop through it is caught rather than hanging.
+
+`original` lives in the track scope beside `current`, and is the other half of the pair (G-22):
+`current` is "wherever it is now", `original` is "wherever the design says it belongs" — the value
+of the **target field's own binding**. Both sides resolve it by compiling/evaluating that binding
+in the plain **live** scope, not the track scope: the emitter inlines
+`expr(s->effectiveField(field), liveNames(owner))` and the runtime calls `evalNumber` against
+`liveScope(owner)`. Using the live scope is what makes the two sides agree name for name, and it
+also means a field's binding can never see `current`/`original`, so the recursion question does
+not arise. Because it is an expression rather than a captured number, `to = original` recentres
+against the *current* size — an `original x` of `(w - self.w) / 2` lands correctly at a window
+size the component was never authored at.
 
 `current` lives only in the track scope, because it means "the target field's value at the
 moment this reaction fires". The emitter binds it to `<property>.value()` and the runtime
@@ -317,11 +354,25 @@ scaled), which needs `GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK` on the drawing a
   is a polygon through the four transformed corners, so it stays correct for a rotated or
   scaled shape. Dragging the handle is direct manipulation and therefore exempt from R-G-1.
 - **Inspector** — one row per field of the selected shape: name, an `artboard::TextBox`
-  holding the expression, and an animate toggle. Focused fields commit every frame, so the
+  holding the expression — its resting value, with no animate mark beside it (G-21), which is
+  where the 26px the toggle used to take now goes. Focused fields commit every frame, so the
   preview tracks typing.
 - **ReactionsPanel** — the reaction list, the signal and cancellation dropdowns, the track
   rows (target / to / ms / easing), a step header on its own row, and a per-reaction
   scrubber — with two independent scrolls, one per list.
+  **Dragging a track (G-23).** Each row carries a 14px **grip** at its left edge, and it is the
+  only draggable part: every other column is a `TextBox` whose own drag selects text, so a grip is
+  not a decoration but the only place the gesture can live. It comes off the top of the available
+  width in `columns()` and is never shed, unlike `delay`/`from`/the chips. `gripAt` finds the row,
+  `dropTargetAt` turns a pointer y into a `(step, index)` — the step header band means "first in
+  this step", a row's top half means "before it", its bottom half "after it", and more than two row
+  heights below the last row means `step == steps.size()`: a **new final step**, which is how
+  simultaneous tracks are made sequential. The press is handled **before** the drag-to-scroll
+  branch, or a grip drag would scroll the list instead. While dragging, the panel draws the
+  insertion line and an **opaque** ghost of the row under the pointer, both inside the list clip;
+  the ghost is the one thing allowed to sit over the rows, so it must be readable rather than a
+  wash. On drop it calls `Document::moveTrack`, and only calls `documentChanged()` when that
+  returns true.
 - **Modal** — New / Open / Save As / report, drawn in the normal pass (see architecture §6).
 
 ### 7.3 `RowHover`

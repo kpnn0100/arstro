@@ -58,10 +58,6 @@
         "pivotX": "self.w / 2",
         "pivotY": "self.h / 2"
       },
-      "animated": [
-        "scaleX",
-        "scaleY"
-      ],
       "reactions": [
         {
           "on": "dragStart",

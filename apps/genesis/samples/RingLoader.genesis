@@ -38,10 +38,6 @@
         "strokeWidth": "thickness",
         "opacity": "0"
       },
-      "animated": [
-        "opacity",
-        "rotation"
-      ],
       "reactions": [
         {
           "on": "loopStart",

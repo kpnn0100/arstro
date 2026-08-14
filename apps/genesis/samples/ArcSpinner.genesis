@@ -61,12 +61,6 @@
         "trimStart": "0",
         "trimEnd": "sweep / 360"
       },
-      "animated": [
-        "opacity",
-        "rotation",
-        "trimEnd",
-        "trimOffset"
-      ],
       "reactions": [
         {
           "on": "loopStart",

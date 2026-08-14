@@ -223,13 +223,25 @@ namespace genesis
             }
 
             /** liveNames plus `current` — the target field's value at the moment the reaction
-             *  fires, which is what makes `to = current + 10` mean "ten more than now". */
-            gene::CppNames trackNames(const std::string &owner, const std::string &propExpr) const
+             *  fires, which is what makes `to = current + 10` mean "ten more than now" — and
+             *  `original`, the target field's own binding compiled inline (G-22). The binding is
+             *  compiled with plain `liveNames`, the same scope the interpreter evaluates it in,
+             *  so a field's expression can never reach `current`/`original` and the two sides
+             *  cannot drift. */
+            gene::CppNames trackNames(const std::string &owner, const std::string &propExpr,
+                                      const std::string &originalExpr, const std::string &where) const
             {
                 gene::CppNames n = liveNames(owner);
                 auto base = n.ident;
-                n.ident = [base, propExpr](const std::string &name) -> std::string {
+                const Emitter *self = this;
+                n.ident = [base, propExpr, originalExpr, where, owner,
+                           self](const std::string &name) -> std::string {
                     if (name == "current") return propExpr + ".value()";
+                    if (name == "original")
+                        return "(" +
+                               const_cast<Emitter *>(self)->expr(originalExpr, self->liveNames(owner),
+                                                                 where + " original") +
+                               ")";
                     return base ? base(name) : std::string();
                 };
                 return n;
@@ -292,7 +304,7 @@ namespace genesis
                 {
                     std::set<std::string> live;
                     for (const auto &sh : doc.shapes)
-                        for (const auto &a : sh.animated)
+                        for (const auto &a : doc.animatedFields(sh.id))
                             live.insert(sh.id + "\x1f" + a);
                     bool changed = true;
                     while (changed)
@@ -445,7 +457,7 @@ namespace genesis
                 o << "        /** Assign a bound value unless motion owns the field (see the .cpp). */\n";
                 o << "        void bindProp(artboard::Property &p, double v, double ms, bool owned);\n";
                 for (const auto &pair : doc.allReactions())
-                    for (size_t i = 0; i < pair.second->steps.size(); ++i)
+                    for (size_t i = 0; i < doc.expandSteps(*pair.second, pair.first->id).size(); ++i)
                         o << "        void " << reactionFn(pair.first->id, pair.second->signal, (int)i)
                           << "();\n";
 
@@ -473,7 +485,7 @@ namespace genesis
                             o << "        artboard::Color " << stylePropOf(s.id, fd->name) << ";\n";
                 }
                 for (const auto &s : doc.shapes)
-                    for (const auto &a : s.animated)
+                    for (const auto &a : doc.animatedFields(s.id))
                         o << "        bool " << ownFlag(s.id, a) << " = false;\n";
                 for (const auto &pair : doc.allReactions())
                 {
@@ -740,7 +752,7 @@ namespace genesis
                     {
                         const std::string expr = self.expr(src, layoutNames(s->id), where);
                         o << "        const double " << localOf(s->id, fd->name) << " = ";
-                        if (s->isAnimated(fd->name))
+                        if (doc.isAnimated(s->id, fd->name))
                         {
                             // Once motion owns a field its VALUE is the animated one, so a
                             // binding reading it follows the animation instead of freezing at
@@ -769,7 +781,7 @@ namespace genesis
                             o << "        " << stylePropOf(s.id, fd->name) << " = " << local << ";\n";
                             continue;
                         }
-                        const bool animated = s.isAnimated(fd->name);
+                        const bool animated = doc.isAnimated(s.id, fd->name);
                         const std::string owned = animated ? ownFlag(s.id, fd->name) : "false";
                         if (*fd->segmentProperty)
                             o << "        bindProp(" << memberOf(s.id) << "->" << fd->segmentProperty
@@ -878,9 +890,12 @@ namespace genesis
                 {
                     const Shape &host = *pair.first;
                     const Reaction &r = *pair.second;
-                    for (size_t si = 0; si < r.steps.size(); ++si)
+                    // The SAME expansion the interpreter uses (G-22), so the compiled class and
+                    // the preview run identical track lists — which is what the Verifier diffs.
+                    const std::vector<Step> steps = doc.expandSteps(r, host.id);
+                    for (size_t si = 0; si < steps.size(); ++si)
                     {
-                        const Step &step = r.steps[si];
+                        const Step &step = steps[si];
                         int finite = 0;
                         for (const auto &t : step.tracks)
                             if (t.repeat >= 0) ++finite;
@@ -904,8 +919,9 @@ namespace genesis
                             const std::string prop = *fd->segmentProperty
                                                          ? memberOf(owner) + "->" + fd->segmentProperty
                                                          : stylePropOf(owner, field);
-                            const gene::CppNames names = trackNames(owner, prop);
                             const std::string where = host.id + " " + r.signal + " " + t.target;
+                            const gene::CppNames names =
+                                trackNames(owner, prop, s->effectiveField(field), where);
                             const std::string from = t.from.empty() ? prop + ".value()"
                                                                     : self.expr(t.from, names, where + " from");
                             const std::string to = self.expr(t.to, names, where + " to");
@@ -926,7 +942,7 @@ namespace genesis
                                 o << "                    return;   // a newer run of this reaction superseded us\n";
                                 o << "                if (--" << pendingMember(host.id, r.signal)
                                   << " > 0)\n                    return;\n";
-                                if (si + 1 < r.steps.size())
+                                if (si + 1 < steps.size())
                                     o << "                " << reactionFn(host.id, r.signal, (int)si + 1)
                                       << "();\n";
                                 else

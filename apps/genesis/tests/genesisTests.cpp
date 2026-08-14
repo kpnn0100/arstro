@@ -417,12 +417,63 @@ TEST(Document_shape_fields_fall_back_to_defaults)
     CHECK(s.effectiveField("w") == "42");
     s.setField("w", "43");                       // overwrite, not duplicate
     CHECK(s.fields.size() == 1);
-    CHECK(!s.isAnimated("opacity"));
-    s.setAnimated("opacity", true);
-    s.setAnimated("opacity", true);
-    CHECK(s.animated.size() == 1);
-    s.setAnimated("opacity", false);
-    CHECK(s.animated.empty());
+}
+TEST(A_field_is_animated_because_a_track_animates_it)
+{
+    // No animate mark (G-21): the answer is derived, and it is a DOCUMENT-level question
+    // because a track on one object may target another's field.
+    Document d = Document::starter("VisualLoop", "C");
+    CHECK(d.isAnimated("ring", "opacity"));            // the starter's fade
+    CHECK(d.isAnimated("ring", "rotation"));           // and its spin
+    CHECK(!d.isAnimated("ring", "x"));
+    CHECK(!d.isAnimated("nosuchshape", "x"));
+
+    Shape dot;
+    dot.id = "dot";
+    dot.kind = ShapeKind::Circle;
+    d.addShape(dot);
+    CHECK(!d.isAnimated("dot", "scaleX"));
+    Reaction r;                                        // ring drives dot: still counts
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"dot.scaleX", "", "2", "100", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    d.findShape("ring")->reactions.push_back(r);
+    CHECK(d.isAnimated("dot", "scaleX"));
+
+    // Field-table order, not the order the tracks were written, or the emitter's output
+    // would depend on how the author happened to reorder rows.
+    Reaction back;
+    back.signal = "loopEnd";
+    Step bs;
+    bs.tracks.push_back({"dot.scaleY", "", "1", "100", "0", "Linear", 0, false});
+    bs.tracks.push_back({"dot.opacity", "", "0", "100", "0", "Linear", 0, false});
+    back.steps.push_back(bs);
+    d.findShape("ring")->reactions.push_back(back);
+    const std::vector<std::string> a = d.animatedFields("dot");
+    CHECK(a.size() == 3);
+    CHECK(a[0] == "opacity" && a[1] == "scaleX" && a[2] == "scaleY");
+}
+TEST(An_older_documents_animated_list_loads_and_is_ignored)
+{
+    // The list was a second source of truth; a file still carrying it must load, and a field it
+    // marked with no track is simply not animated (G-21). Built by injecting the key into a real
+    // saved document, so the fixture cannot drift from the schema.
+    Document d = Document::starter("VisualLoop", "C");
+    d.findShape("ring")->reactions.resize(1);                  // keep the fade, drop the spin
+    d.findShape("ring")->reactions[0].steps.resize(1);
+    std::string saved = d.toJson().dump();
+    const std::string anchor = "\"id\": \"ring\"";
+    const size_t at = saved.find(anchor);
+    CHECK(at != std::string::npos);
+    saved.insert(at + anchor.size(), ", \"animated\": [\"opacity\", \"rotation\"]");
+
+    std::string err;
+    const Document back = Document::fromJson(Json::parse(saved, &err), &err);
+    CHECK(err.empty());
+    CHECK(back.isAnimated("ring", "opacity"));                 // a track says so
+    CHECK(!back.isAnimated("ring", "rotation"));               // only the stale mark did
+    CHECK(back.toJson().dump().find("animated") == std::string::npos);   // never written back
 }
 TEST(Document_starter_is_valid_and_exportable)
 {
@@ -446,7 +497,7 @@ TEST(Document_json_round_trips_byte_for_byte)
     CHECK(back.shapes.size() == d.shapes.size());
     CHECK(back.allReactions().size() == d.allReactions().size());
     CHECK(back.params.size() == d.params.size());
-    CHECK(back.shapes[0].animated.size() == d.shapes[0].animated.size());
+    CHECK(back.animatedFields("ring") == d.animatedFields("ring"));
 }
 TEST(Document_lookup_and_child_queries)
 {
@@ -471,7 +522,6 @@ TEST(Document_removing_a_shape_removes_descendants_and_their_tracks)
     Shape child;
     child.id = "dot";
     child.parent = "ring";
-    child.setAnimated("opacity", true);
     d.addShape(child);
     Reaction r;
     r.signal = "cycle";
@@ -625,7 +675,6 @@ TEST(Document_several_objects_can_react_to_one_signal)
     dot.id = "dot";
     dot.kind = ShapeKind::Circle;
     dot.setField("fill", "accent");
-    dot.setAnimated("opacity", true);
     Reaction r;
     r.signal = "loopStart";
     Step st;
@@ -669,7 +718,6 @@ TEST(Document_duplicate_copies_the_subtree_and_its_reactions)
     child.parent = "ring";
     child.kind = ShapeKind::Circle;
     child.setField("fill", "accent");
-    child.setAnimated("opacity", true);
     Reaction r;
     r.signal = "cycle";
     Step st;
@@ -707,7 +755,6 @@ TEST(Document_duplicate_remaps_only_targets_inside_the_copied_subtree)
     outside.id = "halo";
     outside.kind = ShapeKind::Circle;
     outside.setField("fill", "accent");
-    outside.setAnimated("opacity", true);
     d.addShape(outside);
 
     // ring's reaction drives BOTH itself and the outside object.
@@ -804,11 +851,8 @@ TEST(Document_validate_catches_every_class_of_authoring_mistake)
         d.shapes.front().reactions[0].signal = "onFire";
         CHECK(errorsOf(d) > 0);
     }
-    {   // a track targeting a field that was never marked animated
-        Document d = Document::starter("VisualLoop", "C");
-        d.shapes[0].setAnimated("opacity", false);
-        CHECK(errorsOf(d) > 0);
-    }
+    // (There is no longer a "field not marked animated" mistake to make: the track IS the
+    //  mark. G-21 removed the diagnostic along with the checkbox that caused it.)
     {   // a track targeting a colour
         Document d = Document::starter("VisualLoop", "C");
         d.shapes.front().reactions[0].steps[0].tracks[0].target = "ring.fill";
@@ -838,10 +882,16 @@ TEST(Document_validate_catches_every_class_of_authoring_mistake)
         d.addShape(p);
         CHECK(errorsOf(d) > 0);
     }
-    {   // animating a non-animatable field
+    {   // `original` outside a track, where there is no target field to be original about
         Document d = Document::starter("VisualLoop", "C");
-        d.shapes[0].setAnimated("fill", true);
+        d.shapes.front().setField("x", "original + 4");
         CHECK(errorsOf(d) > 0);
+    }
+    {   // `all` on a kind with no animatable field warns rather than errors: the reaction is
+        // empty, not wrong — and every current kind HAS animatable fields, so this one passes.
+        Document d = Document::starter("VisualLoop", "C");
+        d.shapes.front().reactions[0].steps[0].tracks[0].target = "all";
+        CHECK(errorsOf(d) == 0);
     }
     {   // a param shadowing a built-in name
         Document d = Document::starter("VisualLoop", "C");
@@ -922,7 +972,6 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
         rect.kind = ShapeKind::Rect;
         rect.setField("fill", "theme.card");
         rect.setField("cornerRadius", "6");
-        rect.setAnimated("cornerRadius", true);
         const std::string boxId = d.addShape(rect);   // may be de-duplicated per base
         Shape path;
         path.id = "tick";
@@ -940,7 +989,6 @@ TEST(Emitter_covers_every_base_shape_kind_and_param_type)
         label.kind = ShapeKind::Label;
         label.text = "{caption}";
         label.setField("fill", "theme.muted");
-        label.setAnimated("fontSize", true);
         d.addShape(label);
         Param text;
         text.name = "caption";
@@ -1155,7 +1203,6 @@ TEST(Runtime_a_binding_follows_the_field_it_reads_while_that_field_animates)
     s->setField("y", "0");
     s->setField("fill", "accent");
     s->setField("opacity", "1");
-    s->setAnimated("w", true);
     s->reactions.clear();
     Reaction r;
     r.signal = "loopStart";
@@ -1197,7 +1244,14 @@ TEST(Emitter_layout_runs_per_frame_when_a_binding_reads_an_animated_field)
 
     Document live = Document::starter("VisualLoop", "L");
     live.findShape("ring")->setField("x", "w / 4 * 3 - self.w / 2");
-    live.findShape("ring")->setAnimated("w", true);
+    {
+        Reaction grow;                       // a track is what makes `w` animated now (G-21)
+        grow.signal = "loopStart";
+        Step st;
+        st.tracks.push_back({"w", "", "40", "200", "0", "Linear", 0, false});
+        grow.steps.push_back(st);
+        live.findShape("ring")->reactions.push_back(grow);
+    }
     const EmittedCode b = emitCpp(live);
     CHECK(b.ok());
     CHECK(b.source.find("layout(resized ? sizeMs : 0.0);") != std::string::npos);
@@ -1370,6 +1424,194 @@ TEST(Runtime_renders_paths_and_labels)
 }
 
 // ───────────────────────── the verifier's comparison ─────────────────────────
+TEST(All_expands_to_one_track_per_animatable_field)
+{
+    // `all` is authored as ONE row and expanded in exactly one place, so the emitter, the
+    // interpreter and the validator cannot disagree about what it means (G-22).
+    Document d = Document::starter("VisualLoop", "C");
+    Shape *ring = d.findShape("ring");
+    ring->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"all", "current", "original", "300", "0", "EaseOutCubic", 0, false});
+    r.steps.push_back(st);
+    ring->reactions.push_back(r);
+
+    const std::vector<Step> ex = d.expandSteps(r, "ring");
+    CHECK(ex.size() == 1);
+    int animatable = 0;
+    for (const auto *fd : fieldsFor(ShapeKind::Circle))
+        if (fd->animatable) ++animatable;
+    CHECK((int)ex[0].tracks.size() == animatable);
+    CHECK(animatable > 5);
+    CHECK(ex[0].tracks[0].target == "x");              // field-table order
+    for (const auto &t : ex[0].tracks)                 // and every field inherits the row
+    {
+        CHECK(t.from == "current");
+        CHECK(t.to == "original");
+        CHECK(t.durationMs == "300");
+        CHECK(t.easing == "EaseOutCubic");
+    }
+    // Which makes the whole object animated, without a mark anywhere (G-21).
+    CHECK((int)d.animatedFields("ring").size() == animatable);
+
+    // A qualified `other.all` keeps the qualification, so it still reaches the other object.
+    Shape dot;
+    dot.id = "dot";
+    dot.kind = ShapeKind::Circle;
+    d.addShape(dot);
+    Reaction q;
+    q.signal = "cycle";
+    Step qs;
+    qs.tracks.push_back({"dot.all", "", "0", "100", "0", "Linear", 0, false});
+    q.steps.push_back(qs);
+    const std::vector<Step> qe = d.expandSteps(q, "ring");
+    CHECK(qe[0].tracks.front().target == "dot.x");
+    CHECK(d.isAnimated("dot", "opacity") == false);    // not attached to a shape yet
+    d.findShape("ring")->reactions.push_back(q);
+    CHECK(d.isAnimated("dot", "opacity"));
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+}
+TEST(Original_animates_back_to_the_authored_binding)
+{
+    /*  `original` is "wherever the design says it belongs" — the target field's own binding,
+     *  re-evaluated now (G-22). So `from = current, to = original` is a return-to-rest that
+     *  keeps working when the window is a different size than when it was authored.
+     */
+    Document d = Document::starter("VisualLoop", "B");
+    Shape *s = d.findShape("ring");
+    s->kind = ShapeKind::Rect;
+    s->setField("w", "minSide * 0.2");
+    s->setField("h", "minSide * 0.2");
+    s->setField("x", "(w - self.w) / 2");   // centred: an expression, not a literal
+    s->setField("y", "0");
+    s->setField("fill", "accent");
+    s->setField("opacity", "1");
+    s->reactions.clear();
+    {
+        Reaction out;                        // shove x to the left edge
+        out.signal = "loopStart";
+        Step st;
+        st.tracks.push_back({"x", "", "0", "200", "0", "Linear", 0, false});
+        out.steps.push_back(st);
+        s->reactions.push_back(out);
+    }
+    {
+        Reaction home;                       // and send it back to where it belongs
+        home.signal = "loopEnd";
+        Step st;
+        st.tracks.push_back({"x", "current", "original", "200", "0", "Linear", 0, false});
+        home.steps.push_back(st);
+        s->reactions.push_back(home);
+    }
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    artboard::Segment *seg = rt.segmentFor("ring");
+    CHECK_NEAR(seg->width.value(), 40.0, 1e-6);
+    CHECK_NEAR(seg->x.value(), 80.0, 1e-6);          // (200 - 40) / 2
+
+    rt.loopStart();
+    rt.advance(0.0);
+    rt.advance(200.0);
+    CHECK_NEAR(seg->x.value(), 0.0, 1e-6);           // parked at the edge
+
+    rt.fire("loopEnd");
+    rt.advance(200.0);
+    rt.advance(400.0);
+    CHECK_NEAR(seg->x.value(), 80.0, 1e-6);          // back to the binding's value
+
+    // And `original` is re-evaluated, not remembered: at a new size it lands centred THERE.
+    rt.setSize(300, 300);
+    rt.advance(500.0);
+    rt.loopStart();
+    rt.advance(500.0);
+    rt.advance(700.0);
+    rt.fire("loopEnd");
+    rt.advance(700.0);
+    rt.advance(900.0);
+    CHECK_NEAR(seg->width.value(), 60.0, 1e-6);
+    CHECK_NEAR(seg->x.value(), 120.0, 1e-6);         // (300 - 60) / 2, not the old 80
+}
+TEST(Emitted_code_expands_all_and_inlines_original)
+{
+    // The generated class must contain the SAME expansion, with `original` compiled inline as
+    // the binding expression — that is what lets the Verifier diff the two op streams (G-22).
+    Document d = Document::starter("VisualLoop", "C");
+    Shape *ring = d.findShape("ring");
+    ring->setField("x", "(w - self.w) / 2");
+    ring->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"all", "current", "original", "300", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    ring->reactions.push_back(r);
+
+    const EmittedCode e = emitCpp(d);
+    CHECK(e.ok());
+    // One animate() per animatable field, not one for a field called "all".
+    CHECK(e.source.find("mRing->x.animate(") != std::string::npos);
+    CHECK(e.source.find("mRing->rotation.animate(") != std::string::npos);
+    CHECK(e.source.find("mAll") == std::string::npos);
+    // `original` for x became the binding, inlined — the same expression layout() uses.
+    CHECK(e.source.find("(w - mRing->width.value()) / 2") != std::string::npos);
+    // `current` is still the live property read.
+    CHECK(e.source.find("mRing->x.value()") != std::string::npos);
+}
+TEST(Moving_a_track_between_steps)
+{
+    // Ordering motion is a rearrangement (G-23), so the model does it by rearranging.
+    Reaction r;
+    r.signal = "loopStart";
+    auto track = [](const char *target) {
+        return Track{target, "", "1", "100", "0", "Linear", 0, false};
+    };
+    r.steps.push_back(Step{{track("a"), track("b"), track("c")}});
+    r.steps.push_back(Step{{track("d")}});
+
+    // Within a step: b before a.
+    CHECK(Document::moveTrack(r, 0, 1, 0, 0));
+    CHECK(r.steps[0].tracks[0].target == "b");
+    CHECK(r.steps[0].tracks[1].target == "a");
+
+    // A drop that lands where it already is changes nothing — either index of the same slot.
+    CHECK(!Document::moveTrack(r, 0, 0, 0, 0));
+    CHECK(!Document::moveTrack(r, 0, 0, 0, 1));
+
+    // Across steps, at a chosen index.
+    CHECK(Document::moveTrack(r, 0, 2, 1, 0));
+    CHECK(r.steps[0].tracks.size() == 2);
+    CHECK(r.steps[1].tracks[0].target == "c");
+    CHECK(r.steps[1].tracks[1].target == "d");
+
+    // toStep == steps.size() means a NEW final step: sequential from simultaneous.
+    CHECK(Document::moveTrack(r, 0, 0, 2, 0));
+    CHECK(r.steps.size() == 3);
+    CHECK(r.steps[2].tracks.size() == 1 && r.steps[2].tracks[0].target == "b");
+
+    // Emptying a step removes it, since a step with no tracks has no duration to chain from.
+    CHECK(r.steps[0].tracks.size() == 1 && r.steps[0].tracks[0].target == "a");
+    CHECK(Document::moveTrack(r, 0, 0, 1, 0));
+    CHECK(r.steps.size() == 2);
+    CHECK(r.steps[0].tracks[0].target == "a");        // step 1 is now the old step 2
+    CHECK(r.steps[0].tracks.size() == 3);
+
+    // A lone track already IS its own step: dragging it to a new one is a no-op.
+    CHECK(r.steps[1].tracks.size() == 1);
+    CHECK(!Document::moveTrack(r, 1, 0, 2, 0));
+    // And nonsense indices are refused rather than corrupting the reaction.
+    CHECK(!Document::moveTrack(r, 9, 0, 0, 0));
+    CHECK(!Document::moveTrack(r, 0, 9, 1, 0));
+    CHECK(!Document::moveTrack(r, 0, 0, 9, 0));
+}
 TEST(Verifier_op_serialization_is_field_wise_and_stable)
 {
     artboard::RecordingTarget t;

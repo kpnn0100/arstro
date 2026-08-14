@@ -82,11 +82,33 @@ parent.w / 4                  # sized against whatever holds me, without naming 
 snap(minSide * 0.72, 4)       # onto a 4px grid
 wrap(base.phase * 360, 0, 360)  # an angle, kept in range
 current + 10                  # in a track's `to`: ten more than wherever it is now
+original                      # in a track's `to`: back to the value the inspector says
 ```
+
+Two names exist only inside a track, and they are a pair:
+
+| | |
+| --- | --- |
+| `current` | wherever the field is **now** — `to = current + tau / dots` steps a value on each fire |
+| `original` | wherever the **design** says it belongs: the value of that field's own binding |
+
+`original` is the expression, not a remembered number, so `from = current, to = original` returns
+a field to rest and still lands correctly at a window size the component was never authored at —
+an `original x` of `(w - self.w) / 2` recentres against the current width.
+
+Pair it with the target **`all`** — every animatable field of the object, as one row:
+
+```
+target: all      from: current      to: original      ms: 220      easing: EaseOutBack
+```
+
+That single row is a whole object snapping back to its authored state; `samples/SnapBack.genesis`
+is nothing but that. `other.all` reaches a different object the same way `other.opacity` does.
 
 Names: `w` `h` `minSide` `maxSide` `aspect` `pi` `tau` `e`, any param, `self.<field>`,
 **`parent.<field>`** (the object holding this one — the component itself, for a top-level
-object), `<shape>.<field>`, `base.<read>`, `theme.<role>`, and `current` inside a track.
+object), `<shape>.<field>`, `base.<read>`, `theme.<role>`, and `current` / `original` inside a
+track.
 Functions: `min max abs clamp lerp floor ceil round sign sqrt pow div mod hypot dist snap wrap
 remap step smoothstep sin cos tan asin acos atan atan2 exp log deg rad turns pct rgb rgba fade
 mix`.
@@ -164,9 +186,11 @@ document always produces byte-identical output.
 
 ## Samples
 
-`samples/` holds one verified component per base, plus `PulseDots` — a loop authored with
-**no reactions at all**, purely as a binding on `base.phase`, to show that the animation can
-be a formula.
+`samples/` holds one verified component per base, plus two that exist to show an idea:
+`PulseDots`, a loop authored with **no reactions at all**, purely as a binding on `base.phase`
+— the animation as a formula; and `SnapBack`, whose entire release is one `all → original` row.
+Every one of them passes `--verify`, so each is also a proof that the preview matched the
+compiled class.
 
 ## Mouse
 
@@ -192,9 +216,16 @@ remove a word.
   carries every reference with it) and fields, a label's text, a path's commands, the params
   (add by clicking `number` / `color` / `text`, remove with the ×), and a **Problems** list of
   every validator diagnostic.
-- **Reactions** — per track: `target`, `from` (blank = wherever it is now), `to`, `ms`,
-  `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a delete.
-  The scrubber replays the selected reaction to any point in its own timeline.
+- **Reactions** — per track: a **grip**, `target`, `from` (blank = wherever it is now), `to`,
+  `ms`, `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a
+  delete. The scrubber replays the selected reaction to any point in its own timeline.
+- **Drag a track by its grip** to move it: into another step, to a different position inside its
+  step, or — dropped in the space below the last row — into a **new final step**, which is how
+  you turn tracks that run together into ones that run in sequence. A line shows where it will
+  land. The grip is the only draggable part of the row, because every other part is a text field
+  whose own drag selects text.
+- **Nothing is marked animatable.** A field is animated because a track animates it, and the
+  expression in the inspector is its resting value. There is no toggle to forget.
 - **Duplicate** (or `Ctrl+D`) copies an object and its children as `<id>_copy` — with its
   reactions, so the copy animates itself rather than sharing the original's motion.
 - Every edit is undoable; rapid typing collapses into one undo step.

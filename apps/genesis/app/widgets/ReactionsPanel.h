@@ -39,6 +39,8 @@ namespace ui
          *  Every row must be reachable: see `Every_track_row_can_be_scrolled_fully_into_view`. */
         int trackRowCount() const { return (int)mRows.size(); }
         bool trackRowShown(int i) const { return mRows[(size_t)i].target->visible; }
+        /** True while a track is being dragged by its grip (G-23). */
+        bool dragActive() const { return mDrag.active; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -60,10 +62,27 @@ namespace ui
         /** The chips at a row's right edge: repeat count, yoyo, delete. */
         enum class Chip { None, Repeat, Yoyo, Remove };
         Chip chipAt(const artboard::Point &p, int &rowIndex) const;
+        /** The row whose GRIP is under `p`, or -1. The grip is the only draggable part of a row
+         *  because everything else is a text field, whose own drag selects text (G-23). */
+        int gripAt(const artboard::Point &p) const;
+        /** Where a drop at `localY` would put the track: `step` == step count means a NEW final
+         *  step, which is how a drag below the last row makes motion sequential. */
+        void dropTargetAt(double localY, int &step, int &index) const;
+        /** An in-flight track drag. */
+        struct TrackDrag
+        {
+            bool active = false;
+            int row = -1;          // index into mRows
+            double y = 0.0;        // the pointer, in panel-local space
+            int step = -1;         // where it would land
+            int index = 0;
+        };
         /** Track-row column widths. A width of 0 means the column is DROPPED at this size:
          *  the panel sheds detail rather than letting columns run into each other. */
         struct Columns
         {
+            /** The drag grip. Fixed, and never shed: it is the only way to reorder (G-23). */
+            static constexpr double grip = 14.0;
             double target = 0, from = 0, to = 0, ms = 0, delay = 0, easing = 0, gap = 6.0;
             bool showChips = true;
             double total() const;
@@ -102,6 +121,7 @@ namespace ui
         double mNowMs = 0.0;
         double mScrubT = 0.0;         // 0..1 through the selected reaction, for the scrubber
         bool mScrubbing = false;
+        TrackDrag mDrag;
         ListScroll mTrackScroll;      // the steps + tracks on the right
         ListScroll mReactionScroll;   // the reaction list on the left
         std::string mStructure;

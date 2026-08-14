@@ -113,7 +113,8 @@ scope in a shape's field bindings, where there is no target to speak of.
   all repeat forever ends the chain.
 - Every reaction carries a **cancellation policy** — `restart` (default), `ignoreIfRunning`,
   or `queue` — because interruption is what event-driven motion gets wrong.
-- Only a field marked **animatable** on its shape may be a track target.
+- Only a field the base table calls **animatable** may be a track target — a property of the
+  field, not a per-shape mark the author has to set (G-21).
 
 ### G-6a A binding follows the value it reads, including while it animates
 
@@ -267,7 +268,7 @@ whichever is faded out takes no input.
 
 The editor shall present: the shape tree with add/delete; the live preview with a
 base-appropriate transport and a reduced-motion switch; the inspector (every field as an
-editable expression plus an animate toggle, and the params with live controls); the reactions
+editable expression, and the params with live controls); the reactions
 panel (signal, cancellation policy, steps, tracks, a per-reaction scrubber, and Fire); and
 New/Open/Save/Export/Verify. Editing a field shall update the preview as it is typed.
 
@@ -316,6 +317,73 @@ Each such list shall:
 
 The panel shall also not be capped so tightly that a large window cannot show more: the
 reactions panel takes a third of the window height, so a taller screen buys more track rows.
+
+### G-21 A field is animated because a track animates it
+
+There shall be **no animate mark**. A field is animated exactly when some track targets it, and
+its resting value is the expression in the inspector — nothing else to set, and nothing that can
+disagree.
+
+The mark was a second source of truth for a fact the reactions already stated, and it could
+contradict them in both directions: a field marked animated with no track (a `Property` that
+never moves, and a whole-frame layout re-run to read it), or a track on an unmarked field (which
+the validator had to reject with "must be marked animated", a diagnostic that only ever meant
+"you forgot the checkbox"). Both disappear when the answer is derived:
+
+- `Document::animatedFields(shapeId)` shall answer it by scanning every reaction of every
+  shape — a track on object A may target `B.opacity`, so this is a document-level question, not
+  a shape-level one — and shall return the fields in field-table order, because the emitter's
+  output must be byte-stable.
+- The answer shall be computed **after** `all` is expanded (G-22), since `all` is what makes a
+  whole shape animated.
+- Every consumer — the emitter's own-flags, the interpreter's `owned` map, the live-reachability
+  pass of G-6a — shall read that one function.
+- A document carrying the old `"animated"` list shall still load; the list is ignored, because
+  the tracks in the same file already say what moves. A field it marked with no track was, in
+  every sense that reaches the screen, not animated.
+
+### G-22 `original`, and `all` for a whole object
+
+Two names, so a reaction can put an object back the way it was authored.
+
+**`original`** — valid in a track's `from`/`to` alongside `current` (G-6), and nowhere else —
+reads the value of the **target field's own binding**: the expression sitting in the inspector.
+Where `current` is "wherever it is now", `original` is "wherever the design says it belongs".
+`from = current, to = original` is therefore a return-to-rest that needs no duplicated literal
+and keeps following the binding when the window resizes or a param changes.
+
+The expression is evaluated in the same live scope the binding itself reads (G-6a), so an
+`original x` of `(w - self.w) / 2` recentres against the *current* width, animated or not. A
+field's binding may not itself contain `original` or `current`, so there is no recursion.
+
+**`all`** — a target of `all` (or `other.all`) expands to one track per animatable field of that
+object, in field-table order, sharing the same `from`/`to`/`ms`/`delay`/`easing`/`repeat`/`yoyo`.
+`from = current, to = original` on `all` is the whole point: one row that returns an entire
+object to its authored state.
+
+- Expansion shall happen in **one** place (`Document::expandSteps`) that the interpreter, the
+  emitter, and the validator all call, so the compiled class and the preview cannot disagree —
+  the Verifier compares them op for op.
+- The editor keeps showing the **authored** row: one `all`, not the fields it stands for.
+- A shape with no animatable field for its kind expands to nothing rather than erroring.
+
+### G-23 A track can be dragged into another step
+
+Ordering motion is a rearrangement, so it shall be done by rearranging. Each track row carries a
+**grip** at its left edge; dragging it moves the track, and the panel shows an insertion line
+where it would land.
+
+- The grip is the only draggable part of the row, because every other part is a text field whose
+  own drag selects text. It is never shed as the panel narrows (G-13) — it is the only way to
+  reorder.
+- Dropping into a step inserts at the line's position; dropping in the empty space **below the
+  last row** puts the track in a **new final step**, which is how one turns simultaneous tracks
+  into sequential ones.
+- A step left with no tracks is removed, since a step is defined by the tracks that start
+  together and an empty one has no duration to chain from.
+- Dragging is direct manipulation and therefore exempt from R-G-1: the pointer is the animation.
+- A drop that would not move the track is a no-op, not a document change (it must not land in
+  the undo history).
 
 ## 4. Design rules (the app's UI)
 

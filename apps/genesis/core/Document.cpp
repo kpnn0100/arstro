@@ -138,19 +138,7 @@ namespace genesis
         fields.emplace_back(name, expr);
     }
 
-    bool Shape::isAnimated(const std::string &name) const
-    {
-        return std::find(animated.begin(), animated.end(), name) != animated.end();
-    }
-
-    void Shape::setAnimated(const std::string &name, bool on)
-    {
-        auto it = std::find(animated.begin(), animated.end(), name);
-        if (on && it == animated.end())
-            animated.push_back(name);
-        else if (!on && it != animated.end())
-            animated.erase(it);
-    }
+    const char *const kAllFields = "all";
 
     // ───────────────────────── Document lookup ─────────────────────────
 
@@ -212,6 +200,68 @@ namespace genesis
     {
         const Shape *s = findShape(shapeId);
         return s ? s->parent : std::string();
+    }
+
+    std::vector<Step> Document::expandSteps(const Reaction &r, const std::string &ownerId) const
+    {
+        std::vector<Step> out;
+        out.reserve(r.steps.size());
+        for (const auto &st : r.steps)
+        {
+            Step o;
+            for (const auto &t : st.tracks)
+            {
+                std::string shapeId, field;
+                splitTarget(t.target, ownerId, shapeId, field);
+                if (field != kAllFields)
+                {
+                    o.tracks.push_back(t);
+                    continue;
+                }
+                // `all` stands for every animatable field this KIND has, in table order — a
+                // shape whose kind has none expands to nothing rather than erroring (G-22).
+                const Shape *s = findShape(shapeId);
+                if (!s) continue;
+                const bool qualified = t.target.find('.') != std::string::npos;
+                for (const auto *fd : fieldsFor(s->kind))
+                {
+                    if (!fd->animatable) continue;
+                    Track e = t;
+                    e.target = qualified ? shapeId + "." + fd->name : std::string(fd->name);
+                    o.tracks.push_back(e);
+                }
+            }
+            out.push_back(std::move(o));
+        }
+        return out;
+    }
+
+    std::vector<std::string> Document::animatedFields(const std::string &shapeId) const
+    {
+        const Shape *s = findShape(shapeId);
+        if (!s) return {};
+        std::set<std::string> hit;
+        for (const auto &owner : shapes)
+            for (const auto &r : owner.reactions)
+                for (const auto &st : expandSteps(r, owner.id))
+                    for (const auto &t : st.tracks)
+                    {
+                        std::string target, field;
+                        splitTarget(t.target, owner.id, target, field);
+                        if (target == shapeId) hit.insert(field);
+                    }
+        // Field-table order, not insertion order: the emitter writes these out, and its output
+        // has to be byte-stable across runs and across documents that differ only in row order.
+        std::vector<std::string> out;
+        for (const auto *fd : fieldsFor(s->kind))
+            if (hit.count(fd->name)) out.push_back(fd->name);
+        return out;
+    }
+
+    bool Document::isAnimated(const std::string &shapeId, const std::string &field) const
+    {
+        const std::vector<std::string> a = animatedFields(shapeId);
+        return std::find(a.begin(), a.end(), field) != a.end();
     }
 
     void Document::splitTarget(const std::string &target, const std::string &owner,
@@ -327,6 +377,37 @@ namespace genesis
                                              [](const Step &s) { return s.tracks.empty(); }),
                               r.steps.end());
             }
+    }
+
+    bool Document::moveTrack(Reaction &r, int fromStep, int fromTrack, int toStep, int toIndex)
+    {
+        const int stepCount = (int)r.steps.size();
+        if (fromStep < 0 || fromStep >= stepCount) return false;
+        auto &src = r.steps[(size_t)fromStep].tracks;
+        if (fromTrack < 0 || fromTrack >= (int)src.size()) return false;
+        if (toStep < 0 || toStep > stepCount) return false;              // == stepCount: new step
+
+        // A drop that lands where the track already is changes nothing, and must not push an
+        // undo entry (G-23). Note `toIndex == fromTrack + 1` is the same slot, not the next one.
+        if (toStep == fromStep && (toIndex == fromTrack || toIndex == fromTrack + 1)) return false;
+        if (toStep == stepCount && src.size() == 1) return false;         // its own step already
+
+        const Track t = src[(size_t)fromTrack];
+        src.erase(src.begin() + fromTrack);
+        if (toStep == stepCount)
+            r.steps.push_back(Step{});
+        else if (toStep == fromStep && toIndex > fromTrack)
+            --toIndex;                                                   // the erase shifted it
+
+        auto &dst = r.steps[(size_t)toStep].tracks;
+        toIndex = std::max(0, std::min(toIndex, (int)dst.size()));
+        dst.insert(dst.begin() + toIndex, t);
+
+        // A step is defined by the tracks that start together, so an empty one has no duration
+        // for the next step to chain from — it is removed rather than left as a silent pause.
+        if (r.steps[(size_t)fromStep].tracks.empty())
+            r.steps.erase(r.steps.begin() + fromStep);
+        return true;
     }
 
     // ───────────────────────── persistence ─────────────────────────
@@ -479,13 +560,8 @@ namespace genesis
             for (const auto &kv : s.fields)
                 bind.set(kv.first, Json::string(kv.second));
             j.set("bind", bind);
-            if (!s.animated.empty())
-            {
-                Json anim = Json::array();
-                for (const auto &a : s.animated)
-                    anim.push(Json::string(a));
-                j.set("animated", anim);
-            }
+            // No "animated" list is written: the tracks in this same file already say what
+            // moves, and a second copy of that fact could only ever disagree with them (G-21).
             if (s.kind == ShapeKind::Path)
             {
                 Json d = Json::array();
@@ -571,9 +647,9 @@ namespace genesis
             s.parent = sj["parent"].asString("");
             for (const auto &kv : sj["bind"].members())
                 s.fields.emplace_back(kv.first, kv.second.asString(""));
-            const Json &anim = sj["animated"];
-            for (int k = 0; k < anim.size(); ++k)
-                s.animated.push_back(anim.at(k).asString(""));
+            // "animated" from an older document is READ AND DISCARDED (G-21): a field it marked
+            // with no track was never animated in any sense that reached the screen, and one with
+            // a track needs no mark. The file still loads; the list just no longer says anything.
             const Json &dd = sj["d"];
             for (int k = 0; k < dd.size(); ++k)
             {
@@ -666,8 +742,8 @@ namespace genesis
 
             bool ident(const std::string &n) const
             {
-                if (n == "current")
-                    return allowCurrent;
+                if (n == "current" || n == "original")
+                    return allowCurrent;   // only inside a track (G-6, G-22)
                 const auto &b = gene::builtinIdents();
                 if (std::find(b.begin(), b.end(), n) != b.end())
                     return true;
@@ -804,14 +880,8 @@ namespace genesis
                 if (!fd)
                     out.push_back({Diagnostic::Severity::Error, s.id, "unknown field '" + kv.first + "'"});
             }
-            for (const auto &a : s.animated)
-            {
-                const FieldDef *fd = findField(a);
-                if (!fd)
-                    out.push_back({Diagnostic::Severity::Error, s.id, "cannot animate unknown field '" + a + "'"});
-                else if (!fd->animatable)
-                    out.push_back({Diagnostic::Severity::Error, s.id, "field '" + a + "' is not animatable"});
-            }
+            // Nothing to validate about which fields are animated: the tracks below are what
+            // make a field animated, and each is checked where it is written (G-21).
             if (s.kind == ShapeKind::Path)
             {
                 if (s.path.empty())
@@ -932,24 +1002,40 @@ namespace genesis
                                            "unknown shape '" + shapeId + "'"});
                             continue;
                         }
-                        const FieldDef *fd = findField(field);
-                        if (!fd || !fd->animatable)
+                        // `all` stands for every animatable field of the object (G-22); it is a
+                        // valid target as long as the KIND has one, and warns rather than errors
+                        // when it does not, since the reaction is merely empty, not wrong.
+                        if (field == kAllFields)
                         {
-                            out.push_back({Diagnostic::Severity::Error, sw,
-                                           "'" + t.target + "' is not an animatable field"});
-                            continue;
+                            bool any = false;
+                            for (const auto *afd : fieldsFor(s->kind))
+                                any = any || afd->animatable;
+                            if (!any)
+                                out.push_back({Diagnostic::Severity::Warning, sw,
+                                               "'" + t.target + "' animates nothing: " + s->id +
+                                                   " has no animatable field"});
                         }
-                        if (fd->type != FieldType::Number)
-                            out.push_back({Diagnostic::Severity::Error, sw,
-                                           "'" + t.target + "' is a colour; only numbers animate"});
-                        if (!s->isAnimated(field))
-                            out.push_back({Diagnostic::Severity::Error, sw,
-                                           "'" + t.target + "' must be marked animated on " + s->id});
+                        else
+                        {
+                            const FieldDef *fd = findField(field);
+                            if (!fd || !fd->animatable)
+                            {
+                                out.push_back({Diagnostic::Severity::Error, sw,
+                                               "'" + t.target + "' is not an animatable field"});
+                                continue;
+                            }
+                            if (fd->type != FieldType::Number)
+                                out.push_back({Diagnostic::Severity::Error, sw,
+                                               "'" + t.target +
+                                                   "' is a colour; only numbers animate"});
+                            // Nothing to check about whether the field is "marked" animated:
+                            // this track IS what makes it animated (G-21).
+                        }
                         if (!isEasingName(t.easing))
                             out.push_back({Diagnostic::Severity::Error, sw,
                                            "unknown easing '" + t.easing + "'"});
-                        // `current` is the target's value at fire time — in scope here, and
-                        // only here.
+                        // `current` (the target's value at fire time) and `original` (the value
+                        // of its own binding) are in scope here, and only here (G-6, G-22).
                         NameChecker tnc{*this, b, shapeId, /*allowCurrent*/ true};
                         checkExpr(t.to, sw + " to", FieldType::Number, tnc, out);
                         if (!t.from.empty())
@@ -1063,7 +1149,6 @@ namespace genesis
             fill.setField("h", "h");
             fill.setField("fill", "accent");
             fill.setField("cornerRadius", "h / 2");
-            fill.setAnimated("scaleY", true);
             fill.setField("pivotY", "self.h / 2");
             d.shapes.push_back(fill);
 
@@ -1092,8 +1177,6 @@ namespace genesis
             body.setField("cornerRadius", "6");
             body.setField("pivotX", "self.w / 2");
             body.setField("pivotY", "self.h / 2");
-            body.setAnimated("scaleX", true);
-            body.setAnimated("scaleY", true);
             d.shapes.push_back(body);
 
             Shape wash;
@@ -1107,7 +1190,6 @@ namespace genesis
             wash.setField("fill", "fade(#ffffff, 0.18)");
             wash.setField("cornerRadius", "6");
             wash.setField("opacity", "0");
-            wash.setAnimated("opacity", true);
             d.shapes.push_back(wash);
 
             Step press;
@@ -1163,8 +1245,6 @@ namespace genesis
             thumb.setField("fill", "theme.foreground");
             thumb.setField("pivotX", "self.w / 2");
             thumb.setField("pivotY", "self.h / 2");
-            thumb.setAnimated("scaleX", true);
-            thumb.setAnimated("scaleY", true);
             d.shapes.push_back(thumb);
 
             Step grab;
@@ -1196,8 +1276,6 @@ namespace genesis
             box.setField("cornerRadius", "5");
             box.setField("pivotX", "self.w / 2");
             box.setField("pivotY", "self.h / 2");
-            box.setAnimated("scaleX", true);
-            box.setAnimated("scaleY", true);
             d.shapes.push_back(box);
 
             Shape tick;
@@ -1211,7 +1289,6 @@ namespace genesis
             tick.setField("stroke", "theme.primaryForeground");
             tick.setField("strokeWidth", "2.2");
             tick.setField("opacity", "0");
-            tick.setAnimated("opacity", true);
             tick.path.push_back({'M', {"self.w * 0.26", "self.h * 0.52"}});
             tick.path.push_back({'L', {"self.w * 0.44", "self.h * 0.70"}});
             tick.path.push_back({'L', {"self.w * 0.76", "self.h * 0.32"}});
@@ -1241,8 +1318,6 @@ namespace genesis
         ring.setField("stroke", "accent");
         ring.setField("strokeWidth", "thickness");
         ring.setField("opacity", "0");
-        ring.setAnimated("opacity", true);
-        ring.setAnimated("rotation", true);
         d.shapes.push_back(ring);
 
         Step fade;

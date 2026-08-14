@@ -141,7 +141,6 @@ int main(int argc, char **argv)
             dot.id = "dot" + std::to_string(i);
             dot.kind = genesis::ShapeKind::Circle;
             dot.setField("fill", "accent");
-            dot.setAnimated("opacity", true);
             a.doc().addShape(dot);
         }
         if (genesis::Shape *host = a.doc().findShape("ring"))

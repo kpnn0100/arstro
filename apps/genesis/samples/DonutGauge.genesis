@@ -51,10 +51,6 @@
         "arcStart": "-90",
         "arcEnd": "-90 + 360 * base.display"
       },
-      "animated": [
-        "scaleX",
-        "scaleY"
-      ],
       "reactions": [
         {
           "on": "complete",

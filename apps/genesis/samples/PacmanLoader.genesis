@@ -39,12 +39,6 @@
         "arcStart": "bite / 2",
         "arcEnd": "360 - bite / 2"
       },
-      "animated": [
-        "opacity",
-        "rotation",
-        "arcStart",
-        "arcEnd"
-      ],
       "reactions": [
         {
           "on": "loopStart",

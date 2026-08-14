@@ -26,7 +26,10 @@ package "genesis (editor)" {
     + setHoverSim(on)
   }
   class Inspector
-  class ReactionsPanel
+  class ReactionsPanel {
+    - mDrag : TrackDrag  ' a track being dragged by its grip (G-23)
+    - gripAt(p) / dropTargetAt(y, step, index)
+  }
   class Modal {
     + openNew() / openBrowse() / openSaveAs() / openReport()
     + coversApp()  ' overlay-pass panels check this
@@ -48,6 +51,10 @@ package genesis_core {
   class Document {
     + params / shapes / reactions
     + validate() : Diagnostic[]
+    + expandSteps(r, ownerId) : Step[]  ' `all` -> one track per field (G-22)
+    + animatedFields(shapeId) : string[]  ' derived; there is no mark (G-21)
+    + isAnimated(shapeId, field)
+    + {static} moveTrack(r, fromStep, fromTrack, toStep, toIndex)  ' G-23
     + toJson() / fromJson() / load() / save()
     + {static} starter(base, name)
   }

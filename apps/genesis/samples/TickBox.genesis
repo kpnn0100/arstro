@@ -35,10 +35,6 @@
         "pivotX": "self.w / 2",
         "pivotY": "self.h / 2"
       },
-      "animated": [
-        "scaleX",
-        "scaleY"
-      ],
       "reactions": [
         {
           "on": "checkedChanged",
@@ -83,9 +79,6 @@
         "strokeWidth": "2.2",
         "opacity": "0"
       },
-      "animated": [
-        "opacity"
-      ],
       "d": [
         [
           "M",

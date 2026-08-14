@@ -261,7 +261,9 @@ namespace ui
             }
 
             const double textX = indent + 16.0;
-            const double animCount = s ? (double)s->animated.size() : 0.0;
+            // The badge counts what the reactions actually animate (G-21) — there is no mark
+            // to read, so the tree asks the document the same question the emitter does.
+            const double animCount = s ? (double)mApp.doc().animatedFields(s->id).size() : 0.0;
             const double badgeW = animCount > 0 ? 22.0 : 0.0;
             drawFitted(t, r.id, textX, centreBaseline(y, rowH, type::small()),
                        w - textX - pad - badgeW, type::small(),

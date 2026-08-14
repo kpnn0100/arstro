@@ -935,7 +935,6 @@ TEST(Reactions_panel_shows_only_the_selected_objects_reactions)
     dot.id = "dot";
     dot.kind = ShapeKind::Circle;
     dot.setField("fill", "accent");
-    dot.setAnimated("opacity", true);
     Reaction r;
     r.signal = "cycle";
     Step st;
@@ -1056,7 +1055,6 @@ TEST(Every_clipped_panel_scrolls_by_wheel_and_clamps_at_both_ends)
         s.id = "dot" + std::to_string(i);
         s.kind = ShapeKind::Circle;
         s.setField("fill", "accent");
-        s.setAnimated("opacity", true);
         app.doc().addShape(s);
     }
     Shape *host = app.doc().findShape("ring");
@@ -1230,6 +1228,107 @@ TEST(The_object_lists_last_row_lands_inside_the_box_at_full_scroll)
         wheelAt(app, rec, app.tree()->width.value() * 0.5, 300.0, 400.0);
     settle(app, now, 40.0);
     CHECK(app.tree()->lastRowFullyVisible());             // and scrolling reaches it
+}
+
+TEST(Dragging_a_tracks_grip_moves_it_to_another_step)
+{
+    /*  Ordering motion is a rearrangement, so it is done by rearranging (G-23). The grip is the
+     *  only draggable part of a row — every other part is a text field whose own drag selects
+     *  text — and a drop that would change nothing must not reach the undo history.
+     */
+    App app;
+    app.setSize(1360, 900);
+    double now = 0.0;
+    toEditor(app, now);
+    Shape *host = app.doc().findShape("ring");
+    CHECK(host != nullptr);
+    Reaction r;                                    // two steps, two tracks in the first
+    r.signal = "loopStart";
+    Step a;
+    a.tracks.push_back({"opacity", "0", "1", "120", "0", "Linear", 0, false});
+    a.tracks.push_back({"rotation", "0", "1", "120", "0", "Linear", 0, false});
+    Step b;
+    b.tracks.push_back({"scaleX", "0", "1", "120", "0", "Linear", 0, false});
+    r.steps.push_back(a);
+    r.steps.push_back(b);
+    host->reactions.assign(1, r);
+    app.selectShape("ring");
+    app.selectReaction(0);
+    app.documentChanged();
+    settle(app, now, 200.0);
+
+    auto *panel = app.reactions();
+    CHECK(panel->trackRowCount() == 3);
+    const auto &steps = [&]() -> const std::vector<Step> & {
+        return app.doc().findShape("ring")->reactions[0].steps;
+    };
+    CHECK(steps().size() == 2);
+
+    artboard::GestureRecognizer rec;
+    artboard::InputRouter router;
+    router.add(&app);
+    rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+    auto feed = [&](artboard::RawPointer::Kind k, double x, double y, double ms) {
+        artboard::RawPointer p;
+        p.kind = k;
+        p.pos = {x, y};
+        p.timeMs = ms;
+        rec.feed(p);
+    };
+    // The grip of row 0 (step 1's first track), in window coordinates.
+    const double gripX = panel->x.value() + 200.0 + 6.0;   // kListW + pad + a little
+    const double row0Y = panel->y.value() + panel->height.value() * 0.30;
+    // Aim at the actual row: walk down until the grip press is taken.
+    double y = 0.0;
+    for (double probe = panel->y.value() + 48.0; probe < panel->y.value() + 140.0; probe += 2.0)
+    {
+        feed(artboard::RawPointer::Kind::Down, gripX, probe, 1.0);
+        settle(app, now, 20.0);
+        if (panel->dragActive()) { y = probe; break; }
+        feed(artboard::RawPointer::Kind::Up, gripX, probe, 20.0);
+        settle(app, now, 20.0);
+    }
+    CHECK(y > 0.0);                                        // the grip is grabbable
+    (void)row0Y;
+    if (y <= 0.0) return;                                  // nothing below is meaningful
+
+    // Drag far below the last row: that means a NEW final step.
+    feed(artboard::RawPointer::Kind::Move, gripX, panel->y.value() + panel->height.value() - 60.0, 40.0);
+    settle(app, now, 20.0);
+    feed(artboard::RawPointer::Kind::Up, gripX, panel->y.value() + panel->height.value() - 60.0, 60.0);
+    settle(app, now, 200.0);
+    CHECK(!panel->dragActive());
+    CHECK(steps().size() == 3);                            // simultaneous became sequential
+    if (steps().size() == 3)                               // guard: a failure must report, not crash
+    {
+        CHECK(steps()[0].tracks.size() == 1);
+        CHECK(steps()[2].tracks.size() == 1);
+        CHECK(steps()[2].tracks[0].target == "opacity");
+    }
+}
+TEST(A_track_row_is_only_draggable_by_its_grip)
+{
+    // Pressing a text field must still be a text field press, or the fields become unusable.
+    App app;
+    app.setSize(1360, 900);
+    double now = 0.0;
+    toEditor(app, now);
+    settle(app, now, 200.0);
+    auto *panel = app.reactions();
+    CHECK(panel->trackRowCount() > 0);
+
+    artboard::GestureRecognizer rec;
+    artboard::InputRouter router;
+    router.add(&app);
+    rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+    artboard::RawPointer p;
+    p.kind = artboard::RawPointer::Kind::Down;
+    // Well inside the target column, past the grip.
+    p.pos = {panel->x.value() + 320.0, panel->y.value() + panel->height.value() * 0.32};
+    p.timeMs = 1.0;
+    rec.feed(p);
+    settle(app, now, 40.0);
+    CHECK(!panel->dragActive());
 }
 
 int main() { return mini::runAll(); }

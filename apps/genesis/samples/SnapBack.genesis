@@ -1,0 +1,124 @@
+{
+  "genesis": 1,
+  "//": [
+    "SnapBack — one row of motion returns the whole object to rest.",
+    "",
+    "  all       — one track per animatable field of the object, in field-table order (G-22).",
+    "  original  — the value of the target field's OWN binding, re-evaluated now.",
+    "",
+    "So `release` is a single row: `all` from `current` to `original`. It needs no duplicated",
+    "literals, and it keeps working at a size the component was never authored at, because",
+    "`original` re-runs the binding rather than remembering a number. Compare `pressDown`,",
+    "which has to name each field it disturbs — that is the asymmetry `all` exists to remove.",
+    "",
+    "Nothing here is marked animated: a field is animated because a track animates it (G-21)."
+  ],
+  "component": {
+    "name": "SnapBack",
+    "base": "Button",
+    "namespace": "app",
+    "designSize": [
+      120,
+      40
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "theme.accent"
+    },
+    {
+      "name": "surface",
+      "type": "color",
+      "default": "theme.secondary"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "body",
+      "type": "rect",
+      "bind": {
+        "x": "0",
+        "y": "0",
+        "w": "w",
+        "h": "h",
+        "fill": "mix(surface, accent, base.hover * 0.5)",
+        "cornerRadius": "min(w, h) / 4",
+        "pivotX": "self.w / 2",
+        "pivotY": "self.h / 2"
+      },
+      "reactions": [
+        {
+          "on": "pressDown",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "scaleX",
+                "to": "0.94",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "scaleY",
+                "to": "0.94",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "rotation",
+                "to": "deg(-3)",
+                "ms": "90",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "cancel",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "all",
+                "from": "current",
+                "to": "original",
+                "ms": "220",
+                "easing": "EaseOutBack"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "release",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "all",
+                "from": "current",
+                "to": "original",
+                "ms": "220",
+                "easing": "EaseOutBack"
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cap",
+      "type": "rect",
+      "parent": "body",
+      "bind": {
+        "x": "parent.w / 2 - self.w / 2",
+        "y": "parent.h / 2 - self.h / 2",
+        "w": "parent.w / 3",
+        "h": "2",
+        "fill": "fade(accent, 0.8)",
+        "cornerRadius": "1"
+      }
+    }
+  ]
+}

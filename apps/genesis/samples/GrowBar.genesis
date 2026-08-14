@@ -19,7 +19,6 @@
                 "y": "(h - self.h) / 2",
                 "fill": "accent", "cornerRadius": "self.h / 2",
                 "opacity": "0" },
-      "animated": ["w", "opacity"],
       "reactions": [
         { "on": "loopStart", "cancel": "restart", "steps": [
             [ { "target": "opacity", "to": "1", "ms": 220, "easing": "EaseOutCubic" } ],

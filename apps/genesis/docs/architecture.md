@@ -85,7 +85,26 @@ kept in step by resolving names through two small tables rather than by scattere
   (`mRing->opacity.value()`, or the `Property` the runtime holds), because a reaction's
   `from`/`to` are evaluated when it fires.
 
+Two names exist only at signal time, and are the reason the split is worth its cost:
+`current` (the target's value right now) and `original` (the value of the target field's own
+binding, re-evaluated now). `original` is compiled/evaluated in the **live** scope on both
+sides — the emitter inlines the binding expression, the runtime evaluates the same source —
+so `to = original` is a return-to-rest that follows a resize instead of freezing a number.
+
+One more thing is deliberately shared rather than duplicated: `all` (a target meaning "every
+animatable field of this object") is expanded by `Document::expandSteps`, which the runtime,
+the emitter **and** the validator all call. Neither side owns the meaning, so neither can
+drift from the other — and `animatedFields` derives what is animated from those expanded
+tracks, which is why there is no animate mark to keep in sync with them.
+
 ## 6. The editor
+
+Authoring follows from that. A field is animated because a track animates it, so the inspector
+has no animate toggle and the reactions panel needs no "mark it first" warning; and ordering
+motion is a rearrangement, so a track row is **dragged** by its grip into another step (or into
+a new final one). Both are single-source-of-truth arguments rather than UI preferences: the mark
+was a second copy of what the tracks already said, and a step's order was only editable by
+retyping.
 
 `App` owns the `Document`, the `Runtime`, and the panels, and exposes **one** funnel —
 `documentChanged()` — that re-validates, rebuilds the preview, refreshes every panel, and

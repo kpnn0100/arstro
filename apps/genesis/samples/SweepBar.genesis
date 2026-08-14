@@ -46,9 +46,6 @@
         "cornerRadius": "h / 2",
         "pivotY": "self.h / 2"
       },
-      "animated": [
-        "scaleY"
-      ],
       "reactions": [
         {
           "on": "complete",

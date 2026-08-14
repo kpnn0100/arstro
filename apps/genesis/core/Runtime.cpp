@@ -271,7 +271,7 @@ namespace genesis
             {
                 std::set<std::string> live;
                 for (const auto &sh : mDoc.shapes)
-                    for (const auto &a : sh.animated)
+                    for (const auto &a : mDoc.animatedFields(sh.id))
                         live.insert(sh.id + "\x1f" + a);
                 bool changed = true;
                 while (changed)
@@ -329,7 +329,7 @@ namespace genesis
                 if (fd->type == FieldType::Color)
                     n.colors.emplace(fd->name, artboard::Color{});
             }
-            for (const auto &a : s.animated)
+            for (const auto &a : mDoc.animatedFields(s.id))
                 n.owned[a] = false;
             if (s.kind == ShapeKind::Label)
             {
@@ -556,15 +556,29 @@ namespace genesis
         return sc;
     }
 
-    gene::Scope Runtime::trackScope(const std::string &owner, const artboard::Property &p) const
+    gene::Scope Runtime::trackScope(const std::string &owner, const artboard::Property &p,
+                                    const std::string &originalExpr) const
     {
         gene::Scope sc = liveScope(owner);
         auto base = sc.lookupIdent;
         const double now = p.value();
-        sc.lookupIdent = [base, now](const std::string &name, gene::Value &v) {
+        // `original` is evaluated in the plain live scope — not this one — so a binding can never
+        // see `current`/`original`, and so the emitter (which compiles it with `liveNames`) and
+        // the interpreter agree name for name (G-22).
+        const gene::Scope originalScope = liveScope(owner);
+        const Runtime *self = this;
+        sc.lookupIdent = [base, now, originalExpr, originalScope, self](const std::string &name,
+                                                                       gene::Value &v) {
             // `current` is the target's value at the moment the reaction fires — what makes
             // `to = current + 10` mean "ten more than now".
             if (name == "current") { v = gene::Value::number(now); return true; }
+            // `original` is what the design says the field should be: the value of its own
+            // binding, re-evaluated now, so `to = original` recentres against the current size.
+            if (name == "original")
+            {
+                v = gene::Value::number(self->evalNumber(originalExpr, originalScope, 0.0));
+                return true;
+            }
             return base ? base(name, v) : false;
         };
         return sc;
@@ -780,7 +794,7 @@ namespace genesis
             if (cand.signal == signal) { r = &cand; break; }
         if (!r) return 0.0;
         double total = 0.0;
-        for (const auto &step : r->steps)
+        for (const auto &step : mDoc.expandSteps(*r, shapeId))
         {
             double longest = 0.0;
             for (const auto &t : step.tracks)
@@ -820,7 +834,7 @@ namespace genesis
             if (cand.signal == signal)
             {
                 double acc = 0.0;
-                for (const auto &step : cand.steps)
+                for (const auto &step : mDoc.expandSteps(cand, shapeId))
                 {
                     double longest = 0.0;
                     for (const auto &tr : step.tracks)
@@ -869,12 +883,15 @@ namespace genesis
     void Runtime::playStep(const std::string &owner, const Reaction &r, size_t stepIndex)
     {
         const std::string key = reactionKey(owner, r.signal);
-        if (stepIndex >= r.steps.size())
+        // `all` is expanded HERE, not by the author: one row targeting `all` becomes one track
+        // per animatable field, and the emitter expands the same way (G-22).
+        const std::vector<Step> steps = mDoc.expandSteps(r, owner);
+        if (stepIndex >= steps.size())
         {
             mReactions[key].running = false;
             return;
         }
-        const Step &step = r.steps[stepIndex];
+        const Step &step = steps[stepIndex];
         ReactionState &st = mReactions[key];
         const int token = st.token;
         const std::string signal = r.signal;
@@ -893,7 +910,9 @@ namespace genesis
             if (ShapeNode *n = node(shapeId))
                 n->owned[field] = true;   // motion owns this field from now on
 
-            const gene::Scope sc = trackScope(shapeId, *p);
+            const Shape *target = mDoc.findShape(shapeId);
+            const gene::Scope sc =
+                trackScope(shapeId, *p, target ? target->effectiveField(field) : std::string("0"));
             const double from = t.from.empty() ? p->value() : evalNumber(t.from, sc, p->value());
             const double to = evalNumber(t.to, sc, 0.0);
             const double dur = evalNumber(t.durationMs, sc, 200.0);
@@ -918,7 +937,7 @@ namespace genesis
                     for (const auto &cand : host->reactions)
                         if (cand.signal == signal) { rr = &cand; break; }
                 if (!rr) return;
-                if (stepIndex + 1 < rr->steps.size())
+                if (stepIndex + 1 < mDoc.expandSteps(*rr, ownerId).size())
                 {
                     playStep(ownerId, *rr, stepIndex + 1);
                     return;

@@ -111,11 +111,14 @@ namespace ui
             Track t;
             // Prefill with a field of THIS object, so a new track is never born broken — and
             // the target is bare, because the owner is the selected object.
+            // Every object has animatable fields, so a new track always has a valid target and
+            // there is no longer anything to mark first (G-21). `opacity` when the kind has it:
+            // it is what an author reaches for most, and it is safe on any shape.
             const Shape *host = owner();
-            if (host && !host->animated.empty())
-                t.target = host->animated.front();
-            else
-                a->status("Mark a field animatable in the inspector first", StatusLevel::Warn);
+            if (host)
+                for (const auto *fd : fieldsFor(host->kind))
+                    if (fd->animatable && (t.target.empty() || std::string(fd->name) == "opacity"))
+                        t.target = fd->name;
             r->steps.back().tracks.push_back(t);
             a->documentChanged();
         });
@@ -147,7 +150,10 @@ namespace ui
     ReactionsPanel::Columns ReactionsPanel::columns(double panelW) const
     {
         Columns c;
-        const double avail = panelW - (kListW + metrics::pad()) - metrics::pad();
+        // The grip is taken off the top and never shed: without it the rows cannot be reordered
+        // at all, and no other part of a row is draggable (G-23).
+        const double avail =
+            panelW - (kListW + metrics::pad()) - metrics::pad() - Columns::grip;
 
         c.easing = 112.0;
         c.ms = 52.0;
@@ -170,6 +176,51 @@ namespace ui
         if (slack > 0.0)
             c.target += slack;
         return c;
+    }
+
+    int ReactionsPanel::gripAt(const artboard::Point &p) const
+    {
+        const double x0 = kListW + metrics::pad();
+        if (p.x < x0 || p.x > x0 + Columns::grip) return -1;
+        for (int i = 0; i < (int)mRows.size(); ++i)
+        {
+            const TrackRow &row = mRows[(size_t)i];
+            if (!row.target->visible) continue;          // a hidden row has no grip to grab
+            if (p.y >= row.y && p.y <= row.y + kRowH - 2.0) return i;
+        }
+        return -1;
+    }
+
+    void ReactionsPanel::dropTargetAt(double localY, int &step, int &index) const
+    {
+        const Reaction *r = current();
+        const int stepCount = r ? (int)r->steps.size() : 0;
+        step = std::max(0, stepCount - 1);
+        index = 0;
+        if (!r || mRows.empty()) return;
+
+        int lastStep = -1;
+        for (const auto &row : mRows)
+        {
+            if (row.step != lastStep)
+            {
+                lastStep = row.step;
+                // The step's own header band: a drop on the title means "first in this step".
+                if (localY < row.y)
+                {
+                    step = row.step;
+                    index = 0;
+                    return;
+                }
+            }
+            if (localY < row.y + kRowH * 0.5) { step = row.step; index = row.track; return; }
+            if (localY < row.y + kRowH) { step = row.step; index = row.track + 1; return; }
+        }
+        // Past every row. Within a row's height of the last one it means "last in that step";
+        // further down it means a NEW final step, which is how simultaneous becomes sequential.
+        const TrackRow &last = mRows.back();
+        step = localY > last.y + kRowH * 2.0 ? stepCount : last.step;
+        index = step == stepCount ? 0 : last.track + 1;
     }
 
     ReactionsPanel::Chip ReactionsPanel::chipAt(const artboard::Point &p, int &rowIndex) const
@@ -424,7 +475,7 @@ namespace ui
             // showing one. Every row is still REACHABLE — `mTrackScroll` is measured against
             // exactly this box, so the last row lands flush with `lastRowBottom` at full scroll.
             const bool visibleRow = y >= y0 && y + kRowH <= lastRowBottom;
-            double x = rightX;
+            double x = rightX + Columns::grip;   // the grip owns the row's left edge (G-23)
             auto place = [&](const std::shared_ptr<artboard::Segment> &seg, double cw) {
                 seg->visible = visibleRow && cw > 0.0;
                 if (!seg->visible)
@@ -500,6 +551,50 @@ namespace ui
                 mApp.selectReaction(i);
                 return true;
             }
+        }
+        // Dragging a track by its grip (G-23). Tested BEFORE the drag-to-scroll below, since a
+        // grip press means "move this row", not "scroll the list".
+        if (g.type == artboard::Gesture::Type::Down)
+        {
+            const int row = gripAt(p);
+            if (row >= 0)
+            {
+                mDrag = TrackDrag{};
+                mDrag.active = true;
+                mDrag.row = row;
+                mDrag.y = p.y;
+                dropTargetAt(p.y, mDrag.step, mDrag.index);
+                return true;
+            }
+        }
+        if (mDrag.active && (g.type == artboard::Gesture::Type::Drag ||
+                             g.type == artboard::Gesture::Type::DragStart ||
+                             g.type == artboard::Gesture::Type::Move))
+        {
+            mDrag.y = p.y;
+            dropTargetAt(p.y, mDrag.step, mDrag.index);
+            return true;
+        }
+        if (mDrag.active && (g.type == artboard::Gesture::Type::Drop ||
+                             g.type == artboard::Gesture::Type::Up ||
+                             g.type == artboard::Gesture::Type::Click))
+        {
+            const TrackDrag d = mDrag;
+            mDrag = TrackDrag{};
+            Reaction *r = current();
+            if (r && d.row >= 0 && d.row < (int)mRows.size())
+            {
+                const TrackRow &row = mRows[(size_t)d.row];
+                // A drop that would not move the track is not a document change, so it never
+                // lands in the undo history (G-23).
+                if (Document::moveTrack(*r, row.step, row.track, d.step, d.index))
+                {
+                    mApp.documentChanged();
+                    mApp.status("Moved track to step " + std::to_string(std::min(d.step, (int)r->steps.size() - 1) + 1),
+                                StatusLevel::Good);
+                }
+            }
+            return true;
         }
         if (g.type == artboard::Gesture::Type::Click)
         {
@@ -669,7 +764,7 @@ namespace ui
         const double capY = y0 - 6.0;
         const Columns c = columns(w);
         {
-            double cx = rightX;
+            double cx = rightX + Columns::grip;   // the captions sit over the FIELDS, past the grip
             const char *caps[] = {"target", "from", "to", "ms", "delay", "easing"};
             const double widths[] = {c.target, c.from, c.to, c.ms, c.delay, c.easing};
             for (int i = 0; i < 6; ++i)
@@ -708,6 +803,18 @@ namespace ui
                                           artboard::Paint::filled(palette::border()));
                 ry += kStepH;
             }
+            // The grip: two short rules, the conventional "grab me" mark. It brightens while
+            // this row is the one being dragged, so the pointer always has an anchor (G-23).
+            if (row.target->visible)
+            {
+                const bool held = mDrag.active && mDrag.row == (int)(&row - &mRows[0]);
+                const double gx = rightX + 3.0;
+                artboard::Paint bar = artboard::Paint::filled(
+                    held ? palette::primary() : palette::whiteAlpha(0.22));
+                for (int k = 0; k < 2; ++k)
+                    artboard::drawRoundedRect(t, {gx + (double)k * 4.0, ry + 8.0, 2.0, kRowH - 16.0},
+                                              radius::pill(), bar);
+            }
             // The three chips at the row's right edge: repeat count, yoyo, remove. Drawn only
             // when the row's fields are shown, so chips can never float beside a hidden row.
             const Reaction *rr = current();
@@ -744,6 +851,35 @@ namespace ui
                 t.strokePath();
             }
             ry += kRowH;
+        }
+        // Where the dragged row would land, and a ghost of the row itself under the pointer.
+        // Both inside the list clip, so neither can escape over the captions or the scrubber.
+        if (mDrag.active && mDrag.row >= 0 && mDrag.row < (int)mRows.size())
+        {
+            double lineY = y0 - mTrackScroll.offset();
+            int seen = -1;
+            for (const auto &row : mRows)
+            {
+                if (row.step != seen) { seen = row.step; lineY += kStepH; }
+                if (row.step == mDrag.step && row.track == mDrag.index) break;
+                lineY += kRowH;
+            }
+            if (mDrag.step >= (int)(current() ? current()->steps.size() : 0))
+                lineY += kStepH;   // a new final step gets its own header row first
+            artboard::drawRoundedRect(t, {rightX, lineY - 1.5, rightW, 3.0}, radius::pill(),
+                                      artboard::Paint::filled(palette::primary()));
+
+            const TrackRow &row = mRows[(size_t)mDrag.row];
+            const std::string label =
+                row.target->text.empty() ? std::string("track") : row.target->text;
+            const double gw = std::min(rightW, 150.0);
+            // Opaque, not a wash: a drag ghost is the one thing allowed to sit over the rows, so
+            // it has to be readable rather than let the label underneath bleed through.
+            artboard::drawRoundedRect(t, {rightX + 10.0, mDrag.y - 10.0, gw, 20.0}, radius::hairline(),
+                                      artboard::Paint::filledStroked(palette::popover(),
+                                                                     palette::primary(), 1.0));
+            drawFitted(t, label, rightX + 18.0, mDrag.y + 4.0, gw - 16.0, type::micro(),
+                       palette::foreground(), font::sansMedium());
         }
         t.restore();
         if (mRows.empty())

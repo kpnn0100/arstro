@@ -78,13 +78,17 @@ namespace genesis
     std::string cancelName(Cancel c);
     bool parseCancel(const std::string &s, Cancel &out);
 
+    /** The pseudo-field that means "every animatable field of this object" (G-22). */
+    extern const char *const kAllFields;
+
     /** One animated field inside a step. Durations are Gene expressions too, so a `speed`
      *  param genuinely re-times the whole component. */
     struct Track
     {
         /** A bare field name ("opacity") targets the OWNING shape — the common case now that
          *  reactions belong to a shape. A qualified "other.opacity" still reaches a different
-         *  shape, so a reaction can drive its siblings. */
+         *  shape, so a reaction can drive its siblings. A field of `all` stands for every
+         *  animatable field of that object and is expanded by `Document::expandSteps`. */
         std::string target;
         std::string from;                // "" = start from the field's current value
         std::string to = "0";
@@ -117,7 +121,6 @@ namespace genesis
         ShapeKind kind = ShapeKind::Rect;
         std::string parent;               // "" = a direct child of the component
         std::vector<std::pair<std::string, std::string>> fields;  // ordered: name -> Gene source
-        std::vector<std::string> animated;                        // fields promoted to Property
         std::vector<PathCmd> path;        // Path only
         std::string text;                 // Label only (literal, or a text param name in {braces})
         std::vector<Reaction> reactions;  // this object's own reactions
@@ -125,8 +128,6 @@ namespace genesis
         std::string field(const std::string &name) const;   // "" when unset -> the default applies
         std::string effectiveField(const std::string &name) const;  // set value, else the default
         void setField(const std::string &name, const std::string &expr);
-        bool isAnimated(const std::string &name) const;
-        void setAnimated(const std::string &name, bool on);
     };
 
     struct Diagnostic
@@ -162,6 +163,18 @@ namespace genesis
         /** Every (shape, reaction) pair in document order — what the emitter and the runtime
          *  iterate, since a signal can now be handled by several objects at once. */
         std::vector<std::pair<const Shape *, const Reaction *>> allReactions() const;
+
+        // ---- what moves (G-21, G-22) ----
+        /** `r`'s steps with every `all` target expanded into one track per animatable field of
+         *  the object it names, in field-table order (G-22). THE one expansion: the emitter, the
+         *  interpreter and the validator all call it, so the compiled class and the preview
+         *  cannot disagree about what a reaction does. */
+        std::vector<Step> expandSteps(const Reaction &r, const std::string &ownerId) const;
+        /** The fields of `shapeId` that some track animates, in field-table order (G-21). There
+         *  is no animate mark: a field is animated because a track targets it, and a track on
+         *  ANY object may target this one, which is why this is a document-level question. */
+        std::vector<std::string> animatedFields(const std::string &shapeId) const;
+        bool isAnimated(const std::string &shapeId, const std::string &field) const;
         int shapeIndex(const std::string &id) const;
         /** Ids of `parent`'s direct children, in document order ("" = component root). */
         std::vector<std::string> childrenOf(const std::string &parent) const;
@@ -177,6 +190,11 @@ namespace genesis
          *  id, or "" if `id` is unknown. */
         std::string duplicateShape(const std::string &id);
         void removeShape(const std::string &id);   // also removes descendants + their tracks
+        /** Move a track inside `r` (G-23). `toStep == steps.size()` appends a NEW final step, so
+         *  a drag below the last row turns simultaneous tracks into sequential ones. A step left
+         *  empty is removed. Returns false when the move would change nothing, so a drag that
+         *  goes nowhere never reaches the undo history. */
+        static bool moveTrack(Reaction &r, int fromStep, int fromTrack, int toStep, int toIndex);
 
         // ---- persistence ----
         Json toJson() const;

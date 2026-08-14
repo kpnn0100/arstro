@@ -7,7 +7,7 @@
  *    Component  name, namespace, design size — the document's own identity
  *    Shape      the selected shape's id (rename) and, for a label, its text
  *    Fields     every numeric and colour field as an editable EXPRESSION, with an animate
- *               toggle that promotes it to a Property and makes it a legal reaction target
+ *               expression, which is its resting value; a track is what animates it
  *    Path       for a path shape, each command's coordinates — also expressions
  *    Params     the component's knobs, with a live control each, add and remove
  *    Problems   the validator's errors and warnings, named and in one place
@@ -52,7 +52,7 @@ namespace ui
             SectionTitle,   // a heading; not interactive
             DocName, DocNamespace, DocWidth, DocHeight,
             ShapeId, ShapeText,
-            Field,          // a shape field expression (+ animate toggle when animatable)
+            Field,          // a shape field expression — its resting value (G-21)
             PathCmd,        // one path command's coordinates
             PathAdd,        // the "add a command" row
             Param,          // a param's live control (+ remove)
@@ -86,7 +86,6 @@ namespace ui
         void commitRow(const Row &row);
         void commitAll();
         int rowAt(double localY) const;
-        bool toggleHit(const artboard::Point &p, const Row &row) const;
         bool removeHit(const artboard::Point &p, const Row &row) const;
         double contentHeight() const;
         double boxLeft() const;

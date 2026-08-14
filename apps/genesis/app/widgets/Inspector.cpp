@@ -14,7 +14,6 @@ namespace ui
         constexpr double kTitleH = 26.0;
         constexpr double kNoteH = 18.0;
         constexpr double kLabelW = 84.0;
-        constexpr double kToggleW = 26.0;
 
         std::string numToText(double v)
         {
@@ -35,7 +34,7 @@ namespace ui
     double Inspector::boxLeft() const { return metrics::pad() + kLabelW; }
     double Inspector::boxWidth() const
     {
-        return std::max(56.0, width.value() - boxLeft() - metrics::pad() - kToggleW - 4.0);
+        return std::max(56.0, width.value() - boxLeft() - metrics::pad() - 4.0);
     }
 
     void Inspector::addSection(const std::string &title)
@@ -356,7 +355,7 @@ namespace ui
             // Rows with a remove affordance stop short of it; the rest may use the full
             // width because nothing else lives in that gutter.
             const bool hasRemove = r.kind == RowKind::Param || r.kind == RowKind::PathCmd;
-            const double single = hasRemove ? bw : bw + kToggleW;
+            const double single = bw;
             // A row scrolled out of view is HIDDEN, not merely unpainted: its widgets are
             // real Segments and would otherwise draw (and take input) outside the panel.
             const bool onScreen = y + r.height > 0.0 && y < h;
@@ -498,13 +497,6 @@ namespace ui
         return -1;
     }
 
-    bool Inspector::toggleHit(const artboard::Point &p, const Row &row) const
-    {
-        if (row.kind != RowKind::Field || !row.animatable) return false;
-        const double x0 = width.value() - metrics::pad() - kToggleW;
-        return p.x >= x0 && p.y >= row.y && p.y < row.y + row.height;
-    }
-
     bool Inspector::removeHit(const artboard::Point &p, const Row &row) const
     {
         if (row.kind != RowKind::Param && row.kind != RowKind::PathCmd) return false;
@@ -550,18 +542,6 @@ namespace ui
         const Row &row = mRows[(size_t)i];
         Document &doc = mApp.doc();
 
-        if (toggleHit(p, row))
-        {
-            if (Shape *s = doc.findShape(mShownShape))
-            {
-                const bool on = !s->isAnimated(row.key);
-                s->setAnimated(row.key, on);
-                mApp.documentChanged();
-                mApp.status((on ? "Animatable: " : "No longer animatable: ") + mShownShape + "." + row.key,
-                            StatusLevel::Good);
-            }
-            return true;
-        }
         if (removeHit(p, row))
         {
             if (row.kind == RowKind::Param && row.index < (int)doc.params.size())
@@ -726,23 +706,12 @@ namespace ui
             }
             case RowKind::Field:
             {
+                // Label + expression, and nothing else: there is no animate mark to draw. A
+                // field is animated because a track animates it, and its resting value is the
+                // expression sitting right here (G-21). The 26px the toggle used to occupy is
+                // now expression width, which is what was actually short.
                 drawFitted(t, r.label, pad, centreBaseline(r.y, r.height, type::small()), kLabelW - 6.0,
                            type::small(), palette::secondaryForeground(), font::sans());
-                if (!r.animatable) break;
-                const bool on = shape && shape->isAnimated(r.key);
-                const double bx = w - pad - kToggleW;
-                artboard::drawRoundedRect(t, {bx, r.y + 7.0, kToggleW - 4.0, 16.0}, radius::hairline(),
-                                          artboard::Paint::filledStroked(
-                                              on ? palette::primaryAlpha(0.9) : palette::input(),
-                                              palette::border(), 1.0));
-                // A circular-arrow mark: this field can be driven by a reaction.
-                t.setStroke(on ? palette::primaryForeground() : palette::mutedForeground(), 1.3);
-                t.beginPath();
-                const double cx = bx + (kToggleW - 4.0) * 0.5, cy = r.y + 15.0, rr = 4.2;
-                t.moveTo(cx + rr, cy);
-                t.cubicTo(cx + rr, cy - rr * 1.1, cx - rr, cy - rr * 1.1, cx - rr, cy);
-                t.cubicTo(cx - rr, cy + rr * 1.1, cx + rr, cy + rr * 1.1, cx + rr * 0.2, cy + rr * 0.8);
-                t.strokePath();
                 break;
             }
             default:
