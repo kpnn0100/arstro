@@ -1637,14 +1637,18 @@ TEST(Emitted_code_expands_all_and_inlines_original)
 
     const EmittedCode e = emitCpp(d);
     CHECK(e.ok());
-    // One animate() per animatable field, not one for a field called "all".
-    CHECK(e.source.find("mRing->x.animate(") != std::string::npos);
-    CHECK(e.source.find("mRing->rotation.animate(") != std::string::npos);
+    // One driver per animatable field, not one for a field called "all". A releasing track
+    // animates a 0..1 blend rather than the property, so the property name appears in
+    // applyReleases() instead of in an animate() call.
+    CHECK(e.source.find("mRelDrvRingX.animate(") != std::string::npos);
+    CHECK(e.source.find("mRelDrvRingRotation.animate(") != std::string::npos);
     CHECK(e.source.find("mAll") == std::string::npos);
+    CHECK(e.source.find("void " + d.name + "::applyReleases()") != std::string::npos);
+    CHECK(e.source.find("mRing->x.set(mRelFromRingX") != std::string::npos);
     // `original` for x became the binding, inlined — the same expression layout() uses.
     CHECK(e.source.find("(w - mRing->width.value()) / 2") != std::string::npos);
-    // `current` is still the live property read.
-    CHECK(e.source.find("mRing->x.value()") != std::string::npos);
+    // `current` is still the live property read: it is this track's starting point.
+    CHECK(e.source.find("mRelFromRingX = mRing->x.value()") != std::string::npos);
 }
 TEST(Moving_a_track_between_steps)
 {
@@ -1691,6 +1695,78 @@ TEST(Moving_a_track_between_steps)
     CHECK(!Document::moveTrack(r, 9, 0, 0, 0));
     CHECK(!Document::moveTrack(r, 0, 9, 1, 0));
     CHECK(!Document::moveTrack(r, 0, 0, 9, 0));
+}
+TEST(Field_values_can_be_read_live_with_where_they_came_from)
+{
+    /*  An expression only says what a field SHOULD be. When a shape is not where its binding
+     *  claims, the question is what the value IS and who last wrote it — so the runtime answers
+     *  both, and the inspector and `genesis-cc --trace` are two views of this one call.
+     */
+    Document d = Document::starter("VisualLoop", "B");
+    Shape *s = d.findShape("ring");
+    s->kind = ShapeKind::Rect;
+    s->setField("w", "minSide * 0.2");
+    s->setField("h", "minSide * 0.2");
+    s->setField("x", "(w - self.w) / 2");
+    s->setField("y", "0");
+    s->setField("fill", "accent");
+    s->setField("opacity", "1");
+    s->reactions.clear();
+    {
+        Reaction out;
+        out.signal = "loopStart";
+        Step st;
+        st.tracks.push_back({"x", "", "0", "200", "0", "Linear", 0, false});
+        out.steps.push_back(st);
+        s->reactions.push_back(out);
+    }
+    {
+        Reaction home;
+        home.signal = "loopEnd";
+        Step st;
+        st.tracks.push_back({"x", "current", "original", "200", "0", "Linear", 0, false});
+        home.steps.push_back(st);
+        s->reactions.push_back(home);
+    }
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+
+    double v = 0.0;
+    Runtime::Source from = Runtime::Source::Owned;
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK_NEAR(v, 80.0, 1e-6);
+    CHECK(from == Runtime::Source::Binding);              // nothing has touched it yet
+    CHECK(std::string(Runtime::sourceName(from)) == "binding");
+    CHECK(rt.fieldValue("ring", "strokeWidth", v, &from));  // a style prop, not a Segment property
+    CHECK(!rt.fieldValue("nosuch", "x", v, &from));
+    CHECK(!rt.fieldValue("ring", "nosuch", v, &from));
+    CHECK_NEAR(rt.releaseProgress("ring", "x"), -1.0, 1e-9);
+
+    rt.loopStart();
+    rt.advance(0.0);
+    rt.advance(100.0);
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK(from == Runtime::Source::Animating);            // mid-tween
+    rt.advance(200.0);
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK(from == Runtime::Source::Owned);                // done, and motion still holds it
+    CHECK_NEAR(v, 0.0, 1e-6);
+
+    rt.fire("loopEnd");
+    rt.advance(200.0);
+    rt.advance(300.0);
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK(from == Runtime::Source::Releasing);            // on its way back to the binding
+    CHECK(rt.releaseProgress("ring", "x") > 0.0);
+    CHECK(v > 0.0 && v < 80.0);
+    rt.advance(400.0);
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK(from == Runtime::Source::Binding);              // handed back
+    CHECK_NEAR(v, 80.0, 1e-6);
+    CHECK_NEAR(rt.releaseProgress("ring", "x"), -1.0, 1e-9);
 }
 TEST(Verifier_op_serialization_is_field_wise_and_stable)
 {

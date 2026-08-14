@@ -94,8 +94,10 @@ Two names exist only inside a track, and they are a pair:
 
 `original` is the binding itself, not a number read from it once, and that means two things:
 
-- it is **evaluated**, so `to = original` lands correctly at a window size the component was
-  never authored at — an `original x` of `(w - self.w) / 2` recentres against the current width;
+- it is **evaluated every frame**, so a field whose binding reads something that is *also*
+  animating follows it: `x = w/4*3 - self.w/2` returning to rest while `w` returns to `0` arrives
+  exactly on `w/4*3`, instead of easing to the value that was already stale when the track began
+  and then jumping. It also lands correctly at a window size the component was never authored at;
 - a track that **ends** at `original` gives the field back to its binding, so a later resize or
   param change moves it again. Without that, a field would be correct for one frame and then
   frozen, because layout never touches a field an animation owns.
@@ -200,6 +202,31 @@ document always produces byte-identical output.
 — the animation as a formula; and `SnapBack`, whose entire release is one `all → original` row.
 Every one of them passes `--verify`, so each is also a proof that the preview matched the
 compiled class.
+
+## Seeing what a field actually is
+
+An expression says what a field *should* be. When a shape is not where its binding claims, the
+question is what the value **is** and **who last wrote it** — so the inspector shows the live value
+beside each expression, coloured by source, and the CLI prints the same thing frame by frame:
+
+```
+genesis-cc ArstroLoading.genesis --trace topleftcircle_copy.x \
+           --signal loopStart@0 --signal loopEnd@2000 --until 2400
+```
+
+```
+      ms            x
+       0         150b        # its binding: (w/4*3 - self.w/2), and self.w is still 0
+    1920         130b        # still the binding — self.w grew to 40, so x followed
+    2000  <- fire loopEnd
+    2000         130r        # being released back to its binding
+    2080       140.7r
+    2240         150b        # handed back, and following again
+```
+
+`b` = its binding · `a` = animating · `r` = being released back to its binding · `o` = owned by
+motion and standing still. The last one is usually the bug: a field that ignores a resize is
+`owned`. Drop the `.field` to trace every field of a shape at once.
 
 ## Mouse
 

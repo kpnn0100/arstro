@@ -42,6 +42,21 @@ namespace genesis
         const Document &document() const { return mDoc; }
 
         void setSize(double w, double h);
+        /** The LIVE value of a field, right now — what the preview is actually drawing, after
+         *  bindings, animations and any release blend. This is the answer to "the expression says
+         *  one thing, the shape is somewhere else": read it instead of inferring it. False when
+         *  the shape or field is unknown, or the preview has not been built.
+         *
+         *  `whence` reports where the value came from, because that is usually the real question:
+         *  a field standing still while its binding changes is owned by motion, and one that
+         *  ignores a resize has not been handed back. */
+        enum class Source { Binding, Animating, Releasing, Owned };
+        bool fieldValue(const std::string &shapeId, const std::string &field, double &out,
+                        Source *whence = nullptr) const;
+        static const char *sourceName(Source s);
+        /** How far a field is through being handed back to its binding: 0..1, or -1 when it is not
+         *  being released at all (G-22). */
+        double releaseProgress(const std::string &shapeId, const std::string &field) const;
         void advance(double nowMs);
         double nowMs() const { return mNowMs; }
 
@@ -105,6 +120,18 @@ namespace genesis
             std::map<std::string, artboard::Property> styleProps;   // strokeWidth, cornerRadius, ...
             std::map<std::string, artboard::Color> colors;          // fill, stroke
             std::map<std::string, bool> owned;                      // fields motion has taken over
+            /** A field on its way BACK to its binding (G-22). `to = original` names the binding,
+             *  and a binding can depend on another field that is animating at the same time — so
+             *  the target has to be followed, not snapshotted at fire time. `driver` eases 0 -> 1
+             *  over the track and the field is set to `lerp(start, <the binding now>, driver)`,
+             *  which is identical to a plain tween when the binding is constant and arrives
+             *  exactly on it when it is not. */
+            struct Release
+            {
+                double start = 0.0;
+                artboard::Property driver{0.0};
+            };
+            std::map<std::string, Release> releasing;
         };
         struct ReactionState
         {
@@ -122,6 +149,8 @@ namespace genesis
         void layout(double transitionMs);
         void applyStyles();
         void bindProp(artboard::Property &p, double v, double ms, bool owned);
+        /** Blend every field that is on its way back to its binding (G-22). */
+        void applyReleases();
         /** Reactions are keyed by (object, signal): several objects may react to one signal,
          *  and each keeps its own token, pending count and cancellation state. */
         static std::string reactionKey(const std::string &shapeId, const std::string &signal);

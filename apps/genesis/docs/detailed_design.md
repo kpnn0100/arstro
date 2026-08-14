@@ -232,6 +232,29 @@ not arise. Because it is an expression rather than a captured number, `to = orig
 against the *current* size — an `original x` of `(w - self.w) / 2` lands correctly at a window
 size the component was never authored at.
 
+**The target moves, so it is followed.** A release cannot be a plain tween: `x = w/4*3 - self.w/2`
+returning to rest while `w` also returns to `0` has a target that changes every frame, and a tween
+aimed at the fire-time value lands short and then jumps. So a releasing track animates a **0..1
+driver** instead of the property, and each frame the field is set to
+`lerp(start, <the binding, re-evaluated now>, driver)` — `Runtime::applyReleases`, and the emitted
+`applyReleases()`. With a constant binding this is algebraically the tween it replaces
+(`from + (to - from) * e(t)`), so nothing else changes.
+
+Three details are load-bearing, and each was a bug first:
+
+- **The target cannot come from the layout locals.** The local of an owned field is its LIVE value
+  (G-6a), so blending toward it aims at where the field already is and nothing moves. The target is
+  the field's own binding evaluated in the live scope — the same expression `original` resolves to.
+- **Field-table order, not the map's.** A release target may read another releasing field
+  (`pivotX = self.w - self.h / 2`), so whether it sees this frame's value or last frame's depends
+  on the order. The runtime walks `fieldsFor(kind)` and looks up in its map rather than iterating
+  the map, because `std::map` is alphabetical and the emitter walks the table. The Verifier caught
+  exactly this as `preview=36.66 compiled=29.73`.
+- **Blend, then drop.** The release is cleared *after* the frame in which its driver finishes, so
+  the last blend runs at `t == 1` and lands the field exactly on its binding. Dropping it first
+  left the previous frame's partial value whenever layout was not running every frame — the field
+  stopped just short of the value it was supposed to return to.
+
 **And a track that ends at `original` hands the field back.** `original` names the *binding*, so
 finishing there must leave the field driven by that binding — otherwise it means "the number the
 binding gave at fire time", and the object looks correct for one frame and is then frozen: a
@@ -294,6 +317,27 @@ which register in the process-wide focus and hover slots, and so must run on the
 Comparison is token-wise with a relative tolerance of `1e-9`, so a last-bit difference is not
 reported as a semantic one while any real divergence is. The scan stops after 40 differences —
 enough to diagnose, and the rest would be noise.
+
+### 5a. Reading the live value (G-24)
+
+`Runtime::fieldValue(shape, field, out, &whence)` returns what a field *is*, plus which of four
+things last wrote it: its **binding**, an **animation** in flight, a **release** back to its
+binding, or **owned** by motion and standing still. The last two are the diagnosis a drawing cannot
+give — a field that ignores a resize is `owned`, one drifting home is `releasing` — and
+`releaseProgress` reports how far a hand-back has got.
+
+Two views of that one call: the inspector draws the value in the label gutter beside the
+expression, coloured by source (muted / green / accent / amber), so what a field should be and what
+it is are read together; and `genesis-cc --trace <id>[.<field>] --signal <name>@<ms> --until <ms>`
+prints the same table frame by frame, headless. The trace is what a bug report can carry:
+
+```
+    1920         130b
+    2000  <- fire loopEnd
+    2000         130r
+    2080       140.7r
+    2240         150b
+```
 
 ### 6a. The plan samples after the resize settles (G-9a)
 

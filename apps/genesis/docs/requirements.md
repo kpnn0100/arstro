@@ -238,6 +238,22 @@ This is not hypothetical: it is what hid a one-sided implementation of G-22's ha
 interpreter released the field, the generated class did not, and the two agreed at every sampled
 frame anyway.
 
+### G-24 The live value of a field is readable
+
+An expression says what a field *should* be. When a shape is not where its binding claims, the
+question is what the value **is** and **who last wrote it**, and guessing at that from the drawing
+is how a wrong `original` went unnoticed. The runtime shall therefore answer it directly:
+
+- `Runtime::fieldValue(shape, field, out, &whence)` returns the live value and where it came
+  from — its **binding**, an **animation** in flight, a **release** back to its binding, or
+  **owned** by motion and standing still. That last pair is the diagnosis: a field that ignores a
+  resize is owned, and one drifting toward its binding is releasing.
+- `Runtime::releaseProgress(shape, field)` reports how far a hand-back has got, or -1.
+- The **inspector** shall show each field's live value beside its expression, coloured by source,
+  so the two are read together rather than inferred apart.
+- `genesis-cc --trace <id>[.<field>] [--signal <name>@<ms>] [--until <ms>]` shall print the same
+  thing frame by frame for a headless run, which is the form that fits a bug report.
+
 ### G-10 Determinism
 
 The same document shall always emit byte-identical output, and saving shall always produce a
@@ -366,6 +382,13 @@ the binding says". It is the binding, not a value read from it once, and that ha
   binding itself reads (G-6a), so an `original x` of `(w - self.w) / 2` recentres against the
   *current* width, at a size the component was never authored at. A field's binding may not
   itself contain `original` or `current`, so there is no recursion.
+- **The target is followed, not snapshotted.** A binding may read a field that is animating at
+  the same time — `x = w/4*3 - self.w/2` while `w` is also going back to `0` — so the value of
+  `original` changes during the track. It shall therefore be re-evaluated **every frame** and the
+  field blended toward it, so the field arrives *on* its binding rather than on a number that was
+  already stale when the track started. With a constant binding this is exactly the tween it
+  replaces; with a dependent one it is the difference between landing correctly and landing short
+  and then jumping.
 - **A track that ends at `original` gives the field back to its binding.** When such a track
   completes, the field stops being owned by motion and layout drives it again — so a later resize
   or param change re-evaluates the binding, exactly as it did before the reaction ever ran.

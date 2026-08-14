@@ -279,11 +279,21 @@ namespace genesis
                     changed = false;
                     for (const auto &kv : deps)
                         for (const auto &d : kv.second)
-                            if (live.count(d) && !live.count(kv.first))
+                            if (live.count(d))
                             {
-                                live.insert(kv.first);
-                                mLayoutEveryFrame = true;   // something READS a live value
-                                changed = true;
+                                // The FLAG is "some binding reads a live value", which is true
+                                // even when the reader is ITSELF animated — its binding is still
+                                // what layout evaluates until motion owns it. Tying the flag to
+                                // discovery instead meant an `all` target, which makes every
+                                // field animated, seeded the whole document as live and so no
+                                // field could ever be discovered: layout stopped running per
+                                // frame and G-6a quietly stopped holding.
+                                mLayoutEveryFrame = true;
+                                if (!live.count(kv.first))
+                                {
+                                    live.insert(kv.first);
+                                    changed = true;
+                                }
                             }
                 }
             }
@@ -610,6 +620,42 @@ namespace genesis
         // binding tracks live base state) must not cut that ease short, so it yields while one
         // is in flight. `owned` outranks both: once a reaction has driven a field, motion owns
         // it, and layout stops asserting the bound value so a resize cannot stomp the result.
+    void Runtime::applyReleases()
+    {
+        // A field on its way back to its binding is blended toward `original` RE-EVALUATED every
+        // frame — the same expression, in the same live scope, that `original` resolves to (G-22).
+        // It cannot be read from the layout locals: the local of an owned field is its LIVE value,
+        // so aiming at that would aim at where the field already is and nothing would move.
+        //
+        // Run before layout, so a binding reading this field sees the fresh value this frame.
+        for (auto &n : mNodes)
+        {
+            if (n.releasing.empty()) continue;
+            const Shape *s = mDoc.findShape(n.id);
+            if (!s) continue;
+            std::vector<std::string> done;
+            // FIELD-TABLE order, not the map's alphabetical one: a release target may read
+            // another releasing field (`pivotX = self.w - self.h / 2`), so the order decides
+            // whether it sees this frame's value or last frame's. The emitter walks the same
+            // table, and this is exactly the kind of difference the Verifier catches.
+            for (const auto *fd : fieldsFor(s->kind))
+            {
+                auto kv = n.releasing.find(fd->name);
+                if (kv == n.releasing.end()) continue;
+                artboard::Property *p = propertyFor(n.id, fd->name);
+                if (!p) continue;
+                const double target =
+                    evalNumber(s->effectiveField(fd->name), liveScope(n.id), kv->second.start);
+                const double t = kv->second.driver.value();
+                p->set(kv->second.start + (target - kv->second.start) * t);
+                if (!kv->second.driver.isAnimating())
+                    done.push_back(fd->name);   // blended at t = 1: exactly the binding
+            }
+            for (const auto &f : done)
+                n.releasing.erase(f);
+        }
+    }
+
     void Runtime::bindProp(artboard::Property &p, double v, double ms, bool owned)
     {
         if (owned)
@@ -919,25 +965,45 @@ namespace genesis
             const double delay = evalNumber(t.delayMs, sc, 0.0);
             const artboard::Tween spec(from, to, dur, delay, easingFromName(t.easing), t.repeat, t.yoyo);
 
+            // `to = original` means the field goes back to its BINDING, not to the number the
+            // binding happens to give right now (G-22).
+            const bool releases = releasesToBinding(t);
+            const std::string relShape = shapeId, relField = field;
+            // A releasing track drives a 0..1 blend rather than the property itself: layout sets
+            // the field from its binding each frame, so it ARRIVES on the binding instead of on a
+            // value that was already stale when the track started (G-22). With a constant binding
+            // the result is identical to the tween it replaces.
+            artboard::Property *driven = p;
+            if (ShapeNode *n = releases ? node(shapeId) : nullptr)
+            {
+                ShapeNode::Release &rel = n->releasing[field];
+                rel.start = from;
+                rel.driver = artboard::Property{0.0};
+                driven = &rel.driver;
+            }
+            const artboard::Tween driverSpec(0.0, 1.0, dur, delay, easingFromName(t.easing),
+                                             t.repeat, t.yoyo);
+            const artboard::Tween &use = releases ? driverSpec : spec;
+
             if (t.repeat < 0)
             {
-                p->animate(spec, mNowMs);   // repeats forever: never completes, never chains
+                driven->animate(use, mNowMs);   // repeats forever: never completes, never chains
                 continue;
             }
             const std::string ownerId = owner;
-            // `to = original` means the field goes back to its BINDING, not to the number the
-            // binding happens to give right now — so when such a track completes the field is
-            // handed back to layout and follows the binding again (G-22).
-            const bool releases = releasesToBinding(t);
-            const std::string relShape = shapeId, relField = field;
-            p->animate(spec, mNowMs, [this, key, ownerId, signal, token, stepIndex, releases,
-                                      relShape, relField] {
+            // The callback goes on whatever is ACTUALLY animating — the driver, for a release —
+            // or the step chain would never advance.
+            driven->animate(use, mNowMs, [this, key, ownerId, signal, token, stepIndex, releases,
+                                          relShape, relField] {
                 auto it = mReactions.find(key);
                 if (it == mReactions.end() || it->second.token != token)
                     return;   // a newer run of this reaction superseded us
                 if (releases)
                     if (ShapeNode *n = node(relShape))
-                        n->owned[relField] = false;   // layout owns it again
+                    {
+                        n->owned[relField] = false;   // layout owns it again; the blend's own
+                                                      // last frame lands it on the binding
+                    }
                 if (--it->second.pending > 0)
                     return;
                 const Shape *host = mDoc.findShape(ownerId);
@@ -987,6 +1053,15 @@ namespace genesis
             mLastH = mRootSegment->height.value();
         }
         const double sizeMs = firstSizing ? 0.0 : kResizeMs;
+        // Release drivers tick FIRST: layout reads them to blend a field toward its binding, so
+        // they must hold this frame's value by the time it runs (G-22).
+        for (auto &n : mNodes)
+            for (auto &kv : n.releasing)
+                kv.second.driver.update(nowMs);
+        // Blend FIRST, then drop the finished ones. The other order left the last frame's partial
+        // value in place whenever layout was not running every frame, so a field could stop just
+        // short of its binding — a track that ends at `original` must land ON it.
+        applyReleases();
         if (mLayoutEveryFrame)
             layout(resized ? sizeMs : 0.0);
         else if (resized)
@@ -1002,6 +1077,56 @@ namespace genesis
         }
         else if (resized)
             hostSignal("resize");
+    }
+
+    const char *Runtime::sourceName(Source s)
+    {
+        switch (s)
+        {
+        case Source::Binding: return "binding";
+        case Source::Animating: return "animating";
+        case Source::Releasing: return "releasing";
+        case Source::Owned: return "owned";
+        }
+        return "";
+    }
+
+    bool Runtime::fieldValue(const std::string &shapeId, const std::string &field, double &out,
+                             Source *whence) const
+    {
+        const ShapeNode *n = node(shapeId);
+        if (!n) return false;
+        const artboard::Property *p = nullptr;
+        if (const FieldDef *fd = findField(field))
+        {
+            if (*fd->segmentProperty && n->seg)
+                p = const_cast<Runtime *>(this)->propertyFor(shapeId, field);
+            else
+            {
+                auto it = n->styleProps.find(field);
+                if (it != n->styleProps.end()) p = &it->second;
+            }
+        }
+        if (!p) return false;
+        out = p->value();
+        if (whence)
+        {
+            auto own = n->owned.find(field);
+            const bool owned = own != n->owned.end() && own->second;
+            *whence = n->releasing.count(field) ? Source::Releasing
+                      : p->isAnimating()        ? Source::Animating
+                      : owned                   ? Source::Owned
+                                                : Source::Binding;
+        }
+        return true;
+    }
+
+    double Runtime::releaseProgress(const std::string &shapeId, const std::string &field) const
+    {
+        const ShapeNode *n = node(shapeId);
+        if (!n) return -1.0;
+        auto it = n->releasing.find(field);
+        return it == n->releasing.end() ? -1.0 : it->second.driver.value();
     }
 
     void Runtime::advance(double nowMs)

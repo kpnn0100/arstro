@@ -82,6 +82,10 @@ package genesis_core {
     + writeEmitted(code, dir)
   }
   class Runtime {
+    + fieldValue(shape, field, out, whence) : bool  ' G-24: the live value + who wrote it
+    + releaseProgress(shape, field) : double
+    - applyReleases()  ' G-22: blend toward the binding, re-evaluated each frame
+  } {
     + build(doc) : bool
     + root() : Segment
     + advance(nowMs) / setSize(w,h)

@@ -712,6 +712,33 @@ namespace ui
                 // now expression width, which is what was actually short.
                 drawFitted(t, r.label, pad, centreBaseline(r.y, r.height, type::small()), kLabelW - 6.0,
                            type::small(), palette::secondaryForeground(), font::sans());
+                // The LIVE value, right-aligned in the label gutter. An expression only says what
+                // a field should be; this says what it IS, which is the whole question when a
+                // shape is not where its binding claims. Coloured by where the value came from, so
+                // "owned by motion" and "on its way back to the binding" are visible at a glance.
+                if (shape)
+                {
+                    double v = 0.0;
+                    Runtime::Source from = Runtime::Source::Binding;
+                    const double labelW =
+                        textWidth(r.label, type::small(), font::sans()) + 8.0;
+                    const double room = kLabelW - 6.0 - labelW;
+                    if (room >= 18.0 && mApp.runtime().fieldValue(shape->id, r.key, v, &from))
+                    {
+                        char buf[32];
+                        std::snprintf(buf, sizeof buf, "%.4g", v);
+                        const artboard::Color c = from == Runtime::Source::Releasing
+                                                      ? palette::primary()
+                                                  : from == Runtime::Source::Animating
+                                                      ? palette::success()
+                                                  : from == Runtime::Source::Owned
+                                                      ? palette::warning()
+                                                      : palette::mutedForeground();
+                        drawFittedRight(t, buf, pad + kLabelW - 6.0 - room, 
+                                        centreBaseline(r.y, r.height, type::micro()), room,
+                                        type::micro(), c, font::mono());
+                    }
+                }
                 break;
             }
             default:

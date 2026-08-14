@@ -7,13 +7,19 @@
  */
 #include "BaseCatalog.h"
 #include "Document.h"
+#include "Runtime.h"
 #include "Verifier.h"
 #include "codegen/CppEmitter.h"
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -32,6 +38,14 @@ namespace
             "  --verify    compile the generated class and diff its op stream against the\n"
             "              interpreter's; exit 1 on a mismatch\n"
             "  --stale     exit 1 if the files on disk differ from what would be generated\n"
+            "  --trace <id>[.<field>]\n"
+            "              run the preview and print the LIVE value of every field of <id> (or of\n"
+            "              one field) frame by frame, with where each value came from. This is the\n"
+            "              answer to \"the expression says one thing and the shape is elsewhere\":\n"
+            "              binding / animating / releasing / owned tells you which.\n"
+            "  --signal <name>@<ms>\n"
+            "              fire a signal during a --trace; repeatable\n"
+            "  --until <ms>  how long to trace (default 3000)\n"
             "  --new       write a starter document for <Base> and exit\n"
             "  --bases     list the authorable base classes and their signals\n";
         return code;
@@ -64,10 +78,104 @@ namespace
     }
 }
 
+namespace
+{
+    /** Print the live value of a shape's fields frame by frame. An expression only says what a
+     *  field SHOULD be; when a shape is not where its binding claims, the question is what the
+     *  value is and who last wrote it — so each column carries both. */
+    int trace(const genesis::Document &doc, const std::string &target,
+              const std::vector<std::pair<std::string, double>> &signals, double untilMs)
+    {
+        std::string shapeId = target, only;
+        const size_t dot = target.find('.');
+        if (dot != std::string::npos)
+        {
+            shapeId = target.substr(0, dot);
+            only = target.substr(dot + 1);
+        }
+        const genesis::Shape *s = doc.findShape(shapeId);
+        if (!s)
+        {
+            std::cerr << "error: no shape '" << shapeId << "' in this document\n";
+            return 1;
+        }
+        std::vector<const genesis::FieldDef *> cols;
+        for (const auto *fd : genesis::fieldsFor(s->kind))
+        {
+            if (fd->type != genesis::FieldType::Number) continue;
+            if (!only.empty() && only != fd->name) continue;
+            cols.push_back(fd);
+        }
+        if (cols.empty())
+        {
+            std::cerr << "error: '" << target << "' names no numeric field\n";
+            return 1;
+        }
+
+        genesis::Runtime rt;
+        std::string err;
+        if (!rt.build(doc, &err))
+        {
+            std::cerr << "error: " << err << "\n";
+            return 1;
+        }
+        rt.setSize(doc.designW, doc.designH);
+
+        std::cout << shapeId << " — value and where it came from, at " << doc.designW << "x"
+                  << doc.designH << "\n";
+        for (const auto *fd : cols)
+            std::cout << "  " << fd->name << " = " << s->effectiveField(fd->name) << "\n";
+        std::cout << "\n" << std::setw(8) << "ms";
+        for (const auto *fd : cols)
+            std::cout << std::setw(13) << fd->name;
+        std::cout << "\n";
+
+        size_t next = 0;
+        std::vector<std::pair<std::string, double>> fires = signals;
+        std::sort(fires.begin(), fires.end(),
+                  [](const std::pair<std::string, double> &a, const std::pair<std::string, double> &b) {
+                      return a.second < b.second;
+                  });
+        for (double t = 0.0; t <= untilMs; t += 16.0)
+        {
+            rt.advance(t);
+            while (next < fires.size() && fires[next].second <= t)
+            {
+                rt.fire(fires[next].first);
+                std::cout << std::setw(8) << (long long)t << "  <- fire " << fires[next].first << "\n";
+                ++next;
+                rt.advance(t);
+            }
+            // Every 5th frame, so a 3s trace is readable without losing the shape of the motion.
+            if ((long long)(t / 16.0) % 5 != 0) continue;
+            std::cout << std::setw(8) << (long long)t;
+            for (const auto *fd : cols)
+            {
+                double v = 0.0;
+                genesis::Runtime::Source from = genesis::Runtime::Source::Binding;
+                if (!rt.fieldValue(shapeId, fd->name, v, &from))
+                {
+                    std::cout << std::setw(13) << "-";
+                    continue;
+                }
+                char buf[32];
+                std::snprintf(buf, sizeof buf, "%.4g%c", v, genesis::Runtime::sourceName(from)[0]);
+                std::cout << std::setw(13) << buf;
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n(suffix: b = its binding, a = animating, r = being released back to its "
+                     "binding, o = owned by motion)\n";
+        return 0;
+    }
+}
+
 int main(int argc, char **argv)
 {
-    std::string input, outDir;
+    std::string input, outDir, traceTarget;
     bool check = false, print = false, doVerify = false, stale = false;
+    std::vector<std::pair<std::string, double>> traceSignals;
+    double traceUntil = 3000.0;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -117,6 +225,17 @@ int main(int argc, char **argv)
         if (a == "--print") { print = true; continue; }
         if (a == "--verify") { doVerify = true; continue; }
         if (a == "--stale") { stale = true; continue; }
+        if (a == "--trace") { if (i + 1 >= argc) return usage(2); traceTarget = argv[++i]; continue; }
+        if (a == "--until") { if (i + 1 >= argc) return usage(2); traceUntil = std::atof(argv[++i]); continue; }
+        if (a == "--signal")
+        {
+            if (i + 1 >= argc) return usage(2);
+            const std::string spec = argv[++i];
+            const size_t at = spec.find('@');
+            traceSignals.emplace_back(spec.substr(0, at),
+                                      at == std::string::npos ? 0.0 : std::atof(spec.c_str() + at + 1));
+            continue;
+        }
         if (!a.empty() && a[0] == '-') { std::cerr << "error: unknown option " << a << "\n"; return usage(2); }
         input = a;
     }
@@ -140,6 +259,9 @@ int main(int argc, char **argv)
         std::cerr << "error: " << errors << " error(s); nothing generated\n";
         return 1;
     }
+
+    if (!traceTarget.empty())
+        return trace(doc, traceTarget, traceSignals, traceUntil);
 
     const genesis::EmittedCode code = genesis::emitCpp(doc);
     if (!code.ok())

@@ -50,6 +50,20 @@ namespace genesis
         {
             return "mOwn" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
         }
+        // A field on its way back to its binding (G-22): the flag, the value it left from, and the
+        // 0..1 driver. The property itself is NOT tweened — see `applyReleases`.
+        std::string relFlag(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelOn" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
+        std::string relStart(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelFrom" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
+        std::string relDriver(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelDrv" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
 
         std::string numLit(double d)
         {
@@ -312,11 +326,21 @@ namespace genesis
                         changed = false;
                         for (const auto &kv : deps)
                             for (const auto &d : kv.second)
-                                if (live.count(d) && !live.count(kv.first))
+                                if (live.count(d))
                                 {
-                                    live.insert(kv.first);
-                                    layoutEveryFrame = true;   // something READS a live value
-                                    changed = true;
+                                    // The FLAG is "some binding reads a live value", true even
+                                    // when the reader is ITSELF animated — its binding is still
+                                    // what layout evaluates until motion owns it. Tying it to
+                                    // discovery meant an `all` target, which makes every field
+                                    // animated, seeded the whole document live so nothing could
+                                    // be discovered: layout stopped running per frame and G-6a
+                                    // quietly stopped holding. Mirrors Runtime::build.
+                                    layoutEveryFrame = true;
+                                    if (!live.count(kv.first))
+                                    {
+                                        live.insert(kv.first);
+                                        changed = true;
+                                    }
                                 }
                     }
                 }
@@ -358,6 +382,28 @@ namespace genesis
 
             /** Every (object, reaction) pair handling `signal` — a signal is a component-level
              *  event, so they all run. */
+            /** Every (shape, field) a releasing track targets — the fields that need release
+             *  state and a line in `applyReleases` (G-22). Field-table order per shape, so the
+             *  generated source is stable. */
+            std::vector<std::pair<std::string, std::string>> releasedFields() const
+            {
+                std::set<std::pair<std::string, std::string>> hit;
+                for (const auto &pair : doc.allReactions())
+                    for (const auto &st : doc.expandSteps(*pair.second, pair.first->id))
+                        for (const auto &t : st.tracks)
+                        {
+                            if (!releasesToBinding(t)) continue;
+                            std::string sh, f;
+                            Document::splitTarget(t.target, pair.first->id, sh, f);
+                            if (doc.findShape(sh) && findField(f)) hit.emplace(sh, f);
+                        }
+                std::vector<std::pair<std::string, std::string>> out;
+                for (const auto &s : doc.shapes)
+                    for (const auto *fd : fieldsFor(s.kind))
+                        if (hit.count({s.id, fd->name})) out.emplace_back(s.id, fd->name);
+                return out;
+            }
+
             std::vector<std::pair<const Shape *, const Reaction *>> reactionsFor(
                 const std::string &signal) const
             {
@@ -454,6 +500,8 @@ namespace genesis
                 o << "        void layout(double transitionMs);\n";
                 if (anyStyleProps() || anyColorMember())
                     o << "        void applyStyles();\n";
+                if (!releasedFields().empty())
+                    o << "        void applyReleases();\n";
                 o << "        /** Assign a bound value unless motion owns the field (see the .cpp). */\n";
                 o << "        void bindProp(artboard::Property &p, double v, double ms, bool owned);\n";
                 for (const auto &pair : doc.allReactions())
@@ -487,6 +535,12 @@ namespace genesis
                 for (const auto &s : doc.shapes)
                     for (const auto &a : doc.animatedFields(s.id))
                         o << "        bool " << ownFlag(s.id, a) << " = false;\n";
+                for (const auto &rf : releasedFields())
+                {
+                    o << "        bool " << relFlag(rf.first, rf.second) << " = false;\n";
+                    o << "        double " << relStart(rf.first, rf.second) << " = 0.0;\n";
+                    o << "        artboard::Property " << relDriver(rf.first, rf.second) << "{0.0};\n";
+                }
                 for (const auto &pair : doc.allReactions())
                 {
                     const std::string sh = pair.first->id, sg = pair.second->signal;
@@ -817,6 +871,42 @@ namespace genesis
             void emitApplyStyles(std::ostringstream &o) const
             {
                 o << "    // Push the (possibly animating) style values into each node's style.\n";
+                if (!releasedFields().empty())
+                {
+                    Emitter &self2 = const_cast<Emitter &>(*this);
+                    o << "    /** Fields on their way back to their bindings (G-22). The target is the\n";
+                    o << "     *  binding RE-EVALUATED every frame, so a field whose binding reads another\n";
+                    o << "     *  animating field follows it and arrives exactly on it rather than easing\n";
+                    o << "     *  to a value that was already stale when the track started. It cannot come\n";
+                    o << "     *  from layout(): the local of an owned field is its LIVE value, which is\n";
+                    o << "     *  where the field already is. Runs BEFORE layout, so a binding reading this\n";
+                    o << "     *  field sees this frame's value. */\n";
+                    o << "    void " << doc.name << "::applyReleases()\n    {\n";
+                    o << "        const double w = width.value(), h = height.value();\n";
+                    o << "        (void)w; (void)h;\n";
+                    for (const auto &rf : releasedFields())
+                    {
+                        const Shape *s = doc.findShape(rf.first);
+                        const FieldDef *fd = findField(rf.second);
+                        if (!s || !fd) continue;
+                        const std::string prop = *fd->segmentProperty
+                                                     ? memberOf(rf.first) + "->" + fd->segmentProperty
+                                                     : stylePropOf(rf.first, rf.second);
+                        const std::string target =
+                            self2.expr(s->effectiveField(rf.second), liveNames(rf.first),
+                                       rf.first + "." + rf.second + " original");
+                        o << "        if (" << relFlag(rf.first, rf.second) << ")\n        {\n";
+                        o << "            " << prop << ".set(" << relStart(rf.first, rf.second)
+                          << " + ((" << target << ") - " << relStart(rf.first, rf.second) << ") * "
+                          << relDriver(rf.first, rf.second) << ".value());\n";
+                        o << "            if (!" << relDriver(rf.first, rf.second)
+                          << ".isAnimating())\n";
+                        o << "                " << relFlag(rf.first, rf.second)
+                          << " = false;   // blended at t = 1: exactly the binding\n";
+                        o << "        }\n";
+                    }
+                    o << "    }\n\n";
+                }
                 o << "    void " << doc.name << "::applyStyles()\n    {\n";
                 for (const auto &s : doc.shapes)
                 {
@@ -929,11 +1019,28 @@ namespace genesis
                             const std::string delay = self.expr(t.delayMs, names, where + " delay");
                             o << "        " << ownFlag(owner, field) << " = true;   // motion now owns "
                               << owner << "." << field << "\n";
-                            o << "        " << prop << ".animate(\n";
-                            o << "            artboard::Tween(" << from << ", " << to << ", " << dur
-                              << ", " << delay << ",\n                            artboard::Easing::"
-                              << t.easing << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false")
-                              << "),\n";
+                            // A releasing track drives a 0..1 blend rather than the property, so
+                            // `applyReleases` can aim it at the binding every frame (G-22). With a
+                            // constant binding the result is the identical curve.
+                            const bool rel = releasesToBinding(t);
+                            if (rel)
+                            {
+                                o << "        " << relFlag(owner, field) << " = true;\n";
+                                o << "        " << relStart(owner, field) << " = " << from << ";\n";
+                                o << "        " << relDriver(owner, field)
+                                  << " = artboard::Property{0.0};\n";
+                            }
+                            const std::string driven = rel ? relDriver(owner, field) : prop;
+                            o << "        " << driven << ".animate(\n";
+                            if (rel)
+                                o << "            artboard::Tween(0.0, 1.0, " << dur << ", " << delay
+                                  << ",\n                            artboard::Easing::" << t.easing
+                                  << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false") << "),\n";
+                            else
+                                o << "            artboard::Tween(" << from << ", " << to << ", " << dur
+                                  << ", " << delay << ",\n                            artboard::Easing::"
+                                  << t.easing << ", " << t.repeat << ", "
+                                  << (t.yoyo ? "true" : "false") << "),\n";
                             o << "            mNowMs";
                             if (t.repeat >= 0)
                             {
@@ -943,7 +1050,7 @@ namespace genesis
                                 // `to = original` hands the field back to its BINDING when the
                                 // track completes, so layout drives it again (G-22). The runtime
                                 // clears the same flag at the same moment.
-                                if (releasesToBinding(t))
+                                if (rel)
                                     o << "                " << ownFlag(owner, field)
                                       << " = false;   // back to its binding: layout owns "
                                       << owner << "." << field << " again\n";
@@ -1082,6 +1189,14 @@ namespace genesis
                 o << "            mLastW = width.value();\n            mLastH = height.value();\n";
                 o << "        }\n";
                 o << "        const double sizeMs = firstSizing ? 0.0 : kResizeMs;\n";
+                if (!releasedFields().empty())
+                {
+                    o << "        // Release drivers tick first, then the blend, then layout — the\n";
+                    o << "        // interpreter's order, so both sides agree frame for frame (G-22).\n";
+                    for (const auto &rf : releasedFields())
+                        o << "        " << relDriver(rf.first, rf.second) << ".update(nowMs);\n";
+                    o << "        applyReleases();\n";
+                }
                 if (layoutEveryFrame)
                 {
                     o << "        // A binding reads base.*, so the layout tracks live state every frame.\n";
