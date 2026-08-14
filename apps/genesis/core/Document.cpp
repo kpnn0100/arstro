@@ -148,6 +148,25 @@ namespace genesis
         return expr.compare(a, b - a + 1, "original") == 0;
     }
 
+    std::vector<Track> liveTracks(const Step &st, const std::string &ownerId)
+    {
+        std::map<std::string, size_t> lastAt;   // (shape.field) -> the track that wins
+        for (size_t i = 0; i < st.tracks.size(); ++i)
+        {
+            std::string sh, f;
+            Document::splitTarget(st.tracks[i].target, ownerId, sh, f);
+            lastAt[sh + "." + f] = i;
+        }
+        std::vector<Track> out;
+        for (size_t i = 0; i < st.tracks.size(); ++i)
+        {
+            std::string sh, f;
+            Document::splitTarget(st.tracks[i].target, ownerId, sh, f);
+            if (lastAt[sh + "." + f] == i) out.push_back(st.tracks[i]);
+        }
+        return out;
+    }
+
     bool releasesToBinding(const Track &t)
     {
         if (!isBareOriginal(t.to)) return false;
@@ -993,11 +1012,33 @@ namespace genesis
                 if (r.steps.empty())
                     out.push_back({Diagnostic::Severity::Warning, where,
                                    "reaction has no steps: it does nothing"});
+                // Named, not a temporary indexed inline: a range-for over
+                // `expandSteps(...)[si].tracks` does not extend the vector's lifetime, so the
+                // loop would walk freed memory.
+                const std::vector<Step> expanded = expandSteps(r, owner.id);
                 for (size_t si = 0; si < r.steps.size(); ++si)
                 {
                     const std::string sw = where + " step " + std::to_string(si + 1);
                     if (r.steps[si].tracks.empty())
                         out.push_back({Diagnostic::Severity::Warning, sw, "step has no tracks"});
+                    // Two tracks on one field in one step cannot both run: a Property holds one
+                    // tween, so the later `animate()` replaces the earlier the instant it is made.
+                    // The author almost always meant two STEPS — one leg, then the next.
+                    {
+                        std::map<std::string, int> seen;
+                        for (const auto &t : expanded[si].tracks)
+                        {
+                            std::string sh, f;
+                            splitTarget(t.target, owner.id, sh, f);
+                            if (++seen[sh + "." + f] == 2)
+                                out.push_back(
+                                    {Diagnostic::Severity::Warning, sw,
+                                     "'" + sh + "." + f +
+                                         "' is animated twice in this step; only the last track "
+                                         "runs — put the other in its own step to play them in "
+                                         "sequence"});
+                        }
+                    }
                     for (const auto &t : r.steps[si].tracks)
                     {
                         // A bare field targets the owning object; a qualified one may reach

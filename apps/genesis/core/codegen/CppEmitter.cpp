@@ -986,8 +986,12 @@ namespace genesis
                     for (size_t si = 0; si < steps.size(); ++si)
                     {
                         const Step &step = steps[si];
+                        // Only the tracks that actually run (see Document::liveTracks): a second
+                        // track on the same field in the same step replaces the first, callback
+                        // included, so counting both would stop the chain at this step forever.
+                        const std::vector<Track> tracks = liveTracks(step, host.id);
                         int finite = 0;
-                        for (const auto &t : step.tracks)
+                        for (const auto &t : tracks)
                             if (t.repeat >= 0) ++finite;
 
                         o << "    void " << doc.name << "::" << reactionFn(host.id, r.signal, (int)si)
@@ -999,7 +1003,7 @@ namespace genesis
                             o << "        const int token = " << tokenMember(host.id, r.signal) << ";\n";
                             o << "        " << pendingMember(host.id, r.signal) << " = " << finite << ";\n";
                         }
-                        for (const auto &t : step.tracks)
+                        for (const auto &t : tracks)
                         {
                             std::string owner, field;
                             Document::splitTarget(t.target, host.id, owner, field);

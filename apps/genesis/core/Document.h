@@ -116,6 +116,15 @@ namespace genesis
         std::vector<Track> tracks;
     };
 
+    /** The tracks of `st` that actually RUN. An `artboard::Property` holds one tween, so when two
+     *  tracks in a single step target the same field the later `animate()` replaces the earlier
+     *  one the instant it is made — and takes its completion callback with it. Only the survivors
+     *  are started, and only they are counted towards the step's pending total; counting the
+     *  discarded ones makes the chain wait forever for a callback that no longer exists, and the
+     *  next step never begins. Order is preserved, and `validate()` warns about the duplicate so
+     *  the author can split it into two steps, which is what they meant. */
+    std::vector<Track> liveTracks(const Step &st, const std::string &ownerId);
+
     /** A reaction belongs to a SHAPE: selecting an object shows its reactions and nothing
      *  else. The signal is still a component-level event, so several shapes may each react to
      *  the same one — they all run. */

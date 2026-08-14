@@ -1768,6 +1768,68 @@ TEST(Field_values_can_be_read_live_with_where_they_came_from)
     CHECK_NEAR(v, 80.0, 1e-6);
     CHECK_NEAR(rt.releaseProgress("ring", "x"), -1.0, 1e-9);
 }
+TEST(Two_tracks_on_one_field_in_one_step_do_not_stall_the_chain)
+{
+    /*  A Property holds ONE tween, so a second `animate()` on the same field replaces the first
+     *  the instant it is made — and takes its completion callback with it. Counting both tracks
+     *  towards the step's pending total therefore waits forever for a callback that no longer
+     *  exists, and the NEXT STEP NEVER RUNS. Reported as "step 3 doesn't run after step 2".
+     */
+    Reaction r;
+    r.signal = "loopStart";
+    auto tk = [](const char *target, const char *to, const char *ms, const char *delay) {
+        return Track{target, "", to, ms, delay, "Linear", 0, false};
+    };
+    Step two;
+    two.tracks.push_back(tk("trimStart", "0.9", "100", "0"));
+    two.tracks.push_back(tk("trimOffset", "0.9", "100", "0"));    // first leg
+    two.tracks.push_back(tk("trimOffset", "1.2", "100", "200"));  // replaces it, callback and all
+    Step three;
+    three.tracks.push_back(tk("w", "0", "100", "0"));
+    r.steps.push_back(two);
+    r.steps.push_back(three);
+
+    // Only the survivors, in order: the earlier trimOffset is gone, trimStart is untouched.
+    const std::vector<Track> live = liveTracks(r.steps[0], "ring");
+    CHECK(live.size() == 2);
+    CHECK(live[0].target == "trimStart");
+    CHECK(live[1].target == "trimOffset" && live[1].to == "1.2");
+    // A qualified target names the same field as a bare one on the owning shape.
+    Step mixed;
+    mixed.tracks.push_back(tk("opacity", "0", "100", "0"));
+    mixed.tracks.push_back(tk("ring.opacity", "1", "100", "0"));
+    CHECK(liveTracks(mixed, "ring").size() == 1);
+    CHECK(liveTracks(mixed, "other").size() == 2);   // different objects: both run
+
+    // And the chain reaches step 2 — the property the second step drives actually moves.
+    Document d = Document::starter("VisualLoop", "C");
+    Shape *ring = d.findShape("ring");
+    ring->kind = ShapeKind::Rect;
+    ring->setField("w", "40");
+    ring->setField("opacity", "1");
+    ring->reactions.assign(1, r);
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    artboard::Segment *seg = rt.segmentFor("ring");
+    CHECK_NEAR(seg->width.value(), 40.0, 1e-6);
+    rt.loopStart();
+    for (double t = 0.0; t <= 600.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(seg->width.value(), 0.0, 1e-6);       // step 2 ran; before the fix this stayed 40
+
+    // The author is told, because their first leg was silently discarded: they meant two steps.
+    ring->reactions.assign(1, r);
+    bool warned = false;
+    for (const auto &diag : d.validate())
+    {
+        if (diag.isError()) CHECK(false);
+        if (diag.message.find("animated twice in this step") != std::string::npos) warned = true;
+    }
+    CHECK(warned);
+}
 TEST(Verifier_op_serialization_is_field_wise_and_stable)
 {
     artboard::RecordingTarget t;

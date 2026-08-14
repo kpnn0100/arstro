@@ -102,6 +102,22 @@ ring (VisualLoop), a track + `base.display`-bound fill that pops on completion
 (Button), a rail/fill/thumb that pops on grab (Slider), a box with a path tick that fades in
 (Checkbox).
 
+### 3b. Only one track per field per step actually runs
+
+`Document::liveTracks(step, ownerId)` returns the tracks of a step that will really run: the LAST
+one per `(shape, field)`, in order. An `artboard::Property` holds one tween, so a second
+`animate()` on the same field replaces the first immediately — and takes its completion callback
+with it. The step's pending total is the count of *those* tracks, in the interpreter and the
+emitter alike.
+
+Getting this wrong does not merely lose an animation, it **stops the chain**: `pending` counts a
+callback that was discarded, never reaches zero, and the next step never starts. That was the
+"step 3 doesn't run after step 2" report, from a step that animated `trimOffset` twice — the
+trace showed `w` frozen at `60o` (owned by motion, standing still) forever.
+
+`validate()` warns and names the field, because the author's first leg is otherwise silently
+dropped and what they meant was two steps.
+
 ### 3a. What moves, and what `all` means (G-21, G-22, G-23)
 
 Three functions on `Document`, and every consumer reads them rather than keeping its own answer:

@@ -111,6 +111,12 @@ scope in a shape's field bindings, where there is no target to speak of.
 
 - A track with `repeat == -1` never completes and therefore never chains; a step whose tracks
   all repeat forever ends the chain.
+- **One field, one track per step.** A field's `Property` holds a single tween, so if two tracks
+  in the same step target it, the later `animate()` replaces the earlier the instant it is made.
+  Only the surviving track shall be started and counted towards the step's completion, because
+  counting the discarded one waits forever for a callback that no longer exists and **the next
+  step never runs**. `validate()` shall warn, naming the field, because the author meant two
+  steps — one leg, then the next — and their first leg is otherwise silently dropped.
 - Every reaction carries a **cancellation policy** — `restart` (default), `ignoreIfRunning`,
   or `queue` — because interruption is what event-driven motion gets wrong.
 - Only a field the base table calls **animatable** may be a track target — a property of the

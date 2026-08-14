@@ -255,6 +255,9 @@ remove a word.
 - **Reactions** — per track: a **grip**, `target`, `from` (blank = wherever it is now), `to`,
   `ms`, `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a
   delete. The scrubber replays the selected reaction to any point in its own timeline.
+- **One field, one track per step.** Two tracks on the same field in one step cannot both run —
+  a field holds one animation, so the later one wins and the editor warns. To play two legs in
+  sequence, put the second in its own step (drag it there by its grip).
 - **Drag a track by its grip** to move it: into another step, to a different position inside its
   step, or — dropped in the space below the last row — into a **new final step**, which is how
   you turn tracks that run together into ones that run in sequence. A line shows where it will

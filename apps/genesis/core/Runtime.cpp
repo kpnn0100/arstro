@@ -942,12 +942,16 @@ namespace genesis
         const int token = st.token;
         const std::string signal = r.signal;
 
+        // Only the tracks that actually run are started and counted: two tracks on one field in
+        // one step means the later replaces the earlier immediately, callback and all, and waiting
+        // for the discarded one would stop the chain here forever.
+        const std::vector<Track> tracks = liveTracks(step, owner);
         int finite = 0;
-        for (const auto &t : step.tracks)
+        for (const auto &t : tracks)
             if (t.repeat >= 0) ++finite;
         st.pending = finite;
 
-        for (const auto &t : step.tracks)
+        for (const auto &t : tracks)
         {
             std::string shapeId, field;
             Document::splitTarget(t.target, owner, shapeId, field);
