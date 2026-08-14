@@ -80,6 +80,9 @@ namespace genesis
 
     /** The pseudo-field that means "every animatable field of this object" (G-22). */
     extern const char *const kAllFields;
+    /** True when `expr` is the bare name `original` (G-22). `original + 4` is not: it ends
+     *  somewhere the binding does not describe. */
+    bool isBareOriginal(const std::string &expr);
 
     /** One animated field inside a step. Durations are Gene expressions too, so a `speed`
      *  param genuinely re-times the whole component. */
@@ -98,6 +101,14 @@ namespace genesis
         int repeat = 0;                  // extra cycles; -1 = forever
         bool yoyo = false;
     };
+
+    /** True when this track ends by handing its field back to its BINDING (G-22): its `to` is the
+     *  bare name `original`, AND it actually comes to rest there. It rests at `to` unless it never
+     *  completes (`repeat == -1`) or it is a yoyo whose last cycle is the odd, reversed one — the
+     *  same condition `artboard::Tween` uses to pick its resting endpoint. One predicate, because
+     *  the interpreter and the emitter must clear the own-flag at the same moment or they diverge
+     *  on the next resize. */
+    bool releasesToBinding(const Track &t);
 
     /** Tracks that start together. Step N+1 begins when step N completes. */
     struct Step

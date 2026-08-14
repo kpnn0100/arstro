@@ -1528,17 +1528,97 @@ TEST(Original_animates_back_to_the_authored_binding)
     rt.advance(400.0);
     CHECK_NEAR(seg->x.value(), 80.0, 1e-6);          // back to the binding's value
 
-    // And `original` is re-evaluated, not remembered: at a new size it lands centred THERE.
+    // And the field is back on its BINDING, not parked on the number the binding gave once: a
+    // resize with nothing re-fired must re-centre it. Without the release this read 80 forever,
+    // because motion owned `x` from the first track and layout never asserts an owned field.
     rt.setSize(300, 300);
-    rt.advance(500.0);
-    rt.loopStart();
-    rt.advance(500.0);
-    rt.advance(700.0);
-    rt.fire("loopEnd");
-    rt.advance(700.0);
-    rt.advance(900.0);
+    for (double t = 400.0; t < 900.0; t += 16.0)
+        rt.advance(t);
     CHECK_NEAR(seg->width.value(), 60.0, 1e-6);
     CHECK_NEAR(seg->x.value(), 120.0, 1e-6);         // (300 - 60) / 2, not the old 80
+}
+TEST(Only_a_bare_original_hands_the_field_back)
+{
+    /*  Releasing is what makes `to = original` mean the BINDING rather than a number, so it must
+     *  happen exactly when the track really ends there: `original + 4` does not, and a yoyo ends
+     *  back at `from`. Getting this wrong would snap a field to its binding at the end of an
+     *  animation that deliberately left it somewhere else.
+     */
+    CHECK(isBareOriginal("original"));
+    CHECK(isBareOriginal("  original\n"));
+    CHECK(!isBareOriginal("original + 4"));
+    CHECK(!isBareOriginal("originality"));
+    CHECK(!isBareOriginal(""));
+    CHECK(!isBareOriginal("current"));
+
+    // Where it comes to rest is the framework's rule, not a guess: `artboard::Tween` rests at
+    // `to` unless a yoyo's LAST cycle is the odd, reversed one — so parity decides, not yoyo.
+    auto tr = [](const char *to, int repeat, bool yoyo) {
+        return Track{"x", "0", to, "200", "0", "Linear", repeat, yoyo};
+    };
+    CHECK(releasesToBinding(tr("original", 0, false)));
+    CHECK(releasesToBinding(tr("original", 0, true)));    // one forward cycle: rests at `to`
+    CHECK(releasesToBinding(tr("original", 2, true)));    // even: last cycle forward
+    CHECK(!releasesToBinding(tr("original", 1, true)));   // odd: rests back at `from`
+    CHECK(!releasesToBinding(tr("original", -1, false))); // forever: never completes
+    CHECK(!releasesToBinding(tr("original + 4", 0, false)));
+
+    auto xAfterResize = [](const std::string &to, bool yoyo) {
+        Document d = Document::starter("VisualLoop", "B");
+        Shape *s = d.findShape("ring");
+        s->kind = ShapeKind::Rect;
+        s->setField("w", "minSide * 0.2");
+        s->setField("h", "minSide * 0.2");
+        s->setField("x", "(w - self.w) / 2");
+        s->setField("y", "0");
+        s->setField("fill", "accent");
+        s->setField("opacity", "1");
+        s->reactions.clear();
+        Reaction home;
+        home.signal = "loopStart";
+        Step st;
+        st.tracks.push_back({"x", "0", to, "200", "0", "Linear", 0, yoyo});
+        home.steps.push_back(st);
+        s->reactions.push_back(home);
+        Runtime rt;
+        std::string err;
+        if (!rt.build(d, &err)) return -1.0;
+        rt.setSize(200, 200);
+        rt.advance(0.0);
+        rt.loopStart();
+        rt.advance(0.0);
+        rt.advance(200.0);
+        rt.setSize(300, 300);                        // nothing re-fired: only a resize
+        for (double t = 200.0; t < 700.0; t += 16.0)
+            rt.advance(t);
+        return rt.segmentFor("ring")->x.value();
+    };
+    CHECK_NEAR(xAfterResize("original", false), 120.0, 1e-6);   // handed back: re-centres
+    CHECK_NEAR(xAfterResize("original + 4", false), 84.0, 1e-6);  // ends off the binding: kept
+    CHECK_NEAR(xAfterResize("original", true), 120.0, 1e-6);    // one forward cycle: also handed back
+}
+TEST(Emitted_code_hands_a_bare_original_field_back_to_layout)
+{
+    // The generated class must clear the own-flag at the same moment the interpreter does, or
+    // the two diverge on the next resize — which is exactly what the Verifier would catch.
+    Document d = Document::starter("VisualLoop", "C");
+    Shape *ring = d.findShape("ring");
+    ring->setField("x", "(w - self.w) / 2");
+    ring->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"x", "current", "original", "200", "0", "Linear", 0, false});
+    st.tracks.push_back({"y", "current", "original + 4", "200", "0", "Linear", 0, false});
+    st.tracks.push_back({"opacity", "current", "original", "200", "0", "Linear", 1, true});
+    r.steps.push_back(st);
+    ring->reactions.push_back(r);
+
+    const EmittedCode e = emitCpp(d);
+    CHECK(e.ok());
+    CHECK(e.source.find("mOwnRingX = false;") != std::string::npos);          // bare: released
+    CHECK(e.source.find("mOwnRingY = false;") == std::string::npos);          // offset: kept
+    CHECK(e.source.find("mOwnRingOpacity = false;") == std::string::npos);    // odd yoyo: kept
 }
 TEST(Emitted_code_expands_all_and_inlines_original)
 {
@@ -1639,6 +1719,17 @@ TEST(Verifier_default_plan_exercises_the_base)
     }
     CHECK(hasStart);
     CHECK(hasResize);      // a component that only works at its design size fails R4
+    // And the plan must LOOK after resizing (G-9a): a resize eases, so the frame right after it
+    // still shows the old geometry. Sampling only that frame resized without observing anything,
+    // which is what once hid a one-sided implementation of `original`'s hand-back.
+    double resizeAt = 0.0;
+    for (const auto &e : p.events)
+        if (e.action == "resize") resizeAt = e.atMs;
+    bool settledSample = false;
+    for (double t : p.sampleMs)
+        if (t > resizeAt + 300.0) settledSample = true;
+    CHECK(resizeAt > 0.0);
+    CHECK(settledSample);
     const VerifyPlan b = VerifyPlan::defaultFor(Document::starter("Button", "B"));
     bool hasPress = false;
     for (const auto &e : b.events)

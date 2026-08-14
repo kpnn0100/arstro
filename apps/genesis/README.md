@@ -90,11 +90,20 @@ Two names exist only inside a track, and they are a pair:
 | | |
 | --- | --- |
 | `current` | wherever the field is **now** — `to = current + tau / dots` steps a value on each fire |
-| `original` | wherever the **design** says it belongs: the value of that field's own binding |
+| `original` | that field's own **binding** — the expression in the inspector (or its default) |
 
-`original` is the expression, not a remembered number, so `from = current, to = original` returns
-a field to rest and still lands correctly at a window size the component was never authored at —
-an `original x` of `(w - self.w) / 2` recentres against the current width.
+`original` is the binding itself, not a number read from it once, and that means two things:
+
+- it is **evaluated**, so `to = original` lands correctly at a window size the component was
+  never authored at — an `original x` of `(w - self.w) / 2` recentres against the current width;
+- a track that **ends** at `original` gives the field back to its binding, so a later resize or
+  param change moves it again. Without that, a field would be correct for one frame and then
+  frozen, because layout never touches a field an animation owns.
+
+The hand-back applies when the track really comes to rest there: `to` is the bare name (so
+`original + 4` keeps the field, since it ends somewhere the binding does not describe), the track
+completes at all (`∞` never does), and its last cycle runs forward — a yoyo with an odd repeat
+count rests back at `from`.
 
 Pair it with the target **`all`** — every animatable field of the object, as one row:
 

@@ -140,6 +140,21 @@ namespace genesis
 
     const char *const kAllFields = "all";
 
+    bool isBareOriginal(const std::string &expr)
+    {
+        const size_t a = expr.find_first_not_of(" \t\r\n");
+        if (a == std::string::npos) return false;
+        const size_t b = expr.find_last_not_of(" \t\r\n");
+        return expr.compare(a, b - a + 1, "original") == 0;
+    }
+
+    bool releasesToBinding(const Track &t)
+    {
+        if (!isBareOriginal(t.to)) return false;
+        if (t.repeat < 0) return false;                 // never completes, so never hands back
+        return !(t.yoyo && t.repeat % 2 == 1);          // where artboard::Tween comes to rest
+    }
+
     // ───────────────────────── Document lookup ─────────────────────────
 
     const Shape *Document::findShape(const std::string &id) const

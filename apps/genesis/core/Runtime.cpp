@@ -925,10 +925,19 @@ namespace genesis
                 continue;
             }
             const std::string ownerId = owner;
-            p->animate(spec, mNowMs, [this, key, ownerId, signal, token, stepIndex] {
+            // `to = original` means the field goes back to its BINDING, not to the number the
+            // binding happens to give right now — so when such a track completes the field is
+            // handed back to layout and follows the binding again (G-22).
+            const bool releases = releasesToBinding(t);
+            const std::string relShape = shapeId, relField = field;
+            p->animate(spec, mNowMs, [this, key, ownerId, signal, token, stepIndex, releases,
+                                      relShape, relField] {
                 auto it = mReactions.find(key);
                 if (it == mReactions.end() || it->second.token != token)
                     return;   // a newer run of this reaction superseded us
+                if (releases)
+                    if (ShapeNode *n = node(relShape))
+                        n->owned[relField] = false;   // layout owns it again
                 if (--it->second.pending > 0)
                     return;
                 const Shape *host = mDoc.findShape(ownerId);

@@ -232,6 +232,23 @@ not arise. Because it is an expression rather than a captured number, `to = orig
 against the *current* size — an `original x` of `(w - self.w) / 2` lands correctly at a window
 size the component was never authored at.
 
+**And a track that ends at `original` hands the field back.** `original` names the *binding*, so
+finishing there must leave the field driven by that binding — otherwise it means "the number the
+binding gave at fire time", and the object looks correct for one frame and is then frozen: a
+later resize cannot move it, because layout never asserts a field motion owns (G-6). So on
+completion the own-flag is cleared — `n->owned[field] = false` in the runtime's per-track
+callback, `mOwnRingX = false;` emitted at the same point in the generated lambda, both after the
+token check so a superseded run releases nothing. Nothing jumps at the moment of release: the
+property already holds the value the binding gives.
+
+`Document::releasesToBinding(track)` is the single predicate, because the two sides must release
+at the same instant or they diverge on the next resize — invisible until something is resized,
+and then a silent difference between the preview and the shipped class. It is true when the `to`
+is the bare name `original` (`original + 4` ends off the binding), the track completes
+(`repeat >= 0`), and its final cycle is forward — `!(yoyo && repeat % 2 == 1)`, which is exactly
+the condition `artboard::Tween` uses to pick its resting endpoint rather than a guess about what
+yoyo means.
+
 `current` lives only in the track scope, because it means "the target field's value at the
 moment this reaction fires". The emitter binds it to `<property>.value()` and the runtime
 samples the property when the track starts, which is what makes `to = current + 10` relative:
@@ -277,6 +294,14 @@ which register in the process-wide focus and hover slots, and so must run on the
 Comparison is token-wise with a relative tolerance of `1e-9`, so a last-bit difference is not
 reported as a semantic one while any real divergence is. The scan stops after 40 differences —
 enough to diagnose, and the rest would be noise.
+
+### 6a. The plan samples after the resize settles (G-9a)
+
+`sampleMs` ends `…, 1800, 2200` around the resize event at 1600, because the harness applies a
+resize *after* that frame's `advance` and layout eases into the new geometry over `kResizeMs`. The
+1800 sample therefore lands on the transition's first frame, where nothing has moved yet — so for
+a while the plan resized and never looked. Adding the settled sample is what turned a silent
+divergence into `at 2200ms op 20 token 25: preview=60 compiled=40`.
 
 ## 7. The editor
 

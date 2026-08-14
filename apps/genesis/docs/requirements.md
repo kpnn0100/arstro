@@ -227,6 +227,17 @@ built `artboard_core` is available the result shall be reported as **unavailable
 unavailable check shall never be reported as a pass. A verify step shall mean the same thing
 on both sides (a driver that differs between them is a defect in the verifier, not a finding).
 
+### G-9a The verification plan must look after it resizes
+
+Every default plan resizes (G-9), but a resize eases: the frame immediately after it still shows
+the old geometry. A plan that samples only that frame resizes without ever observing the result,
+so a component that has stopped responding to its size passes. The default plan shall therefore
+carry a sample **after the resize transition has settled**, not only at its first frame.
+
+This is not hypothetical: it is what hid a one-sided implementation of G-22's hand-back — the
+interpreter released the field, the generated class did not, and the two agreed at every sampled
+frame anyway.
+
 ### G-10 Determinism
 
 The same document shall always emit byte-identical output, and saving shall always produce a
@@ -347,14 +358,31 @@ the validator had to reject with "must be marked animated", a diagnostic that on
 Two names, so a reaction can put an object back the way it was authored.
 
 **`original`** — valid in a track's `from`/`to` alongside `current` (G-6), and nowhere else —
-reads the value of the **target field's own binding**: the expression sitting in the inspector.
-Where `current` is "wherever it is now", `original` is "wherever the design says it belongs".
-`from = current, to = original` is therefore a return-to-rest that needs no duplicated literal
-and keeps following the binding when the window resizes or a param changes.
+means the target field's **own binding**: the expression sitting in the inspector, or the field's
+default when nothing is bound. Where `current` is "wherever it is now", `original` is "whatever
+the binding says". It is the binding, not a value read from it once, and that has two parts:
 
-The expression is evaluated in the same live scope the binding itself reads (G-6a), so an
-`original x` of `(w - self.w) / 2` recentres against the *current* width, animated or not. A
-field's binding may not itself contain `original` or `current`, so there is no recursion.
+- **It is evaluated, not remembered.** The expression is evaluated in the same live scope the
+  binding itself reads (G-6a), so an `original x` of `(w - self.w) / 2` recentres against the
+  *current* width, at a size the component was never authored at. A field's binding may not
+  itself contain `original` or `current`, so there is no recursion.
+- **A track that ends at `original` gives the field back to its binding.** When such a track
+  completes, the field stops being owned by motion and layout drives it again — so a later resize
+  or param change re-evaluates the binding, exactly as it did before the reaction ever ran.
+  Without this, `to = original` would only ever mean "the number the binding happened to give at
+  fire time", and the object would look right for one frame and then stop being responsive.
+
+  This refines G-6 rather than contradicting it. G-6 stops a resize from *stomping* a running or
+  finished animation; here the author has explicitly said "this field belongs to its binding
+  again", so handing it back is the stated intent rather than an accident.
+
+  It applies when the track **comes to rest at `to`**: the `to` is the bare name `original`
+  (`original + 4` ends somewhere the binding does not describe and keeps the field), the track
+  completes at all (a `repeat == -1` track never does), and its final cycle is forward — a yoyo
+  with an odd repeat count rests back at `from`. That is the same condition `artboard::Tween`
+  uses to choose its resting endpoint, and it shall be decided by **one** predicate that the
+  interpreter and the emitter both call, since they must release the field at the same moment or
+  they diverge on the next resize.
 
 **`all`** — a target of `all` (or `other.all`) expands to one track per animatable field of that
 object, in field-table order, sharing the same `from`/`to`/`ms`/`delay`/`easing`/`repeat`/`yoyo`.

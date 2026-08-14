@@ -940,6 +940,13 @@ namespace genesis
                                 o << ",\n            [this, token] {\n";
                                 o << "                if (token != " << tokenMember(host.id, r.signal) << ")\n";
                                 o << "                    return;   // a newer run of this reaction superseded us\n";
+                                // `to = original` hands the field back to its BINDING when the
+                                // track completes, so layout drives it again (G-22). The runtime
+                                // clears the same flag at the same moment.
+                                if (releasesToBinding(t))
+                                    o << "                " << ownFlag(owner, field)
+                                      << " = false;   // back to its binding: layout owns "
+                                      << owner << "." << field << " again\n";
                                 o << "                if (--" << pendingMember(host.id, r.signal)
                                   << " > 0)\n                    return;\n";
                                 if (si + 1 < steps.size())

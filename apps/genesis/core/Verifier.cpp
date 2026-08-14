@@ -203,7 +203,11 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
         VerifyPlan p;
         p.width = doc.designW;
         p.height = doc.designH;
-        p.sampleMs = {0, 60, 150, 300, 600, 900, 1200, 1500, 1800};
+        // The last three samples straddle the resize at 1600: 1800 catches the FIRST frame of
+        // the resize transition (nothing has eased yet), and 2200 catches it settled. Without a
+        // settled sample the plan resized but never looked, so a component that stops responding
+        // to its size — say a field an animation never handed back — passed anyway.
+        p.sampleMs = {0, 60, 150, 300, 600, 900, 1200, 1500, 1800, 2200};
         if (doc.base == "VisualLoop")
         {
             p.events.push_back({0, "start", 0, ""});
