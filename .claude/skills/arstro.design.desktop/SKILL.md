@@ -166,6 +166,11 @@ without bound, so the answer is yes even when today's sample shows three rows. T
   that shifts rows (`y = top − offset`) with `maxOffset = max(0, content − viewport)`.
 - **Measure viewport and content every layout**, so resizing the window or editing the document
   cannot leave a stale limit behind.
+- **Measure the box you lay out in, and define that box once.** One accessor for the list's top
+  and bottom, read by `measure()`, the row placement, the visible test, the paint clip, and the
+  bar. Inline copies drift by a padding, and a viewport taller than the rows may occupy makes the
+  last row unreachable at every offset. Clip the row loop while painting too, or a half-scrolled
+  row draws over the captions above and the footer below.
 - **Clamp at both ends**, and when there is nothing to scroll report so and let the wheel **bubble**
   to an ancestor instead of eating it.
 - **Draw the indicator** whenever it is scrollable (thin rounded bar sized `viewport/content`) — off-screen
@@ -174,7 +179,8 @@ without bound, so the answer is yes even when today's sample shows three rows. T
 - **Never silently drop a row** to make things fit; a `break` in a draw loop is fine only for rows
   already reachable by scrolling.
 - Verify per list (see implement_artboard §2 *Overflow*): scrollable → wheel moves it → clamps at the
-  end → returns exactly to 0, plus the mirror case that a short list ignores the wheel.
+  end → returns exactly to 0, every row fully visible at some offset along the way, plus the mirror
+  case that a short list ignores the wheel.
 
 ### Adapted taste rules (from implement_artboard §2A / Artboard FR-24)
 - **Everything interactive hovers** (R-G-3 / Artboard FR-24). Every button and every clickable

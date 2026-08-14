@@ -115,11 +115,20 @@ namespace ui
     }
 
     double ShapeTree::listTop() const { return metrics::pad() + 22.0; }
+    double ShapeTree::listBottom() const { return footerTop() - 8.0; }
 
     /** Top of the fixed footer block (title + delete + the four add buttons). */
     double ShapeTree::footerTop() const
     {
         return height.value() - metrics::pad() - kAddH * 3.0 - 16.0 - 18.0;
+    }
+
+    bool ShapeTree::lastRowFullyVisible() const
+    {
+        if (mRows.empty()) return true;
+        const double bottom =
+            listTop() - mScroll.offset() + (double)mRows.size() * metrics::rowH();
+        return bottom <= listBottom() + 0.01;
     }
 
     void ShapeTree::layout(double w, double h)
@@ -158,7 +167,9 @@ namespace ui
     {
         mNowMs = nowMs;
         mHover.advance(nowMs);
-        mScroll.measure(footerTop() - listTop(), (double)mRows.size() * metrics::rowH());
+        // Measured against the box the rows are DRAWN in (the paint clip stops 8px above the
+        // footer), so the last row can be scrolled fully into view rather than 8px short.
+        mScroll.measure(listBottom() - listTop(), (double)mRows.size() * metrics::rowH());
         Segment::advance(nowMs);
     }
 
@@ -200,9 +211,8 @@ namespace ui
         const double pad = metrics::pad();
         drawSectionTitle(t, "Shapes", pad, pad + 10.0);
 
-        const double listBottom = footerTop() - 8.0;
         t.save();
-        t.clipRect(0, listTop() - 4.0, w, listBottom - listTop() + 4.0);
+        t.clipRect(0, listTop() - 4.0, w, listBottom() - listTop() + 4.0);
         double y = listTop() - mScroll.offset();
         const double rowH = metrics::rowH();
 
@@ -217,7 +227,7 @@ namespace ui
 
         for (int i = 0; i < (int)mRows.size(); ++i, y += rowH)
         {
-            if (y + rowH < listTop() - rowH || y > listBottom) continue;
+            if (y + rowH < listTop() - rowH || y > listBottom()) continue;
             const Row &r = mRows[(size_t)i];
             const bool selected = r.id == mApp.selectedShape();
             const double hover = mHover.amount(i);
@@ -267,7 +277,7 @@ namespace ui
             }
         }
         t.restore();
-        mScroll.drawBar(t, {0, listTop() - 4.0, w, listBottom - listTop() + 4.0});
+        mScroll.drawBar(t, {0, listTop() - 4.0, w, listBottom() - listTop() + 4.0});
 
         drawSectionTitle(t, "Add", pad, footerTop() + 10.0);
     }

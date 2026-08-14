@@ -31,6 +31,9 @@ namespace ui
          *  anything out of view rather than inferring it from what got drawn. */
         bool listScrollable() const { return mScroll.scrollable(); }
         double listOffset() const { return mScroll.offset(); }
+        /** True when the last row sits fully inside the drawn list box at the current offset.
+         *  Scrolled to the end this must hold, or the bottom row can never be read (G-20). */
+        bool lastRowFullyVisible() const;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -44,6 +47,8 @@ namespace ui
         };
         int rowAt(double localY) const;
         double listTop() const;
+        /** Bottom of the drawn list box — the same number `measure()` and the paint clip use. */
+        double listBottom() const;
         double footerTop() const;
 
         App &mApp;

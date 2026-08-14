@@ -35,6 +35,10 @@ namespace ui
         double tracksOffset() const { return mTrackScroll.offset(); }
         bool reactionsScrollable() const { return mReactionScroll.scrollable(); }
         double reactionsOffset() const { return mReactionScroll.offset(); }
+        /** How many track rows the selected reaction has, and whether row `i` is on screen.
+         *  Every row must be reachable: see `Every_track_row_can_be_scrolled_fully_into_view`. */
+        int trackRowCount() const { return (int)mRows.size(); }
+        bool trackRowShown(int i) const { return mRows[(size_t)i].target->visible; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -65,6 +69,15 @@ namespace ui
             double total() const;
         };
         Columns columns(double panelW) const;
+        /** The two list rectangles, as ONE source of truth. Every user of a scrollable list —
+         *  `measure()`, the row placement, the row-visible test, the paint clip, the bar — must
+         *  agree on the same top and bottom, or the offset limit describes a taller box than the
+         *  rows are allowed to live in and the last row becomes unreachable: exactly the bug
+         *  where a second step's tracks could neither be seen nor scrolled to. */
+        double trackTop() const;
+        double trackBottom() const;
+        double reactionTop() const;
+        double reactionBottom() const;
         /** The selected object — a reaction belongs to a shape, so the panel is scoped to it. */
         Shape *owner();
         const Shape *owner() const;

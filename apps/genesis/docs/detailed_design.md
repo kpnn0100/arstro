@@ -276,7 +276,25 @@ the indicator, not another container:
 | `drawBar(t, area)` | a 3px rounded bar of height `area.h × viewport/content`, drawn **only** while scrollable |
 | `reset()` | back to the top when the panel's subject changes (a different shape, a different reaction) |
 
-Four lists own one: `ShapeTree` (objects), `Inspector` (properties), and `ReactionsPanel`
+**One box, one definition.** `ListScroll` only does arithmetic; it is the *panel* that must not
+disagree with itself about where its list is. `ReactionsPanel::trackTop/trackBottom/reactionTop/
+reactionBottom` and `ShapeTree::listTop/listBottom` exist for exactly that, and `measure()`, the
+row placement, the row-visible test, the paint clip, and `drawBar` all read them. The original
+code recomputed the box inline at each site and the copies drifted — the tracks measured
+`h - pad - kHeadH - 30 - kScrubH` while their rows were confined to `lastRowBottom - y0`, a
+`pad` shorter. `maxOffset` therefore stopped one `pad` early, and since a track row is shown
+only when it fits **whole** (half a text field is not editable), the last row of a second step
+was unreachable at every offset. `ShapeTree` had the same defect at 8px. Both are now measured
+against the box the rows are drawn in, and two tests pin it:
+`Every_track_row_can_be_scrolled_fully_into_view` and
+`The_object_lists_last_row_lands_inside_the_box_at_full_scroll`.
+
+The track area is also **clipped while painting** (`onPaint` saves, clips to the box, restores).
+Without it a step separator scrolled half out of view drew over the column captions above and
+the scrubber below, and the chips of a hidden row floated beside nothing — the chips are now
+drawn only when the row's fields are visible, so the two can never separate.
+
+Four lists own a `ListScroll`: `ShapeTree` (objects), `Inspector` (properties), and `ReactionsPanel`
 **twice** — `mReactionScroll` for the signal list on the left and `mTrackScroll` for the tracks
 on the right, chosen in `handleGesture` by which side of `kListW` the pointer is on. Each panel
 exposes its state (`listScrollable()`/`listOffset()`, `tracksScrollable()`/`tracksOffset()`, …)

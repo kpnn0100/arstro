@@ -1155,4 +1155,81 @@ TEST(A_panel_with_nothing_to_scroll_reports_so_and_ignores_the_wheel)
     CHECK_NEAR(app.tree()->listOffset(), 0.0, 1e-9);
 }
 
+TEST(Every_track_row_can_be_scrolled_fully_into_view)
+{
+    // The bug this pins: a reaction with two steps of two tracks each. The second step's rows
+    // were laid out below the list box and hidden — correct so far — but the scroll was measured
+    // against a box `pad` taller than the one the rows are allowed to live in, so `maxOffset`
+    // stopped short and those rows could not be reached at ANY offset. Not "hard to find":
+    // impossible. Reachability, not just "the offset moves", is the property to assert.
+    for (const double windowH : {640.0, 700.0, 860.0})
+    {
+        App app;
+        app.setSize(1024, windowH);
+        double now = 0.0;
+        toEditor(app, now);
+        Shape *host = app.doc().findShape("ring");
+        CHECK(host != nullptr);
+        Step st;
+        for (int k = 0; k < 2; ++k)
+            st.tracks.push_back({"opacity", "0", "1", "120", "0", "Linear", 0, false});
+        host->reactions.front().steps.assign(2, st);      // 2 steps, 2 tracks each
+        app.selectShape("ring");
+        app.documentChanged();
+        settle(app, now, 200.0);
+
+        auto *panel = app.reactions();
+        const int rows = panel->trackRowCount();
+        CHECK(rows == 4);
+
+        artboard::GestureRecognizer rec;
+        artboard::InputRouter router;
+        router.add(&app);
+        rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+        const double x = panel->x.value() + panel->width.value() * 0.55;
+        const double y = panel->y.value() + panel->height.value() * 0.35;
+
+        // Walk to the end, remembering every row that was ever fully on screen.
+        std::vector<bool> everShown((size_t)rows, false);
+        for (int step = 0; step < 12; ++step)
+        {
+            for (int i = 0; i < rows; ++i)
+                if (panel->trackRowShown(i)) everShown[(size_t)i] = true;
+            wheelAt(app, rec, x, y, 200.0);
+            settle(app, now, 40.0);
+        }
+        for (int i = 0; i < rows; ++i)
+            CHECK(everShown[(size_t)i]);                  // including step 2's two tracks
+    }
+}
+TEST(The_object_lists_last_row_lands_inside_the_box_at_full_scroll)
+{
+    // Same defect, smaller symptom: the tree measured against `footerTop()` while its rows are
+    // drawn to 8px above it, so the bottom object stayed clipped even scrolled all the way down.
+    App app;
+    app.setSize(1024, 620);
+    double now = 0.0;
+    toEditor(app, now);
+    for (int i = 0; i < 40; ++i)
+    {
+        Shape dot;
+        dot.id = "dot" + std::to_string(i);
+        dot.kind = ShapeKind::Circle;
+        app.doc().addShape(dot);
+    }
+    app.documentChanged();
+    settle(app, now, 200.0);
+    CHECK(app.tree()->listScrollable());
+    CHECK(!app.tree()->lastRowFullyVisible());            // there IS something below the fold
+
+    artboard::GestureRecognizer rec;
+    artboard::InputRouter router;
+    router.add(&app);
+    rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+    for (int i = 0; i < 60; ++i)
+        wheelAt(app, rec, app.tree()->width.value() * 0.5, 300.0, 400.0);
+    settle(app, now, 40.0);
+    CHECK(app.tree()->lastRowFullyVisible());             // and scrolling reaches it
+}
+
 int main() { return mini::runAll(); }

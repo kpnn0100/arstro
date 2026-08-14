@@ -341,6 +341,17 @@ namespace ui
         rebuildRows();
     }
 
+    // The list rectangles. `trackBottom` leaves room for the scrubber and the footer row; the
+    // track rows themselves start below the signal/cancel header. These four are the only place
+    // either list's box is defined.
+    double ReactionsPanel::trackTop() const { return metrics::pad() + kHeadH; }
+    double ReactionsPanel::trackBottom() const
+    {
+        return height.value() - metrics::pad() - 30.0 - kScrubH;
+    }
+    double ReactionsPanel::reactionTop() const { return metrics::pad() + 18.0; }
+    double ReactionsPanel::reactionBottom() const { return height.value() - metrics::pad() - 30.0; }
+
     void ReactionsPanel::layout(double w, double h)
     {
         width.set(w);
@@ -381,22 +392,23 @@ namespace ui
         mCancel->visible = cancelW > 40.0;
 
         // Track columns: target | to | ms | easing — sized as fractions so they reflow.
-        const double y0 = pad + kHeadH;
+        const double y0 = trackTop();
+        const double lastRowBottom = trackBottom();
         // Both lists are measured every layout, so the bars appear exactly when there is
-        // something to reach and never otherwise (FR-47).
+        // something to reach and never otherwise (FR-47) — and each is measured against the
+        // box its rows are actually placed in, so the last row is always reachable (G-20).
         {
             const Reaction *r = current();
             const double content = (double)mRows.size() * kRowH +
                                    (r ? (double)r->steps.size() * kStepH : 0.0);
-            mTrackScroll.measure(h - pad - kHeadH - 30.0 - kScrubH, content);
+            mTrackScroll.measure(lastRowBottom - y0, content);
             const Shape *host = owner();
-            mReactionScroll.measure(h - pad - 18.0 - 30.0,
+            mReactionScroll.measure(reactionBottom() - reactionTop(),
                                     host ? (double)host->reactions.size() * kRowH : 0.0);
         }
         double y = y0 - mTrackScroll.offset();
         int lastStep = -1;
         const Columns c = columns(w);
-        const double lastRowBottom = h - pad - 30.0 - kScrubH;
         for (auto &row : mRows)
         {
             if (row.step != lastStep)   // reserve the step header's own row
@@ -405,10 +417,13 @@ namespace ui
                 y += kStepH;
             }
             row.y = y;
-            // A row that would fall past the list area is HIDDEN, not just skipped when
-            // painting — its widgets are real Segments and would otherwise sit on top of
-            // the scrubber below.
-            const bool visibleRow = y >= y0 - kRowH && y + kRowH <= lastRowBottom;
+            // A row outside the list area is HIDDEN, not merely skipped when painting — its
+            // widgets are real Segments, so a half-scrolled row would otherwise draw over the
+            // column captions above or the scrubber below. It is all-or-nothing because these
+            // are text fields: half a field is not editable, so there is nothing to gain from
+            // showing one. Every row is still REACHABLE — `mTrackScroll` is measured against
+            // exactly this box, so the last row lands flush with `lastRowBottom` at full scroll.
+            const bool visibleRow = y >= y0 && y + kRowH <= lastRowBottom;
             double x = rightX;
             auto place = [&](const std::shared_ptr<artboard::Segment> &seg, double cw) {
                 seg->visible = visibleRow && cw > 0.0;
@@ -590,8 +605,8 @@ namespace ui
         const Shape *host = owner();
         static const std::vector<Reaction> kNone;
         const auto &rs = host ? host->reactions : kNone;
-        const double listTop = pad + 18.0;
-        const double listBottom = h - pad - 30.0;
+        const double listTop = reactionTop();
+        const double listBottom = reactionBottom();
         t.save();
         t.clipRect(0, listTop - 2.0, kListW, listBottom - listTop + 2.0);
         double y = listTop - mReactionScroll.offset();
@@ -669,11 +684,16 @@ namespace ui
                            type::micro(), palette::mutedForeground(), font::sans());
         }
 
+        // Clipped to the list box: a step separator may be scrolled half out of view, and
+        // without this it would draw over the captions above or the scrubber below.
+        const double trackClipTop = y0 - 2.0;
+        const double trackClipBottom = trackBottom();
+        t.save();
+        t.clipRect(rightX - 2.0, trackClipTop, rightW + 4.0, trackClipBottom - trackClipTop);
         double ry = y0 - mTrackScroll.offset();
         int lastStep = -1;
         for (const auto &row : mRows)
         {
-            if (ry + kRowH > h - pad - 30.0 - kScrubH) break;
             if (row.step != lastStep)
             {
                 lastStep = row.step;
@@ -688,9 +708,10 @@ namespace ui
                                           artboard::Paint::filled(palette::border()));
                 ry += kStepH;
             }
-            // The three chips at the row's right edge: repeat count, yoyo, remove.
+            // The three chips at the row's right edge: repeat count, yoyo, remove. Drawn only
+            // when the row's fields are shown, so chips can never float beside a hidden row.
             const Reaction *rr = current();
-            if (c.showChips && rr && row.step < (int)rr->steps.size() &&
+            if (c.showChips && row.target->visible && rr && row.step < (int)rr->steps.size() &&
                 row.track < (int)rr->steps[(size_t)row.step].tracks.size())
             {
                 const Track &tr = rr->steps[(size_t)row.step].tracks[(size_t)row.track];
@@ -724,11 +745,12 @@ namespace ui
             }
             ry += kRowH;
         }
+        t.restore();
         if (mRows.empty())
             drawFitted(t, "No tracks yet — add one, then pick what it animates.", rightX, y0 + 14.0,
                        rightW, type::small(), palette::mutedForeground(), font::sans());
 
-        mTrackScroll.drawBar(t, {rightX, y0 - 2.0, rightW, h - pad - 30.0 - kScrubH - y0 + 2.0});
+        mTrackScroll.drawBar(t, {rightX, trackClipTop, rightW, trackClipBottom - trackClipTop});
 
         // The scrubber. Local to this reaction, because the model is an event graph, not a
         // global timeline; the chip beside it names what can interrupt this reaction.

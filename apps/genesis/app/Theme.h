@@ -102,7 +102,11 @@ namespace ui
         inline double chromeH() { return 44.0; }        // top bar
         inline double railW() { return 216.0; }         // shape tree column
         inline double inspectorW() { return 268.0; }    // inspector column
-        inline double panelH() { return 208.0; }        // reactions panel
+        // Reactions panel: a CAP, not a size — `App::layout` takes `min(panelH(), mH * 0.32)`,
+        // so the panel is a third of the window and this only stops it eating a huge screen.
+        // The cap used to be 208, which made a 1440p monitor show no more track rows than a
+        // laptop; the author's motion list is the thing that grows, so let it have the room.
+        inline double panelH() { return 320.0; }        // reactions panel
         inline double rowH() { return 26.0; }           // list/field row
         inline double gap() { return 8.0; }             // the one spacing unit
         inline double pad() { return 12.0; }            // panel padding

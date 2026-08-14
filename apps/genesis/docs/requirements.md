@@ -297,6 +297,11 @@ Each such list shall:
 
 - measure its **viewport and content height every layout**, so a window resize, a document
   edit, or a font change cannot leave a stale limit behind;
+- measure **the same rectangle its rows are laid out in**. A list box has one top and one
+  bottom, and `measure()`, the row placement, the row-visible test, the paint clip, and the bar
+  shall all read them from one place. A viewport measured even a few pixels taller than the box
+  the rows may occupy sets a limit that stops short, and the final row becomes unreachable at
+  *every* offset — which is how a second step's tracks could be neither seen nor scrolled to;
 - clamp its offset to `[0, max(0, content − viewport)]`, so neither end runs away;
 - accept **both** the mouse wheel and a drag on its body, landing at the same offset for the
   same distance;
@@ -304,7 +309,13 @@ Each such list shall:
   swallow it, so an outer scrollable region still responds;
 - **show that it can scroll** — a thin bar, sized `viewport/content`, drawn only while there
   is something out of view, so "there is more" never has to be discovered by accident;
-- hide the widgets of rows scrolled out of view, and drop no row to make things fit.
+- hide the widgets of rows scrolled out of view, and drop no row to make things fit. A row of
+  editable fields is shown **whole or not at all** — half a text field is not editable, so there
+  is nothing to gain from drawing one — which makes reachability the load-bearing property: at
+  full scroll the last row shall land flush inside the box.
+
+The panel shall also not be capped so tightly that a large window cannot show more: the
+reactions panel takes a third of the window height, so a taller screen buys more track rows.
 
 ## 4. Design rules (the app's UI)
 
