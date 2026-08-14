@@ -16,6 +16,7 @@
 #include "widgets/ShapeTree.h"
 #include "widgets/SplashScreen.h"
 #include "Recents.h"
+#include <functional>
 #include "widgets/Modal.h"
 #include "Runtime.h"
 #include <cmath>
@@ -1022,6 +1023,136 @@ TEST(Duplicating_an_object_names_the_copy_and_selects_it)
     app.selectShape("");
     app.duplicateSelected();
     CHECK(app.statusLevel() == StatusLevel::Warn);
+}
+
+namespace
+{
+    /** Feed a wheel the way the host does: a raw Scroll event through the recognizer. */
+    void wheelAt(App &app, artboard::GestureRecognizer &rec, double x, double y, double dy)
+    {
+        artboard::RawPointer p;
+        p.kind = artboard::RawPointer::Kind::Scroll;
+        p.pos = {x, y};
+        p.scroll = {0.0, dy};
+        p.timeMs = 1.0;
+        rec.feed(p);
+        (void)app;
+    }
+}
+
+TEST(Every_clipped_panel_scrolls_by_wheel_and_clamps_at_both_ends)
+{
+    /*  Content the user cannot reach and cannot see the existence of is a defect (FR-47). So:
+     *  overfill each panel, then assert the wheel moves it and that it stops at both ends.
+     */
+    App app;
+    app.setSize(1100, 700);          // deliberately small, so every panel overflows
+    double now = 0.0;
+    toEditor(app, now);
+
+    for (int i = 0; i < 30; ++i)     // plenty of objects
+    {
+        Shape s;
+        s.id = "dot" + std::to_string(i);
+        s.kind = ShapeKind::Circle;
+        s.setField("fill", "accent");
+        s.setAnimated("opacity", true);
+        app.doc().addShape(s);
+    }
+    Shape *host = app.doc().findShape("ring");
+    Step wide;                       // one step with enough tracks to overflow the track panel
+    for (int k = 0; k < 4; ++k)
+        wide.tracks.push_back({"opacity", "0", "1", "120", "0", "Linear", 0, false});
+    for (const char *sig : {"loopStart", "cycle", "loopEnd", "attach", "resize", "hoverEnter"})
+    {
+        Reaction r;                  // plenty of reactions, each with plenty of tracks
+        r.signal = sig;
+        r.steps.assign(2, wide);
+        host->reactions.push_back(r);
+    }
+    // The track panel shows the FIRST reaction, which the starter document already created, so
+    // that is the one whose tracks have to overflow — appending fat reactions after it proves
+    // nothing about the list actually on screen.
+    host->reactions.front().steps.assign(2, wide);
+    app.selectShape("ring");
+    app.documentChanged();
+    settle(app, now, 120.0);
+
+    artboard::GestureRecognizer rec;
+    artboard::InputRouter router;
+    router.add(&app);
+    rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+
+    // Every list that can overflow, with where to point and how to read its state.
+    struct Target
+    {
+        const char *name;
+        artboard::Segment *panel;
+        double fx, fy;                       // fraction across / down the panel
+        std::function<bool()> scrollable;
+        std::function<double()> offset;
+    };
+    const Target targets[] = {
+        {"objects", app.tree(), 0.35, 0.30,
+         [&] { return app.tree()->listScrollable(); }, [&] { return app.tree()->listOffset(); }},
+        {"properties", app.inspector(), 0.35, 0.40,
+         [&] { return app.inspector()->listScrollable(); },
+         [&] { return app.inspector()->listOffset(); }},
+        {"reaction list", app.reactions(), 0.06, 0.35,
+         [&] { return app.reactions()->reactionsScrollable(); },
+         [&] { return app.reactions()->reactionsOffset(); }},
+        {"tracks", app.reactions(), 0.55, 0.35,
+         [&] { return app.reactions()->tracksScrollable(); },
+         [&] { return app.reactions()->tracksOffset(); }},
+    };
+
+    for (const auto &target : targets)
+    {
+        const artboard::Segment &p = *target.panel;
+        const double x = p.x.value() + p.width.value() * target.fx;
+        const double y = p.y.value() + p.height.value() * target.fy;
+
+        CHECK(target.scrollable());                 // there IS something out of view
+        CHECK_NEAR(target.offset(), 0.0, 1e-9);
+
+        wheelAt(app, rec, x, y, 200.0);
+        settle(app, now, 40.0);
+        CHECK(target.offset() > 0.0);                // the wheel moved it
+
+        for (int i = 0; i < 60; ++i)                 // run to the end
+            wheelAt(app, rec, x, y, 400.0);
+        settle(app, now, 40.0);
+        const double atEnd = target.offset();
+        wheelAt(app, rec, x, y, 400.0);
+        settle(app, now, 40.0);
+        CHECK_NEAR(target.offset(), atEnd, 1e-9);    // clamped, not runaway
+
+        for (int i = 0; i < 90; ++i)                 // and back to the start
+            wheelAt(app, rec, x, y, -400.0);
+        settle(app, now, 40.0);
+        CHECK_NEAR(target.offset(), 0.0, 1e-9);
+    }
+}
+TEST(A_panel_with_nothing_to_scroll_reports_so_and_ignores_the_wheel)
+{
+    // A bar that is always there would claim more content exists when it does not.
+    App app;
+    app.setSize(1600, 1000);         // roomy, and the starter is tiny
+    double now = 0.0;
+    toEditor(app, now);
+    app.selectShape("");
+    settle(app, now, 200.0);
+
+    CHECK(!app.tree()->listScrollable());
+    CHECK(!app.reactions()->reactionsScrollable());
+
+    artboard::GestureRecognizer rec;
+    artboard::InputRouter router;
+    router.add(&app);
+    rec.setSink([&](const artboard::Gesture &g) { router.route(g); });
+    wheelAt(app, rec, app.tree()->width.value() * 0.5, 300.0, 400.0);
+    settle(app, now, 40.0);
+    CHECK_NEAR(app.tree()->listOffset(), 0.0, 1e-9);
 }
 
 int main() { return mini::runAll(); }

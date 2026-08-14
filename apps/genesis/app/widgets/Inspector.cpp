@@ -347,7 +347,8 @@ namespace ui
     {
         width.set(w);
         height.set(h);
-        double y = metrics::pad() - mScroll;
+        mScroll.measure(h, contentHeight());
+        double y = metrics::pad() - mScroll.offset();
         const double bw = boxWidth();
         for (auto &r : mRows)
         {
@@ -528,10 +529,16 @@ namespace ui
             mHover.setHovered(rowAt(p.y));
             return true;
         }
+        if (g.type == artboard::Gesture::Type::Scroll)
+        {
+            if (!mScroll.wheel(g.delta.y))
+                return false;   // nothing to scroll: let it bubble
+            layout(width.value(), height.value());
+            return true;
+        }
         if (g.type == artboard::Gesture::Type::Drag)
         {
-            const double maxScroll = std::max(0.0, contentHeight() - height.value());
-            mScroll = std::min(maxScroll, std::max(0.0, mScroll - (p.y - g.start.y) * 0.3));
+            mScroll.drag((p.y - g.start.y) * 0.3);
             layout(width.value(), height.value());
             return true;
         }
@@ -745,6 +752,7 @@ namespace ui
             }
         }
         t.restore();
+        mScroll.drawBar(t, {0, 0, w, h});
     }
 }
 }

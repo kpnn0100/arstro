@@ -262,6 +262,31 @@ sheds columns as the window narrows rather than squeezing them into each other, 
 how many rows are out of view. The rule is enforced by a test that replays the op stream with
 transform and clip tracking; see requirements R-G-5.
 
+**And everything clipped can be scrolled to (G-20 / FR-47).** `ui::ListScroll` (in
+`widgets/Panel.h`) is the shared arithmetic, deliberately a value member rather than an
+`artboard::ScrollView` wrapper — these panels draw their own rows, so they need the offset and
+the indicator, not another container:
+
+| member | contract |
+| --- | --- |
+| `measure(viewportH, contentH)` | called **every layout**, so a resize or an edit cannot leave a stale limit; re-clamps the current offset |
+| `maxOffset()` / `scrollable()` | `max(0, content − viewport)`; `scrollable()` is `maxOffset() > 0` |
+| `wheel(deltaY)` | applies a pixel delta and clamps; **returns `false` when `maxOffset() == 0`** so the gesture bubbles to an ancestor (FR-46) instead of being swallowed |
+| `drag(dy)` | the same offset from a drag on the body, so both inputs land in the same place |
+| `drawBar(t, area)` | a 3px rounded bar of height `area.h × viewport/content`, drawn **only** while scrollable |
+| `reset()` | back to the top when the panel's subject changes (a different shape, a different reaction) |
+
+Four lists own one: `ShapeTree` (objects), `Inspector` (properties), and `ReactionsPanel`
+**twice** — `mReactionScroll` for the signal list on the left and `mTrackScroll` for the tracks
+on the right, chosen in `handleGesture` by which side of `kListW` the pointer is on. Each panel
+exposes its state (`listScrollable()`/`listOffset()`, `tracksScrollable()`/`tracksOffset()`, …)
+so the test asserts the scroll itself rather than sniffing pixels for a scrollbar — an earlier
+version of that test matched the panel's own right-edge divider and passed for the wrong reason.
+
+The host completes the path: `main.cpp`'s `onScroll` converts a GTK `scroll-event` into a
+`RawPointer{Kind::Scroll}` with `kWheelStepPx = 52.0` per notch (smooth deltas pass through
+scaled), which needs `GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK` on the drawing area.
+
 
 - **Chrome** — identity, status, and the five actions. The Verify button reads "Verifying…"
   and disables while a check runs (R2: never dead).
@@ -278,7 +303,7 @@ transform and clip tracking; see requirements R-G-5.
   preview tracks typing.
 - **ReactionsPanel** — the reaction list, the signal and cancellation dropdowns, the track
   rows (target / to / ms / easing), a step header on its own row, and a per-reaction
-  scrubber.
+  scrubber — with two independent scrolls, one per list.
 - **Modal** — New / Open / Save As / report, drawn in the normal pass (see architecture §6).
 
 ### 7.3 `RowHover`

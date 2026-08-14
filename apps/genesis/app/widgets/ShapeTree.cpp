@@ -149,7 +149,7 @@ namespace ui
 
     int ShapeTree::rowAt(double localY) const
     {
-        const double top = listTop() - mScroll.value();
+        const double top = listTop() - mScroll.offset();
         const int i = (int)std::floor((localY - top) / metrics::rowH());
         return (i >= 0 && i < (int)mRows.size()) ? i : -1;
     }
@@ -158,9 +158,7 @@ namespace ui
     {
         mNowMs = nowMs;
         mHover.advance(nowMs);
-        const double dt = 1.0 / 60.0;
-        mScroll.setTarget(mScrollTarget);
-        mScroll.advance(dt, artboard::motion::kSpatialFast);
+        mScroll.measure(footerTop() - listTop(), (double)mRows.size() * metrics::rowH());
         Segment::advance(nowMs);
     }
 
@@ -183,12 +181,11 @@ namespace ui
                 mApp.selectShape("");   // clicking the empty area deselects
             return true;
         }
+        if (g.type == artboard::Gesture::Type::Scroll)
+            return mScroll.wheel(g.delta.y);   // false when it all fits: let it bubble
         if (g.type == artboard::Gesture::Type::Drag)
         {
-            // Scroll the list by dragging it, with the same kinetic feel as a ScrollView.
-            const double maxScroll = std::max(
-                0.0, (double)mRows.size() * metrics::rowH() - (footerTop() - listTop()));
-            mScrollTarget = std::min(maxScroll, std::max(0.0, mScrollTarget - (p.y - g.start.y) * 0.35));
+            mScroll.drag((p.y - g.start.y) * 0.35);
             return true;
         }
         return artboard::Segment::handleGesture(g, p);
@@ -206,7 +203,7 @@ namespace ui
         const double listBottom = footerTop() - 8.0;
         t.save();
         t.clipRect(0, listTop() - 4.0, w, listBottom - listTop() + 4.0);
-        double y = listTop() - mScroll.value();
+        double y = listTop() - mScroll.offset();
         const double rowH = metrics::rowH();
 
         if (mRows.empty())
@@ -270,6 +267,7 @@ namespace ui
             }
         }
         t.restore();
+        mScroll.drawBar(t, {0, listTop() - 4.0, w, listBottom - listTop() + 4.0});
 
         drawSectionTitle(t, "Add", pad, footerTop() + 10.0);
     }

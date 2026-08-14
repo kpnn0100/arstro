@@ -27,6 +27,11 @@ namespace ui
         void refresh();                 // rebuild the flattened row list from the document
         void advance(double nowMs) override;
 
+        /** Scroll state of the object list, so a caller (or a test) can ask whether there is
+         *  anything out of view rather than inferring it from what got drawn. */
+        bool listScrollable() const { return mScroll.scrollable(); }
+        double listOffset() const { return mScroll.offset(); }
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
@@ -48,8 +53,7 @@ namespace ui
         std::shared_ptr<artboard::Button> mDelete;
         RowHover mHover;
         double mNowMs = 0.0;
-        artboard::Spring mScroll{0.0};
-        double mScrollTarget = 0.0;
+        ListScroll mScroll;
     };
 }
 }

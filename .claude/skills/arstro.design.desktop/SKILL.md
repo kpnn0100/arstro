@@ -156,6 +156,26 @@ Every string is laid out to fit the box it's in:
 - Reserve room for the longest realistic value (counts, sizes, dates, filenames), and right-size
   dynamic labels each frame.
 
+### R6 — Anything cut off can be scrolled to
+A panel the user can see is cut off but cannot reach is the most infuriating bug in a desktop app,
+and it is invisible in a screenshot of a small fixture. **For every panel, list, tree, or column,
+ask: can its content ever exceed its box?** Content grows with the *document*, not with your test
+data — an object list, a property list, a track/step list, a log, a palette, a result set all grow
+without bound, so the answer is yes even when today's sample shows three rows. Then:
+- **Clip and scroll — clipping alone is the bug.** Use `ScrollView`, or a measured scroll offset
+  that shifts rows (`y = top − offset`) with `maxOffset = max(0, content − viewport)`.
+- **Measure viewport and content every layout**, so resizing the window or editing the document
+  cannot leave a stale limit behind.
+- **Clamp at both ends**, and when there is nothing to scroll report so and let the wheel **bubble**
+  to an ancestor instead of eating it.
+- **Draw the indicator** whenever it is scrollable (thin rounded bar sized `viewport/content`) — off-screen
+  content with no visible affordance does not exist.
+- **Wheel and drag land in the same place**; a wheel cancels kinetic motion rather than fighting it.
+- **Never silently drop a row** to make things fit; a `break` in a draw loop is fine only for rows
+  already reachable by scrolling.
+- Verify per list (see implement_artboard §2 *Overflow*): scrollable → wheel moves it → clamps at the
+  end → returns exactly to 0, plus the mirror case that a short list ignores the wheel.
+
 ### Adapted taste rules (from implement_artboard §2A / Artboard FR-24)
 - **Everything interactive hovers** (R-G-3 / Artboard FR-24). Every button and every clickable
   region shows an **animated** hover treatment under the pointer, never a hard flip. Child-`Segment`
@@ -252,6 +272,10 @@ feasible, run it, to confirm real input + resize behave.
       window sizes.
 - [ ] **R5 Text fits:** every string measured (`estimateTextWidth`) and sized-to-fit or ellipsized;
       no overflow; clipping is only the backstop.
+- [ ] **R6 Reachable:** every panel/list whose content can outgrow its box clips **and** scrolls —
+      viewport+content measured each layout, clamped both ends, indicator shown while scrollable,
+      wheel and drag agree, an unscrollable list bubbles the wheel, no row silently dropped; tested
+      per list.
 - [ ] **Hover:** every interactive element has an animated hover treatment (`hoverAmount()` /
       `hoverBox()` / `hoverWash()`), eased, reduced-motion-safe.
 - [ ] **Tokens:** all colours/radii/fonts come from `palette::`/`radius::`/`font::` — ONE accent,

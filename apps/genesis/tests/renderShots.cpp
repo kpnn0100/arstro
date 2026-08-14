@@ -130,6 +130,38 @@ int main(int argc, char **argv)
         a.selectShape("fill");
         settle(a, now, 1400.0);   // a ring segment following base.display
     });
+    // A crowded document in a small window: every list is past its box, so every list must be
+    // showing its scroll bar (G-20). This is the shot that catches "cut off and unreachable".
+    shoot(dir + "/genesis-scroll.png", 1024, 640, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 900.0);
+        for (int i = 0; i < 24; ++i)
+        {
+            genesis::Shape dot;
+            dot.id = "dot" + std::to_string(i);
+            dot.kind = genesis::ShapeKind::Circle;
+            dot.setField("fill", "accent");
+            dot.setAnimated("opacity", true);
+            a.doc().addShape(dot);
+        }
+        if (genesis::Shape *host = a.doc().findShape("ring"))
+        {
+            genesis::Step wide;
+            for (int k = 0; k < 5; ++k)
+                wide.tracks.push_back({"opacity", "0", "1", "160", "0", "EaseOutCubic", 0, false});
+            for (const char *sig : {"loopStart", "cycle", "loopEnd", "attach", "resize"})
+            {
+                genesis::Reaction r;
+                r.signal = sig;
+                r.steps.assign(2, wide);
+                host->reactions.push_back(r);
+            }
+            host->reactions.front().steps.assign(2, wide);
+        }
+        a.selectShape("ring");
+        a.documentChanged();
+        settle(a, now, 400.0);
+    });
     shoot(dir + "/genesis-selection.png", 1200, 780, [](genesis::ui::App &a, double &now) {
         a.showEditor();
         settle(a, now, 900.0);

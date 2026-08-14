@@ -38,6 +38,10 @@ namespace ui
         void refresh();            // the selection or the document changed
         void advance(double nowMs) override;
 
+        /** Scroll state of the field list. */
+        bool listScrollable() const { return mScroll.scrollable(); }
+        double listOffset() const { return mScroll.offset(); }
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
@@ -93,7 +97,7 @@ namespace ui
         std::vector<Row> mRows;
         RowHover mHover;
         double mNowMs = 0.0;
-        double mScroll = 0.0;
+        ListScroll mScroll;
         std::string mStructure;
     };
 }

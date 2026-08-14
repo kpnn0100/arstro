@@ -30,6 +30,12 @@ namespace ui
         void refresh();
         void advance(double nowMs) override;
 
+        /** Scroll state of the two lists this panel holds. */
+        bool tracksScrollable() const { return mTrackScroll.scrollable(); }
+        double tracksOffset() const { return mTrackScroll.offset(); }
+        bool reactionsScrollable() const { return mReactionScroll.scrollable(); }
+        double reactionsOffset() const { return mReactionScroll.offset(); }
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
@@ -64,7 +70,6 @@ namespace ui
         const Shape *owner() const;
         Reaction *current();
         const Reaction *current() const;
-        double maxListScroll() const;
         void commit();
         void rebuildRows();
         /** Structure only (which rows exist), never their values — see Inspector. */
@@ -84,7 +89,8 @@ namespace ui
         double mNowMs = 0.0;
         double mScrubT = 0.0;         // 0..1 through the selected reaction, for the scrubber
         bool mScrubbing = false;
-        double mListScroll = 0.0;
+        ListScroll mTrackScroll;      // the steps + tracks on the right
+        ListScroll mReactionScroll;   // the reaction list on the left
         std::string mStructure;
     };
 }

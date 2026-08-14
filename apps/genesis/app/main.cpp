@@ -216,6 +216,35 @@ namespace
         return TRUE;
     }
 
+    /** One wheel notch, in pixels. GTK reports steps for a wheel and continuous deltas for a
+     *  trackpad; only the host knows which, so the conversion belongs here (FR-46). */
+    constexpr double kWheelStepPx = 52.0;
+
+    gboolean onScroll(GtkWidget *, GdkEventScroll *e, gpointer user)
+    {
+        auto *h = static_cast<Host *>(user);
+        artboard::RawPointer p;
+        p.kind = artboard::RawPointer::Kind::Scroll;
+        p.pos = {e->x, e->y};
+        p.timeMs = h->nowMs();
+        p.alt = (e->state & GDK_MOD1_MASK) != 0;
+        p.shift = (e->state & GDK_SHIFT_MASK) != 0;
+        p.ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        switch (e->direction)
+        {
+        case GDK_SCROLL_UP: p.scroll = {0.0, -kWheelStepPx}; break;
+        case GDK_SCROLL_DOWN: p.scroll = {0.0, kWheelStepPx}; break;
+        case GDK_SCROLL_LEFT: p.scroll = {-kWheelStepPx, 0.0}; break;
+        case GDK_SCROLL_RIGHT: p.scroll = {kWheelStepPx, 0.0}; break;
+        case GDK_SCROLL_SMOOTH:
+            p.scroll = {e->delta_x * kWheelStepPx, e->delta_y * kWheelStepPx};
+            break;
+        }
+        h->gestures.feed(p);
+        gtk_widget_queue_draw(h->area);
+        return TRUE;
+    }
+
     gboolean onMotion(GtkWidget *, GdkEventMotion *e, gpointer user)
     {
         feed(static_cast<Host *>(user), artboard::RawPointer::Kind::Move, e->x, e->y,
@@ -344,13 +373,15 @@ int main(int argc, char **argv)
     gtk_widget_set_size_request(host.area, 720, 520);
     gtk_widget_set_can_focus(host.area, TRUE);
     gtk_widget_add_events(host.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK);
+                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK |
+                                         GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 
     g_signal_connect(host.window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
     g_signal_connect(host.area, "draw", G_CALLBACK(onDraw), &host);
     g_signal_connect(host.area, "button-press-event", G_CALLBACK(onButton), &host);
     g_signal_connect(host.area, "button-release-event", G_CALLBACK(onButton), &host);
     g_signal_connect(host.area, "motion-notify-event", G_CALLBACK(onMotion), &host);
+    g_signal_connect(host.area, "scroll-event", G_CALLBACK(onScroll), &host);
     g_signal_connect(host.area, "key-press-event", G_CALLBACK(onKey), &host);
     g_signal_connect(host.area, "size-allocate", G_CALLBACK(onSizeAllocate), &host);
 

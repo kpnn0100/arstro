@@ -274,7 +274,8 @@ New/Open/Save/Export/Verify. Editing a field shall update the preview as it is t
 The reactions panel shall **shed columns** rather than let them collide as the window
 narrows: `delay` first, then `from`, then the repeat/yoyo/delete chips, then `easing`
 narrows — in reverse order of how often each is edited. Rows that fall outside the visible
-area shall be hidden and the count reported, never silently dropped.
+area shall be **reachable by scrolling** (G-20), never silently dropped, and the widgets of a
+row that scrolled out shall be hidden so they neither draw nor take input.
 
 There shall be **no global timeline**: a component is a set of responses to events, not a
 linear movie, so the event graph is the source of truth and the scrubber is per reaction.
@@ -284,6 +285,26 @@ linear movie, so the event graph is the source of truth and the scrubber is per 
 Creating a component shall produce a working, idiomatic component for its base — bound
 responsively, with reactions on the signals that base expects — because the fastest way to
 learn the tool is to open something that already moves and take it apart.
+
+### G-20 Every list the document can outgrow scrolls
+
+A panel whose content grows with the document — the object list, the property list, the
+reaction list, and the track/step list — shall scroll, because all four grow without bound
+while their boxes do not, and a panel the user can see is cut off but cannot reach is worse
+than one that never showed the content at all.
+
+Each such list shall:
+
+- measure its **viewport and content height every layout**, so a window resize, a document
+  edit, or a font change cannot leave a stale limit behind;
+- clamp its offset to `[0, max(0, content − viewport)]`, so neither end runs away;
+- accept **both** the mouse wheel and a drag on its body, landing at the same offset for the
+  same distance;
+- **bubble** a wheel it cannot act on (nothing out of view) to its ancestors rather than
+  swallow it, so an outer scrollable region still responds;
+- **show that it can scroll** — a thin bar, sized `viewport/content`, drawn only while there
+  is something out of view, so "there is more" never has to be discovered by accident;
+- hide the widgets of rows scrolled out of view, and drop no row to make things fit.
 
 ## 4. Design rules (the app's UI)
 
@@ -326,7 +347,7 @@ or more window sizes.
 Every string is measured against the live render target (`ui::textWidth`) and either sized to
 fit or ellipsized (`ui::ellipsize`). Any panel that scrolls also **clips**, and hides the
 widgets of rows that scrolled out — a clipped row still records its draw calls and its child
-Segments would still take input.
+Segments would still take input. Clipping without scrolling is a bug, not a layout: see G-20.
 
 This is enforced, not assumed: a test renders the real app at six window sizes, on both
 screens, replays the op stream (tracking the transform AND the clip stack), and asserts that

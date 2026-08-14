@@ -61,6 +61,67 @@ namespace ui
         std::vector<double> mAmount;
     };
 
+    /*  A scrolling list, shared by every panel that clips (FR-47).
+     *
+     *  Content the user cannot reach and cannot see the existence of is a defect, so this
+     *  bundles the three things that have to travel together: a clamped offset, wheel AND
+     *  drag, and a scrollbar drawn only while there is something to scroll.
+     */
+    class ListScroll
+    {
+    public:
+        /** Tell it the viewport and the content for this frame. */
+        void measure(double viewportH, double contentH)
+        {
+            mViewport = viewportH;
+            mContent = contentH;
+            clamp();
+        }
+        double offset() const { return mOffset; }
+        double maxOffset() const { return std::max(0.0, mContent - mViewport); }
+        bool scrollable() const { return maxOffset() > 0.5; }
+
+        /** Apply a wheel delta; false when there was nothing to scroll, so the gesture can
+         *  bubble to a panel that can use it. */
+        bool wheel(double deltaY)
+        {
+            if (!scrollable()) return false;
+            mOffset += deltaY;
+            clamp();
+            return true;
+        }
+        /** Apply a drag; `dy` is the pointer's movement, so the content follows the finger. */
+        void drag(double dy)
+        {
+            mOffset -= dy;
+            clamp();
+        }
+        void reset() { mOffset = 0.0; }
+
+        /** Draw the bar down the right edge of `area`. Nothing is drawn when everything fits —
+         *  a permanent track would claim there is more when there is not. */
+        void drawBar(artboard::IRenderTarget &t, const artboard::Rect &area) const
+        {
+            if (!scrollable()) return;
+            const double w = 3.0;
+            const double x = area.right() - w - 2.0;
+            const double frac = mViewport / mContent;
+            const double thumbH = std::max(24.0, area.h * frac);
+            const double travel = area.h - thumbH;
+            const double y = area.y + (maxOffset() > 0.0 ? travel * (mOffset / maxOffset()) : 0.0);
+            artboard::drawRoundedRect(t, {x, area.y, w, area.h}, radius::pill(),
+                                      artboard::Paint::filled(palette::whiteAlpha(0.05)));
+            artboard::drawRoundedRect(t, {x, y, w, thumbH}, radius::pill(),
+                                      artboard::Paint::filled(palette::whiteAlpha(0.20)));
+        }
+
+    private:
+        void clamp() { mOffset = std::min(maxOffset(), std::max(0.0, mOffset)); }
+        double mOffset = 0.0;
+        double mViewport = 0.0;
+        double mContent = 0.0;
+    };
+
     /** Fill a panel surface with its border. */
     inline void drawSurface(artboard::IRenderTarget &t, const artboard::Rect &r,
                             const artboard::Color &fill, double radius = radius::panel())

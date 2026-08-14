@@ -382,7 +382,18 @@ namespace ui
 
         // Track columns: target | to | ms | easing — sized as fractions so they reflow.
         const double y0 = pad + kHeadH;
-        double y = y0 - mListScroll;
+        // Both lists are measured every layout, so the bars appear exactly when there is
+        // something to reach and never otherwise (FR-47).
+        {
+            const Reaction *r = current();
+            const double content = (double)mRows.size() * kRowH +
+                                   (r ? (double)r->steps.size() * kStepH : 0.0);
+            mTrackScroll.measure(h - pad - kHeadH - 30.0 - kScrubH, content);
+            const Shape *host = owner();
+            mReactionScroll.measure(h - pad - 18.0 - 30.0,
+                                    host ? (double)host->reactions.size() * kRowH : 0.0);
+        }
+        double y = y0 - mTrackScroll.offset();
         int lastStep = -1;
         const Columns c = columns(w);
         const double lastRowBottom = h - pad - 30.0 - kScrubH;
@@ -414,16 +425,6 @@ namespace ui
             place(row.easing, c.easing);
             y += kRowH;
         }
-    }
-
-    /** How far the track list can scroll before its last row is flush with the bottom. */
-    double ReactionsPanel::maxListScroll() const
-    {
-        const Reaction *r = current();
-        if (!r) return 0.0;
-        const double content = (double)mRows.size() * kRowH + (double)r->steps.size() * kStepH;
-        const double view = height.value() - metrics::pad() - kHeadH - 30.0 - kScrubH;
-        return std::max(0.0, content - view);
     }
 
     void ReactionsPanel::commit()
@@ -473,7 +474,7 @@ namespace ui
         {
             const Shape *host = owner();
             const int count = host ? (int)host->reactions.size() : 0;
-            const int i = (int)std::floor((p.y - listTop) / kRowH);
+            const int i = (int)std::floor((p.y - listTop + mReactionScroll.offset()) / kRowH);
             if (g.type == artboard::Gesture::Type::Move)
             {
                 mHover.setHovered(i >= 0 && i < count ? i : -1);
@@ -519,14 +520,29 @@ namespace ui
                 }
             }
         }
-        // Dragging the track area scrolls it, so a reaction with more steps than fit is
-        // still reachable rather than silently truncated.
-        if (p.x >= kListW && g.type == artboard::Gesture::Type::Drag)
+        // Each list scrolls on its own side, by wheel and by drag, so nothing is ever
+        // truncated out of reach (FR-47).
+        const double scrubTop = height.value() - pad - 22.0 - kScrubH;
+        if (g.type == artboard::Gesture::Type::Scroll)
         {
-            const double scrubTop = height.value() - pad - 22.0 - kScrubH;
+            ListScroll &target = p.x < kListW ? mReactionScroll : mTrackScroll;
+            if (p.x >= kListW && p.y >= scrubTop)
+                return false;                    // over the scrubber: not a list
+            if (!target.wheel(g.delta.y))
+                return false;                    // it all fits: let it bubble
+            layout(width.value(), height.value());
+            return true;
+        }
+        if (g.type == artboard::Gesture::Type::Drag)
+        {
+            if (p.x < kListW)
+            {
+                mReactionScroll.drag((p.y - g.start.y) * 0.4);
+                return true;
+            }
             if (p.y < scrubTop)
             {
-                mListScroll = std::max(0.0, std::min(maxListScroll(), mListScroll - (p.y - g.start.y) * 0.4));
+                mTrackScroll.drag((p.y - g.start.y) * 0.4);
                 layout(width.value(), height.value());
                 return true;
             }
@@ -575,10 +591,13 @@ namespace ui
         static const std::vector<Reaction> kNone;
         const auto &rs = host ? host->reactions : kNone;
         const double listTop = pad + 18.0;
-        double y = listTop;
+        const double listBottom = h - pad - 30.0;
+        t.save();
+        t.clipRect(0, listTop - 2.0, kListW, listBottom - listTop + 2.0);
+        double y = listTop - mReactionScroll.offset();
         for (int i = 0; i < (int)rs.size(); ++i, y += kRowH)
         {
-            if (y + kRowH > h - pad - 30.0) break;
+            if (y + kRowH < listTop || y > listBottom) continue;
             const bool sel = i == mApp.selectedReaction();
             const double hover = mHover.amount(i);
             if (sel)
@@ -602,6 +621,9 @@ namespace ui
                             kListW - pad - 46.0, centreBaseline(y, kRowH - 3, type::micro()), 46.0,
                             type::micro(), palette::mutedForeground(), font::sans());
         }
+        t.restore();
+        mReactionScroll.drawBar(t, {0, listTop - 2.0, kListW, listBottom - listTop + 2.0});
+
         if (!host)
         {
             drawFitted(t, "No object selected", pad, listTop + 14.0, kListW - pad * 2.0,
@@ -647,7 +669,7 @@ namespace ui
                            type::micro(), palette::mutedForeground(), font::sans());
         }
 
-        double ry = y0 - mListScroll;
+        double ry = y0 - mTrackScroll.offset();
         int lastStep = -1;
         for (const auto &row : mRows)
         {
@@ -706,16 +728,7 @@ namespace ui
             drawFitted(t, "No tracks yet — add one, then pick what it animates.", rightX, y0 + 14.0,
                        rightW, type::small(), palette::mutedForeground(), font::sans());
 
-        // Say when rows are out of view instead of dropping them silently.
-        {
-            int hidden = 0;
-            for (const auto &row : mRows)
-                if (!row.target->visible) ++hidden;
-            if (hidden > 0)
-                drawFittedRight(t, std::to_string(hidden) + " more — drag to scroll",
-                                w - pad - 190.0, h - pad - 22.0 - kScrubH - 6.0, 190.0,
-                                type::micro(), palette::mutedForeground(), font::sans());
-        }
+        mTrackScroll.drawBar(t, {rightX, y0 - 2.0, rightW, h - pad - 30.0 - kScrubH - y0 + 2.0});
 
         // The scrubber. Local to this reaction, because the model is an event graph, not a
         // global timeline; the chip beside it names what can interrupt this reaction.

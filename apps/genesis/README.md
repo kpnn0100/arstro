@@ -168,6 +168,14 @@ document always produces byte-identical output.
 **no reactions at all**, purely as a binding on `base.phase`, to show that the animation can
 be a formula.
 
+## Mouse
+
+The wheel scrolls whatever is under the pointer — the object list, the property list, the
+reaction list, and the track list each scroll on their own, and each shows a thin bar while
+there is something out of view. A list with nothing out of view passes the wheel outward
+instead of eating it, so no window size can leave a panel visibly cut off and unreachable.
+You can also drag a list's body.
+
 ## Keyboard
 
 `Ctrl+N` new · `Ctrl+O` open · `Ctrl+S` save · `Ctrl+E` export · `Ctrl+R` verify ·

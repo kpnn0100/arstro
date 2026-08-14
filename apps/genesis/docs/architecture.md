@@ -108,10 +108,19 @@ which is the point: the two apps should feel like one product.
 Text is measured against the live render target: the app publishes it once per frame
 (`ui::setMeasureTarget`), so every panel measures with the metrics it will draw with (R-G-5).
 
+**Overflow is scrolled, not truncated (G-20).** Four of the editor's lists grow with the
+document — objects, properties, reactions, tracks — so each owns a `ui::ListScroll`: a ~40-line
+value that holds an offset, is handed `(viewport, content)` every layout, clamps, and draws its
+own bar. It is a plain member rather than an `artboard::ScrollView` wrapper because these panels
+draw their rows themselves (measured columns, shed columns, step headers) instead of parenting a
+child per row, so what they need is the *arithmetic* and the *indicator*, not another container.
+`ListScroll::wheel` returns `false` when there is nothing out of view, which is what lets a
+scroll bubble past a full-view list to an ancestor (FR-46).
+
 ## 7. What Genesis added to Artboard
 
 Genesis is also the application that exercises Artboard's animation surface, and building it
-surfaced ten gaps that belonged in the framework rather than in the app:
+surfaced sixteen gaps that belonged in the framework rather than in the app:
 
 | | |
 | --- | --- |
@@ -125,6 +134,12 @@ surfaced ten gaps that belonged in the framework rather than in the app:
 | FR-39 | text always fits its control (TextBox clip + caret scroll, ComboBox ellipsis) |
 | FR-40 | disabled controls look disabled |
 | FR-41 | `drawsBuiltInVisuals` — a subclass can supply its own appearance |
+| FR-42 | `Path` trim — any shape can be drawn as a partial one |
+| FR-43 | ellipse sector — a circle can be a pie, a ring, or a pac-man |
+| FR-44 | `TextBox` selection, clipboard, and a blinking caret placed by the pointer |
+| FR-45 | rounded-rectangle corners that are actually circular arcs |
+| FR-46 | scroll input — `RawPointer::Kind::Scroll` → `Gesture::Type::Scroll`, routed and bubbled |
+| FR-47 | a clipped panel must scroll, and must show that it can |
 
 Each is in the platform-free core, needed no HAL change, and is useful to cosmo, pulsar, and
 the Android shell independently of Genesis — which is the test of whether it belonged there.

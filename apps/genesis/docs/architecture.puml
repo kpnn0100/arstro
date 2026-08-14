@@ -13,6 +13,13 @@ package "genesis (editor)" {
     + status(msg, level)
   }
   class Chrome
+  class ListScroll <<value>> {
+    + measure(viewportH, contentH)  ' every layout, G-20
+    + offset() / maxOffset() / scrollable()
+    + wheel(dy) : bool  ' false when nothing to scroll -> bubbles (FR-46)
+    + drag(dy) / reset()
+    + drawBar(t, area)  ' only while scrollable
+  }
   class ShapeTree
   class CanvasView {
     + frameW() / frameH()  ' the preview frame, resized independently of the window
@@ -25,6 +32,9 @@ package "genesis (editor)" {
     + coversApp()  ' overlay-pass panels check this
   }
   class RowHover
+  ShapeTree *--> ListScroll : objects
+  Inspector *--> ListScroll : properties
+  ReactionsPanel *--> "2" ListScroll : reactions + tracks
   class TextUtil <<utility>> {
     + setMeasureTarget(t)
     + textWidth() / ellipsize()
