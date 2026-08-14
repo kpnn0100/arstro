@@ -1331,4 +1331,59 @@ TEST(A_track_row_is_only_draggable_by_its_grip)
     CHECK(!panel->dragActive());
 }
 
+TEST(The_reactions_panel_header_and_footer_stay_inside_their_columns)
+{
+    /*  Two overlaps that only a measurement catches: the reaction list's buttons were sized off
+     *  `kListW` itself, so their right edge sat a whole `pad` PAST the divider and into the track
+     *  panel; and the column captions were drawn with their ascenders touching the header buttons'
+     *  bottom edge, with no air between them.
+     */
+    App app;
+    for (double w : {820.0, 1024.0, 1360.0})
+    {
+        app.setSize(w, 700.0);
+        double now = 0.0;
+        toEditor(app, now);
+        app.selectShape("ring");
+        app.documentChanged();
+        settle(app, now, 200.0);
+
+        auto *panel = app.reactions();
+        artboard::RecordingTarget t;
+        panel->render(t);
+
+        // Every control the panel owns, in panel-local space.
+        double divider = 0.0;
+        for (const auto &kid : panel->children())
+        {
+            if (!kid->visible) continue;
+            const double right = kid->x.value() + kid->width.value();
+            const bool inList = kid->x.value() < 100.0;   // the reaction list column
+            if (inList)
+                CHECK(right <= 190.0 - 1.0);              // inside the divider at kListW
+            (void)right;
+        }
+        (void)divider;
+
+        // The captions must clear the header buttons: every button ends at `pad + 20`, and no
+        // caption may be drawn with its ascender above that.
+        double lowestButtonBottom = 0.0;
+        for (const auto &kid : panel->children())
+            if (kid->visible && kid->y.value() < 40.0)
+                lowestButtonBottom =
+                    std::max(lowestButtonBottom, kid->y.value() + kid->height.value());
+        CHECK(lowestButtonBottom > 0.0);
+        bool sawCaption = false;
+        for (const auto &op : t.ops())
+        {
+            if (op.kind != K::DrawText) continue;
+            if (op.text != "target" && op.text != "ms" && op.text != "easing") continue;
+            sawCaption = true;
+            const double ascender = op.args[1] - op.args[2] * 0.8;   // baseline - ~cap height
+            CHECK(ascender >= lowestButtonBottom);
+        }
+        CHECK(sawCaption);
+    }
+}
+
 int main() { return mini::runAll(); }

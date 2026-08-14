@@ -1,0 +1,247 @@
+{
+  "genesis": 1,
+  "component": {
+    "name": "ArstroLoading",
+    "base": "VisualLoop",
+    "namespace": "app",
+    "designSize": [
+      200,
+      200
+    ]
+  },
+  "params": [
+    {
+      "name": "accent",
+      "type": "color",
+      "default": "theme.accent"
+    },
+    {
+      "name": "thickness",
+      "type": "number",
+      "default": "4",
+      "range": [
+        1,
+        24
+      ]
+    }
+  ],
+  "shapes": [
+    {
+      "id": "topleft",
+      "type": "rect",
+      "bind": {
+        "w": "minSide / 2",
+        "h": "minSide / 2",
+        "x": "0",
+        "y": "0",
+        "fill": "",
+        "cornerRadius": "4"
+      }
+    },
+    {
+      "id": "topleftcircle",
+      "type": "circle",
+      "parent": "topleft",
+      "bind": {
+        "w": "minSide * 0.3",
+        "h": "minSide * 0.3",
+        "x": "w/4-self.w/2",
+        "y": "w/4-self.h/2",
+        "fill": "theme.accent",
+        "rotation": "",
+        "opacity": "0"
+      }
+    },
+    {
+      "id": "rect",
+      "type": "rect",
+      "parent": "topleft",
+      "bind": {
+        "w": "minSide * 0.3",
+        "h": "minSide * 0.3",
+        "x": "w/4-topleftcircle.w/2",
+        "y": "w/4-self.h/2",
+        "fill": "",
+        "cornerRadius": "self.h/2",
+        "stroke": "theme.accent",
+        "pivotX": "self.w-self.h/2",
+        "pivotY": "self.h/2",
+        "strokeWidth": "self.h/10"
+      },
+      "reactions": [
+        {
+          "on": "loopStart",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "w",
+                "to": "topleftcircle.w + w/2",
+                "ms": "500",
+                "easing": "EaseInOutQuad"
+              }
+            ],
+            [
+              {
+                "target": "rotation",
+                "to": "-pi/2",
+                "ms": "1000",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "pivotX",
+                "to": "self.h/2",
+                "ms": "0",
+                "delayMs": "1000",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "x",
+                "to": "w/4*3-topleftcircle.w/2",
+                "ms": "0",
+                "delayMs": "1000",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "y",
+                "to": "w/4*3-topleftcircle.w/2",
+                "ms": "0",
+                "delayMs": "1000",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "trimStart",
+                "to": "0.9",
+                "ms": "1000",
+                "delayMs": "400",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "trimOffset",
+                "to": "1.2",
+                "ms": "2000",
+                "delayMs": "400",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "w",
+                "to": "self.h",
+                "ms": "500",
+                "delayMs": "1200",
+                "easing": "EaseInOutQuad"
+              }
+            ],
+            [
+              {
+                "target": "rotation",
+                "to": "-pi",
+                "ms": "200",
+                "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "w",
+                "to": "topleftcircle.w + w/2",
+                "ms": "1000",
+                "delayMs": "200",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "trimOffset",
+                "to": "1.5",
+                "ms": "1000",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "loopEnd",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "all",
+                "to": "original",
+                "ms": "1000",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "topleftcircle_copy",
+      "type": "circle",
+      "parent": "topleft",
+      "bind": {
+        "w": "0",
+        "h": "0",
+        "x": "w/4*3-self.w/2",
+        "y": "w/4-self.h/2",
+        "fill": "theme.accent",
+        "rotation": ""
+      },
+      "reactions": [
+        {
+          "on": "loopStart",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "w",
+                "to": "minSide*0.2",
+                "ms": "1000",
+                "delayMs": "300",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "h",
+                "to": "minSide*0.2",
+                "ms": "1000",
+                "delayMs": "300",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "y",
+                "to": "w/4*3-self.h/2",
+                "ms": "500",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        },
+        {
+          "on": "loopEnd",
+          "cancel": "restart",
+          "steps": [
+            [
+              {
+                "target": "all",
+                "to": "original",
+                "ms": "200",
+                "easing": "EaseOutCubic"
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "topleftcircle_copy_copy",
+      "type": "circle",
+      "parent": "topleft",
+      "bind": {
+        "w": "minSide * 0.3",
+        "h": "minSide * 0.3",
+        "x": "w/4*3-self.w/2",
+        "y": "w/4*3-self.h/2",
+        "fill": "theme.accent",
+        "rotation": "",
+        "opacity": "0"
+      }
+    }
+  ]
+}

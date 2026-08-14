@@ -11,7 +11,11 @@ namespace ui
     {
         constexpr double kListW = 190.0;
         constexpr double kRowH = 28.0;
-        constexpr double kHeadH = 34.0;
+        // The header band: the signal/cancel dropdowns and the +Step/+Track/Fire buttons sit at
+        // `pad - 2` and are 22 tall, so they end at `pad + 20`. The column captions are drawn 6px
+        // above the first track row, so the band has to leave room for BOTH — at 34 the captions'
+        // ascenders touched the buttons' bottom edge with no air at all.
+        constexpr double kHeadH = 42.0;
         constexpr double kScrubH = 26.0;
         constexpr double kStepH = 18.0;   // a step header owns its own row; tracks never sit under it
         constexpr double kChipW = 30.0;   // repeat / yoyo / delete, at the row's right edge
@@ -411,12 +415,16 @@ namespace ui
         const double rightX = kListW + pad;
         const double rightW = w - rightX - pad;
 
+        // Inside the list COLUMN, not the panel: the column ends at the divider (kListW), so the
+        // two buttons share `kListW - 2*pad` between them. Sizing them off kListW itself put their
+        // right edge a whole `pad` past the divider and into the track panel.
+        const double listInner = kListW - pad * 2.0;
         mAddReaction->x.set(pad);
         mAddReaction->y.set(h - pad - 22.0);
-        mAddReaction->width.set(kListW * 0.55);
-        mDeleteReaction->x.set(pad + kListW * 0.55 + 6.0);
+        mAddReaction->width.set(listInner * 0.55);
+        mDeleteReaction->x.set(pad + listInner * 0.55 + 6.0);
         mDeleteReaction->y.set(h - pad - 22.0);
-        mDeleteReaction->width.set(kListW * 0.45 - 6.0);
+        mDeleteReaction->width.set(listInner * 0.45 - 6.0);
 
         // The buttons claim their space first (they are fixed, and their labels must fit),
         // then the two dropdowns share whatever is left — so they can never collide.
@@ -759,9 +767,10 @@ namespace ui
             return;
         }
 
-        // Column captions, aligned with the field row layout.
-        const double y0 = pad + kHeadH;
-        const double capY = y0 - 6.0;
+        // Column captions, aligned with the field row layout: 6px of air under the header buttons
+        // (which end at pad + 20) and 8px above the first row, so the band separates the two.
+        const double y0 = trackTop();
+        const double capY = y0 - 8.0;
         const Columns c = columns(w);
         {
             double cx = rightX + Columns::grip;   // the captions sit over the FIELDS, past the grip

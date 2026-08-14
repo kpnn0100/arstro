@@ -197,7 +197,9 @@ document always produces byte-identical output.
 
 ## Samples
 
-`samples/` holds one verified component per base, plus two that exist to show an idea:
+`samples/` holds one verified component per base, plus three that exist to show an idea:
+`ArstroLoading`, a four-quadrant loader that chains three steps and returns the whole object with
+`all → original`;
 `PulseDots`, a loop authored with **no reactions at all**, purely as a binding on `base.phase`
 — the animation as a formula; and `SnapBack`, whose entire release is one `all → original` row.
 Every one of them passes `--verify`, so each is also a proof that the preview matched the
@@ -283,7 +285,10 @@ needs GTK3 + Cairo + Fontconfig, and self-skips if they are absent.
 
 ## Docs
 
-- [docs/requirements.md](docs/requirements.md) — the contract (G-1…G-14, the R-G design rules)
+- [docs/DEVELOPING.md](docs/DEVELOPING.md) — **start here to change Genesis**: the layout, which
+  document decides what, the load-bearing invariants, the mistakes already made, and how to prove
+  a change is right
+- [docs/requirements.md](docs/requirements.md) — the contract (G-1…G-24, the R-G design rules)
 - [docs/architecture.md](docs/architecture.md) — the shape of the system and why
 - [docs/detailed_design.md](docs/detailed_design.md) — how each piece works
 - [docs/brief.md](docs/brief.md) — the original product brief
