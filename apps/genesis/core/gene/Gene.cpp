@@ -36,7 +36,18 @@ namespace genesis
                     {"log",   {1, 1, "std::log"}},
                     {"pow",   {2, 2, "std::pow"}},
                     {"mod",   {2, 2, "std::fmod"}},
+                    {"div",   {2, 2, ""}},
                     {"atan2", {2, 2, "std::atan2"}},
+                    {"asin",  {1, 1, ""}},
+                    {"acos",  {1, 1, ""}},
+                    {"atan",  {1, 1, "std::atan"}},
+                    {"hypot", {2, 2, "std::hypot"}},
+                    {"dist",  {4, 4, ""}},
+                    {"snap",  {2, 2, ""}},
+                    {"wrap",  {3, 3, ""}},
+                    {"remap", {5, 5, ""}},
+                    {"step",  {2, 2, ""}},
+                    {"smoothstep", {3, 3, ""}},
                     {"sign",  {1, 1, ""}},
                     {"clamp", {3, 3, ""}},
                     {"lerp",  {3, 3, ""}},
@@ -420,8 +431,9 @@ namespace genesis
                     if (n->name == "minSide") { out = Value::number(sc.w < sc.h ? sc.w : sc.h); return true; }
                     if (n->name == "maxSide") { out = Value::number(sc.w > sc.h ? sc.w : sc.h); return true; }
                     if (n->name == "aspect") { out = Value::number(sc.h != 0.0 ? sc.w / sc.h : 0.0); return true; }
-                    if (n->name == "PI") { out = Value::number(kPi); return true; }
-                    if (n->name == "TAU") { out = Value::number(kTau); return true; }
+                    if (n->name == "PI" || n->name == "pi") { out = Value::number(kPi); return true; }
+                    if (n->name == "TAU" || n->name == "tau") { out = Value::number(kTau); return true; }
+                    if (n->name == "e") { out = Value::number(2.71828182845904524); return true; }
                     if (sc.lookupIdent && sc.lookupIdent(n->name, out)) return true;
                     if (err && err->empty()) *err = "unknown name '" + n->name + "'";
                     return false;
@@ -500,8 +512,8 @@ namespace genesis
                                            a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);
                         return true;
                     }
-                    double v[3] = {0, 0, 0};
-                    for (size_t k = 0; k < n->args.size() && k < 3; ++k)
+                    double v[5] = {0, 0, 0, 0, 0};
+                    for (size_t k = 0; k < n->args.size() && k < 5; ++k)
                         if (!evalNumber(n->args[k], sc, v[k], err)) return false;
                     double res = 0.0;
                     if (f == "min") res = v[0] < v[1] ? v[0] : v[1];
@@ -526,6 +538,40 @@ namespace genesis
                     else if (f == "rad") res = v[0] * kPi / 180.0;
                     else if (f == "turns") res = v[0] * kTau;
                     else if (f == "pct") res = v[0] / 100.0;
+                    // Every one of these is TOTAL: defined for whatever a designer types, so a
+                    // preview can never produce a NaN and silently draw nothing. The emitter
+                    // reproduces each definition exactly — the verifier proves it did.
+                    else if (f == "div") res = v[1] == 0.0 ? 0.0 : std::trunc(v[0] / v[1]);
+                    else if (f == "asin") res = std::asin(v[0] < -1.0 ? -1.0 : (v[0] > 1.0 ? 1.0 : v[0]));
+                    else if (f == "acos") res = std::acos(v[0] < -1.0 ? -1.0 : (v[0] > 1.0 ? 1.0 : v[0]));
+                    else if (f == "atan") res = std::atan(v[0]);
+                    else if (f == "hypot") res = std::hypot(v[0], v[1]);
+                    else if (f == "dist") res = std::hypot(v[2] - v[0], v[3] - v[1]);
+                    else if (f == "snap") res = v[1] == 0.0 ? v[0] : std::round(v[0] / v[1]) * v[1];
+                    else if (f == "wrap")
+                    {
+                        const double span = v[2] - v[1];
+                        if (span <= 0.0) res = v[1];
+                        else
+                        {
+                            double t = std::fmod(v[0] - v[1], span);
+                            if (t < 0.0) t += span;      // whole periods, so a negative angle wraps up
+                            res = v[1] + t;
+                        }
+                    }
+                    else if (f == "remap")
+                    {
+                        const double span = v[2] - v[1];
+                        res = span == 0.0 ? v[3] : v[3] + (v[0] - v[1]) / span * (v[4] - v[3]);
+                    }
+                    else if (f == "step") res = v[1] < v[0] ? 0.0 : 1.0;
+                    else if (f == "smoothstep")
+                    {
+                        const double span = v[1] - v[0];
+                        double t = span == 0.0 ? (v[2] < v[0] ? 0.0 : 1.0) : (v[2] - v[0]) / span;
+                        t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
+                        res = t * t * (3.0 - 2.0 * t);
+                    }
                     else
                     {
                         if (err && err->empty()) *err = "unknown function '" + f + "'";
@@ -642,7 +688,8 @@ namespace genesis
 
         const std::vector<std::string> &builtinIdents()
         {
-            static const std::vector<std::string> v = {"w", "h", "minSide", "maxSide", "aspect", "PI", "TAU"};
+            static const std::vector<std::string> v = {"w",   "h",  "minSide", "maxSide", "aspect",
+                                                      "pi",  "tau", "e",       "PI",      "TAU"};
             return v;
         }
 
@@ -754,8 +801,9 @@ namespace genesis
                     if (n->name == "minSide") return "std::min(w, h)";
                     if (n->name == "maxSide") return "std::max(w, h)";
                     if (n->name == "aspect") return "(h != 0.0 ? w / h : 0.0)";
-                    if (n->name == "PI") return "3.14159265358979324";
-                    if (n->name == "TAU") return "6.28318530717958648";
+                    if (n->name == "PI" || n->name == "pi") return "3.14159265358979324";
+                    if (n->name == "TAU" || n->name == "tau") return "6.28318530717958648";
+                    if (n->name == "e") return "2.71828182845904524";
                     if (names.ident)
                     {
                         std::string s = names.ident(n->name);
@@ -835,6 +883,22 @@ namespace genesis
                     if (f == "pct") return "((" + a[0] + ") / 100.0)";
                     if (f == "sqrt") return "genesisSqrt(" + a[0] + ")";
                     if (f == "log") return "genesisLog(" + a[0] + ")";
+                    // Each of these is emitted as a named helper rather than inline, so the
+                    // generated line reads like the authored one and the definition lives in
+                    // exactly one place per file.
+                    if (f == "div") return "genesisDiv(" + a[0] + ", " + a[1] + ")";
+                    if (f == "asin") return "genesisAsin(" + a[0] + ")";
+                    if (f == "acos") return "genesisAcos(" + a[0] + ")";
+                    if (f == "dist") return "std::hypot((" + a[2] + ") - (" + a[0] + "), (" + a[3] +
+                                            ") - (" + a[1] + "))";
+                    if (f == "snap") return "genesisSnap(" + a[0] + ", " + a[1] + ")";
+                    if (f == "wrap") return "genesisWrap(" + a[0] + ", " + a[1] + ", " + a[2] + ")";
+                    if (f == "remap")
+                        return "genesisRemap(" + a[0] + ", " + a[1] + ", " + a[2] + ", " + a[3] +
+                               ", " + a[4] + ")";
+                    if (f == "step") return "(((" + a[1] + ") < (" + a[0] + ")) ? 0.0 : 1.0)";
+                    if (f == "smoothstep")
+                        return "genesisSmoothstep(" + a[0] + ", " + a[1] + ", " + a[2] + ")";
                     if (f == "mod") return "(((" + a[1] + ") == 0.0) ? 0.0 : std::fmod((" + a[0] + "), (" + a[1] + ")))";
                     auto found = functions().find(f);
                     if (found == functions().end() || !*found->second.cpp)

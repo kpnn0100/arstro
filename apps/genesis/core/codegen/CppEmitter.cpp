@@ -170,6 +170,14 @@ namespace genesis
                             if (rd.name == f) return rd.cpp;
                         return std::string();
                     }
+                    if (obj == "parent")
+                    {
+                        const std::string p = doc.parentOf(owner);
+                        // A top-level object's parent IS the component, which publishes w/h.
+                        if (p.empty())
+                            return f == "w" ? "w" : (f == "h" ? "h" : std::string());
+                        return findField(f) ? localOf(p, f) : std::string();
+                    }
                     const std::string shape = obj == "self" ? owner : obj;
                     if (doc.findShape(shape) && findField(f)) return localOf(shape, f);
                     return std::string();
@@ -194,7 +202,14 @@ namespace genesis
                             if (rd.name == f) return rd.cpp;
                         return std::string();
                     }
-                    const std::string shape = obj == "self" ? owner : obj;
+                    std::string shape = obj == "self" ? owner : obj;
+                    if (obj == "parent")
+                    {
+                        const std::string p = doc.parentOf(owner);
+                        if (p.empty())
+                            return f == "w" ? "w" : (f == "h" ? "h" : std::string());
+                        shape = p;
+                    }
                     const Shape *s = doc.findShape(shape);
                     const FieldDef *fd = findField(f);
                     if (!s || !fd) return std::string();
@@ -203,6 +218,19 @@ namespace genesis
                     if (fd->type == FieldType::Number)
                         return stylePropOf(shape, f) + ".value()";
                     return std::string();
+                };
+                return n;
+            }
+
+            /** liveNames plus `current` — the target field's value at the moment the reaction
+             *  fires, which is what makes `to = current + 10` mean "ten more than now". */
+            gene::CppNames trackNames(const std::string &owner, const std::string &propExpr) const
+            {
+                gene::CppNames n = liveNames(owner);
+                auto base = n.ident;
+                n.ident = [base, propExpr](const std::string &name) -> std::string {
+                    if (name == "current") return propExpr + ".value()";
+                    return base ? base(name) : std::string();
                 };
                 return n;
             }
@@ -248,7 +276,12 @@ namespace genesis
                         for (const auto &m : ms)
                         {
                             if (m.first == "base" || m.first == "theme") continue;
-                            const std::string obj = m.first == "self" ? s.id : m.first;
+                            std::string obj = m.first == "self" ? s.id : m.first;
+                            if (m.first == "parent")
+                            {
+                                obj = doc.parentOf(s.id);
+                                if (obj.empty()) continue;   // the component: w/h, not a field
+                            }
                             deps[key].push_back(obj + "\x1f" + m.second);
                         }
                     }
@@ -507,6 +540,31 @@ namespace genesis
                 o << "        inline double genesisLog(double v) { return v <= 0.0 ? 0.0 : std::log(v); }\n";
                 o << "        inline double genesisNorm(double v, double lo, double hi)\n";
                 o << "        {\n            const double span = hi - lo;\n            return span == 0.0 ? 0.0 : genesisClamp((v - lo) / span, 0.0, 1.0);\n        }\n";
+                o << "        inline double genesisDiv(double a, double b) { return b == 0.0 ? 0.0 : std::trunc(a / b); }\n";
+                o << "        inline double genesisAsin(double v) { return std::asin(genesisClamp(v, -1.0, 1.0)); }\n";
+                o << "        inline double genesisAcos(double v) { return std::acos(genesisClamp(v, -1.0, 1.0)); }\n";
+                o << "        inline double genesisSnap(double v, double step)\n";
+                o << "        {\n            return step == 0.0 ? v : std::round(v / step) * step;\n        }\n";
+                o << "        inline double genesisWrap(double v, double lo, double hi)\n";
+                o << "        {\n";
+                o << "            const double span = hi - lo;\n";
+                o << "            if (span <= 0.0) return lo;\n";
+                o << "            double t = std::fmod(v - lo, span);\n";
+                o << "            if (t < 0.0) t += span;   // whole periods, so a negative angle wraps up\n";
+                o << "            return lo + t;\n";
+                o << "        }\n";
+                o << "        inline double genesisRemap(double v, double inLo, double inHi, double outLo, double outHi)\n";
+                o << "        {\n";
+                o << "            const double span = inHi - inLo;\n";
+                o << "            return span == 0.0 ? outLo : outLo + (v - inLo) / span * (outHi - outLo);\n";
+                o << "        }\n";
+                o << "        inline double genesisSmoothstep(double e0, double e1, double v)\n";
+                o << "        {\n";
+                o << "            const double span = e1 - e0;\n";
+                o << "            double t = span == 0.0 ? (v < e0 ? 0.0 : 1.0) : (v - e0) / span;\n";
+                o << "            t = genesisClamp(t, 0.0, 1.0);\n";
+                o << "            return t * t * (3.0 - 2.0 * t);\n";
+                o << "        }\n";
                 o << "        inline artboard::Color genesisFade(const artboard::Color &c, double t)\n";
                 o << "        {\n            return artboard::Color{c.r, c.g, c.b, c.a * t};\n        }\n";
                 o << "        inline artboard::Color genesisMix(const artboard::Color &a, const artboard::Color &b, double t)\n";
@@ -806,7 +864,7 @@ namespace genesis
                             const std::string prop = *fd->segmentProperty
                                                          ? memberOf(owner) + "->" + fd->segmentProperty
                                                          : stylePropOf(owner, field);
-                            const gene::CppNames names = liveNames(owner);
+                            const gene::CppNames names = trackNames(owner, prop);
                             const std::string where = host.id + " " + r.signal + " " + t.target;
                             const std::string from = t.from.empty() ? prop + ".value()"
                                                                     : self.expr(t.from, names, where + " from");

@@ -53,15 +53,34 @@ by construction.
 
 - **Types.** Two: `double` and `Color`. Booleans are doubles. Arithmetic on a colour is a
   type error.
-- **Scope.** `w`/`h` (the component's live size), `minSide`/`maxSide`/`aspect`, `PI`/`TAU`;
-  any param by name; `self.<field>`; `<shape>.<field>`; `base.<name>` (what the base class
-  publishes); `theme.<role>`.
-- **Functions.** `min max abs clamp lerp floor ceil round sign sqrt pow mod sin cos tan
-  atan2 exp log deg rad turns pct rgb rgba fade mix`, and no others. No user-defined
-  functions, statements, or loops.
-- **Totality.** Division or modulo by zero yields `0`, and `sqrt`/`log` of a non-positive
-  value yields `0` — a preview shall never produce a NaN and silently draw nothing. The
-  emitted C++ shall reproduce these definitions exactly.
+- **Scope.** `w`/`h` (the component's live size), `minSide`/`maxSide`/`aspect`, the constants
+  above; any param by name; `self.<field>`; **`parent.<field>`** — the object that holds this
+  one, so a child sizes and places itself relative to its container without naming it;
+  `<shape>.<field>`; `base.<name>` (what the base class publishes); `theme.<role>`.
+  - For a nested object `parent` is its parent shape, and every field is readable.
+  - For a top-level object `parent` is the COMPONENT, which publishes `w` and `h`. Reading any
+    other field there is an error, reported as such rather than silently returning zero.
+  - `parent` joins the binding graph like any other reference, so a cycle through it is caught
+    (G-7) instead of looping at run time.
+- **Functions.** Arithmetic and geometry: `min max abs clamp lerp floor ceil round sign sqrt
+  pow div mod hypot dist snap wrap remap step smoothstep`. Trigonometry and angles:
+  `sin cos tan asin acos atan atan2 deg rad turns pct`. Exponentials: `exp log`. Colour:
+  `rgb rgba fade mix`. And no others — there are no user-defined functions, statements, or
+  loops.
+  - `div(a, b)` is the TRUNCATED quotient and pairs with `mod`: `div(a,b) * b + mod(a,b) == a`
+    for every `b != 0`.
+  - `snap(v, step)` rounds to the nearest multiple of `step` — a grid, in one call.
+  - `wrap(v, lo, hi)` brings a value into `[lo, hi)` by whole periods, which is what an angle
+    or a looping phase needs.
+  - `remap(v, inLo, inHi, outLo, outHi)` rescales between two ranges; `step` and `smoothstep`
+    are the usual threshold and eased threshold.
+- **Constants.** `pi`, `tau`, `e` (and the older spellings `PI`, `TAU`).
+- **Totality.** Every function is defined for every input a designer can type: division,
+  modulo and `div` by zero yield `0`; `sqrt`/`log` of a non-positive value yield `0`;
+  `asin`/`acos` clamp their argument to `[-1, 1]`; `snap` with a zero step returns the value;
+  `wrap` and `remap` over an empty range return the low end. A preview shall never produce a
+  NaN and silently draw nothing, and the emitted C++ shall reproduce each definition exactly —
+  the verifier (G-9) is what proves it did.
 - **Escape hatch.** `raw{ … }` passes C++ through verbatim to the emitter. It cannot be
   previewed; the author is told so rather than shown a wrong result.
 
@@ -82,6 +101,13 @@ A reaction is `signal → steps`. A step's tracks start together; step *N+1* beg
 a literal `artboard::Tween` plus a target — where `from` (empty = the field's current value),
 `to`, `durationMs` and `delayMs` are Gene expressions, so a `speed` param genuinely re-times
 a component.
+
+Inside those four expressions — and only there — the name **`current`** reads the target
+field's value at the moment the reaction fires. `to = current + 10` therefore means "ten more
+than wherever it is", which is what makes a reaction relative rather than absolute: firing it
+repeatedly steps the value, and interrupting mid-flight resumes from where it actually got to.
+(`from` left blank already means `current`; writing it is the same thing.) `current` is not in
+scope in a shape's field bindings, where there is no target to speak of.
 
 - A track with `repeat == -1` never completes and therefore never chains; a step whose tracks
   all repeat forever ends the chain.

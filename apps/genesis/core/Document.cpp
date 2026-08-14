@@ -208,6 +208,12 @@ namespace genesis
         return stem + "_x";
     }
 
+    std::string Document::parentOf(const std::string &shapeId) const
+    {
+        const Shape *s = findShape(shapeId);
+        return s ? s->parent : std::string();
+    }
+
     void Document::splitTarget(const std::string &target, const std::string &owner,
                                std::string &shape, std::string &field)
     {
@@ -655,10 +661,13 @@ namespace genesis
         {
             const Document &doc;
             const BaseDef *base;
-            std::string ownerShape;   // for `self.`
+            std::string ownerShape;   // for `self.` and `parent.`
+            bool allowCurrent = false;   // only inside a track's expressions
 
             bool ident(const std::string &n) const
             {
+                if (n == "current")
+                    return allowCurrent;
                 const auto &b = gene::builtinIdents();
                 if (std::find(b.begin(), b.end(), n) != b.end())
                     return true;
@@ -668,6 +677,16 @@ namespace genesis
             {
                 if (obj == "self")
                     return !ownerShape.empty() && findField(f) != nullptr;
+                if (obj == "parent")
+                {
+                    if (ownerShape.empty())
+                        return false;
+                    const std::string p = doc.parentOf(ownerShape);
+                    // A top-level object's parent is the COMPONENT, which publishes w and h.
+                    if (p.empty())
+                        return f == "w" || f == "h";
+                    return findField(f) != nullptr;
+                }
                 if (obj == "base")
                 {
                     if (!base) return false;
@@ -833,8 +852,13 @@ namespace genesis
                     gene::collectMembers(n, ms);
                     for (const auto &m : ms)
                     {
-                        const std::string obj = m.first == "self" ? s.id : m.first;
-                        if (obj == "base" || obj == "theme") continue;
+                        if (m.first == "base" || m.first == "theme") continue;
+                        std::string obj = m.first == "self" ? s.id : m.first;
+                        if (m.first == "parent")
+                        {
+                            obj = s.parent;
+                            if (obj.empty()) continue;   // the component: w/h, not a field
+                        }
                         edges[key].push_back(obj + "." + m.second);
                     }
                 }
@@ -924,7 +948,9 @@ namespace genesis
                         if (!isEasingName(t.easing))
                             out.push_back({Diagnostic::Severity::Error, sw,
                                            "unknown easing '" + t.easing + "'"});
-                        NameChecker tnc{*this, b, shapeId};
+                        // `current` is the target's value at fire time — in scope here, and
+                        // only here.
+                        NameChecker tnc{*this, b, shapeId, /*allowCurrent*/ true};
                         checkExpr(t.to, sw + " to", FieldType::Number, tnc, out);
                         if (!t.from.empty())
                             checkExpr(t.from, sw + " from", FieldType::Number, tnc, out);

@@ -77,13 +77,27 @@ turns(1)                      # one full rotation, in radians
 raw{ myHelper(w) }            # verbatim C++ when you need the escape hatch
 ```
 
-Names: `w` `h` `minSide` `maxSide` `aspect` `PI` `TAU`, any param, `self.<field>`,
-`<shape>.<field>`, `base.<read>`, `theme.<role>`.
-Functions: `min max abs clamp lerp floor ceil round sign sqrt pow mod sin cos tan atan2 exp
-log deg rad turns pct rgb rgba fade mix`.
+```
+parent.w / 4                  # sized against whatever holds me, without naming it
+snap(minSide * 0.72, 4)       # onto a 4px grid
+wrap(base.phase * 360, 0, 360)  # an angle, kept in range
+current + 10                  # in a track's `to`: ten more than wherever it is now
+```
 
-Division by zero is `0`, not NaN — a preview never silently draws nothing, and the emitted
-C++ reproduces that exactly.
+Names: `w` `h` `minSide` `maxSide` `aspect` `pi` `tau` `e`, any param, `self.<field>`,
+**`parent.<field>`** (the object holding this one — the component itself, for a top-level
+object), `<shape>.<field>`, `base.<read>`, `theme.<role>`, and `current` inside a track.
+Functions: `min max abs clamp lerp floor ceil round sign sqrt pow div mod hypot dist snap wrap
+remap step smoothstep sin cos tan asin acos atan atan2 exp log deg rad turns pct rgb rgba fade
+mix`.
+
+`div` pairs with `mod` (`div(a,b)*b + mod(a,b) == a`), `snap` puts a value on a grid, `wrap`
+brings one into a range by whole periods, and `remap` rescales between two ranges.
+
+Every function is total: division and `div` by zero give `0`, `sqrt`/`log` of a non-positive
+value give `0`, `asin`/`acos` clamp to `[-1,1]`, and an empty range returns its low end. A
+preview never silently draws nothing, and the emitted C++ reproduces each definition exactly —
+`--verify` is what proves it did.
 
 ## Sector: a circle can be a pie, a ring, or a pac-man
 

@@ -153,6 +153,9 @@ namespace genesis
         const Shape *findShape(const std::string &id) const;
         Shape *findShape(const std::string &id);
         const Param *findParam(const std::string &name) const;
+        /** The id of `shapeId`'s parent, or "" when it is top-level (its parent is the
+         *  component itself). */
+        std::string parentOf(const std::string &shapeId) const;
         /** Split a track target into (shape, field); a bare field belongs to `owner`. */
         static void splitTarget(const std::string &target, const std::string &owner,
                                 std::string &shape, std::string &field);

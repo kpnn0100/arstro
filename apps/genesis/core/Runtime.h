@@ -127,6 +127,8 @@ namespace genesis
 
         gene::Scope layoutScope(const std::string &owner) const;
         gene::Scope liveScope(const std::string &owner) const;
+        /** liveScope plus `current` — the target field's value at fire time. */
+        gene::Scope trackScope(const std::string &owner, const artboard::Property &p) const;
         bool lookupIdent(const std::string &name, gene::Value &out) const;
         bool lookupTheme(const std::string &role, gene::Value &out) const;
 

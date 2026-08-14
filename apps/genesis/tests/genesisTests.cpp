@@ -144,6 +144,66 @@ TEST(Gene_builtin_identifiers_and_functions)
     CHECK_NEAR(evalNum("cos(0) + sin(0) + tan(0)"), 1.0, 1e-12);
     CHECK_NEAR(evalNum("max(min(3, 4), 2)"), 3.0, 1e-12);
 }
+TEST(Gene_arithmetic_macros_are_total)
+{
+    // div pairs with mod: div(a,b)*b + mod(a,b) == a, for every non-zero b.
+    CHECK_NEAR(evalNum("div(7, 2)"), 3.0, 1e-12);
+    CHECK_NEAR(evalNum("div(-7, 2)"), -3.0, 1e-12);      // truncated, not floored
+    CHECK_NEAR(evalNum("div(7, 2) * 2 + mod(7, 2)"), 7.0, 1e-12);
+    CHECK_NEAR(evalNum("div(-7, 2) * 2 + mod(-7, 2)"), -7.0, 1e-12);
+    CHECK_NEAR(evalNum("div(5, 0)"), 0.0, 1e-12);        // total, like every other function
+
+    CHECK_NEAR(evalNum("hypot(3, 4)"), 5.0, 1e-12);
+    CHECK_NEAR(evalNum("dist(1, 1, 4, 5)"), 5.0, 1e-12);
+
+    CHECK_NEAR(evalNum("snap(13, 5)"), 15.0, 1e-12);
+    CHECK_NEAR(evalNum("snap(12, 5)"), 10.0, 1e-12);
+    CHECK_NEAR(evalNum("snap(13, 0)"), 13.0, 1e-12);     // no grid: unchanged
+
+    CHECK_NEAR(evalNum("wrap(370, 0, 360)"), 10.0, 1e-12);
+    CHECK_NEAR(evalNum("wrap(-10, 0, 360)"), 350.0, 1e-12);   // negatives wrap UP
+    CHECK_NEAR(evalNum("wrap(5, 0, 0)"), 0.0, 1e-12);         // empty range: the low end
+
+    CHECK_NEAR(evalNum("remap(5, 0, 10, 0, 100)"), 50.0, 1e-12);
+    CHECK_NEAR(evalNum("remap(5, 0, 0, 7, 9)"), 7.0, 1e-12);  // empty input range: the low end
+
+    CHECK_NEAR(evalNum("step(5, 4)"), 0.0, 1e-12);
+    CHECK_NEAR(evalNum("step(5, 6)"), 1.0, 1e-12);
+    CHECK_NEAR(evalNum("smoothstep(0, 10, 5)"), 0.5, 1e-12);
+    CHECK_NEAR(evalNum("smoothstep(0, 10, -3)"), 0.0, 1e-12);
+    CHECK_NEAR(evalNum("smoothstep(0, 10, 99)"), 1.0, 1e-12);
+    CHECK_NEAR(evalNum("smoothstep(4, 4, 9)"), 1.0, 1e-12);   // zero-width edge: a hard step
+
+    CHECK_NEAR(evalNum("asin(2)"), evalNum("asin(1)"), 1e-12);    // clamped, never NaN
+    CHECK_NEAR(evalNum("acos(-9)"), evalNum("acos(-1)"), 1e-12);
+    CHECK_NEAR(evalNum("atan(0)"), 0.0, 1e-12);
+
+    CHECK_NEAR(evalNum("pi"), 3.14159265358979324, 1e-12);
+    CHECK_NEAR(evalNum("tau"), 6.28318530717958648, 1e-12);
+    CHECK_NEAR(evalNum("e"), 2.71828182845904524, 1e-12);
+    CHECK_NEAR(evalNum("PI"), evalNum("pi"), 1e-12);              // the older spellings still work
+    CHECK_NEAR(evalNum("TAU"), evalNum("tau"), 1e-12);
+}
+TEST(Gene_new_macros_emit_and_arity_is_checked)
+{
+    CHECK(emit("div(w, 3)") == "genesisDiv(w, 3.0)");
+    CHECK(emit("snap(w, 8)") == "genesisSnap(w, 8.0)");
+    CHECK(emit("wrap(w, 0, 360)") == "genesisWrap(w, 0.0, 360.0)");
+    CHECK(emit("remap(w, 0, 1, 0, 100)") == "genesisRemap(w, 0.0, 1.0, 0.0, 100.0)");
+    CHECK(emit("smoothstep(0, 1, w)") == "genesisSmoothstep(0.0, 1.0, w)");
+    CHECK(emit("step(1, w)") == "(((w) < (1.0)) ? 0.0 : 1.0)");
+    CHECK(emit("hypot(w, h)") == "std::hypot(w, h)");
+    CHECK(emit("pi") == "3.14159265358979324");
+    // Constant folding still applies to the new ones.
+    CHECK(emit("div(9, 2)") == "4.0");
+    CHECK(emit("snap(13, 5)") == "15.0");
+
+    std::string err;
+    CHECK(gene::parse("div(1)", &err) == nullptr);
+    CHECK(err.find("takes 2") != std::string::npos);
+    CHECK(gene::parse("remap(1, 2, 3)", &err) == nullptr);
+    CHECK(gene::parse("dist(1, 2)", &err) == nullptr);
+}
 TEST(Gene_colours_are_a_second_value_type)
 {
     std::string err;
@@ -427,6 +487,118 @@ TEST(Document_removing_a_shape_removes_descendants_and_their_tracks)
         for (const auto &re : sh.reactions)
             for (const auto &st : re.steps)
                 CHECK(st.tracks.empty());
+}
+TEST(Document_parent_reads_the_object_that_holds_this_one)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    Shape dot;
+    dot.id = "dot";
+    dot.parent = "ring";
+    dot.kind = ShapeKind::Circle;
+    dot.setField("w", "parent.w / 4");        // sized against its container, unnamed
+    dot.setField("h", "parent.h / 4");
+    dot.setField("x", "(parent.w - self.w) / 2");
+    dot.setField("y", "(parent.h - self.h) / 2");
+    dot.setField("fill", "accent");
+    d.addShape(dot);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    // ring is minSide*0.7 = 140, so the dot is a quarter of that and centred in it.
+    CHECK_NEAR(rt.segmentFor("ring")->width.value(), 140.0, 1e-6);
+    CHECK_NEAR(rt.segmentFor("dot")->width.value(), 35.0, 1e-6);
+    CHECK_NEAR(rt.segmentFor("dot")->x.value(), (140.0 - 35.0) / 2.0, 1e-6);
+
+    const EmittedCode c = emitCpp(d);
+    CHECK(c.ok());
+    CHECK(c.source.find("ring_w / 4.0") != std::string::npos);   // resolved to the parent local
+}
+TEST(Document_parent_of_a_top_level_object_is_the_component)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    // The ring is top-level, so `parent` is the component: w and h, and nothing else.
+    d.shapes.front().setField("w", "parent.w / 2");
+    d.shapes.front().setField("h", "parent.h / 2");
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(240, 120);
+    rt.advance(0.0);
+    CHECK_NEAR(rt.segmentFor("ring")->width.value(), 120.0, 1e-6);
+    CHECK_NEAR(rt.segmentFor("ring")->height.value(), 60.0, 1e-6);
+
+    // Any other field there is an error, named as such rather than silently zero.
+    d.shapes.front().setField("w", "parent.opacity");
+    bool named = false;
+    for (const auto &diag : d.validate())
+        if (diag.isError() && diag.message.find("parent.opacity") != std::string::npos) named = true;
+    CHECK(named);
+}
+TEST(Document_a_cycle_through_parent_is_caught)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    Shape dot;
+    dot.id = "dot";
+    dot.parent = "ring";
+    dot.kind = ShapeKind::Circle;
+    dot.setField("w", "parent.w");
+    d.addShape(dot);
+    d.findShape("ring")->setField("w", "dot.w");   // ring <- dot <- parent(ring)
+    bool cycle = false;
+    for (const auto &diag : d.validate())
+        if (diag.isError() && diag.message.find("cycle") != std::string::npos) cycle = true;
+    CHECK(cycle);
+}
+TEST(Document_current_reads_the_target_at_fire_time)
+{
+    Document d = Document::starter("VisualLoop", "C");
+    d.findShape("ring")->reactions.clear();
+    Reaction r;
+    r.signal = "cycle";
+    Step st;
+    // "ten more than wherever it is" — firing repeatedly STEPS the value.
+    st.tracks.push_back({"opacity", "", "current + 0.25", "100", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    d.findShape("ring")->reactions.push_back(r);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(120, 120);
+    rt.advance(0.0);
+    CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 0.0, 1e-9);
+
+    rt.fire("cycle");
+    rt.advance(0.0);
+    rt.advance(100.0);
+    CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 0.25, 1e-9);
+    rt.fire("cycle");                       // relative, so it steps again from where it got to
+    rt.advance(100.0);
+    rt.advance(200.0);
+    CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 0.5, 1e-9);
+
+    const EmittedCode c = emitCpp(d);
+    CHECK(c.ok());
+    // `current` compiles to the target property's live value, not a captured constant.
+    CHECK(c.source.find("mRing->opacity.value() + 0.25") != std::string::npos);
+
+    // It is NOT in scope in a field binding, where there is no target to speak of.
+    Document bad = d;
+    bad.findShape("ring")->setField("w", "current * 2");
+    bool rejected = false;
+    for (const auto &diag : bad.validate())
+        if (diag.isError() && diag.message.find("current") != std::string::npos) rejected = true;
+    CHECK(rejected);
 }
 TEST(Document_reactions_belong_to_their_object)
 {

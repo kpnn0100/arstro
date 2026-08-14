@@ -236,7 +236,12 @@ namespace genesis
                     {
                         if (m.first == "theme") continue;
                         if (m.first == "base") { mLayoutEveryFrame = true; continue; }
-                        const std::string obj = m.first == "self" ? s.id : m.first;
+                        std::string obj = m.first == "self" ? s.id : m.first;
+                        if (m.first == "parent")
+                        {
+                            obj = s.parent;
+                            if (obj.empty()) continue;   // the component: w/h, not a field
+                        }
                         deps[key].push_back(obj + "\x1f" + m.second);
                     }
                 }
@@ -443,7 +448,9 @@ namespace genesis
         sc.w = mRootSegment ? mRootSegment->width.value() : 0.0;
         sc.h = mRootSegment ? mRootSegment->height.value() : 0.0;
         sc.lookupIdent = [this](const std::string &n, gene::Value &v) { return lookupIdent(n, v); };
-        sc.lookupMember = [this, owner](const std::string &obj, const std::string &f, gene::Value &v) {
+        const double cw = sc.w, ch = sc.h;
+        sc.lookupMember = [this, owner, cw, ch](const std::string &obj, const std::string &f,
+                                                gene::Value &v) {
             if (obj == "theme") return lookupTheme(f, v);
             if (obj == "base")
             {
@@ -452,7 +459,19 @@ namespace genesis
                 v = gene::Value::number(d);
                 return true;
             }
-            const std::string shape = obj == "self" ? owner : obj;
+            std::string shape = obj == "self" ? owner : obj;
+            if (obj == "parent")
+            {
+                const std::string p = mDoc.parentOf(owner);
+                // A top-level object's parent IS the component, which publishes w/h.
+                if (p.empty())
+                {
+                    if (f == "w") { v = gene::Value::number(cw); return true; }
+                    if (f == "h") { v = gene::Value::number(ch); return true; }
+                    return false;
+                }
+                shape = p;
+            }
             auto it = mLocals.find(shape + "." + f);
             if (it == mLocals.end()) return false;
             v = it->second;
@@ -464,7 +483,9 @@ namespace genesis
     gene::Scope Runtime::liveScope(const std::string &owner) const
     {
         gene::Scope sc = layoutScope(owner);
-        sc.lookupMember = [this, owner](const std::string &obj, const std::string &f, gene::Value &v) {
+        const double lw = sc.w, lh = sc.h;
+        sc.lookupMember = [this, owner, lw, lh](const std::string &obj, const std::string &f,
+                                                gene::Value &v) {
             if (obj == "theme") return lookupTheme(f, v);
             if (obj == "base")
             {
@@ -473,7 +494,18 @@ namespace genesis
                 v = gene::Value::number(d);
                 return true;
             }
-            const std::string shape = obj == "self" ? owner : obj;
+            std::string shape = obj == "self" ? owner : obj;
+            if (obj == "parent")
+            {
+                const std::string p = mDoc.parentOf(owner);
+                if (p.empty())
+                {
+                    if (f == "w") { v = gene::Value::number(lw); return true; }
+                    if (f == "h") { v = gene::Value::number(lh); return true; }
+                    return false;
+                }
+                shape = p;
+            }
             const ShapeNode *n = node(shape);
             const FieldDef *fd = findField(f);
             if (!n || !fd) return false;
@@ -488,6 +520,20 @@ namespace genesis
             if (!p) return false;
             v = gene::Value::number(p->value());
             return true;
+        };
+        return sc;
+    }
+
+    gene::Scope Runtime::trackScope(const std::string &owner, const artboard::Property &p) const
+    {
+        gene::Scope sc = liveScope(owner);
+        auto base = sc.lookupIdent;
+        const double now = p.value();
+        sc.lookupIdent = [base, now](const std::string &name, gene::Value &v) {
+            // `current` is the target's value at the moment the reaction fires — what makes
+            // `to = current + 10` mean "ten more than now".
+            if (name == "current") { v = gene::Value::number(now); return true; }
+            return base ? base(name, v) : false;
         };
         return sc;
     }
@@ -802,7 +848,7 @@ namespace genesis
             if (ShapeNode *n = node(shapeId))
                 n->owned[field] = true;   // motion owns this field from now on
 
-            const gene::Scope sc = liveScope(shapeId);
+            const gene::Scope sc = trackScope(shapeId, *p);
             const double from = t.from.empty() ? p->value() : evalNumber(t.from, sc, p->value());
             const double to = evalNumber(t.to, sc, 0.0);
             const double dur = evalNumber(t.durationMs, sc, 200.0);

@@ -1,0 +1,42 @@
+{
+  "genesis": 1,
+  // Exercises the three newest pieces of the language together:
+  //   parent.*   — each dot sizes and places itself against the ring that holds it, without
+  //                naming it, so duplicating the ring carries its dots along untouched.
+  //   macros     — snap/wrap/remap/smoothstep/div do the arithmetic in one call each.
+  //   current    — the ring's cycle reaction advances rotation RELATIVE to where it is, so
+  //                firing it repeatedly steps the orbit instead of restarting it.
+  "component": { "name": "OrbitDots", "base": "VisualLoop", "namespace": "app", "designSize": [120, 120] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "dots", "type": "number", "default": "3", "range": [1, 8] },
+    { "name": "gridStep", "type": "number", "default": "4", "range": [1, 16] }
+  ],
+  "shapes": [
+    { "id": "ring", "type": "circle",
+      "bind": { "w": "snap(minSide * 0.72, gridStep)", "h": "snap(minSide * 0.72, gridStep)",
+                "x": "(parent.w - self.w) / 2", "y": "(parent.h - self.h) / 2",
+                "stroke": "fade(accent, 0.25)", "strokeWidth": "2",
+                "opacity": "0", "rotation": "0" },
+      "animated": ["opacity", "rotation"],
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "1", "ms": 260, "easing": "EaseOutCubic" } ] ] },
+        { "on": "cycle", "cancel": "ignoreIfRunning", "steps": [
+            [ { "target": "rotation", "from": "current", "to": "current + tau / dots",
+                "ms": 420, "easing": "EaseInOutCubic" } ] ] },
+        { "on": "loopEnd", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 260, "easing": "EaseInCubic" } ] ] } ] },
+
+    { "id": "dot", "type": "circle", "parent": "ring",
+      "bind": { "w": "div(parent.w, 8)", "h": "self.w",
+                "x": "parent.w - self.w", "y": "(parent.h - self.h) / 2",
+                "fill": "accent",
+                "opacity": "remap(smoothstep(0, 1, wrap(base.phase, 0, 1)), 0, 1, 0.35, 1)" } },
+
+    { "id": "spoke", "type": "rect", "parent": "ring",
+      "bind": { "w": "parent.w / 2 - dot.w", "h": "1",
+                "x": "parent.w / 2", "y": "(parent.h - self.h) / 2",
+                "fill": "fade(accent, 0.35)", "cornerRadius": "0" } }
+  ]
+}

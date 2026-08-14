@@ -146,6 +146,29 @@ callbacks.
 `BaseDef::reads`, and `theme.f` to a `Color` literal — so the generated file carries no theme
 lookup and no Genesis dependency.
 
+## 4a. Three scopes, not one
+
+Name resolution is layered, and each layer exists because the previous one cannot answer the
+question:
+
+| scope | reads | used for |
+| --- | --- | --- |
+| **layout** | shape fields as the locals just computed | a shape's field bindings |
+| **live** | shape fields as their current animated values | a reaction's expressions |
+| **track** | live, plus `current` | a track's `from`/`to`/`ms`/`delay` |
+
+`parent.<field>` is resolved in all three: for a nested object it becomes the parent shape's
+local (layout) or live value (live/track); for a top-level object the parent is the COMPONENT,
+so only `w` and `h` answer and anything else is an error rather than a silent zero. `parent`
+also joins the dependency graph in three places — the emitter's `analyse()`, the runtime's
+`build()`, and `validate()`'s cycle check — so a loop through it is caught rather than hanging.
+
+`current` lives only in the track scope, because it means "the target field's value at the
+moment this reaction fires". The emitter binds it to `<property>.value()` and the runtime
+samples the property when the track starts, which is what makes `to = current + 10` relative:
+firing repeatedly steps the value, and interrupting mid-flight resumes from where it got to
+rather than from where it was first aimed.
+
 ## 5. `Runtime`
 
 The root is a `Host<Base>` template specialised per base (`LoopHost`, `ProgressHost`,
