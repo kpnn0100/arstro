@@ -60,8 +60,15 @@ namespace genesis
             Runtime *rt = nullptr;
             void advance(double nowMs) override
             {
-                if (rt) rt->hostAdvance(nowMs);
+                // Three steps, in this order for two different reasons:
+                //   1. stamp the clock — a tween completing inside step 2 starts the next step
+                //      and reads it, so a stale clock would start that step in the past;
+                //   2. tick every Property;
+                //   3. evaluate the bindings, which must see THIS frame's values, not the
+                //      previous frame's, or every dependent lags a frame behind (G-6a).
+                if (rt) rt->hostPreAdvance(nowMs);
                 Base::advance(nowMs);
+                if (rt) rt->hostAdvance(nowMs);
             }
             void onHoverChanged(bool hovered) override
             {
@@ -256,6 +263,31 @@ namespace genesis
                         for (const auto &m : ms)
                             if (m.first == "base") mLayoutEveryFrame = true;
                     }
+            // A binding that transitively reads an ANIMATED field — or base.* — has to be
+            // re-evaluated every frame, because what it reads changes every frame (G-6a). One
+            // that reads neither is still only re-evaluated on resize, so the common case is
+            // free. The dependency graph already exists for ordering, so this is a
+            // reachability question over it rather than a new mechanism.
+            {
+                std::set<std::string> live;
+                for (const auto &sh : mDoc.shapes)
+                    for (const auto &a : sh.animated)
+                        live.insert(sh.id + "\x1f" + a);
+                bool changed = true;
+                while (changed)
+                {
+                    changed = false;
+                    for (const auto &kv : deps)
+                        for (const auto &d : kv.second)
+                            if (live.count(d) && !live.count(kv.first))
+                            {
+                                live.insert(kv.first);
+                                mLayoutEveryFrame = true;   // something READS a live value
+                                changed = true;
+                            }
+                }
+            }
+
             std::set<std::string> done;
             std::function<void(const std::string &)> visit = [&](const std::string &k) {
                 if (!done.insert(k).second) return;
@@ -595,9 +627,22 @@ namespace genesis
                 artboard::Color c;
                 if (evalColor(src, sc, c))
                     mLocals[s->id + "." + fd->name] = gene::Value::color(c.r, c.g, c.b, c.a);
+                continue;
             }
-            else
-                mLocals[s->id + "." + fd->name] = gene::Value::number(evalNumber(src, sc, 0.0));
+            // Once motion owns a field, its VALUE is the animated one — `self.w` means "my
+            // width", which during an animation is the animated width (G-6a). Reading the
+            // binding here instead would freeze every dependent at the pre-animation value.
+            const ShapeNode *n = node(s->id);
+            auto ownIt = n ? n->owned.find(fd->name) : std::map<std::string, bool>::const_iterator();
+            const bool owned = n && ownIt != n->owned.end() && ownIt->second;
+            if (owned)
+                if (const artboard::Property *p =
+                        const_cast<Runtime *>(this)->propertyFor(s->id, fd->name))
+                {
+                    mLocals[s->id + "." + fd->name] = gene::Value::number(p->value());
+                    continue;
+                }
+            mLocals[s->id + "." + fd->name] = gene::Value::number(evalNumber(src, sc, 0.0));
         }
 
         for (const auto &s : mDoc.shapes)

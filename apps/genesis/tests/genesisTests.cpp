@@ -1139,6 +1139,78 @@ TEST(Runtime_honours_cancellation_policies)
         CHECK_NEAR(rt.segmentFor("ring")->opacity.value(), 0.5, 1e-9);
     }
 }
+TEST(Runtime_a_binding_follows_the_field_it_reads_while_that_field_animates)
+{
+    /*  `self.w` means "my width", so while a reaction animates the width a binding reading it
+     *  must FOLLOW, frame by frame. Two things had to be true for that: an owned field's value
+     *  is its live animated value rather than its own binding's result, and layout has to run
+     *  on any frame where it reads something that changes per frame (G-6a).
+     */
+    Document d = Document::starter("VisualLoop", "B");
+    Shape *s = d.findShape("ring");
+    s->kind = ShapeKind::Rect;
+    s->setField("w", "minSide * 0.2");
+    s->setField("h", "minSide * 0.2");
+    s->setField("x", "w / 4 * 3 - self.w / 2");   // centred on three quarters across
+    s->setField("y", "0");
+    s->setField("fill", "accent");
+    s->setField("opacity", "1");
+    s->setAnimated("w", true);
+    s->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"w", "minSide * 0.2", "minSide * 0.8", "400", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    s->reactions.push_back(r);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    rt.advance(0.0);
+
+    artboard::Segment *seg = rt.segmentFor("ring");
+    CHECK_NEAR(seg->width.value(), 40.0, 1e-6);
+    CHECK_NEAR(seg->x.value(), 150.0 - 40.0 / 2, 1e-6);
+    for (double t : {100.0, 200.0, 300.0, 400.0})
+    {
+        rt.advance(t);
+        // No lag and no freeze: x is exactly what the CURRENT width implies, every frame.
+        CHECK_NEAR(seg->x.value(), 150.0 - seg->width.value() / 2, 1e-6);
+    }
+    CHECK_NEAR(seg->width.value(), 160.0, 1e-6);
+    CHECK_NEAR(seg->x.value(), 70.0, 1e-6);
+}
+TEST(Emitter_layout_runs_per_frame_when_a_binding_reads_an_animated_field)
+{
+    // Reading an animated field is a per-frame dependency, exactly like reading base.*.
+    Document plain = Document::starter("VisualLoop", "P");
+    plain.findShape("ring")->setField("x", "w / 2");   // reads nothing that moves
+    const EmittedCode a = emitCpp(plain);
+    CHECK(a.ok());
+    CHECK(a.source.find("if (resized)\n            layout(sizeMs);") != std::string::npos);
+
+    Document live = Document::starter("VisualLoop", "L");
+    live.findShape("ring")->setField("x", "w / 4 * 3 - self.w / 2");
+    live.findShape("ring")->setAnimated("w", true);
+    const EmittedCode b = emitCpp(live);
+    CHECK(b.ok());
+    CHECK(b.source.find("layout(resized ? sizeMs : 0.0);") != std::string::npos);
+    // And the owned field's local reads its LIVE value, not its binding.
+    CHECK(b.source.find("mOwnRingW ?") != std::string::npos);
+
+    // The base is ticked BEFORE the bindings are evaluated, or every dependent lags a frame.
+    const size_t tick = b.source.find("artboard::VisualLoop::advance(nowMs);");
+    const size_t bind = b.source.find("layout(resized ? sizeMs : 0.0);");
+    CHECK(tick != std::string::npos);
+    CHECK(bind != std::string::npos);
+    CHECK(tick < bind);
+}
 TEST(Runtime_binding_stops_fighting_a_reaction_that_owns_the_field)
 {
     Runtime rt;

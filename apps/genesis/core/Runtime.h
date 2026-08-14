@@ -91,6 +91,9 @@ namespace genesis
         // ---- internals used by the base-class hosts (public so the hosts can call them) ----
         void hostSignal(const std::string &signal);
         bool readBase(const std::string &name, double &out) const;
+        /** Stamp the frame clock, BEFORE the base ticks its properties: a tween completing
+         *  during that tick starts the next step, and it reads this clock. */
+        void hostPreAdvance(double nowMs) { mNowMs = nowMs; }
         void hostAdvance(double nowMs);
 
     private:

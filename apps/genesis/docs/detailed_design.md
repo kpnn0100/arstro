@@ -118,6 +118,38 @@ onHook()      the base's signal hook → start the reaction
 advance(now)  resize check → layout, tick style Properties, applyStyles, base::advance
 ```
 
+### 4.1a A frame is three ordered steps
+
+`advance(nowMs)` must do three things, and the order of all three is load-bearing:
+
+1. **stamp the clock** (`mNowMs = nowMs`) — a tween completing inside step 2 starts the next
+   step of its chain and reads this clock, so a stale one starts that step in the past;
+2. **tick every Property** (`Base::advance`) — including the authored shapes', since they are
+   children;
+3. **evaluate the bindings** (`layout`) — which must therefore see THIS frame's values.
+
+Getting 3 before 2 lags every dependent binding one frame behind the field it reads; getting 1
+after 2 misplaces the start of every chained step. Both were real bugs, and both are pinned by
+tests (`Runtime_a_binding_follows_the_field_it_reads_while_that_field_animates`,
+`Emitter_layout_runs_per_frame_when_a_binding_reads_an_animated_field`).
+
+`Host<Base>::advance` in the runtime and the generated `advance()` implement the same three
+steps in the same order — the verifier compares them, and did in fact catch the moment they
+disagreed.
+
+### 4.1b Which fields are read live, and when layout re-runs
+
+Two rules make `x = w / 4 * 3 - self.w / 2` follow an animating `w` (G-6a):
+
+- **An owned field's local is its live value.** For a field marked animated, the local is
+  `owned ? property.value() : (binding)`. Until a reaction has driven it the binding is its
+  value — that is its resting state — and after that the animated value is, because `self.w`
+  means "my width".
+- **Layout re-runs per frame when it reads something that changes per frame.** Over the
+  dependency graph, seed the animated fields as *live*, propagate to anything depending on
+  them, and if any binding is reached, set `layoutEveryFrame`. Reading `base.*` seeds it too.
+  A component whose bindings read neither still re-lays-out only on resize.
+
 ### 4.2 `bindProp`
 
 ```

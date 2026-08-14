@@ -1,0 +1,36 @@
+{
+  "genesis": 1,
+  // The case that used to be broken: a binding reading a field that ANIMATES.
+  //
+  // `bar.w` is animated by the loop, and `bar.x` is bound to `w / 4 * 3 - self.w / 2` — so the
+  // bar stays centred on three quarters across while its width grows and shrinks. The label's
+  // dot rides the bar's right edge the same way, through parent.w. Both must follow frame by
+  // frame, not freeze at the value they had when the animation started (G-6a).
+  "component": { "name": "GrowBar", "base": "VisualLoop", "namespace": "app", "designSize": [200, 40] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "minW", "type": "number", "default": "0.15", "range": [0.05, 0.5] },
+    { "name": "maxW", "type": "number", "default": "0.6", "range": [0.2, 0.9] }
+  ],
+  "shapes": [
+    { "id": "bar", "type": "rect",
+      "bind": { "w": "w * minW", "h": "h / 3",
+                "x": "w / 4 * 3 - self.w / 2",
+                "y": "(h - self.h) / 2",
+                "fill": "accent", "cornerRadius": "self.h / 2",
+                "opacity": "0" },
+      "animated": ["w", "opacity"],
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "1", "ms": 220, "easing": "EaseOutCubic" } ],
+            [ { "target": "w", "from": "w * minW", "to": "w * maxW", "ms": 700,
+                "easing": "EaseInOutCubic", "repeat": -1, "yoyo": true } ] ] },
+        { "on": "loopEnd", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 220, "easing": "EaseInCubic" } ] ] } ] },
+
+    { "id": "cap", "type": "circle", "parent": "bar",
+      "bind": { "w": "parent.h", "h": "parent.h",
+                "x": "parent.w - self.w / 2", "y": "0",
+                "fill": "theme.foreground" } }
+  ]
+}

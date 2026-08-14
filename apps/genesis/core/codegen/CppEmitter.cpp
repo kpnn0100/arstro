@@ -285,6 +285,30 @@ namespace genesis
                             deps[key].push_back(obj + "\x1f" + m.second);
                         }
                     }
+                // A binding that transitively reads an ANIMATED field — or base.* — must be
+                // re-evaluated every frame, because what it reads changes every frame (G-6a).
+                // One that reads neither is still only re-evaluated on resize. The dependency
+                // graph already exists for ordering, so this is reachability over it.
+                {
+                    std::set<std::string> live;
+                    for (const auto &sh : doc.shapes)
+                        for (const auto &a : sh.animated)
+                            live.insert(sh.id + "\x1f" + a);
+                    bool changed = true;
+                    while (changed)
+                    {
+                        changed = false;
+                        for (const auto &kv : deps)
+                            for (const auto &d : kv.second)
+                                if (live.count(d) && !live.count(kv.first))
+                                {
+                                    live.insert(kv.first);
+                                    layoutEveryFrame = true;   // something READS a live value
+                                    changed = true;
+                                }
+                    }
+                }
+
                 std::set<std::string> done;
                 std::function<void(const std::string &)> visit = [&](const std::string &k) {
                     if (!done.insert(k).second) return;
@@ -713,8 +737,24 @@ namespace genesis
                           << self.expr(src, layoutNames(s->id), where) << ";\n";
                     }
                     else
-                        o << "        const double " << localOf(s->id, fd->name) << " = "
-                          << self.expr(src, layoutNames(s->id), where) << ";   // " << src << "\n";
+                    {
+                        const std::string expr = self.expr(src, layoutNames(s->id), where);
+                        o << "        const double " << localOf(s->id, fd->name) << " = ";
+                        if (s->isAnimated(fd->name))
+                        {
+                            // Once motion owns a field its VALUE is the animated one, so a
+                            // binding reading it follows the animation instead of freezing at
+                            // the pre-animation value (G-6a).
+                            const std::string live = *fd->segmentProperty
+                                                         ? memberOf(s->id) + "->" + fd->segmentProperty +
+                                                               ".value()"
+                                                         : stylePropOf(s->id, fd->name) + ".value()";
+                            o << ownFlag(s->id, fd->name) << " ? " << live << " : (" << expr << ")";
+                        }
+                        else
+                            o << expr;
+                        o << ";   // " << src << "\n";
+                    }
                 }
                 o << "\n";
                 for (const auto &s : doc.shapes)
@@ -1006,6 +1046,10 @@ namespace genesis
             {
                 o << "    void " << doc.name << "::advance(double nowMs)\n    {\n";
                 o << "        mNowMs = nowMs;\n";
+                o << "        // Tick the base (and every child Property) FIRST, so the bindings below\n";
+                o << "        // read THIS frame's values rather than the previous frame's — a binding\n";
+                o << "        // that reads an animating field has to follow it frame by frame.\n";
+                o << "        " << base->cppClass << "::advance(nowMs);\n";
                 o << "        // The FIRST sizing snaps: a component being placed into a layout has not\n";
                 o << "        // \"changed size\", and easing in from the design size would read as a spurious\n";
                 o << "        // entrance animation. Every later change eases.\n";
@@ -1044,7 +1088,6 @@ namespace genesis
                     o << startReactions("resize", "            ");
                     o << "        }\n";
                 }
-                o << "        " << base->cppClass << "::advance(nowMs);\n";
                 o << "    }\n\n";
             }
         };

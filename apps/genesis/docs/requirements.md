@@ -115,6 +115,28 @@ scope in a shape's field bindings, where there is no target to speak of.
   or `queue` — because interruption is what event-driven motion gets wrong.
 - Only a field marked **animatable** on its shape may be a track target.
 
+### G-6a A binding follows the value it reads, including while it animates
+
+`self.w` means "my width". While a reaction is animating that width, it means the ANIMATED
+width — so a binding that reads it must follow. Given `x = w / 4 * 3 - self.w / 2` on an object
+whose `w` is being animated, `x` shall track `w` frame by frame, not hold the value it had when
+the animation started.
+
+Two things follow, and both must hold in the interpreter and in the generated code alike:
+
+- **A field's value is its live value once motion owns it.** When a reaction has driven a
+  field, the value other bindings read for it is the animated property's current value, not the
+  result of its own binding expression. Until then the binding expression is its value, because
+  that is its resting state (G-6).
+- **Layout re-runs per frame when it reads something that changes per frame.** A binding that
+  transitively depends on an animated field — or on `base.*` — is re-evaluated every frame; one
+  that depends on neither is still only re-evaluated on resize, so the common case costs
+  nothing. The dependency graph already exists for ordering and cycle detection (§4), so this
+  is a reachability question over it rather than a new mechanism.
+
+A field that motion owns is still never re-asserted by layout (G-6): it is read from, not
+written to.
+
 ### G-6 Bind-versus-animate
 
 A field's binding is its resting value; a reaction's target is its motion. Layout shall
