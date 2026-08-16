@@ -66,6 +66,8 @@ add_executable(cosmo_widget_tests
   widgets/IconButton.cpp
   widgets/ExportDialog.cpp
   widgets/Filmstrip.cpp
+  widgets/HomeScreen.cpp
+  widgets/ProjectCard.cpp
   widgets/SplashScreen.cpp
   Theme.cpp
   widgets/Icons.cpp)

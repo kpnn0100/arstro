@@ -50,7 +50,15 @@ namespace cosmo_v2
         mRoot->height.set(height);
         // Gestures route to whichever screen is active (launcher vs. editor).
         mRecognizer.setSink([this](const Gesture &g) {
-            if (mScreen == Screen::Home) mHome->onGesture(g);
+            if (mScreen == Screen::Home)
+            {
+                // R-SETTINGS-5: the settings modal lives in the EDITOR tree, but Home can
+                // open it, so while it is up Home hands it the gestures rather than owning
+                // a second copy of the dialog. Same rule as the editor's modals: it stops
+                // capturing once it begins closing, so the dismiss click is not re-used.
+                if (mSettingsDialog->isOpen()) mSettingsDialog->onGesture(g);
+                else mHome->onGesture(g);
+            }
             else if (mScreen == Screen::Editor) mRoot->onGesture(g);
             // Screen::Loading swallows input — the transition is non-interactive.
         });
@@ -167,6 +175,12 @@ namespace cosmo_v2
             applyThreadBudget(); mSession.submit();
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
+        mSettingsDialog->onCpuPercent = [this](int pct) {
+            mSettings.cpuPercent = pct;
+            applyThreadBudget();   // Auto threads follow the budget (R-CPU-2); the next load's pool too
+            mSession.submit();
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
         mSettingsDialog->onUseGpu = [this](bool on) {
             mSession.setUseGpu(on);   // setUseGpu re-renders (R-GPU)
             mSettings.useGpu = on;
@@ -194,6 +208,7 @@ namespace cosmo_v2
         mHome->onNewProject    = [this] { if (onNewProjectRequested) onNewProjectRequested(); };
         mHome->onOpenProject   = [this] { if (onOpenProjectRequested) onOpenProjectRequested(); };
         mHome->onImportCatalog = [this] { if (onImportCatalogRequested) onImportCatalogRequested(); };
+        mHome->onSettings      = [this] { openSettingsDialog(); };   // R-SETTINGS-5
         mHome->onOpenRecent    = [this](int idx) {
             mOpenFromRect = mHome->lastOpenCardRect();   // fly the whole card from where it sits (R-LOADING)
             mOpenCard = mHome->lastOpenCardInfo();       // ...showing the same item at centre
@@ -637,6 +652,16 @@ namespace cosmo_v2
             target.setTransform(Transform::identity());
             mHome->render(target);
             mHome->renderOverlay(target);
+            // R-SETTINGS-5: the same modal instance, drawn over the launcher. It paints
+            // entirely in the overlay pass (scrim + card), so renderOverlay is the whole
+            // of it; sizing it here keeps the card centred as the window resizes (R4).
+            // Unconditionally, not gated on isOpen(): isOpen() is already false while the
+            // dialog fades OUT, so gating would freeze the close mid-fade (R-G-1), and the
+            // dialog needs a current nowMs before show() can start its open tween. It
+            // draws nothing when shut, so the cost is one early return.
+            mSettingsDialog->width.set(mW); mSettingsDialog->height.set(mH);
+            mSettingsDialog->advance(nowMs);
+            mSettingsDialog->renderOverlay(target);
             const double a = mScreenFade.value();
             if (a > 0.001) drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
             target.restore();
@@ -849,7 +874,7 @@ namespace cosmo_v2
         // Seeded from the stored settings, not from par::threadsRef(): Auto now resolves
         // to a real worker count (R-CPU-2), so the resolved value would leave the Auto
         // chip reading as an explicit 4.
-        mSettingsDialog->show(mSettings.previewEdge, mSettings.threads,
+        mSettingsDialog->show(mSettings.previewEdge, mSettings.threads, mSettings.cpuPercent,
                               mSession.useGpu(), mSession.gpuAvailable());
     }
 

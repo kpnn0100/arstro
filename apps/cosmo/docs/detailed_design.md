@@ -35,8 +35,11 @@ Segment tree, the `EditSession`, and the host-callback seam.
 `kLoadingBg={0x14,0x14,0x14}`. Helper `lerpRect(a,b,t)`.
 
 ### 1.3 Render dispatch
-- `render(target, nowMs)` (`App.cpp:456-480`): sets `mNowMs`, updates `mScreenFade`; Home → advance
-  + render `mHome` + scrim; Loading → `renderTransition`; Editor → `renderEditor`.
+- `render(target, nowMs)`: sets `mNowMs`, updates `mScreenFade`; Home → advance + render `mHome`,
+  then size/advance/`renderOverlay` the **`mSettingsDialog`** (which lives in the editor tree but is
+  openable from Home — R-SETTINGS-5; advanced unconditionally, since `isOpen()` is false during its
+  closing fade), then the scrim; Loading → `renderTransition`; Editor → `renderEditor`. The gesture
+  sink routes Home gestures to the dialog while `isOpen()`, else to `mHome`.
 - `renderEditor` (`App.cpp:482-527`): `mSession.tick`, `mRoot->advance`, re-`layout()`; pushes the
   mask-overlay active state from `RightColumn`; `if (renderService().tryAcquire(f) && f.width>0)` →
   cache `mLastAfterFrame`, `refreshPhotoForMode()`, feed histogram; fill background; `mRoot->render`
@@ -91,9 +94,12 @@ Ctor (`App.cpp:36-166`) builds `mRoot` and adds children in draw order: `TopBar`
 `RightColumn(mSession)` (actionBar → preset save/import/export; mask overlay
 `onChange→writeSelectedMask`), `HistoryView` (`onSelect→jumpToHistory`), `ContextMenu`,
 `PresetDialog(mAccent)`, `SettingsDialog` (`onPreviewEdge→setPreviewEdge`,
-`onThreads→par::setThreads+submit`), `ConfirmDialog`. `mHome` is standalone (not in `mRoot`);
+`onThreads→applyThreadBudget+submit`, `onCpuPercent→applyThreadBudget+submit`, each also updating
+`mSettings` and firing `onSettingsChanged`), `ConfirmDialog`. `mHome` is standalone (not in `mRoot`);
 its `onOpenRecent` captures `lastOpenCardRect()`→`mOpenFromRect` then calls
-`onOpenRecentRequested`. `layout()` (`App.cpp:168-199`) sizes the tree from the widget constants
+`onOpenRecentRequested`, and its `onSettings`→`openSettingsDialog()` (R-SETTINGS-5).
+`applyThreadBudget()` is the one place `par::setThreads` is called: the explicit thread count when
+set, else `AppSettings::workersFor(cpuPercent)` (R-CPU-2). `layout()` (`App.cpp:168-199`) sizes the tree from the widget constants
 and animates the rail width via the `Observable<bool> mRailOpen`.
 
 ### 1.8 Helpers
@@ -488,9 +494,21 @@ toggle + one checkbox per category + Cancel/Confirm; Confirm gathers ticked keys
 
 ### 7.5 SettingsDialog
 The engine-settings modal (R-SETTINGS). `SettingsDialog(accent)`; `onPreviewEdge(int)`,
-`onThreads(int)` (0=auto); `show(previewEdge, threads)`. Two chip rows — Preview quality
-(`kEdges{1000,1600,2400}` → Draft/Standard/High) and CPU threads (`kThreads{0,2,4,8}` → Auto/n) —
-plus Done. Values map straight onto `RenderService`/`par::setThreads`.
+`onThreads(int)` (0=auto), `onCpuPercent(int)`, `onUseGpu(bool)`;
+`show(previewEdge, threads, cpuPercent, useGpu, gpuAvailable)`. **Four** chip rows, `kRows=4` —
+0 Preview quality (`kEdges{1000,1600,2400}` → Draft/Standard/High), 1 CPU threads
+(`kThreads{0,2,4,8}` → Auto/n), 2 **CPU limit** (`kCpuPercents{25,50,75,100}` → "n%", R-CPU-3,
+labelled "CPU limit · Auto uses this" because row 1's Auto resolves to it), 3 GPU acceleration
+(Off/On, "· unavailable" and the On chip at 0.4 alpha with no backend) — plus Done. Row 0/1/3 map
+onto `RenderService`/`par::setThreads`; row 2 onto `AppSettings::cpuPercent` via
+`App::applyThreadBudget`. `chipLabel(row, i)` is the single label mapping, read both by `chipRects`
+(which sizes each chip to its text) and by the paint, so the two cannot drift. Card height derives
+from `kRows`, so the row addition resized it with no constant to update.
+
+`advance()` and `onOverlay()` are **public** (unlike the other Segment overrides): the home screen
+drives this same instance directly, since Home is not part of the editor tree that would otherwise
+tick it (R-SETTINGS-5). It is advanced every Home frame, not only while open — `isOpen()` is already
+false during the closing fade, so gating on it would freeze the close mid-fade.
 
 ### 7.6 ConfirmDialog
 A confirm/choose prompt (save-or-discard on leaving an edited project). `ConfirmDialog(accent)`;

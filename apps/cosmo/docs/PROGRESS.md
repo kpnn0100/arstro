@@ -15,19 +15,20 @@ file, and commit.
 
 ## NEXT
 
-**► U1.2 — the Settings surface reachable from the home screen, plus its CPU-limit row.** The core
-half of the user's request is done (U1.1 below); what remains is design work, specified in the U1
-milestone: make the home sidebar's "Settings" link live (this **amends R-HOME-8**, which declares
-those links inert), render and route the modal on the Home screen — `mSettingsDialog` lives in
-`mRoot`, which only the Editor screen draws — and add the CPU-limit chip row (25/50/75/100) to
-`SettingsDialog`, wired to `AppSettings::cpuPercent`, which already persists.
+**U1 is complete.** ► Next is **Phase P0 — the agent-drivable harness**, starting at **P0.0**:
+write the `R-AGENT-*` requirements, then P0.1 onward in order.
 
-After U1: **Phase P0 — the agent-drivable harness**, starting at **P0.0**, writing the `R-AGENT-*`
-requirements. U1 made the case for it concrete: the decode-pool log line added in U1.1 cannot be
-observed from a shell, because a project cannot be opened without clicking (D-6), so that one line
-is `[!]` rather than `[x]`.
+U1 made P0's case concretely, twice over. **First**, the decode-pool log line added in U1.1 still
+cannot be observed from a shell, because a project cannot be opened without clicking (D-6) — it is
+`[!]`, not `[x]`. **Second**, U1.2's gesture-routing change was silently a no-op in the working
+tree (an edit whose match string used `--` where the source has an em dash), and *every*
+lower-level check passed anyway: it compiled, both suites were green, and the widget test proved
+the link fires its callback. Only an end-to-end render — real `App`, real pointer event, look at
+the PNG — caught it, and only on the second shot, when click-outside failed to dismiss. That is
+precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
+the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-16 · Last commit: U1.1, the CPU budget (R-CPU).
+Last updated: 2026-08-16 · Last commit: U1.2, Settings from the launcher (R-SETTINGS-5).
 
 ---
 
@@ -35,7 +36,7 @@ Last updated: 2026-08-16 · Last commit: U1.1, the CPU budget (R-CPU).
 
 | M | Milestone | State |
 |---|---|---|
-| U1 | CPU budget + Settings reachable from home | U1.1 done; **U1.2 next** |
+| U1 | CPU budget + Settings reachable from home | **DONE** (one `[!]`: the load log line) |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | **not started** |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
@@ -53,7 +54,10 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
       pool, at the engine's Auto thread count, and on LibRaw's OpenMP team. Persisted and tested.
 - [!] **U1.1a** The decode-pool log line is code-verified but **not observed at runtime** — reaching
       `startEntriesLoad` needs a project opened by clicking (D-6). Clears with P0.7 (`--project`).
-- [ ] **U1.2** Design: home-screen entry point + the CPU-limit chip row (see NEXT).
+- [x] **U1.2** Design: the home sidebar's Settings link is live and opens the same modal over the
+      launcher (Home advances/renders/routes to the dialog that lives in the editor tree), plus the
+      CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
+      by rendering the real `App` driven by real pointer events at two window sizes.
 
 ## P0 — the agent harness
 
@@ -83,6 +87,20 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-16 (U1.2) — One dialog, driven by two screens.** The launcher does not get its own
+  settings surface: `mSettingsDialog` stays in the editor tree and Home sizes, advances and renders
+  it, and routes gestures to it while it is open. A second instance would mean two copies of the
+  callbacks and a second place for the persisted record to diverge. It is advanced on *every* Home
+  frame, not only while open, because `isOpen()` is false during the closing fade and `show()`
+  needs a current `nowMs`.
+- **2026-08-16 (U1.2) — How to render cosmo headlessly before P0.2 exists.** Link the app sources
+  minus `linux_main.cpp` plus `CairoTarget.cpp` against `artboard_core` + `cosmo_core` +
+  `arstro_image`, and **pass the same defines the libraries were built with**
+  (`-DARSTRO_ENABLE_THREADS -DARSTRO_GL_COMPUTE -DNDEBUG -O3`). Omitting them is an ODR violation
+  that segfaults in `~EditSession` at exit, which reads as a teardown bug and is not one. Also note
+  `App::pointer`'s kind codes: **0 = Down, 2 = Up**, anything else = Move — a `1` produces a Move
+  and no click, with only a hover wash to show for it.
 
 - **2026-08-16 (U1.1) — A CPU limit is enforced as a core count, not as a CPU percentage.** No
   portable per-process CPU-time cap exists across Linux/Windows/Android, and a sleep-based throttle

@@ -363,11 +363,20 @@ applies every present category of a preset immediately (documented stub in `App.
 Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app settings that map onto the
 `RenderService`.
 
-- **R-SETTINGS-1** A settings surface (opened from the Settings menu) exposes: **Preview
-  quality** — the base preview render resolution (speed vs. detail), **CPU threads** — the
-  worker count for the multicore engine, and **GPU acceleration** — off / on-if-available
-  (see R-GPU). All map directly onto `RenderService` / `EditSession` (`mPreviewEdge` /
-  thread count / prefer-GPU).
+- **R-SETTINGS-1** A settings surface exposes: **Preview quality** — the base preview render
+  resolution (speed vs. detail), **CPU threads** — the worker count for the multicore engine,
+  **CPU limit** — the share of the machine cosmo may schedule (**AMENDED (R-CPU-3)**: 25 / 50 / 75 /
+  100%, defaulting to 50, sitting next to CPU threads because Auto resolves to it), and **GPU
+  acceleration** — off / on-if-available (see R-GPU). All map directly onto `RenderService` /
+  `EditSession` (`mPreviewEdge` / thread count / prefer-GPU) or onto `AppSettings::cpuPercent`.
+- **R-SETTINGS-5 Reachable from both screens.** The surface opens from the editor's Settings menu
+  **and** from the home screen's sidebar "Settings" link (**this amends R-HOME-8**). One modal, one
+  set of callbacks, one persisted record — not a second settings page for the launcher. Because the
+  dialog lives in the editor's Segment tree while Home is drawn standalone, the Home screen advances,
+  renders and routes gestures to that same dialog while it is open, rather than owning a copy of it.
+  Everything else about it is unchanged: same chrome, same fade, same Esc / click-outside dismiss
+  (R-SETTINGS-3), and a change made from the launcher is in force and persisted immediately, so the
+  project opened next already loads under it.
 - **R-SETTINGS-2** Changing preview quality updates the base preview edge and re-renders;
   changing thread count reconfigures the engine's parallelism. Values persist for the session.
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
@@ -506,7 +515,11 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
 - **R-HOME-7 Search.** The search box filters recent projects by name (case-insensitive,
   substring); no matches shows the empty-state placeholder.
 - **R-HOME-8 Reserved.** Settings / What's New / Help & Documentation are present but inert
-  (reserved), matching the Figma affordances without behavior.
+  (reserved), matching the Figma affordances without behavior. **AMENDED (R-SETTINGS-5): Settings is
+  now live** — it opens the same modal the editor's Settings menu opens. A link that draws a hover
+  wash and then does nothing reads as broken, and the settings a photographer most wants to set
+  (preview quality, CPU limit) are the ones they want set *before* opening a project, when the only
+  screen available is this one. What's New and Help stay reserved.
 
 ## R-BYPASS — Per-node filter bypass (disable/enable a group's or photo's edits)
 

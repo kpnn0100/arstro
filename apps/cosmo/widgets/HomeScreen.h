@@ -1,7 +1,8 @@
 /*
  *  cosmo_v2 by arstro — HomeScreen: the project launcher (R-HOME), a faithful port
  *  of the Figma `HomeScreenDesktop` frame (ref/2 Figma export). A 300px left
- *  sidebar (wordmark, tagline, New / Open / Import actions, reserved bottom links,
+ *  sidebar (wordmark, tagline, New / Open / Import actions, a live Settings link
+ *  plus two reserved ones,
  *  version) and a right pane with a "Recent Projects" header + count + search box
  *  and an auto-fill grid of project cards (16:9 thumbnail, Edited badge, name,
  *  "N photos · size · date") plus a dashed New-Project card and an empty-search
@@ -46,6 +47,9 @@ namespace cosmo_v2
         std::function<void()> onOpenProject;
         std::function<void()> onImportCatalog;
         std::function<void(int recentIndex)> onOpenRecent;
+        /** Sidebar "Settings" link (R-SETTINGS-5 / R-HOME-8 amended) — opens the same
+         *  modal the editor's Settings menu opens. What's New / Help stay reserved. */
+        std::function<void()> onSettings;
 
         /** Rebuild the recent-project grid (adds the trailing New-Project card). */
         void setRecents(const std::vector<CardInfo> &cards);
@@ -69,6 +73,9 @@ namespace cosmo_v2
         void onPaint(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
+        // Protected, not private: the widget tests drive the sidebar links through their
+        // real geometry rather than re-deriving it (R-SETTINGS-5 / R-HOME-8).
+        artboard::Rect bottomLinkRect(int i) const;  // 0=Settings 1=What's New 2=Help
 
     private:
         struct Card
@@ -84,7 +91,6 @@ namespace cosmo_v2
         enum class Region { None, Action, Link, Card, NewCard };
 
         artboard::Rect actionRect(int i) const;    // 0=New 1=Open 2=Import (sidebar)
-        artboard::Rect bottomLinkRect(int i) const; // 0=Settings 1=What's New 2=Help
         artboard::Rect searchRect() const;
         double gridTop() const;
         double contentX() const;

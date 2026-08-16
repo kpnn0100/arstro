@@ -1,10 +1,16 @@
 /*
  *  cosmo_v2 by arstro — SettingsDialog: a modal engine-settings picker (R-SETTINGS).
- *  Two rows of selectable chips — Preview quality (base preview render long-edge:
- *  speed vs. detail) and CPU threads (worker count for the multicore engine) — plus
- *  a Done button. Both map straight onto the RenderService via EditSession /
- *  par::setThreads. Same modal chrome + fade as PresetDialog (R-G-1). Reference:
- *  cosmo/panels/SettingsPanel.
+ *  Four rows of selectable chips — Preview quality (base preview render long-edge:
+ *  speed vs. detail), CPU threads (worker count for the multicore engine), CPU limit
+ *  (the share of the machine cosmo may schedule, R-CPU) and GPU acceleration — plus
+ *  a Done button. They map straight onto the RenderService via EditSession /
+ *  par::setThreads, or onto AppSettings::cpuPercent. Same modal chrome + fade as
+ *  PresetDialog (R-G-1). Opened from the editor's Settings menu AND from the home
+ *  screen's sidebar link (R-SETTINGS-5) — one dialog, not one per screen.
+ *
+ *  CPU limit sits directly under CPU threads because it is what "Auto" resolves to
+ *  (R-CPU-2): reading them apart would make Auto look like it still meant "every core".
+ *  Reference: cosmo/panels/SettingsPanel.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
@@ -24,16 +30,23 @@ namespace cosmo_v2
 
         std::function<void(int)> onPreviewEdge;  // preview render long-edge in px
         std::function<void(int)> onThreads;      // engine worker threads (0 = auto)
+        std::function<void(int)> onCpuPercent;   // share of the machine cosmo may use (R-CPU-3)
         std::function<void(bool)> onUseGpu;      // GPU acceleration on/off (R-GPU)
 
         /** Open, seeded with the current engine values so the right chips read selected.
          *  `gpuAvailable` false → the GPU row is shown disabled ("unavailable"). */
-        void show(int previewEdge, int threads, bool useGpu, bool gpuAvailable);
+        void show(int previewEdge, int threads, int cpuPercent, bool useGpu, bool gpuAvailable);
         bool isOpen() const { return mOpen && !mClosing; }
+        /** Public (unlike the rest of the Segment overrides) because the HOME screen
+         *  drives this dialog directly: Home is not part of the editor tree that would
+         *  otherwise advance it (R-SETTINGS-5) -- the same reason HomeScreen::advance is
+         *  public. It must keep ticking while shut, so show() has a current nowMs. */
+        void advance(double nowMs) override;
+        /** Also public for Home: the dialog is drawn entirely in the overlay pass, so
+         *  this call IS the dialog. */
+        void onOverlay(artboard::IRenderTarget &t) const override;
 
     protected:
-        void advance(double nowMs) override;
-        void onOverlay(artboard::IRenderTarget &t) const override;
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override { return mOpen && !mClosing; }
 
@@ -41,17 +54,29 @@ namespace cosmo_v2
         void beginClose();
         artboard::Rect cardRect() const;
         artboard::Rect doneRect() const;
-        // Fills `rects` with the chip boxes for row `row` (0 = quality, 1 = threads, 2 = GPU).
+        // Fills `rects` with the chip boxes for row `row`
+        // (0 = quality, 1 = threads, 2 = CPU limit, 3 = GPU).
         void chipRects(int row, std::vector<artboard::Rect> &rects) const;
+        /** The text on chip `i` of `row` — ONE mapping, read both by chipRects (which
+         *  sizes each chip to its text) and by the paint. Two copies would drift and
+         *  mis-place every chip after the first in a row. */
+        static std::string chipLabel(int row, int i);
         void hitTargets(const artboard::Point &p, int &row, int &chip, bool &done) const;
-        static constexpr int kRows = 3;
-        int rowChipCount(int row) const { return row == 0 ? (int)kEdges.size() : row == 1 ? (int)kThreads.size() : 2; }
+        static constexpr int kRows = 4;
+        int rowChipCount(int row) const
+        {
+            return row == 0 ? (int)kEdges.size()
+                 : row == 1 ? (int)kThreads.size()
+                 : row == 2 ? (int)kCpuPercents.size()
+                            : 2;
+        }
         // Flat HoverFade ids: rows laid out contiguously, then Done.
         int chipId(int row, int chip) const { int b = 0; for (int r = 0; r < row; ++r) b += rowChipCount(r); return b + chip; }
-        int doneId() const { return rowChipCount(0) + rowChipCount(1) + rowChipCount(2); }
+        int doneId() const { int b = 0; for (int r = 0; r < kRows; ++r) b += rowChipCount(r); return b; }
 
-        static const std::vector<int> kEdges;    // preview long-edge options
-        static const std::vector<int> kThreads;  // thread-count options (0 = auto)
+        static const std::vector<int> kEdges;        // preview long-edge options
+        static const std::vector<int> kThreads;      // thread-count options (0 = auto)
+        static const std::vector<int> kCpuPercents;  // CPU budget options, % of cores (R-CPU-3)
 
         artboard::Color mAccent;
         bool mOpen = false;
@@ -60,6 +85,7 @@ namespace cosmo_v2
         artboard::AnimatedProperty mAppear{0.0};
         int mEdge = 1600;         // current selection (px)
         int mThreadCount = 0;     // current selection (0 = auto)
+        int mCpuPercent = 50;     // current selection (% of cores, R-CPU-1)
         bool mUseGpu = false;     // GPU acceleration on/off (R-GPU)
         bool mGpuAvailable = false;  // a platform GPU backend exists (else the row is disabled)
         HoverFade mHover;         // per-chip / Done hover cross-fade (R-G-3)

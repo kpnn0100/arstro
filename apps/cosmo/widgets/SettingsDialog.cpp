@@ -11,6 +11,9 @@ namespace cosmo_v2
 
     const std::vector<int> SettingsDialog::kEdges{1000, 1600, 2400};
     const std::vector<int> SettingsDialog::kThreads{0, 2, 4, 8};
+    // R-CPU-3. 50 is the default and the reason the row exists; 100 is offered so a
+    // machine that is doing nothing else can still be given fully to a big import.
+    const std::vector<int> SettingsDialog::kCpuPercents{25, 50, 75, 100};
 
     namespace
     {
@@ -31,15 +34,27 @@ namespace cosmo_v2
 
         std::string edgeLabel(int i) { return i == 0 ? "Draft" : i == 1 ? "Standard" : "High"; }
         std::string threadLabel(int v) { return v == 0 ? "Auto" : std::to_string(v); }
+        std::string cpuLabel(int v) { return std::to_string(v) + "%"; }
         std::string gpuLabel(int i) { return i == 0 ? "Off" : "On"; }
         double blockTop(const Rect &c, int row) { return c.y + kPad + kHeaderH + row * (kBlockH + kRowGap); }
     }
 
+    // One label mapping, read by both chipRects (which sizes the chip to its text) and
+    // onOverlay (which draws it) -- two copies would drift and mis-place every chip
+    // after the first in a row.
+    std::string SettingsDialog::chipLabel(int row, int i)
+    {
+        return row == 0 ? edgeLabel(i)
+             : row == 1 ? threadLabel(kThreads[i])
+             : row == 2 ? cpuLabel(kCpuPercents[i])
+                        : gpuLabel(i);
+    }
+
     SettingsDialog::SettingsDialog(const Color &accent) : mAccent(accent) {}
 
-    void SettingsDialog::show(int previewEdge, int threads, bool useGpu, bool gpuAvailable)
+    void SettingsDialog::show(int previewEdge, int threads, int cpuPercent, bool useGpu, bool gpuAvailable)
     {
-        mEdge = previewEdge; mThreadCount = threads;
+        mEdge = previewEdge; mThreadCount = threads; mCpuPercent = cpuPercent;
         mGpuAvailable = gpuAvailable; mUseGpu = useGpu && gpuAvailable;
         mOpen = true; mClosing = false;
         mAppear.animateTo(1.0, 150.0, Easing::EaseOutCubic, mLastMs);
@@ -97,7 +112,7 @@ namespace cosmo_v2
         const double y = blockTop(c, row) + kLabelH + 6.0;
         for (int i = 0; i < n; ++i)
         {
-            const std::string lbl = row == 0 ? edgeLabel(i) : row == 1 ? threadLabel(kThreads[i]) : gpuLabel(i);
+            const std::string lbl = chipLabel(row, i);
             const double w = estimateTextWidth(lbl, kFontPx) + 2 * kChipPadX;
             rects.push_back(Rect{x, y, w, kChipH});
             x += w + kChipGap;
@@ -128,6 +143,7 @@ namespace cosmo_v2
                 {
                     if (row == 0) { mEdge = kEdges[i]; if (onPreviewEdge) onPreviewEdge(mEdge); }
                     else if (row == 1) { mThreadCount = kThreads[i]; if (onThreads) onThreads(mThreadCount); }
+                    else if (row == 2) { mCpuPercent = kCpuPercents[i]; if (onCpuPercent) onCpuPercent(mCpuPercent); }
                     else  // GPU row: chip 0 = Off, chip 1 = On (On is inert with no backend)
                     {
                         if (i == 1 && !mGpuAvailable) return true;
@@ -153,13 +169,16 @@ namespace cosmo_v2
         t.setFill(fade(palette::foreground(), a));
         t.drawText("Settings", c.x + kPad, c.y + kPad + 16.0, 14.0, font::sansSemiBold());
 
-        const char *rowLabels[kRows] = {"Preview quality", "CPU threads", "GPU acceleration"};
+        const char *rowLabels[kRows] = {"Preview quality", "CPU threads", "CPU limit", "GPU acceleration"};
         for (int row = 0; row < kRows; ++row)
         {
             const double ly = blockTop(c, row);
             t.setFill(fade(palette::mutedForeground(), a));
             std::string rowLbl = rowLabels[row];
-            if (row == 2 && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";  // middot
+            // Middot suffixes. "Auto uses this" is why the two CPU rows sit together:
+            // without it the Auto chip above reads as if it still meant every core (R-CPU-2).
+            if (row == 2) rowLbl += "  \xc2\xb7  Auto uses this";
+            if (row == 3 && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";
             t.drawText(rowLbl, c.x + kPad, ly + 12.0, 11.0, font::sansMedium(), 0.06 * 11.0);
 
             std::vector<Rect> chips;
@@ -169,10 +188,11 @@ namespace cosmo_v2
             {
                 const bool sel = row == 0 ? (kEdges[i] == mEdge)
                                : row == 1 ? (kThreads[i] == mThreadCount)
+                               : row == 2 ? (kCpuPercents[i] == mCpuPercent)
                                           : ((i == 1) == mUseGpu);
-                const bool disabled = (row == 2 && i == 1 && !mGpuAvailable);  // "On" with no backend
+                const bool disabled = (row == 3 && i == 1 && !mGpuAvailable);  // "On" with no backend
                 const double da = disabled ? 0.4 : 1.0;
-                const std::string lbl = row == 0 ? edgeLabel(i) : row == 1 ? threadLabel(kThreads[i]) : gpuLabel(i);
+                const std::string lbl = chipLabel(row, i);
                 drawRoundedRect(t, chips[i], radius::control(),
                                 sel ? Paint::filled(fade(mAccent, a))
                                     : Paint::filledStroked(fade(palette::secondary(), a * da), fade(palette::border(), a * da), 1.0));

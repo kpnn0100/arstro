@@ -858,8 +858,28 @@ animation itself rather than anything I/O-bound. What remains for a much bigger 
 is decode itself; the next lever there is a two-tier decode (preview-resolution first, full
 resolution on demand for the photo being edited or exported).
 
+### DR-SETTINGS-5 One dialog, reachable from both screens (R-SETTINGS-5, R-HOME-8 amended)
+The home sidebar's "Settings" link fires `HomeScreen::onSettings`
+(`widgets/HomeScreen.cpp:322-331`), wired to `App::openSettingsDialog()` — the same entry point the
+editor's Settings menu uses, so there is one dialog, one set of callbacks and one persisted record.
+What's New and Help stay reserved but still consume their click, so it cannot fall through to the
+grid behind them.
+
+The dialog is a child of `mRoot`, which only the Editor screen renders, so `App::render`'s Home
+branch sizes it, `advance()`s it and calls `renderOverlay()` on it directly (the dialog paints
+entirely in the overlay pass). That is done **every** Home frame rather than only while open,
+because `isOpen()` is already false during the closing fade — gating on it would freeze the close
+mid-fade (R-G-1) — and because `show()` needs a current `nowMs` to start its open tween.
+`SettingsDialog::advance`/`onOverlay` are public for exactly this reason, as `HomeScreen::advance`
+already was. The gesture sink routes Home gestures to the dialog while `isOpen()`, else to `mHome`.
+
+Verified by `cosmo_widget_tests`: `homeSettingsLinkOpensSettings`,
+`homeReservedLinksStaySilentButSwallowTheClick`, `homeSettingsLinkIsReachableAtASmallWindow`
+(1024×640, since the link block is pinned to the sidebar bottom).
+
 ### DR-SETTINGS-4 Persisted preferences
-`cosmo::AppSettings` (`core/AppSettings.{h,cpp}`) — `previewEdge` / `threads` / `useGpu` in a plain
+`cosmo::AppSettings` (`core/AppSettings.{h,cpp}`) — `previewEdge` / `threads` / `useGpu` /
+`cpuPercent` (R-CPU-3) in a plain
 `key=value` file at `ProjectStore::configDir()/settings.txt`. `AppSettings::load()` falls back per
 field, so a truncated or garbled file cannot stop the app starting. The host applies it via
 `App::applySettings` **before the first render**, and each `SettingsDialog` callback updates the

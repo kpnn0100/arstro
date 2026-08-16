@@ -319,8 +319,16 @@ namespace cosmo_v2
                 else if (i == 2 && onImportCatalog) onImportCatalog();
                 return true;
             }
-        // reserved bottom links (Settings / What's New / Help) are inert (R-HOME-8)
-        for (int i = 0; i < 3; ++i) if (bottomLinkRect(i).contains(local)) return true;
+        // Sidebar links: Settings is live (R-SETTINGS-5, amending R-HOME-8) so the
+        // preferences that decide how a project LOADS can be set before opening one --
+        // this is the only screen available at that point. What's New / Help remain
+        // reserved: they consume the click so it cannot fall through to the grid behind.
+        for (int i = 0; i < 3; ++i)
+            if (bottomLinkRect(i).contains(local))
+            {
+                if (i == 0 && onSettings) onSettings();
+                return true;
+            }
 
         // grid cards (screen space = grid origin + content rect - eased scroll)
         const double gridLeft = contentX() + kPad, gy = gridTop();

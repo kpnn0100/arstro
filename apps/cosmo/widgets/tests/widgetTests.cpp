@@ -14,6 +14,7 @@
 // The drawn anchor dot is r=4; the OLD pick radii were 7 (curve) / 11 (mixer),
 // now unified to 13, so a click 10-12 px from an anchor must now grab it.
 
+#include "../HomeScreen.h"
 #include "../HueCurveEditor.h"
 #include "../CurvePanel.h"
 #include "../ExportDialog.h"
@@ -33,6 +34,7 @@ using artboard::Gesture;
 using artboard::Point;
 using arstro::CurvePoint;
 using arstro::cosmo_v2::CurvePanel;
+using arstro::cosmo_v2::HomeScreen;
 using arstro::cosmo_v2::HueCurveEditor;
 
 namespace
@@ -45,6 +47,11 @@ namespace
     struct TestCurve : CurvePanel
     {
         using CurvePanel::handleGesture;
+    };
+    struct TestHome : HomeScreen
+    {
+        using HomeScreen::handleGesture;
+        using HomeScreen::bottomLinkRect;
     };
 
     Gesture ev(Gesture::Type t)
@@ -678,6 +685,59 @@ namespace
         f->scrollCellIntoView(1);
         check(settledScroll(f, now) < 1.0, "a rack that fits its viewport stays put");
     }
+
+    // ── home sidebar links (R-SETTINGS-5, amending R-HOME-8) ──
+    // Settings became live so the preferences that decide how a project LOADS can be
+    // set before one is open. The other two stay reserved, and BOTH facts matter: a
+    // link that silently did nothing is what R-HOME-8 originally specified, and a
+    // reserved link must still swallow its click rather than let it reach the grid.
+    std::shared_ptr<TestHome> makeHome(double w = 1440.0, double h = 900.0)
+    {
+        auto home = std::make_shared<TestHome>();
+        home->width.set(w);
+        home->height.set(h);
+        home->layout();
+        return home;
+    }
+    Point centreOf(const artboard::Rect &r) { return Point{r.x + r.w * 0.5, r.y + r.h * 0.5}; }
+
+    void homeSettingsLinkOpensSettings()
+    {
+        auto home = makeHome();
+        int opened = 0;
+        home->onSettings = [&opened] { ++opened; };
+        const bool consumed = home->handleGesture(ev(Gesture::Type::Click),
+                                                  centreOf(home->bottomLinkRect(0)));
+        check(consumed, "the Settings link consumes its click");
+        check(opened == 1, "clicking Settings on the home screen opens the settings surface");
+    }
+
+    void homeReservedLinksStaySilentButSwallowTheClick()
+    {
+        auto home = makeHome();
+        int opened = 0;
+        home->onSettings = [&opened] { ++opened; };
+        for (int i = 1; i <= 2; ++i)   // What's New, Help & Documentation
+        {
+            const bool consumed = home->handleGesture(ev(Gesture::Type::Click),
+                                                      centreOf(home->bottomLinkRect(i)));
+            check(consumed, "a reserved link still swallows its click");
+        }
+        check(opened == 0, "only Settings is live; the reserved links do nothing (R-HOME-8)");
+    }
+
+    void homeSettingsLinkIsReachableAtASmallWindow()
+    {
+        // R4: the link block is pinned to the sidebar bottom, so a short window is where
+        // it would collide with the version line or run off the bottom edge.
+        auto home = makeHome(1024.0, 640.0);
+        const artboard::Rect r = home->bottomLinkRect(0);
+        check(r.y >= 0.0 && r.y + r.h <= 640.0, "the Settings link is inside a 1024x640 window");
+        int opened = 0;
+        home->onSettings = [&opened] { ++opened; };
+        home->handleGesture(ev(Gesture::Type::Click), centreOf(r));
+        check(opened == 1, "and it is still clickable there");
+    }
 }
 
 int main()
@@ -714,6 +774,10 @@ int main()
     filmstripLandsTheCellAtTheEdgeItCameFrom();
     filmstripShortRackNeverScrolls();
     exportProgressIgnoresInputAndReopensClean();
+
+    homeSettingsLinkOpensSettings();
+    homeReservedLinksStaySilentButSwallowTheClick();
+    homeSettingsLinkIsReachableAtASmallWindow();
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

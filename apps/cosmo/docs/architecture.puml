@@ -89,7 +89,12 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class HistoryView
     class ContextMenu
     class PresetDialog
-    class SettingsDialog
+    class SettingsDialog {
+      + show(previewEdge, threads, cpuPercent, useGpu, gpuAvailable)
+      + onPreviewEdge / onThreads / onUseGpu : cb
+      + onCpuPercent(int) : cb   ' R-CPU-3: the CPU budget row
+      + advance() / onOverlay()  ' public: Home drives it too (R-SETTINGS-5)
+    }
     class ConfirmDialog
     class ExportDialog {
       + show(nodes, preselect)
@@ -249,6 +254,8 @@ EditSession *--> RenderService
 History *--> HistoryNode
 App ..> ProjectStore
 App ..> PresetLibrary
+App ..> AppSettings : applySettings / applyThreadBudget (R-CPU-2)
+HomeScreen ..> SettingsDialog : sidebar Settings link (R-SETTINGS-5)
 RenderService ..> EditEngine
 RenderService ..> Frame
 EditEngine ..> EditParams
