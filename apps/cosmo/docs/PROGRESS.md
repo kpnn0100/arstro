@@ -15,16 +15,19 @@ file, and commit.
 
 ## NEXT
 
-**Phase P0 — build the agent-drivable harness.** cosmo is feature-rich but nearly opaque from a shell:
-no flags, no CLI, no headless UI render, no UI logging, and a log level that is never checked. Until P0
-is done, every skill in this family has to work around blind spots (see D-2 … D-7 in `DEFECTS.md`).
+**► U1.2 — the Settings surface reachable from the home screen, plus its CPU-limit row.** The core
+half of the user's request is done (U1.1 below); what remains is design work, specified in the U1
+milestone: make the home sidebar's "Settings" link live (this **amends R-HOME-8**, which declares
+those links inert), render and route the modal on the Home screen — `mSettingsDialog` lives in
+`mRoot`, which only the Editor screen draws — and add the CPU-limit chip row (25/50/75/100) to
+`SettingsDialog`, wired to `AppSettings::cpuPercent`, which already persists.
 
-**► P0.0 — write the `R-AGENT-*` requirements** in `../REQUIREMENTS.md` before any harness code:
-the CLI contract, the debug-mode contract (levels, categories, env vars), the scripted-input grammar,
-the UI-logging contract, and the headless-render contract. Conflict-check them against `R-NFR` and
-`R-G-1…R-G-3`. Then P0.1 onward, in order.
+After U1: **Phase P0 — the agent-drivable harness**, starting at **P0.0**, writing the `R-AGENT-*`
+requirements. U1 made the case for it concrete: the decode-pool log line added in U1.1 cannot be
+observed from a shell, because a project cannot be opened without clicking (D-6), so that one line
+is `[!]` rather than `[x]`.
 
-Last updated: 2026-08-16 · Last commit: the four cosmo skills + this ledger + `DEFECTS.md`.
+Last updated: 2026-08-16 · Last commit: U1.1, the CPU budget (R-CPU).
 
 ---
 
@@ -32,12 +35,25 @@ Last updated: 2026-08-16 · Last commit: the four cosmo skills + this ledger + `
 
 | M | Milestone | State |
 |---|---|---|
+| U1 | CPU budget + Settings reachable from home | U1.1 done; **U1.2 next** |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | **not started** |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
 | P3 | Known gaps: R-ZOOM-5 eased zoom (belongs in Artboard), unwired seams | not started |
 
 ---
+
+## U1 — a CPU budget, and Settings reachable from the launcher
+
+Reported symptom: "loading an image takes almost all the CPU"; wanted a 50% limit, changeable in a
+Settings page that can also be opened from the home screen. Requirements: **R-CPU-1…5** (new),
+amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2.
+
+- [x] **U1.1** Core: `AppSettings::cpuPercent` (default 50) + `workersFor()`, enforced at the decode
+      pool, at the engine's Auto thread count, and on LibRaw's OpenMP team. Persisted and tested.
+- [!] **U1.1a** The decode-pool log line is code-verified but **not observed at runtime** — reaching
+      `startEntriesLoad` needs a project opened by clicking (D-6). Clears with P0.7 (`--project`).
+- [ ] **U1.2** Design: home-screen entry point + the CPU-limit chip row (see NEXT).
 
 ## P0 — the agent harness
 
@@ -68,6 +84,18 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-16 (U1.1) — A CPU limit is enforced as a core count, not as a CPU percentage.** No
+  portable per-process CPU-time cap exists across Linux/Windows/Android, and a sleep-based throttle
+  would occupy the cores it is sparing. The user picks a percentage; `AppSettings::workersFor`
+  converts it to a thread count once, and both pools read that. Recorded because "why isn't this a
+  real % cap?" will be asked again.
+- **2026-08-16 (U1.1) — The budget governs the engine's Auto threads too, not just the load.** The
+  reported symptom was loading, but Auto meant every core for rendering as well, so a 50% budget
+  that left renders at 16 threads would not be believed. An explicit thread choice still overrides.
+- **2026-08-16 (U1.1) — The nested OpenMP team was the real cause.** MSYS2's LibRaw is built
+  `-fopenmp`; 8 decode workers each opening a 16-thread team is ~128 threads, which saturated the
+  machine *regardless* of pool size. On this 16-core host, 50% of the pool was already 8 (the cap),
+  so pinning `OMP_NUM_THREADS=1` is what actually changes the load, not the pool arithmetic.
 - **2026-08-16 — The harness is a requirement, not tooling.** Anything an agent cannot reach from a
   shell is treated as a product defect in cosmo, filed in `DEFECTS.md`, and given an `R-AGENT-*`
   requirement — not left as an informal wish. Rationale: this project is developed across machines and

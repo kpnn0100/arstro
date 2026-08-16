@@ -133,7 +133,9 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
 (measured on a 24 MP JPEG: ~109 ms to decode, ~72 ms to apply):
 
 - **R-LOADPERF-1 Decode in parallel.** The loader decodes on a **pool** of worker threads
-  (`std::thread::hardware_concurrency()`, clamped to 2..8) instead of one, since decoding is
+  (**AMENDED (R-CPU-2):** the pool was one worker per core, clamped to 2..8, which saturated the
+  machine for the whole load; it is now sized by the CPU budget, whose floor is 1 — an explicit
+  user budget outranks a hardcoded parallelism floor) instead of one, since decoding is
   CPU-bound and independent per image. Workers claim entries with an atomic counter, so they
   finish out of order, but each result is stored **at its entry index** and the UI thread still
   applies them strictly in order — the `.cosmoproj` format identifies a node's parent by entry
@@ -162,6 +164,48 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   `finishWorkspaceLoad` consequently must **not** steal the selection — it auto-selects the first
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
+
+## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ✅ IMPLEMENTED
+
+Opening a catalog saturated the machine. The decode pool took one worker per core (R-LOADPERF-1) and
+the engine's Auto thread count is also every core, so importing photos made the rest of the computer
+unusable for as long as the load ran. Decoding fast is worth nothing if the photographer cannot do
+anything else meanwhile — a photo app is something you run *alongside* your work, not instead of it.
+
+- **R-CPU-1 A share of the machine, not all of it.** cosmo's background CPU work runs on a
+  **budget**: a percentage of the machine's logical cores, **50% by default**. Percent is the unit
+  the user is offered because it is the honest answer to "how much of my computer may this take";
+  it is **enforced as a worker count**, because no portable per-process CPU-time cap exists across
+  Linux / Windows / Android, and throttling by sleeping would occupy the very cores it is trying to
+  spare. The count is `clamp(round(cores × percent / 100), 1, cap)` — **never zero**, so even the
+  smallest budget on the smallest machine still makes progress.
+- **R-CPU-2 What the budget governs.** Three things:
+  (a) the **decode pool** that opens a project, capped as before at 8 workers — this **amends
+  R-LOADPERF-1**, whose floor of 2 becomes 1; (b) the **engine's worker count while CPU threads
+  is Auto** — an explicit CPU-threads choice (2 / 4 / 8) still wins for the engine, because that
+  setting is a deliberate override and a budget that silently contradicted it would make both
+  controls untrustworthy; and (c) **nested parallelism inside a decoder**. LibRaw is built with
+  OpenMP, so each decode worker opened a team sized to the whole machine — eight workers on a
+  16-core box meant up to 128 threads, which is why a RAW import took the entire computer *no
+  matter how the pool was sized*. cosmo already parallelises across images, so a second layer
+  inside one image is pure oversubscription: `OMP_NUM_THREADS` is pinned to 1 at startup (an
+  explicit user value still wins) and one decode worker then means one core.
+- **R-CPU-3 Changeable, and persisted.** The budget is a chip row in the Settings surface
+  (R-SETTINGS-1) offering 25% / 50% / 75% / 100%, and it round-trips with the other preferences
+  (R-SETTINGS-4). A change takes effect on the **next** load and on the next render: a pool is sized
+  when it starts, and re-sizing one mid-load would mean tearing down workers that are holding
+  decoded frames.
+- **R-CPU-4 Honest about what it cannot cap.** The budget bounds the threads cosmo starts plus the
+  one nested pool it can reach (R-CPU-2c). Threads a driver or library starts out of cosmo's sight —
+  a GPU driver's helpers, a codec with its own pool and no env knob — remain outside it, so the
+  setting means "of the work cosmo schedules". The log records the worker count actually used at
+  each load, so the nominal budget and the real one can be told apart:
+  `load: 12 entries on 8 decode workers (cpu budget 50% of 16 cores)`.
+- **R-CPU-5 The cap can bind before the budget does.** On a machine with more than 16 logical cores,
+  50% exceeds the decode pool's cap of 8 and the cap is what applies — the pool does not grow past
+  8 whatever the budget says, because beyond that point workers contend for memory bandwidth rather
+  than adding throughput (R-LOADPERF-1a). Lowering the budget below the cap still shrinks the pool.
+  This is why the log states both numbers.
 
 ## R-LOG — File logging & crash diagnostics — ✅ IMPLEMENTED
 

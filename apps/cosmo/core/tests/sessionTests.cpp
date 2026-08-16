@@ -688,12 +688,13 @@ namespace
         }
 
         AppSettings s;
-        s.previewEdge = 2400; s.threads = 6; s.useGpu = true;
+        s.previewEdge = 2400; s.threads = 6; s.useGpu = true; s.cpuPercent = 25;
         assert(s.save());
         const AppSettings back = AppSettings::load();
         assert(back.previewEdge == 2400);
         assert(back.threads == 6);
         assert(back.useGpu && "GPU acceleration is still on next launch");
+        assert(back.cpuPercent == 25 && "the CPU budget survives a restart (R-CPU-3)");
 
         // A truncated / garbled file must fall back per field, never stop the app.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuseGpu=1\npreviewEdge=notanumber\nthre"; }
@@ -701,10 +702,54 @@ namespace
         assert(partial.useGpu && "the readable field is still honoured");
         assert(partial.previewEdge == 1600 && "the garbled one falls back to its default");
         assert(partial.threads == 0);
+        assert(partial.cpuPercent == 50 && "a settings file that predates the budget gets the default");
+
+        // An out-of-range budget is a corrupt file, not a request for the whole machine.
+        { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=400\n"; }
+        assert(AppSettings::load().cpuPercent == 50);
+        { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=0\n"; }
+        assert(AppSettings::load().cpuPercent == 50);
 
         { std::ofstream f(path, std::ios::trunc); f << backup; }
         if (backup.empty()) std::filesystem::remove(path);
         printf("[PASS] settings_roundtrip_and_survive_a_bad_file\n");
+    }
+
+    // R-CPU-1: the budget is offered as a percentage and enforced as a worker count.
+    // The properties that matter are monotonicity, the never-zero floor and the cap --
+    // not an exact number, since the core count differs per machine.
+    void test_cpu_budget_scales_with_percent()
+    {
+        using arstro::cosmo::AppSettings;
+        const int full = AppSettings::workersFor(100);
+        assert(full >= 1);
+
+        // Never zero, however small the budget or the machine.
+        for (int pct : {1, 5, 10, 25, 50, 75, 100})
+            assert(AppSettings::workersFor(pct) >= 1 && "a budget always leaves one worker");
+
+        // Monotonic: more budget never means fewer workers.
+        int prev = 0;
+        for (int pct = 1; pct <= 100; ++pct)
+        {
+            const int n = AppSettings::workersFor(pct);
+            assert(n >= prev && "raising the budget must never shrink the pool");
+            assert(n <= full && "no budget exceeds the whole machine");
+            prev = n;
+        }
+
+        // Half a machine is at most half its cores (the point of the whole feature).
+        assert(AppSettings::workersFor(50) <= (full + 1) / 2);
+
+        // The cap wins over the budget; a non-positive cap means uncapped.
+        assert(AppSettings::workersFor(100, 2) <= 2);
+        assert(AppSettings::workersFor(100, 1) == 1);
+        assert(AppSettings::workersFor(100, 0) == full);
+
+        // Garbage percentages are clamped rather than propagated into a thread count.
+        assert(AppSettings::workersFor(-10) == AppSettings::workersFor(1));
+        assert(AppSettings::workersFor(1000) == full);
+        printf("[PASS] cpu_budget_scales_with_percent\n");
     }
 }
 
@@ -731,6 +776,7 @@ int main()
     test_pending_images_appear_then_attach();
     test_selecting_a_pending_image_keeps_the_stage();
     test_settings_roundtrip_and_survive_a_bad_file();
+    test_cpu_budget_scales_with_percent();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

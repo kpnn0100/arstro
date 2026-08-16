@@ -153,6 +153,9 @@ namespace
         std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
         std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
+        // The in-force preferences, mirrored here because the load pool is sized by the
+        // CPU budget (R-CPU-2) and startEntriesLoad runs in the host, not in App.
+        arstro::cosmo::AppSettings settings;
 
         // ── R-SPLASH: the application-open animation, in its OWN borderless window ──
         GtkWidget *splashWindow = nullptr;
@@ -715,10 +718,13 @@ namespace
         // R-LOADING-1 (amended): decode starts NOW, alongside the intro, so the progress
         // bar and status line are already live by the time the intro lands. It runs on a
         // worker pool whose per-image apply is off the UI thread, so it cannot hitch the
-        // animation. One worker per core (capped); the pipeline bounds how far they run
-        // ahead of the applier.
-        const unsigned hc = std::thread::hardware_concurrency();
-        const int workers = std::max(2, std::min((int)(hc ? hc : 2), kMaxDecodeWorkers));
+        // animation. The pool is sized by the user's CPU budget rather than by the core
+        // count (R-CPU-2) -- one worker per core made the whole machine unusable for the
+        // length of the load; the pipeline still bounds how far they run ahead of the applier.
+        const int workers = arstro::cosmo::AppSettings::workersFor(a->settings.cpuPercent, kMaxDecodeWorkers);
+        LOGI("load: %zu entries on %d decode workers (cpu budget %d%% of %u cores)",
+             job->entries.size(), workers, a->settings.cpuPercent,
+             std::thread::hardware_concurrency());
         job->pipe.start(job->entries.size(), workers, kDecodeWindow, kMaxInFlightBytes,
                         [job](size_t i) { return decodeEntry(job, i); },
                         [](const LoadJob::Result &r) { return r.rgba.size(); });
@@ -1266,6 +1272,15 @@ int main(int argc, char **argv)
     LOGI("cosmo_v2 starting (%d args, log at %s)", argc - 1,
          arstro::cosmo_v2::log::path().c_str());
 
+    // R-CPU-2(c): LibRaw is built with -fopenmp, so EVERY decode worker would open its
+    // own OpenMP team sized to the whole machine -- 8 workers x 16 cores is 128 threads
+    // on a 16-core box, which is what made a RAW import take the entire computer no
+    // matter how the pool was sized. cosmo already parallelises ACROSS images, so a
+    // second layer inside one image is pure oversubscription: pin it to 1 and a decode
+    // worker means exactly one core. Must precede any decode, hence here rather than in
+    // the decoder -- and it is an env var because that is the only knob libgomp exposes.
+    g_setenv("OMP_NUM_THREADS", "1", FALSE);  // FALSE: an explicit user OMP_NUM_THREADS still wins
+
     gtk_init(&argc, &argv);
     registerBundledFonts();
 
@@ -1310,8 +1325,10 @@ int main(int argc, char **argv)
 
     // R-SETTINGS-4: what the user last chose is in force before the first frame, and
     // every later change is written straight back.
-    host.app.applySettings(arstro::cosmo::AppSettings::load());
-    host.app.onSettingsChanged = [](arstro::cosmo::AppSettings s) {
+    host.settings = arstro::cosmo::AppSettings::load();
+    host.app.applySettings(host.settings);
+    host.app.onSettingsChanged = [&host](arstro::cosmo::AppSettings s) {
+        host.settings = s;   // the next load's pool is sized from this (R-CPU-2/3)
         if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
                                   arstro::cosmo::AppSettings::path().c_str());
     };

@@ -224,6 +224,7 @@ namespace cosmo_v2
         void presetSaveClicked();   // Save Preset -> category picker -> host name dialog
         void presetExportClicked(); // Export Preset -> category picker -> host path dialog
         void openSettingsDialog();  // Settings ▸ Engine Settings… (modal)
+        void applyThreadBudget();   // R-CPU-2: explicit thread count, else the CPU budget
         void openExportDialog();    // File ▸ Export… (R-EXPORT): snapshot the tree into the modal
         void refreshHome();         // rebuild the home grid from ProjectStore + request thumbnails
         void requestHome();         // wordmark click: prompt to save/discard if dirty, else go home

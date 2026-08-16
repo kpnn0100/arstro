@@ -233,7 +233,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1) |
 | `apps/cosmo/core/History.{h,cpp}` | core | branching undo tree |
 | `apps/cosmo/core/ProjectStore.{h,cpp}` | core | recents index (config dir) |
-| `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4) |
+| `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4), and the CPU budget that sizes both thread pools (R-CPU-1/2) |
 | `apps/cosmo/core/PresetLibrary.{h,cpp}` | core | `.apf` preset tree scan |
 | `apps/cosmo/core/decode/*` | core | `IImageDecoder` + GdkPixbuf/LibRaw `NativeImageDecoder` |
 | `core/ImageProcessing/src/engine/*` | engine | `EditEngine`, `RenderService`, `EditParams`, serialization |

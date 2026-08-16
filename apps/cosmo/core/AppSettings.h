@@ -21,8 +21,20 @@ namespace cosmo
     struct AppSettings
     {
         int previewEdge = 1600;   // base preview render long edge, px (R-SETTINGS-1)
-        int threads = 0;          // engine worker threads; 0 = auto
+        int threads = 0;          // engine worker threads; 0 = auto (then the budget below applies)
         bool useGpu = false;      // GPU acceleration opt-in (R-GPU-3)
+        int cpuPercent = 50;      // share of the machine's cores cosmo may schedule (R-CPU-1)
+
+        /** Worker count for `percent` of this machine's logical cores (R-CPU-1).
+         *
+         *  A CPU budget is offered to the user as a percentage because that is the honest
+         *  unit for "how much of my computer may this take", but it can only be ENFORCED as
+         *  a thread count: no portable per-process CPU-time cap exists across Linux/Windows/
+         *  Android, and throttling by sleeping would occupy the very cores it is sparing.
+         *
+         *  Rounds to nearest and never returns 0, so the smallest budget on the smallest
+         *  machine still makes progress. `cap <= 0` means uncapped. */
+        static int workersFor(int percent, int cap = 0);
 
         /** Path of the settings file inside ProjectStore::configDir(). */
         static std::string path();

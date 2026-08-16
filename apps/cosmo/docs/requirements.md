@@ -704,6 +704,38 @@ always either produced or held by a worker, and that worker is **exempt** from b
 by `cosmo_core_tests` over 60 randomised (workers × window × byte-cap) combinations — with caps
 deliberately smaller than a single item — and separately under ThreadSanitizer.
 
+### DR-CPU-1 The budget, and how a percentage becomes a thread count (R-CPU-1)
+`AppSettings::workersFor(percent, cap)` (`core/AppSettings.cpp:13-24`) is the single place the
+conversion happens: `(cores * percent + 50) / 100` — integer round-to-nearest — floored at 1 and
+capped at `cap` when `cap > 0`, with `hardware_concurrency()` falling back to 4 when it reports 0.
+Percent is the user-facing unit and a count is what is enforceable, because no portable per-process
+CPU-time cap exists across the platforms cosmo targets and a sleep-based throttle would occupy the
+cores it is trying to spare. The default is 50, in `AppSettings::cpuPercent` (`core/AppSettings.h:29`),
+persisted as `cpuPercent=` in `settings.txt`; a value outside 1..100 falls back to 50 rather than
+clamping up, since an out-of-range budget means a corrupt file, not a request for the whole machine
+(`AppSettings.cpp:52`). Verified by `cosmo_core_tests`' `cpu_budget_scales_with_percent`, which
+asserts the properties that hold on any machine — never zero, monotonic in percent, never above the
+whole machine, 50% no more than half, the cap wins, `cap <= 0` means uncapped.
+
+### DR-CPU-2 The three places it is enforced (R-CPU-2)
+1. **Decode pool** — `startEntriesLoad` (`linux_main.cpp:697-702`) sizes the pool
+   `workersFor(host.settings.cpuPercent, kMaxDecodeWorkers)` instead of the old
+   `max(2, min(hardware_concurrency, 8))`, and logs
+   `load: <n> entries on <w> decode workers (cpu budget <p>% of <c> cores)`. `Host::settings`
+   mirrors the in-force preferences because the load runs in the host, not in `App`.
+2. **Engine Auto threads** — `App::applyThreadBudget` (`App.cpp:834-843`) calls
+   `par::setThreads(threads > 0 ? threads : workersFor(cpuPercent))`, so Auto means the budget
+   rather than every core. Because `par::threadsRef()` is then a resolved count, `openSettingsDialog`
+   seeds the dialog from `mSettings.threads` (`App.cpp:847`) — seeding from the resolved value would
+   make Auto read as an explicit 4.
+3. **LibRaw's OpenMP** — `g_setenv("OMP_NUM_THREADS", "1", FALSE)` in `main` (`linux_main.cpp:1275-1283`),
+   before `gtk_init` and therefore before any decode. MSYS2's LibRaw is built `-fopenmp`
+   (`pkg-config --libs libraw` → `-lraw -fopenmp`), so each decode worker opened a team sized to the
+   whole machine: 8 workers × 16 cores ≈ 128 threads, which is why a RAW import saturated the machine
+   *regardless* of pool size. `FALSE` = do not override a user's own `OMP_NUM_THREADS`.
+
+Not covered: `android/android_main.cpp` has its own entry point and does not yet pin OpenMP.
+
 ### DR-LOADPERF-2 Off-thread apply
 `EditSession::makeThumb` is public and re-entrant so the loader builds the filmstrip thumbnail on its
 own thread, and `EditSession::openImageInto(int, vector<uint8_t>&&, …, Thumb&&)` +

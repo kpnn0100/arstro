@@ -163,8 +163,8 @@ namespace cosmo_v2
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
         mSettingsDialog->onThreads = [this](int n) {
-            arstro::par::setThreads(n); mSession.submit();
             mSettings.threads = n;
+            applyThreadBudget(); mSession.submit();
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
         mSettingsDialog->onUseGpu = [this](bool on) {
@@ -830,14 +830,26 @@ namespace cosmo_v2
         // user last chose; the dialog then opens seeded with what is actually in force.
         mSettings = s;
         mSession.setPreviewEdge(s.previewEdge);
-        arstro::par::setThreads(s.threads);
+        applyThreadBudget();
         mSession.setUseGpu(s.useGpu);   // no-op when no GPU backend exists (R-GPU-3)
+    }
+
+    void App::applyThreadBudget()
+    {
+        // R-CPU-2: Auto means "the CPU budget", not "every core" -- rendering at full
+        // width is what made the machine unusable alongside a load. An explicit thread
+        // choice is a deliberate override and still wins.
+        arstro::par::setThreads(mSettings.threads > 0
+                                    ? mSettings.threads
+                                    : cosmo::AppSettings::workersFor(mSettings.cpuPercent));
     }
 
     void App::openSettingsDialog()
     {
-        // Raw setting (0 = Auto), not the resolved count, so the Auto chip reads right.
-        mSettingsDialog->show(mSession.previewEdge(), arstro::par::threadsRef(),
+        // Seeded from the stored settings, not from par::threadsRef(): Auto now resolves
+        // to a real worker count (R-CPU-2), so the resolved value would leave the Auto
+        // chip reading as an explicit 4.
+        mSettingsDialog->show(mSettings.previewEdge, mSettings.threads,
                               mSession.useGpu(), mSession.gpuAvailable());
     }
 

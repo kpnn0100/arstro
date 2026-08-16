@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-10**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-11**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,27 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
+- **Area:** core / test harness · **Status:** Confirmed (reproduced) · **Severity:** S3
+- **Found:** 2026-08-16, while checking that the R-CPU-3 test fails without its fix
+- **Reproduce:** break any assertion in `sessionTests.cpp` (e.g. stop `AppSettings::save()` writing
+  `cpuPercent=`), rebuild, and run
+  `XDG_CONFIG_HOME=/tmp/s ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe`.
+- **Expected:** the assert prints to stderr and the process exits non-zero, so `ctest` reports a
+  failure and an agent gets an answer in seconds.
+- **Actual:** the process hangs indefinitely (killed at 5 min twice). MinGW/msvcrt `abort()` raises
+  the Windows "terminated in an unusual way" path rather than exiting, and the assert text never
+  reaches a redirected stderr because it is not flushed. A failing suite is indistinguishable from
+  a slow one — and this suite legitimately takes 1–2 minutes (Release; longer in Debug), so the
+  usual "it must be stuck" heuristic does not apply.
+- **Evidence:** the same defect, isolated into a 10-line program linking `cosmo_core`, answered in
+  under a second: `wrote cpuPercent=25, read back 50 -> FAIL`.
+- **Judgement:** defect — no requirement covers the test harness, but "verify with a shell command"
+  (the whole `R-AGENT` premise) is unusable when a red suite looks like a hung one.
+- **Fix:** pending. Call `SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX)` +
+  `_set_abort_behavior(0, _WRITE_ABORT_MSG|_CALL_REPORTFAULT)` on Windows in the suites' `main()`,
+  and `setvbuf(stderr, nullptr, _IONBF, 0)`. Fold into P0.3 or P0.11.
 
 ### D-9 — Two divergent build paths, two undocumented build trees
 - **Area:** core / build · **Status:** Confirmed (by source inspection) · **Severity:** S4

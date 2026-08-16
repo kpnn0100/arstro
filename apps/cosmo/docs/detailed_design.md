@@ -193,6 +193,21 @@ kids; }`. `scan(dir)` recursively builds folder/leaf nodes (folders-first, alpha
 `flatNames(dir)` lists top-level `.apf` stems; `categoryLabel(key)` maps apf category keys to UI
 labels.
 
+### 2.4b AppSettings (`AppSettings.{h,cpp}`)
+`struct AppSettings { int previewEdge=1600; int threads=0; bool useGpu=false; int cpuPercent=50; }`
+— the preferences that must survive a restart (R-SETTINGS-4, R-CPU-3). `path()` =
+`ProjectStore::configDir()/settings.txt`; `load()` parses `key=value` and falls back **per field**
+(a `try/catch` per value, then range checks: `previewEdge<64`→1600, `threads<0`→0, `cpuPercent`
+outside 1..100→50, because an out-of-range budget is a corrupt file rather than a request for the
+whole machine); `save()` truncates and writes `cosmosettings=1` plus the four keys.
+
+`static int workersFor(int percent, int cap = 0)` (R-CPU-1) turns the budget into a thread count:
+`round(hardware_concurrency × percent/100)` — integer `(cores*percent + 50)/100` — floored at **1**
+and capped at `cap` when `cap > 0`. An unknown core count assumes 4. Percent is what the user picks;
+a count is what can actually be enforced, since no portable per-process CPU cap exists. Two callers:
+the decode pool (`linux_main.cpp startEntriesLoad`, `cap = kMaxDecodeWorkers = 8`) and
+`App::applyThreadBudget` (uncapped, used only when `threads == 0`).
+
 ### 2.5 NativeImageDecoder (`decode/*`)
 `struct DecodedImage { std::vector<uint8_t> rgba; int width,height; std::string name; bool ok(); }`
 (top-down RGBA8). `struct IImageDecoder { virtual DecodedImage decodeFile(path)=0; }`.
