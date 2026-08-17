@@ -132,10 +132,25 @@ core first.
         - **The actual gate, and the only one in the proposal's §5 checklist: `widgets/*.cpp`
           reaching past the service = 60**, all in `RightColumn.cpp`, which must reach **0**;
           plus **2** `svc->session()` uses in the host, also to 0.
-        `RightColumn` is the bulk because it owns the `EditSession&` by design today
-        (`architecture.md` §2.3) and every control callback funnels through
-        `curParams()` + `submit()`. Those map onto `Command::Set` one-for-one — and the obvious
-        worry is unfounded: a slider drag is ~60 tiny text parses a second, which is nothing.
+  - [ ] **S4b-2 — RightColumn, which is the gate.** Inspected, and it is two problems, not 60:
+        - **The sliders are ONE change, not 23.** `RightColumn.cpp:44-46` has a single `set`
+          lambda that every slider row funnels through
+          (`if (auto *p = mSession.curParams()) { setter(*p, v); mSession.submit(); }`). What
+          blocks routing it through `Command::Set` is that the lambda holds a *setter closure*
+          and so does not know the field's NAME, and the rows apply unit conversions
+          (`toEv`, `toKelvin`, `toRadiusPx`) so the command must carry the engine-side value,
+          not the slider's. So each row needs to name its field and expose the converted value;
+          the lambda then builds one `Command::Set`. Cost is real but bounded, and the payoff is
+          that every slider becomes scriptable by name for free. The obvious objection — that a
+          drag cannot afford text — is unfounded: ~60 tiny parses a second.
+        - **The mask and curve paths need a new command family first** (`RightColumn.cpp:103+`).
+          They mutate nested structures — `p->masks[i].<field>`, curve point vectors — which
+          `set <key>=<value>` cannot address, because `EditParamsIO` serializes masks as a block
+          rather than per-index. This wants `mask set <i> <field>=<v>` / `curve set …` designed
+          properly, with round-trip tests, before any call site moves. **Do not convert the
+          sliders and leave these reaching past the service** — a half-migrated widget is harder
+          to reason about than an unmigrated one, and the gate is 0, not "fewer".
+        Deliberately not started in this session rather than half-done.
   - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
         `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
 - [x] **S5** `ControlChannel` (non-blocking `AF_UNIX`; Windows stubbed with a reason) + `--control`,

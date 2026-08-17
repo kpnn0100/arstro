@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-17**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-18**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,30 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-17 — The control socket does nothing on Windows
+- **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
+- **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
+  than remembered.
+- **Reproduce:** `cosmo.exe --control \\.\pipe\cosmo` on Windows → the log carries
+  `control channel is not implemented on Windows yet` and the app runs normally, unattended.
+- **Expected:** R-SVC-8 on every platform cosmo ships to.
+- **Actual:** POSIX only. `ControlChannel::open()` returns false with a reason on Windows and
+  every other method is an inert no-op, so `--control` fails loudly at startup instead of hanging
+  later. The branch is `-fsyntax-only` clean but has never been built or run.
+- **Judgement:** requirement gap against R-SVC-8, which does not name platforms. Deferred rather
+  than open because it is a deliberate stop, not an oversight: an overlapped named pipe needs a
+  per-instance state machine (`CreateNamedPipe` + `FILE_FLAG_OVERLAPPED`, a pending
+  `ConnectNamedPipe` per client with its own event, a pending `ReadFile` per client,
+  `GetOverlappedResult(..., FALSE)` per frame) whose failure mode is a **hung UI thread** — and
+  it cannot be tested from this Linux host at all. `PIPE_NOWAIT` is not the shortcut: it is
+  legacy and its writes silently drop data when the buffer fills, so the event stream would lose
+  lines with no error anywhere.
+- **Fix:** pending, and the cheaper route is recorded in `ControlChannel.cpp`: Winsock `AF_UNIX`
+  (Win10 1803+, `<afunix.h>`) makes the POSIX branch nearly portable — `ioctlsocket(FIONBIO)`
+  for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
+  box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
+  and it is unaffected.
 
 ### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
 - **Area:** core / test harness · **Status:** Confirmed (reproduced) · **Severity:** S3
