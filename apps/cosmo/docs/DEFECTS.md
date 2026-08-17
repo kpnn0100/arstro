@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-16**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-17**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -161,6 +161,33 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-16 — `wait` meant two different things to two front ends
+- **Area:** core / service · **Status:** **Fixed** (same session, S5) · **Severity:** S3
+- **Found:** 2026-08-17, the first time the committed acceptance script was run through BOTH
+  front ends — which is the entire reason that test exists.
+- **Reproduce:** before the fix, one script containing `wait load.finished`:
+  ```bash
+  cosmo-cc run --script s.txt          # -> "wait: unknown condition load.finished", then a
+                                       #    120 s timeout and exit 1
+  cosmo-cc attach /tmp/s.sock --script s.txt   # -> worked
+  ```
+- **Expected:** one documented command, one meaning, whichever front end reads it (R-SVC-5).
+- **Actual:** `cosmo-cc run` matched model predicates (`load-finished`, hyphen) while the socket
+  client matched event names (`load.finished`, dot). A script that worked against a live window
+  failed headlessly, and the failure looked like a hang before it looked like a vocabulary error.
+- **Judgement:** defect against R-SVC-5. Two front ends interpreting one command differently is
+  the precise divergence the single-codec rule exists to prevent — and it appeared anyway,
+  because `wait` is handled by the front end rather than the service, so it never went through
+  the shared codec at all. Worth remembering: the rule protects what it routes.
+- **Cause:** `wait` is deliberately front-end-owned (only the caller owns its loop), so both
+  implementations grew independently.
+- **Fix:** commit `S5B_HASH`. `canonicalWait()` normalises `-` to `.` and both front ends call it;
+  the event name is canonical because events are the observable contract; hyphens stay accepted.
+  `Command.h`'s documented example, the parser's error hint, the `--help` text, the coverage test
+  and the proposal all now use the canonical spelling.
+- **Guarded by:** `apps/cosmo/tests/acceptance/run.sh`, which runs the identical script through
+  both front ends and diffs the results — the only check that could have caught this.
 
 ### D-15 — `AppModel::settings` reported defaults while `AppModel::budget` reported the truth
 - **Area:** core / service · **Status:** **Fixed** (same session, S3) · **Severity:** S3

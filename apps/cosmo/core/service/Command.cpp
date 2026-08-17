@@ -222,7 +222,7 @@ namespace cosmo
         }
         else if (v == "wait")
         {
-            if (!need(2, "a condition, e.g. load-finished")) return c;
+            if (!need(2, "a condition, e.g. load.finished")) return c;
             c.kind = Command::Kind::Wait;
             c.name = sub;
             Command tmp;

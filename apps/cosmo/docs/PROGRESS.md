@@ -108,6 +108,12 @@ core first.
       other way, which is the argument for the check existing at all. `cosmo-cc attach <socket>`
       completes the loop the proposal promised: it drives a live `--control` window from a script
       and exits non-zero if any command was rejected.
+  - [x] **S5b** the acceptance test is a **committed, unattended artifact** —
+        `apps/cosmo/tests/acceptance/run.sh` + `drive-a-live-window.txt`. It runs the SAME script
+        through the headless service and through a live window over the socket, asserts the event
+        stream, and diffs the two `--stable` dumps. It found **D-16** on its first run. The socket
+        is also serviced during the splash now, so a client that attaches immediately is not
+        ignored for the length of the intro.
 - [~] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
       ops, save/load workspace. `App.cpp` ends as render + gestures + animation *(core, then design)*
   - [x] **S4a** `App::onCommand` — the view's outbound channel (R-SVC-2). Undo/redo now emit a

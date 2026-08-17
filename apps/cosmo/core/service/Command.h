@@ -27,7 +27,7 @@
  *      settings set cpuPercent=25 previewEdge=1600
  *      screen home
  *      state print
- *      wait load-finished --timeout 120s
+ *      wait load.finished --timeout 120s
  *      quit
  */
 #pragma once

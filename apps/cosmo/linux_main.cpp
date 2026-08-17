@@ -946,6 +946,7 @@ namespace
 
     void showMainWindow(Host *a);
     gboolean onTick(gpointer user);
+    void pollControl(Host *a);   // defined below; the splash tick needs it too (R-SVC-8)
 
     /** Runs once per frame while the splash is up: play the intro, then (and only then)
      *  do the startup work, feeding real progress into the bar; finally fade out, drop
@@ -955,6 +956,14 @@ namespace
         auto *a = static_cast<Host *>(user);
         if (!a->splash) return G_SOURCE_REMOVE;
         a->splash->advance(nowMs(*a));
+
+        // The service and the socket are serviced during the splash too, not just once the
+        // main window exists. A client that attaches immediately after launch — which is what
+        // a script does, because it has no way to know the intro is still playing — would
+        // otherwise have its commands sit unread in the kernel buffer for the length of the
+        // animation, and `wait` on the far end would look like a hang (R-SVC-8).
+        if (a->svc) a->svc->pump(nowMs(*a));
+        pollControl(a);
 
         if (a->splash->introDone() && !a->startupWorkBegun)
         {

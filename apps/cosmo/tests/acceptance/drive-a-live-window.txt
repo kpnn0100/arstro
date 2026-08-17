@@ -1,0 +1,34 @@
+# R-SVC-8 acceptance script: drive a running cosmo from a shell and prove the window followed.
+#
+# Run it with:
+#   apps/cosmo/tests/acceptance/run.sh <project.cmp>
+#
+# Every line here is the same grammar the CLI, a --script file and the control socket share
+# (R-SVC-5), so this file is simultaneously the test, the documentation and a reproduction
+# recipe a defect entry can cite. `cosmo-cc attach` exits non-zero if any command is rejected
+# or a `wait` times out, so this fails loudly rather than half-working.
+
+# The budget first, so the load below is the one we meant to measure (R-CPU-3: it takes
+# effect on the NEXT load, which is why this cannot come after `project open`).
+settings set cpuPercent=25
+
+# The project path is substituted by run.sh — the one line that cannot be static.
+project open @PROJECT@
+
+# A wait is the CLIENT's loop, not the service's (R-SVC-6). Without it the commands below
+# would race the decode and be rejected for having nothing selected.
+wait load.finished
+
+# Discrete actions, each of which must produce an event and move the model.
+select next
+select next
+set exposure=1.2 temp=7400
+undo
+redo
+bypass 1 on
+bypass 1 off
+
+# The comparison artifact (R-SVC-9): --stable drops revision/frameSeq/peak, the fields that
+# legitimately differ between two front ends showing the same state, so this dump can be
+# diffed against `cosmo-cc project <same>.cmp --print --stable`.
+state print --stable

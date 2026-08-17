@@ -105,7 +105,7 @@ group new "Tokyo" --parent 0
 undo
 export --outdir /tmp/out --format jpg --quality 90 --long-edge 2048
 state print --json
-wait load-finished --timeout 120s
+wait load.finished --timeout 120s
 expect model selection == 3
 
 # events (stdout, --watch, the journal, and the debug log — same line)
@@ -129,7 +129,7 @@ cosmo --control /tmp/cosmo.sock &            # the user watches this window
 cosmo-cc attach /tmp/cosmo.sock <<'EOF'      # the agent types here
 settings set cpuPercent=25
 project open /tmp/japan18.cmp
-wait load-finished
+wait load.finished
 state print
 EOF
 ```

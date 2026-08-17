@@ -1178,7 +1178,7 @@ namespace
             {K::SettingsSet, "settings set cpuPercent=50"},
             {K::Screen, "screen home"},
             {K::StatePrint, "state print"},
-            {K::Wait, "wait load-finished"},
+            {K::Wait, "wait load.finished"},
             {K::Quit, "quit"},
         };
         const int kKindCount = 22;   // Kind::None is not a command

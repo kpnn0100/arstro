@@ -443,7 +443,7 @@ namespace
             {"settings set", "cpuPercent=N previewEdge=N threads=N useGpu=0|1"},
             {"screen", "home|editor"},
             {"state print", "[--json]"},
-            {"wait", "load-finished|export-finished|<ms> [--timeout 120s]"},
+            {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
     }
@@ -1210,8 +1210,20 @@ namespace
     /** `wait <condition> --timeout Ns`. The service refuses to guess (only the caller owns
      *  a loop), so the conditions live here — and a bare number of ms is a plain timed pump,
      *  which is what a script that needs a preview to settle actually wants. */
-    bool waitFor(Host &h, const std::string &cond, int timeoutMs)
+    // D-16: `wait` used two vocabularies — this took model predicates (`load-finished`) while
+    // the socket client matched event names (`load.finished`), so one documented command meant
+    // different things to two front ends, which is the exact divergence R-SVC-5 exists to
+    // prevent. The canonical form is the EVENT name, because events are the observable
+    // contract; the hyphenated spellings stay accepted as aliases.
+    std::string canonicalWait(std::string cond)
     {
+        for (char &c : cond) if (c == '-') c = '.';
+        return cond;
+    }
+
+    bool waitFor(Host &h, const std::string &condRaw, int timeoutMs)
+    {
+        const std::string cond = canonicalWait(condRaw);
         const double deadline = wallMs() + (timeoutMs > 0 ? timeoutMs : 120000);
         if (!cond.empty() && std::isdigit((unsigned char)cond[0]))
         {
@@ -1223,10 +1235,10 @@ namespace
         {
             pumpOnce(h);
             const AppModel &m = h.svc.model();
-            if (cond == "load-finished" && !m.load.active) return true;
-            if (cond == "export-finished" && !m.exports.active) return true;
+            if (cond == "load.finished" && !m.load.active) return true;
+            if (cond == "export.finished" && !m.exports.active) return true;
             if (cond == "quit" && h.svc.quitRequested()) return true;
-            if (cond != "load-finished" && cond != "export-finished" && cond != "quit")
+            if (cond != "load.finished" && cond != "export.finished" && cond != "quit")
             {
                 std::cerr << "cosmo-cc: wait: unknown condition " << cond << "\n";
                 return false;
@@ -1367,6 +1379,7 @@ static int cmdAttach(const Args &a, const Options &opt)
             {
                 waitFor = line.substr(5);
                 while (!waitFor.empty() && waitFor.back() == ' ') waitFor.pop_back();
+                waitFor = canonicalWait(waitFor);   // D-16: one vocabulary, both front ends
                 if (opt.watch) printf("... waiting for %s\n", waitFor.c_str());
             }
             else
