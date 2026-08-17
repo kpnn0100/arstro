@@ -2,7 +2,6 @@
 #include "core/PresetLibrary.h"
 #include "widgets/TextMetrics.h"    // estimateTextWidth() for the transition labels
 #include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
-#include "base/Parallel.h"          // par::setThreads() for the settings dialog
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
@@ -170,16 +169,19 @@ namespace cosmo_v2
             mSettings.previewEdge = edge;
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
+        // Both thread controls only REPORT the choice: cosmo::ThreadBudget owns the
+        // engine's width (R-SVC-10), and the host hands it the new settings. Notify before
+        // re-rendering, or the frame the user is waiting for is the one rendered at the old
+        // width.
         mSettingsDialog->onThreads = [this](int n) {
             mSettings.threads = n;
-            applyThreadBudget(); mSession.submit();
             if (onSettingsChanged) onSettingsChanged(mSettings);
+            mSession.submit();
         };
         mSettingsDialog->onCpuPercent = [this](int pct) {
             mSettings.cpuPercent = pct;
-            applyThreadBudget();   // Auto threads follow the budget (R-CPU-2); the next load's pool too
-            mSession.submit();
             if (onSettingsChanged) onSettingsChanged(mSettings);
+            mSession.submit();
         };
         mSettingsDialog->onUseGpu = [this](bool on) {
             mSession.setUseGpu(on);   // setUseGpu re-renders (R-GPU)
@@ -855,25 +857,19 @@ namespace cosmo_v2
         // user last chose; the dialog then opens seeded with what is actually in force.
         mSettings = s;
         mSession.setPreviewEdge(s.previewEdge);
-        applyThreadBudget();
         mSession.setUseGpu(s.useGpu);   // no-op when no GPU backend exists (R-GPU-3)
-    }
-
-    void App::applyThreadBudget()
-    {
-        // R-CPU-2: Auto means "the CPU budget", not "every core" -- rendering at full
-        // width is what made the machine unusable alongside a load. An explicit thread
-        // choice is a deliberate override and still wins.
-        arstro::par::setThreads(mSettings.threads > 0
-                                    ? mSettings.threads
-                                    : cosmo::AppSettings::workersFor(mSettings.cpuPercent));
+        // The engine's thread count is deliberately NOT set here. It is a slice of the
+        // one CPU budget, which the decode pool draws from at the same time, and App
+        // cannot see the other side (R-SVC-10) -- App converting the percentage for itself
+        // is exactly how a 25% budget came to schedule 54% of the machine (D-11). The host
+        // owns a cosmo::ThreadBudget and applies it.
     }
 
     void App::openSettingsDialog()
     {
-        // Seeded from the stored settings, not from par::threadsRef(): Auto now resolves
-        // to a real worker count (R-CPU-2), so the resolved value would leave the Auto
-        // chip reading as an explicit 4.
+        // Seeded from the stored settings, never from the engine's live count: Auto
+        // resolves to a real worker count (R-CPU-2b), so the resolved value would leave
+        // the Auto chip reading as an explicit 4.
         mSettingsDialog->show(mSettings.previewEdge, mSettings.threads, mSettings.cpuPercent,
                               mSession.useGpu(), mSession.gpuAvailable());
     }

@@ -737,9 +737,11 @@ on every settings change, and it owns the engine's width from then on.
    `total - reserved` while a load runs, floored at 1 so an arriving photo can still render a preview
    (R-LOADPERF-3 shows the editor during the load). An explicit CPU-threads choice (2/4/8) wins for
    the engine per R-CPU-2b, and may exceed the budget — a deliberate override, logged rather than
-   clamped. `App::applyThreadBudget` (`App.cpp:862-870`) still exists and still agrees with the
-   budget while idle, which is when it runs; S1b removes it so there is one owner in code as well as
-   in principle.
+   clamped. `App::applyThreadBudget` is **gone** (S1b): `App::applySettings` (`App.cpp:851-861`) sets
+   the preview edge and the GPU preference and deliberately does not touch the engine's width, and the
+   Settings dialog's thread controls only report the choice through `onSettingsChanged` — notified
+   *before* `mSession.submit()` (`App.cpp:168-183`), so the re-render uses the new width rather than
+   the old one. One owner in code as well as in principle.
 3. **Nested library parallelism (LibRaw's OpenMP)** — `cosmo_v2::pinNestedOpenMPForThisThread()`
    (`OmpPin.cpp:47-50`), passed to `ProjectLoader` as the per-worker start hook
    (`linux_main.cpp:680-685`) and therefore called **on each decode worker**. It resolves

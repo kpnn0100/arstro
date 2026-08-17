@@ -286,7 +286,7 @@ EditSession *--> RenderService
 History *--> HistoryNode
 App ..> ProjectStore
 App ..> PresetLibrary
-App ..> AppSettings : applySettings
+App ..> AppSettings : applySettings (no thread count — R-SVC-10)
 GtkMain ..> ThreadBudget : setPercent / setExplicitEngineThreads (R-CPU-3)
 LoadJob *--> ProjectLoader
 ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)

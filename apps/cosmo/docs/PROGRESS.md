@@ -18,9 +18,10 @@ file, and commit.
 **[`service-architecture-proposal.md`](service-architecture-proposal.md) is APPROVED** (2026-08-17,
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
 the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
-architecture. **S1a is done and D-11 + D-12 are closed.** ► Next is **S1b** (design: delete
-`App::applyThreadBudget`, one line, so the budget has one owner in code as well as in principle),
-then **S2** — `AppModel` + `Command`/`Event` + the `CosmoService` skeleton.
+architecture. **S1 is done (S1a + S1b) and D-11 + D-12 are closed.** ► Next is **S2** — `AppModel` +
+`Command`/`Event` + their codecs + the `CosmoService` skeleton wrapping `EditSession`, with the GUI
+dispatching commands for open / select / undo / redo / set-param and reading the model for them.
+That is a core commit followed by a design commit.
 
 The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
 2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
@@ -43,8 +44,8 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-17 · Last commit: S1a, the project load moves into cosmo_core and the CPU
-budget gets one owner (R-SVC-1, R-SVC-10; closes D-11, D-12).
+Last updated: 2026-08-17 · Last commit: S1b, App stops converting the CPU percentage for itself
+(R-SVC-10). S1a before it moved the load into cosmo_core and closed D-11 + D-12.
 
 ---
 
@@ -53,7 +54,7 @@ budget gets one owner (R-SVC-1, R-SVC-10; closes D-11, D-12).
 | M | Milestone | State |
 |---|---|---|
 | U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
-| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1a done, S1b next. Supersedes P0 |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1 done, S2 next. Supersedes P0 |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
@@ -91,8 +92,9 @@ core first.
       UI-side consumer. Closes **D-11** and **D-12**. Two new tests, the first checked to fail against
       the old arithmetic; measured end to end on the reported 18-RAF project (25% → 19% of a 24-core
       machine, peak 5 of a budget of 6)
-- [ ] **S1b** (design) delete `App::applyThreadBudget` — `ThreadBudget` owns the engine's width, and
-      two owners in code is what S1a was about even though they currently agree
+- [x] **S1b** (design) `App::applyThreadBudget` deleted; the Settings dialog's thread controls report
+      the choice and let the host's `ThreadBudget` apply it, notified before the re-render so the new
+      frame uses the new width. `App.cpp` no longer includes `base/Parallel.h` at all
 - [ ] **S2** `AppModel` + `Command`/`Event` + codecs + `CosmoService` skeleton wrapping `EditSession`;
       the GUI dispatches commands for open / select / undo / redo / set-param and reads the model for
       them. *(core commit, then design commit)*
