@@ -486,6 +486,59 @@ namespace cosmo
                 emit(Event::Kind::SelectionChanged, std::string(), mModel.selectedNode, mModel.currentSlot);
                 return true;
             }
+            case Command::Kind::MaskSet:
+            case Command::Kind::MaskDelete:
+            {
+                EditParams *p = mSession.curParams();
+                if (!p) return fail("mask: nothing selected to edit");
+                if (c.index < 0 || c.index >= (int)p->masks.size())
+                    return fail("mask: no mask " + std::to_string(c.index) + " (have " +
+                                std::to_string(p->masks.size()) + ")");
+                if (c.kind == Command::Kind::MaskDelete)
+                {
+                    p->masks.erase(p->masks.begin() + c.index);
+                    mSession.submit();
+                    refreshModel();
+                    emit(Event::Kind::ParamsChanged, "mask.deleted index=" + std::to_string(c.index));
+                    return true;
+                }
+                // Addressing an existing mask by index is the ONE thing `set mask=<blob>`
+                // cannot do — that appends. Everything else about a mask (and curves, the
+                // mixer, grading, every scalar) is already reachable through `set`, because
+                // EditParamsIO names it.
+                MaskParams &m = p->masks[c.index];
+                LocalAdjust &adj = m.adjust;
+                for (const auto &kv : c.fields)
+                {
+                    const std::string &k = kv.first;
+                    const float v = (float)std::atof(kv.second.c_str());
+                    const bool on = kv.second != "0" && kv.second != "false";
+                    if (k == "feather") m.feather = v;
+                    else if (k == "inverted") m.inverted = on;
+                    else if (k == "type") m.type = std::atoi(kv.second.c_str());
+                    else if (k == "cx") m.cx = v; else if (k == "cy") m.cy = v;
+                    else if (k == "rx") m.rx = v; else if (k == "ry") m.ry = v;
+                    else if (k == "x0") m.x0 = v; else if (k == "y0") m.y0 = v;
+                    else if (k == "x1") m.x1 = v; else if (k == "y1") m.y1 = v;
+                    else if (k == "adjust.exposure") adj.exposure = v;
+                    else if (k == "adjust.contrast") adj.contrast = v;
+                    else if (k == "adjust.highlights") adj.highlights = v;
+                    else if (k == "adjust.shadows") adj.shadows = v;
+                    else if (k == "adjust.whites") adj.whites = v;
+                    else if (k == "adjust.blacks") adj.blacks = v;
+                    else if (k == "adjust.temp") adj.temp = v;
+                    else if (k == "adjust.tint") adj.tint = v;
+                    else if (k == "adjust.saturation") adj.saturation = v;
+                    else if (k == "adjust.texture") adj.texture = v;
+                    else if (k == "adjust.clarity") adj.clarity = v;
+                    else if (k == "adjust.dehaze") adj.dehaze = v;
+                    else return fail("mask set: unknown field " + k);
+                }
+                mSession.submit();
+                refreshModel();
+                emit(Event::Kind::ParamsChanged, "mask index=" + std::to_string(c.index));
+                return true;
+            }
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();

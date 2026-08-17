@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-18**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-19**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -153,6 +153,26 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-18 — `state print --params` inside a script was parsed and then ignored
+- **Area:** core / CLI · **Status:** **Fixed** (same session) · **Severity:** S3
+- **Found:** 2026-08-17, while checking whether `set` already reaches curves and masks — the dump
+  came back with no `params:` block and no complaint.
+- **Reproduce:** before the fix, a script containing `state print --params`, run with
+  `cosmo-cc run --script s.txt` → a dump with no params block. Passing `--params` globally on the
+  command line worked.
+- **Expected:** the option the caller wrote takes effect.
+- **Actual:** `printModel()` read `--params`/`--stable` from the GLOBAL argv only, so the
+  per-command form parsed into `Command::fields` and was dropped.
+- **Judgement:** defect, and the **same failure as D-14 one layer up** — an option a caller wrote
+  and the tool silently dropped is worse than one that does not exist, because the caller believes
+  it worked. Two instances of one mistake in a day says the shape is worth naming: whenever a
+  Command carries options AND the front end has global flags for the same thing, the per-command
+  value must win and the global one must be the default.
+- **Fix:** commit `D18_HASH`. `printModel(h, json, const Command *cmd)` — per-command
+  `--stable`/`--params` OR the global flag.
+- **Guarded by:** exercised by the mask script in the same commit, whose `state print --params`
+  now returns the `mask=` lines it was written to show.
 
 ### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
 - **Area:** core / test harness · **Status:** **Fixed on POSIX, code-verified on Windows** · **Severity:** S3

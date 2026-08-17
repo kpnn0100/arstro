@@ -131,7 +131,9 @@ core first.
         - **The actual gate, and the only one in the proposal's §5 checklist: `widgets/*.cpp`
           reaching past the service = 60**, all in `RightColumn.cpp`, which must reach **0**;
           plus **2** `svc->session()` uses in the host, also to 0.
-  - [ ] **S4b-2 — RightColumn, which is the gate.** Inspected, and it is two problems, not 60:
+  - [~] **S4b-2 — RightColumn, which is the gate.** The prerequisite is **DONE**; what is left is
+        mechanical. **My earlier spec here was wrong and is corrected**, because it was written
+        from reading rather than from trying:
         - **The sliders are ONE change, not 23.** `RightColumn.cpp:44-46` has a single `set`
           lambda that every slider row funnels through
           (`if (auto *p = mSession.curParams()) { setter(*p, v); mSession.submit(); }`). What
@@ -142,14 +144,22 @@ core first.
           the lambda then builds one `Command::Set`. Cost is real but bounded, and the payoff is
           that every slider becomes scriptable by name for free. The obvious objection — that a
           drag cannot afford text — is unfounded: ~60 tiny parses a second.
-        - **The mask and curve paths need a new command family first** (`RightColumn.cpp:103+`).
-          They mutate nested structures — `p->masks[i].<field>`, curve point vectors — which
-          `set <key>=<value>` cannot address, because `EditParamsIO` serializes masks as a block
-          rather than per-index. This wants `mask set <i> <field>=<v>` / `curve set …` designed
-          properly, with round-trip tests, before any call site moves. **Do not convert the
-          sliders and leave these reaching past the service** — a half-migrated widget is harder
-          to reason about than an unmigrated one, and the gate is 0, not "fewer".
-        Deliberately not started in this session rather than half-done.
+        - **Curves, the mixer, grading and every scalar needed NOTHING.** I claimed they needed a
+          new command family; they were already addressable through `set`, because
+          `EditParamsIO` names them. Verified by running it:
+          `set curve=0,0;0.5,0.62;1,1`, `set mixer0=…`, `set grade0=210,18,-4`,
+          `set rotation=1.5 balance=12 remapEnable=1` all land. The lesson is the one this
+          session keeps re-teaching: **try it before you spec it.**
+        - **Only mask-by-index was genuinely missing**, because `set mask=<blob>` APPENDS. Now
+          `mask set <i> <field>=<v>` (geometry, `feather`, `inverted`, `type`, `adjust.*`) and
+          `mask delete <i>`, both verified end to end, with a bad index rejected by reason:
+          `mask: no mask 9 (have 1)`.
+        **So the design work is finished and the remaining task is mechanical:** point
+        RightColumn's `set` lambda and its mask/curve callbacks at `Command`s through
+        `RightColumn`'s own outbound channel (it will need one, like `App::onCommand`), and the
+        gate count goes to 0. Still not started, deliberately: it is a design-skill commit
+        (`arstro.cosmo.design.implement` owns `widgets/`), and a half-migrated widget is harder
+        to reason about than an unmigrated one.
   - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
         `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
 - [x] **S5** `ControlChannel` (non-blocking `AF_UNIX`; Windows stubbed with a reason) + `--control`,

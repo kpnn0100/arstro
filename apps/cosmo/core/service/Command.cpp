@@ -84,7 +84,8 @@ namespace cosmo
         static const std::vector<std::string> names = {
             "project open", "project new", "project save", "project close", "import",
             "select", "select next", "select prev", "set", "bypass", "group new",
-            "group ungroup", "group rename", "delete", "undo", "redo", "preset apply",
+            "group ungroup", "group rename", "delete", "mask set", "mask delete",
+            "undo", "redo", "preset apply",
             "preset save", "export",
             "settings set", "screen", "state print", "wait", "quit"};
         return names;
@@ -178,6 +179,28 @@ namespace cosmo
                 c.name = t[3];
             }
             else err = "unknown group subcommand: " + sub;
+        }
+        else if (v == "mask")
+        {
+            if (!need(3, "mask set <i> k=v… | mask delete <i>")) return c;
+            if (sub == "set")
+            {
+                if (!need(4, "mask set <i> <key>=<value>")) return c;
+                c.kind = Command::Kind::MaskSet;
+                c.index = std::atoi(t[2].c_str());
+                for (size_t i = 3; i < t.size(); ++i)
+                {
+                    std::pair<std::string, std::string> kv;
+                    if (!splitField(t[i], kv)) { err = "not a key=value: " + t[i]; return Command{}; }
+                    c.fields.push_back(kv);
+                }
+            }
+            else if (sub == "delete")
+            {
+                c.kind = Command::Kind::MaskDelete;
+                c.index = std::atoi(t[2].c_str());
+            }
+            else err = "unknown mask subcommand: " + sub;
         }
         else if (v == "delete")
         {
@@ -283,6 +306,11 @@ namespace cosmo
             case Command::Kind::GroupNew: o << "group new " << q(c.name); break;
             case Command::Kind::GroupUngroup: o << "group ungroup " << c.index; break;
             case Command::Kind::GroupRename: o << "group rename " << c.index << ' ' << q(c.name); break;
+            case Command::Kind::MaskSet:
+                o << "mask set " << c.index;
+                for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
+                break;
+            case Command::Kind::MaskDelete: o << "mask delete " << c.index; break;
             case Command::Kind::Delete:
                 o << "delete";
                 if (c.index >= 0) o << ' ' << c.index;

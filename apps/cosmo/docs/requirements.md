@@ -871,6 +871,21 @@ and the host makes 2 `svc->session()` calls. Both must reach zero for S to be do
 nothing, since a converted method keeps its fallback — see `PROGRESS.md` S4b for why that metric
 was replaced.
 
+### DR-SVC-2b What needs a command, and what `set` already reaches (R-SVC-2)
+Worth stating because it was got wrong once from reading: **`set` already addresses every scalar,
+every curve, the colour mixer and colour grading**, because `EditParamsIO` names them —
+`set curve=0,0;0.5,0.62;1,1`, `set mixer0=…`, `set grade0=210,18,-4`,
+`set rotation=1.5 balance=12 remapEnable=1`, `set mask=<blob>` (which **appends**). A new
+adjustment is therefore shell-reachable the moment it round-trips through the params codec, with
+no command work at all.
+
+The one thing the codec cannot express is addressing an existing mask **by index**, so
+`Command::MaskSet` / `MaskDelete` exist for exactly that (`CosmoService.cpp`, the `MaskSet` case):
+`mask set <i> feather=0.42 inverted=1 adjust.exposure=0.75`, `mask delete <i>`, with geometry
+(`cx/cy/rx/ry/x0/y0/x1/y1`), `type`, and the twelve `adjust.*` fields. An out-of-range index is
+rejected by reason — `mask: no mask 9 (have 1)` — rather than clamped, because silently editing a
+different mask than the caller named is worse than refusing.
+
 ### DR-SVC-9a Every command kind has a grammar (R-SVC-9)
 `every_command_kind_has_a_grammar` pairs each of the 22 `Command::Kind` values with a
 documented line, asserts the line parses to that kind, that no kind is listed twice, that all

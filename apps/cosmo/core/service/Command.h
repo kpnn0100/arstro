@@ -10,6 +10,12 @@
  *  Two representations maintained by hand would drift the first time one grew a field, and
  *  this project already learned that lesson with a log line nobody had run.
  *
+ *  Note what does NOT need its own command: curves, the colour mixer, colour grading and every
+ *  scalar are already addressable through `set`, because `EditParamsIO` names them
+ *  (`set curve=0,0;0.5,0.62;1,1`, `set mixer0=…`, `set grade0=210,18,-4`, `set rotation=1.5`).
+ *  `set mask=<blob>` APPENDS a mask, which is why `mask set <i>` / `mask delete <i>` exist —
+ *  addressing an existing one by index is the single thing the params codec cannot express.
+ *
  *  The grammar is deliberately flat and line-oriented, because every consumer of it is a
  *  shell, a file, or a socket:
  *
@@ -58,6 +64,8 @@ namespace cosmo
             GroupUngroup,    // index = node
             GroupRename,     // index = node, name
             Delete,          // index = node (-1 = the current selection)
+            MaskSet,         // index = mask, fields (feather / inverted / geometry / adjust.*)
+            MaskDelete,      // index = mask
             Undo,
             Redo,
             PresetApply,     // name

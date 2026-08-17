@@ -383,12 +383,17 @@ namespace
         }
     }
 
-    void printModel(const Host &h, bool json)
+    /** `cmd` is the `state print` that asked, when there was one. Its per-command options win
+     *  over the global flags — D-18: the options were read ONLY from the global argv, so
+     *  `state print --params` inside a script parsed fine and was then ignored, which is the
+     *  same failure as D-14 one layer up. An option a caller wrote and the tool dropped is
+     *  worse than one that does not exist. Global flags remain the default for every dump. */
+    void printModel(const Host &h, bool json, const Command *cmd = nullptr)
     {
         ModelDumpOptions o;
         o.json = json;
-        o.stable = h.opt.stable;
-        o.params = h.opt.params;
+        o.stable = h.opt.stable || (cmd && cmd->field("stable") == "1");
+        o.params = h.opt.params || (cmd && cmd->field("params") == "1");
         std::cout << arstro::cosmo::formatModel(h.svc.model(), o);
     }
 
@@ -1269,7 +1274,7 @@ namespace
         {
             case Command::Kind::StatePrint:
                 pumpOnce(h);
-                printModel(h, c.flag || h.opt.json);
+                printModel(h, c.flag || h.opt.json, &c);
                 return true;
             case Command::Kind::Wait:
                 if (waitFor(h, c.name, c.index)) return true;
