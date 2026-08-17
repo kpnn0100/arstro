@@ -22,8 +22,13 @@ else()
 
 file(GLOB COSMO_CORE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
+# service/ is the R-SVC layer: CosmoService + the Command/Event/AppModel contract every
+# front end binds to. Globbed like the rest so a new file needs no CMake edit.
+file(GLOB COSMO_SERVICE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/service/*.cpp)
+
 add_library(cosmo_core STATIC
   ${COSMO_CORE_SOURCES}
+  ${COSMO_SERVICE_SOURCES}
   ${CMAKE_CURRENT_SOURCE_DIR}/decode/NativeImageDecoder.cpp)
 
 target_include_directories(cosmo_core

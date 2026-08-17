@@ -9,7 +9,8 @@
 #include "ExportWriter.h"
 #include "Log.h"
 #include "OmpPin.h"
-#include "core/ProjectLoader.h"
+#include "core/service/CosmoService.h"
+#include "core/service/Event.h"
 #include "core/ThreadBudget.h"
 #include "widgets/SplashScreen.h"
 #include "core/decode/NativeImageDecoder.h"
@@ -52,33 +53,11 @@ namespace
     // the GTK main thread's consumer: apply each finished result to the session in order
     // and drive the animated loading screen (R-LOADING).
 
-    // What is left of the old LoadJob after S1 (R-SVC-1): the decode pool, the in-order
-    // hand-off, the back-pressure and the decode itself all moved into cosmo_core's
-    // ProjectLoader, which is why a load can now be run and measured with no window at
-    // all. This struct is the HOST's half — the tree mapping, the GTK poll source, and
-    // the two flags that belong to the animation.
-    struct LoadJob
-    {
-        using Result = arstro::cosmo::ProjectLoader::Result;
-
-        arstro::cosmo::ProjectLoader loader;
-        std::vector<int> nodeOf;               // entry index -> tree node (R-LOADUX-1)
-        std::string path;
-        // Import Catalog builds a project that has no .cmp on disk yet, so the file is
-        // written once every image has landed (an open just records the path).
-        bool saveOnFinish = false;
-        size_t entryCount = 0;                 // the project's real size (R-LOADUX-3)
-
-        guint pollId = 0;
-        bool coverSent = false;
-        bool revealed = false;                 // R-LOADPERF-3: editor already shown
-
-        ~LoadJob()
-        {
-            loader.stop();
-            if (pollId) g_source_remove(pollId);
-        }
-    };
+    // The load has no host-side object any more (R-SVC-1): CosmoService owns the pool, the
+    // decode, the tree and the state, and the host owns only the ANIMATION. What used to be
+    // LoadJob's flags are the two below on Host, because they are facts about the transition
+    // rather than about the load — "has the cover been chosen" and "has the editor been
+    // revealed" mean nothing to a CLI running the same project.
 
     // R-EXPORT-6 / R2: a batch export runs on its OWN thread, exactly like the
     // project loader above. It has to: EditSession::exportFullResSlot() renders at full
@@ -129,7 +108,12 @@ namespace
         artboard::CairoTarget target;
         NativeImageDecoder decoder;
         gint64 startUs = 0;
-        std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
+        // R-SVC-1: the application lives here, not in App and not in this file. Constructed
+        // once main() has an App to borrow the session from; every project open, edit,
+        // selection and export goes through dispatch().
+        std::unique_ptr<arstro::cosmo::CosmoService> svc;
+        bool loadCoverSent = false;   // transition state, not load state (see above)
+        bool loadRevealed = false;
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
         std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
         // The in-force preferences, mirrored here because the load runs in the host.
@@ -551,155 +535,131 @@ namespace
     // Main-thread consumer (GTK timeout): apply any decoded results in order, feed
     // the loading cover + progress, and on completion finish + reveal. Runs while
     // the worker decodes, so the loading screen animates at full frame rate.
-    gboolean pollLoad(gpointer user)
+    // ── The service's events, translated into animation (R-SVC-4) ────────────────────
+    //
+    // This is the entire host side of a project load now. The service decodes, attaches and
+    // owns the state (R-SVC-1); everything below turns "what changed" into "what the window
+    // does about it". No decisions are taken here — the only judgement left is WHICH pixels
+    // make the loading-screen cover, and even that is a lookup.
+    //
+    // This adapter is precisely why App keeps its animation while its logic leaves: R-G-1
+    // lives in the view, and the service never learns what an eased property is. It says a
+    // load is 6 of 18; the bar decides how to get there.
+    void onServiceEvent(Host *a, const arstro::cosmo::Event &e)
     {
-        auto *a = static_cast<Host *>(user);
-        LoadJob *job = a->load.get();
-        if (!job) return G_SOURCE_REMOVE;
+        using K = arstro::cosmo::Event::Kind;
+        // Every event IS a log line (R-SVC-5), so the load's progress, its failures and the
+        // measured thread peak all reach cosmo_v2.log without one dedicated LOGI per fact.
+        LOGI("%s", arstro::cosmo::formatEvent(e).c_str());
 
-        for (;;)  // drain everything ready this tick, strictly in entry order
+        switch (e.kind)
         {
-            LoadJob::Result r;
-            if (!job->loader.poll(r)) break;       // in entry order, or nothing ready yet
+            case K::ProjectOpening:
+                // Emitted BEFORE the session is reset, and that ordering is load-bearing:
+                // App::resetWorkspace clears the visible state (thumb pool, last frame), so
+                // beginning the transition afterwards would fade in from nothing instead of
+                // from the outgoing editor.
+                a->app.beginOpenTransition(e.text);
+                a->app.resetWorkspace();
+                a->app.setLoadProgress(0, e.b);
+                a->app.setStreamProgress(0, e.b);
+                a->loadCoverSent = false;
+                a->loadRevealed = false;
+                break;
 
-            // R-LOADUX-1: the node already exists (built before any decoding), so this
-            // is an ATTACH, not a create -- groups need nothing at all here.
-            const int node = r.index < job->nodeOf.size() ? job->nodeOf[r.index] : -1;
-            if (!r.group && r.decoded && node >= 0)
+            case K::EntryDecoded:
             {
-                // Fallback cover only if the thumbnail wasn't already supplied (#3):
-                // normally the loading-screen centre image is the cached thumbnail.
-                // Must run BEFORE the buffer is moved into the engine.
-                if (!job->coverSent && !a->app.hasLoadingCover())
+                const int slot = e.b;
+                // The filmstrip's thumb pool is indexed BY SLOT, so it must be fed in
+                // lockstep with attachment or a cell draws the previous project's image.
+                a->app.registerThumb(slot);
+                if (!a->loadCoverSent && !a->app.hasLoadingCover())
                 {
-                    a->app.setLoadingCover(r.rgba.data(), r.w, r.h);
-                    job->coverSent = true;
+                    // Preferred cover is the project card's cached 480px thumbnail (#3):
+                    // already decoded, no I/O. The fallback is the 110px filmstrip thumb —
+                    // small, but this path only happens for a project whose card was never
+                    // drawn, and a soft cover beats an empty one.
+                    auto it = a->thumbs.find(a->app.sourcePathForSlot(slot));
+                    if (it != a->thumbs.end() && it->second.ok())
+                        a->app.setLoadingCover(it->second.rgba.data(), it->second.width, it->second.height);
+                    else if (const auto *t = a->svc->session().thumbForSlot(slot))
+                        a->app.setLoadingCover(t->rgba.data(), t->w, t->h);
+                    a->loadCoverSent = true;
                 }
-                const int slot = a->app.attachImage(node, std::move(r.rgba), r.w, r.h,
-                                                    r.imagePath, std::move(r.thumb));
-                if (slot >= 0)
+                if (!a->loadRevealed)
                 {
-                    a->app.applyParamsToSlot(slot, r.params, r.history);
-                    a->app.setSlotBypass(slot, r.bypass);   // R-BYPASS-6
-                    // R-LOADPERF-3: reveal on the FIRST image; the rest stream in behind
-                    // the editor, visibly, as their placeholder cells fill in.
-                    if (!job->revealed)
-                    {
-                        // The FIRST photo makes the project showable, but it no longer
-                        // reveals on its own: the loading screen stays so its progress
-                        // bar means something, and App reveals on completion (or on its
-                        // cap, for a catalog too big to wait for) -- R-LOADPERF-3.
-                        job->revealed = true;
-                        a->app.selectImage(slot);
-                        a->app.setLoadUsable();
-                    }
-                    else
-                        a->app.refreshLibrary();    // the arrived photo replaces its spinner
+                    // R-LOADPERF-3: the first photo makes the project showable, but it does
+                    // not reveal on its own — the loading screen stays so its bar means
+                    // something, and App reveals on completion (or on its own cap, for a
+                    // catalog too big to wait for).
+                    a->loadRevealed = true;
+                    a->app.selectImage(slot);
+                    a->app.setLoadUsable();
                 }
-            }
-            else if (!r.group && node >= 0)
-            {
-                g_printerr("cosmo_v2: workspace image missing: %s\n", r.imagePath.c_str());
-                a->app.markImageFailed(node);       // stops spinning; reads as missing
-                a->app.refreshLibrary();
-            }
-
-            const size_t doneN = job->loader.consumed(), totalN = job->entryCount;
-            if (!r.name.empty())
-                a->app.setLoadStatus("Loading  " + r.name);  // what's loading, above the bar
-            a->app.setLoadProgress((int)doneN, (int)totalN);
-            a->app.setStreamProgress((int)doneN, (int)totalN);   // R-LOADUX-3, in the editor
-            gtk_widget_queue_draw(a->area);
-        }
-
-        if (job->loader.finished())
-        {
-            a->app.setStreamProgress((int)job->entryCount, (int)job->entryCount);  // fades out
-            a->app.finishWorkspaceLoad(job->path);   // records the path; keeps any selection
-            if (job->saveOnFinish && !a->app.saveWorkspaceAs(job->path))
-                g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
-            rememberProject(job->path);
-            // R-CPU-4 as amended: the peak is MEASURED, so the allotment and what actually
-            // ran can be told apart instead of taken on trust.
-            LOGI("load: finished %zu entries; peak %d concurrent decode workers, "
-                 "engine now %d threads (budget total %d)",
-                 job->entryCount, a->budget.peakDecode(), a->budget.engineThreads(),
-                 a->budget.total());
-            // A project whose images all failed to decode never revealed above.
-            a->app.finishOpenTransition();   // the bar has filled; reveal (min-visible aside)
-            job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
-            a->load.reset();                // joins the (already-finished) workers
-            return G_SOURCE_REMOVE;
-        }
-        return G_SOURCE_CONTINUE;
-    }
-
-    // Bring a set of workspace entries up with the animated loading transition
-    // (R-LOADING): start the transition immediately, decode on a background thread, and
-    // apply the results on the UI thread so the heavy work never stalls the animation.
-    // Shared by "open a .cmp" and "import a catalog" — the only difference is whether
-    // the .cmp already exists (`saveOnFinish`).
-    void startEntriesLoad(Host *a, std::vector<App::WorkspaceEntry> entries,
-                          const std::string &path, bool saveOnFinish)
-    {
-        if (entries.empty()) return;
-        a->app.beginOpenTransition(std::filesystem::path(path).stem().string());
-        a->app.resetWorkspace();
-
-        // Loading-screen centre image = the project's already-decoded cover thumbnail
-        // (#3), so it is present in part 1 with no I/O. Falls back to the first full
-        // decode (pollLoad) if the thumbnail wasn't cached yet.
-        for (const auto &e : entries)
-            if (!e.group && !e.imagePath.empty())
-            {
-                auto it = a->thumbs.find(e.imagePath);
-                if (it != a->thumbs.end() && it->second.ok())
-                    a->app.setLoadingCover(it->second.rgba.data(), it->second.width, it->second.height);
+                else
+                    a->app.refreshLibrary();   // the arrived photo replaces its spinner
                 break;
             }
 
-        a->load.reset();  // stop/join any prior load first
-        a->load = std::make_unique<LoadJob>();
-        LoadJob *job = a->load.get();
-        job->path = path;
-        job->saveOnFinish = saveOnFinish;
-        job->entryCount = entries.size();
-        // R-LOADUX-1: the whole rack exists before a single pixel is decoded, so the
-        // filmstrip shows the project's real size (as spinners) from the first frame.
-        job->nodeOf = a->app.buildPendingTree(entries);
-        a->app.setLoadProgress(0, (int)job->entryCount);
-        a->app.setStreamProgress(0, (int)job->entryCount);
+            case K::EntryFailed:
+                a->app.refreshLibrary();       // the service already stopped the spinner
+                break;
 
-        // R-LOADING-1 (amended): decode starts NOW, alongside the intro, so the progress
-        // bar and status line are already live by the time the intro lands. It runs on a
-        // worker pool whose per-image apply is off the UI thread, so it cannot hitch the
-        // animation. The pool's size is a SLICE of the one budget rather than a second
-        // conversion of the user's percentage (R-SVC-10): ThreadBudget::beginLoad reserves
-        // it and the engine shrinks to what is left for the duration, so the two can no
-        // longer add up to twice what was asked for (D-11).
-        job->loader.start(std::move(entries), a->budget,
-                          [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); },
-                          // Per-thread, on the thread, because the OpenMP thread count is a
-                          // per-thread ICV — which is why the old env-var pin never bound (D-12).
-                          [] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
-        LOGI("load: %zu entries on %d decode workers, engine %d threads "
-             "(cpu budget %d%% = %d of %d cores; decode cap %d)",
-             job->entryCount, job->loader.workers(), a->budget.engineThreads(),
-             a->budget.percent(), a->budget.total(), a->budget.cores(),
-             arstro::cosmo::ThreadBudget::kMaxDecodeWorkers);
-        job->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
+            case K::LoadProgress:
+                if (!e.text.empty()) a->app.setLoadStatus("Loading  " + e.text);
+                a->app.setLoadProgress(e.a, e.b);
+                a->app.setStreamProgress(e.a, e.b);   // R-LOADUX-3, in the editor
+                gtk_widget_queue_draw(a->area);
+                break;
+
+            case K::LoadFinished:
+                a->app.setStreamProgress(e.b, e.b);   // fades out
+                a->app.refreshLibrary();
+                a->app.finishOpenTransition();        // the bar has filled; reveal
+                gtk_widget_queue_draw(a->area);
+                break;
+
+            case K::SelectionChanged:
+            case K::ParamsChanged:
+            case K::HistoryChanged:
+                // A command changed the edit state from outside the widgets — a script, or an
+                // agent on the control socket (R-SVC-8). Re-push the panels so the window
+                // agrees with the model; a click through the widgets has already done this
+                // for itself, and doing it twice is idempotent.
+                a->app.syncFromSession();
+                gtk_widget_queue_draw(a->area);
+                break;
+
+            case K::Error:
+            case K::CommandRejected:
+                g_printerr("cosmo_v2: %s\n", e.text.c_str());
+                break;
+
+            // Screen ownership stays with App in S2 — it drives the transition phases, which
+            // are presentation. S4 makes the model's `screen` authoritative and this becomes
+            // a real case rather than a deliberate no-op.
+            default: break;
+        }
     }
 
-    // Open an existing .cmp through the shared animated load.
+    // Open an existing .cmp: name the path, let the events animate it (R-SVC-2).
     void startProjectLoad(Host *a, const std::string &path)
     {
-        std::vector<App::WorkspaceEntry> entries;
-        if (!App::readWorkspaceFile(path, entries))
-        {
-            g_printerr("cosmo_v2: could not read project %s\n", path.c_str());
-            return;
-        }
-        startEntriesLoad(a, std::move(entries), path, false);
+        arstro::cosmo::Command c;
+        c.kind = arstro::cosmo::Command::Kind::ProjectOpen;
+        c.path = path;
+        a->svc->dispatch(c);
+    }
+
+    // Import Catalog: the same animated load, except the .cmp does not exist yet, so the
+    // service writes it once the last image has landed.
+    void startImportLoad(Host *a, std::vector<std::string> images, const std::string &cmpPath)
+    {
+        arstro::cosmo::Command c;
+        c.kind = arstro::cosmo::Command::Kind::Import;
+        c.paths = std::move(images);
+        c.path = cmpPath;
+        a->svc->dispatch(c);
     }
 
     void addCmpFilter(GtkWidget *d)
@@ -788,18 +748,9 @@ namespace
         // shared background loader, so a big catalog streams in behind the loading
         // screen instead of freezing the UI for the length of every decode. The .cmp
         // does not exist yet, so it is written once the last image has landed.
-        std::vector<App::WorkspaceEntry> entries;
-        entries.reserve(imgs.size());
-        for (const auto &ip : imgs)
-        {
-            App::WorkspaceEntry e;
-            e.group = false;
-            e.parent = -1;            // flat, at the project root
-            e.imagePath = ip;
-            e.name = baseName(ip);
-            entries.push_back(std::move(e));
-        }
-        startEntriesLoad(a, std::move(entries), cmp, true);
+        // Building the entry list is the service's job now (R-SVC-2): the host names the
+        // images and the target .cmp, and nothing else.
+        startImportLoad(a, std::move(imgs), cmp);
         gtk_widget_queue_draw(a->area);
     }
 
@@ -1088,7 +1039,16 @@ namespace
         a->app.render(a->target, nowMs(*a));
         return FALSE;
     }
-    gboolean onTick(gpointer user) { gtk_widget_queue_draw(static_cast<Host *>(user)->area); return G_SOURCE_CONTINUE; }
+    gboolean onTick(gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        // One pump, every frame, unconditionally (R-SVC-6). The old code added and removed a
+        // dedicated 15 ms GTK source per load; a service that is always pumped cannot forget
+        // to be, and pump() is a cheap early-out when nothing is in flight.
+        if (a->svc) a->svc->pump(nowMs(*a));
+        gtk_widget_queue_draw(a->area);
+        return G_SOURCE_CONTINUE;
+    }
 
     gboolean onButton(GtkWidget *w, GdkEventButton *e, gpointer user)
     {
@@ -1284,6 +1244,27 @@ int main(int argc, char **argv)
     host.budget.setPercent(host.settings.cpuPercent);
     host.budget.setExplicitEngineThreads(host.settings.threads);
     host.app.applySettings(host.settings);
+
+    // ── The service (R-SVC-1) ──────────────────────────────────────────────────────
+    // It borrows App's session rather than owning it: App has owned `mSession` since long
+    // before any of this, and moving that ownership in the same step as introducing the
+    // service would mean rewriting both at once with nothing working in between. S4 moves it
+    // and App becomes a view holding a CosmoService&.
+    host.svc = std::make_unique<arstro::cosmo::CosmoService>(host.app.session(), host.budget);
+    host.svc->setDecoderFactory(
+        [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
+    // Per-thread, on the thread: the OpenMP count is a per-thread ICV, which is why the old
+    // env-var pin in main() bound nothing (D-12).
+    host.svc->setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
+    host.svc->setImageWriter([](const std::string &out, const std::string &src, const uint8_t *rgba,
+                               int w, int h, std::string &err) {
+        // The encoder stays in the host — a codec inside cosmo_core would break the Android
+        // and WASM builds (R-SVC-7). ExportWriter already owns the metadata rules.
+        App::ExportRequest req;   // defaults: JPEG q92, EXIF kept, profile embedded
+        return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
+    });
+    host.svc->subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
+    host.settings.cpuPercent = host.budget.percent();
     LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),
          host.budget.engineThreads(), host.budget.decodeWorkers());

@@ -770,6 +770,49 @@ built on the workers, the per-worker hook ran once per worker, `peakDecode() <= 
 LibRaw): 25% → pool 5, peak 5, 4.51 cores mean = **19% of the machine**; 100% → pool 8 (the cap
 binds), 6.05 cores mean = 25%.
 
+### DR-SVC-1 The service, and what a front end may do (R-SVC-1/2/3/4)
+`CosmoService` (`core/service/CosmoService.{h,cpp}`) owns the application: the edit session
+(borrowed in S2, see §2.4e of `detailed_design.md`), the project load, the export pass,
+settings, recents and the group tree. Its whole interface is `dispatch(Command)` /
+`dispatchText(line, err)` / `pump(nowMs)` / `model()` / `subscribe(sink)`. The GTK host no
+longer contains a load: `onServiceEvent` (`linux_main.cpp:548-644`) translates the event stream
+into App's animation calls and decides nothing, and `startProjectLoad`/`startImportLoad`
+(`linux_main.cpp:646-664`) build a `Command` and dispatch it. `onTick` pumps the service once
+per frame, unconditionally (`linux_main.cpp:1042-1052`) — the old code added and removed a
+dedicated 15 ms GTK source per load, and a service that is always pumped cannot forget to be.
+
+Two App entry points exist for the adapter and are deliberately narrow: `registerThumb(slot)`
+(the filmstrip's thumb pool is indexed by slot, so it must be fed in lockstep with attachment)
+and `syncFromSession()` (re-push the panels when a *command* changed the edit state from
+outside the widgets — a script, or an agent on the control socket). Screen ownership stays with
+App in S2 because it drives the transition phases, which are presentation; S4 makes
+`AppModel::screen` authoritative.
+
+### DR-SVC-2 One grammar, generated from one struct (R-SVC-2/5)
+`parseCommand`/`formatCommand` (`core/service/Command.cpp:92-330`) are the only parser and the
+only formatter, and `formatEvent` (`core/service/Event.cpp:35-70`) is the only event
+serializer. Verified by `command_text_roundtrips`, which asserts `format(parse(x))` re-parses to
+the same kind AND is a fixed point for all 23 documented lines, that a blank/`#` line is a
+successful no-op while garbage names its error, and that `"quoted names"` survive.
+
+### DR-SVC-3 A project opens with no UI at all (R-SVC-1/2/3)
+`service_opens_a_project_with_no_ui` builds a 7-entry `.cmp` (one group, five decodable images,
+one missing), dispatches `project open`, pumps at a fixed 16 ms tick, and asserts: the loading
+surface appears, the editor is reached, five images attached, the group is the parent of the
+images, the missing one reads `failed` and not `pending`, the budget resolved to 2 of 8 cores at
+25%, and the event stream contains `project.opening`, `entry.decoded`, `entry.failed`,
+`load.finished decoded=5 total=7`, `project.opened` and `screen.changed editor`. No window, no
+Artboard, no click — which is what D-6 made impossible and what let D-11/D-12 ship unmeasured.
+`commands_drive_the_session` covers select/set/undo/redo/next/prev/bypass/group/settings/screen/
+save plus rejection, each asserted against the model.
+
+### DR-SVC-9 Two front ends, one state (R-SVC-9)
+`two_services_dump_the_same_state` runs the same command sequence twice — once pumped 120 extra
+frames, standing in for a GUI that has animated longer — and asserts the `stable` dumps are
+byte-identical, while the non-stable dumps do differ (or the exclusion would prove nothing).
+`ModelDumpOptions::stable` is therefore the comparison artifact, and `--json` is asserted to be
+well-formed enough to start with `{` and contain the `nodes` array.
+
 ### DR-LOADPERF-2 Off-thread apply
 `EditSession::makeThumb` is public and re-entrant so the loader builds the filmstrip thumbnail on its
 own thread, and `EditSession::openImageInto(int, vector<uint8_t>&&, …, Thumb&&)` +

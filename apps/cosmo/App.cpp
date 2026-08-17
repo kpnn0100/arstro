@@ -522,6 +522,15 @@ namespace cosmo_v2
         return slot;
     }
 
+    void App::syncFromSession()
+    {
+        // The pair the widgets normally call for themselves after an interaction. Named for
+        // the direction it flows, because the whole point of R-SVC-3 is that state moves one
+        // way: service -> view.
+        syncControlsToSlot();
+        refreshLibrary();
+    }
+
     void App::refreshLibrary()
     {
         // The browse chrome only: the filmstrip's cells + selection, and the top bar's

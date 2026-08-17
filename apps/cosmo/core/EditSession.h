@@ -85,6 +85,28 @@ namespace cosmo
             bool loading = false;   // R-LOADUX-2: pixels still decoding -> spinner cell
         };
 
+        /** One row of the WHOLE tree, depth-first in display order — what a service, a CLI
+         *  or a project dump needs to describe a project without reaching into `mNodes`.
+         *  `Cell` above is deliberately different: it is only the current group's children,
+         *  which is what a filmstrip draws. Root (node 0) is not a row.
+         *
+         *  `pending` vs `failed`: both have `slot == -1`, and the pair is the only way to
+         *  tell "still coming" from "gone" (R-LOADUX-1/2). */
+        struct TreeRow
+        {
+            int node = -1;
+            int parent = -1;   // -1 for a child of root, else the parent node id
+            int depth = 0;
+            bool group = false;
+            std::string name;
+            int slot = -1;     // image leaf only
+            int count = 0;     // group only: child count
+            bool bypass = false;
+            bool pending = false;
+            bool failed = false;
+        };
+        std::vector<TreeRow> treeRows() const;
+
         /** A small pre-downscaled copy of a slot's image, generated once on open --
          *  a filmstrip widget registers this (not the full-res image) as its thumb. */
         struct Thumb
@@ -123,6 +145,12 @@ namespace cosmo
         void navigateToGroup(int node);                    // drill into / up to a group
         /** `cell` indexes currentGroupCells() / the current group's kids. */
         void selectNode(int cell, bool shift, bool ctrl);
+        /** Select by NODE id rather than by cell index: navigates to the node's parent group
+         *  first, so a caller that only has a node (a command, a project dump, a script) does
+         *  not have to know which group is currently open. False if `node` is not a real
+         *  non-root node. Cell indices stay the filmstrip's language; ids are everyone
+         *  else's (R-SVC-2). */
+        bool selectNodeById(int node);
         void selectImage(int slot);                         // jump straight to an image anywhere in the tree
         void createGroupFromSelection();
         void ungroupSelected();

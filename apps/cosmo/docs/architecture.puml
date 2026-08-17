@@ -124,6 +124,40 @@ package "app  (namespace arstro::cosmo_v2)" as app {
 }
 
 package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
+  class CosmoService <<the application, R-SVC-1>> {
+    + dispatch(Command) : bool
+    + dispatchText(line, err) : bool
+    + pump(nowMs)                    ' never blocks (R-SVC-6)
+    + model() : const AppModel &
+    + subscribe(EventSink)
+    + setDecoderFactory / setWorkerInit / setImageWriter
+    + session() : EditSession &      ' transitional; S4 deletes every use
+    - refreshModel() / startProjectLoad()
+  }
+  class AppModel <<plain data, R-SVC-3>> {
+    + revision : unsigned
+    + screen : Screen
+    + nodes : NodeModel[]
+    + selectedNode / currentSlot / editGroup : int
+    + params : EditParams
+    + history / load / exports / settings / budget
+    + frameSlot / frameWidth / frameSeq   ' metadata only — never pixels
+  }
+  class Command <<one way in, R-SVC-2>> {
+    + kind : Kind
+    + path / name / index / flag / paths / fields
+    + {static} parseCommand(line, err) : Command
+    + {static} formatCommand(c) : string
+  }
+  class Event <<one way out = the log line, R-SVC-5>> {
+    + kind : Kind
+    + text / a / b / ms
+    + {static} formatEvent(e) : string
+  }
+  class AppModelCodec <<namespace>> {
+    + formatModel(model, opts) : string   ' stable form proves two views agree (R-SVC-9)
+  }
+
   class EditSession {
     - mNodes : GNode[]
     - mSlotParams/History/Names/Paths/Thumbs : []
@@ -135,6 +169,8 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + exportFullRes/exportFullResSlot
     + sourcePathForSlot/nameForSlot
     + undo/redo/jumpToHistory
+    + treeRows() : TreeRow[]        ' the whole tree, flat, for a service or a CLI
+    + selectNodeById(node) : bool    ' ids are everyone's language but the filmstrip's
     + saveWorkspaceAs/readWorkspaceFile/resetWorkspace
     + savePreset/applyPreset/importPresetFrom
   }
@@ -287,6 +323,14 @@ History *--> HistoryNode
 App ..> ProjectStore
 App ..> PresetLibrary
 App ..> AppSettings : applySettings (no thread count — R-SVC-10)
+GtkMain *--> CosmoService : owns; onServiceEvent translates Events to animation (R-SVC-4)
+CosmoService o--> EditSession : borrows in S2, owns in S4
+CosmoService *--> AppModel
+CosmoService *--> ProjectLoader
+CosmoService ..> ThreadBudget
+CosmoService ..> Command : dispatch
+CosmoService ..> Event : emit
+AppModelCodec ..> AppModel
 GtkMain ..> ThreadBudget : setPercent / setExplicitEngineThreads (R-CPU-3)
 LoadJob *--> ProjectLoader
 ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)

@@ -75,6 +75,49 @@ namespace cosmo
         return cells;
     }
 
+    bool EditSession::selectNodeById(int node)
+    {
+        if (node <= 0 || node >= (int)mNodes.size()) return false;   // 0 is root: never selectable
+        const int parent = mNodes[node].parent;
+        navigateToGroup(parent);
+        const std::vector<int> &kids = mNodes[parent].kids;
+        for (size_t i = 0; i < kids.size(); ++i)
+            if (kids[i] == node) { selectNode((int)i, false, false); return true; }
+        return false;   // a node whose parent does not list it would be a corrupt tree
+    }
+
+    std::vector<EditSession::TreeRow> EditSession::treeRows() const
+    {
+        // Depth-first in display order, so the flat list reads top to bottom exactly as the
+        // filmstrip and a project dump present it, and a parent always precedes its kids.
+        std::vector<TreeRow> rows;
+        std::function<void(int, int, int)> walk = [&](int node, int parentId, int depth) {
+            for (int k : mNodes[node].kids)
+            {
+                const GNode &g = mNodes[k];
+                TreeRow r;
+                r.node = k;
+                r.parent = parentId;
+                r.depth = depth;
+                r.group = g.group;
+                r.name = g.name;
+                r.bypass = g.bypass;
+                if (g.group) r.count = (int)g.kids.size();
+                else
+                {
+                    r.slot = g.slot;
+                    r.pending = g.pending;
+                    // A leaf with no slot that is not pending never arrived (markImageFailed).
+                    r.failed = g.slot < 0 && !g.pending;
+                }
+                rows.push_back(std::move(r));
+                if (g.group) walk(k, k, depth + 1);
+            }
+        };
+        walk(0, -1, 0);
+        return rows;
+    }
+
     std::vector<std::string> EditSession::breadcrumbPath() const
     {
         std::vector<int> chain;

@@ -7,6 +7,8 @@
 #include "../OrderedParallelLoad.h"
 #include "../ProjectLoader.h"
 #include "../ThreadBudget.h"
+#include "../service/AppModelCodec.h"
+#include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
 #include <cassert>
 #include <chrono>
@@ -873,6 +875,276 @@ namespace
         printf("[PASS] project_load_peak_never_exceeds_its_pool (pool %d, peak %d of budget %d)\n",
                pool, budget.peakDecode(), budget.total());
     }
+
+    // ── S2: the service (R-SVC-1/2/3/5) ──────────────────────────────────────────────
+
+    // A decoder that needs no files on disk: every path "decodes" to a small solid image.
+    struct FakeDecoder : arstro::cosmo::IImageDecoder
+    {
+        arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+        {
+            arstro::cosmo::DecodedImage d;
+            if (path.find("missing") != std::string::npos) return d;   // ok() == false
+            d.width = 12; d.height = 8;
+            d.rgba.assign((size_t)12 * 8 * 4, 180);
+            d.name = path;
+            return d;
+        }
+    };
+
+    std::string writeFakeProject(const std::string &path, int images, bool withGroup, bool withMissing)
+    {
+        std::ofstream f(path, std::ios::trunc);
+        f << "cosmoworkspace=1\n";
+        if (withGroup) f << "#group\nparent=-1\nname=Tokyo\n";
+        for (int i = 0; i < images; ++i)
+            f << "#image\nparent=" << (withGroup ? 0 : -1) << "\npath=/fake/img" << i << ".raf\n";
+        if (withMissing) f << "#image\nparent=-1\npath=/fake/missing.raf\n";
+        return path;
+    }
+
+    // Drive a load to completion the way any front end does: pump, don't block.
+    void pumpUntilIdle(arstro::cosmo::CosmoService &svc, int maxMs = 20000)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxMs);
+        double now = 0;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            svc.pump(now);
+            now += 16.0;                       // a fixed tick, so a run is reproducible (R-SVC-6)
+            if (!svc.model().load.active) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        svc.pump(now);
+    }
+
+    // R-SVC-5: the struct is the truth and the text is generated from it, so every command
+    // must survive format(parse(text)) unchanged. Two hand-maintained representations would
+    // drift, which is the failure this test exists to prevent.
+    void test_command_text_roundtrips()
+    {
+        using arstro::cosmo::Command;
+        const char *lines[] = {
+            "project open /tmp/a.cmp", "project new /tmp/b.cmp", "project save", "project save /tmp/c.cmp",
+            "project close", "import /a.raf /b.raf", "select 3", "select next", "select prev",
+            "set exposure=1.2 temp=7000", "bypass 4 on", "bypass 4 off", "group new \"Tokyo Night\"",
+            "group ungroup 2", "undo", "redo", "preset apply \"Portrait/Soft Skin\"",
+            "preset save MyLook", "settings set cpuPercent=25 previewEdge=1600", "screen home",
+            "state print", "state print --json", "quit"};
+        for (const char *line : lines)
+        {
+            std::string err;
+            const Command c = arstro::cosmo::parseCommand(line, err);
+            assert(err.empty() && c.valid() && "every documented line must parse");
+            const std::string back = arstro::cosmo::formatCommand(c);
+            std::string err2;
+            const Command again = arstro::cosmo::parseCommand(back, err2);
+            assert(err2.empty() && again.kind == c.kind && "format(parse(x)) must re-parse to the same kind");
+            assert(arstro::cosmo::formatCommand(again) == back && "and be a fixed point");
+        }
+
+        // A blank line and a comment are successful no-ops, so a script file reads naturally.
+        std::string err;
+        assert(!arstro::cosmo::parseCommand("", err).valid() && err.empty());
+        assert(!arstro::cosmo::parseCommand("   # just a note", err).valid() && err.empty());
+        // Garbage is rejected with a reason rather than silently ignored.
+        arstro::cosmo::parseCommand("frobnicate the widget", err);
+        assert(!err.empty() && "an unknown command must say so");
+        arstro::cosmo::parseCommand("set notakeyvalue", err);
+        assert(!err.empty() && "set without key=value must say so");
+        arstro::cosmo::parseCommand("export --format jpg", err);
+        assert(!err.empty() && "export without --outdir must say so");
+
+        // Quoting survives a name with a space (no escapes anywhere in cosmo's formats).
+        const Command g = arstro::cosmo::parseCommand("group new \"Tokyo Night\"", err);
+        assert(g.name == "Tokyo Night");
+        assert(!arstro::cosmo::commandNames().empty());
+        printf("[PASS] command_text_roundtrips\n");
+    }
+
+    // R-SVC-1/2/3, and the point of the whole architecture: a project opens, decodes,
+    // attaches and lands in the editor with NO window, NO Artboard and NO click. This is
+    // what D-6 made impossible and what let D-11/D-12 ship unmeasured.
+    void test_service_opens_a_project_with_no_ui()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_open.cmp";
+        writeFakeProject(path, 5, /*withGroup=*/true, /*withMissing=*/true);
+
+        EditSession session;
+        ThreadBudget budget(25, 8);
+        CosmoService svc(session, budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+
+        std::vector<std::string> log;
+        svc.subscribe([&log](const Event &e) { log.push_back(formatEvent(e)); });
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+        assert(svc.model().screen == Screen::Loading && "opening shows the loading surface");
+        pumpUntilIdle(svc);
+
+        const AppModel &m = svc.model();
+        assert(m.screen == Screen::Editor && "a finished load lands in the editor");
+        assert(m.imageCount == 5 && "the five decodable images attached");
+        assert(m.nodes.size() == 7 && "one group + five images + one missing");
+        assert(m.projectName == "cosmo_svc_open");
+        assert(m.currentSlot >= 0 && "something is on the stage");
+        assert(m.budget.total == 2 && "25% of 8 cores");
+        assert(m.load.workers >= 1 && m.load.workers <= m.budget.total);
+
+        // The group came first and the images are its children, in entry order.
+        assert(m.nodes[0].group && m.nodes[0].name == "Tokyo");
+        assert(m.nodes[1].parent == m.nodes[0].node && "images parented to the group");
+        // The missing one reads as failed, never as pending — "gone" vs "still coming".
+        const NodeModel &last = m.nodes.back();
+        assert(!last.group && last.slot < 0 && last.failed && !last.pending);
+
+        // The event stream is the log (R-SVC-5): the milestones must all be in it.
+        auto sawPrefix = [&log](const std::string &p) {
+            for (const std::string &l : log) if (l.rfind(p, 0) == 0) return true;
+            return false;
+        };
+        assert(sawPrefix("[evt] project.opening name=cosmo_svc_open entries=7"));
+        assert(sawPrefix("[evt] entry.decoded"));
+        assert(sawPrefix("[evt] entry.failed"));
+        assert(sawPrefix("[evt] load.finished decoded=5 total=7"));
+        assert(sawPrefix("[evt] project.opened"));
+        assert(sawPrefix("[evt] screen.changed editor"));
+
+        std::filesystem::remove(path);
+        printf("[PASS] service_opens_a_project_with_no_ui\n");
+    }
+
+    // R-SVC-2: editing, selecting, grouping, undo and bypass are all reachable as commands,
+    // and each one actually changes the model. A behaviour a front end can reach that no
+    // command expresses is a defect in the command set, so this is the coverage check.
+    void test_commands_drive_the_session()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_cmds.cmp";
+        writeFakeProject(path, 3, false, false);
+
+        EditSession session;
+        ThreadBudget budget(50, 8);
+        CosmoService svc(session, budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 3);
+
+        const int firstNode = svc.model().nodes.front().node;
+        assert(svc.dispatchText("select " + std::to_string(firstNode), err) && err.empty());
+        const int slotA = svc.model().currentSlot;
+        assert(slotA >= 0);
+
+        // set goes through the SAME text codec the .cosmo/.cmp/.apf formats use, so it can
+        // never accept a smaller set of fields than a project file does.
+        assert(svc.dispatchText("set exposure=1.25 temp=7200", err) && err.empty());
+        assert(std::fabs(svc.model().params.exposure - 1.25f) < 1e-4f);
+        assert(std::fabs(svc.model().params.temp - 7200.f) < 1.0f);
+        assert(svc.model().history.canUndo && "an edit is undoable");
+
+        assert(svc.dispatchText("undo", err) && err.empty());
+        assert(std::fabs(svc.model().params.exposure) < 1e-4f && "undo put it back");
+        assert(svc.dispatchText("redo", err) && err.empty());
+        assert(std::fabs(svc.model().params.exposure - 1.25f) < 1e-4f);
+
+        assert(svc.dispatchText("select next", err) && err.empty());
+        assert(svc.model().currentSlot != slotA && "next moved the stage");
+        assert(svc.dispatchText("select prev", err) && err.empty());
+        assert(svc.model().currentSlot == slotA && "and back again");
+
+        assert(svc.dispatchText("bypass " + std::to_string(firstNode) + " on", err) && err.empty());
+        assert(svc.model().nodes.front().bypass && "R-BYPASS through a command");
+        assert(svc.dispatchText("bypass " + std::to_string(firstNode) + " off", err) && err.empty());
+        assert(!svc.model().nodes.front().bypass);
+
+        assert(svc.dispatchText("group new \"Set A\"", err) && err.empty());
+        bool sawGroup = false;
+        for (const NodeModel &n : svc.model().nodes) if (n.group) sawGroup = true;
+        assert(sawGroup && "a group exists now");
+
+        assert(svc.dispatchText("settings set cpuPercent=75", err) && err.empty());
+        assert(svc.model().budget.percent == 75 && svc.model().settings.cpuPercent == 75);
+
+        assert(svc.dispatchText("screen home", err) && err.empty());
+        assert(svc.model().screen == Screen::Home);
+
+        // A rejected command reports why, changes nothing, and leaves it in the model.
+        assert(!svc.dispatchText("select 9999", err));
+        assert(!svc.model().lastError.empty() && "a rejection is inspectable");
+        assert(!svc.dispatchText("settings set nonsense=1", err));
+
+        const std::string save = "/tmp/cosmo_svc_cmds_saved.cmp";
+        assert(svc.dispatchText("project save " + save, err) && err.empty());
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(save, back) && !back.empty());
+
+        std::filesystem::remove(path);
+        std::filesystem::remove(save);
+        printf("[PASS] commands_drive_the_session\n");
+    }
+
+    // R-SVC-9: two front ends given the same commands must show the same state. The stable
+    // dump is the comparison, which is why it excludes revision/frameSeq/peak — a GUI that
+    // has animated longer is not a difference in state (R-SVC-4).
+    void test_two_services_dump_the_same_state()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_dump.cmp";
+        writeFakeProject(path, 4, true, false);
+
+        ModelDumpOptions stable;
+        stable.stable = true;
+        stable.params = true;
+
+        auto runOne = [&](int extraPumps) {
+            EditSession session;
+            ThreadBudget budget(50, 8);
+            CosmoService svc(session, budget);
+            svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+            std::string err;
+            svc.dispatchText("project open " + path, err);
+            pumpUntilIdle(svc);
+            svc.dispatchText("select next", err);
+            svc.dispatchText("set exposure=0.5 contrast=12", err);
+            // The "GUI" pumps many more times than the "CLI" — pure elapsed animation.
+            for (int i = 0; i < extraPumps; ++i) svc.pump(1000.0 + i * 16.0);
+            return formatModel(svc.model(), stable);
+        };
+
+        const std::string cli = runOne(0);
+        const std::string gui = runOne(120);
+        assert(cli == gui && "same commands -> same state, whatever the frame count");
+
+        // And the unstable dump really does differ, or the exclusion above proves nothing.
+        EditSession s3;
+        ThreadBudget b3(50, 8);
+        CosmoService svc3(s3, b3);
+        svc3.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        svc3.dispatchText("project open " + path, err);
+        pumpUntilIdle(svc3);
+        const std::string a = formatModel(svc3.model(), ModelDumpOptions{});
+        svc3.pump(9999.0);
+        svc3.dispatchText("select next", err);
+        const std::string b = formatModel(svc3.model(), ModelDumpOptions{});
+        assert(a != b && "revision moves, so the unstable dump is not accidentally constant");
+
+        // The text form is inspectable, not opaque: these keys are what a debug session greps.
+        assert(cli.find("screen=editor") != std::string::npos);
+        assert(cli.find("kind=group") != std::string::npos);
+        assert(cli.find("budgetTotal=") != std::string::npos);
+        assert(cli.find("revision=") == std::string::npos && "stable dumps exclude revision");
+
+        const std::string js = formatModel(svc3.model(), [] { ModelDumpOptions o; o.json = true; return o; }());
+        assert(js.front() == '{' && js.find("\"nodes\": [") != std::string::npos && "and there is a --json form");
+
+        std::filesystem::remove(path);
+        printf("[PASS] two_services_dump_the_same_state\n");
+    }
 }
 
 int main()
@@ -901,6 +1173,10 @@ int main()
     test_cpu_budget_scales_with_percent();
     test_one_budget_is_divided_not_duplicated();
     test_project_load_peak_never_exceeds_its_pool();
+    test_command_text_roundtrips();
+    test_service_opens_a_project_with_no_ui();
+    test_commands_drive_the_session();
+    test_two_services_dump_the_same_state();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

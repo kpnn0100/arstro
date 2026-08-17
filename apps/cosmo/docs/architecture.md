@@ -17,8 +17,10 @@ are the application.
 │           artboard::IRenderTarget only; drives EditSession              │
 ├───────────────────────────────────────────────────────────────────────┤
 │ cosmo_core  arstro::cosmo    cosmo/core/*                (UI-free)      │
+│           CosmoService (Command in, AppModel + Event out) over          │
 │           EditSession (sessions, group tree, history, presets,         │
-│           persistence) + native image decoder. No Artboard dependency. │
+│           persistence), ProjectLoader, ThreadBudget + the decoder seam. │
+│           No Artboard dependency — the CLI is a front end of THIS.      │
 ├───────────────────────────────────────────────────────────────────────┤
 │ engine    arstro   core/ImageProcessing/*               (headless)     │
 │           EditEngine pipeline + RenderService worker + EditParams       │
@@ -49,6 +51,24 @@ cosmo touches exactly two external contracts:
 - **Engine seam** (`cosmo::EditSession` → `arstro::RenderService`) — how edits become pixels. The
   app mutates `EditParams` and calls `submit()`; the engine renders on a worker thread and the app
   polls finished frames.
+
+### 2.2b The core is a service; every front end is a view (R-SVC)
+The layer above is not "the app" any more — it is *a* view of the app. `CosmoService` owns
+the state and every operation on it; a front end sends a `Command` and reads an `AppModel`
+plus an `Event` stream, and holds no logic of its own. The GTK window, `cosmo-cc` and the
+shot renderer are three views of one service, and a control socket lets one drive a window
+another is watching (R-SVC-8).
+
+This was already the claim in §2.1/§2.3 — and it was not true: `startEntriesLoad` /
+`decodeEntry` / `pollLoad` lived in `linux_main.cpp`, so opening a project needed a mouse
+(D-6). The cost came due when the CPU budget's two defects (D-11, D-12) had to be found by
+*reading*, because the load could not be run from a shell at all. The service is that claim
+made structural rather than aspirational.
+
+Presentation stays a real category (R-SVC-4). Animation, easing, hover, scroll offsets and
+the transition phases are the view's business and R-G-1 is untouched: the service says a
+load is 6 of 18, and the bar decides how to get there. `linux_main.cpp`'s `onServiceEvent`
+is exactly that boundary, and it is worth reading as the shape all four front ends take.
 
 ### 2.3 App shell separated from UI-free logic
 Everything that is not drawing or gesture handling — the group tree, selection, undo history,
@@ -241,7 +261,12 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
 | `apps/cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |
 | `apps/cosmo/widgets/*` | app | ~40 `Segment` widgets (chrome, panels, controls, overlays, dialogs) — plus `SplashScreen`, which the host renders in its OWN borderless window before the main one exists (R-SPLASH) |
-| `apps/cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam |
+| `apps/cosmo/core/service/CosmoService.{h,cpp}` | core | **the application** — `dispatch(Command)` / `pump(nowMs)` / `model()`, owning the load, the export queue, settings and recents (R-SVC-1) |
+| `apps/cosmo/core/service/Command.{h,cpp}` | core | the one way in, plus the single parser/formatter for its text form (R-SVC-2/5) |
+| `apps/cosmo/core/service/Event.{h,cpp}` | core | the one way out; `formatEvent()` output **is** the log line (R-SVC-3/5) |
+| `apps/cosmo/core/service/AppModel.h` | core | the whole observable state as plain data — no pixels, no Artboard types, no presentation (R-SVC-3/4) |
+| `apps/cosmo/core/service/AppModelCodec.{h,cpp}` | core | the model as deterministic text/JSON; the `stable` form is what proves two front ends agree (R-SVC-9) |
+| `apps/cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam. `treeRows()` and `selectNodeById()` are the id-addressed projections a front end needs |
 | `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1); reusable, and calls a per-worker start hook |
 | `apps/cosmo/core/ProjectLoader.{h,cpp}` | core | **the project load** — decode pool, per-worker decode + thumbnail, in-order delivery. Was three functions in the GTK host; moving it down is what made a load runnable and measurable with no window (R-SVC-1) |
 | `apps/cosmo/core/ThreadBudget.{h,cpp}` | core | the ONE owner of the CPU budget: one total, divided between the decode pool and the engine, with the measured peak (R-SVC-10, fixes D-11) |

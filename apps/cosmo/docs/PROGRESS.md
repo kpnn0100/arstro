@@ -19,9 +19,8 @@ file, and commit.
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
 the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
 architecture. **S1 is done (S1a + S1b) and D-11 + D-12 are closed.** ► Next is **S2** — `AppModel` +
-`Command`/`Event` + their codecs + the `CosmoService` skeleton wrapping `EditSession`, with the GUI
-dispatching commands for open / select / undo / redo / set-param and reading the model for them.
-That is a core commit followed by a design commit.
+`Command`/`Event` + the `CosmoService`, **done** — a project now opens headlessly. ► Next are **S3**
+(`cosmo-cc`), **S5** (the control socket) and **S4** (App's remaining logic moves down).
 
 The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
 2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
@@ -44,8 +43,8 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-17 · Last commit: S1b, App stops converting the CPU percentage for itself
-(R-SVC-10). S1a before it moved the load into cosmo_core and closed D-11 + D-12.
+Last updated: 2026-08-17 · Last commit: S2, the core becomes a service and a project opens with
+no UI (R-SVC-1/2/3). S1a/S1b before it closed D-11 + D-12.
 
 ---
 
@@ -95,9 +94,10 @@ core first.
 - [x] **S1b** (design) `App::applyThreadBudget` deleted; the Settings dialog's thread controls report
       the choice and let the host's `ThreadBudget` apply it, notified before the re-render so the new
       frame uses the new width. `App.cpp` no longer includes `base/Parallel.h` at all
-- [ ] **S2** `AppModel` + `Command`/`Event` + codecs + `CosmoService` skeleton wrapping `EditSession`;
-      the GUI dispatches commands for open / select / undo / redo / set-param and reads the model for
-      them. *(core commit, then design commit)*
+- [x] **S2** `AppModel` + `Command`/`Event` + both codecs + `CosmoService`, and the GUI rewired onto
+      it: the project load left `linux_main.cpp` entirely, `onServiceEvent` translates the event
+      stream into App's animation, and `onTick` pumps the service once per frame. Four new tests,
+      including **a project that opens, decodes and reaches the editor with no window at all**
 - [ ] **S3** `cosmo-cc` over the service: `info`, `backends`, `project open|print`, `set`, `render`,
       `state print`, `export`, `bench`, `--script`, `--json`. Subsumes A1–A9 and old P0.8–P0.10
 - [ ] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
@@ -144,6 +144,24 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-17 (S2) — The service borrows the session; it does not own it yet.** App has owned
+  `mSession` since long before any of this, and reparenting ownership in the same step as
+  introducing the service would have meant rewriting App and the service at once with nothing
+  working in between. So `CosmoService(EditSession&, ThreadBudget&)`, `App::session()` is the
+  transitional accessor, and S4 moves ownership in. Every use of `svc->session()` is a line S4
+  deletes — that is the strangler, stated as a countable number.
+- **2026-08-17 (S2) — `refreshModel()` rebuilds the whole snapshot instead of patching it.** The
+  tree is hundreds of nodes at most, and a snapshot that is always derived cannot drift from the
+  session the way incrementally-maintained mirror state does. If this ever shows up in a profile,
+  gate it on a dirty flag — do not hand-maintain the model.
+- **2026-08-17 (S2) — `set` reuses the params text codec rather than a new key table.** Every
+  `EditParams` field already round-trips through `deserializeParams` for `.cosmo`/`.cmp`/`.apf`, so
+  `set exposure=1.2` accepts exactly the fields a project file does and can never fall behind them.
+  A new adjustment becomes shell-reachable for free, which is the R-SVC-2 coverage rule made cheap.
+- **2026-08-17 (S2) — An Event IS the log line.** `onServiceEvent` logs `formatEvent(e)` and
+  nothing else. This is why P0.4/P0.5/P0.6 (log levels, categories, UI logging) stopped being
+  separate work: emitting an event is logging it, and the same line feeds `--watch`, the journal
+  and the control socket.
 - **2026-08-17 (S1a) — The budget is a reservation, not a fixed ratio.** The engine gets the *whole*
   budget when nothing is loading and only the remainder while a load runs, rather than a permanent
   share. A fixed split would slow every render on an idle app to protect a load that is not

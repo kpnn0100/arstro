@@ -93,13 +93,15 @@ Ctor (`App.cpp:36-166`) builds `mRoot` and adds children in draw order: `TopBar`
 (photo `onModeChange`, filmstrip `onSelect`/`onActivate`, breadcrumb `onCrumbClick`),
 `RightColumn(mSession)` (actionBar → preset save/import/export; mask overlay
 `onChange→writeSelectedMask`), `HistoryView` (`onSelect→jumpToHistory`), `ContextMenu`,
-`PresetDialog(mAccent)`, `SettingsDialog` (`onPreviewEdge→setPreviewEdge`,
-`onThreads→applyThreadBudget+submit`, `onCpuPercent→applyThreadBudget+submit`, each also updating
-`mSettings` and firing `onSettingsChanged`), `ConfirmDialog`. `mHome` is standalone (not in `mRoot`);
+`PresetDialog(mAccent)`, `SettingsDialog` (`onPreviewEdge→setPreviewEdge`;
+`onThreads` and `onCpuPercent` update `mSettings`, fire `onSettingsChanged` **and then**
+`submit()` — notified before the re-render, or the frame the user is waiting on is the one
+rendered at the old width), `ConfirmDialog`. `mHome` is standalone (not in `mRoot`);
 its `onOpenRecent` captures `lastOpenCardRect()`→`mOpenFromRect` then calls
 `onOpenRecentRequested`, and its `onSettings`→`openSettingsDialog()` (R-SETTINGS-5).
-`applyThreadBudget()` is the one place `par::setThreads` is called: the explicit thread count when
-set, else `AppSettings::workersFor(cpuPercent)` (R-CPU-2). `layout()` (`App.cpp:168-199`) sizes the tree from the widget constants
+App no longer sets the engine's thread count at all: `cosmo::ThreadBudget` owns it, because the
+width is a slice of a budget the decode pool draws from at the same time and App cannot see the
+other side (R-SVC-10, D-11). `layout()` (`App.cpp:168-199`) sizes the tree from the widget constants
 and animates the rail width via the `Observable<bool> mRailOpen`.
 
 ### 1.8 Helpers
@@ -266,6 +268,59 @@ run — and be measured — with no window. `Result` carries what the applier ne
 `OrderedParallelLoad::start` now re-initialises `mStop`/`mClaimed`/`mConsumed`/`mInFlight` — the
 class had never been restarted before (each load built a fresh `LoadJob`), so a reused pipeline
 started with `mStop` still latched and every worker returned immediately.
+
+### 2.4e The service layer (`core/service/*`) — R-SVC-1…10
+
+**`AppModel`** (`service/AppModel.h`) is the whole observable state as plain data: `revision`,
+`screen`, `projectPath/Name`, `dirty`, `recents[]`, `nodes[]` (a `NodeModel` per tree node —
+`node`, `parent`, `depth`, `group`, `name`, `slot`, `pending`, `failed`, `bypass`, `selected`),
+`selectedNode`, `currentSlot`, `editGroup`, `imageCount`, `params`, and the `HistoryModel` /
+`LoadModel` / `ExportModel` / `AppSettings` / `BudgetModel` blocks. Three rules: **no pixels**
+(a frame is 5-20 MB preview or ~100 MB full, so frames are `frameSlot`/`frameWidth`/`frameSeq`
+metadata and the view fetches bytes through `RenderService` as before); **no Artboard types and
+no presentation** (positions, easing, hover, scroll and the transition phase belong to the view,
+R-SVC-4); and `revision` rises on every change.
+
+**`Command`** (`service/Command.{h,cpp}`) is a tagged struct with 23 kinds and one
+`parseCommand`/`formatCommand` pair. The struct is authoritative and the text is generated
+(R-SVC-5) — the CLI, `--script`, the control socket and the journal all use these two
+functions, so the grammar cannot fork. `tokenize()` honours `"double quotes"` and no escapes,
+matching every other cosmo text format. A blank or `#`-commented line parses to `Kind::None`
+with an empty `err`, which is how a script file distinguishes a comment from a syntax error.
+`commandNames()` exists for `--help` and for the R-SVC-9 coverage check.
+
+**`Event`** (`service/Event.{h,cpp}`) is a kind plus `text`/`a`/`b`/`ms`. `eventName()` gives
+the stable dotted name (`load.progress`, `frame.ready`) and `formatEvent()` the canonical line
+`[evt] <name> <fields>`. **That line IS the log line** — the host's `onServiceEvent` does
+`LOGI("%s", formatEvent(e))` and nothing else, which is why P0's separate log-level/category/
+UI-logging tasks collapsed into this.
+
+**`formatModel`** (`service/AppModelCodec.{h,cpp}`) renders the model as deterministic
+`key=value` text or JSON. `ModelDumpOptions::stable` drops `revision`, `frameSeq` and
+`budgetPeakDecode` — fields that legitimately differ between two front ends showing the same
+state — and that stable form is the artifact R-SVC-9 compares.
+
+**`CosmoService`** (`service/CosmoService.{h,cpp}`). `dispatch(Command)` returns false and
+emits `CommandRejected` (which also lands in `model().lastError`) rather than throwing.
+`pump(nowMs)` drains the loader, attaches each arrival, emits events, and calls
+`endLoad()`-equivalent bookkeeping when the last result lands; it never blocks (R-SVC-6), so a
+GTK timeout, a CLI loop and a fixed-tick test all drive it identically. `refreshModel()`
+rebuilds the snapshot wholesale from the session rather than patching it per command — the tree
+is small, and a derived snapshot cannot drift the way incrementally-maintained mirror state
+does. Three seams are injected because cosmo_core may not contain them (R-SVC-7):
+`setDecoderFactory` (a decoder **per produce call** — stateless, and per-call is provably
+per-thread without a `thread_local`), `setWorkerInit` (the per-thread OpenMP pin, D-12), and
+`setImageWriter` (the encoder, which would break Android/WASM if it lived here).
+
+It **borrows** the session (`CosmoService(EditSession&, ThreadBudget&)`) rather than owning it.
+App has owned `mSession` since long before the service existed, and reparenting that ownership
+in the same step as introducing the service would mean rewriting both at once with nothing
+working in between; S4 moves it and App becomes a view holding a `CosmoService&`. `session()`
+is the transitional accessor and every use of it is a line S4 deletes.
+
+`set` reuses `deserializeParams` instead of growing a second key→field table, so it accepts
+exactly the fields `.cosmo`/`.cmp`/`.apf` do and can never fall behind them — a new adjustment
+becomes settable from a shell for free.
 
 ### 2.5 NativeImageDecoder (`decode/*`)
 `struct DecodedImage { std::vector<uint8_t> rgba; int width,height; std::string name; bool ok(); }`

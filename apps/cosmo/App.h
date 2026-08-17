@@ -47,6 +47,21 @@ namespace cosmo_v2
         void setSize(double width, double height);
 
         // ── home screen / projects (R-HOME) ──
+        /** The session the service drives (R-SVC-1). App still OWNS it in S2 — see
+         *  CosmoService's header for why ownership moves in S4 rather than now. Every other
+         *  use of this from outside App is a line S4 deletes. */
+        cosmo::EditSession &session() { return mSession; }
+
+        /** Re-push every panel + the browse chrome from the session — for when a COMMAND
+         *  changed the edit state from outside the widgets (a script, or an agent on the
+         *  control socket, R-SVC-8). A click through the widgets has already done this for
+         *  itself, so calling it again is idempotent. */
+        void syncFromSession();
+        /** Feed the filmstrip's thumb pool, which is indexed BY SLOT and so must be fed in
+         *  lockstep with the service attaching an image. Public because the load lives in the
+         *  service now (R-SVC-1) and the host is what hears about each arrival. */
+        void registerThumb(int slot);
+
         void showHome();     // leave the editor, show the project launcher (refreshes recents)
         void showEditor();   // enter the editor (after a project is created/opened)
         bool onHomeScreen() const { return mScreen == Screen::Home; }
@@ -213,7 +228,6 @@ namespace cosmo_v2
     private:
         void refreshPresetTree();
         void toggleRail();
-        void registerThumb(int slot);
         /** Push the correct image(s) into the photo canvas for its current
          *  before/split/after mode (before = original, after = edited, split = both). */
         void refreshPhotoForMode();
