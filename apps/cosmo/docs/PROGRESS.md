@@ -44,8 +44,8 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-17 · Last commit: S5, the control socket — an agent drives the window a
-human is watching (R-SVC-8), which found and fixed D-13 on its first run.
+Last updated: 2026-08-17 · Last commit: S3, cosmo-cc — and a CLI dump and a GUI dump of the same
+project are byte-identical (R-SVC-9), which found and fixed D-14 + D-15.
 
 ---
 
@@ -54,7 +54,7 @@ human is watching (R-SVC-8), which found and fixed D-13 on its first run.
 | M | Milestone | State |
 |---|---|---|
 | U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
-| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1, S2, S4a, S5 done; S3 + S4b/c left. Supersedes P0 |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1, S2, S3, S4a, S5 done; only S4b/S4c left. Supersedes P0 |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
@@ -99,8 +99,13 @@ core first.
       it: the project load left `linux_main.cpp` entirely, `onServiceEvent` translates the event
       stream into App's animation, and `onTick` pumps the service once per frame. Four new tests,
       including **a project that opens, decodes and reaches the editor with no window at all**
-- [ ] **S3** `cosmo-cc` over the service: `info`, `backends`, `project open|print`, `set`, `render`,
-      `state print`, `export`, `bench`, `--script`, `--json`. Subsumes A1–A9 and old P0.8–P0.10
+- [x] **S3** `cosmo-cc` over the service — `info`, `backends`, `project --print`, `render`, `export`,
+      `params --print/--diff`, `check`, `bench`, `run --script/-`, and the global `--json` /
+      `--watch` / `--serial` / `--stable` / `--params`. Subsumes A1–A9 and old P0.8–P0.10.
+      **R-SVC-9's headline check passes**: `cosmo-cc project japan18.cmp --print --stable` and the
+      GUI's `state print --stable` over the socket are now **byte-identical** on the real 18-RAF
+      project. Getting there found **D-14** and **D-15**, both fixed here — neither was visible any
+      other way, which is the argument for the check existing at all.
 - [~] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
       ops, save/load workspace. `App.cpp` ends as render + gestures + animation *(core, then design)*
   - [x] **S4a** `App::onCommand` — the view's outbound channel (R-SVC-2). Undo/redo now emit a

@@ -211,9 +211,14 @@ namespace cosmo
             if (!need(2, "state print")) return c;
             if (sub != "print") { err = "unknown state subcommand: " + sub; return c; }
             c.kind = Command::Kind::StatePrint;
-            Command tmp;
-            collectFlags(t, 2, tmp);
-            c.flag = tmp.field("json") == "1";
+            // Two independent options, so they cannot share `flag`: --json picks the format,
+            // --stable drops the fields that legitimately differ between two front ends
+            // (R-SVC-9). Keeping --stable in `fields` means adding a third option later needs
+            // no signature change. D-14: --stable used to parse and then be silently dropped,
+            // so a socket dump could never be compared with a CLI one — which is the single
+            // thing the option exists for.
+            collectFlags(t, 2, c);
+            c.flag = c.field("json") == "1";
         }
         else if (v == "wait")
         {
@@ -275,7 +280,12 @@ namespace cosmo
                 for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
                 break;
             case Command::Kind::Screen: o << "screen " << c.name; break;
-            case Command::Kind::StatePrint: o << "state print" << (c.flag ? " --json" : ""); break;
+            case Command::Kind::StatePrint:
+                o << "state print";
+                if (c.flag) o << " --json";
+                if (c.field("stable") == "1") o << " --stable";
+                if (c.field("params") == "1") o << " --params";
+                break;
             case Command::Kind::Wait: o << "wait " << c.name << " --timeout " << c.index << "ms"; break;
             case Command::Kind::Quit: o << "quit"; break;
         }

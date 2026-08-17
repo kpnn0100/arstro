@@ -60,6 +60,13 @@ namespace cosmo
         void setWorkerInit(std::function<void()> f) { mWorkerInit = std::move(f); }
         void setImageWriter(ImageWriter w) { mWriter = std::move(w); }
         void subscribe(EventSink s) { mSinks.push_back(std::move(s)); }
+        /** Put the persisted preferences in force and into the model (R-SETTINGS-4). The host
+         *  calls this once at startup with what `AppSettings::load()` returned, instead of
+         *  applying the pieces itself — D-15: it used to push the percentage into the budget
+         *  and the edge into the session and never tell the service, so `model().settings`
+         *  reported defaults while `model().budget` reported the truth. Two halves of one
+         *  answer disagreeing is worse than either being wrong. */
+        void applySettings(const AppSettings &s);
 
         // ── the whole interface (R-SVC-2/3) ──
         /** Apply a command. False = rejected; an Error event carries why and it lands in

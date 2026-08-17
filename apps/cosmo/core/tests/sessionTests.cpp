@@ -1246,6 +1246,55 @@ namespace
         std::filesystem::remove(path);
         printf("[PASS] a_view_may_reset_on_project_opening\n");
     }
+
+    // D-14 + D-15, both found by diffing a CLI dump against a GUI dump of the same project —
+    // which is exactly what R-SVC-9 exists to do, and neither was visible any other way.
+    void test_settings_and_dump_options_reach_the_model()
+    {
+        using namespace arstro::cosmo;
+
+        // D-15: applySettings must put the preferences in force AND in the model. It used to be
+        // done piecemeal by the host — percentage into the budget, edge into the session, model
+        // never told — so `settings*` reported defaults while `budget*` reported the truth.
+        // Two halves of one answer disagreeing is worse than either being wrong.
+        EditSession session;
+        ThreadBudget budget(50, 16);
+        CosmoService svc(session, budget);
+
+        AppSettings s;
+        s.cpuPercent = 25;
+        s.previewEdge = 2400;
+        s.threads = 4;
+        s.useGpu = true;
+        svc.applySettings(s);
+
+        const AppModel &m = svc.model();
+        assert(m.settings.cpuPercent == 25 && "the model reports the budget the user chose");
+        assert(m.settings.previewEdge == 2400 && m.settings.threads == 4 && m.settings.useGpu);
+        assert(m.budget.percent == 25 && "and the budget agrees with it");
+        assert(m.budget.engineThreads == 4 && "an explicit thread count still wins (R-CPU-2b)");
+
+        // D-14: `state print` carries --json and --stable INDEPENDENTLY. They shared one bool,
+        // so --stable parsed and was then dropped — and a dump that cannot be made stable
+        // cannot be compared with another front end's, which is the option's only purpose.
+        std::string err;
+        Command c = parseCommand("state print --stable", err);
+        assert(err.empty() && c.kind == Command::Kind::StatePrint);
+        assert(!c.flag && c.field("stable") == "1" && "--stable is not --json");
+        c = parseCommand("state print --json --stable", err);
+        assert(err.empty() && c.flag && c.field("stable") == "1" && "both at once");
+        assert(formatCommand(c).find("--stable") != std::string::npos && "and it round-trips");
+
+        // The stable dump really does drop the volatile fields, which is what makes the
+        // CLI-vs-GUI comparison meaningful rather than incidentally equal.
+        ModelDumpOptions stable;
+        stable.stable = true;
+        const std::string d = formatModel(m, stable);
+        assert(d.find("revision=") == std::string::npos);
+        assert(d.find("budgetPeakDecode=") == std::string::npos);
+        assert(d.find("settingsCpuPercent=25") != std::string::npos && "but keeps real state");
+        printf("[PASS] settings_and_dump_options_reach_the_model\n");
+    }
 }
 
 int main()
@@ -1280,6 +1329,7 @@ int main()
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();
     test_a_view_may_reset_on_project_opening();
+    test_settings_and_dump_options_reach_the_model();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

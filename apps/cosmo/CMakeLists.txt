@@ -12,6 +12,11 @@
 add_subdirectory(core)
 
 if(TARGET cosmo_core)
+  # cosmo-cc: front end #2 over CosmoService — the same service this window hosts,
+  # driven from a shell (R-SVC-1). Its own dir so the GUI's source glob below
+  # cannot swallow the CLI's main().
+  add_subdirectory(cli)
+
   file(GLOB COSMO_SOURCES CONFIGURE_DEPENDS
        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
        ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp)

@@ -118,6 +118,16 @@ namespace cosmo
         m.gpuActive = mSession.useGpu() && m.gpuAvailable;
     }
 
+    void CosmoService::applySettings(const AppSettings &s)
+    {
+        mModel.settings = s;
+        mBudget.setPercent(s.cpuPercent);              // R-CPU-3
+        mBudget.setExplicitEngineThreads(s.threads);   // R-CPU-2b
+        mSession.setPreviewEdge(s.previewEdge);
+        mSession.setUseGpu(s.useGpu);                  // no-op with no GPU backend (R-GPU-3)
+        refreshModel();
+    }
+
     // ── load ──────────────────────────────────────────────────────────────────────────
     bool CosmoService::startProjectLoad(const std::string &path,
                                         std::vector<EditSession::WorkspaceEntry> entries, bool saveOnFinish)

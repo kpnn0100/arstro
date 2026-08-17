@@ -1069,6 +1069,8 @@ namespace
                 // needs to know where a dump starts and stops.
                 arstro::cosmo::ModelDumpOptions o;
                 o.json = c.flag;
+                o.stable = c.field("stable") == "1";    // D-14
+                o.params = c.field("params") == "1";
                 a->control.broadcast("[evt] state.begin");
                 a->control.broadcast(arstro::cosmo::formatModel(a->svc->model(), o));
                 a->control.broadcast("[evt] state.end");
@@ -1282,8 +1284,6 @@ int main(int argc, char **argv)
     // R-SVC-10: the budget is told once, here, and it owns the engine's thread count from
     // then on. App no longer converts the percentage for itself — that second conversion
     // was half of D-11.
-    host.budget.setPercent(host.settings.cpuPercent);
-    host.budget.setExplicitEngineThreads(host.settings.threads);
     host.app.applySettings(host.settings);
 
     // ── The service (R-SVC-1) ──────────────────────────────────────────────────────
@@ -1305,6 +1305,9 @@ int main(int argc, char **argv)
         return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
     });
     host.svc->subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
+    // One call, so the budget, the session and the model can never disagree about what is in
+    // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.
+    host.svc->applySettings(host.settings);
     // R-SVC-2: the view's outbound channel. A menu item, a shortcut and a line on the control
     // socket now travel the same path, so they cannot behave differently.
     host.app.onCommand = [&host](arstro::cosmo::Command c) { host.svc->dispatch(c); };

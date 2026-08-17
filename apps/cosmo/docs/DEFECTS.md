@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-14**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-16**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -161,6 +161,43 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-15 — `AppModel::settings` reported defaults while `AppModel::budget` reported the truth
+- **Area:** core / service · **Status:** **Fixed** (same session, S3) · **Severity:** S3
+- **Found:** 2026-08-17, by diffing a `cosmo-cc` dump against a GUI dump of the same project —
+  the R-SVC-9 check, doing precisely the job it was written for.
+- **Reproduce:** before the fix, with `cpuPercent=25 useGpu=1` in `settings.txt`:
+  ```bash
+  cosmo --control /tmp/s.sock &   # then: state print
+  ```
+  → `settingsCpuPercent=50 settingsUseGpu=0` **and** `budgetPercent=25` in the same dump.
+- **Expected:** one answer. What the user chose, everywhere it is reported.
+- **Actual:** two halves of the same answer disagreeing, which is worse than either being wrong:
+  anyone debugging from the dump would have believed the budget was 50%.
+- **Judgement:** defect against R-SVC-3 — the model is the observable state, so a field that is
+  never written is a lie, not an omission.
+- **Cause:** the host applied the preferences piecemeal — percentage into `ThreadBudget`, edge and
+  GPU into `EditSession`, model never told. `mModel.settings` was only ever written by the
+  `settings set` command path, so a GUI that loaded settings from disk never populated it.
+- **Fix:** commit `S3_HASH`. `CosmoService::applySettings(const AppSettings&)` does all of it in one
+  place and refreshes the model; the host calls that instead of the three separate calls.
+- **Guarded by:** `settings_and_dump_options_reach_the_model`, plus the CLI-vs-GUI dump diff, which
+  is now byte-identical on the 18-RAF project.
+
+### D-14 — `state print --stable` silently ignored `--stable`
+- **Area:** core / service · **Status:** **Fixed** (same session, S3) · **Severity:** S3
+- **Found:** 2026-08-17, same diff as D-15.
+- **Reproduce:** `state print --stable` over the control socket, before the fix — the dump still
+  contained `revision=`, `frameSeq=` and `budgetPeakDecode=`.
+- **Expected:** the volatile fields dropped, so the dump can be compared with another front end's.
+- **Actual:** they were all present, so **the comparison the option exists for was impossible**.
+- **Judgement:** defect against R-SVC-9. An option that parses and is then dropped is worse than one
+  that does not exist, because the caller believes it worked.
+- **Cause:** `Command::StatePrint` had one `flag`, used for `--json`; `--stable` was parsed into a
+  throwaway `Command` and discarded.
+- **Fix:** commit `S3_HASH`. `--stable` and `--params` live in `fields` (so a third option needs no
+  signature change), `--json` keeps `flag`, and `formatCommand` round-trips all three.
+- **Guarded by:** `settings_and_dump_options_reach_the_model`.
 
 ### D-13 — A project opened from the GUI decoded all 18 images and attached none
 - **Area:** core / service · **Status:** **Fixed** (same session, S5) · **Severity:** S2
