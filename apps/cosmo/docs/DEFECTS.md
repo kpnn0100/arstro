@@ -19,82 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-12 — `OMP_NUM_THREADS` is set too late to bind, so R-CPU-2(c) does nothing
-- **Area:** core / load · **Status:** Confirmed (mechanism reproduced at runtime) · **Severity:** S2
-- **Found:** 2026-08-17, debugging "CPU limit 25% still uses ~75% when opening a project"
-- **Reproduce:**
-  ```bash
-  gcc -fopenmp -O1 -o /tmp/omp_env_order apps/cosmo/core/tests/fixtures/omp_env_order.c
-  /tmp/omp_env_order                      # setenv() inside main(): team size = every core
-  OMP_NUM_THREADS=1 /tmp/omp_env_order    # set before exec: team size = 1
-  ```
-- **Expected:** `linux_main.cpp:1282`'s `g_setenv("OMP_NUM_THREADS", "1", FALSE)` pins every nested
-  OpenMP team to one thread, so "a decode worker means exactly one core" (R-CPU-2c).
-- **Actual:** it has no effect. libgomp parses the environment in an **ELF constructor**, which runs
-  when the library is loaded — before `main()` — so a `setenv`/`g_setenv` from `main()` is read by
-  nobody. On this 24-core host:
-  ```
-  before setenv: omp_get_max_threads() = 24
-  after  setenv: omp_get_max_threads() = 24
-  actual parallel-region team size = 24  (machine has 24 cores)
-  ```
-  With the same variable set before `exec`, all three read 1. The commit that introduced the budget
-  (5cb2688) calls this "the third layer, and the one that mattered" — on MSYS2, whose LibRaw *is*
-  built `-fopenmp`, it is therefore still true that each decode worker opens a team sized to the
-  whole machine, which is the reported 25%-budget-uses-75% symptom.
-- **Judgement:** defect — contradicts R-CPU-2(c) ("nested parallelism inside a decoder … pin it to 1")
-  and R-CPU-4's claim that the budget bounds "the one nested pool it can reach".
-- **Cause:** environment variables consumed by a library constructor cannot be set from `main()`.
-- **Platform note:** inert on this Linux host — the vendored `lib/LibRaw/lib/libraw.a` has zero
-  `GOMP_*` symbols (`nm … | grep -c GOMP_` → 0), so there is no nested team here to pin. Live on
-  MSYS2/Windows, where the CPU limit was developed and where the symptom was reported.
-- **Requirement:** R-CPU-2, R-CPU-4 (both existing; neither needs amending — the code does not do
-  what they say)
-- **Fix:** pending. Three candidates, cheapest first: (a) call `omp_set_num_threads(1)` **inside each
-  decode worker** before decoding — the ICV is per-thread, so setting it on the main thread would not
-  help, and it must be weak-linked/`dlsym`'d to keep `cosmo_core` free of an OpenMP dependency;
-  (b) re-`exec` self once at startup with the variable set, which is portable but ugly and breaks the
-  debugger; (c) build the vendored LibRaw without OpenMP on every platform and drop R-CPU-2(c). Fold
-  into the `ThreadBudget` work in `service-architecture-proposal.md` §3 item 6.
-
-### D-11 — The CPU budget is enforced per-subsystem, so a load peaks at ~2× what the user chose
-- **Area:** core / load · **Status:** Confirmed (by source + arithmetic; runtime measurement blocked by D-6) · **Severity:** S2
-- **Found:** 2026-08-17, same investigation as D-12
-- **Reproduce:** (no shell reproduction exists — that is D-6, and is the point) read the three call
-  sites and evaluate them for one budget:
-  ```bash
-  grep -n "workersFor" apps/cosmo/linux_main.cpp apps/cosmo/App.cpp
-  #  linux_main.cpp:724  workersFor(cpuPercent, kMaxDecodeWorkers)   -> decode pool
-  #  App.cpp:869         workersFor(cpuPercent)                      -> engine Auto threads
-  nproc
-  ```
-- **Expected:** R-CPU-1: "cosmo's background CPU work runs on a **budget**: a percentage of the
-  machine's logical cores". A user who picks 25% expects cosmo to schedule at most 25% of the cores.
-- **Actual:** the percentage is converted independently by each consumer and the two run
-  **concurrently** — by design, since R-LOADPERF-3 streams decoded images into a live editor, so the
-  decode pool and the engine's preview renders overlap for most of a load. Peak scheduled threads is
-  `decodeWorkers + engineThreads + 1 (UI)`, i.e. roughly **twice the budget plus one**:
-
-  | cores | budget | decode pool | engine Auto | peak threads | share of machine |
-  |------:|-------:|------------:|------------:|-------------:|-----------------:|
-  | 24 | 25% | 6 | 6 | 13 | **54%** |
-  | 24 | 50% | 8 (cap) | 12 | 21 | **88%** |
-  | 16 | 50% | 8 (cap) | 8 | 17 | **106% — oversubscribed** |
-
-  So the shipped default (50%) can still schedule the whole machine, which is the complaint the
-  feature was written to answer.
-- **Judgement:** defect — contradicts R-CPU-1 as written. Not a requirement gap: R-CPU-1 already says
-  "a share of the machine, not all of it", and R-CPU-2 lists the three consumers without ever saying
-  they divide one budget rather than each taking the whole of it.
-- **Cause:** `AppSettings::workersFor()` is a pure function each consumer calls for itself
-  (`AppSettings.cpp:14`). Nothing owns the total, and nothing can — the two consumers live in
-  different layers (host and app) and neither can see the other.
-- **Requirement:** R-CPU-1, R-CPU-2 (existing). If the sum is judged acceptable, R-CPU-1 must be
-  amended to say the budget is *per pool* — but that would make the number meaningless to a user.
-- **Fix:** pending. A single `ThreadBudget` owned by the service divides one total between the
-  decode pool and the engine (`service-architecture-proposal.md` §3 item 6), and the load logs both
-  the allotment and the measured peak so R-CPU-4's honesty clause is checkable.
-
 ### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
 - **Area:** core / test harness · **Status:** Confirmed (reproduced) · **Severity:** S3
 - **Found:** 2026-08-16, while checking that the R-CPU-3 test fails without its fix
@@ -238,4 +162,89 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
-*(none yet — the first closed entry lands here with its commit hash and the test that guards it)*
+### D-11 — The CPU budget is enforced per-subsystem, so a load peaks at ~2× what the user chose
+- **Area:** core / load · **Status:** **Fixed** (S1) · **Severity:** S2
+- **Found:** 2026-08-17, same investigation as D-12
+- **Reproduce:** (no shell reproduction exists — that is D-6, and is the point) read the three call
+  sites and evaluate them for one budget:
+  ```bash
+  grep -n "workersFor" apps/cosmo/linux_main.cpp apps/cosmo/App.cpp
+  #  linux_main.cpp:724  workersFor(cpuPercent, kMaxDecodeWorkers)   -> decode pool
+  #  App.cpp:869         workersFor(cpuPercent)                      -> engine Auto threads
+  nproc
+  ```
+- **Expected:** R-CPU-1: "cosmo's background CPU work runs on a **budget**: a percentage of the
+  machine's logical cores". A user who picks 25% expects cosmo to schedule at most 25% of the cores.
+- **Actual:** the percentage is converted independently by each consumer and the two run
+  **concurrently** — by design, since R-LOADPERF-3 streams decoded images into a live editor, so the
+  decode pool and the engine's preview renders overlap for most of a load. Peak scheduled threads is
+  `decodeWorkers + engineThreads + 1 (UI)`, i.e. roughly **twice the budget plus one**:
+
+  | cores | budget | decode pool | engine Auto | peak threads | share of machine |
+  |------:|-------:|------------:|------------:|-------------:|-----------------:|
+  | 24 | 25% | 6 | 6 | 13 | **54%** |
+  | 24 | 50% | 8 (cap) | 12 | 21 | **88%** |
+  | 16 | 50% | 8 (cap) | 8 | 17 | **106% — oversubscribed** |
+
+  So the shipped default (50%) can still schedule the whole machine, which is the complaint the
+  feature was written to answer.
+- **Judgement:** defect — contradicts R-CPU-1 as written. Not a requirement gap: R-CPU-1 already says
+  "a share of the machine, not all of it", and R-CPU-2 lists the three consumers without ever saying
+  they divide one budget rather than each taking the whole of it.
+- **Cause:** `AppSettings::workersFor()` is a pure function each consumer calls for itself
+  (`AppSettings.cpp:14`). Nothing owns the total, and nothing can — the two consumers live in
+  different layers (host and app) and neither can see the other.
+- **Requirement:** R-CPU-1, R-CPU-2 (existing). If the sum is judged acceptable, R-CPU-1 must be
+  amended to say the budget is *per pool* — but that would make the number meaningless to a user.
+- **Fix:** commit `afe6704`. `cosmo::ThreadBudget` converts the percentage **once** into `total()`
+  and divides it: the decode pool *reserves* `total - engineFloor` (capped at 8) for the load's
+  duration and the engine gets the remainder, so it holds the whole budget when idle and shrinks only
+  while a load runs. `AppSettings::workersFor` has no callers left in the app. R-CPU-2 and R-CPU-4
+  amended; the load now logs the allotment and the **measured** peak.
+- **Guarded by:** `one_budget_is_divided_not_duplicated` (fails on the old arithmetic at exactly the
+  `decode + engine <= total` assertion — checked, not assumed) and
+  `project_load_peak_never_exceeds_its_pool`. Measured end to end on 24 cores with the reported
+  18-RAF project: 25% → pool 5, peak 5, **19% of the machine** mean over a 35 s load.
+
+### D-12 — `OMP_NUM_THREADS` is set too late to bind, so R-CPU-2(c) does nothing
+- **Area:** core / load · **Status:** **Fixed** (S1) · **Severity:** S2
+- **Found:** 2026-08-17, debugging "CPU limit 25% still uses ~75% when opening a project"
+- **Reproduce:**
+  ```bash
+  gcc -fopenmp -O1 -o /tmp/omp_env_order apps/cosmo/core/tests/fixtures/omp_env_order.c
+  /tmp/omp_env_order                      # setenv() inside main(): team size = every core
+  OMP_NUM_THREADS=1 /tmp/omp_env_order    # set before exec: team size = 1
+  ```
+- **Expected:** `linux_main.cpp:1282`'s `g_setenv("OMP_NUM_THREADS", "1", FALSE)` pins every nested
+  OpenMP team to one thread, so "a decode worker means exactly one core" (R-CPU-2c).
+- **Actual:** it has no effect. libgomp parses the environment in an **ELF constructor**, which runs
+  when the library is loaded — before `main()` — so a `setenv`/`g_setenv` from `main()` is read by
+  nobody. On this 24-core host:
+  ```
+  before setenv: omp_get_max_threads() = 24
+  after  setenv: omp_get_max_threads() = 24
+  actual parallel-region team size = 24  (machine has 24 cores)
+  ```
+  With the same variable set before `exec`, all three read 1. The commit that introduced the budget
+  (5cb2688) calls this "the third layer, and the one that mattered" — on MSYS2, whose LibRaw *is*
+  built `-fopenmp`, it is therefore still true that each decode worker opens a team sized to the
+  whole machine, which is the reported 25%-budget-uses-75% symptom.
+- **Judgement:** defect — contradicts R-CPU-2(c) ("nested parallelism inside a decoder … pin it to 1")
+  and R-CPU-4's claim that the budget bounds "the one nested pool it can reach".
+- **Cause:** environment variables consumed by a library constructor cannot be set from `main()`.
+- **Platform note:** inert on this Linux host — the vendored `lib/LibRaw/lib/libraw.a` has zero
+  `GOMP_*` symbols (`nm … | grep -c GOMP_` → 0), so there is no nested team here to pin. Live on
+  MSYS2/Windows, where the CPU limit was developed and where the symptom was reported.
+- **Requirement:** R-CPU-2, R-CPU-4 (both existing; neither needs amending — the code does not do
+  what they say)
+- **Fix:** commit `afe6704` — option (a). `cosmo_v2::pinNestedOpenMPForThisThread()`
+  (`apps/cosmo/OmpPin.cpp`) resolves `omp_set_num_threads` via `dlsym(RTLD_DEFAULT, …)` /
+  `GetProcAddress`, so nothing links OpenMP, and `ProjectLoader`'s new per-worker start hook calls it
+  **on each decode worker** — the ICV is per-thread, so the main thread could never have done it.
+  `ompPinStatus()` is logged at startup so the mechanism is checked rather than assumed.
+  **Mechanism proven** by a second fixture (`omp_pin.c`, scratch): three pinned pthreads report team
+  size 1 while an unpinned control on the same machine reports 24. **Not observable in cosmo on this
+  Linux host** — the vendored libraw.a has no OpenMP, so the startup line correctly reads
+  `no OpenMP runtime loaded`. Confirm on MSYS2, where the symptom was reported, by checking for
+  `nested OpenMP teams pinned to 1 per decode worker` in the log.
+- **Guarded by:** `project_load_peak_never_exceeds_its_pool` asserts the hook ran once per worker.

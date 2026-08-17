@@ -28,6 +28,11 @@ if(TARGET cosmo_core)
 
   target_link_libraries(cosmo PRIVATE artboard_core arstro_image cosmo_core)
 
+  # OmpPin.cpp resolves omp_set_num_threads dynamically (dlsym / GetProcAddress) rather
+  # than linking OpenMP, so the app carries no OpenMP dependency and the pin is a no-op
+  # where LibRaw was built without it. Empty on platforms whose libc already has dlsym.
+  target_link_libraries(cosmo PRIVATE ${CMAKE_DL_LIBS})
+
   # ── GTK3 (window, dialogs, Cairo, GdkPixbuf) via pkg-config ── find_package(PkgConfig)
   # must be re-run in THIS scope even though core/CMakeLists.txt already did it:
   # its result variables (e.g. PKG_CONFIG_VERSION, which pkg_check_modules' internal

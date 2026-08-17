@@ -704,37 +704,69 @@ always either produced or held by a worker, and that worker is **exempt** from b
 by `cosmo_core_tests` over 60 randomised (workers × window × byte-cap) combinations — with caps
 deliberately smaller than a single item — and separately under ThreadSanitizer.
 
-### DR-CPU-1 The budget, and how a percentage becomes a thread count (R-CPU-1)
-`AppSettings::workersFor(percent, cap)` (`core/AppSettings.cpp:13-24`) is the single place the
-conversion happens: `(cores * percent + 50) / 100` — integer round-to-nearest — floored at 1 and
-capped at `cap` when `cap > 0`, with `hardware_concurrency()` falling back to 4 when it reports 0.
-Percent is the user-facing unit and a count is what is enforceable, because no portable per-process
-CPU-time cap exists across the platforms cosmo targets and a sleep-based throttle would occupy the
-cores it is trying to spare. The default is 50, in `AppSettings::cpuPercent` (`core/AppSettings.h:29`),
-persisted as `cpuPercent=` in `settings.txt`; a value outside 1..100 falls back to 50 rather than
-clamping up, since an out-of-range budget means a corrupt file, not a request for the whole machine
-(`AppSettings.cpp:52`). Verified by `cosmo_core_tests`' `cpu_budget_scales_with_percent`, which
-asserts the properties that hold on any machine — never zero, monotonic in percent, never above the
-whole machine, 50% no more than half, the cap wins, `cap <= 0` means uncapped.
+### DR-CPU-1 The budget, and how a percentage becomes a thread count (R-CPU-1, R-SVC-10)
+**As of S1 the conversion happens in `ThreadBudget`, once.** `ThreadBudget::total()`
+(`core/ThreadBudget.cpp:39-43`) is `clamp((cores * percent + 50) / 100, 1, cores)` — integer
+round-to-nearest, never zero, never more than the machine — with `hardware_concurrency()` falling
+back to 4 when it reports 0 (`ThreadBudget.cpp:16-20`). Percent is the user-facing unit and a count
+is what is enforceable, because no portable per-process CPU-time cap exists across the platforms
+cosmo targets and a sleep-based throttle would occupy the cores it is trying to spare. The default is
+50, in `AppSettings::cpuPercent` (`core/AppSettings.h:29`), persisted as `cpuPercent=` in
+`settings.txt`; a value outside 1..100 falls back to 50 rather than clamping up, in both
+`AppSettings::load()` (`AppSettings.cpp:52`) and `ThreadBudget::setPercent()`
+(`ThreadBudget.cpp:27-31`), since an out-of-range budget means a corrupt file, not a request for the
+whole machine.
 
-### DR-CPU-2 The three places it is enforced (R-CPU-2)
-1. **Decode pool** — `startEntriesLoad` (`linux_main.cpp:697-702`) sizes the pool
-   `workersFor(host.settings.cpuPercent, kMaxDecodeWorkers)` instead of the old
-   `max(2, min(hardware_concurrency, 8))`, and logs
-   `load: <n> entries on <w> decode workers (cpu budget <p>% of <c> cores)`. `Host::settings`
-   mirrors the in-force preferences because the load runs in the host, not in `App`.
-2. **Engine Auto threads** — `App::applyThreadBudget` (`App.cpp:834-843`) calls
-   `par::setThreads(threads > 0 ? threads : workersFor(cpuPercent))`, so Auto means the budget
-   rather than every core. Because `par::threadsRef()` is then a resolved count, `openSettingsDialog`
-   seeds the dialog from `mSettings.threads` (`App.cpp:847`) — seeding from the resolved value would
-   make Auto read as an explicit 4.
-3. **LibRaw's OpenMP** — `g_setenv("OMP_NUM_THREADS", "1", FALSE)` in `main` (`linux_main.cpp:1275-1283`),
-   before `gtk_init` and therefore before any decode. MSYS2's LibRaw is built `-fopenmp`
-   (`pkg-config --libs libraw` → `-lraw -fopenmp`), so each decode worker opened a team sized to the
-   whole machine: 8 workers × 16 cores ≈ 128 threads, which is why a RAW import saturated the machine
-   *regardless* of pool size. `FALSE` = do not override a user's own `OMP_NUM_THREADS`.
+`AppSettings::workersFor(percent, cap)` (`core/AppSettings.cpp:14-24`) still exists and still has its
+test (`cpu_budget_scales_with_percent`), but it is **legacy**: a pure function that each consumer
+called for itself is exactly how the budget came to be applied twice (D-11). It has no callers in the
+app any more.
 
-Not covered: `android/android_main.cpp` has its own entry point and does not yet pin OpenMP.
+### DR-CPU-2 Where the budget is enforced, and how it is divided (R-CPU-2, R-SVC-10)
+**One total, divided — not converted per consumer.** `Host::budget` (`linux_main.cpp:140`) is told
+the percentage and the explicit thread count once at startup (`linux_main.cpp:1280-1296`) and again
+on every settings change, and it owns the engine's width from then on.
+
+1. **Decode pool** — `ProjectLoader::start` (`core/ProjectLoader.cpp:16-39`) takes its size from
+   `ThreadBudget::beginLoad()`, which **reserves** that share for the load's duration;
+   `startEntriesLoad` (`linux_main.cpp:642-690`) logs
+   `load: <n> entries on <w> decode workers, engine <e> threads (cpu budget <p>% = <t> of <c> cores;
+   decode cap 8)`.
+2. **Engine threads** — `ThreadBudget::apply()` (`ThreadBudget.cpp:75`) is the only call to
+   `par::setThreads` for the budget: `engineThreads()` is the whole total when idle and
+   `total - reserved` while a load runs, floored at 1 so an arriving photo can still render a preview
+   (R-LOADPERF-3 shows the editor during the load). An explicit CPU-threads choice (2/4/8) wins for
+   the engine per R-CPU-2b, and may exceed the budget — a deliberate override, logged rather than
+   clamped. `App::applyThreadBudget` (`App.cpp:862-870`) still exists and still agrees with the
+   budget while idle, which is when it runs; S1b removes it so there is one owner in code as well as
+   in principle.
+3. **Nested library parallelism (LibRaw's OpenMP)** — `cosmo_v2::pinNestedOpenMPForThisThread()`
+   (`OmpPin.cpp:47-50`), passed to `ProjectLoader` as the per-worker start hook
+   (`linux_main.cpp:680-685`) and therefore called **on each decode worker**. It resolves
+   `omp_set_num_threads` with `dlsym(RTLD_DEFAULT, …)` / `GetProcAddress` over the loaded OpenMP DLLs
+   (`OmpPin.cpp:19-45`), so nothing links OpenMP and the pin is a no-op where LibRaw has none.
+   `ompPinStatus()` is logged at startup, because the previous mechanism was assumed rather than
+   checked: **`g_setenv("OMP_NUM_THREADS", "1", FALSE)` in `main()` never worked at all** — libgomp
+   parses the environment in a load-time constructor that runs before `main`, so the assignment was
+   read by nobody (D-12, proven by `core/tests/fixtures/omp_env_order.c`). The thread count is a
+   per-thread ICV, which is why it must be set on the worker rather than once at startup.
+
+**Measured, not asserted (R-CPU-4 as amended).** `ThreadBudget::producerEnter/Exit` keep
+`peakDecode()`, a lock-free high-water mark of producers inside their work at once, and the load's
+completion logs it next to the allotment (`linux_main.cpp:624-628`).
+
+### DR-SVC-10 What the division actually measures (R-SVC-10, R-CPU-4)
+Two tests in `cosmo_core_tests`. `one_budget_is_divided_not_duplicated` asserts, for cores ∈
+{2,4,8,12,16,24,32} × percent ∈ {1,25,50,75,100}: an idle engine gets the whole budget; a load's pool
+is ≥1 and ≤8; the engine keeps ≥1 during the load; **decode + engine ≤ total** (the two floors are
+the only slack, and only when the whole budget is one thread); the engine is restored afterwards; an
+explicit count overrides Auto. It fails on the pre-S1 arithmetic at exactly that assertion.
+`project_load_peak_never_exceeds_its_pool` runs an 18-entry load — the reported case — through a
+sleeping fake decoder at 25% of 24 cores and asserts results arrive in entry order, thumbnails were
+built on the workers, the per-worker hook ran once per worker, `peakDecode() <= pool`, and
+`peakDecode() + engineDuringLoad <= total`. Measured on this host (24 cores, real RAF files, real
+LibRaw): 25% → pool 5, peak 5, 4.51 cores mean = **19% of the machine**; 100% → pool 8 (the cap
+binds), 6.05 cores mean = 25%.
 
 ### DR-LOADPERF-2 Off-thread apply
 `EditSession::makeThumb` is public and re-entrant so the loader builds the filmstrip thumbnail on its

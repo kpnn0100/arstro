@@ -48,18 +48,37 @@ namespace cosmo
         OrderedParallelLoad &operator=(const OrderedParallelLoad &) = delete;
         ~OrderedParallelLoad() { stop(); }
 
-        /** Start `workers` threads producing `count` items. Safe to call once. */
+        /** Start `workers` threads producing `count` items. **Reusable**: a stopped or
+         *  finished pipeline can be started again, because every piece of run state is
+         *  re-initialised here. It was not always so — `stop()` latches `mStop`, and
+         *  before ProjectLoader nothing ever restarted an instance (each load built a
+         *  fresh LoadJob), so a second `start()` produced a pool whose workers all
+         *  returned immediately and a load that never advanced past zero.
+         *
+         *  `onWorkerStart` runs once per worker, on that worker, before it claims
+         *  anything — the seam a host needs for per-thread setup it cannot do from
+         *  outside, such as pinning a nested OpenMP team (R-CPU-2c / D-12: the thread
+         *  ICV is per-thread, so nobody but the thread itself can set it). */
         void start(std::size_t count, int workers, std::size_t window,
-                   std::size_t maxInFlightBytes, Produce produce, Weigh weigh)
+                   std::size_t maxInFlightBytes, Produce produce, Weigh weigh,
+                   std::function<void()> onWorkerStart = {})
         {
             mCount = count;
             mProduce = std::move(produce);
             mWeigh = std::move(weigh);
+            mOnWorkerStart = std::move(onWorkerStart);
             mWindow = window < 1 ? 1 : window;
             mMaxBytes = maxInFlightBytes;
+            mItems.clear();
             mItems.resize(count);
             mDone.assign(count, 0);
             mWeights.assign(count, 0);
+            // Full re-initialisation, so start-after-stop is a real capability and not a
+            // silently dead pool. `mStop` above all: stop() latches it.
+            mConsumed = 0;
+            mInFlight = 0;
+            mClaimed.store(0);
+            mStop.store(false);
             if (count == 0) return;
             int n = workers < 1 ? 1 : workers;
             if ((std::size_t)n > count) n = (int)count;
@@ -104,6 +123,7 @@ namespace cosmo
     private:
         void run()
         {
+            if (mOnWorkerStart) mOnWorkerStart();
             for (;;)
             {
                 const std::size_t i = mClaimed.fetch_add(1);
@@ -133,6 +153,7 @@ namespace cosmo
         std::size_t mCount = 0;
         Produce mProduce;
         Weigh mWeigh;
+        std::function<void()> mOnWorkerStart;
         std::size_t mWindow = 1;
         std::size_t mMaxBytes = 0;
 

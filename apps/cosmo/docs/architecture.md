@@ -194,14 +194,25 @@ new slot's `EditParams` into every right-column panel via `RightColumn::syncToSl
 
 ## 7. Threading model
 
-Two worker threads exist, both owned at the host/engine boundary and both feeding the GTK thread
-through a poll:
+Two kinds of worker exist, and **one object decides how many of each** — `cosmo::ThreadBudget`
+(R-SVC-10). Both feed the GTK thread through a poll:
 
-- **Decode worker** (`LoadJob::worker`, host): decodes a project's images off the UI thread and
-  pushes results into a mutex-guarded queue; `pollLoad` (15 ms GTK timeout) drains it in order.
+- **Decode pool** (`cosmo::ProjectLoader`, core): N workers decode a project's images and build
+  their filmstrip thumbnails off the UI thread; results land at their entry index and `pollLoad`
+  (15 ms GTK timeout) drains them strictly in order. N is `ThreadBudget::beginLoad()`, which
+  *reserves* that share for the load's duration. Each worker runs a start hook — the host uses it to
+  pin nested OpenMP to one thread, which must happen on the worker because the OpenMP thread count
+  is a per-thread ICV (D-12).
 - **Render worker** (`RenderService`, engine, `ARSTRO_ENABLE_THREADS`): owns the `EditEngine`
-  exclusively; `render()` requests are coalesced to the latest; the UI polls `tryAcquire()`. With
-  threads disabled the service degrades to synchronous.
+  exclusively; `render()` requests are coalesced to the latest; the UI polls `tryAcquire()`. Its
+  internal `par::parallelFor` width is `ThreadBudget::engineThreads()` — the whole budget when idle,
+  and only what the load left while one is running. With threads disabled the service degrades to
+  synchronous.
+
+**Why one owner.** These two overlap for most of a load, because R-LOADPERF-3 reveals the editor
+while images are still arriving. When each of them converted the user's percentage independently,
+the concurrent total was about twice what was asked for — 13 of 24 cores at a 25% budget, and 17 of
+16 on a 16-core box at the shipped 50% default (D-11). A budget nobody owns is not a budget.
 
 All UI state lives on the GTK thread; the workers touch only their own job/engine, so there is no
 shared UI mutation. `resetWorkspace` resets the render service (dropping engine slots and
@@ -223,17 +234,20 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 
 | Path | Layer | Responsibility |
 |------|-------|----------------|
-| `apps/cosmo/linux_main.cpp` | host | GTK app, events, dialogs, threaded loader (`startEntriesLoad`, shared by Open and Import Catalog), threaded batch exporter, fonts, logging |
+| `apps/cosmo/linux_main.cpp` | host | GTK app, events, dialogs, the load's UI-side consumer (`startEntriesLoad`/`pollLoad` — the decode itself moved down, R-SVC-1), threaded batch exporter, fonts, logging |
+| `apps/cosmo/OmpPin.{h,cpp}` | host | pins a nested OpenMP team per decode worker, resolved by `dlsym`/`GetProcAddress` rather than linked (R-CPU-2c, fixes D-12) |
 | `apps/cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `apps/cosmo/Theme.{h,cpp}` | app | palette, radii, fonts, type ramp |
 | `apps/cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
 | `apps/cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |
 | `apps/cosmo/widgets/*` | app | ~40 `Segment` widgets (chrome, panels, controls, overlays, dialogs) — plus `SplashScreen`, which the host renders in its OWN borderless window before the main one exists (R-SPLASH) |
 | `apps/cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam |
-| `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1) |
+| `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1); reusable, and calls a per-worker start hook |
+| `apps/cosmo/core/ProjectLoader.{h,cpp}` | core | **the project load** — decode pool, per-worker decode + thumbnail, in-order delivery. Was three functions in the GTK host; moving it down is what made a load runnable and measurable with no window (R-SVC-1) |
+| `apps/cosmo/core/ThreadBudget.{h,cpp}` | core | the ONE owner of the CPU budget: one total, divided between the decode pool and the engine, with the measured peak (R-SVC-10, fixes D-11) |
 | `apps/cosmo/core/History.{h,cpp}` | core | branching undo tree |
 | `apps/cosmo/core/ProjectStore.{h,cpp}` | core | recents index (config dir) |
-| `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4), and the CPU budget that sizes both thread pools (R-CPU-1/2) |
+| `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4). It still holds `cpuPercent`, but no longer converts it — `workersFor()` survives only for the legacy test; `ThreadBudget` owns the conversion (R-SVC-10) |
 | `apps/cosmo/core/PresetLibrary.{h,cpp}` | core | `.apf` preset tree scan |
 | `apps/cosmo/core/decode/*` | core | `IImageDecoder` + GdkPixbuf/LibRaw `NativeImageDecoder` |
 | `core/ImageProcessing/src/engine/*` | engine | `EditEngine`, `RenderService`, `EditParams`, serialization |

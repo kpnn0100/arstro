@@ -18,8 +18,9 @@ file, and commit.
 **[`service-architecture-proposal.md`](service-architecture-proposal.md) is APPROVED** (2026-08-17,
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
 the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
-architecture. ► Next is **S1** — `ProjectLoader` + `ThreadBudget` into `cosmo_core`, which is also
-the fix for D-11 and D-12.
+architecture. **S1a is done and D-11 + D-12 are closed.** ► Next is **S1b** (design: delete
+`App::applyThreadBudget`, one line, so the budget has one owner in code as well as in principle),
+then **S2** — `AppModel` + `Command`/`Event` + the `CosmoService` skeleton.
 
 The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
 2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
@@ -42,7 +43,8 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-16 · Last commit: U1.2, Settings from the launcher (R-SETTINGS-5).
+Last updated: 2026-08-17 · Last commit: S1a, the project load moves into cosmo_core and the CPU
+budget gets one owner (R-SVC-1, R-SVC-10; closes D-11, D-12).
 
 ---
 
@@ -50,9 +52,9 @@ Last updated: 2026-08-16 · Last commit: U1.2, Settings from the launcher (R-SET
 
 | M | Milestone | State |
 |---|---|---|
-| U1 | CPU budget + Settings reachable from home | **DONE, then reopened** — D-11 + D-12 mean the budget is not enforced as R-CPU-1 states |
-| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **proposed, awaiting approval** — supersedes P0 if taken |
-| P0 | Agent harness — CLI, headless render, debug logging, scripted input | **not started** (folded into S if the proposal is approved) |
+| U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1a done, S1b next. Supersedes P0 |
+| P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
 | P3 | Known gaps: R-ZOOM-5 eased zoom (belongs in Artboard), unwired seams | not started |
@@ -67,8 +69,12 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
 
 - [x] **U1.1** Core: `AppSettings::cpuPercent` (default 50) + `workersFor()`, enforced at the decode
       pool, at the engine's Auto thread count, and on LibRaw's OpenMP team. Persisted and tested.
-- [!] **U1.1a** The decode-pool log line is code-verified but **not observed at runtime** — reaching
-      `startEntriesLoad` needs a project opened by clicking (D-6). Clears with P0.7 (`--project`).
+- [!] **U1.1a** Still unobserved *in the app*: `startEntriesLoad`'s log line needs a project opened by
+      clicking (D-6), which S1a did not change. What S1a did change is that the **load itself** now
+      runs headlessly, so the numbers that line reports were measured directly instead — and turned
+      out to describe two defects (D-11, D-12). The GUI line clears with S3's `--project`.
+      The startup budget line *is* observed: `cpu: budget 25% = 6 of 24 cores; engine 6 threads,
+      decode pool would be 5`.
 - [x] **U1.2** Design: the home sidebar's Settings link is live and opens the same modal over the
       launcher (Home advances/renders/routes to the dialog that lives in the editor tree), plus the
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
@@ -81,10 +87,12 @@ Strangler: each step leaves both paths compiling, so the app works after every c
 cross into `App`/`widgets/`, which belong to `arstro.cosmo.design.implement` — those are two commits,
 core first.
 
-- [ ] **S1** `ProjectLoader` + `ThreadBudget` into `cosmo_core`; `linux_main.cpp` calls them instead
-      of its own `startEntriesLoad`/`decodeEntry`/`pollLoad`. Closes **D-11** and **D-12**. Proof: a
-      `cosmo_core_tests` case that loads an 18-entry project through a fake decoder on a synchronous
-      `ITaskPool` and asserts peak concurrency ≤ the budget
+- [x] **S1a** (core) `ProjectLoader` + `ThreadBudget` in `cosmo_core`; `linux_main.cpp` keeps only the
+      UI-side consumer. Closes **D-11** and **D-12**. Two new tests, the first checked to fail against
+      the old arithmetic; measured end to end on the reported 18-RAF project (25% → 19% of a 24-core
+      machine, peak 5 of a budget of 6)
+- [ ] **S1b** (design) delete `App::applyThreadBudget` — `ThreadBudget` owns the engine's width, and
+      two owners in code is what S1a was about even though they currently agree
 - [ ] **S2** `AppModel` + `Command`/`Event` + codecs + `CosmoService` skeleton wrapping `EditSession`;
       the GUI dispatches commands for open / select / undo / redo / set-param and reads the model for
       them. *(core commit, then design commit)*
@@ -133,6 +141,24 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-17 (S1a) — The budget is a reservation, not a fixed ratio.** The engine gets the *whole*
+  budget when nothing is loading and only the remainder while a load runs, rather than a permanent
+  share. A fixed split would slow every render on an idle app to protect a load that is not
+  happening. The floor on each side is 1: previews must not stop entirely (the editor is visible
+  during a load, R-LOADPERF-3) and a load must always progress (R-CPU-1). Those two floors are the
+  only case where the sum can exceed the total, and only on a machine whose entire budget is one
+  thread.
+- **2026-08-17 (S1a) — `OrderedParallelLoad` had never been restarted, and could not be.** `stop()`
+  latches `mStop` and `start()` did not clear it, so a reused pipeline started with every worker
+  returning immediately. It was invisible until now because each load built a fresh `LoadJob`;
+  `ProjectLoader` keeps one pipeline and calls `stop()` before each `start()`. `start()` now
+  re-initialises all run state. Found by the new test, not by inspection — which is the argument for
+  S1 in one sentence.
+- **2026-08-17 (S1a) — The measured peak is part of the feature, not instrumentation.** R-CPU-4 used
+  to be satisfied by a log line that had never been executed. `ThreadBudget` counts producers, the
+  load logs the high-water mark, and a test asserts it. Anything that claims a thread count from now
+  on has to be able to report one.
 
 - **2026-08-17 — U1.1's decisive claim was wrong, and the reason is worth keeping.** The decisions
   entry below says "the nested OpenMP team was the real cause … pinning `OMP_NUM_THREADS=1` is what
@@ -187,7 +213,13 @@ and read a debug log that explains what the UI did.
 
 ## Verification notes
 
-- Nothing in P0 has been built or verified yet; every claim above comes from reading the source on
+- **S1a is verified on Linux, not on Windows.** The suite is green (24/24), the new peak test fails on
+  the old arithmetic, and a real 18-RAF load was measured on a 24-core Linux host. The D-12 pin is
+  *inert here* — the vendored libraw.a has no OpenMP, and the startup line says so — so the fix's
+  effect on the reported symptom still needs one confirmation on MSYS2: look for
+  `cpu: nested OpenMP teams pinned to 1 per decode worker` in the log. The mechanism itself is proven
+  by `core/tests/fixtures/omp_pin.c`.
+- Nothing in P0 has been built or verified yet; every claim about it comes from reading the source on
   2026-08-16.
 - The host used for that reading is Windows 10 + MSYS2 MinGW64. `build/` (Debug, Ninja) and
   `build-mingw64/` (Release, Ninja) both contain a working `cosmo.exe`; `build/` is the one wired to

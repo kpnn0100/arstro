@@ -8,7 +8,9 @@
 #include "App.h"
 #include "ExportWriter.h"
 #include "Log.h"
-#include "core/OrderedParallelLoad.h"
+#include "OmpPin.h"
+#include "core/ProjectLoader.h"
+#include "core/ThreadBudget.h"
 #include "widgets/SplashScreen.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
@@ -41,62 +43,39 @@ namespace
 {
     constexpr int kW = 1440, kH = 900;  // Figma base artboard size
 
-    // A project open in progress. The heavy image decode runs on a BACKGROUND
-    // THREAD (producer) so it never stalls the UI; the GTK main thread (consumer)
-    // polls finished results and applies them to the session + drives the animated
-    // loading screen (R-LOADING). Results are consumed strictly in entry order so
-    // the group-tree parent indices stay valid.
     // ── Project loading (R-LOADING + R-LOADPERF) ──────────────────────────────
     //
-    // Decoding is CPU-bound and independent per image, so it runs on a POOL of workers
-    // (R-LOADPERF-1). They finish out of order, but each result is stored AT ITS ENTRY
-    // INDEX and the UI thread applies them strictly in order: the .cosmoproj format
-    // identifies a node's parent by entry index, so applying out of order would reparent
-    // the tree. Each worker also builds the filmstrip thumbnail and hands the decoded
-    // buffer over to be MOVED into the engine, so the UI thread pays neither the
-    // downsample nor the ~100 MB copy (R-LOADPERF-2).
-    constexpr int kMaxDecodeWorkers = 8;
-    // A decoded 24 MP frame is ~100 MB and N workers outrun one applier, so without a
-    // bound a big catalog would be decoded into RAM all at once (R-LOADPERF-1a).
-    constexpr size_t kDecodeWindow = 8;                        // entries ahead of the applier
-    constexpr size_t kMaxInFlightBytes = 512ull * 1024 * 1024; // decoded-but-unapplied
+    // The pool, the decode, the strictly-in-order hand-off, the back-pressure and the
+    // worker count now live in cosmo_core::ProjectLoader (R-SVC-1) — including the
+    // constants that used to sit here, which are ProjectLoader::kDecodeWindow /
+    // kMaxInFlightBytes and ThreadBudget::kMaxDecodeWorkers. What is left in the host is
+    // the GTK main thread's consumer: apply each finished result to the session in order
+    // and drive the animated loading screen (R-LOADING).
 
+    // What is left of the old LoadJob after S1 (R-SVC-1): the decode pool, the in-order
+    // hand-off, the back-pressure and the decode itself all moved into cosmo_core's
+    // ProjectLoader, which is why a load can now be run and measured with no window at
+    // all. This struct is the HOST's half — the tree mapping, the GTK poll source, and
+    // the two flags that belong to the animation.
     struct LoadJob
     {
-        struct Result
-        {
-            size_t index = 0;                 // which entry this is (R-LOADUX-1)
-            bool group = false;
-            std::string name;                 // group name, or leaf display name
-            std::string imagePath;            // source path (image leaves)
-            int parent = -1;
-            arstro::EditParams params;         // per-item edit params (image or group)
-            arstro::cosmo::History history;    // per-item branching edit timeline
-            std::vector<uint8_t> rgba;         // decoded pixels (image leaves)
-            arstro::cosmo::EditSession::Thumb thumb;  // built on the worker (R-LOADPERF-2)
-            int w = 0, h = 0;
-            bool decoded = false;              // false = missing/failed image
-            bool bypass = false;               // R-BYPASS-6: node's filter disabled
-        };
+        using Result = arstro::cosmo::ProjectLoader::Result;
 
-        std::vector<App::WorkspaceEntry> entries;
+        arstro::cosmo::ProjectLoader loader;
         std::vector<int> nodeOf;               // entry index -> tree node (R-LOADUX-1)
         std::string path;
         // Import Catalog builds a project that has no .cmp on disk yet, so the file is
         // written once every image has landed (an open just records the path).
         bool saveOnFinish = false;
+        size_t entryCount = 0;                 // the project's real size (R-LOADUX-3)
 
-        // The pool, the strict in-order hand-off and the back-pressure all live in
-        // cosmo_core's OrderedParallelLoad, which is UI-free and therefore actually
-        // unit-testable (see cosmo_core_tests) — this is just the binding.
-        arstro::cosmo::OrderedParallelLoad<Result> pipe;
         guint pollId = 0;
         bool coverSent = false;
         bool revealed = false;                 // R-LOADPERF-3: editor already shown
 
         ~LoadJob()
         {
-            pipe.stop();
+            loader.stop();
             if (pollId) g_source_remove(pollId);
         }
     };
@@ -153,9 +132,12 @@ namespace
         std::unique_ptr<LoadJob> load;              // active project load (nullptr when idle)
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
         std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
-        // The in-force preferences, mirrored here because the load pool is sized by the
-        // CPU budget (R-CPU-2) and startEntriesLoad runs in the host, not in App.
+        // The in-force preferences, mirrored here because the load runs in the host.
         arstro::cosmo::AppSettings settings;
+        // R-SVC-10: the ONE owner of the CPU budget. The decode pool and the engine's
+        // thread count are both slices of `budget.total()`, so they can no longer each
+        // take the whole percentage and add up to twice it (D-11).
+        arstro::cosmo::ThreadBudget budget;
 
         // ── R-SPLASH: the application-open animation, in its OWN borderless window ──
         GtkWidget *splashWindow = nullptr;
@@ -562,42 +544,9 @@ namespace
         arstro::cosmo::ProjectStore::remember(std::move(e));
     }
 
-    // Background producer: decode every entry's image (the heavy work) off the UI
-    // thread, pushing results in order. Touches only the job + its own decoder — no
-    // App/GTK access — so there is no data race with the main thread.
-    // Runs on a pool thread: decode entry `i` and build its filmstrip thumbnail, so the
-    // UI thread is left with nothing but bookkeeping (R-LOADPERF-1/2).
-    LoadJob::Result decodeEntry(LoadJob *job, size_t i)
-    {
-        NativeImageDecoder dec;  // stateless; a per-call instance is free and provably per-thread
-        const App::WorkspaceEntry &e = job->entries[i];
-        LoadJob::Result r;
-        r.index = i;
-        r.group = e.group;
-        r.parent = e.parent;
-        r.params = e.params;
-        r.history = e.history;
-        r.bypass = e.bypass;               // R-BYPASS-6
-        if (e.group)
-        {
-            r.name = e.name;
-        }
-        else
-        {
-            r.imagePath = e.imagePath;
-            r.name = baseName(e.imagePath);
-            DecodedImage img = dec.decodeFile(e.imagePath);
-            if (img.ok())
-            {
-                r.w = img.width; r.h = img.height; r.decoded = true;
-                // Downsample HERE, not on the UI thread (R-LOADPERF-2).
-                r.thumb = arstro::cosmo::EditSession::makeThumb(
-                    img.rgba.data(), img.width, img.height, arstro::cosmo::EditSession::kThumbEdge);
-                r.rgba = std::move(img.rgba);
-            }
-        }
-        return r;
-    }
+    // The decode producer used to live here. It is now ProjectLoader::produce in
+    // cosmo_core (R-SVC-1), which is what makes a load runnable — and measurable —
+    // without a window; what remains below is the host's half, applying results to App.
 
     // Main-thread consumer (GTK timeout): apply any decoded results in order, feed
     // the loading cover + progress, and on completion finish + reveal. Runs while
@@ -611,7 +560,7 @@ namespace
         for (;;)  // drain everything ready this tick, strictly in entry order
         {
             LoadJob::Result r;
-            if (!job->pipe.tryConsume(r)) break;   // in entry order, or nothing ready yet
+            if (!job->loader.poll(r)) break;       // in entry order, or nothing ready yet
 
             // R-LOADUX-1: the node already exists (built before any decoding), so this
             // is an ATTACH, not a create -- groups need nothing at all here.
@@ -655,7 +604,7 @@ namespace
                 a->app.refreshLibrary();
             }
 
-            const size_t doneN = job->pipe.consumed(), totalN = job->entries.size();
+            const size_t doneN = job->loader.consumed(), totalN = job->entryCount;
             if (!r.name.empty())
                 a->app.setLoadStatus("Loading  " + r.name);  // what's loading, above the bar
             a->app.setLoadProgress((int)doneN, (int)totalN);
@@ -663,13 +612,19 @@ namespace
             gtk_widget_queue_draw(a->area);
         }
 
-        if (job->pipe.finished())
+        if (job->loader.finished())
         {
-            a->app.setStreamProgress((int)job->entries.size(), (int)job->entries.size());  // fades out
+            a->app.setStreamProgress((int)job->entryCount, (int)job->entryCount);  // fades out
             a->app.finishWorkspaceLoad(job->path);   // records the path; keeps any selection
             if (job->saveOnFinish && !a->app.saveWorkspaceAs(job->path))
                 g_printerr("cosmo_v2: could not write project %s\n", job->path.c_str());
             rememberProject(job->path);
+            // R-CPU-4 as amended: the peak is MEASURED, so the allotment and what actually
+            // ran can be told apart instead of taken on trust.
+            LOGI("load: finished %zu entries; peak %d concurrent decode workers, "
+                 "engine now %d threads (budget total %d)",
+                 job->entryCount, a->budget.peakDecode(), a->budget.engineThreads(),
+                 a->budget.total());
             // A project whose images all failed to decode never revealed above.
             a->app.finishOpenTransition();   // the bar has filled; reveal (min-visible aside)
             job->pollId = 0;                // returning REMOVE drops this source; don't double-remove
@@ -706,28 +661,32 @@ namespace
         a->load.reset();  // stop/join any prior load first
         a->load = std::make_unique<LoadJob>();
         LoadJob *job = a->load.get();
-        job->entries = std::move(entries);
         job->path = path;
         job->saveOnFinish = saveOnFinish;
+        job->entryCount = entries.size();
         // R-LOADUX-1: the whole rack exists before a single pixel is decoded, so the
         // filmstrip shows the project's real size (as spinners) from the first frame.
-        job->nodeOf = a->app.buildPendingTree(job->entries);
-        a->app.setLoadProgress(0, (int)job->entries.size());
-        a->app.setStreamProgress(0, (int)job->entries.size());
+        job->nodeOf = a->app.buildPendingTree(entries);
+        a->app.setLoadProgress(0, (int)job->entryCount);
+        a->app.setStreamProgress(0, (int)job->entryCount);
 
         // R-LOADING-1 (amended): decode starts NOW, alongside the intro, so the progress
         // bar and status line are already live by the time the intro lands. It runs on a
         // worker pool whose per-image apply is off the UI thread, so it cannot hitch the
-        // animation. The pool is sized by the user's CPU budget rather than by the core
-        // count (R-CPU-2) -- one worker per core made the whole machine unusable for the
-        // length of the load; the pipeline still bounds how far they run ahead of the applier.
-        const int workers = arstro::cosmo::AppSettings::workersFor(a->settings.cpuPercent, kMaxDecodeWorkers);
-        LOGI("load: %zu entries on %d decode workers (cpu budget %d%% of %u cores)",
-             job->entries.size(), workers, a->settings.cpuPercent,
-             std::thread::hardware_concurrency());
-        job->pipe.start(job->entries.size(), workers, kDecodeWindow, kMaxInFlightBytes,
-                        [job](size_t i) { return decodeEntry(job, i); },
-                        [](const LoadJob::Result &r) { return r.rgba.size(); });
+        // animation. The pool's size is a SLICE of the one budget rather than a second
+        // conversion of the user's percentage (R-SVC-10): ThreadBudget::beginLoad reserves
+        // it and the engine shrinks to what is left for the duration, so the two can no
+        // longer add up to twice what was asked for (D-11).
+        job->loader.start(std::move(entries), a->budget,
+                          [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); },
+                          // Per-thread, on the thread, because the OpenMP thread count is a
+                          // per-thread ICV — which is why the old env-var pin never bound (D-12).
+                          [] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
+        LOGI("load: %zu entries on %d decode workers, engine %d threads "
+             "(cpu budget %d%% = %d of %d cores; decode cap %d)",
+             job->entryCount, job->loader.workers(), a->budget.engineThreads(),
+             a->budget.percent(), a->budget.total(), a->budget.cores(),
+             arstro::cosmo::ThreadBudget::kMaxDecodeWorkers);
         job->pollId = g_timeout_add(15, pollLoad, a);  // ~1 poll per frame
     }
 
@@ -1272,14 +1231,7 @@ int main(int argc, char **argv)
     LOGI("cosmo_v2 starting (%d args, log at %s)", argc - 1,
          arstro::cosmo_v2::log::path().c_str());
 
-    // R-CPU-2(c): LibRaw is built with -fopenmp, so EVERY decode worker would open its
-    // own OpenMP team sized to the whole machine -- 8 workers x 16 cores is 128 threads
-    // on a 16-core box, which is what made a RAW import take the entire computer no
-    // matter how the pool was sized. cosmo already parallelises ACROSS images, so a
-    // second layer inside one image is pure oversubscription: pin it to 1 and a decode
-    // worker means exactly one core. Must precede any decode, hence here rather than in
-    // the decoder -- and it is an env var because that is the only knob libgomp exposes.
-    g_setenv("OMP_NUM_THREADS", "1", FALSE);  // FALSE: an explicit user OMP_NUM_THREADS still wins
+    LOGI("cpu: %s", arstro::cosmo_v2::ompPinStatus());
 
     gtk_init(&argc, &argv);
     registerBundledFonts();
@@ -1326,9 +1278,19 @@ int main(int argc, char **argv)
     // R-SETTINGS-4: what the user last chose is in force before the first frame, and
     // every later change is written straight back.
     host.settings = arstro::cosmo::AppSettings::load();
+    // R-SVC-10: the budget is told once, here, and it owns the engine's thread count from
+    // then on. App no longer converts the percentage for itself — that second conversion
+    // was half of D-11.
+    host.budget.setPercent(host.settings.cpuPercent);
+    host.budget.setExplicitEngineThreads(host.settings.threads);
     host.app.applySettings(host.settings);
+    LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
+         host.budget.percent(), host.budget.total(), host.budget.cores(),
+         host.budget.engineThreads(), host.budget.decodeWorkers());
     host.app.onSettingsChanged = [&host](arstro::cosmo::AppSettings s) {
-        host.settings = s;   // the next load's pool is sized from this (R-CPU-2/3)
+        host.settings = s;
+        host.budget.setPercent(s.cpuPercent);              // R-CPU-3: next load, next render
+        host.budget.setExplicitEngineThreads(s.threads);   // R-CPU-2b: an explicit count still wins
         if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
                                   arstro::cosmo::AppSettings::path().c_str());
     };

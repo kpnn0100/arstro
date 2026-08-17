@@ -5,6 +5,8 @@
 #include "../EditSession.h"
 #include "../AppSettings.h"
 #include "../OrderedParallelLoad.h"
+#include "../ProjectLoader.h"
+#include "../ThreadBudget.h"
 #include "../PresetLibrary.h"
 #include <cassert>
 #include <chrono>
@@ -751,6 +753,126 @@ namespace
         assert(AppSettings::workersFor(1000) == full);
         printf("[PASS] cpu_budget_scales_with_percent\n");
     }
+
+    // R-SVC-10 / D-11: the decode pool and the engine are SLICES of one budget, so their
+    // sum is what the user chose. This is the test the old code could not pass: two
+    // independent workersFor() calls each returned the whole budget, and the sum was ~2x.
+    void test_one_budget_is_divided_not_duplicated()
+    {
+        using arstro::cosmo::ThreadBudget;
+
+        // Checked on the shapes that actually shipped wrong, independent of this machine.
+        for (int cores : {2, 4, 8, 12, 16, 24, 32})
+            for (int pct : {1, 25, 50, 75, 100})
+            {
+                ThreadBudget b(pct, cores);
+                const int total = b.total();
+                assert(total >= 1 && total <= cores && "R-CPU-1: never zero, never the whole machine plus one");
+
+                // Idle: the engine may use the whole budget -- shrinking renders when
+                // nothing is loading would be a pointless slowdown.
+                assert(b.engineThreads() == total && "an idle engine gets the whole budget");
+
+                // Loading: the pool takes its slice and the engine keeps the remainder.
+                const int workers = b.beginLoad();
+                assert(workers >= 1 && "R-CPU-1: a load always makes progress");
+                assert(workers <= ThreadBudget::kMaxDecodeWorkers && "R-CPU-5: the cap can bind first");
+                const int engine = b.engineThreads();
+                assert(engine >= 1 && "previews never stop entirely (R-LOADPERF-3 shows the editor)");
+
+                // THE assertion. The two floors are the only slack, and only on a machine
+                // so small that the budget is a single thread.
+                const int slack = (total <= ThreadBudget::kEngineFloor + 1) ? 1 : 0;
+                assert(workers + engine <= total + slack &&
+                       "R-SVC-10: decode + engine must not exceed the one budget");
+
+                b.endLoad();
+                assert(b.engineThreads() == total && "the engine gets its threads back after a load");
+            }
+
+        // R-CPU-2b: an explicit CPU-threads choice outranks the budget for the engine.
+        // It is allowed to exceed it -- a deliberate override, logged rather than clamped.
+        ThreadBudget ex(25, 16);
+        ex.setExplicitEngineThreads(8);
+        assert(ex.engineThreads() == 8 && "an explicit thread count wins over Auto");
+        ex.setExplicitEngineThreads(0);
+        assert(ex.engineThreads() == ex.total() && "0 means Auto, i.e. follow the budget");
+
+        // A corrupt percentage falls back to the default rather than clamping up to 100.
+        assert(ThreadBudget(0, 16).percent() == 50 && ThreadBudget(400, 16).percent() == 50);
+        printf("[PASS] one_budget_is_divided_not_duplicated\n");
+    }
+
+    // R-CPU-4 as amended: the peak is measured. A load of N entries through a fake decoder
+    // must never have more producers inside their work at once than the pool it was given
+    // -- the number the old log line asserted without ever being run.
+    void test_project_load_peak_never_exceeds_its_pool()
+    {
+        using arstro::cosmo::ProjectLoader;
+        using arstro::cosmo::ThreadBudget;
+
+        // A decoder that produces a tiny image and sleeps, so producers genuinely overlap.
+        struct SlowFake : arstro::cosmo::IImageDecoder
+        {
+            arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                arstro::cosmo::DecodedImage d;
+                d.width = d.height = 8;
+                d.rgba.assign((size_t)8 * 8 * 4, 200);
+                d.name = path;
+                return d;
+            }
+        };
+
+        std::vector<EditSession::WorkspaceEntry> entries;
+        for (int i = 0; i < 18; ++i)   // the reported case: an 18-photo project
+        {
+            EditSession::WorkspaceEntry e;
+            e.imagePath = "/fake/img" + std::to_string(i) + ".raf";
+            entries.push_back(e);
+        }
+
+        ThreadBudget budget(25, 24);   // the reported settings: 25% of a 24-core machine
+        const int engineIdle = budget.engineThreads();
+        ProjectLoader loader;
+        int workerStarts = 0;
+        std::atomic<int> starts{0};
+        loader.start(entries, budget, [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new SlowFake()); },
+                     [&starts] { starts.fetch_add(1); });
+        const int pool = loader.workers();
+        assert(pool >= 1 && pool <= ThreadBudget::kMaxDecodeWorkers);
+        // Captured now, because the invariant is about the concurrent moment: once the load
+        // ends the engine takes the whole budget back, which is correct and would make a
+        // naive after-the-fact sum look like a violation.
+        const int engineDuringLoad = budget.engineThreads();
+        assert(engineDuringLoad < engineIdle && "the engine gives up threads for the duration");
+
+        size_t got = 0;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (!loader.finished() && std::chrono::steady_clock::now() < deadline)
+        {
+            ProjectLoader::Result r;
+            while (loader.poll(r))
+            {
+                assert(r.index == got && "results arrive strictly in entry order (parent indices)");
+                assert(r.decoded && r.w == 8 && r.h == 8);
+                assert(!r.thumb.rgba.empty() && "the worker built the thumbnail, not the UI thread");
+                ++got;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        assert(got == entries.size() && "every entry arrived");
+        assert(budget.peakDecode() <= pool && "never more producers at once than the pool allotted");
+        assert(budget.peakDecode() >= 1 && "the peak was actually measured, not left at zero");
+        assert(budget.peakDecode() + engineDuringLoad <= budget.total() + 1 &&
+               "R-SVC-10: measured peak plus the engine stays inside the budget");
+        assert(budget.engineThreads() == engineIdle && "the engine has its threads back");
+        workerStarts = starts.load();
+        assert(workerStarts == pool && "the per-thread hook ran once on every worker (D-12's fix)");
+        printf("[PASS] project_load_peak_never_exceeds_its_pool (pool %d, peak %d of budget %d)\n",
+               pool, budget.peakDecode(), budget.total());
+    }
 }
 
 int main()
@@ -777,6 +899,8 @@ int main()
     test_selecting_a_pending_image_keeps_the_stage();
     test_settings_roundtrip_and_survive_a_bad_file();
     test_cpu_budget_scales_with_percent();
+    test_one_budget_is_divided_not_duplicated();
+    test_project_load_peak_never_exceeds_its_pool();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

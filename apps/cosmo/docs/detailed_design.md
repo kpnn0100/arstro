@@ -207,12 +207,65 @@ labels.
 outside 1..100→50, because an out-of-range budget is a corrupt file rather than a request for the
 whole machine); `save()` truncates and writes `cosmosettings=1` plus the four keys.
 
-`static int workersFor(int percent, int cap = 0)` (R-CPU-1) turns the budget into a thread count:
+`static int workersFor(int percent, int cap = 0)` turned the budget into a thread count:
 `round(hardware_concurrency × percent/100)` — integer `(cores*percent + 50)/100` — floored at **1**
-and capped at `cap` when `cap > 0`. An unknown core count assumes 4. Percent is what the user picks;
-a count is what can actually be enforced, since no portable per-process CPU cap exists. Two callers:
-the decode pool (`linux_main.cpp startEntriesLoad`, `cap = kMaxDecodeWorkers = 8`) and
-`App::applyThreadBudget` (uncapped, used only when `threads == 0`).
+and capped at `cap` when `cap > 0`. **It is legacy as of S1** and kept only for its existing test:
+having two callers each convert the same percentage for themselves is precisely D-11, and
+`ThreadBudget` (§2.4c) now owns the conversion. Do not add a third caller.
+
+### 2.4c ThreadBudget (`ThreadBudget.{h,cpp}`) — R-SVC-10
+
+The one owner of the CPU budget. `ThreadBudget(int percent = 50, int cores = 0)`; `cores <= 0` asks
+`hardware_concurrency()` and assumes 4 if it cannot say. `setPercent()` applies the same
+corrupt-value rule as `AppSettings::load()` (outside 1..100 → 50, not clamped up).
+
+- `total()` = `clamp((cores*percent + 50)/100, 1, cores)` — **the** number; everything else is a
+  slice of it.
+- `decodeWorkers()` = `clamp(total() - kEngineFloor, 1, kMaxDecodeWorkers)`, with
+  `kMaxDecodeWorkers = 8` (R-CPU-5: the cap binds before the budget above 16 cores) and
+  `kEngineFloor = 1`.
+- `engineThreads()` = `mExplicit > 0 ? mExplicit : clamp(total() - reserved, 1, cores)`. So the
+  engine gets the **whole** budget when idle and only the remainder during a load. An explicit user
+  CPU-threads choice (2/4/8) wins and is allowed to exceed the budget — R-CPU-2b calls it a
+  deliberate override, so it is logged rather than silently clamped.
+- `beginLoad()` reserves `decodeWorkers()`, calls `apply()`, resets the peak, and returns the pool
+  size. `endLoad()` releases and re-applies. Not nestable: one load at a time (R-CPU-3, a pool is
+  sized when it starts).
+- `apply()` is `par::setThreads(engineThreads())` — **the only** place the budget touches the
+  engine's width.
+- `producerEnter()/producerExit()` maintain `peakDecode()`, a lock-free monotonic high-water mark
+  (CAS retry loop). This is R-CPU-4 as amended: the previous version of the feature was verified by
+  a log line nobody had ever run, so the peak is now a measured number a test asserts against.
+
+The two floors are the only way the sum can exceed the total, and only by one thread on a machine
+whose whole budget is a single thread. Asserted in `one_budget_is_divided_not_duplicated` across
+cores ∈ {2,4,8,12,16,24,32} × percent ∈ {1,25,50,75,100}.
+
+### 2.4d ProjectLoader (`ProjectLoader.{h,cpp}`) — R-SVC-1
+
+The project load, moved out of the GTK host (`startEntriesLoad`/`decodeEntry`/`pollLoad`) so it can
+run — and be measured — with no window. `Result` carries what the applier needs: `index`, `group`,
+`name`, `imagePath`, `parent`, `params`, `history`, `rgba`, `thumb`, `w/h`, `decoded`, `bypass`.
+
+- `start(entries, budget, makeDecoder, onWorkerStart)` calls `budget.beginLoad()` for the pool size
+  and hands `OrderedParallelLoad` a `produce` that instantiates a decoder **per call** (stateless,
+  and provably per-thread without a `thread_local`), brackets the work in
+  `producerEnter/Exit`, and weighs the result by `rgba.size()`. `kDecodeWindow = 8` entries ahead of
+  the applier and `kMaxInFlightBytes = 512 MB` bound how far producers may run (R-LOADPERF-1a).
+- `produce(i, decoder)` is the old `decodeEntry`: groups return metadata only; a leaf decodes, then
+  builds its filmstrip thumbnail **on the worker** (R-LOADPERF-2) and moves the pixels into the
+  result. A failed decode leaves `decoded == false`, which reads as *missing*, never as a stall.
+- `poll(Result&)` is `tryConsume` plus one thing: when it drains the last result it calls
+  `endLoad()`, so the engine gets its threads back at the end of the load rather than whenever the
+  host remembers to tear the job down.
+- `onWorkerStart` runs once per worker, on that worker. The host passes
+  `cosmo_v2::pinNestedOpenMPForThisThread()`: the OpenMP thread count is a per-thread ICV, which is
+  why the old `OMP_NUM_THREADS` pin in `main()` could never work (D-12).
+
+`stop()` joins and releases the budget; `start()` calls it first, which is why
+`OrderedParallelLoad::start` now re-initialises `mStop`/`mClaimed`/`mConsumed`/`mInFlight` — the
+class had never been restarted before (each load built a fresh `LoadJob`), so a reused pipeline
+started with `mStop` still latched and every worker returned immediately.
 
 ### 2.5 NativeImageDecoder (`decode/*`)
 `struct DecodedImage { std::vector<uint8_t> rgba; int width,height; std::string name; bool ok(); }`

@@ -12,11 +12,16 @@ package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
     + main()
     - onDraw/onButton/onMotion/onScroll/onKey/onTick
   }
-  class LoadJob <<threaded loader>> {
-    + entries : WorkspaceEntry[]
-    + ready : Result[]  <<mutex>>
-    + worker : std::thread
-    - decodeWorker() / pollLoad()
+  class LoadJob <<load, host half>> {
+    + loader : ProjectLoader        ' the decode moved down (R-SVC-1)
+    + nodeOf : int[]                ' entry index -> tree node (R-LOADUX-1)
+    + entryCount : size_t
+    + pollId : guint                ' GTK 15 ms consumer
+    - startEntriesLoad() / pollLoad()
+  }
+  class OmpPin <<namespace, host>> {
+    + pinNestedOpenMPForThisThread()  ' per-worker; per-thread ICV (D-12)
+    + ompPinStatus() : const char *   ' checked at runtime, not assumed
   }
   class "file dialogs" as Dialogs <<GTK>>
   class ExportWriter <<namespace exporter>> {
@@ -149,11 +154,38 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
   }
   class AppSettings {
     + previewEdge : int
-    + threads : int          ' 0 = auto -> the CPU budget (R-CPU-2)
+    + threads : int          ' 0 = auto -> the CPU budget (R-CPU-2b)
     + useGpu : bool
     + cpuPercent : int       ' R-CPU-1: share of cores cosmo may schedule
     + load() / save()
-    + workersFor(percent, cap) : int   ' R-CPU-1: percent in, thread count out
+    + workersFor(percent, cap) : int   ' legacy: ThreadBudget owns the conversion now
+  }
+  class ThreadBudget <<one owner, R-SVC-10>> {
+    + {static} kMaxDecodeWorkers : int = 8   ' R-CPU-5: the cap can bind first
+    + {static} kEngineFloor : int = 1
+    + setPercent(p) / setExplicitEngineThreads(n)
+    + total() : int                  ' the ONE number every slice comes from
+    + decodeWorkers() : int          ' total - engine floor, capped
+    + engineThreads() : int          ' total - reserved (whole budget when idle)
+    + beginLoad() : int / endLoad()  ' reserve for a load's duration
+    + apply()                        ' the only par::setThreads for the budget
+    + producerEnter() / producerExit() / peakDecode() : int   ' MEASURED (R-CPU-4)
+  }
+  class "OrderedParallelLoad<T>" as OrderedParallelLoad <<template>> {
+    + start(count, workers, window, maxBytes, produce, weigh, onWorkerStart)
+    + tryConsume(T &) : bool         ' one consumer, strict index order
+    + consumed() / count() / finished()
+    + stop()
+    - run()                          ' claim with an atomic; i == mConsumed is exempt
+  }
+  class ProjectLoader <<decode pool, R-SVC-1>> {
+    + {static} kDecodeWindow : size_t = 8
+    + {static} kMaxInFlightBytes : size_t = 512 MB
+    + start(entries, budget, makeDecoder, onWorkerStart)
+    + poll(Result &) : bool          ' strictly in entry order
+    + finished() / consumed() / total() / workers()
+    + stop()
+    - produce(i, decoder) : Result   ' decode + thumbnail, on the worker (R-LOADPERF-2)
   }
   AppSettings ..> ProjectStore : configDir()
   interface IImageDecoder
@@ -254,7 +286,14 @@ EditSession *--> RenderService
 History *--> HistoryNode
 App ..> ProjectStore
 App ..> PresetLibrary
-App ..> AppSettings : applySettings / applyThreadBudget (R-CPU-2)
+App ..> AppSettings : applySettings
+GtkMain ..> ThreadBudget : setPercent / setExplicitEngineThreads (R-CPU-3)
+LoadJob *--> ProjectLoader
+ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)
+ProjectLoader ..> OrderedParallelLoad : pool + in-order hand-off
+ProjectLoader ..> IImageDecoder : one per produce() call
+ProjectLoader ..> OmpPin : onWorkerStart hook (R-CPU-2c)
+ThreadBudget ..> RenderService : par::setThreads(engineThreads())
 HomeScreen ..> SettingsDialog : sidebar Settings link (R-SETTINGS-5)
 RenderService ..> EditEngine
 RenderService ..> Frame
