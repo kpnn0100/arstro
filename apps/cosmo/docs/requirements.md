@@ -806,6 +806,15 @@ Artboard, no click — which is what D-6 made impossible and what let D-11/D-12 
 `commands_drive_the_session` covers select/set/undo/redo/next/prev/bypass/group/settings/screen/
 save plus rejection, each asserted against the model.
 
+### DR-SVC-9a Every command kind has a grammar (R-SVC-9)
+`every_command_kind_has_a_grammar` pairs each of the 22 `Command::Kind` values with a
+documented line, asserts the line parses to that kind, that no kind is listed twice, that all
+22 are covered, and that `commandNames()` has exactly 22 entries. `kKindCount` is asserted
+against the table's size, so **adding a Kind fails this test until its parser rule and its
+documented line exist** — without which the struct path would work while the CLI and the
+control socket could not reach the behaviour, which is the divergence the architecture exists
+to prevent.
+
 ### DR-SVC-9 Two front ends, one state (R-SVC-9)
 `two_services_dump_the_same_state` runs the same command sequence twice — once pumped 120 extra
 frames, standing in for a GUI that has animated longer — and asserts the `stable` dumps are

@@ -1145,6 +1145,64 @@ namespace
         std::filesystem::remove(path);
         printf("[PASS] two_services_dump_the_same_state\n");
     }
+
+    // R-SVC-9: every Command::Kind must be expressible in the text grammar. Without this,
+    // adding a Kind and forgetting its parser is silent — the struct path works, the CLI and
+    // the control socket cannot reach it, and the two front ends diverge exactly the way this
+    // architecture exists to prevent. `kKindCount` is asserted too, so ADDING a kind breaks
+    // this test until its line is written.
+    void test_every_command_kind_has_a_grammar()
+    {
+        using arstro::cosmo::Command;
+        using K = Command::Kind;
+
+        // One documented line per kind. Keep in the enum's order so a gap is obvious.
+        const std::pair<K, const char *> cases[] = {
+            {K::ProjectOpen, "project open /tmp/a.cmp"},
+            {K::ProjectNew, "project new /tmp/a.cmp"},
+            {K::ProjectSave, "project save"},
+            {K::ProjectClose, "project close"},
+            {K::Import, "import /a.raf"},
+            {K::Select, "select 2"},
+            {K::SelectNext, "select next"},
+            {K::SelectPrev, "select prev"},
+            {K::Set, "set exposure=1.0"},
+            {K::Bypass, "bypass 2 on"},
+            {K::GroupNew, "group new Name"},
+            {K::GroupUngroup, "group ungroup 2"},
+            {K::Undo, "undo"},
+            {K::Redo, "redo"},
+            {K::PresetApply, "preset apply Name"},
+            {K::PresetSave, "preset save Name"},
+            {K::Export, "export --outdir /tmp/out"},
+            {K::SettingsSet, "settings set cpuPercent=50"},
+            {K::Screen, "screen home"},
+            {K::StatePrint, "state print"},
+            {K::Wait, "wait load-finished"},
+            {K::Quit, "quit"},
+        };
+        const int kKindCount = 22;   // Kind::None is not a command
+        assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
+               "a new Command::Kind needs a documented line here and a parser rule");
+
+        bool seen[kKindCount + 1] = {false};
+        for (const auto &c : cases)
+        {
+            std::string err;
+            const Command parsed = arstro::cosmo::parseCommand(c.second, err);
+            assert(err.empty() && "the documented line must parse");
+            assert(parsed.kind == c.first && "and to the kind it documents");
+            const int idx = (int)c.first;
+            assert(idx >= 1 && idx <= kKindCount && !seen[idx] && "no kind listed twice");
+            seen[idx] = true;
+        }
+        for (int i = 1; i <= kKindCount; ++i) assert(seen[i] && "every kind is covered");
+
+        // commandNames() feeds --help, so it must not lag the grammar either.
+        assert((int)arstro::cosmo::commandNames().size() == kKindCount &&
+               "commandNames() lists one entry per kind");
+        printf("[PASS] every_command_kind_has_a_grammar (%d kinds)\n", kKindCount);
+    }
 }
 
 int main()
@@ -1174,6 +1232,7 @@ int main()
     test_one_budget_is_divided_not_duplicated();
     test_project_load_peak_never_exceeds_its_pool();
     test_command_text_roundtrips();
+    test_every_command_kind_has_a_grammar();
     test_service_opens_a_project_with_no_ui();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();
