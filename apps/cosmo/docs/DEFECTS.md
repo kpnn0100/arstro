@@ -107,17 +107,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   (`arstro.design.desktop` §5) — currently unsatisfiable for cosmo.
 - **Fix:** pending. P0.1 → P0.3.
 
-### D-6 — A project cannot be opened from the command line
-- **Area:** core / CLI · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** `./build/apps/cosmo/cosmo.exe some.cmp` — `openPath()` special-cases only `.cosmo`, so
-  a `.cmp`/`.cosmoproj` falls through to `openImageFile()` and fails to decode.
-- **Expected:** the primary document format is openable from a shell.
-- **Actual:** only bare images and `.cosmo` sessions are. Seeding `recent.tsv` is the sole way to make a
-  project reachable, and that only puts it on the home screen.
-- **Judgement:** requirement gap — no requirement covers command-line invocation at all.
-- **Fix:** pending. P0.7 (`--project`).
-
 ### D-5 — The UI logs nothing, so a visual bug report cannot be traced
 - **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
 - **Found:** 2026-08-16, source inspection
@@ -185,6 +174,28 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-6 — A project cannot be opened from the command line
+- **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** `./build/apps/cosmo/cosmo.exe some.cmp` — `openPath()` special-cases only `.cosmo`, so
+  a `.cmp`/`.cosmoproj` falls through to `openImageFile()` and fails to decode.
+- **Expected:** the primary document format is openable from a shell.
+- **Actual:** only bare images and `.cosmo` sessions are. Seeding `recent.tsv` is the sole way to make a
+  project reachable, and that only puts it on the home screen.
+- **Judgement:** requirement gap — no requirement covers command-line invocation at all.
+- **Fix:** commit `D6_HASH`. `openPath()` gained one branch — a `.cmp`/`.cosmoproj` dispatches
+  `Command::ProjectOpen` — plus `--project <path>` for scripts where a bare path is ambiguous. It
+  is one branch because the load is a command now (R-SVC-2); before the service there was nothing
+  to dispatch it to, which is a fair summary of what S1–S3 bought.
+  A project argument deliberately does **not** jump to the editor: it runs the normal animated
+  load (R-LOADING) and the transition owns the screen. Only a bare image list lands straight in
+  the editor.
+- **Verified:** `cosmo japan18.cmp` on the 18-RAF project → `[evt] load.finished decoded=18
+  total=18`, 18 `entry.decoded` lines, and `[evt] info load.peak decode=5 engine=6 budget=6` in
+  the log. **This also clears U1.1a**, the `[!]` that had stood since the CPU budget shipped: the
+  load's own numbers had never once been observed in the app, and six other defect entries cited
+  D-6 as their reason for being unverifiable.
 
 ### D-16 — `wait` meant two different things to two front ends
 - **Area:** core / service · **Status:** **Fixed** (same session, S5) · **Severity:** S3

@@ -70,12 +70,11 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
 
 - [x] **U1.1** Core: `AppSettings::cpuPercent` (default 50) + `workersFor()`, enforced at the decode
       pool, at the engine's Auto thread count, and on LibRaw's OpenMP team. Persisted and tested.
-- [!] **U1.1a** Still unobserved *in the app*: `startEntriesLoad`'s log line needs a project opened by
-      clicking (D-6), which S1a did not change. What S1a did change is that the **load itself** now
-      runs headlessly, so the numbers that line reports were measured directly instead — and turned
-      out to describe two defects (D-11, D-12). The GUI line clears with S3's `--project`.
-      The startup budget line *is* observed: `cpu: budget 25% = 6 of 24 cores; engine 6 threads,
-      decode pool would be 5`.
+- [x] **U1.1a** **Cleared.** The load's log line — unobserved since the CPU budget shipped,
+      because reaching it needed a mouse (D-6) — is now observed from a bare
+      `cosmo japan18.cmp`: `[evt] load.finished decoded=18 total=18` and
+      `[evt] info load.peak decode=5 engine=6 budget=6`. It reads as events rather than one
+      `LOGI` because an Event *is* the log line (R-SVC-5).
 - [x] **U1.2** Design: the home sidebar's Settings link is live and opens the same modal over the
       launcher (Home advances/renders/routes to the dialog that lives in the editor tree), plus the
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
@@ -179,12 +178,18 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
 - [ ] **P0.2** `cosmo_shots` — headless PNG renders of every named app state, 2+ window sizes, mid-transition (A12)
 - [ ] **P0.3** `cosmo_ui_tests` — headless assertions over the assembled app: non-overlap, reachability, text fit, reflow (A12)
 - [ ] **P0.4** `Log`: honour the level, add categories, `COSMO_LOG_LEVEL` / `COSMO_LOG_CATEGORIES` / `COSMO_LOG_FILE`, wire up the dead `setStderrEcho()`, route GLib through `g_log_set_default_handler`, Windows backtrace via dbghelp (closes D-2, D-3, D-4)
-- [ ] **P0.5** UI + input debug logging in `App.cpp` and the widgets (closes D-5)
+- [~] **P0.5** **Smaller than it was.** Session/load/selection/params/history/export are all logged
+      already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
+      (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
+      a click, and screen/scroll/hover decisions, none of which are service state
 - [ ] **P0.6** `--dump-ui` — Segment tree with rects, visibility, opacity, scroll offsets, hover
-- [ ] **P0.7** `cosmo.exe` flags: `--project` (closes D-6), `--headless`, `--script`, `--shot`, `--log-level`, `--debug`, `--exit-after`
-- [ ] **P0.8** `cosmo-cc` skeleton + `info` + `backends` + `check` (A1, A2, A7, A8)
-- [ ] **P0.9** `cosmo-cc render` + `params` + `project` (A3, A4, A6)
-- [ ] **P0.10** `cosmo-cc export` + `bench` (A5, A9)
+- [~] **P0.7** `cosmo` flags. **`--project` and a bare `.cmp` argument are done** (closes D-6), and
+      `--control` landed with S5. Still open: `--headless`, `--script`, `--shot`, `--log-level`,
+      `--debug`, `--exit-after`. Note `--script` is largely redundant now — `cosmo --control` plus
+      `cosmo-cc attach --script` does the same job and is already tested by the acceptance run
+- [x] **P0.8** `cosmo-cc` skeleton + `info` + `backends` + `check` — **done in S3**
+- [x] **P0.9** `cosmo-cc render` + `params` + `project` — **done in S3**
+- [x] **P0.10** `cosmo-cc export` + `bench` — **done in S3**
 - [ ] **P0.11** `docs/DEVELOPING.md` — the cold-start guide: where things are, which document decides
       what, the invariants, the worked commands, the mistakes already made (model it on
       `apps/genesis/docs/DEVELOPING.md`, which is the best example in this repo)

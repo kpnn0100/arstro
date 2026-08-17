@@ -262,7 +262,8 @@ namespace
         return b;
     }
 
-    void openPath(Host *a, const std::string &path);  // fwd
+    void openPath(Host *a, const std::string &path);       // fwd
+    void startProjectLoad(Host *a, const std::string &path);  // fwd: defined with the load adapter
     void openPaths(Host *a, const std::vector<std::string> &paths)
     {
         for (const std::string &p : paths)
@@ -281,6 +282,16 @@ namespace
 
     void openPath(Host *a, const std::string &path)
     {
+        // D-6: the PRIMARY document format used to be the one thing that could not be opened
+        // from a shell — `.cmp` fell through to openImageFile() and failed to decode, so a
+        // project was reachable only by clicking a recent card. Six other defect entries cited
+        // that as their reason for being unverifiable. It is one branch now that the load is a
+        // command (R-SVC-2), which is a fair summary of what the service bought.
+        if (endsWith(path, ".cmp") || endsWith(path, ".cosmoproj"))
+        {
+            startProjectLoad(a, path);
+            return;
+        }
         if (endsWith(path, ".cosmo"))
         {
             std::string imgPath;
@@ -1348,9 +1359,24 @@ int main(int argc, char **argv)
             const std::string arg = argv[i];
             if (arg == "--control" && i + 1 < argc) { controlPath = argv[++i]; continue; }
             if (arg.rfind("--control=", 0) == 0) { controlPath = arg.substr(10); continue; }
+            // --project is the same thing as a bare .cmp argument; it exists because a flag is
+            // unambiguous in a generated script, where a bare path could be an image.
+            if (arg == "--project" && i + 1 < argc) { paths.emplace_back(argv[++i]); continue; }
+            if (arg.rfind("--project=", 0) == 0) { paths.emplace_back(arg.substr(10)); continue; }
             paths.emplace_back(arg);
         }
-        if (!paths.empty()) { openPaths(&host, paths); host.app.showEditor(); straightToEditor = true; }
+        if (!paths.empty())
+        {
+            bool anyProject = false;
+            for (const std::string &p : paths)
+                if (endsWith(p, ".cmp") || endsWith(p, ".cosmoproj")) anyProject = true;
+            openPaths(&host, paths);
+            // A project opened from argv runs its normal animated load (R-LOADING), so the
+            // screen belongs to the transition; only a bare image list lands straight in the
+            // editor. Either way the splash is skipped — the user named something to open.
+            if (!anyProject) host.app.showEditor();
+            straightToEditor = true;
+        }
     }
 
     // Opened after the service is fully configured, so no event a startup command emits can
