@@ -171,7 +171,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   under a second: `wrote cpuPercent=25, read back 50 -> FAIL`.
 - **Judgement:** defect — no requirement covers the test harness, but "verify with a shell command"
   (the whole `R-AGENT` premise) is unusable when a red suite looks like a hung one.
-- **Fix:** commit `D10_HASH`. `core/tests/TestMain.h` — `testMainInit()`, called first in both
+- **Fix:** commit `d382b02`. `core/tests/TestMain.h` — `testMainInit()`, called first in both
   suites' `main()`. Unbuffered stdout+stderr on every platform, so an assert's message reaches a
   redirected pipe before `abort()` takes the process down and a mid-suite crash does not swallow
   the lines saying how far it got. On Windows additionally
