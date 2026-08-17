@@ -1338,11 +1338,22 @@ namespace cosmo_v2
 
     void App::undo()
     {
+        // R-SVC-2: the service owns history, so a shortcut asks for it rather than doing it.
+        // The `syncFromSession` that follows arrives as a HistoryChanged event, so this path
+        // and a scripted `undo` produce the same frame. Falls back to the direct call only
+        // when no service is wired — a bare `App` in a widget test, which has no history to
+        // speak of but must still compile and behave.
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::Undo;
+        if (emitCommand(c)) return;
         if (mSession.undo()) syncControlsToSlot();
     }
 
     void App::redo()
     {
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::Redo;
+        if (emitCommand(c)) return;
         if (mSession.redo()) syncControlsToSlot();
     }
 

@@ -1264,6 +1264,9 @@ int main(int argc, char **argv)
         return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
     });
     host.svc->subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
+    // R-SVC-2: the view's outbound channel. A menu item, a shortcut and a line on the control
+    // socket now travel the same path, so they cannot behave differently.
+    host.app.onCommand = [&host](arstro::cosmo::Command c) { host.svc->dispatch(c); };
     host.settings.cpuPercent = host.budget.percent();
     LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),

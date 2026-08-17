@@ -8,6 +8,7 @@
 #pragma once
 #include "../../core/Artboard/include/artboard/artboard.h"
 #include "core/EditSession.h"
+#include "core/service/Command.h"
 #include "Theme.h"
 #include "widgets/TopBar.h"
 #include "widgets/LeftRail.h"
@@ -57,6 +58,16 @@ namespace cosmo_v2
          *  control socket, R-SVC-8). A click through the widgets has already done this for
          *  itself, so calling it again is idempotent. */
         void syncFromSession();
+        /** R-SVC-2: the view's outbound channel. A widget or a shortcut that wants a
+         *  behaviour the service owns emits a Command through this instead of calling the
+         *  session, so the GUI, a script and the control socket all take the same path and
+         *  cannot diverge. The host wires it to `CosmoService::dispatch`.
+         *
+         *  Not everything is here yet — the accessors below that still call `mSession`
+         *  directly are S4's remaining work, and each one is a line to delete. */
+        std::function<void(cosmo::Command)> onCommand;
+        /** Emit `c` if a service is wired, and report whether it was. */
+        bool emitCommand(const cosmo::Command &c) const { if (!onCommand) return false; onCommand(c); return true; }
         /** Feed the filmstrip's thumb pool, which is indexed BY SLOT and so must be fed in
          *  lockstep with the service attaching an image. Public because the load lives in the
          *  service now (R-SVC-1) and the host is what hears about each arrival. */

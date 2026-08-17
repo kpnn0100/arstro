@@ -100,8 +100,18 @@ core first.
       including **a project that opens, decodes and reaches the editor with no window at all**
 - [ ] **S3** `cosmo-cc` over the service: `info`, `backends`, `project open|print`, `set`, `render`,
       `state print`, `export`, `bench`, `--script`, `--json`. Subsumes A1–A9 and old P0.8–P0.10
-- [ ] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
+- [~] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
       ops, save/load workspace. `App.cpp` ends as render + gestures + animation *(core, then design)*
+  - [x] **S4a** `App::onCommand` — the view's outbound channel (R-SVC-2). Undo/redo now emit a
+        `Command` and fall back to the direct call only when no service is wired (a bare `App` in
+        a widget test). A menu item, a shortcut and a socket line take one path.
+  - [ ] **S4b** the measured backlog, so progress is countable rather than felt:
+        **96** `mSession.` uses in `App.cpp`, **60** in `widgets/RightColumn.cpp`, **2**
+        `svc->session()` uses in the host. S is not done until the widget number is 0 and the host
+        number is 0; `RightColumn` is the big one because it owns the `EditSession&` by design
+        today (`architecture.md` §2.3) and every control callback funnels through it.
+  - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
+        `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
 - [ ] **S5** `ControlChannel` (unix socket / named pipe, R-SVC-8) + the acceptance test: launch the
       GUI, drive it over the socket, assert the event stream, exit non-zero on a missing event
 
