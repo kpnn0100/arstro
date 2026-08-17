@@ -806,6 +806,41 @@ Artboard, no click — which is what D-6 made impossible and what let D-11/D-12 
 `commands_drive_the_session` covers select/set/undo/redo/next/prev/bypass/group/settings/screen/
 save plus rejection, each asserted against the model.
 
+### DR-SVC-8 The control socket (R-SVC-8)
+`cosmo --control <path>` opens a `cosmo_v2::ControlChannel` (`apps/cosmo/ControlChannel.{h,cpp}`)
+— a non-blocking `AF_UNIX` listener polled from the frame tick. `--control` is pulled out of argv
+before `openPaths()`, or the socket path would be treated as a photo to open
+(`linux_main.cpp:1329-1344`). The channel moves lines and nothing else: no parsing, no dispatch,
+no service knowledge, which is what keeps R-SVC-5's single codec true. Events reach clients through
+a second `subscribe()` sink that broadcasts `formatEvent(e)` — the identical line the log gets.
+
+`pollControl` (`linux_main.cpp:1052-1085`) parses each line with the one parser and dispatches it
+into the SAME `CosmoService::dispatch` a click produces, on the UI thread between frames, so there
+is no locking and an agent-driven change is indistinguishable from a clicked one. Two kinds are
+answered by the host rather than the service, because only the caller knows where to print and who
+owns the loop: `state print` (framed by `[evt] state.begin`/`state.end`, since `formatModel` is
+multi-line) and `wait`, which is the client's own loop.
+
+Liveness is time-based, not size-based: a client is dropped after 120 consecutive frames (~2 s) in
+which its pending output did not shrink by a byte, plus a 16 MB hard cap as a memory bound. A
+byte-cap alone drops healthy clients, because 6000 events in 4 ms outruns any peer momentarily.
+Reads are capped at 256 KB per client per frame and accepts at 8 per frame — "non-blocking" is not
+"bounded", and an undrained read loop would freeze the window without one blocking call.
+
+**Verified live** on the reported 18-RAF project: the GUI was driven entirely over the socket
+through `settings set` → `project open` → `wait load.finished` → `select next` → `set exposure=0.8`
+→ `state print`, returning `load.finished decoded=18 total=18`,
+`info load.peak decode=5 engine=6 budget=6`, `selection.changed node=2 slot=1`,
+`params.changed exposure`, and a model dump reading `imageCount=18 currentSlot=1 canUndo=1`. A
+window capture confirmed the UI followed: `DSCF5194.RAF (2/18)` in the top bar, the Exposure slider
+moved, 18 thumbnails in the filmstrip.
+
+**Windows is a deliberate stub**: `open()` returns false with a reason, so `--control` reports
+itself unavailable at startup rather than hanging later. An overlapped named pipe is a few hundred
+lines whose failure mode is a hung UI thread; `PIPE_NOWAIT` is not a shortcut because it silently
+drops data when the buffer fills. The header records both routes, and notes that Winsock `AF_UNIX`
+(Win10 1803+) would make the POSIX branch nearly portable as-is.
+
 ### DR-SVC-9a Every command kind has a grammar (R-SVC-9)
 `every_command_kind_has_a_grammar` pairs each of the 22 `Command::Kind` values with a
 documented line, asserts the line parses to that kind, that no kind is listed twice, that all

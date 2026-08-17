@@ -8,7 +8,9 @@
 #include "App.h"
 #include "ExportWriter.h"
 #include "Log.h"
+#include "ControlChannel.h"
 #include "OmpPin.h"
+#include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
 #include "core/service/Event.h"
 #include "core/ThreadBudget.h"
@@ -112,6 +114,9 @@ namespace
         // once main() has an App to borrow the session from; every project open, edit,
         // selection and export goes through dispatch().
         std::unique_ptr<arstro::cosmo::CosmoService> svc;
+        // R-SVC-8: only present when --control was given; a closed channel is inert, so
+        // nothing below has to check whether the app is being driven from outside.
+        arstro::cosmo_v2::ControlChannel control;
         bool loadCoverSent = false;   // transition state, not load state (see above)
         bool loadRevealed = false;
         std::map<std::string, DecodedImage> thumbs;  // decoded cover thumbnails, keyed by image path
@@ -1039,6 +1044,41 @@ namespace
         a->app.render(a->target, nowMs(*a));
         return FALSE;
     }
+    // R-SVC-8: a line off the socket lands in the SAME dispatch a click produces, on the UI
+    // thread, between frames — so there is no locking to get wrong, and "an agent did it" is
+    // indistinguishable from "the user did it". Two commands are answered here rather than in
+    // the service because only the caller knows where to print and who owns the loop
+    // (CosmoService.cpp documents both as front-end concerns).
+    void pollControl(Host *a)
+    {
+        if (!a->control.isOpen() || !a->svc) return;
+        a->control.poll([a](const std::string &line) {
+            std::string err;
+            const arstro::cosmo::Command c = arstro::cosmo::parseCommand(line, err);
+            if (!c.valid())
+            {
+                // A blank or #-commented line parses to None with no error: a no-op, so a
+                // client can pipe a commented script straight in.
+                if (!err.empty())
+                    a->control.broadcast("[evt] command.rejected line=" + line + " why=" + err);
+                return;
+            }
+            if (c.kind == arstro::cosmo::Command::Kind::StatePrint)
+            {
+                // formatModel is multi-line, so it is framed: a client reading line-by-line
+                // needs to know where a dump starts and stops.
+                arstro::cosmo::ModelDumpOptions o;
+                o.json = c.flag;
+                a->control.broadcast("[evt] state.begin");
+                a->control.broadcast(arstro::cosmo::formatModel(a->svc->model(), o));
+                a->control.broadcast("[evt] state.end");
+                return;
+            }
+            a->svc->dispatch(c);   // a rejection already reaches the client via the event sink
+            if (a->svc->quitRequested()) gtk_main_quit();
+        });
+    }
+
     gboolean onTick(gpointer user)
     {
         auto *a = static_cast<Host *>(user);
@@ -1046,6 +1086,7 @@ namespace
         // dedicated 15 ms GTK source per load; a service that is always pumped cannot forget
         // to be, and pump() is a cheap early-out when nothing is in flight.
         if (a->svc) a->svc->pump(nowMs(*a));
+        pollControl(a);
         gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
     }
@@ -1285,10 +1326,38 @@ int main(int argc, char **argv)
     // showHome() runs from the splash tick once the intro has played, so nothing heavy
     // happens before the first thing on screen is the animation.
     bool straightToEditor = false;
+    std::string controlPath;   // R-SVC-8
     {
+        // Every other argv entry is still a file to open, so --control has to be pulled out
+        // here or the socket path would be handed to openPaths() as though it were a photo.
         std::vector<std::string> paths;
-        for (int i = 1; i < argc; ++i) paths.emplace_back(argv[i]);
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string arg = argv[i];
+            if (arg == "--control" && i + 1 < argc) { controlPath = argv[++i]; continue; }
+            if (arg.rfind("--control=", 0) == 0) { controlPath = arg.substr(10); continue; }
+            paths.emplace_back(arg);
+        }
         if (!paths.empty()) { openPaths(&host, paths); host.app.showEditor(); straightToEditor = true; }
+    }
+
+    // Opened after the service is fully configured, so no event a startup command emits can
+    // be missed by a client that attaches immediately.
+    if (!controlPath.empty())
+    {
+        std::string err;
+        if (!host.control.open(controlPath, err))
+            LOGE("control: %s", err.c_str());   // non-fatal: the window still runs unattended
+        else
+        {
+            LOGI("control: driving cosmo from %s — same commands a click produces (R-SVC-8)",
+                 host.control.path().c_str());
+            // R-SVC-3/5: one event stream, one format. The socket, the log and a --watch
+            // client all see the identical line.
+            host.svc->subscribe([&host](const arstro::cosmo::Event &e) {
+                host.control.broadcast(arstro::cosmo::formatEvent(e));
+            });
+        }
     }
 
     host.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);

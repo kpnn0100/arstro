@@ -19,8 +19,9 @@ file, and commit.
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
 the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
 architecture. **S1 is done (S1a + S1b) and D-11 + D-12 are closed.** ► Next is **S2** — `AppModel` +
-`Command`/`Event` + the `CosmoService`, **done** — a project now opens headlessly. ► Next are **S3**
-(`cosmo-cc`), **S5** (the control socket) and **S4** (App's remaining logic moves down).
+`Command`/`Event` + the `CosmoService`, **done** — a project opens headlessly — and **S5 is done**:
+the control socket, verified by driving the live window over it. ► Next are **S3** (`cosmo-cc`) and
+**S4b/S4c** (App's remaining 96 + 60 direct session calls, then session ownership).
 
 The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
 2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
@@ -43,8 +44,8 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-17 · Last commit: S2, the core becomes a service and a project opens with
-no UI (R-SVC-1/2/3). S1a/S1b before it closed D-11 + D-12.
+Last updated: 2026-08-17 · Last commit: S5, the control socket — an agent drives the window a
+human is watching (R-SVC-8), which found and fixed D-13 on its first run.
 
 ---
 
@@ -53,7 +54,7 @@ no UI (R-SVC-1/2/3). S1a/S1b before it closed D-11 + D-12.
 | M | Milestone | State |
 |---|---|---|
 | U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
-| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1 done, S2 next. Supersedes P0 |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1, S2, S4a, S5 done; S3 + S4b/c left. Supersedes P0 |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
@@ -112,8 +113,11 @@ core first.
         today (`architecture.md` §2.3) and every control callback funnels through it.
   - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
         `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
-- [ ] **S5** `ControlChannel` (unix socket / named pipe, R-SVC-8) + the acceptance test: launch the
-      GUI, drive it over the socket, assert the event stream, exit non-zero on a missing event
+- [x] **S5** `ControlChannel` (non-blocking `AF_UNIX`; Windows stubbed with a reason) + `--control`,
+      wired into the frame tick. **The acceptance test passed on the real 18-RAF project**: the GUI
+      driven entirely over the socket, `load.finished decoded=18 total=18`, and a window capture
+      showing `DSCF5194.RAF (2/18)` with the Exposure slider moved. It also found **D-13** on its
+      first run — a bug S2 had just committed, which no headless test could see.
 
 **S is done when** the §5 checks in the proposal pass: a CLI-opened project and a GUI-opened project
 dump the same `AppModel`; `grep "mSession\.\|EditParams" apps/cosmo/widgets/*.cpp` is empty; every
@@ -154,6 +158,13 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-17 (S5) — Announce before you mutate.** D-13: a subscriber runs synchronously inside
+  `dispatch`, and a view is entitled to clear its own state when it hears "a project is opening" —
+  the GTK host does exactly that. So an event describing what is ABOUT to happen must be emitted
+  BEFORE the state it describes exists, or the handler destroys work the service already did. The
+  bug shipped in S2 with a comment in the host that described the correct order while the service
+  did the opposite; the first live socket run found it in seconds, and no headless test could,
+  because with no subscriber doing real work both orderings look identical.
 - **2026-08-17 (S2) — The service borrows the session; it does not own it yet.** App has owned
   `mSession` since long before any of this, and reparenting ownership in the same step as
   introducing the service would have meant rewriting App and the service at once with nothing

@@ -1203,6 +1203,49 @@ namespace
                "commandNames() lists one entry per kind");
         printf("[PASS] every_command_kind_has_a_grammar (%d kinds)\n", kKindCount);
     }
+
+    // D-13: a view is allowed to clear its own state when it hears "a project is opening",
+    // and the GTK host does exactly that (App::resetWorkspace, so the transition captures the
+    // outgoing editor). If the service has already built the pending tree by then, that
+    // handler deletes every node the load is about to attach to — 18 files decoded, none
+    // attached. So ProjectOpening must be emitted BEFORE the session is touched.
+    //
+    // This test stands in for the host by resetting the session from the event handler. It
+    // fails on the pre-fix ordering, which is what the headless test could not catch: with no
+    // subscriber doing real work, both orderings look identical.
+    void test_a_view_may_reset_on_project_opening()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_d13.cmp";
+        writeFakeProject(path, 6, false, false);
+
+        EditSession session;
+        ThreadBudget budget(50, 8);
+        CosmoService svc(session, budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+
+        int opening = 0;
+        svc.subscribe([&](const Event &e) {
+            if (e.kind != Event::Kind::ProjectOpening) return;
+            ++opening;
+            // What the GTK host does, and what broke it.
+            session.resetWorkspace();
+        });
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+        assert(opening == 1 && "the view heard about the open exactly once");
+        pumpUntilIdle(svc);
+
+        assert(svc.model().imageCount == 6 && "every image attached despite the view's reset");
+        assert(svc.model().currentSlot >= 0 && "and one is on the stage");
+        int decoded = 0;
+        for (const NodeModel &n : svc.model().nodes) if (!n.group && n.slot >= 0) ++decoded;
+        assert(decoded == 6 && "the tree agrees");
+
+        std::filesystem::remove(path);
+        printf("[PASS] a_view_may_reset_on_project_opening\n");
+    }
 }
 
 int main()
@@ -1236,6 +1279,7 @@ int main()
     test_service_opens_a_project_with_no_ui();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();
+    test_a_view_may_reset_on_project_opening();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

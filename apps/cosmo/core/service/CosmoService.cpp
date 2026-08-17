@@ -127,6 +127,22 @@ namespace cosmo
 
         mLoadPath = path;
         mSaveOnFinish = saveOnFinish;
+
+        // ── Announce BEFORE touching the session, and the order is load-bearing (D-13) ──
+        // A view's handler for these two runs synchronously, inside this call, and it is
+        // entitled to clear its own state: the GTK host's ProjectOpening handler calls
+        // App::resetWorkspace() so the open transition captures the outgoing editor rather
+        // than fading in from nothing. If the pending tree were already built by then, that
+        // handler would delete all of it — which is precisely what happened: 18 files decoded
+        // and none attached, because every node in `mNodeOf` had been wiped.
+        //
+        // The rule this encodes: emit an event describing what is ABOUT to happen before the
+        // state it describes exists, so a view that reacts by resetting cannot destroy work
+        // the service has already done.
+        mModel.screen = Screen::Loading;
+        emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
+        emit(Event::Kind::ProjectOpening, stemOf(path), 0, (int)entries.size());
+
         mSession.resetWorkspace();
 
         // R-LOADUX-1: the whole rack exists before a single pixel decodes, so entry parents
@@ -139,10 +155,6 @@ namespace cosmo
             mNodeOf[i] = e.group ? mSession.addWorkspaceGroup(parent, e.name, e.params, e.history, e.bypass)
                                  : mSession.addPendingImage(parent, e.name);
         }
-
-        mModel.screen = Screen::Loading;
-        emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
-        emit(Event::Kind::ProjectOpening, stemOf(path), 0, (int)entries.size());
 
         const size_t n = entries.size();
         mLoader.start(std::move(entries), mBudget, mMakeDecoder, mWorkerInit);

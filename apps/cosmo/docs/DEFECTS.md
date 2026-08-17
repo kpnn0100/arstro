@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-13**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-14**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -161,6 +161,40 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-13 — A project opened from the GUI decoded all 18 images and attached none
+- **Area:** core / service · **Status:** **Fixed** (same session, S5) · **Severity:** S2
+- **Found:** 2026-08-17, by the FIRST live run over the control socket — minutes after S2 was
+  committed with the bug in it, and by the very mechanism S2 existed to build.
+- **Reproduce:** before the fix, with a GUI attached:
+  ```bash
+  cosmo --control /tmp/cosmo-ctl.sock &
+  printf 'project open /tmp/japan18.cmp\nwait load.finished\nstate print\n' \
+      | python3 attach.py /tmp/cosmo-ctl.sock
+  ```
+- **Expected:** `load.finished decoded=18 total=18`, `imageCount=18`.
+- **Actual:** `load.finished decoded=0 total=18`, `imageCount=0`, `currentSlot=-1`, and every
+  later command rejected (`select: no decoded images`). All 18 `load.progress` events fired —
+  the files really did decode — but not one `entry.decoded`.
+- **Evidence:** the event stream showed 18 progress lines and zero decoded lines, which localises
+  it exactly: `pump()` only emits `entry.decoded` when `mNodeOf[r.index] >= 0` resolves to a live
+  pending leaf.
+- **Judgement:** defect against R-SVC-1/3. A view is *entitled* to clear its own state when it
+  hears a project is opening — the GTK host calls `App::resetWorkspace()` there so the open
+  transition captures the outgoing editor instead of fading in from nothing.
+- **Cause:** `CosmoService::startProjectLoad` built the pending tree and *then* emitted
+  `ProjectOpening`. Subscribers run synchronously inside that call, so the host's handler deleted
+  all 18 nodes the load was about to attach to. The adapter's own comment claimed the event was
+  emitted "BEFORE the session is reset" — the comment was right and the code was not.
+- **Requirement:** R-SVC-3, and it produced a general rule now written into the service: **emit an
+  event describing what is about to happen before the state it describes exists**, so a view that
+  reacts by resetting cannot destroy work the service has already done.
+- **Fix:** commit `S5_HASH`. Announce (`ScreenChanged` + `ProjectOpening`) first, then
+  `resetWorkspace()`, then build the tree.
+- **Guarded by:** `a_view_may_reset_on_project_opening`, which subscribes a handler that resets the
+  session exactly as the host does and asserts all six images still attach. Checked to fail on the
+  old ordering. The pre-existing headless tests could not catch this: with no subscriber doing real
+  work, both orderings look identical — which is the lesson worth keeping.
 
 ### D-11 — The CPU budget is enforced per-subsystem, so a load peaks at ~2× what the user chose
 - **Area:** core / load · **Status:** **Fixed** (S1) · **Severity:** S2
