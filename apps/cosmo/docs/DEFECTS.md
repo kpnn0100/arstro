@@ -189,7 +189,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Requirement:** R-SVC-3, and it produced a general rule now written into the service: **emit an
   event describing what is about to happen before the state it describes exists**, so a view that
   reacts by resetting cannot destroy work the service has already done.
-- **Fix:** commit `S5_HASH`. Announce (`ScreenChanged` + `ProjectOpening`) first, then
+- **Fix:** commit `4f6d82b`. Announce (`ScreenChanged` + `ProjectOpening`) first, then
   `resetWorkspace()`, then build the tree.
 - **Guarded by:** `a_view_may_reset_on_project_opening`, which subscribes a handler that resets the
   session exactly as the host does and asserts all six images still attach. Checked to fail on the
