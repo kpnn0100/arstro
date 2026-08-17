@@ -196,7 +196,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   different layers (host and app) and neither can see the other.
 - **Requirement:** R-CPU-1, R-CPU-2 (existing). If the sum is judged acceptable, R-CPU-1 must be
   amended to say the budget is *per pool* — but that would make the number meaningless to a user.
-- **Fix:** commit `afe6704`. `cosmo::ThreadBudget` converts the percentage **once** into `total()`
+- **Fix:** commit `95f3b78`. `cosmo::ThreadBudget` converts the percentage **once** into `total()`
   and divides it: the decode pool *reserves* `total - engineFloor` (capped at 8) for the load's
   duration and the engine gets the remainder, so it holds the whole budget when idle and shrinks only
   while a load runs. `AppSettings::workersFor` has no callers left in the app. R-CPU-2 and R-CPU-4
@@ -237,7 +237,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   MSYS2/Windows, where the CPU limit was developed and where the symptom was reported.
 - **Requirement:** R-CPU-2, R-CPU-4 (both existing; neither needs amending — the code does not do
   what they say)
-- **Fix:** commit `afe6704` — option (a). `cosmo_v2::pinNestedOpenMPForThisThread()`
+- **Fix:** commit `95f3b78` — option (a). `cosmo_v2::pinNestedOpenMPForThisThread()`
   (`apps/cosmo/OmpPin.cpp`) resolves `omp_set_num_threads` via `dlsym(RTLD_DEFAULT, …)` /
   `GetProcAddress`, so nothing links OpenMP, and `ProjectLoader`'s new per-worker start hook calls it
   **on each decode worker** — the ICV is per-thread, so the main thread could never have done it.
