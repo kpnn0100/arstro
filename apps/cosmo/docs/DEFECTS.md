@@ -169,7 +169,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   it worked. Two instances of one mistake in a day says the shape is worth naming: whenever a
   Command carries options AND the front end has global flags for the same thing, the per-command
   value must win and the global one must be the default.
-- **Fix:** commit `D18_HASH`. `printModel(h, json, const Command *cmd)` — per-command
+- **Fix:** commit `7839715`. `printModel(h, json, const Command *cmd)` — per-command
   `--stable`/`--params` OR the global flag.
 - **Guarded by:** exercised by the mask script in the same commit, whose `state print --params`
   now returns the `mask=` lines it was written to show.
