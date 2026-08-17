@@ -29,6 +29,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "../../core/tests/TestMain.h"
 
 using artboard::Gesture;
 using artboard::Point;
@@ -742,6 +743,7 @@ namespace
 
 int main()
 {
+    arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
     std::printf("cosmo widget hit-test suite (anchor pick radius = %.0f px)\n\n",
                 arstro::cosmo_v2::metrics::anchorHitRadius());
 

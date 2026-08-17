@@ -10,6 +10,7 @@
 #include "../service/AppModelCodec.h"
 #include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
+#include "TestMain.h"
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -1301,6 +1302,7 @@ namespace
 
 int main()
 {
+    arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
     test_open_edit_submit_and_poll();
     test_thumbnail_generated();
     test_group_tree_create_navigate_ungroup();

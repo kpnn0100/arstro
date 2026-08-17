@@ -43,27 +43,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
   and it is unaffected.
 
-### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
-- **Area:** core / test harness · **Status:** Confirmed (reproduced) · **Severity:** S3
-- **Found:** 2026-08-16, while checking that the R-CPU-3 test fails without its fix
-- **Reproduce:** break any assertion in `sessionTests.cpp` (e.g. stop `AppSettings::save()` writing
-  `cpuPercent=`), rebuild, and run
-  `XDG_CONFIG_HOME=/tmp/s ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe`.
-- **Expected:** the assert prints to stderr and the process exits non-zero, so `ctest` reports a
-  failure and an agent gets an answer in seconds.
-- **Actual:** the process hangs indefinitely (killed at 5 min twice). MinGW/msvcrt `abort()` raises
-  the Windows "terminated in an unusual way" path rather than exiting, and the assert text never
-  reaches a redirected stderr because it is not flushed. A failing suite is indistinguishable from
-  a slow one — and this suite legitimately takes 1–2 minutes (Release; longer in Debug), so the
-  usual "it must be stuck" heuristic does not apply.
-- **Evidence:** the same defect, isolated into a 10-line program linking `cosmo_core`, answered in
-  under a second: `wrote cpuPercent=25, read back 50 -> FAIL`.
-- **Judgement:** defect — no requirement covers the test harness, but "verify with a shell command"
-  (the whole `R-AGENT` premise) is unusable when a red suite looks like a hung one.
-- **Fix:** pending. Call `SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX)` +
-  `_set_abort_behavior(0, _WRITE_ABORT_MSG|_CALL_REPORTFAULT)` on Windows in the suites' `main()`,
-  and `setvbuf(stderr, nullptr, _IONBF, 0)`. Fold into P0.3 or P0.11.
-
 ### D-9 — Two divergent build paths, two undocumented build trees
 - **Area:** core / build · **Status:** Confirmed (by source inspection) · **Severity:** S4
 - **Found:** 2026-08-16, source inspection
@@ -174,6 +153,45 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-10 — A failing assert in `cosmo_core_tests` hangs instead of exiting
+- **Area:** core / test harness · **Status:** **Fixed on POSIX, code-verified on Windows** · **Severity:** S3
+- **Found:** 2026-08-16, while checking that the R-CPU-3 test fails without its fix
+- **Reproduce:** break any assertion in `sessionTests.cpp` (e.g. stop `AppSettings::save()` writing
+  `cpuPercent=`), rebuild, and run
+  `XDG_CONFIG_HOME=/tmp/s ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe`.
+- **Expected:** the assert prints to stderr and the process exits non-zero, so `ctest` reports a
+  failure and an agent gets an answer in seconds.
+- **Actual:** the process hangs indefinitely (killed at 5 min twice). MinGW/msvcrt `abort()` raises
+  the Windows "terminated in an unusual way" path rather than exiting, and the assert text never
+  reaches a redirected stderr because it is not flushed. A failing suite is indistinguishable from
+  a slow one — and this suite legitimately takes 1–2 minutes (Release; longer in Debug), so the
+  usual "it must be stuck" heuristic does not apply.
+- **Evidence:** the same defect, isolated into a 10-line program linking `cosmo_core`, answered in
+  under a second: `wrote cpuPercent=25, read back 50 -> FAIL`.
+- **Judgement:** defect — no requirement covers the test harness, but "verify with a shell command"
+  (the whole `R-AGENT` premise) is unusable when a red suite looks like a hung one.
+- **Fix:** commit `D10_HASH`. `core/tests/TestMain.h` — `testMainInit()`, called first in both
+  suites' `main()`. Unbuffered stdout+stderr on every platform, so an assert's message reaches a
+  redirected pipe before `abort()` takes the process down and a mid-suite crash does not swallow
+  the lines saying how far it got. On Windows additionally
+  `SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX|SEM_NOOPENFILEERRORBOX)` and
+  `_set_abort_behavior(_WRITE_ABORT_MSG, _WRITE_ABORT_MSG|_CALL_REPORTFAULT)` — print the message,
+  never hand off to the fault reporter, because a CI or agent run has nobody to click OK and
+  waiting for that click IS the hang.
+- **Verified on POSIX** with a deliberate failure and both streams redirected:
+  ```
+  exit=134
+  stdout: [PASS] a test that passes
+  stderr: d10_probe.cpp:9: Assertion `1 == 2 && "the deliberate failure"' failed.
+  ```
+  so the passing output, the failure message and a non-zero exit all survive redirection.
+  **The Windows half is code-verified only** — the dialog-suppression path cannot be exercised
+  from this Linux host. Confirm on MSYS2 by breaking an assert and checking that
+  `cosmo_core_tests.exe` exits promptly and non-zero instead of stalling.
+- **Why it mattered beyond convenience:** every verification claim in this project's history rests
+  on "the suite is green", and a suite that cannot report red is not evidence. Two sessions lost
+  five minutes each to a hang before it was diagnosed at all.
 
 ### D-6 — A project cannot be opened from the command line
 - **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S3
