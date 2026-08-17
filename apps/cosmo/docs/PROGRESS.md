@@ -119,11 +119,23 @@ core first.
   - [x] **S4a** `App::onCommand` — the view's outbound channel (R-SVC-2). Undo/redo now emit a
         `Command` and fall back to the direct call only when no service is wired (a bare `App` in
         a widget test). A menu item, a shortcut and a socket line take one path.
-  - [ ] **S4b** the measured backlog, so progress is countable rather than felt:
-        **96** `mSession.` uses in `App.cpp`, **60** in `widgets/RightColumn.cpp`, **2**
-        `svc->session()` uses in the host. S is not done until the widget number is 0 and the host
-        number is 0; `RightColumn` is the big one because it owns the `EditSession&` by design
-        today (`architecture.md` §2.3) and every control callback funnels through it.
+  - [~] **S4b** **The metric was wrong and is corrected here** — worth reading before continuing.
+        Counting `mSession.` in `App.cpp` does not measure progress, because a converted method
+        *keeps* its direct call as a deliberate fallback for a bare `App` with no service wired
+        (`cosmo_widget_tests` builds one). The count stayed at 96 across four real conversions.
+        The three numbers that do mean something:
+        - **Behaviours expressible as a `Command`: 24** (was 22). Rising is progress, and
+          `every_command_kind_has_a_grammar` fails if a kind is added without a grammar rule.
+        - **`App` methods that route through a command when a service is wired: 4** — `undo`,
+          `redo`, `deleteSelected`, `renameGroup`. This is the numerator; the denominator is
+          every discrete user action App still performs itself.
+        - **The actual gate, and the only one in the proposal's §5 checklist: `widgets/*.cpp`
+          reaching past the service = 60**, all in `RightColumn.cpp`, which must reach **0**;
+          plus **2** `svc->session()` uses in the host, also to 0.
+        `RightColumn` is the bulk because it owns the `EditSession&` by design today
+        (`architecture.md` §2.3) and every control callback funnels through
+        `curParams()` + `submit()`. Those map onto `Command::Set` one-for-one — and the obvious
+        worry is unfounded: a slider drag is ~60 tiny text parses a second, which is nothing.
   - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
         `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
 - [x] **S5** `ControlChannel` (non-blocking `AF_UNIX`; Windows stubbed with a reason) + `--control`,

@@ -1170,6 +1170,8 @@ namespace
             {K::Bypass, "bypass 2 on"},
             {K::GroupNew, "group new Name"},
             {K::GroupUngroup, "group ungroup 2"},
+            {K::GroupRename, "group rename 2 Shibuya"},
+            {K::Delete, "delete 2"},
             {K::Undo, "undo"},
             {K::Redo, "redo"},
             {K::PresetApply, "preset apply Name"},
@@ -1181,7 +1183,7 @@ namespace
             {K::Wait, "wait load.finished"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 22;   // Kind::None is not a command
+        const int kKindCount = 24;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 

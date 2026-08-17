@@ -856,6 +856,21 @@ lines whose failure mode is a hung UI thread; `PIPE_NOWAIT` is not a shortcut be
 drops data when the buffer fills. The header records both routes, and notes that Winsock `AF_UNIX`
 (Win10 1803+) would make the POSIX branch nearly portable as-is.
 
+### DR-SVC-2a The view's outbound channel, and what still bypasses it (R-SVC-2)
+`App::onCommand` (`App.h`) is the seam a widget or shortcut uses to ask for a behaviour the
+service owns; `emitCommand()` returns false when no service is wired, which is how a bare `App`
+in `cosmo_widget_tests` keeps working. Four methods route through it today — `undo`, `redo`,
+`deleteSelected`, `renameGroup` — each falling back to the direct session call only when
+unwired. `linux_main.cpp` wires it to `CosmoService::dispatch`, so a menu item, a keyboard
+shortcut and a line on the control socket are one path.
+
+**What still bypasses it, stated as a number because "the UI contains no logic" is otherwise
+unfalsifiable:** `widgets/RightColumn.cpp` makes 60 direct `EditSession`/`EditParams` accesses
+and the host makes 2 `svc->session()` calls. Both must reach zero for S to be done
+(`service-architecture-proposal.md` §5). Note that counting `mSession.` in `App.cpp` measures
+nothing, since a converted method keeps its fallback — see `PROGRESS.md` S4b for why that metric
+was replaced.
+
 ### DR-SVC-9a Every command kind has a grammar (R-SVC-9)
 `every_command_kind_has_a_grammar` pairs each of the 22 `Command::Kind` values with a
 documented line, asserts the line parses to that kind, that no kind is listed twice, that all

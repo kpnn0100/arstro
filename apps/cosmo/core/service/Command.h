@@ -56,6 +56,8 @@ namespace cosmo
             Bypass,          // index = node, flag = on
             GroupNew,        // name
             GroupUngroup,    // index = node
+            GroupRename,     // index = node, name
+            Delete,          // index = node (-1 = the current selection)
             Undo,
             Redo,
             PresetApply,     // name

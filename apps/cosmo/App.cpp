@@ -796,6 +796,12 @@ namespace cosmo_v2
 
     void App::deleteSelected()
     {
+        // R-SVC-2. The event that comes back drives the re-sync, so the shortcut, a context
+        // menu and a scripted `delete` all end in the same frame. The direct call remains for
+        // a bare App with no service wired (cosmo_widget_tests).
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::Delete;
+        if (emitCommand(c)) return;
         mSession.deleteSelected();
         syncControlsToSlot();
     }
@@ -804,6 +810,11 @@ namespace cosmo_v2
     {
         // The rename target is set when rename mode opens (context menu / top-bar name).
         if (mRenameTargetNode < 0 || mRenameTargetNode >= (int)mSession.nodes().size() || name.empty()) return;
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::GroupRename;
+        c.index = mRenameTargetNode;
+        c.name = name;
+        if (emitCommand(c)) return;
         mSession.renameGroup(mRenameTargetNode, name);
         syncControlsToSlot();  // refresh the breadcrumb + top-bar group name
     }

@@ -84,7 +84,8 @@ namespace cosmo
         static const std::vector<std::string> names = {
             "project open", "project new", "project save", "project close", "import",
             "select", "select next", "select prev", "set", "bypass", "group new",
-            "group ungroup", "undo", "redo", "preset apply", "preset save", "export",
+            "group ungroup", "group rename", "delete", "undo", "redo", "preset apply",
+            "preset save", "export",
             "settings set", "screen", "state print", "wait", "quit"};
         return names;
     }
@@ -169,7 +170,21 @@ namespace cosmo
                 c.kind = Command::Kind::GroupUngroup;
                 c.index = std::atoi(t[2].c_str());
             }
+            else if (sub == "rename")
+            {
+                if (!need(4, "group rename <node> <name>")) return c;
+                c.kind = Command::Kind::GroupRename;
+                c.index = std::atoi(t[2].c_str());
+                c.name = t[3];
+            }
             else err = "unknown group subcommand: " + sub;
+        }
+        else if (v == "delete")
+        {
+            // A bare `delete` means the current selection, which is what a keyboard shortcut
+            // sends; an explicit node is what a script or a context menu sends.
+            c.kind = Command::Kind::Delete;
+            c.index = t.size() > 1 ? std::atoi(sub.c_str()) : -1;
         }
         else if (v == "undo") c.kind = Command::Kind::Undo;
         else if (v == "redo") c.kind = Command::Kind::Redo;
@@ -267,6 +282,11 @@ namespace cosmo
             case Command::Kind::Bypass: o << "bypass " << c.index << (c.flag ? " on" : " off"); break;
             case Command::Kind::GroupNew: o << "group new " << q(c.name); break;
             case Command::Kind::GroupUngroup: o << "group ungroup " << c.index; break;
+            case Command::Kind::GroupRename: o << "group rename " << c.index << ' ' << q(c.name); break;
+            case Command::Kind::Delete:
+                o << "delete";
+                if (c.index >= 0) o << ' ' << c.index;
+                break;
             case Command::Kind::Undo: o << "undo"; break;
             case Command::Kind::Redo: o << "redo"; break;
             case Command::Kind::PresetApply: o << "preset apply " << q(c.name); break;

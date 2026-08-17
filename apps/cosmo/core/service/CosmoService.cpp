@@ -462,6 +462,30 @@ namespace cosmo
                 emit(Event::Kind::Info, "group.ungrouped node=" + std::to_string(c.index));
                 return true;
 
+            case Command::Kind::GroupRename:
+            {
+                if (c.name.empty()) return fail("group rename: needs a name");
+                bool found = false;
+                for (const NodeModel &n : mModel.nodes) if (n.node == c.index && n.group) found = true;
+                if (!found) return fail("group rename: node " + std::to_string(c.index) + " is not a group");
+                mSession.renameGroup(c.index, c.name);
+                refreshModel();
+                emit(Event::Kind::Info, "group.renamed node=" + std::to_string(c.index) + " name=" + c.name);
+                return true;
+            }
+            case Command::Kind::Delete:
+            {
+                // -1 means the current selection, so a shortcut and a script share one path.
+                if (c.index >= 0 && !mSession.selectNodeById(c.index))
+                    return fail("delete: no node " + std::to_string(c.index));
+                if (mSession.selection().empty()) return fail("delete: nothing selected");
+                const int removed = (int)mSession.selection().size();
+                mSession.deleteSelected();
+                refreshModel();
+                emit(Event::Kind::Info, "deleted nodes=" + std::to_string(removed));
+                emit(Event::Kind::SelectionChanged, std::string(), mModel.selectedNode, mModel.currentSlot);
+                return true;
+            }
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();
