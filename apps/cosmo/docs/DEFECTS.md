@@ -179,7 +179,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Cause:** the host applied the preferences piecemeal — percentage into `ThreadBudget`, edge and
   GPU into `EditSession`, model never told. `mModel.settings` was only ever written by the
   `settings set` command path, so a GUI that loaded settings from disk never populated it.
-- **Fix:** commit `S3_HASH`. `CosmoService::applySettings(const AppSettings&)` does all of it in one
+- **Fix:** commit `846bcef`. `CosmoService::applySettings(const AppSettings&)` does all of it in one
   place and refreshes the model; the host calls that instead of the three separate calls.
 - **Guarded by:** `settings_and_dump_options_reach_the_model`, plus the CLI-vs-GUI dump diff, which
   is now byte-identical on the 18-RAF project.
@@ -195,7 +195,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   that does not exist, because the caller believes it worked.
 - **Cause:** `Command::StatePrint` had one `flag`, used for `--json`; `--stable` was parsed into a
   throwaway `Command` and discarded.
-- **Fix:** commit `S3_HASH`. `--stable` and `--params` live in `fields` (so a third option needs no
+- **Fix:** commit `846bcef`. `--stable` and `--params` live in `fields` (so a third option needs no
   signature change), `--json` keeps `flag`, and `formatCommand` round-trips all three.
 - **Guarded by:** `settings_and_dump_options_reach_the_model`.
 
