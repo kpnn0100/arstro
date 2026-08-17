@@ -15,8 +15,22 @@ file, and commit.
 
 ## NEXT
 
-**U1 is complete.** ► Next is **Phase P0 — the agent-drivable harness**, starting at **P0.0**:
-write the `R-AGENT-*` requirements, then P0.1 onward in order.
+**Awaiting a decision on [`service-architecture-proposal.md`](service-architecture-proposal.md).**
+► If approved, P0 is superseded: the harness stops being a set of side doors bolted onto a GUI-shaped
+app and becomes a consequence of the architecture. The proposal's S1 (move the project loader and a
+single `ThreadBudget` into `cosmo_core`) replaces P0.0 as the first task, and it is also the fix for
+D-11 + D-12. ► If declined, resume at **P0.0** as written below.
+
+The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
+2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
+`OMP_NUM_THREADS=1` pin that U1.1 called "the layer that mattered" is a no-op, because libgomp reads
+the environment in a constructor that runs before `main()` (proven with a 30-line fixture) — and
+**D-11** — the budget is converted independently by the decode pool and by the engine, which run
+concurrently, so a load peaks at about twice what the user asked for. Neither could be *measured*,
+only read, because opening a project still requires a mouse (D-6). Two hours went into trying to
+drive the real load path from a shell (seeded config + `.cmp`, XTEST and XSendEvent clicks into the
+live window) and it never ran once. That is the case for the proposal, stated as evidence rather than
+as preference.
 
 U1 made P0's case concretely, twice over. **First**, the decode-pool log line added in U1.1 still
 cannot be observed from a shell, because a project cannot be opened without clicking (D-6) — it is
@@ -36,8 +50,9 @@ Last updated: 2026-08-16 · Last commit: U1.2, Settings from the launcher (R-SET
 
 | M | Milestone | State |
 |---|---|---|
-| U1 | CPU budget + Settings reachable from home | **DONE** (one `[!]`: the load log line) |
-| P0 | Agent harness — CLI, headless render, debug logging, scripted input | **not started** |
+| U1 | CPU budget + Settings reachable from home | **DONE, then reopened** — D-11 + D-12 mean the budget is not enforced as R-CPU-1 states |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **proposed, awaiting approval** — supersedes P0 if taken |
+| P0 | Agent harness — CLI, headless render, debug logging, scripted input | **not started** (folded into S if the proposal is approved) |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
 | P3 | Known gaps: R-ZOOM-5 eased zoom (belongs in Artboard), unwired seams | not started |
@@ -88,6 +103,18 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-17 — U1.1's decisive claim was wrong, and the reason is worth keeping.** The decisions
+  entry below says "the nested OpenMP team was the real cause … pinning `OMP_NUM_THREADS=1` is what
+  actually changes the load, not the pool arithmetic." The pin does not work (D-12): libgomp reads the
+  environment in a load-time constructor, so `main()` is too late. The entry is left standing rather
+  than edited because *why* it was believed matters — it was reasoned from the source and never run.
+  Anything asserted about thread counts from now on needs a measurement, not an argument.
+- **2026-08-17 — Proposal: the core becomes a service and every front end becomes a view.** Written up
+  in [`service-architecture-proposal.md`](service-architecture-proposal.md) at the user's request. The
+  driver is that `startEntriesLoad`/`decodeEntry`/`pollLoad` live in `linux_main.cpp`, so the app's
+  most important behaviour is unreachable without a window — and the CPU budget is read in three
+  places by three owners with nobody owning the total. Recorded here so that if the proposal is
+  declined, the reason it was raised is still on file.
 - **2026-08-16 (U1.2) — One dialog, driven by two screens.** The launcher does not get its own
   settings surface: `mSettingsDialog` stays in the editor tree and Home sizes, advances and renders
   it, and routes gestures to it while it is open. A second instance would mean two copies of the
