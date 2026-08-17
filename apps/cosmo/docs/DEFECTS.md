@@ -184,7 +184,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Actual:** only bare images and `.cosmo` sessions are. Seeding `recent.tsv` is the sole way to make a
   project reachable, and that only puts it on the home screen.
 - **Judgement:** requirement gap — no requirement covers command-line invocation at all.
-- **Fix:** commit `D6_HASH`. `openPath()` gained one branch — a `.cmp`/`.cosmoproj` dispatches
+- **Fix:** commit `127d213`. `openPath()` gained one branch — a `.cmp`/`.cosmoproj` dispatches
   `Command::ProjectOpen` — plus `--project <path>` for scripts where a bare path is ambiguous. It
   is one branch because the load is a command now (R-SVC-2); before the service there was nothing
   to dispatch it to, which is a fair summary of what S1–S3 bought.
