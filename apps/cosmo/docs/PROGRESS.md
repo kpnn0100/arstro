@@ -105,7 +105,9 @@ core first.
       **R-SVC-9's headline check passes**: `cosmo-cc project japan18.cmp --print --stable` and the
       GUI's `state print --stable` over the socket are now **byte-identical** on the real 18-RAF
       project. Getting there found **D-14** and **D-15**, both fixed here — neither was visible any
-      other way, which is the argument for the check existing at all.
+      other way, which is the argument for the check existing at all. `cosmo-cc attach <socket>`
+      completes the loop the proposal promised: it drives a live `--control` window from a script
+      and exits non-zero if any command was rejected.
 - [~] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
       ops, save/load workspace. `App.cpp` ends as render + gestures + animation *(core, then design)*
   - [x] **S4a** `App::onCommand` — the view's outbound channel (R-SVC-2). Undo/redo now emit a

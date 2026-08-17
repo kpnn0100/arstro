@@ -46,6 +46,14 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#ifndef _WIN32
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#endif
 #include <iostream>
 #include <map>
 #include <memory>
@@ -461,6 +469,9 @@ namespace
              "                                  validate only; exit 1 with the first error located\n"
              "  bench <img> [--iters N]         per-stage ms, so a perf claim is measured\n"
              "  run [--script <f>] [-]          replay command lines from a file or stdin\n"
+             "  attach <socket> [--script <f>]   drive a RUNNING cosmo --control window; its\n"
+             "                                  events stream back (R-SVC-8). No session here:\n"
+             "                                  the window that owns the service does the work\n"
              "\n"
              "  global   --json      machine-readable output where it makes sense\n"
              "           --watch     stream every Event as it happens (R-SVC-5: this is the log)\n"
@@ -1291,6 +1302,123 @@ namespace
     }
 }
 
+// ── attach: the only subcommand that builds NO service ───────────────────────────────
+//
+// R-SVC-8. Everything else here constructs a CosmoService and is the application; this one
+// is a terminal on somebody else's. That asymmetry is the point: the pixels stay in the
+// process that owns them, and only lines cross. `wait <event>` is handled here rather than
+// sent, because a wait is a property of OUR loop — the service does not own it, which is
+// exactly what CosmoService's Wait case says.
+static int cmdAttach(const Args &a, const Options &opt)
+{
+#ifdef _WIN32
+    (void)a; (void)opt;
+    fprintf(stderr, "attach: not implemented on Windows (see ControlChannel.cpp)\n");
+    return kFail;
+#else
+    const std::string sockPath = a.positional.empty() ? std::string() : a.positional.front();
+    if (sockPath.empty()) { fprintf(stderr, "attach: need a socket path\n"); return kUsage; }
+
+    int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) { perror("attach: socket"); return kFail; }
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    if (sockPath.size() >= sizeof(addr.sun_path))
+    { fprintf(stderr, "attach: socket path too long\n"); ::close(fd); return kFail; }
+    memcpy(addr.sun_path, sockPath.c_str(), sockPath.size());
+    if (::connect(fd, (sockaddr *)&addr, sizeof(addr)) != 0)
+    {
+        fprintf(stderr, "attach: cannot connect to %s: %s — is cosmo running with --control?\n",
+                sockPath.c_str(), strerror(errno));
+        ::close(fd);
+        return kFail;
+    }
+
+    // Commands come from --script or stdin. Read them all up front: a script is short, and
+    // it keeps the loop below about the socket rather than about input buffering.
+    std::vector<std::string> pending;
+    {
+        const std::string script = a.value("script");
+        std::ifstream f(script);
+        std::istream &in = script.empty() ? std::cin : f;
+        if (!script.empty() && !f) { fprintf(stderr, "attach: cannot read %s\n", script.c_str()); ::close(fd); return kFail; }
+        for (std::string line; std::getline(in, line);) if (!line.empty()) pending.push_back(line);
+    }
+
+    std::string waitFor, buf;
+    const double timeoutS = a.value("timeout").empty() ? 300.0 : atof(a.value("timeout").c_str());
+    const auto t0 = std::chrono::steady_clock::now();
+    int rejections = 0;
+    // A command's events arrive AFTER we stop sending, so the loop cannot end when the
+    // script does — the first version did, and every response to the last four commands was
+    // dropped, `state print` included. Instead: once nothing is left to send, keep reading
+    // until the stream has been quiet for this long. A frame is 16 ms, so 600 ms is ~37
+    // frames of silence; a dump is emitted in one pass, so it cannot straddle that.
+    const double kQuietS = 0.6;
+    auto lastData = std::chrono::steady_clock::now();
+
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < timeoutS)
+    {
+        if (!pending.empty() && waitFor.empty())
+        {
+            const std::string line = pending.front();
+            pending.erase(pending.begin());
+            if (line.rfind("wait ", 0) == 0)
+            {
+                waitFor = line.substr(5);
+                while (!waitFor.empty() && waitFor.back() == ' ') waitFor.pop_back();
+                if (opt.watch) printf("... waiting for %s\n", waitFor.c_str());
+            }
+            else
+            {
+                if (opt.watch) printf("--> %s\n", line.c_str());
+                const std::string out = line + "\n";
+                if (::send(fd, out.data(), out.size(), MSG_NOSIGNAL) < 0)
+                { perror("attach: send"); ::close(fd); return kFail; }
+                lastData = std::chrono::steady_clock::now();
+                continue;
+            }
+        }
+
+        fd_set rs;
+        FD_ZERO(&rs);
+        FD_SET(fd, &rs);
+        timeval tv{0, 200000};
+        if (::select(fd + 1, &rs, nullptr, nullptr, &tv) > 0)
+        {
+            char chunk[65536];
+            const ssize_t n = ::recv(fd, chunk, sizeof(chunk), 0);
+            if (n == 0) { printf("attach: the window closed the connection\n"); break; }
+            if (n < 0) { if (errno == EINTR) continue; perror("attach: recv"); ::close(fd); return kFail; }
+            buf.append(chunk, (size_t)n);
+            size_t nl;
+            while ((nl = buf.find('\n')) != std::string::npos)
+            {
+                const std::string line = buf.substr(0, nl);
+                buf.erase(0, nl + 1);
+                printf("%s\n", line.c_str());
+                if (line.find("command.rejected") != std::string::npos) ++rejections;
+                if (!waitFor.empty() && line.find(waitFor) != std::string::npos)
+                {
+                    if (opt.watch) printf("... got %s\n", waitFor.c_str());
+                    waitFor.clear();
+                }
+            }
+            fflush(stdout);
+            lastData = std::chrono::steady_clock::now();
+        }
+        if (pending.empty() && waitFor.empty() &&
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - lastData).count() > kQuietS)
+            break;
+    }
+    ::close(fd);
+    if (!waitFor.empty()) { fprintf(stderr, "attach: timed out waiting for %s\n", waitFor.c_str()); return kFail; }
+    // A rejected command is a failed run: a script that silently half-worked is the thing
+    // this whole architecture exists to make impossible.
+    return rejections ? kFail : kOk;
+#endif
+}
+
 int main(int argc, char **argv)
 {
     const Args a = parseArgs(argc, argv);
@@ -1306,6 +1434,10 @@ int main(int argc, char **argv)
     // The two subcommands that need no session build no session: `info` is a decode and
     // `backends` is introspection, and constructing an EditSession would start a render
     // thread and a GPU context for nothing.
+    // attach drives somebody else's service, so it must come before the Host below: building
+    // one here would start a render thread and a GPU context for a terminal.
+    if (a.verb == "attach") return cmdAttach(a, opt);
+
     if (a.verb == "info") return cmdInfo(a, opt);
     if (a.verb == "backends") return cmdBackends(a, opt);
     if (a.verb == "params") return cmdParams(a, opt);

@@ -827,13 +827,28 @@ byte-cap alone drops healthy clients, because 6000 events in 4 ms outruns any pe
 Reads are capped at 256 KB per client per frame and accepts at 8 per frame — "non-blocking" is not
 "bounded", and an undrained read loop would freeze the window without one blocking call.
 
+`cosmo-cc attach <socket> [--script f] [--watch]` is the client (`cli/main.cpp`, `cmdAttach`) and
+the only subcommand that builds **no** service — everything else in `cosmo-cc` *is* an application,
+this one is a terminal on somebody else's, which is the asymmetry that keeps pixels in the process
+that owns them. `wait <event>` is handled client-side because a wait is a property of the caller's
+loop. It exits non-zero if any command was rejected or a `wait` timed out, so a script that
+half-worked fails a build instead of looking fine. It drains for 600 ms of stream silence after the
+last command: a command's events arrive *after* the send, so ending the loop when the script ends
+drops every response to the final commands — including the `state print` that was the point of the
+run.
+
 **Verified live** on the reported 18-RAF project: the GUI was driven entirely over the socket
 through `settings set` → `project open` → `wait load.finished` → `select next` → `set exposure=0.8`
 → `state print`, returning `load.finished decoded=18 total=18`,
 `info load.peak decode=5 engine=6 budget=6`, `selection.changed node=2 slot=1`,
 `params.changed exposure`, and a model dump reading `imageCount=18 currentSlot=1 canUndo=1`. A
 window capture confirmed the UI followed: `DSCF5194.RAF (2/18)` in the top bar, the Exposure slider
-moved, 18 thumbnails in the filmstrip.
+moved, 18 thumbnails in the filmstrip. Repeated through `cosmo-cc attach` with a longer script —
+`select next` twice, `set exposure=1.4 temp=7800`, `undo`, `state print --stable` — returning
+`selection.changed node=2 slot=1` then `node=3 slot=2`, `params.changed exposure,temp`,
+`history.changed current=0 nodes=2 label=Open`, and a dump reading `currentSlot=2 canUndo=0
+canRedo=1`. The window showed `DSCF5288.RAF (3/18)` with Exposure back at 0, the undo having
+landed.
 
 **Windows is a deliberate stub**: `open()` returns false with a reason, so `--control` reports
 itself unavailable at startup rather than hanging later. An overlapped named pipe is a few hundred
