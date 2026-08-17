@@ -182,7 +182,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   the shared codec at all. Worth remembering: the rule protects what it routes.
 - **Cause:** `wait` is deliberately front-end-owned (only the caller owns its loop), so both
   implementations grew independently.
-- **Fix:** commit `S5B_HASH`. `canonicalWait()` normalises `-` to `.` and both front ends call it;
+- **Fix:** commit `e2d471a`. `canonicalWait()` normalises `-` to `.` and both front ends call it;
   the event name is canonical because events are the observable contract; hyphens stay accepted.
   `Command.h`'s documented example, the parser's error hint, the `--help` text, the coverage test
   and the proposal all now use the canonical spelling.
