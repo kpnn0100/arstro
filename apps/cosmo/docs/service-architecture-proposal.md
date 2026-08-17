@@ -1,9 +1,16 @@
 # cosmo — the core as a service, the UI as a listener
 
-**Status: PROPOSAL, awaiting approval.** Nothing here is built yet. It is written as a proposal
-rather than as `architecture.md` because it changes the app's shape, and that is the user's call.
-Once approved it becomes `R-SVC-*` in [`../REQUIREMENTS.md`](../REQUIREMENTS.md), folds into
-[`architecture.md`](architecture.md), and P0 in [`PROGRESS.md`](PROGRESS.md) is rewritten around it.
+**Status: APPROVED 2026-08-17, in progress.** Now specified as **R-SVC-1…10** in
+[`../REQUIREMENTS.md`](../REQUIREMENTS.md), which is the contract; this file stays as the *design*
+behind it and the migration plan. Two choices were put to the user and both are settled:
+
+- **Process model: in-process service + control socket** (§2.3), not a separate daemon. Frames never
+  cross a process boundary.
+- **Scope: the whole plan, S1 through S5** (§4). Milestones and per-step status live in
+  [`PROGRESS.md`](PROGRESS.md); this file is not a ledger and is not updated per commit.
+
+`architecture.md` is rewritten to match when S2 lands the service skeleton — not before, so it never
+describes something that does not exist.
 
 ---
 

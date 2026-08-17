@@ -15,11 +15,11 @@ file, and commit.
 
 ## NEXT
 
-**Awaiting a decision on [`service-architecture-proposal.md`](service-architecture-proposal.md).**
-► If approved, P0 is superseded: the harness stops being a set of side doors bolted onto a GUI-shaped
-app and becomes a consequence of the architecture. The proposal's S1 (move the project loader and a
-single `ThreadBudget` into `cosmo_core`) replaces P0.0 as the first task, and it is also the fix for
-D-11 + D-12. ► If declined, resume at **P0.0** as written below.
+**[`service-architecture-proposal.md`](service-architecture-proposal.md) is APPROVED** (2026-08-17,
+in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
+the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
+architecture. ► Next is **S1** — `ProjectLoader` + `ThreadBudget` into `cosmo_core`, which is also
+the fix for D-11 and D-12.
 
 The proposal exists because U1's CPU budget could not be debugged. Chasing "25% still uses 75%" on
 2026-08-17 produced two confirmed defects and no runtime measurement: **D-12** — the
@@ -74,7 +74,38 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
       by rendering the real `App` driven by real pointer events at two window sizes.
 
-## P0 — the agent harness
+## S — the core as a service (R-SVC-1…10)
+
+Design + migration plan: [`service-architecture-proposal.md`](service-architecture-proposal.md).
+Strangler: each step leaves both paths compiling, so the app works after every commit. S2 and S4
+cross into `App`/`widgets/`, which belong to `arstro.cosmo.design.implement` — those are two commits,
+core first.
+
+- [ ] **S1** `ProjectLoader` + `ThreadBudget` into `cosmo_core`; `linux_main.cpp` calls them instead
+      of its own `startEntriesLoad`/`decodeEntry`/`pollLoad`. Closes **D-11** and **D-12**. Proof: a
+      `cosmo_core_tests` case that loads an 18-entry project through a fake decoder on a synchronous
+      `ITaskPool` and asserts peak concurrency ≤ the budget
+- [ ] **S2** `AppModel` + `Command`/`Event` + codecs + `CosmoService` skeleton wrapping `EditSession`;
+      the GUI dispatches commands for open / select / undo / redo / set-param and reads the model for
+      them. *(core commit, then design commit)*
+- [ ] **S3** `cosmo-cc` over the service: `info`, `backends`, `project open|print`, `set`, `render`,
+      `state print`, `export`, `bench`, `--script`, `--json`. Subsumes A1–A9 and old P0.8–P0.10
+- [ ] **S4** the rest of `App`'s logic moves down — export batch, presets, copy/paste settings, group
+      ops, save/load workspace. `App.cpp` ends as render + gestures + animation *(core, then design)*
+- [ ] **S5** `ControlChannel` (unix socket / named pipe, R-SVC-8) + the acceptance test: launch the
+      GUI, drive it over the socket, assert the event stream, exit non-zero on a missing event
+
+**S is done when** the §5 checks in the proposal pass: a CLI-opened project and a GUI-opened project
+dump the same `AppModel`; `grep "mSession\.\|EditParams" apps/cosmo/widgets/*.cpp` is empty; every
+`R-*` behaviour has a command; a load's measured peak concurrency is within budget; and the
+acceptance test runs unattended.
+
+**Absorbed from P0 along the way:** P0.1/P0.2/P0.3 (headless UI render + assertions) land with S3's
+harness; P0.4/P0.5/P0.6 (log levels, categories, UI logging, `--dump-ui`) become `Event` plumbing in
+S2 — an event *is* a log line under R-SVC-5; P0.7's `--project` is S3; P0.11/P0.12 (`DEVELOPING.md`,
+Windows `configDir()`) stay as written and are listed below.
+
+## P0 — the agent harness (superseded by S; kept for the two tasks S does not absorb)
 
 Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A12) and
 `arstro.cosmo.design.implement` §6–§7.

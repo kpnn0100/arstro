@@ -165,7 +165,7 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
 
-## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ✅ IMPLEMENTED
+## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ⚠️ REOPENED (D-11, D-12)
 
 Opening a catalog saturated the machine. The decode pool took one worker per core (R-LOADPERF-1) and
 the engine's Auto thread count is also every core, so importing photos made the rest of the computer
@@ -190,6 +190,16 @@ anything else meanwhile — a photo app is something you run *alongside* your wo
   matter how the pool was sized*. cosmo already parallelises across images, so a second layer
   inside one image is pure oversubscription: `OMP_NUM_THREADS` is pinned to 1 at startup (an
   explicit user value still wins) and one decode worker then means one core.
+  (**AMENDED (R-SVC-10), 2026-08-17:** (a) and (b) are **one budget divided**, not two budgets each
+  taking the whole percentage. As written, both consumers converted the same percentage
+  independently and they run concurrently — R-LOADPERF-3 streams decoded images into a live editor
+  — so a load peaked at roughly twice what the user chose: 13 of 24 cores at 25%, and 17 of 16 on a
+  16-core box at the default 50%. D-11. A single `ThreadBudget` now hands out both counts from one
+  total. — And (c) **cannot be done with an environment variable set from `main()`**: libgomp parses
+  the environment in a load-time constructor, so the pin was never read by anyone and the nested
+  team stayed machine-sized wherever LibRaw is built `-fopenmp`. D-12, proven by
+  `core/tests/fixtures/omp_env_order.c`. The intent of (c) stands; the mechanism is replaced by one
+  that works — see R-SVC-10.)
 - **R-CPU-3 Changeable, and persisted.** The budget is a chip row in the Settings surface
   (R-SETTINGS-1) offering 25% / 50% / 75% / 100%, and it round-trips with the other preferences
   (R-SETTINGS-4). A change takes effect on the **next** load and on the next render: a pool is sized
@@ -201,6 +211,12 @@ anything else meanwhile — a photo app is something you run *alongside* your wo
   setting means "of the work cosmo schedules". The log records the worker count actually used at
   each load, so the nominal budget and the real one can be told apart:
   `load: 12 entries on 8 decode workers (cpu budget 50% of 16 cores)`.
+  (**AMENDED (R-SVC-10), 2026-08-17:** honesty has to be *measured*, not asserted. This requirement
+  was satisfied by a log line that no one had ever seen — reaching it needed a project opened by
+  clicking (D-6), so both of the budget's real defects shipped unnoticed. The load now also logs the
+  **observed peak** of concurrently scheduled cosmo threads next to the allotment, and a test
+  asserts the peak never exceeds the total. A number cosmo cannot measure does not belong in this
+  requirement.)
 - **R-CPU-5 The cap can bind before the budget does.** On a machine with more than 16 logical cores,
   50% exceeds the decode pool's cap of 8 and the cap is what applies — the pool does not grow past
   8 whatever the budget says, because beyond that point workers contend for memory bandwidth rather
@@ -741,3 +757,67 @@ load is therefore made **visible** rather than slower:
   is revealed early, a **slim determinate progress bar remains along the top edge of the filmstrip**
   while images are still arriving, with the count beside it. It fades out when the last one lands.
   A photographer can therefore always tell how much is left, in both phases.
+
+## R-SVC — The core is a service; every front end is a view — 🚧 APPROVED, IN PROGRESS
+
+Design: [`docs/service-architecture-proposal.md`](docs/service-architecture-proposal.md).
+
+The architecture doc has always claimed cosmo's logic is UI-free ("this is what lets the same
+session/engine be driven headlessly"). It is not: opening a project — the app's most important
+behaviour — is implemented in the GTK host (`startEntriesLoad`/`decodeEntry`/`pollLoad` in
+`linux_main.cpp`), so it cannot be run without a mouse (D-6). The cost came due in 2026-08-17's
+investigation of "the CPU limit does not limit": both defects behind it (D-11, D-12) were found by
+*reading*, because the load path could not be made to run from a shell at all, and the log line that
+was supposed to prove the feature had never once been observed. A behaviour an agent cannot reach is
+a behaviour nobody can verify — and this app is developed across machines and sessions by agents.
+
+So the fix is not another side door. It is to put the behaviour where the docs already say it lives,
+and make every front end — the GTK window, the CLI, the shot renderer — a *view* of it.
+
+- **R-SVC-1 One service owns the behaviour.** `CosmoService`, in `cosmo_core`, owns the application
+  state and every operation on it: the edit session and group tree, selection, history, the project
+  load pipeline, the export queue, presets, settings and recents. It links no Artboard type, no GTK,
+  no codec, and calls no `getenv` — the existing layering rule, now enforced by there being nothing
+  above it that behaviour can leak into.
+- **R-SVC-2 One way in — `Command`.** A front end never calls `EditSession`, mutates an `EditParams`,
+  or opens a file. It builds a `Command` and calls `dispatch`. A behaviour reachable from a front end
+  but not expressible as a `Command` is a defect in the command set, not a shortcut.
+- **R-SVC-3 One way out — `AppModel` + `Event`.** `AppModel` is the entire observable state as plain
+  data (frames referenced by id, never pixels; no Artboard types), carrying a `revision` that
+  increments on every change. `Event` says what just changed. A view renders the model and reacts to
+  events; it computes nothing it could be told.
+- **R-SVC-4 The view holds presentation only, and presentation is a real category.** A widget may
+  read the model, animate itself, hit-test itself, and emit commands. It may not hold non-visual
+  state or decide what a click *does* beyond naming a command. **Animation, easing, transitions,
+  hover, and scroll offsets stay in the view** — R-G-1 is a view requirement and is untouched by
+  this: the service knows a load is 6-of-18 done, the view knows the bar eases toward it.
+- **R-SVC-5 The text form is generated, never written twice.** Every `Command` and `Event` has one
+  codec converting it to and from a line of text. The typed struct is the truth; the grammar is
+  derived. This is what keeps the CLI, `--script` files, the control socket, the journal and the
+  debug log from drifting apart — they are all the same two codecs.
+- **R-SVC-6 The host drives the clock.** The service never blocks and never starts a thread on its
+  own initiative: `pump(nowMs)` drains completed work and emits events, called from a GTK timeout at
+  frame rate, from a CLI loop, or from a test at a fixed 16 ms tick. One code path, deterministic
+  when driven deterministically.
+- **R-SVC-7 The platform is injected, not imported.** `IImageDecoder` (existing), `IFileStore`,
+  `IClock`, `ITaskPool` and `ILogSink` are supplied by the host. `ITaskPool` is what lets the GUI run
+  a real pool while a test runs a synchronous one — the same load code, parallel in the app and
+  reproducible in `cosmo_core_tests`.
+- **R-SVC-8 The running app is controllable, and stays one process.** `cosmo --control <path>` opens
+  a socket (unix domain; named pipe on Windows) speaking exactly the R-SVC-5 grammar: commands in,
+  events out. The service stays **in-process with whichever front end hosts it** — a preview frame is
+  5-20 MB and a full-res frame ~100 MB, so a separate service process would buy a frame transport
+  problem and nothing else. An agent can therefore drive the window the user is watching, which is
+  the point.
+- **R-SVC-9 Coverage is asserted, not hoped for.** A test walks the command enum and fails if a
+  behaviour named in `PARITY.md` or in an `R-*` requirement has no command; another asserts that
+  `cosmo-cc` and the GUI, given the same commands, produce the same `AppModel` dump (animation
+  fields excluded by construction, since the dump is of state, not of presentation).
+- **R-SVC-10 One owner of the CPU budget.** `ThreadBudget`, owned by the service, converts the
+  user's percentage **once** and divides that single total between the decode pool and the engine —
+  this **amends R-CPU-2**, under which each consumer converted the whole percentage for itself and a
+  load peaked at about twice the chosen budget (D-11). Nested library parallelism (R-CPU-2c) is
+  pinned by a mechanism that is *checked at runtime* rather than assumed, because the environment
+  variable used before was read by nobody (D-12). The load logs the allotment and the **measured
+  peak**, and a test asserts the peak never exceeds the total — R-CPU-4's honesty clause becomes an
+  assertion instead of a claim.
