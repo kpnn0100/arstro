@@ -65,7 +65,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   Preferred: (1) first, because it is contained and reversible, then (2) if the pause at export
   proves annoying. Either way the test is a decode-timing assertion plus an export-path check that
   the exported pixels came from the quality decode.
-- **Partially addressed already** by commit `MST_HASH`, which is worth having on its own: the decode
+- **Partially addressed already** by commit `49c5b40`, which is worth having on its own: the decode
   seam now carries LibRaw's phase callbacks, so a **Bayer** file (Canon, Nikon, Sony) reports every
   256 rows of demosaic and the bar moves inside one image. For X-Trans it yields the honest
   10%/92% steps plus a named stage. That is the ceiling of reporting; the cost is the remaining
