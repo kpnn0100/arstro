@@ -74,7 +74,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   that call **moves** the frame out. The service cannot also poll without stealing frames from the
   view, so this cannot be fixed by having `pump()` look — it needs the frame path to belong to the
   service, which is **S4c**. The comment in `AppModel.h` now says so instead of promising.
-- **Fix:** commit `S4C_HASH`, in S4c as predicted, and by the first of the two routes: the
+- **Fix:** commit `c6e7c39`, in S4c as predicted, and by the first of the two routes: the
   **service polls** and the view takes the frame from it. `pump()` calls `tryAcquire` — moved out
   from behind the load's early-return, which was the other half of why nothing ever moved — stores
   the frame, fills `frameSlot/Width/Height`, increments `frameSeq` and emits `FrameReady`;
