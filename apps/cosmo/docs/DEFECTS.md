@@ -103,7 +103,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   exist on this host — `build/` (Debug, wired to `.vscode`) and `build-mingw64/` (Release) — with no
   documented distinction. `build.sh --target native-test` covers neither cosmo nor genesis.
 - **Judgement:** requirement gap — nothing states which build path is canonical.
-- **Fix:** commit `DOCS_HASH`. `docs/DEVELOPING.md` (new) declares **CMake into `build/` canonical on
+- **Fix:** commit `df993dc`. `docs/DEVELOPING.md` (new) declares **CMake into `build/` canonical on
   every platform** (MSYS2 MINGW64 shell on Windows), and the reason is stronger than "pick one":
   **`./build.sh --project cosmo --target linux-native-app` does not link at all today** —
   `multiple definition of 'main'`, because its glob is every `.cpp` under `apps/cosmo` and since S3
@@ -131,7 +131,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   evidence: `C:\Users\Nam Doan\.config\cosmo_v2\` exists on this host but is **empty** — no log, no
   settings, no recents — so a real session's state has never been observed there.
 - **Judgement:** requirement gap — no requirement states the Windows config location.
-- **Fix:** commit `DOCS_HASH`. `resolveConfigDir()` in `ProjectStore.cpp`, documented in the header:
+- **Fix:** commit `df993dc`. `resolveConfigDir()` in `ProjectStore.cpp`, documented in the header:
   1. `$XDG_CONFIG_HOME/cosmo_v2` — wins everywhere, decided before any platform reasoning, because
      it is how every scripted run in this project sandboxes itself and that must keep working.
   2. *(Windows)* a pre-D-8 directory that already holds state, **adopted**.
@@ -161,7 +161,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `DR-LOADUX` records that the hook is gone.
 - **Judgement:** defect — a doc-sync failure, which is exactly what the V-model's sync check exists to
   prevent. A future session reading `design.md` first would build against the old model.
-- **Fix:** commit `DOCS_HASH`, and it turned out to be **six** places, not three. `design.md`,
+- **Fix:** commit `df993dc`, and it turned out to be **six** places, not three. `design.md`,
   `architecture.md` §4/§6.2 and `detailed_design.md` §1.3/§1.4/§1.6 were rewritten to say what
   happens now rather than deleting the stale sentence — the host dispatches `Command::ProjectOpen`,
   whose `ProjectOpening` event is what calls `beginOpenTransition`, so the pool is already running
