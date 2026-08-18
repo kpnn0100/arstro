@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-19**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-20**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,24 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-19 — `build.sh`'s cosmo desktop path does not link
+- **Area:** core / build · **Status:** Confirmed (reproduced) · **Severity:** S4
+- **Found:** 2026-08-18, while writing `DEVELOPING.md` for D-9 — the guide could not honestly
+  describe a second build path without trying it.
+- **Reproduce:** `./build.sh --project cosmo --target linux-native-app`
+- **Expected:** either it builds cosmo, or it is removed.
+- **Actual:** `multiple definition of 'main'`. Its source glob is every `.cpp` under `apps/cosmo`
+  except `tests/`, and since S3 that set contains two entry points — `linux_main.cpp` and
+  `cli/main.cpp`. D-9 described this path as *divergent*; it is in fact **broken**, and has been
+  since `cosmo-cc` landed.
+- **Judgement:** defect. A build path that cannot build is worse than none, because its presence
+  implies a choice that does not exist.
+- **Fix:** pending. Two honest options, and `DEVELOPING.md` declares CMake canonical either way:
+  teach the glob to exclude alternate entry points, or delete cosmo's desktop target from
+  `build.sh` and let the script cover only what it can still build. Prefer deletion unless someone
+  relies on it — the maintenance cost is a second define list beside CMake's, exactly the ODR trap
+  the decisions log warns about.
 
 ### D-17 — The control socket does nothing on Windows
 - **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
@@ -42,34 +60,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
   box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
   and it is unaffected.
-
-### D-9 — Two divergent build paths, two undocumented build trees
-- **Area:** core / build · **Status:** Confirmed (by source inspection) · **Severity:** S4
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** compare `./build.sh --project cosmo --target linux-native-app` (a hand-rolled one-shot
-  `g++` producing `apps/cosmo/build/cosmo_linux`) with `cmake -S . -B build && cmake --build build`
-  (producing `build/apps/cosmo/cosmo`). Also `ls build/apps/cosmo/cosmo.exe build-mingw64/apps/cosmo/cosmo.exe`.
-- **Expected:** one documented way to build cosmo per platform.
-- **Actual:** two Linux paths with different output names, different flags and no shared tests;
-  `build.sh` cannot build cosmo on Windows at all (hardcoded `-lEGL -lGL`, `nproc`). Two Ninja trees
-  exist on this host — `build/` (Debug, wired to `.vscode`) and `build-mingw64/` (Release) — with no
-  documented distinction. `build.sh --target native-test` covers neither cosmo nor genesis.
-- **Judgement:** requirement gap — nothing states which build path is canonical.
-- **Fix:** pending. Resolve in P0.11 (`docs/DEVELOPING.md`) with an `R-AGENT-*` requirement naming the
-  canonical path per platform.
-
-### D-8 — `configDir()` resolves to the wrong place outside an MSYS2 shell
-- **Area:** core / persistence · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** launch `build\apps\cosmo\cosmo.exe` from cmd.exe or Explorer (where `HOME` is unset)
-  and look for `.config\cosmo_v2\` **relative to the current directory**.
-- **Expected:** settings, recents and the log land in one predictable per-user location on Windows.
-- **Actual:** `ProjectStore::configDir()` reads `XDG_CONFIG_HOME`, else `HOME` (never `USERPROFILE`),
-  else `"."` — so a non-MSYS2 launch scatters config next to wherever it was started from. Supporting
-  evidence: `C:\Users\Nam Doan\.config\cosmo_v2\` exists on this host but is **empty** — no log, no
-  settings, no recents — so a real session's state has never been observed there.
-- **Judgement:** requirement gap — no requirement states the Windows config location.
-- **Fix:** pending (P0.12). Until then, always set `XDG_CONFIG_HOME` explicitly in scripted runs.
 
 ### D-7 — No headless UI render is possible; the CMake glob structurally prevents one
 - **Area:** design / build · **Status:** Confirmed (by source inspection) · **Severity:** S3
@@ -100,8 +90,68 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   it. `R-AGENT-*` will state the contract.
 - **Fix:** pending. P0.4 + P0.5.
 
+## Closed
+### D-9 — Two divergent build paths, two undocumented build trees
+- **Area:** core / build · **Status:** **Fixed** · **Severity:** S4
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** compare `./build.sh --project cosmo --target linux-native-app` (a hand-rolled one-shot
+  `g++` producing `apps/cosmo/build/cosmo_linux`) with `cmake -S . -B build && cmake --build build`
+  (producing `build/apps/cosmo/cosmo`). Also `ls build/apps/cosmo/cosmo.exe build-mingw64/apps/cosmo/cosmo.exe`.
+- **Expected:** one documented way to build cosmo per platform.
+- **Actual:** two Linux paths with different output names, different flags and no shared tests;
+  `build.sh` cannot build cosmo on Windows at all (hardcoded `-lEGL -lGL`, `nproc`). Two Ninja trees
+  exist on this host — `build/` (Debug, wired to `.vscode`) and `build-mingw64/` (Release) — with no
+  documented distinction. `build.sh --target native-test` covers neither cosmo nor genesis.
+- **Judgement:** requirement gap — nothing states which build path is canonical.
+- **Fix:** commit `DOCS_HASH`. `docs/DEVELOPING.md` (new) declares **CMake into `build/` canonical on
+  every platform** (MSYS2 MINGW64 shell on Windows), and the reason is stronger than "pick one":
+  **`./build.sh --project cosmo --target linux-native-app` does not link at all today** —
+  `multiple definition of 'main'`, because its glob is every `.cpp` under `apps/cosmo` and since S3
+  that set has two (`linux_main.cpp` and `cli/main.cpp`). Even repaired it builds no tests and no
+  `cosmo-cc`, so nothing it produces can be verified; it hardcodes `-lEGL -lGL` + `nproc` so it
+  cannot build on Windows; and it maintains defines by hand beside CMake's, the ODR trap the
+  decisions log records. CMake is what `.vscode` is pinned to, what `ctest` aggregates, and the
+  acceptance script's default build dir.
+  **The two trees:** `build/` is the real one and everything in the repo references it;
+  `build-mingw64/` is one developer's private Release tree on the Windows host, referenced by
+  nothing and absent on Linux — the guide says never write a command assuming it, and gives
+  `cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release` instead. It also flags that a fresh
+  `cmake -S . -B build` yields **Release** (the root CMakeLists forces it) while the VSCode
+  extension makes the same directory **Debug** — verified both ways.
+- **Follow-on filed as D-19:** `build.sh`'s cosmo path is **broken, not merely divergent**.
+
+### D-8 — `configDir()` resolves to the wrong place outside an MSYS2 shell
+- **Area:** core / persistence · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** launch `build\apps\cosmo\cosmo.exe` from cmd.exe or Explorer (where `HOME` is unset)
+  and look for `.config\cosmo_v2\` **relative to the current directory**.
+- **Expected:** settings, recents and the log land in one predictable per-user location on Windows.
+- **Actual:** `ProjectStore::configDir()` reads `XDG_CONFIG_HOME`, else `HOME` (never `USERPROFILE`),
+  else `"."` — so a non-MSYS2 launch scatters config next to wherever it was started from. Supporting
+  evidence: `C:\Users\Nam Doan\.config\cosmo_v2\` exists on this host but is **empty** — no log, no
+  settings, no recents — so a real session's state has never been observed there.
+- **Judgement:** requirement gap — no requirement states the Windows config location.
+- **Fix:** commit `DOCS_HASH`. `resolveConfigDir()` in `ProjectStore.cpp`, documented in the header:
+  1. `$XDG_CONFIG_HOME/cosmo_v2` — wins everywhere, decided before any platform reasoning, because
+     it is how every scripted run in this project sandboxes itself and that must keep working.
+  2. *(Windows)* a pre-D-8 directory that already holds state, **adopted**.
+  3. *(Windows)* `%APPDATA%` + `cosmo_v2`, else `%USERPROFILE%` + `.config/cosmo_v2`.
+  4. `$HOME/.config/cosmo_v2` — POSIX and MSYS2.
+  5. `./.config/cosmo_v2` — last resort, byte-identical to the old behaviour.
+  **Why APPDATA above HOME:** `HOME` exists only inside MSYS2, so ranking it first is what *produced*
+  D-8 — one install kept two config directories depending on how it was launched.
+  **Why adoption rather than migration:** `cosmo_core` has no logging and no error channel, so a copy
+  that half-succeeded would leave two divergent directories and nothing able to say so; moving
+  someone's recents is destructive and this layer cannot ask. Adoption is idempotent and re-decided
+  identically every launch. The test is "not empty" rather than "exists", because `configDir()` calls
+  `create_directories` every launch — D-8's own evidence is an *empty* scattered directory.
+- **Verified:** POSIX resolution unchanged; the `_WIN32` branch was extracted verbatim into a probe
+  with only the guard macro swapped and exercised across all five cases plus legacy-present and
+  legacy-empty variants. `cosmo_core_tests` 31/31, with
+  `settings_roundtrip_and_survive_a_bad_file` still backing up and restoring the real settings file.
+
 ### D-1 — Three design docs still describe the removed `onLoadingReady` hook
-- **Area:** core / docs · **Status:** Confirmed (by source inspection) · **Severity:** S4
+- **Area:** core / docs · **Status:** **Fixed** · **Severity:** S4
 - **Found:** 2026-08-16, source inspection
 - **Reproduce:** `grep -rn "onLoadingReady" apps/cosmo/docs/ apps/cosmo/REQUIREMENTS.md`
 - **Expected:** `design.md`, `architecture.md` and `detailed_design.md` agree with `REQUIREMENTS.md` and
@@ -111,11 +161,22 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `DR-LOADUX` records that the hook is gone.
 - **Judgement:** defect — a doc-sync failure, which is exactly what the V-model's sync check exists to
   prevent. A future session reading `design.md` first would build against the old model.
-- **Fix:** pending. Do it in the next task that touches loading (P1).
+- **Fix:** commit `DOCS_HASH`, and it turned out to be **six** places, not three. `design.md`,
+  `architecture.md` §4/§6.2 and `detailed_design.md` §1.3/§1.4/§1.6 were rewritten to say what
+  happens now rather than deleting the stale sentence — the host dispatches `Command::ProjectOpen`,
+  whose `ProjectOpening` event is what calls `beginOpenTransition`, so the pool is already running
+  as the first intro frame draws. Beyond the original three: `docs/requirements.md`'s DR-SCREEN-2
+  still said "the decode has **not** started" and contradicted DR-LOADUX-4 **in the same file**;
+  `REQUIREMENTS.md`'s R-LOADING-0 contradicted its own R-LOADING-1 amendment two bullets below;
+  `architecture.puml` still modelled the deleted `LoadJob` class; and `App.cpp`'s own comment at the
+  Intro-to-Loading boundary still claimed "only now do we ask the host to start decoding".
+  Also corrected `kLoadingBg` (the docs said `{0x14,...}`, the code says `{0x0A,...}`) and the
+  `file:line` anchors on every line rewritten.
+- **Note:** `detailed_design.md`'s anchors are broadly stale beyond the rewritten lines
+  (`renderEditor` cited at 482 is really 686, `renderReturn` at 937 is 1251). A full sweep is P1.
 
 ---
 
-## Closed
 
 ### D-2 — The log level is never checked; `LOGD` and `setStderrEcho()` are dead
 - **Area:** core / observability · **Status:** **Fixed** · **Severity:** S3

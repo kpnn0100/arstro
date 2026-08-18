@@ -19,19 +19,26 @@ and without), and full-res export (re-render) — all for free, with no special-
 ## Why the render service is a worker thread
 A photo edit at preview resolution can take tens of milliseconds; a project open decodes many
 images. Neither may block a 60 fps UI. So rendering runs on a `RenderService` worker (requests
-coalesced to the latest), decode runs on a `LoadJob` worker, and the UI only ever *polls* finished
-results. The cost is eventual-consistency (a frame lands a tick later); the payoff is a UI that
-never janks. The trade-off is deliberate: correctness of the animation loop over immediacy of a
-single edit.
+coalesced to the latest), decode runs on `cosmo::ProjectLoader`'s pool (N workers, N decided by the
+one `ThreadBudget`), and the UI only ever *polls* finished results — `CosmoService::pump()` once per
+frame, never blocking (R-SVC-6). The cost is eventual-consistency (a frame lands a tick later); the
+payoff is a UI that never janks. The trade-off is deliberate: correctness of the animation loop over
+immediacy of a single edit.
 
 ## Why the open/return is a three-phase transition
 Opening a project is the one unavoidably slow moment. Rather than freeze, the transition hides the
-latency inside motion: an **intro** that is pure animation (no I/O — the decode is deferred to
-`onLoadingReady` precisely so part 1 can't hitch), a **loading** beat that shows real progress, and
-a **reveal** that dissolves the loading screen as the editor materializes on the *same* dark
-backdrop with a single cross-faded wordmark, so nothing flashes or doubles. The return mirrors it
-so leaving a project is equally smooth, and the launcher is rebuilt behind the shown loading screen
-rather than as a click-time freeze.
+latency inside motion: an **intro** that is pure animation, a **loading** beat that shows real
+progress, and a **reveal** that dissolves the loading screen as the editor materializes on the
+*same* dark backdrop with a single cross-faded wordmark, so nothing flashes or doubles. The decode
+runs *underneath* all three rather than after the intro: dispatching `Command::ProjectOpen` makes
+`CosmoService` announce the open — which is what starts the transition — and then start the decode
+pool, in one call, so the intro is animation the UI thread has to itself while real work is already
+in flight. There used to be a deferral (an `onLoadingReady` hook the host installed, fired at the
+intro→loading boundary) so a full-resolution decode on the UI thread could not hitch part 1; once
+the decode moved to a worker pool and the per-image apply followed it off the UI thread, the hook
+bought nothing but 460 ms of a progress bar reading "Preparing…", and **R-LOADPERF removed it**. The
+return mirrors the open so leaving a project is equally smooth, and the launcher is rebuilt behind
+the shown loading screen rather than as a click-time freeze.
 
 ## Why everything animates
 Inherited from Artboard's taste rules: a single-frame jump reads as a glitch. Every visible

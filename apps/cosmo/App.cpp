@@ -1096,8 +1096,11 @@ namespace cosmo_v2
         mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs);
         mCoverFade.update(nowMs); mBarFade.update(nowMs);
 
-        // Part 1 (intro) -> Part 2 (loading): the intro is PURE ANIMATION; only now do
-        // we ask the host to start decoding, and begin fading the progress bar in.
+        // Part 1 (intro) -> Part 2 (loading). The intro is pure animation, but the decode is
+        // NOT waiting on it: the service starts the pool when it dispatches ProjectOpen, and
+        // the event that does so is what called beginOpenTransition — so pixels are already
+        // arriving as the first intro frame draws (R-LOADPERF, R-SVC-1). All this boundary
+        // does now is advance the phase and fade the progress bar in. D-1.
         if (mPhase == Phase::Intro && !mIntro.isAnimating())
         {
             mPhase = Phase::Loading;

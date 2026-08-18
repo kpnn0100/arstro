@@ -12,12 +12,10 @@ package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
     + main()
     - onDraw/onButton/onMotion/onScroll/onKey/onTick
   }
-  class LoadJob <<load, host half>> {
-    + loader : ProjectLoader        ' the decode moved down (R-SVC-1)
-    + nodeOf : int[]                ' entry index -> tree node (R-LOADUX-1)
-    + entryCount : size_t
-    + pollId : guint                ' GTK 15 ms consumer
-    - startEntriesLoad() / pollLoad()
+  class ServiceAdapter <<namespace, host>> {
+    + onServiceEvent(Host *, Event)   ' the ONLY host-side load logic left (R-SVC-4)
+    + startProjectLoad() / startImportLoad()   ' build a Command, dispatch it
+    + pollControl()                   ' socket lines -> the same dispatch a click uses
   }
   class OmpPin <<namespace, host>> {
     + pinNestedOpenMPForThisThread()  ' per-worker; per-thread ICV (D-12)
@@ -257,10 +255,9 @@ package "Artboard  (namespace artboard)  <<platform-free UI framework>>" as artb
 ' Relationships
 ' ─────────────────────────────────────────────────────────────
 GtkMain *--> App
-GtkMain *--> LoadJob
 GtkMain *--> CairoTarget
 GtkMain ..> Dialogs
-LoadJob ..> NativeImageDecoder
+ProjectLoader ..> NativeImageDecoder : one instance per produce() call
 CairoTarget ..|> IRenderTarget
 
 App *--> TopBar
@@ -323,7 +320,9 @@ History *--> HistoryNode
 App ..> ProjectStore
 App ..> PresetLibrary
 App ..> AppSettings : applySettings (no thread count — R-SVC-10)
-GtkMain *--> CosmoService : owns; onServiceEvent translates Events to animation (R-SVC-4)
+GtkMain *--> CosmoService : owns; ServiceAdapter translates Events to animation (R-SVC-4)
+GtkMain ..> ServiceAdapter
+CosmoService *--> ProjectLoader
 CosmoService o--> EditSession : borrows in S2, owns in S4
 CosmoService *--> AppModel
 CosmoService *--> ProjectLoader
@@ -332,7 +331,6 @@ CosmoService ..> Command : dispatch
 CosmoService ..> Event : emit
 AppModelCodec ..> AppModel
 GtkMain ..> ThreadBudget : setPercent / setExplicitEngineThreads (R-CPU-3)
-LoadJob *--> ProjectLoader
 ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)
 ProjectLoader ..> OrderedParallelLoad : pool + in-order hand-off
 ProjectLoader ..> IImageDecoder : one per produce() call

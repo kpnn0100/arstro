@@ -128,10 +128,16 @@ Editor  → renderEditor()
 ```
 
 - **Open** (`beginOpenTransition`): Intro is pure animation (wordmark flies, cover lifts from the
-  clicked card, name grows, stars fade in); at the intro boundary `onLoadingReady` fires and the
-  host starts the background decode; Loading advances the progress bar; when decode completes and a
-  minimum has elapsed, `beginReveal` dissolves the loading elements while the editor materializes
-  on the same dark backdrop with a wordmark cross-fade.
+  clicked card, name grows, stars fade in) — but the decode is **already running behind it**, because
+  `CosmoService::startProjectLoad` emits `ProjectOpening` (whose host handler begins the transition)
+  and then starts `ProjectLoader`'s pool, in one call. There is no `onLoadingReady` hook any more:
+  R-LOADPERF overlapped the decode with the intro, so the intro boundary only fades the progress bar
+  in. Loading advances that bar toward the real fraction, and its `kMinLoadingMs=260 ms` floor is
+  measured from `mLoadStartMs` — decode start, set in `beginOpenTransition` — rather than the end of
+  the intro, since the two now overlap. When the load completes and that minimum has elapsed (or
+  `kMaxLoadingMs=2500 ms` passes with at least one image usable, R-LOADPERF-3), `beginReveal`
+  dissolves the loading elements while the editor materializes on the same dark backdrop with a
+  wordmark cross-fade.
 - **Return** (`showHome` from the editor): the editor fades to the star-sky (ReturnEnter), a brief
   beat rebuilds the launcher behind it (ReturnLoad), then home fades in (ReturnExit); the wordmark
   flies back to the home slot.
@@ -197,14 +203,24 @@ App::renderEditor (next frame): tryAcquire(Frame) → cache mLastAfterFrame
 ```
 
 ### 6.2 Opening a project
+Since S1a/S2 (R-SVC-1) none of this lives in `linux_main.cpp`: the host names the path and the
+event stream animates the rest, so the same load runs with no window at all.
 ```
 Home card click → App.onOpenRecent captures the card rect → host.onOpenRecentRequested(path)
-  → startProjectLoad: readWorkspaceFile(.cmp) → beginOpenTransition + resetWorkspace
-  → (intro plays; at its end) onLoadingReady → spawn decodeWorker thread + pollLoad timer
-  → decodeWorker decodes each image off-thread; pollLoad applies results in order
-       (addWorkspaceGroup / openImageInto + applyParamsToSlot(params, history))
-  → all consumed → finishWorkspaceLoad + rememberProject + finishOpenTransition
-  → beginReveal → Editor
+  → host dispatches Command::ProjectOpen   (identically to `cosmo-cc`, a script, or the control
+    socket — the GUI has no privileged path, R-SVC-2)
+  → CosmoService::startProjectLoad: readWorkspaceFile(.cmp), then, in this order (D-13):
+       emit ScreenChanged + ProjectOpening   [host handler runs synchronously here:
+            App::beginOpenTransition + resetWorkspace + setLoadProgress(0,n)]
+       EditSession::resetWorkspace, then build the WHOLE pending node tree (R-LOADUX-1)
+       ProjectLoader::start(entries, ThreadBudget, decoderFactory, workerInit)
+            — the decode pool is now running while the intro animates (R-LOADPERF)
+  → CosmoService::pump(), once per frame, drains the loader strictly in entry order:
+       attachImage + applyParamsToSlot(params, history) + setSlotBypass
+       → emit EntryDecoded / EntryFailed, then LoadProgress   [host: cover, thumbs, bar, status]
+  → all consumed → finishWorkspaceLoad + ProjectStore::remember
+       → emit ScreenChanged + LoadFinished + ProjectOpened + Info "load.peak …"
+       [host, on LoadFinished: App::finishOpenTransition] → beginReveal → Editor
 ```
 
 ### 6.3 Selection / navigation

@@ -30,7 +30,16 @@ namespace cosmo
     class ProjectStore
     {
     public:
-        /** User config dir for cosmo_v2 (created if missing); e.g. ~/.config/cosmo_v2. */
+        /** User config dir for cosmo_v2 — settings.txt, recent.tsv and cosmo_v2.log all live
+         *  here. Created if missing. Resolved in this order (D-8; the reasoning, including
+         *  why an existing legacy directory is adopted rather than migrated, is the long
+         *  comment above `resolveConfigDir` in ProjectStore.cpp):
+         *    1. `$XDG_CONFIG_HOME/cosmo_v2` — the explicit override every scripted run uses
+         *       to sandbox itself, so it wins on every platform.
+         *    2. Windows only: a pre-D-8 directory that already holds state, adopted as-is.
+         *    3. Windows only: `%APPDATA%\cosmo_v2`, else `%USERPROFILE%\.config\cosmo_v2`.
+         *    4. `$HOME/.config/cosmo_v2` — POSIX, and MSYS2, which sets HOME.
+         *    5. `./.config/cosmo_v2` — last resort, when nothing is set. */
         static std::string configDir();
         /** Path of the recent-projects index file inside configDir(). */
         static std::string indexPath();

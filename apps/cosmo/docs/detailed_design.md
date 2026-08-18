@@ -29,10 +29,11 @@ Segment tree, the `EditSession`, and the host-callback seam.
 - Animated properties: `mScreenFade`, `mIntro`, `mReveal`, `mProgress`, `mCoverFade`, `mBarFade`,
   `mReturn`, `mEnterFade`, `mExitFade`.
 
-### 1.2 Transition durations (`App.cpp:16-34`, anonymous namespace)
+### 1.2 Transition durations (`App.cpp:23-35`, anonymous namespace)
 `kRailAnimMs=200`, `kIntroMs=460`, `kRevealMs=520`, `kProgressMs=200`, `kReturnMs=480`,
-`kEnterMs=300`, `kReturnHoldMs=200`, `kExitMs=320`, `kMinLoadingMs=260`,
-`kLoadingBg={0x14,0x14,0x14}`. Helper `lerpRect(a,b,t)`.
+`kEnterMs=300`, `kReturnHoldMs=200`, `kExitMs=320`, `kMinLoadingMs=260`, `kMaxLoadingMs=2500`
+(R-LOADPERF-3: a catalog too big to sit through gets in anyway and streams the rest behind the
+editor), `kLoadingBg={0x0A,0x0A,0x0A}`. Helper `lerpRect(a,b,t)`.
 
 ### 1.3 Render dispatch
 - `render(target, nowMs)`: sets `mNowMs`, updates `mScreenFade`; Home → advance + render `mHome`,
@@ -44,9 +45,12 @@ Segment tree, the `EditSession`, and the host-callback seam.
   mask-overlay active state from `RightColumn`; `if (renderService().tryAcquire(f) && f.width>0)` →
   cache `mLastAfterFrame`, `refreshPhotoForMode()`, feed histogram; fill background; `mRoot->render`
   + `renderOverlay`; screen-switch scrim.
-- `renderTransition` (`App.cpp:788-935`): the open transition (delegates to `renderReturn` if
-  `mReturning`). Phase advance Intro→Loading (fires `onLoadingReady` once), Loading→Reveal
-  (`mLoadComplete && elapsed≥kMinLoadingMs`), Reveal→Editor. Draws stars, flying cover, growing
+- `renderTransition` (`App.cpp:1092-1249`): the open transition (delegates to `renderReturn` if
+  `mReturning`). Phase advance Intro→Loading — which now only fades the progress bar in, because the
+  decode started back in `beginOpenTransition`'s call and there is no `onLoadingReady` left to fire
+  (R-LOADPERF) — then Loading→Reveal (`mLoadComplete && nowMs-mLoadStartMs ≥ kMinLoadingMs`, **or**
+  `mLoadUsable && nowMs-mLoadStartMs ≥ kMaxLoadingMs`; the elapsed time runs from decode start, not
+  from the end of the intro, since they overlap), then Reveal→Editor. Draws stars, flying cover, growing
   name, wordmark, progress bar; in Reveal, dissolves loading elements (`fadeOut=clamp(reveal/0.45)`)
   while the editor materializes (`fadeIn=clamp((reveal-0.40)/0.60)`) with a wordmark cross-fade.
 - `renderReturn` (`App.cpp:937-1004`): ReturnEnter (editor→star-sky, then `refreshHome()`),
@@ -56,8 +60,13 @@ Segment tree, the `EditSession`, and the host-callback seam.
 
 ### 1.4 Transition entry points
 `beginOpenTransition(name)`, `setLoadingCover(rgba,w,h)`, `setLoadProgress(done,total)`,
-`finishOpenTransition()`, `beginReveal()`, `showHome()`, `showEditor()`, `resetWorkspace()`,
-and the `std::function<void()> onLoadingReady` seam fired at the intro→loading boundary.
+`setLoadStatus(text)`, `setLoadUsable()`, `setStreamProgress(done,total)`, `finishOpenTransition()`,
+`beginReveal()`, `showHome()`, `showEditor()`, `resetWorkspace()`. There is **no** `onLoadingReady`
+seam any more (R-LOADPERF): the decode no longer waits for the intro to end, so there is nothing to
+call the host back about at the intro→loading boundary. These are driven by `CosmoService`'s events
+instead — `ProjectOpening`→`beginOpenTransition`+`resetWorkspace`, `EntryDecoded`→`setLoadingCover`
++`setLoadUsable`, `LoadProgress`→`setLoadStatus`+`setLoadProgress`+`setStreamProgress`,
+`LoadFinished`→`finishOpenTransition` (`linux_main.cpp:564-640`).
 
 ### 1.5 Public API (grouped)
 - **Rendering/input**: `App(w,h)`, `render`, `pointer(kind,x,y,button,timeMs,alt,shift,ctrl)`,
@@ -77,15 +86,18 @@ and the `std::function<void()> onLoadingReady` seam fired at the intro→loading
   `addWorkspaceMissingImage`, `applyParamsToSlot(slot,params[,history])`, `finishWorkspaceLoad`,
   `renameGroup`.
 
-### 1.6 Host-callback seam (`App.h`) → host wiring (`linux_main.cpp:849-877`)
+### 1.6 Host-callback seam (`App.h`) → host wiring (`linux_main.cpp:1265-1290`)
 `onOpenRequested→openDialog`, `onSaveAsRequested→saveSessionDialog`,
 `onSavePresetRequested→savePresetDialog`, `onExportPresetRequested→exportPresetDialog`,
 `onImportPresetRequested→importPresetDialog`, `onRenameGroupRequested→renameGroupDialog`,
 `onSaveWorkspaceRequested→saveWorkspaceDialog`, `onLoadWorkspaceRequested→loadWorkspaceDialog`,
 `onNewProjectRequested→newProjectDialog`, `onOpenProjectRequested→openProjectDialog`,
 `onImportCatalogRequested→importCatalogDialog`, `onOpenRecentRequested→startProjectLoad`,
-`onDecodeThumbnail→` decode+cache+`setHomeThumbnail`. `onLoadingReady` is set inside
-`startProjectLoad`. Note: `onSaveRequested` (`App.h:89`) is a declared-but-unwired seam.
+`onDecodeThumbnail→` decode+cache+`setHomeThumbnail`, `onCommand→CosmoService::dispatch` (S4a).
+The host's `startProjectLoad` is now three lines — it fills in a `Command::ProjectOpen` and
+dispatches it (`linux_main.cpp:662-668`) — so it installs no `onLoadingReady` callback; that seam is
+gone (R-LOADPERF) and the load is animated by the service's events (§1.4), not by a callback the
+host owns. Note: `onSaveRequested` (`App.h:129`) is a declared-but-unwired seam.
 
 ### 1.7 Construction & layout
 Ctor (`App.cpp:36-166`) builds `mRoot` and adds children in draw order: `TopBar` (→ `toggleRail`,

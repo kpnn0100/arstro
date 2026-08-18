@@ -206,10 +206,23 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
 - [x] **P0.8** `cosmo-cc` skeleton + `info` + `backends` + `check` — **done in S3**
 - [x] **P0.9** `cosmo-cc render` + `params` + `project` — **done in S3**
 - [x] **P0.10** `cosmo-cc export` + `bench` — **done in S3**
-- [ ] **P0.11** `docs/DEVELOPING.md` — the cold-start guide: where things are, which document decides
+- [x] **P0.11** `docs/DEVELOPING.md` — **written**, and every command in it was run before it was
+      written down. Declares **CMake into `build/` canonical on every platform**, because the
+      alternative turned out not to link at all (D-19). Records the `build/` vs `build-mingw64/`
+      distinction, the Release-vs-Debug trap in the same directory, the document map, the
+      invariants, and the closed-defect lessons with ids. Closes **D-9**
+- [x] **P0.12** `configDir()` outside MSYS2 — `XDG_CONFIG_HOME` first everywhere, then an adopted
+      pre-D-8 directory, then `%APPDATA%`/`%USERPROFILE%`, then `$HOME`, then the old relative path.
+      Adoption rather than migration, because this layer has no error channel to report a half-copy.
+      Closes **D-8**
+- [x] **P1 (part)** doc drift — **D-1 closed**, and it was six places rather than three: two of them
+      were requirement files contradicting *themselves* (DR-SCREEN-2 vs DR-LOADUX-4 in one file;
+      R-LOADING-0 vs its own R-LOADING-1 amendment), plus a puml class that no longer exists and a
+      comment in `App.cpp`. A full `file:line` anchor sweep of `detailed_design.md` remains
+- [ ] ~~**P0.11**~~ superseded above — the cold-start guide: where things are, which document decides
       what, the invariants, the worked commands, the mistakes already made (model it on
       `apps/genesis/docs/DEVELOPING.md`, which is the best example in this repo)
-- [ ] **P0.12** `configDir()` on Windows outside MSYS2 (D-8) — decide and document the rule
+
 
 **P0 is done when** a session on a fresh machine can, from a shell alone: build, run every test, render
 any screen to a PNG, dump the UI tree, replay a scripted interaction, drive the whole engine headlessly,

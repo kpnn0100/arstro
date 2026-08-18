@@ -79,9 +79,15 @@ sudden jump, and the heavy work is isolated to the middle part:
   `widgets/ProjectCard.h` `drawProjectCardChrome` (+ the cover blitted over its thumbnail band), the
   SAME renderer the home grid uses, so the flying item is pixel-identical to the grid item.
   Open-dialog opens (no source card) fade in at centre at a default card size (name only).
+  (**AMENDED (R-LOADPERF), recorded 2026-08-18:** the sentence "The decode does NOT start yet"
+  above is struck — it contradicted this requirement's own R-LOADING-1 amendment two bullets
+  below, which has been the truth since R-LOADPERF. The decode runs behind the intro. D-1.)
 - **R-LOADING-1 Part 2 — loading (status text + progress bar under the card).**
   **AMENDED (R-LOADPERF):** the decode now starts with the transition, not after the intro.
-  `onLoadingReady` fires as part 1 BEGINS. The deferral existed so a full-resolution decode on the
+  The `onLoadingReady` hook that used to carry this is **gone** (D-1): under R-SVC-1 the host
+  dispatches `Command::ProjectOpen`, and the `ProjectOpening` event it emits is what calls
+  `beginOpenTransition` — so the pool is already running as the first intro frame draws, and the
+  ordering is enforced by the service rather than by a hook the view had to remember to fire. The deferral existed so a full-resolution decode on the
   UI thread could not hitch the intro — but decoding moved to a worker pool and the per-image apply
   moved off the UI thread with it (R-LOADPERF-1/2), so there is nothing left to hitch on, and
   deferring only bought 460 ms of a dead progress bar reading "Preparing…". Overlapping them means

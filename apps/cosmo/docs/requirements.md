@@ -156,10 +156,14 @@ render HomeScreen + `mScreenFade` scrim; Loading → `renderTransition`; Editor 
 - **Intro** (pure animation, no I/O): the home `cosmo.` wordmark flies to the top-bar slot
   (46 px→13 px via `drawWordmark`), the clicked project's cover lifts from its card rect
   (`mCoverFrom`, from `HomeScreen::lastOpenCardRect`) toward center over a near-black star-sky
-  (`kLoadingBg={0x14,0x14,0x14}`), the project name grows (`sz=17+6·intro`), stars fade in. The
-  decode has **not** started. At `!mIntro.isAnimating()` the phase advances to Loading, the
-  progress bar fades in, and `onLoadingReady()` fires **once** (`App.cpp:797-803`).
-- **Loading** (progress only): the host starts the background decode only now; `setLoadProgress`
+  (`kLoadingBg={0x0A,0x0A,0x0A}`), the project name grows (`sz=17+6·intro`), stars fade in.
+  **The decode is already running behind it** — R-LOADPERF amended that, and the `onLoadingReady`
+  hook this entry used to describe no longer exists in the code (it contradicted DR-LOADUX-4 in
+  this same file; D-1). The decode starts when `CosmoService` dispatches `ProjectOpen`, whose
+  `ProjectOpening` event is what calls `beginOpenTransition` in the first place, so the pool is
+  already at work as the first intro frame draws. At `!mIntro.isAnimating()` the phase advances to
+  Loading and the progress bar fades in.
+- **Loading** (progress only): the decode continues and its results stream in; `setLoadProgress`
   eases `mProgress` toward `done/total`; the cover thumbnail fades in when supplied
   (`setLoadingCover` → `mCoverFade`). A minimum of `kMinLoadingMs=260 ms` keeps the bar from
   merely flashing (`App.cpp:806`).
