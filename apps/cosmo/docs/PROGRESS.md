@@ -190,7 +190,10 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
 - [x] **D-10** (was folded into P0.3/P0.11) `core/tests/TestMain.h` — a failing assert now exits
       non-zero with its message intact through a redirect, instead of hanging where a red suite
       looked like a slow one. Windows half code-verified only; confirm on MSYS2
-- [ ] **P0.4** `Log`: honour the level, add categories, `COSMO_LOG_LEVEL` / `COSMO_LOG_CATEGORIES` / `COSMO_LOG_FILE`, wire up the dead `setStderrEcho()`, route GLib through `g_log_set_default_handler`, Windows backtrace via dbghelp (closes D-2, D-3, D-4)
+- [x] **P0.4** `Log`: level honoured (compared before formatting), categories **derived** from the
+      event stream's dotted names so the two vocabularies cannot drift, all four env vars + flags,
+      `setStderrEcho()` alive, GLib routed through `g_log_set_default_handler`, Windows backtrace via
+      dbghelp resolved at runtime. **Closes D-2, D-3, D-4** — D-4's Windows branch code-verified only
 - [~] **P0.5** **Smaller than it was.** Session/load/selection/params/history/export are all logged
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed

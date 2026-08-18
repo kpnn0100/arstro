@@ -218,17 +218,6 @@ namespace
             g_printerr("cosmo_v2: could not register font %s\n", path.c_str());
     }
 
-    // Route every g_print/g_printerr through the file logger (chomping the
-    // trailing newline the format strings add), so all of the app's console
-    // diagnostics land in the log file too — no per-call-site changes needed.
-    std::string chomp(const char *s)
-    {
-        std::string t = s ? s : "";
-        while (!t.empty() && (t.back() == '\n' || t.back() == '\r')) t.pop_back();
-        return t;
-    }
-    void logPrintHandler(const gchar *s) { arstro::cosmo_v2::log::write(arstro::cosmo_v2::log::Level::Info, chomp(s)); }
-    void logPrinterrHandler(const gchar *s) { arstro::cosmo_v2::log::write(arstro::cosmo_v2::log::Level::Error, chomp(s)); }
 
     void registerBundledFonts()
     {
@@ -1247,10 +1236,15 @@ int main(int argc, char **argv)
 {
     // Logging first: capture startup, every g_print/g_printerr, and any fatal
     // signal's backtrace to ~/.config/cosmo_v2/cosmo_v2.log.
+    // P0.4: flags and env before init(), so even the session header states the level and
+    // categories in force — a run that filtered everything away must still explain why.
+    arstro::cosmo_v2::log::configureFromArgs(argc, argv);
     arstro::cosmo_v2::log::init();
     arstro::cosmo_v2::log::installCrashHandler();
-    g_set_print_handler(logPrintHandler);
-    g_set_printerr_handler(logPrinterrHandler);
+    // D-3: g_log's DEFAULT handler, not merely g_print/g_printerr — GTK, Cairo and
+    // GdkPixbuf all diagnose through g_warning/g_critical, which the old pair never saw,
+    // so exactly the messages worth having were the ones missing from the file.
+    arstro::cosmo_v2::log::installGlibHandler();
     LOGI("cosmo_v2 starting (%d args, log at %s)", argc - 1,
          arstro::cosmo_v2::log::path().c_str());
 
@@ -1357,6 +1351,8 @@ int main(int argc, char **argv)
         for (int i = 1; i < argc; ++i)
         {
             const std::string arg = argv[i];
+            // Before anything else, or --log-level=debug is collected as a photo to open.
+            if (int n = arstro::cosmo_v2::log::consumeArgs(argc, argv, i)) { i += n - 1; continue; }
             if (arg == "--control" && i + 1 < argc) { controlPath = argv[++i]; continue; }
             if (arg.rfind("--control=", 0) == 0) { controlPath = arg.substr(10); continue; }
             // --project is the same thing as a bare .cmp argument; it exists because a flag is

@@ -100,43 +100,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   it. `R-AGENT-*` will state the contract.
 - **Fix:** pending. P0.4 + P0.5.
 
-### D-4 — No stack trace on a Windows crash
-- **Area:** core / observability · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** inspect `apps/cosmo/Log.cpp` — the fatal-signal handler writes a banner for
-  SIGSEGV/SIGABRT/SIGFPE/SIGILL (+SIGBUS on POSIX) but the `backtrace_symbols_fd` frame dump is POSIX-only
-  and explicitly skipped on Windows.
-- **Expected:** a crash on the development host produces frames.
-- **Actual:** a signal name and nothing else — on the very host this project is developed on.
-- **Judgement:** defect against R-NFR / DR-NFR-5's intent (a crash leaves a diagnosable record).
-- **Fix:** pending. P0.4 (`CaptureStackBackTrace` + dbghelp).
-
-### D-3 — GTK/GLib warnings never reach the log file
-- **Area:** core / observability · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** `linux_main.cpp` installs `g_set_print_handler` and `g_set_printerr_handler`, but
-  `g_warning`/`g_critical`/`g_message` go through `g_log`, which neither handler sees.
-- **Expected:** DR-NFR-5 says every `g_print`/`g_printerr` is routed through the log; the same intent
-  covers GTK's own diagnostics, which are exactly what you need when rendering or a dialog misbehaves.
-- **Actual:** they hit stderr only and vanish from the file. `G_DEBUG=fatal-warnings` under gdb is the
-  only current way to catch them.
-- **Judgement:** defect — DR-NFR-5's intent is not met for the diagnostics that matter most.
-- **Fix:** pending. P0.4 (`g_log_set_default_handler`).
-
-### D-2 — The log level is never checked; `LOGD` and `setStderrEcho()` are dead
-- **Area:** core / observability · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** read `log::write()` in `apps/cosmo/Log.cpp` — no level comparison anywhere; then
-  `grep -rn "LOGD\|setStderrEcho" apps/cosmo/` — `LOGD` is never called and `setStderrEcho()` is never
-  called.
-- **Expected:** a debug mode that can be turned up for an investigation and down for normal use, per
-  `DR-NFR-5`'s "timestamped levelled log".
-- **Actual:** the levels are decorative. Every line is always written to both the file and stderr; there
-  is no verbosity flag, no category filter, no way to silence the stderr echo, and no way to relocate the
-  file except via `XDG_CONFIG_HOME`/`HOME`.
-- **Judgement:** defect — "levelled" is stated in DR-NFR-5 and is not implemented.
-- **Fix:** pending. P0.4.
-
 ### D-1 — Three design docs still describe the removed `onLoadingReady` hook
 - **Area:** core / docs · **Status:** Confirmed (by source inspection) · **Severity:** S4
 - **Found:** 2026-08-16, source inspection
@@ -153,6 +116,81 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Closed
+
+### D-2 — The log level is never checked; `LOGD` and `setStderrEcho()` are dead
+- **Area:** core / observability · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** read `log::write()` in `apps/cosmo/Log.cpp` — no level comparison anywhere; then
+  `grep -rn "LOGD\|setStderrEcho" apps/cosmo/` — `LOGD` is never called and `setStderrEcho()` is never
+  called.
+- **Expected:** a debug mode that can be turned up for an investigation and down for normal use, per
+  `DR-NFR-5`'s "timestamped levelled log".
+- **Actual:** the levels are decorative. Every line is always written to both the file and stderr; there
+  is no verbosity flag, no category filter, no way to silence the stderr echo, and no way to relocate the
+  file except via `XDG_CONFIG_HOME`/`HOME`.
+- **Judgement:** defect — "levelled" is stated in DR-NFR-5 and is not implemented.
+- **Fix:** commit `P04_HASH`. The level is compared in `writef()` **before** the `vsnprintf`, so a
+  suppressed `LOGD` costs a load and a branch. Added `Category{Ui,Input,Render,Load,Session,Export,
+  Gpu}`, the flags `--log-level` / `--debug` / `--log-categories` / `--log-file` / `--log-stderr`,
+  and `COSMO_LOG_LEVEL` / `COSMO_LOG_CATEGORIES` / `COSMO_LOG_FILE` / `COSMO_LOG_STDERR` for when
+  flags cannot be passed. `setStderrEcho()` finally has callers.
+  **A service Event's category is derived, not tabulated twice**: `categoryForEventName()` maps the
+  first segment of `eventName()`'s dotted name, and `write()` recovers it from the `[evt] ` prefix —
+  which is what makes the host's single `LOGI("%s", formatEvent(e))` filterable without editing it
+  (R-SVC-5). Two filter rules are deliberate: **Warn/Error ignore the category filter**, and
+  **uncategorised lines are never filtered**, or a category typo would silence exactly the GTK
+  warnings D-3 exists to surface.
+- **Verified** in the real app on a 2-image project: default prints `[ui]`/`[session]`/`[load]` with
+  today's shape otherwise unchanged; `COSMO_LOG_CATEGORIES=load` → 0 ui+session lines, 5 load lines;
+  `--log-level=warn` → 2 lines against a 16-line baseline. The config rides on the **session header**
+  rather than an INFO line, so `--log-level=warn` cannot filter away the explanation of why the log
+  looks empty.
+
+
+### D-3 — GTK/GLib warnings never reach the log file
+- **Area:** core / observability · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** `linux_main.cpp` installs `g_set_print_handler` and `g_set_printerr_handler`, but
+  `g_warning`/`g_critical`/`g_message` go through `g_log`, which neither handler sees.
+- **Expected:** DR-NFR-5 says every `g_print`/`g_printerr` is routed through the log; the same intent
+  covers GTK's own diagnostics, which are exactly what you need when rendering or a dialog misbehaves.
+- **Actual:** they hit stderr only and vanish from the file. `G_DEBUG=fatal-warnings` under gdb is the
+  only current way to catch them.
+- **Judgement:** defect — DR-NFR-5's intent is not met for the diagnostics that matter most.
+- **Fix:** commit `P04_HASH`. `log::installGlibHandler()` installs `g_log_set_default_handler`
+  alongside the print/printerr pair, mapping ERROR/CRITICAL→Error, WARNING→Warn, MESSAGE→Info,
+  INFO/DEBUG→Debug, all under `Category::Ui`, keeping GLib's domain in the text rather than
+  translating it into our category vocabulary. Two traps are commented in place: a
+  `G_LOG_USE_STRUCTURED` caller bypasses handlers entirely (GTK3 does not use it, and
+  `g_log_set_writer_func` may be called only once and aborts on a second call), and taking over the
+  default handler inherits `G_MESSAGES_DEBUG`'s filtering job — which is why `--log-level=debug` is
+  now noticeably chattier.
+- **Verified** against real GTK: `gtk_widget_show(nullptr)` lands in the file as
+  `[ERROR] [ui] Gtk: gtk_widget_show: assertion 'GTK_IS_WIDGET (widget)' failed`.
+
+
+### D-4 — No stack trace on a Windows crash
+- **Area:** core / observability · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** inspect `apps/cosmo/Log.cpp` — the fatal-signal handler writes a banner for
+  SIGSEGV/SIGABRT/SIGFPE/SIGILL (+SIGBUS on POSIX) but the `backtrace_symbols_fd` frame dump is POSIX-only
+  and explicitly skipped on Windows.
+- **Expected:** a crash on the development host produces frames.
+- **Actual:** a signal name and nothing else — on the very host this project is developed on.
+- **Judgement:** defect against R-NFR / DR-NFR-5's intent (a crash leaves a diagnosable record).
+- **Fix:** commit `P04_HASH`. `CaptureStackBackTrace` + dbghelp (`SymFromAddr`,
+  `SymGetLineFromAddr64`), with dbghelp resolved by `LoadLibraryA`/`GetProcAddress` — the OmpPin
+  pattern — so an optional diagnostic never becomes a link dependency. Symbols are initialised in
+  `installCrashHandler()`, **never in the handler**: `LoadLibrary`/`SymInitialize` take the loader
+  lock and the heap, which is exactly what an access violation has just walked over. The dump uses
+  hand-rolled hex into stack buffers, no malloc or printf, matching the POSIX path's discipline.
+  Also `SetUnhandledExceptionFilter`, because `signal(SIGSEGV)` on MinGW only fires for what the
+  CRT chooses to translate. Degrades to bare frame addresses where dbghelp is absent.
+- **NOT VERIFIED — code-reviewed only.** There is no mingw cross-compiler on the Linux dev host, so
+  this branch has never been compiled or run. Confirm on MSYS2 by faulting the app and checking the
+  log tail carries `#0 0x… name+0x… (file:line)`. The POSIX path was re-verified after the
+  refactor: SIGSEGV at `--log-level=error` still writes the banner and six frames.
+
 
 ### D-18 — `state print --params` inside a script was parsed and then ignored
 - **Area:** core / CLI · **Status:** **Fixed** (same session) · **Severity:** S3
