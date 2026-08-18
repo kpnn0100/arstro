@@ -14,6 +14,13 @@ namespace cosmo
     {
     public:
         DecodedImage decodeFile(const std::string &path) override;
+        /** D-24: LibRaw announces its own phases, so the bar can move inside one image. */
+        void setProgress(Progress p) override { mProgress = std::move(p); }
+
+      private:
+        Progress mProgress;
+
+      public:
 
         /** True if this path looks like a camera RAW file (by extension). */
         static bool isRawExtension(const std::string &path);

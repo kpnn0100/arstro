@@ -66,10 +66,62 @@ namespace cosmo
         }
 
 #ifdef COSMO_HAVE_LIBRAW
-        DecodedImage decodeRaw(const std::string &path)
+        /** LibRaw's own phase flags, mapped onto a monotonic 0..1 with the weights MEASURED on
+         *  this project's files rather than guessed (D-24): on a 26 MB X-Trans RAF, unpack is
+         *  ~0.7 s and `dcraw_process` ~7.5 s of an 8.3 s decode, so interpolation owns most of
+         *  the bar. A stage cosmo does not recognise moves nothing, which keeps it monotonic. */
+        double rawStageFraction(enum LibRaw_progress stage, const char *&nameOut)
+        {
+            switch (stage)
+            {
+                case LIBRAW_PROGRESS_OPEN:            nameOut = "opening";       return 0.01;
+                case LIBRAW_PROGRESS_IDENTIFY:        nameOut = "identifying";   return 0.03;
+                case LIBRAW_PROGRESS_LOAD_RAW:        nameOut = "reading raw";   return 0.10;
+                case LIBRAW_PROGRESS_RAW2_IMAGE:      nameOut = "unpacking";     return 0.14;
+                case LIBRAW_PROGRESS_PRE_INTERPOLATE: nameOut = "preparing";     return 0.18;
+                case LIBRAW_PROGRESS_INTERPOLATE:     nameOut = "demosaicing";   return 0.22;
+                case LIBRAW_PROGRESS_CONVERT_RGB:     nameOut = "colour";        return 0.92;
+                case LIBRAW_PROGRESS_STRETCH:         nameOut = "finishing";     return 0.96;
+                default:                              nameOut = nullptr;         return -1.0;
+            }
+        }
+
+        struct RawProgressCtx
+        {
+            IImageDecoder::Progress *sink = nullptr;
+            double last = 0.0;
+        };
+
+        /** LibRaw calls this from inside the decode, and for INTERPOLATE it calls it REPEATEDLY
+         *  with iteration/expected — which is the only genuinely fine-grained signal in the
+         *  whole pipeline, and it covers the 90% of the time that used to be invisible. */
+        int rawProgressCb(void *data, enum LibRaw_progress stage, int done, int expected)
+        {
+            auto *ctx = static_cast<RawProgressCtx *>(data);
+            if (!ctx || !ctx->sink || !*ctx->sink) return 0;
+            const char *name = nullptr;
+            const double base = rawStageFraction(stage, name);
+            if (base < 0) return 0;   // a stage we do not model moves nothing
+            double f = base;
+            if (stage == LIBRAW_PROGRESS_INTERPOLATE && expected > 0)
+            {
+                // 0.22 -> 0.92 spread across the demosaic's own iterations: this is the part
+                // that took 7.5 of 8.3 seconds with nothing to show for it.
+                const double t = (double)done / (double)expected;
+                f = 0.22 + 0.70 * (t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t));
+            }
+            if (f < ctx->last) f = ctx->last;   // monotonic, whatever order LibRaw reports in
+            ctx->last = f;
+            (*ctx->sink)(f, name);
+            return 0;   // non-zero would ask LibRaw to abort
+        }
+
+        DecodedImage decodeRaw(const std::string &path, IImageDecoder::Progress *sink)
         {
             DecodedImage out;
             LibRaw raw;
+            RawProgressCtx ctx{sink, 0.0};
+            if (sink && *sink) raw.set_progress_handler(rawProgressCb, &ctx);
             if (raw.open_file(path.c_str()) != LIBRAW_SUCCESS) return out;
             if (raw.unpack() != LIBRAW_SUCCESS) return out;
             if (raw.dcraw_process() != LIBRAW_SUCCESS) return out;
@@ -120,7 +172,7 @@ namespace cosmo
         DecodedImage out;
 #ifdef COSMO_HAVE_LIBRAW
         if (isRawExtension(path))
-            out = decodeRaw(path);
+            out = decodeRaw(path, &mProgress);
         else
             out = decodePixbuf(path);
 #else

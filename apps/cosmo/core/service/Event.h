@@ -40,6 +40,7 @@ namespace cosmo
             LoadProgress,     // a = done, b = total, text = entry name
             EntryStarted,     // a = index, b = started count, text = name — R-LOADUX-4 / D-22
             LoadStage,        // text = stage name
+            EntryProgress,    // a = index, ms = fraction*100, text = sub-stage — D-24
             EntryDecoded,     // a = index, b = slot, text = name
             EntryFailed,      // a = index, text = path
             LoadFinished,     // a = decoded, b = total

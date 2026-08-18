@@ -106,6 +106,7 @@ namespace cosmo
         {
             m.load.done = (int)mLoader.consumed();
             m.load.started = (int)mLoader.started();
+            m.load.partial = mLoader.partial();
             m.load.total = (int)mLoader.total();
             m.load.workers = mLoader.workers();
         }
@@ -231,7 +232,26 @@ namespace cosmo
         {
             mModel.load.started = (int)mLoader.started();
             const std::string name = i < mEntryNames.size() ? mEntryNames[i] : std::string();
+            // The model carries WHAT is loading, so a view composes its own label instead of
+            // each front end inventing one (R-SVC-3).
+            if (!name.empty()) mModel.load.status = name;
             emit(Event::Kind::EntryStarted, name, (int)i, mModel.load.started);
+        }
+
+        // Sub-image progress, coalesced by the loader to the newest value per entry (D-24).
+        mProgressScratch.clear();
+        mLoader.drainProgress(mProgressScratch);
+        for (const ProjectLoader::EntryProgress &ep : mProgressScratch)
+        {
+            mModel.load.partial = mLoader.partial();
+            mModel.load.entryStage = ep.stage;
+            ++mModel.revision;
+            Event e;
+            e.kind = Event::Kind::EntryProgress;
+            e.a = (int)ep.index;
+            e.ms = ep.fraction * 100.0;
+            e.text = ep.stage;
+            emit(e);
         }
 
         bool any = false;
@@ -260,6 +280,7 @@ namespace cosmo
                     emit(Event::Kind::EntryFailed, r.imagePath, (int)r.index);
                 }
             }
+            if (!r.name.empty()) mModel.load.status = r.name;
             emit(Event::Kind::LoadProgress, r.name, (int)mLoader.consumed(), (int)mLoader.total());
         }
         if (!any) return;
@@ -291,6 +312,8 @@ namespace cosmo
 
             mModel.screen = Screen::Editor;
             mModel.load.stage.clear();
+            mModel.load.entryStage.clear();
+            mModel.load.partial = 0.0;
             emit(Event::Kind::LoadStage, std::string());
             refreshModel();
             // Counted after refreshModel so `decoded` reflects the final tree, not the

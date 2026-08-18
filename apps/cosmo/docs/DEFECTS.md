@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-24**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-25**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,58 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
+- **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
+- **Found:** 2026-08-18, reported by the user: "loading 1 image takes too long … hard to track the
+  progress".
+- **Reproduce:** `apps/cosmo/core/tests/fixtures/raw_phase_timing.cpp` — the same call sequence
+  `NativeImageDecoder::decodeRaw` uses, timed per phase:
+  ```
+  full      open  0 ms | unpack 713 ms | process 7688 ms | make_mem 107 ms | total 8508 ms  (4170x6246)
+  half      open  0 ms | unpack 719 ms | process   97 ms | make_mem  38 ms | total  854 ms  (2085x3123)
+  fast      open  0 ms | unpack 709 ms | process  337 ms | make_mem 109 ms | total 1155 ms  (4170x6246)
+  ```
+  (`half` = `params.half_size=1`; `fast` = `params.user_qual=0`, bilinear at FULL resolution.)
+- **Expected:** opening an 18-photo project is trackable and does not take 36 s.
+- **Actual:** two findings, and the second one bounds what progress reporting can ever achieve.
+  **(a) 90% of a decode is a single `dcraw_process()` call** — 7688 of 8508 ms — and cosmo spends
+  it producing 4170×6246 pixels to render a **1600 px** preview. **(b) The X-Trans demosaic
+  reports no progress at all**: `grep -c RUN_CALLBACK src/demosaic/xtrans_demosaic.cpp` → **0**,
+  while the Bayer paths report every 256 rows (`misc_demosaic.cpp:271`). Every file in the reported
+  project is Fujifilm X-Trans, so LibRaw's own progress callback yields 10% → 92% with a
+  7.5-second gap and nothing legitimate to put in it.
+- **Judgement:** defect against R-LOADUX-4's intent. The requirement says report at the
+  granularity of the work and explicitly forbids inventing a percentage — and for X-Trans there
+  is no finer *honest* signal available, so **the reporting is already at its ceiling and the real
+  defect is the cost**. Fixing progress harder cannot help; fixing the decode can.
+- **Cause:** `decodeRaw` always runs LibRaw's highest-quality demosaic
+  (`NativeImageDecoder.cpp`, `dcraw_process()` with default params), for pixels that are
+  downsampled to `previewEdge` before anything is shown.
+- **RECOMMENDED FIX — not applied, needs a decision on export quality:**
+  Decode the LOAD with `imgdata.params.user_qual = 0` (bilinear) and keep the good demosaic for
+  output. **`user_qual` rather than `half_size`** because it leaves the dimensions **identical**
+  (4170×6246), so crop rectangles, normalised mask geometry and every slot's coordinates stay
+  valid and a full-quality re-decode can drop straight into the same slot later. 8.5 s → 1.2 s per
+  image, ~7×; the 18-image project goes from ~36 s to ~6 s, and no progress-reporting change is
+  needed to make that trackable.
+  Then one of two ways to get quality back, and **this is the user's call, not a technical one**:
+  1. **Re-decode at export.** Export already re-renders every image; decode it properly there.
+     Load is 7× faster, output unchanged, export pays ~7 s per image once.
+  2. **Re-decode in the background after the load.** The editor is usable in 6 s and each slot's
+     pixels are quietly replaced at full quality as they arrive. Best experience, most work — it
+     needs `RenderService` to accept replacement pixels for a live slot, and a rule for what
+     happens if the user exports mid-upgrade.
+  A third option — ship bilinear everywhere — is **not** recommended: it silently lowers output
+  quality, which is the one thing a photo editor may not trade for speed.
+  Preferred: (1) first, because it is contained and reversible, then (2) if the pause at export
+  proves annoying. Either way the test is a decode-timing assertion plus an export-path check that
+  the exported pixels came from the quality decode.
+- **Partially addressed already** by commit `MST_HASH`, which is worth having on its own: the decode
+  seam now carries LibRaw's phase callbacks, so a **Bayer** file (Canon, Nikon, Sony) reports every
+  256 rows of demosaic and the bar moves inside one image. For X-Trans it yields the honest
+  10%/92% steps plus a named stage. That is the ceiling of reporting; the cost is the remaining
+  work.
 
 ### D-17 — The control socket does nothing on Windows
 - **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3

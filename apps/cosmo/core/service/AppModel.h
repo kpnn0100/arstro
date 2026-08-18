@@ -90,6 +90,23 @@ namespace cosmo
         /** In flight right now: claimed but not yet applied. The view draws this slice of the
          *  bar as work rather than as emptiness, which is what stops it reading as a stall. */
         int inFlight() const { return started > done ? started - done : 0; }
+
+        /** Summed sub-image progress of the in-flight entries, 0..inFlight() (D-24). One RAF
+         *  decode is ~8.3 s and 90% of it is a single `dcraw_process()`, so `done` alone could
+         *  not move for nine seconds at a stretch; LibRaw reports its own demosaic iterations
+         *  and this is their sum. */
+        double partial = 0.0;
+        /** What the bar should actually fill to: finished entries plus the fraction of the ones
+         *  being worked on. Monotonic within a load, and never past 1. */
+        double fraction() const
+        {
+            if (total <= 0) return 0.0;
+            const double f = ((double)done + partial) / (double)total;
+            return f < 0.0 ? 0.0 : (f > 1.0 ? 1.0 : f);
+        }
+        /** The deepest stage any in-flight entry has reached — "demosaicing", "reading raw" —
+         *  so the status line can say what is happening, not just to which file. */
+        std::string entryStage;
     };
 
     struct ExportModel

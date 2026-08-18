@@ -625,6 +625,20 @@ namespace
                 gtk_widget_queue_draw(a->area);
                 break;
 
+            case K::EntryProgress:
+            {
+                // D-24: the bar moves inside a single image now — LibRaw reports its own
+                // demosaic iterations, which is the 90% of a RAF decode that used to be
+                // invisible. The status line gains the sub-stage, so nine seconds of
+                // "demosaicing" reads as work rather than as a hang.
+                const auto &lm = a->svc.model().load;
+                a->app.setLoadFraction(lm.fraction());
+                if (!lm.entryStage.empty() && !lm.status.empty())
+                    a->app.setLoadStatus(lm.status + "  \xE2\x80\x94  " + lm.entryStage);
+                gtk_widget_queue_draw(a->area);
+                break;
+            }
+
             case K::LoadProgress:
                 if (!e.text.empty()) a->app.setLoadStatus("Loading  " + e.text);
                 a->app.setLoadProgress(e.a, e.b);

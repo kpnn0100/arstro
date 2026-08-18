@@ -94,6 +94,10 @@ namespace cosmo_v2
         void setLoadingCover(const uint8_t *rgba, int w, int h);
         /** Update the loading progress bar (0 = start, done==total = complete). */
         void setLoadProgress(int done, int total);
+        /** D-24: the bar's real target — finished entries PLUS the fraction of the ones being
+         *  decoded. `done/total` could not move for nine seconds at a time, because one RAF is
+         *  ~8.3 s and 90% of it is one `dcraw_process()` call. */
+        void setLoadFraction(double fraction);
         /** R-LOADUX-4: entries a worker has CLAIMED, and the named stage. The bar draws
          *  `started-done` as work in progress rather than as emptiness, which is what stops a
          *  9-second first decode reading as a stall (D-22). */

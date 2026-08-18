@@ -19,6 +19,7 @@ namespace cosmo
             case Event::Kind::LoadProgress: return "load.progress";
             case Event::Kind::EntryStarted: return "entry.started";
             case Event::Kind::LoadStage: return "load.stage";
+            case Event::Kind::EntryProgress: return "entry.progress";
             case Event::Kind::EntryDecoded: return "entry.decoded";
             case Event::Kind::EntryFailed: return "entry.failed";
             case Event::Kind::LoadFinished: return "load.finished";
@@ -52,6 +53,10 @@ namespace cosmo
             case Event::Kind::EntryDecoded: o << " index=" << e.a << " slot=" << e.b << " name=" << e.text; break;
             case Event::Kind::EntryStarted: o << " index=" << e.a << " started=" << e.b << " name=" << e.text; break;
             case Event::Kind::LoadStage: o << " stage=" << e.text; break;
+            case Event::Kind::EntryProgress:
+                o << " index=" << e.a << " pct=" << (int)(e.ms + 0.5);
+                if (!e.text.empty()) o << " stage=" << e.text;
+                break;
             case Event::Kind::EntryFailed: o << " index=" << e.a << " path=" << e.text; break;
             case Event::Kind::LoadFinished: o << " decoded=" << e.a << " total=" << e.b; break;
             case Event::Kind::SelectionChanged: o << " node=" << e.a << " slot=" << e.b; break;

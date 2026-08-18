@@ -107,6 +107,16 @@ namespace cosmo
         /** How many entries have been claimed — finished ones included. */
         std::size_t started() const;
 
+        /** Sub-image progress for the entries currently being decoded (D-24). One RAF takes
+         *  ~8.3 s and 90% of it is a single `dcraw_process()`, so per-entry reporting left the
+         *  bar unable to move for nine seconds at a time. Recorded on the worker under the same
+         *  mutex as the claims and drained by whoever pumps, because the service is
+         *  single-threaded by contract (R-SVC-6). */
+        struct EntryProgress { std::size_t index = 0; double fraction = 0.0; std::string stage; };
+        void drainProgress(std::vector<EntryProgress> &out);
+        /** Sum of the in-flight fractions — what a bar adds to `consumed()` to move smoothly. */
+        double partial() const;
+
         /** Stop the workers, join them, and release the budget. Idempotent. */
         void stop();
 
@@ -117,6 +127,8 @@ namespace cosmo
         mutable std::mutex mStartedMu;
         std::vector<std::size_t> mStartedQueue;   // claimed, not yet reported
         std::size_t mStartedCount = 0;
+        std::vector<EntryProgress> mProgressQueue;          // coalesced: newest per index
+        std::vector<double> mFraction;                     // by entry index, 0..1
 
         std::vector<EditSession::WorkspaceEntry> mEntries;
         OrderedParallelLoad<Result> mPipe;

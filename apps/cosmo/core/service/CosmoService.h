@@ -121,6 +121,7 @@ namespace cosmo
         std::vector<int> mNodeOf;      // entry index -> tree node, for the running load
         std::vector<std::string> mEntryNames;      // by entry index; `entries` is moved into the loader
         std::vector<std::size_t> mStartedScratch;  // reused per pump, so a claim costs no allocation
+        std::vector<ProjectLoader::EntryProgress> mProgressScratch;
         std::string mLoadPath;
         bool mSaveOnFinish = false;
         bool mQuit = false;

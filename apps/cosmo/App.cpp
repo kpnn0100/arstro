@@ -1054,6 +1054,15 @@ namespace cosmo_v2
         mProgress.animateTo(f, kProgressMs, Easing::EaseOutCubic, mNowMs);
     }
 
+    void App::setLoadFraction(double fraction)
+    {
+        const double f = fraction < 0.0 ? 0.0 : (fraction > 1.0 ? 1.0 : fraction);
+        // Short and linear: this arrives many times a second now, so easing each step would
+        // lag behind the truth instead of smoothing it.
+        if (f + 1e-6 < mProgress.value()) return;   // monotonic — never walk a load backwards
+        mProgress.animateTo(f, 90.0, Easing::EaseOutCubic, mNowMs);
+    }
+
     void App::setLoadInFlight(int started, const std::string &stage)
     {
         mLoadStarted = started;

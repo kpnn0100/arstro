@@ -21,6 +21,7 @@ namespace cosmo
         if (mEntries.empty()) return;
 
         mBudget = &budget;
+        mFraction.assign(mEntries.size(), 0.0);
         mWorkers = budget.beginLoad();   // the ONE conversion of the user's percentage (R-SVC-10)
 
         mPipe.start(
@@ -29,6 +30,19 @@ namespace cosmo
                 // Stateless and per-call, as before: a decoder instance is free next to a
                 // RAW decode, and per-call is provably per-thread without a thread_local.
                 auto dec = makeDecoder ? makeDecoder() : nullptr;
+                if (dec)
+                {
+                    // Coalesced on the way in: LibRaw calls back many times per second per
+                    // worker, and a UI that pumps at 60 Hz wants the newest value per entry,
+                    // not every one of them (D-24).
+                    dec->setProgress([this, i](double f, const char *stage) {
+                        std::lock_guard<std::mutex> lk(mStartedMu);
+                        if (i < mFraction.size()) mFraction[i] = f;
+                        for (auto &e : mProgressQueue)
+                            if (e.index == i) { e.fraction = f; e.stage = stage ? stage : ""; return; }
+                        mProgressQueue.push_back({i, f, stage ? stage : ""});
+                    });
+                }
                 mBudget->producerEnter();          // measured peak, not assumed (R-CPU-4)
                 {
                     // R-LOADUX-4: the claim is the earliest honest signal there is. A RAW decode
@@ -75,6 +89,21 @@ namespace cosmo
         return r;
     }
 
+    void ProjectLoader::drainProgress(std::vector<EntryProgress> &out)
+    {
+        std::lock_guard<std::mutex> lk(mStartedMu);
+        out.insert(out.end(), mProgressQueue.begin(), mProgressQueue.end());
+        mProgressQueue.clear();
+    }
+
+    double ProjectLoader::partial() const
+    {
+        std::lock_guard<std::mutex> lk(mStartedMu);
+        double sum = 0.0;
+        for (std::size_t i = mPipe.consumed(); i < mFraction.size(); ++i) sum += mFraction[i];
+        return sum;
+    }
+
     void ProjectLoader::drainStarted(std::vector<std::size_t> &out)
     {
         std::lock_guard<std::mutex> lk(mStartedMu);
@@ -91,6 +120,10 @@ namespace cosmo
     bool ProjectLoader::poll(Result &out)
     {
         if (!mPipe.tryConsume(out)) return false;
+        {
+            std::lock_guard<std::mutex> lk(mStartedMu);
+            if (out.index < mFraction.size()) mFraction[out.index] = 1.0;
+        }
         // The last result out is the end of the load: hand the engine its threads back
         // immediately rather than waiting for the host to call stop() (R-SVC-10).
         if (mPipe.finished()) releaseBudget();
@@ -107,6 +140,8 @@ namespace cosmo
             std::lock_guard<std::mutex> lk(mStartedMu);
             mStartedQueue.clear();
             mStartedCount = 0;
+            mProgressQueue.clear();
+            mFraction.clear();
         }
     }
 
