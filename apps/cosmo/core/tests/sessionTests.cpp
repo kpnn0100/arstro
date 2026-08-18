@@ -971,10 +971,8 @@ namespace
         using namespace arstro::cosmo;
         const std::string path = "/tmp/cosmo_svc_open.cmp";
         writeFakeProject(path, 5, /*withGroup=*/true, /*withMissing=*/true);
-
-        EditSession session;
         ThreadBudget budget(25, 8);
-        CosmoService svc(session, budget);
+        CosmoService svc(budget);
         svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
 
         std::vector<std::string> log;
@@ -1025,10 +1023,8 @@ namespace
         using namespace arstro::cosmo;
         const std::string path = "/tmp/cosmo_svc_cmds.cmp";
         writeFakeProject(path, 3, false, false);
-
-        EditSession session;
         ThreadBudget budget(50, 8);
-        CosmoService svc(session, budget);
+        CosmoService svc(budget);
         svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
         std::string err;
         assert(svc.dispatchText("project open " + path, err));
@@ -1102,9 +1098,8 @@ namespace
         stable.params = true;
 
         auto runOne = [&](int extraPumps) {
-            EditSession session;
             ThreadBudget budget(50, 8);
-            CosmoService svc(session, budget);
+            CosmoService svc(budget);
             svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
             std::string err;
             svc.dispatchText("project open " + path, err);
@@ -1121,9 +1116,8 @@ namespace
         assert(cli == gui && "same commands -> same state, whatever the frame count");
 
         // And the unstable dump really does differ, or the exclusion above proves nothing.
-        EditSession s3;
         ThreadBudget b3(50, 8);
-        CosmoService svc3(s3, b3);
+        CosmoService svc3(b3);
         svc3.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
         std::string err;
         svc3.dispatchText("project open " + path, err);
@@ -1223,18 +1217,19 @@ namespace
         using namespace arstro::cosmo;
         const std::string path = "/tmp/cosmo_svc_d13.cmp";
         writeFakeProject(path, 6, false, false);
-
-        EditSession session;
         ThreadBudget budget(50, 8);
-        CosmoService svc(session, budget);
+        CosmoService svc(budget);
         svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
 
         int opening = 0;
         svc.subscribe([&](const Event &e) {
             if (e.kind != Event::Kind::ProjectOpening) return;
             ++opening;
-            // What the GTK host does, and what broke it.
-            session.resetWorkspace();
+            // What the GTK host does, and what broke it. Reached through session() because
+            // that is precisely the shape of the hazard: a view holding the session and
+            // clearing it from inside an event handler (S4c did not remove the hazard, it
+            // only changed who owns the object).
+            svc.session().resetWorkspace();
         });
 
         std::string err;
@@ -1262,9 +1257,8 @@ namespace
         // done piecemeal by the host — percentage into the budget, edge into the session, model
         // never told — so `settings*` reported defaults while `budget*` reported the truth.
         // Two halves of one answer disagreeing is worse than either being wrong.
-        EditSession session;
         ThreadBudget budget(50, 16);
-        CosmoService svc(session, budget);
+        CosmoService svc(budget);
 
         AppSettings s;
         s.cpuPercent = 25;
@@ -1299,6 +1293,59 @@ namespace
         assert(d.find("budgetPeakDecode=") == std::string::npos);
         assert(d.find("settingsCpuPercent=25") != std::string::npos && "but keeps real state");
         printf("[PASS] settings_and_dump_options_reach_the_model\n");
+    }
+
+    // D-21: `frameSeq` promised "a test can wait for one" and nothing ever incremented it,
+    // because the VIEW polled `tryAcquire` — which MOVES the frame out, so the service could
+    // not also poll without stealing frames. S4c makes the service the single owner, and this
+    // is the test that could not have been written before it.
+    void test_a_preview_frame_reaches_the_model()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_frame.cmp";
+        writeFakeProject(path, 2, false, false);
+
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+
+        int frameEvents = 0;
+        svc.subscribe([&](const Event &e) { if (e.kind == Event::Kind::FrameReady) ++frameEvents; });
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 2);
+
+        // An edit must produce a frame. Pump until one lands rather than sleeping a fixed
+        // amount: the render worker's timing is not ours to predict (R-SVC-6).
+        const unsigned before = svc.model().frameSeq;
+        assert(svc.dispatchText("set exposure=1.5", err) && err.empty());
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        double now = 0;
+        while (svc.model().frameSeq == before && std::chrono::steady_clock::now() < deadline)
+        {
+            svc.pump(now);
+            now += 16.0;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        assert(svc.model().frameSeq > before && "a preview landed and the model says so");
+        assert(frameEvents > 0 && "and an event announced it");
+        assert(svc.model().frameWidth > 0 && svc.model().frameHeight > 0);
+        assert(svc.model().frameSlot >= 0);
+
+        // The pixels come out exactly once: whoever takes the frame owns it, and a second
+        // take finds nothing. That is the invariant that made two pollers impossible.
+        arstro::RenderService::Frame f;
+        assert(svc.takeFrame(f) && f.width > 0 && (int)f.rgba.size() == f.width * f.height * 4);
+        assert(!svc.takeFrame(f) && "a frame is handed over once, not queued");
+
+        // R-SVC-3: the model carries metadata, never pixels — the frame block is ints only.
+        assert(svc.model().ownParams.exposure == 1.5f && svc.model().hasEditTarget);
+
+        std::filesystem::remove(path);
+        printf("[PASS] a_preview_frame_reaches_the_model (seq %u -> %u, %d events)\n",
+               before, svc.model().frameSeq, frameEvents);
     }
 }
 
@@ -1336,6 +1383,7 @@ int main()
     test_two_services_dump_the_same_state();
     test_a_view_may_reset_on_project_opening();
     test_settings_and_dump_options_reach_the_model();
+    test_a_preview_frame_reaches_the_model();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

@@ -192,7 +192,10 @@ Rollback is per-commit: each step leaves both paths compiling, and S1-S3 do not 
    `AppModel` dump** (modulo animation fields, which the dump excludes by design).
 2. Every behaviour in `PARITY.md` and every `R-*` requirement is reachable by a `Command`; the
    command list is generated from the enum, so a behaviour with no command fails a test.
-3. `grep -n "mSession\.\|EditParams" apps/cosmo/widgets/*.cpp` is empty.
+3. `grep -n "mSession\.\|\.session()" apps/cosmo/widgets/*.cpp` is empty. **(Corrected from the
+   original, which also grepped `EditParams` — a widget legitimately *holds* `EditParams` values
+   read from the model, so that spelling counted the intended end state as a failure. The check is
+   about reaching past the service, not about the type's name.)**
 4. A load's peak concurrency, measured, is ≤ the chosen budget (§3 item 6).
 5. The acceptance test in §2.3 runs unattended in CI-shaped form: launch, drive over the socket,
    assert the event stream, exit non-zero on a missing event.

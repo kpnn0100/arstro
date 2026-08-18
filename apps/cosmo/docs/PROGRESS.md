@@ -54,7 +54,7 @@ project are byte-identical (R-SVC-9), which found and fixed D-14 + D-15.
 | M | Milestone | State |
 |---|---|---|
 | U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
-| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **in progress** — S1, S2, S3, S4a, S5 done; only S4b/S4c left. Supersedes P0 |
+| S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **COMPLETE** — S1…S5. The §5 checks pass: identical dumps, the gate at 0, every behaviour a command, budget measured, acceptance unattended |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
 | P2 | PARITY backlog: crop overlay (#3), preset picker (#4), settings (#5), split-drag (#6) | see `PARITY.md` |
@@ -142,10 +142,15 @@ core first.
         seam (`params()`/`effectiveParams()`, legitimate under R-SVC-4 and S4c's job), and 7 are
         the documented unwired fallback. **Converted-surface writes reaching past the service: 0.**
 
-  - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
-        `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
-        It also converts RightColumn's 11 remaining reads into `AppModel` reads, which is what
-        finally takes the gate to 0 rather than "0 writes".
+  - [x] **S4c** **DONE.** `CosmoService` owns the `EditSession`; a front end constructs the budget,
+        then the service, then the view — declaration order in `Host` and in the shot `Rig` is now
+        the architecture, bottom-up. `App` holds `CosmoService&` plus a *reference* member
+        `mSession = mSvc.session()`, which is what let 95 not-yet-migrated call sites compile
+        unchanged while the ownership actually moved. The frame path moved too, closing **D-21**.
+        **The gate is 0**: `grep "mSession\.\|\.session()" widgets/*.cpp` is empty — RightColumn
+        reads `AppModel` and, with no App above it, dispatches straight to the service it holds
+        rather than writing to a session it no longer has.
+
   - [ ] **Watch item from S4b-2**, not yet a defect: now that every control emits a command, each
         `set` re-enters `App::syncFromSession()` synchronously, so a **crop drag** and a **mask
         feather drag** get `XformPanel::setState` / `MaskPanel::setMasks` pushed back at them

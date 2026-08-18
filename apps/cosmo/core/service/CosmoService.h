@@ -52,7 +52,11 @@ namespace cosmo
         using ImageWriter = std::function<bool(const std::string &outPath, const std::string &sourcePath,
                                                const uint8_t *rgba, int w, int h, std::string &err)>;
 
-        CosmoService(EditSession &session, ThreadBudget &budget);
+        /** **The service owns the session** (S4c). It borrowed one through S2/S3 so the GUI
+         *  could keep working while the migration ran; owning it is what lets the frame path
+         *  live here too, which is what D-21 needed. A front end now constructs the service
+         *  first and hands it to the view, rather than the other way round. */
+        explicit CosmoService(ThreadBudget &budget);
 
         // ── wiring the host supplies once ──
         void setDecoderFactory(ProjectLoader::DecoderFactory f) { mMakeDecoder = std::move(f); }
@@ -79,9 +83,15 @@ namespace cosmo
         void pump(double nowMs);
         const AppModel &model() const { return mModel; }
 
-        // ── transitional, removed in S4 ──
-        /** The GUI still renders from the session directly. Every use of this is a line S4
-         *  has to delete; it exists so S2 can land without rewriting App in the same step. */
+        /** Pick up the newest preview, if one landed since the last call. The view calls this
+         *  instead of `RenderService::tryAcquire` — there must be exactly ONE caller of that,
+         *  because it moves the frame out, and making it the service is what lets a headless
+         *  front end see frames at all (D-21). */
+        bool takeFrame(RenderService::Frame &out);
+
+        // ── transitional ──
+        /** The GUI still renders from the session directly for everything the model does not
+         *  carry yet. Every use is a line still to delete; the count is tracked in PROGRESS. */
         EditSession &session() { return mSession; }
         bool loadActive() const { return mLoader.active(); }
         /** True once a Quit command has been dispatched, so a CLI loop knows to stop. */
@@ -99,7 +109,7 @@ namespace cosmo
         bool applySettingsFields(const Command &c);
         bool runExport(const Command &c);
 
-        EditSession &mSession;
+        EditSession mSession;          // owned as of S4c
         ThreadBudget &mBudget;
         ProjectLoader mLoader;
         ProjectLoader::DecoderFactory mMakeDecoder;
@@ -112,7 +122,8 @@ namespace cosmo
         std::string mLoadPath;
         bool mSaveOnFinish = false;
         bool mQuit = false;
-        unsigned mFrameSeq = 0;
+        RenderService::Frame mFrame;   // the newest acquired preview, awaiting takeFrame()
+        bool mFrameWaiting = false;
     };
 }
 }

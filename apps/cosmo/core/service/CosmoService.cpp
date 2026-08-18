@@ -21,8 +21,7 @@ namespace cosmo
         }
     }
 
-    CosmoService::CosmoService(EditSession &session, ThreadBudget &budget)
-        : mSession(session), mBudget(budget)
+    CosmoService::CosmoService(ThreadBudget &budget) : mBudget(budget)
     {
         refreshRecents();
         refreshModel();
@@ -86,6 +85,8 @@ namespace cosmo
         m.editGroup = mSession.editGroup();
         m.selectedNode = sel.empty() ? mSession.editTargetNode() : sel.front();
         m.params = mSession.effectiveEditParams();
+        if (const EditParams *own = mSession.curParams()) { m.ownParams = *own; m.hasEditTarget = true; }
+        else { m.ownParams = EditParams{}; m.hasEditTarget = false; }
         m.projectPath = mSession.workspacePath();
         if (!m.projectPath.empty()) m.projectName = stemOf(m.projectPath);
 
@@ -177,8 +178,35 @@ namespace cosmo
         return true;
     }
 
+    bool CosmoService::takeFrame(RenderService::Frame &out)
+    {
+        if (!mFrameWaiting) return false;
+        out = std::move(mFrame);
+        mFrameWaiting = false;
+        return true;
+    }
+
     void CosmoService::pump(double)
     {
+        // Frames first, and UNCONDITIONALLY — this used to sit behind the load's early-return,
+        // which is half of why nothing ever produced `frameSeq` (D-21). `tryAcquire` moves the
+        // frame out, so exactly one owner may poll it; that owner is the service now, and the
+        // view takes it via takeFrame(). A frame that arrives while one is still waiting simply
+        // replaces it: RenderService coalesces upstream anyway, and a view that has not drawn
+        // yet wants the newest, not a queue.
+        RenderService::Frame f;
+        if (mSession.renderService().tryAcquire(f) && f.width > 0)
+        {
+            mFrame = std::move(f);
+            mFrameWaiting = true;
+            mModel.frameSlot = mSession.currentSlot();
+            mModel.frameWidth = mFrame.width;
+            mModel.frameHeight = mFrame.height;
+            ++mModel.frameSeq;
+            ++mModel.revision;
+            emit(Event::Kind::FrameReady, std::string(), mModel.frameSlot, mFrame.width);
+        }
+
         if (!mLoader.active() && mLoader.total() == 0) return;
 
         bool any = false;

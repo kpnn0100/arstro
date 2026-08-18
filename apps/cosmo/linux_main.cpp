@@ -106,14 +106,15 @@ namespace
     {
         GtkWidget *window = nullptr;
         GtkWidget *area = nullptr;
-        App app{(double)kW, (double)kH};
+        // S4c: declaration order IS construction order, and it matters — the budget is the
+        // service's, and the service is App's. The application is built bottom-up and the view
+        // last, which is the shape R-SVC-1 always described and only now compiles.
+        arstro::cosmo::ThreadBudget budget;
+        arstro::cosmo::CosmoService svc{budget};
+        App app{svc, (double)kW, (double)kH};
         artboard::CairoTarget target;
         NativeImageDecoder decoder;
         gint64 startUs = 0;
-        // R-SVC-1: the application lives here, not in App and not in this file. Constructed
-        // once main() has an App to borrow the session from; every project open, edit,
-        // selection and export goes through dispatch().
-        std::unique_ptr<arstro::cosmo::CosmoService> svc;
         // R-SVC-8: only present when --control was given; a closed channel is inert, so
         // nothing below has to check whether the app is being driven from outside.
         arstro::cosmo_v2::ControlChannel control;
@@ -123,10 +124,6 @@ namespace
         std::unique_ptr<ExportJob> exportJob;        // active batch export (nullptr when idle, R-EXPORT-6)
         // The in-force preferences, mirrored here because the load runs in the host.
         arstro::cosmo::AppSettings settings;
-        // R-SVC-10: the ONE owner of the CPU budget. The decode pool and the engine's
-        // thread count are both slices of `budget.total()`, so they can no longer each
-        // take the whole percentage and add up to twice it (D-11).
-        arstro::cosmo::ThreadBudget budget;
 
         // ── R-SPLASH: the application-open animation, in its OWN borderless window ──
         GtkWidget *splashWindow = nullptr;
@@ -587,7 +584,7 @@ namespace
                     auto it = a->thumbs.find(a->app.sourcePathForSlot(slot));
                     if (it != a->thumbs.end() && it->second.ok())
                         a->app.setLoadingCover(it->second.rgba.data(), it->second.width, it->second.height);
-                    else if (const auto *t = a->svc->session().thumbForSlot(slot))
+                    else if (const auto *t = a->svc.session().thumbForSlot(slot))
                         a->app.setLoadingCover(t->rgba.data(), t->w, t->h);
                     a->loadCoverSent = true;
                 }
@@ -653,7 +650,7 @@ namespace
         arstro::cosmo::Command c;
         c.kind = arstro::cosmo::Command::Kind::ProjectOpen;
         c.path = path;
-        a->svc->dispatch(c);
+        a->svc.dispatch(c);
     }
 
     // Import Catalog: the same animated load, except the .cmp does not exist yet, so the
@@ -664,7 +661,7 @@ namespace
         c.kind = arstro::cosmo::Command::Kind::Import;
         c.paths = std::move(images);
         c.path = cmpPath;
-        a->svc->dispatch(c);
+        a->svc.dispatch(c);
     }
 
     void addCmpFilter(GtkWidget *d)
@@ -962,7 +959,7 @@ namespace
         // a script does, because it has no way to know the intro is still playing — would
         // otherwise have its commands sit unread in the kernel buffer for the length of the
         // animation, and `wait` on the far end would look like a hang (R-SVC-8).
-        if (a->svc) a->svc->pump(nowMs(*a));
+        a->svc.pump(nowMs(*a));
         pollControl(a);
 
         if (a->splash->introDone() && !a->startupWorkBegun)
@@ -1060,7 +1057,7 @@ namespace
     // (CosmoService.cpp documents both as front-end concerns).
     void pollControl(Host *a)
     {
-        if (!a->control.isOpen() || !a->svc) return;
+        if (!a->control.isOpen()) return;
         a->control.poll([a](const std::string &line) {
             std::string err;
             const arstro::cosmo::Command c = arstro::cosmo::parseCommand(line, err);
@@ -1081,12 +1078,12 @@ namespace
                 o.stable = c.field("stable") == "1";    // D-14
                 o.params = c.field("params") == "1";
                 a->control.broadcast("[evt] state.begin");
-                a->control.broadcast(arstro::cosmo::formatModel(a->svc->model(), o));
+                a->control.broadcast(arstro::cosmo::formatModel(a->svc.model(), o));
                 a->control.broadcast("[evt] state.end");
                 return;
             }
-            a->svc->dispatch(c);   // a rejection already reaches the client via the event sink
-            if (a->svc->quitRequested()) gtk_main_quit();
+            a->svc.dispatch(c);   // a rejection already reaches the client via the event sink
+            if (a->svc.quitRequested()) gtk_main_quit();
         });
     }
 
@@ -1096,7 +1093,7 @@ namespace
         // One pump, every frame, unconditionally (R-SVC-6). The old code added and removed a
         // dedicated 15 ms GTK source per load; a service that is always pumped cannot forget
         // to be, and pump() is a cheap early-out when nothing is in flight.
-        if (a->svc) a->svc->pump(nowMs(*a));
+        a->svc.pump(nowMs(*a));
         pollControl(a);
         gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
@@ -1305,26 +1302,25 @@ int main(int argc, char **argv)
     // before any of this, and moving that ownership in the same step as introducing the
     // service would mean rewriting both at once with nothing working in between. S4 moves it
     // and App becomes a view holding a CosmoService&.
-    host.svc = std::make_unique<arstro::cosmo::CosmoService>(host.app.session(), host.budget);
-    host.svc->setDecoderFactory(
+    host.svc.setDecoderFactory(
         [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
     // Per-thread, on the thread: the OpenMP count is a per-thread ICV, which is why the old
     // env-var pin in main() bound nothing (D-12).
-    host.svc->setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
-    host.svc->setImageWriter([](const std::string &out, const std::string &src, const uint8_t *rgba,
+    host.svc.setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
+    host.svc.setImageWriter([](const std::string &out, const std::string &src, const uint8_t *rgba,
                                int w, int h, std::string &err) {
         // The encoder stays in the host — a codec inside cosmo_core would break the Android
         // and WASM builds (R-SVC-7). ExportWriter already owns the metadata rules.
         App::ExportRequest req;   // defaults: JPEG q92, EXIF kept, profile embedded
         return arstro::cosmo_v2::exporter::write(req, rgba, w, h, out, src, err);
     });
-    host.svc->subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
+    host.svc.subscribe([&host](const arstro::cosmo::Event &e) { onServiceEvent(&host, e); });
     // One call, so the budget, the session and the model can never disagree about what is in
     // force (D-15). App::applySettings above still seeds the widgets, which is a view concern.
-    host.svc->applySettings(host.settings);
+    host.svc.applySettings(host.settings);
     // R-SVC-2: the view's outbound channel. A menu item, a shortcut and a line on the control
     // socket now travel the same path, so they cannot behave differently.
-    host.app.onCommand = [&host](arstro::cosmo::Command c) { host.svc->dispatch(c); };
+    host.app.onCommand = [&host](arstro::cosmo::Command c) { host.svc.dispatch(c); };
     host.settings.cpuPercent = host.budget.percent();
     LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),
@@ -1388,7 +1384,7 @@ int main(int argc, char **argv)
                  host.control.path().c_str());
             // R-SVC-3/5: one event stream, one format. The socket, the log and a --watch
             // client all see the identical line.
-            host.svc->subscribe([&host](const arstro::cosmo::Event &e) {
+            host.svc.subscribe([&host](const arstro::cosmo::Event &e) {
                 host.control.broadcast(arstro::cosmo::formatEvent(e));
             });
         }

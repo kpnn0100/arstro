@@ -134,6 +134,13 @@ namespace cosmo
          *  which honours bypass on ancestors but not on the target itself. Deliberately not
          *  `effectiveParams`: those two differ on purpose (see EditEngine's invariants). */
         EditParams params;
+        /** The target's OWN params — `curParams()`. Both are in the model because the panels
+         *  need both and they differ: a slider shows the stacked reach (`params`) while an edit
+         *  is applied to the item's own value (`ownParams`). `hasEditTarget` is false when
+         *  nothing is selected, which is what `curParams()` returning nullptr used to say — a
+         *  view cannot read a null through a value model, so the flag carries it (R-SVC-3). */
+        EditParams ownParams;
+        bool hasEditTarget = false;
 
         HistoryModel history;
         LoadModel load;
@@ -141,12 +148,11 @@ namespace cosmo
         AppSettings settings;
         BudgetModel budget;
 
-        /** Metadata only — see rule 1. **`frameSeq` is not produced yet (D-21)**: the VIEW polls
-         *  `RenderService::tryAcquire`, and that call MOVES the frame out, so the service cannot
-         *  also poll without stealing frames from the view. Until the frame path moves down in
-         *  S4c, a headless harness has no signal that a preview landed and must settle on a
-         *  timer instead. Documented rather than quietly left, because this comment used to
-         *  claim "a test can wait for one" and a harness author believed it. */
+        /** Metadata only — see rule 1. `frameSeq` rises each time a preview lands, so a view
+         *  knows to re-fetch and a test can wait for one. **The service is what polls** (S4c):
+         *  `tryAcquire` MOVES the frame out, so exactly one owner may call it, and while that
+         *  owner was the view no headless front end could tell a preview had arrived (D-21).
+         *  `pump()` acquires; `takeFrame()` hands it on. */
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;
         unsigned frameSeq = 0;

@@ -90,7 +90,8 @@ namespace cosmo_v2
         }
     }
 
-    RightColumn::RightColumn(cosmo::EditSession &session) : mSession(session)
+    RightColumn::RightColumn(cosmo::CosmoService &svc)
+        : mSvc(svc)
     {
         clipToBounds = true;
         width.set(kWidth);
@@ -298,19 +299,10 @@ namespace cosmo_v2
         c.kind = cosmo::Command::Kind::Set;
         c.fields = std::move(fields);
         if (emitCommand(c)) return;
-        // Unwired: replay it through the params CODEC rather than a key->field table of our
-        // own — which is exactly what CosmoService::applySetFields does, and for the same
-        // reason. Two tables would start accepting two different sets of names the first
-        // time one of them grew a field.
-        if (EditParams *p = mSession.curParams())
-        {
-            std::string text;
-            for (const auto &kv : c.fields) text += kv.first + "=" + kv.second + "\n";
-            EditParams probe = *p;
-            if (!deserializeParams(text, probe)) return;
-            *p = probe;
-            mSession.submit();
-        }
+        // No App above us (a shot rig, a test): dispatch straight to the service we already
+        // hold. Before S4c this branch wrote to the session, because an unwired column had
+        // nothing else to reach — it does now, so the widget layer touches no session at all.
+        mSvc.dispatch(c);
     }
 
     namespace
@@ -347,14 +339,7 @@ namespace cosmo_v2
         c.index = index;
         c.fields = std::move(fields);
         if (emitCommand(c)) return;
-        // Unwired: write the WHOLE mask the panel just built instead of replaying `fields`.
-        // Replaying would mean a second copy of CosmoService's twenty-key mask table living
-        // in a widget, and the edit lands identically either way.
-        if (auto *p = mSession.curParams(); p && index >= 0 && index < (int)p->masks.size())
-        {
-            p->masks[index] = whole;
-            mSession.submit();
-        }
+        mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }
 
     void RightColumn::sendMaskDelete(int index)
@@ -363,16 +348,19 @@ namespace cosmo_v2
         c.kind = cosmo::Command::Kind::MaskDelete;
         c.index = index;
         if (emitCommand(c)) return;
-        if (auto *p = mSession.curParams(); p && index >= 0 && index < (int)p->masks.size())
-        {
-            p->masks.erase(p->masks.begin() + index);
-            mSession.submit();
-        }
+        mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }
 
     // ── the way in: reading what we render (R-SVC-4) ──────────────────────────────
-    const EditParams *RightColumn::params() const { return mSession.curParams(); }
-    EditParams RightColumn::effectiveParams() const { return mSession.effectiveEditParams(); }
+    // S4c: both reads come from the MODEL now, so this widget no longer knows an EditSession
+    // exists except on the unwired fallback path. `hasEditTarget` carries what a null
+    // `curParams()` used to say — a value model cannot hand back a pointer (R-SVC-3).
+    const EditParams *RightColumn::params() const
+    {
+        const cosmo::AppModel &m = mSvc.model();
+        return m.hasEditTarget ? &m.ownParams : nullptr;
+    }
+    EditParams RightColumn::effectiveParams() const { return mSvc.model().params; }
 
     void RightColumn::syncToSlot()
     {
@@ -446,11 +434,7 @@ namespace cosmo_v2
         c.index = mSelectedMask;
         c.fields = maskFieldsImpl(m);
         if (emitCommand(c)) return;
-        if (auto *p = mSession.curParams(); p && mSelectedMask < (int)p->masks.size())
-        {
-            p->masks[mSelectedMask] = m;
-            mSession.submit();
-        }
+        mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }
 
     void RightColumn::scrollActivePanel(double delta)

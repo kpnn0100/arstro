@@ -41,8 +41,8 @@ namespace cosmo_v2
         }
     }
 
-    App::App(double width, double height)
-        : mW(width), mH(height), mTheme(makeCosmoV2Theme()), mAccent(palette::primary())
+    App::App(cosmo::CosmoService &svc, double width, double height)
+        : mSvc(svc), mSession(svc.session()), mW(width), mH(height), mTheme(makeCosmoV2Theme()), mAccent(palette::primary())
     {
         mRoot = std::make_shared<Segment>();
         mRoot->width.set(width);
@@ -116,7 +116,7 @@ namespace cosmo_v2
         };
         mRoot->addChild(mCenterStage);
 
-        mRightColumn = std::make_shared<RightColumn>(mSession);
+        mRightColumn = std::make_shared<RightColumn>(mSvc);
         // R-SVC-2 (S4b-2): every control in the right column now leaves as a Command. The
         // lambda RETURNS whether it was dispatched, so the two-hop channel composes — a `void`
         // sink would report success merely because App's own channel was set, and drop the
@@ -714,7 +714,10 @@ namespace cosmo_v2
         // behind the modal anyway, so simply leave the last frame on screen until the
         // export finishes.
         RenderService::Frame f;
-        if (!exportInProgress() && mSession.renderService().tryAcquire(f) && f.width > 0)
+        // S4c: the SERVICE polls the engine and hands the frame on. There must be exactly one
+        // caller of tryAcquire — it moves the frame out — and while that caller was this view,
+        // no headless front end could tell a preview had landed (D-21).
+        if (!exportInProgress() && mSvc.takeFrame(f) && f.width > 0)
         {
             mLastAfterFrame = f;
             refreshPhotoForMode();

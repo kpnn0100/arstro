@@ -13,6 +13,7 @@
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../core/EditSession.h"
 #include "../core/service/Command.h"
+#include "../core/service/CosmoService.h"
 #include "HistogramWidget.h"
 #include "EditStackTabs.h"
 #include "ParamPanel.h"
@@ -39,7 +40,10 @@ namespace cosmo_v2
         // Merged edit-stack tabs (Basic+Detail, Mask, Mixer+Curve, Grade, Xform).
         static constexpr int kTabBasicDetail = 0, kTabMask = 1, kTabColor = 2, kTabGrade = 3, kTabXform = 4;
 
-        explicit RightColumn(cosmo::EditSession &session);
+        /** S4c: the column reads the MODEL and emits Commands. It holds no `EditSession` at
+         *  all — with no App above it (a shot rig, a test) it dispatches straight to the
+         *  service, which is the same destination App's channel reaches. */
+        explicit RightColumn(cosmo::CosmoService &svc);
 
         /** R-SVC-2: the column's outbound channel, mirroring `App::onCommand`. Every edit
          *  this panel makes leaves as a Command instead of being written into an EditParams,
@@ -117,7 +121,7 @@ namespace cosmo_v2
         const EditParams *params() const;
         EditParams effectiveParams() const;
 
-        cosmo::EditSession &mSession;
+        cosmo::CosmoService &mSvc;   // S4c: the column holds the service and NOTHING else
         std::shared_ptr<HistogramWidget> mHistogram;
         std::shared_ptr<EditStackTabs> mTabs;
         std::shared_ptr<ParamPanel> mBasicDetail;  // merged Basic + Detail (one scrollable list)

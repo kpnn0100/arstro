@@ -19,61 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-21 — `AppModel::frameSeq` and `Event::FrameReady` are declared and never produced
-- **Area:** core / service · **Status:** Confirmed · **Severity:** S3
-- **Found:** 2026-08-18, by the shot renderer's author, who read `AppModel.h`'s "a test can wait
-  for one" and built against it.
-- **Reproduce:** `grep -rn "mFrameSeq\|FrameReady" apps/cosmo/core/service/` — `mFrameSeq` is a
-  member nothing increments and `Event::Kind::FrameReady` has no emitter.
-- **Expected:** a front end can tell when a preview has landed, which is what the field's own
-  comment promised.
-- **Actual:** nothing ever moves. `cosmo_shots` has to settle on a real-time floor instead, which
-  is most of why the project shots take ~10 s of padding.
-- **Judgement:** defect against R-SVC-3 — a declared field that is never written is a lie, the
-  same species as D-15, except this one had documentation asserting the capability.
-- **Cause, and why it is not a one-liner:** the **view** polls `RenderService::tryAcquire`, and
-  that call **moves** the frame out. The service cannot also poll without stealing frames from the
-  view, so this cannot be fixed by having `pump()` look — it needs the frame path to belong to the
-  service, which is **S4c**. The comment in `AppModel.h` now says so instead of promising.
-- **Fix:** pending, in S4c. Either the service polls and the view reads frames from it, or the view
-  reports each acquisition back through a narrow `noteFrame()`. Prefer the former: it is the same
-  ownership move S4c is already making, and the latter leaves a second path to keep in sync.
- — `EditParamsIO`'s serializers are file-local, so a widget mirrors their formats
-- **Area:** core / service · **Status:** Confirmed · **Severity:** S3
-- **Found:** 2026-08-18, converting `RightColumn` to commands (S4b-2).
-- **Reproduce:** `grep -n "mixerStr\|maskStr" core/ImageProcessing/src/engine/EditParamsIO.cpp` —
-  both are in an anonymous namespace. Then look at the anonymous namespace in
-  `apps/cosmo/widgets/RightColumn.cpp`, which re-implements the point-list and mask-geometry
-  formats so it can build a `set curve=…` / `mask set …` command.
-- **Expected:** one serializer per format, as R-SVC-5 requires of the command grammar.
-- **Actual:** two, in different layers, that must agree by hand. They agree today — the acceptance
-  test's `--params` diff would catch it if they stopped — but nothing makes them.
-- **Judgement:** defect against R-SVC-5's spirit. The rule is that a text form is *generated* from
-  the typed one by a single codec; a second implementation is exactly what it forbids, and it is
-  the same species as D-16, where the front-end-owned `wait` grew two vocabularies because the
-  codec never routed it.
-- **Fix:** pending. Export `serializeCurve()` / `serializeMask()` (or a small `EditParamsText`
-  surface) from `EditParamsIO.h` and delete `RightColumn`'s copies. **Note this is a submodule
-  change** — `core/ImageProcessing` is a git submodule, so it is two commits: the submodule first,
-  then the pointer bump. That is why it was not folded into S4b-2.
- — `build.sh`'s cosmo desktop path does not link
-- **Area:** core / build · **Status:** Confirmed (reproduced) · **Severity:** S4
-- **Found:** 2026-08-18, while writing `DEVELOPING.md` for D-9 — the guide could not honestly
-  describe a second build path without trying it.
-- **Reproduce:** `./build.sh --project cosmo --target linux-native-app`
-- **Expected:** either it builds cosmo, or it is removed.
-- **Actual:** `multiple definition of 'main'`. Its source glob is every `.cpp` under `apps/cosmo`
-  except `tests/`, and since S3 that set contains two entry points — `linux_main.cpp` and
-  `cli/main.cpp`. D-9 described this path as *divergent*; it is in fact **broken**, and has been
-  since `cosmo-cc` landed.
-- **Judgement:** defect. A build path that cannot build is worse than none, because its presence
-  implies a choice that does not exist.
-- **Fix:** pending. Two honest options, and `DEVELOPING.md` declares CMake canonical either way:
-  teach the glob to exclude alternate entry points, or delete cosmo's desktop target from
-  `build.sh` and let the script cover only what it can still build. Prefer deletion unless someone
-  relies on it — the maintenance cost is a second define list beside CMake's, exactly the ODR trap
-  the decisions log warns about.
-
 ### D-17 — The control socket does nothing on Windows
 - **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
 - **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
@@ -113,6 +58,34 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+### D-21 — `AppModel::frameSeq` and `Event::FrameReady` are declared and never produced
+- **Area:** core / service · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-18, by the shot renderer's author, who read `AppModel.h`'s "a test can wait
+  for one" and built against it.
+- **Reproduce:** `grep -rn "mFrameSeq\|FrameReady" apps/cosmo/core/service/` — `mFrameSeq` is a
+  member nothing increments and `Event::Kind::FrameReady` has no emitter.
+- **Expected:** a front end can tell when a preview has landed, which is what the field's own
+  comment promised.
+- **Actual:** nothing ever moves. `cosmo_shots` has to settle on a real-time floor instead, which
+  is most of why the project shots take ~10 s of padding.
+- **Judgement:** defect against R-SVC-3 — a declared field that is never written is a lie, the
+  same species as D-15, except this one had documentation asserting the capability.
+- **Cause, and why it is not a one-liner:** the **view** polls `RenderService::tryAcquire`, and
+  that call **moves** the frame out. The service cannot also poll without stealing frames from the
+  view, so this cannot be fixed by having `pump()` look — it needs the frame path to belong to the
+  service, which is **S4c**. The comment in `AppModel.h` now says so instead of promising.
+- **Fix:** commit `S4C_HASH`, in S4c as predicted, and by the first of the two routes: the
+  **service polls** and the view takes the frame from it. `pump()` calls `tryAcquire` — moved out
+  from behind the load's early-return, which was the other half of why nothing ever moved — stores
+  the frame, fills `frameSlot/Width/Height`, increments `frameSeq` and emits `FrameReady`;
+  `takeFrame()` hands it to whoever draws. Exactly one owner calls `tryAcquire`, which is the
+  invariant that made two pollers impossible in the first place.
+- **Guarded by:** `a_preview_frame_reaches_the_model`, which opens a project headlessly, dispatches
+  `set exposure=1.5`, pumps until `frameSeq` moves, and asserts the event fired, the metadata is
+  filled, the pixels come out **once** (a second `takeFrame` finds nothing), and the model carries
+  no pixels. `[PASS] a_preview_frame_reaches_the_model (seq 0 -> 1, 1 events)` — a test that could
+  not have been written before the ownership moved.
+
 ### D-7 — No headless UI render is possible; the CMake glob structurally prevents one
 - **Area:** design / build · **Status:** **Fixed** · **Severity:** S3
 - **Found:** 2026-08-16, source inspection

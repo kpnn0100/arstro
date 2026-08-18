@@ -195,9 +195,10 @@ namespace
 
     struct Host
     {
-        EditSession session;
+        // S4c: the service owns the session; a front end constructs the budget, then the
+        // service, and holds nothing else.
         ThreadBudget budget;
-        CosmoService svc{session, budget};
+        CosmoService svc{budget};
 
         Options opt;
         WriteOptions write;

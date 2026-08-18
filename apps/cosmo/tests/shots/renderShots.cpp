@@ -224,35 +224,37 @@ namespace
      *  picture of a code path nobody ships. */
     struct Rig
     {
+        // S4c: declaration order is construction order — budget, service, then the view that
+        // draws it. Identical to linux_main.cpp's Host, deliberately: a shot must take the
+        // same path a click does.
+        arstro::cosmo::ThreadBudget budget;
+        CosmoService svc{budget};
         App app;
         // One adapter for the whole run, re-bound per frame — see Frame's comment: the
         // image ids the widgets hold belong to this object, not to a surface.
         artboard::CairoTarget target;
-        arstro::cosmo::ThreadBudget budget;
-        std::unique_ptr<CosmoService> svc;
         NativeImageDecoder decoder;
         std::map<std::string, DecodedImage> covers;   // decoded first-images, keyed by path
         double now = 0.0;
         bool coverSent = false;
         bool revealed = false;
 
-        Rig(int w, int h) : app((double)w, (double)h)
+        Rig(int w, int h) : app(svc, (double)w, (double)h)
         {
-            svc = std::make_unique<CosmoService>(app.session(), budget);
-            svc->setDecoderFactory(
+            svc.setDecoderFactory(
                 [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
             // Per-THREAD, on the thread: the OpenMP count is a per-thread ICV, so a front
             // end that drops this pin takes the whole machine however the pool was sized
             // (R-CPU-2c, D-12). A shot run is a front end like any other.
-            svc->setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
-            svc->subscribe([this](const Event &e) { onEvent(e); });
+            svc.setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
+            svc.subscribe([this](const Event &e) { onEvent(e); });
 
             // Whatever the (scratch) config dir says, applied through the one way in so the
             // shots start from the same state the window would (D-15).
             const AppSettings s = AppSettings::load();
             app.applySettings(s);
-            svc->applySettings(s);
-            app.onCommand = [this](Command c) { svc->dispatch(c); };
+            svc.applySettings(s);
+            app.onCommand = [this](Command c) { svc.dispatch(c); };
 
             // The launcher asks the host to decode each recent's cover; here that is a
             // synchronous decode, which is also what makes the home shots deterministic.
@@ -316,7 +318,7 @@ namespace
                 app.registerThumb(slot);
                 if (!coverSent && !app.hasLoadingCover())
                 {
-                    if (const auto *t = svc->session().thumbForSlot(slot))
+                    if (const auto *t = svc.session().thumbForSlot(slot))
                         app.setLoadingCover(t->rgba.data(), t->w, t->h);
                     coverSent = true;
                 }
@@ -362,7 +364,7 @@ namespace
         {
             for (int i = 0; i < n; ++i)
             {
-                svc->pump(now);
+                svc.pump(now);
                 f.clear();
                 target.setContext(f.cr());   // the host's onDraw, minus the window
                 app.render(target, now);
@@ -395,9 +397,9 @@ namespace
             Command c;
             c.kind = Command::Kind::ProjectOpen;
             c.path = cmp;
-            if (!svc->dispatch(c)) return false;
+            if (!svc.dispatch(c)) return false;
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSec);
-            while (svc->model().load.active)
+            while (svc.model().load.active)
             {
                 step(f, 1);
                 if (std::chrono::steady_clock::now() > deadline) return false;
@@ -634,7 +636,7 @@ namespace
         Frame f(w, h);
         rig.app.beginOpenTransition("Tokyo Streets");
         rig.app.finishOpenTransition();       // the load is already done; only the animation runs
-        if (const auto *t = rig.svc->session().thumbForSlot(0))
+        if (const auto *t = rig.svc.session().thumbForSlot(0))
             rig.app.setLoadingCover(t->rgba.data(), t->w, t->h);
         rig.app.setLoadProgress(12, 12);
         rig.settle(f, kIntroMs + 16.0);       // the frame the reveal starts on

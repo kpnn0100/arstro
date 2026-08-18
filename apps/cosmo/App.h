@@ -9,6 +9,7 @@
 #include "../../core/Artboard/include/artboard/artboard.h"
 #include "core/EditSession.h"
 #include "core/service/Command.h"
+#include "core/service/CosmoService.h"
 #include "Theme.h"
 #include "widgets/TopBar.h"
 #include "widgets/LeftRail.h"
@@ -37,7 +38,11 @@ namespace cosmo_v2
     class App
     {
     public:
-        App(double width, double height);
+        /** S4c: the service is constructed FIRST and handed in — App is a view of it, not its
+         *  owner. `mSession` below is a reference into the service's session, which is what
+         *  lets the call sites still being migrated compile unchanged while the ownership has
+         *  already moved. Every one of them is a line still to delete. */
+        App(cosmo::CosmoService &svc, double width, double height);
 
         void render(artboard::IRenderTarget &target, double nowMs);
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
@@ -52,6 +57,7 @@ namespace cosmo_v2
          *  CosmoService's header for why ownership moves in S4 rather than now. Every other
          *  use of this from outside App is a line S4 deletes. */
         cosmo::EditSession &session() { return mSession; }
+        cosmo::CosmoService &service() { return mSvc; }
 
         /** Re-push every panel + the browse chrome from the session — for when a COMMAND
          *  changed the edit state from outside the widgets (a script, or an agent on the
@@ -266,7 +272,8 @@ namespace cosmo_v2
         // One source of truth for the preset-rail open state; the toggle
         // highlight and the rail width both observe() it so they can't desync.
         artboard::Observable<bool> mRailOpen{true};
-        cosmo::EditSession mSession;
+        cosmo::CosmoService &mSvc;      // S4c: the application; App draws it
+        cosmo::EditSession &mSession;   // = mSvc.session(), for the not-yet-migrated call sites
         cosmo::AppSettings mSettings;   // R-SETTINGS-4: what is in force + what gets saved
         EditParams mClipboard;       // Develop ▸ Copy/Paste Settings clipboard
         bool mHasClipboard = false;
