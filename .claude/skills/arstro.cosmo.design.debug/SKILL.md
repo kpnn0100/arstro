@@ -1,6 +1,6 @@
 ---
 name: arstro.cosmo.design.debug
-description: Use to investigate any suspected visual, layout, motion or interaction problem in the cosmo photo editor — a dead button, a panel that is empty or cut off, a list that cannot be scrolled, text overflowing, something that snaps instead of animating, a layout that breaks on resize, a modal that swallows clicks, wrong colours or spacing. Turns a vague human report ("that panel looks wrong") into a reproduction using the debug log, a UI tree dump and headless PNG renders, judges it against the requirements and the design rules, files it in the committed defect list, and commits. Invoke for "the UI is broken", "this button does nothing", "the list is cut off", "it flickers", "why does this jump", "/arstro.cosmo.design.debug". For engine, session, load or export problems use arstro.cosmo.core.debug.
+description: Use to investigate any suspected visual, layout, motion or interaction problem in the cosmo photo editor — a dead button, a panel that is empty or cut off, a list that cannot be scrolled, text overflowing, something that snaps instead of animating, a layout that breaks on resize, a modal that swallows clicks, wrong colours or spacing. Turns a vague human report ("that panel looks wrong") into a reproduction using the debug log, a UI tree dump and headless PNG renders, judges it against the requirements and the design rules, files it in the committed defect list, RECOMMENDS a fix without applying one, and commits. It never edits product code — landing a fix is `arstro.cosmo.design.implement`, which the user must invoke. Invoke for "the UI is broken", "this button does nothing", "the list is cut off", "it flickers", "why does this jump", "/arstro.cosmo.design.debug". For engine, session, load or export problems use arstro.cosmo.core.debug.
 ---
 
 # arstro.cosmo.design.debug
@@ -10,8 +10,19 @@ specific situation: *the user is looking at the app, something is wrong, and the
 Your job is to turn that description into a rendered frame, a log excerpt and a UI tree dump — evidence
 you can read — and then into a committed defect entry with a repeatable command.
 
-Fixing is `arstro.cosmo.design.implement`'s job. This skill may fix what it reproduced when the fix is
-small and obvious, but **filing is mandatory and fixing is optional.** Never leave the finding in chat.
+**This skill does not fix anything.** It reproduces, judges, files and *recommends* — then stops.
+`arstro.cosmo.design.implement` lands the fix, and the user invokes it; a recommendation is not
+permission to act on itself. Filing is mandatory and so is saying what you would do, but never leave
+the finding in chat alone.
+
+The reason the split is absolute here in particular: a visual symptom is the **furthest** thing in this
+codebase from its cause. D-23 was reported as "export says (missing image)" and lived in the `.cmp`
+reader, two layers down and in the other skill's territory. Recommending lets that be re-routed;
+fixing where the symptom is visible would have left the filmstrip and the breadcrumb still wrong.
+
+You may render, dump, script and probe freely — that is the job. What you may not do is edit anything
+under `apps/` that ships, except `DEFECTS.md`, `PROGRESS.md`, a requirement file, and a `--script`
+fixture the reproduction needs.
 
 Shares the defect list, ID sequence and entry format with `arstro.cosmo.core.debug` §4 — read that
 section for the format; it is not repeated here.
@@ -146,26 +157,40 @@ a user-visible surface that is wrong or unusable (content unreachable, values th
 
 ---
 
-## 6. Fix, or hand off
+## 6. Report and recommend — and lead with the problem
 
-If you fix it here, you run `arstro.cosmo.design.implement`'s rules in full: requirement first, then a
-`cosmo_ui_tests` assertion that fails without the fix (reachability, non-overlap, fit, reflow — assert
-the property, not a pixel), then the fix, then **render the shots again at two sizes and look at them**,
-then sync `detailed_design.md` and the puml, then move the entry to Closed with the commit hash and the
-test name.
+The output is the deliverable. **Say what the problem was first**, in the user's own words, before any
+machinery — they are looking at the app and something is wrong; that sentence is what they came for.
+Then follow `arstro.cosmo.core.debug` §6's order, which this skill shares: proof, cause with
+`file:line`, whether it is a regression (`git log -S`), the recommendation, and the fact that you have
+not applied it.
 
-Add whatever log line or `dump-ui` field would have made this obvious the first time. A defect the log
-could not have shown you is also an observability defect — file that one too.
+Two things specific to a visual defect:
 
-If you do not fix it: leave it Open, schedule it in `PROGRESS.md`, and tell the user plainly what is
-broken and what the workaround is.
+**Show the frame.** A rendered PNG is the evidence, so put it in the report, and say what to look at in
+it — "the New card wraps to a second row at 1280 and the grid leaves a column of dead space" beats
+"layout is wrong". If a shot at a second size or mid-transition is what makes the point, include both;
+that is what `cosmo_shots` is for.
+
+**Recommend at the cause's layer, and name the skill that owns it.** A visual symptom is the furthest
+thing from its cause in this codebase: the export dialog printed "(missing image)" because the `.cmp`
+reader never set a name (D-23), and the CPU-limit chips were drawn correctly for a budget that was
+being applied twice (D-11). So say which layer the change belongs in, and if that is `core/`, say
+plainly that `arstro.cosmo.core.implement` is the skill to invoke — not this pair. Getting the routing
+right is most of the value this skill adds over guessing.
+
+Also name **the assertion that should guard it** — a `cosmo_ui_tests` property (reachability,
+non-overlap, fit, reflow), never a pixel — and what it must assert to fail on today's code. And if the
+log or `dump-ui` could not have shown you the answer, recommend that too: a defect the log could not
+reveal is also an observability defect, worth its own entry.
 
 ---
 
-## 7. Commit — always
+## 7. Commit — the diagnosis, never a fix
 
-Even with no fix, the defect list is the deliverable. Include `DEFECTS.md`, any requirement written or
-amended, the `--script` fixture, and the `PROGRESS.md` update.
+The defect list is the deliverable. Include `DEFECTS.md`, any requirement written or amended, the
+`--script` fixture, and the `PROGRESS.md` update — **and no product code**. A reviewer should be able to
+read the commit and disagree with the recommendation before anything is built on it.
 
 ```
 cosmo: file D-14 — the preset list's last row is unreachable at 1024x640 (R6)
@@ -191,7 +216,9 @@ Do not push unless asked.
 - [ ] Any requirement gap **closed in `REQUIREMENTS.md`**, conflict-checked, including the surface's
       states and overflow behaviour.
 - [ ] The defect entry is complete and uses the shared format and ID sequence.
-- [ ] If fixed: a `cosmo_ui_tests` assertion that fails without the fix, shots re-rendered and looked at,
-      docs synced, entry moved to Closed with the hash.
-- [ ] If not fixed: scheduled in `PROGRESS.md`, and the user was told plainly.
+- [ ] **No product code changed** — `git status` shows only the ledger, a requirement, and a fixture.
+- [ ] The report **leads with the problem** in the user's terms, and includes the frame to look at.
+- [ ] The recommendation names the **layer** the cause is in and the **skill** that owns it — which may
+      be `arstro.cosmo.core.implement`, and often is.
+- [ ] Scheduled in `PROGRESS.md`, and the user was told which skill lands it.
 - [ ] Committed to `main`.

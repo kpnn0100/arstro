@@ -1,6 +1,6 @@
 ---
 name: arstro.cosmo.core.debug
-description: Use to investigate any suspected non-UI problem in the cosmo photo editor — wrong pixels, an adjustment that does nothing, a crash or hang, a project/preset/settings file that loses data, a slow or stalled image load, a bad export, GPU-vs-CPU divergence, a behaviour that is only reachable by clicking. Reproduces it with no GUI in the loop — a script of Commands driven against CosmoService, a diffable AppModel dump, the event stream, seeded config, the control socket for a live window — judges against the written requirements whether it is a defect or intended behaviour, files it in the committed defect list with the exact reproduction, and commits, whether or not it is fixed in the same session. Invoke for "cosmo is broken", "the export looks wrong", "it crashed", "is this a bug?", "why is loading slow", "the CPU limit does not limit", "/arstro.cosmo.core.debug". For visual/layout/interaction problems use arstro.cosmo.design.debug.
+description: Use to investigate any suspected non-UI problem in the cosmo photo editor — wrong pixels, an adjustment that does nothing, a crash or hang, a project/preset/settings file that loses data, a slow or stalled image load, a bad export, GPU-vs-CPU divergence, a behaviour that is only reachable by clicking. Reproduces it with no GUI in the loop — a script of Commands driven against CosmoService, a diffable AppModel dump, the event stream, seeded config, the control socket for a live window — judges against the written requirements whether it is a defect or intended behaviour, files it in the committed defect list with the exact reproduction, RECOMMENDS a fix without applying one, and commits. It never edits product code — landing a fix is `arstro.cosmo.core.implement`, which the user must invoke. Invoke for "cosmo is broken", "the export looks wrong", "it crashed", "is this a bug?", "why is loading slow", "the CPU limit does not limit", "/arstro.cosmo.core.debug". For visual/layout/interaction problems use arstro.cosmo.design.debug.
 ---
 
 # arstro.cosmo.core.debug
@@ -10,9 +10,22 @@ export. Its output is never just an answer in chat: it is a **committed defect e
 anyone on any machine can re-run**, plus — when the requirements turned out to be silent — a requirement
 that now says what the right behaviour is.
 
-Fixing is the sibling skill's job (`arstro.cosmo.core.implement`). This skill may fix a defect it has
-reproduced when the fix is small and obvious, but **filing is mandatory and fixing is optional.** Never
-end a debugging session with the finding only in the conversation.
+**This skill does not fix anything.** It reproduces, judges, files, and *recommends* — and then stops.
+Landing a fix is `arstro.cosmo.core.implement`'s job, and the user invokes it; a recommendation is not
+permission to act on itself. Never end a debugging session with the finding only in the conversation
+either: filing is mandatory, and so is saying what you would do about it.
+
+Why the split is absolute rather than "fix it if it is small and obvious", which is what this skill
+used to say: **the size of a fix is not knowable until the diagnosis is finished, and by then you are
+invested in it.** Every defect in this project's Closed list looked like a one-liner at the moment it
+was understood, and several were not — D-11 needed a requirement amended, D-13 turned out to be an
+event-ordering contract, D-23 wanted a change in two layers for one symptom. A diagnosis that ends in a
+recommendation can be argued with. A diagnosis that ends in a commit has already decided.
+
+You may still WRITE and RUN throwaway things to prove a point — a probe in the scratchpad, a fixture
+under `core/tests/fixtures/`, a temporary assertion you delete again. What you may not do is change
+product code, and the boundary is exactly that: **nothing under `apps/` or `core/` that ships**, except
+`DEFECTS.md`, `PROGRESS.md`, `REQUIREMENTS.md` and a committed fixture the reproduction needs.
 
 ---
 
@@ -44,8 +57,8 @@ requirement behind it (§3). The design is
 5. **File it** (§4) in `apps/cosmo/docs/DEFECTS.md`, with the reproduction and the event/model excerpt
    that measures it.
 6. **Close the requirement gap if there is one** (§3c) — write the requirement before anything else.
-7. **Fix it, or hand it to the implement skill** (§6) — and if you fix it, the test comes first.
-8. **Commit** (§7). The defect list is committed **even when nothing was fixed.**
+7. **Recommend the fix** (§6) — precisely enough to be acted on, and without acting on it.
+8. **Commit** (§7) the diagnosis. The defect list is the deliverable; no product code moves.
 
 ---
 
@@ -386,42 +399,68 @@ would confirm it elsewhere.
 
 ## 5. Severity, and what to do about it
 
-- **S1** — crash, hang, data loss, corrupted save. Stop and fix now, or if you cannot, file it and tell
-  the user plainly what to avoid in the meantime.
-- **S2** — wrong output the user would ship (bad pixels, bad export, a lost adjustment). Fix in this
-  session if it is contained; otherwise file and make it the ledger's **NEXT**.
+- **S1** — crash, hang, data loss, corrupted save. File it, then tell the user plainly and immediately:
+  what breaks, what to avoid until it is fixed, and what you recommend. Do not fix it — say that it is
+  S1 and that `arstro.cosmo.core.implement` should be run next, which is the fastest honest path.
+- **S2** — wrong output the user would ship (bad pixels, bad export, a lost adjustment). File it and
+  make it the ledger's **NEXT**, so the implement skill picks it up first.
 - **S3** — wrong behaviour that has a workaround. File; schedule in the ledger.
 - **S4** — cosmetic or diagnostic. File; batch.
 
 ---
 
-## 6. Fix, or hand off
+## 6. Report and recommend — the output IS the deliverable
 
-If you fix it here, you are running the implement skill's rules — all of them:
-1. Requirement first (already done in §3).
-2. **Write the failing test before the fix** and watch it fail; keep it as the regression guard. Put it
-   in `sessionTests.cpp` (plain `assert()`) or `engineTests.cpp` (MiniTest) in the local style. If the
-   bug was in application behaviour rather than in one processor's arithmetic, write it as a **service
-   test** — dispatch the commands, pump, assert on the model (`arstro.cosmo.core.implement` §7 L2).
-   Name the assertion that fails on the pre-fix code in the entry's **Guarded by**.
-3. Fix, respecting the invariants in `arstro.cosmo.core.implement` §0 — the service invariants included.
-4. **Emit the `Event` that would have made this obvious the first time.** A defect the event stream
-   could not have shown you is also an observability defect; consider filing that separately. Under
-   R-SVC-5 the event *is* the log line, so this is one change, not two — and it is a core change, so do
-   not reach for `LOGD` (`arstro.cosmo.core.implement` §6).
-5. Sync the docs (`arstro.cosmo.core.implement` §8) and update the `DR-` entry if as-built behaviour
-   changed.
-6. Move the entry to Closed with the commit hash and the test name.
+A debugging session's product is an explanation someone can act on. **Lead with what the problem was**,
+in the user's own terms, before any of the machinery. They asked because something was wrong; the first
+thing they should read is what that was.
 
-If you do not fix it: leave Status `Open`/`Confirmed`, add it to `PROGRESS.md` under the right milestone
-so it is scheduled rather than forgotten, and say clearly in your report what is broken, how bad it is,
-and what the workaround is.
+Say it in this order, and keep every part short:
 
----
+1. **What the problem is.** One or two sentences, plain, no file paths yet. *"Images had no name
+   anywhere, and export therefore called every one of them (missing image)."*
+2. **What proves it** — the measurement, pasted. A before/after line, a timeline, a diff, a counter. Not
+   an argument (§3e). If the numbers are what make the point, put the numbers first and the prose after.
+3. **Why it happens** — the cause, with `file:line`. One paragraph. If a symptom the user did *not*
+   mention shares the cause, say so; if something they expected to be broken is fine, say that too and
+   why, because "the top bar looked correct the whole time" is often the reason a defect survived.
+4. **Whether it is a regression**, checked rather than assumed. `git log -S "<the line>"` costs one
+   command and changes how the fix is judged.
+5. **What you recommend.** This is the part the user asked for, so make it decidable:
+   - the change, named concretely — which function, which layer, and *why there* rather than at another
+     layer that would also make the symptom go away;
+   - the alternatives you rejected, in one line each, with the reason;
+   - what it would touch, and whether it crosses a skill boundary (`widgets/` is design's) or a
+     submodule (`core/ImageProcessing` is two commits);
+   - **the test that should guard it**, named, and what it must assert to fail on today's code;
+   - the risk, honestly — what else reads the thing you would change.
+6. **Say that you have not applied it**, and name the skill that would: `arstro.cosmo.core.implement`.
 
-## 7. Commit — always
+Prefer one recommendation with its reasoning over a menu. If two options are genuinely balanced, say
+which you would pick and why, then give the other — a survey with no verdict pushes the decision back
+onto someone with less context than you now have.
 
-Even a session that fixed nothing ends in a commit, because the defect list is the deliverable:
+**Recommend at the layer the cause is at, not the layer the symptom is at.** D-23 showed up in the
+export dialog and belonged in the `.cmp` reader; fixing the dialog would have left the filmstrip and the
+breadcrumb still wrong. If several consumers are wrong at once, that is evidence the fix belongs
+upstream of all of them.
+
+**Two fixes for one cause is sometimes right — say so explicitly.** When a failure is *silent* (an empty
+string that draws as nothing, a dropped option, a count that stays at zero), recommend the fix at the
+source AND a fallback at the sink, and justify the second one by the silence. When the failure is loud,
+one fix is enough and a second is noise.
+
+**If the requirement was the problem, the recommendation is a requirement.** A number nobody measures
+(R-CPU-4), a hook that no longer exists (D-1), an option that parses and is dropped (D-14, D-18) — these
+are fixed in `REQUIREMENTS.md` first and in code second, and you may write the requirement here (§3c)
+because a requirement is a decision, not an implementation.
+
+## 7. Commit — the diagnosis, never a fix
+
+Every session ends in a commit, because the diagnosis is the deliverable. The commit contains
+`DEFECTS.md`, any requirement written or amended, the fixture the reproduction needs, and the
+`PROGRESS.md` update — **and no product code**. A reviewer should be able to read the commit and decide
+whether they agree with the recommendation before any of it is built.
 
 ```
 cosmo: file D-13 — group crop dropped when the member is bypassed (R-GROUP-3)
@@ -454,6 +493,12 @@ reproduction that lives only in the commit message is not committed** — put th
 - [ ] The defect entry is complete: repro, expected, actual, evidence, judgement, severity — with a
       **measurement** in Evidence, not an argument.
 - [ ] If the behaviour turned out to be unreachable except by clicking, that is filed too (R-SVC-2).
-- [ ] If fixed: a test that fails without the fix, docs synced, entry moved to Closed with the hash.
-- [ ] If not fixed: scheduled in `PROGRESS.md`, and the user was told plainly.
+- [ ] **No product code changed.** `git status` shows only `DEFECTS.md`, `PROGRESS.md`, a requirement
+      file, and at most a fixture the reproduction needs. If you edited anything under `apps/` or
+      `core/` that ships, you ran the wrong skill.
+- [ ] The report **leads with what the problem was**, in the user's terms, before any machinery (§6).
+- [ ] A **recommendation** exists and is decidable: the change, where, why there and not elsewhere, the
+      rejected alternatives, the test that should guard it, and the risk.
+- [ ] Whether it is a **regression** was checked with `git log -S`, not assumed.
+- [ ] Scheduled in `PROGRESS.md`, and the user was told which skill lands it.
 - [ ] Committed to `main`.

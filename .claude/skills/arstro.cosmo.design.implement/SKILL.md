@@ -8,6 +8,8 @@ description: Use to implement or resume ANY front-end work in the cosmo photo ed
 The **resume-driven V-model workflow for everything the user can see in cosmo.** All state lives in
 committed files, so a session on any machine can pick up exactly where the last one stopped.
 
+
+**You are the only skill that changes product code for a defect.** `arstro.cosmo.design.debug` never fixes anything: it reproduces, files and *recommends*, and the user then invokes this skill to land it. So when you pick a defect up, the diagnosis, the measurement, the cause with `file:line`, the recommended change and the test that should guard it are already written down in `docs/DEFECTS.md` — **read the entry before re-deriving any of it.** You are free to disagree with the recommendation, and should say so in the commit if you do, but a recommendation you silently ignore usually means the entry knows something you have not read yet.
 **You own:** `apps/cosmo/widgets/` · `apps/cosmo/App.{h,cpp}` (screen composition, layout, gesture
 routing) · `apps/cosmo/Theme.{h,cpp}` · `apps/cosmo/touch/` · `apps/cosmo/assets/` · the headless UI
 harness (`cosmo_shots`, `cosmo_ui_tests`).

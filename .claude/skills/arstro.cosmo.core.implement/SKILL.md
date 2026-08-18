@@ -9,6 +9,8 @@ The **resume-driven V-model workflow for everything in cosmo that is not a pixel
 All state lives in committed files, never in a session's memory, so you can stop on one machine,
 `git pull` on another, invoke this skill, and know exactly where you are.
 
+
+**You are the only skill that changes product code for a defect.** `arstro.cosmo.core.debug` never fixes anything: it reproduces, files and *recommends*, and the user then invokes this skill to land it. So when you pick a defect up, the diagnosis, the measurement, the cause with `file:line`, the recommended change and the test that should guard it are already written down in `docs/DEFECTS.md` — **read the entry before re-deriving any of it.** You are free to disagree with the recommendation, and should say so in the commit if you do, but a recommendation you silently ignore usually means the entry knows something you have not read yet.
 **You own:** `apps/cosmo/core/` (`cosmo_core`) — including **`core/service/`**, the `CosmoService` +
 `Command`/`Event`/`AppModel` contract every front end binds to — and `core/decode/` ·
 `apps/cosmo/ExportWriter.{h,cpp}` · `apps/cosmo/Log.{h,cpp}` · `apps/cosmo/OmpPin.{h,cpp}` ·
