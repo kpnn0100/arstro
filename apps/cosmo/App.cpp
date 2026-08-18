@@ -117,6 +117,11 @@ namespace cosmo_v2
         mRoot->addChild(mCenterStage);
 
         mRightColumn = std::make_shared<RightColumn>(mSession);
+        // R-SVC-2 (S4b-2): every control in the right column now leaves as a Command. The
+        // lambda RETURNS whether it was dispatched, so the two-hop channel composes — a `void`
+        // sink would report success merely because App's own channel was set, and drop the
+        // command when App's was not wired in turn.
+        mRightColumn->onCommand = [this](cosmo::Command c) { return emitCommand(c); };
         mRightColumn->actionBar()->onSave = [this] { presetSaveClicked(); };
         mRightColumn->actionBar()->onImport = [this] { if (onImportPresetRequested) onImportPresetRequested(); };
         mRightColumn->actionBar()->onExport = [this] { presetExportClicked(); };

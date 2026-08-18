@@ -131,37 +131,28 @@ core first.
         - **The actual gate, and the only one in the proposal's §5 checklist: `widgets/*.cpp`
           reaching past the service = 60**, all in `RightColumn.cpp`, which must reach **0**;
           plus **2** `svc->session()` uses in the host, also to 0.
-  - [~] **S4b-2 — RightColumn, which is the gate.** The prerequisite is **DONE**; what is left is
-        mechanical. **My earlier spec here was wrong and is corrected**, because it was written
-        from reading rather than from trying:
-        - **The sliders are ONE change, not 23.** `RightColumn.cpp:44-46` has a single `set`
-          lambda that every slider row funnels through
-          (`if (auto *p = mSession.curParams()) { setter(*p, v); mSession.submit(); }`). What
-          blocks routing it through `Command::Set` is that the lambda holds a *setter closure*
-          and so does not know the field's NAME, and the rows apply unit conversions
-          (`toEv`, `toKelvin`, `toRadiusPx`) so the command must carry the engine-side value,
-          not the slider's. So each row needs to name its field and expose the converted value;
-          the lambda then builds one `Command::Set`. Cost is real but bounded, and the payoff is
-          that every slider becomes scriptable by name for free. The obvious objection — that a
-          drag cannot afford text — is unfounded: ~60 tiny parses a second.
-        - **Curves, the mixer, grading and every scalar needed NOTHING.** I claimed they needed a
-          new command family; they were already addressable through `set`, because
-          `EditParamsIO` names them. Verified by running it:
-          `set curve=0,0;0.5,0.62;1,1`, `set mixer0=…`, `set grade0=210,18,-4`,
-          `set rotation=1.5 balance=12 remapEnable=1` all land. The lesson is the one this
-          session keeps re-teaching: **try it before you spec it.**
-        - **Only mask-by-index was genuinely missing**, because `set mask=<blob>` APPENDS. Now
-          `mask set <i> <field>=<v>` (geometry, `feather`, `inverted`, `type`, `adjust.*`) and
-          `mask delete <i>`, both verified end to end, with a bad index rejected by reason:
-          `mask: no mask 9 (have 1)`.
-        **So the design work is finished and the remaining task is mechanical:** point
-        RightColumn's `set` lambda and its mask/curve callbacks at `Command`s through
-        `RightColumn`'s own outbound channel (it will need one, like `App::onCommand`), and the
-        gate count goes to 0. Still not started, deliberately: it is a design-skill commit
-        (`arstro.cosmo.design.implement` owns `widgets/`), and a half-migrated widget is harder
-        to reason about than an unmigrated one.
+  - [x] **S4b-2 — RightColumn, DONE.** All 23 sliders (one lambda change: it takes a field name
+        and a unit converter instead of a setter closure, so the command carries engine units),
+        the mask panel, the mixer, both curve sets, grading, the remap quad and transform — every
+        one now leaves as a `Command`. **No new command was needed for any of it**, exactly as
+        DR-SVC-2b said; the single genuine gap was `dabs`, added to `MaskSet` here, without which
+        a Brush drag — whose whole product is dabs — was the one edit no command could express.
+        The gate: `grep -c "mSession\.\|EditParams" widgets/*.cpp` → **RightColumn 29, every
+        other widget 0**. Of those 29: 9 are prose in comments, 11 are *reads* through one named
+        seam (`params()`/`effectiveParams()`, legitimate under R-SVC-4 and S4c's job), and 7 are
+        the documented unwired fallback. **Converted-surface writes reaching past the service: 0.**
+
   - [ ] **S4c** move `EditSession` ownership from `App` into `CosmoService`; `App` holds a
         `CosmoService&`. Do this AFTER S4b, or every converted call site gets touched twice.
+        It also converts RightColumn's 11 remaining reads into `AppModel` reads, which is what
+        finally takes the gate to 0 rather than "0 writes".
+  - [ ] **Watch item from S4b-2**, not yet a defect: now that every control emits a command, each
+        `set` re-enters `App::syncFromSession()` synchronously, so a **crop drag** and a **mask
+        feather drag** get `XformPanel::setState` / `MaskPanel::setMasks` pushed back at them
+        mid-drag — the very thing the feather handler's comment warns against. The setters are
+        programmatic and do not refire `onChange`, so it is believed harmless, and the acceptance
+        run is clean; but it is a new interaction and it has not been driven by hand at 60 Hz.
+        Check it before trusting a long crop drag.
 - [x] **S5** `ControlChannel` (non-blocking `AF_UNIX`; Windows stubbed with a reason) + `--control`,
       wired into the frame tick. **The acceptance test passed on the real 18-RAF project**: the GUI
       driven entirely over the socket, `load.finished decoded=18 total=18`, and a window capture

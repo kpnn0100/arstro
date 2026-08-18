@@ -2,6 +2,7 @@
 #include "engine/EditParamsIO.h"
 #include <cstdlib>
 #include <filesystem>
+#include <sstream>
 
 namespace arstro
 {
@@ -542,6 +543,29 @@ namespace cosmo
                     else if (k == "adjust.texture") adj.texture = v;
                     else if (k == "adjust.clarity") adj.clarity = v;
                     else if (k == "adjust.dehaze") adj.dehaze = v;
+                    else if (k == "dabs")
+                    {
+                        // `x:y:r:f;…`, the same third group `EditParamsIO::parseMask` reads out
+                        // of a mask blob. Without this, a Brush mask was the one edit no command
+                        // could express — its whole product is dabs — which left the on-photo
+                        // overlay as the only surface in the app still writing to the session
+                        // directly. `set mask=` cannot stand in: it APPENDS, so replacing mask i
+                        // through it would move that mask to the end of a stack whose order is
+                        // what it renders (R-SVC-2).
+                        m.dabs.clear();
+                        std::string tok;
+                        std::istringstream ds(kv.second);
+                        while (std::getline(ds, tok, ';'))
+                        {
+                            if (tok.empty()) continue;
+                            float f[4] = {0, 0, 0.05f, 1.f};
+                            std::string num;
+                            std::istringstream ts(tok);
+                            for (int n = 0; n < 4 && std::getline(ts, num, ':'); ++n)
+                                f[n] = (float)std::atof(num.c_str());
+                            m.dabs.push_back({f[0], f[1], f[2], f[3]});
+                        }
+                    }
                     else return fail("mask set: unknown field " + k);
                 }
                 mSession.submit();

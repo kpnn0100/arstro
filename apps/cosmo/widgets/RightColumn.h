@@ -1,13 +1,18 @@
 /*
  *  cosmo_v2 by arstro — RightColumn: histogram + 7-tab strip + scrollable
  *  panel body + pinned action bar (App.tsx's right column, fixed 292px).
- *  Owns an EditSession reference directly so it can wire every control's
- *  callback straight to real develop-param mutations, the same way
- *  CosmoApp's constructor wires its panels inline.
+ *  Every control's callback leaves as a Command on `onCommand` (R-SVC-2) — a
+ *  slider drag, a scripted `set exposure=1.1` and an agent on the control
+ *  socket therefore travel one path and cannot diverge. The session reference
+ *  that remains is the READ side (R-SVC-4 lets a view read what it renders),
+ *  the direct-write fallback for a column with no service behind it (App::undo's
+ *  arrangement, for App::undo's reason), and writeSelectedMask — the one surface
+ *  no Command reaches yet, and the comment there says why.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../core/EditSession.h"
+#include "../core/service/Command.h"
 #include "HistogramWidget.h"
 #include "EditStackTabs.h"
 #include "ParamPanel.h"
@@ -35,6 +40,22 @@ namespace cosmo_v2
         static constexpr int kTabBasicDetail = 0, kTabMask = 1, kTabColor = 2, kTabGrade = 3, kTabXform = 4;
 
         explicit RightColumn(cosmo::EditSession &session);
+
+        /** R-SVC-2: the column's outbound channel, mirroring `App::onCommand`. Every edit
+         *  this panel makes leaves as a Command instead of being written into an EditParams,
+         *  so the sliders, the CLI and the control socket are three views of one path — and
+         *  every slider becomes addressable by name for free. App wires it to its own
+         *  channel; see `emitCommand` for what happens when nobody does. */
+        /** Returns whether the command was actually dispatched, so the fallback COMPOSES:
+         *  this is a two-hop channel (RightColumn -> App -> service) and a `void` sink would
+         *  report success merely because App's own channel had been set, dropping the command
+         *  if App's was not wired in turn. The one place in the design where the unwired-
+         *  fallback contract does not compose by itself. */
+        std::function<bool(cosmo::Command)> onCommand;
+        /** Emit `c` if a service is wired, and report whether it was. A false here is what
+         *  sends each emitter down its direct-write fallback — the same bargain App::undo
+         *  makes, because a widget tree built with no service behind it must still edit. */
+        bool emitCommand(const cosmo::Command &c) const { return onCommand && onCommand(c); }
 
         std::shared_ptr<HistogramWidget> histogram() { return mHistogram; }
         std::shared_ptr<ActionBar> actionBar() { return mActionBar; }
@@ -76,6 +97,25 @@ namespace cosmo_v2
         // Push the effective (group-stacked) curves to the mixer/curve editors as their
         // faint green "final" reference — call after every curve/mixer edit so it tracks live.
         void refreshCurveReferences();
+
+        /** A Command's payload: `key=value` pairs, already in ENGINE units. */
+        using Fields = std::vector<std::pair<std::string, std::string>>;
+
+        /** Emit `set <fields>` (R-SVC-2). `set` reaches every scalar, every curve, the
+         *  mixer, grading and a mask APPEND, because EditParamsIO names them all
+         *  (DR-SVC-2b) — which is why this column needs no command of its own. */
+        void sendSet(Fields fields);
+        /** Emit `mask set <index> <fields>`: addressing an EXISTING mask by index is the
+         *  one thing the params codec cannot express, since `set mask=` appends. `whole` is
+         *  the same edit as a complete mask, used only by the unwired fallback. */
+        void sendMaskSet(int index, Fields fields, const MaskParams &whole);
+        /** Emit `mask delete <index>`. */
+        void sendMaskDelete(int index);
+
+        /** The read seam. R-SVC-4 lets a view read the state it renders, and until S4c hands
+         *  widgets an `AppModel` these two are how it reads it. */
+        const EditParams *params() const;
+        EditParams effectiveParams() const;
 
         cosmo::EditSession &mSession;
         std::shared_ptr<HistogramWidget> mHistogram;

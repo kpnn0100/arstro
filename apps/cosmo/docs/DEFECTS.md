@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-20**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-21**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -19,7 +19,25 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-19 — `build.sh`'s cosmo desktop path does not link
+### D-20 — `EditParamsIO`'s serializers are file-local, so a widget mirrors their formats
+- **Area:** core / service · **Status:** Confirmed · **Severity:** S3
+- **Found:** 2026-08-18, converting `RightColumn` to commands (S4b-2).
+- **Reproduce:** `grep -n "mixerStr\|maskStr" core/ImageProcessing/src/engine/EditParamsIO.cpp` —
+  both are in an anonymous namespace. Then look at the anonymous namespace in
+  `apps/cosmo/widgets/RightColumn.cpp`, which re-implements the point-list and mask-geometry
+  formats so it can build a `set curve=…` / `mask set …` command.
+- **Expected:** one serializer per format, as R-SVC-5 requires of the command grammar.
+- **Actual:** two, in different layers, that must agree by hand. They agree today — the acceptance
+  test's `--params` diff would catch it if they stopped — but nothing makes them.
+- **Judgement:** defect against R-SVC-5's spirit. The rule is that a text form is *generated* from
+  the typed one by a single codec; a second implementation is exactly what it forbids, and it is
+  the same species as D-16, where the front-end-owned `wait` grew two vocabularies because the
+  codec never routed it.
+- **Fix:** pending. Export `serializeCurve()` / `serializeMask()` (or a small `EditParamsText`
+  surface) from `EditParamsIO.h` and delete `RightColumn`'s copies. **Note this is a submodule
+  change** — `core/ImageProcessing` is a git submodule, so it is two commits: the submodule first,
+  then the pointer bump. That is why it was not folded into S4b-2.
+ — `build.sh`'s cosmo desktop path does not link
 - **Area:** core / build · **Status:** Confirmed (reproduced) · **Severity:** S4
 - **Found:** 2026-08-18, while writing `DEVELOPING.md` for D-9 — the guide could not honestly
   describe a second build path without trying it.
