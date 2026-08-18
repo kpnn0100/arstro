@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-21**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-22**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -19,7 +19,26 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-20 — `EditParamsIO`'s serializers are file-local, so a widget mirrors their formats
+### D-21 — `AppModel::frameSeq` and `Event::FrameReady` are declared and never produced
+- **Area:** core / service · **Status:** Confirmed · **Severity:** S3
+- **Found:** 2026-08-18, by the shot renderer's author, who read `AppModel.h`'s "a test can wait
+  for one" and built against it.
+- **Reproduce:** `grep -rn "mFrameSeq\|FrameReady" apps/cosmo/core/service/` — `mFrameSeq` is a
+  member nothing increments and `Event::Kind::FrameReady` has no emitter.
+- **Expected:** a front end can tell when a preview has landed, which is what the field's own
+  comment promised.
+- **Actual:** nothing ever moves. `cosmo_shots` has to settle on a real-time floor instead, which
+  is most of why the project shots take ~10 s of padding.
+- **Judgement:** defect against R-SVC-3 — a declared field that is never written is a lie, the
+  same species as D-15, except this one had documentation asserting the capability.
+- **Cause, and why it is not a one-liner:** the **view** polls `RenderService::tryAcquire`, and
+  that call **moves** the frame out. The service cannot also poll without stealing frames from the
+  view, so this cannot be fixed by having `pump()` look — it needs the frame path to belong to the
+  service, which is **S4c**. The comment in `AppModel.h` now says so instead of promising.
+- **Fix:** pending, in S4c. Either the service polls and the view reads frames from it, or the view
+  reports each acquisition back through a narrow `noteFrame()`. Prefer the former: it is the same
+  ownership move S4c is already making, and the latter leaves a second path to keep in sync.
+ — `EditParamsIO`'s serializers are file-local, so a widget mirrors their formats
 - **Area:** core / service · **Status:** Confirmed · **Severity:** S3
 - **Found:** 2026-08-18, converting `RightColumn` to commands (S4b-2).
 - **Reproduce:** `grep -n "mixerStr\|maskStr" core/ImageProcessing/src/engine/EditParamsIO.cpp` —
@@ -79,21 +98,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
   and it is unaffected.
 
-### D-7 — No headless UI render is possible; the CMake glob structurally prevents one
-- **Area:** design / build · **Status:** Confirmed (by source inspection) · **Severity:** S3
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** `grep -n "file(GLOB COSMO_SOURCES" -A4 apps/cosmo/CMakeLists.txt` — the glob includes
-  `linux_main.cpp`, so no second `main()` can link the cosmo UI.
-- **Expected:** any screen or state renderable to a PNG with no display, as `genesis_shots` does.
-- **Actual:** impossible today. `App` is already platform-free and drivable (`App(w,h)`, `setSize`,
-  `render(target,nowMs)`, `pointer`, `wheel`, `key`, and public `showHome`/`showEditor`/
-  `beginOpenTransition`/`setLoadProgress`/`finishOpenTransition`) — only the missing
-  `list(REMOVE_ITEM … linux_main.cpp)` stands in the way. `cosmo_widget_tests` covers isolated widget
-  hit-testing only, never the assembled app.
-- **Judgement:** defect against the family design rule that a UI change must be *seen* before it ships
-  (`arstro.design.desktop` §5) — currently unsatisfiable for cosmo.
-- **Fix:** pending. P0.1 → P0.3.
-
 ### D-5 — The UI logs nothing, so a visual bug report cannot be traced
 - **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
 - **Found:** 2026-08-16, source inspection
@@ -109,6 +113,39 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+### D-7 — No headless UI render is possible; the CMake glob structurally prevents one
+- **Area:** design / build · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** `grep -n "file(GLOB COSMO_SOURCES" -A4 apps/cosmo/CMakeLists.txt` — the glob includes
+  `linux_main.cpp`, so no second `main()` can link the cosmo UI.
+- **Expected:** any screen or state renderable to a PNG with no display, as `genesis_shots` does.
+- **Actual:** impossible today. `App` is already platform-free and drivable (`App(w,h)`, `setSize`,
+  `render(target,nowMs)`, `pointer`, `wheel`, `key`, and public `showHome`/`showEditor`/
+  `beginOpenTransition`/`setLoadProgress`/`finishOpenTransition`) — only the missing
+  `list(REMOVE_ITEM … linux_main.cpp)` stands in the way. `cosmo_widget_tests` covers isolated widget
+  hit-testing only, never the assembled app.
+- **Judgement:** defect against the family design rule that a UI change must be *seen* before it ships
+  (`arstro.design.desktop` §5) — currently unsatisfiable for cosmo.
+- **Fix:** commit `D7_HASH`. **One line was the whole of it** — `list(REMOVE_ITEM COSMO_APP_NOMAIN
+  … linux_main.cpp)`, named and shaped after Genesis's `GENESIS_APP_NOMAIN`, which has had it all
+  along. On top of that, `apps/cosmo/tests/shots/renderShots.cpp` renders **13 PNGs across 2 window
+  sizes** with `DISPLAY` unset: home (empty / recents / the Settings modal opened by a real
+  synthesised click), the empty editor, both mid-transition samples, the dissolve and reveal halves
+  of the reveal, and the editor with a real 2-RAF project loaded through `CosmoService`. No
+  `gtk_init` anywhere; GTK3 is linked for GdkPixbuf alone, and the vendored fonts go straight into
+  fontconfig, so a shot is measured in the app's own typeface rather than the host's default.
+  Two full runs are **byte-identical for all 13 files**.
+- **Guarded by:** `ctest -R cosmo_shots_headless` — the fixture-free subset (0.5 s), with `--check`
+  failing any PNG that came out uniform-colour. The project shots stay manual: they need ~26 MB RAW
+  files that are not in the repo and should not be.
+- **Three real bugs the harness caught in itself**, each worth carrying into P0.3: a `CairoTarget`
+  built per frame invalidates every `registerImage` id, so every photo and thumbnail blanked after a
+  resize (the app owns ONE target for the run — copy `onDraw`); snapping the shot clock *after* a
+  settle made `beginOpenTransition` start its phases in the past, so a "reveal" shot was silently a
+  second copy of the editor — **caught by comparing file sizes, not by `--check`, because a colour
+  count catches blank frames and not wrong ones**; and sampling a transition at its linear midpoint
+  is not its visual midpoint, since every one of them is EaseOutCubic.
+
 ### D-9 — Two divergent build paths, two undocumented build trees
 - **Area:** core / build · **Status:** **Fixed** · **Severity:** S4
 - **Found:** 2026-08-16, source inspection

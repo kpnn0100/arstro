@@ -175,9 +175,12 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
 `arstro.cosmo.design.implement` §6–§7.
 
 - [ ] **P0.0** `R-AGENT-*` requirements written and conflict-checked *(do this first — V-model)*
-- [ ] **P0.1** `COSMO_APP_NOMAIN` in `apps/cosmo/CMakeLists.txt` (A11) — one `list(REMOVE_ITEM … linux_main.cpp)`; it structurally blocks every headless UI harness
-- [ ] **P0.2** `cosmo_shots` — headless PNG renders of every named app state, 2+ window sizes, mid-transition (A12)
-- [ ] **P0.3** `cosmo_ui_tests` — headless assertions over the assembled app: non-overlap, reachability, text fit, reflow (A12)
+- [x] **P0.1** `COSMO_APP_NOMAIN` in `apps/cosmo/CMakeLists.txt` (A11) — one `list(REMOVE_ITEM … linux_main.cpp)`; it structurally blocks every headless UI harness
+- [x] **P0.2** `cosmo_shots` — headless PNG renders of every named app state, 2+ window sizes, mid-transition (A12)
+- [ ] **P0.3** `cosmo_ui_tests` — and P0.2 left three lessons for it: one `CairoTarget` per RUN
+      (a per-frame one invalidates every registerImage id); a wrong shot is not a blank shot, so
+      assertions must compare content rather than count colours; and every transition is
+      EaseOutCubic, so its linear midpoint is ~85% finished. `cosmo_ui_tests` — headless assertions over the assembled app: non-overlap, reachability, text fit, reflow (A12)
 - [x] **D-10** (was folded into P0.3/P0.11) `core/tests/TestMain.h` — a failing assert now exits
       non-zero with its message intact through a redirect, instead of hanging where a red suite
       looked like a slow one. Windows half code-verified only; confirm on MSYS2

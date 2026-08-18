@@ -141,8 +141,12 @@ namespace cosmo
         AppSettings settings;
         BudgetModel budget;
 
-        /** Metadata only — see rule 1. `frameSeq` rises each time a new preview lands, so a
-         *  view knows to re-fetch and a test can wait for one. */
+        /** Metadata only — see rule 1. **`frameSeq` is not produced yet (D-21)**: the VIEW polls
+         *  `RenderService::tryAcquire`, and that call MOVES the frame out, so the service cannot
+         *  also poll without stealing frames from the view. Until the frame path moves down in
+         *  S4c, a headless harness has no signal that a preview landed and must settle on a
+         *  timer instead. Documented rather than quietly left, because this comment used to
+         *  claim "a test can wait for one" and a harness author believed it. */
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;
         unsigned frameSeq = 0;

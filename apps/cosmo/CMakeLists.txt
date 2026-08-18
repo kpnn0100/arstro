@@ -23,6 +23,16 @@ if(TARGET cosmo_core)
 
   set(CAIRO_ADAPTER ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp)
 
+  # ── P0.1 / D-7: the same app sources MINUS the GTK entry point ──
+  # linux_main.cpp owns main(), and the glob above was the only list of app sources —
+  # so no second main() could link the cosmo UI, and every headless UI harness (a shot
+  # renderer, a UI test) was structurally impossible rather than merely unwritten. That
+  # is the whole of D-7, and this one REMOVE_ITEM is the whole of its fix. Named and
+  # shaped after apps/genesis/CMakeLists.txt's GENESIS_APP_NOMAIN, which has had it all
+  # along — the ledger's rule is copy Genesis, do not invent.
+  set(COSMO_APP_NOMAIN ${COSMO_SOURCES})
+  list(REMOVE_ITEM COSMO_APP_NOMAIN ${CMAKE_CURRENT_SOURCE_DIR}/linux_main.cpp)
+
   add_executable(cosmo ${COSMO_SOURCES} ${CAIRO_ADAPTER})
 
   target_include_directories(cosmo PRIVATE
@@ -58,6 +68,49 @@ if(TARGET cosmo_core)
   # regardless of the working directory it's launched from.
   target_compile_definitions(cosmo PRIVATE
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+  # ── P0.2: cosmo_shots — the headless screenshot harness ──────────────────────────
+  # The real App, the real Cairo adapter, an image surface instead of a window: every
+  # named app state rendered to a PNG with no display, so a UI change can be SEEN before
+  # it ships instead of asserted about. Mirrors genesis_shots (tests/renderShots.cpp).
+  #
+  # It links the SAME libraries the app links, and that is load-bearing rather than tidy:
+  # ARSTRO_ENABLE_THREADS and ARSTRO_GL_COMPUTE arrive PUBLICly from arstro_image, so
+  # linking it is what keeps this target's defines identical to the ones cosmo_core and
+  # the engine were built with. A harness hand-compiled without them is an ODR violation
+  # that segfaults in ~EditSession at exit and reads as a teardown bug (decisions log,
+  # 2026-08-16 U1.2).
+  #
+  # GTK3 is here for GdkPixbuf only — NativeImageDecoder and ExportWriter are GdkPixbuf-
+  # based and live in the app layer (R-SVC-7). No gtk_init() is ever called, so no display
+  # and no X server is needed, exactly as in cli/CMakeLists.txt. Fontconfig is linked so
+  # the shots use the app's OWN vendored DM Sans / JetBrains Mono rather than whatever the
+  # host's default sans happens to be — a shot in the wrong typeface measures the wrong
+  # text widths and would report overflow bugs that do not exist.
+  add_executable(cosmo_shots ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/shots/renderShots.cpp)
+  target_include_directories(cosmo_shots PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
+  target_link_libraries(cosmo_shots PRIVATE artboard_core arstro_image cosmo_core
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FONTCONFIG)
+  target_compile_definitions(cosmo_shots PRIVATE
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+  # The fixture-free subset as a ctest case: home (empty, with recents, with the settings
+  # modal), the empty editor and the open transition need no display and no images on
+  # disk, so they run anywhere the app builds. `--check` is what makes it a TEST rather
+  # than a smoke run — it fails the PNG that came out uniform-colour, which is the one
+  # failure mode a screenshot harness has (a blank shot is worse than no shot).
+  #
+  # The project shots are deliberately NOT in it: the editor-with-a-project states need
+  # real RAW files, and there are none in the repo (nor should there be — they are ~26 MB
+  # each). Run those by hand:
+  #   cosmo_shots --outdir /tmp/shots --images <a>.RAF,<b>.RAF
+  add_test(NAME cosmo_shots_headless
+           COMMAND cosmo_shots --outdir ${CMAKE_CURRENT_BINARY_DIR}/shots-ctest --check)
 else()
   message(STATUS "cosmo: app skipped (needs cosmo_core; see core/CMakeLists.txt)")
 endif()
