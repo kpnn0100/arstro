@@ -67,6 +67,16 @@ namespace cosmo_v2
          *  return (so the wordmark reads as one continuous element, R-LOADING). */
         void setWordmarkHidden(bool h) { mWordmarkHidden = h; }
         void layout();
+        /** ── The window minimum, summed from this layout rather than guessed ──
+         *  The action buttons are anchored to the sidebar's TOP and the Settings / What's New /
+         *  Help & Documentation links to its BOTTOM, so a window shorter than their sum makes
+         *  them overlap — which is exactly what a hardcoded 400 px minimum did. The host asks
+         *  for these instead of keeping a second copy of the arithmetic, so the minimum follows
+         *  the layout when the layout changes. */
+        static double minSidebarHeight();
+        static double minContentWidth();
+        static double minContentHeight();
+
         void advance(double nowMs) override;  // App drives this (Home is not in the editor tree)
 
     protected:
@@ -83,14 +93,38 @@ namespace cosmo_v2
             CardInfo info;
             std::shared_ptr<artboard::ImageView> thumb;
             bool shown = true;             // passes the current search filter
-            artboard::Rect rect{0, 0, 0, 0};  // full card rect (grid space), set in layout
+            artboard::Rect rect{0, 0, 0, 0};  // TARGET card rect (grid space), set in layout
+            /** R-G-1: the card's LIVE geometry, eased toward `rect`. A window resize changes
+             *  the column count discretely — 4 across becomes 3 — so every card's size and
+             *  position jumps at one width. These are what the chrome and the thumbnail are
+             *  drawn from, so the reflow travels instead of snapping. */
+            artboard::AnimatedProperty ax{0.0}, ay{0.0}, aw{0.0}, ah{0.0};
+            bool placed = false;           // false until the first layout, which must NOT animate
+            /** The eased rect: what to draw. */
+            artboard::Rect live() const { return artboard::Rect{ax.value(), ay.value(), aw.value(), ah.value()}; }
         };
+
+      public:
+        /** For a test: both halves of the reflow — where a card is drawn NOW (`live()`) and
+         *  where the layout wants it (`rect`). If only the target were readable, an
+         *  implementation that snapped would be indistinguishable from one that eases (R-G-1). */
+        const std::vector<Card> &cards() const { return mCards; }
+
+      private:
+
 
         // One identifier scheme for every hover-able region (sidebar actions, bottom
         // links, recent cards, the trailing New-Project card) -- see regionAt().
         enum class Region { None, Action, Link, Card, NewCard };
 
-        artboard::Rect actionRect(int i) const;    // 0=New 1=Open 2=Import (sidebar)
+        /** The last frame time `advance()` saw. `relayoutGrid()` is reached from `layout()`,
+         *  which the app calls outside `advance()`, so the reflow needs the clock kept here —
+         *  an AnimatedProperty started with a stale `nowMs` finishes in the past. */
+        double mNowMs = 0.0;
+
+      public:
+        artboard::Rect actionRect(int i) const;
+      private:    // 0=New 1=Open 2=Import (sidebar)
         artboard::Rect searchRect() const;
         double gridTop() const;
         double contentX() const;

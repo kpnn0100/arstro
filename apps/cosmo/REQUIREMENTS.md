@@ -22,6 +22,15 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
   / `Spring`), never by direct assignment of the visible value. Show/hide is a fade or a
   size-to-zero tween, not a `visible` flip. Collapses to the final state only under
   `artboard::reducedMotion()`.
+- **R-G-1a Reflow animates too, including a reflow the USER caused by resizing.** (**Added
+  2026-08-18.**) R-G-1 already forbids a component changing size or position in a single frame,
+  and a grid whose column count is derived from the width breaks it in the one case nobody
+  scripts: dragging the window edge past the threshold where 4 cards across becomes 3 changes
+  every card's size *and* position at once. So a card carries its LIVE geometry eased toward the
+  layout's target, and the chrome and its thumbnail are both drawn from the same eased values —
+  drawing one from the target and one from the eased value would separate them mid-reflow. The
+  first placement of a card sets rather than animates, because a card appearing for the first time
+  has nowhere to travel from.
 - **R-G-2 Figma is the spec.** Screens that reference a Figma frame must match it (spacing,
   type ramp, colors, radii pulled from `Theme`), not approximate it.
 - **R-G-2a One wordmark.** The `cosmo.` wordmark is drawn identically everywhere it appears
@@ -536,6 +545,15 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   index (path → front, refresh last-opened).
 - **R-HOME-7 Search.** The search box filters recent projects by name (case-insensitive,
   substring); no matches shows the empty-state placeholder.
+- **R-HOME-11 The window's minimum size is summed from the layout, not chosen.** (**Added
+  2026-08-18.**) The sidebar has two blocks anchored to opposite edges — the three action buttons
+  to the top, the Settings / What's New / Help & Documentation links and the version to the bottom
+  — so a window shorter than their sum plus air makes them **overlap**, which a hardcoded 400 px
+  minimum did. `HomeScreen::minContentHeight()` / `minContentWidth()` sum the parts and the host
+  asks for them, so the minimum follows the layout when the layout changes instead of being a
+  number that happened to work at the size someone tested. On the current layout that is
+  **584 × 466**. A magic number here is not a shortcut; it is a second copy of the layout that
+  nobody updates.
 - **R-HOME-8 Reserved.** Settings / What's New / Help & Documentation are present but inert
   (reserved), matching the Figma affordances without behavior. **AMENDED (R-SETTINGS-5): Settings is
   now live** — it opens the same modal the editor's Settings menu opens. A link that draws a hover

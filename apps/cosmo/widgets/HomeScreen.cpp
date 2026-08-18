@@ -21,8 +21,31 @@ namespace cosmo_v2
         constexpr double kMinCard = 220.0;
         constexpr double kMetaH = projectcard::kMetaH;  // card meta band (name + row), shared with the loading screen
         constexpr double kActionH = 34.0;
+        // ── the sidebar's two anchored blocks, in named parts ──
+        // Everything below used to be spelled as 183.0 / 137.0 / 92.0 at the point of use, which
+        // is why nobody noticed the two blocks could collide: the numbers gave no clue what they
+        // were made of. minSidebarHeight() sums these, so the window minimum follows the layout
+        // instead of being a guess that happened to work at the size someone tested.
+        constexpr double kLogoDividerY = 159.0;      // the rule under the wordmark + tagline
+        constexpr double kActionsTop = 183.0;        // first action button (kLogoDividerY + 24)
+        constexpr double kActionGap = 6.0;
+        constexpr int kActionCount = 3;              // New Project / Open Project / Import Catalog
+        constexpr double kLinkFirstY = 16.0;         // below the bottom divider
+        constexpr double kLinkStride = 20.0;
+        constexpr double kLinkH = 18.0;
+        constexpr int kLinkCount = 3;                // Settings / What's New / Help & Documentation
+        constexpr double kVersionY = 92.0;           // baseline, below the divider
+        constexpr double kBottomPad = 24.0;          // breathing room under the version line
+        /** Divider to window bottom: the links, then the version baseline, then the pad. */
+        constexpr double kBottomBlockH = kVersionY + kBottomPad + 21.0;   // = 137, as drawn
+        constexpr double kBlockGap = 32.0;           // minimum air between actions and the links
+        constexpr double gridTopConst() { return kHeaderH + 24.0; }
         constexpr double kSearchW = 168.0, kSearchH = 26.0;
         constexpr double kScrollGlideMs = 180.0;  // grid-scroll ease (R-G-1)
+        /** Grid reflow when the column count changes. Longer than the scroll glide: a card
+         *  moving AND resizing is a bigger change than the same card sliding, and reading it
+         *  as one motion needs the extra time. */
+        constexpr double kReflowMs = 260.0;
 
         std::string lower(std::string s)
         {
@@ -130,20 +153,45 @@ namespace cosmo_v2
     }
 
     double HomeScreen::contentX() const { return kSidebarW; }
-    double HomeScreen::gridTop() const { return kHeaderH + 24.0; }
+    double HomeScreen::gridTop() const { return gridTopConst(); }
 
     Rect HomeScreen::actionRect(int i) const
     {
         // Below the logo block + divider; three stacked full-width buttons.
-        const double top = 183.0 + i * (kActionH + 6.0);
+        const double top = kActionsTop + i * (kActionH + kActionGap);
         return Rect{kPad, top, kSidebarW - 2 * kPad, kActionH};
+    }
+
+    double HomeScreen::minSidebarHeight()
+    {
+        // The two blocks are anchored to OPPOSITE edges — actions to the top, links to the
+        // bottom — so the window's minimum is their sum plus air. Summed here, once, so the
+        // host cannot hold a stale copy of it (the old 400 px minimum let the "Settings /
+        // What's New / Help & Documentation" block overlap the action buttons).
+        const double actionsBottom = kActionsTop + kActionCount * kActionH
+                                     + (kActionCount - 1) * kActionGap;
+        return actionsBottom + kBlockGap + kBottomBlockH;
+    }
+
+    double HomeScreen::minContentWidth()
+    {
+        // Sidebar + the grid's left pad + one card at kMinCard + the right pad. Below this the
+        // grid would have to render a card narrower than its own minimum.
+        return kSidebarW + kPad + kMinCard + kPad;
+    }
+
+    double HomeScreen::minContentHeight()
+    {
+        // The grid's own need: the header, one card row at the minimum card width, and a pad.
+        const double oneRow = gridTopConst() + kMinCard * 9.0 / 16.0 + kMetaH + kPad;
+        return std::max(minSidebarHeight(), oneRow);
     }
 
     Rect HomeScreen::bottomLinkRect(int i) const
     {
         const double h = height.value();
-        const double blockTop = h - 137.0;      // divider + links + version + pb-8
-        return Rect{kPad, blockTop + 16.0 + i * 20.0, kSidebarW - 2 * kPad, 18.0};
+        const double blockTop = h - kBottomBlockH;
+        return Rect{kPad, blockTop + kLinkFirstY + i * kLinkStride, kSidebarW - 2 * kPad, kLinkH};
     }
 
     Rect HomeScreen::searchRect() const
@@ -217,13 +265,34 @@ namespace cosmo_v2
         {
             if (!c.shown) { if (c.thumb) c.thumb->visible = false; continue; }
             place(c.rect);
+            // R-G-1: the column count changes DISCRETELY as the window resizes — 4 across
+            // becomes 3 at one particular width — so every card's size and position jumps at
+            // that instant. Easing the live geometry toward the new target makes the reflow
+            // travel. The first placement must not animate, or opening Home would fly every
+            // card in from the origin; `placed` is that distinction, per card, because a card
+            // added by a later refreshHome() is also new.
+            if (!c.placed || artboard::reducedMotion())
+            {
+                c.ax.set(c.rect.x); c.ay.set(c.rect.y); c.aw.set(c.rect.w); c.ah.set(c.rect.h);
+                c.placed = true;
+            }
+            else
+            {
+                c.ax.animateTo(c.rect.x, kReflowMs, Easing::EaseOutCubic, mNowMs);
+                c.ay.animateTo(c.rect.y, kReflowMs, Easing::EaseOutCubic, mNowMs);
+                c.aw.animateTo(c.rect.w, kReflowMs, Easing::EaseOutCubic, mNowMs);
+                c.ah.animateTo(c.rect.h, kReflowMs, Easing::EaseOutCubic, mNowMs);
+            }
             if (c.thumb)
             {
+                // The thumbnail rides the SAME eased values as the chrome, or the two would
+                // separate mid-reflow and the image would slide inside its own card.
+                const Rect lv = c.live();
                 c.thumb->visible = true;
-                c.thumb->x.set(c.rect.x);
-                c.thumb->y.set(c.rect.y - scrollY());   // grid-clip local space (eased scroll)
-                c.thumb->width.set(cardW);
-                c.thumb->height.set(thumbH);
+                c.thumb->x.set(lv.x);
+                c.thumb->y.set(lv.y - scrollY());   // grid-clip local space (eased scroll)
+                c.thumb->width.set(lv.w);
+                c.thumb->height.set(lv.w * 9.0 / 16.0);
             }
         }
         place(mNewCardRect);  // trailing New-Project card
@@ -268,6 +337,26 @@ namespace cosmo_v2
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
 
+        // R-G-1: drive the reflow, and re-place each thumbnail on this frame's eased values so
+        // the image and its chrome stay one object while the grid rearranges.
+        mNowMs = nowMs;
+        bool reflowing = false;
+        for (auto &c : mCards)
+        {
+            c.ax.update(nowMs); c.ay.update(nowMs); c.aw.update(nowMs); c.ah.update(nowMs);
+            if (c.ax.isAnimating() || c.ay.isAnimating() || c.aw.isAnimating() || c.ah.isAnimating())
+                reflowing = true;
+            if (c.shown && c.thumb)
+            {
+                const Rect lv = c.live();
+                c.thumb->x.set(lv.x);
+                c.thumb->y.set(lv.y - scrollY());
+                c.thumb->width.set(lv.w);
+                c.thumb->height.set(lv.w * 9.0 / 16.0);
+            }
+        }
+        (void)reflowing;
+
         // Ease the grid scroll toward its target so the wheel glides instead of snapping.
         if (mScrollY != mScrollIssued)
         {
@@ -294,7 +383,8 @@ namespace cosmo_v2
         {
             const Card &c = mCards[i];
             if (!c.shown) continue;
-            const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
+            const Rect lv = c.live();   // R-G-1: the eased rect, not the target
+            const Rect s{gridLeft + lv.x, gy + lv.y - scrollY(), lv.w, lv.h};
             if (s.contains(local)) { kind = Region::Card; index = i; return; }
         }
         const Rect ns{gridLeft + mNewCardRect.x, gy + mNewCardRect.y - scrollY(), mNewCardRect.w, mNewCardRect.h};
@@ -335,7 +425,8 @@ namespace cosmo_v2
         for (auto &c : mCards)
         {
             if (!c.shown) continue;
-            const Rect s{gridLeft + c.rect.x, gy + c.rect.y - scrollY(), c.rect.w, c.rect.h};
+            const Rect lv = c.live();   // R-G-1: the eased rect, not the target
+            const Rect s{gridLeft + lv.x, gy + lv.y - scrollY(), lv.w, lv.h};
             if (s.contains(local))
             {
                 // Remember the FULL card rect + its info as the fly-to-centre start, so
@@ -412,7 +503,7 @@ namespace cosmo_v2
         }
 
         // ── sidebar: bottom reserved links + version ──
-        const double blockTop = H - 137.0;
+        const double blockTop = H - kBottomBlockH;
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(kPad, blockTop); t.lineTo(kSidebarW - kPad, blockTop); t.strokePath();
         const char *links[3] = {"Settings", "What's New", "Help & Documentation"};
@@ -431,7 +522,7 @@ namespace cosmo_v2
             t.drawText(links[i], r.x + 18.0, r.y + r.h / 2 + 4.0, 11.0, font::sans());
         }
         t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.4});
-        t.drawText("cosmo v1.0.0", kPad, blockTop + 92.0, 10.0, font::mono());
+        t.drawText("cosmo v1.0.0", kPad, blockTop + kVersionY, 10.0, font::mono());
 
         // ── right header ──
         iconClock(t, Rect{contentX() + kPad, kHeaderH / 2 - 6.5, 13.0, 13.0}, palette::mutedForeground(), 1.2);
@@ -465,7 +556,7 @@ namespace cosmo_v2
         {
             const Card &c = mCards[ci];
             if (!c.shown) continue;
-            const Rect s = cardScreen(c.rect);
+            const Rect s = cardScreen(c.live());
             const double hv = mHover.amount(hoverId(Region::Card, ci));
             // Shared card chrome (thumbnail itself is the ImageView child, drawn over it).
             drawProjectCardChrome(t, s, {c.info.name, c.info.photos, c.info.size, c.info.date, c.info.edited}, hv);

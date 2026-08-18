@@ -1428,7 +1428,16 @@ int main(int argc, char **argv)
     gtk_window_set_default_size(GTK_WINDOW(host.window), kW, kH);
 
     host.area = gtk_drawing_area_new();
-    gtk_widget_set_size_request(host.area, 640, 400);
+    // The minimum is ASKED FOR, not guessed. HomeScreen sums its own anchored blocks — the
+    // action buttons are pinned to the top and the Settings / What's New / Help links to the
+    // bottom — so at 400 px they overlapped, and a hardcoded number here could never notice the
+    // layout changing. `+ 1` on the width is the sidebar plus one card at its minimum.
+    {
+        const int minW = (int)std::ceil(arstro::cosmo_v2::HomeScreen::minContentWidth());
+        const int minH = (int)std::ceil(arstro::cosmo_v2::HomeScreen::minContentHeight());
+        gtk_widget_set_size_request(host.area, minW, minH);
+        LOGI("window: minimum %dx%d, summed from the home layout (R-G-1 / R-HOME)", minW, minH);
+    }
     gtk_widget_set_can_focus(host.area, TRUE);
     gtk_widget_add_events(host.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);

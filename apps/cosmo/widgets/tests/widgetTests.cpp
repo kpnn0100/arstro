@@ -53,6 +53,12 @@ namespace
     {
         using HomeScreen::handleGesture;
         using HomeScreen::bottomLinkRect;
+        using HomeScreen::actionRect;   // for the min-height assertion
+        /** R-G-1 needs both halves visible to a test: where a card is being drawn NOW versus
+         *  where the layout wants it. If only the target were readable, an implementation that
+         *  snapped would be indistinguishable from one that eases. */
+        artboard::Rect cardLive(int i) const { return cards()[i].live(); }
+        artboard::Rect cardTarget(int i) const { return cards()[i].rect; }
     };
 
     Gesture ev(Gesture::Type t)
@@ -739,6 +745,85 @@ namespace
         home->handleGesture(ev(Gesture::Type::Click), centreOf(r));
         check(opened == 1, "and it is still clickable there");
     }
+
+    // ── R-G-1: the grid reflow travels, it does not snap ──────────────────────────────
+    // The column count changes DISCRETELY as the window resizes — 4 across becomes 3 at one
+    // particular width — so before this every card's size and position jumped at that instant.
+    // R-G-1 admits no exception: "no component may suddenly change size, appear, disappear,
+    // move, recolor, or reflow in a single frame."
+    void homeGridReflowIsAnimated()
+    {
+        auto home = makeHome(1440.0, 900.0);
+        std::vector<HomeScreen::CardInfo> cards(6);
+        for (int i = 0; i < 6; ++i) { cards[i].name = "p" + std::to_string(i); cards[i].recentIndex = i; }
+        home->setRecents(cards);
+        home->advance(0.0);
+        home->layout();
+        home->advance(16.0);
+
+        const artboard::Rect before = home->cardLive(0);
+        check(before.w > 0.0, "the first layout places a card at once (no fly-in on open)");
+        check(std::fabs(before.w - home->cardTarget(0).w) < 0.01,
+              "and it starts AT its target, not eased toward it");
+
+        // Squeeze the window so the grid must drop a column.
+        home->width.set(760.0);
+        home->layout();
+        home->advance(32.0);
+
+        const artboard::Rect target = home->cardTarget(0);
+        const artboard::Rect live = home->cardLive(0);
+        check(std::fabs(target.w - before.w) > 1.0, "the narrower window really did change the card size");
+        check(std::fabs(live.w - target.w) > 0.5,
+              "R-G-1: one frame after the reflow the card is still on its way, not already there");
+        check(std::fabs(live.w - before.w) < std::fabs(target.w - before.w),
+              "and it has started moving rather than sitting still");
+
+        // Let the ease finish; it must ARRIVE, not stall short of the target.
+        home->advance(32.0 + 400.0);
+        const artboard::Rect settled = home->cardLive(0);
+        check(std::fabs(settled.w - target.w) < 0.01, "and it arrives exactly at the target");
+        check(std::fabs(settled.x - target.x) < 0.01 && std::fabs(settled.y - target.y) < 0.01,
+              "in both axes");
+    }
+
+    // ── the window minimum is summed from the layout, not guessed ─────────────────────
+    // The action buttons are anchored to the sidebar's TOP and the Settings / What's New /
+    // Help & Documentation links to its BOTTOM, so a window shorter than their sum overlaps
+    // them. A hardcoded 400 px minimum did exactly that and could never notice the layout
+    // changing underneath it.
+    void homeMinimumHeightClearsBothAnchoredBlocks()
+    {
+        const double minH = HomeScreen::minContentHeight();
+        auto home = makeHome(HomeScreen::minContentWidth(), minH);
+
+        // The lowest action button must finish above the highest bottom link, with air.
+        const artboard::Rect lastAction = home->actionRect(2);
+        const artboard::Rect firstLink = home->bottomLinkRect(0);
+        const double actionsBottom = lastAction.y + lastAction.h;
+        check(firstLink.y > actionsBottom,
+              "at the minimum height the links start BELOW the action buttons");
+        check(firstLink.y - actionsBottom > 8.0, "with visible air, not merely non-overlapping");
+
+        // The version line is the lowest thing in the sidebar: it must still be on screen.
+        const artboard::Rect lastLink = home->bottomLinkRect(2);
+        check(lastLink.y + lastLink.h < minH, "and the last link fits inside the window");
+
+        // The minimum must be doing real work, not sitting comfortably clear of the problem —
+        // a slack minimum hides the NEXT layout change instead of catching it. So find the
+        // tallest window that still overlaps, by scanning rather than by hardcoding a delta
+        // (the first attempt guessed 40 px and was simply wrong: the built-in air is 32 px plus
+        // the link block's own 16 px offset, so 40 px short of the minimum still cleared it).
+        double firstOverlap = -1.0;
+        for (double h = minH; h > 200.0; h -= 1.0)
+        {
+            auto probe = makeHome(HomeScreen::minContentWidth(), h);
+            if (probe->bottomLinkRect(0).y < actionsBottom) { firstOverlap = h; break; }
+        }
+        check(firstOverlap > 0.0, "some window height below the minimum does overlap");
+        check(minH - firstOverlap < 64.0,
+              "and it is close below the minimum, so the minimum is tight rather than generous");
+    }
 }
 
 int main()
@@ -778,6 +863,8 @@ int main()
     exportProgressIgnoresInputAndReopensClean();
 
     homeSettingsLinkOpensSettings();
+    homeGridReflowIsAnimated();
+    homeMinimumHeightClearsBothAnchoredBlocks();
     homeReservedLinksStaySilentButSwallowTheClick();
     homeSettingsLinkIsReachableAtASmallWindow();
 
