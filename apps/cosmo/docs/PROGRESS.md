@@ -44,8 +44,12 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-17 · Last commit: S3, cosmo-cc — and a CLI dump and a GUI dump of the same
-project are byte-identical (R-SVC-9), which found and fixed D-14 + D-15.
+Last updated: 2026-08-18 · Last commit: D-22, a load now reports the WORK (entries claimed, named
+stage) rather than only finished results — the nine seconds of "Preparing…" are gone.
+
+**Milestone S is COMPLETE** (S1…S5). The §5 checks all pass: a CLI dump and a GUI dump of the same
+project are byte-identical, no widget reaches past the service, every behaviour is a command,
+a load's measured peak stays inside the budget, and the acceptance test runs unattended.
 
 ---
 

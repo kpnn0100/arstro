@@ -19,40 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-22 — A load shows "Preparing…" for 9 seconds, then a bar that jumps in fives
-- **Area:** core + design / load UX · **Status:** Confirmed (measured) · **Severity:** S3
-- **Found:** 2026-08-18, reported by the user: "it only shows Preparing… a long time then jumps
-  into the edit page".
-- **Reproduce:**
-  ```bash
-  XDG_CONFIG_HOME=/tmp/lux ./build/apps/cosmo/cosmo japan18.cmp   # 18 RAF files
-  grep -E "project.opening|load.progress|load.finished" /tmp/lux/cosmo_v2/cosmo_v2.log
-  ```
-- **Expected:** R-LOADUX-3, "Progress that means something" — a photographer can always tell how
-  much is left, in both phases.
-- **Actual**, measured on the reported 18-RAF project:
-  ```
-  11:51:32.994  project.opening entries=18      <- "Preparing…", bar at 0
-  11:51:42.104  load.progress done=1            <- 9.1 SECONDS with no signal at all
-  11:51:42.169  load.progress done=2            <-   ...then 65 ms later
-  11:51:51.440  load.progress done=9
-  11:52:08.816  load.progress done=18           <- 35.8 s total, then the editor appears
-  ```
-  Two distinct faults. **(a) A quarter of the load has no signal**: the only progress event is
-  "an entry finished", and with 5 workers each taking ~9 s on a 26 MB RAF, nothing at all happens
-  for the first 9 s even though five decodes are in flight. **(b) The bar advances in bursts of
-  five** — the pool size — because workers that start together finish together, so it leaps 5/18
-  at a time rather than moving.
-- **Judgement:** defect against R-LOADUX-3. The requirement was written when progress was assumed
-  to arrive smoothly; it says the count must be against the project's real total, and it is, but a
-  count that is 0 for nine seconds does not tell a photographer how much is left. The requirement
-  needs amending to say what granularity means, which is the substance of the fix.
-- **Cause:** the load's only progress signal is completion. `OrderedParallelLoad` knows when a
-  worker *claims* an entry and nobody asks; `ProjectLoader` reports `consumed()` only; and the
-  view has no way to distinguish "waiting" from "nothing happening", so it eases a bar toward a
-  target that does not move.
-- **Fix:** two commits, core then design (the skills own different halves).
-
 ### D-17 — The control socket does nothing on Windows
 - **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
 - **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
@@ -92,6 +58,55 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+### D-22 — A load shows "Preparing…" for 9 seconds, then a bar that jumps in fives
+- **Area:** core + design / load UX · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-18, reported by the user: "it only shows Preparing… a long time then jumps
+  into the edit page".
+- **Reproduce:**
+  ```bash
+  XDG_CONFIG_HOME=/tmp/lux ./build/apps/cosmo/cosmo japan18.cmp   # 18 RAF files
+  grep -E "project.opening|load.progress|load.finished" /tmp/lux/cosmo_v2/cosmo_v2.log
+  ```
+- **Expected:** R-LOADUX-3, "Progress that means something" — a photographer can always tell how
+  much is left, in both phases.
+- **Actual**, measured on the reported 18-RAF project:
+  ```
+  11:51:32.994  project.opening entries=18      <- "Preparing…", bar at 0
+  11:51:42.104  load.progress done=1            <- 9.1 SECONDS with no signal at all
+  11:51:42.169  load.progress done=2            <-   ...then 65 ms later
+  11:51:51.440  load.progress done=9
+  11:52:08.816  load.progress done=18           <- 35.8 s total, then the editor appears
+  ```
+  Two distinct faults. **(a) A quarter of the load has no signal**: the only progress event is
+  "an entry finished", and with 5 workers each taking ~9 s on a 26 MB RAF, nothing at all happens
+  for the first 9 s even though five decodes are in flight. **(b) The bar advances in bursts of
+  five** — the pool size — because workers that start together finish together, so it leaps 5/18
+  at a time rather than moving.
+- **Judgement:** defect against R-LOADUX-3. The requirement was written when progress was assumed
+  to arrive smoothly; it says the count must be against the project's real total, and it is, but a
+  count that is 0 for nine seconds does not tell a photographer how much is left. The requirement
+  needs amending to say what granularity means, which is the substance of the fix.
+- **Cause:** the load's only progress signal is completion. `OrderedParallelLoad` knows when a
+  worker *claims* an entry and nobody asks; `ProjectLoader` reports `consumed()` only; and the
+  view has no way to distinguish "waiting" from "nothing happening", so it eases a bar toward a
+  target that does not move.
+- **Fix:** commits `e05183e` (core) + `b9dd26e` (design), core first as the skills require.
+  **Core:** `ProjectLoader::drainStarted()` buffers each worker's claim under a mutex — a callback
+  would fire on a worker and the service is single-threaded by contract (R-SVC-6) — and `pump()`
+  turns them into `EntryStarted` events; `LoadModel` gains `started`, `stage` and `inFlight()`;
+  new `LoadStage` events name reading / decoding / saving. **Design:** the bar draws three bands
+  (finished, in-flight pulsing on a 380 ms sine, track) and the status line names a file when a
+  worker CLAIMS it. Same load, after: `entry.started … name=DSCF5186.RAF` at **+17 ms** instead of
+  the first signal at +9.1 s.
+- **Guarded by:** `a_load_reports_work_before_any_result` — a decoder slow enough that claims must
+  precede completions, asserting the first claim arrives at `done == 0`, which is the precise
+  ordering the defect was about. Verified visually too: a window capture **four seconds into a
+  load**, the moment that used to show "Preparing…" over an empty bar, reads
+  `Loading DSCF5807.RAF` with the in-flight band about five-eighteenths across — the five workers.
+- **Not fixed, and deliberately:** the load still takes 35.8 s and still reveals only at the end.
+  That is R-LOADPERF-3's existing choice and a separate question; D-22 was about the nine seconds
+  of silence, not the duration.
+
 ### D-21 — `AppModel::frameSeq` and `Event::FrameReady` are declared and never produced
 - **Area:** core / service · **Status:** **Fixed** · **Severity:** S3
 - **Found:** 2026-08-18, by the shot renderer's author, who read `AppModel.h`'s "a test can wait
