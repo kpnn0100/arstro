@@ -129,7 +129,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   is no verbosity flag, no category filter, no way to silence the stderr echo, and no way to relocate the
   file except via `XDG_CONFIG_HOME`/`HOME`.
 - **Judgement:** defect — "levelled" is stated in DR-NFR-5 and is not implemented.
-- **Fix:** commit `P04_HASH`. The level is compared in `writef()` **before** the `vsnprintf`, so a
+- **Fix:** commit `b4847a3`. The level is compared in `writef()` **before** the `vsnprintf`, so a
   suppressed `LOGD` costs a load and a branch. Added `Category{Ui,Input,Render,Load,Session,Export,
   Gpu}`, the flags `--log-level` / `--debug` / `--log-categories` / `--log-file` / `--log-stderr`,
   and `COSMO_LOG_LEVEL` / `COSMO_LOG_CATEGORIES` / `COSMO_LOG_FILE` / `COSMO_LOG_STDERR` for when
@@ -157,7 +157,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Actual:** they hit stderr only and vanish from the file. `G_DEBUG=fatal-warnings` under gdb is the
   only current way to catch them.
 - **Judgement:** defect — DR-NFR-5's intent is not met for the diagnostics that matter most.
-- **Fix:** commit `P04_HASH`. `log::installGlibHandler()` installs `g_log_set_default_handler`
+- **Fix:** commit `b4847a3`. `log::installGlibHandler()` installs `g_log_set_default_handler`
   alongside the print/printerr pair, mapping ERROR/CRITICAL→Error, WARNING→Warn, MESSAGE→Info,
   INFO/DEBUG→Debug, all under `Category::Ui`, keeping GLib's domain in the text rather than
   translating it into our category vocabulary. Two traps are commented in place: a
@@ -178,7 +178,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Expected:** a crash on the development host produces frames.
 - **Actual:** a signal name and nothing else — on the very host this project is developed on.
 - **Judgement:** defect against R-NFR / DR-NFR-5's intent (a crash leaves a diagnosable record).
-- **Fix:** commit `P04_HASH`. `CaptureStackBackTrace` + dbghelp (`SymFromAddr`,
+- **Fix:** commit `b4847a3`. `CaptureStackBackTrace` + dbghelp (`SymFromAddr`,
   `SymGetLineFromAddr64`), with dbghelp resolved by `LoadLibraryA`/`GetProcAddress` — the OmpPin
   pattern — so an optional diagnostic never becomes a link dependency. Symbols are initialised in
   `installCrashHandler()`, **never in the handler**: `LoadLibrary`/`SymInitialize` take the loader
