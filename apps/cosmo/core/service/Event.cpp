@@ -17,6 +17,8 @@ namespace cosmo
             case Event::Kind::ProjectClosed: return "project.closed";
             case Event::Kind::ProjectSaved: return "project.saved";
             case Event::Kind::LoadProgress: return "load.progress";
+            case Event::Kind::EntryStarted: return "entry.started";
+            case Event::Kind::LoadStage: return "load.stage";
             case Event::Kind::EntryDecoded: return "entry.decoded";
             case Event::Kind::EntryFailed: return "entry.failed";
             case Event::Kind::LoadFinished: return "load.finished";
@@ -48,6 +50,8 @@ namespace cosmo
                 if (!e.text.empty()) o << " name=" << e.text;
                 break;
             case Event::Kind::EntryDecoded: o << " index=" << e.a << " slot=" << e.b << " name=" << e.text; break;
+            case Event::Kind::EntryStarted: o << " index=" << e.a << " started=" << e.b << " name=" << e.text; break;
+            case Event::Kind::LoadStage: o << " stage=" << e.text; break;
             case Event::Kind::EntryFailed: o << " index=" << e.a << " path=" << e.text; break;
             case Event::Kind::LoadFinished: o << " decoded=" << e.a << " total=" << e.b; break;
             case Event::Kind::SelectionChanged: o << " node=" << e.a << " slot=" << e.b; break;

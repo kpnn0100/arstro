@@ -73,13 +73,23 @@ namespace cosmo
         bool selected = false;
     };
 
+    /** R-LOADUX-4. Three numbers, not one, because a count of finished entries is not progress
+     *  when one entry takes nine seconds: five workers claim together and finish together, so
+     *  `done` alone sat at 0 for 9.1 s and then leapt by five (D-22). `started` is the earliest
+     *  honest signal there is — a RAW decode reports no internal progress, so cosmo says what it
+     *  knows and lets the view animate the uncertainty rather than inventing a percentage. */
     struct LoadModel
     {
         bool active = false;
-        int done = 0;
+        int done = 0;           // entries applied, in order
+        int started = 0;        // entries a worker has claimed; >= done
         int total = 0;
         std::string status;     // "Loading  DSCF5186.RAF" — what, not how far
+        std::string stage;      // "reading" | "decoding" | "saving" | "" — the named phase
         int workers = 0;        // the pool the budget allotted (R-CPU-4)
+        /** In flight right now: claimed but not yet applied. The view draws this slice of the
+         *  bar as work rather than as emptiness, which is what stops it reading as a stall. */
+        int inFlight() const { return started > done ? started - done : 0; }
     };
 
     struct ExportModel

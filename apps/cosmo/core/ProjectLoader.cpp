@@ -30,6 +30,14 @@ namespace cosmo
                 // RAW decode, and per-call is provably per-thread without a thread_local.
                 auto dec = makeDecoder ? makeDecoder() : nullptr;
                 mBudget->producerEnter();          // measured peak, not assumed (R-CPU-4)
+                {
+                    // R-LOADUX-4: the claim is the earliest honest signal there is. A RAW decode
+                    // reports no internal progress, so "a worker has started entry i" is the only
+                    // thing cosmo can say during the seconds it takes.
+                    std::lock_guard<std::mutex> lk(mStartedMu);
+                    mStartedQueue.push_back(i);
+                    ++mStartedCount;
+                }
                 Result r = produce(i, dec.get());
                 mBudget->producerExit();
                 return r;
@@ -67,6 +75,19 @@ namespace cosmo
         return r;
     }
 
+    void ProjectLoader::drainStarted(std::vector<std::size_t> &out)
+    {
+        std::lock_guard<std::mutex> lk(mStartedMu);
+        out.insert(out.end(), mStartedQueue.begin(), mStartedQueue.end());
+        mStartedQueue.clear();
+    }
+
+    std::size_t ProjectLoader::started() const
+    {
+        std::lock_guard<std::mutex> lk(mStartedMu);
+        return mStartedCount;
+    }
+
     bool ProjectLoader::poll(Result &out)
     {
         if (!mPipe.tryConsume(out)) return false;
@@ -82,6 +103,11 @@ namespace cosmo
         releaseBudget();
         mEntries.clear();
         mWorkers = 0;
+        {
+            std::lock_guard<std::mutex> lk(mStartedMu);
+            mStartedQueue.clear();
+            mStartedCount = 0;
+        }
     }
 
     void ProjectLoader::releaseBudget()

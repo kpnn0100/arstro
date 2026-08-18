@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -94,12 +95,28 @@ namespace cosmo
          *  what the percentage suggests (R-CPU-5: the cap can bind first). */
         int workers() const { return mWorkers; }
 
+        /** Entries a worker has CLAIMED and is decoding, in claim order, moved out for the
+         *  caller to report. R-LOADUX-4: a count of finished entries is not progress when one
+         *  entry takes nine seconds — five workers start together, so without this the bar sits
+         *  at zero for the length of the first decode and then leaps by five (D-22).
+         *
+         *  Buffered rather than delivered by callback because `produce()` runs on a worker and
+         *  the service is single-threaded by contract (R-SVC-6): the claim is recorded under a
+         *  mutex here and turned into an Event by whoever pumps. */
+        void drainStarted(std::vector<std::size_t> &out);
+        /** How many entries have been claimed — finished ones included. */
+        std::size_t started() const;
+
         /** Stop the workers, join them, and release the budget. Idempotent. */
         void stop();
 
     private:
         Result produce(std::size_t i, IImageDecoder *dec) const;
         void releaseBudget();
+
+        mutable std::mutex mStartedMu;
+        std::vector<std::size_t> mStartedQueue;   // claimed, not yet reported
+        std::size_t mStartedCount = 0;
 
         std::vector<EditSession::WorkspaceEntry> mEntries;
         OrderedParallelLoad<Result> mPipe;

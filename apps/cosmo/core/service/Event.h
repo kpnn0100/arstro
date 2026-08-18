@@ -38,6 +38,8 @@ namespace cosmo
             ProjectClosed,
             ProjectSaved,     // text = path
             LoadProgress,     // a = done, b = total, text = entry name
+            EntryStarted,     // a = index, b = started count, text = name — R-LOADUX-4 / D-22
+            LoadStage,        // text = stage name
             EntryDecoded,     // a = index, b = slot, text = name
             EntryFailed,      // a = index, text = path
             LoadFinished,     // a = decoded, b = total

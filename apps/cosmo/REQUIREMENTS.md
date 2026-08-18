@@ -758,6 +758,19 @@ load is therefore made **visible** rather than slower:
   draws as a dimmed cell with a **spinning indicator** (a rotating arc — the placeholder for the
   supplied loading animation) instead of a thumbnail, so an un-arrived photo reads as *pending*, not
   as *missing*. The spinner is driven from the frame clock and stops as soon as the cell has pixels.
+- **R-LOADUX-4 Progress at the granularity of the work, not of the results.** (**Added
+  2026-08-18, D-22.**) A count of finished entries is not progress when one entry takes nine
+  seconds: on the reported 18-RAF project the bar sat at 0 for 9.1 s and then advanced in bursts
+  of five, because five workers start together and finish together. So the load reports **three
+  things, not one**: entries **finished**, entries **started** (a worker has claimed them and is
+  decoding), and a named **stage** — reading the project, decoding, writing the project for an
+  import, done. The view therefore always has something true to say and something to animate:
+  the determinate part of the bar is `finished/total`, the **in-flight** part
+  `(started-finished)/total` is drawn as work-in-progress rather than as emptiness, and the
+  status line names an entry the moment a worker picks it up instead of when it lands.
+  This is deliberately *not* a fake percentage: a RAW decode reports no internal progress, so
+  cosmo states what it knows — how many are done, how many are being worked on — and animates the
+  uncertainty instead of inventing a number for it.
 - **R-LOADUX-3 Progress that means something.** The loading screen's bar and status line report
   **`n of N`** against the project's real total, not an unlabelled fraction; and because the editor
   is revealed early, a **slim determinate progress bar remains along the top edge of the filmstrip**

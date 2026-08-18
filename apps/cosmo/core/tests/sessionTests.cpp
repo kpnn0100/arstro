@@ -1347,6 +1347,60 @@ namespace
         printf("[PASS] a_preview_frame_reaches_the_model (seq %u -> %u, %d events)\n",
                before, svc.model().frameSeq, frameEvents);
     }
+
+    // D-22 / R-LOADUX-4: a load must say something before the first entry FINISHES. With five
+    // workers each taking ~9 s on a RAF, `done` alone left the bar at zero for 9.1 s and then
+    // leapt by five. The claim is the earliest honest signal there is.
+    void test_a_load_reports_work_before_any_result()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_started.cmp";
+        writeFakeProject(path, 12, false, false);
+
+        ThreadBudget budget(100, 8);
+        CosmoService svc(budget);
+        // A decoder slow enough that claims MUST arrive before completions, which is the
+        // ordering the defect was about.
+        struct Slow : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &p) override
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(60));
+                DecodedImage d; d.width = d.height = 8;
+                d.rgba.assign((size_t)8 * 8 * 4, 120); d.name = p;
+                return d;
+            }
+        };
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new Slow()); });
+
+        int firstStartedAtDone = -1, startedEvents = 0;
+        std::vector<std::string> stages;
+        svc.subscribe([&](const Event &e) {
+            if (e.kind == Event::Kind::LoadStage) stages.push_back(e.text);
+            if (e.kind != Event::Kind::EntryStarted) return;
+            if (++startedEvents == 1) firstStartedAtDone = svc.model().load.done;
+            assert(!e.text.empty() && "a claim names the entry, or the status line has nothing to say");
+        });
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        // The stage is announced before any decode, so the seconds before the first result
+        // still say something true.
+        assert(!stages.empty() && stages.front() == "reading");
+        pumpUntilIdle(svc);
+
+        assert(startedEvents == 12 && "every entry announced its claim exactly once");
+        assert(firstStartedAtDone == 0 && "the FIRST claim arrived before ANY entry had finished");
+        assert(svc.model().load.started == 12 && svc.model().load.done == 12);
+        assert(svc.model().load.inFlight() == 0 && "nothing in flight once it is all applied");
+        bool sawDecoding = false;
+        for (const std::string &st : stages) if (st == "decoding") sawDecoding = true;
+        assert(sawDecoding);
+
+        std::filesystem::remove(path);
+        printf("[PASS] a_load_reports_work_before_any_result (%d claims, first at done=%d)\n",
+               startedEvents, firstStartedAtDone);
+    }
 }
 
 int main()
@@ -1384,6 +1438,7 @@ int main()
     test_a_view_may_reset_on_project_opening();
     test_settings_and_dump_options_reach_the_model();
     test_a_preview_frame_reaches_the_model();
+    test_a_load_reports_work_before_any_result();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

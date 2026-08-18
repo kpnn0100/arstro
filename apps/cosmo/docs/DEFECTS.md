@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-22**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-23**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,40 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-22 — A load shows "Preparing…" for 9 seconds, then a bar that jumps in fives
+- **Area:** core + design / load UX · **Status:** Confirmed (measured) · **Severity:** S3
+- **Found:** 2026-08-18, reported by the user: "it only shows Preparing… a long time then jumps
+  into the edit page".
+- **Reproduce:**
+  ```bash
+  XDG_CONFIG_HOME=/tmp/lux ./build/apps/cosmo/cosmo japan18.cmp   # 18 RAF files
+  grep -E "project.opening|load.progress|load.finished" /tmp/lux/cosmo_v2/cosmo_v2.log
+  ```
+- **Expected:** R-LOADUX-3, "Progress that means something" — a photographer can always tell how
+  much is left, in both phases.
+- **Actual**, measured on the reported 18-RAF project:
+  ```
+  11:51:32.994  project.opening entries=18      <- "Preparing…", bar at 0
+  11:51:42.104  load.progress done=1            <- 9.1 SECONDS with no signal at all
+  11:51:42.169  load.progress done=2            <-   ...then 65 ms later
+  11:51:51.440  load.progress done=9
+  11:52:08.816  load.progress done=18           <- 35.8 s total, then the editor appears
+  ```
+  Two distinct faults. **(a) A quarter of the load has no signal**: the only progress event is
+  "an entry finished", and with 5 workers each taking ~9 s on a 26 MB RAF, nothing at all happens
+  for the first 9 s even though five decodes are in flight. **(b) The bar advances in bursts of
+  five** — the pool size — because workers that start together finish together, so it leaps 5/18
+  at a time rather than moving.
+- **Judgement:** defect against R-LOADUX-3. The requirement was written when progress was assumed
+  to arrive smoothly; it says the count must be against the project's real total, and it is, but a
+  count that is 0 for nine seconds does not tell a photographer how much is left. The requirement
+  needs amending to say what granularity means, which is the substance of the fix.
+- **Cause:** the load's only progress signal is completion. `OrderedParallelLoad` knows when a
+  worker *claims* an entry and nobody asks; `ProjectLoader` reports `consumed()` only; and the
+  view has no way to distinguish "waiting" from "nothing happening", so it eases a bar toward a
+  target that does not move.
+- **Fix:** two commits, core then design (the skills own different halves).
 
 ### D-17 — The control socket does nothing on Windows
 - **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3

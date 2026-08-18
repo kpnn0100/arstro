@@ -105,6 +105,7 @@ namespace cosmo
         if (m.load.active || mLoader.total() > 0)
         {
             m.load.done = (int)mLoader.consumed();
+            m.load.started = (int)mLoader.started();
             m.load.total = (int)mLoader.total();
             m.load.workers = mLoader.workers();
         }
@@ -152,13 +153,23 @@ namespace cosmo
         // state it describes exists, so a view that reacts by resetting cannot destroy work
         // the service has already done.
         mModel.screen = Screen::Loading;
+        mModel.load.stage = "reading";
+        mModel.load.started = 0;
+        mModel.load.done = 0;
+        mModel.load.total = (int)entries.size();
         emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
         emit(Event::Kind::ProjectOpening, stemOf(path), 0, (int)entries.size());
+        emit(Event::Kind::LoadStage, mModel.load.stage);
 
         mSession.resetWorkspace();
 
         // R-LOADUX-1: the whole rack exists before a single pixel decodes, so entry parents
         // resolve here and an out-of-order arrival can never reparent the tree.
+        mEntryNames.clear();
+        mEntryNames.reserve(entries.size());
+        for (const auto &e : entries)
+            mEntryNames.push_back(e.group ? e.name : baseOf(e.imagePath));
+
         mNodeOf.assign(entries.size(), 0);
         for (size_t i = 0; i < entries.size(); ++i)
         {
@@ -170,6 +181,8 @@ namespace cosmo
 
         const size_t n = entries.size();
         mLoader.start(std::move(entries), mBudget, mMakeDecoder, mWorkerInit);
+        mModel.load.stage = "decoding";
+        emit(Event::Kind::LoadStage, mModel.load.stage);
         emit(Event::Kind::Info,
              "load.started workers=" + std::to_string(mLoader.workers()) +
                  " engine=" + std::to_string(mBudget.engineThreads()) +
@@ -209,6 +222,18 @@ namespace cosmo
 
         if (!mLoader.active() && mLoader.total() == 0) return;
 
+        // R-LOADUX-4: claims first. A worker announcing "I have started entry i" is the only
+        // thing there is to say during the seconds a RAW decode takes, and without it the view
+        // has no way to tell waiting from stalled (D-22).
+        mStartedScratch.clear();
+        mLoader.drainStarted(mStartedScratch);
+        for (std::size_t i : mStartedScratch)
+        {
+            mModel.load.started = (int)mLoader.started();
+            const std::string name = i < mEntryNames.size() ? mEntryNames[i] : std::string();
+            emit(Event::Kind::EntryStarted, name, (int)i, mModel.load.started);
+        }
+
         bool any = false;
         ProjectLoader::Result r;
         while (mLoader.poll(r))
@@ -246,6 +271,11 @@ namespace cosmo
             for (const NodeModel &n : mModel.nodes) if (!n.group && n.slot >= 0) ++decoded;
 
             mSession.finishWorkspaceLoad(mLoadPath);
+            if (mSaveOnFinish)
+            {
+                mModel.load.stage = "saving";
+                emit(Event::Kind::LoadStage, mModel.load.stage);
+            }
             if (mSaveOnFinish && !mSession.saveWorkspaceAs(mLoadPath))
                 emit(Event::Kind::Error, "could not write project " + mLoadPath);
 
@@ -260,6 +290,8 @@ namespace cosmo
             refreshRecents();
 
             mModel.screen = Screen::Editor;
+            mModel.load.stage.clear();
+            emit(Event::Kind::LoadStage, std::string());
             refreshModel();
             // Counted after refreshModel so `decoded` reflects the final tree, not the
             // one-behind snapshot the loop was reading.
