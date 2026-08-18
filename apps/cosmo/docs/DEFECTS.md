@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-23**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-24**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -58,6 +58,44 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-23 — Images have no name, and the export dialog calls them "(missing image)"
+- **Area:** core / persistence (symptom: design) · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-18, reported by the user. **It was visible in this project's own acceptance
+  dumps for a day before anyone read it** — `node=1 … kind=image slot=0 … name=` — which is worth
+  more than the bug: a dump nobody reads is not evidence.
+- **Reproduce:**
+  ```bash
+  printf 'project open two.cmp\nwait load.finished\nstate print --stable\n' \
+    | cosmo-cc run --script - | grep '^  node='
+  #  before:  node=1 parent=-1 depth=0 kind=image slot=0 bypass=0 selected=1 name=
+  ```
+- **Expected:** an image is named by its file, wherever a name is shown.
+- **Actual:** every image node's name was the empty string. The export dialog substitutes
+  `"(missing image)"` for an empty leaf name (`App.cpp:407`), which is what the user saw; the
+  filmstrip cell and the breadcrumb simply drew nothing. The top bar looked *correct* the whole
+  time because it derives from `currentSourcePath()` rather than the node — which is precisely why
+  this survived so long: the one place a name was obviously wanted was the one place it worked.
+- **Judgement:** defect. Not a regression from the service work, and checked rather than assumed:
+  `git log -S "addPendingImage(parent, e.name)"` traces the line to the repo reorganisation, long
+  before any of it. S2 moved the call; it did not break it.
+- **Cause:** `readWorkspaceFile` parses `path=` into `imagePath` and **never sets `name`** — the
+  format stores a name only for a `#group`, and `WorkspaceEntry::name` was documented "groups
+  only". `addPendingImage(parent, e.name)` therefore created a nameless leaf, and `attachImage`
+  copied that empty string into `mSlotNames`, from where every consumer read it.
+- **Fix:** commit `D23_HASH`, in two places on purpose. **The reader** names an image entry from
+  its path, which fixes every consumer at once — the service's tree, the filmstrip, the breadcrumb,
+  the export dialog and `cosmo-cc` — rather than each of them learning to derive it, which is how
+  they came to disagree in the first place. **And `attachImage`** falls back to the path when it is
+  handed a nameless leaf: it is the sink every producer funnels through, it has the path in its
+  hand, and the original failure was **silent** — an empty name draws as nothing — which earns a
+  second line of defence.
+- **Verified:** `name=DSCF5186.RAF` in the state dump, and
+  `[evt] export.progress done=1 total=2 name=DSCF5186.RAF` from the export path, which is the same
+  `nameForSlot()` the dialog reads before deciding whether to print "(missing image)".
+- **Guarded by:** `an_image_entry_gets_its_filename` — the reader names images (including one in a
+  directory with a space) and keeps a group's stored name, and `attachImage` derives a name for a
+  nameless leaf so the tree and the filmstrip agree.
 ### D-22 — A load shows "Preparing…" for 9 seconds, then a bar that jumps in fives
 - **Area:** core + design / load UX · **Status:** **Fixed** · **Severity:** S3
 - **Found:** 2026-08-18, reported by the user: "it only shows Preparing… a long time then jumps

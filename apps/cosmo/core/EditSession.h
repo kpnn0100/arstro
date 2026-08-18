@@ -238,7 +238,7 @@ namespace cosmo
         {
             bool group = false;
             int parent = -1;
-            std::string name;              // group name (groups only)
+            std::string name;              // group name, or an image's filename (D-23)
             std::string imagePath;         // source file path (images only)
             EditParams params;              // develop settings (images AND groups)
             History history;                // branching edit timeline (empty = none saved)

@@ -1401,6 +1401,43 @@ namespace
         printf("[PASS] a_load_reports_work_before_any_result (%d claims, first at done=%d)\n",
                startedEvents, firstStartedAtDone);
     }
+
+    // D-23: the `.cmp` format stores `path=` for an image and a name only for a group, so an
+    // image entry arrived nameless and stayed nameless all the way to the filmstrip, the
+    // breadcrumb and the export dialog — where an empty name rendered as "(missing image)".
+    // Pre-existing, and silent, which is why it survived: an empty string draws as nothing.
+    void test_an_image_entry_gets_its_filename()
+    {
+        const std::string path = "/tmp/cosmo_core_names.cmp";
+        {
+            std::ofstream f(path, std::ios::trunc);
+            f << "cosmoworkspace=1\n";
+            f << "#group\nparent=-1\nname=Tokyo\n";
+            f << "#image\nparent=0\npath=/photos/DSCF5186.RAF\n";
+            f << "#image\nparent=0\npath=/photos/sub dir/_DSF6151.RAF\n";
+        }
+        std::vector<EditSession::WorkspaceEntry> entries;
+        assert(EditSession::readWorkspaceFile(path, entries));
+        assert(entries.size() == 3);
+        assert(entries[0].group && entries[0].name == "Tokyo" && "a group keeps its stored name");
+        assert(entries[1].name == "DSCF5186.RAF" && "an image is named from its path");
+        assert(entries[2].name == "_DSF6151.RAF" && "including one in a directory with a space");
+
+        // And the sink names it too, for any producer that hands over a nameless leaf — the
+        // second line of defence, because the original failure was invisible.
+        EditSession s;
+        const int node = s.addPendingImage(0, "");
+        auto px = solidImage(8, 8, 10, 20, 30);
+        EditSession::Thumb th = EditSession::makeThumb(px.data(), 8, 8, 110);
+        const int slot = s.attachImage(node, std::vector<uint8_t>(px), 8, 8,
+                                       "/photos/_DSF7014.RAF", std::move(th));
+        assert(slot >= 0);
+        assert(s.nameForSlot(slot) == "_DSF7014.RAF" && "attachImage derives a missing name");
+        assert(s.nodes()[node].name == "_DSF7014.RAF" && "and the tree agrees, so the filmstrip does");
+
+        std::filesystem::remove(path);
+        printf("[PASS] an_image_entry_gets_its_filename\n");
+    }
 }
 
 int main()
@@ -1439,6 +1476,7 @@ int main()
     test_settings_and_dump_options_reach_the_model();
     test_a_preview_frame_reaches_the_model();
     test_a_load_reports_work_before_any_result();
+    test_an_image_entry_gets_its_filename();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

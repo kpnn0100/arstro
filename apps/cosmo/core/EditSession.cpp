@@ -251,6 +251,15 @@ namespace cosmo
 
     namespace
     {
+        /** The display name of an image entry: its filename. D-23 — the `.cmp` format stores a
+         *  `path=` and no name for an image, so every consumer that wanted a name got an empty
+         *  string and rendered nothing (or, in the export dialog, "(missing image)"). */
+        std::string fileNameOf(const std::string &path)
+        {
+            const auto slash = path.find_last_of("/\\");
+            return slash == std::string::npos ? path : path.substr(slash + 1);
+        }
+
         void deleteNodeImpl(std::vector<EditSession::GNode> &nodes, arstro::RenderService &service, int node)
         {
             if (node <= 0 || node >= (int)nodes.size()) return;  // node 0 (root) can't be deleted
@@ -735,6 +744,13 @@ namespace cosmo
         auto flushEntry = [&] {
             if (!haveCur) return;
             closeParamBlock();
+            // D-23: the format carries `path=` for an image and a name only for a group, so an
+            // image entry arrived nameless and stayed that way all the way to the filmstrip and
+            // the export tree. Naming it HERE fixes every consumer at once — the service's node
+            // tree, the filmstrip cells, the export dialog and cosmo-cc — rather than each of
+            // them learning to derive it, which is how they came to disagree in the first place.
+            if (!cur.group && cur.name.empty() && !cur.imagePath.empty())
+                cur.name = fileNameOf(cur.imagePath);
             out.push_back(std::move(cur));
             cur = WorkspaceEntry{};
             haveCur = false; inImage = false; inNode = false;
@@ -869,6 +885,11 @@ namespace cosmo
         History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
         hist.init(EditParams{});
         mSlotHistory.push_back(std::move(hist));
+        // D-23 belt and braces: the reader now names entries, but this is the sink every
+        // producer funnels through and it has the path right here. An empty name failed
+        // silently — it rendered as nothing, or as "(missing image)" — and a silent failure
+        // deserves a second line of defence at the point where the truth is available.
+        if (leaf.name.empty() && !path.empty()) leaf.name = fileNameOf(path);
         mSlotNames.push_back(leaf.name);
         mSlotPaths.push_back(path);
         mSlotSessions.push_back("");
