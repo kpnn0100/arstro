@@ -83,7 +83,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   format stores a name only for a `#group`, and `WorkspaceEntry::name` was documented "groups
   only". `addPendingImage(parent, e.name)` therefore created a nameless leaf, and `attachImage`
   copied that empty string into `mSlotNames`, from where every consumer read it.
-- **Fix:** commit `D23_HASH`, in two places on purpose. **The reader** names an image entry from
+- **Fix:** commit `11a8a72`, in two places on purpose. **The reader** names an image entry from
   its path, which fixes every consumer at once — the service's tree, the filmstrip, the breadcrumb,
   the export dialog and `cosmo-cc` — rather than each of them learning to derive it, which is how
   they came to disagree in the first place. **And `attachImage`** falls back to the path when it is
