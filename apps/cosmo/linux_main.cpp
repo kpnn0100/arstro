@@ -607,9 +607,28 @@ namespace
                 a->app.refreshLibrary();       // the service already stopped the spinner
                 break;
 
+            case K::EntryStarted:
+                // R-LOADUX-4 / D-22: name it when a worker PICKS IT UP, not when it lands. On
+                // the reported project this is the difference between the status line changing
+                // in milliseconds and changing after 9.1 seconds — the whole of the complaint.
+                if (!e.text.empty()) a->app.setLoadStatus("Loading  " + e.text);
+                a->app.setLoadInFlight(e.b, a->svc.model().load.stage);
+                gtk_widget_queue_draw(a->area);
+                break;
+
+            case K::LoadStage:
+                // Named phases, so the seconds before any decode finishes still say something
+                // true: reading the project, decoding, writing it out for an import.
+                a->app.setLoadInFlight(a->svc.model().load.started, e.text);
+                if (e.text == "reading") a->app.setLoadStatus("Reading project\xE2\x80\xA6");
+                else if (e.text == "saving") a->app.setLoadStatus("Saving project\xE2\x80\xA6");
+                gtk_widget_queue_draw(a->area);
+                break;
+
             case K::LoadProgress:
                 if (!e.text.empty()) a->app.setLoadStatus("Loading  " + e.text);
                 a->app.setLoadProgress(e.a, e.b);
+                a->app.setLoadInFlight(a->svc.model().load.started, a->svc.model().load.stage);
                 a->app.setStreamProgress(e.a, e.b);   // R-LOADUX-3, in the editor
                 gtk_widget_queue_draw(a->area);
                 break;

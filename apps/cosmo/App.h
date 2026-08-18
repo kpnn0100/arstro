@@ -94,6 +94,10 @@ namespace cosmo_v2
         void setLoadingCover(const uint8_t *rgba, int w, int h);
         /** Update the loading progress bar (0 = start, done==total = complete). */
         void setLoadProgress(int done, int total);
+        /** R-LOADUX-4: entries a worker has CLAIMED, and the named stage. The bar draws
+         *  `started-done` as work in progress rather than as emptiness, which is what stops a
+         *  9-second first decode reading as a stall (D-22). */
+        void setLoadInFlight(int started, const std::string &stage);
         /** Set the load-status line shown above the progress bar (what is being loaded,
          *  e.g. "Loading  IMG_1234.jpg"). The host feeds this per item as it decodes. */
         void setLoadStatus(const std::string &text);
@@ -297,6 +301,9 @@ namespace cosmo_v2
         Screen mScreen = Screen::Home;                    // app starts on the launcher
         std::shared_ptr<HomeScreen> mHome;
         artboard::AnimatedProperty mScreenFade{0.0};      // cross-fade scrim on screen switch (1->0)
+        artboard::AnimatedProperty mInFlight{0.0};        // eased target for started/total (R-LOADUX-4)
+        int mLoadStarted = 0;
+        std::string mLoadStage;
         std::vector<cosmo::RecentEntry> mRecents;         // backing the home grid (open-by-index)
 
         // ── open-project transition (R-LOADING) ──

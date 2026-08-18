@@ -1028,6 +1028,9 @@ namespace cosmo_v2
         mIntro.set(0.0);    mIntro.animateTo(1.0, kIntroMs, Easing::EaseOutCubic, mNowMs);
         mReveal.set(0.0);
         mProgress.set(0.0);
+        mInFlight.set(0.0);
+        mLoadStarted = 0;
+        mLoadStage.clear();
         mCoverFade.set(0.0);
         mBarFade.set(0.0);
     }
@@ -1049,6 +1052,16 @@ namespace cosmo_v2
         mLoadDone = done; mLoadTotal = total;
         const double f = total > 0 ? std::min(1.0, std::max(0.0, (double)done / total)) : 0.0;
         mProgress.animateTo(f, kProgressMs, Easing::EaseOutCubic, mNowMs);
+    }
+
+    void App::setLoadInFlight(int started, const std::string &stage)
+    {
+        mLoadStarted = started;
+        mLoadStage = stage;
+        const double f = mLoadTotal > 0 ? std::min(1.0, std::max(0.0, (double)started / mLoadTotal)) : 0.0;
+        // Eased like the determinate fill, and slower, so the in-flight band grows into place
+        // rather than snapping when five workers claim at once.
+        mInFlight.animateTo(f, kProgressMs * 2.0, Easing::EaseOutCubic, mNowMs);
     }
 
     void App::setLoadStatus(const std::string &text)
@@ -1101,7 +1114,7 @@ namespace cosmo_v2
     {
         if (mReturning) { renderReturn(target, nowMs); return; }  // editor→home reverse
 
-        mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs);
+        mIntro.update(nowMs); mReveal.update(nowMs); mProgress.update(nowMs); mInFlight.update(nowMs);
         mCoverFade.update(nowMs); mBarFade.update(nowMs);
 
         // Part 1 (intro) -> Part 2 (loading). The intro is pure animation, but the decode is
@@ -1183,11 +1196,30 @@ namespace cosmo_v2
             }
             Color track = palette::whiteAlpha(0.12); track.a *= alpha;
             drawRoundedRect(target, barRect, kBarH * 0.5, Paint::filled(track));
-            const double fillW = barRect.w * mProgress.value();
-            if (fillW > 0.5)
+
+            // ── R-LOADUX-4: three bands, because there are three truths (D-22) ──
+            // A RAW decode reports no internal progress, so the bar states what is known —
+            // this many finished, this many being worked on — and ANIMATES the uncertainty
+            // instead of inventing a percentage for it. Without the middle band the first
+            // nine seconds of an 18-RAF load are indistinguishable from a hang.
+            const double doneW = barRect.w * mProgress.value();
+            const double flightW = barRect.w * mInFlight.value();
+            if (flightW > doneW + 0.5)
+            {
+                // The in-flight band pulses between two low alphas — slow enough to read as
+                // "working", never as a second progress reading. Driven by nowMs, so it keeps
+                // breathing even when nothing has landed for nine seconds, which is exactly
+                // the interval it exists for.
+                const double pulse = 0.5 + 0.5 * std::sin(mNowMs / 380.0);
+                Color busy = palette::primary();
+                busy.a *= alpha * (0.22 + 0.20 * pulse);
+                drawRoundedRect(target, Rect{barRect.x, barRect.y, flightW, kBarH}, kBarH * 0.5,
+                                Paint::filled(busy));
+            }
+            if (doneW > 0.5)
             {
                 Color fill = palette::primary(); fill.a *= alpha;
-                drawRoundedRect(target, Rect{barRect.x, barRect.y, fillW, kBarH}, kBarH * 0.5, Paint::filled(fill));
+                drawRoundedRect(target, Rect{barRect.x, barRect.y, doneW, kBarH}, kBarH * 0.5, Paint::filled(fill));
             }
         };
 
