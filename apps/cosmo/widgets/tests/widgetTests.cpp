@@ -15,6 +15,7 @@
 // now unified to 13, so a click 10-12 px from an anchor must now grab it.
 
 #include "../HomeScreen.h"
+#include "../MaskOverlay.h"
 #include "../HueCurveEditor.h"
 #include "../CurvePanel.h"
 #include "../ExportDialog.h"
@@ -37,6 +38,7 @@ using arstro::CurvePoint;
 using arstro::cosmo_v2::CurvePanel;
 using arstro::cosmo_v2::HomeScreen;
 using arstro::cosmo_v2::HueCurveEditor;
+using arstro::cosmo_v2::MaskOverlay;
 
 namespace
 {
@@ -824,6 +826,85 @@ namespace
         check(minH - firstOverlap < 64.0,
               "and it is close below the minimum, so the minimum is tight rather than generous");
     }
+
+    // ── R-MASK-5: a mask may be sized and moved OUTSIDE the framed image ──────────────
+    // Reported as "when I edit the width and height it limits at the image border". The cause
+    // was a clamp to 0..1 in the overlay's localToNorm, which turned normalised framed-image
+    // coordinates — a coordinate SPACE — into a boundary. The engine never had that limit.
+    struct TestOverlay : MaskOverlay
+    {
+        TestOverlay() : MaskOverlay(arstro::cosmo_v2::palette::primary()) {}
+        using MaskOverlay::handleGesture;
+        using MaskOverlay::normToLocal;   // the test needs to grab the handle where it is drawn
+    };
+
+    std::shared_ptr<TestOverlay> makeOverlay(arstro::MaskParams &out)
+    {
+        auto ov = std::make_shared<TestOverlay>();
+        // A canvas larger than the photo, which is the real arrangement: the image is fitted
+        // inside the stage and letterboxed, so there IS room to drag past its edge.
+        ov->width.set(1000.0);
+        ov->height.set(800.0);
+        out = arstro::MaskParams{};
+        out.type = arstro::MaskParams::Radial;
+        out.cx = 0.5f; out.cy = 0.5f; out.rx = 0.2f; out.ry = 0.2f;
+        ov->setFittedRect(artboard::Rect{200.0, 150.0, 600.0, 500.0});   // the photo, inset
+        ov->setMask(out, true);
+        ov->onChange = [&out](const arstro::MaskParams &m) { out = m; };
+        return ov;
+    }
+
+    void maskRadiusCanGrowPastTheImageEdge()
+    {
+        arstro::MaskParams m;
+        auto ov = makeOverlay(m);
+
+        // Grab the +X edge handle and drag it well beyond the photo's right edge (x=800) but
+        // still on the canvas (x=1000) — the gesture the user performed.
+        const Point handle = ov->normToLocal(m.cx + m.rx, m.cy);
+        check(ov->handleGesture(ev(Gesture::Type::Down), handle), "the edge handle is grabbed");
+        ov->handleGesture(ev(Gesture::Type::Drag), Point{980.0, handle.y});
+        ov->handleGesture(ev(Gesture::Type::Up), Point{980.0, handle.y});
+
+        // The photo's half-width in normalised units is 0.5; anything <= that is the old clamp.
+        check(m.rx > 0.5f, "R-MASK-5: the radius grew past the image edge, not up to it");
+        check(m.rx < 8.0f, "and stayed finite (the sanity bound, not a design limit)");
+
+        // Vertically too, so this is not an accident of one axis.
+        arstro::MaskParams m2;
+        auto ov2 = makeOverlay(m2);
+        const Point hy = ov2->normToLocal(m2.cx, m2.cy + m2.ry);
+        ov2->handleGesture(ev(Gesture::Type::Down), hy);
+        ov2->handleGesture(ev(Gesture::Type::Drag), Point{hy.x, 780.0});
+        ov2->handleGesture(ev(Gesture::Type::Up), Point{hy.x, 780.0});
+        check(m2.ry > 0.5f, "and the same on the Y edge");
+    }
+
+    void maskCentreCanLeaveTheImage()
+    {
+        arstro::MaskParams m;
+        auto ov = makeOverlay(m);
+        // Drag the centre off the left edge of the photo (x=200) into the letterbox.
+        const Point c = ov->normToLocal(m.cx, m.cy);
+        ov->handleGesture(ev(Gesture::Type::Down), c);
+        ov->handleGesture(ev(Gesture::Type::Drag), Point{40.0, c.y});
+        ov->handleGesture(ev(Gesture::Type::Up), Point{40.0, c.y});
+        check(m.cx < 0.0f, "R-MASK-5: a gradient/vignette origin may sit off-frame");
+        check(m.cx > -8.0f, "and remains finite");
+    }
+
+    // A radius must never reach zero: that is not a small mask, it is a division the engine
+    // guards with an epsilon, and persisting a 0 would make the project file the problem.
+    void maskRadiusStaysPositive()
+    {
+        arstro::MaskParams m;
+        auto ov = makeOverlay(m);
+        const Point handle = ov->normToLocal(m.cx + m.rx, m.cy);
+        ov->handleGesture(ev(Gesture::Type::Down), handle);
+        ov->handleGesture(ev(Gesture::Type::Drag), ov->normToLocal(m.cx, m.cy));  // onto the centre
+        ov->handleGesture(ev(Gesture::Type::Up), ov->normToLocal(m.cx, m.cy));
+        check(m.rx > 0.0f, "a radius dragged onto the centre stays strictly positive");
+    }
 }
 
 int main()
@@ -863,6 +944,9 @@ int main()
     exportProgressIgnoresInputAndReopensClean();
 
     homeSettingsLinkOpensSettings();
+    maskRadiusCanGrowPastTheImageEdge();
+    maskCentreCanLeaveTheImage();
+    maskRadiusStaysPositive();
     homeGridReflowIsAnimated();
     homeMinimumHeightClearsBothAnchoredBlocks();
     homeReservedLinksStaySilentButSwallowTheClick();

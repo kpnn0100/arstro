@@ -43,9 +43,13 @@ namespace cosmo_v2
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override;
 
-    private:
+        /** The overlay's coordinate mapping. Protected rather than private so a test can grab a
+         *  handle exactly where it is drawn and then drag past the image edge — R-MASK-5's whole
+         *  point is what happens outside 0..1, which is unassertable from outside this mapping. */
         artboard::Point normToLocal(float nx, float ny) const;
         void localToNorm(const artboard::Point &p, float &nx, float &ny) const;
+
+    private:
         int pickHandle(const artboard::Point &local) const;  // -1 none
         void applyDrag(int handle, const artboard::Point &local);
 

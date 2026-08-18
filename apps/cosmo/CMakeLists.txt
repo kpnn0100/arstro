@@ -123,6 +123,7 @@ endif()
 add_executable(cosmo_widget_tests
   widgets/tests/widgetTests.cpp
   widgets/HueCurveEditor.cpp
+  widgets/MaskOverlay.cpp     # R-MASK-5: the drag must be able to leave the image rect
   widgets/CurvePanel.cpp
   widgets/SegmentedControl.cpp
   widgets/PillButton.cpp

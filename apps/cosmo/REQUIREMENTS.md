@@ -330,12 +330,30 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   - Radial: drag centre to move, edge handles to resize.
   - Linear: drag the two endpoints (0% and 100% gradient lines).
   - Brush: drag anywhere to paint coverage dabs.
+  (**AMENDED (R-MASK-5), 2026-08-18:** "inside the photo" describes where the *interaction*
+  happens — on the photo rather than in a dialog — and was implemented as a hard clamp of the
+  geometry to the framed image, which is not the same thing and is wrong. See R-MASK-5.)
 - **R-MASK-2** With no mask selected the overlay is fully click-through (does not intercept
   zoom/pan or the Before/Split/After pill).
 - **R-MASK-3** The overlay maps to the ImageView's current fitted rect **including zoom/pan**
   (R-ZOOM), so handles track the photo as it is magnified/panned.
 - **R-MASK-4** Handle/geometry changes animate their on-screen position (R-G-1); the committed
   `MaskParams` value itself is not eased (it is data), only its rendered handles.
+- **R-MASK-5 A mask's geometry may extend BEYOND the framed image.** (**Added 2026-08-18, amends
+  R-MASK-1.**) A radial mask larger than the frame, or centred off-frame, and a linear gradient
+  whose endpoints sit outside the image, are all ordinary tools — a vignette that darkens every
+  corner equally cannot be built from an ellipse trapped inside the frame, and a gradient that
+  enters from off-canvas is how a sky is graded. Normalised framed-image coordinates are a
+  *coordinate space*, not a boundary: 0..1 spans the image and values outside it are meaningful.
+  The overlay therefore does not clamp a dragged handle to the image rect; it is bounded only by
+  what the pointer can reach on the canvas, plus a generous finite sanity limit so a degenerate
+  fitted rect cannot produce an absurd or non-finite value.
+  The engine already agreed — `maskCoverage` (`engine/MaskStack.cpp`) never clamped mask geometry,
+  only the coverage it computes and `feather`, so out-of-frame geometry has always rendered
+  correctly. The clamp existed solely in the overlay's `localToNorm`, which is why the symptom was
+  "the slider stops at the border" rather than "the mask renders wrong".
+  Radii stay strictly positive: a zero or negative radius is not a small mask, it is a
+  division-by-zero the engine guards with an epsilon.
 
 ## R-ZOOM — Zoom & pan inside the photo (item 2) — ✅ IMPLEMENTED (except R-ZOOM-5)
 

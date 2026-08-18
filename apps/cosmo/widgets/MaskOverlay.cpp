@@ -13,6 +13,21 @@ namespace cosmo_v2
 
     MaskOverlay::MaskOverlay(const Color &accent) : mAccent(accent) {}
 
+    namespace
+    {
+        /** Far outside anything a pointer can reach on a sane canvas, and finite. R-MASK-5 wants
+         *  no *design* limit; this is only arithmetic hygiene. */
+        constexpr float kGeomBound = 8.0f;
+        float clampGeom(float v)
+        {
+            if (!(v > -kGeomBound)) return -kGeomBound;   // also catches NaN
+            if (v > kGeomBound) return kGeomBound;
+            return v;
+        }
+        /** A radius of zero is not a small mask, it is a division the engine has to guard. */
+        float positiveRadius(float r) { return r > 1e-4f ? (r < kGeomBound ? r : kGeomBound) : 1e-4f; }
+    }
+
     Point MaskOverlay::normToLocal(float nx, float ny) const
     {
         return Point{mFitted.x + nx * mFitted.w, mFitted.y + ny * mFitted.h};
@@ -21,8 +36,21 @@ namespace cosmo_v2
     {
         nx = mFitted.w > 0 ? (float)((p.x - mFitted.x) / mFitted.w) : 0.f;
         ny = mFitted.h > 0 ? (float)((p.y - mFitted.y) / mFitted.h) : 0.f;
-        if (nx < 0) nx = 0; else if (nx > 1) nx = 1;
-        if (ny < 0) ny = 0; else if (ny > 1) ny = 1;
+        // R-MASK-5: NOT clamped to 0..1. Normalised framed-image coordinates are a coordinate
+        // space, not a boundary — a radial mask bigger than the frame, or centred off-frame, and
+        // a gradient entering from off-canvas are ordinary tools. A vignette that darkens every
+        // corner equally cannot be built from an ellipse trapped inside the frame.
+        //
+        // This clamp was the whole of the reported defect: the engine's maskCoverage never
+        // bounded mask geometry, so out-of-frame masks have always RENDERED correctly — the
+        // handle simply could not be dragged there, which read as "the size stops at the border".
+        //
+        // What remains is a sanity bound, not a design limit. How far a handle can actually go is
+        // set by the canvas the pointer can reach; this only keeps a degenerate `mFitted` (a
+        // near-zero fitted rect, mid-transition) from turning a stray pixel into a huge or
+        // non-finite coordinate that would then be persisted into a project file.
+        nx = clampGeom(nx);
+        ny = clampGeom(ny);
     }
 
     bool MaskOverlay::hitTestSelf(const Point &p) const
@@ -60,8 +88,9 @@ namespace cosmo_v2
         if (mMask.type == MP::Radial)
         {
             if (handle == 0) { mMask.cx = nx; mMask.cy = ny; }
-            else if (handle == 1) { mMask.rx = std::fabs(nx - mMask.cx); }
-            else if (handle == 2) { mMask.ry = std::fabs(ny - mMask.cy); }
+            // R-MASK-5: the radius is whatever the drag says, past the image edge included.
+            else if (handle == 1) { mMask.rx = positiveRadius(std::fabs(nx - mMask.cx)); }
+            else if (handle == 2) { mMask.ry = positiveRadius(std::fabs(ny - mMask.cy)); }
         }
         else if (mMask.type == MP::Linear)
         {

@@ -906,6 +906,32 @@ byte-identical, while the non-stable dumps do differ (or the exclusion would pro
 `ModelDumpOptions::stable` is therefore the comparison artifact, and `--json` is asserted to be
 well-formed enough to start with `{` and contain the `nodes` array.
 
+### DR-MASK-5 Mask geometry is not bounded by the framed image (R-MASK-5)
+`MaskOverlay::localToNorm` (`widgets/MaskOverlay.cpp`) no longer clamps to 0..1 — that clamp was
+the entire defect. Normalised framed-image coordinates are a coordinate *space*, not a boundary:
+a radial mask larger than the frame, a vignette centred off-frame, and a linear gradient entering
+from off-canvas are ordinary tools, and R-MASK-1's "inside the photo" described where the
+*interaction* happens rather than where the geometry may go.
+
+What bounds a drag now is what the pointer can reach: `hitTestSelf` accepts the whole overlay,
+which is the photo *stage*, so the letterbox around a fitted image is draggable. `clampGeom`
+(±8 in normalised units) and `positiveRadius` (≥1e-4) are arithmetic hygiene only — they keep a
+degenerate `mFitted` mid-transition from turning a stray pixel into a huge or non-finite value
+that would then be written into a project file. A radius of zero is not a small mask; it is the
+division `maskCoverage` guards with an epsilon.
+
+**The engine never had the limit.** `maskCoverage` (`engine/MaskStack.cpp`) clamps the coverage it
+computes and `feather`, never `cx/cy/rx/ry` — which is why the symptom was "the handle stops at
+the border" and not "the mask renders wrong", and why no engine change was needed.
+
+Verified end to end: `set mask=` with `cx=-0.3 rx=1.8`, then `mask set 0 rx=2.2 cy=-0.4`, saved
+and reloaded — `mask=0,0,0.5,-0.3,-0.4,2.2,1.4,…` round-trips byte-identical, so out-of-frame
+geometry survives persistence and is not silently pulled back in on load. Guarded by
+`maskRadiusCanGrowPastTheImageEdge`, `maskCentreCanLeaveTheImage` and `maskRadiusStaysPositive`
+in `cosmo_widget_tests`, which required adding `MaskOverlay.cpp` to that target and making the
+coordinate mapping `protected` — the property under test is what happens *outside* 0..1, which is
+unassertable from outside the mapping.
+
 ### DR-LOADPERF-2 Off-thread apply
 `EditSession::makeThumb` is public and re-entrant so the loader builds the filmstrip thumbnail on its
 own thread, and `EditSession::openImageInto(int, vector<uint8_t>&&, …, Thumb&&)` +
