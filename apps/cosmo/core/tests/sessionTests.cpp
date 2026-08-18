@@ -1171,7 +1171,7 @@ namespace
             {K::Bypass, "bypass 2 on"},
             {K::GroupNew, "group new Name"},
             {K::GroupUngroup, "group ungroup 2"},
-            {K::GroupRename, "group rename 2 Shibuya"},
+            {K::GroupRename, "group rename 2 Shibuya"},   // bare form covered in commands_drive_the_session
             {K::Delete, "delete 2"},
             {K::MaskSet, "mask set 0 feather=0.4"},
             {K::MaskDelete, "mask delete 0"},

@@ -465,12 +465,22 @@ namespace cosmo
             case Command::Kind::GroupRename:
             {
                 if (c.name.empty()) return fail("group rename: needs a name");
+                int node = c.index;
+                if (node < 0)
+                {
+                    // Bare form: the group being edited, else the selected node if it is one.
+                    node = mSession.editGroup();
+                    if (node < 0)
+                        for (const NodeModel &n : mModel.nodes)
+                            if (n.selected && n.group) { node = n.node; break; }
+                    if (node < 0) return fail("group rename: no group selected");
+                }
                 bool found = false;
-                for (const NodeModel &n : mModel.nodes) if (n.node == c.index && n.group) found = true;
-                if (!found) return fail("group rename: node " + std::to_string(c.index) + " is not a group");
-                mSession.renameGroup(c.index, c.name);
+                for (const NodeModel &n : mModel.nodes) if (n.node == node && n.group) found = true;
+                if (!found) return fail("group rename: node " + std::to_string(node) + " is not a group");
+                mSession.renameGroup(node, c.name);
                 refreshModel();
-                emit(Event::Kind::Info, "group.renamed node=" + std::to_string(c.index) + " name=" + c.name);
+                emit(Event::Kind::Info, "group.renamed node=" + std::to_string(node) + " name=" + c.name);
                 return true;
             }
             case Command::Kind::Delete:

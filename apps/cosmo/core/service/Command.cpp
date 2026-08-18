@@ -173,10 +173,18 @@ namespace cosmo
             }
             else if (sub == "rename")
             {
-                if (!need(4, "group rename <node> <name>")) return c;
+                if (!need(3, "group rename [<node>] <name>")) return c;
                 c.kind = Command::Kind::GroupRename;
-                c.index = std::atoi(t[2].c_str());
-                c.name = t[3];
+                if (t.size() >= 4) { c.index = std::atoi(t[2].c_str()); c.name = t[3]; }
+                else
+                {
+                    // Bare form = the selected group, mirroring `delete`. A script cannot know
+                    // the id `group new` just allocated — it depends on how many nodes the
+                    // project already had — so requiring one made the command unusable in the
+                    // exact sequence people actually write: create a group, then name it.
+                    c.index = -1;
+                    c.name = t[2];
+                }
             }
             else err = "unknown group subcommand: " + sub;
         }
@@ -305,7 +313,11 @@ namespace cosmo
             case Command::Kind::Bypass: o << "bypass " << c.index << (c.flag ? " on" : " off"); break;
             case Command::Kind::GroupNew: o << "group new " << q(c.name); break;
             case Command::Kind::GroupUngroup: o << "group ungroup " << c.index; break;
-            case Command::Kind::GroupRename: o << "group rename " << c.index << ' ' << q(c.name); break;
+            case Command::Kind::GroupRename:
+                o << "group rename";
+                if (c.index >= 0) o << ' ' << c.index;
+                o << ' ' << q(c.name);
+                break;
             case Command::Kind::MaskSet:
                 o << "mask set " << c.index;
                 for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;

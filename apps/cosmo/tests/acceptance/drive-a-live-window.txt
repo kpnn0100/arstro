@@ -7,6 +7,10 @@
 # (R-SVC-5), so this file is simultaneously the test, the documentation and a reproduction
 # recipe a defect entry can cite. `cosmo-cc attach` exits non-zero if any command is rejected
 # or a `wait` times out, so this fails loudly rather than half-working.
+#
+# It is also the regression net for the widget layer: run.sh diffs the state this produces
+# headlessly against the state a live window produces, so a widget that quietly stops routing
+# through the service shows up here as a diff rather than as a bug report months later.
 
 # The budget first, so the load below is the one we meant to measure (R-CPU-3: it takes
 # effect on the NEXT load, which is why this cannot come after `project open`).
@@ -19,7 +23,7 @@ project open @PROJECT@
 # would race the decode and be rejected for having nothing selected.
 wait load.finished
 
-# Discrete actions, each of which must produce an event and move the model.
+# ── selection and history ──
 select next
 select next
 set exposure=1.2 temp=7400
@@ -28,7 +32,26 @@ redo
 bypass 1 on
 bypass 1 off
 
+# ── the nested params `set` reaches without any command of their own (DR-SVC-2b) ──
+# Curves, the mixer and grading are addressable because EditParamsIO names them. This was
+# got wrong once from reading the code, so it is asserted here rather than assumed.
+set curve=0,0;0.5,0.62;1,1
+set mixer0=0,0;0.5,0.7;1,1
+set grade0=210,18,-4
+set rotation=1.5 balance=12
+
+# ── masks: `set mask=` APPENDS, `mask set <i>` addresses one by index ──
+set mask=0,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65|0,0,0,0,0,0,0,0,0,0,0,0||
+set mask=1,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65|0,0,0,0,0,0,0,0,0,0,0,0||
+mask set 0 feather=0.42 inverted=1 adjust.exposure=0.75
+mask delete 1
+
+# ── the group tree ──
+select 1
+group new Tokyo
+group rename Shibuya
+
 # The comparison artifact (R-SVC-9): --stable drops revision/frameSeq/peak, the fields that
-# legitimately differ between two front ends showing the same state, so this dump can be
-# diffed against `cosmo-cc project <same>.cmp --print --stable`.
-state print --stable
+# legitimately differ between two front ends showing the same state. `--params` makes the
+# curve/mixer/grade/mask edits above part of what is compared, not just the tree.
+state print --stable --params
