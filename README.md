@@ -34,6 +34,7 @@ adapter, so it adapts to any screen or OS the same way a driver adapts to hardwa
 | [`apps/genesis`](apps/genesis/) | Animation designer whose deliverable is source code — draw a control, bind its geometry, and it emits a `.h`/`.cpp` pair that compiles against Artboard | **Building** — editor, CLI and core |
 | [`apps/pulsar`](apps/pulsar/) | Synthesiser UI over the DSP engine | **Building** — Linux desktop |
 | [`apps/launcher`](apps/launcher/) | An Android-style touch shell for GNOME and KDE Plasma, drawn entirely with Artboard | **Building** — milestones code-complete, live-desktop verification pending |
+| [`apps/arstrobench`](apps/arstrobench/) | Benchmark that answers "can this computer run cosmo?" — times the image pipeline and the signal pipeline, scores each as `1/seconds`, and reports the chip, RAM and OS it measured | **Building** — Linux and Windows desktop |
 | [`apps/solaris`](apps/solaris/) | Digital audio workstation | **Spec only** — no code yet |
 | [`apps/interstellar`](apps/interstellar/) | Professional video editor (colour blending & edit) | **Spec only** — no code yet |
 
@@ -50,7 +51,7 @@ for the shared **Nebula** core.
 ```
 arstro/
 ├── core/          the libraries — Artboard, DigitalSignalProcessing, ImageProcessing
-├── apps/          the applications — cosmo, genesis, pulsar, launcher, solaris, interstellar
+├── apps/          the applications — cosmo, genesis, pulsar, launcher, arstrobench, solaris, interstellar
 ├── examples/      small demos built on the stack
 ├── docs/          suite vision and shared-core design
 └── build.sh       umbrella build entry point

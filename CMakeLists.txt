@@ -25,6 +25,7 @@ option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
 option(ARSTRO_BUILD_GENESIS "Build Genesis (animation designer: genesis_core, genesis-cc, GUI)" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (apps/launcher/android-shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
+option(ARSTRO_BUILD_ARSTROBENCH "Build Arstrobench (the ImageProcessing + DSP benchmark GUI)" ON)
 option(ARSTRO_BUILD_PIANO_UI "Build the interactive piano-keyboard UI demo (examples/piano; needs GTK3+ALSA, skipped gracefully if absent)" ON)
 
 enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` sees them
@@ -61,6 +62,20 @@ endif()
 # logic lives in apps/cosmo/core (target cosmo_core), added by apps/cosmo/CMakeLists.txt.
 if(ARSTRO_BUILD_COSMO)
   add_subdirectory(apps/cosmo)
+endif()
+
+# arstrobench: the benchmark that scores this machine on the two engines cosmo depends
+# on (arstro_image + arstro_dsp) and reports chip/RAM/OS alongside the scores. Added
+# after cosmo because it compiles cosmo's Theme.cpp for its design tokens (R-G-2), and
+# after the DSP library because its signal workload links arstro_dsp. Same GTK3 + Cairo
+# native backend as cosmo, so it builds on Linux and on Windows via MSYS2; the GUI
+# self-skips without pkg-config/GTK3 while its core + unit tests still build.
+if(ARSTRO_BUILD_ARSTROBENCH)
+  if(ARSTRO_BUILD_DSP)
+    add_subdirectory(apps/arstrobench)
+  else()
+    message(STATUS "arstrobench: skipped (needs ARSTRO_BUILD_DSP=ON for the signal workload)")
+  endif()
 endif()
 
 # arstro-android-shell: the Android-theme touch shell (launcher, status bar, quick

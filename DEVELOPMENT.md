@@ -12,7 +12,7 @@ This guide covers three common workflows in the umbrella repository:
   - `core/Artboard/`: rendering, animation, input, UI framework, and adapters.
   - `core/DigitalSignalProcessing/`: DSP engine and supporting audio processing modules.
   - `core/ImageProcessing/`: the image/video edit engine (tone, colour, masks, compute backends).
-- `apps/`: the Arstro applications — `cosmo`, `genesis`, `pulsar`, `launcher`, and the
+- `apps/`: the Arstro applications — `cosmo`, `genesis`, `pulsar`, `launcher`, `arstrobench`, and the
   spec-stage `solaris` and `interstellar`.
 - `examples/`: demo apps and platform glue, kept small on purpose.
 - `build.sh`: umbrella build entry point.
@@ -181,6 +181,8 @@ cmake --build build            # -> build\cosmo\cosmo.exe
 
 Notes:
 - Options: `-DARSTRO_BUILD_COSMO=OFF` builds just the libraries + tests (no GTK needed).
+  `-DARSTRO_BUILD_ARSTROBENCH=OFF` drops the benchmark app (`build/apps/arstrobench/arstrobench`),
+  which builds on the same GTK3 + Cairo stack as cosmo and needs no LibRaw or GdkPixbuf.
 - If `pkg-config` cannot find `gtk+-3.0`, ensure you are in the MinGW64 shell (not the
   plain MSYS shell) so `PKG_CONFIG_PATH` points at the MinGW packages.
 - The **web** (Emscripten/WASM) target still ships via `build.sh --target linux-web-server`;

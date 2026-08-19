@@ -1,0 +1,180 @@
+@startuml arstrobench
+title Arstrobench — class model
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+package "host (platform)" {
+  class native_main <<file>> {
+    + main(argc, argv) : int
+    - onDraw(cairo_t*) : gboolean
+    - onTick() : gboolean
+    - onButton(GdkEventButton*) : gboolean
+    - onMotion(GdkEventMotion*) : gboolean
+    - registerBundledFonts() : void
+  }
+}
+
+package "arstro::arstrobench (UI — platform-free)" {
+  class BenchApp {
+    + BenchApp(width, height)
+    + render(IRenderTarget&, nowMs) : void
+    + pointer(kind, x, y, button, timeMs) : void
+    + startRun() : void
+    + isRunning() const : bool
+    + showResult(Kind, WorkloadResult, nowMs) : void
+    - mRoot : shared_ptr<Segment>
+    - mRunner : BenchmarkRunner
+    - mSystem : SystemInfo
+  }
+  class ScoreCard {
+    + setTitle(string) : void
+    + setAccent(Color) : void
+    + setDetail(string) : void
+    + setState(State, nowMs) : void
+    + showScore(score, seconds, nowMs) : void
+    - mShownScore : Property
+    - mStateFade : Property
+    - onPaint(IRenderTarget&) : void
+  }
+  class TotalCard {
+    + showScore(total, nowMs) : void
+    - mShownScore : Property
+  }
+  class SystemPanel {
+    + setInfo(SystemInfo) : void
+    - onPaint(IRenderTarget&) : void
+  }
+  class RunButton {
+    + onClick : function<void()>
+    + setLabel(string) : void
+    - mPress : Property
+    - handleGesture(Gesture&, Point&) : bool
+  }
+}
+
+package "arstro::arstrobench (core — UI-free)" {
+  class WorkloadResult <<struct>> {
+    + seconds : double
+    + score : double
+    + checksum : double
+    + detail : string
+    + ok : bool
+    + {static} fromSeconds(seconds) : WorkloadResult
+  }
+  class ImageWorkload {
+    + {static} kWidth = 1920
+    + {static} kHeight = 1080
+    + {static} kPasses = 3
+    + ImageWorkload(w, h, passes)
+    + run() : WorkloadResult
+    + {static} makeDummyPixels(w, h) : vector<uint8_t>
+    + {static} benchParams() : EditParams
+  }
+  class DspWorkload {
+    + {static} kVoices = 9
+    + {static} kFrames = 48000
+    + {static} kPasses = 5
+    + DspWorkload(frames, passes)
+    + run() : WorkloadResult
+    + generate() : vector<vector<Sample>>
+  }
+  class SystemInfo <<struct>> {
+    + chip : string
+    + threads : int
+    + ramBytes : uint64
+    + os : string
+    + {static} query() : SystemInfo
+    + ramText() const : string
+    + chipText() const : string
+  }
+  class BenchmarkRunner {
+    + start() : void
+    + stage() const : Stage
+    + running() const : bool
+    + snapshot() const : Snapshot
+    - mThread : std::thread
+    - mStage : atomic<Stage>
+    - mMutex : mutex
+  }
+  enum Stage {
+    Idle
+    Image
+    Dsp
+    Done
+  }
+  class Snapshot <<struct>> {
+    + image : WorkloadResult
+    + dsp : WorkloadResult
+    + total : double
+  }
+}
+
+package "artboard" {
+  abstract class Segment
+  abstract class ProgressIndicator
+  interface IRenderTarget
+  class CairoTarget
+  class GestureRecognizer
+}
+
+package "arstro (engines)" {
+  class EditEngine
+  class EditParams <<struct>>
+  class Voice
+  class Compressor
+  class Reverb
+}
+class LowPassFilter
+class HighPassFilter
+
+native_main --> BenchApp
+native_main --> CairoTarget
+CairoTarget ..|> IRenderTarget
+
+BenchApp *-- "1" RunButton
+BenchApp *-- "2" ScoreCard
+BenchApp *-- "1" TotalCard
+BenchApp *-- "1" SystemPanel
+BenchApp *-- "1" BenchmarkRunner
+BenchApp o-- GestureRecognizer
+
+ProgressIndicator --|> Segment
+ScoreCard --|> ProgressIndicator
+TotalCard --|> Segment
+SystemPanel --|> Segment
+RunButton --|> Segment
+
+BenchmarkRunner *-- ImageWorkload
+BenchmarkRunner *-- DspWorkload
+BenchmarkRunner --> SystemInfo
+BenchmarkRunner +-- Snapshot
+BenchmarkRunner --> Stage
+Snapshot *-- WorkloadResult
+
+ImageWorkload --> EditEngine
+ImageWorkload --> EditParams
+ImageWorkload ..> WorkloadResult
+DspWorkload --> Voice
+DspWorkload --> Compressor
+DspWorkload --> LowPassFilter
+DspWorkload --> HighPassFilter
+DspWorkload --> Reverb
+DspWorkload ..> WorkloadResult
+
+ScoreCard ..> WorkloadResult
+SystemPanel ..> SystemInfo
+
+note right of WorkloadResult
+  score = 1 / seconds   (R-SCORE-1)
+  seconds = fastest of N passes (R-SCORE-3)
+  generation never timed (R-SCORE-2)
+end note
+
+note bottom of ScoreCard
+  Inherits ProgressIndicator so the
+  running sweep + spring-smoothed
+  fill come from the framework
+  (R-UI-6), not re-implemented.
+end note
+@enduml
