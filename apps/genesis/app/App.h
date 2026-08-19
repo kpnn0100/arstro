@@ -16,6 +16,7 @@
 #include "Verifier.h"
 #include <artboard/artboard.h>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <thread>
 #include <string>
@@ -107,6 +108,11 @@ namespace ui
 
         /** Show a modal (owned by the app so it always draws in the overlay pass). */
         Modal *modal() { return mModal.get(); }
+
+        /** host: native "Open" file-chooser dialog (filtered to *.genesis) -> openDocument().
+         *  The host owns file dialogs (cosmo's pattern) rather than the app scanning a fixed
+         *  directory itself, so Open can reach any .genesis file on disk. */
+        std::function<void()> onOpenRequested;
 
         // Named accessors rather than child indices: the child ORDER is a z-order decision,
         // and nothing outside layout() should depend on it.

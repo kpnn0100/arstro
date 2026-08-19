@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  Genesis — unit tests (MiniTest, the harness Artboard uses).
  *
  *  Everything here is headless: the document model, the Gene language (parse / fold /
@@ -14,6 +14,7 @@
 #include "Verifier.h"
 #include "codegen/CppEmitter.h"
 #include "gene/Gene.h"
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -639,8 +640,11 @@ TEST(Document_current_reads_the_target_at_fire_time)
 
     const EmittedCode c = emitCpp(d);
     CHECK(c.ok());
-    // `current` compiles to the target property's live value, not a captured constant.
-    CHECK(c.source.find("mRing->opacity.value() + 0.25") != std::string::npos);
+    // `current` is read from the property AT FIRE TIME and snapshotted, because this target is
+    // followed (G-6b) and gets re-evaluated long after the property has moved on. Reading it back
+    // live every frame would make `current + 0.25` chase the field it is moving.
+    CHECK(c.source.find("mRelCurRingOpacity = mRing->opacity.value();") != std::string::npos);
+    CHECK(c.source.find("return mRelCurRingOpacity + 0.25;") != std::string::npos);
 
     // It is NOT in scope in a field binding, where there is no target to speak of.
     Document bad = d;
@@ -1593,9 +1597,509 @@ TEST(Only_a_bare_original_hands_the_field_back)
             rt.advance(t);
         return rt.segmentFor("ring")->x.value();
     };
+    // At 200x200 the binding gives (200 - 40) / 2 = 80; at 300x300 it gives (300 - 60) / 2 = 120.
     CHECK_NEAR(xAfterResize("original", false), 120.0, 1e-6);   // handed back: re-centres
-    CHECK_NEAR(xAfterResize("original + 4", false), 84.0, 1e-6);  // ends off the binding: kept
     CHECK_NEAR(xAfterResize("original", true), 120.0, 1e-6);    // one forward cycle: also handed back
+    // `original + 4` is NOT handed back — but it is still an expression, so G-6b keeps the field
+    // ON it: the resize moves it to 124, not to the 84 it would sit at if the target had been read
+    // once and kept. Being kept by motion and being frozen are different things.
+    CHECK_NEAR(xAfterResize("original + 4", false), 124.0, 1e-6);
+
+    // ...and that difference is exactly what `whence` has to report, or the two cases are
+    // indistinguishable on screen: both track the binding, but only one is layout's again.
+    auto sourceOf = [](const std::string &to) {
+        Document d = Document::starter("VisualLoop", "B");
+        Shape *s = d.findShape("ring");
+        s->setField("x", "(w - self.w) / 2");
+        s->reactions.clear();
+        Reaction home;
+        home.signal = "loopStart";
+        Step st;
+        st.tracks.push_back({"x", "0", to, "200", "0", "Linear", 0, false});
+        home.steps.push_back(st);
+        s->reactions.push_back(home);
+        Runtime rt;
+        std::string err;
+        if (!rt.build(d, &err)) return Runtime::Source::Binding;
+        rt.setSize(200, 200);
+        rt.advance(0.0);
+        rt.loopStart();
+        for (double t = 0.0; t <= 400.0; t += 16.0)
+            rt.advance(t);
+        double v = 0.0;
+        Runtime::Source from = Runtime::Source::Binding;
+        rt.fieldValue("ring", "x", v, &from);
+        return from;
+    };
+    CHECK(sourceOf("original") == Runtime::Source::Binding);        // handed back to layout
+    CHECK(sourceOf("original + 4") == Runtime::Source::Target);     // motion's, resting on `to`
+}
+namespace
+{
+    /** A reaction whose steps each move `x` one notch, so the trace of `x` says exactly which
+     *  step ran and in what order — which is the only thing worth asserting about a loop. */
+    Document loopDoc(int loopFrom, int loopTo, int loopCount, int steps = 3)
+    {
+        Document d = Document::starter("VisualLoop", "L");
+        Shape *s = d.findShape("ring");
+        s->setField("x", "0");
+        s->reactions.clear();
+        Reaction r;
+        r.signal = "loopStart";
+        for (int i = 0; i < steps; ++i)
+        {
+            Step st;
+            st.tracks.push_back({"x", "", std::to_string((i + 1) * 10), "100", "0", "Linear", 0, false});
+            r.steps.push_back(st);
+        }
+        r.loopFrom = loopFrom;
+        r.loopTo = loopTo;
+        r.loopCount = loopCount;
+        s->reactions.push_back(r);
+        return d;
+    }
+}
+TEST(Chains_of_equal_length_stay_in_step_however_many_steps_they_have)
+{
+    // G-28. A tween is only OBSERVED to complete on a frame, and a frame almost never lands on the
+    // due time. Chaining from the frame clock therefore loses the overshoot once PER STEP, so the
+    // error is proportional to the step count rather than the chain length — and two objects with
+    // identical totals but different step counts come apart.
+    //
+    // `few` is one 800ms step; `many` is eight 100ms steps. Same 800ms lap. On a 16ms frame clock
+    // each 100ms step used to take 112ms, so `many` ran a 896ms lap and slipped 96ms every time.
+    Document d = Document::starter("VisualLoop", "Sync");
+    d.shapes.clear();
+    auto chain = [&d](const char *id, int steps, double msPerStep) {
+        Shape s;
+        s.id = id;
+        s.kind = ShapeKind::Circle;
+        s.setField("w", "10");
+        s.setField("h", "10");
+        s.setField("x", "0");
+        s.setField("fill", "theme.accent");
+        Reaction r;
+        r.signal = "loopStart";
+        for (int i = 0; i < steps; ++i)
+        {
+            // Explicit from/to, so x is a clean 0..100 sawtooth per lap in BOTH chains whatever the
+            // step count: a drop in x is then exactly a lap boundary and nothing else.
+            Step st;
+            const double a = 100.0 * (double)i / (double)steps;
+            const double b = 100.0 * (double)(i + 1) / (double)steps;
+            st.tracks.push_back({"x", std::to_string(a), std::to_string(b),
+                                 std::to_string((long long)msPerStep), "0", "Linear", 0, false});
+            r.steps.push_back(st);
+        }
+        r.loopFrom = 0;
+        r.loopTo = steps - 1;
+        r.loopCount = -1;
+        s.reactions.push_back(r);
+        d.shapes.push_back(s);
+    };
+    chain("few", 1, 800.0);
+    chain("many", 8, 100.0);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+
+    double prevFew = 0.0, prevMany = 0.0, lastFew = 0.0, lastMany = 0.0;
+    int laps = 0;
+    double worstGap = 0.0;
+    for (double t = 0.0; t <= 8200.0; t += 16.0)   // ten laps at a 16ms frame clock
+    {
+        rt.advance(t);
+        const double fx = rt.segmentFor("few")->x.value();
+        const double mx = rt.segmentFor("many")->x.value();
+        if (fx < prevFew - 1.0) lastFew = t;
+        if (mx < prevMany - 1.0)
+        {
+            lastMany = t;
+            ++laps;
+            worstGap = std::max(worstGap, std::abs(lastMany - lastFew));
+        }
+        prevFew = fx;
+        prevMany = mx;
+    }
+    CHECK(laps >= 9);              // both really did lap, ten times over
+    CHECK(worstGap <= 16.0);       // ...and never parted by more than one frame
+}
+TEST(A_step_reports_when_it_runs_and_how_long_it_takes)
+{
+    // G-27. A chain is authored as durations and delays and watched as a timeline; deriving one
+    // from the other by hand is the arithmetic that goes wrong.
+    Document d = Document::starter("VisualLoop", "T");
+    Shape *s = d.findShape("ring");
+    s->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step a;                                    // 200ms, plus a 100ms delay = 300
+    a.tracks.push_back({"opacity", "", "1", "200", "100", "Linear", 0, false});
+    a.tracks.push_back({"x", "", "5", "120", "0", "Linear", 0, false});   // shorter: not the limit
+    Step b;                                    // 3 cycles of 100ms = 300
+    b.tracks.push_back({"y", "", "9", "100", "0", "Linear", 2, false});
+    Step c;                                    // an expression, re-timed by the live param
+    c.tracks.push_back({"rotation", "", "1", "thickness * 50", "0", "Linear", 0, false});
+    r.steps.push_back(a); r.steps.push_back(b); r.steps.push_back(c);
+    s->reactions.push_back(r);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+
+    auto times = rt.stepTimings("ring", "loopStart");
+    CHECK(times.size() == 3);
+    CHECK_NEAR(times[0].startMs, 0.0, 1e-9);
+    CHECK_NEAR(times[0].durationMs, 300.0, 1e-9);      // delay + ms, and the LONGEST track wins
+    CHECK_NEAR(times[1].startMs, 300.0, 1e-9);
+    CHECK_NEAR(times[1].durationMs, 300.0, 1e-9);      // repeat counts every cycle, not just one
+    CHECK_NEAR(times[2].startMs, 600.0, 1e-9);
+    CHECK_NEAR(times[2].durationMs, 200.0, 1e-9);      // thickness defaults to 4 -> 200ms
+    CHECK(!times[0].endless && !times[1].endless && !times[2].endless);
+    CHECK_NEAR(rt.reactionDurationMs("ring", "loopStart"), 800.0, 1e-9);
+
+    // Live, not authored: a param change re-times the component and these numbers follow it.
+    rt.setParamNumber("thickness", 10.0);
+    times = rt.stepTimings("ring", "loopStart");
+    CHECK_NEAR(times[2].durationMs, 500.0, 1e-9);
+
+    // A track shadowed by a later one in the same step never runs (G-6), so it cannot decide when
+    // the step completes -- counting it would report a step longer than it is.
+    Document shadowed = d;
+    Step &first = shadowed.findShape("ring")->reactions[0].steps[0];
+    first.tracks.push_back({"opacity", "", "1", "5000", "0", "Linear", 0, false});
+    Runtime rt2;
+    CHECK(rt2.build(shadowed, &err));
+    rt2.setSize(200, 200);
+    rt2.advance(0.0);
+    CHECK_NEAR(rt2.stepTimings("ring", "loopStart")[0].durationMs, 5000.0, 1e-9);   // it IS the survivor
+
+    // ...and a step whose live tracks all repeat forever never hands on, so nothing after it runs.
+    // A number there would be a lie; this is the diagnosis for "why do my later steps never happen".
+    Document forever = d;
+    forever.findShape("ring")->reactions[0].steps[1].tracks[0].repeat = -1;
+    Runtime rt3;
+    CHECK(rt3.build(forever, &err));
+    rt3.setSize(200, 200);
+    rt3.advance(0.0);
+    const auto ft = rt3.stepTimings("ring", "loopStart");
+    CHECK(ft.size() == 3);
+    CHECK(ft[1].endless);                       // it never hands on...
+    CHECK_NEAR(ft[1].durationMs, 100.0, 1e-9);  // ...but one cycle is still a scrubbable length
+    CHECK(!ft[0].endless && !ft[2].endless);
+
+    CHECK(rt.stepTimings("nosuch", "loopStart").empty());
+    CHECK(rt.stepTimings("ring", "nosuch").empty());
+}
+TEST(A_reaction_loops_a_range_of_its_steps)
+{
+    // G-26. A TRACK could repeat but a CHAIN could not, so "play an intro, then cycle forever"
+    // was inexpressible: a repeating track never completes, so it never chains and the steps
+    // after it never run at all.
+    //
+    // Three steps drive x to 10, 20, 30. Looping 2..3 means step 1 is an intro that runs once
+    // and the chain then cycles 20 -> 30 -> 20 -> 30 forever, never returning to 10.
+    Document d = loopDoc(/*from*/ 1, /*to*/ 2, /*count*/ -1);
+    for (const auto &diag : d.validate())
+        CHECK(!diag.isError());
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+
+    bool sawIntroOnce = true;
+    int reachedTen = 0, reachedThirty = 0;
+    double prev = 0.0;
+    for (double t = 0.0; t <= 2000.0; t += 8.0)
+    {
+        rt.advance(t);
+        const double v = rt.segmentFor("ring")->x.value();
+        // x lands exactly on 10 only while step 1 is finishing; after the first cycle the range
+        // is 20..30, so coming back to 10 would mean the intro replayed.
+        if (v <= 10.0001 && prev < v && t > 400.0) sawIntroOnce = false;
+        if (v > 9.999 && v < 10.001 && t < 400.0) ++reachedTen;
+        if (v > 29.999) ++reachedThirty;
+        prev = v;
+    }
+    CHECK(sawIntroOnce);          // the intro never came round again
+    CHECK(reachedTen > 0);        // ...but it did run
+    CHECK(reachedThirty > 1);     // and the range cycled more than once
+    CHECK(rt.isRunning("loopStart"));   // a forever loop never ends the chain
+}
+TEST(A_loop_count_stops_after_that_many_passes)
+{
+    // ...and when the count runs out the chain carries on PAST the range, so a loop can have an
+    // outro. Steps 1..2 loop twice, then step 3 plays once and the chain ends.
+    Document d = loopDoc(/*from*/ 0, /*to*/ 1, /*count*/ 2);
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    for (double t = 0.0; t <= 3000.0; t += 8.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 30.0, 1e-6);   // the outro ran
+    CHECK(!rt.isRunning("loopStart"));                          // and the chain ended
+}
+TEST(A_restarted_reaction_loops_afresh)
+{
+    // The pass counter belongs to the RUN, not the reaction: firing again must not inherit a
+    // count that has already run out, or the second run skips the loop entirely.
+    Document d = loopDoc(/*from*/ 0, /*to*/ 1, /*count*/ 2);
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    for (double t = 0.0; t <= 3000.0; t += 8.0)
+        rt.advance(t);
+    CHECK(!rt.isRunning("loopStart"));
+
+    // Fire the SIGNAL, not the base's start(): the VisualLoop is already running, so start() is
+    // a no-op and would never re-enter the chain.
+    rt.fire("loopStart");
+    rt.advance(3000.0);
+    rt.advance(3100.0);
+    CHECK(rt.isRunning("loopStart"));
+    int reachedTwenty = 0;
+    for (double t = 3100.0; t <= 6200.0; t += 8.0)
+    {
+        rt.advance(t);
+        if (rt.segmentFor("ring")->x.value() > 19.999 &&
+            rt.segmentFor("ring")->x.value() < 20.001)
+            ++reachedTwenty;
+    }
+    CHECK(reachedTwenty > 0);      // the range ran again rather than being skipped
+}
+TEST(A_loop_range_round_trips_and_is_validated)
+{
+    // Absent unless the reaction actually loops, so every document written before this existed
+    // keeps its exact bytes (G-10).
+    Document plain = loopDoc(-1, -1, -1);
+    CHECK(plain.toJson().dump().find("loopFrom") == std::string::npos);
+
+    Document d = loopDoc(1, 2, 3);
+    const std::string once = d.toJson().dump();
+    std::string err;
+    const Document back = Document::fromJson(Json::parse(once, &err), &err);
+    CHECK(err.empty());
+    CHECK(back.toJson().dump() == once);              // byte-for-byte
+    const Reaction &r = back.findShape("ring")->reactions[0];
+    CHECK(r.loopFrom == 1 && r.loopTo == 2 && r.loopCount == 3);
+    CHECK(r.loops());
+
+    // A range naming steps that do not exist, or running backwards, is an error rather than a
+    // loop that silently never fires.
+    auto errorsOf = [](const Document &doc) {
+        int n = 0;
+        for (const auto &diag : doc.validate())
+            if (diag.isError()) ++n;
+        return n;
+    };
+    CHECK(errorsOf(loopDoc(1, 9, -1)) > 0);           // past the end
+    CHECK(errorsOf(loopDoc(2, 1, -1)) > 0);           // ends before it begins
+    CHECK(errorsOf(loopDoc(1, 2, -1)) == 0);
+
+    // A track inside the range that never completes makes the loop dead — the chain can never
+    // reach the end of the range — so it warns rather than hanging silently.
+    Document forever = loopDoc(0, 1, -1);
+    forever.findShape("ring")->reactions[0].steps[1].tracks[0].repeat = -1;
+    bool warned = false;
+    for (const auto &diag : forever.validate())
+        if (!diag.isError() && diag.message.find("never come round") != std::string::npos)
+            warned = true;
+    CHECK(warned);
+}
+TEST(Emitted_code_loops_the_same_range)
+{
+    // One semantics, two consumers: the generated class must jump back at the same point, or the
+    // preview and the shipped component disagree about how long the animation runs.
+    const Document d = loopDoc(1, 2, -1);
+    const EmittedCode e = emitCpp(d);
+    CHECK(e.ok());
+    // The jump is emitted in the LAST looped step's completion callback, back to loopFrom's fn.
+    CHECK(e.source.find("mLoopsRingLoopStart") != std::string::npos);
+    CHECK(e.source.find("++mLoopsRingLoopStart;") != std::string::npos);
+    // Forever: the guard is a literal `true`, not a count comparison.
+    CHECK(e.source.find("if (true)") != std::string::npos);
+
+    // A counted loop compares instead, and a reaction without a range emits none of it.
+    const EmittedCode counted = emitCpp(loopDoc(1, 2, 3));
+    CHECK(counted.ok());
+    CHECK(counted.source.find("mLoopsRingLoopStart < 3") != std::string::npos);
+    const EmittedCode none = emitCpp(loopDoc(-1, -1, -1));
+    CHECK(none.ok());
+    CHECK(none.source.find("mLoops") == std::string::npos);
+}
+TEST(A_tracks_target_is_followed_while_it_runs)
+{
+    // G-6b. `to` is an expression, and it may read a field animating in the SAME step. Read once
+    // at track start it gives the value that was already stale before the step began; the field
+    // then eases to the wrong number. Here `w` grows 0 -> 40 over the step while `x` aims at
+    // `w/4*3 - self.w/2`: the live target ends at 150 - 20 = 130, the stale one at 150 - 0 = 150.
+    Document d = Document::starter("VisualLoop", "F");
+    Shape *s = d.findShape("ring");
+    s->setField("w", "0");
+    s->setField("h", "0");
+    s->setField("x", "0");
+    s->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"w", "", "40", "1000", "0", "Linear", 0, false});
+    st.tracks.push_back({"x", "", "w/4*3-self.w/2", "1000", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    s->reactions.push_back(r);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    for (double t = 0.0; t <= 1200.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 130.0, 1e-6);
+
+    // ...and it goes on holding the expression, so it is `Target`, not `Owned`.
+    double v = 0.0;
+    Runtime::Source from = Runtime::Source::Binding;
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK(from == Runtime::Source::Target);
+    CHECK(std::string(Runtime::sourceName(from)) == "target");
+}
+TEST(A_completed_tracks_target_keeps_following_it)
+{
+    // G-6b, the half that only shows up a step LATER. Step 1 puts `x` on `w/4*3 - self.w/2` while
+    // `self.w` is 40, so it lands on 130 — correct at that moment. Step 2 then animates `w` to 0,
+    // and the expression `x` was left resting on now says 150. A target read once and kept would
+    // strand `x` at 130 and contradict the expression the author wrote for it.
+    Document d = Document::starter("VisualLoop", "G");
+    Shape *s = d.findShape("ring");
+    s->setField("w", "40");
+    s->setField("h", "40");
+    s->setField("x", "w/4-self.w/2");
+    s->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step move;
+    move.tracks.push_back({"x", "", "w/4*3-self.w/2", "200", "0", "Linear", 0, false});
+    Step shrink;
+    shrink.tracks.push_back({"w", "", "0", "200", "0", "Linear", 0, false});
+    r.steps.push_back(move);
+    r.steps.push_back(shrink);
+    s->reactions.push_back(r);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    for (double t = 0.0; t <= 220.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 130.0, 1e-6);   // step 1 done, self.w still 40
+    for (double t = 220.0; t <= 600.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->width.value(), 0.0, 1e-6);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 150.0, 1e-6);   // followed `w` all the way down
+
+    // A resize moves it too, for the same reason: the expression is what holds the field, and it
+    // reads `w`. This is the difference between "motion holds it" and "motion froze it".
+    rt.setSize(400, 400);
+    for (double t = 600.0; t <= 1200.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 300.0, 1e-6);
+}
+TEST(A_constant_target_stays_a_plain_tween)
+{
+    // The gate on G-6b: following a target that folds to a literal is provably the same number
+    // every frame, so it stays the tween it always was — and the field it leaves behind is
+    // genuinely `Owned`, the one source that does NOT answer a resize.
+    CHECK(!followsTarget(Track{"x", "", "40", "200", "0", "Linear", 0, false}));
+    CHECK(!followsTarget(Track{"x", "", "20 * 2 + 1", "200", "0", "Linear", 0, false}));
+    CHECK(followsTarget(Track{"x", "", "w / 2", "200", "0", "Linear", 0, false}));
+    CHECK(followsTarget(Track{"x", "", "original", "200", "0", "Linear", 0, false}));
+    CHECK(followsTarget(Track{"x", "", "current + 10", "200", "0", "Linear", 0, false}));
+    // A bare `original` always follows, even when it will not hand the field back.
+    CHECK(followsTarget(Track{"x", "", "original", "200", "0", "Linear", -1, false}));
+    CHECK(!releasesToBinding(Track{"x", "", "original", "200", "0", "Linear", -1, false}));
+
+    Document d = Document::starter("VisualLoop", "H");
+    Shape *s = d.findShape("ring");
+    s->setField("x", "(w - self.w) / 2");
+    s->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"x", "", "12", "200", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    s->reactions.push_back(r);
+
+    Runtime rt;
+    std::string err;
+    CHECK(rt.build(d, &err));
+    rt.setSize(200, 200);
+    rt.advance(0.0);
+    rt.loopStart();
+    for (double t = 0.0; t <= 400.0; t += 16.0)
+        rt.advance(t);
+    double v = 0.0;
+    Runtime::Source from = Runtime::Source::Binding;
+    CHECK(rt.fieldValue("ring", "x", v, &from));
+    CHECK_NEAR(v, 12.0, 1e-6);
+    CHECK(from == Runtime::Source::Owned);
+    rt.setSize(400, 400);
+    for (double t = 400.0; t <= 1000.0; t += 16.0)
+        rt.advance(t);
+    CHECK_NEAR(rt.segmentFor("ring")->x.value(), 12.0, 1e-6);   // deaf to the resize, as before
+
+    // And the emitter must agree about which fields carry blend state, or the two disagree about
+    // who writes the field and the Verifier reports it as a divergence (G-6b, one predicate).
+    const EmittedCode e = emitCpp(d);
+    CHECK(e.ok());
+    CHECK(e.source.find("mRelOnRingX") == std::string::npos);
+    CHECK(e.source.find("mRing->x.animate(") != std::string::npos);
+}
+TEST(Emitted_code_follows_a_non_constant_target_every_frame)
+{
+    // The other half of "one semantics, two consumers": a followed target compiles to a closure
+    // `applyReleases` calls every frame, NOT to a number baked into the Tween. `current` inside it
+    // must read the fire-time snapshot, or the target chases the field it is moving.
+    Document d = Document::starter("VisualLoop", "I");
+    Shape *ring = d.findShape("ring");
+    ring->setField("x", "(w - self.w) / 2");
+    ring->reactions.clear();
+    Reaction r;
+    r.signal = "loopStart";
+    Step st;
+    st.tracks.push_back({"x", "", "w/4*3-self.w/2", "200", "0", "Linear", 0, false});
+    st.tracks.push_back({"y", "", "8", "200", "0", "Linear", 0, false});
+    r.steps.push_back(st);
+    ring->reactions.push_back(r);
+
+    const EmittedCode e = emitCpp(d);
+    CHECK(e.ok());
+    CHECK(e.source.find("mRelToRingX = [this]() -> double {") != std::string::npos);
+    CHECK(e.source.find("mRelDrvRingX.animate(") != std::string::npos);
+    CHECK(e.source.find("applyReleases();") != std::string::npos);
+    // The blend keeps running after the driver rests; only a hand-back switches itself off.
+    CHECK(e.source.find("mRelBackRingX = false;") != std::string::npos);
+    CHECK(e.source.find("mOwnRingX = false;") == std::string::npos);
+    // A constant target in the same step is untouched: still a plain tween on the property.
+    CHECK(e.source.find("mRelToRingY") == std::string::npos);
+    CHECK(e.source.find("mRing->y.animate(") != std::string::npos);
 }
 TEST(Emitted_code_hands_a_bare_original_field_back_to_layout)
 {
@@ -1888,3 +2392,4 @@ TEST(Verifier_reports_unavailable_rather_than_passing)
 }
 
 int main() { return mini::runAll(); }
+

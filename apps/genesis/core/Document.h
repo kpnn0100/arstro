@@ -100,7 +100,27 @@ namespace genesis
         std::string easing = "EaseOutCubic";
         int repeat = 0;                  // extra cycles; -1 = forever
         bool yoyo = false;
+
+        /** G-25. With `easing == "Custom"` the curve is authored by the speed it ENTERS and LEAVES
+         *  at, in field units per second — the units of the field, per second of wall time — so a
+         *  leg can be handed over to the next without the visible stall a fixed-endpoint curve
+         *  forces at the seam. Gene expressions, like `ms`/`delay`, evaluated in the track scope at
+         *  fire time.
+         *
+         *  `continueIn`/`continueOut` say "take it from my neighbour instead": the exit speed of
+         *  the previous step's track on this field, and the entry speed of the next step's. They
+         *  override the authored expression when a neighbour exists, and are inert when it does
+         *  not (a chain has two ends). Both are meaningless unless the easing is Custom. */
+        std::string easeIn = "0";
+        std::string easeOut = "0";
+        bool continueIn = false;
+        bool continueOut = false;
     };
+
+    /** True when this track's curve is the authored-speed one (G-25) rather than a named curve.
+     *  The one spelling of the test, so the model, the interpreter, the emitter and the editor
+     *  cannot disagree about which tracks carry speeds. */
+    bool isCustomEasing(const Track &t);
 
     /** True when this track ends by handing its field back to its BINDING (G-22): its `to` is the
      *  bare name `original`, AND it actually comes to rest there. It rests at `to` unless it never
@@ -110,11 +130,104 @@ namespace genesis
      *  on the next resize. */
     bool releasesToBinding(const Track &t);
 
+    /** True when this track's `to` must be re-evaluated every frame rather than read once (G-6b):
+     *  the field is blended toward it while the track runs, and goes on taking it once the track
+     *  rests there. True for any `to` that is not a compile-time constant — a constant target is
+     *  the same number every frame, so following it is provably the plain tween and not worth the
+     *  blend. Both `releasesToBinding` cases are a subset (`original` is never constant).
+     *
+     *  The interpreter and the emitter must call THIS, not each re-derive it: they would disagree
+     *  about which fields are followed, and the Verifier would report a divergence instead of the
+     *  design decision it is. */
+    bool followsTarget(const Track &t);
+
     /** Tracks that start together. Step N+1 begins when step N completes. */
     struct Step
     {
         std::vector<Track> tracks;
     };
+
+    /** ── G-25: the speed arithmetic, in ONE place ─────────────────────────────────────────────
+     *
+     *  Everything below is a pure function of numbers the caller has already evaluated (`from`,
+     *  `to`, `durationMs` come out of Gene in the track scope; the caller knows its own units).
+     *  Keeping them here is the point: the interpreter, the emitter and the editor's readouts all
+     *  answer "what speed is this track leaving at" the same way, or the Verifier reports the
+     *  disagreement as a divergence rather than the arithmetic slip it actually is.
+     *
+     *  Two spaces, and the conversion between them is the only fiddly part:
+     *    - **value space** — field units per second, what the author types and reads.
+     *    - **slope space** — eased progress per unit of normalized time, what `Easing::Hermite`
+     *      takes (Artboard FR-4f). `slope = v * durationMs / (1000 * (to - from))`.
+     */
+
+    /** The endpoint slope for a wanted value-space speed. Returns 0 when the track has no distance
+     *  or no duration — there is no curve to shape, and the alternative is a division by zero. */
+    double slopeForSpeed(double speedPerSec, double from, double to, double durationMs);
+
+    /** The inverse: what value-space speed does this endpoint slope represent? */
+    double speedForSlope(double slope, double from, double to, double durationMs);
+
+    /** The value-space speed a NAMED easing enters and leaves at, so a custom leg can be made
+     *  continuous with an `EaseOutCubic` one without converting it by hand. Measured off the curve
+     *  itself (a numeric derivative at the endpoint), because that is a fact about the curve rather
+     *  than a table someone has to keep in step with Artboard. */
+    double namedEasingEntrySpeed(const std::string &easing, double from, double to, double durationMs);
+    double namedEasingExitSpeed(const std::string &easing, double from, double to, double durationMs);
+
+    /** A track's distance has no curve to shape when it is zero (G-25): every easing then draws the
+     *  same constant, so the custom curve degenerates and `Linear` is used instead. */
+    bool customEasingDegenerates(double from, double to, double durationMs);
+
+    /** Everything about one track that the speed arithmetic needs, already evaluated out of Gene by
+     *  whoever owns a scope. Keeping the numbers separate from the `Track` is what lets the editor
+     *  (which has a live runtime) and the emitter (which has none) share the resolution below. */
+    struct TrackMotion
+    {
+        double from = 0.0;
+        double to = 0.0;
+        double durationMs = 0.0;
+        std::string easing = "Linear";
+        std::string easeIn = "0";        // authored, value-space, already numeric
+        std::string easeOut = "0";
+        double easeInValue = 0.0;
+        double easeOutValue = 0.0;
+        bool continueIn = false;
+        bool continueOut = false;
+        bool valid = false;              // false when there is no such neighbour
+    };
+
+    /** The speed a track ENTERS / LEAVES at, in field units per second (G-25).
+     *
+     *  `prev`/`next` are the same track's neighbours on the same field — the track in the previous
+     *  step and the one in the next step targeting it — or a `TrackMotion` with `valid == false`
+     *  when there is none. That is what makes continuity resolvable in one pass without recursion:
+     *  a neighbour that is ITSELF continuous across this seam cannot be asked, so the shared
+     *  velocity falls back to the average speed of the track arriving at the seam.
+     */
+    double trackEntrySpeed(const TrackMotion &self, const TrackMotion &prev);
+    double trackExitSpeed(const TrackMotion &self, const TrackMotion &next);
+
+    /** Where a track's neighbours on the same field are, inside one expanded reaction (G-25).
+     *  `-1` for either when there is none. Shared so the interpreter, the emitter and the editor's
+     *  readouts all agree about which track is "the previous one" — a question with a surprising
+     *  number of plausible wrong answers once `all` has been expanded and a step holds several
+     *  tracks. Searches backwards/forwards by STEP: within one step a field has at most one live
+     *  track (G-5), so the answer is unambiguous. */
+    struct TrackNeighbours
+    {
+        int prevStep = -1, prevTrack = -1;
+        int nextStep = -1, nextTrack = -1;
+    };
+    TrackNeighbours neighboursOf(const std::vector<Step> &steps, int stepIndex,
+                                 const std::string &qualifiedTarget);
+
+    /** The expression a track actually starts from, for the speed arithmetic (G-25). A blank `from`
+     *  means "wherever the field is", which at the head of a contiguous chain is the `to` of the
+     *  previous track on that field, and failing that the field's own binding. Both consumers
+     *  resolve it identically or their slopes differ. */
+    std::string resolvedFromExpr(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                                 const std::string &qualifiedTarget, const std::string &bindingExpr);
 
     /** The tracks of `st` that actually RUN. An `artboard::Property` holds one tween, so when two
      *  tracks in a single step target the same field the later `animate()` replaces the earlier
@@ -133,6 +246,19 @@ namespace genesis
         std::string signal;              // a BaseDef signal name
         Cancel cancel = Cancel::Restart;
         std::vector<Step> steps;
+
+        /** G-26. When the chain completes step `loopTo` it continues from `loopFrom` instead of
+         *  ending, `loopCount` times (-1 = forever). Steps before `loopFrom` are an intro and run
+         *  once, which is what "fade in, then spin forever" needs and what a track's own `repeat`
+         *  cannot express (a repeating track never completes, so it never chains).
+         *
+         *  `loopFrom < 0` means no loop, and is the default — a reaction written before this
+         *  existed behaves exactly as it did. */
+        int loopFrom = -1;
+        int loopTo = -1;
+        int loopCount = -1;
+
+        bool loops() const { return loopFrom >= 0 && loopTo >= loopFrom; }
     };
 
     struct Shape

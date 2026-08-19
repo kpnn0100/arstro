@@ -1,0 +1,36 @@
+{
+  "genesis": 1,
+  // A loading animation's real shape: an intro that plays ONCE, then a range that repeats until
+  // the load finishes (G-26).
+  //
+  // Step 1 fades the dot in. Steps 2 and 3 swing it left and right, and the reaction loops 2..3
+  // forever — so the fade never replays. A track's own `repeat` cannot express this: a repeating
+  // track never completes, so it never chains, and every step after it would be dead.
+  //
+  // Stopping the loop is what ends it: `loopEnd` fades the dot out, and the cancellation policy
+  // (G-5) is what a caller uses to interrupt the cycle when the work is done.
+  "component": { "name": "IntroLoop", "base": "VisualLoop", "namespace": "app", "designSize": [200, 60] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "size", "type": "number", "default": "0.4", "range": [0.1, 0.9] }
+  ],
+  "shapes": [
+    { "id": "track", "type": "rect",
+      "bind": { "w": "w * 0.72", "h": "2", "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
+                "fill": "theme.border", "cornerRadius": "1" } },
+
+    { "id": "dot", "type": "circle",
+      "bind": { "w": "minSide * size", "h": "minSide * size",
+                "x": "(w - self.w) / 2", "y": "(h - self.h) / 2",
+                "fill": "accent", "opacity": "0" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart",
+          "loopFrom": 1, "loopTo": 2, "loopCount": -1,
+          "steps": [
+            [ { "target": "opacity", "to": "1", "ms": 200, "easing": "EaseOutCubic" } ],
+            [ { "target": "x", "to": "w * 0.16 - self.w / 2", "ms": 300, "easing": "EaseInOutQuad" } ],
+            [ { "target": "x", "to": "w * 0.84 - self.w / 2", "ms": 300, "easing": "EaseInOutQuad" } ] ] },
+        { "on": "loopEnd", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 200, "easing": "EaseInCubic" } ] ] } ] }
+  ]
+}

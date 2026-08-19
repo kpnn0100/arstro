@@ -165,7 +165,8 @@ namespace
             std::cout << "\n";
         }
         std::cout << "\n(suffix: b = its binding, a = animating, r = being released back to its "
-                     "binding, o = owned by motion)\n";
+                     "binding, t = resting on\n a completed track's target, still re-evaluated "
+                     "every frame, o = owned by motion and standing still)\n";
         return 0;
     }
 }

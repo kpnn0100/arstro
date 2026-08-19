@@ -39,8 +39,15 @@ namespace ui
          *  Every row must be reachable: see `Every_track_row_can_be_scrolled_fully_into_view`. */
         int trackRowCount() const { return (int)mRows.size(); }
         bool trackRowShown(int i) const { return mRows[(size_t)i].target->visible; }
+        double trackRowTop(int i) const { return mRows[(size_t)i].y; }
         /** True while a track is being dragged by its grip (G-23). */
         bool dragActive() const { return mDrag.active; }
+        /** The loop-range controls (G-26), for tests: the range is reaction-level state, so the
+         *  thing worth asserting is that the controls track it and yield their space when the
+         *  panel is too narrow rather than colliding with the signal and cancel dropdowns. */
+        const artboard::Segment *loopFromBox() const { return mLoopFrom.get(); }
+        const artboard::Segment *loopToBox() const { return mLoopTo.get(); }
+        const artboard::Segment *loopCountChip() const { return mLoopCount.get(); }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -93,6 +100,8 @@ namespace ui
          *  agree on the same top and bottom, or the offset limit describes a taller box than the
          *  rows are allowed to live in and the last row becomes unreachable: exactly the bug
          *  where a second step's tracks could neither be seen nor scrolled to. */
+        /** Whether the loop-range line fits without starving the track list (G-20, G-26). */
+        bool loopLineShown() const;
         double trackTop() const;
         double trackBottom() const;
         double reactionTop() const;
@@ -112,6 +121,13 @@ namespace ui
         std::vector<TrackRow> mRows;
         std::shared_ptr<artboard::ComboBox> mSignal;
         std::shared_ptr<artboard::ComboBox> mCancel;
+        /** G-26: the loop range, as reaction-level state beside the signal and cancel policy —
+         *  which is what it is. `mLoopFrom` carries "no loop" as its first option, so turning
+         *  looping off is the same control rather than a separate toggle; the other two are
+         *  meaningless without a range and hide with it. */
+        std::shared_ptr<artboard::ComboBox> mLoopFrom;
+        std::shared_ptr<artboard::ComboBox> mLoopTo;
+        std::shared_ptr<artboard::Button> mLoopCount;
         std::shared_ptr<artboard::Button> mAddReaction;
         std::shared_ptr<artboard::Button> mDeleteReaction;
         std::shared_ptr<artboard::Button> mAddStep;

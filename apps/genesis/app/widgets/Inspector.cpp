@@ -727,12 +727,17 @@ namespace ui
                     {
                         char buf[32];
                         std::snprintf(buf, sizeof buf, "%.4g", v);
+                        // `Target` sits between animating and owned: motion holds the field, but on
+                        // an EXPRESSION it re-reads every frame (G-6b), so it still answers a
+                        // resize. Warning at half strength says "motion's, but not stuck".
                         const artboard::Color c = from == Runtime::Source::Releasing
                                                       ? palette::primary()
                                                   : from == Runtime::Source::Animating
                                                       ? palette::success()
                                                   : from == Runtime::Source::Owned
                                                       ? palette::warning()
+                                                  : from == Runtime::Source::Target
+                                                      ? palette::warningAlpha(0.55)
                                                       : palette::mutedForeground();
                         drawFittedRight(t, buf, pad + kLabelW - 6.0 - room, 
                                         centreBaseline(r.y, r.height, type::micro()), room,

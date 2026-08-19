@@ -50,8 +50,10 @@ namespace genesis
         {
             return "mOwn" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
         }
-        // A field on its way back to its binding (G-22): the flag, the value it left from, and the
-        // 0..1 driver. The property itself is NOT tweened — see `applyReleases`.
+        // A field FOLLOWING its track's target (G-6b): the flag, the value it left from, the 0..1
+        // driver, the target as a closure re-read every frame, the `current` it snapshotted at
+        // fire time, and whether reaching the end also hands it back to layout (G-22). The
+        // property itself is NOT tweened — see `applyReleases`.
         std::string relFlag(const std::string &shapeId, const std::string &field)
         {
             return "mRelOn" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
@@ -63,6 +65,18 @@ namespace genesis
         std::string relDriver(const std::string &shapeId, const std::string &field)
         {
             return "mRelDrv" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
+        std::string relTarget(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelTo" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
+        std::string relCurrent(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelCur" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
+        }
+        std::string relHandsBack(const std::string &shapeId, const std::string &field)
+        {
+            return "mRelBack" + upperFirst(ident(shapeId)) + upperFirst(ident(field));
         }
 
         std::string numLit(double d)
@@ -242,15 +256,20 @@ namespace genesis
              *  compiled with plain `liveNames`, the same scope the interpreter evaluates it in,
              *  so a field's expression can never reach `current`/`original` and the two sides
              *  cannot drift. */
-            gene::CppNames trackNames(const std::string &owner, const std::string &propExpr,
+            /** `currentExpr` is what `current` compiles to. For everything evaluated once at fire
+             *  time (`from`, `ms`, `delay`) that is the property itself; for a FOLLOWED `to`, which
+             *  is re-read every frame long after the property has moved, it must be the snapshot
+             *  member instead (G-5, G-6b) — reading the property back would make the target chase
+             *  the field it is moving and never converge. */
+            gene::CppNames trackNames(const std::string &owner, const std::string &currentExpr,
                                       const std::string &originalExpr, const std::string &where) const
             {
                 gene::CppNames n = liveNames(owner);
                 auto base = n.ident;
                 const Emitter *self = this;
-                n.ident = [base, propExpr, originalExpr, where, owner,
+                n.ident = [base, currentExpr, originalExpr, where, owner,
                            self](const std::string &name) -> std::string {
-                    if (name == "current") return propExpr + ".value()";
+                    if (name == "current") return currentExpr;
                     if (name == "original")
                         return "(" +
                                const_cast<Emitter *>(self)->expr(originalExpr, self->liveNames(owner),
@@ -382,9 +401,9 @@ namespace genesis
 
             /** Every (object, reaction) pair handling `signal` — a signal is a component-level
              *  event, so they all run. */
-            /** Every (shape, field) a releasing track targets — the fields that need release
-             *  state and a line in `applyReleases` (G-22). Field-table order per shape, so the
-             *  generated source is stable. */
+            /** Every (shape, field) a FOLLOWING track targets — the fields that need blend state
+             *  and a line in `applyReleases` (G-6b). Field-table order per shape, so the generated
+             *  source is stable. */
             std::vector<std::pair<std::string, std::string>> releasedFields() const
             {
                 std::set<std::pair<std::string, std::string>> hit;
@@ -392,7 +411,7 @@ namespace genesis
                     for (const auto &st : doc.expandSteps(*pair.second, pair.first->id))
                         for (const auto &t : st.tracks)
                         {
-                            if (!releasesToBinding(t)) continue;
+                            if (!followsTarget(t)) continue;
                             std::string sh, f;
                             Document::splitTarget(t.target, pair.first->id, sh, f);
                             if (doc.findShape(sh) && findField(f)) hit.emplace(sh, f);
@@ -402,6 +421,15 @@ namespace genesis
                     for (const auto *fd : fieldsFor(s.kind))
                         if (hit.count({s.id, fd->name})) out.emplace_back(s.id, fd->name);
                 return out;
+            }
+
+            /** Does this field carry blend state at all? A plain tween on a field that some OTHER
+             *  track follows has to switch that follower off, and only then is the flag declared. */
+            bool isFollowedField(const std::string &shapeId, const std::string &field) const
+            {
+                for (const auto &rf : releasedFields())
+                    if (rf.first == shapeId && rf.second == field) return true;
+                return false;
             }
 
             std::vector<std::pair<const Shape *, const Reaction *>> reactionsFor(
@@ -442,6 +470,13 @@ namespace genesis
             std::string pendingMember(const std::string &sh, const std::string &sg) const { return "mPending" + tag(sh, sg); }
             std::string runningMember(const std::string &sh, const std::string &sg) const { return "mRunning" + tag(sh, sg); }
             std::string queuedMember(const std::string &sh, const std::string &sg) const { return "mQueued" + tag(sh, sg); }
+            std::string loopsMember(const std::string &sh, const std::string &sg) const { return "mLoops" + tag(sh, sg); }
+            // G-28: the chain's IDEAL clock — when the current step was due to start, and how long
+            // it is due to last. Chaining from the frame clock instead loses the overshoot once per
+            // step, which is what makes two objects with equal totals but different step counts
+            // drift apart.
+            std::string stepAtMember(const std::string &sh, const std::string &sg) const { return "mStepAt" + tag(sh, sg); }
+            std::string stepDurMember(const std::string &sh, const std::string &sg) const { return "mStepDur" + tag(sh, sg); }
 
             // ---- header -------------------------------------------------------------
             std::string emitHeader() const
@@ -457,8 +492,11 @@ namespace genesis
                   << " *  Depends on artboard only — Genesis ships no runtime.\n"
                   << " */\n"
                   << "#pragma once\n"
-                  << "#include <artboard/artboard.h>\n"
-                  << "#include <memory>\n";
+                  << "#include <artboard/artboard.h>\n";
+                // A followed target is a closure the reaction installs and applyReleases calls
+                // every frame (G-6b) — which track is driving the field decides the expression.
+                if (!releasedFields().empty()) o << "#include <functional>\n";
+                o << "#include <memory>\n";
                 if (hasLabel()) o << "#include <string>\n";
                 o << "\n";
                 o << "namespace " << doc.nameSpace << "\n{\n";
@@ -504,6 +542,15 @@ namespace genesis
                     o << "        void applyReleases();\n";
                 o << "        /** Assign a bound value unless motion owns the field (see the .cpp). */\n";
                 o << "        void bindProp(artboard::Property &p, double v, double ms, bool owned);\n";
+                if (anyCustomEasing())
+                {
+                    o << "        /** An authored endpoint speed (field units per second) as the\n";
+                    o << "         *  slope Easing::Hermite takes. Zero when the track has no\n";
+                    o << "         *  distance or no time: there is no curve to shape, and the\n";
+                    o << "         *  alternative is a division by zero. */\n";
+                    o << "        static double slopeForSpeed(double v, double from, double to,\n";
+                    o << "                                    double durationMs);\n";
+                }
                 for (const auto &pair : doc.allReactions())
                     for (size_t i = 0; i < doc.expandSteps(*pair.second, pair.first->id).size(); ++i)
                         o << "        void " << reactionFn(pair.first->id, pair.second->signal, (int)i)
@@ -538,7 +585,10 @@ namespace genesis
                 for (const auto &rf : releasedFields())
                 {
                     o << "        bool " << relFlag(rf.first, rf.second) << " = false;\n";
+                    o << "        bool " << relHandsBack(rf.first, rf.second) << " = false;\n";
                     o << "        double " << relStart(rf.first, rf.second) << " = 0.0;\n";
+                    o << "        double " << relCurrent(rf.first, rf.second) << " = 0.0;\n";
+                    o << "        std::function<double()> " << relTarget(rf.first, rf.second) << ";\n";
                     o << "        artboard::Property " << relDriver(rf.first, rf.second) << "{0.0};\n";
                 }
                 for (const auto &pair : doc.allReactions())
@@ -549,6 +599,12 @@ namespace genesis
                     o << "        bool " << runningMember(sh, sg) << " = false;\n";
                     if (pair.second->cancel == Cancel::Queue)
                         o << "        bool " << queuedMember(sh, sg) << " = false;\n";
+                    if (pair.second->loops())
+                        o << "        int " << loopsMember(sh, sg)
+                          << " = 0;   // passes through the loop range (G-26)\n";
+                    o << "        double " << stepAtMember(sh, sg)
+                      << " = 0.0;   // the step's ideal start (G-28)\n";
+                    o << "        double " << stepDurMember(sh, sg) << " = 0.0;\n";
                 }
                 if (!doc.allReactions().empty())
                     o << "        int mSeq = 0;   // monotonic token: a restarted reaction ignores stale callbacks\n";
@@ -766,6 +822,20 @@ namespace genesis
 
             void emitBindProp(std::ostringstream &o) const
             {
+                if (anyCustomEasing())
+                {
+                    o << "    // G-25: an authored endpoint speed, in field units per second, becomes the\n";
+                    o << "    // slope Easing::Hermite takes -- eased progress per unit of normalized time.\n";
+                    o << "    // The 1000 is the seconds-to-milliseconds conversion.\n";
+                    o << "    double " << doc.name
+                      << "::slopeForSpeed(double v, double from, double to, double durationMs)\n";
+                    o << "    {\n";
+                    o << "        const double d = to - from;\n";
+                    o << "        if ((d < 0.0 ? -d : d) < 1e-9 || durationMs <= 0.0)\n";
+                    o << "            return 0.0;   // no distance or no time: nothing to shape\n";
+                    o << "        return v * durationMs / (1000.0 * d);\n";
+                    o << "    }\n\n";
+                }
                 o << "    // An edge (resize, a param change) always RETARGETS: easing toward the new value\n";
                 o << "    // from wherever the previous ease had got to. A per-frame refresh (ms == 0, used\n";
                 o << "    // when a binding tracks live base state) must not cut that ease short, so it yields\n";
@@ -873,17 +943,17 @@ namespace genesis
                 o << "    // Push the (possibly animating) style values into each node's style.\n";
                 if (!releasedFields().empty())
                 {
-                    Emitter &self2 = const_cast<Emitter &>(*this);
-                    o << "    /** Fields on their way back to their bindings (G-22). The target is the\n";
-                    o << "     *  binding RE-EVALUATED every frame, so a field whose binding reads another\n";
-                    o << "     *  animating field follows it and arrives exactly on it rather than easing\n";
-                    o << "     *  to a value that was already stale when the track started. It cannot come\n";
-                    o << "     *  from layout(): the local of an owned field is its LIVE value, which is\n";
-                    o << "     *  where the field already is. Runs BEFORE layout, so a binding reading this\n";
-                    o << "     *  field sees this frame's value. */\n";
+                    o << "    /** Fields following their track's target (G-6b). The target is the `to`\n";
+                    o << "     *  expression RE-EVALUATED every frame, so a field whose target reads\n";
+                    o << "     *  another animating field arrives exactly ON it rather than easing to a\n";
+                    o << "     *  value that was already stale when the track started — and goes on taking\n";
+                    o << "     *  it once the blend rests there, which is what makes a completed track's\n";
+                    o << "     *  `to` the field's resting expression. It cannot come from layout(): the\n";
+                    o << "     *  local of an owned field is its LIVE value, which is where the field\n";
+                    o << "     *  already is. Runs BEFORE layout, so a binding reading this field sees this\n";
+                    o << "     *  frame's value. Only a hand-back to the binding (a bare `original`, G-22)\n";
+                    o << "     *  switches itself off, because there layout takes the field back over. */\n";
                     o << "    void " << doc.name << "::applyReleases()\n    {\n";
-                    o << "        const double w = width.value(), h = height.value();\n";
-                    o << "        (void)w; (void)h;\n";
                     for (const auto &rf : releasedFields())
                     {
                         const Shape *s = doc.findShape(rf.first);
@@ -892,15 +962,14 @@ namespace genesis
                         const std::string prop = *fd->segmentProperty
                                                      ? memberOf(rf.first) + "->" + fd->segmentProperty
                                                      : stylePropOf(rf.first, rf.second);
-                        const std::string target =
-                            self2.expr(s->effectiveField(rf.second), liveNames(rf.first),
-                                       rf.first + "." + rf.second + " original");
+                        const std::string from = relStart(rf.first, rf.second);
                         o << "        if (" << relFlag(rf.first, rf.second) << ")\n        {\n";
-                        o << "            " << prop << ".set(" << relStart(rf.first, rf.second)
-                          << " + ((" << target << ") - " << relStart(rf.first, rf.second) << ") * "
-                          << relDriver(rf.first, rf.second) << ".value());\n";
-                        o << "            if (!" << relDriver(rf.first, rf.second)
-                          << ".isAnimating())\n";
+                        o << "            const double target = " << relTarget(rf.first, rf.second)
+                          << " ? " << relTarget(rf.first, rf.second) << "() : " << from << ";\n";
+                        o << "            " << prop << ".set(" << from << " + (target - " << from
+                          << ") * " << relDriver(rf.first, rf.second) << ".value());\n";
+                        o << "            if (" << relHandsBack(rf.first, rf.second) << " && !"
+                          << relDriver(rf.first, rf.second) << ".isAnimating())\n";
                         o << "                " << relFlag(rf.first, rf.second)
                           << " = false;   // blended at t = 1: exactly the binding\n";
                         o << "        }\n";
@@ -973,6 +1042,111 @@ namespace genesis
                 }
             }
 
+            /** Does any track anywhere author its own endpoint speeds (G-25)? Gates the helper and
+             *  the locals, so a document that never uses it emits byte-identical code to before. */
+            bool anyCustomEasing() const
+            {
+                for (const auto &pair : doc.allReactions())
+                    for (const auto &st : doc.expandSteps(*pair.second, pair.first->id))
+                        for (const auto &t : st.tracks)
+                            if (isCustomEasing(t)) return true;
+                return false;
+            }
+
+            /** `from`/`to`/`durationMs` of one track, as C++ expressions, for the speed arithmetic.
+             *  A blank `from` resolves exactly the way `Document::resolvedFromExpr` says, or the
+             *  emitted slopes differ from the interpreter's and the Verifier reports it. */
+            struct MotionExprs
+            {
+                std::string from, to, dur;
+            };
+            MotionExprs motionExprs(const std::vector<Step> &steps, int si, int ti,
+                                    const std::string &owner, const std::string &where) const
+            {
+                Emitter &self = const_cast<Emitter &>(*this);
+                const Track &t = steps[(size_t)si].tracks[(size_t)ti];
+                std::string sh, f;
+                Document::splitTarget(t.target, owner, sh, f);
+                const Shape *s = doc.findShape(sh);
+                const FieldDef *fd = findField(f);
+                MotionExprs m{"0.0", "0.0", "1.0"};
+                if (!s || !fd) return m;
+                const std::string prop = *fd->segmentProperty
+                                             ? memberOf(sh) + "->" + fd->segmentProperty
+                                             : stylePropOf(sh, f);
+                const std::string binding = s->effectiveField(f);
+                const gene::CppNames names = trackNames(owner, prop + ".value()", binding, where);
+                m.from = "(" + self.expr(resolvedFromExpr(steps, si, ti, t.target, binding), names,
+                                        where + " from") + ")";
+                m.to = "(" + self.expr(t.to, names, where + " to") + ")";
+                m.dur = "(" + self.expr(t.durationMs, names, where + " ms") + ")";
+                return m;
+            }
+
+            /** The value-space speed a track enters or leaves at, as a C++ expression. Mirrors
+             *  `Document::ownEntrySpeed`/`ownExitSpeed`: a named curve's endpoint slope is a fact
+             *  about the curve, so it folds to a literal here. */
+            std::string ownSpeedExpr(const std::vector<Step> &steps, int si, int ti,
+                                     const std::string &owner, bool entry,
+                                     const std::string &where, const MotionExprs *known) const
+            {
+                Emitter &self = const_cast<Emitter &>(*this);
+                const Track &t = steps[(size_t)si].tracks[(size_t)ti];
+                const MotionExprs m = known ? *known : motionExprs(steps, si, ti, owner, where);
+                if (isCustomEasing(t))
+                {
+                    std::string sh, f;
+                    Document::splitTarget(t.target, owner, sh, f);
+                    const Shape *s = doc.findShape(sh);
+                    const FieldDef *fd = findField(f);
+                    if (!s || !fd) return "0.0";
+                    const std::string prop = *fd->segmentProperty
+                                                 ? memberOf(sh) + "->" + fd->segmentProperty
+                                                 : stylePropOf(sh, f);
+                    const gene::CppNames names =
+                        trackNames(owner, prop + ".value()", s->effectiveField(f), where);
+                    return "(" + self.expr(entry ? t.easeIn : t.easeOut, names,
+                                           where + (entry ? " easeIn" : " easeOut")) + ")";
+                }
+                // slope * 1000 * (to - from) / dur, with the slope a compile-time constant.
+                const double slope = entry ? namedEasingEntrySpeed(t.easing, 0.0, 1.0, 1000.0)
+                                           : namedEasingExitSpeed(t.easing, 0.0, 1.0, 1000.0);
+                return "(" + numLit(slope) + " * 1000.0 * (" + m.to + " - " + m.from + ") / " +
+                       m.dur + ")";
+            }
+
+            std::string averageSpeedExpr(const MotionExprs &m) const
+            {
+                return "((" + m.to + " - " + m.from + ") * 1000.0 / " + m.dur + ")";
+            }
+
+            /** The entry/exit speed this track should actually use, continuity resolved — the C++
+             *  twin of `Document::trackEntrySpeed`/`trackExitSpeed`, branch for branch. */
+            std::string speedExpr(const std::vector<Step> &steps, int si, int ti,
+                                  const std::string &owner, bool entry, const std::string &where,
+                                  const MotionExprs &selfM) const
+            {
+                const Track &t = steps[(size_t)si].tracks[(size_t)ti];
+                const bool wants = entry ? t.continueIn : t.continueOut;
+                const TrackNeighbours nb = neighboursOf(steps, si, t.target);
+                const int ns = entry ? nb.prevStep : nb.nextStep;
+                const int nt = entry ? nb.prevTrack : nb.nextTrack;
+                if (!wants || ns < 0)
+                    return ownSpeedExpr(steps, si, ti, owner, entry, where, &selfM);
+
+                const Track &n = steps[(size_t)ns].tracks[(size_t)nt];
+                const MotionExprs nm = motionExprs(steps, ns, nt, owner, where + " neighbour");
+                if (entry)
+                {
+                    // The previous track is arriving here. If it also defers across this seam,
+                    // nobody states a speed and the seam takes the pace it was already keeping.
+                    if (n.continueOut) return averageSpeedExpr(nm);
+                    return ownSpeedExpr(steps, ns, nt, owner, /*entry*/ false, where, &nm);
+                }
+                if (n.continueIn) return averageSpeedExpr(selfM);   // `self` is the arriving leg
+                return ownSpeedExpr(steps, ns, nt, owner, /*entry*/ true, where, &nm);
+            }
+
             void emitReactions(std::ostringstream &o) const
             {
                 Emitter &self = const_cast<Emitter &>(*this);
@@ -998,11 +1172,18 @@ namespace genesis
                           << "()\n    {\n";
                         o << "        const double w = width.value(), h = height.value();\n";
                         o << "        (void)w; (void)h;\n";
+                        // G-28: a chain far enough behind that catching up would be a visible
+                        // fast-forward (a minimised window, a paused debugger) resyncs instead.
+                        o << "        if (mNowMs - " << stepAtMember(host.id, r.signal)
+                          << " > 1000.0)\n";
+                        o << "            " << stepAtMember(host.id, r.signal)
+                          << " = mNowMs;   // too far behind to replay: resync (G-28)\n";
                         if (finite > 0)
                         {
                             o << "        const int token = " << tokenMember(host.id, r.signal) << ";\n";
                             o << "        " << pendingMember(host.id, r.signal) << " = " << finite << ";\n";
                         }
+                        std::vector<std::string> stepDurExprs;
                         for (const auto &t : tracks)
                         {
                             std::string owner, field;
@@ -1014,52 +1195,149 @@ namespace genesis
                                                          ? memberOf(owner) + "->" + fd->segmentProperty
                                                          : stylePropOf(owner, field);
                             const std::string where = host.id + " " + r.signal + " " + t.target;
+                            const std::string original = s->effectiveField(field);
+                            // Evaluated ONCE, at fire time: `current` is the property as it reads
+                            // right now, which is exactly what G-5 says it means.
                             const gene::CppNames names =
-                                trackNames(owner, prop, s->effectiveField(field), where);
+                                trackNames(owner, prop + ".value()", original, where);
                             const std::string from = t.from.empty() ? prop + ".value()"
                                                                     : self.expr(t.from, names, where + " from");
-                            const std::string to = self.expr(t.to, names, where + " to");
                             const std::string dur = self.expr(t.durationMs, names, where + " duration");
                             const std::string delay = self.expr(t.delayMs, names, where + " delay");
+                            // G-28 / G-27: the step's ideal length is the longest of its live
+                            // finite tracks. Collected here so the chain advances by the number
+                            // the step header shows, rather than by whenever a frame noticed.
+                            if (t.repeat >= 0)
+                                stepDurExprs.push_back("(" + delay + ") + (" + dur + ") * " +
+                                                       std::to_string(t.repeat + 1) + ".0");
+                            // A track whose target is not a constant drives a 0..1 blend rather
+                            // than the property, so `applyReleases` can aim it at `to` re-evaluated
+                            // every frame (G-6b) and leave it resting there. `to` therefore
+                            // compiles against the SNAPSHOT of `current`, not the live property.
+                            const bool rel = followsTarget(t);
+                            const bool handsBack = releasesToBinding(t);
+                            const std::string to =
+                                self.expr(t.to,
+                                          rel ? trackNames(owner, relCurrent(owner, field), original, where)
+                                              : names,
+                                          where + " to");
                             o << "        " << ownFlag(owner, field) << " = true;   // motion now owns "
                               << owner << "." << field << "\n";
-                            // A releasing track drives a 0..1 blend rather than the property, so
-                            // `applyReleases` can aim it at the binding every frame (G-22). With a
-                            // constant binding the result is the identical curve.
-                            const bool rel = releasesToBinding(t);
+
+                            // G-25. An aimed curve needs its own endpoints as VALUES to convert
+                            // the authored speeds into slopes, so they become locals here rather
+                            // than being inlined twice into the Tween. `tracks` is the filtered
+                            // live subset, so its index means nothing to the neighbour search —
+                            // find this track's place in the expanded step (one live track per
+                            // field per step, G-5, so matching the target is unambiguous).
+                            std::string curve = "artboard::Easing::" + t.easing;
+                            std::string slopes;
+                            if (isCustomEasing(t))
+                            {
+                                int idx = -1;
+                                for (size_t k = 0; k < step.tracks.size(); ++k)
+                                    if (step.tracks[k].target == t.target) idx = (int)k;
+                                const std::string pfx = "k" + upperFirst(ident(owner)) +
+                                                        upperFirst(ident(field));
+                                MotionExprs m;
+                                m.from = "(" + from + ")";
+                                m.to = "(" + to + ")";
+                                m.dur = "(" + dur + ")";
+                                o << "        const double " << pfx << "From = " << from << ";\n";
+                                o << "        const double " << pfx << "To = " << to << ";\n";
+                                o << "        const double " << pfx << "Dur = " << dur << ";\n";
+                                MotionExprs local;
+                                local.from = pfx + "From";
+                                local.to = pfx + "To";
+                                local.dur = pfx + "Dur";
+                                const std::string vIn =
+                                    idx >= 0 ? speedExpr(steps, (int)si, idx, host.id, true, where, local)
+                                             : std::string("0.0");
+                                const std::string vOut =
+                                    idx >= 0 ? speedExpr(steps, (int)si, idx, host.id, false, where, local)
+                                             : std::string("0.0");
+                                o << "        const double " << pfx << "In = " << vIn << ";\n";
+                                o << "        const double " << pfx << "Out = " << vOut << ";\n";
+                                curve = "artboard::Easing::Hermite";
+                                slopes = ",\n                            slopeForSpeed(" + pfx +
+                                         "In, " + pfx + "From, " + pfx + "To, " + pfx + "Dur), " +
+                                         "slopeForSpeed(" + pfx + "Out, " + pfx + "From, " + pfx +
+                                         "To, " + pfx + "Dur)";
+                            }
                             if (rel)
                             {
                                 o << "        " << relFlag(owner, field) << " = true;\n";
+                                o << "        " << relHandsBack(owner, field) << " = "
+                                  << (handsBack ? "true" : "false") << ";\n";
                                 o << "        " << relStart(owner, field) << " = " << from << ";\n";
+                                o << "        " << relCurrent(owner, field) << " = " << prop
+                                  << ".value();\n";
+                                o << "        " << relTarget(owner, field) << " = [this]() -> double {\n";
+                                o << "            const double w = width.value(), h = height.value();\n";
+                                o << "            (void)w; (void)h;\n";
+                                o << "            return " << to << ";\n";
+                                o << "        };\n";
                                 o << "        " << relDriver(owner, field)
                                   << " = artboard::Property{0.0};\n";
                             }
+                            else if (isFollowedField(owner, field))
+                            {
+                                // Another track follows this field. A plain tween writes the
+                                // property directly, so a leftover follower has to be switched off
+                                // or the two write it every frame and the tween loses.
+                                o << "        " << relFlag(owner, field) << " = false;\n";
+                            }
                             const std::string driven = rel ? relDriver(owner, field) : prop;
                             o << "        " << driven << ".animate(\n";
+                            // The driver runs the SAME curve and slopes: it is a 0..1
+                            // reparameterization of the identical motion, so an aimed target keeps
+                            // the speed it was aimed at.
                             if (rel)
                                 o << "            artboard::Tween(0.0, 1.0, " << dur << ", " << delay
-                                  << ",\n                            artboard::Easing::" << t.easing
-                                  << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false") << "),\n";
+                                  << ",\n                            " << curve
+                                  << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false")
+                                  << slopes << "),\n";
                             else
                                 o << "            artboard::Tween(" << from << ", " << to << ", " << dur
-                                  << ", " << delay << ",\n                            artboard::Easing::"
-                                  << t.easing << ", " << t.repeat << ", "
-                                  << (t.yoyo ? "true" : "false") << "),\n";
-                            o << "            mNowMs";
+                                  << ", " << delay << ",\n                            " << curve
+                                  << ", " << t.repeat << ", " << (t.yoyo ? "true" : "false")
+                                  << slopes << "),\n";
+                            o << "            " << stepAtMember(host.id, r.signal);
                             if (t.repeat >= 0)
                             {
                                 o << ",\n            [this, token] {\n";
                                 o << "                if (token != " << tokenMember(host.id, r.signal) << ")\n";
                                 o << "                    return;   // a newer run of this reaction superseded us\n";
                                 // `to = original` hands the field back to its BINDING when the
-                                // track completes, so layout drives it again (G-22). The runtime
-                                // clears the same flag at the same moment.
-                                if (rel)
+                                // track completes, so layout drives it again (G-22). Every OTHER
+                                // target keeps the field and simply rests on the expression
+                                // (G-6b), so the own-flag stays set. The runtime clears the same
+                                // flag at the same moment.
+                                if (handsBack)
                                     o << "                " << ownFlag(owner, field)
                                       << " = false;   // back to its binding: layout owns "
                                       << owner << "." << field << " again\n";
                                 o << "                if (--" << pendingMember(host.id, r.signal)
                                   << " > 0)\n                    return;\n";
+                                // G-26. Tested BEFORE "is there a next step", because loopTo need
+                                // not be the last one — a reaction may loop a middle range and then
+                                // play an outro once the count runs out. The interpreter branches
+                                // at exactly this point, on exactly this condition.
+                                o << "                " << stepAtMember(host.id, r.signal)
+                                  << " += " << stepDurMember(host.id, r.signal)
+                                  << ";   // due when the step was DUE to end (G-28)\n";
+                                const bool loopsHere = r.loops() && (int)si == r.loopTo;
+                                if (loopsHere)
+                                {
+                                    o << "                ++" << loopsMember(host.id, r.signal) << ";\n";
+                                    o << "                if (" << (r.loopCount < 0 ? "true" : "")
+                                      << (r.loopCount < 0 ? "" : loopsMember(host.id, r.signal) +
+                                                                     " < " + std::to_string(r.loopCount))
+                                      << ")\n                {\n";
+                                    o << "                    " << reactionFn(host.id, r.signal, r.loopFrom)
+                                      << "();\n";
+                                    o << "                    return;\n                }\n";
+                                }
                                 if (si + 1 < steps.size())
                                     o << "                " << reactionFn(host.id, r.signal, (int)si + 1)
                                       << "();\n";
@@ -1083,6 +1361,21 @@ namespace genesis
                                 o << "            }";
                             }
                             o << ");\n";
+                        }
+                        {
+                            o << "        " << stepDurMember(host.id, r.signal) << " = ";
+                            if (stepDurExprs.empty())
+                                o << "0.0";
+                            else if (stepDurExprs.size() == 1)
+                                o << stepDurExprs.front();
+                            else
+                            {
+                                o << "std::max({";
+                                for (size_t k = 0; k < stepDurExprs.size(); ++k)
+                                    o << (k ? ", " : "") << stepDurExprs[k];
+                                o << "})";
+                            }
+                            o << ";   // the step's ideal length (G-28)\n";
                         }
                         if (finite == 0)
                         {
@@ -1112,6 +1405,10 @@ namespace genesis
                         o << in << "{   // cancel policy: ignore while running\n";
                         o << in << "    " << tokenMember(sh, signal) << " = ++mSeq;\n";
                         o << in << "    " << runningMember(sh, signal) << " = true;\n";
+                        o << in << "    " << stepAtMember(sh, signal)
+                          << " = mNowMs;   // the chain's ideal clock starts now (G-28)\n";
+                        if (r.loops())
+                            o << in << "    " << loopsMember(sh, signal) << " = 0;\n";
                         o << in << "    " << reactionFn(sh, signal, 0) << "();\n";
                         o << in << "}\n";
                     }
@@ -1124,6 +1421,10 @@ namespace genesis
                         o << in << "{\n";
                         o << in << "    " << tokenMember(sh, signal) << " = ++mSeq;\n";
                         o << in << "    " << runningMember(sh, signal) << " = true;\n";
+                        o << in << "    " << stepAtMember(sh, signal)
+                          << " = mNowMs;   // the chain's ideal clock starts now (G-28)\n";
+                        if (r.loops())
+                            o << in << "    " << loopsMember(sh, signal) << " = 0;\n";
                         o << in << "    " << reactionFn(sh, signal, 0) << "();\n";
                         o << in << "}\n";
                     }
@@ -1131,6 +1432,11 @@ namespace genesis
                     {
                         o << in << tokenMember(sh, signal) << " = ++mSeq;   // supersede any in-flight run\n";
                         o << in << runningMember(sh, signal) << " = true;\n";
+                        o << in << stepAtMember(sh, signal)
+                          << " = mNowMs;   // the chain's ideal clock starts now (G-28)\n";
+                        if (r.loops())
+                            o << in << loopsMember(sh, signal)
+                              << " = 0;   // a restarted chain loops afresh\n";
                         o << in << reactionFn(sh, signal, 0) << "();\n";
                     }
                     o << indent << "}\n";
@@ -1195,8 +1501,8 @@ namespace genesis
                 o << "        const double sizeMs = firstSizing ? 0.0 : kResizeMs;\n";
                 if (!releasedFields().empty())
                 {
-                    o << "        // Release drivers tick first, then the blend, then layout — the\n";
-                    o << "        // interpreter's order, so both sides agree frame for frame (G-22).\n";
+                    o << "        // Blend drivers tick first, then the blend, then layout — the\n";
+                    o << "        // interpreter's order, so both sides agree frame for frame (G-6b).\n";
                     for (const auto &rf : releasedFields())
                         o << "        " << relDriver(rf.first, rf.second) << ".update(nowMs);\n";
                     o << "        applyReleases();\n";

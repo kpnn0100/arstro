@@ -1,5 +1,6 @@
 #include "BaseCatalog.h"
 #include <algorithm>
+#include <map>
 
 namespace genesis
 {
@@ -141,6 +142,46 @@ namespace genesis
             "Standard", "StandardDecel", "StandardAccel", "EmphasizedDecel", "EmphasizedAccel",
         };
         return e;
+    }
+
+    artboard::Easing easingFromName(const std::string &name)
+    {
+        // One table, indexed the same way BaseCatalog::easingNames() lists them, so the
+        // editor's dropdown, the emitter's `Easing::X`, and this lookup cannot disagree.
+        static const std::map<std::string, artboard::Easing> m = {
+            {"Linear", artboard::Easing::Linear},
+            {"EaseInQuad", artboard::Easing::EaseInQuad},
+            {"EaseOutQuad", artboard::Easing::EaseOutQuad},
+            {"EaseInOutQuad", artboard::Easing::EaseInOutQuad},
+            {"EaseInCubic", artboard::Easing::EaseInCubic},
+            {"EaseOutCubic", artboard::Easing::EaseOutCubic},
+            {"EaseInOutCubic", artboard::Easing::EaseInOutCubic},
+            {"EaseInQuart", artboard::Easing::EaseInQuart},
+            {"EaseOutQuart", artboard::Easing::EaseOutQuart},
+            {"EaseInOutQuart", artboard::Easing::EaseInOutQuart},
+            {"EaseInSine", artboard::Easing::EaseInSine},
+            {"EaseOutSine", artboard::Easing::EaseOutSine},
+            {"EaseInOutSine", artboard::Easing::EaseInOutSine},
+            {"EaseInExpo", artboard::Easing::EaseInExpo},
+            {"EaseOutExpo", artboard::Easing::EaseOutExpo},
+            {"EaseInOutExpo", artboard::Easing::EaseInOutExpo},
+            {"EaseInBack", artboard::Easing::EaseInBack},
+            {"EaseOutBack", artboard::Easing::EaseOutBack},
+            {"EaseInOutBack", artboard::Easing::EaseInOutBack},
+            {"EaseInElastic", artboard::Easing::EaseInElastic},
+            {"EaseOutElastic", artboard::Easing::EaseOutElastic},
+            {"EaseInOutElastic", artboard::Easing::EaseInOutElastic},
+            {"EaseInBounce", artboard::Easing::EaseInBounce},
+            {"EaseOutBounce", artboard::Easing::EaseOutBounce},
+            {"EaseInOutBounce", artboard::Easing::EaseInOutBounce},
+            {"Standard", artboard::Easing::Standard},
+            {"StandardDecel", artboard::Easing::StandardDecel},
+            {"StandardAccel", artboard::Easing::StandardAccel},
+            {"EmphasizedDecel", artboard::Easing::EmphasizedDecel},
+            {"EmphasizedAccel", artboard::Easing::EmphasizedAccel},
+        };
+        auto it = m.find(name);
+        return it == m.end() ? artboard::Easing::Linear : it->second;
     }
 
     bool isEasingName(const std::string &name)

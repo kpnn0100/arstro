@@ -66,7 +66,8 @@
         "stroke": "theme.accent",
         "pivotX": "self.w-self.h/2",
         "pivotY": "self.h/2",
-        "strokeWidth": "self.h/10"
+        "strokeWidth": "self.h/10",
+        "opacity": "0"
       },
       "reactions": [
         {
@@ -74,6 +75,12 @@
           "cancel": "restart",
           "steps": [
             [
+              {
+                "target": "opacity",
+                "to": "1",
+                "ms": "200",
+                "easing": "EaseOutCubic"
+              },
               {
                 "target": "w",
                 "to": "topleftcircle.w + w/2",
@@ -154,56 +161,70 @@
             ],
             [
               {
-                "target": "rotation",
-                "to": "-pi/2",
-                "ms": "1000",
-                "easing": "EaseInOutCubic"
-              },
-              {
-                "target": "trimOffset",
-                "to": "3.5",
-                "ms": "1000",
-                "delayMs": "500",
-                "easing": "EaseInOutSine"
+                "target": "w",
+                "to": "minSide * 0.3",
+                "ms": "800",
+                "easing": "EaseInCubic"
               }
             ],
             [
               {
-                "target": "y",
-                "to": "w/4-self.h/2",
-                "ms": "500",
-                "easing": "EaseInOutCubic"
-              },
-              {
-                "target": "w",
-                "to": "minSide * 0.3",
-                "ms": "500",
-                "easing": "EaseInOutCubic"
-              },
-              {
                 "target": "trimStart",
                 "to": "0",
                 "ms": "1000",
-                "delayMs": "500",
-                "easing": "EaseInOutCubic"
+                "easing": "EaseOutCubic"
               },
               {
                 "target": "trimOffset",
                 "to": "4",
-                "ms": "1000",
-                "delayMs": "500",
-                "easing": "EaseInOutCubic"
+                "ms": "800",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "x",
+                "to": "w/4*3",
+                "ms": "800",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "y",
+                "to": "w/4*3",
+                "ms": "800",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "w",
+                "to": "0",
+                "ms": "800",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "h",
+                "to": "0",
+                "ms": "800",
+                "easing": "EaseOutCubic"
+              },
+              {
+                "target": "opacity",
+                "to": "0",
+                "ms": "0",
+                "delayMs": "600",
+                "easing": "EaseOutCubic"
               }
             ],
             [
               {
                 "target": "all",
                 "to": "original",
-                "ms": "1000",
-                "easing": "EaseOutCubic"
+                "ms": "100",
+                "easing": "EaseOutQuad"
               }
             ]
-          ]
+          ],
+          "loopFrom": 0,
+          "loopTo": 7
         },
         {
           "on": "loopEnd",
@@ -231,7 +252,10 @@
         "x": "w/4*3-self.w/2",
         "y": "w/4-self.h/2",
         "fill": "theme.accent",
-        "rotation": ""
+        "rotation": "",
+        "stroke": "theme.accent",
+        "strokeWidth": "0",
+        "opacity": "0"
       },
       "reactions": [
         {
@@ -239,6 +263,12 @@
           "cancel": "restart",
           "steps": [
             [
+              {
+                "target": "opacity",
+                "to": "1",
+                "ms": "200",
+                "easing": "EaseOutCubic"
+              },
               {
                 "target": "w",
                 "to": "minSide*0.2",
@@ -289,28 +319,51 @@
             ],
             [
               {
-                "target": "x",
-                "to": "w/4*3-self.w/2",
+                "target": "y",
+                "to": "w/4-self.w/2",
                 "ms": "1000",
-                "delayMs": "4500",
+                "delayMs": "1000",
                 "easing": "EaseInOutCubic"
               }
             ],
             [
               {
                 "target": "w",
-                "to": "0",
-                "ms": "500",
+                "to": "minSide*0.15",
+                "ms": "800",
                 "easing": "EaseInOutCubic"
               },
               {
                 "target": "h",
+                "to": "minSide*0.15",
+                "ms": "800",
+                "easing": "EaseInOutCubic"
+              },
+              {
+                "target": "strokeWidth",
+                "to": "minSide*0.15",
+                "ms": "800",
+                "easing": "EaseInOutCubic"
+              },
+              {
+                "target": "opacity",
                 "to": "0",
-                "ms": "500",
+                "ms": "800",
+                "delayMs": "800",
+                "easing": "EaseInOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "all",
+                "to": "original",
+                "ms": "400",
                 "easing": "EaseInOutCubic"
               }
             ]
-          ]
+          ],
+          "loopFrom": 0,
+          "loopTo": 7
         },
         {
           "on": "loopEnd",
@@ -383,9 +436,26 @@
                 "to": "0",
                 "ms": "1000",
                 "easing": "EaseInOutQuad"
+              },
+              {
+                "target": "opacity",
+                "to": "0",
+                "ms": "1000",
+                "delayMs": "800",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "all",
+                "to": "original",
+                "ms": "1900",
+                "easing": "EaseOutCubic"
               }
             ]
-          ]
+          ],
+          "loopFrom": 0,
+          "loopTo": 2
         },
         {
           "on": "loopEnd",
@@ -441,8 +511,26 @@
                 "delayMs": "4200",
                 "easing": "EaseOutCubic"
               }
+            ],
+            [
+              {
+                "target": "opacity",
+                "to": "0",
+                "ms": "200",
+                "easing": "EaseOutCubic"
+              }
+            ],
+            [
+              {
+                "target": "all",
+                "to": "original",
+                "ms": "2500",
+                "easing": "EaseOutCubic"
+              }
             ]
-          ]
+          ],
+          "loopFrom": 0,
+          "loopTo": 1
         }
       ]
     }

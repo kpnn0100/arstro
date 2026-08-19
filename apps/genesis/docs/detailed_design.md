@@ -213,6 +213,22 @@ plays the next step or clears `running` (and, under `queue`, restarts). Infinite
 in a comment. `mSeq` is a monotonic token so a restarted reaction ignores its own in-flight
 callbacks.
 
+**Looping a range (G-26).** The jump is one branch inside that same callback, and it is tested
+**before** "is there a next step" — `loopTo` need not be the last step, so a reaction can loop a
+middle range and then play an outro once the count runs out. On reaching `loopTo` the pass counter
+increments and, while `loopCount < 0` or the counter is short of it, the chain re-enters
+`loopFrom`'s step function instead of continuing. The interpreter branches at the identical point
+on the identical condition (`Runtime::playStep`'s completion lambda), which is what lets `--verify`
+diff the two op streams over a cycling animation.
+
+The counter belongs to the **run**, not the reaction: every path that starts a chain resets it
+(all three cancellation policies, plus the queued re-start inside the callback), or firing a
+second time would inherit a count that had already run out and skip the loop entirely.
+
+Why this could not be a track's `repeat`: a repeating track never completes, so it never chains —
+its step's `pending` never reaches zero and every step after it is dead. That is also why
+`validate()` warns when a looped range contains one; the loop can never come round.
+
 ### 4.4 Name resolution
 
 `layoutNames(owner)` resolves `self.f`/`shape.f` to the local `<shape>_<field>`;
@@ -248,28 +264,46 @@ not arise. Because it is an expression rather than a captured number, `to = orig
 against the *current* size — an `original x` of `(w - self.w) / 2` lands correctly at a window
 size the component was never authored at.
 
-**The target moves, so it is followed.** A release cannot be a plain tween: `x = w/4*3 - self.w/2`
-returning to rest while `w` also returns to `0` has a target that changes every frame, and a tween
-aimed at the fire-time value lands short and then jumps. So a releasing track animates a **0..1
-driver** instead of the property, and each frame the field is set to
-`lerp(start, <the binding, re-evaluated now>, driver)` — `Runtime::applyReleases`, and the emitted
-`applyReleases()`. With a constant binding this is algebraically the tween it replaces
-(`from + (to - from) * e(t)`), so nothing else changes.
+**The target moves, so it is followed — and this is true of every `to`, not just `original`
+(G-6b).** A target that reads something live cannot be a plain tween: `x = w/4*3 - self.w/2` while
+`w` is also moving changes every frame, and a tween aimed at the fire-time value lands short and
+then jumps. So such a track animates a **0..1 driver** instead of the property, and each frame the
+field is set to `lerp(start, <`to`, re-evaluated now>, driver)` — `Runtime::applyReleases`, and the
+emitted `applyReleases()`. With a constant target this is algebraically the tween it replaces
+(`from + (to - from) * e(t)`), so `Document::followsTarget` gates on exactly that: parse, `fold`,
+and take the plain tween when the result `isConstant`. `original` is never constant, so every
+releasing track is also a following one — the G-22 machinery is now a special case of this rather
+than a mechanism of its own.
 
-Three details are load-bearing, and each was a bug first:
+The entry **outlives the driver**. Once the blend reaches `t == 1` the field simply keeps taking
+the same expression every frame, which is what makes a completed track's `to` the field's *resting
+expression* — a later step animating `w`, or a resize, moves it, exactly as its binding would have.
+Only a hand-back to the binding drops the entry (below), because there layout takes the field back
+over and two writers would fight.
+
+Four details are load-bearing, and each was a bug first:
 
 - **The target cannot come from the layout locals.** The local of an owned field is its LIVE value
   (G-6a), so blending toward it aims at where the field already is and nothing moves. The target is
-  the field's own binding evaluated in the live scope — the same expression `original` resolves to.
-- **Field-table order, not the map's.** A release target may read another releasing field
+  the track's `to` evaluated in the track scope.
+- **`current` inside a followed target is a snapshot.** The scope is built by `trackScopeAt(owner,
+  <the value at fire time>, …)`, and the emitter compiles `current` to a `mRelCur…` member assigned
+  when the track starts — *not* to `<property>.value()`, which is what everything evaluated once
+  (`from`, `ms`, `delay`) still uses. Re-reading the property every frame would make `current + 10`
+  chase the field it is moving and never converge.
+- **Field-table order, not the map's.** A target may read another followed field
   (`pivotX = self.w - self.h / 2`), so whether it sees this frame's value or last frame's depends
   on the order. The runtime walks `fieldsFor(kind)` and looks up in its map rather than iterating
   the map, because `std::map` is alphabetical and the emitter walks the table. The Verifier caught
   exactly this as `preview=36.66 compiled=29.73`.
-- **Blend, then drop.** The release is cleared *after* the frame in which its driver finishes, so
+- **Blend, then drop.** A hand-back is cleared *after* the frame in which its driver finishes, so
   the last blend runs at `t == 1` and lands the field exactly on its binding. Dropping it first
   left the previous frame's partial value whenever layout was not running every frame — the field
   stopped just short of the value it was supposed to return to.
+
+A plain-tween track targeting a field some *other* track follows must switch that follower off
+first (`n->releasing.erase(field)`, and the emitted `mRelOn… = false;`), or the blend and the tween
+both write the field every frame and the tween loses.
 
 **And a track that ends at `original` hands the field back.** `original` names the *binding*, so
 finishing there must leave the field driven by that binding — otherwise it means "the number the
@@ -283,16 +317,23 @@ property already holds the value the binding gives.
 `Document::releasesToBinding(track)` is the single predicate, because the two sides must release
 at the same instant or they diverge on the next resize — invisible until something is resized,
 and then a silent difference between the preview and the shipped class. It is true when the `to`
-is the bare name `original` (`original + 4` ends off the binding), the track completes
-(`repeat >= 0`), and its final cycle is forward — `!(yoyo && repeat % 2 == 1)`, which is exactly
-the condition `artboard::Tween` uses to pick its resting endpoint rather than a guess about what
-yoyo means.
+is the bare name `original` (`original + 4` ends off the binding — the field stays motion's and
+rests on *that* expression instead), the track completes (`repeat >= 0`), and its final cycle is
+forward — `!(yoyo && repeat % 2 == 1)`, which is exactly the condition `artboard::Tween` uses to
+pick its resting endpoint rather than a guess about what yoyo means.
+
+Now that G-6b makes every resting expression live, what the hand-back is actually *for* is the
+own-flag: it is the one `to` that puts the field back under layout, so the value reads as
+`Binding` rather than `Target` and the inspector's expression is what writes it. The number on
+screen is the same either way — which is precisely why the two must be decided by a predicate
+rather than inferred from the drawing.
 
 `current` lives only in the track scope, because it means "the target field's value at the
-moment this reaction fires". The emitter binds it to `<property>.value()` and the runtime
-samples the property when the track starts, which is what makes `to = current + 10` relative:
-firing repeatedly steps the value, and interrupting mid-flight resumes from where it got to
-rather than from where it was first aimed.
+moment this reaction fires". The runtime samples the property when the track starts, and the
+emitter binds it to `<property>.value()` in everything evaluated once — which is what makes
+`to = current + 10` relative: firing repeatedly steps the value, and interrupting mid-flight
+resumes from where it got to rather than from where it was first aimed. In a *followed* `to` it
+compiles to the `mRelCur…` snapshot instead, for the same reason stated the other way round.
 
 ## 5. `Runtime`
 
@@ -334,17 +375,77 @@ Comparison is token-wise with a relative tolerance of `1e-9`, so a last-bit diff
 reported as a semantic one while any real divergence is. The scan stops after 40 differences —
 enough to diagnose, and the rest would be noise.
 
+### 4c. The chain runs on the ideal clock (G-28)
+
+A tween is only *observed* to complete on a frame, and a frame rarely lands on the due time. Chaining
+from the frame clock therefore discards the overshoot **once per step**, so the error scales with the
+step count rather than the chain length: eight 100 ms steps on a 16 ms clock take 896 ms, not 800.
+Two objects with identical totals but different step counts then drift — measured at +96 ms per lap,
+compounding — which is what "they go out of sync after a few loops" actually is.
+
+So a reaction carries `stepAtMs` (when the current step was *due* to start) and `stepDurMs` (its
+ideal length, the same quantity §5b reports). Every track is started from `stepAtMs`, and the
+completion callback does `stepAtMs += stepDurMs` rather than reading the clock. A step that began
+late is already partway through on its first frame, so the chain returns to schedule instead of
+accumulating. The correction is self-limiting: a tween started in the past still does not report
+completion until its next update, so catch-up runs at most one step per frame. Past a
+`kResyncMs = 1000` backlog — a minimised window, a paused debugger — the chain resyncs rather than
+replaying the backlog as a visible fast-forward.
+
+**This is not a clock-sharing problem.** Every object in a component already reads one frame time,
+stamped once per frame before anything ticks, and rendering cannot alter a value (drawing is a
+`const` pass). Adding a shared clock would have changed nothing; the defect was the quantisation of
+*chaining*, and the fix belongs where the chain advances.
+
+**The trap it exposed.** The per-frame driver tick used to walk `ShapeNode::releasing` directly — but
+a completion callback fired inside that walk starts the next step, which *inserts into that very
+map*. Whether the new driver was then ticked on the same frame depended on `std::map`'s alphabetical
+order, while the emitter walks a static field-table list. While every tween started at `mNowMs` an
+extra tick was a no-op and the asymmetry was invisible; starting from a past time made it a real
+frame of progress, and four samples failed `--verify` at once. The tick now walks `mFollowed`, a list
+precomputed at build time in document x field-table order — the same walk `releasedFields()` does —
+which both fixes the ordering and removes the mutation-during-iteration.
+
+### 5b. Reading the timeline (G-27)
+
+`Runtime::stepTimings(shape, signal)` answers, per step, **when it starts** and **how long it
+takes** — the arithmetic between "durations and delays" (what the document says) and "a timeline"
+(what the author is actually looking at). A step's length is the longest of its **live** tracks'
+`delay + ms x (repeat + 1)`; its start is the sum of every step before it. `reactionDurationMs` is
+now just the sum, so the two can never disagree.
+
+Three details, each of which was wrong in the first cut:
+
+- **`liveTracks`, not `step.tracks`.** A track shadowed by a later one on the same field never runs
+  (G-6), so it cannot decide when the step completes; counting it reports a step longer than it is.
+- **`repeat` counts every cycle.** `delay + ms` is one cycle; a `x3` track occupies three.
+- **Endless is a flag, not a zero.** A step whose live tracks all repeat forever never hands on, and
+  that is the diagnosis for "why do my later steps never happen" — but its reported length is still
+  **one cycle**, because the scrubber needs a timeline to scrub. Collapsing those two questions into
+  one number broke the scrubber the first time; the flag carries the truth and the number stays
+  useful.
+
+The editor draws the pair in each step header and the total beside the scrubber, in mono so the
+columns line up down the list, and colours an endless step as a warning rather than as data.
+
 ### 5a. Reading the live value (G-24)
 
-`Runtime::fieldValue(shape, field, out, &whence)` returns what a field *is*, plus which of four
+`Runtime::fieldValue(shape, field, out, &whence)` returns what a field *is*, plus which of five
 things last wrote it: its **binding**, an **animation** in flight, a **release** back to its
-binding, or **owned** by motion and standing still. The last two are the diagnosis a drawing cannot
-give — a field that ignores a resize is `owned`, one drifting home is `releasing` — and
-`releaseProgress` reports how far a hand-back has got.
+binding, a **target** it has come to rest on (a completed track's `to`, still re-evaluated every
+frame — G-6b), or **owned** by motion and standing still. The last three are the diagnosis a
+drawing cannot give, and they are three different answers to "why has it stopped?": `releasing` is
+on its way home, `target` is following an expression that is not currently changing, and `owned` is
+the only one that will ignore a resize. `releaseProgress` reports how far a hand-back has got, and
+answers -1 for a merely-followed field, which is not on its way anywhere.
+
+A followed field's own property never reports `isAnimating()` — its 0..1 driver does — so the
+driver is what separates `animating` from `target`.
 
 Two views of that one call: the inspector draws the value in the label gutter beside the
-expression, coloured by source (muted / green / accent / amber), so what a field should be and what
-it is are read together; and `genesis-cc --trace <id>[.<field>] --signal <name>@<ms> --until <ms>`
+expression, coloured by source (muted / green / accent / amber, half-amber for `target`), so what a
+field should be and what it is are read together; and
+`genesis-cc --trace <id>[.<field>] --signal <name>@<ms> --until <ms>`
 prints the same table frame by frame, headless. The trace is what a bug report can carry:
 
 ```

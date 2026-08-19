@@ -31,7 +31,7 @@ package "genesis (editor)" {
     - gripAt(p) / dropTargetAt(y, step, index)
   }
   class Modal {
-    + openNew() / openBrowse() / openSaveAs() / openReport()
+    + openNew() / openSaveAs() / openReport()
     + coversApp()  ' overlay-pass panels check this
   }
   class RowHover
@@ -55,12 +55,17 @@ package genesis_core {
     + animatedFields(shapeId) : string[]  ' derived; there is no mark (G-21)
     + isAnimated(shapeId, field)
     + {static} moveTrack(r, fromStep, fromTrack, toStep, toIndex)  ' G-23
+    + {static} followsTarget(t)  ' G-6b: a non-constant `to` is re-read every frame
+    + {static} releasesToBinding(t)  ' G-22: ...and a bare `original` also hands the field back
     + toJson() / fromJson() / load() / save()
     + {static} starter(base, name)
   }
   class Shape
   class Param
-  class Reaction
+  class Reaction {
+    + loopFrom / loopTo / loopCount  ' G-26: the chain repeats a range of its steps
+    + loops() : bool
+  }
   class Step
   class Track
   class FieldDef <<the one field table>>
@@ -84,7 +89,9 @@ package genesis_core {
   class Runtime {
     + fieldValue(shape, field, out, whence) : bool  ' G-24: the live value + who wrote it
     + releaseProgress(shape, field) : double
-    - applyReleases()  ' G-22: blend toward the binding, re-evaluated each frame
+    + stepTimings(shape, signal) : StepTiming[]  ' G-27: start + length per step
+    + reactionDurationMs(shape, signal) : double  ' their sum
+    - applyReleases()  ' G-6b: blend toward `to`, re-evaluated each frame, and rest on it
   } {
     + build(doc) : bool
     + root() : Segment

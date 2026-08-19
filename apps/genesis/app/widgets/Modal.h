@@ -1,10 +1,11 @@
 /*
  *  Genesis — Modal: the app's one overlay surface.
  *
- *  New / Open / Save As / the verification report all share one modal so there is a single
- *  place that knows how a dialog fades in, dims what is behind it, traps the click that
- *  dismisses it, and draws in the OVERLAY pass (the only kind of overlap the layout rules
- *  allow).
+ *  New / Save As / the verification report all share one modal so there is a single place
+ *  that knows how a dialog fades in, dims what is behind it, traps the click that dismisses
+ *  it, and draws in the OVERLAY pass (the only kind of overlap the layout rules allow).
+ *  Open is NOT here: it's a native OS file-chooser (the host owns it, cosmo's pattern) so it
+ *  can reach any .genesis file on disk, not just whatever sits in the process's cwd.
  */
 #pragma once
 #include "../Theme.h"
@@ -29,7 +30,6 @@ namespace ui
         void advance(double nowMs) override;
 
         void openNew();
-        void openBrowse();
         void openSaveAs();
         void openReport(const std::string &title, const std::vector<std::string> &lines,
                         StatusLevel level);
@@ -55,7 +55,7 @@ namespace ui
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &localPoint) override;
 
     private:
-        enum class Mode { None, New, Browse, SaveAs, Report };
+        enum class Mode { None, New, SaveAs, Report };
         void rebuild();
         artboard::Rect cardRect() const;
 

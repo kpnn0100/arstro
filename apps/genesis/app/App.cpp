@@ -39,7 +39,7 @@ namespace ui
             newDocument(base, "My" + base);
             showEditor();
         };
-        mHome->onOpen = [this] { mModal->openBrowse(); };
+        mHome->onOpen = [this] { if (onOpenRequested) onOpenRequested(); };
         mHome->onOpenRecent = [this](const std::string &path) {
             if (openDocument(path)) showEditor();
         };

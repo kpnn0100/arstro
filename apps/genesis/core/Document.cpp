@@ -174,6 +174,157 @@ namespace genesis
         return !(t.yoyo && t.repeat % 2 == 1);          // where artboard::Tween comes to rest
     }
 
+    bool isCustomEasing(const Track &t) { return t.easing == "Custom"; }
+
+    // ── G-25: the speed arithmetic ────────────────────────────────────────────────────────────
+    namespace
+    {
+        // Below this the track has no distance (or no time) to shape, so slope is meaningless and
+        // any answer is as good as any other. Chosen well under a sub-pixel move rather than at
+        // the edge of double precision: a track that travels a millionth of a pixel is one the
+        // author cannot see, and pretending to aim its curve only produces enormous slopes.
+        constexpr double kNoDistance = 1e-9;
+    }
+
+    bool customEasingDegenerates(double from, double to, double durationMs)
+    {
+        const double d = to - from;
+        return (d < 0.0 ? -d : d) < kNoDistance || durationMs <= 0.0;
+    }
+
+    double slopeForSpeed(double speedPerSec, double from, double to, double durationMs)
+    {
+        if (customEasingDegenerates(from, to, durationMs)) return 0.0;
+        // v is per SECOND and durationMs is milliseconds, hence the 1000.
+        return speedPerSec * durationMs / (1000.0 * (to - from));
+    }
+
+    double speedForSlope(double slope, double from, double to, double durationMs)
+    {
+        if (customEasingDegenerates(from, to, durationMs)) return 0.0;
+        return slope * 1000.0 * (to - from) / durationMs;
+    }
+
+    namespace
+    {
+        // The endpoint slope of a named curve, measured rather than tabulated. A table would be a
+        // second copy of Artboard's curve definitions and would rot the first time one changed.
+        // The step is small enough to be a good derivative and large enough that the difference
+        // does not vanish into double-precision noise.
+        double namedSlopeAt(const std::string &easing, bool atEnd)
+        {
+            const artboard::Easing e = easingFromName(easing);
+            constexpr double h = 1e-6;
+            return atEnd ? (artboard::applyEasing(e, 1.0) - artboard::applyEasing(e, 1.0 - h)) / h
+                         : (artboard::applyEasing(e, h) - artboard::applyEasing(e, 0.0)) / h;
+        }
+    }
+
+    double namedEasingEntrySpeed(const std::string &easing, double from, double to, double durationMs)
+    {
+        return speedForSlope(namedSlopeAt(easing, false), from, to, durationMs);
+    }
+
+    double namedEasingExitSpeed(const std::string &easing, double from, double to, double durationMs)
+    {
+        return speedForSlope(namedSlopeAt(easing, true), from, to, durationMs);
+    }
+
+    namespace
+    {
+        /** The pace a track keeps on average — distance over time. This is the value that breaks
+         *  the circularity when both sides of a seam ask each other what speed to use (G-25):
+         *  "keep going at the pace you were already going". It always exists, and it is the one
+         *  choice that cannot introduce the stall the author asked continuity to remove. */
+        double averageSpeed(const TrackMotion &m)
+        {
+            if (m.durationMs <= 0.0) return 0.0;
+            return (m.to - m.from) * 1000.0 / m.durationMs;
+        }
+
+        /** What a track leaves at, ignoring any continuity it has asked for on THAT side. This is
+         *  the terminating case: it never consults a neighbour, so a chain of continuous tracks
+         *  resolves in one step instead of recursing. */
+        double ownExitSpeed(const TrackMotion &m)
+        {
+            if (m.easing != "Custom")
+                return namedEasingExitSpeed(m.easing, m.from, m.to, m.durationMs);
+            return m.easeOutValue;
+        }
+
+        double ownEntrySpeed(const TrackMotion &m)
+        {
+            if (m.easing != "Custom")
+                return namedEasingEntrySpeed(m.easing, m.from, m.to, m.durationMs);
+            return m.easeInValue;
+        }
+    }
+
+    TrackNeighbours neighboursOf(const std::vector<Step> &steps, int stepIndex,
+                                 const std::string &qualifiedTarget)
+    {
+        TrackNeighbours n;
+        auto findIn = [&](int si) {
+            for (size_t k = 0; k < steps[(size_t)si].tracks.size(); ++k)
+                if (steps[(size_t)si].tracks[k].target == qualifiedTarget) return (int)k;
+            return -1;
+        };
+        for (int si = stepIndex - 1; si >= 0 && n.prevStep < 0; --si)
+        {
+            const int k = findIn(si);
+            if (k >= 0) { n.prevStep = si; n.prevTrack = k; }
+        }
+        for (int si = stepIndex + 1; si < (int)steps.size() && n.nextStep < 0; ++si)
+        {
+            const int k = findIn(si);
+            if (k >= 0) { n.nextStep = si; n.nextTrack = k; }
+        }
+        return n;
+    }
+
+    std::string resolvedFromExpr(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                                 const std::string &qualifiedTarget, const std::string &bindingExpr)
+    {
+        const Track &t = steps[(size_t)stepIndex].tracks[(size_t)trackIndex];
+        if (!t.from.empty()) return t.from;
+        const TrackNeighbours n = neighboursOf(steps, stepIndex, qualifiedTarget);
+        if (n.prevStep >= 0)
+            return steps[(size_t)n.prevStep].tracks[(size_t)n.prevTrack].to;
+        return bindingExpr;
+    }
+
+    double trackEntrySpeed(const TrackMotion &self, const TrackMotion &prev)
+    {
+        if (!self.continueIn || !prev.valid)
+            return ownEntrySpeed(self);   // authored, or nothing to be continuous WITH
+        // The previous track is arriving at this seam. If it is also deferring to us across the
+        // same seam, neither states a speed, so the seam takes the pace the arriving leg was
+        // already keeping.
+        if (prev.continueOut) return averageSpeed(prev);
+        return ownExitSpeed(prev);
+    }
+
+    double trackExitSpeed(const TrackMotion &self, const TrackMotion &next)
+    {
+        if (!self.continueOut || !next.valid)
+            return ownExitSpeed(self);
+        // Mirror image, and note it resolves to the SAME number as trackEntrySpeed does for the
+        // track on the other side — which is what makes the seam continuous rather than merely
+        // both-sides-automatic. `self` is the arriving leg here.
+        if (next.continueIn) return averageSpeed(self);
+        return ownEntrySpeed(next);
+    }
+
+    bool followsTarget(const Track &t)
+    {
+        // Deliberately says nothing about repeat/yoyo: a target that reads a moving value has to
+        // be re-evaluated per frame WHILE the track runs too, and a track that never rests (or
+        // rests back at `from`) still wants that. Where it comes to rest is the tween's business.
+        gene::NodePtr n = gene::parse(t.to, nullptr);
+        if (!n) return false;                           // unparseable: validate() reports it
+        return !gene::isConstant(gene::fold(n));
+    }
+
     // ───────────────────────── Document lookup ─────────────────────────
 
     const Shape *Document::findShape(const std::string &id) const
@@ -496,11 +647,33 @@ namespace genesis
                             tj.set("repeat", Json::number(t.repeat));
                         if (t.yoyo)
                             tj.set("yoyo", Json::boolean(true));
+                        // G-25. Written only for a custom curve, and only when they say something
+                        // — a named easing carrying speeds would be noise in the diff, and the
+                        // defaults must not appear or every existing sample's bytes would change.
+                        if (isCustomEasing(t))
+                        {
+                            if (t.easeIn != "0" && !t.easeIn.empty())
+                                tj.set("easeIn", Json::string(t.easeIn));
+                            if (t.easeOut != "0" && !t.easeOut.empty())
+                                tj.set("easeOut", Json::string(t.easeOut));
+                            if (t.continueIn)
+                                tj.set("continueIn", Json::boolean(true));
+                            if (t.continueOut)
+                                tj.set("continueOut", Json::boolean(true));
+                        }
                         tracks.push(tj);
                     }
                     steps.push(tracks);
                 }
                 j.set("steps", steps);
+                // G-26. Absent unless the reaction actually loops, for the same reason.
+                if (r.loops())
+                {
+                    j.set("loopFrom", Json::number(r.loopFrom));
+                    j.set("loopTo", Json::number(r.loopTo));
+                    if (r.loopCount != -1)
+                        j.set("loopCount", Json::number(r.loopCount));
+                }
                 rs.push(j);
             }
             return rs;
@@ -539,10 +712,24 @@ namespace genesis
                         t.easing = tj["easing"].asString("EaseOutCubic");
                         t.repeat = (int)tj["repeat"].asNumber(0);
                         t.yoyo = tj["yoyo"].asBool(false);
+                        // G-25. Numbers are accepted for the same reason `ms` is, and stored as
+                        // expressions so a param can re-time them.
+                        t.easeIn = tj["easeIn"].isNumber()
+                                       ? Json::number(tj["easeIn"].asNumber()).dump()
+                                       : tj["easeIn"].asString("0");
+                        t.easeOut = tj["easeOut"].isNumber()
+                                        ? Json::number(tj["easeOut"].asNumber()).dump()
+                                        : tj["easeOut"].asString("0");
+                        t.continueIn = tj["continueIn"].asBool(false);
+                        t.continueOut = tj["continueOut"].asBool(false);
                         st.tracks.push_back(t);
                     }
                     r.steps.push_back(std::move(st));
                 }
+                // G-26. -1 keeps `loops()` false, so a document without these is unaffected.
+                r.loopFrom = (int)rj["loopFrom"].asNumber(-1);
+                r.loopTo = (int)rj["loopTo"].asNumber(-1);
+                r.loopCount = (int)rj["loopCount"].asNumber(-1);
                 out.push_back(std::move(r));
             }
             return out;
@@ -1012,6 +1199,42 @@ namespace genesis
                 if (r.steps.empty())
                     out.push_back({Diagnostic::Severity::Warning, where,
                                    "reaction has no steps: it does nothing"});
+                // G-26: the loop range names steps by index, so it can name ones that do not
+                // exist — and an inverted range would simply never fire, silently.
+                if (r.loopFrom >= 0 || r.loopTo >= 0)
+                {
+                    const int n = (int)r.steps.size();
+                    if (r.loopFrom < 0 || r.loopTo < 0)
+                        out.push_back({Diagnostic::Severity::Error, where,
+                                       "loop range needs both a first and a last step"});
+                    else if (r.loopFrom >= n || r.loopTo >= n)
+                        out.push_back({Diagnostic::Severity::Error, where,
+                                       "loop range is outside this reaction's " +
+                                           std::to_string(n) + " step(s)"});
+                    else if (r.loopTo < r.loopFrom)
+                        out.push_back({Diagnostic::Severity::Error, where,
+                                       "loop range ends before it begins"});
+                    else if (r.loopCount == 0)
+                        out.push_back({Diagnostic::Severity::Warning, where,
+                                       "loop count of 0 never plays the range"});
+                    else
+                    {
+                        // A track that never completes never chains (G-5), so a looped range
+                        // containing one can never reach its end — the loop is dead, and the
+                        // steps after it never run either.
+                        for (int si = r.loopFrom; si <= r.loopTo; ++si)
+                            for (const auto &t : r.steps[(size_t)si].tracks)
+                                if (t.repeat < 0)
+                                {
+                                    out.push_back(
+                                        {Diagnostic::Severity::Warning, where,
+                                         "step " + std::to_string(si + 1) + "'s '" + t.target +
+                                             "' repeats forever, so the loop can never come "
+                                             "round: drop its repeat and let the loop do it"});
+                                    break;
+                                }
+                    }
+                }
                 // Named, not a temporary indexed inline: a range-for over
                 // `expandSteps(...)[si].tracks` does not extend the vector's lifetime, so the
                 // loop would walk freed memory.
@@ -1087,9 +1310,22 @@ namespace genesis
                             // Nothing to check about whether the field is "marked" animated:
                             // this track IS what makes it animated (G-21).
                         }
-                        if (!isEasingName(t.easing))
+                        // "Custom" is not an artboard::Easing — it is a request to build one from
+                        // the track's authored speeds (G-25), so it passes the name check and its
+                        // own expressions are checked instead.
+                        if (!isEasingName(t.easing) && !isCustomEasing(t))
                             out.push_back({Diagnostic::Severity::Error, sw,
                                            "unknown easing '" + t.easing + "'"});
+                        if (isCustomEasing(t))
+                        {
+                            NameChecker enc{*this, b, shapeId, /*allowCurrent*/ true};
+                            checkExpr(t.easeIn, sw + " easeIn", FieldType::Number, enc, out);
+                            checkExpr(t.easeOut, sw + " easeOut", FieldType::Number, enc, out);
+                        }
+                        else if (t.continueIn || t.continueOut)
+                            out.push_back({Diagnostic::Severity::Warning, sw,
+                                           "continuous in/out only applies to a Custom easing; "
+                                           "'" + t.easing + "' has a fixed endpoint speed"});
                         // `current` (the target's value at fire time) and `original` (the value
                         // of its own binding) are in scope here, and only here (G-6, G-22).
                         NameChecker tnc{*this, b, shapeId, /*allowCurrent*/ true};

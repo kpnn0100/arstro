@@ -15,7 +15,7 @@ namespace ui
     {
         const struct { const char *label; void (*run)(App &); } defs[] = {
             {"New", [](App &a) { a.modal()->openNew(); }},
-            {"Open", [](App &a) { a.modal()->openBrowse(); }},
+            {"Open", [](App &a) { if (a.onOpenRequested) a.onOpenRequested(); }},
             {"Save", [](App &a) { if (a.path().empty()) a.modal()->openSaveAs(); else a.saveDocument(); }},
             {"Export", [](App &a) { a.exportCode(); }},
             {"Verify", [](App &a) { a.startVerify(); }},

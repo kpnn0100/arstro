@@ -38,8 +38,8 @@ apps/genesis/
     main.cpp            the GTK host: window, frame clock, input, clipboard, splash
   samples/*.genesis     one verified component per base, plus SnapBack and ArstroLoading
   tests/
-    genesisTests.cpp    genesis_tests — core (68)
-    uiTests.cpp         genesis_ui_tests — the editor, headless through Cairo (38)
+    genesisTests.cpp    genesis_tests — core (79)
+    uiTests.cpp         genesis_ui_tests — the editor, headless through Cairo (40)
     renderShots.cpp     genesis_shots — writes PNGs of real screens for eyeballing
   docs/                 requirements / architecture / detailed_design / brief / this file
 ```
@@ -96,7 +96,10 @@ genesis-cc samples/ArstroLoading.genesis --trace rect.w \
 ```
 
 `o` means **owned by motion and standing still** — a field that ignores a resize. That suffix has
-found more bugs than any other single thing in this codebase.
+found more bugs than any other single thing in this codebase. Read it against `t`, which means
+**resting on a completed track's target, still re-evaluated every frame** (G-6b): both have stopped
+moving, and only `o` is deaf to a resize. A field you expected to follow something showing `o`
+means its `to` folded to a constant.
 
 **`--verify`** — the real proof. It emits the class, compiles it with a generated harness, drives
 the compiled object *and* the interpreter through one signal script, renders both into a
@@ -119,7 +122,7 @@ were invisible in a passing test suite and obvious in a render.
 must be implemented in *both*, and the Verifier is what keeps them honest. When you add a name, a
 function, or a behaviour, ask "where is the other half?" before you finish. Anything computed in
 one place and consumed by both belongs in `Document` — `expandSteps`, `animatedFields`,
-`liveTracks`, `releasesToBinding` are all there for exactly that reason.
+`liveTracks`, `releasesToBinding`, `followsTarget` are all there for exactly that reason.
 
 **Order is part of the contract.** Field-table order, not insertion or alphabetical order, decides
 the order of emitted members, animate calls, and release blends. `std::map` is alphabetical, and
@@ -137,6 +140,13 @@ half-updated.
 **Derive, don't duplicate.** There is no "animated" mark, because the tracks already say what moves
 (G-21). There is no second copy of a list box's top and bottom, because the copies drift (G-20).
 Every time this codebase has stored a fact it could compute, the two copies eventually disagreed.
+
+**A track's `to` is an expression, not a number (G-6b).** It is re-evaluated every frame while the
+track runs and the field goes on taking it once the track rests there, so "motion owns this field"
+does not mean "this field has stopped answering". Only a target that folds to a literal leaves a
+field genuinely frozen. `followsTarget` is the one predicate that decides which, and both the
+interpreter and the emitter call it — derive that answer twice and the Verifier reports a
+divergence instead of the design decision it is.
 
 **A field's value is its live value once motion owns it (G-6a),** and layout re-runs every frame
 when it reads something that changes every frame. The flag for that is "some binding reads a live
@@ -158,6 +168,10 @@ exists.
 | Second step's tracks invisible | rows shown only when whole, plus the above | assert *reachability*, not that the offset moved |
 | A returned field then ignored resizes | `to = original` handed back a number, not the binding | G-22: release the field to layout on completion |
 | A returned field landed short and jumped | `original` snapshotted at fire time while its inputs animated | blend toward the binding re-evaluated each frame |
+| A field stranded where an earlier step left it | only `original` was followed; every other `to` was read once and kept | G-6b: **every** non-constant `to` is followed, and the field rests on it |
+| A loop control that vanished at 1200px, then starved the list | put on the header line (no room), then on a line under it (26px out of a ~65px list viewport) | G-26's controls live in the **footer band**, which was already there and already empty |
+| Objects animated in lockstep came apart after a few laps | the chain started each step at the FRAME clock, losing the overshoot once per step — so the error scaled with the step COUNT, not the duration | G-28: chain from the ideal clock (`stepAtMs += stepDurMs`) |
+| ...and fixing that made four samples fail `--verify` | the driver tick walked `ShapeNode::releasing` while a callback inside it INSERTED into that same map; `std::map` order decided whether the new driver ticked this frame, while the emitter walked a static field-table list | tick a **precomputed** list (`mFollowed`), never the live map |
 | Step 3 never ran | two tracks on one field in one step; the second replaced the first *and its callback* | `liveTracks`: only the survivors are started and counted |
 | Buttons over the divider | sized off `kListW` instead of `kListW - 2*pad` | a column's contents fit inside the column |
 | Dropdown ran off the window | the popup always opened down, at full height | FR-48: place against the root, cap, scroll |

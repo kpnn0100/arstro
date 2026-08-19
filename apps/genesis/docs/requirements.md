@@ -144,6 +144,43 @@ Two things follow, and both must hold in the interpreter and in the generated co
 A field that motion owns is still never re-asserted by layout (G-6): it is read from, not
 written to.
 
+### G-6b A track's target is an expression, and the field follows it
+
+`to` is a Gene expression (G-5), so the same rule G-6a applies to a binding applies to it: it
+is **followed, not snapshotted**. Reading it once and keeping the number is the bug G-6a exists
+to prevent, moved one level out — the field lands on whatever the expression happened to give at
+one instant and then contradicts it forever.
+
+Both halves hold in the interpreter and in the generated code alike:
+
+- **While the track runs**, `to` shall be re-evaluated every frame and the field blended from
+  `from` toward it. A `to` that reads a field animating at the same time therefore *arrives* on
+  the live value — `x → w/4*3 - self.w/2` running alongside `w → 40` lands on 130, not on the
+  150 that was already stale when the step began.
+- **Once the track comes to rest at `to`**, the field keeps taking that expression, re-evaluated
+  every frame, until another track animates it. The track's `to` becomes the field's **resting
+  expression**, displacing the binding for as long as motion owns the field. So a step that
+  animates `w → 0` after an earlier step put `x` at `w/4*3 - self.w/2` moves `x` too, and a
+  resize or a param change moves it as well.
+
+This is what makes the two names of G-22 ordinary rather than special: `to = original` is simply
+a resting expression that happens to *be* the binding, and `original + 4` is one that sits four
+units off it. Only the hand-back (below) is still peculiar to the bare name.
+
+Three things it deliberately does **not** change:
+
+- **`current` stays a fire-time snapshot** (G-5). It must: a target that re-read `current` every
+  frame would chase the field it is moving and never converge.
+- **A track that does not come to rest at `to`** is untouched — `repeat == -1` never rests, and a
+  yoyo with an odd repeat count rests back at `from`, which is a number, not an expression.
+- **A constant `to` costs nothing.** When the expression folds to a literal, following it is
+  provably the same value every frame, so the plain tween is used. **One** predicate shall decide
+  this, called by the interpreter and the emitter alike, or they disagree about which fields are
+  followed and the Verifier (G-9) catches it as a divergence rather than the design decision it is.
+
+The field is still never re-asserted by *layout* while motion owns it (G-6): a resting expression
+is the track's, not the inspector's, and the two must not both write.
+
 ### G-6 Bind-versus-animate
 
 A field's binding is its resting value; a reaction's target is its motion. Layout shall
@@ -251,9 +288,12 @@ question is what the value **is** and **who last wrote it**, and guessing at tha
 is how a wrong `original` went unnoticed. The runtime shall therefore answer it directly:
 
 - `Runtime::fieldValue(shape, field, out, &whence)` returns the live value and where it came
-  from — its **binding**, an **animation** in flight, a **release** back to its binding, or
-  **owned** by motion and standing still. That last pair is the diagnosis: a field that ignores a
-  resize is owned, and one drifting toward its binding is releasing.
+  from — its **binding**, an **animation** in flight, a **release** back to its binding, a
+  **target** it is resting on (a completed track's `to`, still re-evaluated every frame — G-6b),
+  or **owned** by motion and standing still. Those last three are the diagnosis, and they are
+  three different answers to "why did it not move?": releasing is on its way back to the binding,
+  target is following an expression that simply is not changing, and owned is the only one that
+  will ignore a resize outright.
 - `Runtime::releaseProgress(shape, field)` reports how far a hand-back has got, or -1.
 - The **inspector** shall show each field's live value beside its expression, coloured by source,
   so the two are read together rather than inferred apart.
@@ -388,13 +428,11 @@ the binding says". It is the binding, not a value read from it once, and that ha
   binding itself reads (G-6a), so an `original x` of `(w - self.w) / 2` recentres against the
   *current* width, at a size the component was never authored at. A field's binding may not
   itself contain `original` or `current`, so there is no recursion.
-- **The target is followed, not snapshotted.** A binding may read a field that is animating at
-  the same time — `x = w/4*3 - self.w/2` while `w` is also going back to `0` — so the value of
-  `original` changes during the track. It shall therefore be re-evaluated **every frame** and the
-  field blended toward it, so the field arrives *on* its binding rather than on a number that was
-  already stale when the track started. With a constant binding this is exactly the tween it
-  replaces; with a dependent one it is the difference between landing correctly and landing short
-  and then jumping.
+- **The target is followed, not snapshotted** — which is no longer a rule about `original` at
+  all, but **G-6b** applied to it. A binding may read a field that is animating at the same time
+  — `x = w/4*3 - self.w/2` while `w` is also going back to `0` — so the value of `original`
+  changes during the track and after it; it is re-evaluated every frame and the field blended
+  toward it either way. `original` was simply the first target expression this was noticed for.
 - **A track that ends at `original` gives the field back to its binding.** When such a track
   completes, the field stops being owned by motion and layout drives it again — so a later resize
   or param change re-evaluates the binding, exactly as it did before the reaction ever ran.
@@ -406,12 +444,18 @@ the binding says". It is the binding, not a value read from it once, and that ha
   again", so handing it back is the stated intent rather than an accident.
 
   It applies when the track **comes to rest at `to`**: the `to` is the bare name `original`
-  (`original + 4` ends somewhere the binding does not describe and keeps the field), the track
-  completes at all (a `repeat == -1` track never does), and its final cycle is forward — a yoyo
-  with an odd repeat count rests back at `from`. That is the same condition `artboard::Tween`
-  uses to choose its resting endpoint, and it shall be decided by **one** predicate that the
-  interpreter and the emitter both call, since they must release the field at the same moment or
-  they diverge on the next resize.
+  (`original + 4` ends somewhere the binding does not describe, so the field stays motion's and
+  rests on *that* expression instead — G-6b), the track completes at all (a `repeat == -1` track
+  never does), and its final cycle is forward — a yoyo with an odd repeat count rests back at
+  `from`. That is the same condition `artboard::Tween` uses to choose its resting endpoint, and it
+  shall be decided by **one** predicate that the interpreter and the emitter both call, since they
+  must release the field at the same moment or they diverge on the next resize.
+
+  What the hand-back is *for*, now that G-6b makes every resting expression live, is the
+  **own-flag**: it is the one `to` that puts the field back under layout, so the inspector's
+  binding is what writes it and the field reads as bound rather than as owned. The value is the
+  same either way — which is exactly why the distinction has to be stated rather than inferred
+  from what is on screen.
 
 **`all`** — a target of `all` (or `other.all`) expands to one track per animatable field of that
 object, in field-table order, sharing the same `from`/`to`/`ms`/`delay`/`easing`/`repeat`/`yoyo`.
@@ -441,6 +485,136 @@ where it would land.
 - Dragging is direct manipulation and therefore exempt from R-G-1: the pointer is the animation.
 - A drop that would not move the track is a no-op, not a document change (it must not land in
   the undo history).
+
+### G-25 A track can be aimed: authored entry and exit speed, and continuity across a seam
+
+A named easing has a *fixed* endpoint speed — `EaseOutCubic` always arrives at rest, `Linear`
+always arrives at exactly its average pace. That is fine for one animation and wrong for a chain,
+because the seam between two steps is visible precisely when the speed jumps across it. A loading
+animation built from three chained steps reads as three animations, not one movement, and no
+choice from the dropdown fixes it.
+
+So a track shall be able to state the speed it **enters** and **leaves** at.
+
+- `easing = "Custom"` selects an authored curve, with `easeIn` and `easeOut` as its parameters.
+  Both are Gene expressions like `ms` and `delay` (G-5), so a `speed` param re-times them along
+  with everything else, and both are evaluated in the track scope at fire time.
+- They are in **field units per second** — the units of the field being animated, per second of
+  wall time. That is what "travel at 200 px/s" means, and it is what makes the speed on one side
+  of a seam comparable with the speed on the other when the two legs differ in distance and
+  duration. It is *not* a normalized quantity: `to` may be an expression, so the distance can
+  change with the window, and the same authored speed then yields a differently-shaped curve at a
+  different size. That is the honest consequence of authoring an absolute speed, and continuity
+  still holds because both sides recompute from the same live distance.
+- The curve itself is Artboard's `Easing::Hermite` (FR-4f), whose endpoint slopes are converted
+  from these speeds by `slope = v · durationMs / (1000 · (to − from))`. Fixing both endpoint
+  velocities over a fixed duration determines the curve, so the acceleration between them is a
+  consequence and not a third thing to author.
+- A track whose distance is zero has no curve to shape — every easing gives the same constant —
+  so it shall fall back to `Linear` rather than divide by zero.
+
+**Continuity.** Matching a neighbour's speed by hand is arithmetic the tool should do, and it goes
+stale the moment either side is edited. So:
+
+- `continueIn` shall take this track's entry speed from the **exit speed of the track in the
+  previous step that targets the same field**; `continueOut` shall take its exit speed from the
+  **entry speed of the next step's track on that field**. Either, both, or neither.
+- The neighbour's speed shall be computed for **any** easing, not only a custom one: the exit
+  velocity of a named curve is `Δ · e′(1) / dur`, which is a fact about the curve, so a custom leg
+  can be made continuous with an `EaseOutCubic` leg without converting it first.
+- When there is no such neighbour — this is the first or last step on that field — the flag has
+  nothing to read and the authored value stands. It is not an error; a chain has two ends.
+- **When both sides of one seam are continuous**, the shared velocity is the **average speed of
+  the track arriving at it** (`Δ/dur`): keep going at the pace you were already going. Something
+  has to break the circularity, this choice always exists, resolves in one pass, and is the one
+  that never introduces a stall — which is the whole point of asking for continuity.
+
+`Document` shall own the velocity and slope computation in **one** place that the interpreter, the
+emitter and the editor all call. Three implementations of "what speed is this track leaving at"
+would disagree, and the Verifier (G-9) would report it as a divergence rather than the arithmetic
+slip it is.
+
+### G-26 A reaction can loop a range of its steps
+
+A track repeats (G-5), but a *chain* could not, so "play an intro, then cycle forever" was not
+expressible: `repeat = -1` on the last step's track loops that one track and never chains, and
+looping the whole reaction would replay the intro every cycle.
+
+A reaction shall therefore carry a **loop range**: `loopFrom`, `loopTo` (step indices, inclusive)
+and a `loopCount` (`-1` = forever, matching the track repeat chip's ∞). When the chain completes
+step `loopTo`, it continues from step `loopFrom` instead of ending, `loopCount` times.
+
+- Steps before `loopFrom` are the intro and run once — which is exactly the loading-spinner shape:
+  fade in, then spin.
+- A reaction with no loop range behaves exactly as before. This adds a capability; it does not
+  re-interpret any existing document.
+- `isRunning(signal)` stays true across the seam, because the chain has not ended; a forever loop
+  therefore ends only by the reaction being cancelled or re-fired under its cancellation policy
+  (G-5), which is what stops a loading animation when the load finishes.
+- `validate()` shall reject a range that is out of bounds or inverted (`loopTo < loopFrom`), and
+  shall warn when a looped range contains a track that never completes (`repeat = -1`), since the
+  chain can then never reach the end of the range and the loop is dead.
+- The loop is part of the chain, so the interpreter and the emitter shall implement it at the same
+  point — the step-completion callback — and `--verify` covers it like any other timing.
+
+### G-27 A step says when it runs and how long it takes
+
+A chain is authored as durations and delays, but it is *watched* as a timeline, and the two are not
+the same thing. Every timing question an author actually has — why does this land before that, where
+did the dead half-second come from, is this nine seconds long — needs the numbers the document does
+not state: when a step **starts**, and how long it **lasts**.
+
+Deriving those by hand is exactly the arithmetic that goes wrong. A step's length is the longest of
+its tracks' `delay + ms x (repeat + 1)`, and its start is the sum of every step before it — so one
+delay buried in one track silently moves everything after it.
+
+- Each step header shall show its **duration** and its **start**, both in milliseconds, and the
+  reaction shall show its **total**.
+- They are computed from the **live** values, because `ms` and `delay` are Gene expressions (G-5): a
+  `speed` param re-times the component, and the numbers on screen shall follow it.
+- Only the tracks that actually **run** are counted (`liveTracks`, G-6): a track shadowed by a later
+  one in the same step contributes nothing to when the step completes, so counting it would report a
+  step longer than it is.
+- A track that **never completes** (`repeat == -1`) never chains, so a step whose live tracks are
+  all endless never hands on and nothing after it ever runs. Such a step shall be flagged
+  **endless** — that flag is the diagnosis for "why do my later steps never happen", and the editor
+  shall present it as a warning rather than as data.
+  - Its reported **length is still one cycle**, because the scrubber (G-13) needs a timeline to
+    scrub and a spin you cannot scrub is worse than a spin whose end is notional. The flag carries
+    the truth; the number stays useful. These are two different questions and shall not be
+    conflated into one.
+- The same computation shall answer for the interpreter and the editor, so the number shown is the
+  number that runs.
+
+### G-28 A chain runs on the ideal clock, not the frame clock
+
+Step *N+1* begins when step *N* completes (G-5) — but a tween is only *observed* to complete on a
+frame, and a frame almost never lands exactly on the due time. Starting the next step at the current
+frame therefore throws away the overshoot, and the loss is **per step**: a chain of eight 100 ms
+steps on a 16 ms frame clock takes 8 x 112 = 896 ms, not 800.
+
+That is why objects animated in lockstep come apart. The error is proportional to the **number of
+steps**, not to the length of the chain, so two objects with identical total durations but different
+step counts drift against each other — measurably, +96 ms per lap in the case above, compounding
+until they are visibly unrelated. Nothing about it is random, and it cannot be tuned away by
+matching the durations, because they already match.
+
+- A reaction shall track the **ideal** start of its current step: the time the previous step was
+  *due* to end, not the frame on which it was seen to end. Each track shall be started from that
+  time, so a step that began late is already partway through on its first frame and the chain
+  returns to schedule instead of accumulating.
+- A step's ideal length is the longest of its live tracks' `delay + ms x (repeat + 1)` — the same
+  quantity G-27 reports, so the number shown to the author is the number the chain runs on.
+- The correction is bounded by one step per frame, because a tween started in the past still does
+  not report completion until its next update. After a stall long enough that catching up would be
+  a visible fast-forward (a minimised window, a paused debugger), the chain shall **resync** to the
+  current frame rather than replay the backlog.
+- This is not a clock-sharing problem and shall not be "fixed" with a shared clock: every object in
+  a component already reads one frame time, and rendering cannot alter a value (drawing is a
+  const pass over values the frame already computed). The defect is the *quantisation* of chaining,
+  and the fix belongs where the chain advances.
+- The interpreter and the emitter shall advance the chain identically, or the preview and the
+  shipped component drift apart from each other as well.
 
 ## 4. Design rules (the app's UI)
 

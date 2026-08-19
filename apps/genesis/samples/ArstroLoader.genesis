@@ -1,0 +1,126 @@
+{
+  "genesis": 1,
+  // ArstroLoader — the evolution of ArstroLoading, built to LOOP.
+  //
+  // What was kept from the original: a stroked capsule that stretches, pivots about one end and
+  // walks the corners of a square; dots travelling between quadrants; everything sized off
+  // `minSide` and the params, so it scales to any box.
+  //
+  // What changed, and why:
+  //
+  // 1. IT LOOPS. The original chain ran once and handed everything back with `all -> original`,
+  //    so a loading widget stopped loading after one pass. Here step 1 is an intro that plays
+  //    once and steps 2..9 are a range that repeats forever (G-26) — the shape a loader has.
+  //
+  // 2. THE ARM'S CIRCUIT IS ONE CLEAN LAP. Eight steps, two per side: `reach` extends toward the
+  //    next corner, `carry` brings the tail up to it. That is an inchworm, and it closes exactly
+  //    where it began, so the loop has no seam to hide. Rotation is set with `ms: 0` at the head
+  //    of each reach — instant, and invisible because the arm is a dot at that moment — so it
+  //    never accumulates and never has to unwind at the end of a lap.
+  //
+  // 3. THE SECONDARY MOTION IS A FORMULA, NOT A REACTION. Both arcs and the core read
+  //    `base.phase` straight from the base, so they cannot drift out of step with the loop, they
+  //    restart cleanly, and they cost no reaction at all. `PulseDots` makes that point with one
+  //    shape; this uses it for three, at three different rates, which is where the life comes
+  //    from — the two arcs sweep opposite ways and never quite repeat against each other.
+  //
+  // 4. FEWER, LONGER STEPS INSTEAD OF STACKED DELAYS. The original tuned six overlapping delays
+  //    against each other, which is what made it hard to re-time. Every phase here is one
+  //    `armSpeed`, so the whole lap re-times from a single param.
+  //
+  // A note on easing, since it is the obvious question: the corners do NOT use the continuous
+  // `Custom` curve, deliberately. `w` grows on the reach and shrinks on the carry, so its speed
+  // genuinely reverses at each corner and must pass through zero — an inchworm pauses at full
+  // extension, and forcing continuity there just overshoots the corner. Continuity earns its keep
+  // where a field keeps going the SAME way across consecutive steps; this circuit is not that.
+  //
+  // Geometry: `frame` is an invisible square. Corner centres sit at 0.2 and 0.8 of it, so a leg
+  // spans 0.6 of the frame. A capsule's cap centres are `h/2` in from each end, so an arm whose
+  // ends reach two corners is `0.6 * frame + h` wide — that is where the reach target comes from.
+  "component": { "name": "ArstroLoader", "base": "VisualLoop", "namespace": "app", "designSize": [200, 200] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "weight", "type": "number", "default": "1", "range": [0.3, 3] },
+    { "name": "armSpeed", "type": "number", "default": "300", "range": [80, 900] }
+  ],
+  "shapes": [
+    { "id": "frame", "type": "rect",
+      "bind": { "w": "minSide * 0.66", "h": "minSide * 0.66",
+                "x": "(w - self.w) / 2", "y": "(h - self.h) / 2", "fill": "",
+                "strokeWidth": "minSide * 0.02 * weight" } },
+
+    { "id": "ring", "type": "circle", "parent": "frame",
+      "bind": { "w": "parent.w * 1.12", "h": "parent.w * 1.12",
+                "x": "(parent.w - self.w) / 2", "y": "(parent.h - self.h) / 2",
+                "fill": "", "stroke": "accent", "strokeWidth": "parent.strokeWidth * 0.75",
+                "opacity": "0",
+                "rotation": "turns(base.phase)",
+                "trimStart": "0",
+                "trimEnd": "0.28 + 0.16 * (0.5 + 0.5 * sin(turns(base.phase) * 2))" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0.55", "ms": 420, "easing": "EaseOutCubic" } ] ] },
+        { "on": "loopEnd", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 260, "easing": "EaseInCubic" } ] ] } ] },
+
+    { "id": "arm", "type": "rect", "parent": "frame",
+      "bind": { "w": "parent.strokeWidth * 3.0", "h": "parent.strokeWidth * 3.0",
+                "x": "parent.w * 0.2 - self.h / 2", "y": "parent.h * 0.2 - self.h / 2",
+                "fill": "", "stroke": "accent", "strokeWidth": "parent.strokeWidth",
+                "cornerRadius": "self.h / 2",
+                "pivotX": "self.h / 2", "pivotY": "self.h / 2",
+                "opacity": "0", "trimStart": "0", "trimEnd": "1" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart",
+          "loopFrom": 1, "loopTo": 8, "loopCount": -1,
+          "steps": [
+            [ { "target": "opacity", "to": "1", "ms": 300, "easing": "EaseOutCubic" } ],
+
+            [ { "target": "rotation", "to": "0", "ms": 0, "easing": "Linear" },
+              { "target": "w", "to": "parent.w * 0.6 + self.h", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+            [ { "target": "x", "to": "parent.w * 0.8 - self.h / 2", "ms": "armSpeed", "easing": "EaseInOutSine" },
+              { "target": "w", "to": "parent.strokeWidth * 3.0", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+
+            [ { "target": "rotation", "to": "turns(0.25)", "ms": 0, "easing": "Linear" },
+              { "target": "w", "to": "parent.w * 0.6 + self.h", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+            [ { "target": "y", "to": "parent.h * 0.8 - self.h / 2", "ms": "armSpeed", "easing": "EaseInOutSine" },
+              { "target": "w", "to": "parent.strokeWidth * 3.0", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+
+            [ { "target": "rotation", "to": "turns(0.5)", "ms": 0, "easing": "Linear" },
+              { "target": "w", "to": "parent.w * 0.6 + self.h", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+            [ { "target": "x", "to": "parent.w * 0.2 - self.h / 2", "ms": "armSpeed", "easing": "EaseInOutSine" },
+              { "target": "w", "to": "parent.strokeWidth * 3.0", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+
+            [ { "target": "rotation", "to": "turns(0.75)", "ms": 0, "easing": "Linear" },
+              { "target": "w", "to": "parent.w * 0.6 + self.h", "ms": "armSpeed", "easing": "EaseInOutSine" } ],
+            [ { "target": "y", "to": "parent.h * 0.2 - self.h / 2", "ms": "armSpeed", "easing": "EaseInOutSine" },
+              { "target": "w", "to": "parent.strokeWidth * 3.0", "ms": "armSpeed", "easing": "EaseInOutSine" } ] ] },
+        { "on": "loopEnd", "cancel": "restart", "steps": [
+            [ { "target": "all", "to": "original", "ms": 260, "easing": "EaseOutCubic" } ] ] } ] },
+
+    { "id": "ringInner", "type": "circle", "parent": "frame",
+      "bind": { "w": "parent.w * 0.60", "h": "parent.w * 0.60",
+                "x": "(parent.w - self.w) / 2", "y": "(parent.h - self.h) / 2",
+                "fill": "", "stroke": "accent", "strokeWidth": "parent.strokeWidth * 0.5",
+                "opacity": "0",
+                "rotation": "-turns(base.phase * 1.6)",
+                "trimStart": "0",
+                "trimEnd": "0.18 + 0.12 * (0.5 + 0.5 * sin(turns(base.phase) * 3))" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0.38", "ms": 380, "delayMs": 120, "easing": "EaseOutCubic" } ] ] },
+        { "on": "loopEnd", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 240, "easing": "EaseInCubic" } ] ] } ] },
+
+    { "id": "core", "type": "circle", "parent": "frame",
+      "bind": { "w": "parent.strokeWidth * (2.2 + 0.6 * sin(turns(base.phase) * 2))",
+                "h": "parent.strokeWidth * (2.2 + 0.6 * sin(turns(base.phase) * 2))",
+                "x": "(parent.w - self.w) / 2", "y": "(parent.h - self.h) / 2",
+                "fill": "accent", "opacity": "0" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0.85", "ms": 340, "delayMs": 60, "easing": "EaseOutCubic" } ] ] },
+        { "on": "loopEnd", "cancel": "restart", "steps": [
+            [ { "target": "opacity", "to": "0", "ms": 240, "easing": "EaseInCubic" } ] ] } ] }
+  ]
+}

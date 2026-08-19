@@ -2,6 +2,7 @@
 #include "../App.h"
 #include "BaseCatalog.h"
 #include <cmath>
+#include <cstdio>
 
 namespace genesis
 {
@@ -20,6 +21,33 @@ namespace ui
         constexpr double kStepH = 18.0;   // a step header owns its own row; tracks never sit under it
         constexpr double kChipW = 30.0;   // repeat / yoyo / delete, at the row's right edge
         constexpr double kChips = 3.0;
+
+        /** The dropdown's list: every `artboard::Easing` plus `Custom`, the curve authored by the
+         *  speed it enters and leaves at (G-25). `Custom` is deliberately NOT in `easingNames()` —
+         *  that table maps names to real enumerators and nothing maps to this one — but it has to
+         *  appear here, or a track using it reads as "Linear" and the first touch of the control
+         *  silently throws the authored speeds away. */
+        const std::vector<std::string> &easingOptions()
+        {
+            static const std::vector<std::string> all = [] {
+                std::vector<std::string> v = easingNames();
+                v.push_back("Custom");
+                return v;
+            }();
+            return all;
+        }
+
+        /** Milliseconds, short enough for a step header: whole ms under a second, then seconds
+         *  with one decimal, because "8500 ms" is harder to read at a glance than "8.5 s". */
+        std::string fmtMs(double ms)
+        {
+            char buf[32];
+            if (ms < 1000.0)
+                std::snprintf(buf, sizeof buf, "%.0f ms", ms);
+            else
+                std::snprintf(buf, sizeof buf, "%.2g s", ms / 1000.0);
+            return buf;
+        }
 
         std::string trackSummary(const Track &t)
         {
@@ -58,6 +86,41 @@ namespace ui
             }
         };
         addChild(mCancel);
+
+        // G-26. A chain could repeat a TRACK but not itself, so "play an intro, then cycle
+        // forever" was not expressible. The range lives on the reaction, so it belongs beside the
+        // signal and the cancel policy rather than on any one step.
+        mLoopFrom = std::make_shared<artboard::ComboBox>(theme().combo);
+        mLoopFrom->height.set(22.0);
+        mLoopFrom->onChange = [a, this](int i) {
+            Reaction *r = current();
+            if (!r) return;
+            if (i <= 0)   // "no loop" — the off switch is this control, not a separate toggle
+            {
+                r->loopFrom = r->loopTo = -1;
+            }
+            else
+            {
+                r->loopFrom = i - 1;
+                // Keep the range well-formed here rather than letting validate() scold about a
+                // state the UI itself produced: dragging the start past the end drags the end.
+                if (r->loopTo < r->loopFrom) r->loopTo = (int)r->steps.size() - 1;
+                if (r->loopTo < r->loopFrom) r->loopTo = r->loopFrom;
+            }
+            a->documentChanged();
+        };
+        addChild(mLoopFrom);
+
+        mLoopTo = std::make_shared<artboard::ComboBox>(theme().combo);
+        mLoopTo->height.set(22.0);
+        mLoopTo->onChange = [a, this](int i) {
+            Reaction *r = current();
+            if (!r || !r->loops()) return;
+            r->loopTo = i;
+            if (r->loopTo < r->loopFrom) r->loopFrom = r->loopTo;
+            a->documentChanged();
+        };
+        addChild(mLoopTo);
 
         auto mkButton = [&](const char *label, std::function<void()> run) {
             auto b = std::make_shared<artboard::Button>(label, theme().button);
@@ -99,6 +162,14 @@ namespace ui
             if (i < 0 || i >= (int)host->reactions.size()) return;
             host->reactions.erase(host->reactions.begin() + i);
             a->selectReaction(std::min(i, (int)host->reactions.size() - 1));
+            a->documentChanged();
+        });
+        // The same ×1 → ×2 → ×3 → ∞ cycle the track repeat chip uses, so one idiom covers both
+        // "this track repeats" and "this chain repeats" (G-26).
+        mLoopCount = mkButton("x2", [a, this] {
+            Reaction *r = current();
+            if (!r || !r->loops()) return;
+            r->loopCount = r->loopCount < 0 ? 2 : (r->loopCount >= 4 ? -1 : r->loopCount + 1);
             a->documentChanged();
         });
         mAddStep = mkButton("+ Step", [a, this] {
@@ -311,9 +382,9 @@ namespace ui
                 row.delay = field(t.delayMs, "delay");
                 row.easing = std::make_shared<artboard::ComboBox>(theme().combo);
                 row.easing->height.set(20.0);
-                row.easing->setOptions(easingNames());
-                for (int e = 0; e < (int)easingNames().size(); ++e)
-                    if (easingNames()[(size_t)e] == t.easing) row.easing->setSelectedIndex(e);
+                row.easing->setOptions(easingOptions());
+                for (int e = 0; e < (int)easingOptions().size(); ++e)
+                    if (easingOptions()[(size_t)e] == t.easing) row.easing->setSelectedIndex(e);
                 App *a = &mApp;
                 const int si2 = si, ti2 = ti;
                 row.easing->onChange = [a, this, si2, ti2](int idx) {
@@ -321,7 +392,7 @@ namespace ui
                     if (!rr || si2 >= (int)rr->steps.size()) return;
                     auto &tracks = rr->steps[(size_t)si2].tracks;
                     if (ti2 >= (int)tracks.size()) return;
-                    tracks[(size_t)ti2].easing = easingNames()[(size_t)idx];
+                    tracks[(size_t)ti2].easing = easingOptions()[(size_t)idx];
                     a->documentChanged();
                 };
                 addChild(row.easing);
@@ -360,8 +431,8 @@ namespace ui
             put(row.to, t.to);
             put(row.ms, t.durationMs);
             put(row.delay, t.delayMs);
-            for (int e = 0; e < (int)easingNames().size(); ++e)
-                if (easingNames()[(size_t)e] == t.easing && row.easing->selectedIndex() != e)
+            for (int e = 0; e < (int)easingOptions().size(); ++e)
+                if (easingOptions()[(size_t)e] == t.easing && row.easing->selectedIndex() != e)
                     row.easing->setSelectedIndex(e);
         }
     }
@@ -383,6 +454,21 @@ namespace ui
                 if (sigs[(size_t)i].name == r->signal) mSignal->setSelectedIndex(i);
             mCancel->setSelectedIndex(r->cancel == Cancel::IgnoreIfRunning ? 1
                                                                            : (r->cancel == Cancel::Queue ? 2 : 0));
+            // G-26. The step count changes as steps are added and removed, so both option lists
+            // are rebuilt from the reaction each refresh rather than once at construction.
+            std::vector<std::string> froms{"no loop"};
+            std::vector<std::string> tos;
+            for (size_t i = 0; i < r->steps.size(); ++i)
+            {
+                froms.push_back("from " + std::to_string(i + 1));
+                tos.push_back("to " + std::to_string(i + 1));
+            }
+            mLoopFrom->setOptions(froms);
+            mLoopTo->setOptions(tos.empty() ? std::vector<std::string>{"to 1"} : tos);
+            mLoopFrom->setSelectedIndex(r->loops() ? r->loopFrom + 1 : 0);
+            if (r->loops())
+                mLoopTo->setSelectedIndex(std::min(r->loopTo, (int)r->steps.size() - 1));
+            mLoopCount->text = r->loopCount < 0 ? "∞" : "x" + std::to_string(r->loopCount);
         }
         // Keep the widgets (and the focus, and the caret) while the row structure is the
         // same — rebuilding would destroy the field being typed into.
@@ -399,6 +485,14 @@ namespace ui
     // The list rectangles. `trackBottom` leaves room for the scrubber and the footer row; the
     // track rows themselves start below the signal/cancel header. These four are the only place
     // either list's box is defined.
+    // The loop controls live in the FOOTER band, beside the scrubber — which is where they
+    // belong: both answer "how does this reaction play". They were tried on their own line under
+    // the header and that line has to come out of the track list, which is the thing this panel
+    // exists for. At a 640px window the list viewport is ~65px, and taking 26 of them left a row
+    // unreachable at every offset (the G-20 defect this codebase has already shipped once) and
+    // shrank the "drop below the last row for a new step" target (G-23) to about four pixels.
+    // The footer band is already there and already empty on this side.
+    bool ReactionsPanel::loopLineShown() const { return true; }
     double ReactionsPanel::trackTop() const { return metrics::pad() + kHeadH; }
     double ReactionsPanel::trackBottom() const
     {
@@ -449,6 +543,35 @@ namespace ui
         mCancel->y.set(pad - 2.0);
         mCancel->width.set(std::max(0.0, cancelW));
         mCancel->visible = cancelW > 40.0;
+
+        // The loop line, beneath the signal/cancel line and left-aligned with it. The two controls
+        // that are meaningless without a range hide with it rather than showing a dead "to 1".
+        const Reaction *rNow = current();
+        const bool looping = rNow && rNow->loops();
+        // The footer band already carries the scrubber's "scrub" caption on the left and its
+        // percentage on the right; the middle is empty, so the controls go between them rather
+        // than on top of either.
+        const double loopY = h - pad - 22.0;
+        const double loopLeft = rightX + 64.0;               // clear of the "scrub" caption
+        const double loopRight = w - pad - 40.0;             // clear of the "0%" readout
+        const double kLoopFromW = 92.0, kLoopToW = 70.0, kLoopCountW = 36.0;
+        const bool showLoop =
+            rNow != nullptr && loopLineShown() && loopRight - loopLeft > kLoopFromW;
+        double lx = loopLeft;
+        mLoopFrom->x.set(lx);
+        mLoopFrom->y.set(loopY);
+        mLoopFrom->width.set(kLoopFromW);
+        mLoopFrom->visible = showLoop;
+        lx += kLoopFromW + 6.0;
+        mLoopTo->x.set(lx);
+        mLoopTo->y.set(loopY);
+        mLoopTo->width.set(kLoopToW);
+        mLoopTo->visible = showLoop && looping && lx + kLoopToW <= loopRight;
+        lx += kLoopToW + 6.0;
+        mLoopCount->x.set(lx);
+        mLoopCount->y.set(loopY);
+        mLoopCount->width.set(kLoopCountW);
+        mLoopCount->visible = showLoop && looping && lx + kLoopCountW <= loopRight;
 
         // Track columns: target | to | ms | easing — sized as fractions so they reflow.
         const double y0 = trackTop();
@@ -537,6 +660,10 @@ namespace ui
         mAddStep->enabled = r != nullptr;
         mAddTrack->enabled = r != nullptr;
         mDeleteReaction->enabled = r != nullptr;
+        // A range needs steps to name, so the control is dead until there are some (G-26).
+        mLoopFrom->enabled = r != nullptr && !r->steps.empty();
+        mLoopTo->enabled = r != nullptr && r->loops();
+        mLoopCount->enabled = r != nullptr && r->loops();
         Segment::advance(nowMs);
     }
 
@@ -796,6 +923,11 @@ namespace ui
         t.clipRect(rightX - 2.0, trackClipTop, rightW + 4.0, trackClipBottom - trackClipTop);
         double ry = y0 - mTrackScroll.offset();
         int lastStep = -1;
+        // Once per paint, not once per row: every row of a step reads the same entry.
+        std::vector<Runtime::StepTiming> stepTimes;
+        if (const Shape *host = owner())
+            if (const Reaction *cr = current())
+                stepTimes = mApp.runtime().stepTimings(host->id, cr->signal);
         for (const auto &row : mRows)
         {
             if (row.step != lastStep)
@@ -803,13 +935,57 @@ namespace ui
                 lastStep = row.step;
                 // Step separator on its OWN row, so the chain reads as "this, then that"
                 // without ever sitting on top of a track.
-                const std::string label =
+                const Reaction *lr = current();
+                const bool inLoop = lr && lr->loops() && row.step >= lr->loopFrom &&
+                                    row.step <= lr->loopTo;
+                std::string label =
                     row.step == 0 ? "step 1" : "then step " + std::to_string(row.step + 1);
-                drawFitted(t, label, rightX, ry + 12.0, 120.0, type::micro(), palette::primary(),
+                // G-26. The range lives on the reaction, but it is the STEPS that repeat, so it
+                // has to be legible here — a range you can set and not see is a range you will
+                // set wrong. The last step of the range says where it goes back to and how often,
+                // because that is the moment the jump happens.
+                // Plain words and the arrow `trackSummary` already uses. A rounder glyph would
+                // read better and the UI font does not have one — it drew as a tofu box, which
+                // is worse than no marker at all.
+                if (inLoop && row.step == lr->loopTo)
+                    label += lr->loopFrom == lr->loopTo
+                                 ? "  loop"
+                                 : "  loop → " + std::to_string(lr->loopFrom + 1);
+                drawFitted(t, label, rightX, ry + 12.0, 150.0, type::micro(), palette::primary(),
                            font::sansMedium());
-                const double lx = rightX + textWidth(label, type::micro(), font::sansMedium()) + 8.0;
-                artboard::drawRoundedRect(t, {lx, ry + 8.0, std::max(0.0, w - pad - lx), 1.0}, 0.0,
-                                          artboard::Paint::filled(palette::border()));
+                double lx = rightX + textWidth(label, type::micro(), font::sansMedium()) + 8.0;
+
+                // G-27. A chain is authored as durations and delays but WATCHED as a timeline, and
+                // the arithmetic between the two is where the surprises live — one delay buried in
+                // one track moves every step after it. So each header says how long it takes and
+                // when it starts, from the live values, so a `speed` param re-times these too.
+                if (row.step < (int)stepTimes.size())
+                {
+                    const Runtime::StepTiming &tm = stepTimes[(size_t)row.step];
+                    const std::string ms =
+                        tm.endless ? "endless" : fmtMs(tm.durationMs) + " @ " + fmtMs(tm.startMs);
+                    const double mw = textWidth(ms, type::micro(), font::mono()) + 4.0;
+                    if (lx + mw < w - pad - 30.0)
+                    {
+                        // An endless step is not slow, it is a dead end — nothing after it ever
+                        // runs — so it is coloured as the warning it is rather than as data.
+                        drawFitted(t, ms, lx, ry + 12.0, mw, type::micro(),
+                                   tm.endless ? palette::warning() : palette::mutedForeground(),
+                                   font::mono());
+                        lx += mw + 8.0;
+                    }
+                }
+                const double lineW = std::max(0.0, w - pad - lx);
+                artboard::drawRoundedRect(t, {lx, ry + 8.0, lineW, 1.0}, 0.0,
+                                          artboard::Paint::filled(inLoop ? palette::primaryAlpha(0.5)
+                                                                         : palette::border()));
+                if (inLoop && row.step == lr->loopTo)
+                {
+                    const std::string n = lr->loopCount < 0 ? "∞" : "×" + std::to_string(lr->loopCount);
+                    const double nw = textWidth(n, type::micro(), font::sansMedium()) + 4.0;
+                    drawFitted(t, n, w - pad - nw, ry + 12.0, nw, type::micro(), palette::primary(),
+                               font::sansMedium());
+                }
                 ry += kStepH;
             }
             // The grip: two short rules, the conventional "grab me" mark. It brightens while
@@ -910,7 +1086,20 @@ namespace ui
         std::snprintf(pct, sizeof pct, "%d%%", (int)std::lround(mScrubT * 100.0));
         drawFittedRight(t, pct, w - pad - 34.0, scrubY + 26.0, 34.0, type::micro(),
                         palette::mutedForeground(), font::mono());
-        drawFitted(t, "scrub", rightX, scrubY + 26.0, 60.0, type::micro(),
+        // G-27: the chain's own length, beside the scrubber it scrubs. The per-step numbers say
+        // where the time goes; this says how much there is.
+        std::string scrubLabel = "scrub";
+        if (const Shape *sh = owner())
+            if (const Reaction *cr = current())
+            {
+                const auto times = mApp.runtime().stepTimings(sh->id, cr->signal);
+                double total = 0.0;
+                bool endless = false;
+                for (const auto &st : times) { total += st.durationMs; endless = endless || st.endless; }
+                if (!times.empty())
+                    scrubLabel += endless ? "  endless" : "  " + fmtMs(total);
+            }
+        drawFitted(t, scrubLabel, rightX, scrubY + 26.0, 120.0, type::micro(),
                    palette::mutedForeground(), font::sans());
     }
 }

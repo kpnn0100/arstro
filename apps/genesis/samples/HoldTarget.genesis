@@ -1,0 +1,44 @@
+{
+  "genesis": 1,
+  // The G-6a case, one level out: a TRACK TARGET reading a field that animates (G-6b).
+  //
+  // `GrowBar` proves a binding follows what it reads. This proves a track's `to` does too — both
+  // while it runs and after it has come to rest there.
+  //
+  // Step 1 slides `dot.x` to `w / 4 * 3 - self.w / 2`, three quarters across. Step 2 then shrinks
+  // `dot.w`, and because `x` is RESTING on that expression rather than on the number it gave when
+  // step 1 finished, the dot stays centred on three quarters instead of drifting left by half the
+  // width it just lost. The same expression is what answers the resize at 1600 — a target read
+  // once and kept would leave the dot at a fraction of the window it is no longer in.
+  //
+  // `pin` rides the dot's right edge through `parent.w`, so the followed value has to reach other
+  // bindings too, not just the field itself.
+  //
+  // loopEnd deliberately touches only `opacity`: nothing hands `x` back, so the verifier's resize
+  // lands while the field is still holding its target, which is the case worth proving.
+  "component": { "name": "HoldTarget", "base": "VisualLoop", "namespace": "app", "designSize": [200, 60] },
+  "params": [
+    { "name": "accent", "type": "color", "default": "theme.accent" },
+    { "name": "big", "type": "number", "default": "0.5", "range": [0.2, 0.9] },
+    { "name": "small", "type": "number", "default": "0.15", "range": [0.05, 0.4] }
+  ],
+  "shapes": [
+    { "id": "dot", "type": "circle",
+      "bind": { "w": "minSide * big", "h": "minSide * big",
+                "x": "w / 4 - self.w / 2",
+                "y": "(h - self.h) / 2",
+                "fill": "accent" },
+      "reactions": [
+        { "on": "loopStart", "cancel": "restart", "steps": [
+            [ { "target": "x", "to": "w / 4 * 3 - self.w / 2", "ms": 400, "easing": "EaseInOutQuad" } ],
+            [ { "target": "w", "to": "minSide * small", "ms": 300, "easing": "EaseOutCubic" },
+              { "target": "h", "to": "minSide * small", "ms": 300, "easing": "EaseOutCubic" } ] ] },
+        { "on": "loopEnd", "steps": [
+            [ { "target": "opacity", "to": "0.35", "ms": 220, "easing": "EaseInCubic" } ] ] } ] },
+
+    { "id": "pin", "type": "circle", "parent": "dot",
+      "bind": { "w": "parent.h / 2", "h": "parent.h / 2",
+                "x": "parent.w - self.w / 2", "y": "(parent.h - self.h) / 2",
+                "fill": "theme.foreground" } }
+  ]
+}

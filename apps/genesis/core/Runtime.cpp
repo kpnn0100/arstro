@@ -11,46 +11,6 @@ namespace genesis
     {
         constexpr double kResizeMs = artboard::motion::kDurationShort3;
 
-        artboard::Easing easingFromName(const std::string &name)
-        {
-            // One table, indexed the same way BaseCatalog::easingNames() lists them, so the
-            // editor's dropdown, the emitter's `Easing::X`, and this lookup cannot disagree.
-            static const std::map<std::string, artboard::Easing> m = {
-                {"Linear", artboard::Easing::Linear},
-                {"EaseInQuad", artboard::Easing::EaseInQuad},
-                {"EaseOutQuad", artboard::Easing::EaseOutQuad},
-                {"EaseInOutQuad", artboard::Easing::EaseInOutQuad},
-                {"EaseInCubic", artboard::Easing::EaseInCubic},
-                {"EaseOutCubic", artboard::Easing::EaseOutCubic},
-                {"EaseInOutCubic", artboard::Easing::EaseInOutCubic},
-                {"EaseInQuart", artboard::Easing::EaseInQuart},
-                {"EaseOutQuart", artboard::Easing::EaseOutQuart},
-                {"EaseInOutQuart", artboard::Easing::EaseInOutQuart},
-                {"EaseInSine", artboard::Easing::EaseInSine},
-                {"EaseOutSine", artboard::Easing::EaseOutSine},
-                {"EaseInOutSine", artboard::Easing::EaseInOutSine},
-                {"EaseInExpo", artboard::Easing::EaseInExpo},
-                {"EaseOutExpo", artboard::Easing::EaseOutExpo},
-                {"EaseInOutExpo", artboard::Easing::EaseInOutExpo},
-                {"EaseInBack", artboard::Easing::EaseInBack},
-                {"EaseOutBack", artboard::Easing::EaseOutBack},
-                {"EaseInOutBack", artboard::Easing::EaseInOutBack},
-                {"EaseInElastic", artboard::Easing::EaseInElastic},
-                {"EaseOutElastic", artboard::Easing::EaseOutElastic},
-                {"EaseInOutElastic", artboard::Easing::EaseInOutElastic},
-                {"EaseInBounce", artboard::Easing::EaseInBounce},
-                {"EaseOutBounce", artboard::Easing::EaseOutBounce},
-                {"EaseInOutBounce", artboard::Easing::EaseInOutBounce},
-                {"Standard", artboard::Easing::Standard},
-                {"StandardDecel", artboard::Easing::StandardDecel},
-                {"StandardAccel", artboard::Easing::StandardAccel},
-                {"EmphasizedDecel", artboard::Easing::EmphasizedDecel},
-                {"EmphasizedAccel", artboard::Easing::EmphasizedAccel},
-            };
-            auto it = m.find(name);
-            return it == m.end() ? artboard::Easing::Linear : it->second;
-        }
-
         // ── base-class hosts ────────────────────────────────────────────────────────
         // The preview root really IS the authored base, so its behaviour is the real one.
         // Each host does nothing but forward the base's signal hooks into the Runtime.
@@ -314,6 +274,26 @@ namespace genesis
         for (const auto &pair : mDoc.allReactions())
             mReactions[reactionKey(pair.first->id, pair.second->signal)] = ReactionState{};
 
+        // The follow-driver tick order, fixed at build time so it cannot depend on what a map
+        // happens to contain mid-frame. Same walk the emitter's `releasedFields()` does.
+        mFollowed.clear();
+        {
+            std::set<std::string> hit;
+            for (const auto &pair : mDoc.allReactions())
+                for (const auto &st : mDoc.expandSteps(*pair.second, pair.first->id))
+                    for (const auto &t : st.tracks)
+                    {
+                        if (!followsTarget(t)) continue;
+                        std::string sh, f;
+                        Document::splitTarget(t.target, pair.first->id, sh, f);
+                        if (mDoc.findShape(sh) && findField(f)) hit.insert(sh + "" + f);
+                    }
+            for (const auto &s2 : mDoc.shapes)
+                for (const auto *fd : fieldsFor(s2.kind))
+                    if (hit.count(s2.id + "" + fd->name))
+                        mFollowed.emplace_back(s2.id, fd->name);
+        }
+
         layout(0.0);
         applyStyles();
         if (error) error->clear();
@@ -569,9 +549,15 @@ namespace genesis
     gene::Scope Runtime::trackScope(const std::string &owner, const artboard::Property &p,
                                     const std::string &originalExpr) const
     {
+        return trackScopeAt(owner, p.value(), originalExpr);
+    }
+
+    gene::Scope Runtime::trackScopeAt(const std::string &owner, double currentValue,
+                                      const std::string &originalExpr) const
+    {
         gene::Scope sc = liveScope(owner);
         auto base = sc.lookupIdent;
-        const double now = p.value();
+        const double now = currentValue;
         // `original` is evaluated in the plain live scope — not this one — so a binding can never
         // see `current`/`original`, and so the emitter (which compiles it with `liveNames`) and
         // the interpreter agree name for name (G-22).
@@ -592,6 +578,69 @@ namespace genesis
             return base ? base(name, v) : false;
         };
         return sc;
+    }
+
+    TrackMotion Runtime::motionOf(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                                  const std::string &owner, double currentValue) const
+    {
+        TrackMotion m;
+        if (stepIndex < 0 || stepIndex >= (int)steps.size()) return m;   // no such neighbour
+        const Step &st = steps[(size_t)stepIndex];
+        if (trackIndex < 0 || trackIndex >= (int)st.tracks.size()) return m;
+        const Track &t = st.tracks[(size_t)trackIndex];
+
+        std::string shapeId, field;
+        Document::splitTarget(t.target, owner, shapeId, field);
+        const Shape *s = mDoc.findShape(shapeId);
+        if (!s) return m;
+        const std::string binding = s->effectiveField(field);
+        const gene::Scope sc = trackScopeAt(shapeId, currentValue, binding);
+
+        m.from = evalNumber(resolvedFromExpr(steps, stepIndex, trackIndex, t.target, binding),
+                            sc, currentValue);
+        m.to = evalNumber(t.to, sc, 0.0);
+        m.durationMs = evalNumber(t.durationMs, sc, 200.0);
+        m.easing = t.easing;
+        m.easeInValue = evalNumber(t.easeIn, sc, 0.0);
+        m.easeOutValue = evalNumber(t.easeOut, sc, 0.0);
+        m.continueIn = t.continueIn;
+        m.continueOut = t.continueOut;
+        m.valid = true;
+        return m;
+    }
+
+    void Runtime::curveFor(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                           const std::string &owner, double currentValue,
+                           double from, double to, double durationMs,
+                           artboard::Easing &easing, double &slopeIn, double &slopeOut) const
+    {
+        const Track &t = steps[(size_t)stepIndex].tracks[(size_t)trackIndex];
+        slopeIn = slopeOut = 0.0;
+        if (!isCustomEasing(t))
+        {
+            easing = easingFromName(t.easing);
+            return;
+        }
+        // This track's own endpoints are the REAL ones the tween will run between, so the speed
+        // the author asked for is the speed the field actually reaches. Only the neighbours have
+        // to be resolved statically — a track that has not started has no live value to read.
+        TrackMotion self = motionOf(steps, stepIndex, trackIndex, owner, currentValue);
+        self.from = from;
+        self.to = to;
+        self.durationMs = durationMs;
+        // A track with nowhere to go draws the same constant under every curve, so there is no
+        // shape to author and a slope would be a division by zero (G-25).
+        if (customEasingDegenerates(self.from, self.to, self.durationMs))
+        {
+            easing = artboard::Easing::Linear;
+            return;
+        }
+        const TrackNeighbours nb = neighboursOf(steps, stepIndex, t.target);
+        const TrackMotion prev = motionOf(steps, nb.prevStep, nb.prevTrack, owner, currentValue);
+        const TrackMotion next = motionOf(steps, nb.nextStep, nb.nextTrack, owner, currentValue);
+        easing = artboard::Easing::Hermite;
+        slopeIn = slopeForSpeed(trackEntrySpeed(self, prev), self.from, self.to, self.durationMs);
+        slopeOut = slopeForSpeed(trackExitSpeed(self, next), self.from, self.to, self.durationMs);
     }
 
     double Runtime::evalNumber(const std::string &src, const gene::Scope &sc, double fallback) const
@@ -622,10 +671,17 @@ namespace genesis
         // it, and layout stops asserting the bound value so a resize cannot stomp the result.
     void Runtime::applyReleases()
     {
-        // A field on its way back to its binding is blended toward `original` RE-EVALUATED every
-        // frame — the same expression, in the same live scope, that `original` resolves to (G-22).
-        // It cannot be read from the layout locals: the local of an owned field is its LIVE value,
-        // so aiming at that would aim at where the field already is and nothing would move.
+        // A followed field is blended toward its track's `to` RE-EVALUATED every frame (G-6b), in
+        // the track scope, so `original` means the binding as it reads NOW and `current` still
+        // means the fire-time snapshot. It cannot be read from the layout locals: the local of an
+        // owned field is its LIVE value, so aiming at that would aim at where the field already is
+        // and nothing would move.
+        //
+        // The entry outlives the driver. Once the blend reaches t = 1 the field simply keeps
+        // taking the same expression every frame, which is what makes a completed track's target
+        // the field's resting expression rather than the number it happened to give on the last
+        // frame. Only a hand-back to the binding (bare `original`, G-22) drops the entry, because
+        // there layout takes the field back over and two writers would fight.
         //
         // Run before layout, so a binding reading this field sees the fresh value this frame.
         for (auto &n : mNodes)
@@ -634,21 +690,23 @@ namespace genesis
             const Shape *s = mDoc.findShape(n.id);
             if (!s) continue;
             std::vector<std::string> done;
-            // FIELD-TABLE order, not the map's alphabetical one: a release target may read
-            // another releasing field (`pivotX = self.w - self.h / 2`), so the order decides
-            // whether it sees this frame's value or last frame's. The emitter walks the same
-            // table, and this is exactly the kind of difference the Verifier catches.
+            // FIELD-TABLE order, not the map's alphabetical one: a target may read another
+            // followed field (`pivotX = self.w - self.h / 2`), so the order decides whether it
+            // sees this frame's value or last frame's. The emitter walks the same table, and this
+            // is exactly the kind of difference the Verifier catches.
             for (const auto *fd : fieldsFor(s->kind))
             {
                 auto kv = n.releasing.find(fd->name);
                 if (kv == n.releasing.end()) continue;
                 artboard::Property *p = propertyFor(n.id, fd->name);
                 if (!p) continue;
-                const double target =
-                    evalNumber(s->effectiveField(fd->name), liveScope(n.id), kv->second.start);
-                const double t = kv->second.driver.value();
-                p->set(kv->second.start + (target - kv->second.start) * t);
-                if (!kv->second.driver.isAnimating())
+                ShapeNode::Release &rel = kv->second;
+                const gene::Scope sc =
+                    trackScopeAt(n.id, rel.current, s->effectiveField(fd->name));
+                const double target = evalNumber(rel.to, sc, rel.start);
+                const double t = rel.driver.value();
+                p->set(rel.start + (target - rel.start) * t);
+                if (rel.releases && !rel.driver.isAnimating())
                     done.push_back(fd->name);   // blended at t = 1: exactly the binding
             }
             for (const auto &f : done)
@@ -831,28 +889,57 @@ namespace genesis
         return it != mReactions.end() && it->second.running;
     }
 
-    double Runtime::reactionDurationMs(const std::string &shapeId, const std::string &signal) const
+    std::vector<Runtime::StepTiming> Runtime::stepTimings(const std::string &shapeId,
+                                                          const std::string &signal) const
     {
+        std::vector<StepTiming> out;
         const Shape *host = mDoc.findShape(shapeId);
-        if (!host) return 0.0;
+        if (!host) return out;
         const Reaction *r = nullptr;
         for (const auto &cand : host->reactions)
             if (cand.signal == signal) { r = &cand; break; }
-        if (!r) return 0.0;
-        double total = 0.0;
+        if (!r) return out;
+
+        double at = 0.0;
         for (const auto &step : mDoc.expandSteps(*r, shapeId))
         {
-            double longest = 0.0;
-            for (const auto &t : step.tracks)
+            StepTiming st;
+            st.startMs = at;
+            // Only the tracks that actually RUN decide when the step completes (G-6): one shadowed
+            // by a later track on the same field is replaced the instant it is made, so counting it
+            // would report a step longer than it is.
+            const std::vector<Track> live = liveTracks(step, shapeId);
+            bool anyFinite = false;
+            for (const auto &t : live)
             {
+                anyFinite = anyFinite || t.repeat >= 0;
                 std::string owner, field;
                 Document::splitTarget(t.target, shapeId, owner, field);
                 const gene::Scope sc = liveScope(owner);
-                const double d = evalNumber(t.durationMs, sc, 0.0) + evalNumber(t.delayMs, sc, 0.0);
-                longest = std::max(longest, d);
+                // An infinite track counts as ONE cycle. It never ends the step, but the scrubber
+                // still needs a length to scrub through — a spin you cannot scrub is worse than a
+                // spin whose end is notional. `endless` is what carries the truth.
+                const double cycles = t.repeat < 0 ? 1.0 : (double)(t.repeat + 1);
+                const double d = evalNumber(t.delayMs, sc, 0.0) +
+                                 evalNumber(t.durationMs, sc, 0.0) * cycles;
+                st.durationMs = std::max(st.durationMs, d);
             }
-            total += longest;
+            // A step whose live tracks ALL repeat forever never hands on, so nothing after it ever
+            // runs. The length above is still the honest length of one cycle; this flag is the
+            // diagnosis for "why do my later steps never happen", and the editor colours it as a
+            // warning rather than as data.
+            st.endless = !live.empty() && !anyFinite;
+            out.push_back(st);
+            at += st.durationMs;
         }
+        return out;
+    }
+
+    double Runtime::reactionDurationMs(const std::string &shapeId, const std::string &signal) const
+    {
+        double total = 0.0;
+        for (const auto &st : stepTimings(shapeId, signal))
+            total += st.durationMs;
         return total;
     }
 
@@ -923,6 +1010,9 @@ namespace genesis
         }
         st.token = ++mSeq;
         st.running = true;
+        st.loopsDone = 0;   // a restarted chain loops afresh (G-26)
+        st.stepAtMs = mNowMs;   // the chain's ideal clock starts now (G-28)
+        st.stepDurMs = 0.0;
         playStep(owner, r, 0);
     }
 
@@ -951,6 +1041,15 @@ namespace genesis
             if (t.repeat >= 0) ++finite;
         st.pending = finite;
 
+        // G-28. A chain that has fallen a long way behind — a minimised window, a paused
+        // debugger — should not replay the backlog as a visible fast-forward. Anything shorter
+        // than this is the ordinary per-frame overshoot the ideal clock exists to absorb.
+        constexpr double kResyncMs = 1000.0;
+        if (mNowMs - st.stepAtMs > kResyncMs)
+            st.stepAtMs = mNowMs;
+        const double stepAt = st.stepAtMs;
+        st.stepDurMs = 0.0;
+
         for (const auto &t : tracks)
         {
             std::string shapeId, field;
@@ -967,37 +1066,75 @@ namespace genesis
             const double to = evalNumber(t.to, sc, 0.0);
             const double dur = evalNumber(t.durationMs, sc, 200.0);
             const double delay = evalNumber(t.delayMs, sc, 0.0);
-            const artboard::Tween spec(from, to, dur, delay, easingFromName(t.easing), t.repeat, t.yoyo);
+
+            // G-25. The curve may be authored by the speed it enters and leaves at, which needs
+            // this track's place in the EXPANDED steps — `tracks` is the filtered live subset, so
+            // its index means nothing to the neighbour search. A step holds at most one live track
+            // per field (G-5), so matching the target is unambiguous.
+            artboard::Easing curve = easingFromName(t.easing);
+            double slopeIn = 0.0, slopeOut = 0.0;
+            {
+                int idx = -1;
+                for (size_t k = 0; k < step.tracks.size(); ++k)
+                    if (step.tracks[k].target == t.target) idx = (int)k;
+                if (idx >= 0)
+                    curveFor(steps, (int)stepIndex, idx, owner, p->value(), from, to, dur,
+                             curve, slopeIn, slopeOut);
+            }
+            const artboard::Tween spec(from, to, dur, delay, curve, t.repeat, t.yoyo,
+                                       slopeIn, slopeOut);
 
             // `to = original` means the field goes back to its BINDING, not to the number the
             // binding happens to give right now (G-22).
             const bool releases = releasesToBinding(t);
+            // A track whose target is not a constant drives a 0..1 blend rather than the property
+            // itself, so `applyReleases` can aim it at `to` RE-EVALUATED every frame (G-6b): it
+            // arrives ON the expression instead of on a value that was already stale when the
+            // track started, and it goes on taking it once the blend rests there. A constant
+            // target is the same number every frame, so it stays a plain tween.
+            const bool follows = followsTarget(t);
             const std::string relShape = shapeId, relField = field;
-            // A releasing track drives a 0..1 blend rather than the property itself: layout sets
-            // the field from its binding each frame, so it ARRIVES on the binding instead of on a
-            // value that was already stale when the track started (G-22). With a constant binding
-            // the result is identical to the tween it replaces.
             artboard::Property *driven = p;
-            if (ShapeNode *n = releases ? node(shapeId) : nullptr)
+            if (ShapeNode *n = node(shapeId))
             {
-                ShapeNode::Release &rel = n->releasing[field];
-                rel.start = from;
-                rel.driver = artboard::Property{0.0};
-                driven = &rel.driver;
+                if (follows)
+                {
+                    ShapeNode::Release &rel = n->releasing[field];
+                    rel.start = from;
+                    rel.driver = artboard::Property{0.0};
+                    rel.to = t.to;
+                    rel.current = p->value();   // `current` is the fire-time snapshot (G-5)
+                    rel.releases = releases;
+                    driven = &rel.driver;
+                }
+                else
+                {
+                    // This field may have been RESTING on an earlier track's target. A plain tween
+                    // writes the property directly, so the stale follower has to go or the two
+                    // write the same field every frame and the tween loses.
+                    n->releasing.erase(field);
+                }
             }
-            const artboard::Tween driverSpec(0.0, 1.0, dur, delay, easingFromName(t.easing),
-                                             t.repeat, t.yoyo);
-            const artboard::Tween &use = releases ? driverSpec : spec;
+            // The driver runs the SAME curve, slopes and all: it is a 0..1 reparameterization of
+            // the identical motion, so a followed target keeps the speed the author aimed it at.
+            const artboard::Tween driverSpec(0.0, 1.0, dur, delay, curve, t.repeat, t.yoyo,
+                                             slopeIn, slopeOut);
+            const artboard::Tween &use = follows ? driverSpec : spec;
+
+            // The step's ideal length is the longest of its live finite tracks (G-27's number,
+            // so the header and the chain agree).
+            if (t.repeat >= 0)
+                st.stepDurMs = std::max(st.stepDurMs, delay + dur * (double)(t.repeat + 1));
 
             if (t.repeat < 0)
             {
-                driven->animate(use, mNowMs);   // repeats forever: never completes, never chains
+                driven->animate(use, stepAt);   // repeats forever: never completes, never chains
                 continue;
             }
             const std::string ownerId = owner;
             // The callback goes on whatever is ACTUALLY animating — the driver, for a release —
             // or the step chain would never advance.
-            driven->animate(use, mNowMs, [this, key, ownerId, signal, token, stepIndex, releases,
+            driven->animate(use, stepAt, [this, key, ownerId, signal, token, stepIndex, releases,
                                           relShape, relField] {
                 auto it = mReactions.find(key);
                 if (it == mReactions.end() || it->second.token != token)
@@ -1016,6 +1153,23 @@ namespace genesis
                     for (const auto &cand : host->reactions)
                         if (cand.signal == signal) { rr = &cand; break; }
                 if (!rr) return;
+                // G-26. Tested BEFORE "is there a next step", because `loopTo` need not be the
+                // last step — a reaction may loop a middle range and then play an outro once the
+                // count runs out. A track's own `repeat` cannot express this: a repeating track
+                // never completes, so it never chains and the steps after it never run.
+                // G-28: the next step is due when this one was DUE to end, not when this frame
+                // happened to notice it had. Advancing by the ideal length is what keeps two
+                // objects with different step counts on the same schedule.
+                it->second.stepAtMs += it->second.stepDurMs;
+                if (rr->loops() && (int)stepIndex == rr->loopTo)
+                {
+                    ++it->second.loopsDone;
+                    if (rr->loopCount < 0 || it->second.loopsDone < rr->loopCount)
+                    {
+                        playStep(ownerId, *rr, (size_t)rr->loopFrom);
+                        return;
+                    }
+                }
                 if (stepIndex + 1 < mDoc.expandSteps(*rr, ownerId).size())
                 {
                     playStep(ownerId, *rr, stepIndex + 1);
@@ -1059,9 +1213,15 @@ namespace genesis
         const double sizeMs = firstSizing ? 0.0 : kResizeMs;
         // Release drivers tick FIRST: layout reads them to blend a field toward its binding, so
         // they must hold this frame's value by the time it runs (G-22).
-        for (auto &n : mNodes)
-            for (auto &kv : n.releasing)
-                kv.second.driver.update(nowMs);
+        // Field-table order over a PRECOMPUTED list, never over `releasing` itself: a callback
+        // fired here starts the next step and inserts into that map (see `mFollowed`).
+        for (const auto &f : mFollowed)
+            if (ShapeNode *n = node(f.first))
+            {
+                auto it = n->releasing.find(f.second);
+                if (it != n->releasing.end())
+                    it->second.driver.update(nowMs);
+            }
         // Blend FIRST, then drop the finished ones. The other order left the last frame's partial
         // value in place whenever layout was not running every frame, so a field could stop just
         // short of its binding — a track that ends at `original` must land ON it.
@@ -1090,6 +1250,7 @@ namespace genesis
         case Source::Binding: return "binding";
         case Source::Animating: return "animating";
         case Source::Releasing: return "releasing";
+        case Source::Target: return "target";
         case Source::Owned: return "owned";
         }
         return "";
@@ -1117,10 +1278,18 @@ namespace genesis
         {
             auto own = n->owned.find(field);
             const bool owned = own != n->owned.end() && own->second;
-            *whence = n->releasing.count(field) ? Source::Releasing
-                      : p->isAnimating()        ? Source::Animating
-                      : owned                   ? Source::Owned
-                                                : Source::Binding;
+            // A followed field's own property never "animates" — its 0..1 driver does — so the
+            // driver is what says whether the value is still moving. Once it rests, the field is
+            // sitting ON an expression rather than on a number (G-6b), which is a different
+            // diagnosis from `Owned`: this one still answers a resize.
+            auto rel = n->releasing.find(field);
+            *whence = rel != n->releasing.end()
+                          ? (rel->second.releases          ? Source::Releasing
+                             : rel->second.driver.isAnimating() ? Source::Animating
+                                                               : Source::Target)
+                      : p->isAnimating() ? Source::Animating
+                      : owned            ? Source::Owned
+                                         : Source::Binding;
         }
         return true;
     }
@@ -1129,8 +1298,13 @@ namespace genesis
     {
         const ShapeNode *n = node(shapeId);
         if (!n) return -1.0;
+        // Only a hand-back counts. Every followed track shares the same blend machinery (G-6b),
+        // but this question is specifically "how far back toward its binding", which is what the
+        // inspector colours — a field merely resting on some other expression is not on its way
+        // anywhere.
         auto it = n->releasing.find(field);
-        return it == n->releasing.end() ? -1.0 : it->second.driver.value();
+        if (it == n->releasing.end() || !it->second.releases) return -1.0;
+        return it->second.driver.value();
     }
 
     void Runtime::advance(double nowMs)

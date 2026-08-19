@@ -3,12 +3,11 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <cstdlib>
-#include <unistd.h>
 
 namespace genesis
 {
@@ -62,7 +61,8 @@ namespace ui
 
     bool Recents::save(const std::vector<RecentEntry> &entries)
     {
-        ::mkdir(configDir().c_str(), 0755);
+        std::error_code ec;
+        std::filesystem::create_directories(configDir(), ec);
         Json root = Json::object();
         Json list = Json::array();
         for (const auto &e : entries)
@@ -84,13 +84,9 @@ namespace ui
     std::string Recents::absolute(const std::string &file)
     {
         if (file.empty() || file[0] == '/') return file;
-        char resolved[4096];
-        if (::realpath(file.c_str(), resolved))
-            return resolved;
-        char cwd[4096];
-        if (::getcwd(cwd, sizeof cwd))
-            return std::string(cwd) + "/" + file;
-        return file;
+        std::error_code ec;
+        std::filesystem::path p = std::filesystem::absolute(file, ec);
+        return ec ? file : p.string();
     }
 
     void Recents::remember(const std::string &rawFile, const std::string &name, const std::string &base)

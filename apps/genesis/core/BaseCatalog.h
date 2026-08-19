@@ -8,6 +8,7 @@
  *  Artboard class — never a new code path in the emitter.
  */
 #pragma once
+#include <artboard/artboard.h>
 #include <string>
 #include <vector>
 
@@ -50,8 +51,16 @@ namespace genesis
     const std::vector<SignalDef> &commonSignals();
     /** Reads every base has (hover/enabled/focused), already merged into each BaseDef. */
     const std::vector<BaseRead> &commonReads();
-    /** The Easing enumerators an authored track may name. */
+    /** The Easing enumerators an authored track may name. Does NOT include `"Custom"`, which is
+     *  not an `artboard::Easing` at all but a request to build one from the track's authored
+     *  speeds (G-25) — the dropdown adds it, the lookup below cannot answer it. */
     const std::vector<std::string> &easingNames();
     /** True when `name` is one of them. */
     bool isEasingName(const std::string &name);
+    /** The `artboard::Easing` a name selects; `Linear` for anything unrecognised — including
+     *  `"Custom"`, whose curve is `Easing::Hermite` with slopes only the caller can compute.
+     *
+     *  Lives here beside the name table rather than in the runtime, because the interpreter, the
+     *  emitter's neighbour-speed arithmetic and the editor's readouts all need the same answer. */
+    artboard::Easing easingFromName(const std::string &name);
 }

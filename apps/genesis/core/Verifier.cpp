@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <sys/stat.h>
@@ -101,7 +102,18 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
             return ::stat(path.c_str(), &st) == 0;
         }
 
-        std::string shellQuote(const std::string &s) { return "'" + s + "'"; }
+        // cmd.exe (which popen() shells out to on Windows) doesn't understand POSIX
+        // single-quote quoting at all — it's a literal character there, so a path
+        // containing a space (extremely common on Windows: "C:/Users/Jane Doe/...")
+        // would split into multiple unquoted argv words and break the invocation.
+        std::string shellQuote(const std::string &s)
+        {
+#ifdef _WIN32
+            return "\"" + s + "\"";
+#else
+            return "'" + s + "'";
+#endif
+        }
 
         int runCommand(const std::string &cmd, std::string &output)
         {
@@ -112,7 +124,12 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
             while (std::fgets(buf, sizeof buf, p))
                 output += buf;
             const int rc = ::pclose(p);
-            return rc == -1 ? -1 : (rc / 256);
+            if (rc == -1) return -1;
+#ifdef _WIN32
+            return rc;    // _pclose() returns the child's exit code directly
+#else
+            return rc / 256;  // POSIX: pclose() returns a wait-status; exit code is bits 8-15
+#endif
         }
 
         std::string numText(double d)
@@ -440,7 +457,8 @@ static std::string genesisOpsToText(const std::vector<artboard::DrawOp> &ops)
         }
 
         const std::string dir = cfg.workDir;
-        ::mkdir(dir.c_str(), 0755);
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
         std::string ioError;
         if (!writeFile(dir + "/" + code.headerName, code.header, &ioError) ||
             !writeFile(dir + "/" + code.sourceName, code.source, &ioError) ||

@@ -49,8 +49,10 @@ namespace genesis
          *
          *  `whence` reports where the value came from, because that is usually the real question:
          *  a field standing still while its binding changes is owned by motion, and one that
-         *  ignores a resize has not been handed back. */
-        enum class Source { Binding, Animating, Releasing, Owned };
+         *  ignores a resize has not been handed back. `Target` is the middle case G-6b adds — the
+         *  field is resting on a completed track's `to`, re-evaluated every frame, so it WILL move
+         *  when that expression does; only `Owned` is deaf to a resize. */
+        enum class Source { Binding, Animating, Releasing, Target, Owned };
         bool fieldValue(const std::string &shapeId, const std::string &field, double &out,
                         Source *whence = nullptr) const;
         static const char *sourceName(Source s);
@@ -70,6 +72,22 @@ namespace genesis
          *  (delay + duration). An infinite track counts as one cycle, so a looping step still
          *  has a scrubbable length. 0 when the signal has no reaction. */
         double reactionDurationMs(const std::string &shapeId, const std::string &signal) const;
+
+        /** When each step of a chain runs, and for how long (G-27).
+         *
+         *  A chain is authored as durations and delays but watched as a timeline, and deriving one
+         *  from the other by hand is exactly the arithmetic that goes wrong — one delay buried in
+         *  one track moves everything after it. Computed from the LIVE values, because `ms` and
+         *  `delay` are Gene expressions: a `speed` param re-times the component and these follow. */
+        struct StepTiming
+        {
+            double startMs = 0.0;      // when this step begins, from the reaction firing
+            double durationMs = 0.0;   // how long until it completes and hands on
+            bool endless = false;      // every live track repeats forever: it never completes,
+                                       // so nothing after it ever runs (G-5)
+        };
+        std::vector<StepTiming> stepTimings(const std::string &shapeId,
+                                            const std::string &signal) const;
         /** Replay `signal` and advance to `t` (0..1) through its own timeline, so the editor
          *  can scrub one reaction without a global clock. */
         void scrub(const std::string &shapeId, const std::string &signal, double t);
@@ -120,16 +138,23 @@ namespace genesis
             std::map<std::string, artboard::Property> styleProps;   // strokeWidth, cornerRadius, ...
             std::map<std::string, artboard::Color> colors;          // fill, stroke
             std::map<std::string, bool> owned;                      // fields motion has taken over
-            /** A field on its way BACK to its binding (G-22). `to = original` names the binding,
-             *  and a binding can depend on another field that is animating at the same time — so
-             *  the target has to be followed, not snapshotted at fire time. `driver` eases 0 -> 1
-             *  over the track and the field is set to `lerp(start, <the binding now>, driver)`,
-             *  which is identical to a plain tween when the binding is constant and arrives
-             *  exactly on it when it is not. */
+            /** A field whose track target is FOLLOWED rather than snapshotted (G-6b). `to` is an
+             *  expression, and it can read a field that is animating at the same time — so
+             *  `driver` eases 0 -> 1 over the track and the field is set to
+             *  `lerp(start, <to, evaluated now>, driver)`. That is identical to a plain tween when
+             *  the target is constant, arrives exactly ON it when it is not, and — because the
+             *  entry OUTLIVES the driver — keeps the field on that expression once the track has
+             *  come to rest there, until another track takes the field.
+             *
+             *  `releases` is the one `to` that also hands the field back to layout on completion:
+             *  the bare name `original` (G-22). Then, and only then, the entry is dropped. */
             struct Release
             {
                 double start = 0.0;
                 artboard::Property driver{0.0};
+                std::string to;          // the track's target expression, re-evaluated every frame
+                double current = 0.0;    // `current` inside it: the fire-time snapshot (G-5)
+                bool releases = false;   // bare `original`: clear the own-flag and drop this entry
             };
             std::map<std::string, Release> releasing;
         };
@@ -139,6 +164,16 @@ namespace genesis
             int pending = 0;
             bool running = false;
             bool queued = false;
+            /** Passes completed through the reaction's loop range (G-26). Reset when the chain is
+             *  started, not when a step is played, or a restart would inherit the old count. */
+            int loopsDone = 0;
+            /** G-28: the IDEAL start of the current step — when the previous step was DUE to end,
+             *  not the frame on which it was seen to end. Tracks are started from this, so a step
+             *  that began late is already partway through on its first frame and the chain returns
+             *  to schedule. Starting from the frame time instead loses the overshoot once per step,
+             *  which is what makes two objects with equal totals but different step counts drift. */
+            double stepAtMs = 0.0;
+            double stepDurMs = 0.0;   // the ideal length of the step now running
         };
 
         ShapeNode *node(const std::string &id);
@@ -164,6 +199,27 @@ namespace genesis
          *  target field's own binding, re-evaluated now) — G-6, G-22. */
         gene::Scope trackScope(const std::string &owner, const artboard::Property &p,
                                const std::string &originalExpr) const;
+        /** The same scope with `current` supplied explicitly. A followed target is re-evaluated
+         *  long after the property has moved on, and `current` must still mean what it meant when
+         *  the reaction fired (G-5) — reading it back off the property would make the target chase
+         *  the field it is moving. */
+        gene::Scope trackScopeAt(const std::string &owner, double currentValue,
+                                 const std::string &originalExpr) const;
+
+        /** Evaluate one track's numbers for the speed arithmetic (G-25), in the scope of the shape
+         *  that owns the field. `stepIndex`/`trackIndex` locate it inside `steps` so a blank `from`
+         *  resolves the way `Document::resolvedFromExpr` says it must. */
+        TrackMotion motionOf(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                             const std::string &owner, double currentValue) const;
+        /** The Tween curve + slopes for a track, honouring `easing == "Custom"` and continuity.
+         *  `from`/`to`/`dur` are the tween's OWN endpoints as already evaluated by the caller —
+         *  the real ones, so the authored speed is the speed the field actually reaches. Only the
+         *  neighbours are resolved statically, since a track that has not started yet has no live
+         *  value to read. The emitter derives them the same way, or `--verify` catches it. */
+        void curveFor(const std::vector<Step> &steps, int stepIndex, int trackIndex,
+                      const std::string &owner, double currentValue,
+                      double from, double to, double durationMs,
+                      artboard::Easing &easing, double &slopeIn, double &slopeOut) const;
         bool lookupIdent(const std::string &name, gene::Value &out) const;
         bool lookupTheme(const std::string &role, gene::Value &out) const;
 
@@ -185,6 +241,14 @@ namespace genesis
         double mLastW = -1.0, mLastH = -1.0;
         bool mAttached = false;
         bool mLayoutEveryFrame = false;
+        /** Every (shape, field) some track can follow, in DOCUMENT order x FIELD-TABLE order —
+         *  precomputed, because the per-frame driver tick may not iterate `ShapeNode::releasing`
+         *  directly: a completion callback fired inside that loop starts the next step, which
+         *  INSERTS into the very map being walked. Whether the new driver were then ticked this
+         *  frame would depend on `std::map`'s alphabetical order, while the emitter walks a static
+         *  list in field-table order — so the two would disagree by one frame's progress. Walking
+         *  this list instead makes them identical and removes the mutation-during-iteration. */
+        std::vector<std::pair<std::string, std::string>> mFollowed;
         int mSeq = 0;
         bool mInLayout = false;
     };

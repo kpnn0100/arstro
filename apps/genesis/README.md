@@ -89,18 +89,38 @@ Two names exist only inside a track, and they are a pair:
 
 | | |
 | --- | --- |
-| `current` | wherever the field is **now** — `to = current + tau / dots` steps a value on each fire |
+| `current` | wherever the field is **now**, once, at the moment the reaction fires — `to = current + tau / dots` steps a value on each fire |
 | `original` | that field's own **binding** — the expression in the inspector (or its default) |
 
-`original` is the binding itself, not a number read from it once, and that means two things:
+`original` is the binding itself, not a number read from it once, and a track that **ends** at
+`original` gives the field back to its binding, so a later resize or param change moves it again.
+Without that, a field would be correct for one frame and then frozen, because layout never touches
+a field an animation owns.
 
-- it is **evaluated every frame**, so a field whose binding reads something that is *also*
-  animating follows it: `x = w/4*3 - self.w/2` returning to rest while `w` returns to `0` arrives
-  exactly on `w/4*3`, instead of easing to the value that was already stale when the track began
-  and then jumping. It also lands correctly at a window size the component was never authored at;
-- a track that **ends** at `original` gives the field back to its binding, so a later resize or
-  param change moves it again. Without that, a field would be correct for one frame and then
-  frozen, because layout never touches a field an animation owns.
+### A track's `to` is an expression, and the field keeps it
+
+That is not special to `original`. **Every** `to` is a live expression, evaluated every frame while
+the track runs and still evaluated once it comes to rest there:
+
+```
+step 1   x  →  w/4*3 - self.w/2      # slide to three quarters across
+step 2   w  →  0                     # and x follows, arriving on w/4*3
+```
+
+`x` does not stop at the number its target gave when step 1 ended. It is *resting on the
+expression*, so step 2 shrinking `w` moves it — and so does a resize. Read once and kept, `x` would
+sit at `150 - self.w/2` for a width it no longer has, contradicting the very expression you wrote
+for it.
+
+Two consequences worth knowing:
+
+- **`current` is the exception, deliberately.** It is a snapshot from the moment the reaction fired,
+  or `to = current + 10` would chase the field it is moving and never arrive.
+- **A constant `to` still just tweens.** `to = 40` is the same 40 every frame, so nothing is
+  followed and the field is simply owned by motion afterwards. That is the one state that ignores a
+  resize, and `--trace` marks it `o`.
+
+`samples/HoldTarget.genesis` is the whole rule in one component.
 
 The hand-back applies when the track really comes to rest there: `to` is the bare name (so
 `original + 4` keeps the field, since it ends somewhere the binding does not describe), the track
@@ -197,11 +217,14 @@ document always produces byte-identical output.
 
 ## Samples
 
-`samples/` holds one verified component per base, plus three that exist to show an idea:
+`samples/` holds one verified component per base, plus five that exist to show an idea:
 `ArstroLoading`, a four-quadrant loader that chains three steps and returns the whole object with
 `all → original`;
 `PulseDots`, a loop authored with **no reactions at all**, purely as a binding on `base.phase`
-— the animation as a formula; and `SnapBack`, whose entire release is one `all → original` row.
+— the animation as a formula; `SnapBack`, whose entire release is one `all → original` row; and
+`HoldTarget`, a dot that slides to three quarters across and then shrinks, staying put because the
+`to` its track ended on is an expression it keeps reading; and `IntroLoop`, whose fade-in plays
+once and whose two swing steps then repeat forever — a loading animation's real shape.
 Every one of them passes `--verify`, so each is also a proof that the preview matched the
 compiled class.
 
@@ -226,9 +249,11 @@ genesis-cc ArstroLoading.genesis --trace topleftcircle_copy.x \
     2240         150b        # handed back, and following again
 ```
 
-`b` = its binding · `a` = animating · `r` = being released back to its binding · `o` = owned by
-motion and standing still. The last one is usually the bug: a field that ignores a resize is
-`owned`. Drop the `.field` to trace every field of a shape at once.
+`b` = its binding · `a` = animating · `r` = being released back to its binding · `t` = resting on a
+completed track's target, still re-evaluated every frame · `o` = owned by motion and standing
+still. The last one is usually the bug, and `t` versus `o` is the distinction that finds it: both
+have stopped moving, but only `o` will ignore a resize. Drop the `.field` to trace every field of a
+shape at once.
 
 ## Mouse
 
@@ -257,6 +282,19 @@ remove a word.
 - **Reactions** — per track: a **grip**, `target`, `from` (blank = wherever it is now), `to`,
   `ms`, `delay`, `easing`, a repeat chip that cycles ×1 → ×2 → ×3 → ∞, a yoyo toggle, and a
   delete. The scrubber replays the selected reaction to any point in its own timeline.
+- **Every step says how long it takes and when it starts** — `300 ms @ 500 ms` in its header, and
+  the chain's own total beside the scrubber. A chain is authored as durations and delays but watched
+  as a timeline, and one delay buried in one track moves everything after it. The numbers are live,
+  so a `speed` param re-times them too. A step whose tracks all repeat forever reads **endless** —
+  it never hands on, so nothing after it ever runs.
+- **Loop a range of steps.** A reaction's footer carries `from N` / `to M` / a count chip
+  (`×2` → `×3` → `∞`). When the chain finishes step *M* it continues from step *N* instead of
+  ending. Steps before *N* are an intro and run **once** — which is the shape a loading animation
+  actually has: fade in, then spin until the work is done. The last looped step's header says
+  `loop → N` and how many passes are left, so the range is visible where it happens.
+
+  This is what a track's own `repeat` cannot do: a repeating track never completes, so it never
+  chains, and every step after it is dead. `samples/IntroLoop.genesis` is the whole idea.
 - **One field, one track per step.** Two tracks on the same field in one step cannot both run —
   a field holds one animation, so the later one wins and the editor warns. To play two legs in
   sequence, put the second in its own step (drag it there by its grip).

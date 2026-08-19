@@ -17,7 +17,11 @@
 #include <gtk/gtk.h>
 #include <chrono>
 #include <string>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
+#endif
 #include <vector>
 
 namespace
@@ -50,11 +54,17 @@ namespace
     std::string exeDir()
     {
         char buf[4096];
+#ifdef _WIN32
+        const DWORD n = GetModuleFileNameA(nullptr, buf, sizeof(buf) - 1);
+        if (n == 0 || n >= sizeof(buf) - 1) return ".";
+        buf[n] = 0;
+#else
         const ssize_t n = ::readlink("/proc/self/exe", buf, sizeof buf - 1);
         if (n <= 0) return ".";
         buf[n] = 0;
+#endif
         std::string p(buf);
-        const size_t slash = p.find_last_of('/');
+        const size_t slash = p.find_last_of("/\\");  // Windows paths use '\\'
         return slash == std::string::npos ? "." : p.substr(0, slash);
     }
 
@@ -206,6 +216,32 @@ namespace
         return G_SOURCE_CONTINUE;
     }
 
+    /** File -> Open (the Chrome/home "Open" button, and Ctrl+O): a native file chooser
+     *  filtered to *.genesis, so Open can reach any component file on disk — not just
+     *  whatever happens to sit in the process's current working directory (the app used
+     *  to scan "." itself, which is why it needed this fix). The host owns file dialogs;
+     *  same split cosmo uses for its own Open. */
+    void openGenesisDialog(Host *h)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(
+            "Open component", GTK_WINDOW(h->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+            "_Cancel", GTK_RESPONSE_CANCEL, "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+
+        GtkFileFilter *filter = gtk_file_filter_new();
+        gtk_file_filter_set_name(filter, "Genesis component (*.genesis)");
+        gtk_file_filter_add_pattern(filter, "*.genesis");
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(d), filter);
+
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (h->app.openDocument(path))
+                h->app.showEditor();
+            g_free(path);
+        }
+        gtk_widget_destroy(d);
+    }
+
     gboolean onButton(GtkWidget *w, GdkEventButton *e, gpointer user)
     {
         auto *h = static_cast<Host *>(user);
@@ -269,7 +305,7 @@ namespace
             switch (e->keyval)
             {
             case GDK_KEY_s: case GDK_KEY_S: h->app.saveDocument(); return TRUE;
-            case GDK_KEY_o: case GDK_KEY_O: h->app.modal()->openBrowse(); return TRUE;
+            case GDK_KEY_o: case GDK_KEY_O: openGenesisDialog(h); return TRUE;
             case GDK_KEY_n: case GDK_KEY_N: h->app.modal()->openNew(); return TRUE;
             case GDK_KEY_e: case GDK_KEY_E: h->app.exportCode(); return TRUE;
             case GDK_KEY_r: case GDK_KEY_R: h->app.startVerify(); return TRUE;
@@ -350,6 +386,7 @@ int main(int argc, char **argv)
     installSystemClipboard();
 
     static Host host;
+    host.app.onOpenRequested = [&host] { openGenesisDialog(&host); };
     // The recognizer turns raw pointer events into gestures; the router hit-tests the
     // Segment tree and delivers them. Both are platform-free — the host only supplies facts.
     host.router.add(&host.app);

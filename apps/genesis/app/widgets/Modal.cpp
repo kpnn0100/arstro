@@ -3,8 +3,6 @@
 #include "BaseCatalog.h"
 #include <cmath>
 #include <algorithm>
-#include <dirent.h>
-#include <sys/stat.h>
 
 namespace genesis
 {
@@ -14,28 +12,6 @@ namespace ui
     {
         constexpr double kCardW = 460.0;
         constexpr double kRowH = 30.0;
-
-        std::vector<std::string> genesisFilesIn(const std::string &dir)
-        {
-            std::vector<std::string> out;
-            DIR *d = ::opendir(dir.c_str());
-            if (!d) return out;
-            while (dirent *e = ::readdir(d))
-            {
-                const std::string n = e->d_name;
-                if (n.size() > 8 && n.compare(n.size() - 8, 8, ".genesis") == 0)
-                    out.push_back(dir + "/" + n);
-            }
-            ::closedir(d);
-            std::sort(out.begin(), out.end());
-            return out;
-        }
-
-        std::string baseName(const std::string &path)
-        {
-            const size_t s = path.find_last_of('/');
-            return s == std::string::npos ? path : path.substr(s + 1);
-        }
     }
 
     Modal::Modal(App &app) : mApp(app)
@@ -102,20 +78,6 @@ namespace ui
                 close();
             };
             break;
-        case Mode::Browse:
-        {
-            mTitle = "Open component";
-            mChoices = genesisFilesIn(".");
-            for (const auto &extra : genesisFilesIn("samples"))
-                mChoices.push_back(extra);
-            mOk->text = "Open";
-            mOk->onClick = [a, this] {
-                if (mChoice < 0 || mChoice >= (int)mChoices.size()) return;
-                a->openDocument(mChoices[(size_t)mChoice]);
-                close();
-            };
-            break;
-        }
         case Mode::SaveAs:
             mTitle = "Save component as";
             mName->visible = true;
@@ -137,7 +99,6 @@ namespace ui
     }
 
     void Modal::openNew() { mMode = Mode::New; mOpen = true; rebuild(); mReveal.animateTo(1.0, artboard::motion::kDurationShort4, artboard::Easing::EmphasizedDecel, mNowMs); }
-    void Modal::openBrowse() { mMode = Mode::Browse; mOpen = true; rebuild(); mReveal.animateTo(1.0, artboard::motion::kDurationShort4, artboard::Easing::EmphasizedDecel, mNowMs); }
     void Modal::openSaveAs() { mMode = Mode::SaveAs; mOpen = true; rebuild(); mReveal.animateTo(1.0, artboard::motion::kDurationShort4, artboard::Easing::EmphasizedDecel, mNowMs); }
 
     void Modal::openReport(const std::string &title, const std::vector<std::string> &lines, StatusLevel level)
@@ -260,7 +221,7 @@ namespace ui
             else if (hover > 0.01)
                 artboard::drawRoundedRect(t, {c.x + 8.0, y, c.w - 16.0, kRowH - 3.0}, radius::hairline(),
                                           artboard::Paint::filled(palette::hoverWash(hover)));
-            const std::string label = mMode == Mode::Browse ? baseName(mChoices[(size_t)i]) : mChoices[(size_t)i];
+            const std::string &label = mChoices[(size_t)i];
             // Two columns that never overlap: the name takes a fixed share, the summary the
             // rest, and each is ellipsized into its own share (design rule R5).
             const double nameW = std::min(150.0, (c.w - pad * 2.0) * 0.38);
@@ -282,9 +243,6 @@ namespace ui
                        indent ? font::mono() : font::sans());
             y += 18.0;
         }
-        if (mMode == Mode::Browse && mChoices.empty())
-            drawFitted(t, "No .genesis files here. Use New to start one.", c.x + pad, y + 14.0,
-                       c.w - pad * 2.0, type::small(), palette::mutedForeground(), font::sans());
         t.restore();
     }
 }

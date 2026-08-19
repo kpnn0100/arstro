@@ -122,6 +122,28 @@ int main(int argc, char **argv)
         a.selectShape("body");
         settle(a, now, 900.0);   // a sector: a disk with a wedge cut out by two rays
     });
+    // G-6b, caught after the chain has finished: `dot.x` is resting on the `to` its first step
+    // ended at, and its second step has since shrunk `dot.w` — so the dot must still be centred on
+    // three quarters across, and `pin` must be on its right edge. A target read once and kept
+    // leaves the dot short of both.
+    shoot(dir + "/genesis-hold-target.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
+        a.openDocument("genesis/samples/HoldTarget.genesis");
+        a.selectShape("dot");
+        settle(a, now, 1400.0);
+    });
+    // G-26. The reaction loops steps 2..3 forever after a one-shot intro, so the header's loop
+    // range and the ⟲ marker on the last looped step must both be legible — a range you can set
+    // but not see is a range you will set wrong.
+    shoot(dir + "/genesis-loop.png", 1200, 780, [](genesis::ui::App &a, double &now) {
+        a.showEditor();
+        settle(a, now, 600.0);
+        a.openDocument("genesis/samples/IntroLoop.genesis");
+        a.selectShape("dot");
+        a.selectReaction(0);
+        settle(a, now, 900.0);
+    });
     shoot(dir + "/genesis-donut.png", 1200, 780, [](genesis::ui::App &a, double &now) {
         a.showEditor();
         settle(a, now, 600.0);

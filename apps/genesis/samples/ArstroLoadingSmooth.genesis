@@ -1,7 +1,7 @@
 {
   "genesis": 1,
   "component": {
-    "name": "ArstroLoading",
+    "name": "ArstroLoadingSmooth",
     "base": "VisualLoop",
     "namespace": "app",
     "designSize": [
@@ -86,7 +86,7 @@
                 "target": "rotation",
                 "to": "-pi/2",
                 "ms": "1000",
-                "easing": "EaseOutQuad"
+                "easing": "EaseInOutQuad"
               },
               {
                 "target": "pivotX",
@@ -129,13 +129,15 @@
                 "target": "rotation",
                 "to": "-pi",
                 "ms": "1000",
-                "easing": "EaseInQuad"
+                "easing": "EaseInOutQuad"
               },
               {
                 "target": "trimOffset",
                 "to": "2",
                 "ms": "1000",
-                "easing": "EaseInQuad"
+                "easing": "Custom",
+                "easeIn": "0",
+                "continueOut": true
               }
             ],
             [
@@ -143,13 +145,15 @@
                 "target": "w",
                 "to": "topleftcircle.w + w/2",
                 "ms": "1000",
-                "easing": "EaseOutCubic"
+                "easing": "EaseInOutCubic"
               },
               {
                 "target": "trimOffset",
                 "to": "3",
                 "ms": "2000",
-                "easing": "EaseOutCubic"
+                "easing": "Custom",
+                "continueIn": true,
+                "easeOut": "0"
               }
             ],
             [
@@ -200,7 +204,7 @@
                 "target": "all",
                 "to": "original",
                 "ms": "1000",
-                "easing": "EaseOutCubic"
+                "easing": "EaseInOutCubic"
               }
             ]
           ]

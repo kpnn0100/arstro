@@ -564,12 +564,16 @@ TEST(Chrome_buttons_respond_to_a_real_click)
     app.modal()->close();
     settle(app, now, 400.0);
 
+    // "Open" hands off to the host's native file chooser (onOpenRequested) rather than the
+    // in-app modal, so any .genesis file on disk is reachable — not just whatever happens to
+    // be in the process's cwd. Headlessly, that's verified by checking the hook fires.
+    bool openRequested = false;
+    app.onOpenRequested = [&openRequested] { openRequested = true; };
     const artboard::Point openBtn = centreOf(chrome, *chrome.children()[1]);
     drv.click(openBtn.x, openBtn.y);
     settle(app, now, 60.0);
-    CHECK(app.modal()->isOpen());          // and "Open" opened its own
-    app.modal()->close();
-    settle(app, now, 400.0);
+    CHECK(openRequested);
+    CHECK(!app.modal()->isOpen());
 }
 TEST(Add_shape_buttons_add_a_shape)
 {
@@ -1384,6 +1388,162 @@ TEST(The_reactions_panel_header_and_footer_stay_inside_their_columns)
         }
         CHECK(sawCaption);
     }
+}
+
+TEST(The_loop_range_control_tracks_the_reaction_and_yields_when_narrow)
+{
+    /*  G-26. The loop range is reaction-level state, so it sits beside the signal and the cancel
+     *  policy. Two things are worth asserting about it: the controls reflect the reaction (and
+     *  the two that are meaningless without a range stay hidden until there is one), and at a
+     *  narrow width they give up their space instead of colliding with their neighbours (G-13).
+     */
+    App app;
+    app.setSize(1360, 900);
+    double now = 0.0;
+    toEditor(app, now);
+
+    Shape *host = app.doc().findShape("ring");
+    CHECK(host != nullptr);
+    Reaction r;
+    r.signal = "loopStart";
+    for (int i = 0; i < 3; ++i)
+    {
+        Step st;
+        st.tracks.push_back({"opacity", "0", "1", "120", "0", "Linear", 0, false});
+        r.steps.push_back(st);
+    }
+    host->reactions.assign(1, r);
+    app.selectShape("ring");
+    app.selectReaction(0);
+    app.documentChanged();
+    settle(app, now, 200.0);
+
+    auto *panel = app.reactions();
+    const artboard::Segment *from = panel->loopFromBox();
+    const artboard::Segment *to = panel->loopToBox();
+    const artboard::Segment *count = panel->loopCountChip();
+
+    // No range yet: the "from" control offers one (it carries the off switch), the other two
+    // have nothing to say and stay hidden rather than showing a meaningless "to 1".
+    CHECK(from->visible);
+    CHECK(!to->visible);
+    CHECK(!count->visible);
+
+    // Give it a range, and the other two arrive.
+    app.doc().findShape("ring")->reactions[0].loopFrom = 1;
+    app.doc().findShape("ring")->reactions[0].loopTo = 2;
+    app.documentChanged();
+    settle(app, now, 120.0);
+    CHECK(from->visible);
+    CHECK(to->visible);
+    CHECK(count->visible);
+
+    // Snap, don't stack: nothing visible in the panel may overlap anything else.
+    auto assertNoOverlap = [&]() {
+        std::vector<const artboard::Segment *> vis;
+        for (const auto &kid : panel->children())
+            if (kid->visible && kid->width.value() > 0.0 && kid->height.value() > 0.0)
+                vis.push_back(kid.get());
+        for (size_t i = 0; i < vis.size(); ++i)
+            for (size_t j = i + 1; j < vis.size(); ++j)
+            {
+                const artboard::Segment *A = vis[i], *B = vis[j];
+                const double aL = A->x.value(), aR = aL + A->width.value();
+                const double aT = A->y.value(), aB = aT + A->height.value();
+                const double bL = B->x.value(), bR = bL + B->width.value();
+                const double bT = B->y.value(), bB = bT + B->height.value();
+                const bool apart = aR <= bL + 0.01 || bR <= aL + 0.01 ||
+                                   aB <= bT + 0.01 || bB <= aT + 0.01;
+                CHECK(apart);
+            }
+    };
+    assertNoOverlap();
+
+    // The controls sit in the FOOTER band, not the header — the header line has no room at a
+    // normal window size, and a line under it would have to come out of the track list, which is
+    // what this panel is for. So they must be below every track row, and the rows must be
+    // unaffected by their presence (G-20: the list keeps the box it already had).
+    for (int i = 0; i < panel->trackRowCount(); ++i)
+        if (panel->trackRowShown(i))
+            CHECK(panel->trackRowTop(i) + 28.0 <= from->y.value() + 0.01);
+
+    // Narrowed: the controls give up their space rather than overflowing the panel, and the
+    // document is untouched — this is a display decision, and the chain still loops.
+    app.setSize(820, 900);
+    settle(app, now, 200.0);
+    assertNoOverlap();
+    for (const artboard::Segment *s : {from, to, count})
+        if (s->visible)
+            CHECK(s->x.value() + s->width.value() <= panel->width.value() + 0.01);
+    CHECK(app.doc().findShape("ring")->reactions[0].loops());
+
+    // And back: the controls return with the room.
+    app.setSize(1360, 900);
+    settle(app, now, 200.0);
+    CHECK(from->visible);
+    CHECK(to->visible);
+    CHECK(count->visible);
+}
+
+TEST(A_step_header_says_how_long_it_takes_and_when_it_starts)
+{
+    /*  G-27. The document states durations and delays; the author needs the timeline. Deriving one
+     *  from the other by hand is where the surprises come from — one delay buried in one track
+     *  moves every step after it — so each step header carries the arithmetic.
+     */
+    App app;
+    app.setSize(1360, 900);
+    double now = 0.0;
+    toEditor(app, now);
+
+    Shape *host = app.doc().findShape("ring");
+    CHECK(host != nullptr);
+    Reaction r;
+    r.signal = "loopStart";
+    Step a;                                    // 100ms delay + 200ms = 300
+    a.tracks.push_back({"opacity", "", "1", "200", "100", "Linear", 0, false});
+    Step b;                                    // 2 extra cycles of 100ms = 300, starting at 300
+    b.tracks.push_back({"y", "", "9", "100", "0", "Linear", 2, false});
+    r.steps.push_back(a);
+    r.steps.push_back(b);
+    host->reactions.assign(1, r);
+    app.selectShape("ring");
+    app.selectReaction(0);
+    app.documentChanged();
+    settle(app, now, 200.0);
+
+    artboard::RecordingTarget t;
+    app.render(t);
+    bool sawFirst = false, sawSecond = false, sawTotal = false;
+    for (const auto &op : t.ops())
+    {
+        if (op.kind != K::DrawText) continue;
+        if (op.text.find("300 ms") != std::string::npos &&
+            op.text.find("@ 0 ms") != std::string::npos)
+            sawFirst = true;
+        if (op.text.find("300 ms") != std::string::npos &&
+            op.text.find("@ 300 ms") != std::string::npos)
+            sawSecond = true;                  // the repeat counts EVERY cycle, not just one
+        if (op.text.find("scrub") != std::string::npos &&
+            op.text.find("600 ms") != std::string::npos)
+            sawTotal = true;                   // the chain's own length, beside the scrubber
+    }
+    CHECK(sawFirst);
+    CHECK(sawSecond);
+    CHECK(sawTotal);
+
+    // A step that never completes is a dead end, not a slow step: nothing after it ever runs, so
+    // it says so rather than showing a number that would be a lie.
+    app.doc().findShape("ring")->reactions[0].steps[1].tracks[0].repeat = -1;
+    app.documentChanged();
+    settle(app, now, 120.0);
+    artboard::RecordingTarget t2;
+    app.render(t2);
+    bool sawEndless = false;
+    for (const auto &op : t2.ops())
+        if (op.kind == K::DrawText && op.text.find("endless") != std::string::npos)
+            sawEndless = true;
+    CHECK(sawEndless);
 }
 
 int main() { return mini::runAll(); }
