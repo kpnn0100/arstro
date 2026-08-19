@@ -370,6 +370,7 @@ namespace arstro
             color::encodeInPlace(processed);
             mLastHistogram = Histogram::compute(processed);
         }
+        mLastAccelerated = accelerated;
 
         const int w = processed.width(), h = processed.height(), ch = processed.channels();
         outBytes.assign((size_t)w * h * 4, 255);

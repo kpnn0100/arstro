@@ -19,6 +19,12 @@ namespace arstrobench
         mDspWorkload = dsp;
     }
 
+    void BenchmarkRunner::setPreferGpu(bool prefer)
+    {
+        if (running()) return;
+        mImageWorkload.setPreferGpu(prefer);
+    }
+
     void BenchmarkRunner::start()
     {
         if (running()) return;

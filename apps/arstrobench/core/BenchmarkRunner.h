@@ -51,6 +51,12 @@ namespace arstrobench
          *  fast. Ignored while a run is in flight. */
         void setWorkloads(const ImageWorkload &image, const DspWorkload &dsp);
 
+        /** Opt the image workload into the GPU accelerator for the NEXT run (R-UI-9).
+         *  Ignored while a run is in flight, so a mid-run toggle cannot change what is
+         *  being measured underneath the score that is about to appear. */
+        void setPreferGpu(bool prefer);
+        bool preferGpu() const { return mImageWorkload.preferGpu(); }
+
     private:
         void joinWorker();
 

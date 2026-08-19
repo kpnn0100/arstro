@@ -1,10 +1,7 @@
 #include "DspWorkload.h"
+#include "DspChain.h"
 #include "base/AudioConfig.h"
 #include "synth/Voice.h"
-#include "effects/Compressor.h"
-#include "equalizer/HighPassFilter.h"
-#include "equalizer/LowPassFilter.h"
-#include "reverb/Reverb.h"
 #include <chrono>
 #include <cmath>
 #include <string>
@@ -43,11 +40,14 @@ namespace arstrobench
 
     std::string DspWorkload::describe() const
     {
+        // The stage count comes from the chain itself rather than a literal, so the line
+        // cannot drift from what is actually run.
+        const MixChain probe(kVoices, 1, kChannels);
         return std::to_string(kVoices) + " voices  ·  " + std::to_string(mFrames) +
-               " samples  ·  comp / EQ / reverb";
+               " samples  ·  " + std::to_string(probe.stageCount()) + "-stage mix";
     }
 
-    std::vector<std::vector<Sample>> DspWorkload::generate() const
+    std::vector<std::vector<std::vector<Sample>>> DspWorkload::generate() const
     {
         configureAudio();
 
@@ -75,17 +75,15 @@ namespace arstrobench
             voice.noteOn(kNotes[v], 0.55 + 0.04 * v);
         }
 
-        std::vector<std::vector<Sample>> buffers((size_t)kChannels,
-                                                 std::vector<Sample>((size_t)mFrames, 0.0));
-        for (int ch = 0; ch < kChannels; ++ch)
-            for (int v = 0; v < kVoices; ++v)
-                voices[(size_t)v].renderBlock(buffers[(size_t)ch].data(), mFrames, ch);
-
-        // Keep the summed chord inside a sane range so the compressor is working on a
-        // realistic level rather than permanently pinned.
-        const Sample norm = 1.0 / kVoices;
-        for (auto &buf : buffers)
-            for (Sample &s : buf) s *= norm;
+        // One buffer PER VOICE per channel: the mix processes each voice through its own
+        // channel strip before summing, so summing here would destroy the thing measured.
+        std::vector<std::vector<std::vector<Sample>>> buffers(
+            (size_t)kVoices,
+            std::vector<std::vector<Sample>>((size_t)kChannels,
+                                             std::vector<Sample>((size_t)mFrames, 0.0)));
+        for (int v = 0; v < kVoices; ++v)
+            for (int ch = 0; ch < kChannels; ++ch)
+                voices[(size_t)v].renderBlock(buffers[(size_t)v][(size_t)ch].data(), mFrames, ch);
         return buffers;
     }
 
@@ -95,49 +93,25 @@ namespace arstrobench
             return WorkloadResult{};
 
         // ── generation: outside the clock (R-DSP-3) ──
-        const std::vector<std::vector<Sample>> dry = generate();
+        const std::vector<std::vector<std::vector<Sample>>> dry = generate();
 
         double best = 0.0, checksum = 0.0;
         for (int pass = 0; pass < mPasses; ++pass)
         {
-            // Fresh effect state and a fresh copy of the dry signal every pass (R-DSP-4),
-            // both built before the clock starts.
-            Compressor comp;
-            comp.setThresholdDb(-18.0);
-            comp.setRatio(4.0);
-            comp.setAttackMs(8.0);
-            comp.setReleaseMs(120.0);
-            comp.setMakeupGain(1.6);
+            // Fresh chain state and a fresh copy of the dry signal every pass (R-DSP-4).
+            // Both are built before the clock starts, and MixChain's constructor pre-
+            // allocates every scratch buffer, so the timed region allocates nothing.
+            MixChain chain(kVoices, mFrames, kChannels);
+            std::vector<std::vector<std::vector<Sample>>> wet = dry;
 
-            HighPassFilter eqLow;    // the EQ's low cut
-            eqLow.setCutoffFrequency(85.0);
-            LowPassFilter eqHigh;    // the EQ's high cut
-            eqHigh.setCutoffFrequency(9000.0);
-
-            Reverb reverb;
-            reverb.setDelayInMs(38.0);
-            reverb.setDecayInMs(1800.0);
-            reverb.setDiffusion(4);
-            reverb.setMix(0.32);
-            reverb.setWidth(0.7);
-
-            std::vector<std::vector<Sample>> wet = dry;
-
-            // ── measurement: comp -> EQ -> reverb over `frames` samples per channel ──
+            // ── measurement: strips -> bus -> multiband -> EQ -> reverb -> glue ──
             const auto t0 = std::chrono::steady_clock::now();
-            for (int ch = 0; ch < kChannels; ++ch)
-            {
-                Sample *buf = wet[(size_t)ch].data();
-                comp.processBlock(buf, mFrames, ch);
-                eqLow.processBlock(buf, mFrames, ch);
-                eqHigh.processBlock(buf, mFrames, ch);
-                reverb.processBlock(buf, mFrames, ch);
-            }
+            const std::vector<std::vector<Sample>> &out = chain.process(wet);
             const auto t1 = std::chrono::steady_clock::now();
 
             const double secs = std::chrono::duration<double>(t1 - t0).count();
             if (pass == 0 || secs < best) best = secs;
-            checksum = foldChecksum(wet);  // after the clock stops
+            checksum = foldChecksum(out);  // after the clock stops
         }
 
         WorkloadResult r = WorkloadResult::fromSeconds(best);

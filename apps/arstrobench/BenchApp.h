@@ -12,6 +12,7 @@
 #include "../../core/Artboard/include/artboard/artboard.h"
 #include "core/BenchmarkRunner.h"
 #include "core/SystemInfo.h"
+#include "widgets/GpuToggle.h"
 #include "widgets/RunButton.h"
 #include "widgets/ScoreCard.h"
 #include "widgets/SystemPanel.h"
@@ -50,6 +51,7 @@ namespace arstrobench
         TotalCard &totalCard() { return *mTotal; }
         SystemPanel &systemPanel() { return *mSystem; }
         RunButton &runButton() { return *mRun; }
+        GpuToggle &gpuToggle() { return *mGpu; }
         const SystemInfo &system() const { return mInfo; }
 
     private:
@@ -64,6 +66,7 @@ namespace arstrobench
         std::shared_ptr<TotalCard> mTotal;
         std::shared_ptr<SystemPanel> mSystem;
         std::shared_ptr<RunButton> mRun;
+        std::shared_ptr<GpuToggle> mGpu;
 
         artboard::GestureRecognizer mRecognizer;
         BenchmarkRunner mRunner;

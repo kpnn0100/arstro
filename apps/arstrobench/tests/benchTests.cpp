@@ -10,6 +10,7 @@
  */
 #include "BenchApp.h"
 #include "core/BenchmarkRunner.h"
+#include "core/DspChain.h"
 #include "core/DspWorkload.h"
 #include "core/ImageWorkload.h"
 #include "core/SystemInfo.h"
@@ -128,7 +129,7 @@ namespace
     void testDspWorkload()
     {
         check(DspWorkload::kVoices == 9, "nine voices (R-DSP-1)");
-        check(DspWorkload::kFrames == 48000, "48000 samples (R-DSP-2)");
+        check(DspWorkload::kFrames == 192000, "192000 samples (R-DSP-2)");
         // Multi-note: nine DISTINCT notes, or the voices are not independent work.
         const int *notes = DspWorkload::notes();
         for (int i = 0; i < DspWorkload::kVoices; ++i)
@@ -136,12 +137,28 @@ namespace
                 check(notes[i] != notes[j], "the nine notes are distinct");
 
         const DspWorkload w(2400, 1);
-        const std::vector<std::vector<Sample>> dry = w.generate();
-        check((int)dry.size() == DspWorkload::kChannels, "one buffer per channel");
-        check((int)dry[0].size() == 2400, "the generated buffer is `frames` long");
-        double energy = 0.0;
-        for (const Sample s : dry[0]) energy += std::fabs(s);
-        check(energy > 0.0, "the synth actually produced signal before the chain is timed");
+        // Per-voice buffers, not one summed buffer: the strips need each voice separately.
+        const std::vector<std::vector<std::vector<Sample>>> dry = w.generate();
+        check((int)dry.size() == DspWorkload::kVoices, "one buffer set per voice");
+        check((int)dry[0].size() == DspWorkload::kChannels, "one buffer per channel per voice");
+        check((int)dry[0][0].size() == 2400, "the generated buffer is `frames` long");
+        for (int v = 0; v < DspWorkload::kVoices; ++v)
+        {
+            double energy = 0.0;
+            for (const Sample smp : dry[(size_t)v][0]) energy += std::fabs(smp);
+            check(energy > 0.0, "every voice produced signal before the chain is timed");
+        }
+        // The nine voices must not be nine copies of the same signal, or the strips are
+        // measuring one voice nine times.
+        double diff = 0.0;
+        for (size_t i = 0; i < dry[0][0].size(); ++i)
+            diff += std::fabs(dry[0][0][i] - dry[4][0][i]);
+        check(diff > 0.0, "different voices produce different signal");
+
+        // R-DSP-2: the measured chain is the full three-tier mix, not a token triple.
+        const MixChain chain(DspWorkload::kVoices, 16, DspWorkload::kChannels);
+        check(chain.stageCount() > 40, "the measured chain is a multi-stage mix");
+        check(MultibandCompressor::kBands == 4, "the master compressor is 4-band");
 
         const WorkloadResult r = w.run();
         check(r.ok, "dsp workload ran");
@@ -150,6 +167,80 @@ namespace
         check(r.checksum > 0.0, "dsp workload produced a checksum");
         check(!DspWorkload(0, 1).run().ok, "a zero-frame dsp workload is not ok");
         check(!DspWorkload(2400, 0).run().ok, "a zero-pass dsp workload is not ok");
+    }
+
+    // ── R-IMG-4/4a: the GPU opt-in, and the honesty of what it reports ──────────────
+    void testGpuBackendReporting()
+    {
+        // CPU is the default: a benchmark that silently used whatever accelerator
+        // happened to exist would not be comparable between machines.
+        check(!ImageWorkload().preferGpu(), "the image workload is CPU by default");
+
+        // R-IMG-4a: the label states the backend that ACTUALLY ran, not the one asked for.
+        check(ImageWorkload::backendText(false, false, "OpenGL") == "CPU",
+              "a CPU run is labelled CPU");
+        check(ImageWorkload::backendText(true, true, "OpenGL") == "GPU (OpenGL)",
+              "an accelerated run names the accelerator");
+        const std::string declined = ImageWorkload::backendText(true, false, "OpenGL");
+        check(declined.find("CPU") == 0,
+              "a GPU run the accelerator declined is labelled CPU, not GPU");
+        check(declined.find("GPU") != std::string::npos,
+              "...and says why it is CPU, so the toggle cannot look broken");
+
+        // The measured WORK is identical either way, which is what makes the two scores
+        // comparable: only the backend differs.
+        const arstro::EditParams cpu = ImageWorkload::benchParams();
+        const arstro::EditParams gpu = ImageWorkload::benchParams();
+        check(cpu.exposure == gpu.exposure && cpu.sharpenAmount == gpu.sharpenAmount,
+              "the GPU toggle does not change the workload, only the backend");
+
+        // A real run with the GPU requested must still produce a valid, labelled result
+        // on any machine — accelerator or not.
+        const WorkloadResult r = ImageWorkload(96, 64, 1, true).run();
+        check(r.ok, "a GPU-requested run produces a result even with no accelerator");
+        check(r.detail.find("CPU") != std::string::npos || r.detail.find("GPU") != std::string::npos,
+              "the result names a backend");
+    }
+
+    // ── R-UI-9: the toggle ─────────────────────────────────────────────────────────
+    void testGpuToggle()
+    {
+        artboard::setReducedMotion(false);
+        BenchApp app;
+        renderAt(app, 0, 120);
+        GpuToggle &gpu = app.gpuToggle();
+
+        // Whatever this machine has, the toggle reflects it: a switch that cannot do
+        // anything is disabled and says so, rather than lying about being available.
+        check(gpu.unavailable() == !ImageWorkload::gpuAvailable(),
+              "the toggle's availability matches the machine's");
+        check(gpu.enabled == ImageWorkload::gpuAvailable(),
+              "an unavailable toggle is disabled");
+        check(!gpu.on(), "the toggle starts off (CPU is the default)");
+
+        const std::string offText = allText(renderAt(app, 120, 1));
+        check(offText.find(ImageWorkload::gpuAvailable() ? "GPU" : "GPU unavailable") != std::string::npos,
+              "the toggle draws its caption");
+
+        if (ImageWorkload::gpuAvailable())
+        {
+            // Clicking it flips the switch and re-labels what the next run will measure.
+            const artboard::Rect r = boundsOf(gpu.toggle());
+            const artboard::Rect g = boundsOf(gpu);
+            const double cx = g.x + r.x + r.w * 0.5, cy = g.y + r.y + r.h * 0.5;
+            app.pointer(0, cx, cy, 0, 5000.0);
+            app.pointer(2, cx, cy, 0, 5040.0);
+            check(gpu.on(), "clicking the toggle switches it on");
+            const std::string onText = allText(renderAt(app, 130, 1));
+            check(onText.find("GPU requested") != std::string::npos,
+                  "the image card states that the next run will ask for the GPU");
+        }
+
+        // The toggle does not overlap the Run button (layout snaps, it does not stack).
+        check(!rectsOverlap(boundsOf(gpu), boundsOf(app.runButton())),
+              "the toggle does not overlap the Run button");
+        check(boundsOf(gpu).right() <= boundsOf(app.runButton()).x,
+              "the toggle sits entirely left of the Run button");
     }
 
     // ── R-SYS: the machine report ───────────────────────────────────────────────────
@@ -388,6 +479,8 @@ int main()
     testScoreMath();
     testImageWorkload();
     testDspWorkload();
+    testGpuBackendReporting();
+    testGpuToggle();
     testSystemInfo();
     testRunner();
     testLayoutDoesNotOverlap();

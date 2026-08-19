@@ -33,9 +33,26 @@ namespace arstrobench
         static constexpr int kPasses = 3;
 
         /** Defaults are the real workload; the smaller sizes exist for the unit tests
-         *  (R-TEST-1), which must not spend seconds proving the plumbing works. */
-        explicit ImageWorkload(int width = kWidth, int height = kHeight, int passes = kPasses)
-            : mWidth(width), mHeight(height), mPasses(passes) {}
+         *  (R-TEST-1), which must not spend seconds proving the plumbing works.
+         *  `preferGpu` opts into the engine's accelerator exactly as cosmo's own setting
+         *  does (R-IMG-4); the WORK measured is identical either way, so the two scores
+         *  are directly comparable. */
+        explicit ImageWorkload(int width = kWidth, int height = kHeight, int passes = kPasses,
+                               bool preferGpu = false)
+            : mWidth(width), mHeight(height), mPasses(passes), mPreferGpu(preferGpu) {}
+
+        bool preferGpu() const { return mPreferGpu; }
+        void setPreferGpu(bool prefer) { mPreferGpu = prefer; }
+
+        /** True when this machine HAS a usable GPU accelerator at all. The toggle is
+         *  disabled without one, rather than offering a switch that cannot do anything. */
+        static bool gpuAvailable();
+
+        /** How a finished run describes the backend that ACTUALLY produced the pixels.
+         *  An available accelerator may still decline an edit it does not implement, and
+         *  reporting the requested backend instead of the real one would be a lie the
+         *  user cannot detect (R-IMG-4a). */
+        static std::string backendText(bool preferGpu, bool accelerated, const char *name);
 
         WorkloadResult run() const;
 
@@ -57,6 +74,7 @@ namespace arstrobench
 
     private:
         int mWidth, mHeight, mPasses;
+        bool mPreferGpu;
     };
 }
 }

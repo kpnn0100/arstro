@@ -51,6 +51,13 @@ package "arstro::arstrobench (UI — platform-free)" {
     - mPress : Property
     - handleGesture(Gesture&, Point&) : bool
   }
+  class GpuToggle {
+    + onChange : function<void(bool)>
+    + on() const : bool
+    + setUnavailable(bool) : void
+    - mSwitch : ToggleSwitch
+    - mOnAmount : Property
+  }
 }
 
 package "arstro::arstrobench (core — UI-free)" {
@@ -66,18 +73,21 @@ package "arstro::arstrobench (core — UI-free)" {
     + {static} kWidth = 1920
     + {static} kHeight = 1080
     + {static} kPasses = 3
-    + ImageWorkload(w, h, passes)
+    + ImageWorkload(w, h, passes, preferGpu)
     + run() : WorkloadResult
+    + setPreferGpu(bool) : void
+    + {static} gpuAvailable() : bool
+    + {static} backendText(preferGpu, accelerated, name) : string
     + {static} makeDummyPixels(w, h) : vector<uint8_t>
     + {static} benchParams() : EditParams
   }
   class DspWorkload {
     + {static} kVoices = 9
-    + {static} kFrames = 48000
-    + {static} kPasses = 5
+    + {static} kFrames = 192000
+    + {static} kPasses = 3
     + DspWorkload(frames, passes)
     + run() : WorkloadResult
-    + generate() : vector<vector<Sample>>
+    + generate() : vector<vector<vector<Sample>>>
   }
   class SystemInfo <<struct>> {
     + chip : string
@@ -90,6 +100,7 @@ package "arstro::arstrobench (core — UI-free)" {
   }
   class BenchmarkRunner {
     + start() : void
+    + setPreferGpu(bool) : void
     + stage() const : Stage
     + running() const : bool
     + snapshot() const : Snapshot
@@ -118,11 +129,38 @@ package "artboard" {
   class GestureRecognizer
 }
 
+package "arstro::arstrobench (the measured mix — DspChain.h)" {
+  class MixChain {
+    + MixChain(voices, frames, channels)
+    + process(voiceBuffers) : vector<vector<Sample>>&
+    + stageCount() const : int
+  }
+  class VoiceStrip {
+    + process(buf, frames, channel, scratch) : void
+  }
+  class MultibandCompressor {
+    + {static} kBands = 4
+    + process(buf, frames, channel, bandScratch) : void
+  }
+  class ParametricEq {
+    + process(buf, frames, channel, scratch) : void
+  }
+  class ReverbSection {
+    + process(buf, frames, channel, wet) : void
+  }
+  class "Cascade<Filter>" as Cascade {
+    + Cascade(order, cutoffHz)
+    + process(buf, frames, channel) : void
+  }
+}
+
 package "arstro (engines)" {
   class EditEngine
   class EditParams <<struct>>
   class Voice
   class Compressor
+  class Overdrive
+  class Chorus
   class Reverb
 }
 class LowPassFilter
@@ -133,6 +171,7 @@ native_main --> CairoTarget
 CairoTarget ..|> IRenderTarget
 
 BenchApp *-- "1" RunButton
+BenchApp *-- "1" GpuToggle
 BenchApp *-- "2" ScoreCard
 BenchApp *-- "1" TotalCard
 BenchApp *-- "1" SystemPanel
@@ -141,6 +180,7 @@ BenchApp o-- GestureRecognizer
 
 ProgressIndicator --|> Segment
 ScoreCard --|> ProgressIndicator
+GpuToggle --|> Segment
 TotalCard --|> Segment
 SystemPanel --|> Segment
 RunButton --|> Segment
@@ -152,15 +192,35 @@ BenchmarkRunner +-- Snapshot
 BenchmarkRunner --> Stage
 Snapshot *-- WorkloadResult
 
+GpuToggle ..> ImageWorkload : availability
 ImageWorkload --> EditEngine
 ImageWorkload --> EditParams
 ImageWorkload ..> WorkloadResult
 DspWorkload --> Voice
-DspWorkload --> Compressor
-DspWorkload --> LowPassFilter
-DspWorkload --> HighPassFilter
-DspWorkload --> Reverb
+DspWorkload --> MixChain
 DspWorkload ..> WorkloadResult
+
+MixChain *-- "9" VoiceStrip
+MixChain *-- "1" MultibandCompressor
+MixChain *-- "1" ParametricEq
+MixChain *-- "1" ReverbSection
+MixChain *-- "1" Compressor
+VoiceStrip *-- Cascade
+VoiceStrip --> Compressor
+VoiceStrip --> Overdrive
+VoiceStrip --> LowPassFilter
+VoiceStrip --> HighPassFilter
+MultibandCompressor *-- Cascade
+MultibandCompressor --> Compressor
+MultibandCompressor --> Overdrive
+ParametricEq *-- Cascade
+ParametricEq --> LowPassFilter
+ParametricEq --> HighPassFilter
+ReverbSection --> Reverb
+ReverbSection --> Chorus
+ReverbSection --> LowPassFilter
+Cascade --> LowPassFilter
+Cascade --> HighPassFilter
 
 ScoreCard ..> WorkloadResult
 SystemPanel ..> SystemInfo

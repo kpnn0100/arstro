@@ -48,6 +48,7 @@ endif()
 # objects the app does, instead of hand-compiling a second copy that could drift.
 add_library(arstrobench_ui STATIC
   ${ARSTROBENCH_DIR}/BenchApp.cpp
+  ${ARSTROBENCH_DIR}/widgets/GpuToggle.cpp
   ${ARSTROBENCH_DIR}/widgets/RunButton.cpp
   ${ARSTROBENCH_DIR}/widgets/ScoreCard.cpp
   ${ARSTROBENCH_DIR}/widgets/SystemPanel.cpp

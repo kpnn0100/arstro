@@ -1,5 +1,6 @@
 #include "BenchApp.h"
 #include "Theme.h"
+#include <string>
 
 namespace arstro
 {
@@ -22,6 +23,9 @@ namespace arstrobench
         constexpr double kFooterBaseline = 660.0;
         constexpr double kButtonW = 150.0;
         constexpr double kButtonH = 34.0;
+        constexpr double kGpuW = 130.0;
+        constexpr double kGpuH = 22.0;
+        constexpr double kGpuGap = 22.0;   // between the toggle and the Run button
         constexpr double kStaggerMs = 70.0;
     }
 
@@ -66,11 +70,28 @@ namespace arstrobench
         mRun->height.set(kButtonH);
         mRun->onClick = [this] { startRun(); };
 
+        // GPU opt-in for the image workload (R-UI-9). Snapped to the LEFT of the Run
+        // button so the two never collide however wide the caption gets.
+        mGpu = std::make_shared<GpuToggle>();
+        mGpu->width.set(kGpuW);
+        mGpu->height.set(kGpuH);
+        mGpu->x.set(mW - kPad - kButtonW - kGpuGap - kGpuW);
+        mGpu->y.set((kHeaderH - kGpuH) * 0.5);
+        mGpu->setUnavailable(!ImageWorkload::gpuAvailable());
+        mGpu->onChange = [this](bool on) {
+            mRunner.setPreferGpu(on);
+            // Say what the NEXT run will measure straight away, rather than leaving a
+            // stale backend on the card until the run finishes.
+            mImageCard->setDetail(ImageWorkload(ImageWorkload::kWidth, ImageWorkload::kHeight,
+                                                ImageWorkload::kPasses, on).describe());
+        };
+
         mRoot->addChild(mImageCard);
         mRoot->addChild(mDspCard);
         mRoot->addChild(mTotal);
         mRoot->addChild(mSystem);
         mRoot->addChild(mRun);
+        mRoot->addChild(mGpu);
 
         mRecognizer.setSink([this](const Gesture &g) { mRoot->onGesture(g); });
     }
@@ -109,6 +130,9 @@ namespace arstrobench
             mTotal->showScore(0.0, false, nowMs);
             mRun->enabled = false;
             mRun->setLabel("Running...", nowMs);
+            // The backend cannot change under a run in flight, so the switch is locked
+            // for its duration (the framework fades it, R-G-1).
+            if (!mGpu->unavailable()) mGpu->enabled = false;
             break;
         case BenchmarkRunner::Stage::Dsp:
             if (snap.image.ok)
@@ -132,6 +156,7 @@ namespace arstrobench
             mTotal->showScore(snap.total, snap.image.ok && snap.dsp.ok, nowMs);
             mRun->enabled = true;
             mRun->setLabel("Run again", nowMs);
+            if (!mGpu->unavailable()) mGpu->enabled = true;
             break;
         }
     }
@@ -169,11 +194,14 @@ namespace arstrobench
         // Header rule, snapped to the header's bottom edge.
         drawRoundedRect(target, Rect{0, kHeaderH, mW, 1.0}, 0.0, Paint::filled(palette::border()));
 
-        // Methodology footer: the scoring model stated where the score is read.
+        // Methodology footer: the scoring model stated where the score is read. Built
+        // from the workloads' own pass counts, so it cannot drift from what they do.
+        const std::string footer =
+            "score = 1 / seconds  ·  fastest of " + std::to_string(ImageWorkload::kPasses) +
+            " image passes and " + std::to_string(DspWorkload::kPasses) +
+            " signal passes  ·  generation is never timed";
         target.setFill(palette::mutedForeground());
-        target.drawText("score = 1 / seconds  ·  fastest of 3 image passes and 5 signal passes  ·  "
-                        "generation is never timed",
-                        kPad, kFooterBaseline, 10.0, font::mono());
+        target.drawText(footer, kPad, kFooterBaseline, 10.0, font::mono());
         target.restore();
 
         mRoot->render(target);

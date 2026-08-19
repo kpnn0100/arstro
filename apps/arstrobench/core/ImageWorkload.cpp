@@ -104,10 +104,28 @@ namespace arstrobench
         return p;
     }
 
+    bool ImageWorkload::gpuAvailable()
+    {
+        // Constructing an engine installs the platform accelerator; available() is a
+        // side-effect-free hardware fact, safe to ask once.
+        EditEngine probe;
+        return probe.gpuAvailable();
+    }
+
+    std::string ImageWorkload::backendText(bool preferGpu, bool accelerated, const char *name)
+    {
+        if (!preferGpu) return "CPU";
+        if (accelerated) return std::string("GPU (") + (name ? name : "?") + ")";
+        // The two ways asking for the GPU still yields a CPU number. Both are stated,
+        // because a score labelled GPU that the CPU produced is worse than no toggle.
+        return gpuAvailable() ? "CPU  (GPU declined this edit)" : "CPU  (no GPU backend)";
+    }
+
     std::string ImageWorkload::describe() const
     {
         return std::to_string(mWidth) + " x " + std::to_string(mHeight) + " px  ·  " +
-               std::to_string(activeStageCount()) + " adjustments  ·  CPU";
+               std::to_string(activeStageCount()) + " adjustments  ·  " +
+               (mPreferGpu ? "GPU requested" : "CPU");
     }
 
     int ImageWorkload::activeStageCount()
@@ -126,7 +144,7 @@ namespace arstrobench
         // ── generation: outside the clock (R-IMG-3) ──
         const std::vector<uint8_t> pixels = makeDummyPixels(mWidth, mHeight);
         EditEngine engine;
-        engine.setPreferGpu(false);  // CPU is the reference path and the comparable one (R-IMG-4)
+        engine.setPreferGpu(mPreferGpu);  // the user's choice; CPU stays the default (R-IMG-4)
         const int slot = engine.addImage(pixels.data(), mWidth, mHeight, 4);
         if (slot < 0) return WorkloadResult{};
         engine.selectImage(slot);
@@ -150,7 +168,10 @@ namespace arstrobench
 
         WorkloadResult r = WorkloadResult::fromSeconds(best);
         r.checksum = checksum;
-        r.detail = describe();
+        // Report the backend that actually ran, not the one that was asked for.
+        r.detail = std::to_string(mWidth) + " x " + std::to_string(mHeight) + " px  ·  " +
+                   std::to_string(activeStageCount()) + " adjustments  ·  " +
+                   backendText(mPreferGpu, engine.lastRenderAccelerated(), engine.activeBackendName());
         return r;
     }
 }

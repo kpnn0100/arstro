@@ -108,6 +108,13 @@ namespace arstro
         bool gpuAvailable() const { return mAccel && mAccel->available(); }
         /** "CPU" or the accelerator's name — the backend the next render will use. */
         const char *activeBackendName() const { return (mPreferGpu && gpuAvailable()) ? mAccel->name() : "CPU"; }
+        /** Whether the LAST render actually ran on the accelerator. An available backend
+         *  may still DECLINE a job it does not fully support (IComputeBackend::process
+         *  returning false), in which case the CPU reference path produced the pixels —
+         *  so activeBackendName() states the intent and this states the outcome. Read-only
+         *  observability: a caller that reports which backend produced a result (a
+         *  benchmark, a diagnostics panel) cannot otherwise tell the two apart. */
+        bool lastRenderAccelerated() const { return mLastAccelerated; }
         /** Injection seam (tests / a per-platform host): replace the accelerator the
          *  ctor installed from createComputeAccelerator(). nullptr forces CPU-only. */
         void setComputeAccelerator(std::unique_ptr<IComputeBackend> backend) { mAccel = std::move(backend); }
@@ -220,6 +227,7 @@ namespace arstro
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;
         HistogramData mLastHistogram;
+        bool mLastAccelerated = false;  ///< did the accelerator take the last render?
         HistogramData mPreCurveHist;   // luma entering ToneCurve
         HueHistogram mPreMixerHue;     // hue entering ColorMixer
     };

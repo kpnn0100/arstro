@@ -49,22 +49,23 @@ operating system) so two results can be compared meaningfully.
 - **R-SCORE-3 The reported time is the fastest of N passes.** Each workload runs its timed phase
   `N` times and reports the *shortest* duration (and therefore the highest score). Standard
   benchmark practice: the minimum is the pass least polluted by unrelated system activity, so
-  repeat runs on an idle machine are stable. `N` is 3 for the image workload and 5 for the DSP
-  workload (a DSP pass is short enough that a single sample would be dominated by scheduler
-  noise). What is measured is still exactly one pass of the specified workload.
+  repeat runs on an idle machine are stable. `N` is **3** for both workloads. What is measured is
+  still exactly one pass of the specified workload.
 - **R-SCORE-4 The workloads are fixed.** Sizes, filter sets, voice counts, note sets and sample
   counts are compile-time constants (R-IMG-1/2, R-DSP-1/2). Two machines are only comparable if
   they ran identical work, so nothing about the workload is user-adjustable or auto-scaled to
   the host.
 - **R-SCORE-5 Total score.** The headline `ARSTROBENCH SCORE` is the **sum** of the two workload
   scores. It is labelled as such in the UI (`image score + signal score`); no hidden weighting.
-  **Known property, stated rather than hidden:** the two workloads differ in absolute duration by
-  roughly 30x (a full-HD cosmo render is ~1 s; 48000 samples through comp/EQ/reverb is ~30 ms), so
-  under `score = 1/seconds` the signal score is ~30x the image score and the sum is dominated by
-  it. The sum is kept because it is transparent arithmetic over the two numbers the user asked
-  for — the per-workload scores printed beside it are the comparable figures. Any rebalancing
-  (a geometric mean, a reference-machine normalisation) would introduce a weighting nobody
-  chose, so it is deliberately not done here.
+- **R-SCORE-5a The two workloads are sized to weigh the same.** The signal workload's sample
+  count and chain depth (R-DSP-1/2) are chosen so that on a reference desktop its pass duration
+  lands within ~20% of the image workload's CPU pass — so the sum in R-SCORE-5 is a genuine
+  blend rather than one score wearing the other as noise. **The balance is calibrated, not
+  guaranteed:** the image pipeline parallelises across every core while an audio chain is a
+  single thread by nature (R-DSP-5), so on a machine with far more or far fewer cores than the
+  reference the two will drift apart. That drift is itself information — it says which of the two
+  this computer is better at — and the per-workload scores beside the total are what to compare
+  between machines.
 - **R-SCORE-6 Every timed phase produces a checksum.** Each workload folds its output into a
   checksum that the caller reads. This keeps an optimiser from eliding the measured work and
   gives the unit tests a determinism handle.
@@ -89,27 +90,61 @@ operating system) so two results can be compared meaningfully.
 - **R-IMG-3 Generation and decode are outside the clock.** Generating the RGBA8 bytes and
   converting them to the engine's linear working space (`EditEngine::fromEncodedBytes`) happen
   before timing starts. The timed region is exactly the `renderImage()` call.
-- **R-IMG-4 CPU is the measured backend.** `setPreferGpu(false)`: the CPU pipeline is
-  `arstro_image`'s reference path and the one path guaranteed to exist on every machine. Timing
-  whichever backend happened to be available would make scores incomparable between machines.
-  The UI states the backend so the choice is visible, not hidden.
+- **R-IMG-4 CPU by default; the GPU is an explicit opt-in.** The workload runs `setPreferGpu(false)`
+  unless the user turns the GPU toggle on (R-UI-9). The CPU pipeline is `arstro_image`'s reference
+  path and the one path guaranteed to exist on every machine, so timing whichever backend happened
+  to be available would make scores incomparable. **The toggle changes only the backend — never
+  the work** (same image, same 15 stages, same passes), which is what makes the GPU-on and GPU-off
+  scores directly comparable to each other.
+- **R-IMG-4a The card reports the backend that actually ran, not the one requested.** An available
+  accelerator may still **decline** a job it does not implement (`IComputeBackend::process`
+  returning false), in which case the CPU reference path produced the pixels. Reporting the
+  requested backend would be a lie the user cannot detect, so the result reads one of: `CPU`,
+  `GPU (<name>)`, `CPU (GPU declined this edit)`, or `CPU (no GPU backend)`. This needs
+  `EditEngine::lastRenderAccelerated()` — a read-only accessor added to `arstro_image` for exactly
+  this, since `activeBackendName()` states intent and cannot state outcome.
+  **Known state of the world, recorded rather than discovered later:** the current OpenGL backend
+  (`glcompute::computeSupports`) accepts only exposure / contrast / temperature / tint and requires
+  every other stage to be at identity, so against this workload's full 15-stage pipeline it
+  declines on every machine and the honest label is `CPU (GPU declined this edit)`. The toggle
+  will start reporting a real GPU score the day that ported subset grows; it is wired to the
+  engine's real setting, not to a mock.
 
 ## R-DSP — DigitalSignalProcessing workload
 
-- **R-DSP-1 Nine voices, multiple notes.** The synth is a bank of **9** `arstro::Voice` objects
-  (the library's own `VoiceManager` caps at 8, so the bench owns its polyphony) sounding **9
-  distinct MIDI notes simultaneously** — an extended chord spread over three octaves, with
-  per-voice velocity, waveform and detune variation so no two voices produce the same signal.
-- **R-DSP-2 48000 samples through comp → EQ → reverb.** The timed chain is, in order:
-  `arstro::Compressor` → `HighPassFilter` → `LowPassFilter` (the two-band EQ) → `arstro::Reverb`,
-  applied to **48000 samples per channel** at a 48 kHz sample rate (one second of audio) across
-  the configured channel count.
-- **R-DSP-3 Generation is not timed.** The 9 voices are rendered into the buffer *before* the
-  clock starts; only the effect chain is measured. (This is the user-stated contract and the
-  reason R-SCORE-2 exists.)
-- **R-DSP-4 Fresh state per pass.** Each of the N passes builds fresh effect instances
-  (construction untimed) and processes a fresh copy of the generated signal, so a reverb tail
-  from a previous pass cannot alter the next one's work or checksum.
+- **R-DSP-1 Nine voices, multiple notes, rendered per voice.** The synth is a bank of **9**
+  `arstro::Voice` objects (the library's own `VoiceManager` caps at 8, so the bench owns its
+  polyphony) sounding **9 distinct MIDI notes simultaneously** — an extended chord spread over
+  three octaves, with per-voice velocity, waveform and detune variation so no two voices produce
+  the same signal. Generation writes **one buffer per voice per channel**, not one summed buffer:
+  the mix processes each voice through its own channel strip before the bus, and summing first
+  would throw away the thing being measured.
+- **R-DSP-2 192000 samples through a three-tier mix.** The timed chain is a real mix, not a token
+  comp/EQ/reverb triple, applied to **192000 samples per channel** at 48 kHz (four seconds of
+  audio) across the configured channel count:
+  - **Per voice (x9):** 2nd-order rumble cut → `Compressor` → 3-band EQ (low shelf, mid peak,
+    high shelf, each a filtered copy summed back at a gain) → `Overdrive` saturation. Each strip
+    is tilted differently across the nine voices, so it is nine different jobs, not one nine times.
+  - **Master bus:** a **4-band multiband compressor** (2nd-order crossovers at 200/1200/5000 Hz,
+    per-band threshold/ratio/attack/release and saturation, summed in fixed band order) → a
+    **6-section parametric EQ** (high-pass, low shelf, two peaking bands, high shelf, low-pass) →
+    a **reverb send** (a short dense early-reflection `Reverb` feeding a long tail `Reverb`, the
+    wet path damped and widened by a `Chorus`, then mixed back) → a bus glue `Compressor`.
+  Every stage is **composed from `arstro_dsp`'s own primitives**; the library is not modified to
+  suit a benchmark. `MixChain::stageCount()` is the number the UI reports, read from the chain
+  itself so the card cannot drift from what runs.
+- **R-DSP-3 Generation is not timed.** The 9 voices are rendered into their buffers *before* the
+  clock starts; only the mix is measured. (This is the user-stated contract and the reason
+  R-SCORE-2 exists.)
+- **R-DSP-4 Fresh state per pass, and no allocation inside the clock.** Each of the N passes
+  builds a fresh `MixChain` and processes a fresh copy of the generated signal, so a reverb tail
+  from a previous pass cannot alter the next one's work or checksum. The `MixChain` constructor
+  pre-allocates every scratch and band buffer, so the timed region measures signal processing
+  rather than the allocator.
+- **R-DSP-5 Single-threaded, deliberately.** The chain runs on one thread because a real audio
+  thread is one core — so this score measures single-core throughput while the image score
+  measures the whole machine. The two are complementary facts about the computer, not a
+  redundant pair; see R-SCORE-5a.
 
 ## R-SYS — System report
 
@@ -154,6 +189,13 @@ operating system) so two results can be compared meaningfully.
   run is in flight, and reads `Run benchmark` / `Running…` / `Run again`.
 - **R-UI-8 Status is coloured by meaning.** Idle uses the muted foreground, Running the single
   accent, Done the success green — all cross-faded through an animated Property, never switched.
+- **R-UI-9 The GPU toggle.** A captioned `artboard::ToggleSwitch` in the header, snapped to the
+  left of the Run button, opts the image workload into the accelerator (R-IMG-4). It is:
+  **off by default**; **disabled and captioned `GPU unavailable`** when the machine has no GPU
+  backend at all, rather than offering a switch that cannot do anything; and **locked for the
+  duration of a run**, so the backend cannot change underneath the score about to appear. Flipping
+  it restates the image card's detail line immediately, so what the next run will measure is
+  visible before it starts. Both the caption's brightness and the disabled state fade (R-G-1).
 
 ## R-TEST — Verification
 

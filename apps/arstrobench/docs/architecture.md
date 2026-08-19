@@ -12,6 +12,7 @@ that knows nothing about how a benchmark is timed.**
                     ┌───────────────────▼──────────────────────┐
                     │ BenchApp            (artboard::Segment)   │  UI (platform-free)
                     │  ├ RunButton                              │
+                    │  ├ GpuToggle       (ToggleSwitch)         │
                     │  ├ ScoreCard × 2   (ProgressIndicator)    │
                     │  ├ TotalCard                              │
                     │  └ SystemPanel                            │
@@ -20,7 +21,7 @@ that knows nothing about how a benchmark is timed.**
                     ┌───────────────────▼──────────────────────┐
                     │ BenchmarkRunner     (worker std::thread)  │  core (UI-free)
                     │  ├ ImageWorkload ── arstro::EditEngine    │
-                    │  ├ DspWorkload   ── arstro::Voice/effects │
+                    │  ├ DspWorkload   ── MixChain (DspChain.h) │
                     │  └ SystemInfo                             │
                     └──────────────────────────────────────────┘
 ```
@@ -35,8 +36,17 @@ what the unit tests drive directly.
   single shape to render and no knowledge of which engine produced it.
 - `ImageWorkload` — generates the dummy image (R-IMG-1), builds the all-stages-engaged
   `EditParams` (R-IMG-2), and times `EditEngine::renderImage()` (R-IMG-3).
-- `DspWorkload` — builds the 9-voice bank and renders it (untimed), then times
-  Compressor → HighPass → LowPass → Reverb over 48000 samples per channel (R-DSP-1/2/3).
+- `DspWorkload` — builds the 9-voice bank and renders **one buffer per voice** (untimed), then
+  times the mix over 192000 samples per channel (R-DSP-1/2/3).
+- `DspChain.h` — the measured mix, as its own file because it is the substance of the signal
+  score rather than a detail of the workload that drives it: `VoiceStrip` (per voice),
+  `MultibandCompressor` (4 bands), `ParametricEq` (6 sections), `ReverbSection` (early + tail),
+  and `MixChain` which owns them and the pre-allocated scratch. `Cascade<Filter>` is the one
+  shared piece — N one-pole sections in series, since the library ships 6 dB/octave filters and
+  a crossover needs a steeper slope than that to be worth the name. Shelves and peaks are built
+  the way an EQ builds them (filter a copy, sum it back at a gain), so a band can boost as well
+  as cut. Nothing here is added to `arstro_dsp`: a benchmark composes the library, it does not
+  reshape it.
 - `SystemInfo` — chip / RAM / OS, per-platform behind one `query()` (R-SYS-1/2/3).
 - `BenchmarkRunner` — owns the worker thread and publishes a `Snapshot` under a mutex. The UI
   polls it once per frame; nothing on the render thread ever blocks (R-G-4).
@@ -48,6 +58,9 @@ what the unit tests drive directly.
 - `ScoreCard : artboard::ProgressIndicator` — a card *is* a progress readout, so it inherits the
   indeterminate sweep and the spring-smoothed display level rather than re-implementing them.
 - `RunButton : artboard::Segment` — click + eased hover + eased press wash.
+- `GpuToggle` — a caption plus Artboard's own `ToggleSwitch` (styled from cosmo's theme), which
+  is why it owns no track/thumb drawing of its own. It carries the unavailable state, because
+  "this machine has no accelerator" is a property of the control, not of the app.
 - `SystemPanel`, `TotalCard` — self-drawn read-only panels.
 
 **`BenchApp`** — composes the tree, owns the `BenchmarkRunner`, and on each frame moves the
@@ -63,6 +76,15 @@ there is one host file and not two.
 Arstrobench adds no drawing capability: every card, meter, chip and label is paths, text and the
 existing `pushLayer` opacity group. The `IRenderTarget` HAL is untouched, so no adapter needed
 updating (`implement_artboard` §3).
+
+## The one change made outside this app
+
+`EditEngine::lastRenderAccelerated()` was added to `arstro_image` — a read-only accessor over a
+flag `renderInto` already computed. `activeBackendName()` states which backend the engine *will
+try*; nothing exposed whether the accelerator actually *took* the job, and an accelerator is free
+to decline an edit it does not implement. Without the accessor the GPU toggle (R-IMG-4a) could
+only report intent, which on today's OpenGL backend would mean labelling a CPU number "GPU". No
+behaviour changed; one bool is now observable.
 
 ## Theme reuse (R-G-2)
 
