@@ -97,6 +97,20 @@ namespace cosmo
         /** True once a Quit command has been dispatched, so a CLI loop knows to stop. */
         bool quitRequested() const { return mQuit; }
 
+        /** Re-derive the view-model from the session and bump `revision` (R-SVC-12).
+         *
+         *  For the call sites that still mutate `EditSession` directly instead of sending a
+         *  Command — `App.cpp` has ~95 session calls left, a dozen of them mutations: selecting
+         *  a node, navigating into a group, jumping in history, applying a preset. Those changed
+         *  the MODEL without the view-model being re-derived, so the view then re-read a snapshot
+         *  still describing the PREVIOUS edit target and pushed its values back into the panels.
+         *  That is why selecting a different image did not change the curve (D-35).
+         *
+         *  A bridge, deliberately named for what it is: every one of those sites should become a
+         *  Command, and then this disappears. Until they do, a direct mutation must announce
+         *  itself, and one call here is cheaper than fifteen ways to forget. */
+        void refreshFromSession() { refreshModel(); }
+
     private:
         void emit(const Event &e);
         void emit(Event::Kind k, const std::string &text = std::string(), int a = 0, int b = 0, double ms = 0);

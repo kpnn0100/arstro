@@ -924,6 +924,25 @@ and make every front end — the GTK window, the CLI, the shot renderer — a *v
   behaviour named in `PARITY.md` or in an `R-*` requirement has no command; another asserts that
   `cosmo-cc` and the GUI, given the same commands, produce the same `AppModel` dump (animation
   fields excluded by construction, since the dump is of state, not of presentation).
+- **R-SVC-12 The view BINDS to the view-model; it does not remember.** `AppModel` is the
+  view-model: a value snapshot with a `revision` that increments on every change. The view reads it
+  in **one** place — `App::bindIfStale()`, at the top of `render()`, skipped when the revision has
+  not moved — and every displayed value is written from that snapshot. So a change reaches the
+  screen whatever caused it: a click, a script, an agent on the control socket, a load finishing,
+  an undo. There is no per-event push to wire up and therefore none to forget, which is what the
+  previous arrangement required: fifteen UI handlers each remembering to call a sync function, and
+  no handler at all for "the edit target moved", so **selecting another image left every panel
+  showing the previous one's values** (D-35).
+  Two obligations follow. **(a)** The bind is a pure push — it fires no callbacks and reads nothing
+  back — because it runs whenever the model moved, including under the user's hands mid-drag.
+  **(b)** Anything that changes state must make the view-model reflect it *before* the next bind:
+  a `Command` does this by construction, and the call sites that still mutate `EditSession`
+  directly must call `CosmoService::refreshFromSession()`. That bridge exists because `App.cpp`
+  still holds ~95 direct session calls, a dozen of them mutations; each one that becomes a Command
+  deletes a use of it, and the last one deletes the function.
+  This completes the MVVM split the rest of R-SVC set up: **model** = `EditSession` + `EditParams`,
+  owned by the service · **view-model** = `AppModel` + `Command` in + `Event` out · **view** =
+  widgets that render the snapshot and send commands, and now re-read it when it changes.
 - **R-SVC-11 The view is inspectable without a screen.** `ui dump [--root <name>] [--json]
   [--visible] [--depth N]` returns the Segment tree as text over the same socket: per node its
   type, its **world** rect, size, visibility, opacity, hover and enabled state. A widget that
