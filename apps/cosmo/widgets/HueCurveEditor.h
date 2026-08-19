@@ -77,6 +77,13 @@ namespace cosmo_v2
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull
+        // D-32, as CurvePanel: where inside the grabbed thing the pointer was, so a press
+        // anywhere in the 13 px pick radius does not teleport the node on the first pixel.
+        // Hue is cyclic, so the x offset is carried in degrees and re-wrapped after adding.
+        double mGrabDX = 0.0, mGrabDY = 0.0;
+        void beginGrab(const artboard::Point &local, double tx, double ty);
+        double grabbedX(const artboard::Point &local, bool wrap) const;
+        double grabbedY(const artboard::Point &local) const;
     };
 }
 }

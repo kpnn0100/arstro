@@ -19,6 +19,29 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
+### D-33 — The right column does not resync when the model changes underneath it
+- **Area:** design · **Status:** **Open** · **Severity:** S3
+- **Found:** 2026-08-19, while diagnosing D-32: after `settings set`-style socket traffic —
+  specifically `set curve=0,0;0.5,0.55;1,1` over the control socket — `state print --params` showed
+  `ownParams` with three curve points while `ui dump` showed the panel holding `pts=2`.
+- **Reproduce:**
+  ```bash
+  printf 'select 1\nset curve=0,0;0.5,0.55;1,1\nwait 400\nstate print --params\nui dump --root editor\n' \
+    | cosmo-cc attach /tmp/c.sock --script -
+  # ownParams: curve=0,0;0.5,0.55;1,1     but     · channel=0 pts=2 ...
+  ```
+- **Judgement:** defect, low severity in the GUI and real for scripted driving. `RightColumn::
+  syncToSlot` runs from `App::syncControlsToSlot`, which every UI action that changes params calls —
+  so in pure GUI use the panel is the ORIGIN of the edit and cannot be stale. Nothing calls it in
+  response to a service `ParamsChanged`, so a command arriving over the socket (R-SVC-8) updates the
+  model and leaves the view showing the old value. It also means a widget that then emits would send
+  its stale copy back.
+- **Recommendation:** have the host call `App::syncControlsToSlot()` on `Event::Kind::ParamsChanged`
+  when the change did not originate in the view — the same shape as the `SettingsChanged` bridge
+  added for R-SCALE-2. Needs a guard against the feedback loop (a view edit emits `set`, which emits
+  `ParamsChanged`, which would re-push into the view mid-drag), which is why it is filed rather than
+  fixed alongside D-32. Not applied.
+
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
 - **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
 - **Found:** 2026-08-18, reported by the user: "loading 1 image takes too long … hard to track the
@@ -110,6 +133,56 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-32 — A node grabbed near the pointer teleported to it, so the curve snapped onto the readout
+- **Area:** design (widget interaction) · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, by the user, with a screenshot: *"i still can select and it make this weird
+  interaction / when i click slightly off the main curve it will select the green curve and it switch
+  to that curve."* The screenshot shows an edited curve zig-zagging through the green readout's
+  inflection points — which is what repeated accidental teleports look like.
+- **Reproduce:** press a fixed distance above an existing node and move the pointer ONE pixel.
+  ```
+  node at local (125.8, 73.8); pick radius 13 px
+  press offset   grabbed?   node after a 1px drag   moved by
+  0              yes        y=72.8                  1.0 px
+  4              yes        y=68.8                  5.0 px
+  8              yes        y=64.8                  9.0 px
+  12             yes        y=60.8                 13.0 px     <-- 1 px of input, 13 px of movement
+  14             no         y=73.8                  0.0 px
+  ```
+- **Expected:** a grab moves the thing with the pointer. A forgiving pick radius exists so you can
+  hit a 4 px node without being precise; it is worthless if the node then jumps to wherever you
+  were imprecise.
+- **Actual:** `mDragKind == 0` wrote `nx(pl.x)` / `ny(pl.y)` — the pointer's own position — straight
+  into the node, with no grab offset. So a press anywhere inside the 13 px radius grabbed the node
+  and the first pixel of movement teleported it up to 13 px, **to the click point**. Both halves of
+  the user's sentence come from that one line: "click slightly off the main curve" is a press inside
+  the radius, and "it switch to that curve" is the node landing where they clicked — which, if they
+  were aiming near the readout, is *on* the readout, so their curve visibly snapped onto the green
+  line. The tangent handles had the same defect.
+- **Judgement:** defect. Not the reference's fault at all: D-28 and D-31 both chased the green line
+  because that is where the symptom appeared, and the cause was in the drag arithmetic the whole
+  time. The green curve was only ever the thing the node happened to land on.
+- **Cause:** `widgets/CurvePanel.cpp` drag branch (and `HueCurveEditor.cpp`, identically): absolute
+  pointer position assigned to the dragged element instead of pointer-plus-grab-offset.
+- **Fix:** `beginGrab()` on the press records where inside the grabbed thing the pointer sat, in
+  curve space; `grabbedX/Y()` add it back on every drag. A node grabbed 12 px off-centre simply
+  stays 12 px from the cursor for the rest of the drag. Handles record their own offset (node +
+  ix/iy or ox/oy), so they do not jump either. Hue is cyclic, so its x offset is carried in degrees
+  and re-wrapped after adding; y is clamped to the axis after adding, not before.
+- **Verified:** the same sweep reports exactly 1 px of movement for 1 px of input at every offset
+  from 0 to 12. Through the whole app — `App::pointer` → router capture → `toLocal` → the UI-scale
+  transform — a 24 px drag moves the node **24.0 px** (a teleport would be 34). Both guards were
+  confirmed to FAIL against the old arithmetic before being kept.
+- **Guarded by:** `curveGrabMovesByTheDragNotToThePointer` (widget level, swept over the whole pick
+  radius, because the SIZE of the jump is the bug and a spot check at offset 0 passes on the broken
+  code) and `curveNodeGrabThroughTheAppDoesNotTeleport` (`cosmo_ui_tests`, through the real gesture
+  router, because the report was about the live window).
+  **Two existing tests had to be rewritten:** `hueEnlargedTargetIsClickable` and
+  `curveEnlargedTargetIsClickable` both asserted that the grabbed node landed *at the pointer* —
+  they had encoded the teleport as the expected result while proving the pick radius worked. A test
+  that pins a bug in place is worse than no test, and these two are why the defect survived every
+  suite.
 
 ### D-31 — The green "final" curve was still a target, and D-28's test was a spot check
 - **Area:** design · **Status:** **Fixed** · **Severity:** S2

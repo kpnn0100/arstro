@@ -326,6 +326,12 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
   `— final, with group` in muted text: the tone curve puts the caption in the strip below its plot,
   the hue editor in the free strip above its own. Dashing is what says "readout" without a legend;
   the caption is what stops the only way to find out being to try to drag it.
+- **A grab moves what you grabbed, by the drag (D-32).** Both editors record the pointer's offset
+  within the grabbed node or handle on the press (`beginGrab`) and add it back on every drag
+  (`grabbedX/Y`). Before that they assigned the pointer's own position, so a press anywhere inside
+  the forgiving 13 px pick radius teleported the node up to 13 px on the first pixel of movement —
+  to the click point, which put it *on* the readout whenever the user was aiming near the green
+  line. That, and not anything about the reference, is what "it switch to that curve" was.
 - **The reference never reaches input, and it leaves while you work (D-31).** `pointAt` /
   `handleAt` scan the active curve only, in both editors — but that was never the whole problem.
   Being drawn in space the plot treats as empty made it a **target**: a double-click on the green

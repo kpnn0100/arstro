@@ -17,6 +17,8 @@
 #include "../../core/service/CosmoService.h"
 #include "../../core/ThreadBudget.h"
 #include "../../widgets/HomeScreen.h"
+#include "../../widgets/CurvePanel.h"
+#include "../../widgets/EditStackTabs.h"
 #include "../../UiDump.h"
 #include <cassert>
 #include <cstdio>
@@ -66,6 +68,26 @@ namespace
             app.render(target, now);
         }
         void frames(int n) { for (int i = 0; i < n; ++i) frame(); }
+
+        // Input through App's own entry point, in PHYSICAL pixels — the same call the GTK
+        // handlers make. kind: 0 = press, 1 = motion, 2 = release.
+        void click(double x, double y)
+        {
+            app.pointer(0, x, y, 1, now); frames(2);
+            app.pointer(2, x, y, 1, now); frames(1);
+        }
+        void doubleClick(double x, double y) { click(x, y); click(x, y); }
+        void drag(double x0, double y0, double x1, double y1)
+        {
+            app.pointer(0, x0, y0, 1, now); frames(1);
+            for (int i = 1; i <= 6; ++i)
+            {
+                const double t = (double)i / 6.0;
+                app.pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 1, now);
+                frames(1);
+            }
+            app.pointer(2, x1, y1, 1, now); frames(1);
+        }
         void settle(double ms) { frames((int)(ms / 16.0) + 2); }
     };
 
@@ -116,6 +138,67 @@ namespace
               "and drawn at once — applySettings does not tween from 100%");
     }
 
+    // ── D-32 through the WHOLE app: grabbing a node near the pointer must not teleport it ──
+    //
+    // `cosmo_widget_tests` already sweeps this against CurvePanel::handleGesture directly. This
+    // one drives it through `App::pointer` — so it also covers the parts the widget test cannot
+    // see: the gesture router's capture, `toLocal`, and the UI-scale transform on the way in.
+    // That matters here because the user's report was about the live window, and the one live
+    // measurement I took by synthesising X events was worthless (the window had moved and the
+    // scale had changed between runs). This is the same path minus GTK, and it is repeatable.
+    void curveNodeGrabThroughTheAppDoesNotTeleport()
+    {
+        std::printf("App: a node grabbed off-centre moves by the drag, through the real router (D-32)\n");
+        Rig rig(1440.0, 900.0);
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        check(tabs != nullptr, "the edit-stack tabs exist");
+        if (!tabs) return;
+
+        // Click the Mixer/Curve tab (index 2 of 5) the way a user does, so the CurvePanel is
+        // actually laid out and reachable rather than merely present.
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 2.5, tw.f + 13.0);
+        rig.settle(400.0);
+
+        auto *curve = const_cast<arstro::cosmo_v2::CurvePanel *>(
+            static_cast<const arstro::cosmo_v2::CurvePanel *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "CurvePanel")));
+        check(curve != nullptr, "and the tone curve is in the tree");
+        if (!curve) return;
+
+        const artboard::Transform cw = curve->worldTransform();
+        const artboard::Rect plot = curve->plotBox();
+        const double px0 = cw.e + plot.x, py0 = cw.f + plot.y;
+        const double PW = plot.w, PH = plot.h;
+
+        // Add a node at the middle of the plot, then grab it 10 px off-centre and drag 24 px.
+        rig.doubleClick(px0 + PW * 0.5, py0 + PH * 0.5);
+        rig.settle(200.0);
+        auto pts = curve->curveFor(0);
+        check(pts.size() == 3, "a double-click in the plot adds one node");
+        if (pts.size() != 3) return;
+
+        const double startY = pts[1].y;
+        const double nodeScreenY = py0 + (1.0 - startY) * PH;
+        const double kOff = 10.0, kDrag = 24.0;
+        rig.drag(px0 + PW * 0.5, nodeScreenY - kOff, px0 + PW * 0.5, nodeScreenY - kOff - kDrag);
+        rig.settle(200.0);
+
+        const double endY = curve->curveFor(0)[1].y;
+        const double movedPx = (endY - startY) * PH;
+        char msg[192];
+        std::snprintf(msg, sizeof(msg),
+                      "the node travelled %.1f px for a %.0f px drag (a teleport would be %.0f)",
+                      movedPx, kDrag, kDrag + kOff);
+        check(std::fabs(movedPx - kDrag) < 1.5, msg);
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -159,6 +242,7 @@ namespace
 int main()
 {
     std::printf("cosmo assembled-app UI tests\n\n");
+    curveNodeGrabThroughTheAppDoesNotTeleport();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

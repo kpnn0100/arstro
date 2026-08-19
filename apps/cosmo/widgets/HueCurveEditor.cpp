@@ -59,6 +59,26 @@ namespace cosmo_v2
     }
     double HueCurveEditor::nyv(double py) const { return clampY((midY() - py) / halfH()); }
 
+    // D-32. `wrap` matches nxh's own flag: a NODE may travel across the 360/0 seam, a tangent
+    // handle is measured relative to its node and must not.
+    void HueCurveEditor::beginGrab(const Point &local, double tx, double ty)
+    {
+        mGrabDX = tx - nxh(local.x, false);
+        mGrabDY = ty - nyv(local.y);
+    }
+
+    double HueCurveEditor::grabbedX(const Point &local, bool wrap) const
+    {
+        double x = nxh(local.x, false) + mGrabDX;
+        if (wrap) { while (x < 0.0) x += 360.0; while (x >= 360.0) x -= 360.0; }
+        return x;
+    }
+
+    double HueCurveEditor::grabbedY(const Point &local) const
+    {
+        return std::clamp(nyv(local.y) + mGrabDY, -1.0, 1.0);
+    }
+
     int HueCurveEditor::pointAt(const Point &p) const
     {
         // Nearest anchor within the forgiving pick radius (see metrics::
@@ -112,23 +132,36 @@ namespace cosmo_v2
         {
             mPressed = true;   // D-31: the readout steps aside for the whole gesture
             int idx, kind;
-            if (handleAt(local, idx, kind)) { mDragIdx = idx; mDragKind = kind; return true; }
+            if (handleAt(local, idx, kind))
+            {
+                mDragIdx = idx; mDragKind = kind;
+                const CurvePoint &cp = mPts[idx];
+                beginGrab(local, cp.x + (kind == 1 ? cp.ix : cp.ox),
+                                 cp.y + (kind == 1 ? cp.iy : cp.oy));
+                return true;
+            }
             const int p = pointAt(local);
-            if (p >= 0) { mDragIdx = p; if (g.alt) { mPts[p].smooth = true; mDragKind = 3; } else mDragKind = 0; return true; }
+            if (p >= 0)
+            {
+                mDragIdx = p;
+                if (g.alt) { mPts[p].smooth = true; mDragKind = 3; } else mDragKind = 0;
+                beginGrab(local, mPts[p].x, mPts[p].y);
+                return true;
+            }
             return false;
         }
         if ((g.type == T::Drag || g.type == T::DragStart) && mDragIdx >= 0)
         {
             CurvePoint &cp = mPts[mDragIdx];
-            if (mDragKind == 0) { cp.x = (float)nxh(local.x, true); cp.y = (float)nyv(local.y); }
+            if (mDragKind == 0) { cp.x = (float)grabbedX(local, true); cp.y = (float)grabbedY(local); }
             else if (mDragKind == 3)
             {
-                const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
+                const float hx = (float)grabbedX(local, false) - cp.x, hy = (float)grabbedY(local) - cp.y;
                 cp.ox = hx; cp.oy = hy; cp.ix = -hx; cp.iy = -hy;
             }
             else
             {
-                const float hx = (float)nxh(local.x, false) - cp.x, hy = (float)nyv(local.y) - cp.y;
+                const float hx = (float)grabbedX(local, false) - cp.x, hy = (float)grabbedY(local) - cp.y;
                 if (g.alt)
                 {
                     if (mDragKind == 1) { cp.ix = hx; cp.iy = hy; }

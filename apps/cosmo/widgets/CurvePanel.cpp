@@ -140,6 +140,13 @@ namespace cosmo_v2
     double CurvePanel::nx(double localX) const { return std::clamp(localX / mPlotW, 0.0, 1.0); }
     double CurvePanel::ny(double localY) const { return std::clamp(1.0 - localY / kPlotH, 0.0, 1.0); }
 
+    // D-32: the pick radius is 13 px so a node is easy to hit; that generosity must not become
+    // a teleport. Adding the grab offset back means grabbing a node 12 px off-centre simply
+    // keeps it 12 px from the cursor for the rest of the drag, which is what every other drag
+    // in the app does and what a user assumes without being told.
+    double CurvePanel::grabbedX(const Point &pl) const { return std::clamp(nx(pl.x) + mGrabDX, 0.0, 1.0); }
+    double CurvePanel::grabbedY(const Point &pl) const { return std::clamp(ny(pl.y) + mGrabDY, 0.0, 1.0); }
+
     int CurvePanel::pointAt(const Point &pl) const
     {
         // Nearest node within the forgiving pick radius (see metrics::anchorHitRadius).
@@ -200,12 +207,21 @@ namespace cosmo_v2
             if (!inPlot) return Segment::handleGesture(g, local);
             mPressed = true;   // D-31: the readout steps aside for the whole gesture
             int idx, kind;
-            if (handleAt(pl, idx, kind)) { mDragIdx = idx; mDragKind = kind; return true; }
+            if (handleAt(pl, idx, kind))
+            {
+                mDragIdx = idx; mDragKind = kind;
+                const CurvePoint &cp = active()[idx];
+                // A handle lives at the node plus its own offset — that is the thing grabbed.
+                beginGrab(pl, cp.x + (kind == 1 ? cp.ix : cp.ox),
+                              cp.y + (kind == 1 ? cp.iy : cp.oy));
+                return true;
+            }
             const int p = pointAt(pl);
             if (p >= 0)
             {
                 mDragIdx = p;
                 if (g.alt) { active()[p].smooth = true; mDragKind = 3; } else mDragKind = 0;
+                beginGrab(pl, active()[p].x, active()[p].y);
                 return true;
             }
             mDragIdx = -1;
@@ -215,10 +231,12 @@ namespace cosmo_v2
         {
             Points &pts = active();
             CurvePoint &cp = pts[mDragIdx];
-            const float hx = (float)(nx(pl.x) - cp.x), hy = (float)(ny(pl.y) - cp.y);
+            // D-32: the grab-corrected pointer, everywhere the raw pointer used to be used.
+            const double gx = grabbedX(pl), gy = grabbedY(pl);
+            const float hx = (float)(gx - cp.x), hy = (float)(gy - cp.y);
             if (mDragKind == 0)  // move the node (endpoints locked in x, interior clamped between neighbours)
             {
-                double x = nx(pl.x);
+                double x = gx;
                 if (mDragIdx == 0) x = 0.0;
                 else if (mDragIdx == (int)pts.size() - 1) x = 1.0;
                 else
@@ -227,7 +245,7 @@ namespace cosmo_v2
                     x = std::clamp(x, lo, hi);
                 }
                 cp.x = (float)x;
-                cp.y = (float)ny(pl.y);
+                cp.y = (float)gy;
             }
             else if (mDragKind == 3)  // Alt-drag on a node: pull symmetric tangent handles (make a spline)
             {
@@ -262,9 +280,10 @@ namespace cosmo_v2
         char buf[256];
         std::snprintf(buf, sizeof(buf),
                       "channel=%d pts=%d ref=%d refDrawn=%d plot=%.0f,%.0f %.0fx%.0f "
-                      "dragIdx=%d dragKind=%d",
+                      "dragIdx=%d dragKind=%d grab=%.4f,%.4f pressed=%d",
                       mChannel, (int)active().size(), (int)ref.size(), refDrawn ? 1 : 0,
-                      kPadX, mPlotY, mPlotW, kPlotH, mDragIdx, mDragKind);
+                      kPadX, mPlotY, mPlotW, kPlotH, mDragIdx, mDragKind,
+                      mGrabDX, mGrabDY, mPressed ? 1 : 0);
         return buf;
     }
 

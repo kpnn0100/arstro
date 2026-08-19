@@ -56,6 +56,10 @@ namespace cosmo_v2
         const Points &curveFor(int channel) const { return mCurves[channel]; }
         void layout();
         void advance(double nowMs) override;
+        /** The plot box in widget-local coords. Public because a test that drives the ASSEMBLED
+         *  app has to aim at the plot through App's pointer entry, and restating kPadX/mPlotY in
+         *  the test is how a test comes to aim somewhere the widget no longer draws. */
+        artboard::Rect plotBox() const { return plotRect(); }
 
         /** P0.6 — the plot is one self-drawn leaf, so a tree dump reports a rectangle and
          *  says nothing about which curves are in it. This reports the editable curve, the
@@ -114,6 +118,18 @@ namespace cosmo_v2
         int mChannel = 0;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 = move node, 1 = in-handle, 2 = out-handle, 3 = symmetric pull (Alt on node)
+        // D-32: where the pointer sat WITHIN the thing it grabbed, in curve space, captured on
+        // the press and added back on every drag. Without it a drag wrote the pointer's own
+        // position straight into the node, so grabbing a node anywhere inside the forgiving
+        // 13 px pick radius teleported it up to 13 px on the first pixel of movement.
+        double mGrabDX = 0.0, mGrabDY = 0.0;
+        /** Record the grab offset so `pointerX/Y` return the grabbed thing's current position
+         *  on the frame of the press. `tx`/`ty` are that thing's position in curve space. */
+        void beginGrab(const artboard::Point &plotLocal, double tx, double ty)
+        { mGrabDX = tx - nx(plotLocal.x); mGrabDY = ty - ny(plotLocal.y); }
+        /** The pointer in curve space, corrected for where inside the target it was grabbed. */
+        double grabbedX(const artboard::Point &pl) const;
+        double grabbedY(const artboard::Point &pl) const;
         double mPlotY = 0.0;
         double mPlotW = 232.0;  // set each layout() to the panel's inner width
     };

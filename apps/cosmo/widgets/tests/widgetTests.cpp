@@ -46,6 +46,10 @@ namespace
     struct TestHue : HueCurveEditor
     {
         using HueCurveEditor::handleGesture;
+        // The plot band, so a test can convert pixels to the -1..1 axis the way the widget does
+        // instead of restating the constants and drifting from them.
+        double plotTopPx() const { return 10.0; }
+        double plotBotPx() const { return height.value() - 20.0; }
     };
     struct TestCurve : CurvePanel
     {
@@ -106,11 +110,22 @@ namespace
         const bool grabbed = h.handleGesture(ev(Gesture::Type::Down), Point{104, 82});
         check(grabbed, "Down 12px from the anchor is caught (was a miss at r=11)");
 
-        // Drag it up to y=0.5 (pixel 40) -> the editor emits the moved point.
+        // Drag from 82 to 40: the pointer travelled 42 px UP, so the anchor travels 42 px up
+        // from where it was — NOT to the pointer.
+        //
+        // This assertion used to require the anchor to land exactly at the pointer's y, which
+        // is what a press 12 px off the anchor teleporting 12 px looks like from the outside.
+        // It encoded D-32 as the expected result: the whole point of a forgiving pick radius is
+        // that you can grab a small target without being precise, and it is worthless if the
+        // target then jumps to wherever you were imprecise.
         h.handleGesture(ev(Gesture::Type::Drag), Point{104, 40});
         check(changes >= 1 && last.size() == 3, "drag emits the control points");
-        check(!last.empty() && near(last[1].x, 120.0) && near(last[1].y, 0.5),
-              "the grabbed anchor (idx1) moved to y=0.5");
+        // Anchor 1 sat at pixel y=70; 42 px up is y=28, and the editor's y axis spans -1..1
+        // over (plotBot - plotTop), so convert through the same helper the widget uses.
+        const double travelled = 82.0 - 40.0;
+        const double expectedY = 0.0 + travelled * 2.0 / (h.plotBotPx() - h.plotTopPx());
+        check(!last.empty() && near(last[1].x, 120.0) && near(last[1].y, expectedY, 1e-3),
+              "the grabbed anchor moved BY the drag distance, not TO the pointer (D-32)");
     }
 
     void hueFarClickMisses()
@@ -161,10 +176,15 @@ namespace
         // Endpoint (1,1) at plot-local (232,0) -> widget-local (241.75,0). Press 10px below.
         const bool grabbed = c.handleGesture(ev(Gesture::Type::Down), Point{241.75, 10});
         check(grabbed, "Down 10px from the endpoint is caught");
-        c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 30}); // y = 1 - 30/164
+        // Pressed 10 px below the endpoint and dragged from y=10 to y=30: 20 px DOWN, so the
+        // endpoint travels 20 px down from y=0 — it does not jump to the pointer. (Was
+        // `1 - 30/164`, the pointer's own position, which is D-32's teleport written down as
+        // the expected answer.)
+        c.handleGesture(ev(Gesture::Type::Drag), Point{241.75, 30});
         check(changes >= 1 && last.size() == 2, "drag emits the curve points");
-        check(!last.empty() && near(last[1].x, 1.0, 1e-6) && near(last[1].y, 1.0 - 30.0 / 164.0, 1e-3),
-              "the grabbed endpoint moved, x locked to 1");
+        check(!last.empty() && near(last[1].x, 1.0, 1e-6) &&
+              near(last[1].y, 1.0 - 20.0 / CurvePanel::kPlotH, 1e-3),
+              "the grabbed endpoint moved BY the drag distance, x still locked to 1 (D-32)");
     }
 
     void curveFarClickMisses()
@@ -323,6 +343,58 @@ namespace
             c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
             c.setReferenceCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
             check(greenRefStrokes(c) == 0, "no green when the final equals the own curve");
+        }
+    }
+
+    // ── D-32: a grab moves the node BY the drag, never TO the pointer ────────────────────
+    //
+    // Reported as "when i click slightly off the main curve it will select the green curve and
+    // it switch to that curve", with a screenshot of an edited curve zig-zagging through the
+    // green readout's inflections. Both halves of that sentence come from one line of code:
+    // `mDragKind == 0` wrote `nx(pl.x)` / `ny(pl.y)` — the pointer's own position — into the
+    // node. The pick radius is a forgiving 13 px, so pressing anywhere within 13 px of a node
+    // grabbed it and the first pixel of movement teleported it up to 13 px, straight to where
+    // the user had clicked. If they were aiming near the readout, the node landed ON the
+    // readout and their curve visibly snapped onto it.
+    //
+    // Swept over the whole radius, because the size of the jump IS the bug: a spot check at
+    // offset 0 passes on the broken code.
+    void curveGrabMovesByTheDragNotToThePointer()
+    {
+        std::printf("CurvePanel: a grab moves the node by the drag, not to the pointer (D-32)\n");
+        const double W = 232.0, H = CurvePanel::kPlotH, padX = 9.75;   // no layout(): see the header note
+        const P own{cp(0, 0), cp(0.5f, 0.55f), cp(1, 1)};
+        const double nodeX = padX + 0.5 * W, nodeY = H - 0.55 * H;
+        const double kDrag = 6.0;    // pixels the pointer travels, upward
+
+        int teleported = 0, missed = 0;
+        for (double off = 0.0; off <= 12.0; off += 1.0)
+        {
+            TestCurve c;
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            const Point press{nodeX, nodeY - off};
+            if (!c.handleGesture(ev(Gesture::Type::Down), press)) { ++missed; continue; }
+            c.handleGesture(ev(Gesture::Type::Drag), Point{press.x, press.y - kDrag});
+            const double afterY = H - c.curveFor(0)[1].y * H;
+            // The node started at nodeY and the pointer moved kDrag up, so it must be exactly
+            // kDrag up. On the broken code it lands at press.y - kDrag, i.e. off px further.
+            if (std::fabs(afterY - (nodeY - kDrag)) > 0.51) ++teleported;
+        }
+        check(missed == 0, "every press inside the 13 px radius grabs the node");
+        check(teleported == 0,
+              "and the node travels exactly the drag distance from EVERY grab offset — it is "
+              "never yanked to the pointer");
+
+        // The forgiving radius still has an edge: beyond it, nothing is grabbed and nothing moves.
+        {
+            TestCurve c;
+            int changes = 0;
+            c.onCurveChange = [&](int, P) { ++changes; };
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.handleGesture(ev(Gesture::Type::Down), Point{nodeX, nodeY - 20.0});
+            c.handleGesture(ev(Gesture::Type::Drag), Point{nodeX, nodeY - 26.0});
+            check(changes == 0 && near(c.curveFor(0)[1].y, 0.55f, 1e-4),
+                  "a press beyond the radius still grabs and moves nothing");
         }
     }
 
@@ -1134,6 +1206,7 @@ int main()
     curveAltDragMakesSmoothSpline();
     curveDoubleClickAddRemove();
     curveReferenceShownWhenDiffers();
+    curveGrabMovesByTheDragNotToThePointer();
     curveReferenceIsNotEditable();
     curveReferenceLooksLikeAReadout();
 

@@ -201,6 +201,13 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
       a click, and screen/scroll/hover decisions, none of which are service state
+- [x] **D-32** **The curve-grab teleport** — the actual cause behind two earlier "green curve"
+      defects. A node grabbed anywhere inside the 13 px pick radius was written the POINTER's
+      position, so one pixel of input moved it up to 13 px, to the click point — which landed it on
+      the green readout whenever the user aimed near it. Fixed with a grab offset in both curve
+      editors. Two existing tests had encoded the teleport as their expected result and had to be
+      rewritten; that is why it survived every suite. Filed **D-33** (the right column does not
+      resync on a socket-driven param change) as a recommendation, not applied.
 - [x] **D-31** **The green "final" curve is shown-only for real now.** D-28 fixed how it looked and
       left it reachable: a double-click on it adds a corner exactly on it (18 of 21 sampled points),
       so the edited curve snapped to touch the readout and the user had, to all appearances, dragged
