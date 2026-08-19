@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "ControlChannel.h"
 #include "UiDump.h"
+#include "widgets/WidgetLog.h"
 #include "OmpPin.h"
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
@@ -1462,6 +1463,12 @@ int main(int argc, char **argv)
         if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
                                   arstro::cosmo::AppSettings::path().c_str());
     };
+
+    // §7: route the widget layer's trace into the log's `ui` category. The widget layer cannot
+    // include Log.h — that is a host facility, and cosmo_widget_tests links neither GTK nor
+    // cosmo_core — so it declares a sink and the host fills it in. Costs one null check per call
+    // site when nothing is listening, which is every run without --debug.
+    arstro::cosmo_v2::setWidgetLogSink([](const char *line) { CLOGD(Ui, "%s", line); });
 
     host.app.setPresetDir(exeDir() + "/presets");
 

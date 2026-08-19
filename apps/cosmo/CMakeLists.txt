@@ -156,6 +156,7 @@ add_executable(cosmo_widget_tests
   widgets/HomeScreen.cpp
   widgets/ProjectCard.cpp
   widgets/SplashScreen.cpp
+  widgets/WidgetLog.cpp     # the sink itself: no deps, and stays null in this target
   Theme.cpp
   widgets/Icons.cpp)
 target_include_directories(cosmo_widget_tests PRIVATE

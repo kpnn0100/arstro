@@ -1,6 +1,7 @@
 #include "CurvePanel.h"
 #include "SectionHeader.h"
 #include "DashedLine.h"
+#include "WidgetLog.h"
 #include "Icons.h"
 #include "../Theme.h"
 #include <algorithm>
@@ -25,6 +26,20 @@ namespace cosmo_v2
         constexpr double kRefWidth = 1.0;    // the editable curve is 1.5
         constexpr double kCurveWidth = 1.5;
         constexpr double kLegendPx = 8.5;    // caption under the plot
+
+        /** A point list, short enough for one log line: at most six points, then an ellipsis. */
+        std::string briefPts(const std::vector<CurvePoint> &p)
+        {
+            std::string s;
+            char b[48];
+            for (size_t i = 0; i < p.size() && i < 6; ++i)
+            {
+                std::snprintf(b, sizeof(b), "%s%.3f,%.3f", i ? " " : "", (double)p[i].x, (double)p[i].y);
+                s += b;
+            }
+            if (p.size() > 6) s += " ...";
+            return "[" + std::to_string(p.size()) + "] " + s;
+        }
     }
 
     CurvePanel::CurvePanel()
@@ -68,17 +83,26 @@ namespace cosmo_v2
 
     void CurvePanel::emitChange()
     {
+        WLOG("curve: EMIT ch=%d %s", mChannel, briefPts(active()).c_str());
         if (onCurveChange) onCurveChange(mChannel, active());
     }
 
     void CurvePanel::setCurves(const Points &master, const std::array<Points, 3> &channels)
     {
+        // Logged because this is the panel being RE-SEEDED from the model: if the curve the
+        // user is looking at is ever replaced by something else it happens on this line, and a
+        // trace has to show what arrived and what it displaced (D-33's territory).
+        if (widgetLogEnabled() && master != mCurves[0])
+            WLOG("curve: setCurves REPLACES master %s -> %s",
+                 briefPts(mCurves[0]).c_str(), briefPts(master).c_str());
         mCurves[0] = master;
         for (int c = 0; c < 3; ++c) mCurves[c + 1] = channels[c];
     }
 
     void CurvePanel::setReferenceCurves(const Points &master, const std::array<Points, 3> &channels)
     {
+        if (widgetLogEnabled() && master != mReference[0])
+            WLOG("curve: setReference master %s", briefPts(master).c_str());
         mReference[0] = master;
         for (int c = 0; c < 3; ++c) mReference[c + 1] = channels[c];
     }
@@ -116,6 +140,7 @@ namespace cosmo_v2
 
     void CurvePanel::showChannel(int channel)
     {
+        WLOG("curve: showChannel %d -> %d", mChannel, channel);
         mChannel = channel < 0 ? 0 : (channel > 3 ? 3 : channel);
         mDragIdx = -1;  // a channel swap cancels any in-flight drag on the old curve
     }
@@ -185,15 +210,26 @@ namespace cosmo_v2
         const Point pl{local.x - plot.x, local.y - plot.y};
         const bool inPlot = pl.x >= 0 && pl.x <= mPlotW && pl.y >= 0 && pl.y <= kPlotH;
 
+        WLOG("curve: gesture=%d local=%.1f,%.1f plot=%.1f,%.1f inPlot=%d ch=%d pts=%d "
+             "dragIdx=%d alt=%d",
+             (int)g.type, local.x, local.y, pl.x, pl.y, inPlot ? 1 : 0, mChannel,
+             (int)active().size(), mDragIdx, g.alt ? 1 : 0);
+
         if (g.type == T::DoubleClick && inPlot)
         {
             Points &pts = active();
             const int hit = pointAt(pl);
+            WLOG("curve: dblclick hit=%d curve=%s", hit, briefPts(pts).c_str());
             if (hit > 0 && hit < (int)pts.size() - 1)   // remove an interior node (never the endpoints)
+            {
+                WLOG("curve: dblclick REMOVES node %d at %.3f,%.3f", hit,
+                     (double)pts[hit].x, (double)pts[hit].y);
                 pts.erase(pts.begin() + hit);
+            }
             else if (hit < 0)                            // add a corner where the user clicked
             {
                 CurvePoint c; c.x = (float)nx(pl.x); c.y = (float)ny(pl.y);
+                WLOG("curve: dblclick ADDS node at %.3f,%.3f", (double)c.x, (double)c.y);
                 auto it = std::lower_bound(pts.begin(), pts.end(), c,
                                            [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
                 pts.insert(it, c);
@@ -211,6 +247,7 @@ namespace cosmo_v2
             {
                 mDragIdx = idx; mDragKind = kind;
                 const CurvePoint &cp = active()[idx];
+                WLOG("curve: down GRABBED HANDLE idx=%d kind=%d", idx, kind);
                 // A handle lives at the node plus its own offset — that is the thing grabbed.
                 beginGrab(pl, cp.x + (kind == 1 ? cp.ix : cp.ox),
                               cp.y + (kind == 1 ? cp.iy : cp.oy));
@@ -222,9 +259,20 @@ namespace cosmo_v2
                 mDragIdx = p;
                 if (g.alt) { active()[p].smooth = true; mDragKind = 3; } else mDragKind = 0;
                 beginGrab(pl, active()[p].x, active()[p].y);
+                // The distance is the interesting number: a grab from 12 px away used to
+                // teleport the node 12 px (D-32), so a trace that omits it cannot show whether
+                // the pick radius or the drag arithmetic is at fault.
+                {
+                    const double ddx = pl.x - px(active()[p].x), ddy = pl.y - py(active()[p].y);
+                    WLOG("curve: down GRABBED NODE idx=%d kind=%d at %.3f,%.3f  %.1f px away  "
+                         "grab=%.4f,%.4f", p, mDragKind, (double)active()[p].x,
+                         (double)active()[p].y, std::sqrt(ddx * ddx + ddy * ddy), mGrabDX, mGrabDY);
+                }
                 return true;
             }
             mDragIdx = -1;
+            WLOG("curve: down HIT NOTHING (pointer at %.3f,%.3f in curve space) - consumed",
+                 nx(pl.x), ny(pl.y));
             return true;  // consume the press (a following double-click adds a point)
         }
         if ((g.type == T::Drag || g.type == T::DragStart) && mDragIdx >= 0)
@@ -234,6 +282,9 @@ namespace cosmo_v2
             // D-32: the grab-corrected pointer, everywhere the raw pointer used to be used.
             const double gx = grabbedX(pl), gy = grabbedY(pl);
             const float hx = (float)(gx - cp.x), hy = (float)(gy - cp.y);
+            WLOG("curve: drag idx=%d kind=%d node=%.3f,%.3f  pointer=%.3f,%.3f  "
+                 "grabCorrected=%.3f,%.3f", mDragIdx, mDragKind, (double)cp.x, (double)cp.y,
+                 nx(pl.x), ny(pl.y), gx, gy);
             if (mDragKind == 0)  // move the node (endpoints locked in x, interior clamped between neighbours)
             {
                 double x = gx;

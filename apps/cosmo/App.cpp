@@ -1,5 +1,8 @@
 #include "App.h"
 #include "core/PresetLibrary.h"
+#include "UiDump.h"          // findSegmentByType, to name the consumer
+#include "Log.h"
+#include "widgets/WidgetLog.h"
 #include "widgets/TextMetrics.h"    // estimateTextWidth() for the transition labels
 #include "engine/EditParamsApf.h"   // apfImageCategories() for the category picker
 #include <algorithm>
@@ -681,6 +684,12 @@ namespace cosmo_v2
         // R-SCALE-2: the inverse of rootTransform, once, at the entry point. Every widget
         // below this line hit-tests in the same logical space it laid itself out in.
         { const Point p = toLogical(x, y); x = p.x; y = p.y; }
+        // §7: every gesture that lands, with the point it landed on. "click at 320,540
+        // consumed by nobody" answers half of all dead-control reports on its own, and a press
+        // whose coordinates are not what the reporter thinks they are answers most of the rest
+        // — which is exactly how a whole afternoon went into a curve grab this week.
+        CLOGD(Input, "pointer kind=%d logical=%.1f,%.1f btn=%d alt=%d shift=%d ctrl=%d scale=%d%%",
+              kind, x, y, button, alt ? 1 : 0, shift ? 1 : 0, ctrl ? 1 : 0, mUiScale);
         // A press outside the open menu's bar/dropdown area closes it first (the
         // press still goes on to do its own thing afterward), matching cosmo's
         // MenuBar outside-click dismissal.
