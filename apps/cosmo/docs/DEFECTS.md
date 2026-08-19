@@ -111,6 +111,42 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-35 — Changing the edit target left every panel showing the previous target's values
+- **Area:** core + design (view-model binding) · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, reported by the user: *"it don't change the curve when i change target, each
+  target need to get it info when move to, even the group … value on GUI must refresh when select an
+  image."*
+- **Reproduce:** give two images different curves, then select between them. Before the fix the
+  curve panel kept the first one's curve. Same for a group and its child.
+- **Expected:** every displayed value is the current edit target's.
+- **Actual:** the host *did* call `syncFromSession()` on `SelectionChanged`, and the UI's own
+  handlers called `syncControlsToSlot()` — so the push was happening. What it pushed was stale.
+  `App.cpp` holds **95 direct `mSession.` calls**, a dozen of them mutations (`selectNode`,
+  `navigateToGroup`, `jumpToHistory`, `applyPreset`, `createGroupFromSelection`). Those change the
+  session **without going through the service**, so `refreshModel()` never runs, `AppModel` still
+  describes the *previous* target, and the sync then faithfully fills every panel from it.
+- **Judgement:** defect, and an architectural one rather than a widget bug — the third symptom this
+  week whose cause was the view and the view-model disagreeing (D-33 the socket path, D-34 the emit
+  ordering, D-35 the direct mutation). All three are the same shape: something changed the model
+  without the snapshot the view reads being re-derived first. `App.cpp` was never covered by the S
+  milestone's "the widget layer reaches nothing" check, because that check was
+  `grep "mSession\.\|\.session()" widgets/*.cpp` — and `App.cpp` is not in `widgets/`.
+- **Fix, in two halves.** *(core)* `CosmoService::refreshFromSession()` — a public re-derive, named
+  for what it is: a bridge for the sites that still mutate directly. *(design)* R-SVC-12: the view
+  binds in ONE place, `App::bindIfStale()` at the top of `render()`, guarded by `AppModel::revision`
+  — whose own header had promised since S2 that "a view that has already drawn revision N can skip
+  work", which nothing had ever used. `syncControlsToSlot()` becomes the dirty-marker its callers
+  already spell: refresh the service, set a flag. A model change now reaches the screen whatever
+  caused it, and there is no per-event push to forget.
+- **Verified:** driven over the socket against the real window — two images given different curves
+  and selected in turn logged
+  `setCurves REPLACES [3] …0.750,0.200… -> [3] …0.250,0.700…` on every move, including moving *back*;
+  then a group and its child, which is the "even the group" half.
+- **Guarded by:** `panelsFollowTheEditTarget` (`cosmo_ui_tests`), which asserts the binding contract
+  in **both** directions — the bound revision advances when the model moves, and stands still when
+  it has not. The second half matters as much as the first: a bind that ran unconditionally every
+  frame would satisfy the report and fight the user's hands on every drag.
+
 ### D-34 — An edit was answered by the view being handed back the value it had just replaced
 - **Area:** core (service event ordering) · **Status:** **Fixed** · **Severity:** S1 (silent data loss)
 - **Found:** 2026-08-19. The user had reported the curve symptom three times — D-28, D-31, D-32 —

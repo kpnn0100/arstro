@@ -201,6 +201,15 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
       a click, and screen/scroll/hover decisions, none of which are service state
+- [x] **R-SVC-12 / D-35** **The view binds to the view-model.** Selecting another image left every
+      panel showing the previous target's values: `App.cpp` still holds ~95 direct `mSession.` calls
+      (a dozen mutations), which changed the session without the snapshot being re-derived — so the
+      sync faithfully filled the panels from a model describing the OLD target. `App.cpp` was never
+      covered by S's "the widget layer reaches nothing" check, because that grepped `widgets/*.cpp`.
+      Now: one bind, `bindIfStale()` at the top of `render()`, guarded by `AppModel::revision` —
+      which had promised exactly this since S2 and was never used. Completes the MVVM split.
+      **Owed:** turn those dozen mutations into Commands; each deletes a use of the
+      `refreshFromSession()` bridge, and the last one deletes the bridge.
 - [x] **D-34 / §7 UI logging** **The actual cause of the "green curve" reports.** `applySetFields`
       emitted `ParamsChanged` before `refreshModel()`, so the host re-seeded the right column from a
       PRE-EDIT model and handed the panel back the curve it had just replaced — while the green

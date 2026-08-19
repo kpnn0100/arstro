@@ -284,8 +284,33 @@ namespace cosmo_v2
         void layout();
         /** Push the current slot's params into every panel that isn't backed by
          *  live queries -- filled in as each panel lands (no-op until then). */
+        // ── R-SVC-12: the view binds to the view-model, it does not remember ──────────────
+        /** Mark the view-model as possibly changed. Cheap: it sets a flag. The actual re-read
+         *  happens once, in `bindIfStale()`, at the top of the frame.
+         *
+         *  It also tells the SERVICE to re-derive, because most callers got here after mutating
+         *  `EditSession` directly rather than by sending a Command — see
+         *  `CosmoService::refreshFromSession`. Without that the flag would cause the view to
+         *  re-read a snapshot describing the previous edit target (D-35). */
         void syncControlsToSlot();
+        /** Re-read every displayed value from the view-model, but only when it has actually
+         *  changed. `AppModel::revision` increments on every change and its own header has said
+         *  since S2 that "a view that has already drawn revision N can skip work" — nothing did.
+         *  Called from `render()`, so a model change reaches the screen whatever caused it: a
+         *  click, a script, an agent on the socket, a load finishing. There is no event to
+         *  subscribe to and forget. */
+        void bindIfStale();
+        /** The bind itself: read the view-model, write the widgets. Was `syncControlsToSlot`'s
+         *  body. Must stay a pure push — no callbacks fired, nothing read back — because it runs
+         *  whenever the model moved, including under the user's hands mid-interaction. */
+        void bindViewToModel();
+
     public:
+        /** The revision the widgets currently show. Public so a test can assert the binding
+         *  contract in both directions: it advances when the model moves, and does NOT when the
+         *  model stood still — a bind that ran every frame would fight the user's hands. */
+        unsigned boundRevision() const { return mBoundRevision; }
+
         /** Re-push ONLY the browse chrome (filmstrip cells + selection + the top bar's
          *  n/total). The host calls this per image while a project streams in behind the
          *  already-revealed editor (R-LOADPERF-3), so newly arrived photos appear in the
@@ -330,6 +355,8 @@ namespace cosmo_v2
         double mW, mH;            // LOGICAL size the widgets lay out in = physical / scale
         double mPhysW = 0, mPhysH = 0;   // what the window last reported, kept so a scale
                                          // change can re-derive mW/mH without a resize event
+        unsigned mBoundRevision = 0;     // the AppModel revision the widgets currently show
+        bool mBindPending = true;        // force the first bind, before the first frame
         int mUiScale = 100;              // percent, the TARGET (R-SCALE-1)
         // R-SCALE-2a: the drawn scale eases to the target. Everything geometric reads this,
         // every frame — a logical size computed once from the target and then left alone is

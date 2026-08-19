@@ -957,6 +957,32 @@ the widths either side) and asserts one verdict per property rather than one per
 requires that all three responses — long title, short title, shrunken field — actually occur
 somewhere in the range, so the test cannot pass because a branch is unreachable.
 
+### DR-SVC-12 One bind, driven by `revision` (R-SVC-12, D-35)
+`App::render()` opens with `bindIfStale()`: if `mSvc.model().revision != mBoundRevision` (or a
+first-frame/dirty flag is set), `bindViewToModel()` re-reads the snapshot and writes every displayed
+value; otherwise it costs one compare. `bindViewToModel()` is the old `syncControlsToSlot()` body,
+unchanged in what it pushes — the change is *when* and *how often* it runs, and that nothing else
+decides.
+
+`syncControlsToSlot()` survives as the dirty-marker its fifteen callers already spell, and it does
+two things: `mSvc.refreshFromSession()` then set the flag. The refresh is the load-bearing half —
+those callers reach it having mutated `EditSession` directly (`selectNode`, `navigateToGroup`,
+`jumpToHistory`, `applyPreset`, `createGroupFromSelection`), so without it the view would be filled
+from a snapshot still describing the previous edit target, which is D-35 exactly.
+
+`App::boundRevision()` is public so the contract can be asserted in both directions:
+`panelsFollowTheEditTarget` requires the bound revision to advance when the model moves **and to
+stand still when it has not** — a bind that ran every frame would fight the user's hands on a drag.
+
+Verified end to end with the real window driven over the socket: two images given different curves,
+then selected in turn, and the panel logged
+`setCurves REPLACES [3] …0.750,0.200… -> [3] …0.250,0.700…` on each move; the same for a group and
+its child, which is the "even the group" half of the report.
+
+**Still owed:** `App.cpp` holds ~95 `mSession.` calls. The dozen mutations are correct now because
+they funnel through one function that announces, but each should be a `Command` — at which point
+`refreshFromSession()` loses a caller, and when it loses the last one it goes too.
+
 ### DR-SVC-5a Refresh before you emit (R-SVC-5, D-34)
 **Invariant: `refreshModel()` runs before every `emit()`.** A listener reads `model()` from inside
 the callback — the GTK host re-seeds the right column from it on `ParamsChanged` — so an event

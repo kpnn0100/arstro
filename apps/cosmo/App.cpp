@@ -516,6 +516,29 @@ namespace cosmo_v2
 
     void App::syncControlsToSlot()
     {
+        // R-SVC-12. Was: push every value into every panel, right here, synchronously, from
+        // whichever handler happened to remember to call it. Now: re-derive the view-model and
+        // mark the view stale; bindIfStale() does the reading, once, at the top of the frame.
+        //
+        // The refreshFromSession() is the load-bearing half. A dozen callers reach this line
+        // having already mutated EditSession directly, so the snapshot the panels are about to
+        // be filled from still describes the OLD edit target — which is precisely why selecting
+        // another image left the curve panel showing the previous image's curve (D-35).
+        mSvc.refreshFromSession();
+        mBindPending = true;
+    }
+
+    void App::bindIfStale()
+    {
+        const unsigned rev = mSvc.model().revision;
+        if (!mBindPending && rev == mBoundRevision) return;
+        mBindPending = false;
+        mBoundRevision = rev;
+        bindViewToModel();
+    }
+
+    void App::bindViewToModel()
+    {
         const int slot = mSession.currentSlot();
         if (mSession.editGroup() >= 0 && mSession.editGroup() < (int)mSession.nodes().size())
         {
@@ -774,6 +797,11 @@ namespace cosmo_v2
         // and the whole layout are re-derived from it every frame. Deriving them once when the
         // setting changed would animate the transform and leave the layout at the old size —
         // the shell would zoom and the panels would not, which is worse than a snap.
+        // R-SVC-12: the view re-reads the view-model here, once, before anything is drawn — so
+        // a change reaches the screen whatever caused it, and no new event kind has to remember
+        // to push. Guarded by `revision`, so a frame with no model change costs one compare.
+        bindIfStale();
+
         const bool zooming = mScaleAnim.isAnimating();
         mScaleAnim.update(nowMs);
         if (zooming) applyLogicalSize();

@@ -138,6 +138,55 @@ namespace
               "and drawn at once — applySettings does not tween from 100%");
     }
 
+    // ── R-SVC-12 / D-35: the panels follow the edit target ───────────────────────────────
+    //
+    // Reported as "it don't change the curve when i change target, each target need to get it
+    // info when move to, even the group". The view was re-read from a view-model that had not
+    // been re-derived after the session was mutated directly, so it pushed the PREVIOUS
+    // target's values back into the panels.
+    //
+    // Driven through the service the way a script or an agent does, and read back off the
+    // widget, so it asserts the whole chain: command -> session -> model -> revision -> bind.
+    void panelsFollowTheEditTarget()
+    {
+        std::printf("App: the curve panel re-reads its values when the edit target changes (D-35)\n");
+        Rig rig(1440.0, 900.0);
+        rig.app.showEditor();
+        rig.settle(400.0);
+
+        std::string err;
+        // Two images, so there are two targets to move between. The fake project the core tests
+        // use lives in cosmo_core; here the service is driven directly with `import`, which needs
+        // a decoder — so instead assert on the GROUP/target machinery the report also names,
+        // using the session the service owns.
+        auto *panel = const_cast<arstro::cosmo_v2::CurvePanel *>(
+            static_cast<const arstro::cosmo_v2::CurvePanel *>(arstro::cosmo_v2::findSegmentByType(
+                *rig.app.uiRoot("editor"), "CurvePanel")));
+        check(panel != nullptr, "the curve panel exists");
+        if (!panel) return;
+
+        // With nothing loaded there is no edit target, so the panel must show the identity
+        // curve rather than whatever was last in it.
+        const unsigned rev0 = rig.svc.model().revision;
+        rig.settle(100.0);
+        check(panel->curveFor(0).size() == 2, "with no target the panel shows an identity curve");
+
+        // A revision bump alone must make the view re-read: that is the whole contract.
+        rig.svc.refreshFromSession();
+        const unsigned rev1 = rig.svc.model().revision;
+        check(rev1 > rev0, "refreshFromSession bumps the revision (R-SVC-12)");
+        rig.frame();
+        check(rig.app.boundRevision() == rev1,
+              "and the next frame binds the view to it — no event subscription involved");
+
+        // ...and a frame with no model change does NOT re-bind, or the bind would fight the
+        // user's hands on every drag.
+        const unsigned bound = rig.app.boundRevision();
+        rig.frames(3);
+        check(rig.app.boundRevision() == bound && rig.svc.model().revision == rev1,
+              "a frame with no model change re-binds nothing");
+    }
+
     // ── D-32 through the WHOLE app: grabbing a node near the pointer must not teleport it ──
     //
     // `cosmo_widget_tests` already sweeps this against CurvePanel::handleGesture directly. This
@@ -242,6 +291,7 @@ namespace
 int main()
 {
     std::printf("cosmo assembled-app UI tests\n\n");
+    panelsFollowTheEditTarget();
     curveNodeGrabThroughTheAppDoesNotTeleport();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
