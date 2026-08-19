@@ -693,13 +693,14 @@ namespace
         }
 
         AppSettings s;
-        s.previewEdge = 2400; s.threads = 6; s.useGpu = true; s.cpuPercent = 25;
+        s.previewEdge = 2400; s.threads = 6; s.useGpu = true; s.cpuPercent = 25; s.uiScale = 75;
         assert(s.save());
         const AppSettings back = AppSettings::load();
         assert(back.previewEdge == 2400);
         assert(back.threads == 6);
         assert(back.useGpu && "GPU acceleration is still on next launch");
         assert(back.cpuPercent == 25 && "the CPU budget survives a restart (R-CPU-3)");
+        assert(back.uiScale == 75 && "the UI scale survives a restart (R-SCALE-1)");
 
         // A truncated / garbled file must fall back per field, never stop the app.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuseGpu=1\npreviewEdge=notanumber\nthre"; }
@@ -708,12 +709,23 @@ namespace
         assert(partial.previewEdge == 1600 && "the garbled one falls back to its default");
         assert(partial.threads == 0);
         assert(partial.cpuPercent == 50 && "a settings file that predates the budget gets the default");
+        assert(partial.uiScale == 100 && "a file that predates the UI scale renders at the design size");
 
         // An out-of-range budget is a corrupt file, not a request for the whole machine.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=400\n"; }
         assert(AppSettings::load().cpuPercent == 50);
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=0\n"; }
         assert(AppSettings::load().cpuPercent == 50);
+
+        // A scale nothing was laid out at is SNAPPED, not range-checked: every offered scale
+        // has a rendered shot and a layout assertion behind it, and an arbitrary 83% has
+        // neither (R-SCALE-1).
+        { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuiScale=83\n"; }
+        assert(AppSettings::load().uiScale == 90 && "a hand-edited scale snaps to the nearest offered one");
+        { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuiScale=1000\n"; }
+        assert(AppSettings::load().uiScale == 125 && "and an absurd one snaps to the largest, not through it");
+        for (int s2 : AppSettings::uiScales())
+            assert(AppSettings::clampUiScale(s2) == s2 && "every offered scale is a fixed point");
 
         { std::ofstream f(path, std::ios::trunc); f << backup; }
         if (backup.empty()) std::filesystem::remove(path);

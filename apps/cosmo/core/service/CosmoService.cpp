@@ -366,6 +366,12 @@ namespace cosmo
             else if (k == "threads") { s.threads = v; mBudget.setExplicitEngineThreads(v); }
             else if (k == "previewEdge") { s.previewEdge = v; mSession.setPreviewEdge(v); }
             else if (k == "useGpu") { s.useGpu = (kv.second != "0" && kv.second != "false"); mSession.setUseGpu(s.useGpu); }
+            // The one settings key the service STORES and never acts on: the scale applies to
+            // the view's layout, which R-SVC-3 forbids the service to know anything about. It
+            // is in the grammar so a scale is scriptable and a shot of a scaled shell can be
+            // rendered headlessly, and in the model so whichever front end owns a view can
+            // read the value it must honour (R-SCALE-2).
+            else if (k == "uiScale") s.uiScale = AppSettings::clampUiScale(v);
             else return fail("settings: unknown key " + k);
         }
         std::string tail;

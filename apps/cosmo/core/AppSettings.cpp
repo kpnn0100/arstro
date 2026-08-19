@@ -11,6 +11,29 @@ namespace cosmo
 {
     std::string AppSettings::path() { return ProjectStore::configDir() + "/settings.txt"; }
 
+    // 75 and 90 are the reason the setting exists: a 1366x768 or 1280x800 panel cannot show
+    // the editor's three columns plus a usable canvas at the Figma sizes. 125 is the other
+    // direction — a dense display, or simply bigger controls. No 150: at that scale the
+    // editor's minimum needs 876x699 of window, which is most of a small screen's height,
+    // and offering a scale the shell cannot honour is worse than not offering it (R-SCALE-3).
+    const std::vector<int> &AppSettings::uiScales()
+    {
+        static const std::vector<int> v{75, 90, 100, 125};
+        return v;
+    }
+
+    int AppSettings::clampUiScale(int percent)
+    {
+        const auto &all = uiScales();
+        int best = 100, bestD = 1 << 30;
+        for (int s : all)
+        {
+            const int d = s > percent ? s - percent : percent - s;
+            if (d < bestD) { bestD = d; best = s; }
+        }
+        return best;
+    }
+
     int AppSettings::workersFor(int percent, int cap)
     {
         if (percent < 1) percent = 1;
@@ -42,6 +65,7 @@ namespace cosmo
                 else if (k == "threads") s.threads = std::stoi(v);
                 else if (k == "useGpu") s.useGpu = (v != "0");
                 else if (k == "cpuPercent") s.cpuPercent = std::stoi(v);
+                else if (k == "uiScale") s.uiScale = std::stoi(v);
             }
             catch (...) {}
         }
@@ -50,6 +74,9 @@ namespace cosmo
         // An out-of-range budget is a corrupt file, not a request to take the whole
         // machine — fall back to the default rather than clamping up to 100 (R-CPU-1).
         if (s.cpuPercent < 1 || s.cpuPercent > 100) s.cpuPercent = 50;
+        // Snapped rather than range-checked: every scale the app has been laid out, rendered
+        // and asserted at is one of the offered ones (R-SCALE-1).
+        s.uiScale = clampUiScale(s.uiScale);
         return s;
     }
 
@@ -61,7 +88,8 @@ namespace cosmo
           << "previewEdge=" << previewEdge << "\n"
           << "threads=" << threads << "\n"
           << "useGpu=" << (useGpu ? 1 : 0) << "\n"
-          << "cpuPercent=" << cpuPercent << "\n";
+          << "cpuPercent=" << cpuPercent << "\n"
+          << "uiScale=" << uiScale << "\n";
         return (bool)f;
     }
 }

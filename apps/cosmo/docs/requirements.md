@@ -919,6 +919,23 @@ documented line exist** — without which the struct path would work while the C
 control socket could not reach the behaviour, which is the divergence the architecture exists
 to prevent.
 
+### DR-SCALE-1 `AppSettings::uiScale` — the persisted screen scale (R-SCALE-1)
+`int uiScale = 100`, percent, in `core/AppSettings.h` beside the four engine preferences. Percent
+rather than a double because `settings.txt` is plain `key=value` text a person may edit and "90"
+cannot round-trip wrong the way "0.8999999" can. `AppSettings::uiScales()` is the one list of legal
+values — `{75, 90, 100, 125}` — and `clampUiScale(p)` snaps to the nearest, applied on **load**, so
+a hand-edited or corrupt value becomes a scale the app has actually been laid out and rendered at
+rather than being range-checked into something arbitrary.
+
+Reachable from a script as `settings set uiScale=N` (the existing `SettingsSet` grammar needed no
+new command) and readable in a dump as `settingsUiScale=`. `CosmoService::applySettingsFields`
+stores and echoes it and **acts on nothing** — the only settings key with no engine call beside it,
+because what it scales is the view's layout and R-SVC-3 forbids the service to know that exists.
+
+Guarded by `settings_roundtrip_and_survive_a_bad_file`: the value survives a restart, a file that
+predates the setting renders at 100, `uiScale=83` loads as 90, `uiScale=1000` loads as 125 (snapped
+to the largest, not through it), and every offered scale is a fixed point of the snap.
+
 ### DR-SVC-11 `ui dump` — the view as text (R-SVC-11)
 `apps/cosmo/UiDump.{h,cpp}` walks an `artboard::Segment` and prints one line per node: demangled
 type (RTTI, so a widget cannot forget to declare a name it then lets rot), **world** rect (a local

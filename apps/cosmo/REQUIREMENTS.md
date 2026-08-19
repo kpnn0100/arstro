@@ -415,9 +415,12 @@ Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app setting
 - **R-SETTINGS-1** A settings surface exposes: **Preview quality** — the base preview render
   resolution (speed vs. detail), **CPU threads** — the worker count for the multicore engine,
   **CPU limit** — the share of the machine cosmo may schedule (**AMENDED (R-CPU-3)**: 25 / 50 / 75 /
-  100%, defaulting to 50, sitting next to CPU threads because Auto resolves to it), and **GPU
-  acceleration** — off / on-if-available (see R-GPU). All map directly onto `RenderService` /
-  `EditSession` (`mPreviewEdge` / thread count / prefer-GPU) or onto `AppSettings::cpuPercent`.
+  100%, defaulting to 50, sitting next to CPU threads because Auto resolves to it), **GPU
+  acceleration** — off / on-if-available (see R-GPU), and **Screen scale** (**AMENDED (R-SCALE-1),
+  2026-08-19**: 75 / 90 / 100 / 125%, defaulting to 100, first in the list because it changes the
+  window the other four rows are read in). The first four map directly onto `RenderService` /
+  `EditSession` (`mPreviewEdge` / thread count / prefer-GPU) or onto `AppSettings::cpuPercent`;
+  Screen scale is the one row that maps onto the **view** and not the engine (R-SCALE-2).
 - **R-SETTINGS-5 Reachable from both screens.** The surface opens from the editor's Settings menu
   **and** from the home screen's sidebar "Settings" link (**this amends R-HOME-8**). One modal, one
   set of callbacks, one persisted record — not a second settings page for the launcher. Because the
@@ -426,12 +429,36 @@ Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app setting
   Everything else about it is unchanged: same chrome, same fade, same Esc / click-outside dismiss
   (R-SETTINGS-3), and a change made from the launcher is in force and persisted immediately, so the
   project opened next already loads under it.
+- **R-SCALE-1 The shell has one scale, and it persists.** A **Screen scale** setting draws the
+  whole shell at `75 / 90 / 100 / 125` percent of the Figma sizes, default 100, persisted with the
+  other preferences (R-SETTINGS-4) and settable from a script as `settings set uiScale=N`, so a
+  scaled shell can be rendered and asserted headlessly. It exists for **small screens**: a 1366x768
+  or 1280x800 panel cannot show the editor's rail + canvas + right column at the design sizes, and
+  the honest fix is to draw the design smaller rather than to invent a second, narrower layout.
+  Only the listed scales are legal and a stored value is **snapped** to the nearest one — every
+  offered scale has a rendered shot and a layout assertion behind it, an arbitrary 83% has neither.
+- **R-SCALE-2 It scales the view, never the model.** The scale is a single transform on the view
+  root plus the inverse on incoming pointer coordinates: `mW`/`mH` become **logical** units
+  (`physical / scale`) and every widget keeps laying out in the one coordinate system it was written
+  for. No widget reads the scale, no constant is multiplied at its use site, and no second set of
+  metrics exists — a per-widget scale factor is how a layout acquires two truths and starts
+  disagreeing with itself. The service stores the value (it is a machine preference) and never acts
+  on it, because the layout it scales is presentation (R-SVC-3).
+- **R-SCALE-3 A scale the shell cannot honour is not offered, and the window enforces the rest.**
+  The window's minimum size is `logical minimum x scale`, and the logical minimum is the **larger**
+  of what the launcher needs and what the editor needs — the editor's is bigger and had never been
+  computed, so before this the editor could be resized until the photo canvas was 64 px wide with
+  the rail still open. Below the width where the canvas would fall under its minimum the **left
+  rail collapses itself**, eased like the manual toggle (R-G-1), so the canvas keeps its floor
+  instead of the three columns squeezing each other. Scales are chosen so that every one of them
+  has a minimum that still fits a small screen.
 - **R-SETTINGS-2** Changing preview quality updates the base preview edge and re-renders;
   changing thread count reconfigures the engine's parallelism. Values persist for the session.
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
   card, fade+scale open/close, Esc/click-outside dismiss).
-- **R-SETTINGS-4 Settings persist across launches.** Preview quality, CPU threads and GPU
-  acceleration are statements about the **machine**, not about the session — reverting them on every
+- **R-SETTINGS-4 Settings persist across launches.** Preview quality, CPU threads, GPU
+  acceleration and **screen scale** (**AMENDED (R-SCALE-1)**) are statements about the **machine**,
+  not about the session — reverting them on every
   launch makes the panel feel broken. They round-trip through `cosmo::AppSettings`, a plain
   `key=value` file in the same user config dir as the recent-projects index (the same file
   convention the workspace format uses). They are **loaded before the first render** and applied to

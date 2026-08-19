@@ -88,6 +88,7 @@ namespace cosmo
         kvi(s, j, "settingsThreads", m.settings.threads);
         kvb(s, j, "settingsUseGpu", m.settings.useGpu);
         kvi(s, j, "settingsCpuPercent", m.settings.cpuPercent);
+        kvi(s, j, "settingsUiScale", m.settings.uiScale);
 
         kvi(s, j, "budgetPercent", m.budget.percent);
         kvi(s, j, "budgetTotal", m.budget.total);

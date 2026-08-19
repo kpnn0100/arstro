@@ -13,6 +13,7 @@
  */
 #pragma once
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -24,6 +25,22 @@ namespace cosmo
         int threads = 0;          // engine worker threads; 0 = auto (then the budget below applies)
         bool useGpu = false;      // GPU acceleration opt-in (R-GPU-3)
         int cpuPercent = 50;      // share of the machine's cores cosmo may schedule (R-CPU-1)
+        /** UI scale, PERCENT of the design size (R-SCALE-1). 100 = the Figma sizes; below
+         *  that the whole shell is drawn smaller so a small panel fits more of the app, above
+         *  it larger for a dense display or a user who wants bigger controls.
+         *
+         *  Percent rather than a double on purpose: this file is plain `key=value` text a
+         *  person may edit, and "90" cannot round-trip wrong the way "0.8999999" can. It is
+         *  the ONLY presentation value in this struct, and it is here because it is a
+         *  statement about the machine (R-SETTINGS-4) — the service stores and forwards it and
+         *  never acts on it, since the layout it scales is the view's (R-SVC-3). */
+        int uiScale = 100;
+
+        /** Legal UI scales, in the order the settings row offers them. */
+        static const std::vector<int> &uiScales();
+        /** `percent` snapped to the nearest offered scale — a hand-edited 83 becomes 90
+         *  rather than a size nothing was ever laid out or rendered at. */
+        static int clampUiScale(int percent);
 
         /** Worker count for `percent` of this machine's logical cores (R-CPU-1).
          *
