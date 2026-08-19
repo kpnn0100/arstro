@@ -944,9 +944,16 @@ somewhere in the range, so the test cannot pass because a branch is unreachable.
 `int uiScale = 100`, percent, in `core/AppSettings.h` beside the four engine preferences. Percent
 rather than a double because `settings.txt` is plain `key=value` text a person may edit and "90"
 cannot round-trip wrong the way "0.8999999" can. `AppSettings::uiScales()` is the one list of legal
-values — `{75, 90, 100, 125}` — and `clampUiScale(p)` snaps to the nearest, applied on **load**, so
-a hand-edited or corrupt value becomes a scale the app has actually been laid out and rendered at
-rather than being range-checked into something arbitrary.
+values — `{75, 90, 100, 125, 150, 175, 200}` — and `clampUiScale(p)` snaps to the nearest, applied on
+**load**, so a hand-edited or corrupt value becomes a scale the app has actually been laid out and
+rendered at rather than being range-checked into something arbitrary.
+
+The range runs both ways because "small screen" is two different problems. 75 / 90 are for a screen
+small in **pixels** (a 1366x768 panel cannot show the editor's three columns and a usable canvas at
+the Figma sizes, so the shell is drawn smaller to fit). 125 through 200 are for a screen small in
+**inches** but dense (a 7-inch 1920x1200 panel has pixels to spare and controls too small to hit, so
+the shell is drawn bigger). 200 is the top because it is what makes such a panel usable and its
+window minimum, 1168x932, still fits one.
 
 Reachable from a script as `settings set uiScale=N` (the existing `SettingsSet` grammar needed no
 new command) and readable in a dump as `settingsUiScale=`. `CosmoService::applySettingsFields`

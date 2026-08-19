@@ -25,6 +25,53 @@ A genuinely reusable control belongs in Artboard via **`implement_artboard`**, n
 
 ---
 
+## THE NON-NEGOTIABLE RULE — nothing changes in one frame
+
+**No property a user can see may change suddenly. Ever. Every visible change is an animation.**
+
+This is not a quality bar to trade against a deadline, and it is not satisfied by animating the
+things that obviously move. It is the first thing to check when you write code and the first thing to
+check before you commit, and a change that breaks it is not finished, however correct it is otherwise.
+
+**What counts as a visible property** — and the list is deliberately wider than it looks:
+
+- position, size, opacity, colour, radius, rotation, scale
+- show / hide — a fade or a size-to-zero tween, **never** a `visible` flip
+- scroll and zoom offsets, panel open/close, list insert/remove, grid reflow
+- **the coordinate system itself**: a change of UI scale, of logical size, of the transform the whole
+  tree is drawn through
+- **anything derived from a setting, a window resize, or a value arriving over the socket** — a
+  property does not become exempt because a preference changed it rather than a click
+- **anything derived from another animated value** — if it is computed from something that eases, it
+  must be recomputed every frame from the *eased* value, not once from the target
+
+**How, in cosmo:** `AnimatedProperty` / `Property::animateTo(target, ms, easing, nowMs)` / `Spring`,
+driven from `advance(nowMs)`, which **always** chains to `Segment::advance(nowMs)`. Never assign the
+visible value directly. A setter with no `nowMs` cannot start a tween — record a pending target and
+let `advance()` start it. Default easing `EaseOutCubic`; cosmo's durations are in §1.6.
+`reducedMotion()` is free if you animate through the primitives; hand-rolled interpolation must check
+it. Deriving a value every frame from an eased source is the pattern, not an optimisation to skip.
+
+**How to actually check it, because reading the code does not catch this.** The failure mode is a
+change that is *correct at rest*, so a still frame and a passing test both look fine:
+
+1. Render **mid-transition**, not only at rest (§8). Two frames, half a tween apart, that differ.
+2. Where a test can see it, assert the *live* value differs from the *target* mid-tween — the
+   `HomeScreen` reflow test does exactly this (`cardLive` vs `cardTarget`), and it is the only kind
+   of assertion that can tell an eased implementation from a snapping one.
+
+**Precedent, so this reads as experience and not as decoration.** R-G-1a exists because a grid whose
+column count came from the window width re-laid every card in one frame when the width crossed a
+threshold. R-SCALE-2a exists because the screen-scale setting — added in the same session that wrote
+this rule — changed the whole shell's transform and logical size **instantly**, and it took the user
+pointing at it. Both were written by someone who had just read R-G-1 and still shipped a snap,
+because both changes felt like "configuration", not like motion. There is no such category.
+
+The requirement is **R-G-1** (with **R-G-1a**, **R-SCALE-2a**) in `apps/cosmo/REQUIREMENTS.md`. It
+outranks every preference in this file.
+
+---
+
 ## 0. Orient — read these, in this order, every single invocation
 
 | # | File | Why |
@@ -406,6 +453,9 @@ Artboard changes are a **submodule** commit plus an umbrella pointer bump — an
 
 ## 11. Definition of done
 
+- [ ] **THE NON-NEGOTIABLE RULE:** nothing a user can see changes in one frame — including the
+      coordinate system, anything a setting changed, and anything derived from another eased value.
+      Checked by comparing two mid-transition frames, not by reading the code.
 - [ ] Requirement read first, written or amended, conflict-checked — **before** the code.
 - [ ] **R1 Smooth:** every visible change eased through `Property`/`AnimatedProperty`/`Spring`, honouring
       `reducedMotion()`. No single-frame pop. Tab highlights travel; content swaps cross-fade or slide;

@@ -11,14 +11,20 @@ namespace cosmo
 {
     std::string AppSettings::path() { return ProjectStore::configDir() + "/settings.txt"; }
 
-    // 75 and 90 are the reason the setting exists: a 1366x768 or 1280x800 panel cannot show
-    // the editor's three columns plus a usable canvas at the Figma sizes. 125 is the other
-    // direction — a dense display, or simply bigger controls. No 150: at that scale the
-    // editor's minimum needs 876x699 of window, which is most of a small screen's height,
-    // and offering a scale the shell cannot honour is worse than not offering it (R-SCALE-3).
+    // Both directions, because "small screen" means two different things. 75 and 90 are for a
+    // screen that is small in PIXELS — a 1366x768 or 1280x800 panel cannot show the editor's
+    // three columns plus a usable canvas at the Figma sizes, so the shell is drawn smaller to
+    // fit. 125 through 200 are for a screen that is small in INCHES but dense: a 7-inch
+    // 1920x1200 panel has pixels to spare and controls too small to hit, so the shell is drawn
+    // bigger. 200 is the top because it is what makes such a panel usable and its window
+    // minimum (1168x932) still fits one.
+    //
+    // Not every scale fits every screen any more — 200% cannot be honoured on a 768 px-tall
+    // display — so the settings row DISABLES the ones the display cannot give a window for,
+    // rather than the list pretending they are universal (R-SCALE-3).
     const std::vector<int> &AppSettings::uiScales()
     {
-        static const std::vector<int> v{75, 90, 100, 125};
+        static const std::vector<int> v{75, 90, 100, 125, 150, 175, 200};
         return v;
     }
 

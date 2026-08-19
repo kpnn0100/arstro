@@ -723,7 +723,7 @@ namespace
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuiScale=83\n"; }
         assert(AppSettings::load().uiScale == 90 && "a hand-edited scale snaps to the nearest offered one");
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuiScale=1000\n"; }
-        assert(AppSettings::load().uiScale == 125 && "and an absurd one snaps to the largest, not through it");
+        assert(AppSettings::load().uiScale == 200 && "and an absurd one snaps to the largest, not through it");
         for (int s2 : AppSettings::uiScales())
             assert(AppSettings::clampUiScale(s2) == s2 && "every offered scale is a fixed point");
 

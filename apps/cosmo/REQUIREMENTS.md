@@ -15,13 +15,24 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
 
 ## Global rules (apply to every requirement)
 
-- **R-G-1 Everything animates, nothing snaps.** No component may suddenly change size, appear,
-  disappear, move, recolor, or reflow in a single frame. Every visible property change
+- **R-G-1 Everything animates, nothing snaps. NON-NEGOTIABLE.** No component may suddenly change
+  size, appear, disappear, move, recolor, or reflow in a single frame. Every visible property change
   (position, size, show/hide via fade, color, radius, scroll/zoom offset, panel open/close,
   list insert/remove) changes through an animation primitive (`AnimatedProperty` / `Property`
   / `Spring`), never by direct assignment of the visible value. Show/hide is a fade or a
   size-to-zero tween, not a `visible` flip. Collapses to the final state only under
   `artboard::reducedMotion()`.
+  (**AMENDED (R-SCALE-2a), 2026-08-19**, to close the loophole every violation of this requirement
+  has so far walked through — three of them now, each written by someone who had just read it:
+  **(a)** the list above is examples, not a boundary. It also covers **the coordinate system
+  itself** — the UI scale, the logical size, the transform the whole tree is drawn through — and
+  anything derived from any of them. **(b)** a property is not exempt because a *setting* changed it
+  rather than a click, or because the change arrived over the control socket; the user sees a frame
+  either way. **(c)** a value computed from something that eases must be recomputed **every frame
+  from the eased value**, never once from the target. **(d)** compliance is established by comparing
+  two frames half a tween apart, or by a test asserting the live value differs from the target
+  mid-tween — never by reading the code, because every one of these three shipped code that read
+  correctly. R-G-1a was the grid reflow, R-SCALE-2a is the screen scale.)
 - **R-G-1a Reflow animates too, including a reflow the USER caused by resizing.** (**Added
   2026-08-18.**) R-G-1 already forbids a component changing size or position in a single frame,
   and a grid whose column count is derived from the width breaks it in the one case nobody
@@ -430,13 +441,25 @@ Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app setting
   (R-SETTINGS-3), and a change made from the launcher is in force and persisted immediately, so the
   project opened next already loads under it.
 - **R-SCALE-1 The shell has one scale, and it persists.** A **Screen scale** setting draws the
-  whole shell at `75 / 90 / 100 / 125` percent of the Figma sizes, default 100, persisted with the
-  other preferences (R-SETTINGS-4) and settable from a script as `settings set uiScale=N`, so a
-  scaled shell can be rendered and asserted headlessly. It exists for **small screens**: a 1366x768
-  or 1280x800 panel cannot show the editor's rail + canvas + right column at the design sizes, and
-  the honest fix is to draw the design smaller rather than to invent a second, narrower layout.
-  Only the listed scales are legal and a stored value is **snapped** to the nearest one — every
-  offered scale has a rendered shot and a layout assertion behind it, an arbitrary 83% has neither.
+  whole shell at `75 / 90 / 100 / 125 / 150 / 175 / 200` percent of the Figma sizes
+  (**AMENDED, 2026-08-19**: the range was 75-125; a really small device needs the shell drawn
+  *bigger*, not smaller, and 200% is what makes a 7-inch high-density panel usable), default 100,
+  persisted with the other preferences (R-SETTINGS-4) and settable from a script as
+  `settings set uiScale=N`, so a scaled shell can be rendered and asserted headlessly. It runs in
+  **both** directions: below 100 the shell is drawn smaller so a 1366x768 or 1280x800 panel can show
+  the editor's rail + canvas + right column at all; above 100 it is drawn larger so a small dense
+  screen is legible and touchable. Either way the fix is to draw the one design at a different size,
+  never to invent a second, narrower layout. Only the listed scales are legal and a stored value is
+  **snapped** to the nearest one — every offered scale has a rendered shot and a layout assertion
+  behind it, an arbitrary 83% has neither.
+- **R-SCALE-2a A scale change animates, like everything else (R-G-1).** Changing the scale eases the
+  whole shell between the two sizes over ~260 ms: the root transform, the logical size derived from
+  it, and therefore every widget's layout, recomputed each frame from the **eased** scale. It does
+  not jump and then reflow. This is an **amendment to the first implementation**, which set the scale
+  and the logical size instantly — the single largest visible change in the app, snapped, by the
+  same change that documented R-G-1 two requirements above. `AppSettings::uiScale` and
+  `App::uiScale()` remain the *target* (the setting is a number, not a motion); only the drawn scale
+  eases.
 - **R-SCALE-2 It scales the view, never the model.** The scale is a single transform on the view
   root plus the inverse on incoming pointer coordinates: `mW`/`mH` become **logical** units
   (`physical / scale`) and every widget keeps laying out in the one coordinate system it was written
@@ -444,14 +467,20 @@ Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app setting
   metrics exists — a per-widget scale factor is how a layout acquires two truths and starts
   disagreeing with itself. The service stores the value (it is a machine preference) and never acts
   on it, because the layout it scales is presentation (R-SVC-3).
-- **R-SCALE-3 A scale the shell cannot honour is not offered, and the window enforces the rest.**
+- **R-SCALE-3 A scale the screen cannot honour is not SELECTABLE, and the window enforces the rest.**
   The window's minimum size is `logical minimum x scale`, and the logical minimum is the **larger**
   of what the launcher needs and what the editor needs — the editor's is bigger and had never been
   computed, so before this the editor could be resized until the photo canvas was 64 px wide with
   the rail still open. Below the width where the canvas would fall under its minimum the **left
   rail collapses itself**, eased like the manual toggle (R-G-1), so the canvas keeps its floor
-  instead of the three columns squeezing each other. Scales are chosen so that every one of them
-  has a minimum that still fits a small screen.
+  instead of the three columns squeezing each other.
+  (**AMENDED, 2026-08-19**, because the range now reaches 200%: it is no longer true that every
+  offered scale fits every screen — 200% needs 1168x932 of window, which a 1366x768 panel cannot
+  give. So a scale whose minimum exceeds the **display** is shown **disabled**, with the reason,
+  exactly as the GPU row already shows "unavailable" — the same affordance for the same fact. Hiding
+  it would leave a user on a large screen wondering what happened to it; letting it be chosen would
+  hand a small screen a window it cannot open. The host reports the display size; with none reported
+  nothing is disabled, so a headless harness sees the full range.)
 - **R-SETTINGS-2** Changing preview quality updates the base preview edge and re-renders;
   changing thread count reconfigures the engine's parallelism. Values persist for the session.
 - **R-SETTINGS-3** Presented as a modal overlay consistent with R-PRESETPICK-3 (scrim, centered
