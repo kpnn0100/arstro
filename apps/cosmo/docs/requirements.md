@@ -919,6 +919,27 @@ documented line exist** — without which the struct path would work while the C
 control socket could not reach the behaviour, which is the divergence the architecture exists
 to prevent.
 
+### DR-HOME-11a The recents header row shares one line (R5 / R-SCALE-3)
+The header holds a title block (clock glyph + `Recent Projects` + the visible count) and a search
+field on one row. Both used to be positioned independently — the field pinned right at a fixed
+168 px, the title drawn from the left knowing nothing about it — so at the minimum window width the
+title ran straight under the box. Two things cannot both be fixed on one row.
+
+The title is the more important, so it is measured first and the field takes what is left:
+`searchRect()` starts at `max(titleEnd + 12, W - pad - 168)` and keeps `max(72, W - pad - x)`. When
+even that floor does not fit, `headerTitle()` gives up the long form and returns `Recent` rather than
+the field disappearing. `titleBlockW()` measures with the same `estimateTextWidth` the paint draws
+with — a box measured one way and drawn another is how the overlap got in. `minContentWidth()` now
+sums the header's own floor as well as the grid's and takes the larger, so a future sidebar or title
+change moves the minimum instead of breaking the row.
+
+Found by rendering the launcher at `App::minPhysical*` for each screen scale. Guarded by
+`homeHeaderTitleNeverRunsUnderTheSearchField`, which **sweeps** every width from the published
+minimum to 2200 px (the failure is a threshold, so a spot check at the minimum proves nothing about
+the widths either side) and asserts one verdict per property rather than one per width; it also
+requires that all three responses — long title, short title, shrunken field — actually occur
+somewhere in the range, so the test cannot pass because a branch is unreachable.
+
 ### DR-SCALE-1 `AppSettings::uiScale` — the persisted screen scale (R-SCALE-1)
 `int uiScale = 100`, percent, in `core/AppSettings.h` beside the four engine preferences. Percent
 rather than a double because `settings.txt` is plain `key=value` text a person may edit and "90"
@@ -935,6 +956,64 @@ because what it scales is the view's layout and R-SVC-3 forbids the service to k
 Guarded by `settings_roundtrip_and_survive_a_bad_file`: the value survives a restart, a file that
 predates the setting renders at 100, `uiScale=83` loads as 90, `uiScale=1000` loads as 125 (snapped
 to the largest, not through it), and every offered scale is a fixed point of the snap.
+
+### DR-SCALE-2 One transform, one coordinate system (R-SCALE-2)
+`App` owns `mUiScale` (percent) and keeps **two** sizes: `mPhysW/mPhysH`, what the window last
+reported, and `mW/mH`, the **logical** box every widget lays out in — `physical / scale`, floored at
+`minLogical*`. Three members carry the whole feature:
+
+- `rootTransform()` = `Transform::scaling(s, s)`, installed **everywhere** the render path used to
+  install `Transform::identity()` (ten sites in `App.cpp`) and passed as the parent transform to
+  every `render` / `renderOverlay` call. Both halves are required: `Segment::renderContent` computes
+  `parent.mul(localTransform())` and calls `setTransform(world)`, and `setTransform` is **absolute**
+  — which is also the reason the scale cannot live in the GTK layer as a `cairo_scale`, since the
+  first identity reset inside `App` would wipe it.
+- `toLogical(x, y)` = the inverse, applied once at the top of `pointer()` and `wheel()`. No widget
+  hit-tests in physical pixels, because none of them ever sees one.
+- `setUiScale(percent)` re-derives `mW/mH` from the remembered physical size, so a scale change is a
+  relayout rather than a resize and the dialog that made it re-centres in the same frame.
+
+No widget reads the scale and no constant is multiplied at its use site — a per-widget factor is how
+a layout acquires two truths. `App::applySettings` sets it before the first render. The splash is
+scaled the same way in `linux_main.cpp` (its Segment keeps the 420x260 design size; the window is
+sized `x scale`).
+
+`linux_main.cpp` bridges the control socket to the view: on `Event::Kind::SettingsChanged` it
+compares `svc.model().settings.uiScale` with `app.uiScale()` and applies the difference. Needed
+because the service deliberately does nothing with the value (DR-SCALE-1) — without the bridge
+`settings set uiScale=125` would change the stored number, print it in a dump and leave the window
+untouched, which is worse than not having the command.
+
+### DR-SCALE-3 The minimum window, and the rail that folds before the canvas (R-SCALE-3)
+`App::minLogicalWidth/Height()` are the shell's floor, and they take the **larger** of the launcher's
+and the editor's needs. The launcher's has been summed from its own anchored blocks since D-26; the
+editor's never existed, which is how the photo canvas could be dragged to 64 px wide with the rail
+still open. The editor's floor is `RightColumn::kWidth + kMinCanvasW` wide (324 + 260) and
+`TopBar::kHeight + kMinCanvasH + Breadcrumb::kHeight + Filmstrip::kHeight` tall — the fixed rows that
+cannot be given up. `App::kMinCanvasW/H = 260x220` is the one place the canvas's floor is written.
+
+Enforcement is the **window**, not the layout code: `applyWindowMinimum()` in `linux_main.cpp` asks
+GTK for `minPhysical* = minLogical* x scale`, and re-asks on every scale change, so a bigger scale
+requires a bigger window instead of quietly breaking. At the four offered scales that is
+438x350 / 526x420 / 584x466 / 730x583 — all of which fit a small panel, which is why 150% is not
+offered. `setSize` still clamps, for the cases the host cannot hold (a tiling WM, an offscreen
+harness, `--size` below the minimum): a shell drawn slightly cropped is usable, one that refuses to
+size is not.
+
+**The rail folds before the canvas does.** Two flags, and the distinction is the point:
+`mRailWanted` is the user's intent and only `toggleRail` changes it; `mRailOpen` is what the window
+can afford and is **derived** every `layout()` as `mRailWanted && roomForRail()`. It eases both ways
+through the observable the toolbar toggle already drives (R-G-1), and `Observable::set` early-returns
+on an unchanged value so deriving it every frame starts no animation. Keeping only the effective
+flag — the first version — meant a window dragged narrow and then wide again had thrown the user's
+choice away and they had to hunt for the toggle.
+
+Shots: `scale-{75,90,100,125}-{home-min,editor-min,settings-min}` render each screen at exactly
+`minPhysical*` for its scale — the smallest window that scale permits, and therefore the frame where
+three fixed columns and a floor-bound canvas have the least room to disagree — plus
+`-editor-1280x800` to show what the setting is for. All fixture-free, so they run in
+`cosmo_shots_headless`. `settings-min` in particular proves the dialog that sets the scale never puts
+its own Done button off the bottom edge.
 
 ### DR-SVC-11 `ui dump` — the view as text (R-SVC-11)
 `apps/cosmo/UiDump.{h,cpp}` walks an `artboard::Segment` and prints one line per node: demangled

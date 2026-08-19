@@ -124,10 +124,20 @@ namespace cosmo_v2
 
       public:
         artboard::Rect actionRect(int i) const;
-      private:    // 0=New 1=Open 2=Import (sidebar)
+      protected:  // 0=New 1=Open 2=Import (sidebar)
+        // Protected rather than private so `cosmo_widget_tests` can assert the header row
+        // shares its width instead of the two halves being positioned independently — the
+        // overlap this trio exists to prevent is only visible by comparing them (R5).
         artboard::Rect searchRect() const;
-        double gridTop() const;
+        /** "Recent Projects", or "Recent" when the row is too narrow to hold both it and the
+         *  search field at its floor (R5). One mapping, read by the paint and by searchRect. */
+        std::string headerTitle() const;
+        /** Width of the clock glyph + title + count block, measured the way it is drawn. */
+        double titleBlockW(const std::string &title) const;
         double contentX() const;
+
+      private:
+        double gridTop() const;
         double scrollY() const { return mScrollYAnim.value(); }  // eased (drawn) scroll, not the target
         void regionAt(const artboard::Point &local, Region &kind, int &index) const;
         /** Flat HoverFade id for a region: Action 0..2, Link 3..5, NewCard 6, Card 7+i. */

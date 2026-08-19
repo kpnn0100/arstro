@@ -50,7 +50,33 @@ namespace cosmo_v2
         /** Forward a key/text event; returns true if consumed (host suppresses its
          *  own shortcut for that key). */
         bool key(const artboard::KeyEvent &e);
+        /** PHYSICAL window size in device pixels. Divided by the UI scale into the LOGICAL
+         *  units every widget lays out in (R-SCALE-2), so nothing below this call has to know
+         *  a scale exists. */
         void setSize(double width, double height);
+
+        // ── R-SCALE: one scale for the whole shell ────────────────────────────────────────
+        /** Draw the shell at `percent` of the design size (75 / 90 / 100 / 125). Re-derives
+         *  the logical size from the physical one the window last reported, so the change is
+         *  a relayout and not a resize. Snapped by `AppSettings::clampUiScale`. */
+        void setUiScale(int percent);
+        int uiScale() const { return mUiScale; }
+        /** The smallest LOGICAL size the shell can be laid out in without a column squeezing
+         *  another to nothing — the larger of what the launcher needs and what the editor
+         *  needs (R-SCALE-3). The host turns this into the window's minimum by multiplying by
+         *  the scale, which is the whole enforcement mechanism: pick a bigger scale and the
+         *  window cannot be made small enough to break. */
+        /** The photo canvas's floor, in logical px — the size below which the editor stops
+         *  being an editor. 260x220 is a legible thumbnail of a photo with the filmstrip and
+         *  breadcrumb still under it, and it is what both the window minimum and the rail's
+         *  self-collapse are derived from, so there is one number rather than two guesses. */
+        static constexpr double kMinCanvasW = 260.0;
+        static constexpr double kMinCanvasH = 220.0;
+        static double minLogicalWidth();
+        static double minLogicalHeight();
+        /** Physical minimum at the scale currently in force — what the host asks GTK for. */
+        double minPhysicalWidth() const { return minLogicalWidth() * scale(); }
+        double minPhysicalHeight() const { return minLogicalHeight() * scale(); }
 
         // ── home screen / projects (R-HOME) ──
         /** The session the service drives (R-SVC-1). App still OWNS it in S2 — see
@@ -285,11 +311,35 @@ namespace cosmo_v2
         void beginReveal();                      // start the reveal (editor fades in, loading dissolves)
         void drawWordmark(artboard::IRenderTarget &target, double p, double alpha = 1.0) const;  // p: 0=home(big) .. 1=top-bar(small)
 
-        double mW, mH;
+        double mW, mH;            // LOGICAL size the widgets lay out in = physical / scale
+        double mPhysW = 0, mPhysH = 0;   // what the window last reported, kept so a scale
+                                         // change can re-derive mW/mH without a resize event
+        int mUiScale = 100;              // percent (R-SCALE-1)
+        double scale() const { return mUiScale / 100.0; }
+        /** The view root's transform. EVERY place that used to install
+         *  `Transform::identity()` installs this instead — `setTransform` is ABSOLUTE, so a
+         *  scale applied by the host outside App would be wiped by the first reset inside it,
+         *  which is exactly why the scale lives here and not in the GTK layer (R-SCALE-2). */
+        artboard::Transform rootTransform() const
+        { return artboard::Transform::scaling(scale(), scale()); }
+        /** Physical pointer coordinates -> logical. The inverse of rootTransform, and the only
+         *  other place the scale is allowed to appear. */
+        artboard::Point toLogical(double x, double y) const
+        { return artboard::Point{x / scale(), y / scale()}; }
         double mNowMs = 0.0;
         // One source of truth for the preset-rail open state; the toggle
         // highlight and the rail width both observe() it so they can't desync.
+        /** Two flags, not one, and the distinction is the whole of R-SCALE-3's rail rule:
+         *  `mRailWanted` is what the USER asked for and only `toggleRail` changes it;
+         *  `mRailOpen` is what the window can currently afford and is DERIVED every layout.
+         *  Collapsing the rail when the canvas would drop under its floor, without keeping the
+         *  intent, means a window dragged narrow and then wide again has quietly thrown the
+         *  user's choice away and they have to find the toggle to get it back. */
+        bool mRailWanted = true;
         artboard::Observable<bool> mRailOpen{true};
+        /** True when the rail can be open without pushing the canvas under its floor. */
+        bool roomForRail() const
+        { return mW - LeftRail::kOpenWidth - RightColumn::kWidth >= kMinCanvasW; }
         cosmo::CosmoService &mSvc;      // S4c: the application; App draws it
         cosmo::EditSession &mSession;   // = mSvc.session(), for the not-yet-migrated call sites
         cosmo::AppSettings mSettings;   // R-SETTINGS-4: what is in force + what gets saved

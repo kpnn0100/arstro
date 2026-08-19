@@ -613,17 +613,29 @@ checked}`; `show(title, confirmLabel, rows, onConfirm(vector<string>))`. A "Sele
 toggle + one checkbox per category + Cancel/Confirm; Confirm gathers ticked keys. `kCardW=340`.
 
 ### 7.5 SettingsDialog
-The engine-settings modal (R-SETTINGS). `SettingsDialog(accent)`; `onPreviewEdge(int)`,
-`onThreads(int)` (0=auto), `onCpuPercent(int)`, `onUseGpu(bool)`;
-`show(previewEdge, threads, cpuPercent, useGpu, gpuAvailable)`. **Four** chip rows, `kRows=4` —
-0 Preview quality (`kEdges{1000,1600,2400}` → Draft/Standard/High), 1 CPU threads
-(`kThreads{0,2,4,8}` → Auto/n), 2 **CPU limit** (`kCpuPercents{25,50,75,100}` → "n%", R-CPU-3,
-labelled "CPU limit · Auto uses this" because row 1's Auto resolves to it), 3 GPU acceleration
-(Off/On, "· unavailable" and the On chip at 0.4 alpha with no backend) — plus Done. Row 0/1/3 map
-onto `RenderService`/`par::setThreads`; row 2 onto `AppSettings::cpuPercent` via
-`App::applyThreadBudget`. `chipLabel(row, i)` is the single label mapping, read both by `chipRects`
-(which sizes each chip to its text) and by the paint, so the two cannot drift. Card height derives
-from `kRows`, so the row addition resized it with no constant to update.
+The engine-settings modal (R-SETTINGS). `SettingsDialog(accent)`; `onUiScale(int)`,
+`onPreviewEdge(int)`, `onThreads(int)` (0=auto), `onCpuPercent(int)`, `onUseGpu(bool)`;
+`show(uiScale, previewEdge, threads, cpuPercent, useGpu, gpuAvailable)`. **Five** chip rows, named
+by `enum Row { kRowScale, kRowQuality, kRowThreads, kRowCpu, kRowGpu, kRows }` —
+
+- `kRowScale` **Screen scale** (`kScales`, a reference to `AppSettings::uiScales()` = {75,90,100,125}
+  → "n%", R-SCALE-1), labelled "Screen scale · smaller fits more". **First**, because it changes the
+  window every other row is read in: a user who cannot read the dialog should not have to find the
+  fix at the bottom of it. It is the one row that maps onto the **view** (`App::setUiScale`) rather
+  than onto the engine, and the only one bound to a core list instead of owning its own — two lists
+  would drift into a chip that loads back as something else.
+- `kRowQuality` Preview quality (`kEdges{1000,1600,2400}` → Draft/Standard/High).
+- `kRowThreads` CPU threads (`kThreads{0,2,4,8}` → Auto/n).
+- `kRowCpu` **CPU limit** (`kCpuPercents{25,50,75,100}` → "n%", R-CPU-3, labelled
+  "CPU limit · Auto uses this" because the row above's Auto resolves to it).
+- `kRowGpu` GPU acceleration (Off/On, "· unavailable" and the On chip at 0.4 alpha with no backend).
+
+Plus Done. The `enum` replaced bare `0..3` literals in five places (`rowChipCount`, `chipLabel`, the
+click dispatch, the row labels, the selected-chip test) — inserting a row was otherwise five
+coordinated edits to five sets of magic numbers. `chipLabel(row, i)` remains the single label
+mapping, read both by `chipRects` (which sizes each chip to its text) and by the paint. Card height
+derives from `kRows`, so the row addition resized it with no constant to update: 366 → 430 px, which
+still clears the 466 px logical minimum height at every scale (shot `scale-*-settings-min`).
 
 `advance()` and `onOverlay()` are **public** (unlike the other Segment overrides): the home screen
 drives this same instance directly, since Home is not part of the editor tree that would otherwise

@@ -201,6 +201,20 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
       a click, and screen/scroll/hover decisions, none of which are service state
+- [x] **R-SCALE** **Screen scale** — a small-screen UI scale, 75 / 90 / 100 / 125%, persisted and
+      scriptable (`settings set uiScale=N`). Two commits, core then design. **One transform on the
+      view root plus its inverse on pointer input** (R-SCALE-2): `mW`/`mH` became LOGICAL units, no
+      widget reads the scale and no constant is multiplied at its use site. It had to live in `App`
+      rather than as a `cairo_scale` in the GTK layer because `setTransform` is absolute and the ten
+      identity resets inside `App` would have wiped it.
+      The layout-integrity half is the substance, and it found two real breaks that predate the
+      setting: the **editor had no computed minimum** (the photo canvas could be dragged to 64 px
+      wide with the rail still open), and the launcher's **"Recent Projects" header ran under the
+      search field** at minimum width. Both fixed — `App::minLogical*` takes the larger of the two
+      screens' floors and the window minimum is `that x scale`; the rail now folds before the canvas
+      does, with the user's intent kept separate from the effective state so widening restores it;
+      the header row shares its width, title first. Shots at every scale in the smallest window that
+      scale permits, including the settings modal itself, all fixture-free and in ctest.
 - [x] **P0.6** **`ui dump`, not `--dump-ui`** — a *command* over the control socket rather than a
       launch flag, because the question is almost always about a window that is already running
       (R-SVC-11 / DR-SVC-11). Segment tree with demangled type, world rect, size, visibility,

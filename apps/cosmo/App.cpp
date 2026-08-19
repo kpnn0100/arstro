@@ -169,6 +169,16 @@ namespace cosmo_v2
         mSettingsDialog = std::make_shared<SettingsDialog>(mAccent);
         // R-SETTINGS-4: every change is applied AND persisted, so the choice survives
         // the next launch instead of silently reverting.
+        // R-SCALE: the only settings row that changes the VIEW. Applying it relays the whole
+        // shell out at the new logical size (including this dialog, which re-centres in the
+        // same frame), and the host needs the notification to re-ask GTK for a window minimum
+        // at the new scale — without that the window could stay smaller than the layout needs
+        // and the clamp in setSize would crop it (R-SCALE-3).
+        mSettingsDialog->onUiScale = [this](int percent) {
+            setUiScale(percent);
+            mSettings.uiScale = mUiScale;   // the snapped value, not the requested one
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
         mSettingsDialog->onPreviewEdge = [this](int edge) {
             mSession.setPreviewEdge(edge);
             mSettings.previewEdge = edge;
@@ -277,6 +287,16 @@ namespace cosmo_v2
         mRightColumn->height.set(mH - TopBar::kHeight);
         mRightColumn->layout();
 
+        // R-SCALE-3: the canvas has a floor, and the rail gives way before the floor does.
+        // std::max(0.0, ...) below stops the width going negative, but zero is not a layout —
+        // it is the right column sitting on top of the rail with no photo between them. So the
+        // rail's effective state is DERIVED here, every layout, from what the user wants and
+        // what the window can afford: it folds when the canvas would drop under its floor and
+        // unfolds when the room comes back, eased both ways through the same observable the
+        // toolbar toggle drives (R-G-1). Observable::set is a no-op when the value is
+        // unchanged, so running this every frame starts no animation and costs one compare.
+        mRailOpen.set(mRailWanted && roomForRail());
+
         mCenterStage->x.set(mLeftRail->width.value());
         mCenterStage->y.set(TopBar::kHeight);
         mCenterStage->width.set(std::max(0.0, mW - mLeftRail->width.value() - RightColumn::kWidth));
@@ -286,9 +306,13 @@ namespace cosmo_v2
 
     void App::toggleRail()
     {
-        // Flip the ONE source of truth; the observer set in the ctor updates both
-        // the toggle highlight and the rail width, so they stay in lockstep.
-        mRailOpen.set(!mRailOpen.get());
+        // Flip the user's INTENT; layout() derives the effective state from it and the room
+        // available, and the observer on that updates the toggle highlight and the rail width
+        // together so they stay in lockstep. Toggling in a window with no room for the rail
+        // therefore records the wish and shows nothing — which is honest, and is why the
+        // highlight follows the derived flag rather than the wish.
+        mRailWanted = !mRailWanted;
+        mRailOpen.set(mRailWanted && roomForRail());
     }
 
     void App::refreshPresetTree()
@@ -581,18 +605,61 @@ namespace cosmo_v2
         mCenterStage->filmstrip()->setSelection(selCells, primary);
     }
 
+    // ── R-SCALE-3: the smallest logical box the shell can be laid out in ─────────────────
+    // Asked for, not guessed, and the LARGER of the two screens' needs. The launcher's number
+    // has been summed from its own anchored blocks since D-26; the editor's never existed, and
+    // it is the bigger of the two — which is why the editor could be dragged narrow enough to
+    // leave the photo canvas 64 px wide with the rail still open, at any scale.
+    double App::minLogicalWidth()
+    {
+        // The right column is fixed, the canvas has a floor, and the rail collapses itself
+        // before the canvas is squeezed (see layout()) — so the editor's floor is the two of
+        // them, not all three.
+        const double editor = RightColumn::kWidth + kMinCanvasW;
+        return std::max(HomeScreen::minContentWidth(), editor);
+    }
+
+    double App::minLogicalHeight()
+    {
+        // Top bar + the canvas's own floor + the breadcrumb + the filmstrip: the fixed rows
+        // the editor stacks under the canvas, which cannot be given up.
+        const double editor = TopBar::kHeight + kMinCanvasH + Breadcrumb::kHeight + Filmstrip::kHeight;
+        return std::max(HomeScreen::minContentHeight(), editor);
+    }
+
+    void App::setUiScale(int percent)
+    {
+        const int snapped = cosmo::AppSettings::clampUiScale(percent);
+        if (snapped == mUiScale) return;
+        mUiScale = snapped;
+        // A scale change is a RELAYOUT, not a resize: the window is the same size it was, so
+        // re-derive the logical box from the physical one it last reported. Without this the
+        // shell would keep the old logical size and simply be drawn at the wrong scale.
+        if (mPhysW > 0 && mPhysH > 0) setSize(mPhysW, mPhysH);
+    }
+
     void App::setSize(double width, double height)
     {
-        if (width < 320) width = 320;
-        if (height < 240) height = 240;
-        mW = width; mH = height;
-        mRoot->width.set(width); mRoot->height.set(height);
-        if (mHome) { mHome->width.set(width); mHome->height.set(height); mHome->layout(); }
+        if (width < 1) width = 1;
+        if (height < 1) height = 1;
+        mPhysW = width; mPhysH = height;
+        // Logical units from here down. The host holds the window at minPhysical*, so this
+        // division normally lands at or above the logical minimum; the clamp is for the cases
+        // the host cannot hold it there (a tiling WM, an offscreen harness, a --size smaller
+        // than the minimum) and it is a clamp rather than a rejection because a shell drawn
+        // slightly cropped is still usable and a shell that refuses to size is not.
+        mW = std::max(minLogicalWidth(), width / scale());
+        mH = std::max(minLogicalHeight(), height / scale());
+        mRoot->width.set(mW); mRoot->height.set(mH);
+        if (mHome) { mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); }
         layout();
     }
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
+        // R-SCALE-2: the inverse of rootTransform, once, at the entry point. Every widget
+        // below this line hit-tests in the same logical space it laid itself out in.
+        { const Point p = toLogical(x, y); x = p.x; y = p.y; }
         // A press outside the open menu's bar/dropdown area closes it first (the
         // press still goes on to do its own thing afterward), matching cosmo's
         // MenuBar outside-click dismissal.
@@ -613,6 +680,7 @@ namespace cosmo_v2
 
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
+        { const Point p = toLogical(x, y); x = p.x; y = p.y; }   // R-SCALE-2, as in pointer()
         if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
         if (mScreen == Screen::Loading) return;                           // non-interactive transition
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
@@ -682,9 +750,9 @@ namespace cosmo_v2
             mHome->layout();
             mHome->advance(nowMs);
             target.save();
-            target.setTransform(Transform::identity());
-            mHome->render(target);
-            mHome->renderOverlay(target);
+            target.setTransform(rootTransform());
+            mHome->render(target, rootTransform());
+            mHome->renderOverlay(target, rootTransform());
             // R-SETTINGS-5: the same modal instance, drawn over the launcher. It paints
             // entirely in the overlay pass (scrim + card), so renderOverlay is the whole
             // of it; sizing it here keeps the card centred as the window resizes (R4).
@@ -694,7 +762,7 @@ namespace cosmo_v2
             // draws nothing when shut, so the cost is one early return.
             mSettingsDialog->width.set(mW); mSettingsDialog->height.set(mH);
             mSettingsDialog->advance(nowMs);
-            mSettingsDialog->renderOverlay(target);
+            mSettingsDialog->renderOverlay(target, rootTransform());
             const double a = mScreenFade.value();
             if (a > 0.001) drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
             target.restore();
@@ -743,19 +811,19 @@ namespace cosmo_v2
         }
 
         target.save();
-        target.setTransform(Transform::identity());
+        target.setTransform(rootTransform());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::background()));
         target.restore();
 
-        mRoot->render(target);
-        mRoot->renderOverlay(target);
+        mRoot->render(target, rootTransform());
+        mRoot->renderOverlay(target, rootTransform());
 
         // Cross-fade scrim when we just switched into the editor.
         const double a = mScreenFade.value();
         if (a > 0.001)
         {
             target.save();
-            target.setTransform(Transform::identity());
+            target.setTransform(rootTransform());
             drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(Color{palette::background().r, palette::background().g, palette::background().b, a}));
             target.restore();
         }
@@ -901,6 +969,7 @@ namespace cosmo_v2
         // R-SETTINGS-4. Applied before the first render so the app runs with what the
         // user last chose; the dialog then opens seeded with what is actually in force.
         mSettings = s;
+        setUiScale(s.uiScale);   // R-SCALE-1: before the first render, so nothing is laid out twice
         mSession.setPreviewEdge(s.previewEdge);
         mSession.setUseGpu(s.useGpu);   // no-op when no GPU backend exists (R-GPU-3)
         // The engine's thread count is deliberately NOT set here. It is a slice of the
@@ -915,7 +984,7 @@ namespace cosmo_v2
         // Seeded from the stored settings, never from the engine's live count: Auto
         // resolves to a real worker count (R-CPU-2b), so the resolved value would leave
         // the Auto chip reading as an explicit 4.
-        mSettingsDialog->show(mSettings.previewEdge, mSettings.threads, mSettings.cpuPercent,
+        mSettingsDialog->show(mUiScale, mSettings.previewEdge, mSettings.threads, mSettings.cpuPercent,
                               mSession.useGpu(), mSession.gpuAvailable());
     }
 
@@ -1200,7 +1269,7 @@ namespace cosmo_v2
                 const Rect thumb{cr.x, cr.y, cr.w, cr.w * 9.0 / 16.0};
                 mCover->x.set(thumb.x); mCover->y.set(thumb.y);
                 mCover->width.set(thumb.w); mCover->height.set(thumb.h);
-                mCover->render(target);
+                mCover->render(target, rootTransform());
                 const double coverA = mCoverFade.value() * alpha;
                 if (coverA < 0.999)  // fade the cover toward the backdrop (card fade + cover fade-in)
                 {
@@ -1259,7 +1328,7 @@ namespace cosmo_v2
 
             // Continuous dark backdrop (matches the editor bg, #1) so nothing flashes.
             target.save();
-            target.setTransform(Transform::identity());
+            target.setTransform(rootTransform());
             drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
             target.restore();
 
@@ -1270,7 +1339,7 @@ namespace cosmo_v2
                 if (fadeIn < 0.999)
                 {
                     target.save();
-                    target.setTransform(Transform::identity());
+                    target.setTransform(rootTransform());
                     Color s = kLoadingBg; s.a = 1.0 - fadeIn;
                     drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
                     target.restore();
@@ -1280,7 +1349,7 @@ namespace cosmo_v2
             // Loading elements fade OUT in place on top — no move (#5). While they
             // fade the editor is still mostly scrimmed, so they dissolve over dark.
             target.save();
-            target.setTransform(Transform::identity());
+            target.setTransform(rootTransform());
             if (fadeOut < 0.999)
             {
                 const double a = 1.0 - fadeOut;
@@ -1298,7 +1367,7 @@ namespace cosmo_v2
         // ── Part 1 (intro) + Part 2 (loading): gray star-sky backdrop ──
         const double intro = mIntro.value();
         target.save();
-        target.setTransform(Transform::identity());
+        target.setTransform(rootTransform());
         drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(kLoadingBg));
         mStars.draw(target, Rect{0, 0, mW, mH}, intro, nowMs);  // small specks fade in with the intro
 
@@ -1342,15 +1411,15 @@ namespace cosmo_v2
             mPhase = Phase::None;
             mHome->setWordmarkHidden(false);  // the flown copy has landed; hand off to the sidebar
             mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); mHome->advance(nowMs);
-            target.save(); target.setTransform(Transform::identity());
-            mHome->render(target); mHome->renderOverlay(target);
+            target.save(); target.setTransform(rootTransform());
+            mHome->render(target, rootTransform()); mHome->renderOverlay(target, rootTransform());
             target.restore();
             return;
         }
 
         const double p = mReturn.value();  // 1=top-bar .. 0=home
         target.save();
-        target.setTransform(Transform::identity());
+        target.setTransform(rootTransform());
 
         if (mPhase == Phase::ReturnExit)
         {
@@ -1358,7 +1427,7 @@ namespace cosmo_v2
             // fading OUT on top.
             const double out = 1.0 - mExitFade.value();
             mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); mHome->advance(nowMs);
-            mHome->render(target); mHome->renderOverlay(target);
+            mHome->render(target, rootTransform()); mHome->renderOverlay(target, rootTransform());
             Color s = kLoadingBg; s.a = out;
             drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
             mStars.draw(target, Rect{0, 0, mW, mH}, out, nowMs);
@@ -1371,7 +1440,7 @@ namespace cosmo_v2
             target.restore();
             renderEditor(target, nowMs);
             target.save();
-            target.setTransform(Transform::identity());
+            target.setTransform(rootTransform());
             Color s = kLoadingBg; s.a = in;
             drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(s));
             mStars.draw(target, Rect{0, 0, mW, mH}, in, nowMs);

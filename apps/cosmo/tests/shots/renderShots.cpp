@@ -576,6 +576,86 @@ namespace
         save(f, "editor-empty");
     }
 
+    /** R-SCALE: the shell at every offered scale, in the SMALLEST window each scale allows.
+     *
+     *  That window size is the point of the shot, not decoration. A scaled shell looks fine in
+     *  a big window at any scale; what can break is the smallest box the scale still permits,
+     *  because that is where three fixed columns and a floor-bound canvas have the least room
+     *  to disagree. So each shot is rendered at exactly `App::minPhysical*` for its scale —
+     *  the size GTK will refuse to go below (R-SCALE-3) — which makes these the frames that
+     *  prove the enforcement number is actually big enough.
+     *
+     *  Fixture-free (no project, no images), so this runs in ctest on any machine.
+     *
+     *  Both screens, because they have different minimums and only the larger one is enforced:
+     *  the launcher is the one whose blocks are anchored top and bottom, the editor is the one
+     *  whose middle column is squeezed between two fixed ones. */
+    void shotScales()
+    {
+        if (!wanted("scale-")) return;
+        for (int pct : AppSettings::uiScales())
+        {
+            setEnv("XDG_CONFIG_HOME", (gOpt.outdir / ("config-scale-" + std::to_string(pct))).string());
+            // Seed the scale the way the app does — through AppSettings, so the shot exercises
+            // applySettings rather than a back door only the harness has (D-15).
+            AppSettings s;
+            s.uiScale = pct;
+            Rig rig(1440, 900);
+            rig.app.applySettings(s);
+            rig.svc.applySettings(s);
+
+            const int w = (int)std::ceil(rig.app.minPhysicalWidth());
+            const int h = (int)std::ceil(rig.app.minPhysicalHeight());
+            rig.app.setSize((double)w, (double)h);
+
+            const std::string tag = "scale-" + std::to_string(pct);
+            {
+                Frame f(w, h);
+                rig.app.showHome();
+                rig.settle(f, 400.0);
+                save(f, tag + "-home-min");
+            }
+            {
+                Frame f(w, h);
+                rig.app.showEditor();
+                rig.settle(f, 1200.0);
+                save(f, tag + "-editor-min");
+            }
+            // The settings modal in the SMALLEST window this scale allows, because the dialog
+            // that sets the scale is the one place a scale must never make itself unreachable:
+            // five rows of chips at 125% in a 730x583 window is the tightest the card ever
+            // gets, and a Done button off the bottom edge would be a trap rather than a bug.
+            // Clicked through the sidebar link, not called, for the reason the home-settings
+            // shot documents — the path a user takes is the path worth proving.
+            {
+                // A FRESH rig, the way shotHomeRecents does it for the same shot: the one above
+                // has already been to the editor and back, and driving a click into a screen
+                // that has just cross-faded produced a frame byte-identical to the home shot —
+                // a modal that silently did not open, which is exactly the wrong-but-not-blank
+                // failure --check cannot see.
+                Rig r2(w, h);
+                r2.app.applySettings(s);
+                r2.svc.applySettings(s);
+                r2.app.setSize((double)w, (double)h);
+                Frame f(w, h);
+                r2.app.showHome();
+                r2.settle(f, 400.0);
+                const double sc = pct / 100.0;   // the link's logical rect, in physical px
+                r2.click(f, 150.0 * sc, ((double)h / sc - 137.0 + 16.0 + 9.0) * sc);
+                r2.settle(f, 500.0);
+                save(f, tag + "-settings-min");
+            }
+            // And the same scale in a normal window, so a reviewer can see what the setting
+            // is FOR rather than only how it behaves under pressure.
+            {
+                Frame f(1280, 800);
+                rig.app.setSize(1280.0, 800.0);
+                rig.settle(f, 400.0);
+                save(f, tag + "-editor-1280x800");
+            }
+        }
+    }
+
     /** The open transition, caught in the middle, with no project behind it. Deterministic
      *  by construction: the phases are driven from the shot clock, and `beginOpenTransition`
      *  starts them at the nowMs of the frame it was called on.
@@ -751,7 +831,9 @@ int main(int argc, char **argv)
     if (gOpt.list)
     {
         std::printf("home-empty  home-recents  home-settings  editor-empty\n"
-                    "loading-intro  loading-progress  loading-dissolve  loading-reveal  editor-project\n");
+                    "loading-intro  loading-progress  loading-dissolve  loading-reveal  editor-project\n"
+                    "scale-75-*  scale-90-*  scale-100-*  scale-125-*   (-home-min, -editor-min,\n"
+                    "                            -settings-min, -editor-1280x800)\n");
         return 0;
     }
 
@@ -779,6 +861,7 @@ int main(int argc, char **argv)
     shotHomeEmpty(sizes[0], sizes[1]);
     shotHomeRecents(sizes, images);
     shotEditorEmpty(sizes[0], sizes[1]);
+    shotScales();   // R-SCALE: every offered scale, at the smallest window it permits
     shotTransition(sizes[0], sizes[1], images);
     shotTransition(sizes[2], sizes[3], images);
     const int rc = shotEditorProject(sizes, images);

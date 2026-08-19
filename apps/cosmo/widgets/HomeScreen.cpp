@@ -41,6 +41,11 @@ namespace cosmo_v2
         constexpr double kBlockGap = 32.0;           // minimum air between actions and the links
         constexpr double gridTopConst() { return kHeaderH + 24.0; }
         constexpr double kSearchW = 168.0, kSearchH = 26.0;
+        /** The narrowest the search field may be squeezed to before the header gives up the
+         *  long title instead. Below ~72 px the glyph plus two or three characters is all that
+         *  is left, and a field you cannot read your own query in is not a field. */
+        constexpr double kSearchMinW = 72.0;
+        constexpr double kHeaderGap = 12.0;   // air between the title block and the field
         constexpr double kScrollGlideMs = 180.0;  // grid-scroll ease (R-G-1)
         /** Grid reflow when the column count changes. Longer than the scroll glide: a card
          *  moving AND resizing is a bigger change than the same card sliding, and reading it
@@ -177,7 +182,15 @@ namespace cosmo_v2
     {
         // Sidebar + the grid's left pad + one card at kMinCard + the right pad. Below this the
         // grid would have to render a card narrower than its own minimum.
-        return kSidebarW + kPad + kMinCard + kPad;
+        const double grid = kSidebarW + kPad + kMinCard + kPad;
+        // ...and the header row has its own floor: the SHORT title plus its air plus the
+        // field's floor. Summed rather than assumed to be smaller, so a future change to the
+        // sidebar or the title cannot silently make the header the binding constraint without
+        // the minimum moving with it.
+        const double header = kSidebarW + kPad + (20.0 + estimateTextWidth("Recent", 13.0) + 8.0
+                                                  + estimateTextWidth("00", 10.0))
+                            + kHeaderGap + kSearchMinW + kPad;
+        return std::max(grid, header);
     }
 
     double HomeScreen::minContentHeight()
@@ -194,9 +207,34 @@ namespace cosmo_v2
         return Rect{kPad, blockTop + kLinkFirstY + i * kLinkStride, kSidebarW - 2 * kPad, kLinkH};
     }
 
+    // ── the header row shares one line between a title and a field (R5/R6) ──────────────
+    // At the minimum window width the title ran straight under the search box: the field was
+    // pinned to the right at a fixed 168 px and the title was drawn from the left with no
+    // knowledge of it, so "Recent Projects" simply overlapped it. Two lines cannot both be
+    // fixed on one row. The title is the more important of the two, so it is measured first
+    // and the field takes what is left — and when even the floor does not fit, the title gives
+    // up its long form rather than the field disappearing.
+    std::string HomeScreen::headerTitle() const
+    {
+        const double room = width.value() - kPad - kSearchMinW - kHeaderGap - (contentX() + kPad);
+        return titleBlockW("Recent Projects") <= room ? "Recent Projects" : "Recent";
+    }
+
+    double HomeScreen::titleBlockW(const std::string &title) const
+    {
+        // Clock glyph + gap, the title, then the count — the same three pieces onPaint draws,
+        // measured with the same estimator it uses, because a box measured one way and drawn
+        // another is how the overlap got in.
+        return 20.0 + estimateTextWidth(title, 13.0) + 8.0
+             + estimateTextWidth(std::to_string(visibleCount()), 10.0);
+    }
+
     Rect HomeScreen::searchRect() const
     {
-        return Rect{width.value() - kPad - kSearchW, (kHeaderH - kSearchH) / 2, kSearchW, kSearchH};
+        const double titleEnd = contentX() + kPad + titleBlockW(headerTitle());
+        const double x = std::max(titleEnd + kHeaderGap, width.value() - kPad - kSearchW);
+        const double w = std::max(kSearchMinW, width.value() - kPad - x);
+        return Rect{x, (kHeaderH - kSearchH) / 2, w, kSearchH};
     }
 
     void HomeScreen::setRecents(const std::vector<CardInfo> &cards)
@@ -527,8 +565,9 @@ namespace cosmo_v2
         // ── right header ──
         iconClock(t, Rect{contentX() + kPad, kHeaderH / 2 - 6.5, 13.0, 13.0}, palette::mutedForeground(), 1.2);
         t.setFill(palette::foreground());
-        t.drawText("Recent Projects", contentX() + kPad + 20.0, kHeaderH / 2 + 4.0, 13.0, font::sansSemiBold());
-        const double titleW = estimateTextWidth("Recent Projects", 13.0);
+        const std::string title = headerTitle();
+        t.drawText(title, contentX() + kPad + 20.0, kHeaderH / 2 + 4.0, 13.0, font::sansSemiBold());
+        const double titleW = estimateTextWidth(title, 13.0);
         t.setFill(Color{palette::mutedForeground().r, palette::mutedForeground().g, palette::mutedForeground().b, 0.6});
         t.drawText(std::to_string(visibleCount()), contentX() + kPad + 20.0 + titleW + 8.0, kHeaderH / 2 + 4.0, 10.0, font::sans());
         // search chrome frame (the TextBox child draws itself); draw the search glyph

@@ -1,4 +1,5 @@
 #include "SettingsDialog.h"
+#include "../core/AppSettings.h"   // the ONE list of legal scales (R-SCALE-1)
 #include "TextMetrics.h"
 #include "../Theme.h"
 #include <string>
@@ -14,6 +15,10 @@ namespace cosmo_v2
     // R-CPU-3. 50 is the default and the reason the row exists; 100 is offered so a
     // machine that is doing nothing else can still be given fully to a big import.
     const std::vector<int> SettingsDialog::kCpuPercents{25, 50, 75, 100};
+    // Bound to the core list rather than copied: the scales that are persisted and snapped to
+    // are the scales that may be offered, and two lists would drift into a chip that loads back
+    // as something else (R-SCALE-1).
+    const std::vector<int> &SettingsDialog::kScales = cosmo::AppSettings::uiScales();
 
     namespace
     {
@@ -33,6 +38,7 @@ namespace cosmo_v2
         inline Color fade(Color c, double a) { return Color{c.r, c.g, c.b, c.a * a}; }
 
         std::string edgeLabel(int i) { return i == 0 ? "Draft" : i == 1 ? "Standard" : "High"; }
+        std::string scaleLabel(int v) { return std::to_string(v) + "%"; }
         std::string threadLabel(int v) { return v == 0 ? "Auto" : std::to_string(v); }
         std::string cpuLabel(int v) { return std::to_string(v) + "%"; }
         std::string gpuLabel(int i) { return i == 0 ? "Off" : "On"; }
@@ -44,16 +50,19 @@ namespace cosmo_v2
     // after the first in a row.
     std::string SettingsDialog::chipLabel(int row, int i)
     {
-        return row == 0 ? edgeLabel(i)
-             : row == 1 ? threadLabel(kThreads[i])
-             : row == 2 ? cpuLabel(kCpuPercents[i])
-                        : gpuLabel(i);
+        return row == kRowScale   ? scaleLabel(kScales[i])
+             : row == kRowQuality ? edgeLabel(i)
+             : row == kRowThreads ? threadLabel(kThreads[i])
+             : row == kRowCpu     ? cpuLabel(kCpuPercents[i])
+                                  : gpuLabel(i);
     }
 
     SettingsDialog::SettingsDialog(const Color &accent) : mAccent(accent) {}
 
-    void SettingsDialog::show(int previewEdge, int threads, int cpuPercent, bool useGpu, bool gpuAvailable)
+    void SettingsDialog::show(int uiScale, int previewEdge, int threads, int cpuPercent,
+                              bool useGpu, bool gpuAvailable)
     {
+        mUiScale = cosmo::AppSettings::clampUiScale(uiScale);
         mEdge = previewEdge; mThreadCount = threads; mCpuPercent = cpuPercent;
         mGpuAvailable = gpuAvailable; mUseGpu = useGpu && gpuAvailable;
         mOpen = true; mClosing = false;
@@ -141,9 +150,10 @@ namespace cosmo_v2
             for (int i = 0; i < (int)chips.size(); ++i)
                 if (chips[i].contains(p))
                 {
-                    if (row == 0) { mEdge = kEdges[i]; if (onPreviewEdge) onPreviewEdge(mEdge); }
-                    else if (row == 1) { mThreadCount = kThreads[i]; if (onThreads) onThreads(mThreadCount); }
-                    else if (row == 2) { mCpuPercent = kCpuPercents[i]; if (onCpuPercent) onCpuPercent(mCpuPercent); }
+                    if (row == kRowScale) { mUiScale = kScales[i]; if (onUiScale) onUiScale(mUiScale); }
+                    else if (row == kRowQuality) { mEdge = kEdges[i]; if (onPreviewEdge) onPreviewEdge(mEdge); }
+                    else if (row == kRowThreads) { mThreadCount = kThreads[i]; if (onThreads) onThreads(mThreadCount); }
+                    else if (row == kRowCpu) { mCpuPercent = kCpuPercents[i]; if (onCpuPercent) onCpuPercent(mCpuPercent); }
                     else  // GPU row: chip 0 = Off, chip 1 = On (On is inert with no backend)
                     {
                         if (i == 1 && !mGpuAvailable) return true;
@@ -169,7 +179,8 @@ namespace cosmo_v2
         t.setFill(fade(palette::foreground(), a));
         t.drawText("Settings", c.x + kPad, c.y + kPad + 16.0, 14.0, font::sansSemiBold());
 
-        const char *rowLabels[kRows] = {"Preview quality", "CPU threads", "CPU limit", "GPU acceleration"};
+        const char *rowLabels[kRows] = {"Screen scale", "Preview quality", "CPU threads",
+                                        "CPU limit", "GPU acceleration"};
         for (int row = 0; row < kRows; ++row)
         {
             const double ly = blockTop(c, row);
@@ -177,8 +188,11 @@ namespace cosmo_v2
             std::string rowLbl = rowLabels[row];
             // Middot suffixes. "Auto uses this" is why the two CPU rows sit together:
             // without it the Auto chip above reads as if it still meant every core (R-CPU-2).
-            if (row == 2) rowLbl += "  \xc2\xb7  Auto uses this";
-            if (row == 3 && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";
+            // Middot suffixes name the consequence, because neither row's effect is where the
+            // user is looking: the scale changes the WINDOW's minimum, not just the type size.
+            if (row == kRowScale) rowLbl += "  \xc2\xb7  smaller fits more";
+            if (row == kRowCpu) rowLbl += "  \xc2\xb7  Auto uses this";
+            if (row == kRowGpu && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";
             t.drawText(rowLbl, c.x + kPad, ly + 12.0, 11.0, font::sansMedium(), 0.06 * 11.0);
 
             std::vector<Rect> chips;
@@ -186,11 +200,12 @@ namespace cosmo_v2
             const int n = rowChipCount(row);
             for (int i = 0; i < n; ++i)
             {
-                const bool sel = row == 0 ? (kEdges[i] == mEdge)
-                               : row == 1 ? (kThreads[i] == mThreadCount)
-                               : row == 2 ? (kCpuPercents[i] == mCpuPercent)
-                                          : ((i == 1) == mUseGpu);
-                const bool disabled = (row == 3 && i == 1 && !mGpuAvailable);  // "On" with no backend
+                const bool sel = row == kRowScale   ? (kScales[i] == mUiScale)
+                               : row == kRowQuality ? (kEdges[i] == mEdge)
+                               : row == kRowThreads ? (kThreads[i] == mThreadCount)
+                               : row == kRowCpu     ? (kCpuPercents[i] == mCpuPercent)
+                                                    : ((i == 1) == mUseGpu);
+                const bool disabled = (row == kRowGpu && i == 1 && !mGpuAvailable);  // "On", no backend
                 const double da = disabled ? 0.4 : 1.0;
                 const std::string lbl = chipLabel(row, i);
                 drawRoundedRect(t, chips[i], radius::control(),

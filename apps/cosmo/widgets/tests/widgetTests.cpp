@@ -56,6 +56,12 @@ namespace
         using HomeScreen::handleGesture;
         using HomeScreen::bottomLinkRect;
         using HomeScreen::actionRect;   // for the min-height assertion
+        using HomeScreen::searchRect;   // for the header-row assertion (R-SCALE-3 / R5)
+        using HomeScreen::headerTitle;
+        using HomeScreen::titleBlockW;
+        /** Where the title block ends, drawn the way onPaint draws it: content edge + pad +
+         *  the glyph/title/count block. */
+        double titleEndX() const { return contentX() + 32.0 + titleBlockW(headerTitle()); }
         /** R-G-1 needs both halves visible to a test: where a card is being drawn NOW versus
          *  where the layout wants it. If only the target were readable, an implementation that
          *  snapped would be indistinguishable from one that eases. */
@@ -906,6 +912,51 @@ namespace
               "and it is close below the minimum, so the minimum is tight rather than generous");
     }
 
+    // R-SCALE-3 / R5: the header row shares ONE line between the "Recent Projects" title and
+    // the search field. Both used to be positioned independently — the field pinned right at a
+    // fixed 168 px, the title drawn from the left knowing nothing about it — so at the minimum
+    // window width the title ran straight under the box. Found by rendering the launcher at
+    // App::minPhysical* for each screen scale, which is the smallest window the shell now
+    // permits and therefore the frame where a fixed-plus-fixed row shows itself.
+    //
+    // Swept rather than spot-checked at the minimum: the failure is a threshold, and the whole
+    // point is that no width between the minimum and a large window has an overlap.
+    void homeHeaderTitleNeverRunsUnderTheSearchField()
+    {
+        std::printf("HomeScreen: the header title and the search field never overlap (R5)\n");
+        // One `check` per property for the WHOLE sweep, not per width: 1600 identical [ok]
+        // lines bury every other test in the suite, and the interesting number is the width
+        // that failed, which a counter can carry out of the loop.
+        bool sawLong = false, sawShort = false, sawShrunkField = false;
+        double overlapAt = -1.0, spillAt = -1.0, squeezeAt = -1.0;
+        for (double w = HomeScreen::minContentWidth(); w <= 2200.0; w += 1.0)
+        {
+            auto home = makeHome(w, 900.0);
+            const artboard::Rect sr = home->searchRect();
+            const double titleEnd = home->titleEndX();
+            if (titleEnd > sr.x && overlapAt < 0) overlapAt = w;
+            if (sr.x + sr.w > w - 32.0 + 0.01 && spillAt < 0) spillAt = w;
+            if (sr.w < 72.0 && squeezeAt < 0) squeezeAt = w;
+            if (home->headerTitle() == "Recent Projects") sawLong = true; else sawShort = true;
+            if (sr.w < 168.0) sawShrunkField = true;
+        }
+        check(overlapAt < 0, "the title block ends before the search field at every width");
+        check(spillAt < 0, "and the field stays inside the right pad at every width");
+        check(squeezeAt < 0, "and is never squeezed below its readable floor");
+        // All three responses must actually happen somewhere in the range, or the test is
+        // passing because one of them is unreachable rather than because it works.
+        check(sawLong, "a wide window shows the full title");
+        check(sawShort, "and the narrowest one falls back to the short title");
+        check(sawShrunkField, "and somewhere between, the field gives up width rather than overlap");
+
+        // The minimum width must be big enough for the header's own floor, not only for one
+        // card — the two constraints are summed independently in minContentWidth so that a
+        // future sidebar or title change moves the minimum instead of breaking the row.
+        auto atMin = makeHome(HomeScreen::minContentWidth(), 900.0);
+        check(atMin->searchRect().x >= atMin->titleEndX(),
+              "the published minimum width fits the header row");
+    }
+
     // ── R-MASK-5: a mask may be sized and moved OUTSIDE the framed image ──────────────
     // Reported as "when I edit the width and height it limits at the image border". The cause
     // was a clamp to 0..1 in the overlay's localToNorm, which turned normalised framed-image
@@ -1030,6 +1081,7 @@ int main()
     maskRadiusStaysPositive();
     homeGridReflowIsAnimated();
     homeMinimumHeightClearsBothAnchoredBlocks();
+    homeHeaderTitleNeverRunsUnderTheSearchField();
     homeReservedLinksStaySilentButSwallowTheClick();
     homeSettingsLinkIsReachableAtASmallWindow();
 

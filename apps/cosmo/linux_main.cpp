@@ -548,6 +548,8 @@ namespace
     // This adapter is precisely why App keeps its animation while its logic leaves: R-G-1
     // lives in the view, and the service never learns what an eased property is. It says a
     // load is 6 of 18; the bar decides how to get there.
+    void applyWindowMinimum(Host *a);   // defined below; the scale bridge needs it (R-SCALE-3)
+
     void onServiceEvent(Host *a, const arstro::cosmo::Event &e)
     {
         using K = arstro::cosmo::Event::Kind;
@@ -557,6 +559,22 @@ namespace
 
         switch (e.kind)
         {
+            // R-SCALE-2: the scale is the one setting the service carries without acting on
+            // it, so SOMEBODY has to hand it to the view — and it is the host, because the
+            // host is what owns a view at all. Without this bridge `settings set uiScale=125`
+            // over the control socket would change the stored value, print it in a dump, and
+            // leave the window it is supposedly scaling untouched — a command that lies to a
+            // script is worse than a command that does not exist (R-SVC-8).
+            case K::SettingsChanged:
+                if (a->svc.model().settings.uiScale != a->app.uiScale())
+                {
+                    a->settings.uiScale = a->svc.model().settings.uiScale;
+                    a->app.setUiScale(a->settings.uiScale);
+                    applyWindowMinimum(a);
+                    if (a->area) gtk_widget_queue_draw(a->area);
+                }
+                break;
+
             case K::ProjectOpening:
                 // Emitted BEFORE the session is reset, and that ordering is load-bearing:
                 // App::resetWorkspace clears the visible state (thumb pool, last frame), so
@@ -970,12 +988,41 @@ namespace
         auto *a = static_cast<Host *>(user);
         if (!a->splash) return FALSE;
         a->splashTarget.setContext(cr);
-        a->splash->render(a->splashTarget);
-        a->splash->renderOverlay(a->splashTarget);
+        // R-SCALE-2: the splash is chrome like the rest of the shell, so it is drawn at the
+        // same scale. Its Segment keeps its design size (420x260 logical) and the window is
+        // sized to match in showSplash — the alternative, laying the splash out at a scaled
+        // size, would mean a second set of metrics for one window.
+        const double s = a->settings.uiScale / 100.0;
+        const artboard::Transform root = artboard::Transform::scaling(s, s);
+        a->splash->render(a->splashTarget, root);
+        a->splash->renderOverlay(a->splashTarget, root);
         return FALSE;
     }
 
     void showMainWindow(Host *a);
+    /** R-SCALE-3: the window may not be made smaller than the shell can be laid out in, AT
+     *  THE SCALE IN FORCE. This is the whole enforcement mechanism — the layout code itself
+     *  does not have to cope with an impossible box, because GTK will not hand it one.
+     *
+     *  The minimum is ASKED FOR, not guessed, and it is the app's, not the launcher's. The
+     *  home screen sums its own anchored blocks (its action buttons pin to the top and the
+     *  Settings / What's New / Help links to the bottom, so at 400 px they overlapped); the
+     *  EDITOR's minimum is larger and had never been computed at all, which is how the photo
+     *  canvas could be dragged down to 64 px with the rail still open. App::minLogical* takes
+     *  the larger of the two, and multiplying by the scale is what makes a bigger scale
+     *  require a bigger window instead of quietly breaking the layout.
+     *
+     *  Called again on every scale change: a size request is not a one-time hint. */
+    void applyWindowMinimum(Host *a)
+    {
+        if (!a->area) return;
+        const int minW = (int)std::ceil(a->app.minPhysicalWidth());
+        const int minH = (int)std::ceil(a->app.minPhysicalHeight());
+        gtk_widget_set_size_request(a->area, minW, minH);
+        LOGI("window: minimum %dx%d physical = %.0fx%.0f logical at %d%% scale (R-SCALE-3)",
+             minW, minH, App::minLogicalWidth(), App::minLogicalHeight(), a->app.uiScale());
+    }
+
     gboolean onTick(gpointer user);
     void pollControl(Host *a);   // defined below; the splash tick needs it too (R-SVC-8)
 
@@ -1068,9 +1115,12 @@ namespace
         gtk_window_set_resizable(GTK_WINDOW(a->splashWindow), FALSE);
         gtk_window_set_position(GTK_WINDOW(a->splashWindow), GTK_WIN_POS_CENTER);
         gtk_window_set_type_hint(GTK_WINDOW(a->splashWindow), GDK_WINDOW_TYPE_HINT_SPLASHSCREEN);
-        gtk_window_set_default_size(GTK_WINDOW(a->splashWindow),
-                                    (int)arstro::cosmo_v2::SplashScreen::kWidth,
-                                    (int)arstro::cosmo_v2::SplashScreen::kHeight);
+        {
+            const double s = a->settings.uiScale / 100.0;
+            gtk_window_set_default_size(GTK_WINDOW(a->splashWindow),
+                                        (int)std::ceil(arstro::cosmo_v2::SplashScreen::kWidth * s),
+                                        (int)std::ceil(arstro::cosmo_v2::SplashScreen::kHeight * s));
+        }
         a->splashArea = gtk_drawing_area_new();
         g_signal_connect(a->splashArea, "draw", G_CALLBACK(onSplashDraw), a);
         gtk_container_add(GTK_CONTAINER(a->splashWindow), a->splashArea);
@@ -1402,6 +1452,11 @@ int main(int argc, char **argv)
          host.budget.engineThreads(), host.budget.decodeWorkers());
     host.app.onSettingsChanged = [&host](arstro::cosmo::AppSettings s) {
         host.settings = s;
+        // R-SCALE-3: re-ask for the minimum at the new scale, and let GTK grow the window if
+        // the current size no longer satisfies it. Without this, choosing 125% in a window
+        // that only just met the 100% minimum would leave the shell laid out in a box smaller
+        // than its own floor, and setSize's clamp would crop it rather than reflow it.
+        applyWindowMinimum(&host);
         host.budget.setPercent(s.cpuPercent);              // R-CPU-3: next load, next render
         host.budget.setExplicitEngineThreads(s.threads);   // R-CPU-2b: an explicit count still wins
         if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
@@ -1474,12 +1529,7 @@ int main(int argc, char **argv)
     // action buttons are pinned to the top and the Settings / What's New / Help links to the
     // bottom — so at 400 px they overlapped, and a hardcoded number here could never notice the
     // layout changing. `+ 1` on the width is the sidebar plus one card at its minimum.
-    {
-        const int minW = (int)std::ceil(arstro::cosmo_v2::HomeScreen::minContentWidth());
-        const int minH = (int)std::ceil(arstro::cosmo_v2::HomeScreen::minContentHeight());
-        gtk_widget_set_size_request(host.area, minW, minH);
-        LOGI("window: minimum %dx%d, summed from the home layout (R-G-1 / R-HOME)", minW, minH);
-    }
+    applyWindowMinimum(&host);
     gtk_widget_set_can_focus(host.area, TRUE);
     gtk_widget_add_events(host.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
