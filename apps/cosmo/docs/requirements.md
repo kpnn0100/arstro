@@ -957,6 +957,41 @@ the widths either side) and asserts one verdict per property rather than one per
 requires that all three responses — long title, short title, shrunken field — actually occur
 somewhere in the range, so the test cannot pass because a branch is unreachable.
 
+### DR-SVC-5a Refresh before you emit (R-SVC-5, D-34)
+**Invariant: `refreshModel()` runs before every `emit()`.** A listener reads `model()` from inside
+the callback — the GTK host re-seeds the right column from it on `ParamsChanged` — so an event
+delivered against a stale model hands the view the value it has just replaced. `applySetFields` was
+one of three sites that emitted first (`applySettingsFields` and the export finish were the others,
+latent because both write straight into `mModel`); every other handler in the file already had the
+order right. Now all of them do, and the `Set` case no longer refreshes a second time, so one place
+owns the ordering.
+
+This is **D-13 one step on**: that one was *announce before mutating* (the view cleared state the
+load was about to fill); this one is *refresh before announcing*. Both reduce to: an event and the
+state it describes must be consistent at the instant it is delivered.
+
+Guarded by `an_event_sees_the_model_it_describes`, which asserts the invariant from **inside** the
+handler — the only place it can be observed, since every after-the-fact check of the model passes on
+the broken code.
+
+### DR-UI-LOG-1 The widget layer has a trace, and the host owns the sink (§7)
+Widgets cannot include `Log.h`: it is a host facility (OS I/O, GLib, `ProjectStore` for the default
+path) and `cosmo_widget_tests` deliberately links neither GTK nor `cosmo_core`. So
+`widgets/WidgetLog.h` declares a sink — one function pointer, one level, one category — and
+`linux_main.cpp` installs a lambda forwarding to `CLOGD(Ui, …)`. `WLOG(...)` checks the pointer
+before formatting, so a run without `--debug` pays one load and a branch. `cosmo_widget_tests`
+compiles `WidgetLog.cpp` (no dependencies) and leaves the sink null.
+
+`App::pointer` logs every gesture with its **logical** point and the UI scale (`[input]`), which is
+§7's headline line: a press whose coordinates are not what the reporter thinks answers most
+dead-control reports, and the scale makes a mis-scaled coordinate obvious. `CurvePanel` traces its
+whole decision chain — gesture in, hit-test result with the distance to the node it grabbed, the
+grab offset, each drag's raw and grab-corrected pointer, what it emits, and **what is pushed back
+into it** by `setCurves` / `setReferenceCurves`. That last pair is what found D-34: the panel being
+re-seeded is invisible from outside, and it is where an edit can be destroyed.
+
+Run it with `COSMO_LOG_LEVEL=debug COSMO_LOG_CATEGORIES=ui,input` or `--debug`.
+
 ### DR-SVC-2c The dump prints BOTH the effective and the own params (R-SVC-9)
 `state print --params` prints `params:` — `AppModel::params`, the **effective** value the engine
 renders — and now also `ownParams:` — `AppModel::ownParams`, what the panels edit and what `set`

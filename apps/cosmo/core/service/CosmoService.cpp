@@ -351,6 +351,13 @@ namespace cosmo
 
         std::string names;
         for (const auto &kv : c.fields) { if (!names.empty()) names += ","; names += kv.first; }
+        // REFRESH BEFORE EMIT, and this is the one line the whole of D-34 was: a listener reads
+        // the model *during* the event, and every other handler in this file already refreshes
+        // first. Emitting first meant a `set` from the view was answered by the view being
+        // re-seeded from the PRE-EDIT model — the widget's own edit thrown away and replaced by
+        // the value it had just changed. Same family as D-13 (announce before mutating): an
+        // event and the state it describes have to be consistent at the moment it is delivered.
+        refreshModel();
         emit(Event::Kind::ParamsChanged, names);
         return true;
     }
@@ -376,8 +383,8 @@ namespace cosmo
         }
         std::string tail;
         for (const auto &kv : c.fields) { if (!tail.empty()) tail += " "; tail += kv.first + "=" + kv.second; }
+        refreshModel();                       // D-34: before the emit, like every other handler
         emit(Event::Kind::SettingsChanged, tail);
-        refreshModel();
         return true;
     }
 
@@ -421,8 +428,8 @@ namespace cosmo
         }
         mModel.exports.active = false;
         mModel.exports.failures = failures;
+        refreshModel();                       // D-34: before the emit
         emit(Event::Kind::ExportFinished, std::string(), written, failures);
-        refreshModel();
         return failures == 0;
     }
 
@@ -529,7 +536,9 @@ namespace cosmo
                 return true;
             }
 
-            case Command::Kind::Set: { const bool ok = applySetFields(c); refreshModel(); return ok; }
+            // applySetFields refreshes before it emits (D-34); refreshing again here would be
+            // harmless but would leave two places deciding the order.
+            case Command::Kind::Set: return applySetFields(c);
 
             case Command::Kind::Bypass:
                 mSession.setBypassed(c.index, c.flag);

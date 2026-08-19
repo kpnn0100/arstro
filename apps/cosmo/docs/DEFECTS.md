@@ -19,29 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-33 — The right column does not resync when the model changes underneath it
-- **Area:** design · **Status:** **Open** · **Severity:** S3
-- **Found:** 2026-08-19, while diagnosing D-32: after `settings set`-style socket traffic —
-  specifically `set curve=0,0;0.5,0.55;1,1` over the control socket — `state print --params` showed
-  `ownParams` with three curve points while `ui dump` showed the panel holding `pts=2`.
-- **Reproduce:**
-  ```bash
-  printf 'select 1\nset curve=0,0;0.5,0.55;1,1\nwait 400\nstate print --params\nui dump --root editor\n' \
-    | cosmo-cc attach /tmp/c.sock --script -
-  # ownParams: curve=0,0;0.5,0.55;1,1     but     · channel=0 pts=2 ...
-  ```
-- **Judgement:** defect, low severity in the GUI and real for scripted driving. `RightColumn::
-  syncToSlot` runs from `App::syncControlsToSlot`, which every UI action that changes params calls —
-  so in pure GUI use the panel is the ORIGIN of the edit and cannot be stale. Nothing calls it in
-  response to a service `ParamsChanged`, so a command arriving over the socket (R-SVC-8) updates the
-  model and leaves the view showing the old value. It also means a widget that then emits would send
-  its stale copy back.
-- **Recommendation:** have the host call `App::syncControlsToSlot()` on `Event::Kind::ParamsChanged`
-  when the change did not originate in the view — the same shape as the `SettingsChanged` bridge
-  added for R-SCALE-2. Needs a guard against the feedback loop (a view edit emits `set`, which emits
-  `ParamsChanged`, which would re-push into the view mid-drag), which is why it is filed rather than
-  fixed alongside D-32. Not applied.
-
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
 - **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
 - **Found:** 2026-08-18, reported by the user: "loading 1 image takes too long … hard to track the
@@ -133,6 +110,43 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-34 — An edit was answered by the view being handed back the value it had just replaced
+- **Area:** core (service event ordering) · **Status:** **Fixed** · **Severity:** S1 (silent data loss)
+- **Found:** 2026-08-19. The user had reported the curve symptom three times — D-28, D-31, D-32 —
+  and after the third fix said *"add more debug log i will click for you it still happen."* The UI
+  logging that request produced (§7, `WidgetLog`) named the cause on the very first click:
+  ```
+  [ui] curve: dblclick ADDS node at 0.500,0.500
+  [ui] curve: EMIT ch=0 [3] 0.000,0.000 0.500,0.500 1.000,1.000
+  [ui] curve: setCurves REPLACES master [3] 0.000,0.000 0.500,0.500 1.000,1.000 -> [2] 0.000,0.000 1.000,1.000
+  [ui] curve: setReference master [3] 0.000,0.000 0.500,0.500 1.000,1.000
+  ```
+  The edit is added, emitted, and then **thrown off the edited curve and onto the readout**. That is
+  the whole of "it will select the green curve and it switch to that curve", in four lines.
+- **Expected:** an edit stays where it was made.
+- **Actual:** `applySetFields` emitted `ParamsChanged` and left `refreshModel()` to its caller, so
+  `mModel` still held the **pre-edit** value while the event was being delivered. The GTK host
+  re-seeds the right column from the model on that event, so the panel was handed back the curve it
+  had just replaced — and the green "final" readout, which is fed from a value read *after* dispatch
+  returns, showed the new one. The user's edit visibly jumped from the blue curve to the green line.
+- **Judgement:** defect, and the most serious of the four: silent loss of an edit. Every other
+  handler in `CosmoService.cpp` already refreshed before emitting — `bypass`, `group new`,
+  `ungroup`, `rename`, `delete`, `mask set`, `mask delete`, `select`, `save`, `close`. `set` was one
+  of three that did not (`settings set` and the export finish were the others, latent because both
+  write straight into `mModel`). Same family as **D-13**, one step further on: announce before
+  mutating, and refresh before announcing — an event and the state it describes have to be
+  consistent at the moment it is delivered, because a listener reads the model *during* the callback.
+- **Fix:** `refreshModel()` moved before `emit()` at all three sites, and the caller's duplicate
+  refresh for `Set` removed so one place owns the order.
+- **Verified:** the same edit driven again shows `setCurves REPLACES [2] identity -> [3] …` — the
+  panel now receives the new curve — and the panel and the model agree at `pts=3`.
+- **Guarded by:** `an_event_sees_the_model_it_describes`, which asserts from **inside** the event
+  handler that `ownParams` and `params` already hold the new value. That is the only place the bug
+  exists: every after-the-fact check of the model passes on the broken code, which is why three
+  rounds of widget-level fixes never touched it. Confirmed to fail on the old ordering.
+- **Also closes D-33** (the right column not resyncing after a socket-driven `set`), which was the
+  same root cause seen from the scripted side and was filed as a separate open item.
 
 ### D-32 — A node grabbed near the pointer teleported to it, so the curve snapped onto the readout
 - **Area:** design (widget interaction) · **Status:** **Fixed** · **Severity:** S2

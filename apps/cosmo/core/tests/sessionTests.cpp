@@ -1030,6 +1030,57 @@ namespace
     // R-SVC-2: editing, selecting, grouping, undo and bypass are all reachable as commands,
     // and each one actually changes the model. A behaviour a front end can reach that no
     // command expresses is a defect in the command set, so this is the coverage check.
+    // D-34: an Event and the model it describes must be CONSISTENT when the event is
+    // delivered, because a listener reads the model during the callback.
+    //
+    // `applySetFields` emitted ParamsChanged and left the refresh to its caller, so a
+    // subscriber that read the model from the handler saw the PRE-EDIT value. The GUI does
+    // exactly that — the host re-seeds the right column from the model on ParamsChanged — so a
+    // curve edit was answered by the panel being handed back the curve it had just replaced.
+    // The user saw their edit vanish from the curve they were drawing and reappear on the faint
+    // "final" readout beside it, because that one is fed from a value read after dispatch
+    // returned. Same family as D-13: announce before mutating, refresh before announcing.
+    //
+    // Asserted from INSIDE the handler, which is the only place the bug exists — every
+    // after-the-fact check of the model passes on the broken code.
+    void test_an_event_sees_the_model_it_describes()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_evt_order.cmp";
+        writeFakeProject(path, 2, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        int seen = 0;
+        bool ownStale = false, effStale = false;
+        svc.subscribe([&](const Event &e) {
+            if (e.kind != Event::Kind::ParamsChanged) return;
+            ++seen;
+            // Both halves of the model, because the view reads own (what it edits) and
+            // effective (what it draws behind) and a stale either is a wrong frame.
+            if (std::fabs(svc.model().ownParams.exposure - 2.5f) > 1e-4f) ownStale = true;
+            if (std::fabs(svc.model().params.exposure - 2.5f) > 1e-4f) effStale = true;
+        });
+
+        assert(svc.dispatchText("set exposure=2.5", err) && err.empty());
+        assert(seen == 1 && "the edit emitted exactly one ParamsChanged");
+        assert(!ownStale && "ownParams already holds the new value when the event is delivered");
+        assert(!effStale && "and so does the effective params block");
+
+        // The same for a mask edit, which takes a different path to the same emit.
+        ownStale = effStale = false; seen = 0;
+        assert(svc.dispatchText("set contrast=30", err) && err.empty());
+        assert(seen == 1 && !ownStale && !effStale && "and for any other field");
+
+        std::filesystem::remove(path);
+        printf("[PASS] an_event_sees_the_model_it_describes\n");
+    }
+
     void test_commands_drive_the_session()
     {
         using namespace arstro::cosmo;
@@ -1476,6 +1527,7 @@ int main()
     test_finish_workspace_load_keeps_an_existing_selection();
     test_pending_images_appear_then_attach();
     test_selecting_a_pending_image_keeps_the_stage();
+    test_an_event_sees_the_model_it_describes();
     test_settings_roundtrip_and_survive_a_bad_file();
     test_cpu_budget_scales_with_percent();
     test_one_budget_is_divided_not_duplicated();
