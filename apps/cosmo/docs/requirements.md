@@ -951,6 +951,18 @@ the widths either side) and asserts one verdict per property rather than one per
 requires that all three responses — long title, short title, shrunken field — actually occur
 somewhere in the range, so the test cannot pass because a branch is unreachable.
 
+### DR-SVC-2c The dump prints BOTH the effective and the own params (R-SVC-9)
+`state print --params` prints `params:` — `AppModel::params`, the **effective** value the engine
+renders — and now also `ownParams:` — `AppModel::ownParams`, what the panels edit and what `set`
+writes — whenever the two differ (with no ancestor groups they are equal and a second identical
+block is noise).
+
+Printing only the effective one is how a whole family of defects hid. D-28, D-31 and D-32 all turn
+on the own-vs-effective distinction, and every one of them had to be diagnosed by hand-reasoning
+about which of the two a number was, because the dump could not say: a 33-point curve in a dump next
+to a panel reporting `pts=2` looks like a contradiction until you know one is a composition of the
+other. `hasEditTarget` gates it, so a dump with nothing selected does not invent an empty block.
+
 ### DR-SCALE-1 `AppSettings::uiScale` — the persisted screen scale (R-SCALE-1)
 `int uiScale = 100`, percent, in `core/AppSettings.h` beside the four engine preferences. Percent
 rather than a double because `settings.txt` is plain `key=value` text a person may edit and "90"

@@ -127,9 +127,27 @@ namespace cosmo
 
         if (o.params)
         {
-            const std::string ser = serializeParams(m.params);
-            if (j) s << ",\n  \"params\": \"" << jsonEscape(ser) << "\"";
-            else s << "params:\n" << ser;
+            // BOTH, and always labelled: `params` is the EFFECTIVE value the engine renders
+            // (the edit target's own, with every ancestor group's stacked on top) and
+            // `ownParams` is what the panels edit and what `set` writes. Printing only the
+            // effective one is how three separate defects hid — D-28, D-31 and the "the curve
+            // switched to the green one" report all turn on exactly this distinction, and every
+            // one of them was diagnosed by hand-reasoning about which of the two a value was,
+            // because a dump could not say. `ownParams` is emitted only when it DIFFERS: with
+            // no groups the two are equal and a second identical block is noise.
+            const std::string eff = serializeParams(m.params);
+            const std::string own = m.hasEditTarget ? serializeParams(m.ownParams) : std::string();
+            if (j)
+            {
+                s << ",\n  \"params\": \"" << jsonEscape(eff) << "\"";
+                if (!own.empty() && own != eff)
+                    s << ",\n  \"ownParams\": \"" << jsonEscape(own) << "\"";
+            }
+            else
+            {
+                s << "params:\n" << eff;
+                if (!own.empty() && own != eff) s << "ownParams:\n" << own;
+            }
         }
         if (j) s << "\n}\n";
         // Every scalar key emits its own trailing comma, and `"nodes"` always follows at
