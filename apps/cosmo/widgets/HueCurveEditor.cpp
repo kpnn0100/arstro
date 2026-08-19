@@ -110,6 +110,7 @@ namespace cosmo_v2
         }
         if (g.type == T::Down)
         {
+            mPressed = true;   // D-31: the readout steps aside for the whole gesture
             int idx, kind;
             if (handleAt(local, idx, kind)) { mDragIdx = idx; mDragKind = kind; return true; }
             const int p = pointAt(local);
@@ -142,17 +143,23 @@ namespace cosmo_v2
             emit();
             return true;
         }
-        if (g.type == T::Up || g.type == T::Drop) mDragIdx = -1;
+        if (g.type == T::Up || g.type == T::Drop)
+        {
+            mDragIdx = -1;
+            mPressed = false;
+            mRevealAtMs = mNowMs + kRefHoldMs;   // D-31: wait out a possible second click
+        }
         return Segment::handleGesture(g, local);
     }
 
     void HueCurveEditor::advance(double nowMs)
     {
-        const double want = referenceWanted() ? 1.0 : 0.0;
+        mNowMs = nowMs;
+        const double want = referenceVisible(nowMs) ? 1.0 : 0.0;
         if (want != mRefTarget)
         {
             mRefTarget = want;
-            mRefFade.animateTo(want, 180.0, Easing::EaseOutCubic, nowMs);
+            mRefFade.animateTo(want, want > 0.5 ? 180.0 : 110.0, Easing::EaseOutCubic, nowMs);
         }
         if (want > 0.5) mRefShown = mReference;
         mRefFade.update(nowMs);

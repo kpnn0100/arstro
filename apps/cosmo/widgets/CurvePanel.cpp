@@ -89,13 +89,23 @@ namespace cosmo_v2
         return ref.size() >= 2 && ref != active();
     }
 
+    bool CurvePanel::referenceVisible(double nowMs) const
+    {
+        // D-31: shown only when nothing is being aimed inside the plot. `mRevealAtMs` holds it
+        // away for a moment after release so a double-click's two presses read as one gesture.
+        return referenceWanted() && !mPressed && nowMs >= mRevealAtMs;
+    }
+
     void CurvePanel::advance(double nowMs)
     {
-        const double want = referenceWanted() ? 1.0 : 0.0;
+        mNowMs = nowMs;
+        const double want = referenceVisible(nowMs) ? 1.0 : 0.0;
         if (want != mRefTarget)
         {
             mRefTarget = want;
-            mRefFade.animateTo(want, 180.0, Easing::EaseOutCubic, nowMs);
+            // Out faster than in: getting out of the way should feel immediate, coming back
+            // should not startle. Both eased, both collapse under reducedMotion() (R-G-1).
+            mRefFade.animateTo(want, want > 0.5 ? 180.0 : 110.0, Easing::EaseOutCubic, nowMs);
         }
         // Keep the last drawable copy so the fade-OUT has a line to fade; refreshed while the
         // reference is live so it tracks the drag (DR-EDIT-5).
@@ -188,6 +198,7 @@ namespace cosmo_v2
         if (g.type == T::Down)
         {
             if (!inPlot) return Segment::handleGesture(g, local);
+            mPressed = true;   // D-31: the readout steps aside for the whole gesture
             int idx, kind;
             if (handleAt(pl, idx, kind)) { mDragIdx = idx; mDragKind = kind; return true; }
             const int p = pointAt(pl);
@@ -234,7 +245,13 @@ namespace cosmo_v2
             emitChange();
             return true;
         }
-        if (g.type == T::Up || g.type == T::Drop) { mDragIdx = -1; return true; }
+        if (g.type == T::Up || g.type == T::Drop)
+        {
+            mDragIdx = -1;
+            mPressed = false;
+            mRevealAtMs = mNowMs + kRefHoldMs;   // D-31: wait out a possible second click
+            return true;
+        }
         return Segment::handleGesture(g, local);
     }
 

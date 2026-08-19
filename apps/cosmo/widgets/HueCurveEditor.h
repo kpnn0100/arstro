@@ -66,6 +66,14 @@ namespace cosmo_v2
         double mRefTarget = 0.0;
         std::vector<CurvePoint> mRefShown;
         bool referenceWanted() const { return mReference.size() >= 2 && mReference != mPts; }
+        // D-31: and it leaves while the pointer is working in here — see CurvePanel's header for
+        // why looking like a readout was not enough on its own.
+        bool referenceVisible(double nowMs) const
+        { return referenceWanted() && !mPressed && nowMs >= mRevealAtMs; }
+        bool mPressed = false;
+        double mRevealAtMs = 0.0;
+        double mNowMs = 0.0;
+        static constexpr double kRefHoldMs = 220.0;
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull

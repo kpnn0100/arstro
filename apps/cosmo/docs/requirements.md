@@ -326,13 +326,24 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
   `— final, with group` in muted text: the tone curve puts the caption in the strip below its plot,
   the hue editor in the free strip above its own. Dashing is what says "readout" without a legend;
   the caption is what stops the only way to find out being to try to drag it.
-- **The reference never reaches input.** `pointAt` / `handleAt` scan the active curve only, in both
-  editors. Asserted, not assumed: `curveReferenceIsNotEditable` drives a press + drag on a point
-  lying exactly on the reference and ~79 px from the nearest own node, and requires zero emitted
-  edits, zero nodes added and zero nodes moved — then repeats the identical gesture with **no**
-  reference set and requires the same outcome, so the reference is provably outside the input path
-  rather than accidentally ignored. A double-click there still adds a corner to the **own** curve
-  (empty space adds a node — the editing model), and that too is asserted, so it stays a decision.
+- **The reference never reaches input, and it leaves while you work (D-31).** `pointAt` /
+  `handleAt` scan the active curve only, in both editors — but that was never the whole problem.
+  Being drawn in space the plot treats as empty made it a **target**: a double-click on the green
+  line adds a corner exactly on it (18 of 21 sampled points), so the edited curve snaps to touch the
+  reference and the user has apparently grabbed and dragged it; and at either end the two curves
+  share an endpoint, so a press there grabs the user's own node through the 13 px pick radius.
+  So the readout now **fades out on a press inside the plot** and back in once the gesture is over —
+  `mPressed`, plus a 220 ms `mRevealAtMs` hold so a double-click's two presses read as one gesture
+  rather than flashing the line between them; out in 110 ms, back in 180 ms. A line that is not on
+  screen cannot be aimed at, and it is present whenever the user is not editing, which is when they
+  are reading it. The cost is that the "final" no longer tracks a drag *visibly* while the drag is
+  happening — it is still recomputed throughout, so it is correct the instant it returns.
+  Unchanged on purpose: a double-click still adds a corner where you click (the editing model), and
+  a press within the pick radius of your own node still grabs it.
+  Swept, not spot-checked: `curveReferenceIsNotEditable` walks 21 points along the reference and
+  requires it absent at every one during a press, present at rest, absent through the hold, back
+  afterwards, and adding no node anywhere. The first version of this guard asserted one point, and
+  that point was one of the three where nothing happens — which is how D-31 shipped.
 - **The line fades (R-G-1).** It appears and disappears through a 180 ms `AnimatedProperty` rather
   than blinking on the frame a group's curve starts or stops differing; each editor keeps the last
   drawable copy so the fade-out has something to fade. Note for tests: a `render()` with no

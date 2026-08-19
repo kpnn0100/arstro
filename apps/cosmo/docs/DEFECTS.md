@@ -111,6 +111,53 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-31 — The green "final" curve was still a target, and D-28's test was a spot check
+- **Area:** design · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, by the user, after D-28 shipped: *"i still can select and adjust the green
+  curve, it should act as shown only no interact."*
+- **Reproduce:** with a group curve set so the readout is drawn, double-click anywhere on the green
+  line. Measured across 21 points along it:
+  ```
+  x       refY       Down+Drag              DoubleClick
+  0.00    0.00       CHANGED the curve      -
+  0.10    0.04       -                      ADDED a node
+  ...
+  0.95    0.92       -                      ADDED a node
+  aimed-at-green gestures that changed the edited curve: drag 3/21, double-click 18/21
+  ```
+- **Expected:** the readout is shown and nothing else — no gesture aimed at it does anything.
+- **Actual:** two ways in, neither of them a property of the reference itself:
+  1. **Double-click adds a corner exactly where you clicked — 18 of 21 points along the line.** The
+     new node lands *on* the green curve, so the edited curve snaps to touch it and the user has,
+     to all appearances, grabbed the reference and dragged it. `pointAt` returning -1 means "empty
+     space", and the reference is drawn in space the plot considers empty.
+  2. **A press at either end grabs the user's own endpoint node**, because the two curves share
+     their endpoints and the pick radius is 13 px.
+- **Judgement:** defect against the user's stated requirement and against **R-G-3**'s premise, same
+  as D-28 — but D-28 fixed the *appearance* and left the *reachability*. Nothing about the
+  reference's geometry was ever wrong: it owns no nodes and is not hit-tested. It was simply **on
+  screen to be aimed at** while the plot accepted gestures anywhere.
+- **The test is the more important finding.** D-28's guard asserted this at ONE point and passed.
+  That point (x = 0.5, with an identity curve) is one of the three of 21 where nothing happens. It
+  is exactly the mistake `homeHeaderTitleNeverRunsUnderTheSearchField` was written to avoid three
+  commits earlier — *a threshold proves nothing about a spot check* — and I made it anyway, in the
+  same session, in a test whose whole purpose was to prove non-reachability.
+- **Fix:** the readout **leaves while the plot is being worked in**. `mPressed` on Down inside the
+  plot, cleared on Up, plus a 220 ms `mRevealAtMs` hold so a double-click's two presses read as one
+  gesture instead of flashing the line between them. Fade out 110 ms, in 180 ms — getting out of the
+  way should feel immediate, coming back should not startle (R-G-1). Same in `HueCurveEditor`. A
+  line that is not on screen during the gesture cannot be aimed at, and the readout is still there
+  whenever the user is not editing, which is when they are reading it.
+  Deliberately NOT changed: double-click still adds a corner where you click (the documented editing
+  model), and a press within 13 px of your own node still grabs it (that is your node).
+- **Verified:** the same 21-point probe reports the readout on screen at **0** of 21 points during a
+  press, down from 21; rendered at rest and during a press — dashed line plus caption, then neither.
+- **Guarded by:** `curveReferenceIsNotEditable`, rewritten as a **sweep**: the readout is drawn at
+  rest, is absent at every one of 21 points along itself after a press, stays absent through the
+  hold, returns afterwards, and no press on it adds a node. It also records that at most 4 samples
+  move anything at all — the endpoint ones — instead of pretending the shared endpoints do not
+  exist. One verdict per property rather than one per sample.
+
 ### D-29 — The screen-scale setting snapped, and R-G-1 had said not to
 - **Area:** design · **Status:** **Fixed** · **Severity:** S3
 - **Found:** 2026-08-19, by the user, immediately after the setting shipped: *"fix scale change

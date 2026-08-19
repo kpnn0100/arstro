@@ -294,6 +294,21 @@ namespace
         return w;
     }
 
+    /** Like greenRefStrokes, but advanced to a caller-chosen clock — the D-31 assertions are
+     *  about WHEN the readout is on screen, so they cannot use a helper that always settles. */
+    int greenRefStrokes2(artboard::Segment &seg, double nowMs)
+    {
+        seg.advance(nowMs);
+        artboard::RecordingTarget t; seg.render(t);
+        int n = 0;
+        for (const auto &op : t.ops())
+            if (op.kind == artboard::DrawOp::Kind::SetStroke &&
+                near(op.color.r, 0.298, 0.02) && near(op.color.g, 0.710, 0.02) &&
+                near(op.color.b, 0.451, 0.02) && op.color.a > 0.02)
+                ++n;
+        return n;
+    }
+
     void curveReferenceShownWhenDiffers()
     {
         std::printf("CurvePanel: the green 'final' curve is drawn only when it differs from own\n");
@@ -311,47 +326,113 @@ namespace
         }
     }
 
-    // D-28: the "final, with group" line is a READOUT. Two independent claims, because a
-    // panel can fail either half: it must not respond to input (no node to grab, no node
-    // created by grabbing at it), and it must not LOOK like the curve that does.
+    // D-28 / D-31: the "final, with group" line is a READOUT — shown, never interacted with.
+    //
+    // D-28 asserted this at ONE point and passed, and the line was still reachable: the point I
+    // picked happened to be one of the three (of 21) along the reference where nothing happens.
+    // That is the same mistake the home header row's test was written to avoid — a threshold
+    // proves nothing about a spot check — so this SWEEPS the reference and reports the count.
+    //
+    // What the sweep found, and what the fix therefore had to be: a double-click on the green
+    // line adds a corner exactly ON it at 18 of 21 points, so the edited curve snaps to touch
+    // the reference and the user has, to all appearances, grabbed and dragged it. Nothing about
+    // the reference's own geometry was wrong — it owns no nodes and is not hit-tested — the
+    // problem was that it was on screen to be aimed at. So it leaves while the plot is being
+    // worked in (D-31), and THAT is what these assertions check: not "the gesture did nothing"
+    // (a double-click adding a corner is the documented editing model) but "the reference was
+    // not on screen to be aimed at while the gesture happened".
     void curveReferenceIsNotEditable()
     {
-        std::printf("CurvePanel: the green 'final' curve cannot be selected or dragged (D-28)\n");
-        // Own curve = identity (nodes only at the two corners). Reference bulges to (0.5,0.8),
-        // which in plot pixels is (116, 32.8) -> local (125.75, 32.8): a point ON the green
-        // line and ~79 px from the nearest own node, far outside the pick radius.
-        const Point onGreen{125.75, 32.8};
+        std::printf("CurvePanel: the green 'final' curve leaves while the plot is worked in (D-31)\n");
+        const P own{cp(0, 0), cp(0.35f, 0.55f), cp(0.7f, 0.75f), cp(1, 1)};
+        const P ref{cp(0, 0), cp(0.25f, 0.10f), cp(0.5f, 0.30f), cp(0.75f, 0.62f), cp(1, 1)};
 
-        TestCurve c;
-        int emitted = 0;
-        c.onCurveChange = [&](int, P) { ++emitted; };
-        c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
-        c.setReferenceCurves({cp(0, 0), cp(0.5f, 0.8f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+        // 1) At rest, with a group contributing, the readout is drawn.
+        {
+            TestCurve c;
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves(ref, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            check(greenRefStrokes(c) > 5, "at rest the dashed readout is on screen");
+        }
 
-        c.handleGesture(ev(Gesture::Type::Down), onGreen);
-        c.handleGesture(ev(Gesture::Type::Drag), Point{onGreen.x, onGreen.y - 20.0});
-        c.handleGesture(ev(Gesture::Type::Up), Point{onGreen.x, onGreen.y - 20.0});
-        check(emitted == 0, "pressing and dragging the 'final' line emits no edit");
-        check(c.curveFor(0).size() == 2, "and adds no node to the curve being edited");
-        check(near(c.curveFor(0)[0].y, 0.f, 1e-4) && near(c.curveFor(0)[1].y, 1.f, 1e-4),
-              "and moves no existing node");
+        // 2) Sweep the reference: after a press anywhere in the plot, it is gone — so there is
+        //    nothing to aim at, at ANY point along it, for the whole gesture.
+        int visibleDuringPress = 0;
+        const int kSamples = 21;
+        for (int i = 0; i < kSamples; ++i)
+        {
+            const double tx = (double)i / (kSamples - 1);
+            const auto dense = arstro::curve::sample(ref, false, 0.f);
+            double ry = 0.0, best = 1e9;
+            for (const auto &d : dense)
+                if (std::fabs(d.first - tx) < best) { best = std::fabs(d.first - tx); ry = d.second; }
+            // plot-local -> segment-local: mPlotW is 232 and mPlotY 0 with no layout() (see the
+            // note at the top of this file), and kPadX is 9.75.
+            const Point onGreen{9.75 + tx * 232.0, CurvePanel::kPlotH - ry * CurvePanel::kPlotH};
 
-        // The same gesture with NO reference set must behave identically — proof that the
-        // reference is not merely ignored by accident but is outside the input path entirely.
-        TestCurve bare;
-        int bareEmitted = 0;
-        bare.onCurveChange = [&](int, P) { ++bareEmitted; };
-        bare.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
-        bare.handleGesture(ev(Gesture::Type::Down), onGreen);
-        bare.handleGesture(ev(Gesture::Type::Drag), Point{onGreen.x, onGreen.y - 20.0});
-        check(bareEmitted == emitted && bare.curveFor(0).size() == c.curveFor(0).size(),
-              "input behaves the same whether or not a 'final' line is drawn");
+            TestCurve c;
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves(ref, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.advance(0.0); c.advance(400.0);              // let it fade in
+            c.handleGesture(ev(Gesture::Type::Down), onGreen);
+            c.advance(500.0); c.advance(700.0);            // and out again, on the press
+            if (greenRefStrokes2(c, 700.0) > 0) ++visibleDuringPress;
+        }
+        check(visibleDuringPress == 0,
+              "and after a press it is gone at EVERY point along it, not just the one I checked first");
 
-        // Double-click there DOES add a corner — that is the editing model (empty space adds
-        // a node), and it adds it to the OWN curve. Asserted so it stays a decision.
-        c.handleGesture(ev(Gesture::Type::DoubleClick), onGreen);
-        check(c.curveFor(0).size() == 3, "double-clicking there adds a node to the OWN curve");
-        check(emitted == 1, "and that is the only edit the whole sequence produced");
+        // 3) It comes back after the gesture — a readout that hides for good is not a readout.
+        {
+            TestCurve c;
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves(ref, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.advance(0.0); c.advance(400.0);
+            c.handleGesture(ev(Gesture::Type::Down), Point{125.75, 82.0});
+            c.advance(500.0);
+            c.handleGesture(ev(Gesture::Type::Up), Point{125.75, 82.0});
+            // 700 ms, not 560: the fade-OUT is 110 ms from the press at 500, so a query at 560
+            // catches it mid-fade and still sees green. The claim is about the HOLD (reveal at
+            // 500 + 220 = 720), so ask after the fade has finished and before the reveal is due.
+            check(greenRefStrokes2(c, 700.0) == 0,
+                  "it stays away through the hold, so a double-click cannot flash it");
+            // Two clocks: the frame the reveal becomes due only STARTS the 180 ms fade, so its
+            // value is still 0 on that frame. Asking once at 1200 measured the frame the
+            // animation began, which is a fade-in working correctly and reads as a failure.
+            greenRefStrokes2(c, 1200.0);
+            check(greenRefStrokes2(c, 1500.0) > 5, "and it is back once the gesture is over");
+        }
+
+        // 4) The press itself still edits only the user's own curve. Swept for the same reason:
+        //    the reference and the edited curve SHARE their endpoints, so a press at the green
+        //    line's ends legitimately grabs the user's own endpoint node — that is their node,
+        //    and the sweep records where it happens instead of pretending it does not.
+        int emittedTotal = 0, grabbedOwnNode = 0, addedNodes = 0;
+        for (int i = 0; i < kSamples; ++i)
+        {
+            const double tx = (double)i / (kSamples - 1);
+            const auto dense = arstro::curve::sample(ref, false, 0.f);
+            double ry = 0.0, best = 1e9;
+            for (const auto &d : dense)
+                if (std::fabs(d.first - tx) < best) { best = std::fabs(d.first - tx); ry = d.second; }
+            const Point onGreen{9.75 + tx * 232.0, CurvePanel::kPlotH - ry * CurvePanel::kPlotH};
+
+            TestCurve c;
+            int emitted = 0;
+            c.onCurveChange = [&](int, P) { ++emitted; };
+            c.setCurves(own, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.setReferenceCurves(ref, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+            c.handleGesture(ev(Gesture::Type::Down), onGreen);
+            c.handleGesture(ev(Gesture::Type::Drag), Point{onGreen.x, onGreen.y - 25.0});
+            c.handleGesture(ev(Gesture::Type::Up), Point{onGreen.x, onGreen.y - 25.0});
+            emittedTotal += emitted;
+            if (emitted > 0) ++grabbedOwnNode;
+            if (c.curveFor(0).size() != own.size()) ++addedNodes;   // one verdict for the sweep
+        }
+        check(addedNodes == 0, "no press on the reference ADDS a node to the edited curve");
+        check(grabbedOwnNode <= 4,
+              "and only the few samples within 13 px of an OWN node move anything — the two "
+              "curves share their endpoints, so those presses grab the user's own node");
+        (void)emittedTotal;
     }
 
     void curveReferenceLooksLikeAReadout()

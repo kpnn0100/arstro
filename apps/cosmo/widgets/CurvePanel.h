@@ -16,6 +16,12 @@
  *  captioned, because drawn solid at the same weight it read as a second, equally
  *  editable curve — see D-28. It carries no nodes and is never hit-tested; the plot
  *  edits exactly one curve, the one the channel picker names.
+ *
+ *  And it LEAVES while you work in the plot (D-31). Looking like a readout was not
+ *  enough: double-clicking the green line adds a corner exactly on it, so your curve
+ *  snaps to touch it and you have, to all appearances, just grabbed and dragged the
+ *  reference. A line that is not on screen during the gesture cannot be aimed at, so
+ *  it fades out on press and back in once you have stopped.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
@@ -80,6 +86,9 @@ namespace cosmo_v2
         /** True while the effective curve differs from the one being edited — i.e. while an
          *  ancestor group contributes something and there is a second line worth showing. */
         bool referenceWanted() const;
+        /** True while the readout should be on screen: wanted, and nothing being aimed inside
+         *  the plot (D-31). */
+        bool referenceVisible(double nowMs) const;
 
         std::shared_ptr<SegmentedControl> mChannelPicker;
         std::shared_ptr<IconButton> mResetBtn;
@@ -95,6 +104,13 @@ namespace cosmo_v2
         artboard::AnimatedProperty mRefFade{0.0};
         double mRefTarget = 0.0;
         Points mRefShown;
+        // D-31: the readout is hidden while the pointer is working in the plot, and for a short
+        // hold after it stops. The hold is what keeps a DOUBLE-click from flashing the line in
+        // the gap between its two presses — the press state alone flickers there.
+        bool mPressed = false;
+        double mRevealAtMs = 0.0;
+        double mNowMs = 0.0;      // last advance()'s clock, so a gesture can schedule the reveal
+        static constexpr double kRefHoldMs = 220.0;
         int mChannel = 0;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 = move node, 1 = in-handle, 2 = out-handle, 3 = symmetric pull (Alt on node)
