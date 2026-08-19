@@ -260,6 +260,11 @@ namespace
     // unique to the "final" reference curve, so its presence proves it was drawn.
     int greenRefStrokes(artboard::Segment &seg)
     {
+        // advance() twice, far apart: the reference fades in over 180 ms (R-G-1), so a render
+        // with no clock would report "not drawn" for every case and the check would pass for
+        // the wrong reason.
+        seg.advance(0.0);
+        seg.advance(400.0);
         artboard::RecordingTarget t; seg.render(t);
         int n = 0;
         for (const auto &op : t.ops())
@@ -267,6 +272,20 @@ namespace
                 near(op.color.r, 0.298, 0.02) && near(op.color.g, 0.710, 0.02) && near(op.color.b, 0.451, 0.02))
                 ++n;
         return n;
+    }
+
+    // The widest stroke of a given colour in a rendered frame. The reference must be drawn
+    // THINNER than the curve being edited: same-weight is what made them indistinguishable.
+    double strokeWidthOf(artboard::Segment &seg, double r, double g, double b)
+    {
+        seg.advance(0.0); seg.advance(400.0);
+        artboard::RecordingTarget t; seg.render(t);
+        double w = 0.0;
+        for (const auto &op : t.ops())
+            if (op.kind == artboard::DrawOp::Kind::SetStroke &&
+                near(op.color.r, r, 0.02) && near(op.color.g, g, 0.02) && near(op.color.b, b, 0.02))
+                w = std::max(w, op.width);
+        return w;
     }
 
     void curveReferenceShownWhenDiffers()
@@ -284,6 +303,66 @@ namespace
             c.setReferenceCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
             check(greenRefStrokes(c) == 0, "no green when the final equals the own curve");
         }
+    }
+
+    // D-28: the "final, with group" line is a READOUT. Two independent claims, because a
+    // panel can fail either half: it must not respond to input (no node to grab, no node
+    // created by grabbing at it), and it must not LOOK like the curve that does.
+    void curveReferenceIsNotEditable()
+    {
+        std::printf("CurvePanel: the green 'final' curve cannot be selected or dragged (D-28)\n");
+        // Own curve = identity (nodes only at the two corners). Reference bulges to (0.5,0.8),
+        // which in plot pixels is (116, 32.8) -> local (125.75, 32.8): a point ON the green
+        // line and ~79 px from the nearest own node, far outside the pick radius.
+        const Point onGreen{125.75, 32.8};
+
+        TestCurve c;
+        int emitted = 0;
+        c.onCurveChange = [&](int, P) { ++emitted; };
+        c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+        c.setReferenceCurves({cp(0, 0), cp(0.5f, 0.8f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+
+        c.handleGesture(ev(Gesture::Type::Down), onGreen);
+        c.handleGesture(ev(Gesture::Type::Drag), Point{onGreen.x, onGreen.y - 20.0});
+        c.handleGesture(ev(Gesture::Type::Up), Point{onGreen.x, onGreen.y - 20.0});
+        check(emitted == 0, "pressing and dragging the 'final' line emits no edit");
+        check(c.curveFor(0).size() == 2, "and adds no node to the curve being edited");
+        check(near(c.curveFor(0)[0].y, 0.f, 1e-4) && near(c.curveFor(0)[1].y, 1.f, 1e-4),
+              "and moves no existing node");
+
+        // The same gesture with NO reference set must behave identically — proof that the
+        // reference is not merely ignored by accident but is outside the input path entirely.
+        TestCurve bare;
+        int bareEmitted = 0;
+        bare.onCurveChange = [&](int, P) { ++bareEmitted; };
+        bare.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+        bare.handleGesture(ev(Gesture::Type::Down), onGreen);
+        bare.handleGesture(ev(Gesture::Type::Drag), Point{onGreen.x, onGreen.y - 20.0});
+        check(bareEmitted == emitted && bare.curveFor(0).size() == c.curveFor(0).size(),
+              "input behaves the same whether or not a 'final' line is drawn");
+
+        // Double-click there DOES add a corner — that is the editing model (empty space adds
+        // a node), and it adds it to the OWN curve. Asserted so it stays a decision.
+        c.handleGesture(ev(Gesture::Type::DoubleClick), onGreen);
+        check(c.curveFor(0).size() == 3, "double-clicking there adds a node to the OWN curve");
+        check(emitted == 1, "and that is the only edit the whole sequence produced");
+    }
+
+    void curveReferenceLooksLikeAReadout()
+    {
+        std::printf("CurvePanel: the 'final' line is dashed and thinner than the edited curve (D-28)\n");
+        TestCurve c;
+        c.setCurves({cp(0, 0), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+        c.setReferenceCurves({cp(0, 0), cp(0.5f, 0.8f), cp(1, 1)}, std::array<P, 3>{{kIdentity, kIdentity, kIdentity}});
+
+        const double refW = strokeWidthOf(c, 0.298, 0.710, 0.451);   // #4cb573, the reference
+        const artboard::Color accent = arstro::cosmo_v2::palette::primary();  // the edited RGB curve
+        const double curveW = strokeWidthOf(c, accent.r, accent.g, accent.b);
+        check(refW > 0.0 && curveW > 0.0, "both lines are drawn");
+        check(refW < curveW, "the reference is drawn thinner than the curve being edited");
+        // Dashed: one solid polyline is a single stroked path, so many green strokes in one
+        // frame is what dashing looks like from the outside.
+        check(greenRefStrokes(c) > 5, "the reference is dashed, not a solid line");
     }
 
     // ── ExportDialog tree propagation (R-EXPORT-2) ────────────────────────────
@@ -923,6 +1002,8 @@ int main()
     curveAltDragMakesSmoothSpline();
     curveDoubleClickAddRemove();
     curveReferenceShownWhenDiffers();
+    curveReferenceIsNotEditable();
+    curveReferenceLooksLikeAReadout();
 
     exportTreeStartsFullySelected();
     exportDeselectParentClearsChildren();

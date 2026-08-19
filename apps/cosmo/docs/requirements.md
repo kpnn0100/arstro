@@ -312,11 +312,31 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
 ### DR-EDIT-5 Mixer/Curve (`StackPanel` → `MixerPanel` + `CurvePanel`) (R-BUGFIX-3)
 - **Effective ("final") curve behind (both editors).** Like the sliders' green reach, each curve
   editor draws the **effective** curve — the item's own curve **summed** with its ancestor groups'
-  (`effectiveEditParams`, i.e. `item(x) + group(x) − x` per axis) — faint (`#4cb573`) **behind** the
+  (`effectiveEditParams`, i.e. `item(x) + group(x) − x` per axis) — `#4cb573` **behind** the
   editable one, so you see the final result after group stacking. Fed via
   `RightColumn::refreshCurveReferences` (`MixerPanel::setReference` / `CurvePanel::setReferenceCurves`),
   called on sync **and on every curve/mixer edit** so the "final" tracks the drag live; when it
   equals the own curve (no group curve) it is not drawn.
+- **It is a readout, and it is drawn as one (D-28).** Originally it was a solid 1.5 px line — the
+  same weight as the tone curve it sits behind — with no caption. Two lines of equal weight in one
+  interactive plot is one line too many: a user reads the second as a curve to grab, and grabbing
+  it does nothing, because the reference carries no nodes and is not in the input path at all. So
+  it is now **dashed** (`widgets/DashedLine.h`, arc-length stepped so the rhythm survives tight
+  bends), **1.0 px against the editable 1.5**, at **α 0.34 rather than 0.5**, and **captioned**
+  `— final, with group` in muted text: the tone curve puts the caption in the strip below its plot,
+  the hue editor in the free strip above its own. Dashing is what says "readout" without a legend;
+  the caption is what stops the only way to find out being to try to drag it.
+- **The reference never reaches input.** `pointAt` / `handleAt` scan the active curve only, in both
+  editors. Asserted, not assumed: `curveReferenceIsNotEditable` drives a press + drag on a point
+  lying exactly on the reference and ~79 px from the nearest own node, and requires zero emitted
+  edits, zero nodes added and zero nodes moved — then repeats the identical gesture with **no**
+  reference set and requires the same outcome, so the reference is provably outside the input path
+  rather than accidentally ignored. A double-click there still adds a corner to the **own** curve
+  (empty space adds a node — the editing model), and that too is asserted, so it stays a decision.
+- **The line fades (R-G-1).** It appears and disappears through a 180 ms `AnimatedProperty` rather
+  than blinking on the frame a group's curve starts or stops differing; each editor keeps the last
+  drawable copy so the fade-out has something to fade. Note for tests: a `render()` with no
+  `advance()` now draws no reference at all, which is why `greenRefStrokes` ticks the clock first.
 - **MixerPanel**: a Hue/Sat/Lum segmented picker over one visible `HueCurveEditor` per channel
   (`EditParams::mixer[3]`). Each editor is a cyclic hue mapper: X = input hue [0,360), Y =
   adjustment [−1,1], wrapping at the 360/0 seam. Points are **bezier control points**

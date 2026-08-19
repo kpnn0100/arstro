@@ -111,6 +111,56 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-28 — Two curves in one plot, and only one of them is yours
+- **Area:** design · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, reported by the user: *"the shadow curve in curve[d] can be select and
+  adjust lead to undefine behavior. I can now adjust 2 independent curve in the same curve
+  section."* The "shadow curve" is the **effective ("final") curve** DR-EDIT-5 draws behind the
+  editable one — confirmed with the user against a rendered frame before anything was changed.
+- **Reproduce:**
+  ```bash
+  cosmo --control /tmp/c.sock --project <a>.cmp &
+  printf 'select 1\ngroup new "G"\nselect 9\nset curve=0,0;0.5,0.25;1,1\nselect 1\nwait 400\nui dump --root editor\n' > s.txt
+  cosmo-cc attach /tmp/c.sock --script s.txt | grep channel=
+  #  · channel=0 pts=2 ref=33 refDrawn=1 plot=10,51 304x164 dragIdx=-1 dragKind=0
+  ```
+  Then open Mixer/Curve and press-drag anywhere along the green line: `dragIdx` stays `-1`,
+  `curve=` does not change. The line is drawn; it is not grabbable.
+- **Expected:** one plot, one curve you can edit, and anything else in it legible as a readout.
+- **Actual:** the reference was a **solid 1.5 px line — the same weight as the editable curve** —
+  with no caption. Two equal-weight lines in one interactive plot, one of them completely inert:
+  a press on it lands in `pointAt`, finds no node (the reference has none), sets `mDragIdx = -1`
+  and silently consumes the gesture. A double-click on it *does* fire — it adds a corner to the
+  **other** curve at that point, so the editable curve jumps to touch the line the user was
+  aiming at, which reads as having grabbed it. From there the two lines move together in a way
+  with no explanation on screen, which is the "undefined behavior" reported.
+- **Judgement:** defect. Not against DR-EDIT-5's intent — the reference should be drawn — but
+  against **R-G-3**'s premise: hover and affordance are how cosmo says what is interactive, and a
+  line drawn exactly like the editable curve claims to be interactive while having no hover, no
+  nodes and no response. The sliders' equivalent (DR-EDIT-4's green stacked reach) never had this
+  problem because a reach-and-tick behind a thumb cannot be mistaken *for* the thumb; the curve
+  version was given the editable curve's own visual weight.
+- **Cause:** `CurvePanel.cpp` `strokeCurve(ref, kRefColor, 1.5)` — same width as
+  `strokeCurve(active(), accent, 1.5)` two lines below; `HueCurveEditor.cpp` the same at 1.5
+  against an editable 2.0. Present since the reference feature was written (`git log -S
+  "setReferenceCurves"` → `af95c65`, the repo reorganisation), so not a regression — it has simply
+  never been looked at with a group curve set, which is the only state that draws it.
+- **Fix:** the reference is drawn as a readout, in both editors — **dashed** (new
+  `widgets/DashedLine.h`, arc-length stepped so the dash rhythm survives tight bends; hand-rolled
+  because `IRenderTarget` has no dash state and `core/Artboard` is a submodule), **1.0 px** against
+  the editable curve's 1.5, **α 0.34** instead of 0.5, and **captioned** `— final, with group`. It
+  now also fades in and out over 180 ms instead of blinking (R-G-1, which it had been violating).
+  Input is unchanged: it never was in the input path, and that is now asserted rather than assumed.
+- **Verified:** headless render of the real `StackPanel(MixerPanel, CurvePanel)` at the shipping
+  324x710 geometry, before and after — both editors now show a dashed, dimmer line with its
+  caption, unmistakable against the solid node-carrying curve.
+- **Guarded by:** `curveReferenceIsNotEditable` (press + drag on a point exactly on the reference
+  emits nothing, adds nothing, moves nothing — and the identical gesture with no reference set
+  behaves identically, so the reference is provably outside the input path; the double-click that
+  adds a corner to the *own* curve is asserted too, so it stays a decision) and
+  `curveReferenceLooksLikeAReadout` (the reference is stroked thinner than the edited curve, and in
+  many short segments rather than one path — which is what dashed looks like from outside).
+
 ### D-26 — The splash's progress bar is drawn only while the splash is fading out
 - **Area:** design · **Status:** **Fixed** · **Severity:** S2
 - **Found:** 2026-08-19, by the `ui dump` feature filed as D-25 — the first thing it was pointed

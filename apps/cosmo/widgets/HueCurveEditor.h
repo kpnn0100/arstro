@@ -13,6 +13,7 @@
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../../../core/ImageProcessing/src/base/CurvePoint.h"
+#include "../UiInspectable.h"
 #include <functional>
 #include <utility>
 #include <vector>
@@ -21,16 +22,24 @@ namespace arstro
 {
 namespace cosmo_v2
 {
-    class HueCurveEditor : public artboard::Segment
+    class HueCurveEditor : public artboard::Segment, public UiInspectable
     {
     public:
         HueCurveEditor();
 
         std::function<void(const std::vector<CurvePoint> &)> onChange;
         void setPoints(const std::vector<CurvePoint> &pts);  // bezier control points
-        void setReference(const std::vector<CurvePoint> &ref) { mReference = ref; }  // effective (group-stacked) curve, drawn faint behind
+        // The effective (group-stacked) curve, drawn behind as a READ-ONLY reference
+        // (DR-EDIT-5): dashed and dimmer than the editable curve, never hit-tested. See D-28.
+        void setReference(const std::vector<CurvePoint> &ref) { mReference = ref; }
         void reset();                                  // back to a flat (no-op) curve
         void setMappedHue(bool m) { mMappedHue = m; }  // colour the line by output hue (Hue channel)
+
+        /** P0.6 — see CurvePanel::uiDetail; the mixer stacks three of these in one rect and
+         *  hides two, so "which one am I looking at" is a question a dump has to answer. */
+        std::string uiDetail() const override;
+
+        void advance(double nowMs) override;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -52,6 +61,11 @@ namespace cosmo_v2
 
         std::vector<CurvePoint> mPts;  // x in [0,360), y in [-1,1]
         std::vector<CurvePoint> mReference;  // effective (group-stacked) curve; empty = none
+        // R-G-1: the reference fades rather than blinking on the frame it starts differing.
+        artboard::AnimatedProperty mRefFade{0.0};
+        double mRefTarget = 0.0;
+        std::vector<CurvePoint> mRefShown;
+        bool referenceWanted() const { return mReference.size() >= 2 && mReference != mPts; }
         bool mMappedHue = false;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 body, 1 in, 2 out, 3 symmetric pull

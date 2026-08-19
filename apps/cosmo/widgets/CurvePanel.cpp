@@ -1,9 +1,11 @@
 #include "CurvePanel.h"
 #include "SectionHeader.h"
+#include "DashedLine.h"
 #include "Icons.h"
 #include "../Theme.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace arstro
 {
@@ -15,7 +17,14 @@ namespace cosmo_v2
     {
         constexpr double kPadX = 9.75;
         constexpr double kPickerH = 16.25;  // ~9px*1.3 + 2*py-0.5(1.625)
-        const Color kRefColor{0.298, 0.710, 0.451, 0.5};  // #4cb573 @ .5 = the effective (final) line
+        // #4cb573 = the stacked-reach green the sliders use for the same idea (DR-EDIT-4).
+        // Dimmer than it was (.5 -> .34) and drawn thinner and dashed: this line is a readout,
+        // and at the editable curve's weight it read as a second curve to grab (D-28).
+        constexpr double kRefAlpha = 0.34;
+        const Color kRefColor{0.298, 0.710, 0.451, kRefAlpha};
+        constexpr double kRefWidth = 1.0;    // the editable curve is 1.5
+        constexpr double kCurveWidth = 1.5;
+        constexpr double kLegendPx = 8.5;    // caption under the plot
     }
 
     CurvePanel::CurvePanel()
@@ -72,6 +81,27 @@ namespace cosmo_v2
     {
         mReference[0] = master;
         for (int c = 0; c < 3; ++c) mReference[c + 1] = channels[c];
+    }
+
+    bool CurvePanel::referenceWanted() const
+    {
+        const Points &ref = mReference[mChannel];
+        return ref.size() >= 2 && ref != active();
+    }
+
+    void CurvePanel::advance(double nowMs)
+    {
+        const double want = referenceWanted() ? 1.0 : 0.0;
+        if (want != mRefTarget)
+        {
+            mRefTarget = want;
+            mRefFade.animateTo(want, 180.0, Easing::EaseOutCubic, nowMs);
+        }
+        // Keep the last drawable copy so the fade-OUT has a line to fade; refreshed while the
+        // reference is live so it tracks the drag (DR-EDIT-5).
+        if (want > 0.5) mRefShown = mReference[mChannel];
+        mRefFade.update(nowMs);
+        Segment::advance(nowMs);
     }
 
     void CurvePanel::showChannel(int channel)
@@ -208,6 +238,19 @@ namespace cosmo_v2
         return Segment::handleGesture(g, local);
     }
 
+    std::string CurvePanel::uiDetail() const
+    {
+        const Points &ref = mReference[mChannel];
+        const bool refDrawn = ref.size() >= 2 && ref != active();
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+                      "channel=%d pts=%d ref=%d refDrawn=%d plot=%.0f,%.0f %.0fx%.0f "
+                      "dragIdx=%d dragKind=%d",
+                      mChannel, (int)active().size(), (int)ref.size(), refDrawn ? 1 : 0,
+                      kPadX, mPlotY, mPlotW, kPlotH, mDragIdx, mDragKind);
+        return buf;
+    }
+
     void CurvePanel::onPaint(IRenderTarget &t) const
     {
         const double innerW = std::max(0.0, width.value() - 2 * kPadX);
@@ -243,12 +286,25 @@ namespace cosmo_v2
             t.strokePath();
         };
 
-        // The effective (group-stacked) curve, faint, behind the editable one.
-        const Points &ref = mReference[mChannel];
-        if (ref.size() >= 2 && ref != active()) strokeCurve(ref, kRefColor, 1.5);
+        // The effective (group-stacked) curve, behind the editable one — read-only, so it is
+        // drawn as a readout and not as a curve: dashed, thinner, dimmer, and captioned
+        // below the plot. Drawn solid at 1.5 it was indistinguishable from the curve the
+        // panel actually edits, and a press on it does nothing because it has no nodes to
+        // grab — a plot with two identical-looking lines, one of them inert (D-28).
+        const double refA = mRefFade.value();
+        if (refA > 0.001 && mRefShown.size() >= 2)
+        {
+            const auto dense = curve::sample(mRefShown, false, 0.f);
+            std::vector<Point> poly;
+            poly.reserve(dense.size());
+            for (const auto &d : dense)
+                poly.push_back(Point{ox + d.first * mPlotW, oy + kPlotH - d.second * kPlotH});
+            Color rc = kRefColor; rc.a *= refA;
+            strokeDashedPolyline(t, poly, rc, kRefWidth);
+        }
 
         const Color accent = channelColor();
-        strokeCurve(active(), accent, 1.5);
+        strokeCurve(active(), accent, kCurveWidth);
 
         // Tangent handles for smooth nodes, then the node circles.
         for (const auto &p : active())
@@ -264,6 +320,19 @@ namespace cosmo_v2
         }
         for (const auto &p : active())
             drawCircle(t, ox + px(p.x), oy + py(p.y), 4.0, Paint::filledStroked(accent, palette::white(), 1.5));
+
+        // Caption, in the strip under the plot: a dashed swatch and what the dashes mean.
+        // A second line in a plot needs a name — without one the only way to find out what it
+        // is, is to try to drag it, which is exactly the interaction that has no answer.
+        if (refA > 0.001)
+        {
+            const double ly = oy + kPlotH + 11.0;
+            Color rc = kRefColor; rc.a *= refA;
+            strokeDashedPolyline(t, {Point{ox, ly}, Point{ox + 14.0, ly}}, rc, kRefWidth, 3.0, 2.5);
+            Color tc = palette::mutedForeground(); tc.a *= refA;
+            t.setFill(tc);
+            t.drawText("final, with group", ox + 20.0, ly + kLegendPx * 0.35, kLegendPx, font::sans());
+        }
     }
 }
 }

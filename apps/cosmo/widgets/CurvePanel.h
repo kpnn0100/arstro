@@ -9,12 +9,18 @@
  *  Each channel has its OWN curve: four independent bezier control-point sets
  *  (0=RGB master, 1=R, 2=G, 3=B); the picker switches which is shown/edited. The
  *  RGB master maps EditParams::curve (applied to every channel); R/G/B map
- *  EditParams::curveChannel[0..2]. Edits emit (channel, points); the effective
- *  (group-stacked) curve is drawn faintly behind as a reference.
+ *  EditParams::curveChannel[0..2]. Edits emit (channel, points).
+ *
+ *  The effective (group-stacked) curve is drawn behind as a read-only reference
+ *  (DR-EDIT-5). It is drawn DASHED, thinner and dimmer than the editable curve, and
+ *  captioned, because drawn solid at the same weight it read as a second, equally
+ *  editable curve — see D-28. It carries no nodes and is never hit-tested; the plot
+ *  edits exactly one curve, the one the channel picker names.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../../../core/ImageProcessing/src/base/CurvePoint.h"
+#include "../UiInspectable.h"
 #include "SegmentedControl.h"
 #include "IconButton.h"
 #include <array>
@@ -26,7 +32,7 @@ namespace arstro
 {
 namespace cosmo_v2
 {
-    class CurvePanel : public artboard::Segment
+    class CurvePanel : public artboard::Segment, public UiInspectable
     {
     public:
         static constexpr double kPlotH = 164.0;  // plot width fills the panel (set in layout)
@@ -43,6 +49,12 @@ namespace cosmo_v2
         // Read a channel's current control points (0=RGB,1=R,2=G,3=B).
         const Points &curveFor(int channel) const { return mCurves[channel]; }
         void layout();
+        void advance(double nowMs) override;
+
+        /** P0.6 — the plot is one self-drawn leaf, so a tree dump reports a rectangle and
+         *  says nothing about which curves are in it. This reports the editable curve, the
+         *  faint reference behind it, and whether that reference is actually being drawn. */
+        std::string uiDetail() const override;
 
         // (channel, points): channel 0 = RGB master, 1..3 = R/G/B.
         std::function<void(int, Points)> onCurveChange;
@@ -65,6 +77,9 @@ namespace cosmo_v2
         const Points &active() const { return mCurves[mChannel]; }
         artboard::Color channelColor() const;  // accent for RGB, red/green/blue for R/G/B
         void emitChange();
+        /** True while the effective curve differs from the one being edited — i.e. while an
+         *  ancestor group contributes something and there is a second line worth showing. */
+        bool referenceWanted() const;
 
         std::shared_ptr<SegmentedControl> mChannelPicker;
         std::shared_ptr<IconButton> mResetBtn;
@@ -74,6 +89,12 @@ namespace cosmo_v2
                                        {CurvePoint{0, 0}, CurvePoint{1, 1}},
                                        {CurvePoint{0, 0}, CurvePoint{1, 1}}}};
         std::array<Points, 4> mReference{};  // effective (group-stacked) curves; empty = none
+        // R-G-1: the reference line and its caption fade in and out rather than blinking on
+        // the frame a group's curve starts or stops differing. mRefShown holds the last
+        // points worth drawing so the fade-out has something to fade.
+        artboard::AnimatedProperty mRefFade{0.0};
+        double mRefTarget = 0.0;
+        Points mRefShown;
         int mChannel = 0;
         int mDragIdx = -1;
         int mDragKind = 0;  // 0 = move node, 1 = in-handle, 2 = out-handle, 3 = symmetric pull (Alt on node)
