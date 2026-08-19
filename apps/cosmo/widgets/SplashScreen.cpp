@@ -1,4 +1,5 @@
 #include "SplashScreen.h"
+#include <cstdio>
 #include "../Theme.h"
 #include <algorithm>
 #include <cmath>
@@ -14,7 +15,15 @@ namespace cosmo_v2
         constexpr double kWordPx = 40.0;      // the reference's 60px, scaled to the small window
         constexpr double kTagPx = 9.0;
         constexpr double kTagTrack = 2.1;     // the reference's 0.24em, in px at kTagPx
-        constexpr double kBarH = 2.0;
+        // ── the progress bar (R-SPLASH-5) ──
+        // It used to be a 2 px hairline pinned to the very bottom edge, full-bleed and square,
+        // which is invisible at a glance and unreadable at a fraction. It is a real element now:
+        // inset, rounded, with its own track, sitting under the status line where the eye
+        // already is — and it fades IN with the first real work rather than sitting at zero.
+        constexpr double kBarH = 4.0;
+        constexpr double kBarInset = 44.0;      // matches the tagline's optical margin
+        constexpr double kBarBottom = 34.0;     // clear of the version line
+        constexpr double kCountPx = 9.5;
         constexpr double kDotR = 2.0;
         constexpr double kDotGap = 12.0;
         constexpr double kDotPulseMs = 1400.0;
@@ -46,10 +55,21 @@ namespace cosmo_v2
         mRise.set(0.0); mRise.animateTo(1.0, 700.0, Easing::EaseOutCubic, nowMs);
         mTag.set(0.0);  mTag.animateTo(1.0, 700.0, Easing::EaseOutCubic, nowMs + 300.0);
         mDots.set(0.0); mDots.animateTo(1.0, 500.0, Easing::EaseOutCubic, nowMs + 600.0);
+        // The bar's TRACK comes in with the dots, so by the time there is anything to report
+        // the bar is already there and simply fills.
+        mBarFade.set(0.0); mBarFade.animateTo(1.0, 500.0, Easing::EaseOutCubic, nowMs + 600.0);
     }
 
-    void SplashScreen::setProgress(double p)
+    void SplashScreen::setProgress(double p, int done, int total)
     {
+        mDone = done; mTotal = total;
+        // The bar's fade-in used to start HERE, on the first real work, so that an empty
+        // track would not sit through the intro looking stuck. Measurement reversed that:
+        // `ui dump --root splash` at 80 ms showed a cover decoding in ~7 ms (R-SPLASH-5), so
+        // the first setProgress() and the last one land in the same frame the splash begins
+        // leaving — the 260 ms fade-in got 80 ms and 23% opacity before the exit swallowed
+        // it, and the bar was, in practice, never visible. The track now arrives with the
+        // dots in begin(); an empty 4 px track at 10% white reads as chrome, not as a stall.
         mProgress.animateTo(clamp01(p), 220.0, Easing::EaseOutCubic, mNowMs);
     }
 
@@ -64,9 +84,8 @@ namespace cosmo_v2
 
     void SplashScreen::beginExit()
     {
-        if (mExiting) return;
-        mExiting = true;
-        mExit.animateTo(0.0, 260.0, Easing::EaseOutCubic, mNowMs);
+        if (mExiting || mExitRequested) return;
+        mExitRequested = true;   // advance() starts the fade once the bar has caught up
     }
 
     void SplashScreen::advance(double nowMs)
@@ -78,8 +97,46 @@ namespace cosmo_v2
         mDots.update(nowMs);
         mStatusMix.update(nowMs);
         mProgress.update(nowMs);
+        mBarFade.update(nowMs);
+        // Hold the exit until the eased fill has actually reached the end of the track. The
+        // ease is 220 ms and the fade 260 ms, so starting them together drew the bar at 96%
+        // and 0.1% alpha: the one frame that says "finished" was the one frame nobody saw.
+        // Costs ~200 ms of launch to make the completion legible, which is the trade R-SPLASH
+        // already makes for the intro itself.
+        if (mExitRequested && !mExiting && mProgress.value() >= 0.995)
+        {
+            mExiting = true;
+            mExit.animateTo(0.0, 260.0, Easing::EaseOutCubic, nowMs);
+        }
         mExit.update(nowMs);
         Segment::advance(nowMs);
+    }
+
+    // P0.6 — what the last frame actually put on screen, in one line. Deliberately built
+    // from the SAME fields and constants onPaint() reads, so it cannot drift into describing
+    // a splash that is not the one being drawn. The one thing it will not claim is the
+    // track's final width: onPaint shortens it by the measured width of the "n of N" count,
+    // and measuring needs a render target this call does not have — so it reports the
+    // untrimmed track and the count separately and lets the caller see both.
+    std::string SplashScreen::uiDetail() const
+    {
+        char buf[320];
+        const double a = mExit.value();
+        const double barA = a * mBarFade.value();
+        std::string count = (mDone >= 0 && mTotal > 0)
+                                ? std::to_string(mDone) + " of " + std::to_string(mTotal)
+                                : std::string("-");
+        std::snprintf(buf, sizeof(buf),
+                      "progress=%.3f barAlpha=%.3f bar=%.0f,%.0f %.0fx%.0f fill=%.0f count=%s "
+                      "alpha=%.3f intro=%s status=\"%s\" statusMix=%.2f exiting=%d exitReq=%d",
+                      clamp01(mProgress.value()), barA,
+                      kBarInset, height.value() - kBarBottom,
+                      width.value() - kBarInset * 2.0, kBarH,
+                      std::max((width.value() - kBarInset * 2.0) * clamp01(mProgress.value()), kBarH),
+                      count.c_str(), a, introDone() ? "done" : "playing",
+                      mStatus.c_str(), mStatusMix.value(), mExiting ? 1 : 0,
+                      mExitRequested ? 1 : 0);
+        return buf;
     }
 
     void SplashScreen::onPaint(IRenderTarget &t) const
@@ -190,14 +247,37 @@ namespace cosmo_v2
         t.setFill(vc);
         t.drawText(kVersion, w - 12.0 - t.measureText(kVersion, 9.0, font::mono()), h - 10.0, 9.0, font::mono());
 
-        // ── progress bar pinned to the bottom edge ──
-        drawRoundedRect(t, Rect{0, h - kBarH, w, kBarH}, 0.0,
-                        Paint::filled(Color{0x1E / 255.0, 0x1E / 255.0, 0x1E / 255.0, a}));
-        const double p = clamp01(mProgress.value());
-        if (p > 0.001)
+        // ── progress bar ──
+        const double barA = a * mBarFade.value();
+        if (barA > 0.001)
         {
-            Color pc = palette::primary(); pc.a *= a;
-            drawRoundedRect(t, Rect{0, h - kBarH, w * p, kBarH}, 0.0, Paint::filled(pc));
+            const double by = h - kBarBottom;
+            double bw = w - kBarInset * 2.0;
+            // The count sits to the right of the bar rather than above it, so the two read as
+            // one control; the bar gives up exactly the width the text needs.
+            std::string count;
+            if (mDone >= 0 && mTotal > 0) count = std::to_string(mDone) + " of " + std::to_string(mTotal);
+            double cw = count.empty() ? 0.0 : t.measureText(count, kCountPx, font::mono()) + 10.0;
+            bw -= cw;
+            if (bw < 40.0) { bw = w - kBarInset * 2.0; cw = 0.0; count.clear(); }   // too narrow: drop the count
+
+            drawRoundedRect(t, Rect{kBarInset, by, bw, kBarH}, kBarH * 0.5,
+                            Paint::filled(palette::whiteAlpha(0.10 * barA)));
+            const double p = clamp01(mProgress.value());
+            if (p > 0.001)
+            {
+                Color pc = palette::primary(); pc.a *= barA;
+                // Never narrower than the cap radius, or a small fraction draws as a smudge
+                // instead of as a rounded end.
+                drawRoundedRect(t, Rect{kBarInset, by, std::max(bw * p, kBarH), kBarH}, kBarH * 0.5,
+                                Paint::filled(pc));
+            }
+            if (!count.empty())
+            {
+                t.setFill(palette::whiteAlpha(0.34 * barA));
+                t.drawText(count, kBarInset + bw + 10.0, by + kBarH * 0.5 + kCountPx * 0.36,
+                           kCountPx, font::mono());
+            }
         }
     }
 }
