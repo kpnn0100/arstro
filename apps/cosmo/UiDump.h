@@ -23,6 +23,13 @@ namespace arstro
 {
 namespace cosmo_v2
 {
+    /** The first node in `root`'s subtree whose demangled type name equals `type`, or null.
+     *  Depth-first, root included. Exists so a test over the ASSEMBLED app can name the widget
+     *  it cares about ("CenterStage") instead of indexing into a child list whose order is a
+     *  layout detail — an assertion that breaks when a child is inserted is an assertion nobody
+     *  keeps. Same RTTI the dump uses to label a node. */
+    const artboard::Segment *findSegmentByType(const artboard::Segment &root, const char *type);
+
     struct UiDumpOptions
     {
         bool json = false;

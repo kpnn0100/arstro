@@ -117,6 +117,15 @@ namespace cosmo_v2
         }
     }
 
+    const artboard::Segment *findSegmentByType(const artboard::Segment &root, const char *type)
+    {
+        if (typeName(root) == type) return &root;
+        for (const auto &c : root.children())
+            if (c)
+                if (const artboard::Segment *hit = findSegmentByType(*c, type)) return hit;
+        return nullptr;
+    }
+
     std::string dumpSegmentTree(const artboard::Segment &root, const std::string &label,
                                 const UiDumpOptions &o)
     {

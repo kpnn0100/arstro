@@ -977,8 +977,20 @@ reported, and `mW/mH`, the **logical** box every widget lays out in — `physica
   first identity reset inside `App` would wipe it.
 - `toLogical(x, y)` = the inverse, applied once at the top of `pointer()` and `wheel()`. No widget
   hit-tests in physical pixels, because none of them ever sees one.
-- `setUiScale(percent)` re-derives `mW/mH` from the remembered physical size, so a scale change is a
-  relayout rather than a resize and the dialog that made it re-centres in the same frame.
+- `setUiScale(percent, animate = true)` sets the **target** and eases the **drawn** scale to it.
+
+**The scale eases (R-SCALE-2a / R-G-1, D-29).** `mUiScale` is the target — a preference is a number,
+not a motion, and `uiScale()` reports it — while `mScaleAnim` (an `AnimatedProperty`, `kScaleAnimMs`
+= 260, `EaseOutCubic`) carries what is drawn. `scale()`, and therefore `rootTransform()` and
+`toLogical()`, read the eased value; `App::render` ticks it and, **while it is moving**, calls
+`applyLogicalSize()` every frame so the logical box and every widget's layout are re-derived from
+the eased scale. Deriving them once at the start would animate the transform and leave the panels at
+the old size — the shell would zoom and its contents would not, which is worse than a snap.
+`minPhysical*` deliberately uses the **target** scale, so the window's minimum does not wobble
+mid-tween. `applySettings` passes `animate = false`: the startup apply has no previous scale to
+travel from and a tween there is an entrance nobody asked for. `drawnUiScale()` is public because the
+difference between it and `uiScale()` mid-tween is the only thing that can tell an eased
+implementation from a snapping one, which is what `cosmo_ui_tests` asserts.
 
 No widget reads the scale and no constant is multiplied at its use site — a per-widget factor is how
 a layout acquires two truths. `App::applySettings` sets it before the first render. The splash is
@@ -1001,9 +1013,20 @@ cannot be given up. `App::kMinCanvasW/H = 260x220` is the one place the canvas's
 
 Enforcement is the **window**, not the layout code: `applyWindowMinimum()` in `linux_main.cpp` asks
 GTK for `minPhysical* = minLogical* x scale`, and re-asks on every scale change, so a bigger scale
-requires a bigger window instead of quietly breaking. At the four offered scales that is
-438x350 / 526x420 / 584x466 / 730x583 — all of which fit a small panel, which is why 150% is not
-offered. `setSize` still clamps, for the cases the host cannot hold (a tiling WM, an offscreen
+requires a bigger window instead of quietly breaking. Across the seven offered scales that is
+438x350 / 526x420 / 584x466 / 730x583 / 876x699 / 1022x816 / 1168x932.
+
+**A scale the display cannot honour is offered disabled.** 1168x932 does not fit a 1366x768 panel,
+so with the range reaching 200% it is no longer true that every scale fits every screen. The host
+reports the monitor **work area** (`gdk_monitor_get_workarea` — a dock or a title bar is height the
+window will never get) via `App::setDisplaySize`; `App::scaleFitsDisplay(pct)` is the rule, and
+`openSettingsDialog` turns it into the single `maxScale` the dialog needs — one number suffices
+because the constraint is monotonic, the logical minimum being fixed. Chips above it draw at 0.4
+alpha and ignore clicks, exactly as the GPU row's "On" does with no backend, and the row label gains
+`, up to N% here` only when there is a cap. A display size of 0 means "unknown" and disables nothing,
+so a headless harness sees the full range; the host logs which of the two happened, because "every
+scale is offered" and "we could not find out" look identical in the dialog and only one of them means
+a 200% chip is safe to click. `setSize` still clamps, for the cases the host cannot hold (a tiling WM, an offscreen
 harness, `--size` below the minimum): a shell drawn slightly cropped is usable, one that refuses to
 size is not.
 
@@ -1021,6 +1044,37 @@ three fixed columns and a floor-bound canvas have the least room to disagree —
 `-editor-1280x800` to show what the setting is for. All fixture-free, so they run in
 `cosmo_shots_headless`. `settings-min` in particular proves the dialog that sets the scale never puts
 its own Done button off the bottom edge.
+
+### DR-SETTINGS-1a The dialog's chip rows wrap (R5/R6, D-30)
+Seven scale chips at ~52 px do not fit a 324 px card interior, and the old `chipRects` laid chips on
+one unbounded line — so they would have run off the card's right edge, silently. Chips now **wrap**
+at the card's inner width and each row's height follows: `rowBlockH(row) = kLabelH + 6 + lines *
+kChipH + (lines - 1) * kChipRowGap`, `blockTop` sums the previous rows rather than multiplying a
+constant, and `cardRect` sums all of them — so the card grows only as much as it needs (366 -> 430 px
+for five rows, one of them wrapped 5 + 2) and cannot clip its own Done button. Generic, so the next
+long row is already handled.
+
+One walk serves both questions: `layoutChips(row, left, top, out)` returns the line count and, given
+an origin and a vector, also fills the boxes. That split is load-bearing — see **D-30**: the first
+version had the measure path (`rowLines` → `chipRects`) ask `cardRect()` for its wrap bound, and
+`cardRect()` needed `rowBlockH` → `rowLines`, so "how big is the card" and "where do the chips go"
+each waited on the other and the dialog crashed the moment it was drawn. The wrap bound is `kCardW`,
+a constant; only the chips' absolute positions need the card's position.
+
+### DR-UITEST-1 `cosmo_ui_tests` — assertions over the assembled app
+A ctest target (`apps/cosmo/tests/ui/uiTests.cpp`) that builds the real `App` over a real
+`CosmoService` from `COSMO_APP_NOMAIN`, with no display and no window, and drives its clock through
+`render()` into an `artboard::RecordingTarget`. It exists because of **D-29**: R-G-1's compliance
+clause says a snap is ruled out by comparing frames, not by reading code, and `cosmo_widget_tests`
+cannot do that — it builds widgets in isolation, with no App, no service and no clock. Same
+libraries as `cosmo_shots`, for the ODR reason that target's comment records.
+
+Covers today: `scaleChangeIsAnimatedNotSnapped` (the drawn scale passes through several values
+strictly between old and new, the logical size changes on those same frames, and it arrives exactly
+on target), `theStartupScaleDoesNotAnimate`, and `everyScaleLaysOutAtItsOwnMinimum` (at each offered
+scale, size the window to `minPhysical*` and require the logical box to meet the published floor and
+`CenterStage` to keep `kMinCanvasW`). The last uses `findSegmentByType` from `UiDump.h` to name the
+widget rather than indexing a child list whose order is a layout detail.
 
 ### DR-SVC-11 `ui dump` — the view as text (R-SVC-11)
 `apps/cosmo/UiDump.{h,cpp}` walks an `artboard::Segment` and prints one line per node: demangled

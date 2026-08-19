@@ -201,6 +201,16 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
       a click, and screen/scroll/hover decisions, none of which are service state
+- [x] **R-SCALE-2a / D-29** **The scale change animates**, and R-G-1 became a stated
+      non-negotiable. The setting shipped snapping the largest visible change the app can make —
+      the third time a change violated R-G-1 while its author had just read it, so the rule is
+      amended (the property list is examples not a boundary; it covers the coordinate system; a
+      setting is not exempt; a derived value must be recomputed from the eased source; compliance
+      is two frames, not a code read) and the design skill now leads with it. Range extended to
+      **200%** for a small dense screen, with scales the display cannot honour offered disabled.
+      New **`cosmo_ui_tests`** target — the assembled app, with a clock — because
+      `cosmo_widget_tests` structurally cannot see a snap. Also D-30: the chip wrapping the 7-chip
+      row needed made `cardRect` and `chipRects` call each other, which crashed the dialog.
 - [x] **R-SCALE** **Screen scale** — a small-screen UI scale, 75 / 90 / 100 / 125%, persisted and
       scriptable (`settings set uiScale=N`). Two commits, core then design. **One transform on the
       view root plus its inverse on pointer input** (R-SCALE-2): `mW`/`mH` became LOGICAL units, no

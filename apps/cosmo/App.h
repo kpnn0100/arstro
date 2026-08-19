@@ -56,11 +56,27 @@ namespace cosmo_v2
         void setSize(double width, double height);
 
         // ── R-SCALE: one scale for the whole shell ────────────────────────────────────────
-        /** Draw the shell at `percent` of the design size (75 / 90 / 100 / 125). Re-derives
-         *  the logical size from the physical one the window last reported, so the change is
-         *  a relayout and not a resize. Snapped by `AppSettings::clampUiScale`. */
-        void setUiScale(int percent);
+        /** Draw the shell at `percent` of the design size. EASES there over `kScaleAnimMs`
+         *  (R-SCALE-2a / R-G-1): the drawn scale, the logical size derived from it and every
+         *  widget's layout are recomputed each frame from the eased value, so the shell zooms
+         *  rather than jumping and then reflowing. Snapped by `AppSettings::clampUiScale`.
+         *
+         *  `animate == false` for the startup apply, where there is no previous scale to
+         *  travel from and a tween would be an entrance nobody asked for. */
+        void setUiScale(int percent, bool animate = true);
+        /** The scale that is SET — a preference is a number, not a motion. */
         int uiScale() const { return mUiScale; }
+        /** The scale currently being DRAWN. Differs from `uiScale()` only mid-tween, and that
+         *  difference is the only way a test can tell an eased change from a snapped one, which
+         *  is why it is public (R-G-1's compliance clause). */
+        double drawnUiScale() const { return mScaleAnim.value(); }
+        static constexpr double kScaleAnimMs = 260.0;   // as the home grid's reflow (§1.6)
+        /** The display the window is on, in physical px, so a scale whose minimum will not fit
+         *  can be offered as disabled rather than as a trap (R-SCALE-3). Zero (the default, and
+         *  what a headless harness leaves it at) means "unknown" — nothing is disabled. */
+        void setDisplaySize(double w, double h) { mDispW = w; mDispH = h; }
+        /** True when this scale's window minimum fits the reported display. */
+        bool scaleFitsDisplay(int percent) const;
         /** The smallest LOGICAL size the shell can be laid out in without a column squeezing
          *  another to nothing — the larger of what the launcher needs and what the editor
          *  needs (R-SCALE-3). The host turns this into the window's minimum by multiplying by
@@ -75,8 +91,8 @@ namespace cosmo_v2
         static double minLogicalWidth();
         static double minLogicalHeight();
         /** Physical minimum at the scale currently in force — what the host asks GTK for. */
-        double minPhysicalWidth() const { return minLogicalWidth() * scale(); }
-        double minPhysicalHeight() const { return minLogicalHeight() * scale(); }
+        double minPhysicalWidth() const { return minLogicalWidth() * (mUiScale / 100.0); }
+        double minPhysicalHeight() const { return minLogicalHeight() * (mUiScale / 100.0); }
 
         // ── home screen / projects (R-HOME) ──
         /** The session the service drives (R-SVC-1). App still OWNS it in S2 — see
@@ -314,8 +330,17 @@ namespace cosmo_v2
         double mW, mH;            // LOGICAL size the widgets lay out in = physical / scale
         double mPhysW = 0, mPhysH = 0;   // what the window last reported, kept so a scale
                                          // change can re-derive mW/mH without a resize event
-        int mUiScale = 100;              // percent (R-SCALE-1)
-        double scale() const { return mUiScale / 100.0; }
+        int mUiScale = 100;              // percent, the TARGET (R-SCALE-1)
+        // R-SCALE-2a: the drawn scale eases to the target. Everything geometric reads this,
+        // every frame — a logical size computed once from the target and then left alone is
+        // exactly the snap R-G-1 forbids.
+        artboard::AnimatedProperty mScaleAnim{1.0};
+        double mDispW = 0, mDispH = 0;   // reported display size, 0 = unknown
+        double targetScale() const { return mUiScale / 100.0; }
+        double scale() const { return mScaleAnim.value(); }
+        /** Re-derive the logical box from the physical one and the scale being drawn, then lay
+         *  out. Called by setSize and once per frame while the scale is easing. */
+        void applyLogicalSize();
         /** The view root's transform. EVERY place that used to install
          *  `Transform::identity()` installs this instead — `setTransform` is ABSOLUTE, so a
          *  scale applied by the host outside App would be wiped by the first reset inside it,

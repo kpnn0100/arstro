@@ -627,15 +627,45 @@ namespace cosmo_v2
         return std::max(HomeScreen::minContentHeight(), editor);
     }
 
-    void App::setUiScale(int percent)
+    bool App::scaleFitsDisplay(int percent) const
+    {
+        if (mDispW <= 0 || mDispH <= 0) return true;   // unknown display: disable nothing
+        const double s = percent / 100.0;
+        return minLogicalWidth() * s <= mDispW && minLogicalHeight() * s <= mDispH;
+    }
+
+    void App::setUiScale(int percent, bool animate)
     {
         const int snapped = cosmo::AppSettings::clampUiScale(percent);
-        if (snapped == mUiScale) return;
+        if (snapped == mUiScale && animate) return;
         mUiScale = snapped;
-        // A scale change is a RELAYOUT, not a resize: the window is the same size it was, so
-        // re-derive the logical box from the physical one it last reported. Without this the
-        // shell would keep the old logical size and simply be drawn at the wrong scale.
-        if (mPhysW > 0 && mPhysH > 0) setSize(mPhysW, mPhysH);
+        // R-SCALE-2a / R-G-1. The first version assigned the scale and re-derived the logical
+        // size in the same call: the largest visible change in the app, in one frame. It now
+        // travels, and because every geometric read goes through the eased value (see
+        // applyLogicalSize, called per frame from render) the whole shell zooms continuously
+        // instead of cutting to the new size and reflowing there.
+        if (animate)
+            mScaleAnim.animateTo(targetScale(), kScaleAnimMs, Easing::EaseOutCubic, mNowMs);
+        else
+            mScaleAnim.set(targetScale());
+        applyLogicalSize();
+    }
+
+    void App::applyLogicalSize()
+    {
+        if (mPhysW <= 0 || mPhysH <= 0) return;
+        // Logical units from here down. The host holds the window at minPhysical* for the
+        // TARGET scale, so this division normally lands at or above the logical minimum; the
+        // clamp is for the cases the host cannot hold it there (a tiling WM, an offscreen
+        // harness, a --size below the minimum, or the moment mid-tween when the drawn scale is
+        // briefly larger than the window was sized for) and it is a clamp rather than a
+        // rejection because a shell drawn slightly cropped is usable and one that refuses to
+        // size is not.
+        mW = std::max(minLogicalWidth(), mPhysW / scale());
+        mH = std::max(minLogicalHeight(), mPhysH / scale());
+        mRoot->width.set(mW); mRoot->height.set(mH);
+        if (mHome) { mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); }
+        layout();
     }
 
     void App::setSize(double width, double height)
@@ -643,16 +673,7 @@ namespace cosmo_v2
         if (width < 1) width = 1;
         if (height < 1) height = 1;
         mPhysW = width; mPhysH = height;
-        // Logical units from here down. The host holds the window at minPhysical*, so this
-        // division normally lands at or above the logical minimum; the clamp is for the cases
-        // the host cannot hold it there (a tiling WM, an offscreen harness, a --size smaller
-        // than the minimum) and it is a clamp rather than a rejection because a shell drawn
-        // slightly cropped is still usable and a shell that refuses to size is not.
-        mW = std::max(minLogicalWidth(), width / scale());
-        mH = std::max(minLogicalHeight(), height / scale());
-        mRoot->width.set(mW); mRoot->height.set(mH);
-        if (mHome) { mHome->width.set(mW); mHome->height.set(mH); mHome->layout(); }
-        layout();
+        applyLogicalSize();
     }
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
@@ -740,6 +761,13 @@ namespace cosmo_v2
     void App::render(IRenderTarget &target, double nowMs)
     {
         mNowMs = nowMs;
+        // R-SCALE-2a: the drawn scale advances FIRST, and while it is moving the logical box
+        // and the whole layout are re-derived from it every frame. Deriving them once when the
+        // setting changed would animate the transform and leave the layout at the old size —
+        // the shell would zoom and the panels would not, which is worse than a snap.
+        const bool zooming = mScaleAnim.isAnimating();
+        mScaleAnim.update(nowMs);
+        if (zooming) applyLogicalSize();
         mScreenFade.update(nowMs);
 
         // Home screen: render the launcher instead of the editor, then the transition
@@ -969,7 +997,9 @@ namespace cosmo_v2
         // R-SETTINGS-4. Applied before the first render so the app runs with what the
         // user last chose; the dialog then opens seeded with what is actually in force.
         mSettings = s;
-        setUiScale(s.uiScale);   // R-SCALE-1: before the first render, so nothing is laid out twice
+        // R-SCALE-1, and NOT animated: this is the startup apply, with no previous scale to
+        // travel from — a tween here would be an entrance nobody asked for (R-SCALE-2a).
+        setUiScale(s.uiScale, false);
         mSession.setPreviewEdge(s.previewEdge);
         mSession.setUseGpu(s.useGpu);   // no-op when no GPU backend exists (R-GPU-3)
         // The engine's thread count is deliberately NOT set here. It is a slice of the
@@ -984,8 +1014,13 @@ namespace cosmo_v2
         // Seeded from the stored settings, never from the engine's live count: Auto
         // resolves to a real worker count (R-CPU-2b), so the resolved value would leave
         // the Auto chip reading as an explicit 4.
-        mSettingsDialog->show(mUiScale, mSettings.previewEdge, mSettings.threads, mSettings.cpuPercent,
-                              mSession.useGpu(), mSession.gpuAvailable());
+        // The largest scale this display can honour, found by asking rather than by computing
+        // a threshold here: scaleFitsDisplay owns the rule and this owns the presentation.
+        int maxScale = cosmo::AppSettings::uiScales().front();
+        for (int s : cosmo::AppSettings::uiScales())
+            if (scaleFitsDisplay(s)) maxScale = s;
+        mSettingsDialog->show(mUiScale, maxScale, mSettings.previewEdge, mSettings.threads,
+                              mSettings.cpuPercent, mSession.useGpu(), mSession.gpuAvailable());
     }
 
     namespace

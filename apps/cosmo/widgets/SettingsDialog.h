@@ -39,7 +39,12 @@ namespace cosmo_v2
 
         /** Open, seeded with the current engine values so the right chips read selected.
          *  `gpuAvailable` false → the GPU row is shown disabled ("unavailable"). */
-        void show(int uiScale, int previewEdge, int threads, int cpuPercent, bool useGpu, bool gpuAvailable);
+        /** `maxScale` is the largest screen scale this DISPLAY can give a window for; anything
+         *  above it is drawn disabled with the reason, the way the GPU row shows "unavailable"
+         *  (R-SCALE-3). ONE number suffices because the constraint is monotonic — the logical
+         *  minimum is fixed, so a bigger scale always needs a bigger window. */
+        void show(int uiScale, int maxScale, int previewEdge, int threads, int cpuPercent,
+                  bool useGpu, bool gpuAvailable);
         bool isOpen() const { return mOpen && !mClosing; }
         /** Public (unlike the rest of the Segment overrides) because the HOME screen
          *  drives this dialog directly: Home is not part of the editor tree that would
@@ -61,8 +66,16 @@ namespace cosmo_v2
         // Named once, so inserting a row is not five coordinated edits to five literals —
         // which is what the row indices were before Screen scale was added.
         enum Row { kRowScale = 0, kRowQuality, kRowThreads, kRowCpu, kRowGpu, kRows };
-        // Fills `rects` with the chip boxes for row `row`.
-        void chipRects(int row, std::vector<artboard::Rect> &rects) const;
+        /** Fills `rects` with the chip boxes for row `row`, WRAPPING at the card's inner
+         *  width; `lines` (optional) receives how many lines it took. */
+        void chipRects(int row, std::vector<artboard::Rect> &rects, int *lines = nullptr) const;
+        /** The one chip walk. Returns the number of lines row `row` needs; when `out` is
+         *  non-null also fills it with the chips' boxes placed from (`left`, `top`). Splitting
+         *  it this way is what keeps `cardRect` and `chipRects` from calling each other. */
+        int layoutChips(int row, double left, double top, std::vector<artboard::Rect> *out) const;
+        int rowLines(int row) const;              // lines of chips row `row` needs
+        double rowBlockH(int row) const;          // label + gap + those lines
+        double blockTop(const artboard::Rect &card, int row) const;
         /** The text on chip `i` of `row` — ONE mapping, read both by chipRects (which
          *  sizes each chip to its text) and by the paint. Two copies would drift and
          *  mis-place every chip after the first in a row. */
@@ -91,6 +104,7 @@ namespace cosmo_v2
         double mLastMs = 0.0;
         artboard::AnimatedProperty mAppear{0.0};
         int mUiScale = 100;       // current selection (percent, R-SCALE-1)
+        int mMaxScale = 10000;     // largest scale this display can honour (R-SCALE-3)
         int mEdge = 1600;         // current selection (px)
         int mThreadCount = 0;     // current selection (0 = auto)
         int mCpuPercent = 50;     // current selection (% of cores, R-CPU-1)

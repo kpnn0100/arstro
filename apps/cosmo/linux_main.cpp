@@ -1525,10 +1525,34 @@ int main(int argc, char **argv)
     gtk_window_set_default_size(GTK_WINDOW(host.window), kW, kH);
 
     host.area = gtk_drawing_area_new();
-    // The minimum is ASKED FOR, not guessed. HomeScreen sums its own anchored blocks — the
-    // action buttons are pinned to the top and the Settings / What's New / Help links to the
-    // bottom — so at 400 px they overlapped, and a hardcoded number here could never notice the
-    // layout changing. `+ 1` on the width is the sidebar plus one card at its minimum.
+    // R-SCALE-3: tell App how big the screen actually is, so the settings row can disable the
+    // scales this display cannot give a window for instead of offering a trap. The WORK AREA,
+    // not the raw monitor size — a panel dock or a title bar is height the window will never
+    // get, and a scale whose minimum only fits behind the taskbar does not fit.
+    {
+        GdkDisplay *dpy = gdk_display_get_default();
+        GdkMonitor *mon = dpy ? gdk_display_get_primary_monitor(dpy) : nullptr;
+        if (!mon && dpy && gdk_display_get_n_monitors(dpy) > 0) mon = gdk_display_get_monitor(dpy, 0);
+        GdkRectangle area{};
+        if (mon) gdk_monitor_get_workarea(mon, &area);
+        if (area.width > 0 && area.height > 0)
+        {
+            host.app.setDisplaySize((double)area.width, (double)area.height);
+            int mx = arstro::cosmo::AppSettings::uiScales().front();
+            for (int s : arstro::cosmo::AppSettings::uiScales())
+                if (host.app.scaleFitsDisplay(s)) mx = s;
+            LOGI("display: work area %dx%d — screen scale offered up to %d%% here (R-SCALE-3)",
+                 area.width, area.height, mx);
+        }
+        else
+        {
+            // Said out loud rather than left as a silently full list: "every scale is offered"
+            // and "we could not find out" look identical in the dialog, and only one of them
+            // means a 200%% chip is safe to click.
+            LOGI("display: size unknown (no monitor work area) — every screen scale offered");
+        }
+    }
+
     applyWindowMinimum(&host);
     gtk_widget_set_can_focus(host.area, TRUE);
     gtk_widget_add_events(host.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |

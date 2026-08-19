@@ -111,6 +111,63 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-29 — The screen-scale setting snapped, and R-G-1 had said not to
+- **Area:** design · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-19, by the user, immediately after the setting shipped: *"fix scale change
+  that will apply animation"*. Filed alongside the rule amendment it caused, because the useful
+  artefact is not this bug — it is the third instance of the same one.
+- **Reproduce:** pick any other Screen scale. Before the fix the whole shell cut to the new size
+  in one frame. `cosmo_ui_tests`' `scaleChangeIsAnimatedNotSnapped` fails against that code on
+  "the drawn scale passes through several values strictly between old and new".
+- **Expected:** R-G-1, which the same session had just quoted while writing R-SCALE: no visible
+  property changes in a single frame.
+- **Actual:** `setUiScale` assigned `mUiScale` and re-derived the logical size in the same call —
+  the largest visible change the app can make (every rect, every type size, the transform the whole
+  tree draws through), snapped.
+- **Judgement:** defect against **R-G-1**, no interpretation needed. Worth recording *why* it got
+  written: a scale is a *setting*, and a setting feels like configuration rather than motion. The
+  grid-reflow snap (R-G-1a) was "a layout consequence of a resize"; this one was "a preference".
+  Both were the same mistake, which is why R-G-1 is now amended to say that no such category
+  exists, and why its compliance clause now says reading the code does not count as checking.
+- **Fix:** `mUiScale` stays the **target** (a preference is a number); a new `mScaleAnim`
+  `AnimatedProperty` carries the **drawn** scale and eases over 260 ms. `rootTransform()` and
+  `toLogical()` read the eased value, and `App::render` re-derives the logical box and re-runs
+  `layout()` **every frame while it moves** — deriving it once would have animated the transform
+  and left the panels at the old size, which is worse than a snap. The window minimum stays on the
+  *target* scale so it does not wobble mid-tween. `applySettings` passes `animate = false`: the
+  startup apply has no previous scale to travel from.
+- **Verified:** `cosmo_ui_tests` (new target) asserts the drawn scale passes through several
+  intermediate values, that the logical size changes on those same frames, and that it arrives
+  exactly on target; shots `scale-zoom-{000-before,060-mid,140-mid,999-after}` are the two
+  mid-tween frames a human can compare, and they are visibly different sizes.
+- **Guarded by:** `scaleChangeIsAnimatedNotSnapped` and `theStartupScaleDoesNotAnimate` in the new
+  **`cosmo_ui_tests`** target — which exists because of this defect. `cosmo_widget_tests` could
+  never have caught it: it builds widgets in isolation, with no `App`, no service and no clock.
+
+### D-30 — The settings card and its chips asked each other how big they were, and the stack ran out
+- **Area:** design · **Status:** **Fixed** · **Severity:** S1 (crash)
+- **Found:** 2026-08-19, by `cosmo_shots` segfaulting on the very next run after chip wrapping was
+  added — a 74,000-frame stack, so the cause was legible immediately from the backtrace.
+- **Reproduce:** open the Settings dialog on the intermediate commit; `cosmo_shots --check` dies
+  with SIGSEGV in `SettingsDialog::cardRect`.
+- **Actual:** mutual recursion. `cardRect()` summed `rowBlockH(r)` (a wrapped row is taller than an
+  unwrapped one, so the card's height depends on the wrap) → `rowLines()` → `chipRects()` → and
+  `chipRects` asked `cardRect()` for the edges to wrap against. "How big is the card" and "where do
+  the chips go" each needed the other's answer first.
+- **Judgement:** defect, mine, introduced and found within one edit — recorded rather than quietly
+  fixed because the shape is worth having written down: it is what happens when a *measure* query
+  and a *place* query are the same function.
+- **Cause:** `chipRects` used `cardRect()` for both its wrap bound and its origin, when only the
+  origin needs it — the wrap bound is `kCardW`, a constant.
+- **Fix:** one private `layoutChips(row, left, top, out)` does the single walk and returns the line
+  count; `rowLines` calls it with no origin and no output vector, `chipRects` calls it with both.
+  The measure path no longer touches `cardRect` at all, so the cycle cannot re-form.
+- **Verified:** `cosmo_shots --check` renders all 41 fixture-free shots and exits 0; the settings
+  shot shows the scale row wrapped 5 + 2 with the card grown to hold it and Done inside.
+- **Guarded by:** `cosmo_shots_headless` in ctest, which now covers the dialog — it renders
+  `home-settings` and every `scale-*-settings-min`, so any return of the recursion is a crashing
+  test rather than a crashing app.
+
 ### D-28 — Two curves in one plot, and only one of them is yours
 - **Area:** design · **Status:** **Fixed** · **Severity:** S2
 - **Found:** 2026-08-19, reported by the user: *"the shadow curve in curve[d] can be select and

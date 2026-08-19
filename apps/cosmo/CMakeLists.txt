@@ -99,6 +99,29 @@ if(TARGET cosmo_core)
   target_compile_definitions(cosmo_shots PRIVATE
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+  # ── cosmo_ui_tests: assertions over the ASSEMBLED app ────────────────────────────────
+  # The skill has asked for this target since P0.2 and it finally has a failure that demands
+  # it: R-G-1's compliance clause. "Nothing changes in one frame" cannot be established by
+  # reading code — three changes have now shipped a snap that read correctly — so it is
+  # established by driving App's clock and requiring the DRAWN value to differ from the target
+  # mid-tween. cosmo_widget_tests cannot do that: it builds widgets in isolation and has no
+  # App, no service and no clock.
+  #
+  # Same libraries as cosmo_shots, for the same ODR reason its comment gives, and no display:
+  # the assertions are about geometry and animated state, so frames go to a RecordingTarget.
+  add_executable(cosmo_ui_tests ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/ui/uiTests.cpp)
+  target_include_directories(cosmo_ui_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
+  target_link_libraries(cosmo_ui_tests PRIVATE artboard_core arstro_image cosmo_core
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FONTCONFIG)
+  target_compile_definitions(cosmo_ui_tests PRIVATE
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME cosmo_ui COMMAND cosmo_ui_tests)
+
   # The fixture-free subset as a ctest case: home (empty, with recents, with the settings
   # modal), the empty editor and the open transition need no display and no images on
   # disk, so they run anywhere the app builds. `--check` is what makes it a TEST rather

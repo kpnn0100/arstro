@@ -33,7 +33,8 @@ namespace cosmo_v2
         constexpr double kFooterH = 40.0;
         constexpr double kBtnW = 92.0, kBtnH = 26.0;
         constexpr double kFontPx = 12.0;
-        constexpr double kBlockH = kLabelH + 6.0 + kChipH;  // label + gap + chips
+        constexpr double kChipRowGap = 5.0;   // between wrapped lines of chips within one row
+        constexpr double kBlockH = kLabelH + 6.0 + kChipH;  // label + gap + ONE line of chips
 
         inline Color fade(Color c, double a) { return Color{c.r, c.g, c.b, c.a * a}; }
 
@@ -42,7 +43,7 @@ namespace cosmo_v2
         std::string threadLabel(int v) { return v == 0 ? "Auto" : std::to_string(v); }
         std::string cpuLabel(int v) { return std::to_string(v) + "%"; }
         std::string gpuLabel(int i) { return i == 0 ? "Off" : "On"; }
-        double blockTop(const Rect &c, int row) { return c.y + kPad + kHeaderH + row * (kBlockH + kRowGap); }
+
     }
 
     // One label mapping, read by both chipRects (which sizes the chip to its text) and
@@ -59,10 +60,11 @@ namespace cosmo_v2
 
     SettingsDialog::SettingsDialog(const Color &accent) : mAccent(accent) {}
 
-    void SettingsDialog::show(int uiScale, int previewEdge, int threads, int cpuPercent,
-                              bool useGpu, bool gpuAvailable)
+    void SettingsDialog::show(int uiScale, int maxScale, int previewEdge, int threads,
+                              int cpuPercent, bool useGpu, bool gpuAvailable)
     {
         mUiScale = cosmo::AppSettings::clampUiScale(uiScale);
+        mMaxScale = maxScale;
         mEdge = previewEdge; mThreadCount = threads; mCpuPercent = cpuPercent;
         mGpuAvailable = gpuAvailable; mUseGpu = useGpu && gpuAvailable;
         mOpen = true; mClosing = false;
@@ -100,7 +102,11 @@ namespace cosmo_v2
 
     Rect SettingsDialog::cardRect() const
     {
-        const double h = kPad + kHeaderH + kRows * kBlockH + kRows * kRowGap + kFooterH + kPad;
+        // Summed from the rows rather than kRows * kBlockH: a wrapped row is taller, and a card
+        // sized for the unwrapped height would clip its own Done button.
+        double rows = 0.0;
+        for (int r = 0; r < kRows; ++r) rows += rowBlockH(r) + kRowGap;
+        const double h = kPad + kHeaderH + rows + kFooterH + kPad;
         const double x = (width.value() - kCardW) * 0.5;
         const double y = (height.value() - h) * 0.5;
         return Rect{x < 4 ? 4 : x, y < 4 ? 4 : y, kCardW, h};
@@ -112,20 +118,62 @@ namespace cosmo_v2
         return Rect{c.x + c.w - kPad - kBtnW, c.y + c.h - kPad - kBtnH, kBtnW, kBtnH};
     }
 
-    void SettingsDialog::chipRects(int row, std::vector<Rect> &rects) const
+    // ── chips WRAP, and the row grows to hold them (R5/R6) ──────────────────────────────
+    // Chips used to be laid out on one unbounded line: fine for four, and silently off the
+    // card's right edge for seven, which is what Screen scale became when the range reached
+    // 200%. Widening the card for one row, or thinning the padding, would trade one row's
+    // problem for the whole dialog's; wrapping fixes every future row at once and costs the
+    // card only the height it actually needs.
+    //
+    // ONE walk, two callers, and the split matters: the first version had `rowLines` ask
+    // `chipRects`, which asked `cardRect`, which summed `rowBlockH`, which asked `rowLines` —
+    // mutual recursion between "how big is the card" and "where do the chips go", which
+    // segfaulted on a 74000-frame stack the moment the dialog was drawn. The wrap decision
+    // depends only on the card's WIDTH, which is a constant; only the chips' absolute
+    // positions need to know where the card sits. So `layoutChips` does the single walk, and a
+    // caller that only wants the line count passes no origin and no output vector.
+    int SettingsDialog::layoutChips(int row, double left, double top, std::vector<Rect> *out) const
     {
-        rects.clear();
-        const Rect c = cardRect();
+        if (out) out->clear();
+        const double inner = kCardW - 2 * kPad;
         const int n = rowChipCount(row);
-        double x = c.x + kPad;
-        const double y = blockTop(c, row) + kLabelH + 6.0;
+        double x = 0.0, y = 0.0;
+        int lines = 1;
         for (int i = 0; i < n; ++i)
         {
-            const std::string lbl = chipLabel(row, i);
-            const double w = estimateTextWidth(lbl, kFontPx) + 2 * kChipPadX;
-            rects.push_back(Rect{x, y, w, kChipH});
+            const double w = estimateTextWidth(chipLabel(row, i), kFontPx) + 2 * kChipPadX;
+            if (i > 0 && x + w > inner)   // never the first chip of a line: a chip wider than
+            {                             // the card must overflow visibly, not vanish
+                x = 0.0;
+                y += kChipH + kChipRowGap;
+                ++lines;
+            }
+            if (out) out->push_back(Rect{left + x, top + y, w, kChipH});
             x += w + kChipGap;
         }
+        return lines;
+    }
+
+    void SettingsDialog::chipRects(int row, std::vector<Rect> &rects, int *lines) const
+    {
+        const Rect c = cardRect();
+        const int used = layoutChips(row, c.x + kPad, blockTop(c, row) + kLabelH + 6.0, &rects);
+        if (lines) *lines = used;
+    }
+
+    int SettingsDialog::rowLines(int row) const { return layoutChips(row, 0.0, 0.0, nullptr); }
+
+    double SettingsDialog::rowBlockH(int row) const
+    {
+        const int lines = rowLines(row);
+        return kLabelH + 6.0 + lines * kChipH + (lines - 1) * kChipRowGap;
+    }
+
+    double SettingsDialog::blockTop(const Rect &c, int row) const
+    {
+        double y = c.y + kPad + kHeaderH;
+        for (int r = 0; r < row; ++r) y += rowBlockH(r) + kRowGap;
+        return y;
     }
 
     bool SettingsDialog::handleGesture(const Gesture &g, const Point &local)
@@ -150,7 +198,15 @@ namespace cosmo_v2
             for (int i = 0; i < (int)chips.size(); ++i)
                 if (chips[i].contains(p))
                 {
-                    if (row == kRowScale) { mUiScale = kScales[i]; if (onUiScale) onUiScale(mUiScale); }
+                    if (row == kRowScale)
+                    {
+                        // A scale this display cannot give a window for is inert, like the GPU
+                        // "On" chip with no backend — clicking it must not set a scale the
+                        // shell would then have to crop itself into (R-SCALE-3).
+                        if (kScales[i] > mMaxScale) return true;
+                        mUiScale = kScales[i];
+                        if (onUiScale) onUiScale(mUiScale);
+                    }
                     else if (row == kRowQuality) { mEdge = kEdges[i]; if (onPreviewEdge) onPreviewEdge(mEdge); }
                     else if (row == kRowThreads) { mThreadCount = kThreads[i]; if (onThreads) onThreads(mThreadCount); }
                     else if (row == kRowCpu) { mCpuPercent = kCpuPercents[i]; if (onCpuPercent) onCpuPercent(mCpuPercent); }
@@ -190,7 +246,16 @@ namespace cosmo_v2
             // without it the Auto chip above reads as if it still meant every core (R-CPU-2).
             // Middot suffixes name the consequence, because neither row's effect is where the
             // user is looking: the scale changes the WINDOW's minimum, not just the type size.
-            if (row == kRowScale) rowLbl += "  \xc2\xb7  smaller fits more";
+            if (row == kRowScale)
+            {
+                // Name the limit rather than leaving a dimmed chip unexplained. "smaller fits
+                // more" is the whole point of the row on a cramped screen; the cap is only
+                // mentioned when there IS one, so a big display is not told about a problem it
+                // does not have.
+                rowLbl += "  \xc2\xb7  smaller fits more";
+                if (!kScales.empty() && mMaxScale < kScales.back())
+                    rowLbl += ", up to " + std::to_string(mMaxScale) + "% here";
+            }
             if (row == kRowCpu) rowLbl += "  \xc2\xb7  Auto uses this";
             if (row == kRowGpu && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";
             t.drawText(rowLbl, c.x + kPad, ly + 12.0, 11.0, font::sansMedium(), 0.06 * 11.0);
@@ -205,7 +270,8 @@ namespace cosmo_v2
                                : row == kRowThreads ? (kThreads[i] == mThreadCount)
                                : row == kRowCpu     ? (kCpuPercents[i] == mCpuPercent)
                                                     : ((i == 1) == mUseGpu);
-                const bool disabled = (row == kRowGpu && i == 1 && !mGpuAvailable);  // "On", no backend
+                const bool disabled = (row == kRowGpu && i == 1 && !mGpuAvailable)     // "On", no backend
+                                   || (row == kRowScale && kScales[i] > mMaxScale);   // no room (R-SCALE-3)
                 const double da = disabled ? 0.4 : 1.0;
                 const std::string lbl = chipLabel(row, i);
                 drawRoundedRect(t, chips[i], radius::control(),

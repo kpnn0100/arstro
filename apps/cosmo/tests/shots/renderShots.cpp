@@ -656,6 +656,44 @@ namespace
         }
     }
 
+    /** R-G-1 / R-SCALE-2a: the scale change caught IN FLIGHT.
+     *
+     *  The rule's own compliance clause says a snap cannot be ruled out by reading code, only
+     *  by comparing frames half a tween apart — so here are those frames. 100% -> 200% is the
+     *  largest jump the setting offers, which makes it the pair where a snap would be most
+     *  obvious and an ease most legible. `cosmo_ui_tests` asserts the same thing numerically;
+     *  this is the half a human can check. */
+    void shotScaleZoom()
+    {
+        if (!wanted("scale-zoom")) return;
+        setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-scale-zoom").string());
+        // 1280x960, not the usual 1280x800: 200% needs 1168x932 of window (R-SCALE-3), and in a
+        // shorter one the last frame would show the logical-size CLAMP cropping the shell rather
+        // than the ease this pair exists to show. The clamp is correct and documented; it is
+        // just not what is being demonstrated, and a shot that shows the wrong true thing is
+        // read as a bug.
+        const int w = 1280, h = 960;
+        Rig rig(w, h);
+        AppSettings s;
+        rig.app.applySettings(s);          // 100%, applied without a tween
+        rig.svc.applySettings(s);
+        rig.app.setSize((double)w, (double)h);
+        Frame f(w, h);
+        rig.app.showEditor();
+        rig.settle(f, 800.0);
+        save(f, "scale-zoom-000-before");
+
+        rig.app.setUiScale(200);
+        // kScaleAnimMs is 260; sample early and late in the EASE, not at its ends. EaseOutCubic
+        // moves most in its first third, so 60 ms and 140 ms are visibly different sizes.
+        rig.step(f, 4);    // ~64 ms
+        save(f, "scale-zoom-060-mid");
+        rig.step(f, 5);    // ~144 ms
+        save(f, "scale-zoom-140-mid");
+        rig.settle(f, 400.0);
+        save(f, "scale-zoom-999-after");
+    }
+
     /** The open transition, caught in the middle, with no project behind it. Deterministic
      *  by construction: the phases are driven from the shot clock, and `beginOpenTransition`
      *  starts them at the nowMs of the frame it was called on.
@@ -833,7 +871,8 @@ int main(int argc, char **argv)
         std::printf("home-empty  home-recents  home-settings  editor-empty\n"
                     "loading-intro  loading-progress  loading-dissolve  loading-reveal  editor-project\n"
                     "scale-75-*  scale-90-*  scale-100-*  scale-125-*   (-home-min, -editor-min,\n"
-                    "                            -settings-min, -editor-1280x800)\n");
+                    "                            -settings-min, -editor-1280x800)\n"
+                    "scale-zoom-{000-before,060-mid,140-mid,999-after}\n");
         return 0;
     }
 
@@ -862,6 +901,7 @@ int main(int argc, char **argv)
     shotHomeRecents(sizes, images);
     shotEditorEmpty(sizes[0], sizes[1]);
     shotScales();   // R-SCALE: every offered scale, at the smallest window it permits
+    shotScaleZoom();  // R-G-1: the scale change caught mid-tween
     shotTransition(sizes[0], sizes[1], images);
     shotTransition(sizes[2], sizes[3], images);
     const int rc = shotEditorProject(sizes, images);
