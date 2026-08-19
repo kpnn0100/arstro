@@ -692,9 +692,12 @@ namespace cosmo
                 emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
                 return true;
 
-            // Both are front-end concerns: only the caller knows where to print, and only
-            // the caller owns the loop a wait would spin. The service just refuses to guess.
+            // All three are front-end concerns: only the caller knows where to print, only
+            // the caller owns the loop a wait would spin, and the Segment tree `ui dump`
+            // walks is presentation the service is forbidden to know about (R-SVC-3). The
+            // service just refuses to guess.
             case Command::Kind::StatePrint:
+            case Command::Kind::UiDump:
             case Command::Kind::Wait: return true;
 
             case Command::Kind::Quit: mQuit = true; return true;

@@ -868,6 +868,16 @@ and make every front end — the GTK window, the CLI, the shot renderer — a *v
   behaviour named in `PARITY.md` or in an `R-*` requirement has no command; another asserts that
   `cosmo-cc` and the GUI, given the same commands, produce the same `AppModel` dump (animation
   fields excluded by construction, since the dump is of state, not of presentation).
+- **R-SVC-11 The view is inspectable without a screen.** `ui dump [--root <name>] [--json]
+  [--visible] [--depth N]` returns the Segment tree as text over the same socket: per node its
+  type, its **world** rect, size, visibility, opacity, hover and enabled state. A widget that
+  paints itself rather than composing children — the splash, the filmstrip — additionally
+  reports one line of its own presentation state (`UiInspectable`), because a leaf's rect says
+  nothing about what the leaf drew. Answered by the **front end**, never by the service: the
+  Segment tree is presentation and R-SVC-3 forbids the service to know it exists; `cosmo-cc`
+  headless answers "no view attached" so one script runs against both. This does not replace a
+  rendered frame — a shot says it looks wrong, a dump says which node is wrong — and the two
+  together are what make a visual defect diagnosable without a human at a monitor.
 - **R-SVC-10 One owner of the CPU budget.** `ThreadBudget`, owned by the service, converts the
   user's percentage **once** and divides that single total between the decode pool and the engine —
   this **amends R-CPU-2**, under which each consumer converted the whole percentage for itself and a

@@ -127,6 +127,16 @@ namespace cosmo_v2
         { return (index >= 0 && index < (int)mRecents.size()) ? mRecents[index].name : std::string(); }
         int recentCount() const { return (int)mRecents.size(); }
 
+        /** P0.6 — a named view root, for `ui dump` over the control socket. The window has
+         *  two independent trees (the editor and the home screen are siblings, not one
+         *  hierarchy), so a caller that wants "the UI" has to ask for both by name. Returns
+         *  null for an unknown name. Read-only on purpose: an inspector that could mutate the
+         *  tree would be a second, untested way to drive the app. */
+        const artboard::Segment *uiRoot(const std::string &name) const;
+        /** The names `uiRoot` accepts, so a client can dump everything without knowing what
+         *  cosmo happens to be made of this month. */
+        static const std::vector<std::string> &uiRootNames();
+
         int openImage(const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path = "");
         void selectImage(int slot);
         void deleteSelected();

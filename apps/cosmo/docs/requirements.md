@@ -899,6 +899,34 @@ documented line exist** — without which the struct path would work while the C
 control socket could not reach the behaviour, which is the divergence the architecture exists
 to prevent.
 
+### DR-SVC-11 `ui dump` — the view as text (R-SVC-11)
+`apps/cosmo/UiDump.{h,cpp}` walks an `artboard::Segment` and prints one line per node: demangled
+type (RTTI, so a widget cannot forget to declare a name it then lets rot), **world** rect (a local
+x/y says nothing once a parent has moved), size, `opacity`, `visible`, an explicit `SHOWN=no` when
+`isFadedOut()`, plus hover / disabled / clip and the child count. `--json` emits the same fields as
+an array, `--visible` prunes faded subtrees (off by default — *why is it not showing* is the
+commonest question and a filter that hides the answer is worse than a longer dump), `--depth N`
+truncates.
+
+`App::uiRoot(name)` / `App::uiRootNames()` expose **two** roots, because there really are two: the
+editor tree and the home screen are drawn by different branches of `render()` and neither contains
+the other, so a single "the root" accessor would silently return half the UI. The **splash** is
+dumped by the host, which owns it — it lives in its own borderless window and is in neither App
+root. `--root` selects one; the default dumps all three; a root that does not exist right now
+answers `ui-root <name> (absent)`, which is itself the answer to "has the splash gone yet".
+
+`UiInspectable` (`apps/cosmo/UiInspectable.h`) is the opt-in escape hatch for widgets that paint
+themselves: one virtual returning a line of `key=value`, found by `dynamic_cast` (affordable — the
+dumper already uses RTTI). Cosmo-side rather than a virtual on `artboard::Segment` because
+debugging cosmo is not a general UI engine's job, and `core/Artboard` is a submodule whose every
+change costs a second commit. `SplashScreen::uiDetail` is the first implementor and is what turned
+DR-SPLASH-5's invisible progress bar from a suspicion into a timeline.
+
+Host-side in `pollControl`, framed `[evt] ui.begin` / `[evt] ui.end` for line-oriented clients,
+exactly like `state print` and for the same reason (R-SVC-3). `cosmo-cc` headless answers
+`(no view attached)` and exits 0, so one acceptance script runs through both front ends without
+branching on which it is.
+
 ### DR-SVC-9 Two front ends, one state (R-SVC-9)
 `two_services_dump_the_same_state` runs the same command sequence twice — once pumped 120 extra
 frames, standing in for a GUI that has animated longer — and asserts the `stable` dumps are
@@ -985,6 +1013,46 @@ one activity affordance reads identically app-wide — and never two at once. Th
 unit (spinner + gap + text) and ellipsizes at `kStatusMaxFrac` of the window. **Ellipsize against
 the room available, not against the string's own measured width** — the latter truncates *every*
 string, since appending `…` always makes it wider.
+
+### DR-SPLASH-5 The progress bar, and why it waits (R-SPLASH / R-LOADUX-3)
+An inset rounded bar pinned above the version line: `kBarInset = 44` (the tagline's optical
+margin), `kBarBottom = 34`, `kBarH = 4`, a track at 10% white with the fill in the accent colour,
+never narrower than the cap radius (a small fraction drawn thinner than its own rounding reads as a
+smudge). Beside it, the R-LOADUX-3 count — `n of N` in the mono face at 9.5 px — because a fraction
+with no denominator says how far but never how much; the bar gives up exactly the width the text
+needs, and drops the count entirely rather than shrink below 40 px.
+
+Two timing rules, both **measured** through `ui dump --root splash` sampled at 80 ms rather than
+reasoned about:
+
+- The **track fades in with the dots** during the intro, not on the first real work. Its first
+  version faded in on the first `setProgress`, so that an empty track would not sit through the
+  intro looking stuck. But a cover is now the embedded preview (~7 ms, DR-SPLASH-5a) rather than a
+  full decode, so on a machine with a few recents the first and last `setProgress` land in the same
+  frame the splash starts leaving: the 260 ms fade-in got one 80 ms window at **23% opacity**,
+  inside the exit fade. The bar was, in practice, never visible.
+- **`beginExit()` only requests the exit.** The fade starts once the eased fill reaches ≥ 0.995,
+  because the 220 ms ease and the 260 ms fade run concurrently otherwise and the bar's last drawn
+  state was 96% full at 0.1% alpha — the one frame that says *finished* was the one frame nobody
+  saw. It costs ~200 ms of launch (measured 1.2 s → 1.55 s) to make completion legible, the same
+  trade R-SPLASH already makes for the intro.
+
+Measured after the fix: the bar holds full opacity from ~900 ms to ~1280 ms, filling 4 → 332 px
+with `1 of 1` beside it, and only then fades.
+
+### DR-SPLASH-5a A cover is the camera's own preview, not a decode
+`ImageDecoder::decodeThumb(path, maxEdge)` — default implementation forwards to `decodeFile`, so
+every decoder keeps working — is overridden by `NativeImageDecoder` to pull the **embedded**
+preview: LibRaw `unpack_thumb()` + `dcraw_make_mem_thumb()` for RAW, then a GdkPixbufLoader with
+`size-prepared` wired up so the JPEG is scaled **during** decode rather than after. Non-RAW files
+take the same scaled-loader path. It falls back to the full `decodeRaw` when a file carries no
+preview.
+
+Measured on a Fujifilm X-Trans `.RAF`: **8072 ms → 6.6 ms**, and a probe put the returned preview
+at 480x320 in 32.1 ms end to end. A cover is drawn at 480 px, so the full demosaic was decoding
+~1200x the pixels it would ever show — and it ran **inline in the GTK splash tick**, which is why
+the splash froze mid-animation and the status text set two lines above it was never painted before
+the freeze began. The home screen's covers come from the same call.
 
 Host: `startSplash` creates a **borderless, non-resizable, centred** `GTK_WINDOW_TOPLEVEL`
 (`gtk_window_set_decorated(FALSE)`, `GDK_WINDOW_TYPE_HINT_SPLASHSCREEN`) with its own drawing area

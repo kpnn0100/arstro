@@ -9,6 +9,7 @@
 #include "ExportWriter.h"
 #include "Log.h"
 #include "ControlChannel.h"
+#include "UiDump.h"
 #include "OmpPin.h"
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
@@ -1014,7 +1015,12 @@ namespace
                 // the launcher's unit is a project (R-SPLASH-2a).
                 const std::string who = a->app.recentName(job.first);
                 a->splash->setStatus(who.empty() ? std::string("Loading covers…") : "Loading  " + who);
-                DecodedImage img = a->decoder.decodeFile(job.second);
+                // R-SPLASH-5: the EMBEDDED preview, not a full decode. A cover is drawn at
+                // 480 px, and the full path cost 8072 ms against 6.6 ms for the preview the
+                // camera already wrote into the file — 1200x. That decode ran inline in this
+                // GTK tick, so the splash froze mid-animation for its whole duration and the
+                // status text set two lines above was never painted before the freeze began.
+                DecodedImage img = a->decoder.decodeThumb(job.second, 480);
                 if (img.ok())
                 {
                     DecodedImage thumb = downscaleCover(img, 480);
@@ -1024,7 +1030,10 @@ namespace
                 ++a->thumbDone;
             }
             const size_t total = a->thumbQueue.size();
-            a->splash->setProgress(total == 0 ? 1.0 : (double)a->thumbDone / (double)total);
+            // R-SPLASH-5: the fraction AND the count — "how far" and "how much" are different
+            // questions and a bar answers only the first.
+            a->splash->setProgress(total == 0 ? 1.0 : (double)a->thumbDone / (double)total,
+                                   (int)a->thumbDone, (int)total);
             if (a->thumbDone >= total)
             {
                 a->splash->setStatus("Ready");
@@ -1085,9 +1094,9 @@ namespace
     }
     // R-SVC-8: a line off the socket lands in the SAME dispatch a click produces, on the UI
     // thread, between frames — so there is no locking to get wrong, and "an agent did it" is
-    // indistinguishable from "the user did it". Two commands are answered here rather than in
-    // the service because only the caller knows where to print and who owns the loop
-    // (CosmoService.cpp documents both as front-end concerns).
+    // indistinguishable from "the user did it". Three commands are answered here rather than
+    // in the service because only the caller knows where to print, who owns the loop, and
+    // what the view looks like (CosmoService.cpp documents all three as front-end concerns).
     void pollControl(Host *a)
     {
         if (!a->control.isOpen()) return;
@@ -1113,6 +1122,39 @@ namespace
                 a->control.broadcast("[evt] state.begin");
                 a->control.broadcast(arstro::cosmo::formatModel(a->svc.model(), o));
                 a->control.broadcast("[evt] state.end");
+                return;
+            }
+            if (c.kind == arstro::cosmo::Command::Kind::UiDump)
+            {
+                // P0.6 — "what is on screen" answered without a screen. Host-side, like the
+                // state dump above and for the same reason: the Segment tree is presentation,
+                // and CosmoService is not allowed to know it exists (R-SVC-3). The splash is
+                // dumped from HERE rather than from App because the host owns it -- it lives
+                // in its own borderless window and is not part of either App root.
+                arstro::cosmo_v2::UiDumpOptions o;
+                o.json = c.flag;
+                o.visibleOnly = c.field("visible") == "1";
+                if (!c.field("depth").empty()) o.maxDepth = std::atoi(c.field("depth").c_str());
+                const std::string want = c.name.empty() ? "all" : c.name;
+                a->control.broadcast("[evt] ui.begin");
+                bool any = false;
+                for (const auto &n : App::uiRootNames())
+                {
+                    if (want != "all" && want != n) continue;
+                    if (const artboard::Segment *r = a->app.uiRoot(n))
+                    {
+                        a->control.broadcast(arstro::cosmo_v2::dumpSegmentTree(*r, n, o));
+                        any = true;
+                    }
+                }
+                if ((want == "all" || want == "splash") && a->splash)
+                {
+                    a->control.broadcast(arstro::cosmo_v2::dumpSegmentTree(*a->splash, "splash", o));
+                    any = true;
+                }
+                if (!any)
+                    a->control.broadcast("ui-root " + want + " (absent)");
+                a->control.broadcast("[evt] ui.end");
                 return;
             }
             a->svc.dispatch(c);   // a rejection already reaches the client via the event sink
@@ -1315,7 +1357,7 @@ int main(int argc, char **argv)
         // R-SPLASH-3: during launch these are QUEUED and decoded one per frame by the
         // splash tick. Decoding here would be the very stall the splash exists to hide.
         if (host.startupPhase) { host.thumbQueue.emplace_back(idx, imgPath); return; }
-        DecodedImage img = host.decoder.decodeFile(imgPath);
+        DecodedImage img = host.decoder.decodeThumb(imgPath, 480);   // R-SPLASH-5
         if (!img.ok()) return;
         DecodedImage thumb = downscaleCover(img, 480);  // small: cheap to cache + reuse
         host.app.setHomeThumbnail(idx, thumb.rgba.data(), thumb.width, thumb.height);

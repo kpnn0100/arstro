@@ -14,6 +14,8 @@ namespace cosmo
     {
     public:
         DecodedImage decodeFile(const std::string &path) override;
+        /** The embedded preview for RAW, a size-limited GdkPixbuf load otherwise. */
+        DecodedImage decodeThumb(const std::string &path, int maxEdge) override;
         /** D-24: LibRaw announces its own phases, so the bar can move inside one image. */
         void setProgress(Progress p) override { mProgress = std::move(p); }
 

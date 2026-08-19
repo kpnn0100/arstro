@@ -111,6 +111,91 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-26 — The splash's progress bar is drawn only while the splash is fading out
+- **Area:** design · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, by the `ui dump` feature filed as D-25 — the first thing it was pointed
+  at. Two prior attempts to answer the same question with screenshots produced a crop of the
+  user's own desktop and a flat dark rectangle.
+- **Reproduce:**
+  ```bash
+  cosmo --control /tmp/c.sock &
+  printf 'ui dump --root splash\nwait 80\n%.0s' {1..30} > s.txt
+  cosmo-cc attach /tmp/c.sock --script s.txt | grep '·'
+  #  960ms  progress=0.615 barAlpha=0.229 ... alpha=0.416 exiting=1
+  # 1040ms  progress=0.883 barAlpha=0.067 ... alpha=0.076 exiting=1
+  # 1120ms  progress=0.964 barAlpha=0.001 ... alpha=0.001 exiting=1
+  ```
+- **Expected:** a progress bar the user can see, reaching 100% before the splash leaves.
+- **Actual:** the bar's peak opacity over its whole life was **0.229**, held for one 80 ms sample,
+  and every frame of it fell inside the exit fade. The fill peaked at **0.964** — it never once
+  drew full. The splash was up for ~1.2 s and the bar was effectively invisible for all of it.
+- **Judgement:** defect against the request that added it ("Loading page when open app need to have
+  progress bar and text to indicate loading progress too"): the feature shipped, built, and did
+  nothing. The bar had been *reviewed* by reading its drawing code, which is exactly the check that
+  cannot catch a timing failure.
+- **Cause:** two animations racing an exit that no longer waits for anything. `mBarFade` began its
+  260 ms fade-in on the first `setProgress` call, and `mProgress` eased over 220 ms — but since
+  DR-SPLASH-5a a cover is the embedded preview at ~7 ms instead of an 8072 ms decode, so with a
+  handful of recents the first and last `setProgress` land in **the same tick**, which is also the
+  tick that calls `beginExit()`. The bar's entrance, its fill and the splash's 260 ms departure all
+  started together. The speedup that fixed the freeze is what made the bar unviewable; nothing was
+  wrong with either change alone.
+- **Fix:** the track fades in with the dots during the intro (`begin()`), so the bar is present
+  before there is anything to report and merely fills; and `beginExit()` now only *requests* the
+  exit — `advance()` starts the fade once the eased fill reaches ≥ 0.995. Launch grows ~200 ms
+  (1.2 s → 1.55 s), the same trade R-SPLASH already makes for the intro.
+- **Verified:** re-sampled at 80 ms through the same `ui dump`: `barAlpha` reaches 0.986 at 960 ms
+  and holds **1.000** through 1280 ms while the fill goes 4 → 332 px and the count reads `1 of 1`;
+  only then does `exiting` flip and the fade run.
+- **Guarded by:** nothing automated — the failure is a timing relationship between two eased
+  properties and a host tick, and the harness that would assert it is the `ui dump` sampler itself.
+  Recorded as such rather than claimed: this one is guarded by the reproduce block above.
+
+### D-25 — A UI question can only be answered by photographing the screen
+- **Area:** tooling · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, reported by the user — "do it with out capturing screen, add feature to
+  debug UI (like get the visual component info through ipc)" — after watching several turns go into
+  screenshots that answered nothing.
+- **Expected:** the state of the view is readable the way the state of the model already is
+  (`state print`).
+- **Actual:** it was not readable at all. Every question about layout, visibility or a widget's
+  drawn state had to go through a screen grab: slow, racy against animation, impossible headless,
+  and dependent on guessing crop coordinates on a multi-monitor desktop. One 4 px progress bar cost
+  an afternoon and was still not seen — and when it finally was measured, it turned out not to be
+  drawn at all (D-26).
+- **Judgement:** defect against R-SVC-1's premise. The whole service architecture exists so an
+  agent can drive the app without looking at it; leaving the *view* unreadable meant half the app
+  stayed behind glass.
+- **Fix:** `ui dump` (R-SVC-11 / DR-SVC-11) — the Segment tree as text over the control socket,
+  plus `UiInspectable` for widgets that paint themselves and so have no children to walk.
+- **Verified:** dumps the live editor tree (10 top-level children, world rects, `SHOWN=no` on the
+  hidden compare pane), the home screen, and the splash — the last of which immediately produced
+  D-26. The acceptance test still passes, so the new command did not disturb R-SVC-9 parity.
+- **Guarded by:** `every_command_kind_has_a_grammar` now covers 27 kinds including `ui dump`.
+
+### D-27 — `wait 60` sleeps in `cosmo-cc run` and pattern-matches in `cosmo-cc attach`
+- **Area:** tooling · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-19, while sampling the splash for D-26 — 40 dumps 60 ms apart came back
+  byte-identical, and the run took 1.2 s instead of 2.4 s.
+- **Reproduce:** any `attach` script with `wait <ms>` between two commands: the whole script sends
+  in one burst and every dump reports the same frame.
+- **Expected:** one word, one meaning, in both front ends — which is literally what the comment on
+  the line above the bug said (`canonicalWait(...)  // D-16: one vocabulary, both front ends`).
+- **Actual:** `cmdRun`'s `waitFor()` treats a leading digit as a **duration** and spins `pumpOnce`
+  for it. `cmdAttach` never had that branch: it put the string into `waitFor` and waited for an
+  arriving event line to *contain* it. `wait 60` therefore matched the `260` in a 420x260 splash
+  dump and cleared instantly — a sampler with no delay, silently.
+- **Judgement:** defect, and the same D-16 shape it was supposed to have closed: `canonicalWait`
+  unified the *spelling* of the conditions and nobody checked that both call sites still agreed on
+  what a number meant.
+- **Fix:** `cmdAttach` grows the duration branch — a `sleeping`/`sleepUntil` pair kept separate
+  from `waitFor` so a duration is never matched as text, the socket kept drained throughout (so a
+  sleep between two dumps genuinely samples two frames), the quiet-timeout suppressed while it
+  runs, and the `select` timeout capped by the remaining time so `wait 60` is not silently 200 ms.
+- **Verified:** the same 30-sample script now spans 2.4 s and shows the splash advancing frame by
+  frame — the timeline in D-26 is its output.
+- **Guarded by:** nothing automated; it is a CLI timing path. The D-26 reproduce block exercises it.
+
 ### D-23 — Images have no name, and the export dialog calls them "(missing image)"
 - **Area:** core / persistence (symptom: design) · **Status:** **Fixed** · **Severity:** S2
 - **Found:** 2026-08-18, reported by the user. **It was visible in this project's own acceptance

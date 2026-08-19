@@ -1177,10 +1177,11 @@ namespace
             {K::SettingsSet, "settings set cpuPercent=50"},
             {K::Screen, "screen home"},
             {K::StatePrint, "state print"},
+            {K::UiDump, "ui dump --root splash"},
             {K::Wait, "wait load.finished"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 26;   // Kind::None is not a command
+        const int kKindCount = 27;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 

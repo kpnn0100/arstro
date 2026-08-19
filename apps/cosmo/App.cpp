@@ -232,6 +232,23 @@ namespace cosmo_v2
         layout();
     }
 
+    // ── P0.6: the view, named ─────────────────────────────────────────────────────────
+    // Two roots, because they really are two: the editor tree and the home screen are drawn
+    // by different branches of render() and neither contains the other. A single "the root"
+    // accessor would silently return half the UI.
+    const std::vector<std::string> &App::uiRootNames()
+    {
+        static const std::vector<std::string> names = {"editor", "home"};
+        return names;
+    }
+
+    const artboard::Segment *App::uiRoot(const std::string &name) const
+    {
+        if (name == "editor") return mRoot.get();
+        if (name == "home") return mHome.get();
+        return nullptr;
+    }
+
     void App::layout()
     {
         mHistoryView->x.set(0.0); mHistoryView->y.set(0.0);

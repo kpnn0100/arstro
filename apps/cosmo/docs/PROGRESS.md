@@ -201,7 +201,18 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       already, because `onServiceEvent` writes `formatEvent(e)` and an Event *is* the log line
       (R-SVC-5) — that was most of D-5. What is genuinely left is **input**: which widget consumed
       a click, and screen/scroll/hover decisions, none of which are service state
-- [ ] **P0.6** `--dump-ui` — Segment tree with rects, visibility, opacity, scroll offsets, hover
+- [x] **P0.6** **`ui dump`, not `--dump-ui`** — a *command* over the control socket rather than a
+      launch flag, because the question is almost always about a window that is already running
+      (R-SVC-11 / DR-SVC-11). Segment tree with demangled type, world rect, size, visibility,
+      opacity, hover, enabled and clip; `--root` picks the editor / home / splash tree, `--json`,
+      `--visible`, `--depth`. Answered host-side, never by the service, since the tree is
+      presentation (R-SVC-3); `cosmo-cc` headless answers "no view attached" so one script drives
+      both front ends. Widgets that paint themselves add one line via `UiInspectable` — otherwise a
+      self-drawn leaf dumps as a rectangle and says nothing about what it drew. Closes D-25, and
+      found D-26 (the splash's progress bar was never visible) and D-27 (`wait <ms>` meant two
+      different things in the two front ends) within minutes of existing.
+      Scroll offsets are **not** in it: no widget exposes one, and inventing an accessor per
+      widget to fill a column belongs with the widget that needs it
 - [~] **P0.7** `cosmo` flags. **`--project` and a bare `.cmp` argument are done** (closes D-6), and
       `--control` landed with S5. Still open: `--headless`, `--script`, `--shot`, `--log-level`,
       `--debug`, `--exit-after`. Note `--script` is largely redundant now — `cosmo --control` plus

@@ -1277,6 +1277,16 @@ namespace
                 pumpOnce(h);
                 printModel(h, c.flag || h.opt.json, &c);
                 return true;
+            case Command::Kind::UiDump:
+                // A headless run has no Segment tree — there is no window and no view object
+                // to walk. Say so and succeed, so ONE acceptance script can run through both
+                // front ends (tests/acceptance/run.sh) without branching on which one it is.
+                std::cout << "[evt] ui.begin\n"
+                          << "ui-root " << (c.name.empty() ? "all" : c.name)
+                          << " (no view attached: cosmo-cc is headless; run `cosmo-cc attach` "
+                             "against a live window to dump it)\n"
+                          << "[evt] ui.end\n";
+                return true;
             case Command::Kind::Wait:
                 if (waitFor(h, c.name, c.index)) return true;
                 std::cerr << "cosmo-cc: wait " << c.name << ": timed out after " << c.index << "ms\n";
@@ -1364,6 +1374,14 @@ static int cmdAttach(const Args &a, const Options &opt)
     }
 
     std::string waitFor, buf;
+    // A numeric `wait <ms>` is a SLEEP, exactly as it is in `cosmo-cc run` (waitFor(), which
+    // spins pumpOnce for the duration). It needs its own state rather than riding in
+    // `waitFor`, because that string is matched against arriving event text — and "wait 60"
+    // treated as a pattern matches the "260" in a 420x260 splash dump, so a timed sample
+    // loop fired all its samples in a single frame and reported the same instant forty times.
+    // D-16 is exactly this: one word, one meaning, in both front ends.
+    std::chrono::steady_clock::time_point sleepUntil;
+    bool sleeping = false;
     const double timeoutS = a.value("timeout").empty() ? 300.0 : atof(a.value("timeout").c_str());
     const auto t0 = std::chrono::steady_clock::now();
     int rejections = 0;
@@ -1377,16 +1395,31 @@ static int cmdAttach(const Args &a, const Options &opt)
 
     while (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < timeoutS)
     {
-        if (!pending.empty() && waitFor.empty())
+        if (sleeping && std::chrono::steady_clock::now() >= sleepUntil) sleeping = false;
+        if (!pending.empty() && waitFor.empty() && !sleeping)
         {
             const std::string line = pending.front();
             pending.erase(pending.begin());
             if (line.rfind("wait ", 0) == 0)
             {
-                waitFor = line.substr(5);
-                while (!waitFor.empty() && waitFor.back() == ' ') waitFor.pop_back();
-                waitFor = canonicalWait(waitFor);   // D-16: one vocabulary, both front ends
-                if (opt.watch) printf("... waiting for %s\n", waitFor.c_str());
+                std::string w = line.substr(5);
+                while (!w.empty() && w.back() == ' ') w.pop_back();
+                w = canonicalWait(w);   // D-16: one vocabulary, both front ends
+                if (!w.empty() && std::isdigit((unsigned char)w[0]))
+                {
+                    // A duration, not a condition. Events keep being drained below while it
+                    // runs, so a sleep between two `ui dump`s samples two different frames —
+                    // which is the whole point of being able to write one.
+                    sleeping = true;
+                    sleepUntil = std::chrono::steady_clock::now() +
+                                 std::chrono::milliseconds((long)atof(w.c_str()));
+                    if (opt.watch) printf("... sleeping %sms\n", w.c_str());
+                }
+                else
+                {
+                    waitFor = w;
+                    if (opt.watch) printf("... waiting for %s\n", waitFor.c_str());
+                }
             }
             else
             {
@@ -1402,7 +1435,16 @@ static int cmdAttach(const Args &a, const Options &opt)
         fd_set rs;
         FD_ZERO(&rs);
         FD_SET(fd, &rs);
-        timeval tv{0, 200000};
+        // Cap the poll at what is left of a running sleep, or a `wait 60` between samples
+        // would really be 200 ms and the sample cadence would be a lie.
+        long usec = 200000;
+        if (sleeping)
+        {
+            const auto left = std::chrono::duration_cast<std::chrono::microseconds>(
+                                  sleepUntil - std::chrono::steady_clock::now()).count();
+            usec = left > 0 ? std::min<long>(usec, (long)left) : 0;
+        }
+        timeval tv{0, usec};
         if (::select(fd + 1, &rs, nullptr, nullptr, &tv) > 0)
         {
             char chunk[65536];
@@ -1426,7 +1468,7 @@ static int cmdAttach(const Args &a, const Options &opt)
             fflush(stdout);
             lastData = std::chrono::steady_clock::now();
         }
-        if (pending.empty() && waitFor.empty() &&
+        if (pending.empty() && waitFor.empty() && !sleeping &&
             std::chrono::duration<double>(std::chrono::steady_clock::now() - lastData).count() > kQuietS)
             break;
     }

@@ -74,6 +74,7 @@ namespace cosmo
             SettingsSet,     // fields: cpuPercent / previewEdge / threads / useGpu
             Screen,          // name = "home" | "editor"
             StatePrint,      // flag = json
+            UiDump,          // flag = json, name = root, fields: visible / depth
             Wait,            // name = condition, index = timeout ms
             Quit
         };

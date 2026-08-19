@@ -30,6 +30,81 @@ namespace cosmo
         }
 
         // GdkPixbuf path: JPEG/PNG/TIFF/BMP/GIF/... -> straight RGBA8.
+        /** GdkPixbuf -> straight RGBA8, shared by every path below. */
+        DecodedImage fromPixbuf(GdkPixbuf *pb)
+        {
+            DecodedImage out;
+            if (!pb) return out;
+            const int w = gdk_pixbuf_get_width(pb);
+            const int h = gdk_pixbuf_get_height(pb);
+            const int nch = gdk_pixbuf_get_n_channels(pb);
+            const int stride = gdk_pixbuf_get_rowstride(pb);
+            const guchar *src = gdk_pixbuf_get_pixels(pb);
+            out.width = w; out.height = h;
+            out.rgba.resize((size_t)w * h * 4);
+            for (int y = 0; y < h; ++y)
+            {
+                const guchar *sp = src + (size_t)y * stride;
+                uint8_t *dp = out.rgba.data() + (size_t)y * w * 4;
+                for (int x = 0; x < w; ++x)
+                {
+                    dp[x * 4 + 0] = sp[x * nch + 0];
+                    dp[x * 4 + 1] = sp[x * nch + 1];
+                    dp[x * 4 + 2] = sp[x * nch + 2];
+                    dp[x * 4 + 3] = nch >= 4 ? sp[x * nch + 3] : 255;
+                }
+            }
+            return out;
+        }
+
+        /** Decode JPEG/PNG/… bytes already in memory, scaled down DURING the decode so a
+         *  4.7 MB embedded preview never becomes a 26-megapixel buffer we immediately shrink. */
+        DecodedImage fromMemoryScaled(const unsigned char *data, size_t bytes, int maxEdge)
+        {
+            DecodedImage out;
+            GdkPixbufLoader *ld = gdk_pixbuf_loader_new();
+            if (!ld) return out;
+            if (maxEdge > 0)
+            {
+                // size-prepared fires once the header is read: ask the loader for a smaller
+                // image up front. This is the difference between a fast cover and a slow one.
+                g_signal_connect(ld, "size-prepared", G_CALLBACK(+[](GdkPixbufLoader *l, gint w, gint h,
+                                                                    gpointer user) {
+                    const int cap = GPOINTER_TO_INT(user);
+                    if (w <= 0 || h <= 0) return;
+                    const int longEdge = w > h ? w : h;
+                    if (longEdge <= cap) return;
+                    const double k = (double)cap / (double)longEdge;
+                    gdk_pixbuf_loader_set_size(l, (int)(w * k + 0.5), (int)(h * k + 0.5));
+                }), GINT_TO_POINTER(maxEdge));
+            }
+            GError *err = nullptr;
+            if (gdk_pixbuf_loader_write(ld, data, bytes, &err))
+            {
+                gdk_pixbuf_loader_close(ld, nullptr);
+                out = fromPixbuf(gdk_pixbuf_loader_get_pixbuf(ld));
+            }
+            else
+            {
+                if (err) g_error_free(err);
+                gdk_pixbuf_loader_close(ld, nullptr);
+            }
+            g_object_unref(ld);
+            return out;
+        }
+
+        DecodedImage decodePixbufScaled(const std::string &path, int maxEdge)
+        {
+            GError *err = nullptr;
+            GdkPixbuf *pb = maxEdge > 0
+                                ? gdk_pixbuf_new_from_file_at_scale(path.c_str(), maxEdge, maxEdge, TRUE, &err)
+                                : gdk_pixbuf_new_from_file(path.c_str(), &err);
+            if (!pb) { if (err) g_error_free(err); return DecodedImage{}; }
+            DecodedImage out = fromPixbuf(pb);
+            g_object_unref(pb);
+            return out;
+        }
+
         DecodedImage decodePixbuf(const std::string &path)
         {
             DecodedImage out;
@@ -165,6 +240,52 @@ namespace cosmo
 #else
         return false;
 #endif
+    }
+
+    DecodedImage NativeImageDecoder::decodeThumb(const std::string &path, int maxEdge)
+    {
+        DecodedImage out;
+#ifdef COSMO_HAVE_LIBRAW
+        if (isRawExtension(path))
+        {
+            // A RAW file already contains a JPEG preview the camera wrote. Reading it costs
+            // 6.6 ms against 8072 ms for the full decode on a 26 MB X-Trans RAF — 1200x — and
+            // a cover is drawn at 480 px, so the full path's 26 megapixels were being demosaiced
+            // and then thrown away. This is what froze the splash for the length of a startup.
+            LibRaw raw;
+            if (raw.open_file(path.c_str()) == LIBRAW_SUCCESS && raw.unpack_thumb() == LIBRAW_SUCCESS)
+            {
+                int code = 0;
+                if (libraw_processed_image_t *th = raw.dcraw_make_mem_thumb(&code))
+                {
+                    if (th->type == LIBRAW_IMAGE_JPEG)
+                        out = fromMemoryScaled(th->data, th->data_size, maxEdge);
+                    else if (th->type == LIBRAW_IMAGE_BITMAP && th->bits == 8 && th->colors == 3)
+                    {
+                        out.width = th->width; out.height = th->height;
+                        out.rgba.resize((size_t)out.width * out.height * 4);
+                        for (size_t i = 0; i < (size_t)out.width * out.height; ++i)
+                        {
+                            out.rgba[i * 4 + 0] = th->data[i * 3 + 0];
+                            out.rgba[i * 4 + 1] = th->data[i * 3 + 1];
+                            out.rgba[i * 4 + 2] = th->data[i * 3 + 2];
+                            out.rgba[i * 4 + 3] = 255;
+                        }
+                    }
+                    LibRaw::dcraw_clear_mem(th);
+                }
+            }
+            // No embedded preview (rare, but some RAWs have none): fall back to the real thing
+            // rather than showing nothing. Slow, and correct.
+            if (!out.ok()) out = decodeRaw(path, nullptr);
+        }
+        else
+            out = decodePixbufScaled(path, maxEdge);
+#else
+        out = decodePixbufScaled(path, maxEdge);
+#endif
+        out.name = baseName(path);
+        return out;
     }
 
     DecodedImage NativeImageDecoder::decodeFile(const std::string &path)

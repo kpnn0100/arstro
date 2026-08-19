@@ -87,7 +87,7 @@ namespace cosmo
             "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
-            "settings set", "screen", "state print", "wait", "quit"};
+            "settings set", "screen", "state print", "ui dump", "wait", "quit"};
         return names;
     }
 
@@ -266,6 +266,19 @@ namespace cosmo
             collectFlags(t, 2, c);
             c.flag = c.field("json") == "1";
         }
+        else if (v == "ui")
+        {
+            // Front-end-answered like `state print`: the Segment tree is presentation, and the
+            // service is forbidden to know it exists (R-SVC-3). It lives in the grammar anyway
+            // so one script drives both front ends and `ui dump` round-trips like everything
+            // else — a CLI-only run answers it honestly with "no view attached".
+            if (!need(2, "ui dump")) return c;
+            if (sub != "dump") { err = "unknown ui subcommand: " + sub; return c; }
+            c.kind = Command::Kind::UiDump;
+            collectFlags(t, 2, c);
+            c.flag = c.field("json") == "1";
+            c.name = c.field("root", "all");
+        }
         else if (v == "wait")
         {
             if (!need(2, "a condition, e.g. load.finished")) return c;
@@ -345,6 +358,13 @@ namespace cosmo
                 if (c.flag) o << " --json";
                 if (c.field("stable") == "1") o << " --stable";
                 if (c.field("params") == "1") o << " --params";
+                break;
+            case Command::Kind::UiDump:
+                o << "ui dump";
+                if (c.flag) o << " --json";
+                if (!c.name.empty() && c.name != "all") o << " --root " << c.name;
+                if (c.field("visible") == "1") o << " --visible";
+                if (!c.field("depth").empty()) o << " --depth " << c.field("depth");
                 break;
             case Command::Kind::Wait: o << "wait " << c.name << " --timeout " << c.index << "ms"; break;
             case Command::Kind::Quit: o << "quit"; break;
