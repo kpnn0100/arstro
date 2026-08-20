@@ -163,6 +163,31 @@ if(TARGET cosmo_core)
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
   add_test(NAME cosmo_ui COMMAND cosmo_ui_tests)
 
+  # ── cosmo_touch_shots: the TOUCH shell, with no device (R-TOUCH-5) ───────────────────
+  # PhoneApp is Artboard Segments over CairoTarget, so the phone UI builds on this host as
+  # soon as it stops constructing its own Android decoder (it does — decode is the service's
+  # now, R-SVC-7). That is what turns the touch UI from "look at a phone" into something a
+  # shot renderer and a ctest can judge, in BOTH orientations.
+  add_executable(cosmo_touch_shots
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/touch/touchShots.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/touch/PhoneApp.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/touch/TouchIcons.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/Theme.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/EditCommands.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/EmbeddedFonts.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/widgets/Icons.cpp
+                 ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS})
+  target_include_directories(cosmo_touch_shots PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
+  target_link_libraries(cosmo_touch_shots PRIVATE artboard_core arstro_image cosmo_core
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
+  target_compile_definitions(cosmo_touch_shots PRIVATE
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
+  add_test(NAME cosmo_touch_layout COMMAND cosmo_touch_shots --assert)
+
   # The fixture-free subset as a ctest case: home (empty, with recents, with the settings
   # modal), the empty editor and the open transition need no display and no images on
   # disk, so they run anywhere the app builds. `--check` is what makes it a TEST rather

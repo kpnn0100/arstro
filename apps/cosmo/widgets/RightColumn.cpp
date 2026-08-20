@@ -1,4 +1,5 @@
 #include "RightColumn.h"
+#include "../EditCommands.h"
 #include "../Theme.h"
 #include "Icons.h"
 #include "TextMetrics.h"
@@ -34,60 +35,14 @@ namespace cosmo_v2
         const char *kPillLabel = "FILTER DISABLED";
 
         // ── Command payloads (R-SVC-2) ──────────────────────────────────────────────
-        // A Command is text (R-SVC-5), so every value this column sends is formatted here.
-        // Seven significant digits is what EditParamsIO writes, so a number that arrived
-        // from a project file goes back out as the same number.
-        std::string num(double v)
-        {
-            std::ostringstream o;
-            o.precision(7);
-            o << v;
-            return o.str();
-        }
-
-        // A curve/mixer point list exactly as EditParamsIO writes it: "x,y" for a corner
-        // point, "x,y,ix,iy,ox,oy" for a smooth one, ';'-joined. Mirrored rather than shared
-        // because the engine's writer is file-local to EditParamsIO.cpp; the two move together
-        // (see the report note asking for it to be exported, which deletes this).
-        std::string pointsStr(const std::vector<CurvePoint> &pts)
-        {
-            std::ostringstream o;
-            o.precision(7);
-            for (size_t i = 0; i < pts.size(); ++i)
-            {
-                if (i) o << ';';
-                const CurvePoint &c = pts[i];
-                o << c.x << ',' << c.y;
-                if (c.smooth) o << ',' << c.ix << ',' << c.iy << ',' << c.ox << ',' << c.oy;
-            }
-            return o.str();
-        }
-
-        // The geometry group of EditParamsIO's mask blob (its first '|'-section). The adjust
-        // group and the dab list are deliberately left off: this only ever serialises a NEW
-        // mask, whose adjust is identity and whose dab list is empty, and parseMask keeps the
-        // struct's own defaults for whatever groups a blob omits.
-        std::string maskBlob(const MaskParams &m)
-        {
-            std::ostringstream o;
-            o.precision(7);
-            o << m.type << ',' << (m.inverted ? 1 : 0) << ',' << m.feather << ',' << m.cx << ',' << m.cy
-              << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1;
-            return o.str();
-        }
-
-        // The twelve `adjust.*` keys CosmoService's `mask set` accepts. Sent as a set rather
-        // than one changed field because the panel hands over a whole LocalAdjust and does not
-        // say which slider moved.
-        std::vector<std::pair<std::string, std::string>> adjustFields(const LocalAdjust &a)
-        {
-            return {{"adjust.exposure", num(a.exposure)},     {"adjust.contrast", num(a.contrast)},
-                    {"adjust.highlights", num(a.highlights)}, {"adjust.shadows", num(a.shadows)},
-                    {"adjust.whites", num(a.whites)},         {"adjust.blacks", num(a.blacks)},
-                    {"adjust.temp", num(a.temp)},             {"adjust.tint", num(a.tint)},
-                    {"adjust.saturation", num(a.saturation)}, {"adjust.texture", num(a.texture)},
-                    {"adjust.clarity", num(a.clarity)},       {"adjust.dehaze", num(a.dehaze)}};
-        }
+        // A Command is text (R-SVC-5) and this column is no longer the only view that sends
+        // one: the touch shell sends the same commands, so the formatting moved to
+        // EditCommands.h and both shells call it (R-TOUCH-1). What is left here is the part
+        // that IS this column's own — when to send, and where to route it.
+        using editcmd::adjustFields;
+        using editcmd::maskBlob;
+        using editcmd::num;
+        using editcmd::pointsStr;
     }
 
     RightColumn::RightColumn(cosmo::CosmoService &svc)
@@ -295,9 +250,7 @@ namespace cosmo_v2
 
     void RightColumn::sendSet(Fields fields)
     {
-        cosmo::Command c;
-        c.kind = cosmo::Command::Kind::Set;
-        c.fields = std::move(fields);
+        cosmo::Command c = editcmd::set(std::move(fields));
         if (emitCommand(c)) return;
         // No App above us (a shot rig, a test): dispatch straight to the service we already
         // hold. Before S4c this branch wrote to the session, because an unwired column had
@@ -305,48 +258,16 @@ namespace cosmo_v2
         mSvc.dispatch(c);
     }
 
-    namespace
-    {
-        std::vector<std::pair<std::string, std::string>> maskFieldsImpl(const arstro::MaskParams &m)
-        {
-            std::vector<std::pair<std::string, std::string>> f = {
-                {"type", std::to_string(m.type)}, {"inverted", m.inverted ? "1" : "0"},
-                {"feather", num(m.feather)},
-                {"cx", num(m.cx)}, {"cy", num(m.cy)}, {"rx", num(m.rx)}, {"ry", num(m.ry)},
-                {"x0", num(m.x0)}, {"y0", num(m.y0)}, {"x1", num(m.x1)}, {"y1", num(m.y1)},
-                {"adjust.exposure", num(m.adjust.exposure)}, {"adjust.contrast", num(m.adjust.contrast)},
-                {"adjust.highlights", num(m.adjust.highlights)}, {"adjust.shadows", num(m.adjust.shadows)},
-                {"adjust.whites", num(m.adjust.whites)}, {"adjust.blacks", num(m.adjust.blacks)},
-                {"adjust.temp", num(m.adjust.temp)}, {"adjust.tint", num(m.adjust.tint)},
-                {"adjust.saturation", num(m.adjust.saturation)}, {"adjust.texture", num(m.adjust.texture)},
-                {"adjust.clarity", num(m.adjust.clarity)}, {"adjust.dehaze", num(m.adjust.dehaze)}};
-            std::string dabs;
-            for (size_t i = 0; i < m.dabs.size(); ++i)
-            {
-                const auto &d = m.dabs[i];
-                if (i) dabs += ';';
-                dabs += num(d.x) + ':' + num(d.y) + ':' + num(d.radius) + ':' + num(d.flow);
-            }
-            f.emplace_back("dabs", dabs);   // empty clears them, which is the correct erase
-            return f;
-        }
-    }
-
     void RightColumn::sendMaskSet(int index, Fields fields, const MaskParams &whole)
     {
-        cosmo::Command c;
-        c.kind = cosmo::Command::Kind::MaskSet;
-        c.index = index;
-        c.fields = std::move(fields);
+        cosmo::Command c = editcmd::maskSet(index, std::move(fields));
         if (emitCommand(c)) return;
         mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }
 
     void RightColumn::sendMaskDelete(int index)
     {
-        cosmo::Command c;
-        c.kind = cosmo::Command::Kind::MaskDelete;
-        c.index = index;
+        cosmo::Command c = editcmd::maskDelete(index);
         if (emitCommand(c)) return;
         mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }
@@ -432,7 +353,7 @@ namespace cosmo_v2
         cosmo::Command c;
         c.kind = cosmo::Command::Kind::MaskSet;
         c.index = mSelectedMask;
-        c.fields = maskFieldsImpl(m);
+        c.fields = editcmd::maskFields(m);
         if (emitCommand(c)) return;
         mSvc.dispatch(c);   // unwired: the service is right here (see sendSet)
     }

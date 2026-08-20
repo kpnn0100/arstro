@@ -1,7 +1,24 @@
 # cosmo — Phone (Android) UI design brief for Figma
 
 A complete component + interaction spec for a **small‑phone** version of the cosmo photo editor, to
-hand to Figma AI. Target device is a **~6‑inch phone in portrait** (design at **393 × 852 dp**, must
+hand to Figma AI.
+
+> **AMENDED 2026-08-20 by R-TOUCH (see [`../REQUIREMENTS.md`](../REQUIREMENTS.md)).** Three things in
+> this brief are superseded, and where they disagree the requirement wins:
+> 1. **The tray no longer rises OVER the photo.** R-TOUCH-2 forbids any component overlapping
+>    another: opening the tray **shrinks the photo's box** instead. On a phone the photo is the work,
+>    and a sheet across it hides the thing being edited. Overlays are only modal ones (sheets,
+>    dialogs, drawer, the fullscreen curve editor), each scrimmed.
+> 2. **Landscape is no longer "future".** R-TOUCH-3 requires both orientations: portrait stays this
+>    one column; landscape becomes **two panes** — photo left, the active tray a fixed panel on the
+>    right — which is the desktop's shape at phone size, so it needs no new interaction model.
+> 3. **Curves get a fullscreen editor with a loupe** (R-TOUCH-4), not a curve inside the tray's Full
+>    detent: the plot takes the whole screen so nodes are far apart, the grab radius is ≥24 dp, a tap
+>    selects the *nearest* node rather than requiring a hit, and a magnifier offset above the finger
+>    shows the node the fingertip is covering.
+>
+> Everything else here — the visual language, the gesture mapping table, the component inventory, the
+> tokens, the motion scale — stands unchanged. Target device is a **~6‑inch phone in portrait** (design at **393 × 852 dp**, must
 also hold at **360 × 780 dp**). It replicates the desktop cosmo feature‑for‑feature — **nothing is
 dropped** — but the layout is rebuilt for one narrow column: the photo is the hero, and every panel
 that was docked on desktop becomes a **bottom tray / sheet / drawer** that rises over the photo.
@@ -28,7 +45,7 @@ component inventory · §15 tokens · §16 motion · §17 Figma prompt notes.
   text — a deliberate light island in the dark UI.
 - **Radii:** `1px` (hairline: segmented pickers), `2px` (control: buttons, chips, cards, trays),
   `9999px` (pill: slider track/thumb, Before/After pill). ONE radius scale.
-- **Type:** UI sans = **DM Sans** (regular/medium/semibold); numerics & filenames = **JetBrains Mono**.
+- **Type:** UI sans = **Roboto** (regular/medium/semibold, R-FONT-2); numerics & filenames = **JetBrains Mono**.
   Wordmark "cosmo." = semibold, letter‑spacing −0.03·size, the "." in accent.
 - **Density:** desktop is very compact. On the phone, **keep the tight visual rhythm but grow hit
   zones** (§3) and step type up ~1.15–1.3× for legibility at arm's length. The look stays tight; the
@@ -456,7 +473,7 @@ where a container can lack data). NO hover‑only states.
   · `green/stacked #4CB573` · `destructive #E5484D` · rename field `#F4F4F5` bg / `#18181B` text ·
   channel R `#E65252` · G `#61CC6B` · B `#6B94F5`.
 - **Radii:** `1` (hairline) · `2` (control) · `9999` (pill).
-- **Type:** DM Sans {Regular, Medium, SemiBold}; JetBrains Mono {Regular, Medium}. Phone body ~13–15 px,
+- **Type:** Roboto {Regular, Medium, SemiBold}; JetBrains Mono {Regular, Medium}. Phone body ~13–15 px,
   labels ~12 px, values mono ~13 px, section headers ~11–12 px tracked‑up. Keep desktop's ratios, scale
   ~1.15–1.3×.
 - **Touch sizing:** min hit target **44 dp**; slider band **≥ 48 dp**; curve node grab **≥ 24 dp**; mask

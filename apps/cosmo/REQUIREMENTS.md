@@ -196,6 +196,60 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
 
+## R-TOUCH — The touch shell: one core, two UIs — 🚧 IN PROGRESS
+
+cosmo has two front ends that must stay one application: the desktop shell (`App`, mouse and
+keyboard, three zones at once) and the **touch shell** (`touch/PhoneApp`, `arstro::cosmo_touch`) for a
+small touch screen — Android first. The desktop went through R-SVC and now binds to `CosmoService`
+through `Command` in and `AppModel`/`Event` out; the touch shell predates that and does not, so it is
+a second application that happens to link the same library. This section is what makes it one.
+
+The visual language is **identical** to the desktop's (R-G-2, `Theme.h` tokens) — the touch shell may
+diverge in *metrics* (hit bands, type steps, its own brighter muted grey for arm's-length reading) and
+never in palette, radii, accent, motion vocabulary or wordmark. `docs/touch-ui-brief.md` is the
+component-level spec; where it disagrees with this section, this section wins and the brief is amended.
+
+- **R-TOUCH-1 One core, one view-model, two views.** The touch shell owns **no session and no
+  engine**: it is constructed over a `CosmoService`, every change it makes is a `Command` it
+  dispatches, and everything it draws comes from `AppModel`, the service's frame channel
+  (`takeFrame`) or its own presentation state (animation, detents, scroll — R-SVC-4). It must
+  therefore be drivable by the same scripts, the same control socket and the same `cosmo-cc` as the
+  desktop, and a project opened on one shell must dump byte-identical state on the other (R-SVC-9's
+  check, extended to the second view). The UI→`Command` mapping is **shared code**, not two copies:
+  one place turns "this control moved" into a command, and both shells call it. Two mappings drift
+  the first time a parameter is added, and the drift is silent.
+- **R-TOUCH-2 No component overlaps another. NEW RULE.** Every element of the touch shell has its
+  own space: opening the control tray **shrinks the photo's box** rather than covering it, the tool
+  bar and top bar are never drawn over content, and no panel is partly hidden behind another. The
+  only things allowed above content are **deliberate modal overlays** — action sheets, dialogs, the
+  preset drawer, the fullscreen curve editor — each with a scrim, drawn in the overlay pass, and
+  dismissible. This is stricter than the desktop's R-G-3 (siblings snap, overlays are the exception)
+  and stricter than the brief, which had the tray *rise over* the photo: on a phone the photo is the
+  work, and a sheet across it hides the thing being edited. Asserted, not eyeballed: the harness
+  walks the tree and fails on any two non-overlay siblings whose world rects intersect.
+- **R-TOUCH-3 Both orientations, and the change animates. NEW RULE.** The shell works in portrait
+  **and** landscape, and rotation is a reflow like any other (R-G-1: it eases, it does not snap).
+  - **Portrait** (tall): one column — top bar, photo, breadcrumb + filmstrip, tool bar; a tab raises
+    the tray *below* the photo, which shrinks to fit (R-TOUCH-2).
+  - **Landscape** (wide): **two panes** — photo on the left, the active tray as a **fixed panel on the
+    right** (~40% of the width, its own column), so nothing is ever over the photo. This is the
+    desktop's shape at phone size, which is also why it needs no new interaction model.
+  - Either orientation, every control stays reachable: a panel taller than its pane scrolls (R6) and
+    nothing is clipped away.
+- **R-TOUCH-4 Touch-sized, and curves especially. NEW RULE.** Every interactive element has a
+  ≥ **44 dp** hit band (the drawn control may be smaller), slider rows ≥ **48 dp**, adjacent targets
+  ≥ **8 dp** apart. Curve and mixer nodes are the hardest case on a small screen and get their own
+  treatment: a **fullscreen curve editor** (the plot takes the whole screen, so nodes are far apart),
+  a ≥ **24 dp** grab radius, and while dragging a **loupe** offset above the finger showing the node
+  under it — because the fingertip covers exactly the thing being positioned. Tapping selects the
+  nearest node rather than requiring a hit, so a miss adjusts something instead of nothing.
+- **R-TOUCH-5 The touch shell is renderable and assertable with no device.** `PhoneApp` is Artboard
+  `Segment`s over `CairoTarget`, so it builds on the desktop host: `cosmo_touch_shots` renders every
+  screen and state to PNG at phone sizes in both orientations, and `cosmo_touch_tests` asserts the
+  R-TOUCH-2/3/4 rules over the assembled shell. Without this the touch UI can only be checked by
+  building an APK and looking at a phone, which is why M4–M7 of `docs/android.md` had no evidence
+  behind them.
+
 ## R-FONT — The typeface travels inside the binary — ✅ IMPLEMENTED
 
 An app's own type is not something that may differ between machines, and cosmo's did: the faces were

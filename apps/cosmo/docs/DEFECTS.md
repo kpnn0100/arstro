@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-38**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-39**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,28 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
+- **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
+- **Found:** 2026-08-20, on the first frames `cosmo_touch_shots` ever produced — the phone UI had
+  never been rendered anywhere but on a device, which is why this shipped through M3.
+- **Reproduce:** `cosmo_touch_shots --outdir /tmp/t --only portrait` and `--only landscape`, then
+  look at `cosmo-touch-editor-*`.
+- **Expected:** R-TOUCH-2 — no component overlaps another; R-TOUCH-3 — both orientations work.
+- **Actual:** **Portrait:** the Save / Import / Export action bar sits on top of the last slider row
+  ("Blacks" is cut in half behind the Save button), and the tray's row list is clipped mid-row rather
+  than ending above the bar. **Landscape (852×393):** the photo is a thin strip at the top and the
+  tray covers the rest, with the section chips, the action bar and the 5-tab tool bar all drawn into
+  the same band — three layers of controls in the same pixels, most of them unreachable.
+- **Cause:** the tray is laid out as an overlay that rises **over** the photo (the design brief's own
+  model, now amended), its content height is not measured against the space left after the action bar
+  and tool bar, and there is no landscape layout at all — `resize()` applies one set of portrait
+  metrics whatever the aspect.
+- **RECOMMENDED FIX:** the R-TOUCH-2/3 work: give the tray its own box that the photo's box shrinks
+  to make room for (no overlay), measure the row list against `bodyTop()..actionBarTop()` and scroll
+  it (R6), and add the landscape two-pane layout — photo left, tray a fixed right-hand panel — so
+  neither orientation stacks controls. Guard it in `cosmo_touch_shots --assert` with a sibling-rect
+  intersection check once the tray is a real box rather than an overlay.
 
 ### D-36 — An adjustment outside the UI's range crashes the render worker (NaN through a clamp)
 - **Area:** core / engine · **Status:** Confirmed (crashed under gdb) · **Severity:** S1 (crash)

@@ -2,16 +2,24 @@
  *  cosmo — phone (touch) app shell.
  *
  *  The touch counterpart of cosmo_v2::App: a single-column, ~6-inch phone UI built
- *  from Artboard Segments, driving the SAME UI-free core (arstro::cosmo::EditSession)
- *  and the same project model as the desktop app — so a cosmo project is identical on
- *  desktop and mobile. Home / Loading / Editor screens with animated transitions.
+ *  from Artboard Segments over the SAME service the desktop shell binds to — one core,
+ *  one view-model, two views (R-TOUCH-1). It owns no session and no engine: every change
+ *  it makes leaves as a `Command` dispatched to `CosmoService`, and every preview frame
+ *  arrives through `CosmoService::takeFrame`, so a project is identical on desktop and
+ *  mobile and both shells are drivable by the same scripts and the same `cosmo-cc`.
  *
- *  The Android host (android_main.cpp) owns the platform seam and calls render/pointer/
- *  wheel/setSize + addProjectImage, mirroring what linux_main.cpp does for the desktop App.
+ *  Reads still go through `svc.session()`, the transitional accessor the desktop App also
+ *  uses until S4 moves ownership in — every one of them is a line S4 deletes. What is NOT
+ *  transitional is the write path: nothing here mutates an `EditParams`.
+ *
+ *  The Android host (android_main.cpp) owns the platform seam — it constructs the
+ *  ThreadBudget + CosmoService, installs the decoder factory, pumps the service once per
+ *  frame and calls render/pointer/setSize — mirroring what linux_main.cpp does for the
+ *  desktop App.
  */
 #pragma once
 #include "artboard/artboard.h"
-#include "core/EditSession.h"
+#include "core/service/CosmoService.h"
 
 #include <cstdint>
 #include <functional>
@@ -33,7 +41,7 @@ namespace cosmo_touch
     class PhoneApp
     {
     public:
-        PhoneApp(double width, double height);
+        PhoneApp(cosmo::CosmoService &svc, double width, double height);
         ~PhoneApp();
 
         void render(artboard::IRenderTarget &t, double nowMs);
@@ -58,6 +66,11 @@ namespace cosmo_touch
 
     private:
         void poll();
+        /** The only way out (R-TOUCH-1). False when the service rejected it — `model().lastError`
+         *  says why, and a caller that cares can read it. */
+        bool emit(const cosmo::Command &c);
+        /** The transitional READ accessor, and the raw-pixel host seam. S4 deletes these. */
+        cosmo::EditSession &sess() { return mSvc.session(); }
         void setScreen(Screen s, double nowMs);
         artboard::Segment *activeRoot() const;
         void buildSession(const std::string &name, bool empty);  // (re)build the EditSession
@@ -75,7 +88,7 @@ namespace cosmo_touch
         struct Recent { std::string name; int count = 0; bool empty = false; std::vector<uint8_t> thumb; int tw = 0, th = 0; };
         std::vector<Recent> mRecents;  // newest first (DR-HOME-4)
 
-        cosmo::EditSession mSession;
+        cosmo::CosmoService &mSvc;      // borrowed: the host owns it (R-TOUCH-1)
         artboard::GestureRecognizer mRecognizer;
         std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<LoadingScreen> mLoading;

@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-20 · T1 landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -86,6 +86,52 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
       launcher (Home advances/renders/routes to the dialog that lives in the editor tree), plus the
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
       by rendering the real `App` driven by real pointer events at two window sizes.
+
+## T — the touch shell: one core, two UIs (R-TOUCH)
+
+Asked for on 2026-08-20: "use the same theme, make a touch version of cosmo suitable for a small
+touch screen", with three added rules — **no component overlap**, **works in both orientations**,
+**touch-friendly, especially curves** — plus "the same view/view-model mechanism so the same core can
+run a different UI", Android first, and Android GPU adapters for the three core libraries.
+
+Decisions taken with the user before any code (so no other machine re-litigates them):
+1. **Service binding first**, before any new screen — everything else sits on it.
+2. **Landscape is two-pane**: photo left, the active tray a fixed right-hand panel (~40% width), so
+   nothing is ever over the photo. Portrait keeps one column.
+3. **Curves get a fullscreen editor with a loupe** and direct drag (≥24 dp grab, tap selects the
+   nearest node), not a curve inside the tray.
+4. **GPU work: ImageProcessing stage coverage + an Artboard GLES render adapter.** DSP is **not** in
+   scope (cosmo does not use it).
+
+- [x] **T1** The touch shell binds to the service, and can be seen without a device (**R-TOUCH-1**,
+      **R-TOUCH-5**). `PhoneApp` takes a `CosmoService&` and owns no session; every write is a
+      `Command` (`editcmd::diff` for whole-`EditParams` edits, the mask commands for masks, `settings
+      set` for preview/threads/GPU — which also removed a direct `par::setThreads` from the UI);
+      frames come from `takeFrame`; decode moved behind the service's factory, which is what made the
+      file buildable off Android at all. The UI→Command mapping is **shared** with the desktop
+      (`EditCommands.h`; `RightColumn`'s local formatters are now `using` declarations of it).
+      New `cosmo_touch_shots` renders every state at 393×852, 360×780 and 852×393 and asserts the
+      shell builds, renders, takes a photo into the model and survives a rotation (`ctest -R
+      cosmo_touch_layout`). Its first frames immediately found **D-38**
+- [ ] **T2** **No overlap, and both orientations** (**R-TOUCH-2**, **R-TOUCH-3**, closes **D-38**).
+      Portrait: the tray gets its own box and the photo's box SHRINKS for it (no overlay); the row
+      list is measured against the space left above the action bar and scrolls. Landscape: the
+      two-pane layout. Then the assert mode gains the sibling-rect intersection check, and both
+      orientations get shots at rest and mid-rotation
+- [ ] **T3** **Touch sizing pass** (**R-TOUCH-4** minus curves): every hit band ≥44 dp, slider rows
+      ≥48 dp, ≥8 dp apart, asserted from the shell's own hit zones rather than by eye
+- [ ] **T4** **The fullscreen curve editor** (**R-TOUCH-4**): whole-screen plot, ≥24 dp grab radius,
+      tap selects the nearest node, and a loupe offset above the finger so the fingertip never covers
+      the node it is placing. Mixer/hue curves on the same screen
+- [ ] **T5** **The rest of the editing surface on touch**: mask tray + on-canvas overlay, grade and
+      xform trays, filmstrip + breadcrumb + group indicators, pinch-zoom and two-finger pan
+      (M4–M7 of `docs/android.md`, now with a harness behind them)
+- [ ] **T6** **ImageProcessing: more stages on the Android GPU.** The GLES compute backend covers
+      exposure / contrast / white balance / sRGB encode; extend it to tone curve, tone regions,
+      clarity/texture, sharpen and masks, each conformance-tested against the CPU reference
+- [ ] **T7** **Artboard: a GLES render adapter.** Draw the UI on the GPU instead of software Cairo
+      (a new `IRenderTarget` adapter in the Artboard repo, via `implement_artboard`) — for UI
+      smoothness and battery on device, and reusable by every Arstro app on Android
 
 ## U2 — what the photographer reported on 2026-08-20
 
@@ -371,6 +417,23 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-20 (T1) — A whole-EditParams edit becomes a DIFF command, not a per-field table.** The
+  touch tray hands over a mutated copy of `EditParams` rather than naming the field that moved, so
+  the desktop's "one control, one key" pattern did not fit. `editcmd::diff` serialises both sides
+  with the engine's own writer and sends the lines that differ: no second key table to keep in step,
+  and it can never accept fewer keys than a project file does. The one thing it cannot express is a
+  mask edit — `mask=` APPENDS on parse — so masks keep their own commands and the mask rows carry
+  their index. That asymmetry is worth remembering rather than rediscovering.
+- **2026-08-20 (T1) — The phone shell's reads stay on `session()` for now.** Converting the 47 read
+  sites to `AppModel` in the same commit as the write path would have made one unreviewable change,
+  and the desktop is itself mid-migration (S4). They are marked as S4's list for this shell; the
+  write path is the part that had to move first, because that is what makes the two shells one
+  application.
+- **2026-08-20 (T1) — The harness taps the recent card instead of calling an entry point.**
+  `finishProject` only registers the project on Home (the shell starts there by design), so a shot
+  that wants the editor has to get there the way a user does. Driving it through a private entry
+  point would have made every editor shot a picture of a path nobody ships.
 
 - **2026-08-20 (U2.4) — The font is embedded and registered by NAME, not resolved.** Two things
   were true of cosmo's type before this and neither is acceptable: it needed a directory next to

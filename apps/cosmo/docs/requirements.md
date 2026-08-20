@@ -237,6 +237,50 @@ animates its width over `kRailAnimMs=200 ms` driven by an `Observable<bool> mRai
 Vertical stack: `PhotoCanvas` (fills), `Breadcrumb` (`kHeight=22.75`), `Filmstrip`
 (`kHeight=86`) (`CenterStage.cpp:21-35`).
 
+### DR-TOUCH-1 The touch shell binds to the service (R-TOUCH-1)
+`PhoneApp(cosmo::CosmoService &svc, double w, double h)` ([touch/PhoneApp.h](../touch/PhoneApp.h))
+holds the service by reference and owns **no** session — it used to declare
+`cosmo::EditSession mSession`, so the phone was a second application that happened to link the same
+library: nothing it did could be scripted, dumped, or driven over the control socket, and its edits
+never passed through a `Command`.
+
+Every write now leaves as one. `Tray`, `SheetLayer` and `EditorScreen` each take the service and
+expose two members: `sess()` (the transitional READ accessor the desktop App also keeps until S4
+moves ownership in) and `emit(Command)` (the only way out). The 20-odd `applyParams(np)` calls
+became commands:
+
+- scalars, curves, crop, quarter-turns → **`editcmd::diff(*p, np)`**, which serialises both sides
+  with `serializeParams` and sends only the keys that differ, so a view that edits a whole
+  `EditParams` needs no per-field table and can never accept fewer keys than a project file does.
+- masks → `editcmd::addMask` / `maskSet` / `maskDelete`, because a `mask=` line **appends** on parse
+  (`EditParamsIO.cpp:200`) and a diff therefore cannot express "edit mask 2". The four mask sliders
+  carry their index for exactly this reason.
+- undo/redo/group/ungroup → their own commands; preview quality, thread count and GPU → `settings
+  set`, which also removed a direct `par::setThreads` call from the UI (a second owner of the CPU
+  budget, R-SVC-10).
+- preview frames → `mSvc.takeFrame(f)` instead of `renderService().tryAcquire`, so the service is
+  the single caller that moves a frame out (R-SVC).
+- decode → `Command::Import`, so the codec left the view (R-SVC-7). It had constructed an
+  `AndroidImageDecoder` inline, which is also what made the whole file unbuildable off Android.
+
+The UI→Command mapping is shared, not duplicated: [EditCommands.h](../EditCommands.h) holds the
+number/blob formatting and the command builders, and **both** shells call it — `RightColumn`'s local
+`num`/`pointsStr`/`maskBlob`/`adjustFields` are now `using` declarations of the shared ones
+(R-TOUCH-1's one-mapping rule).
+
+### DR-TOUCH-5 The touch shell renders with no device (R-TOUCH-5)
+`cosmo_touch_shots` ([tests/touch/touchShots.cpp](../tests/touch/touchShots.cpp)) builds `PhoneApp`
+over a real `CosmoService` on the desktop host and either renders every state to PNG or (`--assert`,
+run by `ctest -R cosmo_touch_layout`) checks that the shell builds, renders, takes a photo into the
+model and survives a rotation at **393×852**, **360×780** and **852×393**. It drives the editor the
+way a user does — `finishProject` only registers the project on Home, so the harness taps the first
+recent card.
+
+What the first renders showed, which is why this had to exist before any layout work: the portrait
+editor's action bar (Save / Import / Export) is drawn **over** the last slider row, and in landscape
+the tray, the section chips, the action bar and the tool bar all occupy the same pixels — R-TOUCH-2
+and R-TOUCH-3 are unimplemented, not merely unpolished (D-38).
+
 ### DR-FONT-1 The typeface is compiled into the binary (R-FONT-1…4)
 `cmake/embed_fonts.cmake` turns the five vendored TTFs into `EmbeddedFonts.generated.cpp` in the
 build dir — `file(READ … HEX)` plus one regex, so there is no `xxd`, no `objcopy` and no host

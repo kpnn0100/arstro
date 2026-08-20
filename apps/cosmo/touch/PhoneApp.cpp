@@ -1,8 +1,8 @@
 #include "PhoneApp.h"
+#include "../EditCommands.h"
 #include "Theme.h"
 #include "TouchIcons.h"
 #include "widgets/Icons.h"
-#include "core/decode/AndroidImageDecoder.h"
 #include "base/Parallel.h"
 
 #include <algorithm>
@@ -22,6 +22,10 @@ namespace arstro
 {
 namespace cosmo_touch
 {
+// The shared UI->Command mapping (R-TOUCH-1): the same one the desktop column uses, so a slider
+// on either shell turns into the same text.
+namespace editcmd = cosmo_v2::editcmd;
+
 namespace
 {
     namespace fnt = cosmo_v2::font;
@@ -269,15 +273,15 @@ class Tray : public Segment
 {
 public:
     enum class Detent { Rail, Half, Full };
-    explicit Tray(cosmo::EditSession &s) : mSession(s) { clipToBounds = true; rebuildBody(); }
+    explicit Tray(cosmo::CosmoService &svc) : mSvc(svc) { clipToBounds = true; rebuildBody(); }
     void configure(double w, double h, double now) { mScreenW = w; mScreenH = h; mNowMs = now; x.set(0); width.set(w); mTabX.set((mTab + 0.5) * (w / 5.0)); applyDetent(now); layoutBody(); }
     void setNow(double n) { mNowMs = n; }
     void setHist(const HistogramData &h) { mHist = h; mHasHist = true; }
 
     void syncFromSession()
     {
-        const EditParams *p = mSession.curParams(); if (!p) return;
-        const EditParams eff = mSession.effectiveEditParams();
+        const EditParams *p = sess().curParams(); if (!p) return;
+        const EditParams eff = sess().effectiveEditParams();
         for (auto &r : mRows) { double own = r.get(*p); r.w->setValue(own); r.w->setDefault(r.def); r.w->setSubOffset(r.get(eff) - own); }
         if (mCurve) syncCurve();
     }
@@ -455,7 +459,7 @@ private:
         const char *tp[3] = {"Radial", "Linear", "Brush"};
         for (int i = 0; i < 3; ++i)
         { double cx = 16 + i * (cw + 8); t.setStroke(BORDER, 1.0); rrectPath(t, cx, bodyTop() + 28, cw, 34, 2); t.strokePath(); txtC(t, tp[i], cx + cw * 0.5, bodyTop() + 50, 13, fnt::sans(), FG); zoneRect(cx, bodyTop() + 28, cw, 34, 700 + i); }
-        auto *p = mSession.curParams();
+        auto *p = sess().curParams();
         if (!p || p->masks.empty()) { txtC(t, "Tap a button above to add a mask", w * 0.5, bodyTop() + 96, 13, fnt::sans(), MUTED); return; }
         // mask list
         double ly = bodyTop() + 74;
@@ -487,13 +491,13 @@ private:
     void paintGrade(IRenderTarget &t, double w) const
     {
         seg(t, 16, bodyTop() + 8, w - 32, 30, {"Shadows", "Midtones", "Highlights"}, mGradeRegion, 400);
-        auto *p = mSession.curParams();
+        auto *p = sess().curParams();
         toggle(t, w - 60, mRemapToggleY, p && p->remapEnable, 900);
         txt(t, "Hue Range Remap", 16, mRemapToggleY + 17, 13, fnt::sans(), FG);
     }
     void paintXform(IRenderTarget &t, double w) const
     {
-        auto *p = mSession.curParams(); double rot = p ? p->rotation : 0;
+        auto *p = sess().curParams(); double rot = p ? p->rotation : 0;
         char b[16]; std::snprintf(b, sizeof b, "%.1f", rot); txtR(t, std::string(b) + " deg", w - 16, bodyTop() + 22, 13, fnt::mono(), FG);
         // buttons row (below rotation slider)
         double by = mXBtnY; const char *bl[3] = {"-90", "+90", "Reset"};
@@ -519,19 +523,22 @@ private:
     }
     void onZone(int id)
     {
-        auto *p = mSession.curParams();
+        auto *p = sess().curParams();
         if (id >= 100 && id < 120) { if (id - 100 != mSection) { mSection = id - 100; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
         else if (id == 200 || id == 201) { if (id - 200 != mCurveMode) { mCurveMode = id - 200; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
         else if (id >= 300 && id < 304) { mCurveCh = id - 300; syncCurve(); }
         else if (id >= 320 && id < 323) { mMixerCh = id - 320; syncCurve(); }
         else if (id >= 400 && id < 403) { if (id - 400 != mGradeRegion) { mGradeRegion = id - 400; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
-        else if (id == 900 && p) { EditParams np = *p; np.remapEnable = !np.remapEnable; mSession.applyParams(np); rebuildBody(); layoutBody(); syncFromSession(); }
-        else if (id == 901 && p && mMaskSel >= 0 && mMaskSel < (int)p->masks.size()) { EditParams np = *p; np.masks[mMaskSel].inverted = !np.masks[mMaskSel].inverted; mSession.applyParams(np); }
-        else if (id >= 700 && id < 703 && p) { EditParams np = *p; MaskParams m; m.type = id - 700; np.masks.push_back(m); mSession.applyParams(np); mMaskSel = (int)np.masks.size() - 1; rebuildBody(); layoutBody(); syncFromSession(); }
+        else if (id == 900 && p) { EditParams np = *p; np.remapEnable = !np.remapEnable; emit(editcmd::diff(*p, np)); rebuildBody(); layoutBody(); syncFromSession(); }
+        else if (id == 901 && p && mMaskSel >= 0 && mMaskSel < (int)p->masks.size())
+            emit(editcmd::maskSet(mMaskSel, {{"inverted", p->masks[mMaskSel].inverted ? "0" : "1"}}));
+        else if (id >= 700 && id < 703 && p) { MaskParams m; m.type = id - 700; emit(editcmd::addMask(m));
+              mMaskSel = (int)(p->masks.size());   // the one just appended
+              rebuildBody(); layoutBody(); syncFromSession(); }
         else if (id >= 800 && id < 900) { if (id - 800 != mMaskSel) { mMaskSel = id - 800; rebuildBody(); layoutBody(); syncFromSession(); slideIn(); } }
-        else if (id >= 600 && id < 603 && p) { EditParams np = *p; if (id == 600) np.quarterTurns = (np.quarterTurns + 3) % 4; else if (id == 601) np.quarterTurns = (np.quarterTurns + 1) % 4; else { np.rotation = 0; np.quarterTurns = 0; } mSession.applyParams(np); }
-        else if (id >= 500 && id < 506 && p) { mAspect = id - 500; EditParams np = *p; setAspect(np, mAspect); mSession.applyParams(np); }
-        else if (id == 950 && p) { EditParams np = *p; resetCurve(np); mSession.applyParams(np); syncCurve(); }
+        else if (id >= 600 && id < 603 && p) { EditParams np = *p; if (id == 600) np.quarterTurns = (np.quarterTurns + 3) % 4; else if (id == 601) np.quarterTurns = (np.quarterTurns + 1) % 4; else { np.rotation = 0; np.quarterTurns = 0; } emit(editcmd::diff(*p, np)); }
+        else if (id >= 500 && id < 506 && p) { mAspect = id - 500; EditParams np = *p; setAspect(np, mAspect); emit(editcmd::diff(*p, np)); }
+        else if (id == 950 && p) { EditParams np = *p; resetCurve(np); emit(editcmd::diff(*p, np)); syncCurve(); }
         // action bar 960..962: Save/Import/Export — no-op stand-ins (SAF wiring later)
     }
     static void setAspect(EditParams &p, int a)
@@ -551,7 +558,7 @@ private:
     void syncCurve()
     {
         if (!mCurve) return;
-        auto *p = mSession.curParams(); if (!p) return;
+        auto *p = sess().curParams(); if (!p) return;
         std::vector<CurvePoint> pts;
         if (mCurveMode == 1) { pts = p->mixer[mMixerCh]; if (pts.empty()) pts = {CurvePoint{0, 0.5f}, CurvePoint{1, 0.5f}}; mCurve->cyclic = true; mCurve->hueStrip = (mMixerCh == 0); mCurve->line = ACCENT; }
         else { pts = (mCurveCh == 0) ? p->curve : p->curveChannel[mCurveCh - 1]; mCurve->cyclic = false; mCurve->hueStrip = false; mCurve->line = (mCurveCh == 0 ? ACCENT : mCurveCh == 1 ? CHR : mCurveCh == 2 ? CHG : CHB); }
@@ -561,10 +568,20 @@ private:
     void rebuildBody()
     {
         clearChildren(); mRows.clear(); mCurve = nullptr;
+        // `maskIndex >= 0` marks a row that edits masks[i]: those cannot go through the diff
+        // command, because a `mask=` line APPENDS on parse — they use `mask set` instead.
         auto addRow = [&](const std::string &label, double mn, double mx, double def, bool grad, Color gl, Color gr,
-                          std::function<double(const EditParams &)> get, std::function<void(EditParams &, double)> set) {
+                          std::function<double(const EditParams &)> get, std::function<void(EditParams &, double)> set,
+                          int maskIndex = -1) {
             auto w = std::make_shared<ParamSlider>(label, mn, mx, grad, gl, gr);
-            w->onChangeValue = [this, set](double ui) { auto *p = mSession.curParams(); if (!p) return; EditParams np = *p; set(np, ui); mSession.applyParams(np); };
+            w->onChangeValue = [this, set, maskIndex](double ui) {
+                auto *p = sess().curParams(); if (!p) return;
+                EditParams np = *p; set(np, ui);
+                if (maskIndex >= 0 && maskIndex < (int)np.masks.size())
+                    emit(editcmd::maskSet(maskIndex, editcmd::maskFields(np.masks[maskIndex])));
+                else
+                    emit(editcmd::diff(*p, np));
+            };
             addChild(w); mRows.push_back({w, get, set, def});
         };
         if (mTab == 0)
@@ -578,7 +595,7 @@ private:
             addRow("Saturation", 0, 100, 0, false, {}, {}, [rg](const EditParams &p) { return (double)p.grade[rg].sat; }, [rg](EditParams &p, double v) { p.grade[rg].sat = (float)v; });
             addRow("Luminance", -100, 100, 0, false, {}, {}, [rg](const EditParams &p) { return (double)p.grade[rg].lum; }, [rg](EditParams &p, double v) { p.grade[rg].lum = (float)v; });
             addRow("Balance", -100, 100, 0, false, {}, {}, [](const EditParams &p) { return (double)p.balance; }, [](EditParams &p, double v) { p.balance = (float)v; });
-            auto *p = mSession.curParams();
+            auto *p = sess().curParams();
             if (p && p->remapEnable)
             {
                 addRow("Source Hue", 0, 360, 0, false, {}, {}, [](const EditParams &p) { return (double)p.remapSrc; }, [](EditParams &p, double v) { p.remapSrc = (float)v; });
@@ -591,14 +608,14 @@ private:
             addRow("", -45, 45, 0, false, {}, {}, [](const EditParams &p) { return (double)p.rotation; }, [](EditParams &p, double v) { p.rotation = (float)v; });
         else if (mTab == 1)
         {
-            auto *p = mSession.curParams();
+            auto *p = sess().curParams();
             if (p && mMaskSel >= 0 && mMaskSel < (int)p->masks.size())
             {
                 int mi = mMaskSel;
-                addRow("Feather", 0, 100, 50, false, {}, {}, [mi](const EditParams &p) { return (double)(p.masks[mi].feather * 100); }, [mi](EditParams &p, double v) { p.masks[mi].feather = (float)(v / 100); });
-                addRow("Exposure", -5, 5, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.exposure; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.exposure = (float)v; });
-                addRow("Contrast", -100, 100, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.contrast; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.contrast = (float)v; });
-                addRow("Clarity", -100, 100, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.clarity; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.clarity = (float)v; });
+                addRow("Feather", 0, 100, 50, false, {}, {}, [mi](const EditParams &p) { return (double)(p.masks[mi].feather * 100); }, [mi](EditParams &p, double v) { p.masks[mi].feather = (float)(v / 100); }, mi);
+                addRow("Exposure", -5, 5, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.exposure; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.exposure = (float)v; }, mi);
+                addRow("Contrast", -100, 100, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.contrast; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.contrast = (float)v; }, mi);
+                addRow("Clarity", -100, 100, 0, false, {}, {}, [mi](const EditParams &p) { return (double)p.masks[mi].adjust.clarity; }, [mi](EditParams &p, double v) { p.masks[mi].adjust.clarity = (float)v; }, mi);
             }
         }
         else if (mTab == 2)
@@ -606,10 +623,10 @@ private:
     }
     void writeCurve(const std::vector<CurvePoint> &pts)
     {
-        auto *p = mSession.curParams(); if (!p) return; EditParams np = *p;
+        auto *p = sess().curParams(); if (!p) return; EditParams np = *p;
         if (mCurveMode == 1) np.mixer[mMixerCh] = pts;
         else if (mCurveCh == 0) np.curve = pts; else np.curveChannel[mCurveCh - 1] = pts;
-        mSession.applyParams(np);
+        emit(editcmd::diff(*p, np));
     }
     void layoutBody()
     {
@@ -618,7 +635,7 @@ private:
         if (mTab == 0) y0 += 52;                 // chips
         else if (mTab == 3) { y0 += 46; }         // region picker
         else if (mTab == 4) y0 += 8;              // rotation slider first
-        else if (mTab == 1) y0 += (mSession.curParams() && !mSession.curParams()->masks.empty() ? 74 + (int)mSession.curParams()->masks.size() * 40 + 34 : 0);
+        else if (mTab == 1) y0 += (sess().curParams() && !sess().curParams()->masks.empty() ? 74 + (int)sess().curParams()->masks.size() * 40 + 34 : 0);
         for (auto &r : mRows) { r.w->layout(w); r.w->x.set(0); r.w->y.set(y0); y0 += kRowH; }
         if (mTab == 3) mRemapToggleY = bodyTop() + 46 + 4 * kRowH + 6;   // after H/S/L/Balance
         if (mTab == 4) mXBtnY = bodyTop() + 8 + kRowH + 8;
@@ -633,7 +650,11 @@ private:
     void setDetent(Detent d) { mDetent = d; applyDetent(mNowMs); bool vis = d != Detent::Rail; for (auto &r : mRows) r.w->visible = vis; if (mCurve) mCurve->visible = vis; }
     void applyDetent(double now) { double tg = mDetent == Detent::Rail ? kRail : openHeight(); height.animateTo(tg, 280.0, Easing::EaseOutCubic, now); }
 
-    cosmo::EditSession &mSession;
+    // The service, not a session (R-TOUCH-1). `sess()` is the transitional READ accessor the
+    // desktop App also uses; `emit()` is the only way out.
+    cosmo::EditSession &sess() const { return mSvc.session(); }
+    bool emit(const cosmo::Command &c) const { return c.valid() && mSvc.dispatch(c); }
+    cosmo::CosmoService &mSvc;
     Detent mDetent = Detent::Half;
     int mTab = 0, mSection = 0, mCurveMode = 0, mCurveCh = 0, mMixerCh = 0, mGradeRegion = 1, mAspect = 0, mMaskSel = -1;
     double mScreenW = 393, mScreenH = 852, mNowMs = 0, mRemapToggleY = 0, mXBtnY = 0;
@@ -723,7 +744,7 @@ public:
     enum class Mode { None, Overflow, Settings, History, Confirm };
     std::function<void()> onChanged;   // sync editor after a session-mutating action
     std::function<void()> onReset;     // reset workspace -> host (go home)
-    explicit SheetLayer(cosmo::EditSession &s) : mSession(s) { visible = false; }
+    explicit SheetLayer(cosmo::CosmoService &svc) : mSvc(svc) { visible = false; }
     void open(Mode m, double now) { mMode = m; visible = true; mClosing = false; mScrim.set(0); mScrim.animateTo(0.55, 180, Easing::EaseOutCubic, now); mRise.set(1); mRise.animateTo(0, 240, Easing::EaseOutCubic, now); }
     void close(double now) { mScrim.animateTo(0, 140, Easing::EaseInCubic, now); mClosing = true; }
     bool isOpen() const { return visible && !mClosing; }
@@ -752,7 +773,7 @@ protected:
 
 private:
     void zoneRect(double x, double y, double w, double h, int id) const { mZones.push_back({Rect{x, y, w, h}, id}); }
-    std::vector<int> allImageSlots() const { std::vector<int> v; for (auto &n : mSession.nodes()) if (!n.group && n.slot >= 0) v.push_back(n.slot); return v; }
+    std::vector<int> allImageSlots() const { std::vector<int> v; for (auto &n : sess().nodes()) if (!n.group && n.slot >= 0) v.push_back(n.slot); return v; }
 
     void seg(IRenderTarget &t, double x, double y, double w, double h, const std::vector<const char *> &labels, int sel, int base) const
     {
@@ -774,7 +795,7 @@ private:
         t.setFill(Color(0x8a / 255.0, 0x8a / 255.0, 0x8a / 255.0, 0.4)); rrectPath(t, w / 2 - 18, sy + 8, 36, 4, 2); t.fillPath();
         double y = sy + 24;
         for (auto &it : items)
-        { bool dis = (it.id == 1 && !mSession.canUndo()) || (it.id == 2 && !mSession.canRedo());
+        { bool dis = (it.id == 1 && !sess().canUndo()) || (it.id == 2 && !sess().canRedo());
           txt(t, it.l, 24, y + rowH * 0.5 + 5, 15, fnt::sans(), dis ? Color(FG.r, FG.g, FG.b, 0.35) : it.danger ? DESTRUCT : FG);
           hline(t, 20, w - 20, y + rowH, BORDER); if (!dis) zoneRect(0, y, w, rowH, it.id); y += rowH; }
     }
@@ -784,13 +805,14 @@ private:
         t.setFill(POP); rrectPath(t, 0, sy, w, sheetH + 40, 12); t.fillPath();
         t.setFill(Color(0x8a / 255.0, 0x8a / 255.0, 0x8a / 255.0, 0.4)); rrectPath(t, w / 2 - 18, sy + 8, 36, 4, 2); t.fillPath();
         txt(t, "Engine Settings", 20, sy + 40, 15, fnt::sansSemiBold(), FG);
-        int q = mSession.previewEdge() <= 1200 ? 0 : mSession.previewEdge() <= 2000 ? 1 : 2;
+        int q = sess().previewEdge() <= 1200 ? 0 : sess().previewEdge() <= 2000 ? 1 : 2;
         txt(t, "PREVIEW QUALITY", 20, sy + 74, 11, fnt::sansMedium(), MUTED);
         seg(t, 20, sy + 84, w - 40, 30, {"Draft", "Standard", "High"}, q, 100);
-        int th = par::threadsRef() == 0 ? 0 : par::threadsRef() == 2 ? 1 : par::threadsRef() == 4 ? 2 : 3;
+        const int thr = mSvc.model().settings.threads;
+        int th = thr == 0 ? 0 : thr == 2 ? 1 : thr == 4 ? 2 : 3;
         txt(t, "CPU THREADS", 20, sy + 138, 11, fnt::sansMedium(), MUTED);
         seg(t, 20, sy + 148, w - 40, 30, {"Auto", "2", "4", "8"}, th, 200);
-        bool avail = mSession.gpuAvailable(), on = mSession.useGpu();
+        bool avail = sess().gpuAvailable(), on = sess().useGpu();
         txt(t, avail ? "GPU Acceleration" : "GPU Acceleration . unavailable", 20, sy + 214, 14, fnt::sans(), avail ? FG : MUTED);
         t.setFill(on && avail ? ACCENT : INPUT); rrectPath(t, w - 60, sy + 198, 44, 26, 13); t.fillPath();
         t.setFill(WHITE); rrectPath(t, w - 60 + (on && avail ? 21 : 3), sy + 201, 20, 20, 10); t.fillPath();
@@ -802,7 +824,7 @@ private:
         t.setFill(CARD); rrectPath(t, cx, cy, cw, ch, 4); t.fillPath(); t.setStroke(BORDER, 1.0); rrectPath(t, cx, cy, cw, ch, 4); t.strokePath();
         txt(t, "History", cx + 16, cy + 30, 15, fnt::sansSemiBold(), FG);
         icon::back(t, Rect{cx + cw - 36, cy + 12, 20, 20}, MUTED, 1.6); zoneRect(cx + cw - 44, cy + 8, 40, 32, 9000);   // close
-        cosmo::History *hy = mSession.currentHistory(); if (!hy) return;
+        cosmo::History *hy = sess().currentHistory(); if (!hy) return;
         double y = cy + 56;
         for (size_t i = 0; i < hy->nodes.size() && y < cy + ch - 20; ++i)
         {
@@ -832,29 +854,37 @@ private:
     {
         switch (id)
         {
-        case 1: mSession.undo(); done(); break;
-        case 2: mSession.redo(); done(); break;
-        case 3: mSession.copyCurrent(); close(mNow); break;
-        case 4: mSession.pasteTo(allImageSlots()); done(); break;
-        case 5: mSession.createGroupFromSelection(); done(); break;
-        case 6: mSession.ungroupSelected(); done(); break;
+        case 1: emit(editcmd::undo()); done(); break;
+        case 2: emit(editcmd::redo()); done(); break;
+        case 3: sess().copyCurrent(); close(mNow); break;
+        case 4: sess().pasteTo(allImageSlots()); done(); break;
+        case 5: { cosmo::Command c; c.kind = cosmo::Command::Kind::GroupNew; emit(c); done(); break; }
+        case 6: { cosmo::Command c; c.kind = cosmo::Command::Kind::GroupUngroup; c.index = -1; emit(c); done(); break; }
         case 7: open(Mode::History, mNow); break;
         case 8: open(Mode::Settings, mNow); break;
         case 9: open(Mode::Confirm, mNow); break;
-        case 100: case 101: case 102: mSession.setPreviewEdge(id == 100 ? 1000 : id == 101 ? 1600 : 2400); break;
-        case 200: case 201: case 202: case 203: par::setThreads(id == 200 ? 0 : id == 201 ? 2 : id == 202 ? 4 : 8); mSession.submit(); break;
-        case 300: mSession.setUseGpu(!mSession.useGpu()); break;
+        // Settings are the service's (R-SVC-10): it owns the budget and applies it. Calling
+        // par::setThreads from here was a layering violation as well as a second owner.
+        case 100: case 101: case 102:
+            emit(editcmd::settings({{"previewEdge", id == 100 ? "1000" : id == 101 ? "1600" : "2400"}})); break;
+        case 200: case 201: case 202: case 203:
+            emit(editcmd::settings({{"threads", id == 200 ? "0" : id == 201 ? "2" : id == 202 ? "4" : "8"}})); break;
+        case 300: emit(editcmd::settings({{"useGpu", sess().useGpu() ? "0" : "1"}})); break;
         case 2000: close(mNow); break;
-        case 2001: mSession.resetWorkspace(); close(mNow); if (onReset) onReset(); break;
+        case 2001: sess().resetWorkspace(); close(mNow); if (onReset) onReset(); break;
         case 9000: close(mNow); break;
         default:
-            if (id >= 1000 && id < 2000) { mSession.jumpToHistory(id - 1000); done(); }
+            if (id >= 1000 && id < 2000) { sess().jumpToHistory(id - 1000); done(); }
             break;
         }
     }
     void done() { if (onChanged) onChanged(); close(mNow); }
 
-    cosmo::EditSession &mSession;
+    // The service, not a session (R-TOUCH-1). `sess()` is the transitional READ accessor the
+    // desktop App also uses; `emit()` is the only way out.
+    cosmo::EditSession &sess() const { return mSvc.session(); }
+    bool emit(const cosmo::Command &c) const { return c.valid() && mSvc.dispatch(c); }
+    cosmo::CosmoService &mSvc;
     Mode mMode = Mode::None;
     Property mScrim{0.0}, mRise{1.0};
     bool mClosing = false;
@@ -867,13 +897,13 @@ class EditorScreen : public Segment
 {
 public:
     std::function<void()> onHome;
-    explicit EditorScreen(cosmo::EditSession &s) : mSession(s)
+    explicit EditorScreen(cosmo::CosmoService &svc) : mSvc(svc)
     {
         mPhoto = std::make_shared<ImageView>(); mPhoto->setFit(ImageView::Fit::Contain); mPhoto->inputTransparent = true; addChild(mPhoto);
         mPill = std::make_shared<BeforeAfterPill>(); addChild(mPill);
-        mTray = std::make_shared<Tray>(s); addChild(mTray);
+        mTray = std::make_shared<Tray>(svc); addChild(mTray);
         mDrawer = std::make_shared<PresetDrawer>(); addChild(mDrawer);
-        mSheets = std::make_shared<SheetLayer>(s);
+        mSheets = std::make_shared<SheetLayer>(svc);
         mSheets->onChanged = [this] { syncControls(); };
         mSheets->onReset = [this] { if (onHome) onHome(); };
         addChild(mSheets);
@@ -907,13 +937,13 @@ protected:
         double c = kTopBar * 0.5;
         ci::panelLeft(t, Rect{10, c - 10, 20, 20}, FG, 1.5);
         icon::back(t, Rect{54, c - 10, 20, 20}, FG, 1.75);
-        int eg = mSession.editGroup();
-        std::string title = (eg >= 0 && eg < (int)mSession.nodes().size() && mSession.nodes()[eg].group)
-                                ? "Group: " + mSession.nodes()[eg].name
+        int eg = sess().editGroup();
+        std::string title = (eg >= 0 && eg < (int)sess().nodes().size() && sess().nodes()[eg].group)
+                                ? "Group: " + sess().nodes()[eg].name
                                 : (mName.empty() ? "Untitled" : mName);
         txtC(t, title, w * 0.5, c + 5, 14, fnt::sansMedium(), eg >= 0 ? ACCENT : FG);
-        icon::undo(t, Rect{w - 132, c - 10, 20, 20}, mSession.canUndo() ? FG : MUTED, 1.75);
-        icon::redo(t, Rect{w - 88, c - 10, 20, 20}, mSession.canRedo() ? FG : MUTED, 1.75);
+        icon::undo(t, Rect{w - 132, c - 10, 20, 20}, sess().canUndo() ? FG : MUTED, 1.75);
+        icon::redo(t, Rect{w - 88, c - 10, 20, 20}, sess().canRedo() ? FG : MUTED, 1.75);
         icon::more(t, Rect{w - 44, c - 10, 20, 20}, FG, 1.75);
     }
     bool handleGesture(const Gesture &g, const Point &lp) override
@@ -925,22 +955,22 @@ protected:
         {
             if (lp.x < 44) mDrawer->open(mNow);                                  // panel -> preset drawer
             else if (lp.x < 88) { if (onHome) onHome(); }                         // back -> home
-            else if (lp.x >= w - 140 && lp.x < w - 96) { if (mSession.canUndo()) { mSession.undo(); syncControls(); } }
-            else if (lp.x >= w - 96 && lp.x < w - 52) { if (mSession.canRedo()) { mSession.redo(); syncControls(); } }
+            else if (lp.x >= w - 140 && lp.x < w - 96) { if (sess().canUndo()) { sess().undo(); syncControls(); } }
+            else if (lp.x >= w - 96 && lp.x < w - 52) { if (sess().canRedo()) { sess().redo(); syncControls(); } }
             else if (lp.x >= w - 52) mSheets->open(SheetLayer::Mode::Overflow, mNow);
             return true;
         }
         double filmY = h - kRail - kFilm;
         if (lp.y >= filmY && lp.y <= filmY + kFilm)
         {
-            auto cells = mSession.currentGroupCells(); double x = 8;
+            auto cells = sess().currentGroupCells(); double x = 8;
             for (size_t i = 0; i < cells.size(); ++i)
             {
                 if (lp.x >= x && lp.x <= x + 72)
                 {
-                    if (dbl && cells[i].group) mSession.navigateToGroup(cells[i].node);  // drill into group
-                    else if (rc) mSession.selectNode((int)i, false, true);                // long-press -> multi-select toggle
-                    else mSession.selectNode((int)i, false, false);                       // tap -> select (image, or group as edit target)
+                    if (dbl && cells[i].group) sess().navigateToGroup(cells[i].node);  // drill into group
+                    else if (rc) sess().selectNode((int)i, false, true);                // long-press -> multi-select toggle
+                    else sess().selectNode((int)i, false, false);                       // tap -> select (image, or group as edit target)
                     syncControls();
                     break;
                 }
@@ -951,7 +981,7 @@ protected:
         double crumbY = h - kRail - kFilm - kCrumb;
         if (click && lp.y >= crumbY && lp.y < crumbY + kCrumb)
         {
-            for (auto &z : mCrumbZones) if (z.first.contains(lp)) { mSession.navigateToGroup(z.second); syncControls(); break; }
+            for (auto &z : mCrumbZones) if (z.first.contains(lp)) { sess().navigateToGroup(z.second); syncControls(); break; }
             return true;
         }
         return true;
@@ -962,13 +992,13 @@ private:
     {
         mCrumbZones.clear();
         std::vector<int> path;                       // group node path: root -> ... -> current group
-        for (int g = mSession.currentGroup(); g >= 0;) { path.push_back(g); if (g == 0) break; g = mSession.nodes()[g].parent; }
+        for (int g = sess().currentGroup(); g >= 0;) { path.push_back(g); if (g == 0) break; g = sess().nodes()[g].parent; }
         std::reverse(path.begin(), path.end());
         double x = 12, bl = y + kCrumb * 0.5 + 4;
         for (size_t i = 0; i < path.size(); ++i)
         {
             int n = path[i]; bool last = i + 1 == path.size();
-            std::string nm = mSession.nodes()[n].name.empty() ? (n == 0 ? "All Photos" : "Group") : mSession.nodes()[n].name;
+            std::string nm = sess().nodes()[n].name.empty() ? (n == 0 ? "All Photos" : "Group") : sess().nodes()[n].name;
             double wpx = t.measureText(nm, 11, fnt::sans());
             txt(t, nm, x, bl, 11, fnt::sans(), last ? FG : MUTED);
             mCrumbZones.push_back({Rect{x - 4, y, wpx + 8, kCrumb}, n});
@@ -978,9 +1008,9 @@ private:
     }
     void drawFilmstrip(IRenderTarget &t, double y, double w) const
     {
-        (void)w; auto cells = mSession.currentGroupCells();
-        int cur = mSession.currentSlot(), eg = mSession.editGroup();
-        const auto &sel = mSession.selection();
+        (void)w; auto cells = sess().currentGroupCells();
+        int cur = sess().currentSlot(), eg = sess().editGroup();
+        const auto &sel = sess().selection();
         auto selected = [&](const cosmo::EditSession::Cell &c) {
             if (std::find(sel.begin(), sel.end(), c.node) != sel.end()) return true;
             if (c.group) return c.node == eg;
@@ -1002,10 +1032,14 @@ private:
     int thumbId(IRenderTarget &t, int slot) const
     {
         auto it = mThumbIds.find(slot); if (it != mThumbIds.end()) return it->second;
-        const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(slot); if (!th || th->w <= 0) return -1;
+        const cosmo::EditSession::Thumb *th = sess().thumbForSlot(slot); if (!th || th->w <= 0) return -1;
         int id = t.registerImage(th->rgba.data(), th->w, th->h); mThumbIds[slot] = id; return id;
     }
-    cosmo::EditSession &mSession;
+    // The service, not a session (R-TOUCH-1). `sess()` is the transitional READ accessor the
+    // desktop App also uses; `emit()` is the only way out.
+    cosmo::EditSession &sess() const { return mSvc.session(); }
+    bool emit(const cosmo::Command &c) const { return c.valid() && mSvc.dispatch(c); }
+    cosmo::CosmoService &mSvc;
     std::shared_ptr<ImageView> mPhoto;
     std::shared_ptr<BeforeAfterPill> mPill;
     std::shared_ptr<Tray> mTray;
@@ -1285,10 +1319,9 @@ private:
 };
 
 // ── PhoneApp ─────────────────────────────────────────────────────────────────────
-PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
+PhoneApp::PhoneApp(cosmo::CosmoService &svc, double width, double height) : mSvc(svc), mW(width), mH(height)
 {
-    par::setThreads(4);
-    mHome = std::make_shared<HomeScreen>(); mLoading = std::make_shared<LoadingScreen>(); mEditor = std::make_shared<EditorScreen>(mSession);
+    mHome = std::make_shared<HomeScreen>(); mLoading = std::make_shared<LoadingScreen>(); mEditor = std::make_shared<EditorScreen>(mSvc);
     for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get()}) { s->width.set(width); s->height.set(height); }
     mEditor->resize(width, height, 0.0);
     mBrowser = std::make_shared<FileBrowser>();
@@ -1305,6 +1338,8 @@ PhoneApp::PhoneApp(double width, double height) : mW(width), mH(height)
 }
 PhoneApp::~PhoneApp() = default;
 
+bool PhoneApp::emit(const cosmo::Command &c) { return c.valid() && mSvc.dispatch(c); }
+
 artboard::Segment *PhoneApp::activeRoot() const
 { switch (mScreen) { case Screen::Home: return mHome.get(); case Screen::Loading: return mLoading.get(); default: return mEditor.get(); } }
 
@@ -1318,14 +1353,17 @@ void PhoneApp::addProjectImage(const uint8_t *rgba, int w, int h, const std::str
 
 void PhoneApp::buildSession(const std::string &name, bool empty)
 {
-    mSession.resetWorkspace();
+    // The remaining session calls in this function are the same host seam the desktop App keeps
+    // (`openImage` takes PIXELS, and no Command carries pixels): they are S4's list for this
+    // shell, and they are reads or raw-pixel handoffs, never a parameter write.
+    sess().resetWorkspace();
     mImageCount = 0;
     if (!empty)
         for (auto &im : mImgs)
-        { if (mImageCount == 0) mSession.openImage(im.rgba.data(), im.w, im.h, im.name);
-          else mSession.openImageInto(mSession.currentGroup(), im.rgba.data(), im.w, im.h, im.name, ""); ++mImageCount; }
-    if (mImageCount > 0) mSession.selectImage(0);
-    mSession.setUseGpu(true);
+        { if (mImageCount == 0) sess().openImage(im.rgba.data(), im.w, im.h, im.name);
+          else sess().openImageInto(sess().currentGroup(), im.rgba.data(), im.w, im.h, im.name, ""); ++mImageCount; }
+    if (mImageCount > 0) emit(editcmd::select(0));
+    emit(editcmd::settings({{"useGpu", "1"}}));
     mEditor->setName(name);
     mEditor->setEmpty(empty);
     mEditor->syncControls();
@@ -1335,7 +1373,7 @@ void PhoneApp::pushRecent(const std::string &name, int count, bool empty)
 {
     mRecents.erase(std::remove_if(mRecents.begin(), mRecents.end(), [&](const Recent &r) { return r.name == name; }), mRecents.end());
     Recent r; r.name = name; r.count = count; r.empty = empty;
-    if (!empty) { const cosmo::EditSession::Thumb *th = mSession.thumbForSlot(0); if (th && th->w > 0) { r.thumb = th->rgba; r.tw = th->w; r.th = th->h; } }
+    if (!empty) { const cosmo::EditSession::Thumb *th = sess().thumbForSlot(0); if (th && th->w > 0) { r.thumb = th->rgba; r.tw = th->w; r.th = th->h; } }
     mRecents.insert(mRecents.begin(), std::move(r));
     if (mRecents.size() > 24) mRecents.resize(24);
     refreshHome();
@@ -1373,30 +1411,37 @@ void PhoneApp::openRecent(int i) { if (i >= 0 && i < (int)mRecents.size()) enter
 
 void PhoneApp::loadImagesAsProject(const std::vector<std::string> &paths, const std::string &name)
 {
-    cosmo::AndroidImageDecoder dec;
-    std::vector<SrcImage> imgs;
-    for (const auto &p : paths)
-    { cosmo::DecodedImage d = dec.decodeFile(p); if (d.ok()) imgs.push_back({std::move(d.rgba), d.width, d.height, d.name}); }
-    if (imgs.empty()) return;                 // nothing decoded (permission / unsupported)
-    mImgs = std::move(imgs);
-    enterProject(name, false);
+    // Decoding is the SERVICE's, behind the decoder factory its host installs (R-SVC-7): this
+    // shell used to construct an AndroidImageDecoder itself, which put a codec in the view AND
+    // made the file unbuildable anywhere but Android — so the touch UI could never be rendered
+    // or tested on a desktop host (R-TOUCH-5). `import` does the same job off the UI thread and
+    // reports progress, which is what the Loading screen wants anyway.
+    if (paths.empty()) return;
+    cosmo::Command c;
+    c.kind = cosmo::Command::Kind::Import;
+    c.paths = paths;
+    if (!emit(c)) return;                     // rejected: no decoder installed, model has why
+    mImageCount = (int)paths.size();
+    enterProject(name, /*empty=*/false);
 }
 
 void PhoneApp::charInput(unsigned int cp) { if (mScreen == Screen::Home) mHome->searchChar(cp); }
 void PhoneApp::backspace() { if (mScreen == Screen::Home) mHome->searchBackspace(); }
 
-bool PhoneApp::gpuAvailable() const { return mSession.gpuAvailable(); }
+bool PhoneApp::gpuAvailable() const { return mSvc.session().gpuAvailable(); }
 
 void PhoneApp::poll()
 {
+    // The SERVICE polls the engine and hands the frame on — exactly one caller of tryAcquire
+    // (R-SVC), and on this shell that caller is no longer the view.
     RenderService::Frame f;
-    if (mSession.renderService().tryAcquire(f) && f.width > 0)
+    if (mSvc.takeFrame(f) && f.width > 0)
     { mEditor->setPhoto(f.rgba.data(), f.width, f.height); mEditor->setHist(f.hist); }
 }
 
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
-    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); mSession.tick(nowMs); poll();
+    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); sess().tick(nowMs); poll();
     Segment *r = activeRoot(); r->advance(nowMs); r->render(t); r->renderOverlay(t);
     double a = mFade.update(nowMs);
     if (a > 0.002) { t.save(); t.setTransform(Transform::identity()); t.setFill(Color(0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, a));
