@@ -30,8 +30,8 @@
  *
  *  No gtk_init(): GTK3 is linked for GdkPixbuf (the decoder + the export encoder live in
  *  the app layer, R-SVC-7) and never initialised, so nothing here needs a display. The
- *  vendored fonts are registered straight into fontconfig, the same call linux_main.cpp
- *  makes — with the host's default sans instead, every text measurement is off and the
+ *  embedded faces are handed to the render adapter, the same call linux_main.cpp makes
+ *  (R-FONT-1) — with the host's default sans instead, every text measurement is off and the
  *  shots would report layout bugs that do not exist.
  *
  *  Usage:
@@ -41,6 +41,7 @@
  *  fixture-free subset is what `ctest -R cosmo_shots_headless` runs.
  */
 #include "App.h"
+#include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
 #include "core/AppSettings.h"
@@ -56,7 +57,6 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
-#include <fontconfig/fontconfig.h>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -459,18 +459,10 @@ namespace
 
     void registerBundledFonts()
     {
-        // COSMO_SOURCE_DIR is baked in by CMakeLists.txt, exactly as for the app, so the
-        // fonts are found whatever directory the harness was launched from.
-        const std::string dir = std::string(COSMO_SOURCE_DIR) + "/assets/fonts";
-        const char *files[] = {"/DMSans/DMSans-Regular.ttf", "/DMSans/DMSans-Medium.ttf",
-                               "/DMSans/DMSans-SemiBold.ttf", "/JetBrainsMono/JetBrainsMono-Regular.ttf",
-                               "/JetBrainsMono/JetBrainsMono-Medium.ttf"};
-        for (const char *f : files)
-        {
-            const std::string path = dir + f;
-            if (!FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)path.c_str()))
-                std::printf("  warning: could not register font %s\n", path.c_str());
-        }
+        // The same call the app makes (R-FONT-1): the faces are in this binary, so a shot is in
+        // the app's own type on any machine — which is the whole point of a shot that measures
+        // text. Nothing to find on disk, nothing for Fontconfig to resolve differently here.
+        arstro::cosmo_v2::registerEmbeddedFonts();
     }
 
     void setEnv(const char *key, const std::string &value)

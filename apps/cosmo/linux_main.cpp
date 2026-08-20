@@ -1,11 +1,13 @@
 /*
  *  Native Linux host for cosmo_v2 by arstro: GTK3 drawing area -> Cairo
  *  (Artboard's CairoTarget). Mirrors cosmo/linux_main.cpp's GTK glue; the only
- *  addition is registering the vendored DM Sans / JetBrains Mono files with
- *  Fontconfig at startup (App-private, no system install) so the drawText
- *  font-family parameter (Artboard FR-22) resolves to them.
+ *  addition is registering the typeface at startup, which is now a handoff of
+ *  bytes that are already IN this binary (EmbeddedFonts, R-FONT-1) rather than a
+ *  Fontconfig call on a path baked in at build time — so the drawText font-family
+ *  parameter (Artboard FR-22) resolves to the app's own faces on any machine.
  */
 #include "App.h"
+#include "EmbeddedFonts.h"
 #include "ExportWriter.h"
 #include "Log.h"
 #include "ControlChannel.h"
@@ -19,7 +21,6 @@
 #include "widgets/SplashScreen.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
-#include <fontconfig/fontconfig.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 #ifdef _WIN32
@@ -211,23 +212,13 @@ namespace
     // Registers a vendored font file as an app-private font (no system install,
     // scoped to this process's Fontconfig config) so cosmo_v2's Theme can select
     // it by family name via the drawText fontFamily parameter.
-    void registerFont(const std::string &path)
-    {
-        if (!FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)path.c_str()))
-            g_printerr("cosmo_v2: could not register font %s\n", path.c_str());
-    }
-
-
     void registerBundledFonts()
     {
-        // COSMO_SOURCE_DIR (baked in by CMakeLists.txt) locates assets next to
-        // the source tree, independent of the build directory or CWD.
-        const std::string dir = std::string(COSMO_SOURCE_DIR) + "/assets/fonts";
-        registerFont(dir + "/DMSans/DMSans-Regular.ttf");
-        registerFont(dir + "/DMSans/DMSans-Medium.ttf");
-        registerFont(dir + "/DMSans/DMSans-SemiBold.ttf");
-        registerFont(dir + "/JetBrainsMono/JetBrainsMono-Regular.ttf");
-        registerFont(dir + "/JetBrainsMono/JetBrainsMono-Medium.ttf");
+        // R-FONT-1: the faces are IN this binary and go straight to the render adapter. What
+        // this replaced — Fontconfig plus a path baked in at build time — made the app's own
+        // type depend on a directory next to the source tree and on how the host resolves a
+        // family name, and neither is allowed to differ between machines.
+        arstro::cosmo_v2::registerEmbeddedFonts();
     }
 
     void openImageFile(Host *a, const std::string &path)

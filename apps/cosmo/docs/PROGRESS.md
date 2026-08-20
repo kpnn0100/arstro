@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · U2.1 + U2.2 + U2.2a landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-20 · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -134,6 +134,21 @@ current to new photo with adjustment when doing adjustment on slider". Requireme
       `theStageNeverBlinksDuringADrag`, which drives 100 adjustments and asserts both per-frame
       facts off the op stream — **checked against the shipped code first: both assertions fail on
       it** — plus a re-rendered `editor-dissolve` pair at two sizes, looked at
+- [x] **U2.4** (core + design) The typeface travels inside the binary, and it is Roboto
+      (**R-FONT-1…4**, **R-G-2a** amended, Artboard **FR-22a**). Asked for as "copy this font to
+      this repo … use this font for the app to make sure consistent UI between platform, embed the
+      font directly into binary build". Roboto Regular/Medium/SemiBold vendored under
+      `assets/fonts/Roboto/` with its OFL; `cmake/embed_fonts.cmake` generates a C++ array from the
+      five faces (Roboto + JetBrains Mono, which stays the numeric face) and
+      `registerEmbeddedFonts()` hands them to `CairoTarget::registerFontMemory` — so **Fontconfig
+      is out of cosmo entirely**, `ARTBOARD_CAIRO_FT` is on for the desktop build, and the binary
+      draws its own glyphs with nothing to find on disk. `cosmo_shots` and `cosmo_ui_tests` share
+      the one registration, so a shot measures the app's real text. Fell out of it: the wordmark's
+      accent dot was placed with `estimateTextWidth` (`len·px·0.6`, font-independent) and detached
+      from the `o` under the new face — both stragglers now measure, like `SplashScreen` and the
+      phone shell already did, and R-G-2a says so. Verified by `strings` finding every family in
+      the binary, home + editor shots at two sizes in Roboto with the dot tight against the word,
+      and all 16 ctest suites green
 - [ ] **U2.3** (design) The **phone** stage dissolves too — `touch/PhoneApp.cpp:872/891`
       (`EditorScreen::mPhoto` / `setPhoto`) still replaces its pixels in one frame. Same fix as
       U2.2, ~20 lines: a second `ImageView`, one opacity, the same "newest pixels into the hidden
@@ -356,6 +371,21 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-20 (U2.4) — The font is embedded and registered by NAME, not resolved.** Two things
+  were true of cosmo's type before this and neither is acceptable: it needed a directory next to
+  the source tree (`COSMO_SOURCE_DIR/assets/fonts`), and it went through Fontconfig, which resolves
+  a family name however the host is configured — including silently to the system sans when the
+  file is missing. The face now goes from a C++ array to `FT_New_Memory_Face` to Cairo, so the only
+  agreement left is between the names in `CMakeLists`' font list and the names in `Theme.h` (that
+  pairing is R-FONT-3, and a mismatch is silent by the adapter's design — worth remembering).
+- **2026-08-20 (U2.4) — `cmake -P` as the code generator, not xxd/objcopy/a host tool.** A
+  generator target needs building before the thing that needs it and is awkward when
+  cross-compiling; `xxd -i` and `objcopy` are not portable to MSYS2 the way `file(READ … HEX)` is.
+  0.08 s per face, and the custom command re-runs only when a TTF changes.
+- **2026-08-20 (U2.4) — DM Sans is left in the tree, unused.** Vendored, licensed assets with their
+  OFL; removing them buys nothing and loses the ability to compare. `Theme.h` and the Android font
+  table are the only places that ever named them, and both now name Roboto.
 
 - **2026-08-20 (U2.2a) — A cross-fade is linear; the house EaseOutCubic is for things that move.**
   Everything else in cosmo eases out, and for position/size that is right. For a dissolve the

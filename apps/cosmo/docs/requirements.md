@@ -237,6 +237,31 @@ animates its width over `kRailAnimMs=200 ms` driven by an `Observable<bool> mRai
 Vertical stack: `PhotoCanvas` (fills), `Breadcrumb` (`kHeight=22.75`), `Filmstrip`
 (`kHeight=86`) (`CenterStage.cpp:21-35`).
 
+### DR-FONT-1 The typeface is compiled into the binary (R-FONT-1…4)
+`cmake/embed_fonts.cmake` turns the five vendored TTFs into `EmbeddedFonts.generated.cpp` in the
+build dir — `file(READ … HEX)` plus one regex, so there is no `xxd`, no `objcopy` and no host
+codegen target, and MSYS2 runs the same line as Linux. The `add_custom_command` in
+[CMakeLists.txt](../CMakeLists.txt) depends on the TTFs and the script, so it re-runs only when one
+changes, and the generated file is compiled into `cosmo`, `cosmo_shots` and `cosmo_ui_tests` alike
+(R-FONT-4).
+
+`registerEmbeddedFonts()` ([EmbeddedFonts.cpp](../EmbeddedFonts.cpp)) is the only code that pairs a
+family NAME with bytes (R-FONT-3); it calls `artboard::CairoTarget::registerFontMemory` per face,
+which builds an `FT_Face` over the static array without copying it (Artboard FR-22a). The desktop
+build therefore defines `ARTBOARD_CAIRO_FT` — previously Android-only — which switches
+`CairoTarget::drawText`/`measureText` to "a registered face wins, otherwise the toy API", and links
+`freetype2` instead of `fontconfig`. **Nothing in cosmo calls Fontconfig any more.**
+
+The families are `Roboto` / `Roboto Medium` / `Roboto SemiBold` (UI) and `JetBrains Mono` /
+`JetBrains Mono Medium` (numerics, filenames), matching `Theme.h`'s `font::` accessors name for name.
+The binary carries ~880 KB of face data and `strings` finds every family in it, which is the cheapest
+proof that the embedding worked.
+
+One visible consequence, fixed in the same change: the wordmark's accent dot was placed with
+`estimateTextWidth` (`len * px * 0.6`, font-independent), so it detached from the `o` as soon as the
+typeface changed. `App::renderWordmark` and `HomeScreen`'s sidebar now measure, like `SplashScreen`
+and the phone shell already did (R-G-2a as amended).
+
 ### DR-PHOTO-1 Photo canvas
 A `#0A0A0A` backdrop behind an `ImageView` (Contain fit). The main image shows the edited
 ("After") frame; Before shows the geometry-only baseline (`renderBefore`); Split shows the before

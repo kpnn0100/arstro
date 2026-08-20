@@ -1279,7 +1279,12 @@ namespace cosmo_v2
         target.setFill(fg);
         target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
         target.setFill(dot);
-        target.drawText(".", x + estimateTextWidth("cosmo", sz), base, sz, font::sansSemiBold(), sp);
+        // MEASURED, not estimated (R-G-2a): the dot has to touch the word, and
+        // estimateTextWidth is `len * px * 0.6` — font-independent by construction, so it
+        // detached the moment the typeface changed. SplashScreen and the phone shell already
+        // measure; these two sites were the stragglers.
+        target.drawText(".", x + target.measureText("cosmo", sz, font::sansSemiBold(), sp),
+                        base, sz, font::sansSemiBold(), sp);
     }
 
     void App::renderTransition(IRenderTarget &target, double nowMs)

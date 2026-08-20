@@ -45,8 +45,13 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
 - **R-G-2 Figma is the spec.** Screens that reference a Figma frame must match it (spacing,
   type ramp, colors, radii pulled from `Theme`), not approximate it.
 - **R-G-2a One wordmark.** The `cosmo.` wordmark is drawn identically everywhere it appears
-  (home sidebar, editor top bar, the open/return transition): letter-spacing `-0.03 * size` and the
-  accent dot at `x + estimateTextWidth("cosmo", size)`. No per-site spacing tweaks.
+  (home sidebar, editor top bar, the open/return transition, the splash, the phone shell):
+  letter-spacing `-0.03 * size` and the accent dot at the **measured** end of the word,
+  `x + measureText("cosmo", size, family, spacing)`. No per-site spacing tweaks.
+  (**AMENDED (R-FONT-2), 2026-08-20:** it said `estimateTextWidth`, which is `len * px * 0.6` —
+  font-independent by construction, so it is wrong for any particular font, and the dot detached
+  from the `o` the moment the typeface changed. Two of the sites already measured; the requirement
+  now says what the accurate ones do.)
 
 ## R-EDITSTACK — Right-column edit stack
 
@@ -190,6 +195,39 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   `finishWorkspaceLoad` consequently must **not** steal the selection — it auto-selects the first
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
+
+## R-FONT — The typeface travels inside the binary — ✅ IMPLEMENTED
+
+An app's own type is not something that may differ between machines, and cosmo's did: the faces were
+registered with Fontconfig from a path baked in at build time, so the text depended on a directory
+existing next to the source tree, on Fontconfig resolving the family the same way on every host, and
+— when either failed — silently on whatever the system's default sans happened to be. A shot then
+measures the wrong widths, a panel overflows on one machine and not another, and the app does not
+look like itself.
+
+- **R-FONT-1 The faces are compiled into the binary.** The vendored TTFs are generated into a C++
+  array at build time and handed straight to the render adapter (`CairoTarget::registerFontMemory`,
+  Artboard FR-22a). No font file beside the executable, no Fontconfig in the text path, no
+  system-installed family: the binary draws its own glyphs on any machine, which is the only way the
+  UI is identical across platforms. The generator is a `cmake -P` script (no `xxd`, no `objcopy`, no
+  host codegen target to build first), so Linux and MSYS2 run the same line, and it re-runs only
+  when a TTF changes.
+- **R-FONT-2 Roboto is the UI face; JetBrains Mono stays the numeric one.** `font::sans` /
+  `sansMedium` / `sansSemiBold` are Roboto Regular / Medium / SemiBold — one family, three real
+  static weights, because a weight is selected by its own family name at the text-stack level
+  (Artboard FR-22) rather than by a number. `font::mono` / `monoMedium` stay JetBrains Mono for
+  numerics and filenames, embedded on the same terms — a mono face resolved from the system would
+  reintroduce exactly the inconsistency this requirement removes.
+- **R-FONT-3 One list, in one place.** The names the faces are registered under and the names
+  `Theme.h`'s `font::` accessors ask for are the same list, and the registration is the only code
+  that pairs a name with bytes. A name in `Theme.h` with no registered face falls through to the
+  host's default sans — silently, since that is the adapter's documented fallback — so the build's
+  font list is treated as part of the theme, not as build plumbing.
+- **R-FONT-4 Every shell registers them, including the harnesses.** The app, `cosmo_shots` and
+  `cosmo_ui_tests` share one registration call, so a shot is in the app's own type. A shot in the
+  wrong typeface measures the wrong widths and reports overflow bugs that do not exist, which makes
+  it worse than no shot. The Android shell asks for the same families from its APK assets (it ships
+  them anyway); embedding there is a follow-up, not a difference in the design.
 
 ## R-THUMB — A thumbnail is the same photo, only smaller — ✅ IMPLEMENTED
 

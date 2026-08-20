@@ -497,13 +497,17 @@ namespace cosmo_v2
         //    its own copy back into place on return, so it reads as one element)
         if (!mWordmarkHidden)
         {
-            // Same spacing formula as the top-bar wordmark (spacing -0.03*size; the
-            // dot sits at kPad + estimateTextWidth) so the two "cosmo." read identical.
+            // Same spacing formula as the top-bar wordmark (spacing -0.03*size; the dot sits
+            // at the MEASURED end of the word) so the two "cosmo." read identical — R-G-2a.
+            // Measured rather than estimated because estimateTextWidth is `len * px * 0.6`,
+            // which is font-independent and therefore wrong for any particular font: it left
+            // a visible gap before the accent dot as soon as the typeface changed.
             const double sp = -0.03 * 46.0;
             t.setFill(palette::foreground());
             t.drawText("cosmo", kPad, 96.0, 46.0, font::sansSemiBold(), sp);
             t.setFill(palette::primary());
-            t.drawText(".", kPad + estimateTextWidth("cosmo", 46.0), 96.0, 46.0, font::sansSemiBold(), sp);
+            t.drawText(".", kPad + t.measureText("cosmo", 46.0, font::sansSemiBold(), sp),
+                       96.0, 46.0, font::sansSemiBold(), sp);
         }
         t.setFill(palette::mutedForeground());
         t.drawText("Develop, grade, and export", kPad, 118.0, 11.0, font::sans());
