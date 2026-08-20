@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · T1 landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-20 · T1 + T1a landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -113,6 +113,19 @@ Decisions taken with the user before any code (so no other machine re-litigates 
       New `cosmo_touch_shots` renders every state at 393×852, 360×780 and 852×393 and asserts the
       shell builds, renders, takes a photo into the model and survives a rotation (`ctest -R
       cosmo_touch_layout`). Its first frames immediately found **D-38**
+- [x] **T1a** **Touch mode is a setting on the desktop** (**R-TOUCH-6**, asked for directly:
+      "make me a setting in desktop version that change UI to touch mode"). Core half:
+      `AppSettings::touchUi`, persisted, `settings set touchUi=1`, stored-and-forwarded by the
+      service like `uiScale` and printed in the model dump. Host half: a sixth Settings row
+      (**Input** — `Mouse` / `Touch`), and `linux_main.cpp` holding a `PhoneApp` beside `App`,
+      cross-faded (260 ms) with both drawn through `pushLayer` while the switch is in flight.
+      Both shells share the service, so the project, selection, parameters and undo history
+      survive the switch — nothing reloads. In a window wider than tall the phone shell is drawn
+      in a centred 430 dp column (`TouchViewport.h`, shared with the shot renderer) because
+      there is no landscape layout yet — a dated letterbox, not the end state. Found by looking:
+      the first shot drew the column flush left, because the tree sets the transform absolutely
+      and an outer translate is wiped — hence `PhoneApp::setOrigin`. Verified by the
+      `desktop-touch` shot and by launching the real app with `touchUi=1` seeded
 - [ ] **T2** **No overlap, and both orientations** (**R-TOUCH-2**, **R-TOUCH-3**, closes **D-38**).
       Portrait: the tray gets its own box and the photo's box SHRINKS for it (no overlay); the row
       list is measured against the space left above the action bar and scrolls. Landscape: the
@@ -417,6 +430,18 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-20 (T1a) — Touch mode is a live switch, not a restart, and the letterbox is dated.**
+  Both shells bind to the same service, so swapping them keeps the project open — that is the
+  payoff of T1 and the reason this could be a 260 ms cross-fade instead of "restart to apply".
+  The centred 430 dp column in a wide window is a deliberate interim while T2 is unbuilt: filling
+  a 1600x1000 window with the current touch layout stacks four bands of controls (D-38), and a
+  letterbox that says "this is the phone layout" is more honest than a broken one that says
+  nothing.
+- **2026-08-20 (T1a) — A shell offsets itself; a caller's translate cannot.** `CairoTarget` maps
+  `setTransform` onto `cairo_set_matrix` (absolute), and the segment tree sets the transform per
+  node, so wrapping `PhoneApp::render` in a translate is wiped on the first node. Hence
+  `setOrigin`. Worth remembering for any future "draw this shell over there" idea.
 
 - **2026-08-20 (T1) — A whole-EditParams edit becomes a DIFF command, not a per-field table.** The
   touch tray hands over a mutated copy of `EditParams` rather than naming the field that moved, so

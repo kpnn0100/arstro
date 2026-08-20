@@ -16,11 +16,13 @@
  */
 #include "touch/PhoneApp.h"
 #include "EmbeddedFonts.h"
+#include "TouchViewport.h"
 #include "adapter/native/CairoTarget.h"
 #include "core/AppSettings.h"
 #include "core/ThreadBudget.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "core/service/CosmoService.h"
+#include "Theme.h"
 #include <cairo/cairo.h>
 #include <cstdio>
 #include <cstdlib>
@@ -193,6 +195,34 @@ namespace
     }
 }
 
+namespace
+{
+    /** R-TOUCH-6: what the DESKTOP window shows once touch mode is on — the phone shell in the
+     *  viewport the host gives it, letterboxed in a wide window because there is no landscape
+     *  layout yet. The rule comes from TouchViewport.h, the same one linux_main.cpp uses, so this
+     *  is a picture of the real thing rather than of the harness's idea of it. */
+    void shotDesktopTouchMode(double winW, double winH)
+    {
+        if (!wanted("desktop-touch")) return;
+        const artboard::Rect v = arstro::cosmo_v2::touchViewport(winW, winH);
+        Rig rig(v.w, v.h);
+        Frame f((int)winW, (int)winH);
+        rig.settle(f, 400.0);
+        rig.seedPhoto();
+        rig.settle(f, 200.0);
+        rig.openFirstRecent(f);
+        // Redraw into the full window with the letterbox the host paints, at the host's offset.
+        f.clear();
+        rig.target.setContext(f.cr());
+        rig.target.setTransform(artboard::Transform::identity());
+        drawRoundedRect(rig.target, artboard::Rect{0, 0, winW, winH}, 0.0,
+                        artboard::Paint::filled(arstro::cosmo_v2::palette::background()));
+        rig.app.setOrigin(v.x, v.y);
+        rig.app.render(rig.target, rig.now);
+        save(f, "desktop-touch");
+    }
+}
+
 int main(int argc, char **argv)
 {
     std::vector<std::string> args(argv + 1, argv + argc);
@@ -204,7 +234,8 @@ int main(int argc, char **argv)
         else if (args[i] == "--assert") doAssert = true;
         else if (args[i] == "--list")
         {
-            std::printf("home-portrait  editor-portrait  home-landscape  editor-landscape  home-small  editor-small\n");
+            std::printf("home-portrait  editor-portrait  tray-portrait  home-landscape  editor-landscape\n"
+                        "home-small  editor-small  desktop-touch\n");
             return 0;
         }
     }
@@ -243,5 +274,6 @@ int main(int argc, char **argv)
     shotsAt(kPortraitW, kPortraitH, "portrait");
     shotsAt(kSmallW, kSmallH, "small");
     shotsAt(kPortraitH, kPortraitW, "landscape");
+    shotDesktopTouchMode(1600.0, 1000.0);
     return 0;
 }

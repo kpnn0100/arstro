@@ -1442,11 +1442,17 @@ void PhoneApp::poll()
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
     mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); sess().tick(nowMs); poll();
-    Segment *r = activeRoot(); r->advance(nowMs); r->render(t); r->renderOverlay(t);
+    // Everything draws through `origin`, this shell's own offset inside the surface the host gave
+    // it (R-TOUCH-6). It cannot be a translate applied by the CALLER: the tree sets the transform
+    // absolutely (CairoTarget maps setTransform onto cairo_set_matrix), so an outer translate is
+    // wiped on the first node — which is exactly what the first shot of the desktop window in
+    // touch mode showed, the phone column flush left instead of centred.
+    const Transform origin = Transform::translation(mOriginX, mOriginY);
+    Segment *r = activeRoot(); r->advance(nowMs); r->render(t, origin); r->renderOverlay(t, origin);
     double a = mFade.update(nowMs);
-    if (a > 0.002) { t.save(); t.setTransform(Transform::identity()); t.setFill(Color(0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, a));
+    if (a > 0.002) { t.save(); t.setTransform(origin); t.setFill(Color(0x14 / 255.0, 0x14 / 255.0, 0x14 / 255.0, a));
         t.beginPath(); t.moveTo(0, 0); t.lineTo(mW, 0); t.lineTo(mW, mH); t.lineTo(0, mH); t.closePath(); t.fillPath(); t.restore(); }
-    if (mBrowser->visible) { mBrowser->advance(nowMs); mBrowser->render(t); mBrowser->renderOverlay(t); }   // file browser on top
+    if (mBrowser->visible) { mBrowser->advance(nowMs); mBrowser->render(t, origin); mBrowser->renderOverlay(t, origin); }
 }
 
 void PhoneApp::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)

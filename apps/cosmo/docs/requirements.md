@@ -282,6 +282,39 @@ can be driven and shot on a desktop host with no device (R-TOUCH-5). Guarded by
 `test_settings_and_dump_options_reach_the_model` (the command, the model, the dump, and back) and the
 settings roundtrip test (it survives a restart; a file that predates the key gets the desktop shell).
 
+### DR-TOUCH-6b The desktop window can draw the touch shell (R-TOUCH-6, host half)
+The Settings dialog gains a sixth row, **Input** — chips `Mouse` / `Touch`, labelled by what you
+get rather than "Off/On", with the middot suffix "touch keeps your project open" because that is the
+question a user actually has ([widgets/SettingsDialog.cpp](../widgets/SettingsDialog.cpp)). The
+callback does not swap anything itself: a view cannot replace itself with a different view, so it
+sends `settings set touchUi=…` and notifies the host, exactly like every other row.
+
+The host ([linux_main.cpp](../linux_main.cpp)) holds `std::unique_ptr<cosmo_touch::PhoneApp> phone`
+beside its `App`, built on first use and kept afterwards, and `setTouchMode` eases
+`Host::touchFade` between them (260 ms, `EaseOutCubic`). While the fade is in flight both shells are
+drawn, each inside `pushLayer(alpha)`; at rest only one is drawn and no layer is opened, so the
+common case costs what it did before. **Both shells bind to the same `CosmoService`**, which is what
+makes this a live switch rather than a restart: the open project, the selection, the parameters and
+the undo history are the service's, so nothing reloads.
+
+Input and layout follow the active shell: pointer, motion and wheel go to the phone shell in touch
+mode with the viewport offset subtracted, and `onSizeAllocate` re-measures both.
+
+`TouchViewport.h` holds the rule for WHERE the phone shell sits, in its own header so the shot
+renderer uses the same one: a portrait-ish window gets the whole thing, a window wider than tall gets
+a centred **430 dp portrait column** with the app background painted around it. That letterbox is
+deliberate and dated — the touch shell has no landscape layout yet (D-38 / ledger T2) — and it
+collapses to "fill the window" when the two-pane layout lands.
+
+`PhoneApp::setOrigin(x, y)` exists because of that: the shell offsets **itself**. A translate applied
+by the caller is wiped on the first node, since the tree sets the transform absolutely (`CairoTarget`
+maps `setTransform` onto `cairo_set_matrix`) — the first shot of the desktop window in touch mode drew
+the column flush left, which is how this was found rather than shipped.
+
+Shown by `cosmo_touch_shots --only desktop-touch` (1600×1000: the phone column centred, letterboxed,
+its tray and tool bar clean at that height) and by launching the real app with `touchUi=1` seeded in
+`settings.txt` — it comes up in the touch shell and stays up.
+
 ### DR-TOUCH-5 The touch shell renders with no device (R-TOUCH-5)
 `cosmo_touch_shots` ([tests/touch/touchShots.cpp](../tests/touch/touchShots.cpp)) builds `PhoneApp`
 over a real `CosmoService` on the desktop host and either renders every state to PNG or (`--assert`,

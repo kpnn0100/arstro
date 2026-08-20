@@ -275,6 +275,8 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/OmpPin.{h,cpp}` | host | pins a nested OpenMP team per decode worker, resolved by `dlsym`/`GetProcAddress` rather than linked (R-CPU-2c, fixes D-12) |
 | `apps/cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `apps/cosmo/Theme.{h,cpp}` | app | palette, radii, font family names, type ramp |
+| `apps/cosmo/touch/*` + `apps/cosmo/TouchViewport.h` | app | the TOUCH shell (`arstro::cosmo_touch`), built into the desktop binary too: `linux_main.cpp` holds one beside `App` and cross-fades to it when `touchUi` is set (R-TOUCH-6). Same service, so the switch keeps the project open |
+| `apps/cosmo/EditCommands.{h,cpp}` | app | the one place a moved control becomes a `Command`, shared by BOTH shells (R-TOUCH-1) |
 | `apps/cosmo/EmbeddedFonts.{h,cpp}` + `cmake/embed_fonts.cmake` | app (host) | the typeface, compiled into the binary: the script generates a C++ array from the vendored TTFs and `registerEmbeddedFonts()` hands them to `CairoTarget::registerFontMemory` — no font file, no Fontconfig, no system font (R-FONT-1, Artboard FR-22a) |
 | `apps/cosmo/Log.{h,cpp}` | app | file log + crash backtrace |
 | `apps/cosmo/ExportWriter.{h,cpp}` | app (host) | batch export encoder: path resolution, JPEG/PNG/TIFF via GdkPixbuf, EXIF/GPS/sRGB metadata (R-EXPORT-3/4/5) |

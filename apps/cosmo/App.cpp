@@ -1,4 +1,5 @@
 #include "App.h"
+#include "EditCommands.h"
 #include "core/PresetLibrary.h"
 #include "UiDump.h"          // findSegmentByType, to name the consumer
 #include "Log.h"
@@ -204,6 +205,15 @@ namespace cosmo_v2
         mSettingsDialog->onUseGpu = [this](bool on) {
             mSession.setUseGpu(on);   // setUseGpu re-renders (R-GPU)
             mSettings.useGpu = on;
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
+        // R-TOUCH-6: this view cannot swap ITSELF for another one — the host owns which shell
+        // exists. So it goes out as a settings command (the service stores and forwards it) and
+        // as the host notification every other row already uses; the host reads the flag and
+        // cross-fades between the two shells, keeping the project open.
+        mSettingsDialog->onTouchUi = [this](bool on) {
+            mSettings.touchUi = on;
+            emitCommand(editcmd::settings({{"touchUi", on ? "1" : "0"}}));
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
         mRoot->addChild(mSettingsDialog);
@@ -1062,7 +1072,8 @@ namespace cosmo_v2
         for (int s : cosmo::AppSettings::uiScales())
             if (scaleFitsDisplay(s)) maxScale = s;
         mSettingsDialog->show(mUiScale, maxScale, mSettings.previewEdge, mSettings.threads,
-                              mSettings.cpuPercent, mSession.useGpu(), mSession.gpuAvailable());
+                              mSettings.cpuPercent, mSession.useGpu(), mSession.gpuAvailable(),
+                              mSettings.touchUi);
     }
 
     namespace

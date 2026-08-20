@@ -20,9 +20,12 @@ if(TARGET cosmo_core)
   # cannot swallow the CLI's main().
   add_subdirectory(cli)
 
+  # touch/ is in the DESKTOP app's sources too (R-TOUCH-6): the same binary can draw the touch
+  # shell, so linux_main.cpp holds a PhoneApp and switches to it when the setting says so.
   file(GLOB COSMO_SOURCES CONFIGURE_DEPENDS
        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
-       ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp)
+       ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/touch/*.cpp)
 
   set(CAIRO_ADAPTER ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp)
 

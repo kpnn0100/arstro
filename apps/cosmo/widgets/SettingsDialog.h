@@ -1,9 +1,11 @@
 /*
  *  cosmo_v2 by arstro — SettingsDialog: a modal engine-settings picker (R-SETTINGS).
- *  Five rows of selectable chips — Screen scale (how large the whole shell is drawn,
+ *  Six rows of selectable chips — Screen scale (how large the whole shell is drawn,
  *  R-SCALE), Preview quality (base preview render long-edge: speed vs. detail), CPU
  *  threads (worker count for the multicore engine), CPU limit (the share of the
- *  machine cosmo may schedule, R-CPU) and GPU acceleration — plus a Done button. They map straight onto the RenderService via EditSession /
+ *  machine cosmo may schedule, R-CPU), GPU acceleration and Input (mouse shell or
+ *  TOUCH shell, R-TOUCH-6 — the host swaps them, this only reports the choice) — plus
+ *  a Done button. They map straight onto the RenderService via EditSession /
  *  par::setThreads, or onto AppSettings::cpuPercent. Same modal chrome + fade as
  *  PresetDialog (R-G-1). Opened from the editor's Settings menu AND from the home
  *  screen's sidebar link (R-SETTINGS-5) — one dialog, not one per screen.
@@ -36,6 +38,10 @@ namespace cosmo_v2
         std::function<void(int)> onThreads;      // engine worker threads (0 = auto)
         std::function<void(int)> onCpuPercent;   // share of the machine cosmo may use (R-CPU-3)
         std::function<void(bool)> onUseGpu;      // GPU acceleration on/off (R-GPU)
+        /** R-TOUCH-6: draw the TOUCH shell instead of this one. Last row, because it replaces
+         *  every other control in the dialog with its touch equivalent — a user who lands here
+         *  by accident should have read the rest first. */
+        std::function<void(bool)> onTouchUi;
 
         /** Open, seeded with the current engine values so the right chips read selected.
          *  `gpuAvailable` false → the GPU row is shown disabled ("unavailable"). */
@@ -44,7 +50,7 @@ namespace cosmo_v2
          *  (R-SCALE-3). ONE number suffices because the constraint is monotonic — the logical
          *  minimum is fixed, so a bigger scale always needs a bigger window. */
         void show(int uiScale, int maxScale, int previewEdge, int threads, int cpuPercent,
-                  bool useGpu, bool gpuAvailable);
+                  bool useGpu, bool gpuAvailable, bool touchUi);
         bool isOpen() const { return mOpen && !mClosing; }
         /** Public (unlike the rest of the Segment overrides) because the HOME screen
          *  drives this dialog directly: Home is not part of the editor tree that would
@@ -65,7 +71,7 @@ namespace cosmo_v2
         artboard::Rect doneRect() const;
         // Named once, so inserting a row is not five coordinated edits to five literals —
         // which is what the row indices were before Screen scale was added.
-        enum Row { kRowScale = 0, kRowQuality, kRowThreads, kRowCpu, kRowGpu, kRows };
+        enum Row { kRowScale = 0, kRowQuality, kRowThreads, kRowCpu, kRowGpu, kRowTouch, kRows };
         /** Fills `rects` with the chip boxes for row `row`, WRAPPING at the card's inner
          *  width; `lines` (optional) receives how many lines it took. */
         void chipRects(int row, std::vector<artboard::Rect> &rects, int *lines = nullptr) const;
@@ -110,6 +116,7 @@ namespace cosmo_v2
         int mCpuPercent = 50;     // current selection (% of cores, R-CPU-1)
         bool mUseGpu = false;     // GPU acceleration on/off (R-GPU)
         bool mGpuAvailable = false;  // a platform GPU backend exists (else the row is disabled)
+        bool mTouchUi = false;       // draw the touch shell instead of this one (R-TOUCH-6)
         HoverFade mHover;         // per-chip / Done hover cross-fade (R-G-3)
     };
 }

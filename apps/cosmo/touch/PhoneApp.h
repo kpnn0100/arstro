@@ -50,6 +50,13 @@ namespace cosmo_touch
         void wheel(double x, double y, double delta, bool ctrl);
         void longPress(double x, double y);   // synthesized by the host; -> multi-select toggle
         void setSize(double width, double height);
+        /** Where this shell sits inside the surface the host draws into (R-TOUCH-6). A desktop
+         *  host that letterboxes the phone layout into a wide window sets this; a phone host
+         *  leaves it at 0,0. Input arrives in SHELL coordinates either way — the host subtracts
+         *  the same offset — so this is a drawing concern only, and it has to be the SHELL's
+         *  because the tree sets the transform absolutely: a translate applied by the caller is
+         *  wiped on the first node (which is what a shot of the desktop window showed). */
+        void setOrigin(double x, double y) { mOriginX = x; mOriginY = y; }
 
         // text entry (host feeds soft-keyboard events; app requests show/hide via onKeyboard)
         void charInput(unsigned int codepoint);
@@ -97,6 +104,7 @@ namespace cosmo_touch
         Screen mScreen = Screen::Home;
         artboard::Property mFade{0.0};   // cross-fade scrim on screen change
         double mW, mH, mNowMs = 0.0;
+        double mOriginX = 0.0, mOriginY = 0.0;
         int mImageCount = 0;
     };
 }
