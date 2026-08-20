@@ -379,6 +379,10 @@ namespace cosmo
             // rendered headlessly, and in the model so whichever front end owns a view can
             // read the value it must honour (R-SCALE-2).
             else if (k == "uiScale") s.uiScale = AppSettings::clampUiScale(v);
+            // The second of those (R-TOUCH-6): WHICH shell a host draws is the view's business,
+            // so the service stores the choice, puts it in the model and emits the change. That
+            // is also what makes the touch shell scriptable from a desktop host.
+            else if (k == "touchUi") s.touchUi = (kv.second != "0" && kv.second != "false");
             else return fail("settings: unknown key " + k);
         }
         std::string tail;

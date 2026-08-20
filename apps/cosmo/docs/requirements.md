@@ -268,6 +268,20 @@ number/blob formatting and the command builders, and **both** shells call it —
 `num`/`pointsStr`/`maskBlob`/`adjustFields` are now `using` declarations of the shared ones
 (R-TOUCH-1's one-mapping rule).
 
+### DR-TOUCH-6a Touch mode is a persisted setting (R-TOUCH-6, core half)
+`AppSettings::touchUi` (default false) round-trips through `settings.txt` like every other
+preference, and `CosmoService::applySettingsFields` accepts `touchUi=0|1`
+([core/service/CosmoService.cpp:382](../core/service/CosmoService.cpp#L382)) — stored in
+`AppModel::settings`, emitted as `SettingsChanged`, printed as `settingsTouchUi` by `formatModel`,
+and never acted on by the service. It is the second store-and-forward view key after `uiScale`, for
+the same reason: which shell a host draws is not something the service may know about (R-SVC-3).
+
+Being in the grammar is what makes it useful beyond the dialog: `settings set touchUi=1` from a
+script, from `cosmo-cc` or over the control socket puts the touch shell on screen, so the touch UI
+can be driven and shot on a desktop host with no device (R-TOUCH-5). Guarded by
+`test_settings_and_dump_options_reach_the_model` (the command, the model, the dump, and back) and the
+settings roundtrip test (it survives a restart; a file that predates the key gets the desktop shell).
+
 ### DR-TOUCH-5 The touch shell renders with no device (R-TOUCH-5)
 `cosmo_touch_shots` ([tests/touch/touchShots.cpp](../tests/touch/touchShots.cpp)) builds `PhoneApp`
 over a real `CosmoService` on the desktop host and either renders every state to PNG or (`--assert`,

@@ -72,6 +72,7 @@ namespace cosmo
                 else if (k == "useGpu") s.useGpu = (v != "0");
                 else if (k == "cpuPercent") s.cpuPercent = std::stoi(v);
                 else if (k == "uiScale") s.uiScale = std::stoi(v);
+                else if (k == "touchUi") s.touchUi = (v != "0");
             }
             catch (...) {}
         }
@@ -95,7 +96,8 @@ namespace cosmo
           << "threads=" << threads << "\n"
           << "useGpu=" << (useGpu ? 1 : 0) << "\n"
           << "cpuPercent=" << cpuPercent << "\n"
-          << "uiScale=" << uiScale << "\n";
+          << "uiScale=" << uiScale << "\n"
+          << "touchUi=" << (touchUi ? 1 : 0) << "\n";
         return (bool)f;
     }
 }

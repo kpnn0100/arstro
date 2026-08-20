@@ -89,6 +89,7 @@ namespace cosmo
         kvb(s, j, "settingsUseGpu", m.settings.useGpu);
         kvi(s, j, "settingsCpuPercent", m.settings.cpuPercent);
         kvi(s, j, "settingsUiScale", m.settings.uiScale);
+        kvb(s, j, "settingsTouchUi", m.settings.touchUi);
 
         kvi(s, j, "budgetPercent", m.budget.percent);
         kvi(s, j, "budgetTotal", m.budget.total);

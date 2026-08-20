@@ -243,6 +243,27 @@ component-level spec; where it disagrees with this section, this section wins an
   a ≥ **24 dp** grab radius, and while dragging a **loupe** offset above the finger showing the node
   under it — because the fingertip covers exactly the thing being positioned. Tapping selects the
   nearest node rather than requiring a hit, so a miss adjusts something instead of nothing.
+- **R-TOUCH-6 The desktop build can RUN the touch shell, and it is a setting.** A touch screen is
+  not a different product: a convertible folded into a tablet, a touchscreen panel, or a desktop
+  being driven by hand wants the touch layout from the same binary. So `AppSettings::touchUi`
+  (persisted like every other preference, R-SETTINGS-4; settable as `settings set touchUi=1`) picks
+  which shell the host draws, and:
+  - **The service stores and forwards it, and never acts on it** — which shell exists is the view's
+    business (R-SVC-3). It is the second such key, alongside `uiScale`, and it is in the grammar and
+    the model for the same two reasons: a script can flip it, and whoever owns a view can read the
+    value it must honour.
+  - **Both shells bind to the same service**, so switching mode keeps the open project, the
+    selection, the parameters and the undo history — nothing reloads and nothing is lost. That is
+    the practical payoff of R-TOUCH-1, and the check for it is that a `state print --stable` taken
+    either side of the switch is identical.
+  - **The switch is a visible change, so it animates** (R-G-1): the outgoing shell fades out as the
+    incoming one fades in, both drawn through the render target's layer alpha. It does not require
+    a restart, and it does not resize the window.
+  - **Interim, until R-TOUCH-3 lands (T2):** the touch shell has no landscape layout yet, so in a
+    window wider than it is tall the host draws it in a **centred portrait column** at the phone's
+    design width rather than in the stacked-controls layout D-38 describes. That is a deliberate
+    letterbox with a date on it, not the intended end state — when the two-pane landscape layout
+    exists, the shell fills the window.
 - **R-TOUCH-5 The touch shell is renderable and assertable with no device.** `PhoneApp` is Artboard
   `Segment`s over `CairoTarget`, so it builds on the desktop host: `cosmo_touch_shots` renders every
   screen and state to PNG at phone sizes in both orientations, and `cosmo_touch_tests` asserts the

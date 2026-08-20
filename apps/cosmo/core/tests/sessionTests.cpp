@@ -695,6 +695,7 @@ namespace
 
         AppSettings s;
         s.previewEdge = 2400; s.threads = 6; s.useGpu = true; s.cpuPercent = 25; s.uiScale = 75;
+        s.touchUi = true;
         assert(s.save());
         const AppSettings back = AppSettings::load();
         assert(back.previewEdge == 2400);
@@ -702,6 +703,8 @@ namespace
         assert(back.useGpu && "GPU acceleration is still on next launch");
         assert(back.cpuPercent == 25 && "the CPU budget survives a restart (R-CPU-3)");
         assert(back.uiScale == 75 && "the UI scale survives a restart (R-SCALE-1)");
+        assert(back.touchUi && "touch mode survives a restart (R-TOUCH-6) -- a UI that reverts to "
+                               "the mouse layout on a tablet every launch reads as broken");
 
         // A truncated / garbled file must fall back per field, never stop the app.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuseGpu=1\npreviewEdge=notanumber\nthre"; }
@@ -711,6 +714,7 @@ namespace
         assert(partial.threads == 0);
         assert(partial.cpuPercent == 50 && "a settings file that predates the budget gets the default");
         assert(partial.uiScale == 100 && "a file that predates the UI scale renders at the design size");
+        assert(!partial.touchUi && "a file that predates touch mode gets the desktop shell");
 
         // An out-of-range budget is a corrupt file, not a request for the whole machine.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=400\n"; }
@@ -1337,6 +1341,26 @@ namespace
         assert(m.settings.previewEdge == 2400 && m.settings.threads == 4 && m.settings.useGpu);
         assert(m.budget.percent == 25 && "and the budget agrees with it");
         assert(m.budget.engineThreads == 4 && "an explicit thread count still wins (R-CPU-2b)");
+
+        // R-TOUCH-6: which shell to draw is a setting, so it has to be reachable as a COMMAND —
+        // that is what lets a script (or a shot renderer on a desktop host) put the touch shell
+        // on screen without a device. The service stores and forwards it; it never acts on it,
+        // exactly like uiScale (R-SVC-3).
+        assert(!m.settings.touchUi && "the desktop shell is the default");
+        {
+            std::string err;
+            const Command c = parseCommand("settings set touchUi=1", err);
+            assert(err.empty() && c.kind == Command::Kind::SettingsSet);
+            assert(svc.dispatch(c) && "settings set touchUi=1 is accepted");
+        }
+        assert(m.settings.touchUi && "and the model reports the touch shell");
+        assert(formatModel(m, {}).find("settingsTouchUi=1") != std::string::npos &&
+               "so a front end that was not listening can still read it out of a dump");
+        {
+            std::string err;
+            assert(svc.dispatch(parseCommand("settings set touchUi=0", err)));
+        }
+        assert(!m.settings.touchUi && "and back");
 
         // D-14: `state print` carries --json and --stable INDEPENDENTLY. They shared one bool,
         // so --stable parsed and was then dropped — and a dump that cannot be made stable
