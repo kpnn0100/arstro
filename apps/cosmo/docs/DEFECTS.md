@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-39**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-40**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -173,6 +173,35 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-39 — Switching to touch mode showed no project, and the touch shell could have destroyed one
+- **Area:** design / touch shell · **Status:** **Fixed** (same session it was reported) · **Severity:** S1 (potential data loss)
+- **Found:** 2026-08-20, reported by the user immediately after touch mode shipped: "when change to
+  touch mode, all project file must keep the same, make it like a view only … right now when change
+  to touch mode i see no project".
+- **Reproduce:** open a project in the desktop shell, then Settings → Input → Touch. Headlessly:
+  `cosmo_touch_shots --assert` — a project is opened through the service with no touch shell in
+  existence, then one is built, and its screen is checked. Fails on the old code.
+- **Expected:** R-TOUCH-1 and the dialog's own promise ("touch keeps your project open") — the
+  touch shell is a view of the same service, so it shows the open project.
+- **Actual:** it came up on its own empty Home screen. Worse than cosmetic: tapping New / Open /
+  Import there called `buildSession`, whose first line is `resetWorkspace()` — so the touch view
+  could have thrown away the project the desktop view had open, without asking.
+- **Cause:** the shell predated the service binding and kept its own project state — `mScreen`
+  starting at Home, its own `mRecents` list, its own `mImgs` source images, and
+  `buildSession`/`enterProject`/`pushRecent`/`refreshHome` reimplementing the project lifecycle
+  against the session. T1 moved the WRITES onto commands but left that lifecycle in place, so the
+  view still believed it owned the project.
+- **Fix:** `PhoneApp::syncFromModel()` adopts the service's screen, project name, image count,
+  edit target and recents, called at construction and whenever `AppModel::revision` moves (the same
+  bind-on-revision rule the desktop shell uses). The local lifecycle is deleted: New / Open /
+  Import are host seams that end in a `Command`, a recent card dispatches `project open <path>`,
+  `finishProject` asks for `screen editor` rather than deciding, and `addProjectImage` — the one
+  raw-pixel seam, since no Command carries pixels — no longer resets the workspace. Entering the
+  editor over an already-loaded project re-selects the current image so the engine produces a
+  preview, otherwise the stage would stay empty until the next edit.
+- **Guarded by:** the `--assert` case above and the `adopted` shot (a touch shell built over an open
+  project, showing its photo, histogram and controls).
 
 ### D-37 — The photo dissolve blinked: one dark frame per render, and a pixel swap under a visible layer
 - **Area:** design / photo stage · **Status:** **Fixed** (same session it was reported) · **Severity:** S2

@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · T1 + T1a landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-20 · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -126,6 +126,16 @@ Decisions taken with the user before any code (so no other machine re-litigates 
       the first shot drew the column flush left, because the tree sets the transform absolutely
       and an outer translate is wiped — hence `PhoneApp::setOrigin`. Verified by the
       `desktop-touch` shot and by launching the real app with `touchUi=1` seeded
+- [x] **T1b** **The touch shell is a view, not a second owner** (**R-TOUCH-1** tightened, closes
+      **D-39**). Reported the moment touch mode shipped: switching showed no project. The shell
+      kept its own screen, its own recents and its own `buildSession` — whose first line was
+      `resetWorkspace()`, so its Home actions could have thrown away the project the desktop view
+      had open. `syncFromModel()` now adopts the service's screen, project, edit target and
+      recents on construction and on every revision change; the local lifecycle is deleted; New /
+      Open / Import are host seams ending in commands (the desktop host wires them to its own
+      dialogs); entering the editor re-selects so a preview actually arrives. Asserted by a
+      harness case that opens a project with NO touch shell alive and then builds one, plus the
+      `adopted` shot
 - [ ] **T2** **No overlap, and both orientations** (**R-TOUCH-2**, **R-TOUCH-3**, closes **D-38**).
       Portrait: the tray gets its own box and the photo's box SHRINKS for it (no overlay); the row
       list is measured against the space left above the action bar and scrolls. Landscape: the
@@ -430,6 +440,14 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-20 (T1b) — Moving the writes onto commands was not enough; the LIFECYCLE had to go.**
+  T1 converted every parameter write in the touch shell into a Command and called the binding done.
+  The shell still owned its screen, its recents and a `buildSession()` that reset the workspace —
+  so it looked bound and behaved like a second application, and the first thing the user saw after
+  the mode switch was an empty Home. The lesson worth keeping: "does it write through the service"
+  is a weaker question than "does it keep any state the service already has". The second question
+  is the one R-TOUCH-1 now asks, and the harness asks it too.
 
 - **2026-08-20 (T1a) — Touch mode is a live switch, not a restart, and the letterbox is dated.**
   Both shells bind to the same service, so swapping them keeps the project open — that is the

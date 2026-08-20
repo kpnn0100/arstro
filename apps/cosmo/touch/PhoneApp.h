@@ -63,16 +63,32 @@ namespace cosmo_touch
         void backspace();
         std::function<void(bool)> onKeyboard;   // set by the host: show(true)/hide(false) the IME
 
-        // Build the project: add each decoded image (straight RGBA8). The first becomes
-        // the project root's first image; the rest are added to the same group. Call
-        // finishProject() once all are added. The app starts on the Home screen.
+        // Build the project from pixels the host already has (the Android sample, a harness):
+        // the raw-pixel seam, because no Command carries pixels. `finishProject` selects the
+        // first image and asks the service for the editor screen — it does NOT decide the screen
+        // itself, since the screen is the model's (R-TOUCH-1).
         void addProjectImage(const uint8_t *rgba, int w, int h, const std::string &name);
         void finishProject(const std::string &projectName);
 
+        // ── host seams for the things only a host can do (R-SVC-7) ──
+        // A phone host may leave these unset, in which case the shell falls back to its own
+        // built-in file browser. A desktop host wires them to its native dialogs, exactly as the
+        // desktop shell does — one project-opening story, whichever shell is drawing.
+        std::function<void()> onNewProjectRequested;
+        std::function<void()> onOpenRequested;
+        std::function<void()> onImportRequested;
+
         bool gpuAvailable() const;
+        /** Which screen this shell is showing. Read-back for the harness (and for a host that
+         *  wants to know), the same way the desktop App exposes its bound revision. */
+        Screen screen() const { return mScreen; }
 
     private:
         void poll();
+        /** Adopt the service's state: the screen, the project, the recents, the controls. Called
+         *  whenever `AppModel::revision` moves, and once at construction — which is what makes a
+         *  shell built over an already-open project show THAT project (R-TOUCH-1). */
+        void syncFromModel();
         /** The only way out (R-TOUCH-1). False when the service rejected it — `model().lastError`
          *  says why, and a caller that cares can read it. */
         bool emit(const cosmo::Command &c);
@@ -80,20 +96,7 @@ namespace cosmo_touch
         cosmo::EditSession &sess() { return mSvc.session(); }
         void setScreen(Screen s, double nowMs);
         artboard::Segment *activeRoot() const;
-        void buildSession(const std::string &name, bool empty);  // (re)build the EditSession
-        void enterProject(const std::string &name, bool empty);  // build + push recent + loading
-        void newProject();      // fresh empty project
-        void openProject();     // open the existing project
-        void importCatalog();   // import the source images as a new catalog
-        void openRecent(int index);
-        void pushRecent(const std::string &name, int count, bool empty);
-        void refreshHome();
         void loadImagesAsProject(const std::vector<std::string> &paths, const std::string &name);  // from the file browser
-
-        struct SrcImage { std::vector<uint8_t> rgba; int w = 0, h = 0; std::string name; };
-        std::vector<SrcImage> mImgs;   // decoded source images (kept so New/Import can rebuild)
-        struct Recent { std::string name; int count = 0; bool empty = false; std::vector<uint8_t> thumb; int tw = 0, th = 0; };
-        std::vector<Recent> mRecents;  // newest first (DR-HOME-4)
 
         cosmo::CosmoService &mSvc;      // borrowed: the host owns it (R-TOUCH-1)
         artboard::GestureRecognizer mRecognizer;
@@ -105,6 +108,7 @@ namespace cosmo_touch
         artboard::Property mFade{0.0};   // cross-fade scrim on screen change
         double mW, mH, mNowMs = 0.0;
         double mOriginX = 0.0, mOriginY = 0.0;
+        unsigned mBoundRevision = 0;   // the AppModel revision this view is currently showing
         int mImageCount = 0;
     };
 }

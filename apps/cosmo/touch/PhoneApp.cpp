@@ -1327,14 +1327,36 @@ PhoneApp::PhoneApp(cosmo::CosmoService &svc, double width, double height) : mSvc
     mBrowser = std::make_shared<FileBrowser>();
     mBrowser->width.set(width); mBrowser->height.set(height);
     mBrowser->onPick = [this](const std::vector<std::string> &paths, const std::string &name) { loadImagesAsProject(paths, name); };
-    mHome->onNew = [this] { newProject(); };
-    mHome->onOpen = [this] { mBrowser->open(FileBrowser::Mode::OpenImage, mNowMs); };
-    mHome->onImport = [this] { mBrowser->open(FileBrowser::Mode::ImportFolder, mNowMs); };
-    mHome->onOpenRecent = [this](int i) { openRecent(i); };
+    // A host that has native dialogs (the desktop one does) handles these; a phone host leaves
+    // them unset and gets the shell's own browser. Either way what comes back is a Command.
+    mHome->onNew = [this] {
+        if (onNewProjectRequested) onNewProjectRequested();
+        else mBrowser->open(FileBrowser::Mode::ImportFolder, mNowMs);
+    };
+    mHome->onOpen = [this] {
+        if (onOpenRequested) onOpenRequested();
+        else mBrowser->open(FileBrowser::Mode::OpenImage, mNowMs);
+    };
+    mHome->onImport = [this] {
+        if (onImportRequested) onImportRequested();
+        else mBrowser->open(FileBrowser::Mode::ImportFolder, mNowMs);
+    };
+    mHome->onOpenRecent = [this](int i) {
+        const auto &r = mSvc.model().recents;
+        if (i < 0 || i >= (int)r.size() || r[i].path.empty()) return;
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::ProjectOpen;
+        c.path = r[i].path;
+        emit(c);   // the SERVICE opens it; this view finds out from the model, like any other
+    };
     mHome->onSearchFocus = [this] { if (onKeyboard) onKeyboard(true); };
     mLoading->onDone = [this] { setScreen(Screen::Editor, mNowMs); };
     mEditor->onHome = [this] { setScreen(Screen::Home, mNowMs); if (onKeyboard) onKeyboard(false); };
     mRecognizer.setSink([this](const Gesture &g) { if (mBrowser->isOpen()) mBrowser->onGesture(g); else if (auto *r = activeRoot()) r->onGesture(g); });
+    // Adopt whatever the service already has: this shell may be built long after a project was
+    // opened by the other one (R-TOUCH-6's live switch), and it must show it.
+    mScreen = Screen::Home;
+    syncFromModel();
 }
 PhoneApp::~PhoneApp() = default;
 
@@ -1349,65 +1371,65 @@ void PhoneApp::setSize(double width, double height)
 { mW = width; mH = height; for (Segment *s : {(Segment *)mHome.get(), (Segment *)mLoading.get(), (Segment *)mEditor.get(), (Segment *)mBrowser.get()}) { s->width.set(width); s->height.set(height); } mEditor->resize(width, height, mNowMs); }
 
 void PhoneApp::addProjectImage(const uint8_t *rgba, int w, int h, const std::string &name)
-{ mImgs.push_back({std::vector<uint8_t>(rgba, rgba + (size_t)w * h * 4), w, h, name}); }  // keep source
-
-void PhoneApp::buildSession(const std::string &name, bool empty)
 {
-    // The remaining session calls in this function are the same host seam the desktop App keeps
-    // (`openImage` takes PIXELS, and no Command carries pixels): they are S4's list for this
-    // shell, and they are reads or raw-pixel handoffs, never a parameter write.
-    sess().resetWorkspace();
-    mImageCount = 0;
-    if (!empty)
-        for (auto &im : mImgs)
-        { if (mImageCount == 0) sess().openImage(im.rgba.data(), im.w, im.h, im.name);
-          else sess().openImageInto(sess().currentGroup(), im.rgba.data(), im.w, im.h, im.name, ""); ++mImageCount; }
-    if (mImageCount > 0) emit(editcmd::select(0));
-    emit(editcmd::settings({{"useGpu", "1"}}));
-    mEditor->setName(name);
-    mEditor->setEmpty(empty);
-    mEditor->syncControls();
+    // The raw-pixel host seam: no Command carries pixels, so this is the one place the shell
+    // reaches the session, exactly as the desktop App's openImage does. It does NOT reset the
+    // workspace — a view may not destroy the project the other view has open, which is what the
+    // old buildSession() did on every New/Open/Import.
+    if (mSvc.model().imageCount == 0) sess().openImage(rgba, w, h, name);
+    else                              sess().openImageInto(sess().currentGroup(), rgba, w, h, name, "");
+    mSvc.refreshFromSession();   // the model is the only thing this view reads (R-TOUCH-1)
 }
 
-void PhoneApp::pushRecent(const std::string &name, int count, bool empty)
+void PhoneApp::finishProject(const std::string &projectName)
 {
-    mRecents.erase(std::remove_if(mRecents.begin(), mRecents.end(), [&](const Recent &r) { return r.name == name; }), mRecents.end());
-    Recent r; r.name = name; r.count = count; r.empty = empty;
-    if (!empty) { const cosmo::EditSession::Thumb *th = sess().thumbForSlot(0); if (th && th->w > 0) { r.thumb = th->rgba; r.tw = th->w; r.th = th->h; } }
-    mRecents.insert(mRecents.begin(), std::move(r));
-    if (mRecents.size() > 24) mRecents.resize(24);
-    refreshHome();
+    (void)projectName;   // the name is the model's (`projectName`), not this shell's to keep
+    for (const cosmo::NodeModel &n : mSvc.model().nodes)
+        if (!n.group && n.slot >= 0) { emit(editcmd::select(n.node)); break; }
+    emit(editcmd::screen("editor"));   // the SERVICE decides the screen; syncFromModel follows it
 }
 
-void PhoneApp::refreshHome()
+void PhoneApp::syncFromModel()
 {
+    const cosmo::AppModel &m = mSvc.model();
+    mBoundRevision = m.revision;
+
+    // Home's cards ARE the service's recents, so the two shells can never disagree about what
+    // exists. No thumbnail bytes: the model carries a path and decoding a cover is the host's job
+    // (the desktop asks its host too), so a card draws its placeholder until one arrives.
     std::vector<HomeScreen::Card> cards;
-    for (auto &r : mRecents)
+    for (const cosmo::RecentModel &r : m.recents)
     {
-        HomeScreen::Card c; c.name = r.name; c.thumb = r.thumb; c.tw = r.tw; c.th = r.th;
-        double mb = 0; for (auto &im : mImgs) mb += (double)im.w * im.h * 4; mb = r.empty ? 0 : mb / (1024.0 * 1024.0);
-        char m[64]; std::snprintf(m, sizeof m, "%d photo%s . %.1f MB . Just now", r.count, r.count == 1 ? "" : "s", mb);
-        c.meta = m; cards.push_back(std::move(c));
+        HomeScreen::Card c;
+        c.name = r.name;
+        char meta[96];
+        std::snprintf(meta, sizeof meta, "%d photo%s", r.photoCount, r.photoCount == 1 ? "" : "s");
+        c.meta = meta;
+        cards.push_back(std::move(c));
     }
     mHome->setCards(std::move(cards));
+
+    mEditor->setName(m.projectName.empty() ? std::string("Untitled") : m.projectName);
+    mEditor->setEmpty(m.imageCount == 0);
+    mEditor->syncControls();
+    mImageCount = m.imageCount;
+
+    // The screen is the MODEL's. This is the whole of the reported bug: a touch shell built while
+    // a project was already open showed its own empty Home, because it kept its own screen and its
+    // own recents list. A view does not decide whether a project is open.
+    const Screen want = m.load.active ? Screen::Loading
+                      : (m.screen == cosmo::Screen::Editor ? Screen::Editor : Screen::Home);
+    if (want != mScreen)
+    {
+        if (want == Screen::Loading) mLoading->begin(m.projectName, m.load.total, mNowMs);
+        const bool entering = (want == Screen::Editor);
+        setScreen(want, mNowMs);
+        // Entering the editor over a project that is ALREADY loaded means no render is in flight,
+        // so the stage would stay empty until the next edit. Re-selecting the current image asks
+        // the engine for a preview of what is already there.
+        if (entering && m.selectedNode >= 0) emit(editcmd::select(m.selectedNode));
+    }
 }
-
-void PhoneApp::enterProject(const std::string &name, bool empty)
-{
-    buildSession(name, empty);
-    pushRecent(name, empty ? 0 : mImageCount, empty);
-    mLoading->begin(name, empty ? 0 : mImageCount, mNowMs);
-    setScreen(Screen::Loading, mNowMs);
-    if (onKeyboard) onKeyboard(false);
-}
-
-void PhoneApp::finishProject(const std::string &projectName)   // startup: build + seed recents, stay on Home
-{ if (!mImgs.empty()) { buildSession(projectName, false); pushRecent(projectName, mImageCount, false); } }
-
-void PhoneApp::newProject()    { enterProject("Untitled", true); }
-void PhoneApp::openProject()   { enterProject("Sample Project", false); }
-void PhoneApp::importCatalog() { enterProject("Imported Catalog", false); }
-void PhoneApp::openRecent(int i) { if (i >= 0 && i < (int)mRecents.size()) enterProject(mRecents[i].name, mRecents[i].empty); }
 
 void PhoneApp::loadImagesAsProject(const std::vector<std::string> &paths, const std::string &name)
 {
@@ -1421,8 +1443,8 @@ void PhoneApp::loadImagesAsProject(const std::vector<std::string> &paths, const 
     c.kind = cosmo::Command::Kind::Import;
     c.paths = paths;
     if (!emit(c)) return;                     // rejected: no decoder installed, model has why
-    mImageCount = (int)paths.size();
-    enterProject(name, /*empty=*/false);
+    (void)name;   // the project's name comes back in the model
+    emit(editcmd::screen("editor"));
 }
 
 void PhoneApp::charInput(unsigned int cp) { if (mScreen == Screen::Home) mHome->searchChar(cp); }
@@ -1441,7 +1463,11 @@ void PhoneApp::poll()
 
 void PhoneApp::render(IRenderTarget &t, double nowMs)
 {
-    mNowMs = nowMs; mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); sess().tick(nowMs); poll();
+    mNowMs = nowMs;
+    // One read per frame, and only when the model actually moved — the same bind-on-revision rule
+    // the desktop shell uses, so a user's hands are never fighting a re-seed (D-34/D-35).
+    if (mSvc.model().revision != mBoundRevision) syncFromModel();
+    mEditor->setNowAll(nowMs); mHome->setNow(nowMs); mBrowser->setNow(nowMs); sess().tick(nowMs); poll();
     // Everything draws through `origin`, this shell's own offset inside the surface the host gave
     // it (R-TOUCH-6). It cannot be a translate applied by the CALLER: the tree sets the transform
     // absolutely (CairoTarget maps setTransform onto cairo_set_matrix), so an outer translate is

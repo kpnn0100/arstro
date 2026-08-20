@@ -215,7 +215,15 @@ component-level spec; where it disagrees with this section, this section wins an
   (`takeFrame`) or its own presentation state (animation, detents, scroll — R-SVC-4). It must
   therefore be drivable by the same scripts, the same control socket and the same `cosmo-cc` as the
   desktop, and a project opened on one shell must dump byte-identical state on the other (R-SVC-9's
-  check, extended to the second view). The UI→`Command` mapping is **shared code**, not two copies:
+  check, extended to the second view).
+
+  **In particular — and this needed saying, because its absence shipped (D-39):** the touch shell
+  derives its **screen**, the **open project** (name, image count, edit target) and its **recents
+  list** from `AppModel`, and keeps no copy of any of them. A shell built while a project is already
+  open — which is exactly what the desktop's touch-mode switch does — shows *that* project, and a
+  shell must never reset or rebuild the workspace on its own initiative, because the other view is
+  looking at it. Asserted, not assumed: `cosmo_touch_shots --assert` opens a project with no touch
+  shell in existence, then builds one and requires it to land on the editor. The UI→`Command` mapping is **shared code**, not two copies:
   one place turns "this control moved" into a command, and both shells call it. Two mappings drift
   the first time a parameter is added, and the drift is silent.
 - **R-TOUCH-2 No component overlaps another. NEW RULE.** Every element of the touch shell has its

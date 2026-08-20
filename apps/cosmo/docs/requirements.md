@@ -263,6 +263,19 @@ became commands:
 - decode → `Command::Import`, so the codec left the view (R-SVC-7). It had constructed an
   `AndroidImageDecoder` inline, which is also what made the whole file unbuildable off Android.
 
+**And it takes its whole picture from the model.** `PhoneApp::syncFromModel()` runs at construction
+and whenever `AppModel::revision` moves, setting the screen (`model().screen`, or Loading while
+`load.active`), the project name, the empty state, the edit-target controls and Home's cards
+(`model().recents`). Nothing about a project is kept locally: the shell's own `mRecents`, `mImgs`,
+`buildSession`, `enterProject`, `pushRecent` and `refreshHome` are gone. New / Open / Import are host
+seams (`onNewProjectRequested` / `onOpenRequested` / `onImportRequested`, wired by the desktop host
+to the SAME native dialogs the desktop shell uses, and falling back to the shell's own browser on a
+phone host), a recent card dispatches `project open <path>`, and `finishProject` asks for
+`screen editor` instead of deciding. Entering the editor over an already-loaded project re-selects
+the current image, because no render is in flight and the stage would otherwise stay empty until the
+next edit. This is D-39: without it the shell showed its own empty Home after a mode switch, and its
+Home actions could have reset the workspace the other view was looking at.
+
 The UI→Command mapping is shared, not duplicated: [EditCommands.h](../EditCommands.h) holds the
 number/blob formatting and the command builders, and **both** shells call it — `RightColumn`'s local
 `num`/`pointsStr`/`maskBlob`/`adjustFields` are now `using` declarations of the shared ones

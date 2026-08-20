@@ -197,6 +197,37 @@ namespace
 
 namespace
 {
+    /** The reported bug, as a picture (R-TOUCH-1): a project is opened with NO touch shell in
+     *  existence — the way the desktop shell does it — and only then is the touch shell built, as
+     *  the touch-mode switch does. It must come up on that project's editor. */
+    void shotAdoptedProject(double w, double h)
+    {
+        if (!wanted("adopted")) return;
+        Rig rig(w, h);
+        Frame f((int)w, (int)h);
+        std::vector<uint8_t> px((size_t)96 * 64 * 4);
+        for (int i = 0; i < 96 * 64; ++i)
+        { px[i * 4 + 0] = 40; px[i * 4 + 1] = (uint8_t)(90 + i % 120); px[i * 4 + 2] = 160; px[i * 4 + 3] = 255; }
+        rig.svc.session().openImage(px.data(), 96, 64, "already-open.jpg", "");
+        rig.svc.refreshFromSession();
+        std::string err;
+        rig.svc.dispatch(arstro::cosmo::parseCommand("select 1", err));
+        rig.svc.dispatch(arstro::cosmo::parseCommand("screen editor", err));
+
+        // Only now does a touch shell exist — a second one, built over the open project.
+        PhoneApp adopted(rig.svc, w, h);
+        artboard::CairoTarget t;
+        for (int i = 0; i < 60; ++i)
+        {
+            rig.svc.pump(rig.now);
+            f.clear();
+            t.setContext(f.cr());
+            adopted.render(t, rig.now);
+            rig.now += kFrameMs;
+        }
+        save(f, "adopted");
+    }
+
     /** R-TOUCH-6: what the DESKTOP window shows once touch mode is on — the phone shell in the
      *  viewport the host gives it, letterboxed in a wide window because there is no landscape
      *  layout yet. The rule comes from TouchViewport.h, the same one linux_main.cpp uses, so this
@@ -263,6 +294,34 @@ int main(int argc, char **argv)
             rig.settle(f, 400.0);
             check(true, std::string(c.name) + ": survives a rotation to the other orientation");
         }
+        // R-TOUCH-1, the clause the user's report was against: the touch shell is a VIEW of the
+        // service. A shell built while a project is already open — which is exactly what the
+        // desktop's touch-mode switch does — must show THAT project, not its own empty Home.
+        {
+            arstro::cosmo::ThreadBudget budget;
+            CosmoService svc{budget};
+            svc.setDecoderFactory(
+                [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
+            // Open a project the way the desktop shell does: pixels in through the session seam,
+            // then the screen command. No touch shell exists yet at this point.
+            std::vector<uint8_t> px((size_t)64 * 48 * 4, 200);
+            svc.session().openImage(px.data(), 64, 48, "already-open.jpg", "");
+            svc.refreshFromSession();
+            std::string err;
+            svc.dispatch(arstro::cosmo::parseCommand("select 1", err));
+            svc.dispatch(arstro::cosmo::parseCommand("screen editor", err));
+            check(svc.model().imageCount == 1 && svc.model().screen == arstro::cosmo::Screen::Editor,
+                  "a project is open in the service before any touch shell exists");
+
+            PhoneApp phone(svc, kPortraitW, kPortraitH);
+            Frame f((int)kPortraitW, (int)kPortraitH);
+            artboard::CairoTarget t;
+            for (int i = 0; i < 40; ++i)
+            { svc.pump(i * kFrameMs); f.clear(); t.setContext(f.cr()); phone.render(t, i * kFrameMs); }
+            check(phone.screen() == arstro::cosmo_touch::Screen::Editor,
+                  "a touch shell built over an open project lands on the EDITOR, not on Home");
+        }
+
         std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                     gFailures == 1 ? "" : "s");
         return gFailures ? 1 : 0;
@@ -274,6 +333,7 @@ int main(int argc, char **argv)
     shotsAt(kPortraitW, kPortraitH, "portrait");
     shotsAt(kSmallW, kSmallH, "small");
     shotsAt(kPortraitH, kPortraitW, "landscape");
+    shotAdoptedProject(kPortraitW, kPortraitH);
     shotDesktopTouchMode(1600.0, 1000.0);
     return 0;
 }

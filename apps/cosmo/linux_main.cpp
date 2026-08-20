@@ -1165,6 +1165,12 @@ namespace
             // The touch shell asks the host to show/hide the soft keyboard; a desktop has a
             // real one, so there is nothing to do and saying so beats leaving it unset.
             a->phone->onKeyboard = [](bool) {};
+            // The SAME dialogs the desktop shell uses (R-TOUCH-1: one project-opening story,
+            // whichever shell is drawing). Without these the touch shell would fall back to its
+            // own built-in browser, which on a desktop is the wrong file picker.
+            a->phone->onNewProjectRequested = [a] { newProjectDialog(a); };
+            a->phone->onOpenRequested = [a] { openProjectDialog(a); };
+            a->phone->onImportRequested = [a] { importCatalogDialog(a); };
         }
         if (a->phone)
         {
