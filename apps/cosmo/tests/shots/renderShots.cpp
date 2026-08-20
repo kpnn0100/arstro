@@ -772,8 +772,10 @@ namespace
     }
 
     /** R-VIEW-1: the photo mid-dissolve, which is the only way to SEE that an adjustment
-     *  cross-fades instead of cutting. Two frames of one 120 ms dissolve — early and late — so
-     *  the mix of the two renders is visible rather than taken on trust from a number.
+     *  cross-fades instead of cutting. Two frames of one 160 ms LINEAR dissolve — about 30% and
+     *  60% across — so the mix of the two renders is visible rather than taken on trust from a
+     *  number, and so a curve that front-loads the change would show up as an early frame that
+     *  has already arrived (which is how EaseOutCubic was caught here).
      *
      *  The wait is the fiddly part and it is deliberate: the new render lands on a worker, so
      *  the frame is waited for in REAL time (pumping, not drawing) and only then are frames
@@ -806,9 +808,9 @@ namespace
         if (rig.svc.model().frameSeq == seq0) { std::printf("  (no render arrived: skipping editor-dissolve)\n"); return; }
 
         rig.step(f, 1);   // this frame TAKES the render and starts the dissolve at alpha 0
-        rig.step(f, 2);   // ~32 ms into 120 ms: the old photo still dominates
+        rig.step(f, 2);   // ~48 ms of 160 ms: three tenths across
         save(f, "editor-dissolve-early");
-        rig.step(f, 3);   // ~80 ms: the new one has most of the weight
+        rig.step(f, 3);   // ~96 ms: six tenths across
         save(f, "editor-dissolve-late");
         rig.settleQuiet(f, 200.0, 300);
     }

@@ -21,6 +21,10 @@
 #include "../../widgets/EditStackTabs.h"
 #include "../../widgets/PhotoCanvas.h"
 #include "../../core/service/Command.h"
+#include <chrono>
+#include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 #include "../../UiDump.h"
 #include <cassert>
@@ -305,6 +309,8 @@ namespace
     {
         int photos = 0;        // images drawn at stage size (a filmstrip thumb is 86 px wide)
         double partial = -1.0; // the fractional layer alpha in force over one of them
+        bool partialWithoutCover = false;  // a see-through photo with nothing drawn behind it
+        bool updatedWhileVisible = false;  // pixels replaced in a photo that is ON SCREEN
     };
 
     /** What the last recorded frame actually put on the photo stage. The layer stack is walked
@@ -314,17 +320,42 @@ namespace
     {
         Stage st;
         std::vector<double> layers;
+        std::vector<int> updated;                       // ids whose pixels were re-uploaded
+        std::vector<std::pair<int, double>> drawn;      // stage-sized draws and their weight
         for (const auto &op : target.ops())
         {
             using K = artboard::DrawOp::Kind;
             if (op.kind == K::PushLayer) layers.push_back(op.args[0]);
             else if (op.kind == K::PopLayer) { if (!layers.empty()) layers.pop_back(); }
+            else if (op.kind == K::UpdateImage) updated.push_back(op.imageId);
             else if (op.kind == K::DrawImage && op.args[2] > 200.0)   // stage-sized, not a thumb
             {
                 ++st.photos;
-                for (double a : layers)
-                    if (a > 0.001 && a < 0.999) st.partial = a;
+                double weight = 1.0;
+                for (double a : layers) weight *= a;
+                if (weight > 0.001 && weight < 0.999) st.partial = weight;
+                drawn.push_back({op.imageId, weight});
             }
+        }
+        // R-VIEW-1e: a see-through photo needs the one it is dissolving from underneath it. One
+        // stage photo drawn at a fractional weight means the canvas is showing through.
+        if (st.partial >= 0.0 && st.photos < 2) st.partialWithoutCover = true;
+        // R-VIEW-1a: pixels may only be written where they cannot be SEEN, and what a layer
+        // contributes is not its own alpha — the bottom one is painted over, so it contributes
+        // ∏(1 − alpha) of everything above it. Compose bottom-to-top to get the real weights.
+        //
+        // The bar is one animation step, not zero, and that is a property of Artboard rather than
+        // a looseness in the rule: an ImageView uploads its pixels inside onPaint, so the earliest
+        // an upload can happen is the first frame the layer is drawn at all — one linear step of a
+        // 160 ms dissolve, ~0.13, doubled here for slack. The behaviour this catches missed it by
+        // a mile: reversing a dissolve wrote into a layer contributing 0.5 to 0.9.
+        for (size_t i = 0; i < drawn.size(); ++i)
+        {
+            double contribution = drawn[i].second;
+            for (size_t j = i + 1; j < drawn.size(); ++j) contribution *= (1.0 - drawn[j].second);
+            if (contribution <= 0.26) continue;
+            for (int id : updated)
+                if (id == drawn[i].first) st.updatedWhileVisible = true;
         }
         return st;
     }
@@ -389,6 +420,65 @@ namespace
         check(rest.photos == photosAtRest, "and only the photo that won is drawn");
     }
 
+    // ── R-VIEW-1a / R-VIEW-1e: the drag that made it blink ──────────────────────────────
+    //
+    // Reported as "it doesn't smooth, make the photo blink when transition", and both causes are
+    // per-FRAME facts that only a frame-by-frame walk can see, which is why this test exists
+    // rather than a longer look at the code:
+    //   (1) the covered layer was skipped from the PREVIOUS frame's alpha, so the first frame of
+    //       every 1->0 dissolve drew the top at ~0.9 with the canvas behind it;
+    //   (2) a render arriving mid-dissolve was written into the layer that still had weight
+    //       (1-a), stepping the composite by that weight times two renders' difference.
+    // A drag is the case that hits both, so the test IS a drag: a new value every three frames.
+    void theStageNeverBlinksDuringADrag()
+    {
+        std::printf("App: a drag dissolves continuously — no dark frame, no pixel swap on screen "
+                    "(R-VIEW-1a/1e)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+        check(seedOnePhoto(rig, 120, 100, 80), "a photo is on the stage");
+
+        double ev = 0.0;
+        int dissolveFrames = 0, accepted = 0;
+        bool covered = true, wroteOffScreenOnly = true;
+        for (int i = 0; i < 300; ++i)
+        {
+            if (i % 3 == 0)
+            {
+                ev += 0.15;                     // the slider moving, in EV
+                arstro::cosmo::Command set;
+                set.kind = arstro::cosmo::Command::Kind::Set;
+                set.fields = {{"exposure", std::to_string(ev)}};
+                if (rig.svc.dispatch(set)) ++accepted;
+            }
+            rig.frame();
+            const Stage st = stageOf(rig.target);
+            if (st.partial >= 0.0) ++dissolveFrames;
+            if (st.partialWithoutCover) covered = false;
+            if (st.updatedWhileVisible) wroteOffScreenOnly = false;
+        }
+        std::printf("      (%d adjustments, %d frames mid-dissolve)\n", accepted, dissolveFrames);
+        check(dissolveFrames > 10, "the drag produced enough dissolving frames to judge");
+        check(covered,
+              "every see-through photo has the one it came from drawn underneath it (R-VIEW-1e)");
+        check(wroteOffScreenOnly,
+              "no frame replaces the pixels of a photo that is on screen (R-VIEW-1a)");
+
+        // And it converges: the last render is not left waiting for a dissolve that never comes.
+        // "Quiet" has to be measured, not timed — the render worker is asynchronous, so a fixed
+        // settle can simply end inside a dissolve that started one frame earlier (it did, twice).
+        int quiet = 0;
+        for (int i = 0; i < 600 && quiet < 10; ++i)
+        {
+            rig.frame();
+            std::this_thread::sleep_for(std::chrono::microseconds(200));   // let a late render land
+            quiet = stageOf(rig.target).partial < 0.0 ? quiet + 1 : 0;
+        }
+        const Stage rest = stageOf(rig.target);
+        check(quiet >= 10 && rest.photos >= 1, "it settles on one photo with no partial layer");
+    }
+
     // R-VIEW-2: the Before/After pill rides the same seam, so the toggle dissolves too. Clicked,
     // not called: the pill's onChange is what asks App to re-push the photo, so calling setMode
     // would prove a code path nobody ships.
@@ -436,6 +526,7 @@ int main()
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();
     theStageDissolvesWhenAnAdjustmentLands();
+    theStageNeverBlinksDuringADrag();
     theBeforeAfterToggleDissolves();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");

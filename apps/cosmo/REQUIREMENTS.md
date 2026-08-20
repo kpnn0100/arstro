@@ -406,17 +406,28 @@ any other.
   is currently hidden and the opacity eases toward it (**120 ms**, `EaseOutCubic`, collapsing under
   `reducedMotion()`), so consecutive renders dissolve in alternating directions and no pixels are
   ever copied between views.
-- **R-VIEW-1a A render arriving mid-dissolve reverses it, it does not restart it.** During a drag,
-  renders arrive faster than 120 ms, so the common case is an interruption. The newest pixels
-  replace the view the dissolve is *leaving* and the opacity retargets from its current eased value,
-  which keeps opacity continuous and always converges on the newest render. The residual visible
-  step is the outgoing layer's alpha times **one** preview-to-preview delta — strictly smaller than
-  the whole-frame swap it replaces, and it is the honest cost of not holding the screen behind the
-  edit.
+- **R-VIEW-1a A render arriving mid-dissolve WAITS; nothing is ever written into a layer that is
+  on screen.** (**AMENDED 2026-08-20**, and the amendment is the whole point: the first version
+  reversed the dissolve instead — it wrote the newest render into the layer that still had weight
+  `1−a` — and treated the resulting step as an acceptable residual. It is not acceptable and it is
+  what the user reported as *the photo blinks*. Opacity being continuous is not sufficient: the
+  composite is `a·top + (1−a)·bottom`, so replacing the **pixels** of either layer while its weight
+  is non-zero is a discontinuity of exactly that weight times the difference between two renders,
+  and during a drag that happens on nearly every render.) So while a dissolve is in flight the
+  newest frame is **held**, and it is applied the moment the dissolve settles — when the hidden
+  view's weight is exactly zero and writing to it changes nothing on screen. Newest wins: a held
+  frame is overwritten by a newer one, the same coalescing `RenderService` already does upstream.
+  The cost is stated plainly: a render can wait up to one dissolve (120 ms) before it is shown, and
+  intermediate renders during a fast drag are dropped rather than flashed. Latency is the right
+  thing to trade for continuity here, because a preview that is 120 ms behind still tracks the
+  slider while a photo that jumps does not read as an edit at all.
 - **R-VIEW-1b The first photo is set, not dissolved.** A photo appearing on an empty stage has
   nothing to travel from (R-G-1a's rule for a card's first placement, applied to pixels).
-- **R-VIEW-1c A different photo is set, not dissolved.** A frame whose pixel size differs cannot
-  cover the one on screen, so dissolving it would leave the old photo visible around its edges and
+- **R-VIEW-1c A differently-SHAPED photo is set, not dissolved.** (**AMENDED 2026-08-20:** the test
+  was the pixel size, which is wrong for the same photo at a different preview resolution — a zoom
+  step changes the pixel count and not the shape, and cutting there was a visible pop while
+  zooming. The test is the **fitted shape**: two frames that fit the same rect dissolve, whatever
+  their resolution.) A frame whose aspect differs cannot cover the one on screen, so dissolving it would leave the old photo visible around its edges and
   then snap it away at the end. Both views take it, so no stale pixels can peek. A proper
   cross-photo transition (dissolve through the canvas, since nothing covers anything) is its own
   task — tracked in `docs/PROGRESS.md`, not silently absent.
@@ -426,6 +437,14 @@ any other.
   lines, but that shell has no headless test or shot to prove it with, so it is a ledger task
   (U2.3) rather than an unverified edit — and it is written here so the requirement is not read as
   claiming something that is only true on the desktop.
+- **R-VIEW-1e A layer that is covering another may not be dropped a frame early.** The stage skips
+  drawing the fully covered layer, which is legitimate only while the covering layer is **exactly**
+  opaque. That decision therefore reads **this** frame's alpha — computed after the animation
+  update and before anything is drawn — never the previous frame's. Reading the stale value hid the
+  base on the first frame of every `1 → 0` dissolve, so the canvas showed through the
+  partly-transparent top: a one-frame darkening on every other render, at roughly 8 Hz through a
+  drag. This is R-G-1's own clause (d) restated for a value derived from an eased one: derive it
+  every frame, from the eased value, or do not derive it.
 - **R-VIEW-2 Before / Split / After changes dissolve too.** The mode pill routes through the same
   path, so toggling Before↔After dissolves rather than cutting, and Split's clipped half and its
   seam **fade** in and out instead of flipping `visible` (R-G-1). The pill's own highlight keeps

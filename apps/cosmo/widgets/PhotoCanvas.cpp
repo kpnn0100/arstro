@@ -2,6 +2,7 @@
 #include "TextMetrics.h"
 #include "WidgetLog.h"
 #include "../Theme.h"
+#include <cmath>
 
 namespace arstro
 {
@@ -15,11 +16,16 @@ namespace cosmo_v2
         constexpr double kSegPadX = 11.375;  // px-3.5
         constexpr double kFontPx = 10.0;
         constexpr double kPillRadius = 6.0;   // "rounded like a background" — the highlight hugs this
-        // The photo dissolve (R-VIEW-1). 120 ms is cosmo's shortest motion step, and it has to be
-        // short here for a reason beyond feel: preview renders land faster than that while a slider
-        // is being dragged, so a longer dissolve would spend the whole drag interrupted and never
-        // arrive. Short enough to converge between renders, long enough to read as one movement.
-        constexpr double kPhotoFadeMs = 120.0;
+        // The photo dissolve (R-VIEW-1): 160 ms, and LINEAR — the one place in cosmo that does not
+        // take the house EaseOutCubic. A cross-fade is judged by its LARGEST single-frame step, and
+        // an ease-out front-loads: at 16 ms of 120 ms, EaseOutCubic is already 35% of the way
+        // across, so the first frame carried a third of the change and the rest crawled — which
+        // reads as a partial cut, not a fade. Linear spreads the change evenly (10 frames, ~10%
+        // each) and is what a video cross-dissolve does, for the same reason. 160 ms is long enough
+        // for the steps to be small and short enough that a held render is never far behind the
+        // slider (R-VIEW-1a's stated trade).
+        constexpr double kPhotoFadeMs = 160.0;
+        constexpr Easing kPhotoFadeEase = Easing::Linear;
         constexpr double kModeFadeMs = 180.0;   // Split's clip + seam: cosmo's cross-fade step
     }
 
@@ -92,13 +98,6 @@ namespace cosmo_v2
 
     void PhotoCanvas::advance(double nowMs)
     {
-        // Once the dissolve has fully arrived on the top view, the base underneath is covered by
-        // an identical rect — same image size, same fit, same zoom — so drawing it is pure cost
-        // (a second full-canvas image blit every frame). Skipping it there is the one `visible`
-        // flip in this file that is provably invisible, and it is undone on the very next frame
-        // the top is not opaque, before anything is drawn.
-        mPhotoBase->visible = mPhotoTop->opacity.value() < 0.999;
-
         if (mSplitApplied != mSplitWanted)
         {
             const double a = mSplitWanted ? 1.0 : 0.0;
@@ -107,7 +106,25 @@ namespace cosmo_v2
             mSplitApplied = mSplitWanted;
             WLOG("photo: split %s over %.0fms", mSplitWanted ? "IN" : "OUT", kModeFadeMs);
         }
-        Segment::advance(nowMs);   // updates every opacity, including the dissolve's
+        Segment::advance(nowMs);   // every opacity now holds THIS frame's value
+
+        // The render that arrived mid-dissolve goes in the moment the dissolve has settled
+        // (R-VIEW-1a): the hidden view's weight is exactly zero, so writing its pixels changes
+        // nothing on screen. Doing it here rather than in setPhoto is the whole fix — the frame
+        // waits for a safe moment instead of stepping the composite.
+        if (mHeldPending && !mPhotoTop->opacity.isAnimating())
+        {
+            mHeldPending = false;
+            showPhoto(mHeld.data(), mHeldW, mHeldH, nowMs);
+        }
+
+        // The covered layer is not drawn — a second full-canvas blit every frame is pure cost —
+        // but ONLY while the layer above is exactly opaque, and that is decided from THIS frame's
+        // alpha, updated just above and read before anything is drawn (R-VIEW-1e). Reading the
+        // previous frame's value hid the base for the first frame of every 1->0 dissolve and let
+        // the canvas show through the partly-transparent top: one dark frame per render, at about
+        // 8 Hz through a drag, which is what "the photo blinks" was.
+        mPhotoBase->visible = mPhotoTop->opacity.value() < 0.999;
     }
 
     ImageView *PhotoCanvas::visibleView() const
@@ -115,36 +132,62 @@ namespace cosmo_v2
         return (mPhotoTop->opacity.value() > 0.5 ? mPhotoTop : mPhotoBase).get();
     }
 
+    bool PhotoCanvas::sameShape(int w1, int h1, int w2, int h2)
+    {
+        if (w1 <= 0 || h1 <= 0 || w2 <= 0 || h2 <= 0) return false;
+        // Cross-multiplied so no division is needed, with half a percent of slack: a preview at a
+        // different resolution rounds its dimensions, and two frames of the same photo must still
+        // count as the same shape (R-VIEW-1c).
+        const double a = (double)w1 * h2, b = (double)w2 * h1;
+        return std::fabs(a - b) <= 0.005 * a;
+    }
+
     void PhotoCanvas::setPhoto(const uint8_t *rgba, int w, int h, double nowMs)
     {
         if (!rgba || w <= 0 || h <= 0) return;
+
+        // A dissolve in flight means BOTH views are contributing to the composite, so writing
+        // pixels into either of them is a step the eye reads as a blink — a step of exactly the
+        // written layer's weight times the difference between two renders, which mid-drag is
+        // nearly every render. So the frame WAITS (R-VIEW-1a): held here, applied by advance()
+        // the moment the dissolve settles. Newest wins; an older held frame is simply overwritten,
+        // the same coalescing RenderService does upstream.
+        if (mPhotoTop->opacity.isAnimating())
+        {
+            mHeld.assign(rgba, rgba + (size_t)w * h * 4);
+            mHeldW = w; mHeldH = h;
+            mHeldPending = true;
+            WLOG("photo: HOLD %dx%d (a=%.2f, dissolve in flight)", w, h, mPhotoTop->opacity.value());
+            return;
+        }
+        showPhoto(rgba, w, h, nowMs);
+    }
+
+    void PhotoCanvas::showPhoto(const uint8_t *rgba, int w, int h, double nowMs)
+    {
         auto &cur = mTopIsCurrent ? mPhotoTop : mPhotoBase;
         auto &other = mTopIsCurrent ? mPhotoBase : mPhotoTop;
 
-        // Nothing to dissolve FROM (an empty stage, R-VIEW-1b), or a frame of a different pixel
-        // size that cannot cover what is on screen (a different photo, R-VIEW-1c): both views take
-        // it, so no stale pixels can peek around a differently-shaped frame, and the dissolve rests
-        // wherever it already was.
-        if (!cur->hasImage() || cur->imageWidth() != w || cur->imageHeight() != h)
+        // Nothing to dissolve FROM (an empty stage, R-VIEW-1b), or a frame of a different SHAPE,
+        // which cannot cover what is on screen (a different photo, R-VIEW-1c): both views take it,
+        // so no stale pixels can peek around it, and the dissolve rests where it already was.
+        if (!cur->hasImage() || !sameShape(cur->imageWidth(), cur->imageHeight(), w, h))
         {
             WLOG("photo: SET %dx%d (%s) -- no dissolve", w, h,
-                 cur->hasImage() ? "different frame size" : "empty stage");
+                 cur->hasImage() ? "different shape" : "empty stage");
             mPhotoBase->setImage(rgba, w, h);
             mPhotoTop->setImage(rgba, w, h);
             return;
         }
 
-        // The newest render goes into the hidden view and the top's opacity eases toward it. When a
-        // render lands mid-dissolve this REVERSES it rather than restarting: `animateTo` starts
-        // from the current eased value, so opacity stays continuous and always converges on the
-        // newest frame (R-VIEW-1a).
+        // The newest render goes into the view that is currently at weight zero, and the top's
+        // opacity eases toward it — so successive renders dissolve in alternating directions and
+        // the pixels are only ever written where they cannot be seen.
         other->setImage(rgba, w, h);
-        const bool interrupted = mPhotoTop->opacity.isAnimating();
         mTopIsCurrent = !mTopIsCurrent;
-        mPhotoTop->opacity.animateTo(mTopIsCurrent ? 1.0 : 0.0, kPhotoFadeMs, Easing::EaseOutCubic, nowMs);
-        WLOG("photo: DISSOLVE %dx%d -> %s from a=%.2f over %.0fms%s", w, h,
-             mTopIsCurrent ? "top" : "base", mPhotoTop->opacity.value(), kPhotoFadeMs,
-             interrupted ? " (reversing a dissolve already in flight)" : "");
+        mPhotoTop->opacity.animateTo(mTopIsCurrent ? 1.0 : 0.0, kPhotoFadeMs, kPhotoFadeEase, nowMs);
+        WLOG("photo: DISSOLVE %dx%d -> %s from a=%.2f over %.0fms", w, h,
+             mTopIsCurrent ? "top" : "base", mPhotoTop->opacity.value(), kPhotoFadeMs);
     }
 
     void PhotoCanvas::clearPhoto()
@@ -153,6 +196,8 @@ namespace cosmo_v2
         mPhotoTop->clearImage();
         mPhotoTop->opacity.set(0.0);
         mTopIsCurrent = false;
+        mHeldPending = false;
+        mHeld.clear();
     }
 
     void PhotoCanvas::layout()

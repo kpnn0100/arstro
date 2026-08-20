@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · U2.1 + U2.2 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-20 · U2.1 + U2.2 + U2.2a landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -120,6 +120,20 @@ current to new photo with adjustment when doing adjustment on slider". Requireme
       no layer at rest; `cosmo_shots --only editor-dissolve` renders early/late frames of one
       dissolve at 1600x1000 and 1280x800 (looked at, the blend is visible in both); all 16 ctest
       suites green
+- [x] **U2.2a** (design) The dissolve no longer blinks (**R-VIEW-1a** amended, **R-VIEW-1e** new,
+      **D-37**). U2.2's own report back from the user: "it doesn't smooth, make the photo blink when
+      transition" — and it was two per-frame bugs, neither visible in the code's shape. **(1)** The
+      covered-layer optimisation read the PREVIOUS frame's alpha, so the base was out of the tree
+      for the first frame of every 1→0 dissolve and the canvas showed through the partly
+      transparent top: one dark frame per render, about 8 Hz through a drag. **(2)** A render
+      arriving mid-dissolve was written into the layer that still carried weight `1−a` — R-VIEW-1a
+      called that residual acceptable and it is not; the newest frame is now HELD and applied when
+      the dissolve settles, at the only moment a write is invisible. Also swapped `EaseOutCubic`
+      for **linear over 160 ms**: an ease-out is 35% across after one frame, so the first frame
+      carried a third of the change and read as a partial cut. Guarded by
+      `theStageNeverBlinksDuringADrag`, which drives 100 adjustments and asserts both per-frame
+      facts off the op stream — **checked against the shipped code first: both assertions fail on
+      it** — plus a re-rendered `editor-dissolve` pair at two sizes, looked at
 - [ ] **U2.3** (design) The **phone** stage dissolves too — `touch/PhoneApp.cpp:872/891`
       (`EditorScreen::mPhoto` / `setPhoto`) still replaces its pixels in one frame. Same fix as
       U2.2, ~20 lines: a second `ImageView`, one opacity, the same "newest pixels into the hidden
@@ -342,6 +356,18 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-20 (U2.2a) — A cross-fade is linear; the house EaseOutCubic is for things that move.**
+  Everything else in cosmo eases out, and for position/size that is right. For a dissolve the
+  quality metric is the LARGEST single-frame step, and an ease-out front-loads: 16 ms into a 120 ms
+  EaseOutCubic is 35% across. Linear over 160 ms gives ten even ~10% steps, which is what a video
+  cross-dissolve does and for the same reason. Written down because "why isn't this EaseOutCubic
+  like everything else" is the obvious future question.
+- **2026-08-20 (U2.2a) — Continuity beats latency for the photo, and the trade is stated.** Holding
+  a render until the dissolve settles costs up to 160 ms of lag and drops intermediate renders
+  during a fast drag. That is the right trade: a preview 160 ms behind still tracks the slider,
+  while a photo that steps does not read as an edit at all. The rejected alternative — reversing the
+  dissolve in place, which is what shipped — has no lag and blinks.
 
 - **2026-08-20 (U2.2) — One animated property, not two, and no pixel copies.** The obvious
   cross-dissolve is "fade the new one in, fade the old one out", and it is wrong: two stacked

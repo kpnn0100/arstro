@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-37**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-38**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -151,6 +151,39 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-37 — The photo dissolve blinked: one dark frame per render, and a pixel swap under a visible layer
+- **Area:** design / photo stage · **Status:** **Fixed** (same session it was reported) · **Severity:** S2
+- **Found:** 2026-08-20, reported by the user against the U2.2 dissolve itself: "fix the fade from to
+  target effect photo, it doesn't smooth make the photo blink when transition".
+- **Reproduce:** open a project, drag any Basic/Detail slider. Headlessly:
+  `theStageNeverBlinksDuringADrag` in `cosmo_ui_tests` — 100 adjustments, a new exposure every third
+  frame, judging the recorded op stream frame by frame. Both of its assertions fail on the shipped
+  code and pass on the fix (verified by re-breaking each cause in turn).
+- **Expected:** the composite moves continuously from one render to the next.
+- **Actual:** two discontinuities per dissolve cycle, neither of which a still frame or the previous
+  tests could see.
+- **Cause (a) — a stale alpha, one frame wide.** `PhotoCanvas::advance` set
+  `mPhotoBase->visible = mPhotoTop->opacity.value() < 0.999` **before** `Segment::advance` updated
+  that opacity, so it decided from the PREVIOUS frame's value. On the first frame of every `1 → 0`
+  dissolve the base was therefore skipped while the top had already eased to ~0.9 — the canvas
+  (`#0A0A0A`) showed through 10% of the frame. Every other render, i.e. ~8 Hz through a drag: a
+  visible flicker.
+- **Cause (b) — pixels written under a visible layer.** R-VIEW-1a specified that a render arriving
+  mid-dissolve REVERSES it, writing the newest pixels into the layer the dissolve was leaving. That
+  layer still contributed `1 − a`, so the composite stepped by `(1−a)` times the difference between
+  two renders — and since renders arrive faster than the dissolve, that happened on nearly every one.
+  The requirement was wrong, not just the code: it is amended, and the newest frame now waits.
+- **Fix:** hold the incoming frame (`mHeld`/`mHeldPending`) while the dissolve runs and apply it from
+  `advance()` once it settles (R-VIEW-1a as amended); set `mPhotoBase->visible` at the END of
+  `advance`, from this frame's alpha (R-VIEW-1e); and change the curve to `Easing::Linear` over
+  160 ms, since an ease-out puts 35% of the change in the first frame.
+- **Guarded by:** `theStageNeverBlinksDuringADrag` (both facts) and the re-rendered
+  `editor-dissolve-early/late` shots at 1600x1000 and 1280x800.
+- **Lesson worth keeping:** both causes are properties of a *frame*, not of the code's structure, and
+  the code read correctly in both cases — the second one had a comment explaining why it was safe.
+  This is the third time in this project that a snap or a step passed review and was caught only by
+  walking frames (R-G-1's clause (d) exists for exactly this).
 
 ### D-35 — Changing the edit target left every panel showing the previous target's values
 - **Area:** core + design (view-model binding) · **Status:** **Fixed** · **Severity:** S2

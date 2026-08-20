@@ -247,17 +247,34 @@ image clipped to the left half with a 1.5 px seam (`refreshPhotoForMode`, `App.c
 `PhotoCanvas` holds two stacked `ImageView`s and one animated property — `mPhotoTop->opacity` — so a
 new render is a cross-dissolve rather than a pixel swap: `App::refreshPhotoForMode` calls
 `photo->setPhoto(rgba, w, h, nowMs)` ([App.cpp:346](../App.cpp#L346)) and
-`PhotoCanvas::setPhoto` ([widgets/PhotoCanvas.cpp:98](../widgets/PhotoCanvas.cpp#L98)) puts the
-pixels in whichever view is hidden and eases the top's opacity toward it (120 ms, `EaseOutCubic`).
+`PhotoCanvas::setPhoto` ([widgets/PhotoCanvas.cpp:145](../widgets/PhotoCanvas.cpp#L145)) puts the
+pixels in whichever view is hidden and eases the top's opacity toward it (160 ms, `Easing::Linear`).
 The composite is `a·top + (1−a)·bottom`, so the layer being covered stays opaque and the canvas
 never shows through mid-dissolve; nothing is copied between views, and successive renders simply
 dissolve in alternating directions.
 
-During a drag renders arrive faster than 120 ms, so an interruption is the normal case: the newest
-pixels replace the view the dissolve is leaving and `animateTo` retargets from the current eased
-value, which keeps opacity continuous (R-VIEW-1a). It sets instead of dissolving only for the first
-photo (nothing to travel from) and for a frame of a different pixel size, which cannot cover what is
-on screen — there both views take it so no stale pixels peek around it (R-VIEW-1b/1c).
+During a drag renders arrive faster than the dissolve, so an interruption is the normal case, and
+**the frame waits** (R-VIEW-1a): `setPhoto` copies it into `mHeld` while
+`mPhotoTop->opacity.isAnimating()`, and `PhotoCanvas::advance` applies it through `showPhoto` once
+the dissolve settles — the only moment the hidden view's weight is exactly zero. Writing pixels into
+a layer that is on screen steps the composite by that layer's weight times the difference between
+two renders, which is what the first version did (it reversed the dissolve in place) and what the
+user reported as the photo blinking. The second half of the same report was the covered-layer
+optimisation reading the PREVIOUS frame's alpha, so the base was hidden for the first frame of every
+1→0 dissolve and the canvas showed through: `mPhotoBase->visible` is now set at the END of
+`advance`, after the opacity update and after the held frame, and before anything is drawn
+(R-VIEW-1e). The curve is `Easing::Linear` over 160 ms rather than the house `EaseOutCubic`, because
+16 ms into a 120 ms ease-out is already 35% of the way across and one frame carrying a third of the
+change reads as a cut. It sets instead of dissolving only for the first photo (nothing to travel
+from) and for a frame of a different **shape** (`sameShape`, half a percent of aspect slack, so a
+preview at another resolution still dissolves) — there both views take it so no stale pixels peek
+around it (R-VIEW-1b/1c).
+
+Guarded by `theStageNeverBlinksDuringADrag` in `cosmo_ui_tests`, which drives 100 adjustments (a new
+exposure every third frame) and asserts two per-frame facts off the recorded op stream: every
+see-through photo has the one it came from drawn underneath it, and no frame re-uploads the pixels of
+a photo whose **contribution** to the composite (`w · ∏(1−w_above)`, not its own alpha) exceeds one
+animation step. Both assertions were run against the shipped behaviour first, and both fail on it.
 
 Mode changes ride the same seam (R-VIEW-2): Before↔After dissolves because it is just another
 `setPhoto`, and `applyMode` now records a wanted state that `PhotoCanvas::advance` turns into an

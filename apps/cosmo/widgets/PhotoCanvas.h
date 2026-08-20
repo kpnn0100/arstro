@@ -19,13 +19,29 @@
  *  through. A render lands in whichever view is hidden and the opacity eases
  *  toward it, so successive renders dissolve in alternating directions and no
  *  pixels are ever copied between the two.
+ *
+ *  Two rules keep that composite CONTINUOUS, and the first version of this file
+ *  broke both, which is what the user saw as the photo blinking:
+ *
+ *  1. Nothing is written into a layer that is on screen (R-VIEW-1a). A render
+ *     arriving mid-dissolve is HELD and applied when the dissolve settles, at
+ *     the moment the hidden view's weight is exactly zero. Opacity being smooth
+ *     is not enough — swapping the PIXELS under weight (1-a) is a step of that
+ *     size, and mid-drag that is nearly every render.
+ *  2. The covered layer is skipped only while the layer above is exactly opaque,
+ *     decided from THIS frame's alpha (R-VIEW-1e). Reading the previous frame's
+ *     value hid the base for the first frame of every 1->0 dissolve and let the
+ *     canvas through the partly-transparent top: a one-frame darkening on every
+ *     other render.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "SegmentedControl.h"
 #include "MaskOverlay.h"
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace arstro
 {
@@ -74,6 +90,13 @@ namespace cosmo_v2
 
     private:
         void applyMode(bool immediate = false);  // record the wanted split state (advance tweens it)
+        /** setPhoto's body, minus the wait: starts a dissolve (or sets both views when there is
+         *  nothing to dissolve between). Only ever called when no dissolve is in flight. */
+        void showPhoto(const uint8_t *rgba, int w, int h, double nowMs);
+        /** Do these two frames fit the same rect? The dissolve needs the incoming photo to cover
+         *  the one on screen, and that is a question about SHAPE, not about pixel count — the same
+         *  photo at a different preview resolution fits identically (R-VIEW-1c). */
+        static bool sameShape(int w1, int h1, int w2, int h2);
         /** The view the photographer is actually looking at — the top one once the dissolve has
          *  carried it past halfway. What `layout()` measures the mask overlay against. */
         artboard::ImageView *visibleView() const;
@@ -91,6 +114,11 @@ namespace cosmo_v2
         artboard::Point mPanLast{0, 0};   // previous drag position while panning a zoomed view
         bool mSplitWanted = false;        // pill state; advance() eases the clip + seam to it
         bool mSplitApplied = false;
+        // The render that arrived while a dissolve was in flight (R-VIEW-1a). One slot, newest
+        // wins; the buffer keeps its capacity so a drag does not reallocate per frame.
+        std::vector<uint8_t> mHeld;
+        int mHeldW = 0, mHeldH = 0;
+        bool mHeldPending = false;
     };
 }
 }
