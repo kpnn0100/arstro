@@ -191,6 +191,32 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
 
+## R-THUMB — A thumbnail is the same photo, only smaller — ✅ IMPLEMENTED
+
+Every reduced-size copy of a photo — the home screen's project-card cover (R-HOME-6), the
+open-project and splash covers (R-LOADING, R-SPLASH-3), the filmstrip cell (R-LOADPERF-2) — must
+read as *that photo*. A cover that is a cheaper copy of the pixels is a performance decision
+(DR-SPLASH-5a) and must stay invisible to the photographer; the moment it differs in orientation
+it stops being a thumbnail of the photo and becomes a different picture beside it.
+
+- **R-THUMB-1 A thumbnail is oriented like its photo.** A thumbnail is shown in the same
+  orientation the full decode produces, so a portrait shot's cover is portrait. This is not
+  automatic: LibRaw applies the RAW's orientation (`sizes.flip`) inside `dcraw_process`, but the
+  camera's **embedded preview** — which is what a cover reads, because it costs 6.6 ms against
+  8072 ms — is handed back exactly as the camera stored it, in sensor orientation. So the same
+  flip is applied to the preview. A maker that already stores an upright preview must not be
+  rotated twice: a quarter turn swaps the aspect, so the preview's own aspect against the sensor
+  frame's says which of the two frames it is already in, and only a preview still in the sensor
+  frame is turned. The full-decode fallback (a file with no preview) is already oriented and is
+  left alone.
+- **R-THUMB-2 A cell crops, it never distorts and never rotates to fit.** A thumbnail keeps its
+  aspect and is cropped by the cell that holds it (`ImageView::Fit::Cover` — filmstrip cells, home
+  covers), so a portrait photo in a 16:9 band shows its middle rather than being squeezed or laid
+  on its side. Rotating the image to fit its box is never the answer: the box crops.
+- **R-THUMB-3 Same photo, same pixels, whatever produced them.** The cheap path and the full path
+  must agree. A change to one is verified against the other on a real RAW — the preview's
+  orientation and aspect compared with the full decode's, not assumed from the flag.
+
 ## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ⚠️ REOPENED (D-11, D-12)
 
 Opening a catalog saturated the machine. The decode pool took one worker per core (R-LOADPERF-1) and

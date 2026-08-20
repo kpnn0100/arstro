@@ -1321,6 +1321,34 @@ at 480x320 in 32.1 ms end to end. A cover is drawn at 480 px, so the full demosa
 the splash froze mid-animation and the status text set two lines above it was never painted before
 the freeze began. The home screen's covers come from the same call.
 
+### DR-SPLASH-5b The preview is turned the way the photo is (R-THUMB-1)
+`NativeImageDecoder::applyFlip(DecodedImage&, int flip)`
+([core/decode/NativeImageDecoder.cpp:245](../core/decode/NativeImageDecoder.cpp#L245)) is LibRaw's
+own `flip_index` math (`&4` transposes, `&2` mirrors rows, `&1` mirrors columns) applied to an RGBA
+buffer; `decodeThumb` calls it with `raw.imgdata.sizes.flip` after pulling the embedded preview
+([NativeImageDecoder.cpp:307](../core/decode/NativeImageDecoder.cpp#L307)).
+
+The bug it closes: `dcraw_process` applies `sizes.flip` to a **full** decode, but
+`dcraw_make_mem_thumb` hands the camera's preview back exactly as stored. Measured on this
+project's own files, `sizes.flip == 5` (a quarter turn) on 18 of 19 sample RAWs — so
+`DSCF5186.RAF` decoded to **4170x6246 portrait** while its cover came back **4416x2944 landscape**.
+Every portrait shot's project card and loading cover was lying on its side next to its own photo.
+
+A preview a maker already stored upright must not be turned twice, and a quarter turn swaps the
+aspect — so the flip is applied only when the preview's own aspect still matches the **sensor**
+frame (`sizes.width >= sizes.height`), which is exactly the case of a preview that has not been
+turned yet. A 180-degree flip swaps nothing and therefore offers no such signal; it is applied,
+which is what the camera's flag asks for. The no-preview fallback (`decodeRaw`) is already oriented
+by `dcraw_process` and is left alone.
+
+Verified two ways rather than from the flag (R-THUMB-3): a unit test
+(`test_a_thumbnail_is_turned_the_way_the_photo_is`) pins all four turns against a hand-computed 3x2
+whose every pixel is identifiable — a 180-degree error passes an aspect-only check — and a probe
+over the real RW2/RAF/JPEG set box-averages `decodeThumb` and `decodeFile` onto one grid and picks
+the rotation that matches best: **no extra flip** wins on every file (rms 50.0 vs 81.0, 59.4 vs
+82.9, 10.2 vs 36.3, 0.43 vs 41.2 against the 180-degree alternative), with the aspect agreeing on
+all four.
+
 Host: `startSplash` creates a **borderless, non-resizable, centred** `GTK_WINDOW_TOPLEVEL`
 (`gtk_window_set_decorated(FALSE)`, `GDK_WINDOW_TYPE_HINT_SPLASHSCREEN`) with its own drawing area
 and 16 ms tick. The main window is constructed but **not shown**. `onSplashTick` plays the intro;

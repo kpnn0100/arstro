@@ -84,6 +84,28 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
       by rendering the real `App` driven by real pointer events at two window sizes.
 
+## U2 — what the photographer reported on 2026-08-20
+
+Two items, in the user's words: **(1)** "thumbnail photo shouldn't be rotate, just use original image
+and crop"; **(2)** "make the edit more smooth by duplicate the photo on UI, photo will be fade from
+current to new photo with adjustment when doing adjustment on slider". Requirements: **R-THUMB**
+(new) and **R-VIEW** (new). Item 1 is core-owned (`core/decode/`), item 2 design-owned
+(`widgets/PhotoCanvas`) — two commits, core first.
+
+- [x] **U2.1** (core) A cover is turned the way its photo is (**R-THUMB-1**). `dcraw_process`
+      applies the RAW's `sizes.flip`; `dcraw_make_mem_thumb` does not, and `sizes.flip == 5` on 18
+      of the 19 sample RAWs — so `DSCF5186.RAF` decoded to 4170x6246 portrait while its project card
+      showed a 4416x2944 landscape cover. `NativeImageDecoder::applyFlip` (LibRaw's own `flip_index`
+      math) is applied to the embedded preview, guarded by the preview's own aspect so a maker that
+      already stores it upright is not turned twice. The crop half of the report was already right:
+      covers and filmstrip cells are `Fit::Cover` (**R-THUMB-2**), which crops rather than distorts.
+      Verified both ways (**R-THUMB-3**): a unit test pinning all four turns against a hand-computed
+      3x2, and a probe over the real RW2/RAF/JPEG set where `decodeThumb` and `decodeFile` now agree
+      on aspect and need **no extra rotation** to match (rms 50.0/59.4/10.2/0.43 against
+      81.0/82.9/36.3/41.2 for the 180-degree alternative)
+- [ ] **U2.2** (design) The photo dissolves instead of popping when an adjustment lands
+      (**R-VIEW-1**)
+
 ## S — the core as a service (R-SVC-1…10)
 
 Design + migration plan: [`service-architecture-proposal.md`](service-architecture-proposal.md).
