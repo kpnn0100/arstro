@@ -156,7 +156,8 @@ mRoot
 ├─ TopBar ─── MenuStrip, wordmark, project name, filename, rail toggle
 ├─ LeftRail ─ PresetTree (scrollable), collapsible
 ├─ CenterStage
-│   ├─ PhotoCanvas ── ImageView, split before-view + seam, MaskOverlay, Before/Split/After pill
+│   ├─ PhotoCanvas ── two cross-dissolving ImageViews (R-VIEW-1), split before-view + seam,
+│   │                 MaskOverlay, Before/Split/After pill
 │   ├─ Breadcrumb
 │   └─ Filmstrip ──── pooled thumbnail ImageViews, sliding selection ring
 ├─ RightColumn

@@ -44,7 +44,10 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-18 · Last commit: D-22, a load now reports the WORK (entries claimed, named
+Last updated: 2026-08-20 · U2.1 + U2.2 landed (a cover is oriented like its photo; the photo
+dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
+**D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
+clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
 stage) rather than only finished results — the nine seconds of "Preparing…" are gone.
 
 **Milestone S is COMPLETE** (S1…S5). The §5 checks all pass: a CLI dump and a GUI dump of the same
@@ -103,8 +106,26 @@ current to new photo with adjustment when doing adjustment on slider". Requireme
       3x2, and a probe over the real RW2/RAF/JPEG set where `decodeThumb` and `decodeFile` now agree
       on aspect and need **no extra rotation** to match (rms 50.0/59.4/10.2/0.43 against
       81.0/82.9/36.3/41.2 for the 180-degree alternative)
-- [ ] **U2.2** (design) The photo dissolves instead of popping when an adjustment lands
-      (**R-VIEW-1**)
+- [x] **U2.2** (design) The photo dissolves instead of popping when an adjustment lands
+      (**R-VIEW-1**, **R-VIEW-2**). `PhotoCanvas` holds two stacked `ImageView`s and ONE animated
+      property — the top one's opacity — so the composite is `a·top + (1−a)·bottom`: a true
+      cross-dissolve with no dip through the canvas, no pixels copied between views, and
+      successive renders dissolving in alternating directions. A render arriving mid-dissolve
+      reverses it instead of restarting (during a drag that is the normal case). The public seam
+      is `setPhoto(rgba, w, h, nowMs)`, so the Before/After toggle dissolves for free, and Split's
+      clip + seam now fade instead of flipping `visible`. Also closed R-ZOOM-3's stale wording (it
+      said "both views"; there are three) and stopped drawing the fully covered layer.
+      Verified three ways: `cosmo_ui_tests` asserts off the recorded op stream that mid-dissolve
+      there are TWO stage photos inside a fractional layer whose alpha MOVES, and one photo with
+      no layer at rest; `cosmo_shots --only editor-dissolve` renders early/late frames of one
+      dissolve at 1600x1000 and 1280x800 (looked at, the blend is visible in both); all 16 ctest
+      suites green
+- [ ] **U2.3** (design) The **phone** stage dissolves too — `touch/PhoneApp.cpp:872/891`
+      (`EditorScreen::mPhoto` / `setPhoto`) still replaces its pixels in one frame. Same fix as
+      U2.2, ~20 lines: a second `ImageView`, one opacity, the same "newest pixels into the hidden
+      view" rule, plus `mNowMs` threaded through `setPhoto`. Deliberately deferred, not missed
+      (**R-VIEW-1d**): that shell has no headless test or shot target, so landing it needs the
+      harness first or it ships unverified
 
 ## S — the core as a service (R-SVC-1…10)
 
@@ -322,6 +343,28 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-20 (U2.2) — One animated property, not two, and no pixel copies.** The obvious
+  cross-dissolve is "fade the new one in, fade the old one out", and it is wrong: two stacked
+  layers at alpha `p` and `1−p` let the canvas through in the middle
+  (`p·new + (1−p)²·old + p(1−p)·bg` — a 25% dip at halfway), so the photo visibly darkens
+  mid-drag. Keeping the covered layer OPAQUE and animating only the top one gives exactly
+  `a·top + (1−a)·bottom`. The consequence worth writing down: the roles then have to alternate
+  (the dissolve runs 0→1, then 1→0) rather than the new render always landing on top, which in
+  exchange removes the swap-at-completion and the pixel copy that a fixed "top is always newest"
+  design needs. `Segment::raise()` is not an alternative — it moves a child to the END of the
+  parent's list, which on this canvas is above the mask overlay and the pill.
+- **2026-08-20 (U2.2) — An interrupted dissolve reverses; it does not restart.** Renders land
+  faster than 120 ms while a slider is moving, so interruption is the common case, not the edge.
+  The newest pixels go into the view the dissolve is *leaving* and `animateTo` retargets from the
+  current eased value: opacity stays continuous and always converges on the newest frame. The
+  residual step is the outgoing layer's alpha times ONE preview-to-preview delta — smaller than
+  the whole-frame swap it replaces, and stated in R-VIEW-1a rather than hidden.
+- **2026-08-20 (U2.2) — `cosmo_ui_tests` now pumps the service every frame.** The rig drew frames
+  without calling `CosmoService::pump`, which is what moves a finished render out of the engine —
+  so no preview could ever reach the stage and *every* photo assertion would have passed on an
+  empty canvas. The first version of the dissolve test did exactly that. Same class as the harness
+  bugs in P0: a test rig that diverges from the host tests a path nobody ships.
+
 - **2026-08-17 (S5) — Announce before you mutate.** D-13: a subscriber runs synchronously inside
   `dispatch`, and a view is entitled to clear its own state when it hears "a project is opening" —
   the GTK host does exactly that. So an event describing what is ABOUT to happen must be emitted
@@ -417,6 +460,15 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Verification notes
+
+- **U2.2 is verified on the desktop shell only.** The op-stream assertions and the two PNG pairs
+  are all `App` (desktop); `touch/PhoneApp`'s stage is unchanged and still snaps — U2.3, and
+  R-VIEW-1d says so in the requirement too. The phone shell has no test or shot target at all,
+  which is why the task is filed rather than done.
+- **U2.1's orientation fix is verified on the RW2/RAF/JPEG set on this machine** (`/home/namdln/photo`,
+  19 files, 18 of them `flip == 5`). No Canon/Nikon/Sony file was available, so the branch that
+  SKIPS the flip — a maker that already stores an upright preview — is covered by reasoning and by
+  the aspect guard, not by a file. If one turns up, run the probe in DR-SPLASH-5b against it.
 
 - **S1a is verified on Linux, not on Windows.** The suite is green (24/24), the new peak test fails on
   the old arithmetic, and a real 18-RAF load was measured on a 24-core Linux host. The D-12 pin is

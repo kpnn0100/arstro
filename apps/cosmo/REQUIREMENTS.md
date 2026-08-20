@@ -392,6 +392,45 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   Radii stay strictly positive: a zero or negative radius is not a small mask, it is a
   division-by-zero the engine guards with an epsilon.
 
+## R-VIEW — The photo dissolves; it never pops — ✅ IMPLEMENTED
+
+Dragging a slider is the one place in cosmo where the *photo itself* changes, and it changed the
+only way R-G-1 forbids: each preview render replaced the pixels in a single frame, so a drag read as
+a stutter of discrete pictures rather than one continuous edit. The photo is a visible property like
+any other.
+
+- **R-VIEW-1 A render cross-dissolves onto the one on screen.** The stage holds **two** stacked
+  photo views; the top one's opacity **is** the dissolve, so the composite is
+  `a·top + (1−a)·bottom` — a true cross-dissolve with no dip through the canvas, because the layer
+  being covered stays opaque instead of fading out underneath. A new render lands in whichever view
+  is currently hidden and the opacity eases toward it (**120 ms**, `EaseOutCubic`, collapsing under
+  `reducedMotion()`), so consecutive renders dissolve in alternating directions and no pixels are
+  ever copied between views.
+- **R-VIEW-1a A render arriving mid-dissolve reverses it, it does not restart it.** During a drag,
+  renders arrive faster than 120 ms, so the common case is an interruption. The newest pixels
+  replace the view the dissolve is *leaving* and the opacity retargets from its current eased value,
+  which keeps opacity continuous and always converges on the newest render. The residual visible
+  step is the outgoing layer's alpha times **one** preview-to-preview delta — strictly smaller than
+  the whole-frame swap it replaces, and it is the honest cost of not holding the screen behind the
+  edit.
+- **R-VIEW-1b The first photo is set, not dissolved.** A photo appearing on an empty stage has
+  nothing to travel from (R-G-1a's rule for a card's first placement, applied to pixels).
+- **R-VIEW-1c A different photo is set, not dissolved.** A frame whose pixel size differs cannot
+  cover the one on screen, so dissolving it would leave the old photo visible around its edges and
+  then snap it away at the end. Both views take it, so no stale pixels can peek. A proper
+  cross-photo transition (dissolve through the canvas, since nothing covers anything) is its own
+  task — tracked in `docs/PROGRESS.md`, not silently absent.
+- **R-VIEW-1d The desktop stage first; the phone stage is tracked, not forgotten.** The touch
+  shell (`touch/PhoneApp`, §1.8's separate UI) drives the same session through a single
+  `ImageView` and still replaces its pixels in one frame. It is the same fix and the same twenty
+  lines, but that shell has no headless test or shot to prove it with, so it is a ledger task
+  (U2.3) rather than an unverified edit — and it is written here so the requirement is not read as
+  claiming something that is only true on the desktop.
+- **R-VIEW-2 Before / Split / After changes dissolve too.** The mode pill routes through the same
+  path, so toggling Before↔After dissolves rather than cutting, and Split's clipped half and its
+  seam **fade** in and out instead of flipping `visible` (R-G-1). The pill's own highlight keeps
+  sliding as it already did.
+
 ## R-ZOOM — Zoom & pan inside the photo (item 2) — ✅ IMPLEMENTED (except R-ZOOM-5)
 
 Status: implemented in `PhotoCanvas` (owns zoom/pan, mirrors to before+after views) +
@@ -407,6 +446,10 @@ change under the Artboard skill) and is tracked there, not faked at the app laye
   image always covers the view (ImageView `clampPan`).
 - **R-ZOOM-3** Before and After (split) image views share one zoom/pan state so the split seam
   stays pixel-aligned — zoom/pan is routed through `PhotoCanvas`, applied to both views.
+  (**AMENDED (R-VIEW-1), 2026-08-20:** "both views" is now **every** image view on the stage. The
+  dissolve of R-VIEW-1 adds a second after-view, and a view left out of a zoom or a pan would slide
+  into place under the next dissolve — the seam alignment this requirement exists for is a property
+  of the whole stage, not of a pair.)
 - **R-ZOOM-4** On each zoom step the preview render resolution scales with the zoom
   (`EditSession::setPreviewZoom`) so a high-res original stays sharp when magnified; resets to
   base when the view returns to 1× or the selected image changes.

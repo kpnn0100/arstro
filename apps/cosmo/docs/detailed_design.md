@@ -417,11 +417,30 @@ Pure container: `PhotoCanvas` (fills) + `Breadcrumb` + `Filmstrip`, stacked in `
 Accessors `photo()`, `breadcrumb()`, `filmstrip()`.
 
 ### 4.5 PhotoCanvas
-`enum Mode{Before,Split,After}`. A `#0A0A0A` backdrop, an `ImageView` (Contain), a split
-before-view clipped to the left half + a 1.5 px divider, a `MaskOverlay`, and a Before/Split/After
-`SegmentedControl` pill (bottom-center, added last so it stays clickable). Owns shared zoom/pan:
-`zoom()`, `zoomAbout(factor, localInCanvas)`, `resetZoom()`; drag-pans both views while zoomed.
-Callbacks `onModeChange(int)`, `onContext(worldX,worldY)` (right-click).
+`enum Mode{Before,Split,After}`. A `#0A0A0A` backdrop, **two stacked `ImageView`s** (Contain) that
+cross-dissolve (below), a split before-view clipped to the left half + a 1.5 px divider, a
+`MaskOverlay`, and a Before/Split/After `SegmentedControl` pill (bottom-center, added last so it
+stays clickable). Owns shared zoom/pan: `zoom()`, `zoomAbout(factor, localInCanvas)`, `resetZoom()`;
+drag-pans **every** view while zoomed (R-ZOOM-3 as amended). Callbacks `onModeChange(int)`,
+`onContext(worldX,worldY)` (right-click).
+
+**The dissolve (R-VIEW-1).** The public seam is `setPhoto(rgba, w, h, nowMs)` / `clearPhoto()` — the
+canvas is told *these pixels*, not handed a view to write into, which is what keeps the pair an
+implementation detail. `mPhotoBase` (bottom) and `mPhotoTop` (top) are fixed in z-order; only
+`mPhotoTop->opacity` animates (`kPhotoFadeMs = 120`, `EaseOutCubic`), so the composite is
+`a·top + (1−a)·bottom` and the covered layer stays opaque — no dip through the canvas, and nothing
+is ever copied between the two. `mTopIsCurrent` says which view holds the newest pixels: a render
+goes into the *other* one and the flag flips, so successive renders dissolve 0→1, 1→0, 0→1…
+Interruption is the same code path (**R-VIEW-1a**): `animateTo` retargets from the current eased
+value, so opacity never jumps. `setPhoto` sets instead of dissolving when the current view has no
+image (**R-VIEW-1b**) or when the incoming pixel size differs (**R-VIEW-1c**) — then *both* views
+take the pixels, so nothing stale can show around a differently-shaped frame.
+
+**Mode (R-VIEW-2).** `applyMode()` records a wanted split state; `advance(nowMs)` starts the tween
+(a setter with no `nowMs` cannot), fading `mSplitClip` and `mDivider` opacity between 0 and 1 rather
+than flipping `visible` — the constructor sets them immediately, since the first frame has nothing
+to fade from. `visibleView()` (the one with `a > 0.5`) is what `layout()` reads for the mask
+overlay's fitted rect, so the overlay tracks what is actually on screen.
 
 ### 4.6 Filmstrip
 `kHeight=86`; 86×62 photo cells, 78×62 dashed folder chips. `struct Cell{group,node,thumbSlot,

@@ -19,6 +19,9 @@
 #include "../../widgets/HomeScreen.h"
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
+#include "../../widgets/PhotoCanvas.h"
+#include "../../core/service/Command.h"
+#include <vector>
 #include "../../UiDump.h"
 #include <cassert>
 #include <cstdio>
@@ -60,10 +63,14 @@ namespace
             app.setSize(w, h);
         }
 
-        /** One 16 ms frame. Rendering IS advancing — App has no separate tick. */
+        /** One 16 ms frame. Rendering IS advancing — App has no separate tick. The service is
+         *  pumped first, exactly as the GTK host's tick does: `pump` is what moves a finished
+         *  render out of the engine, so a rig that skips it can never see a preview reach the
+         *  stage (and every photo assertion here would pass on an empty canvas). */
         void frame()
         {
             now += 16.0;
+            svc.pump(now);
             target.clear();
             app.render(target, now);
         }
@@ -286,6 +293,138 @@ namespace
             }
         }
     }
+
+    // ── R-VIEW-1 / R-G-1: the PHOTO dissolves when an adjustment lands ───────────────────
+    //
+    // Reported as "make the edit more smooth by duplicate the photo on UI, photo will be fade
+    // from current to new photo with adjustment when doing adjustment on slider". Asserted off
+    // the recorded op stream rather than off PhotoCanvas's members, because what matters is what
+    // was DRAWN: mid-dissolve there must be TWO photos on the stage, the top one inside a layer
+    // whose alpha is strictly between 0 and 1, and at rest one photo with no fractional layer.
+    struct Stage
+    {
+        int photos = 0;        // images drawn at stage size (a filmstrip thumb is 86 px wide)
+        double partial = -1.0; // the fractional layer alpha in force over one of them
+    };
+
+    /** What the last recorded frame actually put on the photo stage. The layer stack is walked
+     *  rather than "the last PushLayer seen", because every faded segment in the tree pushes one
+     *  and only the one still OPEN over a DrawImage is the dissolve. */
+    Stage stageOf(const artboard::RecordingTarget &target)
+    {
+        Stage st;
+        std::vector<double> layers;
+        for (const auto &op : target.ops())
+        {
+            using K = artboard::DrawOp::Kind;
+            if (op.kind == K::PushLayer) layers.push_back(op.args[0]);
+            else if (op.kind == K::PopLayer) { if (!layers.empty()) layers.pop_back(); }
+            else if (op.kind == K::DrawImage && op.args[2] > 200.0)   // stage-sized, not a thumb
+            {
+                ++st.photos;
+                for (double a : layers)
+                    if (a > 0.001 && a < 0.999) st.partial = a;
+            }
+        }
+        return st;
+    }
+
+    /** One synthetic photo, selected, with its first preview on the stage. Returns false if the
+     *  engine never produced a frame — the poll is generous because these frames cost
+     *  microseconds of real time while the render happens on a worker. */
+    bool seedOnePhoto(Rig &rig, uint8_t r, uint8_t g, uint8_t b)
+    {
+        std::vector<uint8_t> px((size_t)64 * 48 * 4, 0);
+        for (int i = 0; i < 64 * 48; ++i)
+        { px[i * 4 + 0] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255; }
+        const int slot = rig.app.openImage(px.data(), 64, 48, "a.jpg", "");
+        if (slot < 0) return false;
+        rig.app.selectImage(slot);     // openImage does not select; `set` needs an edit target
+        for (int i = 0; i < 400 && stageOf(rig.target).photos == 0; ++i) rig.frame();
+        return stageOf(rig.target).photos > 0;
+    }
+
+    void theStageDissolvesWhenAnAdjustmentLands()
+    {
+        std::printf("App: a new render cross-dissolves onto the photo on screen (R-VIEW-1)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+
+        check(seedOnePhoto(rig, 90, 90, 90), "the first preview reaches the stage");
+        check(stageOf(rig.target).partial < 0.0,
+              "and is SET, not dissolved — an empty stage has nothing to fade from (R-VIEW-1b)");
+        const int photosAtRest = stageOf(rig.target).photos;
+
+        // An adjustment, through the service exactly as the slider sends it.
+        arstro::cosmo::Command set;
+        set.kind = arstro::cosmo::Command::Kind::Set;
+        set.fields = {{"exposure", "1.5"}};
+        check(rig.svc.dispatch(set), "the adjustment is accepted (there is an edit target)");
+
+        std::vector<double> alphas;
+        int twoPhotoFrames = 0;
+        for (int i = 0; i < 400; ++i)
+        {
+            rig.frame();
+            const Stage st = stageOf(rig.target);
+            if (st.partial >= 0.0) alphas.push_back(st.partial);
+            if (st.photos > photosAtRest) ++twoPhotoFrames;
+            if (alphas.size() >= 6 && st.partial < 0.0) break;   // the dissolve has been and gone
+        }
+        std::printf("      (%zu partial-alpha frames, %d with both photos drawn)\n",
+                    alphas.size(), twoPhotoFrames);
+        check(alphas.size() >= 3,
+              "the stage draws several frames at a partial alpha — it interpolates, it does not cut");
+        check(twoPhotoFrames >= 3,
+              "and BOTH photos are on screen during those frames (the duplicate layer)");
+        bool moves = false;
+        for (size_t i = 1; i < alphas.size(); ++i)
+            if (std::fabs(alphas[i] - alphas[0]) > 0.05) moves = true;
+        check(moves, "the alpha MOVES across frames rather than sitting at one value");
+
+        rig.settle(300.0);
+        const Stage rest = stageOf(rig.target);
+        check(rest.partial < 0.0, "once it arrives there is no partial layer left");
+        check(rest.photos == photosAtRest, "and only the photo that won is drawn");
+    }
+
+    // R-VIEW-2: the Before/After pill rides the same seam, so the toggle dissolves too. Clicked,
+    // not called: the pill's onChange is what asks App to re-push the photo, so calling setMode
+    // would prove a code path nobody ships.
+    void theBeforeAfterToggleDissolves()
+    {
+        std::printf("App: Before/After dissolves rather than cutting (R-VIEW-2)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+        check(seedOnePhoto(rig, 200, 120, 60), "a photo is on the stage");
+        rig.settle(300.0);
+
+        const artboard::Segment *photo =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "PhotoCanvas");
+        check(photo != nullptr, "the photo canvas exists");
+        if (!photo) return;
+        const artboard::Segment *pill = arstro::cosmo_v2::findSegmentByType(*photo, "SegmentedControl");
+        check(pill != nullptr, "and its Before/Split/After pill");
+        if (!pill) return;
+
+        const artboard::Point before =
+            pill->worldTransform().apply(artboard::Point{pill->width.value() / 6.0,
+                                                         pill->height.value() / 2.0});
+        rig.app.pointer(0, before.x, before.y, 1, rig.now); rig.frames(1);
+        rig.app.pointer(2, before.x, before.y, 1, rig.now);
+
+        int partialFrames = 0;
+        for (int i = 0; i < 400; ++i)
+        {
+            rig.frame();
+            if (stageOf(rig.target).partial > 0.0) ++partialFrames;
+            if (partialFrames >= 4) break;
+        }
+        std::printf("      (%d partial-alpha frames after the Before click)\n", partialFrames);
+        check(partialFrames >= 2, "switching to Before fades the baseline in over the edit");
+    }
 }
 
 int main()
@@ -296,6 +435,8 @@ int main()
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();
+    theStageDissolvesWhenAnAdjustmentLands();
+    theBeforeAfterToggleDissolves();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");
     return gFailures ? 1 : 0;

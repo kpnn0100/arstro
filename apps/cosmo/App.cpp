@@ -337,7 +337,7 @@ namespace cosmo_v2
         // (resetWorkspace restarts slot ids at 0, so the filmstrip thumb pool must
         // restart in lockstep or new cells would index the old project's thumbnails.)
         mLastAfterFrame = RenderService::Frame{};
-        mCenterStage->photo()->imageView()->clearImage();
+        mCenterStage->photo()->clearPhoto();
         mCenterStage->photo()->beforeView()->clearImage();
         mCenterStage->filmstrip()->clearThumbs();
         mCenterStage->breadcrumb()->setPath({});
@@ -347,20 +347,25 @@ namespace cosmo_v2
     {
         auto photo = mCenterStage->photo();
         const int mode = photo->mode();
-        auto setBefore = [&](std::shared_ptr<artboard::ImageView> view) {
-            if (const auto *b = mSession.renderBefore(); b && b->width > 0)
-                view->setImage(b->rgba.data(), b->width, b->height);
-        };
+        // R-VIEW-1: the stage is handed PIXELS and dissolves onto what is already there, so a
+        // render that lands mid-drag and a Before/After toggle both cross-fade. `mNowMs` is the
+        // frame clock — this is called from the frame loop and from the mode pill's callback,
+        // which has no time of its own to pass.
         if (mode == PhotoCanvas::Before)
         {
-            setBefore(photo->imageView());
+            if (const auto *b = mSession.renderBefore(); b && b->width > 0)
+                photo->setPhoto(b->rgba.data(), b->width, b->height, mNowMs);
         }
         else
         {
             if (mLastAfterFrame.width > 0)
-                photo->imageView()->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
+                photo->setPhoto(mLastAfterFrame.rgba.data(), mLastAfterFrame.width,
+                                mLastAfterFrame.height, mNowMs);
+            // Split's left half is a fixed reference, not a moving target: it changes when the
+            // photo does, not per adjustment, so it is set rather than dissolved.
             if (mode == PhotoCanvas::Split)
-                setBefore(photo->beforeView());
+                if (const auto *b = mSession.renderBefore(); b && b->width > 0)
+                    photo->beforeView()->setImage(b->rgba.data(), b->width, b->height);
         }
     }
 

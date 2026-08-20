@@ -62,6 +62,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -770,6 +771,48 @@ namespace
         rig.settle(f, kRevealMs);             // hand back to the editor, so the next shot is clean
     }
 
+    /** R-VIEW-1: the photo mid-dissolve, which is the only way to SEE that an adjustment
+     *  cross-fades instead of cutting. Two frames of one 120 ms dissolve — early and late — so
+     *  the mix of the two renders is visible rather than taken on trust from a number.
+     *
+     *  The wait is the fiddly part and it is deliberate: the new render lands on a worker, so
+     *  the frame is waited for in REAL time (pumping, not drawing) and only then are frames
+     *  drawn. Advancing the shot clock while waiting would run it straight past the dissolve
+     *  and photograph the settled editor twice. `frameSeq` is the signal — `pump` bumps it when
+     *  it takes a frame out of the engine. */
+    void shotDissolve(Rig &rig, int w, int h, const char *ev, const char *contrast)
+    {
+        if (!wanted("editor-dissolve")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);   // a settled editor, so the only motion is the photo
+
+        Command set;
+        set.kind = Command::Kind::Set;
+        // Big enough to see in a PNG, INSIDE the range the slider can reach (±5 EV): a value
+        // beyond it crashes the render worker on a NaN that walks through ToneCurve's clamp
+        // (D-36), and a harness must not depend on a defect it just found. The values differ per
+        // call for a duller reason that cost a render to find: `set` to the value already in
+        // force still submits, and a dissolve between two IDENTICAL renders is a photograph of
+        // nothing.
+        set.fields = {{"exposure", ev}, {"contrast", contrast}};
+        const unsigned seq0 = rig.svc.model().frameSeq;
+        if (!rig.svc.dispatch(set)) { std::printf("  (no edit target: skipping editor-dissolve)\n"); return; }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (rig.svc.model().frameSeq == seq0 && std::chrono::steady_clock::now() < deadline)
+        {
+            rig.svc.pump(rig.now);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (rig.svc.model().frameSeq == seq0) { std::printf("  (no render arrived: skipping editor-dissolve)\n"); return; }
+
+        rig.step(f, 1);   // this frame TAKES the render and starts the dissolve at alpha 0
+        rig.step(f, 2);   // ~32 ms into 120 ms: the old photo still dominates
+        save(f, "editor-dissolve-early");
+        rig.step(f, 3);   // ~80 ms: the new one has most of the weight
+        save(f, "editor-dissolve-late");
+        rig.settleQuiet(f, 200.0, 300);
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -780,7 +823,8 @@ namespace
             std::printf("  (skipping the project shots: no --images given)\n");
             return 0;
         }
-        if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve"))
+        if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
+            && !wanted("editor-dissolve"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -800,6 +844,7 @@ namespace
             }
             if (wanted("editor-project")) save(f, "editor-project");
         }
+        shotDissolve(rig, w0, h0, "1.5", "70");
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)
@@ -809,6 +854,7 @@ namespace
             rig.app.setSize((double)w, (double)h);
             rig.settleQuiet(f, 800.0, 2500);
             if (wanted("editor-project")) save(f, "editor-project");
+            shotDissolve(rig, w, h, "-1.2", "-50");   // dragging back the other way
         }
         // Back to the first size for the reveal shot, so it is comparable with the others.
         rig.app.setSize((double)w0, (double)h0);
@@ -870,6 +916,7 @@ int main(int argc, char **argv)
     {
         std::printf("home-empty  home-recents  home-settings  editor-empty\n"
                     "loading-intro  loading-progress  loading-dissolve  loading-reveal  editor-project\n"
+                    "editor-dissolve-early  editor-dissolve-late\n"
                     "scale-75-*  scale-90-*  scale-100-*  scale-125-*   (-home-min, -editor-min,\n"
                     "                            -settings-min, -editor-1280x800)\n"
                     "scale-zoom-{000-before,060-mid,140-mid,999-after}\n");

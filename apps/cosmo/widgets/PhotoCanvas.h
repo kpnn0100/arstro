@@ -9,6 +9,16 @@
  *  holding a full-canvas ImageView, so it stays pixel-aligned with the edited
  *  image behind it) and the edited "after" image on the right, divided by a
  *  1.5px seam.
+ *
+ *  THE PHOTO DISSOLVES (R-VIEW-1). Dragging a slider is the one place where the
+ *  photo itself changes, and replacing the pixels in one frame made a drag read
+ *  as a stutter of separate pictures — exactly what R-G-1 forbids. So the stage
+ *  holds TWO stacked image views and the top one's opacity IS the dissolve: the
+ *  composite is a*top + (1-a)*bottom, which is a true cross-dissolve because the
+ *  layer being covered stays opaque instead of fading out and letting the canvas
+ *  through. A render lands in whichever view is hidden and the opacity eases
+ *  toward it, so successive renders dissolve in alternating directions and no
+ *  pixels are ever copied between the two.
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
@@ -28,7 +38,16 @@ namespace cosmo_v2
 
         PhotoCanvas();
 
-        std::shared_ptr<artboard::ImageView> imageView() { return mImageView; }   // main (after) image
+        /** Show these pixels (R-VIEW-1): they cross-dissolve onto whatever is on screen. The
+         *  caller hands over pixels, not a view, so the pair below stays an implementation
+         *  detail — and every path that changes the photo (a new render, a Before/After
+         *  toggle) gets the dissolve for free. Sets instead of dissolving only when there is
+         *  nothing to dissolve from (first photo, R-VIEW-1b) or when the frame's pixel size
+         *  differs and therefore cannot cover what is on screen (R-VIEW-1c). */
+        void setPhoto(const uint8_t *rgba, int w, int h, double nowMs);
+        /** Back to an empty stage (a new workspace): both views, no dissolve. */
+        void clearPhoto();
+
         std::shared_ptr<artboard::ImageView> beforeView() { return mBeforeView; }  // left-half split image
         std::shared_ptr<MaskOverlay> maskOverlay() { return mMaskOverlay; }        // on-photo mask editor
 
@@ -41,11 +60,12 @@ namespace cosmo_v2
         // ── zoom / pan (ctrl-scroll magnify + drag-to-pan) ──
         // Routed through here so the after AND before(split) views share one
         // zoom/pan state and the split seam stays pixel-aligned (R-ZOOM-3).
-        double zoom() const { return mImageView->zoom(); }
+        double zoom() const { return mPhotoBase->zoom(); }
         void zoomAbout(double factor, const artboard::Point &localInCanvas);  // localInCanvas == PhotoCanvas-local == ImageView-local
         void resetZoom();
 
         void layout();  // call after width/height changes
+        void advance(double nowMs) override;  // starts the mode fade the pill could not (no nowMs)
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -53,15 +73,24 @@ namespace cosmo_v2
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        void applyMode();  // toggle split clip + divider visibility from the pill state
+        void applyMode(bool immediate = false);  // record the wanted split state (advance tweens it)
+        /** The view the photographer is actually looking at — the top one once the dissolve has
+         *  carried it past halfway. What `layout()` measures the mask overlay against. */
+        artboard::ImageView *visibleView() const;
 
-        std::shared_ptr<artboard::ImageView> mImageView;
+        // The dissolving pair: fixed in z-order (base below, top above), so the only thing that
+        // moves is mPhotoTop->opacity and `mTopIsCurrent` says which one holds the newest pixels.
+        std::shared_ptr<artboard::ImageView> mPhotoBase;
+        std::shared_ptr<artboard::ImageView> mPhotoTop;
+        bool mTopIsCurrent = false;
         std::shared_ptr<artboard::Segment> mSplitClip;    // clips the before image to the left half
         std::shared_ptr<artboard::ImageView> mBeforeView;
         std::shared_ptr<artboard::RectangleSegment> mDivider;
         std::shared_ptr<MaskOverlay> mMaskOverlay;   // above the image, below the pill (z-order)
         std::shared_ptr<SegmentedControl> mPill;
         artboard::Point mPanLast{0, 0};   // previous drag position while panning a zoomed view
+        bool mSplitWanted = false;        // pill state; advance() eases the clip + seam to it
+        bool mSplitApplied = false;
     };
 }
 }

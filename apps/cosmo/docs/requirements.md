@@ -243,11 +243,32 @@ A `#0A0A0A` backdrop behind an `ImageView` (Contain fit). The main image shows t
 image clipped to the left half with a 1.5 px seam (`refreshPhotoForMode`, `App.cpp:233-252`;
 `PhotoCanvas.cpp:75-105`). A Before/Split/After `SegmentedControl` pill sits bottom-center.
 
+### DR-PHOTO-1a The photo dissolves (R-VIEW-1, R-VIEW-2)
+`PhotoCanvas` holds two stacked `ImageView`s and one animated property — `mPhotoTop->opacity` — so a
+new render is a cross-dissolve rather than a pixel swap: `App::refreshPhotoForMode` calls
+`photo->setPhoto(rgba, w, h, nowMs)` ([App.cpp:346](../App.cpp#L346)) and
+`PhotoCanvas::setPhoto` ([widgets/PhotoCanvas.cpp:98](../widgets/PhotoCanvas.cpp#L98)) puts the
+pixels in whichever view is hidden and eases the top's opacity toward it (120 ms, `EaseOutCubic`).
+The composite is `a·top + (1−a)·bottom`, so the layer being covered stays opaque and the canvas
+never shows through mid-dissolve; nothing is copied between views, and successive renders simply
+dissolve in alternating directions.
+
+During a drag renders arrive faster than 120 ms, so an interruption is the normal case: the newest
+pixels replace the view the dissolve is leaving and `animateTo` retargets from the current eased
+value, which keeps opacity continuous (R-VIEW-1a). It sets instead of dissolving only for the first
+photo (nothing to travel from) and for a frame of a different pixel size, which cannot cover what is
+on screen — there both views take it so no stale pixels peek around it (R-VIEW-1b/1c).
+
+Mode changes ride the same seam (R-VIEW-2): Before↔After dissolves because it is just another
+`setPhoto`, and `applyMode` now records a wanted state that `PhotoCanvas::advance` turns into an
+opacity tween on the split clip and its seam instead of a `visible` flip.
+
 ### DR-PHOTO-2 Zoom & pan (R-ZOOM)
 Ctrl+wheel over the photo zooms about the cursor in 1.15× notches, clamped 1×–8×
 (`App.cpp:423-438`, `PhotoCanvas::zoomAbout`); plain wheel does not zoom. While zoomed, press-drag
-pans; before + after views share one zoom/pan so the split seam stays aligned
-(`PhotoCanvas.cpp:133-137`). Each zoom step scales preview render resolution
+pans; EVERY view on the stage — the dissolving pair and the split's before-view — shares one
+zoom/pan so the seam stays aligned and a view cannot slide into place under the next dissolve
+(`PhotoCanvas::zoomAbout`/`resetZoom`/`handleGesture`, R-ZOOM-3 as amended by R-VIEW-1). Each zoom step scales preview render resolution
 (`EditSession::setPreviewZoom`) and resets to base at 1× or on image change. R-ZOOM-5 (eased zoom)
 is deferred to an Artboard `ImageView` change; today zoom applies per notch.
 

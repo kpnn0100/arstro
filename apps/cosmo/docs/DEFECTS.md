@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-25**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-37**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,47 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-36 — An adjustment outside the UI's range crashes the render worker (NaN through a clamp)
+- **Area:** core / engine · **Status:** Confirmed (crashed under gdb) · **Severity:** S1 (crash)
+- **Found:** 2026-08-20, while adding the `editor-dissolve` shot for R-VIEW-1. The shot asked for a
+  deliberately huge change so the dissolve would be visible in a PNG, and the process died.
+- **Reproduce:** any front end, no UI needed — `set exposure=250` on a loaded image, then let a
+  preview render:
+  ```
+  cosmo_shots --outdir /tmp/s --images <a>.RAF --only editor-dissolve   # with exposure=250
+  Thread 242 received signal SIGSEGV
+  #0  arstro::ToneCurve::sampleLut (lut=0x7ffffffe77a8, d=-nan(0x400000))
+      at core/ImageProcessing/src/tone/ToneCurve.cpp:78
+  #1  arstro::ToneCurve::processPixel (…) at ToneCurve.cpp:88
+  #2  arstro::PointProcessor::process …  (a parallelFor worker)
+  ```
+- **Expected:** an out-of-range value is clamped, or renders as white — a number a script can send
+  must not be able to kill the process.
+- **Actual:** `sampleLut` indexes its LUT out of bounds and the render worker segfaults, taking the
+  app with it.
+- **Cause:** [ToneCurve.cpp:70-79](../../../core/ImageProcessing/src/tone/ToneCurve.cpp#L70) clamps
+  with `if (d < 0) d = 0; if (d > 1) d = 1;` — **both comparisons are false for NaN**, so a NaN
+  input survives the clamp, `(int)(NaN * (kLut-1))` is undefined (INT_MIN in practice) and
+  `lut[i]` reads wild memory. The NaN itself comes from the exposure gain: `2^250` overflows to
+  `inf`, and a later `inf - inf` (or `inf * 0`) in the tone chain produces NaN.
+- **Why it matters beyond the silly number:** the UI's own slider is limited to ±5 EV, so a mouse
+  cannot reach this — but `set` is a documented command (R-SVC), which means a script, the control
+  socket, `cosmo-cc`, or a preset file with a bad value all can. It is also the class of bug that
+  turns any future NaN anywhere in the pipeline into a crash rather than a wrong pixel.
+- **RECOMMENDED FIX (not applied — `core/ImageProcessing` is not this skill's to change):** guard
+  the LUT index rather than trusting the clamp, in `ToneCurve::sampleLut`:
+  ```cpp
+  if (!(d > 0)) d = 0;      // false for NaN as well as for negatives
+  else if (d > 1) d = 1;
+  ```
+  and, so a bad value cannot silently poison a whole frame, clamp the *parameter* where it enters
+  the session (`deserializeParams` / `applySetFields`) to the range the UI exposes — an out-of-range
+  `set` should be rejected with a message, which is also what makes it debuggable. A test belongs
+  with each: a `sampleLut(lut, NaN)` unit assertion, and a service test that `set exposure=250`
+  either fails or renders finite pixels.
+- **Guard for the shot in the meantime:** `editor-dissolve` now uses `exposure=1.5`, inside the
+  UI's range, so the harness does not depend on the fix.
 
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
 - **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
