@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-25**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-37**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -110,6 +110,61 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-36 — The D-10 fix did not compile on the Windows host it was written for
+- **Area:** core / test harness · **Status:** **Fixed** · **Severity:** S1 (build break: two of the
+  suites could not be produced at all, so nothing could be verified on this host)
+- **Found:** 2026-08-19, by the user, on the first MSYS2/MINGW64 build after `TestMain.h` landed.
+- **Reproduce:** `cmake --build build-mingw64 --target cosmo_core_tests cosmo_widget_tests` on
+  MSYS2 MINGW64 (msvcrt-based; `_UCRT` undefined).
+- **Expected:** both suites build, as they do on Linux.
+- **Actual:** two failures, both from `core/tests/TestMain.h`, both of them the first compile of
+  that header on Windows:
+  1. **Link.** `undefined reference to __imp__set_abort_behavior`, from `TestMain.h:43`.
+  2. **Compile,** in a file that had nothing to do with the change:
+     `widgets/tests/widgetTests.cpp:82: error: expected unqualified-id before 'double'` on
+     `bool near(double a, double b, double eps = 1e-3)`.
+- **Evidence:**
+  ```
+  $ nm libmsvcrt.a | grep -c set_abort_behavior      ->  0
+  $ nm libucrt.a   | grep -c set_abort_behavior      ->  4
+  $ g++ -fsyntax-only  #ifdef _UCRT ... #endif       ->  error: UCRT_NOT_DEFINED
+  $ grep -n _set_abort_behavior /mingw64/include/stdlib.h
+    296:  _CRTIMP unsigned int __cdecl _set_abort_behavior(unsigned int,unsigned int);
+  ```
+  So msvcrt **declares** the function unconditionally and **exports** nothing: `_CRTIMP` makes it
+  `__declspec(dllimport)`, the call compiles, and it resolves only against the UCRT import library.
+  The second failure is `<windows.h>`, included by `TestMain.h` for `SetErrorMode`, still defining
+  the 16-bit memory-model keywords: `near` and `far` expand to nothing. `widgetTests.cpp:33`
+  includes `TestMain.h`, so its float comparison at line 82 became `bool (double a, ...)`.
+- **Judgement:** defect, and a **method** defect more than a code one. D-10's entry says in as many
+  words that its Windows half was *"code-verified only"* and asks the next MSYS2 session to confirm
+  it. Nobody did, and the thing that failed was not the subtle runtime behaviour it warned about —
+  it was the build. A header written for a platform and never compiled on it is not verified in any
+  sense, and this one then broke a suite that never asked for it.
+- **Fix:** commit *"cosmo: the test harness header builds on the Windows host it was written for"*.
+  `core/tests/TestMain.h` — `_set_abort_behavior` is gone; a `SIGABRT` handler that prints one line
+  and calls `std::_Exit(3)` replaces it, which works on both CRTs and needs no `#if` on the CRT,
+  because `abort()` raises `SIGABRT` on both and a handler that does not return never reaches the
+  reporting path that stalls. The assert text is already on stderr by then — `_assert` prints before
+  it aborts, so nothing is lost by leaving early. The header now also enters with
+  `WIN32_LEAN_AND_MEAN`/`NOMINMAX` and leaves with `#undef near` / `far` / `small`, so it cannot
+  redefine its includer's vocabulary.
+- **Verified:** both targets build and pass; and, for the first time on Windows, the D-10 property
+  itself — a probe including the header with one deliberately failing `assert`:
+  ```
+  run exit=3  elapsed=0.18s
+  stdout: [PASS] a test that passes
+  stderr: Assertion failed: 1 == 2 && "the deliberate failure", file d36_probe.cpp, line 7
+          [abort] assertion failed — exiting 3
+  ```
+  0.18 s and exit 3, where D-10's symptom was a five-minute stall. `D-10`'s "Windows half code-
+  verified only" caveat is now discharged.
+- **Guarded by:** the build. `cosmo_widget_tests` declares `near` and includes `TestMain.h`, so the
+  macro leak cannot return without breaking a target that is always built; and both suites call
+  `testMainInit()`, so a CRT entry point that does not link cannot reach `main`. Requirement:
+  **R-TEST-1**, **R-TEST-2** (new — the test harness had no requirement at all, which D-10 noted and
+  left).
 
 ### D-35 — Changing the edit target left every panel showing the previous target's values
 - **Area:** core + design (view-model binding) · **Status:** **Fixed** · **Severity:** S2

@@ -44,8 +44,9 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-18 · Last commit: D-22, a load now reports the WORK (entries claimed, named
-stage) rather than only finished results — the nine seconds of "Preparing…" are gone.
+Last updated: 2026-08-19 · Last commit: D-36, the test harness header builds on the Windows host it
+was written for — `_set_abort_behavior` is UCRT-only and `<windows.h>` was leaking `near` into a
+suite that declares it. R-TEST-1/2 added; D-10's "Windows half code-verified only" is discharged.
 
 **Milestone S is COMPLETE** (S1…S5). The §5 checks all pass: a CLI dump and a GUI dump of the same
 project are byte-identical, no widget reaches past the service, every behaviour is a command,
@@ -192,7 +193,10 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
       EaseOutCubic, so its linear midpoint is ~85% finished. `cosmo_ui_tests` — headless assertions over the assembled app: non-overlap, reachability, text fit, reflow (A12)
 - [x] **D-10** (was folded into P0.3/P0.11) `core/tests/TestMain.h` — a failing assert now exits
       non-zero with its message intact through a redirect, instead of hanging where a red suite
-      looked like a slow one. Windows half code-verified only; confirm on MSYS2
+      looked like a slow one. **The MSYS2 confirmation this line asked for happened on 2026-08-19
+      and failed: the header did not build on Windows at all (D-36).** Now fixed and measured
+      there — exit 3 in 0.18 s — so the caveat is discharged and the harness has a requirement,
+      R-TEST-1/2
 - [x] **P0.4** `Log`: level honoured (compared before formatting), categories **derived** from the
       event stream's dotted names so the two vocabularies cannot drift, all four env vars + flags,
       `setStderrEcho()` alive, GLib routed through `g_log_set_default_handler`, Windows backtrace via
@@ -300,6 +304,19 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+- **2026-08-19 (D-36) — "Code-verified on Windows" is not verified, and the harness now has a
+  requirement.** `TestMain.h` shipped with its Windows half read rather than compiled; the first
+  MSYS2 build after it landed failed twice — a link error for `_set_abort_behavior`, which msvcrt
+  declares in `<stdlib.h>` and does not export (it is UCRT-only), and a compile error in
+  `widgetTests.cpp`, whose `bool near(...)` collided with the empty `near` macro that
+  `<windows.h>` still defines. Two lessons, both already visible in D-12's: a **platform claim
+  needs the platform**, and a header included by more than one suite owes them a clean namespace —
+  the second failure was in a file that had nothing to do with the change and named neither the
+  macro nor the header. Also: the CRT lever was replaced by a `SIGABRT` handler rather than
+  guarded with `#if defined(_UCRT)`, because one path that works on both CRTs beats two paths of
+  which only one is ever exercised here. **R-TEST-1/2 are new** — the test harness had no
+  requirement at all, which D-10 noticed and left, and §2's "no code without a requirement" had
+  therefore never applied to the one thing every other verification rests on.
 - **2026-08-17 (S5) — Announce before you mutate.** D-13: a subscriber runs synchronously inside
   `dispatch`, and a view is entitled to clear its own state when it hears "a project is opening" —
   the GTK host does exactly that. So an event describing what is ABOUT to happen must be emitted

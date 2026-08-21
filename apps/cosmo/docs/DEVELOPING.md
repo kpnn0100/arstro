@@ -345,6 +345,14 @@ Two more that are not in the table because they are about *method*:
   minutes, so the usual "it must be stuck" heuristic did not apply. Every verification claim in this
   project rests on "the suite is green"; a suite that cannot report red is not evidence.
   `core/tests/TestMain.h` fixes it, and both suites call `testMainInit()` first.
+- **D-36** — that same header then failed to build on Windows, the platform it was written for, and
+  took an unrelated suite down with it: `_set_abort_behavior` is declared by msvcrt and exported
+  only by UCRT (a **link** error), and the `<windows.h>` it pulled in for one call still defines
+  `near` as an empty macro, so `widgetTests.cpp`'s `bool near(a,b,eps)` stopped parsing. D-10's own
+  entry had said its Windows half was *code-verified only* and asked for confirmation on MSYS2;
+  nobody ran it. **"Code-verified on platform X" means unverified.** And a header included by more
+  than one suite owes them a clean namespace — the failure it caused was in a file that had nothing
+  to do with it, with a diagnostic naming neither the macro nor the header. R-TEST-1/2.
 - **S4b-2, in the ledger** — a spec written from *reading* the code claimed curves, the mixer and
   grading each needed a new command family. Running it showed they were already addressable through
   `set`, because `EditParamsIO` names them. **Try it before you spec it.**

@@ -1151,6 +1151,43 @@ version had the measure path (`rowLines` → `chipRects`) ask `cardRect()` for i
 each waited on the other and the dialog crashed the moment it was drawn. The wrap bound is `kCardW`,
 a constant; only the chips' absolute positions need the card's position.
 
+### DR-TEST-1 `TestMain.h` — a red suite reports red, on both hosts (R-TEST-1, R-TEST-2)
+`apps/cosmo/core/tests/TestMain.h` — `testMainInit()`, called first in every suite's `main()`.
+Unbuffered `stdout`/`stderr` on every platform (`TestMain.h:65-66`), so an assert's message reaches
+a redirected pipe before the process dies and a mid-suite crash does not swallow the lines saying
+how far it got. On Windows additionally
+`SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX|SEM_NOOPENFILEERRORBOX)`
+(`TestMain.h:71`) and a `SIGABRT` handler that prints one line and calls `std::_Exit(3)`
+(`TestMain.h:52-58,81`).
+
+**Why a signal handler and not `_set_abort_behavior`** (D-36): msvcrt declares `_set_abort_behavior`
+unconditionally in `<stdlib.h>` but `libmsvcrt.a` exports no such symbol — it lives only in the UCRT
+import library — so on the MSYS2 MINGW64 toolchain the call compiles and then fails at **link** time
+with `undefined reference to __imp__set_abort_behavior`. `abort()` raises `SIGABRT` on both CRTs, and
+a handler that does not return never reaches the CRT reporting path that stalls, so one code path
+covers msvcrt and UCRT with no `#if` on the CRT at all.
+
+The header also **undoes what `<windows.h>` leaks** (`TestMain.h:39-41`): `WIN32_LEAN_AND_MEAN` and
+`NOMINMAX` going in, then `#undef near` / `far` / `small` coming out. It is included by
+`widgets/tests/widgetTests.cpp:33`, which declares `bool near(double,double,double)` at line 82 — the
+empty `near` macro turned that into `expected unqualified-id before 'double'`, a diagnostic that
+names neither the macro nor the header.
+
+**Verified on MSYS2/MINGW64**, which is what D-10 left outstanding and D-36 turned into a build
+failure — a probe including this header, with one deliberately failing `assert`:
+
+```
+compile exit=0
+run exit=3  elapsed=0.18s
+stdout: [PASS] a test that passes
+stderr: Assertion failed: 1 == 2 && "the deliberate failure", file d36_probe.cpp, line 7
+        [abort] assertion failed — exiting 3
+```
+
+so the passing output, the failure message, a prompt return and a non-zero exit all survive
+redirection. **Guarded by the build itself**: `cosmo_widget_tests` declares `near` and includes this
+header, so the macro leak cannot come back without breaking a target that is always built.
+
 ### DR-UITEST-1 `cosmo_ui_tests` — assertions over the assembled app
 A ctest target (`apps/cosmo/tests/ui/uiTests.cpp`) that builds the real `App` over a real
 `CosmoService` from `COSMO_APP_NOMAIN`, with no display and no window, and drives its clock through

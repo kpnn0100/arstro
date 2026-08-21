@@ -961,3 +961,21 @@ and make every front end — the GTK window, the CLI, the shot renderer — a *v
   variable used before was read by nobody (D-12). The load logs the allotment and the **measured
   peak**, and a test asserts the peak never exceeds the total — R-CPU-4's honesty clause becomes an
   assertion instead of a claim.
+
+## R-TEST — The test suites build and can report red on every host they run on — ✅ IMPLEMENTED
+
+Every verification claim in this project rests on "the suite is green", so the suites themselves are
+part of the contract, not scaffolding. D-10 established the behaviour clause; D-36 established the
+build clause, after the D-10 fix shipped code-verified-only and turned out not to compile on the
+Windows host it was written for.
+
+- **R-TEST-1 A failing assertion exits, promptly and non-zero, on every supported host.** The
+  assert text reaches a redirected stderr before the process dies, and no path waits for a human to
+  dismiss a dialog — an agent or CI run has nobody to click OK, and waiting for that click is
+  indistinguishable from a slow suite. A suite that cannot report red is not evidence.
+- **R-TEST-2 Shared test infrastructure compiles on every host, and never breaks its includer.**
+  A header included by more than one suite is verified by *compiling it there*, on each host, not by
+  reading it. In particular it must not leak platform macros into the suite that includes it: a
+  system header pulled in for one Win32 call defines `near`, `far`, `small`, `min` and `max`, and a
+  test that legitimately names one of those must keep compiling. Platform CRT entry points are used
+  only where they are known to link, not merely where they are declared.
