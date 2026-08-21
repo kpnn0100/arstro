@@ -7,6 +7,7 @@
 #include "../OrderedParallelLoad.h"
 #include "../ProjectLoader.h"
 #include "../ThreadBudget.h"
+#include "../decode/NativeImageDecoder.h"
 #include "../service/AppModelCodec.h"
 #include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
@@ -694,6 +695,7 @@ namespace
 
         AppSettings s;
         s.previewEdge = 2400; s.threads = 6; s.useGpu = true; s.cpuPercent = 25; s.uiScale = 75;
+        s.touchUi = true;
         assert(s.save());
         const AppSettings back = AppSettings::load();
         assert(back.previewEdge == 2400);
@@ -701,6 +703,8 @@ namespace
         assert(back.useGpu && "GPU acceleration is still on next launch");
         assert(back.cpuPercent == 25 && "the CPU budget survives a restart (R-CPU-3)");
         assert(back.uiScale == 75 && "the UI scale survives a restart (R-SCALE-1)");
+        assert(back.touchUi && "touch mode survives a restart (R-TOUCH-6) -- a UI that reverts to "
+                               "the mouse layout on a tablet every launch reads as broken");
 
         // A truncated / garbled file must fall back per field, never stop the app.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\nuseGpu=1\npreviewEdge=notanumber\nthre"; }
@@ -710,6 +714,7 @@ namespace
         assert(partial.threads == 0);
         assert(partial.cpuPercent == 50 && "a settings file that predates the budget gets the default");
         assert(partial.uiScale == 100 && "a file that predates the UI scale renders at the design size");
+        assert(!partial.touchUi && "a file that predates touch mode gets the desktop shell");
 
         // An out-of-range budget is a corrupt file, not a request for the whole machine.
         { std::ofstream f(path, std::ios::trunc); f << "cosmosettings=1\ncpuPercent=400\n"; }
@@ -1337,6 +1342,26 @@ namespace
         assert(m.budget.percent == 25 && "and the budget agrees with it");
         assert(m.budget.engineThreads == 4 && "an explicit thread count still wins (R-CPU-2b)");
 
+        // R-TOUCH-6: which shell to draw is a setting, so it has to be reachable as a COMMAND —
+        // that is what lets a script (or a shot renderer on a desktop host) put the touch shell
+        // on screen without a device. The service stores and forwards it; it never acts on it,
+        // exactly like uiScale (R-SVC-3).
+        assert(!m.settings.touchUi && "the desktop shell is the default");
+        {
+            std::string err;
+            const Command c = parseCommand("settings set touchUi=1", err);
+            assert(err.empty() && c.kind == Command::Kind::SettingsSet);
+            assert(svc.dispatch(c) && "settings set touchUi=1 is accepted");
+        }
+        assert(m.settings.touchUi && "and the model reports the touch shell");
+        assert(formatModel(m, {}).find("settingsTouchUi=1") != std::string::npos &&
+               "so a front end that was not listening can still read it out of a dump");
+        {
+            std::string err;
+            assert(svc.dispatch(parseCommand("settings set touchUi=0", err)));
+        }
+        assert(!m.settings.touchUi && "and back");
+
         // D-14: `state print` carries --json and --stable INDEPENDENTLY. They shared one bool,
         // so --stable parsed and was then dropped — and a dump that cannot be made stable
         // cannot be compared with another front end's, which is the option's only purpose.
@@ -1502,6 +1527,66 @@ namespace
         std::filesystem::remove(path);
         printf("[PASS] an_image_entry_gets_its_filename\n");
     }
+    // R-THUMB-1: the pixel transform a camera's embedded preview needs so a cover is oriented
+    // like its photo. Hand-computed against LibRaw's own flip_index, on a 3x2 whose every pixel
+    // is identifiable -- a rotation that is 180 degrees out passes any aspect-only check.
+    void test_a_thumbnail_is_turned_the_way_the_photo_is()
+    {
+        using arstro::cosmo::DecodedImage;
+        using arstro::cosmo::NativeImageDecoder;
+        // A B C
+        // D E F   (one grey level per pixel, so a wrong index is a wrong number)
+        const uint8_t v[6] = {10, 20, 30, 40, 50, 60};
+        auto make = [&] {
+            DecodedImage img; img.width = 3; img.height = 2; img.rgba.resize(3 * 2 * 4);
+            for (int i = 0; i < 6; ++i)
+            { img.rgba[i * 4 + 0] = img.rgba[i * 4 + 1] = img.rgba[i * 4 + 2] = v[i]; img.rgba[i * 4 + 3] = 255; }
+            return img;
+        };
+        auto at = [](const DecodedImage &img, int r, int c) { return img.rgba[((size_t)r * img.width + c) * 4]; };
+
+        DecodedImage none = make();
+        NativeImageDecoder::applyFlip(none, 0);          // flip 0 changes nothing at all
+        assert(none.width == 3 && none.height == 2 && at(none, 0, 0) == 10 && at(none, 1, 2) == 60);
+
+        // flip 5 (= 4|1) is the quarter turn Fujifilm and Panasonic files carry: the dimensions
+        // swap and the result is the source rotated 90 degrees counter-clockwise.
+        //   C F
+        //   B E
+        //   A D
+        DecodedImage cw = make();
+        NativeImageDecoder::applyFlip(cw, 5);
+        assert(cw.width == 2 && cw.height == 3);
+        assert(at(cw, 0, 0) == 30 && at(cw, 0, 1) == 60);
+        assert(at(cw, 1, 0) == 20 && at(cw, 1, 1) == 50);
+        assert(at(cw, 2, 0) == 10 && at(cw, 2, 1) == 40);
+
+        // flip 6 (= 4|2) is the other quarter turn -- 90 degrees clockwise.
+        //   D A
+        //   E B
+        //   F C
+        DecodedImage ccw = make();
+        NativeImageDecoder::applyFlip(ccw, 6);
+        assert(ccw.width == 2 && ccw.height == 3);
+        assert(at(ccw, 0, 0) == 40 && at(ccw, 0, 1) == 10);
+        assert(at(ccw, 2, 0) == 60 && at(ccw, 2, 1) == 30);
+
+        // flip 3 (= 2|1) is 180 degrees: same shape, both axes mirrored.
+        DecodedImage half = make();
+        NativeImageDecoder::applyFlip(half, 3);
+        assert(half.width == 3 && half.height == 2);
+        assert(at(half, 0, 0) == 60 && at(half, 1, 2) == 10);
+
+        // Turning it four quarter-turns comes back to the original, which is the property that
+        // would catch a transposed-but-not-mirrored implementation.
+        DecodedImage round = make();
+        for (int i = 0; i < 4; ++i) NativeImageDecoder::applyFlip(round, 6);
+        assert(round.width == 3 && round.height == 2);
+        for (int r = 0; r < 2; ++r)
+            for (int c = 0; c < 3; ++c) assert(at(round, r, c) == v[r * 3 + c]);
+
+        printf("[PASS] a_thumbnail_is_turned_the_way_the_photo_is\n");
+    }
 }
 
 int main()
@@ -1542,6 +1627,7 @@ int main()
     test_a_preview_frame_reaches_the_model();
     test_a_load_reports_work_before_any_result();
     test_an_image_entry_gets_its_filename();
+    test_a_thumbnail_is_turned_the_way_the_photo_is();
     printf("\nAll cosmo_core session tests passed.\n");
     return 0;
 }

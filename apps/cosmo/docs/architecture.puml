@@ -72,7 +72,12 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class LeftRail
     class PresetTree
     class CenterStage
-    class PhotoCanvas
+    class PhotoCanvas {
+      + setPhoto(rgba,w,h,nowMs)  ' cross-dissolve, R-VIEW-1
+      + clearPhoto()
+      - mPhotoBase / mPhotoTop    ' two stacked ImageViews
+      - mTopIsCurrent : bool
+    }
     class MaskOverlay
     class Filmstrip
     class Breadcrumb

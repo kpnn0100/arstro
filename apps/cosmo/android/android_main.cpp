@@ -60,9 +60,9 @@ void registerFonts(android_app *app)
     const std::string dir = app->activity->internalDataPath ? app->activity->internalDataPath : ".";
     struct FontFile { const char *asset; const char *family; };
     const FontFile fonts[] = {
-        {"fonts/DMSans-Regular.ttf",        "DM Sans"},
-        {"fonts/DMSans-Medium.ttf",         "DM Sans Medium"},
-        {"fonts/DMSans-SemiBold.ttf",       "DM Sans SemiBold"},
+        {"fonts/Roboto-Regular.ttf",        "Roboto"},
+        {"fonts/Roboto-Medium.ttf",         "Roboto Medium"},
+        {"fonts/Roboto-SemiBold.ttf",       "Roboto SemiBold"},
         {"fonts/JetBrainsMono-Regular.ttf", "JetBrains Mono"},
         {"fonts/JetBrainsMono-Medium.ttf",  "JetBrains Mono Medium"},
     };

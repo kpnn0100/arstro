@@ -19,6 +19,13 @@
 #include "../../widgets/HomeScreen.h"
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
+#include "../../widgets/PhotoCanvas.h"
+#include "../../core/service/Command.h"
+#include <chrono>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
 #include "../../UiDump.h"
 #include <cassert>
 #include <cstdio>
@@ -60,10 +67,14 @@ namespace
             app.setSize(w, h);
         }
 
-        /** One 16 ms frame. Rendering IS advancing — App has no separate tick. */
+        /** One 16 ms frame. Rendering IS advancing — App has no separate tick. The service is
+         *  pumped first, exactly as the GTK host's tick does: `pump` is what moves a finished
+         *  render out of the engine, so a rig that skips it can never see a preview reach the
+         *  stage (and every photo assertion here would pass on an empty canvas). */
         void frame()
         {
             now += 16.0;
+            svc.pump(now);
             target.clear();
             app.render(target, now);
         }
@@ -286,6 +297,224 @@ namespace
             }
         }
     }
+
+    // ── R-VIEW-1 / R-G-1: the PHOTO dissolves when an adjustment lands ───────────────────
+    //
+    // Reported as "make the edit more smooth by duplicate the photo on UI, photo will be fade
+    // from current to new photo with adjustment when doing adjustment on slider". Asserted off
+    // the recorded op stream rather than off PhotoCanvas's members, because what matters is what
+    // was DRAWN: mid-dissolve there must be TWO photos on the stage, the top one inside a layer
+    // whose alpha is strictly between 0 and 1, and at rest one photo with no fractional layer.
+    struct Stage
+    {
+        int photos = 0;        // images drawn at stage size (a filmstrip thumb is 86 px wide)
+        double partial = -1.0; // the fractional layer alpha in force over one of them
+        bool partialWithoutCover = false;  // a see-through photo with nothing drawn behind it
+        bool updatedWhileVisible = false;  // pixels replaced in a photo that is ON SCREEN
+    };
+
+    /** What the last recorded frame actually put on the photo stage. The layer stack is walked
+     *  rather than "the last PushLayer seen", because every faded segment in the tree pushes one
+     *  and only the one still OPEN over a DrawImage is the dissolve. */
+    Stage stageOf(const artboard::RecordingTarget &target)
+    {
+        Stage st;
+        std::vector<double> layers;
+        std::vector<int> updated;                       // ids whose pixels were re-uploaded
+        std::vector<std::pair<int, double>> drawn;      // stage-sized draws and their weight
+        for (const auto &op : target.ops())
+        {
+            using K = artboard::DrawOp::Kind;
+            if (op.kind == K::PushLayer) layers.push_back(op.args[0]);
+            else if (op.kind == K::PopLayer) { if (!layers.empty()) layers.pop_back(); }
+            else if (op.kind == K::UpdateImage) updated.push_back(op.imageId);
+            else if (op.kind == K::DrawImage && op.args[2] > 200.0)   // stage-sized, not a thumb
+            {
+                ++st.photos;
+                double weight = 1.0;
+                for (double a : layers) weight *= a;
+                if (weight > 0.001 && weight < 0.999) st.partial = weight;
+                drawn.push_back({op.imageId, weight});
+            }
+        }
+        // R-VIEW-1e: a see-through photo needs the one it is dissolving from underneath it. One
+        // stage photo drawn at a fractional weight means the canvas is showing through.
+        if (st.partial >= 0.0 && st.photos < 2) st.partialWithoutCover = true;
+        // R-VIEW-1a: pixels may only be written where they cannot be SEEN, and what a layer
+        // contributes is not its own alpha — the bottom one is painted over, so it contributes
+        // ∏(1 − alpha) of everything above it. Compose bottom-to-top to get the real weights.
+        //
+        // The bar is one animation step, not zero, and that is a property of Artboard rather than
+        // a looseness in the rule: an ImageView uploads its pixels inside onPaint, so the earliest
+        // an upload can happen is the first frame the layer is drawn at all — one linear step of a
+        // 160 ms dissolve, ~0.13, doubled here for slack. The behaviour this catches missed it by
+        // a mile: reversing a dissolve wrote into a layer contributing 0.5 to 0.9.
+        for (size_t i = 0; i < drawn.size(); ++i)
+        {
+            double contribution = drawn[i].second;
+            for (size_t j = i + 1; j < drawn.size(); ++j) contribution *= (1.0 - drawn[j].second);
+            if (contribution <= 0.26) continue;
+            for (int id : updated)
+                if (id == drawn[i].first) st.updatedWhileVisible = true;
+        }
+        return st;
+    }
+
+    /** One synthetic photo, selected, with its first preview on the stage. Returns false if the
+     *  engine never produced a frame — the poll is generous because these frames cost
+     *  microseconds of real time while the render happens on a worker. */
+    bool seedOnePhoto(Rig &rig, uint8_t r, uint8_t g, uint8_t b)
+    {
+        std::vector<uint8_t> px((size_t)64 * 48 * 4, 0);
+        for (int i = 0; i < 64 * 48; ++i)
+        { px[i * 4 + 0] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255; }
+        const int slot = rig.app.openImage(px.data(), 64, 48, "a.jpg", "");
+        if (slot < 0) return false;
+        rig.app.selectImage(slot);     // openImage does not select; `set` needs an edit target
+        for (int i = 0; i < 400 && stageOf(rig.target).photos == 0; ++i) rig.frame();
+        return stageOf(rig.target).photos > 0;
+    }
+
+    void theStageDissolvesWhenAnAdjustmentLands()
+    {
+        std::printf("App: a new render cross-dissolves onto the photo on screen (R-VIEW-1)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+
+        check(seedOnePhoto(rig, 90, 90, 90), "the first preview reaches the stage");
+        check(stageOf(rig.target).partial < 0.0,
+              "and is SET, not dissolved — an empty stage has nothing to fade from (R-VIEW-1b)");
+        const int photosAtRest = stageOf(rig.target).photos;
+
+        // An adjustment, through the service exactly as the slider sends it.
+        arstro::cosmo::Command set;
+        set.kind = arstro::cosmo::Command::Kind::Set;
+        set.fields = {{"exposure", "1.5"}};
+        check(rig.svc.dispatch(set), "the adjustment is accepted (there is an edit target)");
+
+        std::vector<double> alphas;
+        int twoPhotoFrames = 0;
+        for (int i = 0; i < 400; ++i)
+        {
+            rig.frame();
+            const Stage st = stageOf(rig.target);
+            if (st.partial >= 0.0) alphas.push_back(st.partial);
+            if (st.photos > photosAtRest) ++twoPhotoFrames;
+            if (alphas.size() >= 6 && st.partial < 0.0) break;   // the dissolve has been and gone
+        }
+        std::printf("      (%zu partial-alpha frames, %d with both photos drawn)\n",
+                    alphas.size(), twoPhotoFrames);
+        check(alphas.size() >= 3,
+              "the stage draws several frames at a partial alpha — it interpolates, it does not cut");
+        check(twoPhotoFrames >= 3,
+              "and BOTH photos are on screen during those frames (the duplicate layer)");
+        bool moves = false;
+        for (size_t i = 1; i < alphas.size(); ++i)
+            if (std::fabs(alphas[i] - alphas[0]) > 0.05) moves = true;
+        check(moves, "the alpha MOVES across frames rather than sitting at one value");
+
+        rig.settle(300.0);
+        const Stage rest = stageOf(rig.target);
+        check(rest.partial < 0.0, "once it arrives there is no partial layer left");
+        check(rest.photos == photosAtRest, "and only the photo that won is drawn");
+    }
+
+    // ── R-VIEW-1a / R-VIEW-1e: the drag that made it blink ──────────────────────────────
+    //
+    // Reported as "it doesn't smooth, make the photo blink when transition", and both causes are
+    // per-FRAME facts that only a frame-by-frame walk can see, which is why this test exists
+    // rather than a longer look at the code:
+    //   (1) the covered layer was skipped from the PREVIOUS frame's alpha, so the first frame of
+    //       every 1->0 dissolve drew the top at ~0.9 with the canvas behind it;
+    //   (2) a render arriving mid-dissolve was written into the layer that still had weight
+    //       (1-a), stepping the composite by that weight times two renders' difference.
+    // A drag is the case that hits both, so the test IS a drag: a new value every three frames.
+    void theStageNeverBlinksDuringADrag()
+    {
+        std::printf("App: a drag dissolves continuously — no dark frame, no pixel swap on screen "
+                    "(R-VIEW-1a/1e)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+        check(seedOnePhoto(rig, 120, 100, 80), "a photo is on the stage");
+
+        double ev = 0.0;
+        int dissolveFrames = 0, accepted = 0;
+        bool covered = true, wroteOffScreenOnly = true;
+        for (int i = 0; i < 300; ++i)
+        {
+            if (i % 3 == 0)
+            {
+                ev += 0.15;                     // the slider moving, in EV
+                arstro::cosmo::Command set;
+                set.kind = arstro::cosmo::Command::Kind::Set;
+                set.fields = {{"exposure", std::to_string(ev)}};
+                if (rig.svc.dispatch(set)) ++accepted;
+            }
+            rig.frame();
+            const Stage st = stageOf(rig.target);
+            if (st.partial >= 0.0) ++dissolveFrames;
+            if (st.partialWithoutCover) covered = false;
+            if (st.updatedWhileVisible) wroteOffScreenOnly = false;
+        }
+        std::printf("      (%d adjustments, %d frames mid-dissolve)\n", accepted, dissolveFrames);
+        check(dissolveFrames > 10, "the drag produced enough dissolving frames to judge");
+        check(covered,
+              "every see-through photo has the one it came from drawn underneath it (R-VIEW-1e)");
+        check(wroteOffScreenOnly,
+              "no frame replaces the pixels of a photo that is on screen (R-VIEW-1a)");
+
+        // And it converges: the last render is not left waiting for a dissolve that never comes.
+        // "Quiet" has to be measured, not timed — the render worker is asynchronous, so a fixed
+        // settle can simply end inside a dissolve that started one frame earlier (it did, twice).
+        int quiet = 0;
+        for (int i = 0; i < 600 && quiet < 10; ++i)
+        {
+            rig.frame();
+            std::this_thread::sleep_for(std::chrono::microseconds(200));   // let a late render land
+            quiet = stageOf(rig.target).partial < 0.0 ? quiet + 1 : 0;
+        }
+        const Stage rest = stageOf(rig.target);
+        check(quiet >= 10 && rest.photos >= 1, "it settles on one photo with no partial layer");
+    }
+
+    // R-VIEW-2: the Before/After pill rides the same seam, so the toggle dissolves too. Clicked,
+    // not called: the pill's onChange is what asks App to re-push the photo, so calling setMode
+    // would prove a code path nobody ships.
+    void theBeforeAfterToggleDissolves()
+    {
+        std::printf("App: Before/After dissolves rather than cutting (R-VIEW-2)\n");
+        Rig rig(1200.0, 800.0);
+        rig.app.showEditor();
+        rig.settle(200.0);
+        check(seedOnePhoto(rig, 200, 120, 60), "a photo is on the stage");
+        rig.settle(300.0);
+
+        const artboard::Segment *photo =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "PhotoCanvas");
+        check(photo != nullptr, "the photo canvas exists");
+        if (!photo) return;
+        const artboard::Segment *pill = arstro::cosmo_v2::findSegmentByType(*photo, "SegmentedControl");
+        check(pill != nullptr, "and its Before/Split/After pill");
+        if (!pill) return;
+
+        const artboard::Point before =
+            pill->worldTransform().apply(artboard::Point{pill->width.value() / 6.0,
+                                                         pill->height.value() / 2.0});
+        rig.app.pointer(0, before.x, before.y, 1, rig.now); rig.frames(1);
+        rig.app.pointer(2, before.x, before.y, 1, rig.now);
+
+        int partialFrames = 0;
+        for (int i = 0; i < 400; ++i)
+        {
+            rig.frame();
+            if (stageOf(rig.target).partial > 0.0) ++partialFrames;
+            if (partialFrames >= 4) break;
+        }
+        std::printf("      (%d partial-alpha frames after the Before click)\n", partialFrames);
+        check(partialFrames >= 2, "switching to Before fades the baseline in over the edit");
+    }
 }
 
 int main()
@@ -296,6 +525,9 @@ int main()
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();
+    theStageDissolvesWhenAnAdjustmentLands();
+    theStageNeverBlinksDuringADrag();
+    theBeforeAfterToggleDissolves();
     std::printf("\n%s (%d failure%s)\n", gFailures ? "FAILED" : "all passed", gFailures,
                 gFailures == 1 ? "" : "s");
     return gFailures ? 1 : 0;

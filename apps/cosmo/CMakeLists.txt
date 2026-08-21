@@ -2,8 +2,11 @@
 # editing logic in core/ (cosmo_core).
 #
 # Native backend: GTK3 (window, file dialogs) + Cairo (the Artboard native
-# render adapter) + Fontconfig (registers the vendored DM Sans / JetBrains Mono
-# files at startup, see linux_main.cpp). Native-only; there is no web build.
+# render adapter) + FreeType. The typeface is COMPILED INTO the binary (R-FONT-1):
+# cmake/embed_fonts.cmake turns the vendored TTFs into a C++ array and
+# EmbeddedFonts.cpp hands them to CairoTarget::registerFontMemory, so there is no
+# font file to ship, no Fontconfig in the text path, and no dependency on what the
+# host has installed. Native-only; there is no web build.
 
 # UI-free session/editing/history/decode logic lives in core/ (target cosmo_core).
 # Optional itself — needs pkg-config + GTK3, see core/CMakeLists.txt — so the
@@ -17,9 +20,12 @@ if(TARGET cosmo_core)
   # cannot swallow the CLI's main().
   add_subdirectory(cli)
 
+  # touch/ is in the DESKTOP app's sources too (R-TOUCH-6): the same binary can draw the touch
+  # shell, so linux_main.cpp holds a PhoneApp and switches to it when the setting says so.
   file(GLOB COSMO_SOURCES CONFIGURE_DEPENDS
        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
-       ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp)
+       ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp
+       ${CMAKE_CURRENT_SOURCE_DIR}/touch/*.cpp)
 
   set(CAIRO_ADAPTER ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp)
 
@@ -33,7 +39,41 @@ if(TARGET cosmo_core)
   set(COSMO_APP_NOMAIN ${COSMO_SOURCES})
   list(REMOVE_ITEM COSMO_APP_NOMAIN ${CMAKE_CURRENT_SOURCE_DIR}/linux_main.cpp)
 
-  add_executable(cosmo ${COSMO_SOURCES} ${CAIRO_ADAPTER})
+  # ── R-FONT-1: the typeface is compiled into the binary ───────────────────────────
+  # A path baked in at build time (COSMO_SOURCE_DIR) made the app's own type depend on a
+  # directory next to the source tree, and Fontconfig made it depend on how the host resolves
+  # a family name. Neither is a thing the app's type may depend on, so the faces are generated
+  # into a C++ array here and handed to the render adapter directly (Artboard FR-22a).
+  #
+  # The generator is a `cmake -P` script on purpose: no xxd, no objcopy, no host codegen target
+  # to build first, so MSYS2 and Linux run the same line — and the custom command reruns only
+  # when a TTF or the script itself changes.
+  #
+  # Roboto is the UI face (three static weights, since a weight is a family name at the text
+  # stack level — Artboard FR-22); JetBrains Mono stays the numeric/filename face, embedded for
+  # the same reason. Every family string here must match a `font::` accessor in Theme.h.
+  set(COSMO_FONT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts)
+  set(COSMO_FONT_FILES
+      ${COSMO_FONT_DIR}/Roboto/Roboto-Regular.ttf
+      ${COSMO_FONT_DIR}/Roboto/Roboto-Medium.ttf
+      ${COSMO_FONT_DIR}/Roboto/Roboto-SemiBold.ttf
+      ${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf
+      ${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf)
+  set(COSMO_FONT_LIST
+      "Roboto|${COSMO_FONT_DIR}/Roboto/Roboto-Regular.ttf"
+      "Roboto Medium|${COSMO_FONT_DIR}/Roboto/Roboto-Medium.ttf"
+      "Roboto SemiBold|${COSMO_FONT_DIR}/Roboto/Roboto-SemiBold.ttf"
+      "JetBrains Mono|${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf"
+      "JetBrains Mono Medium|${COSMO_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf")
+  set(COSMO_EMBEDDED_FONTS ${CMAKE_CURRENT_BINARY_DIR}/EmbeddedFonts.generated.cpp)
+  add_custom_command(OUTPUT ${COSMO_EMBEDDED_FONTS}
+    COMMAND ${CMAKE_COMMAND} "-DFONTS=${COSMO_FONT_LIST}" -DOUT=${COSMO_EMBEDDED_FONTS}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_fonts.cmake
+    DEPENDS ${COSMO_FONT_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_fonts.cmake
+    VERBATIM
+    COMMENT "cosmo: embedding the typeface into the binary (R-FONT-1)")
+
+  add_executable(cosmo ${COSMO_SOURCES} ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS})
 
   target_include_directories(cosmo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -58,11 +98,15 @@ if(TARGET cosmo_core)
   pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
   target_link_libraries(cosmo PRIVATE PkgConfig::GTK3)
 
-  # ── Fontconfig: registers the vendored fonts as app-private fonts at startup ──
-  # Own prefix (not "FONTCONFIG") so this doesn't collide with launcher/android-
-  # shell's independent fontconfig check when both are configured in the same run.
-  pkg_check_modules(COSMO_FONTCONFIG REQUIRED IMPORTED_TARGET fontconfig)
-  target_link_libraries(cosmo PRIVATE PkgConfig::COSMO_FONTCONFIG)
+  # ── FreeType + cairo-ft: the embedded faces, without Fontconfig ──
+  # ARTBOARD_CAIRO_FT switches CairoTarget's text path to "a registered face wins, otherwise
+  # the toy API" (Artboard FR-22a), which is what lets the embedded bytes be used at all. It
+  # was previously an Android-only define; the desktop build takes it for the same reason
+  # Android did — no reliance on a system font database. Own prefix (not "FREETYPE") so this
+  # cannot collide with launcher/android-shell's independent checks in one configure run.
+  pkg_check_modules(COSMO_FREETYPE REQUIRED IMPORTED_TARGET freetype2)
+  target_link_libraries(cosmo PRIVATE PkgConfig::COSMO_FREETYPE)
+  target_compile_definitions(cosmo PRIVATE ARTBOARD_CAIRO_FT)
 
   # Baked into the binary so it can find assets/fonts relative to itself
   # regardless of the working directory it's launched from.
@@ -83,11 +127,11 @@ if(TARGET cosmo_core)
   #
   # GTK3 is here for GdkPixbuf only — NativeImageDecoder and ExportWriter are GdkPixbuf-
   # based and live in the app layer (R-SVC-7). No gtk_init() is ever called, so no display
-  # and no X server is needed, exactly as in cli/CMakeLists.txt. Fontconfig is linked so
-  # the shots use the app's OWN vendored DM Sans / JetBrains Mono rather than whatever the
-  # host's default sans happens to be — a shot in the wrong typeface measures the wrong
-  # text widths and would report overflow bugs that do not exist.
-  add_executable(cosmo_shots ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER}
+  # and no X server is needed, exactly as in cli/CMakeLists.txt. The embedded faces are
+  # linked in (${COSMO_EMBEDDED_FONTS}) so the shots draw in the app's OWN type rather than
+  # whatever the host's default sans happens to be — a shot in the wrong typeface measures the
+  # wrong text widths and would report overflow bugs that do not exist.
+  add_executable(cosmo_shots ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS}
                  ${CMAKE_CURRENT_SOURCE_DIR}/tests/shots/renderShots.cpp)
   target_include_directories(cosmo_shots PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -95,9 +139,9 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
   target_link_libraries(cosmo_shots PRIVATE artboard_core arstro_image cosmo_core
-                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FONTCONFIG)
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_shots PRIVATE
-    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
 
   # ── cosmo_ui_tests: assertions over the ASSEMBLED app ────────────────────────────────
   # The skill has asked for this target since P0.2 and it finally has a failure that demands
@@ -109,7 +153,7 @@ if(TARGET cosmo_core)
   #
   # Same libraries as cosmo_shots, for the same ODR reason its comment gives, and no display:
   # the assertions are about geometry and animated state, so frames go to a RecordingTarget.
-  add_executable(cosmo_ui_tests ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER}
+  add_executable(cosmo_ui_tests ${COSMO_APP_NOMAIN} ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS}
                  ${CMAKE_CURRENT_SOURCE_DIR}/tests/ui/uiTests.cpp)
   target_include_directories(cosmo_ui_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -117,10 +161,35 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
   target_link_libraries(cosmo_ui_tests PRIVATE artboard_core arstro_image cosmo_core
-                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FONTCONFIG)
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_ui_tests PRIVATE
-    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
   add_test(NAME cosmo_ui COMMAND cosmo_ui_tests)
+
+  # ── cosmo_touch_shots: the TOUCH shell, with no device (R-TOUCH-5) ───────────────────
+  # PhoneApp is Artboard Segments over CairoTarget, so the phone UI builds on this host as
+  # soon as it stops constructing its own Android decoder (it does — decode is the service's
+  # now, R-SVC-7). That is what turns the touch UI from "look at a phone" into something a
+  # shot renderer and a ctest can judge, in BOTH orientations.
+  add_executable(cosmo_touch_shots
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/touch/touchShots.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/touch/PhoneApp.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/touch/TouchIcons.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/Theme.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/EditCommands.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/EmbeddedFonts.cpp
+                 ${CMAKE_CURRENT_SOURCE_DIR}/widgets/Icons.cpp
+                 ${CAIRO_ADAPTER} ${COSMO_EMBEDDED_FONTS})
+  target_include_directories(cosmo_touch_shots PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
+  target_link_libraries(cosmo_touch_shots PRIVATE artboard_core arstro_image cosmo_core
+                        ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
+  target_compile_definitions(cosmo_touch_shots PRIVATE
+    COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
+  add_test(NAME cosmo_touch_layout COMMAND cosmo_touch_shots --assert)
 
   # The fixture-free subset as a ctest case: home (empty, with recents, with the settings
   # modal), the empty editor and the open transition need no display and no images on

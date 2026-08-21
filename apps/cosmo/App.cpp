@@ -1,4 +1,5 @@
 #include "App.h"
+#include "EditCommands.h"
 #include "core/PresetLibrary.h"
 #include "UiDump.h"          // findSegmentByType, to name the consumer
 #include "Log.h"
@@ -206,6 +207,15 @@ namespace cosmo_v2
             mSettings.useGpu = on;
             if (onSettingsChanged) onSettingsChanged(mSettings);
         };
+        // R-TOUCH-6: this view cannot swap ITSELF for another one — the host owns which shell
+        // exists. So it goes out as a settings command (the service stores and forwards it) and
+        // as the host notification every other row already uses; the host reads the flag and
+        // cross-fades between the two shells, keeping the project open.
+        mSettingsDialog->onTouchUi = [this](bool on) {
+            mSettings.touchUi = on;
+            emitCommand(editcmd::settings({{"touchUi", on ? "1" : "0"}}));
+            if (onSettingsChanged) onSettingsChanged(mSettings);
+        };
         mRoot->addChild(mSettingsDialog);
 
         // Batch export modal (R-EXPORT). Its two host seams: a native folder chooser
@@ -337,7 +347,7 @@ namespace cosmo_v2
         // (resetWorkspace restarts slot ids at 0, so the filmstrip thumb pool must
         // restart in lockstep or new cells would index the old project's thumbnails.)
         mLastAfterFrame = RenderService::Frame{};
-        mCenterStage->photo()->imageView()->clearImage();
+        mCenterStage->photo()->clearPhoto();
         mCenterStage->photo()->beforeView()->clearImage();
         mCenterStage->filmstrip()->clearThumbs();
         mCenterStage->breadcrumb()->setPath({});
@@ -347,20 +357,25 @@ namespace cosmo_v2
     {
         auto photo = mCenterStage->photo();
         const int mode = photo->mode();
-        auto setBefore = [&](std::shared_ptr<artboard::ImageView> view) {
-            if (const auto *b = mSession.renderBefore(); b && b->width > 0)
-                view->setImage(b->rgba.data(), b->width, b->height);
-        };
+        // R-VIEW-1: the stage is handed PIXELS and dissolves onto what is already there, so a
+        // render that lands mid-drag and a Before/After toggle both cross-fade. `mNowMs` is the
+        // frame clock — this is called from the frame loop and from the mode pill's callback,
+        // which has no time of its own to pass.
         if (mode == PhotoCanvas::Before)
         {
-            setBefore(photo->imageView());
+            if (const auto *b = mSession.renderBefore(); b && b->width > 0)
+                photo->setPhoto(b->rgba.data(), b->width, b->height, mNowMs);
         }
         else
         {
             if (mLastAfterFrame.width > 0)
-                photo->imageView()->setImage(mLastAfterFrame.rgba.data(), mLastAfterFrame.width, mLastAfterFrame.height);
+                photo->setPhoto(mLastAfterFrame.rgba.data(), mLastAfterFrame.width,
+                                mLastAfterFrame.height, mNowMs);
+            // Split's left half is a fixed reference, not a moving target: it changes when the
+            // photo does, not per adjustment, so it is set rather than dissolved.
             if (mode == PhotoCanvas::Split)
-                setBefore(photo->beforeView());
+                if (const auto *b = mSession.renderBefore(); b && b->width > 0)
+                    photo->beforeView()->setImage(b->rgba.data(), b->width, b->height);
         }
     }
 
@@ -1057,7 +1072,8 @@ namespace cosmo_v2
         for (int s : cosmo::AppSettings::uiScales())
             if (scaleFitsDisplay(s)) maxScale = s;
         mSettingsDialog->show(mUiScale, maxScale, mSettings.previewEdge, mSettings.threads,
-                              mSettings.cpuPercent, mSession.useGpu(), mSession.gpuAvailable());
+                              mSettings.cpuPercent, mSession.useGpu(), mSession.gpuAvailable(),
+                              mSettings.touchUi);
     }
 
     namespace
@@ -1274,7 +1290,12 @@ namespace cosmo_v2
         target.setFill(fg);
         target.drawText("cosmo", x, base, sz, font::sansSemiBold(), sp);
         target.setFill(dot);
-        target.drawText(".", x + estimateTextWidth("cosmo", sz), base, sz, font::sansSemiBold(), sp);
+        // MEASURED, not estimated (R-G-2a): the dot has to touch the word, and
+        // estimateTextWidth is `len * px * 0.6` — font-independent by construction, so it
+        // detached the moment the typeface changed. SplashScreen and the phone shell already
+        // measure; these two sites were the stragglers.
+        target.drawText(".", x + target.measureText("cosmo", sz, font::sansSemiBold(), sp),
+                        base, sz, font::sansSemiBold(), sp);
     }
 
     void App::renderTransition(IRenderTarget &target, double nowMs)

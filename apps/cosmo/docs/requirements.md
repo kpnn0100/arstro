@@ -237,17 +237,184 @@ animates its width over `kRailAnimMs=200 ms` driven by an `Observable<bool> mRai
 Vertical stack: `PhotoCanvas` (fills), `Breadcrumb` (`kHeight=22.75`), `Filmstrip`
 (`kHeight=86`) (`CenterStage.cpp:21-35`).
 
+### DR-TOUCH-1 The touch shell binds to the service (R-TOUCH-1)
+`PhoneApp(cosmo::CosmoService &svc, double w, double h)` ([touch/PhoneApp.h](../touch/PhoneApp.h))
+holds the service by reference and owns **no** session — it used to declare
+`cosmo::EditSession mSession`, so the phone was a second application that happened to link the same
+library: nothing it did could be scripted, dumped, or driven over the control socket, and its edits
+never passed through a `Command`.
+
+Every write now leaves as one. `Tray`, `SheetLayer` and `EditorScreen` each take the service and
+expose two members: `sess()` (the transitional READ accessor the desktop App also keeps until S4
+moves ownership in) and `emit(Command)` (the only way out). The 20-odd `applyParams(np)` calls
+became commands:
+
+- scalars, curves, crop, quarter-turns → **`editcmd::diff(*p, np)`**, which serialises both sides
+  with `serializeParams` and sends only the keys that differ, so a view that edits a whole
+  `EditParams` needs no per-field table and can never accept fewer keys than a project file does.
+- masks → `editcmd::addMask` / `maskSet` / `maskDelete`, because a `mask=` line **appends** on parse
+  (`EditParamsIO.cpp:200`) and a diff therefore cannot express "edit mask 2". The four mask sliders
+  carry their index for exactly this reason.
+- undo/redo/group/ungroup → their own commands; preview quality, thread count and GPU → `settings
+  set`, which also removed a direct `par::setThreads` call from the UI (a second owner of the CPU
+  budget, R-SVC-10).
+- preview frames → `mSvc.takeFrame(f)` instead of `renderService().tryAcquire`, so the service is
+  the single caller that moves a frame out (R-SVC).
+- decode → `Command::Import`, so the codec left the view (R-SVC-7). It had constructed an
+  `AndroidImageDecoder` inline, which is also what made the whole file unbuildable off Android.
+
+**And it takes its whole picture from the model.** `PhoneApp::syncFromModel()` runs at construction
+and whenever `AppModel::revision` moves, setting the screen (`model().screen`, or Loading while
+`load.active`), the project name, the empty state, the edit-target controls and Home's cards
+(`model().recents`). Nothing about a project is kept locally: the shell's own `mRecents`, `mImgs`,
+`buildSession`, `enterProject`, `pushRecent` and `refreshHome` are gone. New / Open / Import are host
+seams (`onNewProjectRequested` / `onOpenRequested` / `onImportRequested`, wired by the desktop host
+to the SAME native dialogs the desktop shell uses, and falling back to the shell's own browser on a
+phone host), a recent card dispatches `project open <path>`, and `finishProject` asks for
+`screen editor` instead of deciding. Entering the editor over an already-loaded project re-selects
+the current image, because no render is in flight and the stage would otherwise stay empty until the
+next edit. This is D-39: without it the shell showed its own empty Home after a mode switch, and its
+Home actions could have reset the workspace the other view was looking at.
+
+The UI→Command mapping is shared, not duplicated: [EditCommands.h](../EditCommands.h) holds the
+number/blob formatting and the command builders, and **both** shells call it — `RightColumn`'s local
+`num`/`pointsStr`/`maskBlob`/`adjustFields` are now `using` declarations of the shared ones
+(R-TOUCH-1's one-mapping rule).
+
+### DR-TOUCH-6a Touch mode is a persisted setting (R-TOUCH-6, core half)
+`AppSettings::touchUi` (default false) round-trips through `settings.txt` like every other
+preference, and `CosmoService::applySettingsFields` accepts `touchUi=0|1`
+([core/service/CosmoService.cpp:382](../core/service/CosmoService.cpp#L382)) — stored in
+`AppModel::settings`, emitted as `SettingsChanged`, printed as `settingsTouchUi` by `formatModel`,
+and never acted on by the service. It is the second store-and-forward view key after `uiScale`, for
+the same reason: which shell a host draws is not something the service may know about (R-SVC-3).
+
+Being in the grammar is what makes it useful beyond the dialog: `settings set touchUi=1` from a
+script, from `cosmo-cc` or over the control socket puts the touch shell on screen, so the touch UI
+can be driven and shot on a desktop host with no device (R-TOUCH-5). Guarded by
+`test_settings_and_dump_options_reach_the_model` (the command, the model, the dump, and back) and the
+settings roundtrip test (it survives a restart; a file that predates the key gets the desktop shell).
+
+### DR-TOUCH-6b The desktop window can draw the touch shell (R-TOUCH-6, host half)
+The Settings dialog gains a sixth row, **Input** — chips `Mouse` / `Touch`, labelled by what you
+get rather than "Off/On", with the middot suffix "touch keeps your project open" because that is the
+question a user actually has ([widgets/SettingsDialog.cpp](../widgets/SettingsDialog.cpp)). The
+callback does not swap anything itself: a view cannot replace itself with a different view, so it
+sends `settings set touchUi=…` and notifies the host, exactly like every other row.
+
+The host ([linux_main.cpp](../linux_main.cpp)) holds `std::unique_ptr<cosmo_touch::PhoneApp> phone`
+beside its `App`, built on first use and kept afterwards, and `setTouchMode` eases
+`Host::touchFade` between them (260 ms, `EaseOutCubic`). While the fade is in flight both shells are
+drawn, each inside `pushLayer(alpha)`; at rest only one is drawn and no layer is opened, so the
+common case costs what it did before. **Both shells bind to the same `CosmoService`**, which is what
+makes this a live switch rather than a restart: the open project, the selection, the parameters and
+the undo history are the service's, so nothing reloads.
+
+Input and layout follow the active shell: pointer, motion and wheel go to the phone shell in touch
+mode with the viewport offset subtracted, and `onSizeAllocate` re-measures both.
+
+`TouchViewport.h` holds the rule for WHERE the phone shell sits, in its own header so the shot
+renderer uses the same one: a portrait-ish window gets the whole thing, a window wider than tall gets
+a centred **430 dp portrait column** with the app background painted around it. That letterbox is
+deliberate and dated — the touch shell has no landscape layout yet (D-38 / ledger T2) — and it
+collapses to "fill the window" when the two-pane layout lands.
+
+`PhoneApp::setOrigin(x, y)` exists because of that: the shell offsets **itself**. A translate applied
+by the caller is wiped on the first node, since the tree sets the transform absolutely (`CairoTarget`
+maps `setTransform` onto `cairo_set_matrix`) — the first shot of the desktop window in touch mode drew
+the column flush left, which is how this was found rather than shipped.
+
+Shown by `cosmo_touch_shots --only desktop-touch` (1600×1000: the phone column centred, letterboxed,
+its tray and tool bar clean at that height) and by launching the real app with `touchUi=1` seeded in
+`settings.txt` — it comes up in the touch shell and stays up.
+
+### DR-TOUCH-5 The touch shell renders with no device (R-TOUCH-5)
+`cosmo_touch_shots` ([tests/touch/touchShots.cpp](../tests/touch/touchShots.cpp)) builds `PhoneApp`
+over a real `CosmoService` on the desktop host and either renders every state to PNG or (`--assert`,
+run by `ctest -R cosmo_touch_layout`) checks that the shell builds, renders, takes a photo into the
+model and survives a rotation at **393×852**, **360×780** and **852×393**. It drives the editor the
+way a user does — `finishProject` only registers the project on Home, so the harness taps the first
+recent card.
+
+What the first renders showed, which is why this had to exist before any layout work: the portrait
+editor's action bar (Save / Import / Export) is drawn **over** the last slider row, and in landscape
+the tray, the section chips, the action bar and the tool bar all occupy the same pixels — R-TOUCH-2
+and R-TOUCH-3 are unimplemented, not merely unpolished (D-38).
+
+### DR-FONT-1 The typeface is compiled into the binary (R-FONT-1…4)
+`cmake/embed_fonts.cmake` turns the five vendored TTFs into `EmbeddedFonts.generated.cpp` in the
+build dir — `file(READ … HEX)` plus one regex, so there is no `xxd`, no `objcopy` and no host
+codegen target, and MSYS2 runs the same line as Linux. The `add_custom_command` in
+[CMakeLists.txt](../CMakeLists.txt) depends on the TTFs and the script, so it re-runs only when one
+changes, and the generated file is compiled into `cosmo`, `cosmo_shots` and `cosmo_ui_tests` alike
+(R-FONT-4).
+
+`registerEmbeddedFonts()` ([EmbeddedFonts.cpp](../EmbeddedFonts.cpp)) is the only code that pairs a
+family NAME with bytes (R-FONT-3); it calls `artboard::CairoTarget::registerFontMemory` per face,
+which builds an `FT_Face` over the static array without copying it (Artboard FR-22a). The desktop
+build therefore defines `ARTBOARD_CAIRO_FT` — previously Android-only — which switches
+`CairoTarget::drawText`/`measureText` to "a registered face wins, otherwise the toy API", and links
+`freetype2` instead of `fontconfig`. **Nothing in cosmo calls Fontconfig any more.**
+
+The families are `Roboto` / `Roboto Medium` / `Roboto SemiBold` (UI) and `JetBrains Mono` /
+`JetBrains Mono Medium` (numerics, filenames), matching `Theme.h`'s `font::` accessors name for name.
+The binary carries ~880 KB of face data and `strings` finds every family in it, which is the cheapest
+proof that the embedding worked.
+
+One visible consequence, fixed in the same change: the wordmark's accent dot was placed with
+`estimateTextWidth` (`len * px * 0.6`, font-independent), so it detached from the `o` as soon as the
+typeface changed. `App::renderWordmark` and `HomeScreen`'s sidebar now measure, like `SplashScreen`
+and the phone shell already did (R-G-2a as amended).
+
 ### DR-PHOTO-1 Photo canvas
 A `#0A0A0A` backdrop behind an `ImageView` (Contain fit). The main image shows the edited
 ("After") frame; Before shows the geometry-only baseline (`renderBefore`); Split shows the before
 image clipped to the left half with a 1.5 px seam (`refreshPhotoForMode`, `App.cpp:233-252`;
 `PhotoCanvas.cpp:75-105`). A Before/Split/After `SegmentedControl` pill sits bottom-center.
 
+### DR-PHOTO-1a The photo dissolves (R-VIEW-1, R-VIEW-2)
+`PhotoCanvas` holds two stacked `ImageView`s and one animated property — `mPhotoTop->opacity` — so a
+new render is a cross-dissolve rather than a pixel swap: `App::refreshPhotoForMode` calls
+`photo->setPhoto(rgba, w, h, nowMs)` ([App.cpp:346](../App.cpp#L346)) and
+`PhotoCanvas::setPhoto` ([widgets/PhotoCanvas.cpp:145](../widgets/PhotoCanvas.cpp#L145)) puts the
+pixels in whichever view is hidden and eases the top's opacity toward it (160 ms, `Easing::Linear`).
+The composite is `a·top + (1−a)·bottom`, so the layer being covered stays opaque and the canvas
+never shows through mid-dissolve; nothing is copied between views, and successive renders simply
+dissolve in alternating directions.
+
+During a drag renders arrive faster than the dissolve, so an interruption is the normal case, and
+**the frame waits** (R-VIEW-1a): `setPhoto` copies it into `mHeld` while
+`mPhotoTop->opacity.isAnimating()`, and `PhotoCanvas::advance` applies it through `showPhoto` once
+the dissolve settles — the only moment the hidden view's weight is exactly zero. Writing pixels into
+a layer that is on screen steps the composite by that layer's weight times the difference between
+two renders, which is what the first version did (it reversed the dissolve in place) and what the
+user reported as the photo blinking. The second half of the same report was the covered-layer
+optimisation reading the PREVIOUS frame's alpha, so the base was hidden for the first frame of every
+1→0 dissolve and the canvas showed through: `mPhotoBase->visible` is now set at the END of
+`advance`, after the opacity update and after the held frame, and before anything is drawn
+(R-VIEW-1e). The curve is `Easing::Linear` over 160 ms rather than the house `EaseOutCubic`, because
+16 ms into a 120 ms ease-out is already 35% of the way across and one frame carrying a third of the
+change reads as a cut. It sets instead of dissolving only for the first photo (nothing to travel
+from) and for a frame of a different **shape** (`sameShape`, half a percent of aspect slack, so a
+preview at another resolution still dissolves) — there both views take it so no stale pixels peek
+around it (R-VIEW-1b/1c).
+
+Guarded by `theStageNeverBlinksDuringADrag` in `cosmo_ui_tests`, which drives 100 adjustments (a new
+exposure every third frame) and asserts two per-frame facts off the recorded op stream: every
+see-through photo has the one it came from drawn underneath it, and no frame re-uploads the pixels of
+a photo whose **contribution** to the composite (`w · ∏(1−w_above)`, not its own alpha) exceeds one
+animation step. Both assertions were run against the shipped behaviour first, and both fail on it.
+
+Mode changes ride the same seam (R-VIEW-2): Before↔After dissolves because it is just another
+`setPhoto`, and `applyMode` now records a wanted state that `PhotoCanvas::advance` turns into an
+opacity tween on the split clip and its seam instead of a `visible` flip.
+
 ### DR-PHOTO-2 Zoom & pan (R-ZOOM)
 Ctrl+wheel over the photo zooms about the cursor in 1.15× notches, clamped 1×–8×
 (`App.cpp:423-438`, `PhotoCanvas::zoomAbout`); plain wheel does not zoom. While zoomed, press-drag
-pans; before + after views share one zoom/pan so the split seam stays aligned
-(`PhotoCanvas.cpp:133-137`). Each zoom step scales preview render resolution
+pans; EVERY view on the stage — the dissolving pair and the split's before-view — shares one
+zoom/pan so the seam stays aligned and a view cannot slide into place under the next dissolve
+(`PhotoCanvas::zoomAbout`/`resetZoom`/`handleGesture`, R-ZOOM-3 as amended by R-VIEW-1). Each zoom step scales preview render resolution
 (`EditSession::setPreviewZoom`) and resets to base at 1× or on image change. R-ZOOM-5 (eased zoom)
 is deferred to an Artboard `ImageView` change; today zoom applies per notch.
 
@@ -362,6 +529,16 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
   them with the shared `curve::sample()` for its LUT, so the drawn curve and the render never
   diverge, and a saved project restores the exact editable curve. A Reset button flattens the
   active channel.
+  **What the engine does with those curves (R-MIXER):** each channel's `y` is scaled by
+  `smoothstep(ColorMixer::kChromaFloor, kChromaFull, chroma)` — `0.010 → 0.040` in linear light — so a
+  pixel that is indistinguishable from neutral receives **nothing** and a coloured pixel receives the
+  curve in full ([core/ImageProcessing/src/color/ColorMixer.cpp:98](../../../core/ImageProcessing/src/color/ColorMixer.cpp#L98)).
+  Without it the Lum channel gave every pixel of a flat grey a different full-strength lift, because
+  hue at zero chroma is noise: measured at 110× the luminance spread on a synthetic patch and **624×**
+  on the flattest patch of a real X-Trans frame, against 1.00× with the weight. The editor is
+  unchanged — this is entirely in the engine — but the panel's effect on a desaturated region is
+  deliberately smaller now (R-MIXER-3).
+
 - **CurvePanel**: an RGB/R/G/B picker + Reset over a tone-curve plot that edits with the **same
   UX as the mixer's HueCurveEditor** — points are **bezier `CurvePoint`s** (`EditParams::curve` /
   `curveChannel`, same model + `curve::sample` sampler): **corners** (straight segments) by
@@ -1160,7 +1337,7 @@ how far it got. On Windows additionally
 (`TestMain.h:71`) and a `SIGABRT` handler that prints one line and calls `std::_Exit(3)`
 (`TestMain.h:52-58,81`).
 
-**Why a signal handler and not `_set_abort_behavior`** (D-36): msvcrt declares `_set_abort_behavior`
+**Why a signal handler and not `_set_abort_behavior`** (D-40): msvcrt declares `_set_abort_behavior`
 unconditionally in `<stdlib.h>` but `libmsvcrt.a` exports no such symbol — it lives only in the UCRT
 import library — so on the MSYS2 MINGW64 toolchain the call compiles and then fails at **link** time
 with `undefined reference to __imp__set_abort_behavior`. `abort()` raises `SIGABRT` on both CRTs, and
@@ -1173,7 +1350,7 @@ The header also **undoes what `<windows.h>` leaks** (`TestMain.h:39-41`): `WIN32
 empty `near` macro turned that into `expected unqualified-id before 'double'`, a diagnostic that
 names neither the macro nor the header.
 
-**Verified on MSYS2/MINGW64**, which is what D-10 left outstanding and D-36 turned into a build
+**Verified on MSYS2/MINGW64**, which is what D-10 left outstanding and D-40 turned into a build
 failure — a probe including this header, with one deliberately failing `assert`:
 
 ```
@@ -1357,6 +1534,34 @@ at 480x320 in 32.1 ms end to end. A cover is drawn at 480 px, so the full demosa
 ~1200x the pixels it would ever show — and it ran **inline in the GTK splash tick**, which is why
 the splash froze mid-animation and the status text set two lines above it was never painted before
 the freeze began. The home screen's covers come from the same call.
+
+### DR-SPLASH-5b The preview is turned the way the photo is (R-THUMB-1)
+`NativeImageDecoder::applyFlip(DecodedImage&, int flip)`
+([core/decode/NativeImageDecoder.cpp:245](../core/decode/NativeImageDecoder.cpp#L245)) is LibRaw's
+own `flip_index` math (`&4` transposes, `&2` mirrors rows, `&1` mirrors columns) applied to an RGBA
+buffer; `decodeThumb` calls it with `raw.imgdata.sizes.flip` after pulling the embedded preview
+([NativeImageDecoder.cpp:307](../core/decode/NativeImageDecoder.cpp#L307)).
+
+The bug it closes: `dcraw_process` applies `sizes.flip` to a **full** decode, but
+`dcraw_make_mem_thumb` hands the camera's preview back exactly as stored. Measured on this
+project's own files, `sizes.flip == 5` (a quarter turn) on 18 of 19 sample RAWs — so
+`DSCF5186.RAF` decoded to **4170x6246 portrait** while its cover came back **4416x2944 landscape**.
+Every portrait shot's project card and loading cover was lying on its side next to its own photo.
+
+A preview a maker already stored upright must not be turned twice, and a quarter turn swaps the
+aspect — so the flip is applied only when the preview's own aspect still matches the **sensor**
+frame (`sizes.width >= sizes.height`), which is exactly the case of a preview that has not been
+turned yet. A 180-degree flip swaps nothing and therefore offers no such signal; it is applied,
+which is what the camera's flag asks for. The no-preview fallback (`decodeRaw`) is already oriented
+by `dcraw_process` and is left alone.
+
+Verified two ways rather than from the flag (R-THUMB-3): a unit test
+(`test_a_thumbnail_is_turned_the_way_the_photo_is`) pins all four turns against a hand-computed 3x2
+whose every pixel is identifiable — a 180-degree error passes an aspect-only check — and a probe
+over the real RW2/RAF/JPEG set box-averages `decodeThumb` and `decodeFile` onto one grid and picks
+the rotation that matches best: **no extra flip** wins on every file (rms 50.0 vs 81.0, 59.4 vs
+82.9, 10.2 vs 36.3, 0.43 vs 41.2 against the 180-degree alternative), with the aspect agreeing on
+all four.
 
 Host: `startSplash` creates a **borderless, non-resizable, centred** `GTK_WINDOW_TOPLEVEL`
 (`gtk_window_set_decorated(FALSE)`, `GDK_WINDOW_TYPE_HINT_SPLASHSCREEN`) with its own drawing area

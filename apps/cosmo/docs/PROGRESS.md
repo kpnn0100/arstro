@@ -44,9 +44,14 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-19 · Last commit: D-36, the test harness header builds on the Windows host it
+Last updated: 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
+**D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
+clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on
+merge — see the top of the decisions log), the test harness header builds on the Windows host it
 was written for — `_set_abort_behavior` is UCRT-only and `<windows.h>` was leaking `near` into a
-suite that declares it. R-TEST-1/2 added; D-10's "Windows half code-verified only" is discharged.
+suite that declares it. R-TEST-1/2 added; D-10's "Windows half code-verified only" is discharged. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
+stage) rather than only finished results — the nine seconds of "Preparing…" are gone.
 
 **Milestone S is COMPLETE** (S1…S5). The §5 checks all pass: a CLI dump and a GUI dump of the same
 project are byte-identical, no widget reaches past the service, every behaviour is a command,
@@ -84,6 +89,160 @@ amending **R-LOADPERF-1**; **R-SETTINGS-1** and **R-HOME-8** are amended by U1.2
       launcher (Home advances/renders/routes to the dialog that lives in the editor tree), plus the
       CPU-limit chip row (25/50/75/100). Three `cosmo_widget_tests` assertions; verified end-to-end
       by rendering the real `App` driven by real pointer events at two window sizes.
+
+## T — the touch shell: one core, two UIs (R-TOUCH)
+
+Asked for on 2026-08-20: "use the same theme, make a touch version of cosmo suitable for a small
+touch screen", with three added rules — **no component overlap**, **works in both orientations**,
+**touch-friendly, especially curves** — plus "the same view/view-model mechanism so the same core can
+run a different UI", Android first, and Android GPU adapters for the three core libraries.
+
+Decisions taken with the user before any code (so no other machine re-litigates them):
+1. **Service binding first**, before any new screen — everything else sits on it.
+2. **Landscape is two-pane**: photo left, the active tray a fixed right-hand panel (~40% width), so
+   nothing is ever over the photo. Portrait keeps one column.
+3. **Curves get a fullscreen editor with a loupe** and direct drag (≥24 dp grab, tap selects the
+   nearest node), not a curve inside the tray.
+4. **GPU work: ImageProcessing stage coverage + an Artboard GLES render adapter.** DSP is **not** in
+   scope (cosmo does not use it).
+
+- [x] **T1** The touch shell binds to the service, and can be seen without a device (**R-TOUCH-1**,
+      **R-TOUCH-5**). `PhoneApp` takes a `CosmoService&` and owns no session; every write is a
+      `Command` (`editcmd::diff` for whole-`EditParams` edits, the mask commands for masks, `settings
+      set` for preview/threads/GPU — which also removed a direct `par::setThreads` from the UI);
+      frames come from `takeFrame`; decode moved behind the service's factory, which is what made the
+      file buildable off Android at all. The UI→Command mapping is **shared** with the desktop
+      (`EditCommands.h`; `RightColumn`'s local formatters are now `using` declarations of it).
+      New `cosmo_touch_shots` renders every state at 393×852, 360×780 and 852×393 and asserts the
+      shell builds, renders, takes a photo into the model and survives a rotation (`ctest -R
+      cosmo_touch_layout`). Its first frames immediately found **D-38**
+- [x] **T1a** **Touch mode is a setting on the desktop** (**R-TOUCH-6**, asked for directly:
+      "make me a setting in desktop version that change UI to touch mode"). Core half:
+      `AppSettings::touchUi`, persisted, `settings set touchUi=1`, stored-and-forwarded by the
+      service like `uiScale` and printed in the model dump. Host half: a sixth Settings row
+      (**Input** — `Mouse` / `Touch`), and `linux_main.cpp` holding a `PhoneApp` beside `App`,
+      cross-faded (260 ms) with both drawn through `pushLayer` while the switch is in flight.
+      Both shells share the service, so the project, selection, parameters and undo history
+      survive the switch — nothing reloads. In a window wider than tall the phone shell is drawn
+      in a centred 430 dp column (`TouchViewport.h`, shared with the shot renderer) because
+      there is no landscape layout yet — a dated letterbox, not the end state. Found by looking:
+      the first shot drew the column flush left, because the tree sets the transform absolutely
+      and an outer translate is wiped — hence `PhoneApp::setOrigin`. Verified by the
+      `desktop-touch` shot and by launching the real app with `touchUi=1` seeded
+- [x] **T1b** **The touch shell is a view, not a second owner** (**R-TOUCH-1** tightened, closes
+      **D-39**). Reported the moment touch mode shipped: switching showed no project. The shell
+      kept its own screen, its own recents and its own `buildSession` — whose first line was
+      `resetWorkspace()`, so its Home actions could have thrown away the project the desktop view
+      had open. `syncFromModel()` now adopts the service's screen, project, edit target and
+      recents on construction and on every revision change; the local lifecycle is deleted; New /
+      Open / Import are host seams ending in commands (the desktop host wires them to its own
+      dialogs); entering the editor re-selects so a preview actually arrives. Asserted by a
+      harness case that opens a project with NO touch shell alive and then builds one, plus the
+      `adopted` shot
+- [ ] **T2** **No overlap, and both orientations** (**R-TOUCH-2**, **R-TOUCH-3**, closes **D-38**).
+      Portrait: the tray gets its own box and the photo's box SHRINKS for it (no overlay); the row
+      list is measured against the space left above the action bar and scrolls. Landscape: the
+      two-pane layout. Then the assert mode gains the sibling-rect intersection check, and both
+      orientations get shots at rest and mid-rotation
+- [ ] **T3** **Touch sizing pass** (**R-TOUCH-4** minus curves): every hit band ≥44 dp, slider rows
+      ≥48 dp, ≥8 dp apart, asserted from the shell's own hit zones rather than by eye
+- [ ] **T4** **The fullscreen curve editor** (**R-TOUCH-4**): whole-screen plot, ≥24 dp grab radius,
+      tap selects the nearest node, and a loupe offset above the finger so the fingertip never covers
+      the node it is placing. Mixer/hue curves on the same screen
+- [ ] **T5** **The rest of the editing surface on touch**: mask tray + on-canvas overlay, grade and
+      xform trays, filmstrip + breadcrumb + group indicators, pinch-zoom and two-finger pan
+      (M4–M7 of `docs/android.md`, now with a harness behind them)
+- [ ] **T6** **ImageProcessing: more stages on the Android GPU.** The GLES compute backend covers
+      exposure / contrast / white balance / sRGB encode; extend it to tone curve, tone regions,
+      clarity/texture, sharpen and masks, each conformance-tested against the CPU reference
+- [ ] **T7** **Artboard: a GLES render adapter.** Draw the UI on the GPU instead of software Cairo
+      (a new `IRenderTarget` adapter in the Artboard repo, via `implement_artboard`) — for UI
+      smoothness and battery on device, and reusable by every Arstro app on Android
+
+## U3 — reported 2026-08-21
+
+- [x] **U3.1** (engine) The Mixer's Lum curve no longer lights up noise in grey areas
+      (**R-MIXER-1…4**, `arstro_image` commit). Asked as a question first — "is it make sense for
+      lum curve that lower saturation receive less amount of lum" — and the answer was yes, for a
+      numerical reason: hue is derived by dividing channel differences by chroma, so on a neutral
+      pixel it is decided by noise, and the additive Lum channel then gave each pixel of a flat
+      grey a different full-strength lift. Every mixer channel is now scaled by
+      `smoothstep(0.010, 0.040, chroma)`, weighted on **chroma** rather than HSL saturation
+      (saturation is normalised by lightness, so it lies in the shadows — exactly where noise
+      lives). Measured: a noisy grey patch's luminance spread went 0.00240 → 0.26549 unweighted
+      and 0.00240 → 0.00240 weighted; on a real X-Trans frame the flattest patch went 0.00025 →
+      0.15329 (**×624**) unweighted and ×1.00 weighted, with the most colourful patch in the same
+      frame moving identically either way. Test fails on the unweighted code, checked by
+      re-breaking it
+
+## U2 — what the photographer reported on 2026-08-20
+
+Two items, in the user's words: **(1)** "thumbnail photo shouldn't be rotate, just use original image
+and crop"; **(2)** "make the edit more smooth by duplicate the photo on UI, photo will be fade from
+current to new photo with adjustment when doing adjustment on slider". Requirements: **R-THUMB**
+(new) and **R-VIEW** (new). Item 1 is core-owned (`core/decode/`), item 2 design-owned
+(`widgets/PhotoCanvas`) — two commits, core first.
+
+- [x] **U2.1** (core) A cover is turned the way its photo is (**R-THUMB-1**). `dcraw_process`
+      applies the RAW's `sizes.flip`; `dcraw_make_mem_thumb` does not, and `sizes.flip == 5` on 18
+      of the 19 sample RAWs — so `DSCF5186.RAF` decoded to 4170x6246 portrait while its project card
+      showed a 4416x2944 landscape cover. `NativeImageDecoder::applyFlip` (LibRaw's own `flip_index`
+      math) is applied to the embedded preview, guarded by the preview's own aspect so a maker that
+      already stores it upright is not turned twice. The crop half of the report was already right:
+      covers and filmstrip cells are `Fit::Cover` (**R-THUMB-2**), which crops rather than distorts.
+      Verified both ways (**R-THUMB-3**): a unit test pinning all four turns against a hand-computed
+      3x2, and a probe over the real RW2/RAF/JPEG set where `decodeThumb` and `decodeFile` now agree
+      on aspect and need **no extra rotation** to match (rms 50.0/59.4/10.2/0.43 against
+      81.0/82.9/36.3/41.2 for the 180-degree alternative)
+- [x] **U2.2** (design) The photo dissolves instead of popping when an adjustment lands
+      (**R-VIEW-1**, **R-VIEW-2**). `PhotoCanvas` holds two stacked `ImageView`s and ONE animated
+      property — the top one's opacity — so the composite is `a·top + (1−a)·bottom`: a true
+      cross-dissolve with no dip through the canvas, no pixels copied between views, and
+      successive renders dissolving in alternating directions. A render arriving mid-dissolve
+      reverses it instead of restarting (during a drag that is the normal case). The public seam
+      is `setPhoto(rgba, w, h, nowMs)`, so the Before/After toggle dissolves for free, and Split's
+      clip + seam now fade instead of flipping `visible`. Also closed R-ZOOM-3's stale wording (it
+      said "both views"; there are three) and stopped drawing the fully covered layer.
+      Verified three ways: `cosmo_ui_tests` asserts off the recorded op stream that mid-dissolve
+      there are TWO stage photos inside a fractional layer whose alpha MOVES, and one photo with
+      no layer at rest; `cosmo_shots --only editor-dissolve` renders early/late frames of one
+      dissolve at 1600x1000 and 1280x800 (looked at, the blend is visible in both); all 16 ctest
+      suites green
+- [x] **U2.2a** (design) The dissolve no longer blinks (**R-VIEW-1a** amended, **R-VIEW-1e** new,
+      **D-37**). U2.2's own report back from the user: "it doesn't smooth, make the photo blink when
+      transition" — and it was two per-frame bugs, neither visible in the code's shape. **(1)** The
+      covered-layer optimisation read the PREVIOUS frame's alpha, so the base was out of the tree
+      for the first frame of every 1→0 dissolve and the canvas showed through the partly
+      transparent top: one dark frame per render, about 8 Hz through a drag. **(2)** A render
+      arriving mid-dissolve was written into the layer that still carried weight `1−a` — R-VIEW-1a
+      called that residual acceptable and it is not; the newest frame is now HELD and applied when
+      the dissolve settles, at the only moment a write is invisible. Also swapped `EaseOutCubic`
+      for **linear over 160 ms**: an ease-out is 35% across after one frame, so the first frame
+      carried a third of the change and read as a partial cut. Guarded by
+      `theStageNeverBlinksDuringADrag`, which drives 100 adjustments and asserts both per-frame
+      facts off the op stream — **checked against the shipped code first: both assertions fail on
+      it** — plus a re-rendered `editor-dissolve` pair at two sizes, looked at
+- [x] **U2.4** (core + design) The typeface travels inside the binary, and it is Roboto
+      (**R-FONT-1…4**, **R-G-2a** amended, Artboard **FR-22a**). Asked for as "copy this font to
+      this repo … use this font for the app to make sure consistent UI between platform, embed the
+      font directly into binary build". Roboto Regular/Medium/SemiBold vendored under
+      `assets/fonts/Roboto/` with its OFL; `cmake/embed_fonts.cmake` generates a C++ array from the
+      five faces (Roboto + JetBrains Mono, which stays the numeric face) and
+      `registerEmbeddedFonts()` hands them to `CairoTarget::registerFontMemory` — so **Fontconfig
+      is out of cosmo entirely**, `ARTBOARD_CAIRO_FT` is on for the desktop build, and the binary
+      draws its own glyphs with nothing to find on disk. `cosmo_shots` and `cosmo_ui_tests` share
+      the one registration, so a shot measures the app's real text. Fell out of it: the wordmark's
+      accent dot was placed with `estimateTextWidth` (`len·px·0.6`, font-independent) and detached
+      from the `o` under the new face — both stragglers now measure, like `SplashScreen` and the
+      phone shell already did, and R-G-2a says so. Verified by `strings` finding every family in
+      the binary, home + editor shots at two sizes in Roboto with the dot tight against the word,
+      and all 16 ctest suites green
+- [ ] **U2.3** (design) The **phone** stage dissolves too — `touch/PhoneApp.cpp:872/891`
+      (`EditorScreen::mPhoto` / `setPhoto`) still replaces its pixels in one frame. Same fix as
+      U2.2, ~20 lines: a second `ImageView`, one opacity, the same "newest pixels into the hidden
+      view" rule, plus `mNowMs` threaded through `setPhoto`. Deliberately deferred, not missed
+      (**R-VIEW-1d**): that shell has no headless test or shot target, so landing it needs the
+      harness first or it ships unverified
 
 ## S — the core as a service (R-SVC-1…10)
 
@@ -194,7 +353,7 @@ Each task is one session. Specs: `arstro.cosmo.core.implement` §5–§6 (A1–A
 - [x] **D-10** (was folded into P0.3/P0.11) `core/tests/TestMain.h` — a failing assert now exits
       non-zero with its message intact through a redirect, instead of hanging where a red suite
       looked like a slow one. **The MSYS2 confirmation this line asked for happened on 2026-08-19
-      and failed: the header did not build on Windows at all (D-36).** Now fixed and measured
+      and failed: the header did not build on Windows at all (D-40).** Now fixed and measured
       there — exit 3 in 0.18 s — so the caveat is discharged and the harness has a requirement,
       R-TEST-1/2
 - [x] **P0.4** `Log`: level honoured (compared before formatting), categories **derived** from the
@@ -304,7 +463,119 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
-- **2026-08-19 (D-36) — "Code-verified on Windows" is not verified, and the harness now has a
+- **2026-08-21 (merge) — Two machines allocated D-36 at the same time, and the published one
+  keeps it.** This machine filed the `TestMain.h` Windows build break as D-36 on 2026-08-19 while
+  origin filed the render-worker NaN crash as D-36; both branches read "next free id: D-36" from a
+  common ancestor whose counter was itself stale (it said D-25 with D-35 already filed). Origin's
+  D-36 had been pushed and is referenced from `tests/shots/renderShots.cpp`, so it keeps the id and
+  the local one was renumbered **D-36 → D-40** everywhere it is named (DEFECTS.md, this file,
+  REQUIREMENTS.md, docs/requirements.md, docs/DEVELOPING.md, `core/tests/TestMain.h`). The one
+  deliberate exception is the `d36_probe.cpp` filename inside D-40's Evidence block: that is
+  verbatim recorded stderr from the run, and rewriting a transcript to match a later renumbering
+  would make the evidence a fiction. Next free id is now **D-41**. The lesson is the counter: an
+  id claimed only in a working tree is not claimed at all, so a session that files a defect should
+  fetch before it picks the number, and the ancestor's stale counter shows this had already been
+  drifting.
+
+- **2026-08-21 (U3.1) — Chroma, not saturation, and a floor rather than only a ramp.** Two things
+  that looked like details and were not. (1) Gating a per-hue effect on HSL *saturation* fails in
+  the shadows, because `s = d/(mx+mn)` inflates a tiny chroma into a large `s` — the noise is worst
+  exactly where the gate would be loosest. (2) A weight that merely attenuates is not enough: with
+  the floor at 0.004 the ±1/255 noise still carried ~6% of a steep curve, and 6% of a 0.5 lift is
+  still visible speckle. The floor has to sit **above** the noise chroma (0.010) so a neutral pixel
+  receives exactly zero.
+- **2026-08-21 (U3.1) — A flat test curve cannot show this defect.** The first fixture lifted every
+  hue by the same amount, so the random hues produced identical lifts and the spread did not move.
+  The defect is hue-DEPENDENCE landing on pixels whose hue is noise, so the curve has to swing (+1
+  at red, −1 at cyan) for the measurement to mean anything.
+
+- **2026-08-20 (T1b) — Moving the writes onto commands was not enough; the LIFECYCLE had to go.**
+  T1 converted every parameter write in the touch shell into a Command and called the binding done.
+  The shell still owned its screen, its recents and a `buildSession()` that reset the workspace —
+  so it looked bound and behaved like a second application, and the first thing the user saw after
+  the mode switch was an empty Home. The lesson worth keeping: "does it write through the service"
+  is a weaker question than "does it keep any state the service already has". The second question
+  is the one R-TOUCH-1 now asks, and the harness asks it too.
+
+- **2026-08-20 (T1a) — Touch mode is a live switch, not a restart, and the letterbox is dated.**
+  Both shells bind to the same service, so swapping them keeps the project open — that is the
+  payoff of T1 and the reason this could be a 260 ms cross-fade instead of "restart to apply".
+  The centred 430 dp column in a wide window is a deliberate interim while T2 is unbuilt: filling
+  a 1600x1000 window with the current touch layout stacks four bands of controls (D-38), and a
+  letterbox that says "this is the phone layout" is more honest than a broken one that says
+  nothing.
+- **2026-08-20 (T1a) — A shell offsets itself; a caller's translate cannot.** `CairoTarget` maps
+  `setTransform` onto `cairo_set_matrix` (absolute), and the segment tree sets the transform per
+  node, so wrapping `PhoneApp::render` in a translate is wiped on the first node. Hence
+  `setOrigin`. Worth remembering for any future "draw this shell over there" idea.
+
+- **2026-08-20 (T1) — A whole-EditParams edit becomes a DIFF command, not a per-field table.** The
+  touch tray hands over a mutated copy of `EditParams` rather than naming the field that moved, so
+  the desktop's "one control, one key" pattern did not fit. `editcmd::diff` serialises both sides
+  with the engine's own writer and sends the lines that differ: no second key table to keep in step,
+  and it can never accept fewer keys than a project file does. The one thing it cannot express is a
+  mask edit — `mask=` APPENDS on parse — so masks keep their own commands and the mask rows carry
+  their index. That asymmetry is worth remembering rather than rediscovering.
+- **2026-08-20 (T1) — The phone shell's reads stay on `session()` for now.** Converting the 47 read
+  sites to `AppModel` in the same commit as the write path would have made one unreviewable change,
+  and the desktop is itself mid-migration (S4). They are marked as S4's list for this shell; the
+  write path is the part that had to move first, because that is what makes the two shells one
+  application.
+- **2026-08-20 (T1) — The harness taps the recent card instead of calling an entry point.**
+  `finishProject` only registers the project on Home (the shell starts there by design), so a shot
+  that wants the editor has to get there the way a user does. Driving it through a private entry
+  point would have made every editor shot a picture of a path nobody ships.
+
+- **2026-08-20 (U2.4) — The font is embedded and registered by NAME, not resolved.** Two things
+  were true of cosmo's type before this and neither is acceptable: it needed a directory next to
+  the source tree (`COSMO_SOURCE_DIR/assets/fonts`), and it went through Fontconfig, which resolves
+  a family name however the host is configured — including silently to the system sans when the
+  file is missing. The face now goes from a C++ array to `FT_New_Memory_Face` to Cairo, so the only
+  agreement left is between the names in `CMakeLists`' font list and the names in `Theme.h` (that
+  pairing is R-FONT-3, and a mismatch is silent by the adapter's design — worth remembering).
+- **2026-08-20 (U2.4) — `cmake -P` as the code generator, not xxd/objcopy/a host tool.** A
+  generator target needs building before the thing that needs it and is awkward when
+  cross-compiling; `xxd -i` and `objcopy` are not portable to MSYS2 the way `file(READ … HEX)` is.
+  0.08 s per face, and the custom command re-runs only when a TTF changes.
+- **2026-08-20 (U2.4) — DM Sans is left in the tree, unused.** Vendored, licensed assets with their
+  OFL; removing them buys nothing and loses the ability to compare. `Theme.h` and the Android font
+  table are the only places that ever named them, and both now name Roboto.
+
+- **2026-08-20 (U2.2a) — A cross-fade is linear; the house EaseOutCubic is for things that move.**
+  Everything else in cosmo eases out, and for position/size that is right. For a dissolve the
+  quality metric is the LARGEST single-frame step, and an ease-out front-loads: 16 ms into a 120 ms
+  EaseOutCubic is 35% across. Linear over 160 ms gives ten even ~10% steps, which is what a video
+  cross-dissolve does and for the same reason. Written down because "why isn't this EaseOutCubic
+  like everything else" is the obvious future question.
+- **2026-08-20 (U2.2a) — Continuity beats latency for the photo, and the trade is stated.** Holding
+  a render until the dissolve settles costs up to 160 ms of lag and drops intermediate renders
+  during a fast drag. That is the right trade: a preview 160 ms behind still tracks the slider,
+  while a photo that steps does not read as an edit at all. The rejected alternative — reversing the
+  dissolve in place, which is what shipped — has no lag and blinks.
+
+- **2026-08-20 (U2.2) — One animated property, not two, and no pixel copies.** The obvious
+  cross-dissolve is "fade the new one in, fade the old one out", and it is wrong: two stacked
+  layers at alpha `p` and `1−p` let the canvas through in the middle
+  (`p·new + (1−p)²·old + p(1−p)·bg` — a 25% dip at halfway), so the photo visibly darkens
+  mid-drag. Keeping the covered layer OPAQUE and animating only the top one gives exactly
+  `a·top + (1−a)·bottom`. The consequence worth writing down: the roles then have to alternate
+  (the dissolve runs 0→1, then 1→0) rather than the new render always landing on top, which in
+  exchange removes the swap-at-completion and the pixel copy that a fixed "top is always newest"
+  design needs. `Segment::raise()` is not an alternative — it moves a child to the END of the
+  parent's list, which on this canvas is above the mask overlay and the pill.
+- **2026-08-20 (U2.2) — An interrupted dissolve reverses; it does not restart.** Renders land
+  faster than 120 ms while a slider is moving, so interruption is the common case, not the edge.
+  The newest pixels go into the view the dissolve is *leaving* and `animateTo` retargets from the
+  current eased value: opacity stays continuous and always converges on the newest frame. The
+  residual step is the outgoing layer's alpha times ONE preview-to-preview delta — smaller than
+  the whole-frame swap it replaces, and stated in R-VIEW-1a rather than hidden.
+- **2026-08-20 (U2.2) — `cosmo_ui_tests` now pumps the service every frame.** The rig drew frames
+  without calling `CosmoService::pump`, which is what moves a finished render out of the engine —
+  so no preview could ever reach the stage and *every* photo assertion would have passed on an
+  empty canvas. The first version of the dissolve test did exactly that. Same class as the harness
+  bugs in P0: a test rig that diverges from the host tests a path nobody ships.
+
+- **2026-08-19 (D-40) — "Code-verified on Windows" is not verified, and the harness now has a
   requirement.** `TestMain.h` shipped with its Windows half read rather than compiled; the first
   MSYS2 build after it landed failed twice — a link error for `_set_abort_behavior`, which msvcrt
   declares in `<stdlib.h>` and does not export (it is UCRT-only), and a compile error in
@@ -412,6 +683,15 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Verification notes
+
+- **U2.2 is verified on the desktop shell only.** The op-stream assertions and the two PNG pairs
+  are all `App` (desktop); `touch/PhoneApp`'s stage is unchanged and still snaps — U2.3, and
+  R-VIEW-1d says so in the requirement too. The phone shell has no test or shot target at all,
+  which is why the task is filed rather than done.
+- **U2.1's orientation fix is verified on the RW2/RAF/JPEG set on this machine** (`/home/namdln/photo`,
+  19 files, 18 of them `flip == 5`). No Canon/Nikon/Sony file was available, so the branch that
+  SKIPS the flip — a maker that already stores an upright preview — is covered by reasoning and by
+  the aspect guard, not by a file. If one turns up, run the probe in DR-SPLASH-5b against it.
 
 - **S1a is verified on Linux, not on Windows.** The suite is green (24/24), the new peak test fails on
   the old arithmetic, and a real 18-RAF load was measured on a 24-core Linux host. The D-12 pin is

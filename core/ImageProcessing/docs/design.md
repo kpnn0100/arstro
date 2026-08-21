@@ -105,8 +105,27 @@ destructor (`D0`) variant of the abstract base `ImageProcessor`, which is uncall
 
 | Family | Processors |
 |--------|------------|
+### The colour mixer's chroma weight
+
+`rgbToHsl` derives hue by dividing channel differences by chroma, so at low chroma a pixel's hue is
+decided by its last bit of noise: neighbouring pixels in a flat grey read as red, green and blue at
+random. The mixer's Lum channel is *additive* (`l += y*0.5`), so before this weight every one of
+those pixels took a different full-strength lift and a smooth grey broke into speckle — measured at
+**624x** the luminance spread of a flat patch on a real X-Trans file.
+
+Each channel's `y` is therefore scaled by `smoothstep(kChromaFloor, kChromaFull, chroma)`
+(`0.010 → 0.040` in linear-light units): exactly zero where a pixel is indistinguishable from
+neutral, full where there is real colour. The weight is on **chroma**, not on HSL saturation, because
+saturation is normalised by lightness and so reports a large value for a tiny chroma in the shadows —
+precisely where noise lives. Chroma comes back out of the HSL pair as `d = s * (1 - |2l - 1|)`, the
+algebraic inverse of that normalisation, so it costs no second min/max pass.
+
+The GPU backends **decline** any non-identity mixer today (`GlComputeShared.h`'s accept test), so
+there is no shader copy of this to keep in step — but a future port of the mixer to compute has to
+carry the weight with it, or GPU and CPU diverge on exactly the pixels this exists for.
+
 | `tone/` | Exposure (±5 EV, `2^EV`), Contrast (slope around 0.18 pivot), ToneRegions (highlights/shadows/whites/blacks via luminance masks), ToneCurve (four 1024-entry LUTs — an RGB **master** curve applied to all channels, then an independent **per-channel** R/G/B curve; `out_c = chan_c(master(x_c))`; log/linear domain shared. Control points are **bezier** `CurvePoint`s — corners by default, smooth (Alt-dragged handles) where set — flattened by the shared `curve::sample()`, the same model and sampler as the colour mixer) |
-| `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (3 cyclic per-hue curves: hue-shift/sat/lum over the input hue, wrapping at 360 so it never bands), ColorGrading (3-way wheels + hue-range remap) |
+| `color/` | WhiteBalance (temp/tint as luminance-preserving gains), Vibrance (+saturation, sat-weighted), ColorMixer (3 cyclic per-hue curves: hue-shift/sat/lum over the input hue, wrapping at 360 so it never bands; **each scaled by a chroma weight** — a per-hue tool must not fire on a pixel whose hue is noise, see below), ColorGrading (3-way wheels + hue-range remap) |
 | `effect/` | Dehaze (dark-channel prior, ± adds/removes haze), Grain (smooth two-octave deterministic value noise — quintic fade, so `size` sets grain scale without blocky upscaling), Texture (fine-radius local contrast), Clarity (large-radius midtone local contrast, midtone-masked) |
 | `detail/` | Sharpen (unsharp mask on perceptual luma, amount/radius/edge-masking), NoiseReduction (Gaussian chroma blur for colour speckle + edge-preserving bilateral on luma) |
 | `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear), LensCorrection (radial distortion + chromatic-aberration + vignette, one resample pass) |

@@ -11,7 +11,7 @@
  *  interactive/selected state -- active tab, slider fill, selection ring,
  *  primary button), a restrained near-neutral grey ramp otherwise. Radii are
  *  small and literal per Figma's own bracket values (1-3px), not a single
- *  uniform scale. Typography: DM Sans (body/UI) + JetBrains Mono (numerics/
+ *  uniform scale. Typography: Roboto (body/UI) + JetBrains Mono (numerics/
  *  filenames), both vendored under assets/fonts and registered at startup via
  *  Fontconfig (see linux_main.cpp) -- see Artboard's FR-22 drawText family
  *  parameter this depends on.
@@ -30,9 +30,13 @@ namespace cosmo_v2
 
     namespace font
     {
-        inline const char *sans() { return "DM Sans"; }
-        inline const char *sansMedium() { return "DM Sans Medium"; }
-        inline const char *sansSemiBold() { return "DM Sans SemiBold"; }
+        // The family names here are the OTHER half of a pair: they must match the names the
+        // faces are registered under (CMakeLists' COSMO_FONT_LIST -> EmbeddedFonts.cpp, R-FONT-1).
+        // A weight is a family name rather than a number because that is how a static weight is
+        // selected at the text-stack level (Artboard FR-22).
+        inline const char *sans() { return "Roboto"; }
+        inline const char *sansMedium() { return "Roboto Medium"; }
+        inline const char *sansSemiBold() { return "Roboto SemiBold"; }
         inline const char *mono() { return "JetBrains Mono"; }
         inline const char *monoMedium() { return "JetBrains Mono Medium"; }
     }

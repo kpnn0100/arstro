@@ -34,7 +34,7 @@
 // `near` and `far` expand to nothing and `small` to `char`. A suite that includes this
 // header for one Win32 call does not expect a header to redefine its vocabulary, and the
 // diagnostic when it does is unreadable — `bool near(double a, double b)` in
-// widgets/tests/widgetTests.cpp reported "expected unqualified-id before 'double'" (D-36).
+// widgets/tests/widgetTests.cpp reported "expected unqualified-id before 'double'" (D-40).
 // A header that breaks its includer is worse than no header, so undo the leak here.
 #undef near
 #undef far

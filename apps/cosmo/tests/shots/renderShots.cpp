@@ -30,8 +30,8 @@
  *
  *  No gtk_init(): GTK3 is linked for GdkPixbuf (the decoder + the export encoder live in
  *  the app layer, R-SVC-7) and never initialised, so nothing here needs a display. The
- *  vendored fonts are registered straight into fontconfig, the same call linux_main.cpp
- *  makes — with the host's default sans instead, every text measurement is off and the
+ *  embedded faces are handed to the render adapter, the same call linux_main.cpp makes
+ *  (R-FONT-1) — with the host's default sans instead, every text measurement is off and the
  *  shots would report layout bugs that do not exist.
  *
  *  Usage:
@@ -41,6 +41,7 @@
  *  fixture-free subset is what `ctest -R cosmo_shots_headless` runs.
  */
 #include "App.h"
+#include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
 #include "core/AppSettings.h"
@@ -56,12 +57,12 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
-#include <fontconfig/fontconfig.h>
 #include <fstream>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -458,18 +459,10 @@ namespace
 
     void registerBundledFonts()
     {
-        // COSMO_SOURCE_DIR is baked in by CMakeLists.txt, exactly as for the app, so the
-        // fonts are found whatever directory the harness was launched from.
-        const std::string dir = std::string(COSMO_SOURCE_DIR) + "/assets/fonts";
-        const char *files[] = {"/DMSans/DMSans-Regular.ttf", "/DMSans/DMSans-Medium.ttf",
-                               "/DMSans/DMSans-SemiBold.ttf", "/JetBrainsMono/JetBrainsMono-Regular.ttf",
-                               "/JetBrainsMono/JetBrainsMono-Medium.ttf"};
-        for (const char *f : files)
-        {
-            const std::string path = dir + f;
-            if (!FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)path.c_str()))
-                std::printf("  warning: could not register font %s\n", path.c_str());
-        }
+        // The same call the app makes (R-FONT-1): the faces are in this binary, so a shot is in
+        // the app's own type on any machine — which is the whole point of a shot that measures
+        // text. Nothing to find on disk, nothing for Fontconfig to resolve differently here.
+        arstro::cosmo_v2::registerEmbeddedFonts();
     }
 
     void setEnv(const char *key, const std::string &value)
@@ -770,6 +763,50 @@ namespace
         rig.settle(f, kRevealMs);             // hand back to the editor, so the next shot is clean
     }
 
+    /** R-VIEW-1: the photo mid-dissolve, which is the only way to SEE that an adjustment
+     *  cross-fades instead of cutting. Two frames of one 160 ms LINEAR dissolve — about 30% and
+     *  60% across — so the mix of the two renders is visible rather than taken on trust from a
+     *  number, and so a curve that front-loads the change would show up as an early frame that
+     *  has already arrived (which is how EaseOutCubic was caught here).
+     *
+     *  The wait is the fiddly part and it is deliberate: the new render lands on a worker, so
+     *  the frame is waited for in REAL time (pumping, not drawing) and only then are frames
+     *  drawn. Advancing the shot clock while waiting would run it straight past the dissolve
+     *  and photograph the settled editor twice. `frameSeq` is the signal — `pump` bumps it when
+     *  it takes a frame out of the engine. */
+    void shotDissolve(Rig &rig, int w, int h, const char *ev, const char *contrast)
+    {
+        if (!wanted("editor-dissolve")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);   // a settled editor, so the only motion is the photo
+
+        Command set;
+        set.kind = Command::Kind::Set;
+        // Big enough to see in a PNG, INSIDE the range the slider can reach (±5 EV): a value
+        // beyond it crashes the render worker on a NaN that walks through ToneCurve's clamp
+        // (D-36), and a harness must not depend on a defect it just found. The values differ per
+        // call for a duller reason that cost a render to find: `set` to the value already in
+        // force still submits, and a dissolve between two IDENTICAL renders is a photograph of
+        // nothing.
+        set.fields = {{"exposure", ev}, {"contrast", contrast}};
+        const unsigned seq0 = rig.svc.model().frameSeq;
+        if (!rig.svc.dispatch(set)) { std::printf("  (no edit target: skipping editor-dissolve)\n"); return; }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        while (rig.svc.model().frameSeq == seq0 && std::chrono::steady_clock::now() < deadline)
+        {
+            rig.svc.pump(rig.now);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (rig.svc.model().frameSeq == seq0) { std::printf("  (no render arrived: skipping editor-dissolve)\n"); return; }
+
+        rig.step(f, 1);   // this frame TAKES the render and starts the dissolve at alpha 0
+        rig.step(f, 2);   // ~48 ms of 160 ms: three tenths across
+        save(f, "editor-dissolve-early");
+        rig.step(f, 3);   // ~96 ms: six tenths across
+        save(f, "editor-dissolve-late");
+        rig.settleQuiet(f, 200.0, 300);
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -780,7 +817,8 @@ namespace
             std::printf("  (skipping the project shots: no --images given)\n");
             return 0;
         }
-        if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve"))
+        if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
+            && !wanted("editor-dissolve"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -800,6 +838,7 @@ namespace
             }
             if (wanted("editor-project")) save(f, "editor-project");
         }
+        shotDissolve(rig, w0, h0, "1.5", "70");
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)
@@ -809,6 +848,7 @@ namespace
             rig.app.setSize((double)w, (double)h);
             rig.settleQuiet(f, 800.0, 2500);
             if (wanted("editor-project")) save(f, "editor-project");
+            shotDissolve(rig, w, h, "-1.2", "-50");   // dragging back the other way
         }
         // Back to the first size for the reveal shot, so it is comparable with the others.
         rig.app.setSize((double)w0, (double)h0);
@@ -870,6 +910,7 @@ int main(int argc, char **argv)
     {
         std::printf("home-empty  home-recents  home-settings  editor-empty\n"
                     "loading-intro  loading-progress  loading-dissolve  loading-reveal  editor-project\n"
+                    "editor-dissolve-early  editor-dissolve-late\n"
                     "scale-75-*  scale-90-*  scale-100-*  scale-125-*   (-home-min, -editor-min,\n"
                     "                            -settings-min, -editor-1280x800)\n"
                     "scale-zoom-{000-before,060-mid,140-mid,999-after}\n");

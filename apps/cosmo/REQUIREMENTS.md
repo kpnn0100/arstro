@@ -45,8 +45,13 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
 - **R-G-2 Figma is the spec.** Screens that reference a Figma frame must match it (spacing,
   type ramp, colors, radii pulled from `Theme`), not approximate it.
 - **R-G-2a One wordmark.** The `cosmo.` wordmark is drawn identically everywhere it appears
-  (home sidebar, editor top bar, the open/return transition): letter-spacing `-0.03 * size` and the
-  accent dot at `x + estimateTextWidth("cosmo", size)`. No per-site spacing tweaks.
+  (home sidebar, editor top bar, the open/return transition, the splash, the phone shell):
+  letter-spacing `-0.03 * size` and the accent dot at the **measured** end of the word,
+  `x + measureText("cosmo", size, family, spacing)`. No per-site spacing tweaks.
+  (**AMENDED (R-FONT-2), 2026-08-20:** it said `estimateTextWidth`, which is `len * px * 0.6` —
+  font-independent by construction, so it is wrong for any particular font, and the dot detached
+  from the `o` the moment the typeface changed. Two of the sites already measured; the requirement
+  now says what the accurate ones do.)
 
 ## R-EDITSTACK — Right-column edit stack
 
@@ -191,6 +196,148 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
 
+## R-TOUCH — The touch shell: one core, two UIs — 🚧 IN PROGRESS
+
+cosmo has two front ends that must stay one application: the desktop shell (`App`, mouse and
+keyboard, three zones at once) and the **touch shell** (`touch/PhoneApp`, `arstro::cosmo_touch`) for a
+small touch screen — Android first. The desktop went through R-SVC and now binds to `CosmoService`
+through `Command` in and `AppModel`/`Event` out; the touch shell predates that and does not, so it is
+a second application that happens to link the same library. This section is what makes it one.
+
+The visual language is **identical** to the desktop's (R-G-2, `Theme.h` tokens) — the touch shell may
+diverge in *metrics* (hit bands, type steps, its own brighter muted grey for arm's-length reading) and
+never in palette, radii, accent, motion vocabulary or wordmark. `docs/touch-ui-brief.md` is the
+component-level spec; where it disagrees with this section, this section wins and the brief is amended.
+
+- **R-TOUCH-1 One core, one view-model, two views.** The touch shell owns **no session and no
+  engine**: it is constructed over a `CosmoService`, every change it makes is a `Command` it
+  dispatches, and everything it draws comes from `AppModel`, the service's frame channel
+  (`takeFrame`) or its own presentation state (animation, detents, scroll — R-SVC-4). It must
+  therefore be drivable by the same scripts, the same control socket and the same `cosmo-cc` as the
+  desktop, and a project opened on one shell must dump byte-identical state on the other (R-SVC-9's
+  check, extended to the second view).
+
+  **In particular — and this needed saying, because its absence shipped (D-39):** the touch shell
+  derives its **screen**, the **open project** (name, image count, edit target) and its **recents
+  list** from `AppModel`, and keeps no copy of any of them. A shell built while a project is already
+  open — which is exactly what the desktop's touch-mode switch does — shows *that* project, and a
+  shell must never reset or rebuild the workspace on its own initiative, because the other view is
+  looking at it. Asserted, not assumed: `cosmo_touch_shots --assert` opens a project with no touch
+  shell in existence, then builds one and requires it to land on the editor. The UI→`Command` mapping is **shared code**, not two copies:
+  one place turns "this control moved" into a command, and both shells call it. Two mappings drift
+  the first time a parameter is added, and the drift is silent.
+- **R-TOUCH-2 No component overlaps another. NEW RULE.** Every element of the touch shell has its
+  own space: opening the control tray **shrinks the photo's box** rather than covering it, the tool
+  bar and top bar are never drawn over content, and no panel is partly hidden behind another. The
+  only things allowed above content are **deliberate modal overlays** — action sheets, dialogs, the
+  preset drawer, the fullscreen curve editor — each with a scrim, drawn in the overlay pass, and
+  dismissible. This is stricter than the desktop's R-G-3 (siblings snap, overlays are the exception)
+  and stricter than the brief, which had the tray *rise over* the photo: on a phone the photo is the
+  work, and a sheet across it hides the thing being edited. Asserted, not eyeballed: the harness
+  walks the tree and fails on any two non-overlay siblings whose world rects intersect.
+- **R-TOUCH-3 Both orientations, and the change animates. NEW RULE.** The shell works in portrait
+  **and** landscape, and rotation is a reflow like any other (R-G-1: it eases, it does not snap).
+  - **Portrait** (tall): one column — top bar, photo, breadcrumb + filmstrip, tool bar; a tab raises
+    the tray *below* the photo, which shrinks to fit (R-TOUCH-2).
+  - **Landscape** (wide): **two panes** — photo on the left, the active tray as a **fixed panel on the
+    right** (~40% of the width, its own column), so nothing is ever over the photo. This is the
+    desktop's shape at phone size, which is also why it needs no new interaction model.
+  - Either orientation, every control stays reachable: a panel taller than its pane scrolls (R6) and
+    nothing is clipped away.
+- **R-TOUCH-4 Touch-sized, and curves especially. NEW RULE.** Every interactive element has a
+  ≥ **44 dp** hit band (the drawn control may be smaller), slider rows ≥ **48 dp**, adjacent targets
+  ≥ **8 dp** apart. Curve and mixer nodes are the hardest case on a small screen and get their own
+  treatment: a **fullscreen curve editor** (the plot takes the whole screen, so nodes are far apart),
+  a ≥ **24 dp** grab radius, and while dragging a **loupe** offset above the finger showing the node
+  under it — because the fingertip covers exactly the thing being positioned. Tapping selects the
+  nearest node rather than requiring a hit, so a miss adjusts something instead of nothing.
+- **R-TOUCH-6 The desktop build can RUN the touch shell, and it is a setting.** A touch screen is
+  not a different product: a convertible folded into a tablet, a touchscreen panel, or a desktop
+  being driven by hand wants the touch layout from the same binary. So `AppSettings::touchUi`
+  (persisted like every other preference, R-SETTINGS-4; settable as `settings set touchUi=1`) picks
+  which shell the host draws, and:
+  - **The service stores and forwards it, and never acts on it** — which shell exists is the view's
+    business (R-SVC-3). It is the second such key, alongside `uiScale`, and it is in the grammar and
+    the model for the same two reasons: a script can flip it, and whoever owns a view can read the
+    value it must honour.
+  - **Both shells bind to the same service**, so switching mode keeps the open project, the
+    selection, the parameters and the undo history — nothing reloads and nothing is lost. That is
+    the practical payoff of R-TOUCH-1, and the check for it is that a `state print --stable` taken
+    either side of the switch is identical.
+  - **The switch is a visible change, so it animates** (R-G-1): the outgoing shell fades out as the
+    incoming one fades in, both drawn through the render target's layer alpha. It does not require
+    a restart, and it does not resize the window.
+  - **Interim, until R-TOUCH-3 lands (T2):** the touch shell has no landscape layout yet, so in a
+    window wider than it is tall the host draws it in a **centred portrait column** at the phone's
+    design width rather than in the stacked-controls layout D-38 describes. That is a deliberate
+    letterbox with a date on it, not the intended end state — when the two-pane landscape layout
+    exists, the shell fills the window.
+- **R-TOUCH-5 The touch shell is renderable and assertable with no device.** `PhoneApp` is Artboard
+  `Segment`s over `CairoTarget`, so it builds on the desktop host: `cosmo_touch_shots` renders every
+  screen and state to PNG at phone sizes in both orientations, and `cosmo_touch_tests` asserts the
+  R-TOUCH-2/3/4 rules over the assembled shell. Without this the touch UI can only be checked by
+  building an APK and looking at a phone, which is why M4–M7 of `docs/android.md` had no evidence
+  behind them.
+
+## R-FONT — The typeface travels inside the binary — ✅ IMPLEMENTED
+
+An app's own type is not something that may differ between machines, and cosmo's did: the faces were
+registered with Fontconfig from a path baked in at build time, so the text depended on a directory
+existing next to the source tree, on Fontconfig resolving the family the same way on every host, and
+— when either failed — silently on whatever the system's default sans happened to be. A shot then
+measures the wrong widths, a panel overflows on one machine and not another, and the app does not
+look like itself.
+
+- **R-FONT-1 The faces are compiled into the binary.** The vendored TTFs are generated into a C++
+  array at build time and handed straight to the render adapter (`CairoTarget::registerFontMemory`,
+  Artboard FR-22a). No font file beside the executable, no Fontconfig in the text path, no
+  system-installed family: the binary draws its own glyphs on any machine, which is the only way the
+  UI is identical across platforms. The generator is a `cmake -P` script (no `xxd`, no `objcopy`, no
+  host codegen target to build first), so Linux and MSYS2 run the same line, and it re-runs only
+  when a TTF changes.
+- **R-FONT-2 Roboto is the UI face; JetBrains Mono stays the numeric one.** `font::sans` /
+  `sansMedium` / `sansSemiBold` are Roboto Regular / Medium / SemiBold — one family, three real
+  static weights, because a weight is selected by its own family name at the text-stack level
+  (Artboard FR-22) rather than by a number. `font::mono` / `monoMedium` stay JetBrains Mono for
+  numerics and filenames, embedded on the same terms — a mono face resolved from the system would
+  reintroduce exactly the inconsistency this requirement removes.
+- **R-FONT-3 One list, in one place.** The names the faces are registered under and the names
+  `Theme.h`'s `font::` accessors ask for are the same list, and the registration is the only code
+  that pairs a name with bytes. A name in `Theme.h` with no registered face falls through to the
+  host's default sans — silently, since that is the adapter's documented fallback — so the build's
+  font list is treated as part of the theme, not as build plumbing.
+- **R-FONT-4 Every shell registers them, including the harnesses.** The app, `cosmo_shots` and
+  `cosmo_ui_tests` share one registration call, so a shot is in the app's own type. A shot in the
+  wrong typeface measures the wrong widths and reports overflow bugs that do not exist, which makes
+  it worse than no shot. The Android shell asks for the same families from its APK assets (it ships
+  them anyway); embedding there is a follow-up, not a difference in the design.
+
+## R-THUMB — A thumbnail is the same photo, only smaller — ✅ IMPLEMENTED
+
+Every reduced-size copy of a photo — the home screen's project-card cover (R-HOME-6), the
+open-project and splash covers (R-LOADING, R-SPLASH-3), the filmstrip cell (R-LOADPERF-2) — must
+read as *that photo*. A cover that is a cheaper copy of the pixels is a performance decision
+(DR-SPLASH-5a) and must stay invisible to the photographer; the moment it differs in orientation
+it stops being a thumbnail of the photo and becomes a different picture beside it.
+
+- **R-THUMB-1 A thumbnail is oriented like its photo.** A thumbnail is shown in the same
+  orientation the full decode produces, so a portrait shot's cover is portrait. This is not
+  automatic: LibRaw applies the RAW's orientation (`sizes.flip`) inside `dcraw_process`, but the
+  camera's **embedded preview** — which is what a cover reads, because it costs 6.6 ms against
+  8072 ms — is handed back exactly as the camera stored it, in sensor orientation. So the same
+  flip is applied to the preview. A maker that already stores an upright preview must not be
+  rotated twice: a quarter turn swaps the aspect, so the preview's own aspect against the sensor
+  frame's says which of the two frames it is already in, and only a preview still in the sensor
+  frame is turned. The full-decode fallback (a file with no preview) is already oriented and is
+  left alone.
+- **R-THUMB-2 A cell crops, it never distorts and never rotates to fit.** A thumbnail keeps its
+  aspect and is cropped by the cell that holds it (`ImageView::Fit::Cover` — filmstrip cells, home
+  covers), so a portrait photo in a 16:9 band shows its middle rather than being squeezed or laid
+  on its side. Rotating the image to fit its box is never the answer: the box crops.
+- **R-THUMB-3 Same photo, same pixels, whatever produced them.** The cheap path and the full path
+  must agree. A change to one is verified against the other on a real RAW — the preview's
+  orientation and aspect compared with the full decode's, not assumed from the flag.
+
 ## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ⚠️ REOPENED (D-11, D-12)
 
 Opening a catalog saturated the machine. The decode pool took one worker per core (R-LOADPERF-1) and
@@ -288,6 +435,35 @@ pool in lockstep with the engine's reset slot ids (a new project's `thumbSlot` m
 thumbnail). Headless-verified: red project → reset → editor blank → green project opens fresh, no
 stale photo, no crash.
 
+## R-MIXER — A per-hue tool only touches pixels that have a hue — ✅ IMPLEMENTED
+
+Reported by the user: using the Mixer's **Lum** curve made flat grey areas break into speckle —
+"random noise particle got lit up". Not a matter of taste, and not fixable by moving a control: hue
+is *derived* by dividing channel differences by chroma, so on a near-neutral pixel it is decided by
+the last bit of sensor noise. Neighbouring pixels in a grey read as red, green and blue at random,
+and the Lum channel — the one that adds rather than multiplies — then gave each of them a different
+full-strength lift. Measured at **624×** the luminance spread of the flattest patch of a real
+X-Trans frame.
+
+- **R-MIXER-1 Every mixer channel is scaled by a chroma weight.** `smoothstep(0.010, 0.040, chroma)`
+  in linear-light units: exactly **zero** where a pixel is indistinguishable from neutral, full where
+  there is real colour, a ramp between. All three channels — Lum is where it showed, but boosting Sat
+  on grey amplifies colour noise and bending the hue of a noise pixel is equally meaningless. The
+  floor is set by measurement, not by taste: ±1/255 of per-channel noise reaches ~0.008 of chroma, and
+  a weight that merely *attenuates* still fans out under a steep curve.
+- **R-MIXER-2 The weight is on chroma, never on saturation.** HSL saturation is normalised by
+  lightness, so it reports a large value for a tiny chroma in the shadows — exactly where noise
+  lives, so gating on it would let dark speckle through. A genuinely saturated shadow keeps its full
+  weight, because chroma is recovered exactly as `s · (1 − |2l − 1|)`.
+- **R-MIXER-3 The trade is stated, not hidden.** A genuinely desaturated region now moves less under
+  the lum curve. That is intended — darkening a grey sky is exposure, tone regions or a mask, not a
+  per-hue curve — but a project that leaned on the old behaviour renders differently, which is why
+  this is a requirement rather than a tweak.
+- **R-MIXER-4 A GPU port must carry the weight.** The compute backends currently **decline** any
+  non-identity mixer, so CPU is the only implementation and cannot diverge. When the mixer moves to
+  GLES (ledger T6) the weight goes with it in the same change, and the conformance test covers a
+  neutral patch — otherwise GPU and CPU would differ on precisely the pixels this exists for.
+
 ## R-BUGFIX-3 — Mixer curve saved as samples, not bezier points — ✅ FIXED
 
 The colour-mixer (Mixer/Curve tab) is edited as a bezier curve with smooth, Alt-dragged tangent
@@ -366,6 +542,64 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   Radii stay strictly positive: a zero or negative radius is not a small mask, it is a
   division-by-zero the engine guards with an epsilon.
 
+## R-VIEW — The photo dissolves; it never pops — ✅ IMPLEMENTED
+
+Dragging a slider is the one place in cosmo where the *photo itself* changes, and it changed the
+only way R-G-1 forbids: each preview render replaced the pixels in a single frame, so a drag read as
+a stutter of discrete pictures rather than one continuous edit. The photo is a visible property like
+any other.
+
+- **R-VIEW-1 A render cross-dissolves onto the one on screen.** The stage holds **two** stacked
+  photo views; the top one's opacity **is** the dissolve, so the composite is
+  `a·top + (1−a)·bottom` — a true cross-dissolve with no dip through the canvas, because the layer
+  being covered stays opaque instead of fading out underneath. A new render lands in whichever view
+  is currently hidden and the opacity eases toward it (**120 ms**, `EaseOutCubic`, collapsing under
+  `reducedMotion()`), so consecutive renders dissolve in alternating directions and no pixels are
+  ever copied between views.
+- **R-VIEW-1a A render arriving mid-dissolve WAITS; nothing is ever written into a layer that is
+  on screen.** (**AMENDED 2026-08-20**, and the amendment is the whole point: the first version
+  reversed the dissolve instead — it wrote the newest render into the layer that still had weight
+  `1−a` — and treated the resulting step as an acceptable residual. It is not acceptable and it is
+  what the user reported as *the photo blinks*. Opacity being continuous is not sufficient: the
+  composite is `a·top + (1−a)·bottom`, so replacing the **pixels** of either layer while its weight
+  is non-zero is a discontinuity of exactly that weight times the difference between two renders,
+  and during a drag that happens on nearly every render.) So while a dissolve is in flight the
+  newest frame is **held**, and it is applied the moment the dissolve settles — when the hidden
+  view's weight is exactly zero and writing to it changes nothing on screen. Newest wins: a held
+  frame is overwritten by a newer one, the same coalescing `RenderService` already does upstream.
+  The cost is stated plainly: a render can wait up to one dissolve (120 ms) before it is shown, and
+  intermediate renders during a fast drag are dropped rather than flashed. Latency is the right
+  thing to trade for continuity here, because a preview that is 120 ms behind still tracks the
+  slider while a photo that jumps does not read as an edit at all.
+- **R-VIEW-1b The first photo is set, not dissolved.** A photo appearing on an empty stage has
+  nothing to travel from (R-G-1a's rule for a card's first placement, applied to pixels).
+- **R-VIEW-1c A differently-SHAPED photo is set, not dissolved.** (**AMENDED 2026-08-20:** the test
+  was the pixel size, which is wrong for the same photo at a different preview resolution — a zoom
+  step changes the pixel count and not the shape, and cutting there was a visible pop while
+  zooming. The test is the **fitted shape**: two frames that fit the same rect dissolve, whatever
+  their resolution.) A frame whose aspect differs cannot cover the one on screen, so dissolving it would leave the old photo visible around its edges and
+  then snap it away at the end. Both views take it, so no stale pixels can peek. A proper
+  cross-photo transition (dissolve through the canvas, since nothing covers anything) is its own
+  task — tracked in `docs/PROGRESS.md`, not silently absent.
+- **R-VIEW-1d The desktop stage first; the phone stage is tracked, not forgotten.** The touch
+  shell (`touch/PhoneApp`, §1.8's separate UI) drives the same session through a single
+  `ImageView` and still replaces its pixels in one frame. It is the same fix and the same twenty
+  lines, but that shell has no headless test or shot to prove it with, so it is a ledger task
+  (U2.3) rather than an unverified edit — and it is written here so the requirement is not read as
+  claiming something that is only true on the desktop.
+- **R-VIEW-1e A layer that is covering another may not be dropped a frame early.** The stage skips
+  drawing the fully covered layer, which is legitimate only while the covering layer is **exactly**
+  opaque. That decision therefore reads **this** frame's alpha — computed after the animation
+  update and before anything is drawn — never the previous frame's. Reading the stale value hid the
+  base on the first frame of every `1 → 0` dissolve, so the canvas showed through the
+  partly-transparent top: a one-frame darkening on every other render, at roughly 8 Hz through a
+  drag. This is R-G-1's own clause (d) restated for a value derived from an eased one: derive it
+  every frame, from the eased value, or do not derive it.
+- **R-VIEW-2 Before / Split / After changes dissolve too.** The mode pill routes through the same
+  path, so toggling Before↔After dissolves rather than cutting, and Split's clipped half and its
+  seam **fade** in and out instead of flipping `visible` (R-G-1). The pill's own highlight keeps
+  sliding as it already did.
+
 ## R-ZOOM — Zoom & pan inside the photo (item 2) — ✅ IMPLEMENTED (except R-ZOOM-5)
 
 Status: implemented in `PhotoCanvas` (owns zoom/pan, mirrors to before+after views) +
@@ -381,6 +615,10 @@ change under the Artboard skill) and is tracked there, not faked at the app laye
   image always covers the view (ImageView `clampPan`).
 - **R-ZOOM-3** Before and After (split) image views share one zoom/pan state so the split seam
   stays pixel-aligned — zoom/pan is routed through `PhotoCanvas`, applied to both views.
+  (**AMENDED (R-VIEW-1), 2026-08-20:** "both views" is now **every** image view on the stage. The
+  dissolve of R-VIEW-1 adds a second after-view, and a view left out of a zoom or a pan would slide
+  into place under the next dissolve — the seam alignment this requirement exists for is a property
+  of the whole stage, not of a pair.)
 - **R-ZOOM-4** On each zoom step the preview render resolution scales with the zoom
   (`EditSession::setPreviewZoom`) so a high-res original stays sharp when magnified; resets to
   base when the view returns to 1× or the selected image changes.
@@ -965,7 +1203,7 @@ and make every front end — the GTK window, the CLI, the shot renderer — a *v
 ## R-TEST — The test suites build and can report red on every host they run on — ✅ IMPLEMENTED
 
 Every verification claim in this project rests on "the suite is green", so the suites themselves are
-part of the contract, not scaffolding. D-10 established the behaviour clause; D-36 established the
+part of the contract, not scaffolding. D-10 established the behaviour clause; D-40 established the
 build clause, after the D-10 fix shipped code-verified-only and turned out not to compile on the
 Windows host it was written for.
 

@@ -242,6 +242,31 @@ namespace cosmo
 #endif
     }
 
+    void NativeImageDecoder::applyFlip(DecodedImage &img, int flip)
+    {
+        if (flip <= 0 || !img.ok()) return;
+        // Same index math as LibRaw's flip_index (src/write/file_write.cpp), so a preview turned
+        // here lands in exactly the orientation dcraw_process would have produced.
+        const int sw = img.width, sh = img.height;
+        const bool quarter = (flip & 4) != 0;      // transpose -> the dimensions swap
+        const int dw = quarter ? sh : sw, dh = quarter ? sw : sh;
+        std::vector<uint8_t> out((size_t)dw * dh * 4);
+        for (int r = 0; r < dh; ++r)
+            for (int c = 0; c < dw; ++c)
+            {
+                int sr = r, sc = c;
+                if (quarter) std::swap(sr, sc);
+                if (flip & 2) sr = sh - 1 - sr;
+                if (flip & 1) sc = sw - 1 - sc;
+                const uint8_t *sp = img.rgba.data() + ((size_t)sr * sw + sc) * 4;
+                uint8_t *dp = out.data() + ((size_t)r * dw + c) * 4;
+                dp[0] = sp[0]; dp[1] = sp[1]; dp[2] = sp[2]; dp[3] = sp[3];
+            }
+        img.rgba.swap(out);
+        img.width = dw;
+        img.height = dh;
+    }
+
     DecodedImage NativeImageDecoder::decodeThumb(const std::string &path, int maxEdge)
     {
         DecodedImage out;
@@ -255,6 +280,11 @@ namespace cosmo
             LibRaw raw;
             if (raw.open_file(path.c_str()) == LIBRAW_SUCCESS && raw.unpack_thumb() == LIBRAW_SUCCESS)
             {
+                // The RAW's orientation, and the sensor frame it is measured against. The full
+                // decode gets this applied inside dcraw_process; the preview below does not, which
+                // is why a portrait shot's cover used to lie on its side next to its own photo.
+                const int flip = raw.imgdata.sizes.flip;
+                const bool sensorLandscape = raw.imgdata.sizes.width >= raw.imgdata.sizes.height;
                 int code = 0;
                 if (libraw_processed_image_t *th = raw.dcraw_make_mem_thumb(&code))
                 {
@@ -274,9 +304,22 @@ namespace cosmo
                     }
                     LibRaw::dcraw_clear_mem(th);
                 }
+                // R-THUMB-1: turn the preview the way dcraw_process would have turned the photo.
+                // Some makers already store an upright preview, and turning that one again would
+                // be just as wrong — a quarter turn swaps the aspect, so a preview whose aspect
+                // still matches the SENSOR frame is the one that has not been turned yet. (A 180
+                // degree flip swaps nothing, so there is no such signal; it is applied, which is
+                // what the camera's own flag asks for.)
+                if (out.ok() && flip > 0)
+                {
+                    const bool previewLandscape = out.width >= out.height;
+                    if ((flip & 4) == 0 || previewLandscape == sensorLandscape)
+                        applyFlip(out, flip);
+                }
             }
             // No embedded preview (rare, but some RAWs have none): fall back to the real thing
-            // rather than showing nothing. Slow, and correct.
+            // rather than showing nothing. Slow, and correct — and already oriented by
+            // dcraw_process, so it must NOT be flipped again.
             if (!out.ok()) out = decodeRaw(path, nullptr);
         }
         else

@@ -90,9 +90,19 @@ namespace arstro
         }
         Pixel h, s, l;
         color::rgbToHsl(in[0], in[1], in[2], h, s, l);
-        const float yh = sampleCyclic(Hue, (float)h);
-        const float ys = sampleCyclic(Sat, (float)h);
-        const float yl = sampleCyclic(Lum, (float)h);
+
+        // How much this pixel's hue can be trusted (see the header). Chroma back out of the
+        // HSL pair — `s` is chroma divided by the lightness envelope, so multiplying it back
+        // by that envelope is exact and costs no second min/max. A deep saturated shadow keeps
+        // its weight this way, where gating on `s` alone would have let dark noise through.
+        const float chroma = (float)s * (1.0f - std::fabs(2.0f * (float)l - 1.0f));
+        float w = (chroma - kChromaFloor) / (kChromaFull - kChromaFloor);
+        w = w < 0.0f ? 0.0f : (w > 1.0f ? 1.0f : w);
+        w = w * w * (3.0f - 2.0f * w);   // smoothstep: no edge where the effect switches on
+
+        const float yh = sampleCyclic(Hue, (float)h) * w;
+        const float ys = sampleCyclic(Sat, (float)h) * w;
+        const float yl = sampleCyclic(Lum, (float)h) * w;
         h += (Pixel)(yh * 180.0f);  // full ±180deg bend so any hue can reach any target
         s *= (Pixel)1 + (Pixel)ys;
         l += (Pixel)(yl * 0.5f);

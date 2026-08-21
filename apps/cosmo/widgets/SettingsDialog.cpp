@@ -43,6 +43,9 @@ namespace cosmo_v2
         std::string threadLabel(int v) { return v == 0 ? "Auto" : std::to_string(v); }
         std::string cpuLabel(int v) { return std::to_string(v) + "%"; }
         std::string gpuLabel(int i) { return i == 0 ? "Off" : "On"; }
+        // Named rather than Off/On: this row swaps the whole shell, and "Mouse / Touch" says
+        // which one you get where "On" would only say that something is on.
+        std::string touchLabel(int i) { return i == 0 ? "Mouse" : "Touch"; }
 
     }
 
@@ -55,18 +58,20 @@ namespace cosmo_v2
              : row == kRowQuality ? edgeLabel(i)
              : row == kRowThreads ? threadLabel(kThreads[i])
              : row == kRowCpu     ? cpuLabel(kCpuPercents[i])
-                                  : gpuLabel(i);
+             : row == kRowGpu     ? gpuLabel(i)
+                                  : touchLabel(i);
     }
 
     SettingsDialog::SettingsDialog(const Color &accent) : mAccent(accent) {}
 
     void SettingsDialog::show(int uiScale, int maxScale, int previewEdge, int threads,
-                              int cpuPercent, bool useGpu, bool gpuAvailable)
+                              int cpuPercent, bool useGpu, bool gpuAvailable, bool touchUi)
     {
         mUiScale = cosmo::AppSettings::clampUiScale(uiScale);
         mMaxScale = maxScale;
         mEdge = previewEdge; mThreadCount = threads; mCpuPercent = cpuPercent;
         mGpuAvailable = gpuAvailable; mUseGpu = useGpu && gpuAvailable;
+        mTouchUi = touchUi;
         mOpen = true; mClosing = false;
         mAppear.animateTo(1.0, 150.0, Easing::EaseOutCubic, mLastMs);
         raise();
@@ -210,10 +215,14 @@ namespace cosmo_v2
                     else if (row == kRowQuality) { mEdge = kEdges[i]; if (onPreviewEdge) onPreviewEdge(mEdge); }
                     else if (row == kRowThreads) { mThreadCount = kThreads[i]; if (onThreads) onThreads(mThreadCount); }
                     else if (row == kRowCpu) { mCpuPercent = kCpuPercents[i]; if (onCpuPercent) onCpuPercent(mCpuPercent); }
-                    else  // GPU row: chip 0 = Off, chip 1 = On (On is inert with no backend)
+                    else if (row == kRowGpu)  // chip 0 = Off, 1 = On (inert with no backend)
                     {
                         if (i == 1 && !mGpuAvailable) return true;
                         mUseGpu = (i == 1); if (onUseGpu) onUseGpu(mUseGpu);
+                    }
+                    else  // touch row: chip 0 = Mouse (this shell), 1 = Touch (R-TOUCH-6)
+                    {
+                        mTouchUi = (i == 1); if (onTouchUi) onTouchUi(mTouchUi);
                     }
                     return true;
                 }
@@ -236,7 +245,7 @@ namespace cosmo_v2
         t.drawText("Settings", c.x + kPad, c.y + kPad + 16.0, 14.0, font::sansSemiBold());
 
         const char *rowLabels[kRows] = {"Screen scale", "Preview quality", "CPU threads",
-                                        "CPU limit", "GPU acceleration"};
+                                        "CPU limit", "GPU acceleration", "Input"};
         for (int row = 0; row < kRows; ++row)
         {
             const double ly = blockTop(c, row);
@@ -258,6 +267,9 @@ namespace cosmo_v2
             }
             if (row == kRowCpu) rowLbl += "  \xc2\xb7  Auto uses this";
             if (row == kRowGpu && !mGpuAvailable) rowLbl += "  \xc2\xb7  unavailable";
+            // The consequence, since the row replaces every control above it with a touch one and
+            // the project stays open across the switch — worth saying so nobody fears losing work.
+            if (row == kRowTouch) rowLbl += "  \xc2\xb7  touch keeps your project open";
             t.drawText(rowLbl, c.x + kPad, ly + 12.0, 11.0, font::sansMedium(), 0.06 * 11.0);
 
             std::vector<Rect> chips;
@@ -269,7 +281,8 @@ namespace cosmo_v2
                                : row == kRowQuality ? (kEdges[i] == mEdge)
                                : row == kRowThreads ? (kThreads[i] == mThreadCount)
                                : row == kRowCpu     ? (kCpuPercents[i] == mCpuPercent)
-                                                    : ((i == 1) == mUseGpu);
+                               : row == kRowGpu     ? ((i == 1) == mUseGpu)
+                                                    : ((i == 1) == mTouchUi);
                 const bool disabled = (row == kRowGpu && i == 1 && !mGpuAvailable)     // "On", no backend
                                    || (row == kRowScale && kScales[i] > mMaxScale);   // no room (R-SCALE-3)
                 const double da = disabled ? 0.4 : 1.0;

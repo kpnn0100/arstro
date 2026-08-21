@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-37**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-41**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,69 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
+- **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
+- **Found:** 2026-08-20, on the first frames `cosmo_touch_shots` ever produced — the phone UI had
+  never been rendered anywhere but on a device, which is why this shipped through M3.
+- **Reproduce:** `cosmo_touch_shots --outdir /tmp/t --only portrait` and `--only landscape`, then
+  look at `cosmo-touch-editor-*`.
+- **Expected:** R-TOUCH-2 — no component overlaps another; R-TOUCH-3 — both orientations work.
+- **Actual:** **Portrait:** the Save / Import / Export action bar sits on top of the last slider row
+  ("Blacks" is cut in half behind the Save button), and the tray's row list is clipped mid-row rather
+  than ending above the bar. **Landscape (852×393):** the photo is a thin strip at the top and the
+  tray covers the rest, with the section chips, the action bar and the 5-tab tool bar all drawn into
+  the same band — three layers of controls in the same pixels, most of them unreachable.
+- **Cause:** the tray is laid out as an overlay that rises **over** the photo (the design brief's own
+  model, now amended), its content height is not measured against the space left after the action bar
+  and tool bar, and there is no landscape layout at all — `resize()` applies one set of portrait
+  metrics whatever the aspect.
+- **RECOMMENDED FIX:** the R-TOUCH-2/3 work: give the tray its own box that the photo's box shrinks
+  to make room for (no overlay), measure the row list against `bodyTop()..actionBarTop()` and scroll
+  it (R6), and add the landscape two-pane layout — photo left, tray a fixed right-hand panel — so
+  neither orientation stacks controls. Guard it in `cosmo_touch_shots --assert` with a sibling-rect
+  intersection check once the tray is a real box rather than an overlay.
+
+### D-36 — An adjustment outside the UI's range crashes the render worker (NaN through a clamp)
+- **Area:** core / engine · **Status:** Confirmed (crashed under gdb) · **Severity:** S1 (crash)
+- **Found:** 2026-08-20, while adding the `editor-dissolve` shot for R-VIEW-1. The shot asked for a
+  deliberately huge change so the dissolve would be visible in a PNG, and the process died.
+- **Reproduce:** any front end, no UI needed — `set exposure=250` on a loaded image, then let a
+  preview render:
+  ```
+  cosmo_shots --outdir /tmp/s --images <a>.RAF --only editor-dissolve   # with exposure=250
+  Thread 242 received signal SIGSEGV
+  #0  arstro::ToneCurve::sampleLut (lut=0x7ffffffe77a8, d=-nan(0x400000))
+      at core/ImageProcessing/src/tone/ToneCurve.cpp:78
+  #1  arstro::ToneCurve::processPixel (…) at ToneCurve.cpp:88
+  #2  arstro::PointProcessor::process …  (a parallelFor worker)
+  ```
+- **Expected:** an out-of-range value is clamped, or renders as white — a number a script can send
+  must not be able to kill the process.
+- **Actual:** `sampleLut` indexes its LUT out of bounds and the render worker segfaults, taking the
+  app with it.
+- **Cause:** [ToneCurve.cpp:70-79](../../../core/ImageProcessing/src/tone/ToneCurve.cpp#L70) clamps
+  with `if (d < 0) d = 0; if (d > 1) d = 1;` — **both comparisons are false for NaN**, so a NaN
+  input survives the clamp, `(int)(NaN * (kLut-1))` is undefined (INT_MIN in practice) and
+  `lut[i]` reads wild memory. The NaN itself comes from the exposure gain: `2^250` overflows to
+  `inf`, and a later `inf - inf` (or `inf * 0`) in the tone chain produces NaN.
+- **Why it matters beyond the silly number:** the UI's own slider is limited to ±5 EV, so a mouse
+  cannot reach this — but `set` is a documented command (R-SVC), which means a script, the control
+  socket, `cosmo-cc`, or a preset file with a bad value all can. It is also the class of bug that
+  turns any future NaN anywhere in the pipeline into a crash rather than a wrong pixel.
+- **RECOMMENDED FIX (not applied — `core/ImageProcessing` is not this skill's to change):** guard
+  the LUT index rather than trusting the clamp, in `ToneCurve::sampleLut`:
+  ```cpp
+  if (!(d > 0)) d = 0;      // false for NaN as well as for negatives
+  else if (d > 1) d = 1;
+  ```
+  and, so a bad value cannot silently poison a whole frame, clamp the *parameter* where it enters
+  the session (`deserializeParams` / `applySetFields`) to the range the UI exposes — an out-of-range
+  `set` should be rejected with a message, which is also what makes it debuggable. A test belongs
+  with each: a `sampleLut(lut, NaN)` unit assertion, and a service test that `set exposure=250`
+  either fails or renders finite pixels.
+- **Guard for the shot in the meantime:** `editor-dissolve` now uses `exposure=1.5`, inside the
+  UI's range, so the harness does not depend on the fix.
 
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
 - **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
@@ -111,7 +174,69 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
-### D-36 — The D-10 fix did not compile on the Windows host it was written for
+### D-39 — Switching to touch mode showed no project, and the touch shell could have destroyed one
+- **Area:** design / touch shell · **Status:** **Fixed** (same session it was reported) · **Severity:** S1 (potential data loss)
+- **Found:** 2026-08-20, reported by the user immediately after touch mode shipped: "when change to
+  touch mode, all project file must keep the same, make it like a view only … right now when change
+  to touch mode i see no project".
+- **Reproduce:** open a project in the desktop shell, then Settings → Input → Touch. Headlessly:
+  `cosmo_touch_shots --assert` — a project is opened through the service with no touch shell in
+  existence, then one is built, and its screen is checked. Fails on the old code.
+- **Expected:** R-TOUCH-1 and the dialog's own promise ("touch keeps your project open") — the
+  touch shell is a view of the same service, so it shows the open project.
+- **Actual:** it came up on its own empty Home screen. Worse than cosmetic: tapping New / Open /
+  Import there called `buildSession`, whose first line is `resetWorkspace()` — so the touch view
+  could have thrown away the project the desktop view had open, without asking.
+- **Cause:** the shell predated the service binding and kept its own project state — `mScreen`
+  starting at Home, its own `mRecents` list, its own `mImgs` source images, and
+  `buildSession`/`enterProject`/`pushRecent`/`refreshHome` reimplementing the project lifecycle
+  against the session. T1 moved the WRITES onto commands but left that lifecycle in place, so the
+  view still believed it owned the project.
+- **Fix:** `PhoneApp::syncFromModel()` adopts the service's screen, project name, image count,
+  edit target and recents, called at construction and whenever `AppModel::revision` moves (the same
+  bind-on-revision rule the desktop shell uses). The local lifecycle is deleted: New / Open /
+  Import are host seams that end in a `Command`, a recent card dispatches `project open <path>`,
+  `finishProject` asks for `screen editor` rather than deciding, and `addProjectImage` — the one
+  raw-pixel seam, since no Command carries pixels — no longer resets the workspace. Entering the
+  editor over an already-loaded project re-selects the current image so the engine produces a
+  preview, otherwise the stage would stay empty until the next edit.
+- **Guarded by:** the `--assert` case above and the `adopted` shot (a touch shell built over an open
+  project, showing its photo, histogram and controls).
+
+### D-37 — The photo dissolve blinked: one dark frame per render, and a pixel swap under a visible layer
+- **Area:** design / photo stage · **Status:** **Fixed** (same session it was reported) · **Severity:** S2
+- **Found:** 2026-08-20, reported by the user against the U2.2 dissolve itself: "fix the fade from to
+  target effect photo, it doesn't smooth make the photo blink when transition".
+- **Reproduce:** open a project, drag any Basic/Detail slider. Headlessly:
+  `theStageNeverBlinksDuringADrag` in `cosmo_ui_tests` — 100 adjustments, a new exposure every third
+  frame, judging the recorded op stream frame by frame. Both of its assertions fail on the shipped
+  code and pass on the fix (verified by re-breaking each cause in turn).
+- **Expected:** the composite moves continuously from one render to the next.
+- **Actual:** two discontinuities per dissolve cycle, neither of which a still frame or the previous
+  tests could see.
+- **Cause (a) — a stale alpha, one frame wide.** `PhotoCanvas::advance` set
+  `mPhotoBase->visible = mPhotoTop->opacity.value() < 0.999` **before** `Segment::advance` updated
+  that opacity, so it decided from the PREVIOUS frame's value. On the first frame of every `1 → 0`
+  dissolve the base was therefore skipped while the top had already eased to ~0.9 — the canvas
+  (`#0A0A0A`) showed through 10% of the frame. Every other render, i.e. ~8 Hz through a drag: a
+  visible flicker.
+- **Cause (b) — pixels written under a visible layer.** R-VIEW-1a specified that a render arriving
+  mid-dissolve REVERSES it, writing the newest pixels into the layer the dissolve was leaving. That
+  layer still contributed `1 − a`, so the composite stepped by `(1−a)` times the difference between
+  two renders — and since renders arrive faster than the dissolve, that happened on nearly every one.
+  The requirement was wrong, not just the code: it is amended, and the newest frame now waits.
+- **Fix:** hold the incoming frame (`mHeld`/`mHeldPending`) while the dissolve runs and apply it from
+  `advance()` once it settles (R-VIEW-1a as amended); set `mPhotoBase->visible` at the END of
+  `advance`, from this frame's alpha (R-VIEW-1e); and change the curve to `Easing::Linear` over
+  160 ms, since an ease-out puts 35% of the change in the first frame.
+- **Guarded by:** `theStageNeverBlinksDuringADrag` (both facts) and the re-rendered
+  `editor-dissolve-early/late` shots at 1600x1000 and 1280x800.
+- **Lesson worth keeping:** both causes are properties of a *frame*, not of the code's structure, and
+  the code read correctly in both cases — the second one had a comment explaining why it was safe.
+  This is the third time in this project that a snap or a step passed review and was caught only by
+  walking frames (R-G-1's clause (d) exists for exactly this).
+
+### D-40 — The D-10 fix did not compile on the Windows host it was written for
 - **Area:** core / test harness · **Status:** **Fixed** · **Severity:** S1 (build break: two of the
   suites could not be produced at all, so nothing could be verified on this host)
 - **Found:** 2026-08-19, by the user, on the first MSYS2/MINGW64 build after `TestMain.h` landed.

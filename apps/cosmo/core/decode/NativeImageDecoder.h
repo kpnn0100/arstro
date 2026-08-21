@@ -28,6 +28,13 @@ namespace cosmo
         static bool isRawExtension(const std::string &path);
         /** True if RAW decoding is compiled in (LibRaw present). */
         static bool rawSupported();
+
+        /** Rotate/mirror decoded pixels by a LibRaw/dcraw `flip` code (0..7) — the SAME
+         *  transform `dcraw_process` applies to a full decode (`flip & 4` transposes,
+         *  `& 2` mirrors rows, `& 1` mirrors columns), so a camera's embedded preview can be
+         *  brought into the orientation the photo itself has (R-THUMB-1). Public because it is
+         *  a pure pixel transform with nothing to do with files, and it is unit-tested as one. */
+        static void applyFlip(DecodedImage &img, int flip);
     };
 }
 }

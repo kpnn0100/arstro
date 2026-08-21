@@ -345,7 +345,7 @@ Two more that are not in the table because they are about *method*:
   minutes, so the usual "it must be stuck" heuristic did not apply. Every verification claim in this
   project rests on "the suite is green"; a suite that cannot report red is not evidence.
   `core/tests/TestMain.h` fixes it, and both suites call `testMainInit()` first.
-- **D-36** — that same header then failed to build on Windows, the platform it was written for, and
+- **D-40** — that same header then failed to build on Windows, the platform it was written for, and
   took an unrelated suite down with it: `_set_abort_behavior` is declared by msvcrt and exported
   only by UCRT (a **link** error), and the `<windows.h>` it pulled in for one call still defines
   `near` as an empty macro, so `widgetTests.cpp`'s `bool near(a,b,eps)` stopped parsing. D-10's own

@@ -36,6 +36,19 @@ namespace cosmo
          *  never acts on it, since the layout it scales is the view's (R-SVC-3). */
         int uiScale = 100;
 
+        /** Draw the TOUCH shell instead of the desktop one (R-TOUCH-6). The second
+         *  store-and-forward view key, for the same reason `uiScale` is one: which shell a host
+         *  builds is the view's business (R-SVC-3), and the service only needs to remember the
+         *  choice and tell whoever owns a view about it.
+         *
+         *  It is a *setting* rather than a launch flag because the machine is what decides it —
+         *  a convertible laptop folded into a tablet, a touchscreen panel, a desktop being used
+         *  by hand — and because a preference that reverts on every launch reads as broken
+         *  (R-SETTINGS-4). Being in the settings grammar also means `settings set touchUi=1`
+         *  drives it, so the touch shell is scriptable and its shots are renderable on a desktop
+         *  host without a device (R-TOUCH-5). */
+        bool touchUi = false;
+
         /** Legal UI scales, in the order the settings row offers them. */
         static const std::vector<int> &uiScales();
         /** `percent` snapped to the nearest offered scale — a hand-edited 83 becomes 90

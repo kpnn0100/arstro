@@ -386,7 +386,9 @@ int main(int argc, char **argv)
     installSystemClipboard();
 
     static Host host;
-    host.app.onOpenRequested = [&host] { openGenesisDialog(&host); };
+    // `host` has static storage duration, so the lambdas below name it directly rather
+    // than capturing it (capturing a non-automatic variable is redundant, and warned on).
+    host.app.onOpenRequested = [] { openGenesisDialog(&host); };
     // The recognizer turns raw pointer events into gestures; the router hit-tests the
     // Segment tree and delivers them. Both are platform-free — the host only supplies facts.
     host.router.add(&host.app);

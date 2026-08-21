@@ -1,11 +1,15 @@
 /*
  *  Native Linux host for cosmo_v2 by arstro: GTK3 drawing area -> Cairo
  *  (Artboard's CairoTarget). Mirrors cosmo/linux_main.cpp's GTK glue; the only
- *  addition is registering the vendored DM Sans / JetBrains Mono files with
- *  Fontconfig at startup (App-private, no system install) so the drawText
- *  font-family parameter (Artboard FR-22) resolves to them.
+ *  addition is registering the typeface at startup, which is now a handoff of
+ *  bytes that are already IN this binary (EmbeddedFonts, R-FONT-1) rather than a
+ *  Fontconfig call on a path baked in at build time — so the drawText font-family
+ *  parameter (Artboard FR-22) resolves to the app's own faces on any machine.
  */
 #include "App.h"
+#include "EmbeddedFonts.h"
+#include "touch/PhoneApp.h"
+#include "TouchViewport.h"
 #include "ExportWriter.h"
 #include "Log.h"
 #include "ControlChannel.h"
@@ -19,7 +23,6 @@
 #include "widgets/SplashScreen.h"
 #include "core/decode/NativeImageDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
-#include <fontconfig/fontconfig.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
 #ifdef _WIN32
@@ -127,6 +130,15 @@ namespace
         // The in-force preferences, mirrored here because the load runs in the host.
         arstro::cosmo::AppSettings settings;
 
+        // ── R-TOUCH-6: the same binary can draw the TOUCH shell instead of this one ──
+        // Both shells bind to the SAME service above, which is the whole reason this can be a
+        // live switch rather than a restart: the project, the selection, the parameters and the
+        // undo history are the service's, so nothing is reloaded and nothing is lost. The phone
+        // shell is built on first use and then kept, so switching back and forth is free.
+        std::unique_ptr<arstro::cosmo_touch::PhoneApp> phone;
+        bool touchMode = false;                  // which shell input goes to
+        artboard::Property touchFade{0.0};       // 0 = desktop, 1 = touch; between = cross-fade
+
         // ── R-SPLASH: the application-open animation, in its OWN borderless window ──
         GtkWidget *splashWindow = nullptr;
         GtkWidget *splashArea = nullptr;
@@ -211,23 +223,13 @@ namespace
     // Registers a vendored font file as an app-private font (no system install,
     // scoped to this process's Fontconfig config) so cosmo_v2's Theme can select
     // it by family name via the drawText fontFamily parameter.
-    void registerFont(const std::string &path)
-    {
-        if (!FcConfigAppFontAddFile(FcConfigGetCurrent(), (const FcChar8 *)path.c_str()))
-            g_printerr("cosmo_v2: could not register font %s\n", path.c_str());
-    }
-
-
     void registerBundledFonts()
     {
-        // COSMO_SOURCE_DIR (baked in by CMakeLists.txt) locates assets next to
-        // the source tree, independent of the build directory or CWD.
-        const std::string dir = std::string(COSMO_SOURCE_DIR) + "/assets/fonts";
-        registerFont(dir + "/DMSans/DMSans-Regular.ttf");
-        registerFont(dir + "/DMSans/DMSans-Medium.ttf");
-        registerFont(dir + "/DMSans/DMSans-SemiBold.ttf");
-        registerFont(dir + "/JetBrainsMono/JetBrainsMono-Regular.ttf");
-        registerFont(dir + "/JetBrainsMono/JetBrainsMono-Medium.ttf");
+        // R-FONT-1: the faces are IN this binary and go straight to the render adapter. What
+        // this replaced — Fontconfig plus a path baked in at build time — made the app's own
+        // type depend on a directory next to the source tree and on how the host resolves a
+        // family name, and neither is allowed to differ between machines.
+        arstro::cosmo_v2::registerEmbeddedFonts();
     }
 
     void openImageFile(Host *a, const std::string &path)
@@ -1136,11 +1138,82 @@ namespace
         g_timeout_add(16, onTick, a);
     }
 
+    /** Where the touch shell is drawn inside this window (R-TOUCH-6). The rule itself lives in
+     *  TouchViewport.h so the shot renderer can show the same thing; this only supplies the
+     *  window's size. */
+    artboard::Rect touchViewport(const Host &a)
+    {
+        int w = kW, h = kH;
+        if (a.area)
+        {
+            const int aw = gtk_widget_get_allocated_width(a.area);
+            const int ah = gtk_widget_get_allocated_height(a.area);
+            if (aw > 0 && ah > 0) { w = aw; h = ah; }
+        }
+        return arstro::cosmo_v2::touchViewport((double)w, (double)h);
+    }
+
+    /** Turn touch mode on or off. Eased, because it is a visible change (R-G-1). */
+    void setTouchMode(Host *a, bool on)
+    {
+        if (a->touchMode == on && (a->phone || !on)) return;
+        a->touchMode = on;
+        if (on && !a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone.reset(new arstro::cosmo_touch::PhoneApp(a->svc, v.w, v.h));
+            // The touch shell asks the host to show/hide the soft keyboard; a desktop has a
+            // real one, so there is nothing to do and saying so beats leaving it unset.
+            a->phone->onKeyboard = [](bool) {};
+            // The SAME dialogs the desktop shell uses (R-TOUCH-1: one project-opening story,
+            // whichever shell is drawing). Without these the touch shell would fall back to its
+            // own built-in browser, which on a desktop is the wrong file picker.
+            a->phone->onNewProjectRequested = [a] { newProjectDialog(a); };
+            a->phone->onOpenRequested = [a] { openProjectDialog(a); };
+            a->phone->onImportRequested = [a] { importCatalogDialog(a); };
+        }
+        if (a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone->setSize(v.w, v.h);
+        }
+        a->touchFade.animateTo(on ? 1.0 : 0.0, 260.0, artboard::Easing::EaseOutCubic, nowMs(*a));
+        if (a->area) gtk_widget_queue_draw(a->area);
+    }
+
     gboolean onDraw(GtkWidget *, cairo_t *cr, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
         a->target.setContext(cr);
-        a->app.render(a->target, nowMs(*a));
+        const double now = nowMs(*a);
+        const double f = a->touchFade.update(now);
+
+        // Neither shell is redrawn at partial alpha unless the switch is actually in flight, so
+        // the common case costs exactly what it did before: one shell, no layer.
+        if (f <= 0.001) { a->app.render(a->target, now); return FALSE; }
+
+        if (f < 0.999)
+        {
+            a->target.pushLayer(1.0 - f);
+            a->app.render(a->target, now);
+            a->target.popLayer();
+        }
+        if (a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            if (f < 0.999) a->target.pushLayer(f);
+            a->target.save();
+            // The letterbox is painted, not left transparent: an unpainted gutter would show
+            // whatever the desktop shell drew there a frame ago.
+            a->target.setTransform(artboard::Transform::identity());
+            drawRoundedRect(a->target, artboard::Rect{0, 0, (double)gtk_widget_get_allocated_width(a->area),
+                                                      (double)gtk_widget_get_allocated_height(a->area)},
+                            0.0, artboard::Paint::filled(arstro::cosmo_v2::palette::background()));
+            a->target.restore();
+            a->phone->setOrigin(v.x, v.y);   // the shell offsets ITSELF (see PhoneApp::render)
+            a->phone->render(a->target, now);
+            if (f < 0.999) a->target.popLayer();
+        }
         return FALSE;
     }
     // R-SVC-8: a line off the socket lands in the SAME dispatch a click produces, on the UI
@@ -1232,6 +1305,13 @@ namespace
         const bool alt = (e->state & GDK_MOD1_MASK) != 0;
         const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
         const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        if (a->touchMode && a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone->pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x - v.x, e->y - v.y,
+                              mapButton(e->button), nowMs(*a), alt, shift, ctrl);
+            return TRUE;
+        }
         a->app.pointer(e->type == GDK_BUTTON_PRESS ? 0 : 2, e->x, e->y, mapButton(e->button), nowMs(*a), alt, shift, ctrl);
         return TRUE;
     }
@@ -1243,7 +1323,13 @@ namespace
         if (e->direction == GDK_SCROLL_UP) dy = 1.0;
         else if (e->direction == GDK_SCROLL_DOWN) dy = -1.0;
         else if (e->direction == GDK_SCROLL_SMOOTH) dy = -e->delta_y;
-        a->app.wheel(e->x, e->y, dy, ctrl);
+        if (a->touchMode && a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone->wheel(e->x - v.x, e->y - v.y, dy, ctrl);
+        }
+        else
+            a->app.wheel(e->x, e->y, dy, ctrl);
         gtk_widget_queue_draw(a->area);
         return TRUE;
     }
@@ -1253,6 +1339,12 @@ namespace
         const bool alt = (e->state & GDK_MOD1_MASK) != 0;
         const bool shift = (e->state & GDK_SHIFT_MASK) != 0;
         const bool ctrl = (e->state & GDK_CONTROL_MASK) != 0;
+        if (a->touchMode && a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone->pointer(1, e->x - v.x, e->y - v.y, 0, nowMs(*a), alt, shift, ctrl);
+            return TRUE;
+        }
         a->app.pointer(1, e->x, e->y, 0, nowMs(*a), alt, shift, ctrl);
         return TRUE;
     }
@@ -1260,6 +1352,14 @@ namespace
     {
         auto *a = static_cast<Host *>(user);
         a->app.setSize(alloc->width, alloc->height);
+        // The phone shell is laid out in its viewport, not in the window (R-TOUCH-6): in a wide
+        // window that is a centred portrait column, and it has to be re-measured here or the
+        // touch UI would keep the size it was built at.
+        if (a->phone)
+        {
+            const artboard::Rect v = touchViewport(*a);
+            a->phone->setSize(v.w, v.h);
+        }
     }
     gboolean onKey(GtkWidget *, GdkEventKey *e, gpointer user)
     {
@@ -1462,6 +1562,7 @@ int main(int argc, char **argv)
         host.budget.setExplicitEngineThreads(s.threads);   // R-CPU-2b: an explicit count still wins
         if (!s.save()) g_printerr("cosmo_v2: could not save settings to %s\n",
                                   arstro::cosmo::AppSettings::path().c_str());
+        setTouchMode(&host, s.touchUi);   // R-TOUCH-6: the host owns which shell exists
     };
 
     // §7: route the widget layer's trace into the log's `ui` category. The widget layer cannot

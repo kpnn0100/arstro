@@ -1,6 +1,8 @@
 #include "PhotoCanvas.h"
 #include "TextMetrics.h"
+#include "WidgetLog.h"
 #include "../Theme.h"
+#include <cmath>
 
 namespace arstro
 {
@@ -14,17 +16,33 @@ namespace cosmo_v2
         constexpr double kSegPadX = 11.375;  // px-3.5
         constexpr double kFontPx = 10.0;
         constexpr double kPillRadius = 6.0;   // "rounded like a background" — the highlight hugs this
+        // The photo dissolve (R-VIEW-1): 160 ms, and LINEAR — the one place in cosmo that does not
+        // take the house EaseOutCubic. A cross-fade is judged by its LARGEST single-frame step, and
+        // an ease-out front-loads: at 16 ms of 120 ms, EaseOutCubic is already 35% of the way
+        // across, so the first frame carried a third of the change and the rest crawled — which
+        // reads as a partial cut, not a fade. Linear spreads the change evenly (10 frames, ~10%
+        // each) and is what a video cross-dissolve does, for the same reason. 160 ms is long enough
+        // for the steps to be small and short enough that a held render is never far behind the
+        // slider (R-VIEW-1a's stated trade).
+        constexpr double kPhotoFadeMs = 160.0;
+        constexpr Easing kPhotoFadeEase = Easing::Linear;
+        constexpr double kModeFadeMs = 180.0;   // Split's clip + seam: cosmo's cross-fade step
     }
 
     PhotoCanvas::PhotoCanvas()
     {
         clipToBounds = true;
-        mImageView = std::make_shared<ImageView>();
-        mImageView->setFit(ImageView::Fit::Contain);
-        // PhotoCanvas owns pan/zoom so the after + before(split) views move together;
-        // make the after view click-through so its drag falls through to us (R-ZOOM-3).
-        mImageView->inputTransparent = true;
-        addChild(mImageView);
+        // Two stacked after-views, fixed in z-order: only mPhotoTop's opacity moves (R-VIEW-1).
+        // PhotoCanvas owns pan/zoom so every view on the stage moves together; both are
+        // click-through so a drag falls through to us (R-ZOOM-3, as amended).
+        for (auto *slot : {&mPhotoBase, &mPhotoTop})
+        {
+            *slot = std::make_shared<ImageView>();
+            (*slot)->setFit(ImageView::Fit::Contain);
+            (*slot)->inputTransparent = true;
+            addChild(*slot);
+        }
+        mPhotoTop->opacity.set(0.0);   // nothing to dissolve from yet
 
         // Split: a left-half clip holding a full-canvas before-image, so it stays
         // aligned with the edited image behind it.
@@ -61,22 +79,135 @@ namespace cosmo_v2
         mPill->onChange = [this](int idx) { applyMode(); if (onModeChange) onModeChange(idx); };
         addChild(mPill);
 
-        applyMode();
+        applyMode(/*immediate=*/true);   // the first frame has nothing to fade from
         layout();
     }
 
-    void PhotoCanvas::applyMode()
+    void PhotoCanvas::applyMode(bool immediate)
     {
-        const bool split = (mPill->selected() == Split);
-        mSplitClip->visible = split;
-        mDivider->visible = split;
+        // R-VIEW-2 / R-G-1: the split half and its seam FADE. A setter with no `nowMs` cannot
+        // start a tween, and the pill's onChange is exactly that, so record the wanted state and
+        // let advance() ease toward it.
+        mSplitWanted = (mPill->selected() == Split);
+        if (!immediate) return;
+        const double a = mSplitWanted ? 1.0 : 0.0;
+        mSplitClip->opacity.set(a);
+        mDivider->opacity.set(a);
+        mSplitApplied = mSplitWanted;
+    }
+
+    void PhotoCanvas::advance(double nowMs)
+    {
+        if (mSplitApplied != mSplitWanted)
+        {
+            const double a = mSplitWanted ? 1.0 : 0.0;
+            mSplitClip->opacity.animateTo(a, kModeFadeMs, Easing::EaseOutCubic, nowMs);
+            mDivider->opacity.animateTo(a, kModeFadeMs, Easing::EaseOutCubic, nowMs);
+            mSplitApplied = mSplitWanted;
+            WLOG("photo: split %s over %.0fms", mSplitWanted ? "IN" : "OUT", kModeFadeMs);
+        }
+        Segment::advance(nowMs);   // every opacity now holds THIS frame's value
+
+        // The render that arrived mid-dissolve goes in the moment the dissolve has settled
+        // (R-VIEW-1a): the hidden view's weight is exactly zero, so writing its pixels changes
+        // nothing on screen. Doing it here rather than in setPhoto is the whole fix — the frame
+        // waits for a safe moment instead of stepping the composite.
+        if (mHeldPending && !mPhotoTop->opacity.isAnimating())
+        {
+            mHeldPending = false;
+            showPhoto(mHeld.data(), mHeldW, mHeldH, nowMs);
+        }
+
+        // The covered layer is not drawn — a second full-canvas blit every frame is pure cost —
+        // but ONLY while the layer above is exactly opaque, and that is decided from THIS frame's
+        // alpha, updated just above and read before anything is drawn (R-VIEW-1e). Reading the
+        // previous frame's value hid the base for the first frame of every 1->0 dissolve and let
+        // the canvas show through the partly-transparent top: one dark frame per render, at about
+        // 8 Hz through a drag, which is what "the photo blinks" was.
+        mPhotoBase->visible = mPhotoTop->opacity.value() < 0.999;
+    }
+
+    ImageView *PhotoCanvas::visibleView() const
+    {
+        return (mPhotoTop->opacity.value() > 0.5 ? mPhotoTop : mPhotoBase).get();
+    }
+
+    bool PhotoCanvas::sameShape(int w1, int h1, int w2, int h2)
+    {
+        if (w1 <= 0 || h1 <= 0 || w2 <= 0 || h2 <= 0) return false;
+        // Cross-multiplied so no division is needed, with half a percent of slack: a preview at a
+        // different resolution rounds its dimensions, and two frames of the same photo must still
+        // count as the same shape (R-VIEW-1c).
+        const double a = (double)w1 * h2, b = (double)w2 * h1;
+        return std::fabs(a - b) <= 0.005 * a;
+    }
+
+    void PhotoCanvas::setPhoto(const uint8_t *rgba, int w, int h, double nowMs)
+    {
+        if (!rgba || w <= 0 || h <= 0) return;
+
+        // A dissolve in flight means BOTH views are contributing to the composite, so writing
+        // pixels into either of them is a step the eye reads as a blink — a step of exactly the
+        // written layer's weight times the difference between two renders, which mid-drag is
+        // nearly every render. So the frame WAITS (R-VIEW-1a): held here, applied by advance()
+        // the moment the dissolve settles. Newest wins; an older held frame is simply overwritten,
+        // the same coalescing RenderService does upstream.
+        if (mPhotoTop->opacity.isAnimating())
+        {
+            mHeld.assign(rgba, rgba + (size_t)w * h * 4);
+            mHeldW = w; mHeldH = h;
+            mHeldPending = true;
+            WLOG("photo: HOLD %dx%d (a=%.2f, dissolve in flight)", w, h, mPhotoTop->opacity.value());
+            return;
+        }
+        showPhoto(rgba, w, h, nowMs);
+    }
+
+    void PhotoCanvas::showPhoto(const uint8_t *rgba, int w, int h, double nowMs)
+    {
+        auto &cur = mTopIsCurrent ? mPhotoTop : mPhotoBase;
+        auto &other = mTopIsCurrent ? mPhotoBase : mPhotoTop;
+
+        // Nothing to dissolve FROM (an empty stage, R-VIEW-1b), or a frame of a different SHAPE,
+        // which cannot cover what is on screen (a different photo, R-VIEW-1c): both views take it,
+        // so no stale pixels can peek around it, and the dissolve rests where it already was.
+        if (!cur->hasImage() || !sameShape(cur->imageWidth(), cur->imageHeight(), w, h))
+        {
+            WLOG("photo: SET %dx%d (%s) -- no dissolve", w, h,
+                 cur->hasImage() ? "different shape" : "empty stage");
+            mPhotoBase->setImage(rgba, w, h);
+            mPhotoTop->setImage(rgba, w, h);
+            return;
+        }
+
+        // The newest render goes into the view that is currently at weight zero, and the top's
+        // opacity eases toward it — so successive renders dissolve in alternating directions and
+        // the pixels are only ever written where they cannot be seen.
+        other->setImage(rgba, w, h);
+        mTopIsCurrent = !mTopIsCurrent;
+        mPhotoTop->opacity.animateTo(mTopIsCurrent ? 1.0 : 0.0, kPhotoFadeMs, kPhotoFadeEase, nowMs);
+        WLOG("photo: DISSOLVE %dx%d -> %s from a=%.2f over %.0fms", w, h,
+             mTopIsCurrent ? "top" : "base", mPhotoTop->opacity.value(), kPhotoFadeMs);
+    }
+
+    void PhotoCanvas::clearPhoto()
+    {
+        mPhotoBase->clearImage();
+        mPhotoTop->clearImage();
+        mPhotoTop->opacity.set(0.0);
+        mTopIsCurrent = false;
+        mHeldPending = false;
+        mHeld.clear();
     }
 
     void PhotoCanvas::layout()
     {
         const double w = width.value(), h = height.value();
-        mImageView->x.set(0.0); mImageView->y.set(0.0);
-        mImageView->width.set(w); mImageView->height.set(h);
+        for (auto &iv : {mPhotoBase, mPhotoTop})
+        {
+            iv->x.set(0.0); iv->y.set(0.0);
+            iv->width.set(w); iv->height.set(h);
+        }
 
         // Clip covers the left half; the before-image inside spans the FULL canvas
         // (same fit as the edited image) so the two stay pixel-aligned.
@@ -92,7 +223,7 @@ namespace cosmo_v2
         // display area INCLUDING the current zoom/pan (R-MASK-3, R-ZOOM).
         mMaskOverlay->x.set(0.0); mMaskOverlay->y.set(0.0);
         mMaskOverlay->width.set(w); mMaskOverlay->height.set(h);
-        mMaskOverlay->setFittedRect(mImageView->fittedRect());
+        mMaskOverlay->setFittedRect(visibleView()->fittedRect());
 
         double pillW = 0.0;
         for (const char *s : {"Before", "Split", "After"})
@@ -107,22 +238,24 @@ namespace cosmo_v2
     void PhotoCanvas::zoomAbout(double factor, const Point &localInCanvas)
     {
         // ImageView fills PhotoCanvas at (0,0), so PhotoCanvas-local == ImageView-local.
-        mImageView->zoomAbout(factor, localInCanvas);
-        mBeforeView->zoomAbout(factor, localInCanvas);
+        // EVERY view on the stage, not just the pair that is visible now: a view left behind
+        // would slide into place under the next dissolve (R-ZOOM-3 as amended).
+        for (auto &iv : {mPhotoBase, mPhotoTop, mBeforeView})
+            iv->zoomAbout(factor, localInCanvas);
     }
 
     void PhotoCanvas::resetZoom()
     {
-        mImageView->resetView();
-        mBeforeView->resetView();
+        for (auto &iv : {mPhotoBase, mPhotoTop, mBeforeView})
+            iv->resetView();
     }
 
     bool PhotoCanvas::handleGesture(const Gesture &g, const Point &local)
     {
         if (g.type == Gesture::Type::RightClick && onContext) { onContext(g.pos.x, g.pos.y); return true; }
 
-        // Drag-to-pan while zoomed (>1x) — pan both views so the split stays aligned.
-        if (mImageView->zoom() > 1.0)
+        // Drag-to-pan while zoomed (>1x) — pan every view so the split stays aligned.
+        if (mPhotoBase->zoom() > 1.0)
         {
             switch (g.type)
             {
@@ -131,8 +264,8 @@ namespace cosmo_v2
                 mPanLast = local;
                 return true;
             case Gesture::Type::Drag:
-                mImageView->panBy(local.x - mPanLast.x, local.y - mPanLast.y);
-                mBeforeView->panBy(local.x - mPanLast.x, local.y - mPanLast.y);
+                for (auto &iv : {mPhotoBase, mPhotoTop, mBeforeView})
+                    iv->panBy(local.x - mPanLast.x, local.y - mPanLast.y);
                 mPanLast = local;
                 return true;
             case Gesture::Type::Up:
