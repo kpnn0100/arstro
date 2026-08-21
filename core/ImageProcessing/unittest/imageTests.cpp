@@ -476,6 +476,79 @@ TEST(ColorMixer_hue_curve_localized_and_cyclic)
     CHECK(hueOf(mh.apply(pxHsl(0, (Pixel)0.9, (Pixel)0.5))) > 30.0);
 }
 
+// ── ColorMixer: a per-hue effect must not fire on a pixel that has no hue ──────────────
+//
+// Hue is computed by dividing channel DIFFERENCES by chroma (ColorSpace.cpp), so as chroma
+// goes to zero the hue of a pixel is decided by its last bit of noise: neighbouring pixels in
+// a flat grey area read as red, green and blue at random. The Lum channel is additive
+// (`l += y*0.5`), so before the chroma weight each of those pixels took a DIFFERENT full-strength
+// lift and a smooth grey turned into speckle — reported as "random noise particles got lit up".
+//
+// The measurement, rather than an opinion about it: take a flat grey with a little noise, apply a
+// lum curve that lifts hard at one hue, and compare the spread of the output with the spread of
+// the input. Amplifying the noise is the defect; leaving it alone is the fix.
+TEST(ColorMixer_lum_curve_does_not_amplify_noise_in_a_grey)
+{
+    auto spread = [](const Image &im) {                    // stddev of luminance, in linear light
+        double sum = 0, sum2 = 0;
+        const int n = im.width() * im.height();
+        for (int y = 0; y < im.height(); ++y)
+            for (int x = 0; x < im.width(); ++x)
+            {
+                const double l = 0.2126 * im.at(x, y, 0) + 0.7152 * im.at(x, y, 1) + 0.0722 * im.at(x, y, 2);
+                sum += l; sum2 += l * l;
+            }
+        const double mean = sum / n;
+        const double var = sum2 / n - mean * mean;
+        return var > 0 ? std::sqrt(var) : 0.0;
+    };
+
+    // A flat grey with ±1/255 of per-channel noise: chroma is tiny, hue is meaningless, and the
+    // pattern is deterministic so the numbers below are reproducible.
+    Image grey(48, 48, 3, ColorSpace::LinearSRGB);
+    unsigned seed = 12345u;   // a plain LCG: reproducible, and genuinely varying per pixel
+    auto lsb = [&seed] {
+        seed = seed * 1664525u + 1013904223u;
+        return (int)((seed >> 16) % 3u) - 1;   // -1, 0 or +1
+    };
+    for (int y = 0; y < 48; ++y)
+        for (int x = 0; x < 48; ++x)
+            for (int c = 0; c < 3; ++c)
+                grey.at(x, y, c) = (Pixel)0.18 + (Pixel)lsb() * (Pixel)(1.0 / 255.0);
+
+    // A curve that SWINGS with hue: +1 at red, -1 at cyan. That is what turns "each pixel read a
+    // different random hue" into "each pixel got a different lift" — a flat curve cannot show the
+    // defect at all, because it lifts every hue by the same amount.
+    ColorMixer lift;
+    lift.setCurve(ColorMixer::Lum, {{0.f, 1.f}, {180.f, -1.f}});
+    const Image out = lift.apply(grey);
+
+    const double before = spread(grey), after = spread(out);
+    std::printf("      grey spread %.5f -> %.5f\n", before, after);
+    // The grey still moves as a whole — a constant curve is a constant offset — but it must not
+    // FAN OUT. 1.5x leaves room for the HSL round trip; the unweighted code multiplies it by ~40.
+    CHECK(after < before * 1.5);
+    // ...and it is genuinely still grey, not tinted by whichever hue each pixel happened to read.
+    CHECK(satOf(out) < 0.05);
+
+    // The other half of the contract: a pixel that HAS a hue still gets the full lift.
+    const Image colour = pxHsl(0, (Pixel)0.8, (Pixel)0.4);    // at the curve's +1 peak
+    Pixel h0, s0, l0, h1, s1, l1;
+    color::rgbToHsl(colour.at(0, 0, 0), colour.at(0, 0, 1), colour.at(0, 0, 2), h0, s0, l0);
+    const Image lifted = lift.apply(colour);
+    color::rgbToHsl(lifted.at(0, 0, 0), lifted.at(0, 0, 1), lifted.at(0, 0, 2), h1, s1, l1);
+    CHECK(l1 - l0 > 0.4);   // ~+0.5, undiminished by the weight
+
+    // And the weight is a ramp, not a switch: a pastel gets part of the lift, between the two.
+    const Image pastel = pxHsl(0, (Pixel)0.03, (Pixel)0.4);   // chroma 0.024: mid-ramp
+    Pixel ph, ps, pl0, qh, qs, pl1;
+    color::rgbToHsl(pastel.at(0, 0, 0), pastel.at(0, 0, 1), pastel.at(0, 0, 2), ph, ps, pl0);
+    const Image plifted = lift.apply(pastel);
+    color::rgbToHsl(plifted.at(0, 0, 0), plifted.at(0, 0, 1), plifted.at(0, 0, 2), qh, qs, pl1);
+    CHECK(pl1 - pl0 > 0.02);
+    CHECK(pl1 - pl0 < 0.45);
+}
+
 // ── ColorGrading ──
 TEST(ColorGrading_hue_remap_and_identity)
 {

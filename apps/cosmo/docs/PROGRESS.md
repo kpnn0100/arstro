@@ -44,7 +44,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-20 · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Previous commit: D-22, a load now reports the WORK (entries claimed, named
@@ -155,6 +155,22 @@ Decisions taken with the user before any code (so no other machine re-litigates 
 - [ ] **T7** **Artboard: a GLES render adapter.** Draw the UI on the GPU instead of software Cairo
       (a new `IRenderTarget` adapter in the Artboard repo, via `implement_artboard`) — for UI
       smoothness and battery on device, and reusable by every Arstro app on Android
+
+## U3 — reported 2026-08-21
+
+- [x] **U3.1** (engine) The Mixer's Lum curve no longer lights up noise in grey areas
+      (**R-MIXER-1…4**, `arstro_image` commit). Asked as a question first — "is it make sense for
+      lum curve that lower saturation receive less amount of lum" — and the answer was yes, for a
+      numerical reason: hue is derived by dividing channel differences by chroma, so on a neutral
+      pixel it is decided by noise, and the additive Lum channel then gave each pixel of a flat
+      grey a different full-strength lift. Every mixer channel is now scaled by
+      `smoothstep(0.010, 0.040, chroma)`, weighted on **chroma** rather than HSL saturation
+      (saturation is normalised by lightness, so it lies in the shadows — exactly where noise
+      lives). Measured: a noisy grey patch's luminance spread went 0.00240 → 0.26549 unweighted
+      and 0.00240 → 0.00240 weighted; on a real X-Trans frame the flattest patch went 0.00025 →
+      0.15329 (**×624**) unweighted and ×1.00 weighted, with the most colourful patch in the same
+      frame moving identically either way. Test fails on the unweighted code, checked by
+      re-breaking it
 
 ## U2 — what the photographer reported on 2026-08-20
 
@@ -440,6 +456,18 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-21 (U3.1) — Chroma, not saturation, and a floor rather than only a ramp.** Two things
+  that looked like details and were not. (1) Gating a per-hue effect on HSL *saturation* fails in
+  the shadows, because `s = d/(mx+mn)` inflates a tiny chroma into a large `s` — the noise is worst
+  exactly where the gate would be loosest. (2) A weight that merely attenuates is not enough: with
+  the floor at 0.004 the ±1/255 noise still carried ~6% of a steep curve, and 6% of a 0.5 lift is
+  still visible speckle. The floor has to sit **above** the noise chroma (0.010) so a neutral pixel
+  receives exactly zero.
+- **2026-08-21 (U3.1) — A flat test curve cannot show this defect.** The first fixture lifted every
+  hue by the same amount, so the random hues produced identical lifts and the spread did not move.
+  The defect is hue-DEPENDENCE landing on pixels whose hue is noise, so the curve has to swing (+1
+  at red, −1 at cyan) for the measurement to mean anything.
 
 - **2026-08-20 (T1b) — Moving the writes onto commands was not enough; the LIFECYCLE had to go.**
   T1 converted every parameter write in the touch shell into a Command and called the binding done.

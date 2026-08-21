@@ -8,7 +8,22 @@
  *  so adjustments vary smoothly around the colour wheel with no banding between
  *  discrete bands. A point op.
  *
- *  y maps to: Hue -> hue += y*60 deg; Sat -> s *= (1 + y); Lum -> l += y*0.5.
+ *  y maps to: Hue -> hue += y*180 deg; Sat -> s *= (1 + y); Lum -> l += y*0.5.
+ *
+ *  ...each scaled by a CHROMA WEIGHT, and that is not a refinement — it is what keeps a
+ *  per-hue tool from firing on a pixel that has no hue. `rgbToHsl` computes hue by dividing
+ *  channel differences by chroma, so as chroma goes to zero the hue of a pixel is decided by
+ *  its last bit of noise: neighbouring pixels in a flat grey read as red, green and blue at
+ *  random. The Lum channel is additive, so every one of them took a DIFFERENT full-strength
+ *  lift and a smooth grey broke into speckle.
+ *
+ *  So each channel's y is multiplied by `smoothstep(kChromaFloor, kChromaFull, chroma)`:
+ *  exactly zero for a pixel indistinguishable from neutral, full for anything with real
+ *  colour, a ramp between. The weight is on CHROMA, not on HSL saturation, because HSL
+ *  saturation is normalised by lightness (`s = d/(mx+mn)`) and therefore reports a large
+ *  value for a tiny chroma in the shadows — exactly where noise lives. Chroma is recovered
+ *  from the HSL pair without a second min/max pass: `d = s * (1 - |2l - 1|)`, the algebraic
+ *  inverse of that formula.
  */
 #pragma once
 #include "../base/CurvePoint.h"
@@ -23,6 +38,17 @@ namespace arstro
     public:
         enum Channel { Hue = 0, Sat = 1, Lum = 2 };
         static constexpr int kLut = 256;
+
+        /** The chroma ramp (linear-light units, full scale 1.0). Below the floor a pixel is
+         *  treated as neutral and no per-hue adjustment reaches it; above `kChromaFull` the
+         *  curve applies in full. The floor is set by MEASUREMENT, not by taste: a flat grey
+         *  carrying ±1/255 of per-channel noise reaches ~2/255 = 0.008 of chroma, so a floor
+         *  of 0.010 puts that entirely at zero — which is the point, since anything the weight
+         *  merely attenuates still fans out when the curve is steep. The full point at 0.040
+         *  (~10/255) is where hue is solidly determined; a faint-but-real tint (s≈0.03) lands
+         *  mid-ramp and a normal colour is untouched. */
+        static constexpr float kChromaFloor = 0.010f;
+        static constexpr float kChromaFull = 0.040f;
 
         ColorMixer();
 

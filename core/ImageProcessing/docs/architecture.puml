@@ -122,6 +122,7 @@ package color {
   }
   class ColorMixer {
     + setCurve(Hue/Sat/Lum, points)  ' 3 cyclic per-hue LUTs
+    + {static} kChromaFloor / kChromaFull  ' the weight: no per-hue effect on a neutral pixel
   }
   class ColorGrading {
     + setGradeHue/Sat/Lum(region) / setHueRemap(...)

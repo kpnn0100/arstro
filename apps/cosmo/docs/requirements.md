@@ -529,6 +529,16 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
   them with the shared `curve::sample()` for its LUT, so the drawn curve and the render never
   diverge, and a saved project restores the exact editable curve. A Reset button flattens the
   active channel.
+  **What the engine does with those curves (R-MIXER):** each channel's `y` is scaled by
+  `smoothstep(ColorMixer::kChromaFloor, kChromaFull, chroma)` — `0.010 → 0.040` in linear light — so a
+  pixel that is indistinguishable from neutral receives **nothing** and a coloured pixel receives the
+  curve in full ([core/ImageProcessing/src/color/ColorMixer.cpp:98](../../../core/ImageProcessing/src/color/ColorMixer.cpp#L98)).
+  Without it the Lum channel gave every pixel of a flat grey a different full-strength lift, because
+  hue at zero chroma is noise: measured at 110× the luminance spread on a synthetic patch and **624×**
+  on the flattest patch of a real X-Trans frame, against 1.00× with the weight. The editor is
+  unchanged — this is entirely in the engine — but the panel's effect on a desaturated region is
+  deliberately smaller now (R-MIXER-3).
+
 - **CurvePanel**: an RGB/R/G/B picker + Reset over a tone-curve plot that edits with the **same
   UX as the mixer's HueCurveEditor** — points are **bezier `CurvePoint`s** (`EditParams::curve` /
   `curveChannel`, same model + `curve::sample` sampler): **corners** (straight segments) by

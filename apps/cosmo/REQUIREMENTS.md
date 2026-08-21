@@ -435,6 +435,35 @@ pool in lockstep with the engine's reset slot ids (a new project's `thumbSlot` m
 thumbnail). Headless-verified: red project → reset → editor blank → green project opens fresh, no
 stale photo, no crash.
 
+## R-MIXER — A per-hue tool only touches pixels that have a hue — ✅ IMPLEMENTED
+
+Reported by the user: using the Mixer's **Lum** curve made flat grey areas break into speckle —
+"random noise particle got lit up". Not a matter of taste, and not fixable by moving a control: hue
+is *derived* by dividing channel differences by chroma, so on a near-neutral pixel it is decided by
+the last bit of sensor noise. Neighbouring pixels in a grey read as red, green and blue at random,
+and the Lum channel — the one that adds rather than multiplies — then gave each of them a different
+full-strength lift. Measured at **624×** the luminance spread of the flattest patch of a real
+X-Trans frame.
+
+- **R-MIXER-1 Every mixer channel is scaled by a chroma weight.** `smoothstep(0.010, 0.040, chroma)`
+  in linear-light units: exactly **zero** where a pixel is indistinguishable from neutral, full where
+  there is real colour, a ramp between. All three channels — Lum is where it showed, but boosting Sat
+  on grey amplifies colour noise and bending the hue of a noise pixel is equally meaningless. The
+  floor is set by measurement, not by taste: ±1/255 of per-channel noise reaches ~0.008 of chroma, and
+  a weight that merely *attenuates* still fans out under a steep curve.
+- **R-MIXER-2 The weight is on chroma, never on saturation.** HSL saturation is normalised by
+  lightness, so it reports a large value for a tiny chroma in the shadows — exactly where noise
+  lives, so gating on it would let dark speckle through. A genuinely saturated shadow keeps its full
+  weight, because chroma is recovered exactly as `s · (1 − |2l − 1|)`.
+- **R-MIXER-3 The trade is stated, not hidden.** A genuinely desaturated region now moves less under
+  the lum curve. That is intended — darkening a grey sky is exposure, tone regions or a mask, not a
+  per-hue curve — but a project that leaned on the old behaviour renders differently, which is why
+  this is a requirement rather than a tweak.
+- **R-MIXER-4 A GPU port must carry the weight.** The compute backends currently **decline** any
+  non-identity mixer, so CPU is the only implementation and cannot diverge. When the mixer moves to
+  GLES (ledger T6) the weight goes with it in the same change, and the conformance test covers a
+  neutral patch — otherwise GPU and CPU would differ on precisely the pixels this exists for.
+
 ## R-BUGFIX-3 — Mixer curve saved as samples, not bezier points — ✅ FIXED
 
 The colour-mixer (Mixer/Curve tab) is edited as a bezier curve with smooth, Alt-dragged tangent
