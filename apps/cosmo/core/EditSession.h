@@ -150,7 +150,7 @@ namespace cosmo
          *  not have to know which group is currently open. False if `node` is not a real
          *  non-root node. Cell indices stay the filmstrip's language; ids are everyone
          *  else's (R-SVC-2). */
-        bool selectNodeById(int node);
+        bool selectNodeById(int node, bool add = false, bool range = false);
         void selectImage(int slot);                         // jump straight to an image anywhere in the tree
         void createGroupFromSelection();
         void ungroupSelected();

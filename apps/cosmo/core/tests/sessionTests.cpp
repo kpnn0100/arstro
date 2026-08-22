@@ -1069,6 +1069,7 @@ namespace
         const char *lines[] = {
             "project open /tmp/a.cmp", "project new /tmp/b.cmp", "project save", "project save /tmp/c.cmp",
             "project close", "import /a.raf /b.raf", "select 3", "select next", "select prev",
+            "select 3 add", "select 3 range",   // R-SVC-2: multi-select is IN the grammar now
             "set exposure=1.2 temp=7000", "bypass 4 on", "bypass 4 off", "group new \"Tokyo Night\"",
             "group ungroup 2", "undo", "redo", "preset apply \"Portrait/Soft Skin\"",
             "preset save MyLook", "settings set cpuPercent=25 previewEdge=1600", "screen home",
@@ -1250,6 +1251,77 @@ namespace
                "(%d decodes for 6 photos, %d re-decodes)\n",
                sDecodes.load(), svc.model().budget.rehydrations);
     }
+    void test_selection_reaches_the_service_during_a_load()
+    {
+        using namespace arstro::cosmo;
+        // Reported as "when photo is loading, select another photo doesn't work (it don't
+        // send even to the core)". The core half always worked — selectNode moves onto a
+        // pending leaf and keeps the stage (R-LOADUX-2) — but the filmstrip called
+        // EditSession directly, so the click emitted no Event, wrote no log line and no
+        // other front end could see or script it. R-SVC-2: this asserts the COMMAND path,
+        // mid-load, which is the part that did not exist.
+        const std::string path = "/tmp/cosmo_select_during_load.cmp";
+        writeFakeProject(path, 8, /*withGroup=*/false, /*withMissing=*/false);
+
+        struct SlowDecoder : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &p) override
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                DecodedImage d;
+                d.width = 24; d.height = 16;
+                d.rgba.assign((size_t)24 * 16 * 4, 140);
+                d.name = p;
+                return d;
+            }
+        };
+
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new SlowDecoder()); });
+
+        std::vector<std::string> log;
+        svc.subscribe([&log](const Event &e) { log.push_back(formatEvent(e)); });
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+
+        // Pump only until the tree exists — the nodes are built before any pixel decodes
+        // (R-LOADUX-1), so there are leaves to select while the load is still running.
+        double t = 0;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (svc.model().nodes.size() < 8 && std::chrono::steady_clock::now() < deadline)
+        {
+            svc.pump(t); t += 16.0;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        assert(svc.model().nodes.size() == 8 && "the whole rack exists from the first frame");
+        assert(svc.model().load.active && "and the load is genuinely still running");
+
+        // THE assertion: a select dispatched mid-load is accepted, moves the model, and
+        // says so on the event stream.
+        const int target = svc.model().nodes.back().node;
+        const size_t before = log.size();
+        assert(svc.dispatchText("select " + std::to_string(target), err) && err.empty() &&
+               "selecting during a load must be accepted, not ignored");
+        assert(svc.model().selectedNode == target && "the selection actually moved");
+        bool sawEvent = false;
+        for (size_t i = before; i < log.size(); ++i)
+            if (log[i].rfind("[evt] selection.changed", 0) == 0) sawEvent = true;
+        assert(sawEvent && "and it reaches every front end as an Event (R-SVC-2/5)");
+
+        // Multi-select is in the grammar too, which it had to be: the filmstrip could always
+        // ctrl-click, and a behaviour no Command expresses is a hole in the enum.
+        const int other = svc.model().nodes.front().node;
+        assert(svc.dispatchText("select " + std::to_string(other) + " add", err) && err.empty());
+        assert(svc.session().selection().size() == 2 && "ctrl-click adds rather than replaces");
+        assert(!svc.dispatchText("select 1 sideways", err) && !err.empty() &&
+               "an unknown modifier is rejected with a reason, not silently ignored");
+
+        pumpUntilIdle(svc, 20000);
+        printf("[PASS] selection_reaches_the_service_during_a_load\n");
+    }
+
     void test_service_opens_a_project_with_no_ui()
     {
         using namespace arstro::cosmo;
@@ -1889,6 +1961,7 @@ int main()
     test_every_command_kind_has_a_grammar();
     test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded();
     test_a_cold_slot_is_re_decoded_through_the_service();
+    test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();

@@ -1166,9 +1166,9 @@ drops data when the buffer fills. The header records both routes, and notes that
 ### DR-SVC-2a The view's outbound channel, and what still bypasses it (R-SVC-2)
 `App::onCommand` (`App.h`) is the seam a widget or shortcut uses to ask for a behaviour the
 service owns; `emitCommand()` returns false when no service is wired, which is how a bare `App`
-in `cosmo_widget_tests` keeps working. Four methods route through it today — `undo`, `redo`,
-`deleteSelected`, `renameGroup` — each falling back to the direct session call only when
-unwired. `linux_main.cpp` wires it to `CosmoService::dispatch`, so a menu item, a keyboard
+in `cosmo_widget_tests` keeps working. Five route through it today — `undo`, `redo`,
+`deleteSelected`, `renameGroup`, and the filmstrip's `onSelect` (DR-SVC-2c) — each falling back to
+the direct session call only when unwired. `linux_main.cpp` wires it to `CosmoService::dispatch`, so a menu item, a keyboard
 shortcut and a line on the control socket are one path.
 
 **What still bypasses it, stated as a number because "the UI contains no logic" is otherwise
@@ -1177,6 +1177,43 @@ and the host makes 2 `svc->session()` calls. Both must reach zero for S to be do
 (`service-architecture-proposal.md` §5). Note that counting `mSession.` in `App.cpp` measures
 nothing, since a converted method keeps its fallback — see `PROGRESS.md` S4b for why that metric
 was replaced.
+
+### DR-SVC-2d Selecting a photo is a Command, including while a project is loading (R-SVC-2)
+`Filmstrip::onSelect` used to call `EditSession::selectNode(cell, shift, ctrl)` straight through
+(`App.cpp:100`), so a click on a photo emitted no `Event`, wrote no log line, and no second front
+end could see or script it — which is exactly how it read to the user: *"when photo is loading,
+select another photo doesn't work (it don't send even to the core)"*. The core half had always
+worked (`selecting_a_pending_image_keeps_the_stage`); the command did not exist.
+
+The lambda now translates the filmstrip's **cell index** — its own private language — into the
+**node id** the grammar speaks, and emits `Command::Kind::Select`. `emitCommand` returns false when
+no service is wired above (a shot rig, a widget test) and the direct call remains as that fallback,
+the same transitional idiom `RightColumn` uses.
+
+Multi-select had to go into the grammar with it: the filmstrip could always ctrl-click and
+shift-click, and under R-SVC-2 a behaviour a front end can reach that no `Command` expresses is a
+hole in the enum rather than licence to reach past it. `select <node> [add|range]` — a bare word,
+matching `bypass <node> on|off`, not a `--flag` — carried in `Command::name`, dispatched through
+`EditSession::selectNodeById(node, add, range)`. That function now only calls `navigateToGroup` when
+the node is in a *different* group, because a range extends from an anchor that is a cell index in
+the current group and navigating first would move the anchor out from under it.
+
+`CosmoService` keeps `selectImage(slot)` only for the plain single-select case: a modifier, or a
+photo that is still decoding and therefore has no slot, goes by node id.
+
+```bash
+cosmo-cc run --script sel.txt --watch      # dispatched while the load was still running
+#   [cmd] select 7
+#   [evt] selection.changed node=7 slot=-1     <- slot=-1: still decoding, and it still worked
+#   [cmd] select 3 add
+#   [evt] selection.changed node=7 slot=-1
+echo "select 2 sideways" | cosmo-cc run -
+#   cosmo-cc: select: expected add|range, got 'sideways': select 2 sideways   (exit 1)
+```
+
+Guarded by `selection_reaches_the_service_during_a_load` (dispatches mid-load, asserts the model
+moved *and* that a `selection.changed` event was emitted, plus `add` and a rejected modifier) and by
+the two new lines in `command_text_roundtrips`. Checked to fail with the modifier handling removed.
 
 ### DR-SVC-2b What needs a command, and what `set` already reaches (R-SVC-2)
 Worth stating because it was got wrong once from reading: **`set` already addresses every scalar,

@@ -75,14 +75,17 @@ namespace cosmo
         return cells;
     }
 
-    bool EditSession::selectNodeById(int node)
+    bool EditSession::selectNodeById(int node, bool add, bool range)
     {
         if (node <= 0 || node >= (int)mNodes.size()) return false;   // 0 is root: never selectable
         const int parent = mNodes[node].parent;
-        navigateToGroup(parent);
+        // A range extends from the anchor, and the anchor is a CELL in the current group —
+        // so navigating first would move the anchor out from under it. Only navigate when
+        // the node is somewhere else, which for a filmstrip click it never is.
+        if (parent != mCurGroup) navigateToGroup(parent);
         const std::vector<int> &kids = mNodes[parent].kids;
         for (size_t i = 0; i < kids.size(); ++i)
-            if (kids[i] == node) { selectNode((int)i, false, false); return true; }
+            if (kids[i] == node) { selectNode((int)i, range, add); return true; }
         return false;   // a node whose parent does not list it would be a corrupt tree
     }
 

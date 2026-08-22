@@ -45,13 +45,17 @@ something for it; (4) changing a parameter seems to recompute every photo.*
   from `currentGroupCells()` every time — O(N) per photo, so **O(N²) over a load**, which at 120
   photos is 14 400 cell rebuilds with string copies on the UI thread. That is the cost that actually
   scales with the project, and it belongs to `arstro.cosmo.design.implement`.
-- **[ ] (1) Selection during a load never reaches the core.** `App.cpp:100` calls
-  `mSession.selectNode(cell, …)` **directly**, bypassing `Command`/`dispatch` — so it emits no
-  `Event`, writes no log line, and is invisible to every front end but the window, which is exactly
-  why it reads as "it doesn't even reach the core" (R-SVC-2). It is one of S4b's 96 direct session
-  calls. The core half already works: `selectNode` moves the selection onto a pending leaf and keeps
-  the stage (`selecting_a_pending_image_keeps_the_stage`), so what is missing is the command, the
-  event, and — worth deciding — whether selecting a still-decoding photo should PRIORITISE it.
+- **[x] (1) Selection now travels as a Command, mid-load included (R-SVC-2, DR-SVC-2d).**
+  `App.cpp:100` called `mSession.selectNode(cell, …)` directly, so a click emitted no `Event`, wrote
+  no log line and no other front end could see or script it — which is what "it doesn't even reach
+  the core" meant. It is now `Command::Select` by node id, with multi-select promoted into the
+  grammar as `select <node> [add|range]` because the filmstrip could always ctrl/shift-click and no
+  command said so. Verified mid-load from the shell: `select 7` while the photos were still decoding
+  gives `[evt] selection.changed node=7 slot=-1`. One of S4b's 96 direct session calls retired.
+
+  **Still open, and worth a decision:** selecting a photo that has not decoded yet moves the ring
+  and keeps the stage (R-LOADUX-2) but does **not** move that photo up the decode queue. Prioritising
+  the photo the user just asked for is the obvious next behaviour and needs a requirement first.
 
 **► 2026-08-22, on Windows: the CPU limit was reported broken, and three defects came out of it.
 All three are now CLOSED (D-41, D-42, D-43).** Every one was found by running the suites and the CLI

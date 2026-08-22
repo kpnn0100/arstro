@@ -98,7 +98,20 @@ namespace cosmo_v2
         mCenterStage = std::make_shared<CenterStage>();
         mCenterStage->photo()->onModeChange = [this](int) { refreshPhotoForMode(); };
         mCenterStage->filmstrip()->onSelect = [this](int cell, bool shift, bool ctrl) {
-            mSession.selectNode(cell, shift, ctrl);
+            // R-SVC-2: a click on a photo leaves as a Command like every other behaviour.
+            // It used to call mSession.selectNode() directly, which is why selecting a photo
+            // while a project was still loading looked like it "never reached the core":
+            // it emitted no Event, wrote no log line, and no other front end could see or
+            // script it. Cell indices are the filmstrip's private language; the command
+            // grammar speaks node ids, so the translation happens here, at the edge.
+            const auto cells = mSession.currentGroupCells();
+            if (cell < 0 || cell >= (int)cells.size()) return;
+            cosmo::Command c;
+            c.kind = cosmo::Command::Kind::Select;
+            c.index = cells[cell].node;
+            c.name = shift ? "range" : (ctrl ? "add" : "");
+            if (!emitCommand(c))
+                mSession.selectNode(cell, shift, ctrl);   // no service above us (a shot rig, a test)
             syncControlsToSlot();
             // A click on a cell that is only half in view brings it fully in; one on a
             // cell already shown just moves the selector (R-BROWSE-2).

@@ -136,7 +136,19 @@ namespace cosmo
             if (!need(2, "a node id, or next|prev")) return c;
             if (sub == "next") c.kind = Command::Kind::SelectNext;
             else if (sub == "prev") c.kind = Command::Kind::SelectPrev;
-            else { c.kind = Command::Kind::Select; c.index = std::atoi(sub.c_str()); }
+            else
+            {
+                c.kind = Command::Kind::Select;
+                c.index = std::atoi(sub.c_str());
+                // Multi-select, in the grammar rather than only under the mouse. The
+                // filmstrip could always ctrl-click and shift-click, and no Command said so,
+                // which is precisely the R-SVC-2 defect: a behaviour a front end can reach
+                // that the command set cannot express is missing from the enum, not licence
+                // to reach past it. Bare word rather than a --flag, matching `bypass N on`.
+                const std::string mode = t.size() > 2 ? t[2] : std::string();
+                if (mode == "add" || mode == "range") c.name = mode;
+                else if (!mode.empty()) { err = "select: expected add|range, got '" + mode + "'"; return Command{}; }
+            }
         }
         else if (v == "set")
         {
@@ -316,7 +328,10 @@ namespace cosmo
                 o << "import";
                 for (const auto &p : c.paths) o << ' ' << q(p);
                 break;
-            case Command::Kind::Select: o << "select " << c.index; break;
+            case Command::Kind::Select:
+                o << "select " << c.index;
+                if (!c.name.empty()) o << ' ' << c.name;
+                break;
             case Command::Kind::SelectNext: o << "select next"; break;
             case Command::Kind::SelectPrev: o << "select prev"; break;
             case Command::Kind::Set:

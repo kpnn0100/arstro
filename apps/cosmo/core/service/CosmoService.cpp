@@ -537,13 +537,21 @@ namespace cosmo
 
             case Command::Kind::Select:
             {
+                const bool add = c.name == "add";
+                const bool range = c.name == "range";
                 bool found = false;
                 for (const NodeModel &n : mModel.nodes)
                     if (n.node == c.index)
                     {
                         found = true;
-                        if (n.slot >= 0) mSession.selectImage(n.slot);
-                        else mSession.selectNodeById(n.node);
+                        // `selectImage(slot)` is the plain single-select shortcut and cannot
+                        // express a multi-select, so anything with a modifier — and anything
+                        // still DECODING, which has no slot at all — goes by node id.
+                        // R-LOADUX-2: selecting a pending photo moves the ring and leaves the
+                        // stage alone until its pixels arrive, which is why this must work
+                        // during a load rather than being ignored until the load ends.
+                        if (n.slot >= 0 && !add && !range) mSession.selectImage(n.slot);
+                        else mSession.selectNodeById(n.node, add, range);
                         break;
                     }
                 if (!found) return fail("select: no node " + std::to_string(c.index));

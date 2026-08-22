@@ -23,6 +23,8 @@
  *      project save
  *      import /photos/a.RAF /photos/b.RAF
  *      select 3
+ *      select 3 add          (ctrl-click: toggle into the selection)
+ *      select 3 range        (shift-click: extend from the anchor)
  *      select next
  *      set exposure=1.2 temp=7000
  *      bypass 3 on
@@ -55,7 +57,7 @@ namespace cosmo
             ProjectSave,     // path (empty = current)
             ProjectClose,
             Import,          // paths[]
-            Select,          // index = node id
+            Select,          // index = node id, name = "" | "add" | "range"
             SelectNext,
             SelectPrev,
             Set,             // fields: EditParams key=value

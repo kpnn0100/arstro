@@ -434,7 +434,7 @@ namespace
             {"project save", "[path.cmp]"},
             {"project close", ""},
             {"import", "<img> [img ...]"},
-            {"select", "<node>"},
+            {"select", "<node> [add|range]"},
             {"select next", ""},
             {"select prev", ""},
             {"set", "<key>=<value> [key=value ...]"},
