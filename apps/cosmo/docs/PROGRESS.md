@@ -15,6 +15,37 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-23 — four problems reported against a 120-photo RAW project. (2) and (4) are DONE;
+(1) and (3) are next.**
+
+Reported: *(1) selecting another photo while one is loading does nothing and never reaches the core;
+(2) memory — a 120-RAW project takes the whole machine; (3) the UI lags badly during a load, reserve
+something for it; (4) changing a parameter seems to recompute every photo.*
+
+- **[x] (2) Memory — R-MEM, the big one.** `EditEngine::Slot::source` held the decoded image in
+  linear float (24 MP = 387 MB) for **every** slot, for the life of the project: **465 MB per photo,
+  measured**, ~54 GB for 120 on a 27.7 GB machine. Not a leak; no smart pointer applies. Fixed with
+  two **byte-capped LRU pools** plus re-decode-on-demand for a cold slot. Now: **120 RAW photos open
+  in 50 s at `engineResidentMB=765`**, and engine residency is FLAT — 739 MB at 8, 739 at 16, 765 at
+  24, 765 at 120.
+- **[x] (4) "a parameter change recomputes every photo".** Measured against the event stream: it
+  does not, and never did — one `set exposure=…` emits exactly one `frame.ready`. What the user felt
+  was (2): with the machine swapping, a slider move had to fault a 387 MB source back in to rebuild
+  an evicted proxy. Closed by the R-MEM work; no separate change. Worth keeping as the example of
+  why a symptom gets measured before it gets fixed.
+- **[ ] (3) UI lag during a load — a UI reservation in `ThreadBudget`.** `decodeWorkers()` is
+  `total - kEngineFloor`, so the GTK main thread — a thread cosmo starts, doing real Cairo work at
+  frame rate — is in no one's budget. R-CPU-4 says the budget bounds "the threads cosmo starts", so
+  this is a gap in R-CPU, not a new area. Note much of the reported lag was (2)'s paging and should
+  be re-measured before sizing the reservation.
+- **[ ] (1) Selection during a load never reaches the core.** `App.cpp:100` calls
+  `mSession.selectNode(cell, …)` **directly**, bypassing `Command`/`dispatch` — so it emits no
+  `Event`, writes no log line, and is invisible to every front end but the window, which is exactly
+  why it reads as "it doesn't even reach the core" (R-SVC-2). It is one of S4b's 96 direct session
+  calls. The core half already works: `selectNode` moves the selection onto a pending leaf and keeps
+  the stage (`selecting_a_pending_image_keeps_the_stage`), so what is missing is the command, the
+  event, and — worth deciding — whether selecting a still-decoding photo should PRIORITISE it.
+
 **► 2026-08-22, on Windows: the CPU limit was reported broken, and three defects came out of it.
 All three are now CLOSED (D-41, D-42, D-43).** Every one was found by running the suites and the CLI
 on MSYS2 for the first time — the platform where the CPU budget was originally reported broken, and

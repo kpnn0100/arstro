@@ -27,6 +27,39 @@ namespace cosmo
         refreshModel();
     }
 
+    void CosmoService::setDecoderFactory(ProjectLoader::DecoderFactory f)
+    {
+        mMakeDecoder = std::move(f);
+
+        // R-MEM-2: the same decoder that opens the project is what brings an evicted slot
+        // back. Wiring it here rather than at the call site is deliberate — D-41 was a
+        // decode path nobody remembered to budget, and a second one installed separately
+        // would be the identical mistake with a new name.
+        //
+        // The lambda runs on the RENDER WORKER, so it may not touch the session: it is
+        // handed a PATH, which RenderService kept alongside the slot for exactly this
+        // reason, and it returns bytes. `mMakeDecoder` builds a decoder per call because
+        // IImageDecoder implementations are stateless and that is what makes this
+        // thread-safe without a lock (the same rule ProjectLoader's produce() follows).
+        ProjectLoader::DecoderFactory make = mMakeDecoder;
+        if (!make)
+        {
+            mSession.renderService().setSourceLoader(nullptr);
+            return;
+        }
+        mSession.renderService().setSourceLoader(
+            [make](const std::string &path, std::vector<uint8_t> &rgba, int &w, int &h) {
+                auto dec = make();
+                if (!dec) return false;
+                DecodedImage img = dec->decodeFile(path);
+                if (!img.ok()) return false;
+                rgba = std::move(img.rgba);
+                w = img.width;
+                h = img.height;
+                return true;
+            });
+    }
+
     // ── events ────────────────────────────────────────────────────────────────────────
     void CosmoService::emit(const Event &e)
     {
@@ -117,6 +150,8 @@ namespace cosmo
         m.budget.engineThreads = mBudget.engineThreads();
         m.budget.decodeWorkers = mBudget.decodeWorkers();
         m.budget.peakDecode = mBudget.peakDecode();
+        m.budget.residentBytes = mSession.renderService().residentBytes();   // R-MEM-4
+        m.budget.rehydrations = mSession.renderService().rehydrations();
 
         m.gpuAvailable = mSession.gpuAvailable();
         m.gpuActive = mSession.useGpu() && m.gpuAvailable;

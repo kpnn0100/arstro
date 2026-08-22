@@ -138,6 +138,12 @@ namespace cosmo
         int engineThreads = 0;
         int decodeWorkers = 0;
         int peakDecode = 0;
+        /** R-MEM-4: what the engine's two pixel pools actually hold, and how many times
+         *  eviction has forced a re-decode. Measured on the render worker and published
+         *  here, because "memory is bounded" is the kind of claim this project has already
+         *  shipped once without anyone ever reading the number back (R-CPU-4). */
+        size_t residentBytes = 0;
+        int rehydrations = 0;
     };
 
     struct AppModel

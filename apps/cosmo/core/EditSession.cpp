@@ -842,7 +842,7 @@ namespace cosmo
     int EditSession::openImageInto(int parentNode, const uint8_t *rgba, int w, int h, const std::string &name, const std::string &path)
     {
         if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = mCurGroup;
-        const int slot = mService.addImage(rgba, w, h, 4);
+        const int slot = mService.addImage(rgba, w, h, 4);   // copying path: no eviction story (R-MEM-2)
         if (slot < 0) return -1;
         mSlotParams.push_back(EditParams{});
         History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
@@ -879,7 +879,10 @@ namespace cosmo
         if (node < 0 || node >= (int)mNodes.size()) return -1;
         GNode &leaf = mNodes[node];
         if (leaf.group || !leaf.pending || leaf.slot >= 0) return -1;
-        const int slot = mService.addImage(std::move(rgba), w, h, 4);
+        // The source path travels with the pixels so the engine can re-decode this slot
+        // after eviction instead of holding ~387 MB of it for the life of the project
+        // (R-MEM-2). A slot added with no path is simply never re-decodable.
+        const int slot = mService.addImage(std::move(rgba), w, h, 4, path);
         if (slot < 0) return -1;
         mSlotParams.push_back(EditParams{});
         History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;
@@ -920,7 +923,10 @@ namespace cosmo
         // owns a buffer it will never touch again, so neither the ~100 MB copy nor the
         // full-image downsample is charged to whichever thread calls this.
         if (parentNode < 0 || parentNode >= (int)mNodes.size() || !mNodes[parentNode].group) parentNode = mCurGroup;
-        const int slot = mService.addImage(std::move(rgba), w, h, 4);
+        // The source path travels with the pixels so the engine can re-decode this slot
+        // after eviction instead of holding ~387 MB of it for the life of the project
+        // (R-MEM-2). A slot added with no path is simply never re-decodable.
+        const int slot = mService.addImage(std::move(rgba), w, h, 4, path);
         if (slot < 0) return -1;
         mSlotParams.push_back(EditParams{});
         History hist; hist.maxSteps = mHistorySteps; hist.coalesceMs = mHistoryCoalesceMs;

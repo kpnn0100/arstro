@@ -76,14 +76,78 @@ namespace arstro
         s.source = fromEncodedBytes(rgba, width, height, channels);
         mSlots.push_back(std::move(s));
         const int slot = (int)mSlots.size() - 1;
+        // R-MEM-1: the new source joins the capped pool immediately, so a load of 120
+        // photos evicts as it goes instead of accumulating 387 MB per photo to the end.
+        touchSourceLRU(slot);
         if (mCurrent < 0)
             selectImage(slot);
         return slot;
     }
 
+    bool EditEngine::supplySource(int slot, const uint8_t *rgba, int width, int height, int channels)
+    {
+        // R-MEM-2: eviction is a cache decision, never a data decision. A cold slot gets
+        // its pixels back here, from the caller that re-decoded the original file, and
+        // then renders exactly as it would have if it had never been evicted.
+        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].released ||
+            !rgba || width <= 0 || height <= 0 || channels < 1)
+            return false;
+        mSlots[slot].source = fromEncodedBytes(rgba, width, height, channels);
+        ++mRehydrations;
+        touchSourceLRU(slot);
+        return true;
+    }
+
+    bool EditEngine::slotNeedsSource(int slot) const
+    {
+        if (slot < 0 || slot >= (int)mSlots.size()) return false;
+        const Slot &s = mSlots[slot];
+        if (s.released) return false;   // removed from the session; nothing to bring back
+        if (!s.source.empty()) return false;
+        // A proxy already at the current preview size is enough to render a preview from,
+        // so a slot is only COLD when neither is present. renderFull is the other caller
+        // and it asks for the source explicitly.
+        return s.proxy.empty() || s.proxyEdge != mPreviewMaxEdge;
+    }
+
+    bool EditEngine::slotHasSource(int slot) const
+    {
+        return slot >= 0 && slot < (int)mSlots.size() && !mSlots[slot].released &&
+               !mSlots[slot].source.empty();
+    }
+
+    void EditEngine::setMemoryCaps(size_t sourceBytes, size_t proxyBytes)
+    {
+        // A cap of 0 would evict the slot being rendered on the next touch, so both keep a
+        // floor of one frame's worth. The floors are deliberately not "unbounded": a host
+        // that asks for a tiny cap gets a tiny cache, not a disabled one.
+        mSourceCap = sourceBytes;
+        mProxyCap = proxyBytes;
+        if (mCurrent >= 0) { touchSourceLRU(mCurrent); touchProxyLRU(mCurrent); }
+    }
+
+    size_t EditEngine::residentSourceBytes() const
+    {
+        size_t n = 0;
+        for (const Slot &s : mSlots) n += imageBytes(s.source);
+        return n;
+    }
+
+    size_t EditEngine::residentProxyBytes() const
+    {
+        size_t n = 0;
+        for (const Slot &s : mSlots) n += imageBytes(s.proxy);
+        return n;
+    }
+
     void EditEngine::selectImage(int slot)
     {
-        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].source.empty())
+        // A slot with no source is still selectable: it may hold a usable proxy, or it may
+        // be cold and about to be re-decoded (R-MEM-2). Refusing on an empty source was what
+        // made an evicted slot unreachable rather than merely slow. A RELEASED slot is a
+        // different thing and stays unselectable, which is the contract releaseImage has
+        // always had.
+        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].released)
             return;
         // Each slot keeps its own preview proxy (see ensurePreviewProxy + the Slot
         // struct), so switching images does NOT invalidate/re-downscale anything —
@@ -98,11 +162,49 @@ namespace arstro
         auto it = std::find(mProxyLRU.begin(), mProxyLRU.end(), slot);
         if (it != mProxyLRU.end()) mProxyLRU.erase(it);
         mProxyLRU.insert(mProxyLRU.begin(), slot);  // most-recent first
-        while ((int)mProxyLRU.size() > kMaxProxies)  // evict the oldest proxy to bound memory
+        // R-MEM-1: evict from the cold end until the pool is under its BYTE cap. The slot
+        // being rendered is SKIPPED, never evicted — a render reading an image dropped to
+        // satisfy a number is a crash, not a saving — and skipping means leaving it in the
+        // list: popping it would quietly stop tracking it, so it could never be evicted
+        // again once the selection moved on.
+        size_t bytes = residentProxyBytes();
+        for (int i = (int)mProxyLRU.size() - 1; i >= 0 && bytes > mProxyCap; --i)
         {
-            const int old = mProxyLRU.back();
-            mProxyLRU.pop_back();
-            if (old >= 0 && old < (int)mSlots.size()) { mSlots[old].proxy = Image{}; mSlots[old].proxyEdge = -1; }
+            const int old = mProxyLRU[i];
+            if (old == mCurrent) continue;
+            if (old < 0 || old >= (int)mSlots.size() || mSlots[old].proxy.empty())
+            {
+                mProxyLRU.erase(mProxyLRU.begin() + i);   // stale entry, nothing to free
+                continue;
+            }
+            bytes -= imageBytes(mSlots[old].proxy);
+            mSlots[old].proxy = Image{};
+            mSlots[old].proxyEdge = -1;
+            mProxyLRU.erase(mProxyLRU.begin() + i);
+        }
+    }
+
+    void EditEngine::touchSourceLRU(int slot)
+    {
+        auto it = std::find(mSourceLRU.begin(), mSourceLRU.end(), slot);
+        if (it != mSourceLRU.end()) mSourceLRU.erase(it);
+        mSourceLRU.insert(mSourceLRU.begin(), slot);
+        // The pool that actually mattered: a source is ~14x its proxy, and one per slot
+        // held for the life of the project is what made a 120-photo catalog ask for 54 GB.
+        // A slot evicted here is COLD, not gone — RenderService re-decodes it on demand.
+        size_t bytes = residentSourceBytes();
+        for (int i = (int)mSourceLRU.size() - 1; i >= 0 && bytes > mSourceCap; --i)
+        {
+            const int old = mSourceLRU[i];
+            if (old == mCurrent) continue;   // skipped, and deliberately left in the list
+            if (old < 0 || old >= (int)mSlots.size() || mSlots[old].source.empty())
+            {
+                mSourceLRU.erase(mSourceLRU.begin() + i);
+                continue;
+            }
+            bytes -= imageBytes(mSlots[old].source);
+            mSlots[old].source = Image{};
+            mSourceLRU.erase(mSourceLRU.begin() + i);
         }
     }
 
@@ -113,12 +215,20 @@ namespace arstro
         if (slot >= 0 && slot < (int)mSlots.size()) { mSlots[slot].proxy = Image{}; mSlots[slot].proxyEdge = -1; }
     }
 
+    void EditEngine::dropSource(int slot)
+    {
+        auto it = std::find(mSourceLRU.begin(), mSourceLRU.end(), slot);
+        if (it != mSourceLRU.end()) mSourceLRU.erase(it);
+        if (slot >= 0 && slot < (int)mSlots.size()) mSlots[slot].source = Image{};
+    }
+
     void EditEngine::releaseImage(int slot)
     {
         if (slot < 0 || slot >= (int)mSlots.size())
             return;
-        mSlots[slot].source = Image{};
         mSlots[slot].params = EditParams{};
+        mSlots[slot].released = true;   // gone from the session, not merely evicted
+        dropSource(slot);
         dropProxy(slot);
         if (mCurrent == slot) mCurrent = -1;
     }
@@ -127,7 +237,9 @@ namespace arstro
     {
         mSlots.clear();
         mProxyLRU.clear();
+        mSourceLRU.clear();
         mCurrent = -1;
+        mRehydrations = 0;
     }
 
     const EditParams &EditEngine::currentParams() const
@@ -319,17 +431,26 @@ namespace arstro
         return out;
     }
 
-    void EditEngine::ensurePreviewProxy()
+    bool EditEngine::ensurePreviewProxy()
     {
         Slot &s = mSlots[mCurrent];
         if (!s.proxy.empty() && s.proxyEdge == mPreviewMaxEdge)  // cached at this preview size -> reuse
         {
             touchProxyLRU(mCurrent);
-            return;
+            return true;
         }
+        // Cold: the proxy is missing or stale AND the source it would be built from has
+        // been evicted (R-MEM-2). Say so rather than downscaling an empty image — the
+        // caller re-decodes and comes back.
+        if (s.source.empty()) return false;
         s.proxy = downscaleLinear(s.source, mPreviewMaxEdge);
         s.proxyEdge = mPreviewMaxEdge;
         touchProxyLRU(mCurrent);
+        // Building the proxy is also the moment the source stops being the only copy, so
+        // it goes to the back of its own pool rather than staying pinned by having been
+        // used most recently.
+        touchSourceLRU(mCurrent);
+        return true;
     }
 
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes)
@@ -401,13 +522,20 @@ namespace arstro
     PreviewBuffer EditEngine::renderPreview()
     {
         if (mCurrent < 0) return PreviewBuffer{};
-        ensurePreviewProxy();
+        // An empty buffer here means COLD, not failed (R-MEM-2): the slot's pixels were
+        // evicted and the caller must re-decode. RenderService does that through its
+        // SourceLoader and renders on the second attempt.
+        if (!ensurePreviewProxy()) return PreviewBuffer{};
         return renderInto(mSlots[mCurrent].proxy, mSlots[mCurrent].params, mPreviewOut);
     }
 
     PreviewBuffer EditEngine::renderFull()
     {
         if (mCurrent < 0) return PreviewBuffer{};
+        // Full resolution is the one thing a proxy cannot stand in for, so an evicted
+        // source is always cold here — export re-decodes rather than exporting a preview.
+        if (mSlots[mCurrent].source.empty()) return PreviewBuffer{};
+        touchSourceLRU(mCurrent);
         return renderInto(mSlots[mCurrent].source, mSlots[mCurrent].params, mFullOut);
     }
 

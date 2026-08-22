@@ -936,6 +936,42 @@ repeats it 20 times: the race needs `stop()` to be called with nothing at all be
 `tryConsume`, so a version that measured the deadline afterwards, or moved `stop()` onto a
 `std::async`, passed on the broken code.
 
+### DR-MEM-1 Resident pixels are capped in bytes, and a cold slot is re-decoded (R-MEM-1/2/4)
+`EditEngine` keeps two byte-capped LRU pools — `mSourceLRU` (full-resolution linear-float sources)
+and `mProxyLRU` (preview proxies) — sized by `setMemoryCaps(sourceBytes, proxyBytes)`
+(`engine/EditEngine.cpp`), defaults 800 MB / 1 GB. `touchSourceLRU`/`touchProxyLRU` evict from the
+cold end until each pool is under its cap, **skipping the slot being rendered and leaving it in the
+list** (popping it would stop tracking it, so it could never be evicted later).
+
+A slot with neither a source nor a proxy at the current preview size is **cold**:
+`slotNeedsSource()` says so, `renderPreview()` returns an empty buffer, and
+`RenderService::ensureSource` re-decodes the original file through `setSourceLoader(fn)` before the
+render. `CosmoService::setDecoderFactory` installs that loader from the same `IImageDecoder` the
+project load uses, so the re-decode goes through the host's budgeted `PinnedDecoder` (R-CPU-2c) and
+is not a second, unbudgeted path. The loader takes a **path** because it runs on the render worker;
+`RenderService::addImage(..., sourcePath)` carries it alongside the slot.
+
+`releaseImage` sets `Slot::released`, which is what `selectImage` refuses — "no source" no longer
+means "removed from the session", because eviction now produces that state routinely.
+
+**Measured, not asserted (R-MEM-4).** `AppModel::budget.residentBytes` and `.rehydrations` come from
+the worker; `state print` shows them as `engineResidentMB` / `engineRehydrations` (non-stable, like
+`budgetPeakDecode`). Worked command and the numbers it produced on the reported case:
+
+```bash
+cosmo-cc project /tmp/p120.cmp --print | grep engine
+#   engineResidentMB=765
+#   engineRehydrations=0            # 120 x 24 MP RAW, 50 s, flat
+```
+
+Engine residency measured flat across project size — 739 MB at 8 images, 739 at 16, 765 at 24, 765
+at 120 — against 465 MB *per photo* before (1.6 GB for four, 3.7 GB for eight, ~54 GB extrapolated
+for 120). Guarded by `engine_memory_is_capped_and_a_cold_slot_is_re_decoded` and
+`a_cold_slot_is_re_decoded_through_the_service` in `cosmo_core_tests`, both checked to fail with
+eviction disabled. Process peak during a load is now dominated by the decode pool rather than by the
+photo count: at 24 images it is 2348 MB at `cpuPercent=25` (3 workers) against 3753 MB at 100%
+(8 workers), and the steady state after the load settles to ~0.9 GB whatever the count.
+
 ### DR-CPU-1 The budget, and how a percentage becomes a thread count (R-CPU-1, R-SVC-10)
 **As of S1 the conversion happens in `ThreadBudget`, once.** `ThreadBudget::total()`
 (`core/ThreadBudget.cpp:39-43`) is `clamp((cores * percent + 50) / 100, 1, cores)` — integer

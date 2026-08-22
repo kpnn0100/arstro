@@ -180,25 +180,78 @@ namespace arstro
         void setBypass(bool b);
         void resetAll();
 
+        // ── resident pixel memory (R-MEM) ────────────────────────────────────────────
+        /** Cap the two pixel pools, in BYTES. A slot's *source* is the decoded image in
+         *  linear float RGBA — 24 MP is 387 MB — and holding one per slot made resident
+         *  memory a function of how many photos the project had rather than of how many
+         *  the user is looking at: 465 MB per photo measured, ~54 GB for a 120-RAW
+         *  catalog. Bytes rather than a count of images on purpose: an image is not a
+         *  unit of memory, so `kMaxProxies = 6` silently meant six times whatever the
+         *  camera produced (R-MEM-1).
+         *
+         *  Proxies get the larger share because browsing is what must stay instant and a
+         *  proxy is ~14x smaller than its source; sources are kept only for the few slots
+         *  actually being rendered or exported (R-MEM-5). */
+        void setMemoryCaps(size_t sourceBytes, size_t proxyBytes);
+        size_t sourceCapBytes() const { return mSourceCap; }
+        size_t proxyCapBytes() const { return mProxyCap; }
+        /** Measured, not assumed (R-MEM-4): what the two pools actually hold right now. */
+        size_t residentSourceBytes() const;
+        size_t residentProxyBytes() const;
+        size_t residentBytes() const { return residentSourceBytes() + residentProxyBytes(); }
+
+        /** True when `slot` exists but both its source and a usable proxy have been
+         *  evicted — it is **cold**, not broken (R-MEM-2). The caller re-decodes the
+         *  original file and calls `supplySource`; `RenderService` does this for its own
+         *  worker through the `SourceLoader` seam. */
+        bool slotNeedsSource(int slot) const;
+        /** Whether `slot` still holds full-resolution pixels. A preview can run off a
+         *  proxy, but `renderFull` (export) cannot, so the two questions are different. */
+        bool slotHasSource(int slot) const;
+        /** Hand an evicted slot its pixels back. Same bytes `addImage` takes. */
+        bool supplySource(int slot, const uint8_t *rgba, int width, int height, int channels = 4);
+        /** How many times eviction has forced a re-decode. Read back by the model so
+         *  R-MEM-5's "the caps are generous enough" is a number and not a hope. */
+        int rehydrations() const { return mRehydrations; }
+
     private:
         // Each slot caches its own downscaled preview proxy so SWITCHING between
-        // already-viewed images is instant (no re-downscale); an LRU caps how many
-        // proxies are kept in memory at once.
-        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1; };
+        // already-viewed images is instant (no re-downscale); a byte-capped LRU bounds
+        // how much the proxies and the full-resolution sources may hold at once (R-MEM-1).
+        // `released` is what tells a slot that was REMOVED from the session apart from one
+        // that was merely EVICTED (R-MEM-1). Both have no source, and before the byte caps
+        // existed the engine could read "no source" as "dead" because the two never differed
+        // — `releaseImage` was the only way a source went away. Now eviction is routine, so
+        // conflating them would make every cached-out photo unselectable instead of slow.
+        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1; bool released = false; };
 
         void buildPipeline();
         PreviewBuffer renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes);
-        void ensurePreviewProxy();
-        void touchProxyLRU(int slot);   // mark `slot`'s proxy most-recently-used; evict the oldest beyond the cap
+        /** False when the slot is cold — no proxy at this size and no source to build one
+         *  from (R-MEM-2). The caller must re-decode before it can render. */
+        bool ensurePreviewProxy();
+        void touchProxyLRU(int slot);   // mark `slot`'s proxy most-recently-used; evict back to the byte cap
+        void touchSourceLRU(int slot);  // same, for full-resolution sources (R-MEM-1)
         void dropProxy(int slot);       // free a slot's cached proxy + drop it from the LRU
+        void dropSource(int slot);      // free a slot's source + drop it from the source LRU
+        static size_t imageBytes(const Image &i) { return i.pixelCount() * (size_t)i.channels() * sizeof(Pixel); }
         EditParams *cur() { return mCurrent >= 0 ? &mSlots[mCurrent].params : nullptr; }
 
-        static constexpr int kMaxProxies = 6;  // ~cached preview images (bounds memory)
+        // Defaults, in bytes. ~1 GB of proxies is ~37 previews at 1600 px — enough that
+        // stepping along a filmstrip hits resident pixels (R-MEM-5) — and ~0.8 GB of
+        // sources is two 24 MP frames, which is what rendering and exporting need at once.
+        // A host may raise or lower both; they are not a function of the project's size.
+        static constexpr size_t kDefaultSourceCap = (size_t)800 * 1024 * 1024;
+        static constexpr size_t kDefaultProxyCap = (size_t)1024 * 1024 * 1024;
 
         std::vector<Slot> mSlots;
         int mCurrent = -1;
         int mPreviewMaxEdge = 2048;
-        std::vector<int> mProxyLRU;   // slots holding a live proxy, most-recent first
+        std::vector<int> mProxyLRU;    // slots holding a live proxy, most-recent first
+        std::vector<int> mSourceLRU;   // slots holding full-resolution pixels, most-recent first
+        size_t mSourceCap = kDefaultSourceCap;
+        size_t mProxyCap = kDefaultProxyCap;
+        int mRehydrations = 0;
 
         // pipeline split into three segments so histograms can be tapped at the
         // boundaries: pre (before ToneCurve), mid (before ColorMixer), post.

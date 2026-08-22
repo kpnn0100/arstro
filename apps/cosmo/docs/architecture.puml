@@ -242,13 +242,23 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
 
 package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   class RenderService <<worker thread>> {
-    + addImage/releaseImage/reset/setPreviewSize
+    + addImage(bytes, w, h, ch, sourcePath)   ' path travels with the slot (R-MEM-2)
+    + releaseImage/reset/setPreviewSize
     + render(slot, EditParams)   <<coalesced>>
     + tryAcquire(Frame&) : bool
     + renderFull / renderPreviewSync
+    + setSourceLoader(fn)        ' re-decode a cold slot, on this worker (R-MEM-2)
+    + setMemoryCaps(sourceBytes, proxyBytes)
+    + residentBytes() / rehydrations()        ' MEASURED (R-MEM-4)
   }
   class Frame
-  class EditEngine <<fixed pipeline>>
+  class EditEngine <<fixed pipeline>> {
+    + setMemoryCaps(sourceBytes, proxyBytes)  ' byte-capped LRU pools (R-MEM-1)
+    + residentSourceBytes() / residentProxyBytes()
+    + slotNeedsSource(slot) / slotHasSource(slot)
+    + supplySource(slot, rgba, w, h, ch)      ' a cold slot gets its pixels back
+    - touchSourceLRU / touchProxyLRU          ' never evicts the slot being rendered
+  }
   class EditParams
   class CurvePoint
   class MaskParams

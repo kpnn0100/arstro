@@ -325,6 +325,59 @@ UI-thread path: `CosmoService` calls `mLoader.stop()` on `ProjectClose`, and `Pr
 calls it before every load, so the two user actions that hung the app were going Home mid-load and
 opening a second project while one was still loading.
 
+### 2.4g Resident pixel memory (`EditEngine` + `RenderService`) — R-MEM
+
+**The defect.** `EditEngine::Slot::source` is the decoded image in *linear float RGBA* — 24 MP x 4
+channels x 4 bytes = **387 MB** — and every slot held one for as long as the project stayed open.
+Measured with `cosmo-cc project --print` on 24 MP ARWs: **465 MB resident per photo**, exactly
+linear — 4 photos 1.6 GB, 8 photos 3.7 GB, so the reported 120-photo catalog wanted **~54 GB on a
+27.7 GB machine**. Not a leak, and not something a smart pointer addresses: the pixels were
+correctly owned and correctly freed, there were simply always N of them.
+
+**The caps.** Two byte-capped LRU pools on the engine, `mSourceLRU` and `mProxyLRU`, evicting from
+the cold end until each is under `setMemoryCaps(sourceBytes, proxyBytes)`; defaults 800 MB of
+sources (~2 full-resolution frames) and 1 GB of proxies (~37 previews at 1600 px). **Bytes, not a
+count of images:** the previous `kMaxProxies = 6` silently meant six times whatever the camera
+produced, and an image is not a unit of memory. Proxies get the larger share because browsing is
+what must stay instant and a proxy is ~14x smaller than its source (R-MEM-5).
+
+Two rules the loops encode, both learned by getting them wrong first:
+- **The slot being rendered is skipped, never evicted** — a render reading an image dropped to
+  satisfy a number is a crash, not a saving.
+- **Skipping means leaving it in the list.** Popping the current slot while declining to free it
+  stopped tracking it, so it could never be evicted once the selection moved on — a slow leak
+  wearing the fix's clothes.
+
+**Cold, not broken (R-MEM-2).** A slot with neither source nor usable proxy reports
+`slotNeedsSource()`; `renderPreview` returns an empty buffer rather than drawing an empty image.
+`RenderService::ensureSource` re-decodes the original file first, through
+`setSourceLoader(fn)` — a `std::function` seam, exactly like `setComputeAccelerator`, so no codec
+enters `arstro_image`. `CosmoService::setDecoderFactory` installs it from the same `IImageDecoder`
+the load uses, which is deliberate: D-41 was a decode path nobody remembered to budget, and a
+second one installed separately would be that mistake with a new name.
+
+The loader is handed a **path, not a slot id**, because it runs on the render worker and must never
+read session state; `RenderService::addImage(..., sourcePath)` carries the path alongside the slot
+for exactly that reason. A slot added with no path (a paste, a test fixture) is simply never
+re-decoded.
+
+**`released` vs evicted.** `releaseImage` now sets `Slot::released`, and `selectImage` refuses only
+*that*. Before the caps existed the engine could read "no source" as "removed from the session",
+because `releaseImage` was the only way a source went away; now eviction is routine, and conflating
+them made every cached-out photo unselectable rather than merely slow. `Engine_release_image_frees_
+and_keeps_indices_stable` is what caught it.
+
+**Measured (R-MEM-4).** `residentSourceBytes()`/`residentProxyBytes()`/`rehydrations()` are
+published by the worker into `AppModel::budget.residentBytes`/`.rehydrations` and printed by
+`state print` as `engineResidentMB` / `engineRehydrations` (non-stable fields — what a cache holds
+at an instant is real state but never part of an R-SVC-9 comparison).
+
+Result, on the reported case: **120 RAW photos open in 50 s with `engineResidentMB=765` and zero
+re-decodes**, and engine residency is flat — 739 MB at 8 images, 739 at 16, 765 at 24, 765 at 120.
+Guarded by `engine_memory_is_capped_and_a_cold_slot_is_re_decoded` (20 images resident in 2 MB under
+a 2-source cap) and `a_cold_slot_is_re_decoded_through_the_service` (browsing past the cap
+re-decodes and still produces frames), both checked to fail with eviction disabled.
+
 ### 2.4e The service layer (`core/service/*`) — R-SVC-1…10
 
 **`AppModel`** (`service/AppModel.h`) is the whole observable state as plain data: `revision`,

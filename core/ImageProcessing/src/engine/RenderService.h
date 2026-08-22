@@ -15,7 +15,10 @@
 #include "EditEngine.h"
 #include "EditParams.h"
 #include "../analysis/Histogram.h"
+#include <atomic>
 #include <cstdint>
+#include <functional>
+#include <string>
 #include <utility>
 #include <vector>
 #ifdef ARSTRO_ENABLE_THREADS
@@ -43,6 +46,26 @@ namespace arstro
         RenderService(const RenderService &) = delete;
         RenderService &operator=(const RenderService &) = delete;
 
+        /** Where a slot's pixels came from, so an evicted slot can be re-decoded (R-MEM-2).
+         *  A path, not a slot id: the loader runs on the render worker, and handing it a
+         *  slot would mean reaching back into caller-owned, UI-thread-mutated state from
+         *  another thread. `rgba` is filled with straight RGBA8, the same bytes `addImage`
+         *  takes. Return false and the render is skipped rather than drawn wrong.
+         *
+         *  A `std::function` seam, exactly like `EditEngine::setComputeAccelerator`: no
+         *  codec enters arstro_image, and the host's own decoder — budgeted, per R-CPU-2c
+         *  — is what actually runs. */
+        using SourceLoader = std::function<bool(const std::string &path, std::vector<uint8_t> &rgba,
+                                                int &w, int &h)>;
+        void setSourceLoader(SourceLoader loader);
+
+        /** Cap the engine's two pixel pools in bytes (R-MEM-1). Applied on the worker. */
+        void setMemoryCaps(size_t sourceBytes, size_t proxyBytes);
+        /** Measured resident pixel bytes and the number of re-decodes eviction has caused
+         *  (R-MEM-4). Cheap snapshots kept by the worker, so the UI thread may read them. */
+        size_t residentBytes() const;
+        int rehydrations() const;
+
         /** Add an image (copied); returns its slot id (assigned sequentially). */
         int addImage(const uint8_t *rgba, int w, int h, int channels = 4);
         /** As above but TAKES the buffer instead of copying it. A full-resolution frame
@@ -51,6 +74,11 @@ namespace arstro
          *  afford it. Falls back to a copy on the non-threaded build, where the engine
          *  consumes the pixels inline. */
         int addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels = 4);
+        /** As above, remembering where the pixels came from so the slot can be re-decoded
+         *  after eviction (R-MEM-2). A slot added WITHOUT a path is never evictable-and-
+         *  recoverable, so it is simply never re-decoded — which is right for an image
+         *  that has no file behind it (a paste, a test fixture). */
+        int addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels, std::string sourcePath);
         /** Free a slot's pixels (e.g. removed from the session); its index is never
          *  reused, so every other slot's id stays valid. */
         void releaseImage(int slot);
@@ -80,12 +108,24 @@ namespace arstro
 
     private:
         void doPreview(int slot, const EditParams &params, int maxEdge);
+        /** Re-decode `slot` through the SourceLoader if the engine says it is cold, so the
+         *  render that follows has pixels to work with (R-MEM-2). Runs on whichever thread
+         *  is about to render. False when the slot is cold and cannot be recovered. */
+        bool ensureSource(int slot, bool needFullRes);
         EditEngine mEngine;
         int mNextSlot = 0;
         int mPreviewMaxEdge = 1600;
         bool mGpuAvailable = false;  // cached at construction (engine accel availability)
         Frame mReady;          // latest completed preview (both builds)
         bool mFrameReady = false;
+        SourceLoader mSourceLoader;
+        // Slot -> the file its pixels came from. Written by addImage, read by the worker;
+        // both under mMu on the threaded build, so the worker never touches session state.
+        std::vector<std::string> mSourcePaths;
+        // Snapshots the UI thread may read without taking the render mutex (R-MEM-4).
+        // Outside the threads guard because doPreview is shared with the synchronous build.
+        std::atomic<size_t> mResidentBytes{0};
+        std::atomic<int> mRehydrations{0};
 
 #ifdef ARSTRO_ENABLE_THREADS
         void workerLoop();

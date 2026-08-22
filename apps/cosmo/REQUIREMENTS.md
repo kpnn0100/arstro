@@ -196,6 +196,57 @@ Opening a catalog of large frames was bounded by three serial costs, all avoidab
   image only when nothing is selected yet, so a photographer who started working during the stream
   is not yanked back to image 1 when the last one lands.
 
+## R-MEM — A project's size must not be a memory budget — 🚧 IN PROGRESS
+
+Opening a 120-photo RAW project consumed the whole machine and then some. Measured with
+`cosmo-cc project --print` on 24 MP ARWs: **465 MB resident per photo**, linear in the count — 4
+photos took 1.6 GB, 8 took 3.7 GB, and 120 would have needed **~54 GB on a 27.7 GB machine.** Not a
+leak, and no smart pointer would have helped: `EditEngine::Slot::source` is the decoded image in
+*linear float RGBA* — 24 MP × 4 channels × 4 bytes = 387 MB — and every slot held one **for as long
+as the project was open**. Everything else the user reported followed from it: the machine swapped,
+so the UI hitched and a single slider move felt like it was "recomputing every photo" (it was not —
+one parameter change emits exactly one `frame.ready` — it was faulting a 387 MB source back in to
+rebuild an evicted proxy).
+
+The rule this states is the one a photo editor lives by: **what is resident is bounded by what the
+user is looking at, not by how many photos they opened.** A catalog is a list of files; it is not a
+claim on RAM.
+
+- **R-MEM-1 The engine's pixel memory is capped in BYTES, and the cap does not depend on the project.**
+  `EditEngine` holds two byte-capped LRU pools — full-resolution sources, and preview proxies — and
+  evicts the least recently used until each is under its cap. The caps are absolute numbers of bytes,
+  not counts of images, because an image is not a unit of memory: a 61 MP source is five times a
+  12 MP one, and a count-based cap (the previous `kMaxProxies = 6`) silently means six times whatever
+  the camera happened to produce. The slot currently being rendered is never evicted, or the render
+  it is doing would have nothing to read.
+- **R-MEM-2 An evicted photo is re-decoded from its file, not lost.** A slot whose source and proxy
+  have both been evicted is **cold**, not broken: the next render of it re-decodes the original file
+  through the same `IImageDecoder` the load used, on the render worker, and proceeds. This is what
+  makes R-MEM-1 safe to enforce — eviction is a cache decision, never a data decision, and a project
+  with 10 000 photos in it behaves exactly like one with 10. The re-decode is decode work like any
+  other and is therefore inside the CPU budget (R-CPU-2c): it goes through the host's `PinnedDecoder`
+  like every other decode, and is not a second, unbudgeted path (D-41).
+- **R-MEM-3 A thumbnail is never evicted.** Filmstrip thumbnails (R-THUMB, 110 px long edge, ~32 KB)
+  stay resident for every slot for the life of the project: 120 of them is 3.8 MB, they are what the
+  rack draws, and a rack that went blank because memory was tight would make the application look
+  broken while saving nothing worth having.
+- **R-MEM-4 The number is measured and reported, not asserted.** `AppModel` carries the engine's
+  resident bytes and the count of re-decodes eviction has caused, `state print` shows both, and a
+  test asserts resident bytes stay under the cap across a load of many images. R-CPU-4's rule applies
+  here for the same reason it applies there: a memory bound nothing reads back is a note, not a
+  contract, and this project has already shipped one of those.
+- **R-MEM-5 Bounding memory must not un-bound latency.** Re-decoding a 24 MP RAW costs ~0.9 s, so the
+  caps must be generous enough that ordinary work — stepping along the filmstrip, adjusting the photo
+  in front of you, undo/redo — hits resident pixels. The proxy pool is the one that matters for
+  browsing (a proxy is ~14× smaller than its source), so it gets the larger share; sources are kept
+  only for the few slots being rendered or exported. R-VIEW-1's dissolve already covers a frame that
+  arrives late, and R-THUMB's thumbnail is what the rack shows meanwhile, so a cold photo degrades to
+  "it fades in a moment later" rather than to a blank stage.
+
+*Complementary to, and not in conflict with, R-LOADPERF-1a:* that caps decoded-but-**unapplied**
+bytes in flight during a load, which bounds the producer side; this caps what stays resident **after**
+they are applied, which is the side that outlives the load and was unbounded.
+
 ## R-TOUCH — The touch shell: one core, two UIs — 🚧 IN PROGRESS
 
 cosmo has two front ends that must stay one application: the desktop shell (`App`, mouse and

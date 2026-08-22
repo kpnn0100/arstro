@@ -594,6 +594,7 @@ namespace
         printf("[PASS] ordered_parallel_load_stops_cleanly_midway\n");
     }
 
+
     void test_every_decoding_thread_is_pinned()
     {
         // D-41 / R-CPU-2(c) as amended: the nested-team pin belongs to every thread that
@@ -1091,6 +1092,149 @@ namespace
     // R-SVC-1/2/3, and the point of the whole architecture: a project opens, decodes,
     // attaches and lands in the editor with NO window, NO Artboard and NO click. This is
     // what D-6 made impossible and what let D-11/D-12 ship unmeasured.
+    void test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded()
+    {
+        // R-MEM-1/2/4. The defect: EditEngine held every slot's source as a full-resolution
+        // LINEAR FLOAT image — 24 MP x 4ch x 4B = 387 MB — for the life of the project, so
+        // resident memory was a function of how many photos were opened rather than of how
+        // many were being looked at. Measured on real 24 MP ARWs before the fix: 465 MB per
+        // photo, 1.6 GB for four, 3.7 GB for eight, ~54 GB extrapolated for the reported
+        // 120-photo catalog on a 27.7 GB machine.
+        //
+        // Asserted on BYTES the engine reports, not on the process's memory: the pools are
+        // what this owns, and a working-set assertion would fail on an allocator's retention
+        // rather than on a defect.
+        arstro::EditEngine eng;
+        constexpr int kW = 256, kH = 256;
+        const size_t oneSource = (size_t)kW * kH * 4 * sizeof(Pixel);
+        // Room for two sources, so adding a third must evict the first (R-MEM-1).
+        eng.setMemoryCaps(oneSource * 2, oneSource * 8);
+
+        std::vector<uint8_t> px((size_t)kW * kH * 4, 128);
+        const int a = eng.addImage(px.data(), kW, kH, 4);
+        const int b = eng.addImage(px.data(), kW, kH, 4);
+        const int c = eng.addImage(px.data(), kW, kH, 4);
+        assert(a == 0 && b == 1 && c == 2);
+        assert(eng.residentSourceBytes() <= oneSource * 2 &&
+               "three sources may not all stay resident under a two-source cap (R-MEM-1)");
+        // `a` was auto-selected as the first image, and the slot being rendered is never the
+        // one evicted — so the victim is the oldest slot that is NOT current, which is `b`.
+        assert(eng.currentSlot() == a);
+        assert(eng.slotHasSource(a) && "the current slot survives eviction whatever the cap says");
+        assert(!eng.slotHasSource(b) && "the oldest non-current source is the one evicted");
+        assert(eng.slotHasSource(c) && "the newest source stays");
+
+        // The evicted slot is COLD, not gone: it has no source and no proxy, and says so.
+        assert(eng.slotNeedsSource(b) && "an evicted slot with no proxy reports itself cold");
+        // ...and re-supplying it is all it takes to render again (R-MEM-2).
+        assert(eng.supplySource(b, px.data(), kW, kH, 4));
+        assert(eng.slotHasSource(b));
+        assert(eng.rehydrations() == 1 && "the re-decode is counted, not assumed (R-MEM-4)");
+
+        // The slot being rendered is never the one evicted, whatever the cap says — a render
+        // reading an image that was dropped to satisfy a number is a crash, not a saving.
+        eng.setMemoryCaps(1, 1);
+        eng.setPreviewSize(64);
+        eng.selectImage(c);
+        // Switching to a slot the tiny cap already evicted is the ordinary cold case, and
+        // renderPreview says so by returning nothing rather than by drawing an empty image.
+        assert(eng.slotNeedsSource(c) && "a slot evicted before it was selected reads as cold");
+        arstro::PreviewBuffer none = eng.renderPreview();
+        assert(!none.rgba && "a cold slot renders NOTHING rather than garbage (R-MEM-2)");
+        // Re-supply is all it takes, and then it renders even though the cap is one byte:
+        // the slot being rendered is never the one evicted.
+        assert(eng.supplySource(c, px.data(), kW, kH, 4));
+        arstro::PreviewBuffer pb = eng.renderPreview();
+        assert(pb.rgba && pb.width > 0 && "the current slot renders even under a 1-byte cap");
+        assert(eng.residentSourceBytes() <= oneSource &&
+               "everything except the slot being rendered is gone at a 1-byte cap");
+
+        // And the whole point, end to end: N images do NOT cost N sources. Twenty of them
+        // under a two-source cap must hold what two hold, not what twenty would.
+        arstro::EditEngine many;
+        many.setMemoryCaps(oneSource * 2, oneSource * 4);
+        for (int i = 0; i < 20; ++i) many.addImage(px.data(), kW, kH, 4);
+        assert(many.imageCount() == 20);
+        assert(many.residentSourceBytes() <= oneSource * 2 &&
+               "resident pixels are bounded by the cap, not by the project's size (R-MEM-1)");
+
+        printf("[PASS] engine_memory_is_capped_and_a_cold_slot_is_re_decoded "
+               "(20 images resident in %zu KB, cap %zu KB)\n",
+               many.residentBytes() / 1024, (oneSource * 6) / 1024);
+    }
+
+    void test_a_cold_slot_is_re_decoded_through_the_service()
+    {
+        using namespace arstro::cosmo;
+        // R-MEM-2 through the real service: eviction must be a CACHE decision, never a data
+        // decision, so a project bigger than the cap still renders every photo — it just
+        // re-reads the ones it dropped. Counted through the decoder, so "it re-decoded" is
+        // observed rather than argued.
+        const std::string path = "/tmp/cosmo_mem_cold.cmp";
+        writeFakeProject(path, 6, /*withGroup=*/false, /*withMissing=*/false);
+
+        static std::atomic<int> sDecodes{0};
+        struct CountingDecoder : arstro::cosmo::IImageDecoder
+        {
+            arstro::cosmo::DecodedImage decodeFile(const std::string &p) override
+            {
+                sDecodes.fetch_add(1);
+                arstro::cosmo::DecodedImage d;
+                d.width = 96; d.height = 96;
+                d.rgba.assign((size_t)96 * 96 * 4, 200);
+                d.name = p;
+                return d;
+            }
+        };
+
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new CountingDecoder()); });
+        // One source's worth of cap, so every slot but the current one is cold.
+        svc.session().renderService().setMemoryCaps((size_t)96 * 96 * 4 * sizeof(Pixel), 1);
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 6);
+        const int afterLoad = sDecodes.load();
+        assert(afterLoad == 6 && "the load decodes each entry exactly once");
+
+        // Walk the rack. Every hop lands on a slot whose pixels the cap already evicted, so
+        // every hop must re-decode and must still produce a frame — the failure this guards
+        // against is a photo that silently renders nothing once memory got tight.
+        //
+        // The re-decode happens on the RENDER WORKER, and `pumpUntilIdle` returns as soon as
+        // the LOAD is idle — which it already is here — so it is not the wait this needs.
+        // Wait for the work itself, with a deadline, rather than asserting into a race.
+        double t = 0;
+        auto settle = [&](auto done) {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            while (!done() && std::chrono::steady_clock::now() < deadline)
+            {
+                svc.pump(t);
+                t += 16.0;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        };
+
+        for (int i = 0; i < 5; ++i)
+        {
+            const int before = sDecodes.load();
+            assert(svc.dispatchText("select next", err) && err.empty());
+            settle([&] { return sDecodes.load() > before; });
+        }
+        assert(sDecodes.load() > afterLoad &&
+               "browsing past the cap re-decodes rather than showing nothing (R-MEM-2)");
+
+        settle([&] { return svc.model().budget.rehydrations > 0; });
+        assert(svc.model().budget.rehydrations > 0 && "and the model reports it (R-MEM-4)");
+        assert(svc.model().budget.residentBytes > 0 && "resident bytes are measured, not zero");
+
+        printf("[PASS] a_cold_slot_is_re_decoded_through_the_service "
+               "(%d decodes for 6 photos, %d re-decodes)\n",
+               sDecodes.load(), svc.model().budget.rehydrations);
+    }
     void test_service_opens_a_project_with_no_ui()
     {
         using namespace arstro::cosmo;
@@ -1728,6 +1872,8 @@ int main()
     test_project_load_peak_never_exceeds_its_pool();
     test_command_text_roundtrips();
     test_every_command_kind_has_a_grammar();
+    test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded();
+    test_a_cold_slot_is_re_decoded_through_the_service();
     test_service_opens_a_project_with_no_ui();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();

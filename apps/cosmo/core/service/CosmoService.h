@@ -59,7 +59,10 @@ namespace cosmo
         explicit CosmoService(ThreadBudget &budget);
 
         // ── wiring the host supplies once ──
-        void setDecoderFactory(ProjectLoader::DecoderFactory f) { mMakeDecoder = std::move(f); }
+        /** The host's decoder, used for the project load AND — since R-MEM-2 — to re-decode
+         *  a slot the engine evicted. Installing it here wires both, so there can be no
+         *  second, unbudgeted decode path (the D-41 shape). */
+        void setDecoderFactory(ProjectLoader::DecoderFactory f);
         /** Runs on every decode worker before it works — the OpenMP pin (R-CPU-2c, D-12). */
         void setWorkerInit(std::function<void()> f) { mWorkerInit = std::move(f); }
         void setImageWriter(ImageWriter w) { mWriter = std::move(w); }

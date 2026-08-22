@@ -110,6 +110,17 @@ request). The UI polls `tryAcquire(Frame&)` each frame in `renderEditor`; a comp
 cached as `mLastAfterFrame`, pushed into the photo `ImageView`, and its histogram fed to the
 `HistogramWidget`. Export (`renderFull`) and the before/after baseline (`renderPreviewSync`) block.
 
+**Resident pixels are capped, and a cold slot is re-decoded (R-MEM).** `EditEngine` used to hold
+every slot's source as a full-resolution LINEAR FLOAT image for the life of the project — 24 MP is
+387 MB — so memory was a function of how many photos were opened rather than of how many were being
+looked at (465 MB per photo measured; ~54 GB for a 120-RAW catalog). It now keeps two **byte-capped
+LRU pools**, sources and proxies, and never evicts the slot it is rendering. A slot whose pixels are
+both gone is *cold*, not broken: `RenderService::ensureSource` re-decodes the original file through
+the `SourceLoader` seam — a `std::function` the host fills with its own budgeted decoder, so no codec
+enters `arstro_image` and there is no second, unbudgeted decode path. The loader takes a **path**,
+not a slot id, because it runs on the render worker and must never read session state; `addImage`
+carries the path alongside the slot for exactly that reason.
+
 ### 3.4 Decode seam — `IImageDecoder`
 `cosmo_core` defines `IImageDecoder`/`DecodedImage`; `NativeImageDecoder` implements it with
 GdkPixbuf (JPEG/PNG/TIFF) + optional LibRaw (RAW). The host uses its own decoder instances (one

@@ -98,6 +98,15 @@ namespace cosmo
         // The measured peak depends on real thread scheduling, so it can differ between two
         // runs of the identical commands. Never part of a comparison.
         if (!o.stable) kvi(s, j, "budgetPeakDecode", m.budget.peakDecode);
+        // Same rule as the peak: what a cache holds at an instant depends on how many
+        // renders happened to have run, so it is real state but never part of a comparison
+        // between two front ends (R-SVC-9). Reported in MB — bytes would make the line
+        // unreadable and the number is a bound, not an accountant's figure.
+        if (!o.stable)
+        {
+            kvi(s, j, "engineResidentMB", (int)(m.budget.residentBytes / (1024 * 1024)));
+            kvi(s, j, "engineRehydrations", m.budget.rehydrations);
+        }
 
         kvb(s, j, "gpuAvailable", m.gpuAvailable);
         kvb(s, j, "gpuActive", m.gpuActive);
