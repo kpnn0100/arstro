@@ -624,8 +624,10 @@ namespace
                       << " of " << budget.cores() << " cores"
                       << " engine=" << budget.engineThreads()
                       << " decode=" << budget.decodeWorkers()
+                      << " schedulable=" << budget.schedulable()
                       << " (cap " << ThreadBudget::kMaxDecodeWorkers
-                      << ", engine floor " << ThreadBudget::kEngineFloor << ")\n"
+                      << ", engine floor " << ThreadBudget::kEngineFloor
+                      << ", ui reserve " << ThreadBudget::kUiReserve << ")\n"
                       << "gpuAvailable=" << (gpu ? 1 : 0) << '\n'
                       << "backend cpu=" << cpuName << " gpu=" << gpuName << '\n'
                       << "libraw=" << (PinnedDecoder::rawSupported() ? 1 : 0) << '\n'

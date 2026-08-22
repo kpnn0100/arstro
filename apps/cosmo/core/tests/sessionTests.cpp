@@ -898,9 +898,14 @@ namespace
                 const int total = b.total();
                 assert(total >= 1 && total <= cores && "R-CPU-1: never zero, never the whole machine plus one");
 
-                // Idle: the engine may use the whole budget -- shrinking renders when
-                // nothing is loading would be a pointless slowdown.
-                assert(b.engineThreads() == total && "an idle engine gets the whole budget");
+                // R-CPU-2d: the UI's one thread comes off the top before anything else
+                // divides the rest, floored so a one-thread budget still makes progress.
+                const int sched = b.schedulable();
+                assert(sched == (total - ThreadBudget::kUiReserve < 1 ? 1 : total - ThreadBudget::kUiReserve));
+
+                // Idle: the engine may use everything that is schedulable -- shrinking
+                // renders when nothing is loading would be a pointless slowdown.
+                assert(b.engineThreads() == sched && "an idle engine gets the whole schedulable budget");
 
                 // Loading: the pool takes its slice and the engine keeps the remainder.
                 const int workers = b.beginLoad();
@@ -911,12 +916,22 @@ namespace
 
                 // THE assertion. The two floors are the only slack, and only on a machine
                 // so small that the budget is a single thread.
-                const int slack = (total <= ThreadBudget::kEngineFloor + 1) ? 1 : 0;
-                assert(workers + engine <= total + slack &&
+                const int slack = (sched <= ThreadBudget::kEngineFloor + 1) ? 1 : 0;
+                assert(workers + engine <= sched + slack &&
                        "R-SVC-10: decode + engine must not exceed the one budget");
 
+                // R-CPU-2d, the point of the reservation: whatever the budget, the thread
+                // drawing the window is not competing with every core cosmo scheduled.
+                // Before it, 100% of 16 cores meant 8 decode + 8 engine = the machine, and
+                // the UI was the 17th thread.
+                assert(workers + engine <= total - ThreadBudget::kUiReserve + slack + 1 &&
+                       "R-CPU-2d: the UI's thread is inside the budget, not on top of it");
+                if (total > ThreadBudget::kEngineFloor + ThreadBudget::kUiReserve)
+                    assert(workers + engine < total &&
+                           "on any budget with room, a thread is left for the window");
+
                 b.endLoad();
-                assert(b.engineThreads() == total && "the engine gets its threads back after a load");
+                assert(b.engineThreads() == sched && "the engine gets its threads back after a load");
             }
 
         // R-CPU-2b: an explicit CPU-threads choice outranks the budget for the engine.
@@ -925,7 +940,7 @@ namespace
         ex.setExplicitEngineThreads(8);
         assert(ex.engineThreads() == 8 && "an explicit thread count wins over Auto");
         ex.setExplicitEngineThreads(0);
-        assert(ex.engineThreads() == ex.total() && "0 means Auto, i.e. follow the budget");
+        assert(ex.engineThreads() == ex.schedulable() && "0 means Auto, i.e. follow the budget");
 
         // A corrupt percentage falls back to the default rather than clamping up to 100.
         assert(ThreadBudget(0, 16).percent() == 50 && ThreadBudget(400, 16).percent() == 50);

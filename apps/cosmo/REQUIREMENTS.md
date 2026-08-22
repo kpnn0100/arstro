@@ -442,6 +442,16 @@ anything else meanwhile — a photo app is something you run *alongside* your wo
   leave unused. Measured — pinning every decode to 1 removed the violation and made opening a
   24 MP RAW take 1.85 s against 0.79 s, identically at 25% and at 100%, which is a second way of
   ignoring the setting. An explicit `OMP_NUM_THREADS` still outranks both.)
+- **R-CPU-2d The UI thread is inside the budget, not on top of it.** The thread that draws the
+  window is a thread cosmo starts, and it was in nobody's share: at 100% on a 16-core machine the
+  budget handed out 8 decode workers and 8 engine threads — the whole machine — and left the thread
+  the photographer is actually looking at to fight for what was left. So `total()` now reserves one
+  for it before the decode pool and the engine divide the rest. One, not a percentage: the UI is a
+  single thread and cannot use more, and taking a *share* would scale the reservation with the
+  budget exactly where it is least needed. This is the same reasoning as R-CPU-2's amendment for the
+  decode pool and the engine — a budget nobody owns the sum of is not a budget — applied to the one
+  consumer that had been left out of the sum entirely. Reported as "the UI is really lag when
+  loading photo".
 - **R-CPU-3 Changeable, and persisted.** The budget is a chip row in the Settings surface
   (R-SETTINGS-1) offering 25% / 50% / 75% / 100%, and it round-trips with the other preferences
   (R-SETTINGS-4). A change takes effect on the **next** load and on the next render: a pool is sized

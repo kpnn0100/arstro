@@ -42,19 +42,28 @@ namespace cosmo
         return clampi(n, 1, mCores);                    // R-CPU-1: never zero, never more than the machine
     }
 
+    int ThreadBudget::schedulable() const
+    {
+        // R-CPU-2d: the UI thread comes off the top, before anything divides the rest. The
+        // floor is 1 — on a one-thread budget the reservation would otherwise leave nothing
+        // to work with, and a budget that makes no progress is not honouring anything.
+        const int n = total() - kUiReserve;
+        return n < 1 ? 1 : n;
+    }
+
     int ThreadBudget::decodeWorkers() const
     {
         // What is left after the engine keeps its floor, capped where the cap binds first
         // (R-CPU-5). On a 1-thread budget the load still gets its one worker and the
         // engine still gets its one — the two floors are the only place the sum may
         // exceed the total, and only by a single thread on a machine that small.
-        return clampi(total() - kEngineFloor, 1, kMaxDecodeWorkers);
+        return clampi(schedulable() - kEngineFloor, 1, kMaxDecodeWorkers);
     }
 
     int ThreadBudget::engineThreads() const
     {
         if (mExplicit > 0) return mExplicit;   // R-CPU-2b: a deliberate override outranks the budget
-        return clampi(total() - mReserved.load(), 1, mCores);
+        return clampi(schedulable() - mReserved.load(), 1, mCores);
     }
 
     int ThreadBudget::beginLoad()

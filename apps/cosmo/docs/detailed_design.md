@@ -255,6 +255,15 @@ The two floors are the only way the sum can exceed the total, and only by one th
 whose whole budget is a single thread. Asserted in `one_budget_is_divided_not_duplicated` across
 cores ∈ {2,4,8,12,16,24,32} × percent ∈ {1,25,50,75,100}.
 
+**The UI's thread comes off the top (R-CPU-2d).** `schedulable()` is
+`max(1, total() - kUiReserve)` with `kUiReserve = 1`, and it — not `total()` — is what
+`decodeWorkers()` and `engineThreads()` divide. The thread that draws the window is a thread cosmo
+starts and it was in nobody's share: at 100% on 16 cores the two consumers took 8 and 8, the whole
+machine, leaving the UI to contend for every core it got. One thread rather than a percentage,
+because the UI is single-threaded and a share would scale the reservation exactly where it is least
+needed. The floor of 1 keeps a one-thread budget working rather than reserving away the only thread
+it had. `cosmo-cc backends` prints `schedulable=` and `ui reserve` alongside the rest.
+
 ### 2.4d ProjectLoader (`ProjectLoader.{h,cpp}`) — R-SVC-1
 
 The project load, moved out of the GTK host (`startEntriesLoad`/`decodeEntry`/`pollLoad`) so it can

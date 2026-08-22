@@ -1000,8 +1000,22 @@ on every settings change, and it owns the engine's width from then on.
    `startEntriesLoad` (`linux_main.cpp:642-690`) logs
    `load: <n> entries on <w> decode workers, engine <e> threads (cpu budget <p>% = <t> of <c> cores;
    decode cap 8)`.
+1a. **The UI's thread, off the top (R-CPU-2d)** — `ThreadBudget::schedulable()` is
+   `max(1, total() - kUiReserve)`, and it is what the pool and the engine divide; `total()` itself is
+   never handed out. Before it, `cpuPercent=100` on a 16-core machine gave 8 decode workers and 8
+   engine threads — the whole machine — and the thread drawing the window was the seventeenth,
+   competing with cosmo's own work for every core it got ("the UI is really lag when loading
+   photo"). One thread rather than a share: the UI is single-threaded and cannot use more, and a
+   percentage would grow the reservation exactly where it is least needed. Reported by
+   `cosmo-cc backends` and by the host's startup line, so the division is readable rather than
+   inferred:
+
+   ```
+   budget percent=100 total=16 of 16 cores engine=15 decode=8 schedulable=15 (cap 8, engine floor 1, ui reserve 1)
+   ```
+
 2. **Engine threads** — `ThreadBudget::apply()` (`ThreadBudget.cpp:75`) is the only call to
-   `par::setThreads` for the budget: `engineThreads()` is the whole total when idle and
+   `par::setThreads` for the budget: `engineThreads()` is the whole schedulable share when idle and
    `total - reserved` while a load runs, floored at 1 so an arriving photo can still render a preview
    (R-LOADPERF-3 shows the editor during the load). An explicit CPU-threads choice (2/4/8) wins for
    the engine per R-CPU-2b, and may exceed the budget — a deliberate override, logged rather than

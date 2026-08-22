@@ -1562,8 +1562,10 @@ int main(int argc, char **argv)
     // more. The pool's own decoders come from makePinnedDecoder() with no budget, so each of
     // them opens a team of one and `decodeWorkers() x 1` is again exactly the budget.
     host.decoder.setBudget(&host.budget);
-    LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
+    LOGI("cpu: budget %d%% = %d of %d cores; %d schedulable after the UI's %d (R-CPU-2d); "
+         "engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),
+         host.budget.schedulable(), arstro::cosmo::ThreadBudget::kUiReserve,
          host.budget.engineThreads(), host.budget.decodeWorkers());
     host.app.onSettingsChanged = [&host](arstro::cosmo::AppSettings s) {
         host.settings = s;

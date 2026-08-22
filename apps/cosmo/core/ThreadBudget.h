@@ -49,6 +49,19 @@ namespace cosmo
         /** The engine never drops to zero threads, even mid-load: an arriving photo still
          *  has to render a preview, and R-LOADPERF-3 shows the editor while the load runs. */
         static constexpr int kEngineFloor = 1;
+        /** R-CPU-2d: one thread held back for whichever thread is drawing the window.
+         *
+         *  It was in nobody's share. At 100% on a 16-core box `total()` was 16 and the two
+         *  consumers took 8 and 8 — the whole machine — so the thread the photographer is
+         *  actually looking at competed with the work for every core it got, which is the
+         *  reported "the UI is really lag when loading photo". ONE, not a percentage: the UI
+         *  is a single thread and cannot use more, and a share would grow the reservation
+         *  precisely where it is least needed.
+         *
+         *  Held back even in a headless front end, deliberately: `cosmo-cc` has a driving
+         *  loop that must stay responsive to the same commands, and a budget that meant two
+         *  different things depending on who was asking would be worth less than one thread. */
+        static constexpr int kUiReserve = 1;
 
         /** `cores <= 0` means "ask the machine" (hardware_concurrency, 4 if it cannot say). */
         explicit ThreadBudget(int percent = 50, int cores = 0);
@@ -63,6 +76,9 @@ namespace cosmo
 
         /** The one number every other number is a slice of. */
         int total() const;
+        /** What is left for the decode pool and the engine to divide, after the UI's one
+         *  thread is held back (R-CPU-2d). Never below 1. */
+        int schedulable() const;
         /** What `beginLoad()` would reserve, without reserving it. */
         int decodeWorkers() const;
         /** What the engine may use right now — the whole budget when idle, the remainder

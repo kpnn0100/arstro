@@ -210,6 +210,8 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
   class ThreadBudget <<one owner, R-SVC-10>> {
     + {static} kMaxDecodeWorkers : int = 8   ' R-CPU-5: the cap can bind first
     + {static} kEngineFloor : int = 1
+    + {static} kUiReserve : int = 1          ' the window's thread, off the top (R-CPU-2d)
+    + schedulable() : int            ' total - kUiReserve; what the two consumers divide
     + setPercent(p) / setExplicitEngineThreads(n)
     + total() : int                  ' the ONE number every slice comes from
     + decodeWorkers() : int          ' total - engine floor, capped

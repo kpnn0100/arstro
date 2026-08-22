@@ -33,11 +33,18 @@ something for it; (4) changing a parameter seems to recompute every photo.*
   was (2): with the machine swapping, a slider move had to fault a 387 MB source back in to rebuild
   an evicted proxy. Closed by the R-MEM work; no separate change. Worth keeping as the example of
   why a symptom gets measured before it gets fixed.
-- **[ ] (3) UI lag during a load — a UI reservation in `ThreadBudget`.** `decodeWorkers()` is
-  `total - kEngineFloor`, so the GTK main thread — a thread cosmo starts, doing real Cairo work at
-  frame rate — is in no one's budget. R-CPU-4 says the budget bounds "the threads cosmo starts", so
-  this is a gap in R-CPU, not a new area. Note much of the reported lag was (2)'s paging and should
-  be re-measured before sizing the reservation.
+- **[x] (3) UI lag — the core half: a UI reservation in `ThreadBudget` (R-CPU-2d).**
+  `decodeWorkers()`/`engineThreads()` divided `total()`, so the GTK main thread was in nobody's
+  share: at `cpuPercent=100` on 16 cores that was 8 decode + 8 engine = the whole machine, with the
+  UI as the seventeenth thread. `schedulable() = max(1, total - kUiReserve)` is now what the two
+  consumers divide, and `backends` prints it. **Honest scope:** at the default 50% on this 16-core
+  box only 8 of 16 cores were ever scheduled, so core starvation was NOT the whole story — most of
+  the reported lag was (2)'s paging. The remaining UI-side cost is design's and is filed below.
+- **[ ] (3b) UI lag — the design half, NOT yet done.** `linux_main.cpp` calls
+  `App::refreshLibrary()` once per decoded entry, and it rebuilds the whole filmstrip cell vector
+  from `currentGroupCells()` every time — O(N) per photo, so **O(N²) over a load**, which at 120
+  photos is 14 400 cell rebuilds with string copies on the UI thread. That is the cost that actually
+  scales with the project, and it belongs to `arstro.cosmo.design.implement`.
 - **[ ] (1) Selection during a load never reaches the core.** `App.cpp:100` calls
   `mSession.selectNode(cell, …)` **directly**, bypassing `Command`/`dispatch` — so it emits no
   `Event`, writes no log line, and is invisible to every front end but the window, which is exactly
