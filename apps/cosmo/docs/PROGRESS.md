@@ -15,6 +15,32 @@ file, and commit.
 
 ## NEXT
 
+**► Two defects filed on Windows on 2026-08-22, and they are next, in this order.** Both were found
+running the suites and the CLI on MSYS2 for the first time — the platform where the CPU budget was
+originally reported broken and the one place its two known defects could ever have been observed.
+
+1. **D-42 (S1, hang)** — `OrderedParallelLoad::stop()` signals `mCv` without holding `mMu`, so a
+   worker that has evaluated the predicate but not yet blocked misses the wake and `join()` never
+   returns. `cosmo_core_tests` hangs at test 15 of 36 on Windows and therefore **has never run
+   `cpu_budget_scales_with_percent`, `one_budget_is_divided_not_duplicated` or
+   `project_load_peak_never_exceeds_its_pool`** — the three guards written for D-11/D-12, on the
+   only host where those defects were live. In the product the same call is `ProjectClose` and
+   `ProjectLoader::start()`, both on the UI thread, so going Home mid-load can hang the app. Fix
+   this first: nothing about the budget is verifiable on Windows until the suite finishes.
+2. **D-41 (S3)** — D-12's pin was wired to `CosmoService::setWorkerInit` and nowhere else, so it
+   covers ProjectLoader's pool and none of the six other decode paths (opening one photo, a
+   `.cosmo`, the synchronous workspace load — all on the GTK main thread — plus `cosmo-cc info` and
+   `params`). Measured: a bare decode takes 4.6 cores and 20 OS threads at `cpuPercent=25` and 4.5
+   cores at 100% — identical, i.e. the setting does nothing to it, while `project` and `render` on
+   the same box track the budget correctly (3.3 / 7.7 cores). Fixture:
+   `apps/cosmo/core/tests/fixtures/cpu_budget_win.ps1`. R-CPU-2(c) amended: the pin belongs to every
+   thread that decodes, and the threads it has bound are **counted**, so R-CPU-4's honesty clause is
+   measured rather than asserted. Recommended fix is a host-side `PinnedDecoder` wrapper that is the
+   only way a decoder gets constructed — filed in full in `DEFECTS.md`.
+
+Both are recommendations, not code: `arstro.cosmo.core.debug` filed them and applied nothing. The
+user runs `arstro.cosmo.core.implement` to land them.
+
 **[`service-architecture-proposal.md`](service-architecture-proposal.md) is APPROVED** (2026-08-17,
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
 the harness stops being side doors bolted onto a GUI-shaped app and becomes a consequence of the
@@ -63,7 +89,7 @@ a load's measured peak stays inside the budget, and the acceptance test runs una
 
 | M | Milestone | State |
 |---|---|---|
-| U1 | CPU budget + Settings reachable from home | reopened by D-11 + D-12, **now fixed in S1a** and measured |
+| U1 | CPU budget + Settings reachable from home | reopened again by **D-41** — D-12's pin covers the load pool only, and no other decode is inside the budget. D-11's half stands: `project` and `render` measure correct on Windows |
 | S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **COMPLETE** — S1…S5. The §5 checks pass: identical dumps, the gate at 0, every behaviour a command, budget measured, acceptance unattended |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |

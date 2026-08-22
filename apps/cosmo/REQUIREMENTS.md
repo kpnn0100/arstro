@@ -338,7 +338,7 @@ it stops being a thumbnail of the photo and becomes a different picture beside i
   must agree. A change to one is verified against the other on a real RAW — the preview's
   orientation and aspect compared with the full decode's, not assumed from the flag.
 
-## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ⚠️ REOPENED (D-11, D-12)
+## R-CPU — A CPU budget, so the machine stays usable while cosmo works — ⚠️ REOPENED (D-41; was D-11, D-12)
 
 Opening a catalog saturated the machine. The decode pool took one worker per core (R-LOADPERF-1) and
 the engine's Auto thread count is also every core, so importing photos made the rest of the computer
@@ -373,6 +373,17 @@ anything else meanwhile — a photo app is something you run *alongside* your wo
   team stayed machine-sized wherever LibRaw is built `-fopenmp`. D-12, proven by
   `core/tests/fixtures/omp_env_order.c`. The intent of (c) stands; the mechanism is replaced by one
   that works — see R-SVC-10.)
+  (**AMENDED (c), 2026-08-22:** the pin belongs to **every thread that decodes**, not to the decode
+  pool. Naming ProjectLoader's per-worker hook as *the* mechanism read as though the pool were the
+  only place a decode happens, and it is not: opening one photo, opening a `.cosmo` session and the
+  synchronous workspace load all decode on the GTK **main thread**, and `cosmo-cc info` decodes on
+  its own — six call sites that constructed a bare decoder on an unpinned thread and were therefore
+  outside the budget entirely, measurably insensitive to the setting (D-41). A decode is a decode:
+  which internal path reached it is not something the user chose. So the pin is applied by whatever
+  the host uses to decode, once per thread, and **the number of threads it has bound is counted and
+  reported** next to `ompPinStatus()` — R-CPU-4 asks for honesty that is measured, and "the pin ran
+  on every decoding thread" is a count that can be asserted on every platform, including the ones
+  whose LibRaw has no OpenMP to pin.)
 - **R-CPU-3 Changeable, and persisted.** The budget is a chip row in the Settings surface
   (R-SETTINGS-1) offering 25% / 50% / 75% / 100%, and it round-trips with the other preferences
   (R-SETTINGS-4). A change takes effect on the **next** load and on the next render: a pool is sized
