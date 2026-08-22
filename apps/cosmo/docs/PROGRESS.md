@@ -40,11 +40,28 @@ something for it; (4) changing a parameter seems to recompute every photo.*
   consumers divide, and `backends` prints it. **Honest scope:** at the default 50% on this 16-core
   box only 8 of 16 cores were ever scheduled, so core starvation was NOT the whole story — most of
   the reported lag was (2)'s paging. The remaining UI-side cost is design's and is filed below.
-- **[ ] (3b) UI lag — the design half, NOT yet done.** `linux_main.cpp` calls
-  `App::refreshLibrary()` once per decoded entry, and it rebuilds the whole filmstrip cell vector
-  from `currentGroupCells()` every time — O(N) per photo, so **O(N²) over a load**, which at 120
-  photos is 14 400 cell rebuilds with string copies on the UI thread. That is the cost that actually
-  scales with the project, and it belongs to `arstro.cosmo.design.implement`.
+- **[x] (3b) UI lag — the design half: MEASURED, and there is nothing to fix.** This entry
+  originally claimed `App::refreshLibrary()` per decoded entry was "the cost that actually scales" —
+  O(N) per photo, O(N²) over a load. **That claim was written from reading, and it is wrong.**
+  Measured through the assembled-app rig in `cosmo_ui_tests`:
+
+  ```
+  refreshLibrary, once per arriving photo:   n=10 0.01 ms | n=40 0.13 | n=80 0.31 | n=120 0.55 ms
+                                             (total, for the WHOLE load — 0.0046 ms per call)
+  UI frame times across a 120-entry load:    14 860 frames, mean 0.022 ms, worst 14.59 ms,
+                                             exactly ONE frame over 8 ms
+  ```
+
+  The O(N²) shape is real (0.0011 → 0.0046 ms per call as the rack grows) and the absolute cost is
+  half a millisecond across an entire 120-photo load. `Filmstrip::onPaint` already culls off-screen
+  cells (`Filmstrip.cpp:226`), so the per-frame cost does not scale either. Optimising this would
+  have been a change with a good story and no effect — the D-41 lesson applied to my own diagnosis.
+
+  **So the reported lag was (2) and (3), not the view.** Re-measure in the real app now that
+  resident memory is flat and the window has its own thread; if any lag remains, it needs a fresh
+  measurement rather than this guess. (Caveat, stated because it bounds the claim: the rig draws
+  through a `RecordingTarget`, so real Cairo rasterisation is excluded — but that cost is per-frame
+  and per-visible-cell, not per-photo, which is the thing that was in question.)
 - **[x] (1) Selection now travels as a Command, mid-load included (R-SVC-2, DR-SVC-2d).**
   `App.cpp:100` called `mSession.selectNode(cell, …)` directly, so a click emitted no `Event`, wrote
   no log line and no other front end could see or script it — which is what "it doesn't even reach
@@ -537,6 +554,26 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-23 — a reported symptom was traced to the wrong layer twice, and measuring was what
+  settled it both times.** Of the four problems reported against a 120-photo RAW project, only two
+  were where they appeared to be.
+  * *"changing a parameter computes every raw photo"* — it never did. One `set exposure=…` emits
+    exactly one `frame.ready`; the event stream said so in one command. What the photographer felt
+    was the memory defect: with the machine swapping, a slider move had to fault a 387 MB source
+    back in to rebuild an evicted proxy.
+  * *"the UI is really lag"* — I filed `refreshLibrary`'s per-entry rebuild as "the cost that
+    actually scales", from reading. Measured through the `cosmo_ui_tests` rig it is **0.55 ms
+    across an entire 120-photo load**, and UI frame times over that load are mean 0.022 ms with one
+    frame above 8 ms. `Filmstrip::onPaint` already culls off-screen cells. Optimising it would have
+    been a change with a good story and no effect.
+
+  Both readings were plausible and both were wrong in the same way: a symptom was attributed to the
+  layer it was *visible* in rather than the layer it came from. The rule this project already had
+  for defects — prefer a measurement to an argument (R-CPU-4, R-MEM-4, D-41) — applies just as much
+  to a fix in progress as to a diagnosis. **Measure before optimising, including your own last
+  guess.** The probes were throwaway (a timing assertion would be flaky on any other machine); the
+  numbers live here so nobody re-derives them.
 
 - **2026-08-21 (merge) — Two machines allocated D-36 at the same time, and the published one
   keeps it.** This machine filed the `TestMain.h` Windows build break as D-36 on 2026-08-19 while
