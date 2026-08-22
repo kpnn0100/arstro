@@ -281,6 +281,15 @@ run — and be measured — with no window. `Result` carries what the applier ne
 class had never been restarted before (each load built a fresh `LoadJob`), so a reused pipeline
 started with `mStop` still latched and every worker returned immediately.
 
+`OrderedParallelLoad::stop()` sets `mStop` **under `mMu`** and only then notifies
+(`OrderedParallelLoad.h:114-135`). Signalling it outside the lock let the flag land in the gap
+between a worker evaluating the wait predicate (which it does *holding* the lock) and actually
+blocking, so `notify_all` reached no waiter, the worker slept forever and `join()` never returned —
+D-42, deterministic on winpthreads, unseen on glibc since the class was written. This is the
+UI-thread path: `CosmoService` calls `mLoader.stop()` on `ProjectClose`, and `ProjectLoader::start`
+calls it before every load, so the two user actions that hung the app were going Home mid-load and
+opening a second project while one was still loading.
+
 ### 2.4e The service layer (`core/service/*`) — R-SVC-1…10
 
 **`AppModel`** (`service/AppModel.h`) is the whole observable state as plain data: `revision`,

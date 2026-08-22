@@ -922,6 +922,20 @@ always either produced or held by a worker, and that worker is **exempt** from b
 by `cosmo_core_tests` over 60 randomised (workers × window × byte-cap) combinations — with caps
 deliberately smaller than a single item — and separately under ThreadSanitizer.
 
+**Every change to the wait predicate is made under `mMu`, including `stop()`'s** (`OrderedParallelLoad.h:114-137`).
+That argument above is about the predicate's *logic*, and it was correct and complete — the defect
+was in the *signalling*, which it never covered. `stop()` used to set `mStop` and `notify_all`
+without taking the lock, and a worker inside `mCv.wait(lk, pred)` holds the lock while it evaluates
+`pred`: setting the flag in the gap between that evaluation returning false and the worker blocking
+meant the notify reached nobody and none was ever coming, so the worker slept forever and `join()`
+never returned (D-42). `tryConsume` was always safe signalling outside the lock — it changes the
+predicate *inside* it, and a worker in that gap is holding the very lock `tryConsume` needs — which
+is what made `stop()`, the one signaller that took no lock at all, the only racy one. Guarded by
+`ordered_parallel_load_stops_cleanly_midway`, which arms a watchdog **before** the scenario and
+repeats it 20 times: the race needs `stop()` to be called with nothing at all between it and
+`tryConsume`, so a version that measured the deadline afterwards, or moved `stop()` onto a
+`std::async`, passed on the broken code.
+
 ### DR-CPU-1 The budget, and how a percentage becomes a thread count (R-CPU-1, R-SVC-10)
 **As of S1 the conversion happens in `ThreadBudget`, once.** `ThreadBudget::total()`
 (`core/ThreadBudget.cpp:39-43`) is `clamp((cores * percent + 50) / 100, 1, cores)` — integer

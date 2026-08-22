@@ -287,7 +287,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/service/AppModel.h` | core | the whole observable state as plain data — no pixels, no Artboard types, no presentation (R-SVC-3/4) |
 | `apps/cosmo/core/service/AppModelCodec.{h,cpp}` | core | the model as deterministic text/JSON; the `stable` form is what proves two front ends agree (R-SVC-9) |
 | `apps/cosmo/core/EditSession.{h,cpp}` | core | sessions, group tree, params, history, presets, persistence, render seam. `treeRows()` and `selectNodeById()` are the id-addressed projections a front end needs |
-| `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1); reusable, and calls a per-worker start hook |
+| `apps/cosmo/core/OrderedParallelLoad.h` | core | pooled produce → strictly-ordered consume, with bounded work in flight (R-LOADPERF-1); reusable, calls a per-worker start hook, and every predicate change — `stop()`'s included — is made under the mutex (D-42) |
 | `apps/cosmo/core/ProjectLoader.{h,cpp}` | core | **the project load** — decode pool, per-worker decode + thumbnail, in-order delivery. Was three functions in the GTK host; moving it down is what made a load runnable and measurable with no window (R-SVC-1) |
 | `apps/cosmo/core/ThreadBudget.{h,cpp}` | core | the ONE owner of the CPU budget: one total, divided between the decode pool and the engine, with the measured peak (R-SVC-10, fixes D-11) |
 | `apps/cosmo/core/History.{h,cpp}` | core | branching undo tree |

@@ -19,75 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-42 — `OrderedParallelLoad::stop()` signals its condition variable without the lock, and hangs
-- **Area:** core / load · **Status:** **Confirmed** (stacks captured under gdb, deterministic) · **Severity:** S1 (hang)
-- **Found:** 2026-08-22, on Windows, while reproducing "the CPU limit does not work on Windows"
-  (D-41). Found because `cosmo_core_tests` never finishes on this host — which is *why* D-41 shipped.
-- **Front end:** none — `cosmo_core_tests`, and by inspection `CosmoService` in every front end.
-- **Reproduce:** MSYS2 MINGW64, 16 logical cores. Runs forever; three runs, identical:
-  ```bash
-  export PATH=/c/msys64/mingw64/bin:$PATH
-  export XDG_CONFIG_HOME=/tmp/cosmo-dbg          # a sandbox: the suite writes the REAL recent.tsv
-  ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe > /tmp/tests.out 2>&1 &
-  sleep 60 && tail -1 /tmp/tests.out             # -> [PASS] ordered_parallel_load_is_in_order_and_never_stalls
-  gdb -q -p $(pidof cosmo_core_tests) -batch -ex "thread apply all bt 8"
-  ```
-- **Expected:** `stop()` returns and the suite continues. The test that hangs asserts exactly this:
-  `assert(dt < std::chrono::seconds(3) && "stop() must not wait for the whole batch")`. Beyond any
-  document, a hang is a defect (`arstro.cosmo.core.debug` §3).
-- **Actual:** the suite stops dead in `test_ordered_parallel_load_stops_cleanly_midway()` and never
-  reaches the three CPU-budget tests that come nine lines later. Killed after 75 s with 1.6 s of CPU
-  consumed — it is blocked, not slow, so the 3 s assertion never gets the chance to fail.
-- **Evidence:** the two stacks that matter, from the run above — one thread waiting to be joined,
-  the other waiting for a notify that already happened:
-  ```
-  Thread 1 (main):
-    #0 ntdll!ZwWaitForSingleObject
-    #2 libwinpthread-1.dll        <- pthread_join
-    #4 (anonymous namespace)::test_ordered_parallel_load_stops_cleanly_midway()
-
-  Thread 6 (a pool worker):
-    #0 ntdll!ZwWaitForMultipleObjects
-    #3 libwinpthread-1.dll        <- condition_variable::wait
-    #6 std::thread::_State_impl<...OrderedParallelLoad<unsigned long long>::start(...)::{lambda()#1}>::_M_run()
-  ```
-- **Judgement:** defect — a hang. Also violates **R-TEST-1** ("a failing assertion exits, promptly
-  and non-zero, on every supported host … a suite that cannot report red is not evidence"): the
-  suite cannot report anything at all on Windows past test 15 of 36.
-- **Cause:** `OrderedParallelLoad::stop()` (`apps/cosmo/core/OrderedParallelLoad.h:114-121`) mutates
-  the predicate and signals **without holding `mMu`**:
-  ```cpp
-  mStop.store(true);
-  mCv.notify_all();
-  for (auto &w : mWorkers) if (w.joinable()) w.join();
-  ```
-  A worker inside `mCv.wait(lk, pred)` holds `mMu` while it evaluates `pred`. If it evaluates
-  `false` and *then* `stop()` runs to completion before the worker actually blocks, the `notify_all`
-  reaches no waiter and none ever comes again: the worker sleeps forever and `join()` never returns.
-  Classic lost wakeup — `notify` must not race a predicate change made outside the mutex. Nothing
-  about it is Windows-specific in principle; winpthreads' scheduling just loses that race every time
-  where glibc almost never does, which is why it went unseen on Linux.
-- **Reachable in the product, not only in the test:** `ProjectLoader::stop()` is `mPipe.stop()`, and
-  `CosmoService` calls it from `ProjectClose` (`CosmoService.cpp:479` — the user goes Home) and
-  `ProjectLoader::start()` calls it first thing (`ProjectLoader.cpp:19` — the user opens a second
-  project). Both run on the UI thread while a load is in flight, so on Windows either action can
-  hang the whole app with no way out but the task manager. Not yet observed in the GUI — the CLI
-  reproduction is the one above.
-- **Regression?** No. `git log -S "mStop.store(true);" -- apps/cosmo/core/OrderedParallelLoad.h`
-  returns only `af95c65` (the repo reorganisation), so the unlocked signal is original code and has
-  been latent since the class was written.
-- **Requirement:** R-TEST-1 (existing); no R-LOADPERF clause needs amending — a hang needs none.
-- **RECOMMENDED FIX:** take the lock around the flag change, so the signal cannot race the wait:
-  ```cpp
-  { std::lock_guard<std::mutex> lk(mMu); mStop.store(true); }
-  mCv.notify_all();
-  ```
-  `mStop` stays atomic because `run()` reads it outside the lock too. Then the three CPU-budget
-  tests run on Windows for the first time — expect to fix D-41 before the suite is green here.
-- **Guarded by:** `ordered_parallel_load_stops_cleanly_midway` already exists and already asserts
-  the right thing; it has simply never been able to run to its assertion on this host. Confirm the
-  fix by running the suite to completion on MSYS2, not by reading it.
-
 ### D-41 — The OpenMP pin reaches only the load pool, so every other decode ignores the CPU limit
 - **Area:** core / load · **Status:** **Confirmed** (measured) · **Severity:** S3
 - **Found:** 2026-08-22, reported by the user as "the CPU limit feature doesn't work on Windows".
@@ -313,6 +244,72 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-42 — `OrderedParallelLoad::stop()` signals its condition variable without the lock, and hangs
+- **Area:** core / load · **Status:** **Fixed** (same session it was filed) · **Severity:** S1 (hang)
+- **Found:** 2026-08-22, on Windows, while reproducing "the CPU limit does not work on Windows"
+  (D-41). Found because `cosmo_core_tests` never finishes on this host — which is *why* D-41 shipped.
+- **Front end:** none — `cosmo_core_tests`, and by inspection `CosmoService` in every front end.
+- **Reproduce:** MSYS2 MINGW64, 16 logical cores. Ran forever; three runs, identical:
+  ```bash
+  export PATH=/c/msys64/mingw64/bin:$PATH
+  export XDG_CONFIG_HOME=/tmp/cosmo-dbg          # a sandbox: the suite writes the REAL recent.tsv
+  ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe > /tmp/tests.out 2>&1 &
+  sleep 60 && tail -1 /tmp/tests.out             # -> [PASS] ordered_parallel_load_is_in_order_and_never_stalls
+  gdb -q -p $(pidof cosmo_core_tests) -batch -ex "thread apply all bt 8"
+  ```
+- **Expected:** `stop()` returns and the suite continues. The test that hung asserts exactly this:
+  `assert(dt < std::chrono::seconds(3) && "stop() must not wait for the whole batch")`. Beyond any
+  document, a hang is a defect (`arstro.cosmo.core.debug` §3).
+- **Actual:** the suite stopped dead in `test_ordered_parallel_load_stops_cleanly_midway()` and never
+  reached the three CPU-budget tests nine lines later. Killed after 75 s with 1.6 s of CPU consumed —
+  blocked, not slow, so the 3 s assertion never got the chance to fail.
+- **Evidence:** the two stacks that matter — one thread waiting to be joined, the other waiting for a
+  notify that had already happened:
+  ```
+  Thread 1 (main):
+    #0 ntdll!ZwWaitForSingleObject
+    #2 libwinpthread-1.dll        <- pthread_join
+    #4 (anonymous namespace)::test_ordered_parallel_load_stops_cleanly_midway()
+
+  Thread 6 (a pool worker):
+    #0 ntdll!ZwWaitForMultipleObjects
+    #3 libwinpthread-1.dll        <- condition_variable::wait
+    #6 std::thread::_State_impl<...OrderedParallelLoad<unsigned long long>::start(...)::{lambda()#1}>::_M_run()
+  ```
+- **Judgement:** defect — a hang. Also violated **R-TEST-1** ("a failing assertion exits, promptly
+  and non-zero, on every supported host … a suite that cannot report red is not evidence"): the suite
+  could report nothing at all on Windows past test 15 of 36.
+- **Cause:** `stop()` mutated the predicate and signalled **without holding `mMu`**. A worker inside
+  `mCv.wait(lk, pred)` holds `mMu` while it evaluates `pred`; if it evaluated `false` and `stop()`
+  then ran to completion before the worker actually blocked, the `notify_all` reached no waiter and
+  none was ever coming. `tryConsume` was always safe signalling outside the lock because it changes
+  the predicate *inside* it — a worker in that gap holds the very lock `tryConsume` needs — which is
+  what left `stop()`, the one signaller that took no lock at all, as the only racy one. Not
+  Windows-specific in principle; winpthreads loses the race every time where glibc almost never does.
+- **Was reachable in the product:** `ProjectLoader::stop()` is `mPipe.stop()`, and `CosmoService`
+  calls it from `ProjectClose` (the user goes Home) and `ProjectLoader::start()` calls it first thing
+  (the user opens a second project). Both on the UI thread while a load is in flight.
+- **Regression?** No. `git log -S "mStop.store(true);" -- apps/cosmo/core/OrderedParallelLoad.h`
+  returned only `af95c65` (the repo reorganisation): original code, latent since the class was written.
+- **Requirement:** R-TEST-1 (existing). `DR-LOADPERF-1` amended to state the signalling rule — its
+  deadlock-freedom argument was about the predicate's *logic*, was correct, and never covered the
+  signalling, which is why it read as a complete proof for a class that could hang.
+- **Fix:** commit `127807e`. `stop()` takes `mMu` for the flag change and notifies after
+  releasing it; `mStop` stays atomic because `run()` also reads it outside the lock.
+- **Guarded by:** `ordered_parallel_load_stops_cleanly_midway` in `sessionTests.cpp`, rewritten to
+  report rather than hang — **checked to fail on the pre-fix code, exit 3, three runs out of three.**
+  Two things in its shape are load-bearing and were established by measurement: the watchdog is armed
+  **before** the scenario (a deadline checked afterwards never runs when `stop()` never returns), and
+  **nothing sits between `tryConsume()` and `stop()`**, with the scenario repeated 20 times. The race
+  needs the flag set in the narrow gap between a worker evaluating the predicate and blocking on it;
+  a `std::async` version and a version that merely constructed the watchdog thread in between both
+  added enough latency to park every worker first, and both **passed on the broken code**.
+- **Verified:** all 36 `cosmo_core_tests` pass on MSYS2 for the first time, three runs out of three,
+  and `ctest` is 17/17. The three guards that had never run on this host now do:
+  `cpu_budget_scales_with_percent`, `one_budget_is_divided_not_duplicated`, and
+  `project_load_peak_never_exceeds_its_pool (pool 5, peak 5 of budget 6)` — so D-11's arithmetic is
+  now measured on Windows, not only on Linux.
 
 ### D-39 — Switching to touch mode showed no project, and the touch shell could have destroyed one
 - **Area:** design / touch shell · **Status:** **Fixed** (same session it was reported) · **Severity:** S1 (potential data loss)

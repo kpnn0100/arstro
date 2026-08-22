@@ -113,7 +113,26 @@ namespace cosmo
         /** Ask the workers to bail out and join them. Idempotent. */
         void stop()
         {
-            mStop.store(true);
+            {
+                // Under `mMu`, not merely atomic — this is D-42, and the reason is the whole
+                // point of the mutex. A worker inside `mCv.wait(lk, pred)` HOLDS the lock while
+                // it evaluates `pred`. Setting the flag without the lock lets this function run
+                // to completion in the gap between that evaluation returning false and the
+                // worker actually blocking, so `notify_all` reaches no waiter and no other
+                // notify is ever coming: the worker sleeps forever and `join()` below never
+                // returns. On a live load that is the UI thread, hung, with no way out.
+                //
+                // `tryConsume` is safe signalling outside the lock because it changes the
+                // predicate INSIDE it, and a worker in that gap is holding the very lock
+                // tryConsume needs — so the change cannot land in the gap. `stop()` never took
+                // the lock at all, which is exactly what made it the one racy signaller.
+                //
+                // Nothing here is Windows-specific in principle; winpthreads simply loses the
+                // race every time where glibc almost never does, so the same code hung
+                // deterministically on MSYS2 and had passed on Linux since it was written.
+                std::lock_guard<std::mutex> lk(mMu);
+                mStop.store(true);   // stays atomic: run() also reads it outside the lock
+            }
             mCv.notify_all();
             for (auto &w : mWorkers)
                 if (w.joinable()) w.join();

@@ -214,7 +214,7 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + start(count, workers, window, maxBytes, produce, weigh, onWorkerStart)
     + tryConsume(T &) : bool         ' one consumer, strict index order
     + consumed() / count() / finished()
-    + stop()
+    + stop()                         ' sets mStop UNDER mMu, then notifies (D-42)
     - run()                          ' claim with an atomic; i == mConsumed is exempt
   }
   class ProjectLoader <<decode pool, R-SVC-1>> {

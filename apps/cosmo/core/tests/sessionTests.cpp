@@ -546,18 +546,50 @@ namespace
     void test_ordered_parallel_load_stops_cleanly_midway()
     {
         // Abandoning a load (the user goes Home, or another project is opened) must join
-        // the pool without waiting for the whole catalog.
-        arstro::cosmo::OrderedParallelLoad<size_t> pipe;
-        pipe.start(500, 4, 4, 4096,
-                   [](size_t i) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); return i; },
-                   [](const size_t &) { return (size_t)1024; });
-        size_t got = 0;
-        while (!pipe.tryConsume(got)) std::this_thread::sleep_for(std::chrono::microseconds(200));
-        const auto t0 = std::chrono::steady_clock::now();
-        pipe.stop();
-        const auto dt = std::chrono::steady_clock::now() - t0;
-        assert(dt < std::chrono::seconds(3) && "stop() must not wait for the whole batch");
-        assert(!pipe.finished());
+        // the pool without waiting for the whole catalog — and must RETURN (D-42).
+        //
+        // Two things about the shape of this test are load-bearing, both established by
+        // measurement rather than taste:
+        //
+        // 1. A WATCHDOG, armed before anything else, instead of a deadline checked afterwards.
+        //    D-42 was a lost wakeup inside stop(): it never returned at all, so the `dt < 3s`
+        //    assertion below never got the chance to run and cosmo_core_tests stopped dead at
+        //    test 15 of 36 on Windows, taking the three CPU-budget guards with it. R-TEST-1 — a
+        //    suite that cannot report red is not evidence, and a hang is the least legible red.
+        // 2. NOTHING may sit between tryConsume() returning and stop() being called, and the
+        //    scenario is repeated. The race needs mStop to be set in the narrow gap between a
+        //    worker evaluating the wait predicate and actually blocking on it; a std::async, or
+        //    even constructing the watchdog thread, in between is enough latency for every
+        //    worker to be parked already, and the suite then PASSES on the broken code. Both
+        //    were tried and both hid the defect — do not "tidy" this back into either.
+        std::atomic<bool> allStopsReturned{false};
+        std::thread watchdog([&allStopsReturned] {
+            for (int i = 0; i < 3000 && !allStopsReturned.load(); ++i)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (allStopsReturned.load()) return;
+            std::fputs("[FAIL] ordered_parallel_load_stops_cleanly_midway: stop() did not return "
+                       "— mStop must be signalled under mMu (D-42)\n", stderr);
+            std::fflush(nullptr);
+            std::_Exit(3);
+        });
+
+        for (int trial = 0; trial < 20; ++trial)
+        {
+            arstro::cosmo::OrderedParallelLoad<size_t> pipe;
+            pipe.start(500, 4, 4, 4096,
+                       [](size_t i) { std::this_thread::sleep_for(std::chrono::milliseconds(2)); return i; },
+                       [](const size_t &) { return (size_t)1024; });
+            size_t got = 0;
+            while (!pipe.tryConsume(got)) std::this_thread::sleep_for(std::chrono::microseconds(200));
+            const auto t0 = std::chrono::steady_clock::now();
+            pipe.stop();
+            const auto dt = std::chrono::steady_clock::now() - t0;
+            assert(dt < std::chrono::seconds(3) && "stop() must not wait for the whole batch");
+            assert(!pipe.finished());
+        }
+
+        allStopsReturned.store(true);
+        watchdog.join();
         printf("[PASS] ordered_parallel_load_stops_cleanly_midway\n");
     }
 

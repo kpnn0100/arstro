@@ -19,15 +19,14 @@ file, and commit.
 running the suites and the CLI on MSYS2 for the first time — the platform where the CPU budget was
 originally reported broken and the one place its two known defects could ever have been observed.
 
-1. **D-42 (S1, hang)** — `OrderedParallelLoad::stop()` signals `mCv` without holding `mMu`, so a
-   worker that has evaluated the predicate but not yet blocked misses the wake and `join()` never
-   returns. `cosmo_core_tests` hangs at test 15 of 36 on Windows and therefore **has never run
-   `cpu_budget_scales_with_percent`, `one_budget_is_divided_not_duplicated` or
-   `project_load_peak_never_exceeds_its_pool`** — the three guards written for D-11/D-12, on the
-   only host where those defects were live. In the product the same call is `ProjectClose` and
-   `ProjectLoader::start()`, both on the UI thread, so going Home mid-load can hang the app. Fix
-   this first: nothing about the budget is verifiable on Windows until the suite finishes.
-2. **D-41 (S3)** — D-12's pin was wired to `CosmoService::setWorkerInit` and nowhere else, so it
+1. ~~**D-42 (S1, hang)**~~ — **CLOSED.** `OrderedParallelLoad::stop()` signalled `mCv` without
+   holding `mMu`, so a worker that had evaluated the predicate but not yet blocked missed the wake
+   and `join()` never returned. It now takes the lock for the flag change. **All 36
+   `cosmo_core_tests` pass on MSYS2 for the first time** and `ctest` is 17/17, so the three guards
+   written for D-11/D-12 — `cpu_budget_scales_with_percent`,
+   `one_budget_is_divided_not_duplicated`, `project_load_peak_never_exceeds_its_pool (pool 5, peak 5
+   of budget 6)` — have now run on the only host where those defects were ever live.
+2. **► D-41 (S3) — NEXT.** D-12's pin was wired to `CosmoService::setWorkerInit` and nowhere else, so it
    covers ProjectLoader's pool and none of the six other decode paths (opening one photo, a
    `.cosmo`, the synchronous workspace load — all on the GTK main thread — plus `cosmo-cc info` and
    `params`). Measured: a bare decode takes 4.6 cores and 20 OS threads at `cpuPercent=25` and 4.5
