@@ -215,7 +215,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `NDEBUG`. Latent since the first Release configure; invisible because a suite in this state is
   indistinguishable from a passing one.
 - **Requirement:** R-TEST-1 (violated), R-TEST-3 (written while filing this).
-- **Fix:** commit `PENDING-D41`. `TestMain.h` undefines `NDEBUG` before including `<cassert>`,
+- **Fix:** commit `b0a4fbb`. `TestMain.h` undefines `NDEBUG` before including `<cassert>`,
   unconditionally — `<cassert>` is specified to be re-includable and to re-read `NDEBUG` each time,
   which is what makes this work rather than a trick. It is in that header rather than in each CMake
   target because both suites already include it and any future one will (R-TEST-2).
@@ -274,7 +274,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Regression?** No. `git log -S "pinNestedOpenMPForThisThread" -- apps/cosmo` shows it arrived in
   `95f3b78` (D-12's fix) already wired only to the worker hook; later commits copied that wiring.
 - **Requirement:** R-CPU-2(c), R-CPU-4 (both violated); R-CPU-2(c) amended twice while fixing.
-- **Fix:** commit `PENDING-D41`. `cosmo_v2::PinnedDecoder` (`apps/cosmo/PinnedDecoder.h`) wraps
+- **Fix:** commit `b0a4fbb`. `cosmo_v2::PinnedDecoder` (`apps/cosmo/PinnedDecoder.h`) wraps
   `NativeImageDecoder`, pins the calling thread and delegates — and is now the **only** decoder the
   host constructs, so the pin is a property of decoding rather than a hook a call site can forget.
   D-11's lesson applied a second time: a single owner, not a better clamp. The worker hook stays as
