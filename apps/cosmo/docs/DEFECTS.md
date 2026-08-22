@@ -295,7 +295,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Requirement:** R-TEST-1 (existing). `DR-LOADPERF-1` amended to state the signalling rule — its
   deadlock-freedom argument was about the predicate's *logic*, was correct, and never covered the
   signalling, which is why it read as a complete proof for a class that could hang.
-- **Fix:** commit `127807e`. `stop()` takes `mMu` for the flag change and notifies after
+- **Fix:** commit `4807110`. `stop()` takes `mMu` for the flag change and notifies after
   releasing it; `mStop` stays atomic because `run()` also reads it outside the lock.
 - **Guarded by:** `ordered_parallel_load_stops_cleanly_midway` in `sessionTests.cpp`, rewritten to
   report rather than hang — **checked to fail on the pre-fix code, exit 3, three runs out of three.**
