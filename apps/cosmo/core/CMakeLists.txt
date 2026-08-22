@@ -58,8 +58,15 @@ else()
 endif()
 
 # ── Smoke tests (plain assert(), no external framework) ──
-add_executable(cosmo_core_tests tests/sessionTests.cpp)
-target_link_libraries(cosmo_core_tests PRIVATE cosmo_core)
+           # OmpPin.cpp is a HOST file compiled into this suite on purpose (R-CPU-2c / D-41):
+           # the pin cannot live in cosmo_core — it needs dlsym/GetProcAddress and getenv —
+           # but "every decoding thread gets pinned" is exactly the claim that shipped twice
+           # without ever being executed, so it needs a test. cosmo-cc's CMakeLists pulls the
+           # same file in for the same reason. ${CMAKE_DL_LIBS} follows it.
+add_executable(cosmo_core_tests tests/sessionTests.cpp
+               ${CMAKE_CURRENT_SOURCE_DIR}/../OmpPin.cpp)
+target_include_directories(cosmo_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(cosmo_core_tests PRIVATE cosmo_core ${CMAKE_DL_LIBS})
 add_test(NAME cosmo_core COMMAND cosmo_core_tests)
 
 endif()  # PkgConfig_FOUND

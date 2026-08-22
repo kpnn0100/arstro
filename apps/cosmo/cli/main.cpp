@@ -31,7 +31,7 @@
 #include "OmpPin.h"
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
-#include "core/decode/NativeImageDecoder.h"
+#include "PinnedDecoder.h"
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
 #include "base/Parallel.h"
@@ -78,7 +78,7 @@ using arstro::cosmo::DecodedImage;
 using arstro::cosmo::EditSession;
 using arstro::cosmo::Event;
 using arstro::cosmo::ModelDumpOptions;
-using arstro::cosmo::NativeImageDecoder;
+using arstro::cosmo_v2::PinnedDecoder;   // R-CPU-2c / D-41: the host has ONE decoder, and it pins its thread
 using arstro::cosmo::ThreadBudget;
 
 namespace
@@ -261,7 +261,7 @@ namespace
     {
         // R-SVC-7: the codecs live on this side of the seam, so cosmo_core carries none.
         h.svc.setDecoderFactory([] {
-            return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder());
+            return arstro::cosmo_v2::makePinnedDecoder();
         });
         // R-CPU-2c / D-12: per-THREAD, on the thread, because the OpenMP thread count is a
         // per-thread ICV. A front end that drops this pin takes the whole machine no matter
@@ -512,15 +512,20 @@ namespace
         const std::string path = a.at(0);
         if (path.empty()) return usage(kUsage);
 
-        NativeImageDecoder dec;
+        // One decode, on this thread, with no pool around it — so it gets the whole budget
+        // and stays inside it (R-CPU-2c / D-41). Before the pin reached this path it took
+        // 4.6 cores of 16 at cpuPercent=25 and 4.5 at 100%: the setting did nothing to it.
+        PinnedDecoder dec;
+        ThreadBudget budget(AppSettings::load().cpuPercent, 0);
+        dec.setBudget(&budget);
         const double t0 = wallMs();
         const DecodedImage img = dec.decodeFile(path);
         const double ms = wallMs() - t0;
 
-        const bool raw = NativeImageDecoder::isRawExtension(path);
+        const bool raw = PinnedDecoder::isRawExtension(path);
         // COSMO_HAVE_LIBRAW is PRIVATE to cosmo_core, so it is not visible in this TU on
         // purpose: asking the decoder is the only answer that cannot go stale.
-        const char *used = raw ? (NativeImageDecoder::rawSupported() ? "LibRaw" : "none")
+        const char *used = raw ? (PinnedDecoder::rawSupported() ? "LibRaw" : "none")
                                : "GdkPixbuf";
         std::error_code ec;
         const auto bytes = std::filesystem::file_size(path, ec);
@@ -534,9 +539,10 @@ namespace
                       << "  \"height\": " << img.height << ",\n"
                       << "  \"megapixels\": " << (img.width * (double)img.height / 1e6) << ",\n"
                       << "  \"raw\": " << (raw ? "true" : "false") << ",\n"
-                      << "  \"rawSupported\": " << (NativeImageDecoder::rawSupported() ? "true" : "false") << ",\n"
+                      << "  \"rawSupported\": " << (PinnedDecoder::rawSupported() ? "true" : "false") << ",\n"
                       << "  \"decoder\": \"" << used << "\",\n"
                       << "  \"fileBytes\": " << (ec ? 0 : (long long)bytes) << ",\n"
+                      << "  \"ompPinnedThreads\": " << arstro::cosmo_v2::ompPinnedThreadCount() << ",\n"
                       << "  \"ms\": " << ms << "\n}\n";
         }
         else
@@ -545,9 +551,13 @@ namespace
                       << "ok=" << (img.ok() ? 1 : 0) << '\n'
                       << "width=" << img.width << " height=" << img.height << '\n'
                       << "megapixels=" << (img.width * (double)img.height / 1e6) << '\n'
-                      << "raw=" << (raw ? 1 : 0) << " rawSupported=" << (NativeImageDecoder::rawSupported() ? 1 : 0) << '\n'
+                      << "raw=" << (raw ? 1 : 0) << " rawSupported=" << (PinnedDecoder::rawSupported() ? 1 : 0) << '\n'
                       << "decoder=" << used << '\n'
                       << "fileBytes=" << (ec ? 0 : (long long)bytes) << '\n'
+                      // R-CPU-4 as amended, and the one line that makes D-41 checkable from the
+                      // command that found it: `info` decodes on its own thread, outside any
+                      // pool, so a 1 here says that thread WAS pinned. It read 0 before D-41.
+                      << "ompPinnedThreads=" << arstro::cosmo_v2::ompPinnedThreadCount() << '\n'
                       << "ms=" << ms << '\n';
         }
         if (!img.ok()) return fail("could not decode " + path);
@@ -598,8 +608,10 @@ namespace
                       << "  \"gpuAvailable\": " << (gpu ? "true" : "false") << ",\n"
                       << "  \"backendCpu\": \"" << cpuName << "\",\n"
                       << "  \"backendGpu\": \"" << gpuName << "\",\n"
-                      << "  \"libraw\": " << (NativeImageDecoder::rawSupported() ? "true" : "false") << ",\n"
+                      << "  \"libraw\": " << (PinnedDecoder::rawSupported() ? "true" : "false") << ",\n"
                       << "  \"ompPin\": \"" << arstro::cosmo_v2::ompPinStatus() << "\",\n"
+                      << "  \"ompPinUserOverride\": " << arstro::cosmo_v2::ompPinUserOverride() << ",\n"
+                      << "  \"ompPinnedThreads\": " << arstro::cosmo_v2::ompPinnedThreadCount() << ",\n"
                       << "  \"defines\": \"" << defs << "\"\n}\n";
         }
         else
@@ -616,8 +628,12 @@ namespace
                       << ", engine floor " << ThreadBudget::kEngineFloor << ")\n"
                       << "gpuAvailable=" << (gpu ? 1 : 0) << '\n'
                       << "backend cpu=" << cpuName << " gpu=" << gpuName << '\n'
-                      << "libraw=" << (NativeImageDecoder::rawSupported() ? 1 : 0) << '\n'
+                      << "libraw=" << (PinnedDecoder::rawSupported() ? 1 : 0) << '\n'
                       << "ompPin=" << arstro::cosmo_v2::ompPinStatus() << '\n'
+                      // R-CPU-4 as amended: how many decoding threads the pin ACTUALLY bound,
+                      // not how many it was supposed to. `backends` decodes nothing, so 0 here
+                      // is correct and the number is only interesting after a run that did.
+                      << "ompPinnedThreads=" << arstro::cosmo_v2::ompPinnedThreadCount() << '\n'
                       << "defines=" << defs << '\n'
                       << "configDir=" << arstro::cosmo::ProjectStore::configDir() << '\n';
         }
@@ -1133,7 +1149,11 @@ namespace
         const int iters = std::max(1, a.intValue("iters", 3));
 
         // ── decode: the host's own seam, timed directly ──
-        NativeImageDecoder dec;
+        // Budgeted like `info`: a bench that decoded outside the budget would report a
+        // number the app can never reproduce (R-CPU-2c / D-41).
+        PinnedDecoder dec;
+        ThreadBudget benchBudget(AppSettings::load().cpuPercent, 0);
+        dec.setBudget(&benchBudget);
         double decodeMs = 0;
         int w = 0, hh = 0;
         for (int i = 0; i < iters; ++i)

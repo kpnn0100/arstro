@@ -974,9 +974,28 @@ on every settings change, and it owns the engine's width from then on.
    Settings dialog's thread controls only report the choice through `onSettingsChanged` — notified
    *before* `mSession.submit()` (`App.cpp:168-183`), so the re-render uses the new width rather than
    the old one. One owner in code as well as in principle.
-3. **Nested library parallelism (LibRaw's OpenMP)** — `cosmo_v2::pinNestedOpenMPForThisThread()`
-   (`OmpPin.cpp:47-50`), passed to `ProjectLoader` as the per-worker start hook
-   (`linux_main.cpp:680-685`) and therefore called **on each decode worker**. It resolves
+3. **Nested library parallelism (LibRaw's OpenMP)** — `cosmo_v2::pinNestedOpenMPForThisThread(teamSize)`
+   (`OmpPin.cpp`), called **by the decoder, on whatever thread is decoding**. `PinnedDecoder`
+   (`apps/cosmo/PinnedDecoder.h`) is the only decoder the host constructs: it wraps
+   `NativeImageDecoder`, pins first and delegates, so the pin is a property of decoding rather than
+   a hook a call site has to remember. It had been exactly such a hook — `setWorkerInit`, which
+   `OrderedParallelLoad` calls per pool worker — and it therefore covered the project load and
+   nothing else. The six other decodes (`openImageFile`, the `.cosmo` open and the synchronous
+   workspace load, all on the GTK main thread; `cosmo-cc info`, `bench` and the shot renderer) ran
+   with a machine-sized team the budget never counted: 4.6 cores and 20 OS threads of 16 at
+   `cpuPercent=25`, and 4.5 at 100% — identical, so the setting did nothing to them (D-41). The
+   worker hook is still wired as well; a silent failure is worth covering at both ends.
+
+   **Team size comes from the budget, and 1 is only the pool's answer.** A pooled decoder is built
+   by `makePinnedDecoder()` with no budget attached and pins to 1 — `decodeWorkers()` workers times
+   a team of one is exactly the budget. A decoder that runs alone gets a `setBudget(&budget)`
+   (`linux_main.cpp` for `Host::decoder`, `cmdInfo`/`cmdBench` for the CLI) and sizes its team from
+   `ThreadBudget::total()`: with no outer parallelism there is nothing to oversubscribe, and pinning
+   it to 1 made opening a 24 MP ARW take 1.85 s against 0.79 s at *every* budget — insensitivity to
+   the setting in the other direction. Measured after the fix: `info` is 3.26 cores / 8 threads at
+   25% and 4.71 / 20 at 100%. `ompPinUserOverride()` reports a user's own `OMP_NUM_THREADS`, which
+   outranks both — the previous pin called `omp_set_num_threads(1)` unconditionally and overrode
+   them, against (c)'s own "an explicit user value still wins". It resolves
    `omp_set_num_threads` with `dlsym(RTLD_DEFAULT, …)` / `GetProcAddress` over the loaded OpenMP DLLs
    (`OmpPin.cpp:19-45`), so nothing links OpenMP and the pin is a no-op where LibRaw has none.
    `ompPinStatus()` is logged at startup, because the previous mechanism was assumed rather than
@@ -987,7 +1006,13 @@ on every settings change, and it owns the engine's width from then on.
 
 **Measured, not asserted (R-CPU-4 as amended).** `ThreadBudget::producerEnter/Exit` keep
 `peakDecode()`, a lock-free high-water mark of producers inside their work at once, and the load's
-completion logs it next to the allotment (`linux_main.cpp:624-628`).
+completion logs it next to the allotment. Alongside it, `cosmo_v2::ompPinnedThreadCount()` is the
+number of **distinct threads the nested-team pin actually bound** — reported by `cosmo-cc backends`,
+by `cosmo-cc info` (where a 1 says that lone decode's own thread was pinned; it read 0 before D-41),
+and by the host on `LoadFinished`. A count is the right measurement rather than an OpenMP team size
+because it behaves identically on hosts whose LibRaw has no OpenMP at all — which is precisely where
+D-41 hid for five days. Guarded by `every_decoding_thread_is_pinned` in `cosmo_core_tests`, checked
+to fail on the pre-fix code.
 
 ### DR-SVC-10 What the division actually measures (R-SVC-10, R-CPU-4)
 Two tests in `cosmo_core_tests`. `one_budget_is_divided_not_duplicated` asserts, for cores ∈

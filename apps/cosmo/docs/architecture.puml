@@ -18,8 +18,16 @@ package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
     + pollControl()                   ' socket lines -> the same dispatch a click uses
   }
   class OmpPin <<namespace, host>> {
-    + pinNestedOpenMPForThisThread()  ' per-worker; per-thread ICV (D-12)
+    + pinNestedOpenMPForThisThread(teamSize = 1)  ' per-thread ICV (D-12); size from the budget (D-41)
     + ompPinStatus() : const char *   ' checked at runtime, not assumed
+    + ompPinnedThreadCount() : int    ' distinct threads bound — MEASURED (R-CPU-4, D-41)
+    + ompPinUserOverride() : int      ' their OMP_NUM_THREADS wins; 0 = unset (R-CPU-2c)
+  }
+  class PinnedDecoder <<host, R-CPU-2c>> {
+    + setBudget(const ThreadBudget *)  ' attached only for a decode that runs ALONE
+    + decodeFile(path) / decodeThumb(path, maxEdge)
+    - teamSize() : int                 ' budget->total(), or 1 for a pool worker
+    - mInner : NativeImageDecoder
   }
   class "file dialogs" as Dialogs <<GTK>>
   class ExportWriter <<namespace exporter>> {
@@ -340,6 +348,10 @@ ProjectLoader ..> ThreadBudget : beginLoad / producerEnter (R-SVC-10)
 ProjectLoader ..> OrderedParallelLoad : pool + in-order hand-off
 ProjectLoader ..> IImageDecoder : one per produce() call
 ProjectLoader ..> OmpPin : onWorkerStart hook (R-CPU-2c)
+PinnedDecoder ..|> IImageDecoder
+PinnedDecoder ..> OmpPin : pins the thread before EVERY decode (D-41)
+PinnedDecoder ..> ThreadBudget : total() sizes a lone decode's team
+GtkMain ..> PinnedDecoder : the one decoder the host constructs
 ThreadBudget ..> RenderService : par::setThreads(engineThreads())
 HomeScreen ..> SettingsDialog : sidebar Settings link (R-SETTINGS-5)
 RenderService ..> EditEngine

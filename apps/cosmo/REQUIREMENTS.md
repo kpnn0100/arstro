@@ -380,10 +380,17 @@ anything else meanwhile — a photo app is something you run *alongside* your wo
   its own — six call sites that constructed a bare decoder on an unpinned thread and were therefore
   outside the budget entirely, measurably insensitive to the setting (D-41). A decode is a decode:
   which internal path reached it is not something the user chose. So the pin is applied by whatever
-  the host uses to decode, once per thread, and **the number of threads it has bound is counted and
-  reported** next to `ompPinStatus()` — R-CPU-4 asks for honesty that is measured, and "the pin ran
-  on every decoding thread" is a count that can be asserted on every platform, including the ones
-  whose LibRaw has no OpenMP to pin.)
+  the host uses to decode, and **the number of threads it has bound is counted and reported** next
+  to `ompPinStatus()` — R-CPU-4 asks for honesty that is measured, and "the pin ran on every
+  decoding thread" is a count that can be asserted on every platform, including the ones whose
+  LibRaw has no OpenMP to pin.
+  — And **"pinned to 1" is the pool's answer, not every decode's.** One worker per image times a
+  team of one *is* the budget, and that is what (c) was written about. A decode running **alone**
+  has no outer parallelism to oversubscribe against, so its team is sized from
+  `ThreadBudget::total()` instead: the budget is a share the user permits, not a share cosmo must
+  leave unused. Measured — pinning every decode to 1 removed the violation and made opening a
+  24 MP RAW take 1.85 s against 0.79 s, identically at 25% and at 100%, which is a second way of
+  ignoring the setting. An explicit `OMP_NUM_THREADS` still outranks both.)
 - **R-CPU-3 Changeable, and persisted.** The budget is a chip row in the Settings surface
   (R-SETTINGS-1) offering 25% / 50% / 75% / 100%, and it round-trips with the other preferences
   (R-SETTINGS-4). A change takes effect on the **next** load and on the next render: a pool is sized
@@ -1222,6 +1229,16 @@ Windows host it was written for.
   assert text reaches a redirected stderr before the process dies, and no path waits for a human to
   dismiss a dialog — an agent or CI run has nobody to click OK, and waiting for that click is
   indistinguishable from a slow suite. A suite that cannot report red is not evidence.
+- **R-TEST-3 A suite keeps its assertions in every build configuration.** These suites are written
+  in plain `assert()`, and `CMAKE_BUILD_TYPE=Release` puts `-DNDEBUG` in the flags, which defines
+  `assert` away to `((void)0)`. Both cosmo suites were therefore printing `[PASS]` for every test
+  while checking nothing at all on the MSYS2 tree — the configuration the Windows work is done in
+  (D-43). So `TestMain.h` undefines `NDEBUG` before `<cassert>`, unconditionally rather than only in
+  a debug build: a green suite is this project's entire notion of evidence, and one that has been
+  optimised out is worse than none, because it still says green. The same rule reaches any future
+  suite by including that header — which is why the fix lives there and not in a CMake target.
+  Found by deleting a line the tests were supposed to be guarding and watching them pass, which is
+  the only way this class of failure is ever found: **a test you have not seen fail is not a test.**
 - **R-TEST-2 Shared test infrastructure compiles on every host, and never breaks its includer.**
   A header included by more than one suite is verified by *compiling it there*, on each host, not by
   reading it. In particular it must not leak platform macros into the suite that includes it: a

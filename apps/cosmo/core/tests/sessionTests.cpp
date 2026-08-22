@@ -11,6 +11,7 @@
 #include "../service/AppModelCodec.h"
 #include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
+#include "PinnedDecoder.h"   // host layer, compiled into this suite on purpose — see CMakeLists
 #include "TestMain.h"
 #include <cassert>
 #include <chrono>
@@ -591,6 +592,81 @@ namespace
         allStopsReturned.store(true);
         watchdog.join();
         printf("[PASS] ordered_parallel_load_stops_cleanly_midway\n");
+    }
+
+    void test_every_decoding_thread_is_pinned()
+    {
+        // D-41 / R-CPU-2(c) as amended: the nested-team pin belongs to every thread that
+        // decodes, not to ProjectLoader's pool. It used to be wired ONLY to the pool's
+        // per-worker hook, so the six host call sites that construct a decoder directly —
+        // opening one photo, opening a .cosmo, the synchronous workspace load, `cosmo-cc
+        // info`, `params --print`, the shot renderer — decoded with a machine-sized OpenMP
+        // team the budget knew nothing about. Measured before the fix: 4.6 cores and 20 OS
+        // threads at cpuPercent=25, and 4.5 at 100% — identical, so the setting did nothing.
+        //
+        // What is asserted is the COUNT of distinct threads bound, not a thread-count of the
+        // OpenMP team: a team assertion would be inert on any host whose LibRaw has no
+        // OpenMP (the vendored Linux libraw.a, for one), and this defect was invisible on
+        // exactly such a host for five days. The count behaves identically everywhere, which
+        // is the whole reason R-CPU-4 was amended to ask for it.
+        using arstro::cosmo_v2::ompPinnedThreadCount;
+        const int before = ompPinnedThreadCount();
+
+        // A path that cannot decode is the right probe: the pin happens before the delegate
+        // is even called, so this asserts the wrapper's contract without needing a fixture
+        // image, a codec or a display.
+        arstro::cosmo_v2::PinnedDecoder dec;
+        (void)dec.decodeFile("/definitely/not/a/file.arw");
+        assert(ompPinnedThreadCount() == before + 1 &&
+               "decodeFile must pin the thread it decodes on (D-41)");
+
+        (void)dec.decodeThumb("/definitely/not/a/file.arw", 480);
+        assert(ompPinnedThreadCount() == before + 1 &&
+               "the same thread counts once, however many decodes it does");
+
+        // Each NEW decoding thread is counted, which is what makes the number readable as
+        // "how many threads did the pin actually reach" in the load log and `cosmo-cc info`.
+        constexpr int kThreads = 4;
+        std::vector<std::thread> pool;
+        for (int i = 0; i < kThreads; ++i)
+            pool.emplace_back([] {
+                arstro::cosmo_v2::PinnedDecoder d;
+                (void)d.decodeFile("/definitely/not/a/file.arw");
+                (void)d.decodeFile("/definitely/not/a/file.arw");   // still one thread
+            });
+        for (auto &t : pool) t.join();
+        assert(ompPinnedThreadCount() == before + 1 + kThreads &&
+               "every decoding thread is counted exactly once (R-CPU-4, measured)");
+
+        // A decoder with a BUDGET attached is the lone-decode case — the user opening one
+        // photo — and it must be allowed the whole share rather than one core. Pinning
+        // everything to 1 also fixes the budget violation, and measurably over-corrects:
+        // opening a 24 MP ARW went from 0.79 s to 1.85 s, at 100% as much as at 25%.
+        arstro::cosmo::ThreadBudget budget(50, 16);
+        assert(budget.total() == 8);
+        arstro::cosmo_v2::PinnedDecoder wide;
+        wide.setBudget(&budget);
+        (void)wide.decodeFile("/definitely/not/a/file.arw");
+        assert(ompPinnedThreadCount() == before + 1 + kThreads &&
+               "still this thread, already counted");
+
+        // R-CPU-2(c)'s "an explicit user value still wins": the old pin called
+        // omp_set_num_threads(1) unconditionally and overrode a user who had asked for more.
+        // 0 means the user said nothing, so the caller's team size decides — never a silent 1.
+        const int override_ = arstro::cosmo_v2::ompPinUserOverride();
+        const char *env = std::getenv("OMP_NUM_THREADS");
+        if (env && *env)
+        {
+            char *end = nullptr;
+            const long n = std::strtol(env, &end, 10);
+            if (end && *end == '\0' && n >= 1 && n < 1024)
+                assert(override_ == (int)n && "an explicit OMP_NUM_THREADS wins (R-CPU-2c)");
+        }
+        else
+            assert(override_ == 0 && "nothing set means the caller's team size decides");
+
+        printf("[PASS] every_decoding_thread_is_pinned (%d threads; user override %d)\n",
+               ompPinnedThreadCount(), override_);
     }
 
     void test_open_image_move_and_prebuilt_thumb_match_the_copying_path()
@@ -1640,6 +1716,7 @@ int main()
     test_bypass_workspace_roundtrip();
     test_ordered_parallel_load_is_in_order_and_never_stalls();
     test_ordered_parallel_load_stops_cleanly_midway();
+    test_every_decoding_thread_is_pinned();
     test_open_image_move_and_prebuilt_thumb_match_the_copying_path();
     test_finish_workspace_load_keeps_an_existing_selection();
     test_pending_images_appear_then_attach();

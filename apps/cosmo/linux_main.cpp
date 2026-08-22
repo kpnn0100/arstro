@@ -21,7 +21,7 @@
 #include "core/service/Event.h"
 #include "core/ThreadBudget.h"
 #include "widgets/SplashScreen.h"
-#include "core/decode/NativeImageDecoder.h"
+#include "PinnedDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
@@ -44,7 +44,7 @@
 #include <vector>
 
 using arstro::cosmo_v2::App;
-using arstro::cosmo::NativeImageDecoder;
+using arstro::cosmo_v2::PinnedDecoder;   // R-CPU-2c / D-41: the host has ONE decoder, and it pins its thread
 using arstro::cosmo::DecodedImage;
 
 namespace
@@ -118,7 +118,7 @@ namespace
         arstro::cosmo::CosmoService svc{budget};
         App app{svc, (double)kW, (double)kH};
         artboard::CairoTarget target;
-        NativeImageDecoder decoder;
+        PinnedDecoder decoder;
         gint64 startUs = 0;
         // R-SVC-8: only present when --control was given; a closed channel is inert, so
         // nothing below has to check whether the app is being driven from outside.
@@ -239,7 +239,7 @@ namespace
             a->app.openImage(img.rgba.data(), img.width, img.height, baseName(path), path);
         else
             g_printerr("cosmo_v2: could not decode %s%s\n", path.c_str(),
-                       (NativeImageDecoder::isRawExtension(path) && !NativeImageDecoder::rawSupported())
+                       (PinnedDecoder::isRawExtension(path) && !PinnedDecoder::rawSupported())
                            ? " (RAW needs a LibRaw build)" : "");
     }
 
@@ -258,11 +258,11 @@ namespace
     {
         for (const std::string &p : paths)
         {
-            if (!NativeImageDecoder::isRawExtension(p))
+            if (!PinnedDecoder::isRawExtension(p))
             {
                 bool rawDup = false;
                 for (const std::string &q : paths)
-                    if (&q != &p && NativeImageDecoder::isRawExtension(q) && stemLower(q) == stemLower(p))
+                    if (&q != &p && PinnedDecoder::isRawExtension(q) && stemLower(q) == stemLower(p))
                     { rawDup = true; break; }
                 if (rawDup) { g_print("cosmo_v2: skipping %s (RAW with same name preferred)\n", p.c_str()); continue; }
             }
@@ -670,6 +670,14 @@ namespace
                 break;
 
             case K::LoadFinished:
+                // R-CPU-4 as amended: the budget's own honesty clause, as a number rather than
+                // a claim. `peakDecode` says how wide the pool actually got; `ompPinnedThreads`
+                // says how many decoding threads the nested-team pin actually bound. Before
+                // D-41 the second one covered the pool and nothing else, and nothing anywhere
+                // would have said so.
+                LOGI("cpu: load finished — peak decode %d of budget %d; %d thread(s) pinned (%s)",
+                     a->budget.peakDecode(), a->budget.total(),
+                     arstro::cosmo_v2::ompPinnedThreadCount(), arstro::cosmo_v2::ompPinStatus());
                 a->app.setStreamProgress(e.b, e.b);   // fades out
                 a->app.refreshLibrary();
                 a->app.finishOpenTransition();        // the bar has filled; reveal
@@ -1529,7 +1537,7 @@ int main(int argc, char **argv)
     // service would mean rewriting both at once with nothing working in between. S4 moves it
     // and App becomes a view holding a CosmoService&.
     host.svc.setDecoderFactory(
-        [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
+        [] { return arstro::cosmo_v2::makePinnedDecoder(); });
     // Per-thread, on the thread: the OpenMP count is a per-thread ICV, which is why the old
     // env-var pin in main() bound nothing (D-12).
     host.svc.setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
@@ -1548,6 +1556,12 @@ int main(int argc, char **argv)
     // socket now travel the same path, so they cannot behave differently.
     host.app.onCommand = [&host](arstro::cosmo::Command c) { host.svc.dispatch(c); };
     host.settings.cpuPercent = host.budget.percent();
+    // R-CPU-2c / D-41: Host::decoder is the LONE decoder — opening one photo, a .cosmo, the
+    // synchronous workspace load — all on the UI thread with no pool around them. Attaching
+    // the budget is what puts those decodes inside it: they may use the whole share, and no
+    // more. The pool's own decoders come from makePinnedDecoder() with no budget, so each of
+    // them opens a team of one and `decodeWorkers() x 1` is again exactly the budget.
+    host.decoder.setBudget(&host.budget);
     LOGI("cpu: budget %d%% = %d of %d cores; engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),
          host.budget.engineThreads(), host.budget.decodeWorkers());

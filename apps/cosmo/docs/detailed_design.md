@@ -274,7 +274,42 @@ run — and be measured — with no window. `Result` carries what the applier ne
   host remembers to tear the job down.
 - `onWorkerStart` runs once per worker, on that worker. The host passes
   `cosmo_v2::pinNestedOpenMPForThisThread()`: the OpenMP thread count is a per-thread ICV, which is
-  why the old `OMP_NUM_THREADS` pin in `main()` could never work (D-12).
+  why the old `OMP_NUM_THREADS` pin in `main()` could never work (D-12). It is **no longer the only
+  place the pin happens** — see 2.4f: wiring it here and nowhere else left every decode off the pool
+  outside the budget (D-41). The hook stays because the failure was silent, and a silent failure is
+  worth covering at both ends.
+
+### 2.4f PinnedDecoder (`apps/cosmo/PinnedDecoder.h`) — R-CPU-2c
+
+`NativeImageDecoder` decodes; this pins the thread it decodes on first, and it is the only decoder
+the host constructs. `decodeFile` and `decodeThumb` call
+`pinNestedOpenMPForThisThread(teamSize())` and delegate; `setBudget(const ThreadBudget *)` attaches
+a budget and `teamSize()` is `mBudget ? mBudget->total() : 1`, re-read per decode so a budget change
+lands on the next one (R-CPU-3). `makePinnedDecoder()` is the factory every `setDecoderFactory` in
+the host hands the service.
+
+Two decisions, both measured on 16 cores with a 24 MP ARW:
+
+- **Why a decoder and not a hook.** The pin was `CosmoService::setWorkerInit`, called per pool
+  worker, so it covered the project load and none of the six other decodes — `openImageFile`, the
+  `.cosmo` open and the synchronous workspace load (all on the GTK main thread), `cosmo-cc info`,
+  `bench`, and `renderShots`. Those took 4.6 cores and 20 OS threads at `cpuPercent=25` and 4.5 at
+  100%: identical, so the setting did nothing to them. D-11's lesson a second time — the answer to
+  "the limit does not limit" was a single owner, not a better clamp — so the pin became a property
+  of decoding that no caller can forget, because there is no other decoder in the host to construct.
+- **Why the team size is not simply 1.** 1 is the *pool's* answer: `decodeWorkers()` workers each
+  opening a team of one is exactly the budget. A decode running alone has no outer parallelism to
+  oversubscribe against, and pinning it to 1 removed the violation while making a single open take
+  1.85 s against 0.79 s — at 100% as much as at 25%, which ignores the setting in the other
+  direction. Sized from `total()` instead, `info` measures 3.26 cores / 8 threads at 25% and 4.71 /
+  20 at 100%. A user's own `OMP_NUM_THREADS` outranks both (`ompPinUserOverride()`); the previous
+  pin called `omp_set_num_threads(1)` unconditionally and overrode them, against R-CPU-2(c)'s own
+  "an explicit user value still wins".
+
+Host layer, and necessarily: `OmpPin` needs `dlsym`/`GetProcAddress` and `getenv`, none of which
+`cosmo_core` may carry — which is also why this is a wrapper rather than a change inside
+`NativeImageDecoder`. `cosmo_core_tests` compiles `OmpPin.cpp` in for the same reason `cosmo-cc`
+does, so `every_decoding_thread_is_pinned` can assert the count.
 
 `stop()` joins and releases the budget; `start()` calls it first, which is why
 `OrderedParallelLoad::start` now re-initialises `mStop`/`mClaimed`/`mConsumed`/`mInFlight` — the

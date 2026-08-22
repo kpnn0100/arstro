@@ -18,6 +18,29 @@
  *  (R-TEST-2): everything <windows.h> leaks is undone below.
  */
 #pragma once
+
+// ── An assertion-based suite must keep its assertions, whatever the build type (D-43) ──
+//
+// These suites are built with plain `assert()` by design. `CMAKE_BUILD_TYPE=Release` — which
+// is what the MSYS2 tree and every release build configure with — puts `-DNDEBUG` in
+// CMAKE_CXX_FLAGS_RELEASE, and `<cassert>` then defines `assert` to `((void)0)`. Every test
+// in both suites went on printing `[PASS]` while checking nothing at all: found by deleting
+// the pin from PinnedDecoder::decodeFile and watching the guard for D-41 pass anyway.
+//
+// So NDEBUG is undefined here, before `<cassert>` is pulled in, and `<cassert>` is included
+// again below — the one standard header explicitly specified to be re-includable and to
+// re-read NDEBUG each time, which is exactly what makes this work rather than a trick. This
+// header is included by every suite that owns this problem, which is why the fix belongs in
+// it rather than in each CMake target (R-TEST-2: shared test infrastructure).
+//
+// It is deliberately NOT `#ifdef NDEBUG`-guarded to a debug build only: a Release-built
+// suite that silently stops checking is worse than a slow one, and the whole point of
+// R-TEST-1 is that a suite which cannot report red is not evidence.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+#include <cassert>
+
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>

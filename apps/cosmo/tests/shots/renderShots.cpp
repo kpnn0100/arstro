@@ -46,7 +46,7 @@
 #include "adapter/native/CairoTarget.h"
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
-#include "core/decode/NativeImageDecoder.h"
+#include "PinnedDecoder.h"
 #include "core/service/CosmoService.h"
 #include <algorithm>
 #include <cairo/cairo.h>
@@ -73,7 +73,7 @@ namespace
     using arstro::cosmo::CosmoService;
     using arstro::cosmo::DecodedImage;
     using arstro::cosmo::Event;
-    using arstro::cosmo::NativeImageDecoder;
+    using arstro::cosmo_v2::PinnedDecoder;   // R-CPU-2c / D-41
     using arstro::cosmo::ProjectStore;
     using arstro::cosmo::RecentEntry;
     using arstro::cosmo_v2::App;
@@ -234,7 +234,7 @@ namespace
         // One adapter for the whole run, re-bound per frame — see Frame's comment: the
         // image ids the widgets hold belong to this object, not to a surface.
         artboard::CairoTarget target;
-        NativeImageDecoder decoder;
+        PinnedDecoder decoder;
         std::map<std::string, DecodedImage> covers;   // decoded first-images, keyed by path
         double now = 0.0;
         bool coverSent = false;
@@ -243,7 +243,7 @@ namespace
         Rig(int w, int h) : app(svc, (double)w, (double)h)
         {
             svc.setDecoderFactory(
-                [] { return std::unique_ptr<arstro::cosmo::IImageDecoder>(new NativeImageDecoder()); });
+                [] { return arstro::cosmo_v2::makePinnedDecoder(); });
             // Per-THREAD, on the thread: the OpenMP count is a per-thread ICV, so a front
             // end that drops this pin takes the whole machine however the pool was sized
             // (R-CPU-2c, D-12). A shot run is a front end like any other.

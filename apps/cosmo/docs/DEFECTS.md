@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-43**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-44**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,77 +18,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
-
-### D-41 — The OpenMP pin reaches only the load pool, so every other decode ignores the CPU limit
-- **Area:** core / load · **Status:** **Confirmed** (measured) · **Severity:** S3
-- **Found:** 2026-08-22, reported by the user as "the CPU limit feature doesn't work on Windows".
-  This is D-12's fix finished only halfway: it was landed on a Linux host where it could not be
-  observed at all, and D-12's own entry asks for exactly this confirmation on MSYS2.
-- **Front end:** reproduced with `cosmo-cc`; the same call is in the GTK app (three sites, below).
-- **Reproduce:** the committed fixture measures cores-busy for three decode paths at two budgets:
-  ```powershell
-  pwsh apps/cosmo/core/tests/fixtures/cpu_budget_win.ps1 `
-       -Cc  build-mingw64/apps/cosmo/cli/cosmo-cc.exe `
-       -Raw C:/path/to/one.ARW
-  ```
-- **Expected:** R-CPU-1 — "cosmo's background CPU work runs on a **budget**: a percentage of the
-  machine's logical cores"; R-CPU-2(c) — "nested parallelism inside a decoder … cosmo already
-  parallelises across images, so a second layer inside one image is pure oversubscription";
-  R-CPU-4 — the budget bounds "the threads cosmo starts **plus the one nested pool it can reach**".
-  A decode is a decode: which internal path reached it is not something the user chose.
-- **Actual:** the pooled paths obey the budget and the bare decode is **completely insensitive** to
-  it — the same wall time, the same 4.5 cores and the same 20 OS threads at 25% and at 100%:
-
-  | path | budget 25% | budget 100% | |
-  |---|---:|---:|---|
-  | `project` (ProjectLoader pool, pinned) | 3.32 cores · 20.8% | 7.71 cores · 48.2% | budget honoured |
-  | `render` (engine, `par::setThreads`)   | 3.13 cores · 19.6% | 7.34 cores · 45.9% | budget honoured |
-  | `info` (bare `NativeImageDecoder`)     | **4.64 cores · 29.0%** | **4.50 cores · 28.1%** | **outside the budget** |
-
-- **Evidence:** the control isolates the cause to LibRaw's OpenMP team rather than to anything of
-  cosmo's. The identical decode, with the nested team pinned before `exec` (the only way libgomp
-  reads it — D-12), on the same 16-core box:
-  ```
-  info  budget= 25%                      meanCores=4.64  peakOSThreads=20
-  info  budget= 25%  OMP_NUM_THREADS=1   meanCores=1.54  peakOSThreads=9
-  ```
-  ~11 of those 20 threads are an OpenMP team the budget never counted, and pinning removes them.
-- **Judgement:** defect — contradicts R-CPU-2(c) and R-CPU-4 as written. Not a requirement gap, but
-  the (c) clause as **amended by R-SVC-10** describes the mechanism as "ProjectLoader's per-worker
-  start hook", which is what licensed a pool-only wiring; R-CPU-2 is amended in the same commit as
-  this entry to say the pin belongs to **every thread that decodes**, with a countable hook so
-  R-CPU-4's honesty clause can be measured rather than asserted (§3d).
-- **Cause:** `pinNestedOpenMPForThisThread()` (`apps/cosmo/OmpPin.cpp:47`) is wired in exactly one
-  place — `CosmoService::setWorkerInit`, which `OrderedParallelLoad` calls on each pool worker
-  (`linux_main.cpp:1535`, `cli/main.cpp:270`, `tests/shots/renderShots.cpp:250`). Every decode that
-  does not come from that pool constructs a bare `NativeImageDecoder` on an unpinned thread:
-  * `linux_main.cpp:237` — `openImageFile()`: the user opens a single photo, or launches
-    `cosmo <image>`. On the **GTK main thread**.
-  * `linux_main.cpp:291` — opening a `.cosmo` session file. Main thread.
-  * `linux_main.cpp:361` — the synchronous workspace load, once **per entry**. Main thread.
-  * `cli/main.cpp:515` (`info`) and `:1136` (`params --print`), and `renderShots.cpp:274`.
-  Same shape as D-11: the budget has an owner, but a consumer that never asks it anything.
-- **Platform note:** effect is Windows-only today, and that is why the user sees it and CI does not.
-  MSYS2's LibRaw is built `-fopenmp`, so the nested team exists; the vendored Linux `libraw.a` has
-  no `GOMP_*` symbols at all, so on Linux these same call sites decode single-threaded and the hole
-  is invisible. Verified here: `ompPinStatus()` reports *"nested OpenMP teams pinned to 1 per decode
-  worker (via a loaded OpenMP DLL)"* — the pin resolves fine on Windows; it is simply not called.
-- **Secondary finding, same function, same fix:** R-CPU-2(c) promises "an explicit user value still
-  wins", but `pinNestedOpenMPForThisThread()` calls `gSet(1)` unconditionally, so a user who sets
-  `OMP_NUM_THREADS=4` is overridden to 1. By inspection (`OmpPin.cpp:47-50`), S4.
-- **Regression?** No. `git log -S "pinNestedOpenMPForThisThread" -- apps/cosmo` shows it arrived in
-  `95f3b78` (D-12's fix) already wired only to the worker hook, and the two later commits only added
-  front ends that copied that wiring. It has never covered the other paths.
-- **Requirement:** R-CPU-2(c), R-CPU-4 (existing, both violated); R-CPU-2 amended while filing.
-- **RECOMMENDED FIX:** make the pin a property of *decoding* rather than of the pool, so no future
-  caller can forget it — see the report in the session that filed this. Concretely: a host-layer
-  `PinnedDecoder` wrapper (the pin must stay in the host: `cosmo_core` may not `dlsym`) that calls
-  `pinNestedOpenMPForThisThread()` once per thread and delegates to `NativeImageDecoder`, made the
-  only way the host constructs a decoder — the six call sites above plus the three factories. Plus,
-  because this failure is silent, the honesty half: have the pin count the distinct threads it has
-  bound and print that next to `ompPinStatus()` in `cosmo-cc backends` and the load log.
-- **Guarded by:** pending. A test asserting the pin ran on every decoding thread (countable on every
-  platform) — not a thread-count assertion, which would be inert wherever LibRaw has no OpenMP.
 
 ### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
 - **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
@@ -244,6 +173,136 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-43 — Every `assert()` in both cosmo suites is compiled out in a Release build
+- **Area:** core / test infrastructure · **Status:** **Fixed** (same session it was found) · **Severity:** S1
+- **Found:** 2026-08-22, while checking that D-41's new guard failed on the pre-fix code. It did
+  not: the guard passed with the thing it guards deleted. Found the only way this class of failure
+  ever is — by deleting a line the tests were supposed to be catching and watching them stay green.
+- **Front end:** none — `cosmo_core_tests` and `cosmo_widget_tests`.
+- **Reproduce:** on any tree configured `Release` (which the MSYS2 tree is, and which is where all
+  the Windows work happens):
+  ```bash
+  grep CMAKE_BUILD_TYPE build-mingw64/CMakeCache.txt        # -> Release
+  grep CMAKE_CXX_FLAGS_RELEASE build-mingw64/CMakeCache.txt # -> -O3 -DNDEBUG
+  # delete the pin from PinnedDecoder::decodeFile, rebuild, run the suite:
+  ./build-mingw64/apps/cosmo/core/cosmo_core_tests.exe      # -> 37x [PASS], exit 0
+  ```
+- **Expected:** R-TEST-1 — "a failing assertion exits, promptly and non-zero, on every supported
+  host". A suite of 37 assertion-based tests reports red when an assertion is false.
+- **Actual:** `-DNDEBUG` defines `assert` to `((void)0)`, so **every test in both suites checked
+  nothing**. They printed `[PASS]` line by line and exited 0 with the code under test broken. The
+  print statements were the only thing still running.
+- **Evidence:** the same binary, same test, with only `#undef NDEBUG` added to `TestMain.h`:
+  ```
+  before:  [PASS] every_decoding_thread_is_pinned (1 threads pinned to 1)     exit=0
+  after:   Assertion failed: ompPinnedThreadCount() == before + 1 &&
+           "decodeFile must pin the thread it decodes on (D-41)",
+           file .../sessionTests.cpp, line 620
+           [abort] assertion failed — exiting 3                               exit=3
+  ```
+  Note the `1 threads` in the "before" line: the count was visibly wrong on stdout and nothing
+  failed. D-42's guard did report red before this was fixed only because it exits via `_Exit(3)`
+  from a watchdog rather than through `assert`.
+- **Judgement:** defect — violates R-TEST-1 outright, and voids its premise. Every "the suite is
+  green" claim made from a Release tree is worth nothing, which includes every verification done on
+  Windows. **R-TEST-3 written** to state the rule rather than leave it as a fixed accident.
+- **Cause:** the suites are written in plain `assert()` (by design — see the skill and R-TEST-1),
+  and nothing prevented `NDEBUG` from reaching them. Not a Windows defect at all: any Release
+  configure on any host has the same effect. It surfaced here because Windows is where a Release
+  tree was being used for verification.
+- **Regression?** No — the suites have always been assert-based and `Release` has always defined
+  `NDEBUG`. Latent since the first Release configure; invisible because a suite in this state is
+  indistinguishable from a passing one.
+- **Requirement:** R-TEST-1 (violated), R-TEST-3 (written while filing this).
+- **Fix:** commit `PENDING-D41`. `TestMain.h` undefines `NDEBUG` before including `<cassert>`,
+  unconditionally — `<cassert>` is specified to be re-includable and to re-read `NDEBUG` each time,
+  which is what makes this work rather than a trick. It is in that header rather than in each CMake
+  target because both suites already include it and any future one will (R-TEST-2).
+- **Guarded by:** the whole of both suites, which now assert. Directly checked by breaking
+  `PinnedDecoder::decodeFile` and confirming `exit=3` with the assertion text on stderr; the same
+  break exits 0 without the fix. `ctest` is 17/17 with assertions live.
+
+### D-41 — The OpenMP pin reaches only the load pool, so every other decode ignores the CPU limit
+- **Area:** core / load · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-22, reported by the user as "the CPU limit feature doesn't work on Windows".
+  D-12's fix finished only halfway: it was landed on a Linux host where it could not be observed at
+  all, and D-12's own entry asks for exactly this confirmation on MSYS2.
+- **Front end:** reproduced with `cosmo-cc`; the same call was in the GTK app at three sites.
+- **Reproduce:** the committed fixture measures cores-busy for three decode paths at two budgets:
+  ```powershell
+  pwsh apps/cosmo/core/tests/fixtures/cpu_budget_win.ps1 `
+       -Cc  build-mingw64/apps/cosmo/cli/cosmo-cc.exe `
+       -Raw C:/path/to/one.ARW
+  ```
+- **Expected:** R-CPU-1 — "cosmo's background CPU work runs on a **budget**: a percentage of the
+  machine's logical cores"; R-CPU-2(c) — "nested parallelism inside a decoder … a second layer
+  inside one image is pure oversubscription"; R-CPU-4 — the budget bounds "the threads cosmo starts
+  **plus the one nested pool it can reach**". A decode is a decode: which internal path reached it
+  is not something the user chose.
+- **Actual:** the pooled paths obeyed the budget and the bare decode was **completely insensitive**
+  to it — same wall time, same 4.5 cores, same 20 OS threads at 25% and at 100%:
+
+  | path | budget 25% | budget 100% | |
+  |---|---:|---:|---|
+  | `project` (ProjectLoader pool, pinned) | 3.32 cores · 20.8% | 7.71 cores · 48.2% | budget honoured |
+  | `render` (engine, `par::setThreads`)   | 3.13 cores · 19.6% | 7.34 cores · 45.9% | budget honoured |
+  | `info` (bare `NativeImageDecoder`)     | **4.64 cores · 29.0%** | **4.50 cores · 28.1%** | **outside the budget** |
+
+- **Evidence:** the control isolated the cause to LibRaw's OpenMP team rather than anything of
+  cosmo's — the identical decode with the nested team pinned before `exec` (the only way libgomp
+  reads it, D-12), on the same 16-core box:
+  ```
+  info  budget= 25%                      meanCores=4.64  peakOSThreads=20
+  info  budget= 25%  OMP_NUM_THREADS=1   meanCores=1.54  peakOSThreads=9
+  ```
+- **Judgement:** defect — contradicted R-CPU-2(c) and R-CPU-4 as written. R-CPU-2 amended twice
+  while fixing: the pin belongs to every thread that decodes, and the team size comes from the
+  budget rather than being 1 everywhere (see **Fix**).
+- **Cause:** `pinNestedOpenMPForThisThread()` was wired in exactly one place —
+  `CosmoService::setWorkerInit`, which `OrderedParallelLoad` calls on each pool worker. Every decode
+  that did not come from that pool constructed a bare `NativeImageDecoder` on an unpinned thread:
+  `linux_main.cpp:237` (`openImageFile` — the user opens one photo, or launches `cosmo <image>`),
+  `:291` (a `.cosmo` session), `:361` (the synchronous workspace load, once **per entry**) — all
+  three on the **GTK main thread** — plus `cli/main.cpp` `info` and `bench`, and `renderShots.cpp`.
+  Same shape as D-11: the budget had an owner, and a consumer that never asked it anything.
+- **Platform note:** effect was Windows-only, which is why the user saw it and CI did not. MSYS2's
+  LibRaw is built `-fopenmp` so the nested team exists; the vendored Linux `libraw.a` has no `GOMP_*`
+  symbols, so on Linux these same call sites decode single-threaded and the hole is invisible.
+  `ompPinStatus()` reported the pin resolving correctly on Windows the whole time — it was simply
+  never called.
+- **Regression?** No. `git log -S "pinNestedOpenMPForThisThread" -- apps/cosmo` shows it arrived in
+  `95f3b78` (D-12's fix) already wired only to the worker hook; later commits copied that wiring.
+- **Requirement:** R-CPU-2(c), R-CPU-4 (both violated); R-CPU-2(c) amended twice while fixing.
+- **Fix:** commit `PENDING-D41`. `cosmo_v2::PinnedDecoder` (`apps/cosmo/PinnedDecoder.h`) wraps
+  `NativeImageDecoder`, pins the calling thread and delegates — and is now the **only** decoder the
+  host constructs, so the pin is a property of decoding rather than a hook a call site can forget.
+  D-11's lesson applied a second time: a single owner, not a better clamp. The worker hook stays as
+  well, because the failure is silent.
+
+  **The recommendation filed with this entry said "pin once per thread", and that turned out to be
+  half right.** Implemented literally — team size 1 everywhere — it removed the violation and made
+  opening a 24 MP ARW take **1.85 s against 0.79 s, at 100% as much as at 25%**: insensitivity to
+  the setting in the other direction, and a 2.3x regression on the commonest action in the app.
+  1 is the *pool's* answer, where `decodeWorkers()` workers times a team of one is exactly the
+  budget. A decode running alone has no outer parallelism to oversubscribe against, so it is sized
+  from `ThreadBudget::total()`. R-CPU-1 grants the user's share; it does not ask cosmo to leave it
+  unused.
+
+  Also fixed here, same function: `pinNestedOpenMPForThisThread` called `omp_set_num_threads(1)`
+  unconditionally, overriding a user who had set `OMP_NUM_THREADS` — against R-CPU-2(c)'s own "an
+  explicit user value still wins". `ompPinUserOverride()` now reports it and it outranks both.
+- **Verified:** after the fix, `info` measures **3.26 cores / 8 OS threads at 25% and 4.71 / 20 at
+  100%** — it responds to the setting, stays inside it, and opens in 0.88 s / 0.76 s, so nothing got
+  slower. `project` and `render` are unchanged.
+- **Guarded by:** `every_decoding_thread_is_pinned` in `sessionTests.cpp` — **checked to fail on the
+  pre-fix code**, at `"decodeFile must pin the thread it decodes on (D-41)"`, exit 3. It asserts the
+  **count of distinct threads bound**, not an OpenMP team size, because a team assertion is inert on
+  any host whose LibRaw has no OpenMP — which is exactly the host this defect hid on. That count is
+  reported by `cosmo-cc info`, `cosmo-cc backends` and the host's `LoadFinished` log, so R-CPU-4's
+  honesty clause is a number rather than a claim.
+- **Note:** this guard is also what uncovered **D-43** — it passed with the fix deleted, because
+  `-DNDEBUG` had been compiling every assertion in both suites away.
 
 ### D-42 — `OrderedParallelLoad::stop()` signals its condition variable without the lock, and hangs
 - **Area:** core / load · **Status:** **Fixed** (same session it was filed) · **Severity:** S1 (hang)

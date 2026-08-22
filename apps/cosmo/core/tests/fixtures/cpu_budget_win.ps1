@@ -12,19 +12,28 @@
              -Raw C:/photos/DSC00729.ARW
 
     Expected, with the budget honoured on every path: meanCores tracks the budget on all
-    three rows -- roughly total() at 25%, roughly 4x that at 100%.
+    three rows -- no row may be INSENSITIVE to the setting, and none may exceed total().
 
-    Actual on 2026-08-22 (16 logical cores, MSYS2 MINGW64):
+    D-41, on 2026-08-22 (16 logical cores, MSYS2 MINGW64). Before the fix:
 
         project  25%  meanCores 3.31   100%  meanCores 7.16     <- budget honoured
         render   25%  meanCores 2.89   100%  meanCores 7.01     <- budget honoured
-        info     25%  meanCores 4.32   100%  meanCores 4.03     <- IDENTICAL: outside the budget
+        info     25%  meanCores 4.32   100%  meanCores 4.03     <- IDENTICAL: outside it
 
-    `info` decodes with a bare NativeImageDecoder and no per-thread OpenMP pin, so LibRaw
-    opens a machine-sized team the budget knows nothing about. The control is the last row:
-    with OMP_NUM_THREADS=1 set BEFORE exec (the only way libgomp reads it -- D-12) the same
-    decode falls to ~1.5 cores and 9 OS threads, which is what the pin would have achieved.
-    That is the whole of D-41: the pin reaches ProjectLoader's pool workers and nothing else.
+    `info` decoded with a bare NativeImageDecoder and no per-thread OpenMP pin, so LibRaw
+    opened a machine-sized team the budget knew nothing about -- 20 OS threads either way.
+    The control row proves the cause: with OMP_NUM_THREADS=1 set BEFORE exec (the only way
+    libgomp reads it -- D-12) the same decode falls to ~1.6 cores and 9 threads.
+
+    After the fix (`PinnedDecoder`, the one decoder the host constructs):
+
+        info     25%  meanCores 3.26 / 8 threads    100%  meanCores 4.71 / 20 threads
+
+    It now responds to the setting and stays inside it. Note it is NOT pinned to the control
+    row's 1.6 cores: a lone decode has no outer parallelism to oversubscribe against, so it
+    is sized from `ThreadBudget::total()` rather than from 1. Pinning it to 1 also "fixed"
+    the violation and made opening a 24 MP ARW take 1.85 s instead of 0.79 s at every budget
+    -- fixing a budget violation by leaving the budget unused is not fixing it.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Cc,     # path to cosmo-cc.exe

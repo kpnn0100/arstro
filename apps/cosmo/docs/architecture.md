@@ -272,7 +272,8 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | Path | Layer | Responsibility |
 |------|-------|----------------|
 | `apps/cosmo/linux_main.cpp` | host | GTK app, events, dialogs, the load's UI-side consumer (`startEntriesLoad`/`pollLoad` — the decode itself moved down, R-SVC-1), threaded batch exporter, fonts, logging |
-| `apps/cosmo/OmpPin.{h,cpp}` | host | pins a nested OpenMP team per decode worker, resolved by `dlsym`/`GetProcAddress` rather than linked (R-CPU-2c, fixes D-12) |
+| `apps/cosmo/OmpPin.{h,cpp}` | host | sizes the nested OpenMP team of the calling thread, resolved by `dlsym`/`GetProcAddress` rather than linked; counts the threads it bound, so R-CPU-4's honesty clause is a number (R-CPU-2c, fixes D-12 + D-41) |
+| `apps/cosmo/PinnedDecoder.h` | host | the ONE decoder the host constructs: wraps `NativeImageDecoder` and pins the decoding thread first, so the budget covers every decode and not only the load pool's (R-CPU-2c, fixes D-41) |
 | `apps/cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `apps/cosmo/Theme.{h,cpp}` | app | palette, radii, font family names, type ramp |
 | `apps/cosmo/touch/*` + `apps/cosmo/TouchViewport.h` | app | the TOUCH shell (`arstro::cosmo_touch`), built into the desktop binary too: `linux_main.cpp` holds one beside `App` and cross-fades to it when `touchUi` is set (R-TOUCH-6). Same service, so the switch keeps the project open |

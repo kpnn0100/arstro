@@ -15,30 +15,38 @@ file, and commit.
 
 ## NEXT
 
-**► Two defects filed on Windows on 2026-08-22, and they are next, in this order.** Both were found
-running the suites and the CLI on MSYS2 for the first time — the platform where the CPU budget was
-originally reported broken and the one place its two known defects could ever have been observed.
+**► 2026-08-22, on Windows: the CPU limit was reported broken, and three defects came out of it.
+All three are now CLOSED (D-41, D-42, D-43).** Every one was found by running the suites and the CLI
+on MSYS2 for the first time — the platform where the CPU budget was originally reported broken, and
+the one place its defects were ever live.
 
-1. ~~**D-42 (S1, hang)**~~ — **CLOSED.** `OrderedParallelLoad::stop()` signalled `mCv` without
-   holding `mMu`, so a worker that had evaluated the predicate but not yet blocked missed the wake
-   and `join()` never returned. It now takes the lock for the flag change. **All 36
-   `cosmo_core_tests` pass on MSYS2 for the first time** and `ctest` is 17/17, so the three guards
-   written for D-11/D-12 — `cpu_budget_scales_with_percent`,
-   `one_budget_is_divided_not_duplicated`, `project_load_peak_never_exceeds_its_pool (pool 5, peak 5
-   of budget 6)` — have now run on the only host where those defects were ever live.
-2. **► D-41 (S3) — NEXT.** D-12's pin was wired to `CosmoService::setWorkerInit` and nowhere else, so it
-   covers ProjectLoader's pool and none of the six other decode paths (opening one photo, a
-   `.cosmo`, the synchronous workspace load — all on the GTK main thread — plus `cosmo-cc info` and
-   `params`). Measured: a bare decode takes 4.6 cores and 20 OS threads at `cpuPercent=25` and 4.5
-   cores at 100% — identical, i.e. the setting does nothing to it, while `project` and `render` on
-   the same box track the budget correctly (3.3 / 7.7 cores). Fixture:
-   `apps/cosmo/core/tests/fixtures/cpu_budget_win.ps1`. R-CPU-2(c) amended: the pin belongs to every
-   thread that decodes, and the threads it has bound are **counted**, so R-CPU-4's honesty clause is
-   measured rather than asserted. Recommended fix is a host-side `PinnedDecoder` wrapper that is the
-   only way a decoder gets constructed — filed in full in `DEFECTS.md`.
+1. **D-43 (S1)** — `CMAKE_BUILD_TYPE=Release` puts `-DNDEBUG` in the flags, so **every `assert()` in
+   both cosmo suites was compiled out**. 37 tests printed `[PASS]` while checking nothing, and every
+   "the suite is green" claim ever made from a Release tree was worth nothing. `TestMain.h` now
+   undefines `NDEBUG` before `<cassert>`. **R-TEST-3 written.** Found only because D-41's new guard
+   passed with the thing it guards deleted — *a test you have not seen fail is not a test.*
+2. **D-42 (S1, hang)** — `OrderedParallelLoad::stop()` signalled `mCv` without holding `mMu`, so a
+   worker that had evaluated the predicate but not yet blocked missed the wake and `join()` never
+   returned. Deterministic on winpthreads. In the product it is `ProjectClose` and
+   `ProjectLoader::start()`, both on the UI thread — going Home mid-load could hang the app.
+3. **D-41 (S3)** — D-12's pin was wired to `CosmoService::setWorkerInit` and nowhere else, so it
+   covered ProjectLoader's pool and none of the six other decode paths. A bare decode took 4.6 cores
+   and 20 OS threads at `cpuPercent=25` and 4.5 at 100% — the setting did nothing to it. Now
+   `cosmo_v2::PinnedDecoder` is the only decoder the host constructs and it pins the thread it
+   decodes on. Sized from `ThreadBudget::total()` when it runs alone, **not** hard-pinned to 1:
+   pinning everything to 1 also removed the violation and made opening a 24 MP ARW take 1.85 s
+   instead of 0.79 s at every budget. After: 3.26 cores at 25%, 4.71 at 100%, 0.88 s.
 
-Both are recommendations, not code: `arstro.cosmo.core.debug` filed them and applied nothing. The
-user runs `arstro.cosmo.core.implement` to land them.
+**All 37 `cosmo_core_tests` pass on MSYS2 with assertions live — the first meaningful green this
+host has ever produced — and `ctest` is 17/17.** The three guards written for D-11/D-12 have now run
+here for the first time: `cpu_budget_scales_with_percent`, `one_budget_is_divided_not_duplicated`,
+`project_load_peak_never_exceeds_its_pool (pool 5, peak 5 of budget 6)`. Fixture for the whole
+investigation: `apps/cosmo/core/tests/fixtures/cpu_budget_win.ps1`.
+
+**Worth carrying forward:** two of these three were invisible on Linux and one was invisible
+everywhere. The Windows tree is not a port to be checked occasionally — it is where the only
+`-fopenmp` LibRaw and the only winpthreads scheduler live, and it found what four months of green
+suites did not. Run `ctest` there before believing a threading or budget claim.
 
 **[`service-architecture-proposal.md`](service-architecture-proposal.md) is APPROVED** (2026-08-17,
 in-process service + control socket, full S1-S5) and written up as **R-SVC-1…10**. P0 is superseded:
@@ -88,7 +96,7 @@ a load's measured peak stays inside the budget, and the acceptance test runs una
 
 | M | Milestone | State |
 |---|---|---|
-| U1 | CPU budget + Settings reachable from home | reopened again by **D-41** — D-12's pin covers the load pool only, and no other decode is inside the budget. D-11's half stands: `project` and `render` measure correct on Windows |
+| U1 | CPU budget + Settings reachable from home | **done, and measured on Windows at last** — D-41 closed (every decoding thread is inside the budget, and sized from it); D-11's half re-confirmed here: `project` 3.3 → 7.7 cores, `render` 3.1 → 7.1, `info` 3.3 → 4.7 across 25% → 100% |
 | S  | Core-as-a-service: `CosmoService`, `Command`/`Event`, CLI + GUI as views | **COMPLETE** — S1…S5. The §5 checks pass: identical dumps, the gate at 0, every behaviour a command, budget measured, acceptance unattended |
 | P0 | Agent harness — CLI, headless render, debug logging, scripted input | superseded by S, except P0.11 / P0.12 |
 | P1 | Doc-drift cleanup (D-1) and requirement coverage for what already shipped | not started |
