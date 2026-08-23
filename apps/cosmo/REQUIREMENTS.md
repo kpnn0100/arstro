@@ -242,6 +242,18 @@ claim on RAM.
   only for the few slots being rendered or exported. R-VIEW-1's dissolve already covers a frame that
   arrives late, and R-THUMB's thumbnail is what the rack shows meanwhile, so a cold photo degrades to
   "it fades in a moment later" rather than to a blank stage.
+  (**AMENDED, 2026-08-23:** "generous enough" is a claim with nothing reading it back, and it was
+  wrong within a day — D-44. Stepping along the filmstrip of a 120-photo project re-decoded on
+  **8 of 10 hops**, at ~1.8 s each against ~0.65 s warm, because the proxy pool is filled only by
+  *rendering* a photo and so was empty for every photo the user had not already visited. The rule
+  §3d exists for applies to the requirement I wrote as much as to anyone's: **a latency bound needs a
+  number and something that measures it.** So, stated so it can fail:
+  **for a project whose proxies fit the cap, walking it must re-decode at most once per photo — a
+  photo already visited must never re-decode — and the caps must be sized so that a typical rack
+  fits.** `apps/cosmo/core/tests/fixtures/preview_hop_latency.cpp` is what reads it back, reporting
+  `rehydrated=` per hop, and a service test asserting the rehydration count over a walk is what
+  guards it. The separate question of what a *warm* hop may cost is D-45 and is not this
+  requirement's — this one bounds how often the cache misses, not how fast a render is.)
 
 *Complementary to, and not in conflict with, R-LOADPERF-1a:* that caps decoded-but-**unapplied**
 bytes in flight during a load, which bounds the producer side; this caps what stays resident **after**

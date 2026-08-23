@@ -15,6 +15,38 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-23 (later) — "sometime changing photo take too long". Diagnosed, filed, NOT fixed:
+D-44 and D-45. These are the ledger's NEXT.**
+
+Measured on a real 120-photo ARW project with the new fixture
+`apps/cosmo/core/tests/fixtures/preview_hop_latency.cpp`:
+
+```
+walking the rack:   8 of 10 hops re-decoded    cold ~1.8 s   warm ~0.65 s
+the cold path:      LibRaw decode 1020.9 ms | to linear 105.3 | +proxy+render 841.5
+                    render again, proxy warm  601.4 ms   <- the floor, fully cached
+```
+
+1. **D-44 (S2) — and it is a regression I introduced.** Yesterday's R-MEM commit (`1897d27`) capped
+   resident pixels and traded 465 MB/photo for ~1 s/hop; **nothing measured the second half of that
+   trade.** Two causes: the proxy is built only when a photo is *rendered*, so after a load the whole
+   rack is cold; and a 26 MB proxy against a 1 GB cap holds 37 of 120 anyway. Recommended: build the
+   proxy at ingest on the render worker and drop the source; size the caps from physical RAM in the
+   host; and land **D-24** (still open — its fixture already measured `user_qual=0` at ~7x faster,
+   same dimensions) so the decode a cold slot needs is cheaper. Plus the observability half:
+   `frame.ready` never sets `ms`, so neither the user's log nor a script can tell a 250 ms hop from a
+   2537 ms one.
+   **R-MEM-5 amended** — "generous enough" was unmeasurable and wrong within a day; it now states a
+   target that can fail and names what reads it back.
+2. **D-45 (S2) — the floor underneath D-44.** A 1600 px preview render costs **~600 ms at 16 threads
+   with every parameter at its neutral value**. Paid on every hop and every slider move. Filed as a
+   **requirement gap**: nothing says what an interactive preview may cost, and that number is a
+   product decision to take with the user rather than guess. First step is a measurement — extend
+   `cosmo-cc bench` to time the preview pipeline per stage — not an optimisation.
+
+Neither is fixed: `arstro.cosmo.core.debug` filed them and applied nothing. Run
+`arstro.cosmo.core.implement` to land D-44 (and decide D-45's target first).
+
 **► 2026-08-23 — four problems reported against a 120-photo RAW project. (2) and (4) are DONE;
 (1) and (3) are next.**
 

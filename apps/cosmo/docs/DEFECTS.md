@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-44**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-46**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,116 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-44 — Switching to a photo re-decodes it, because the preview cache is filled only by rendering
+- **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2
+- **Found:** 2026-08-23, reported by the user: *"sometime changing photo take too long"*, with a log
+  showing one hop at 250 ms and the next at 2537 ms.
+- **Front end:** the GTK app (the user's log); reproduced headlessly with the fixture below.
+- **REGRESSION, and mine.** `1897d27` (R-MEM, yesterday) capped the engine's resident pixels. Before
+  it, all 120 sources stayed resident, so every hop was warm — at the cost of the 54 GB that commit
+  existed to remove. The memory fix was right; it traded 465 MB/photo for ~1 s/hop and **nothing
+  measured the second half of that trade**, which is precisely what R-MEM-5 was written to prevent.
+- **Reproduce:** `apps/cosmo/core/tests/fixtures/preview_hop_latency.cpp` (compile line in its
+  header), then:
+  ```bash
+  /tmp/hoplat <one.ARW> <project-with-120-photos.cmp>
+  ```
+- **Expected:** R-MEM-5 — "the caps must be generous enough that **ordinary work — stepping along the
+  filmstrip**, adjusting the photo in front of you, undo/redo — **hits resident pixels**."
+- **Actual:** it almost never hits resident pixels. Walking a 120-photo project, **8 of 10 hops
+  re-decoded the RAW**:
+  ```
+  node=7   1622.9 ms  rehydrated=1        node=6   (revisit)   683.0 ms  <- warm
+  node=8   1866.6 ms  rehydrated=1        node=61  (revisit)   660.9 ms  <- warm
+  node=61  1630.4 ms  rehydrated=1
+  node=62  1626.6 ms  rehydrated=1
+  ```
+  A cold hop is ~1.8 s, a warm one ~0.65 s. That difference is the user's "sometimes".
+- **Evidence:** the same fixture's stage breakdown says where the extra second goes — 16 engine
+  threads, Sony 24 MP ARW, previewEdge 1600:
+  ```
+  1. LibRaw decode -> RGBA8 6024x4024   1020.9 ms  (92 MB)   <- the whole variance
+  2. -> linear float source              105.3 ms  (369 MB)
+  3. add + proxy + first render          841.5 ms  (proxy 26 MB)
+  4. render again, proxy warm            601.4 ms             <- D-45, the floor
+  ```
+- **Judgement:** defect — contradicts R-MEM-5 as written. **R-MEM-5 amended in the same commit**,
+  because its own wording is half the problem: "generous enough" is a claim with nothing reading it
+  back, which is what §3d forbids and how D-11 and D-12 shipped. It now states a measurable target
+  and names the fixture that measures it.
+- **Cause:** two independent reasons a photo is cold, and both need fixing:
+  1. **The proxy is built lazily, in `ensurePreviewProxy` (`EditEngine.cpp`), so it exists only for a
+     photo that has already been rendered.** After a load the *sources* were evicted as the load
+     progressed (correctly) but no proxies were ever built, so the whole rack is cold and the first
+     visit to every photo pays a full decode. `engineRehydrations=0` right after the load and 1 per
+     hop afterwards is exactly this.
+  2. **Even with proxies built, the pool cannot hold the rack.** A 1600 px proxy is 26 MB in linear
+     float and the cap is 1 GB, so ~37 of 120 fit. `resident` climbing 765 → 974 MB over ten hops is
+     the pool filling one proxy at a time.
+- **Requirement:** R-MEM-5 (violated; amended while filing), R-MEM-1/2 (unchanged and still right).
+- **RECOMMENDED FIX — not applied.** Three parts, in value order; the first alone removes most of it.
+  1. **Build the proxy at ingest, on the render worker that already holds the bytes, and drop the
+     full-resolution source right after.** The worker converts to linear anyway (105 ms) and the
+     downscale is ~130 ms — both already paid during a load — so the added cost is bounded and off
+     the UI thread. This makes the load *fill* the browse cache instead of leaving it empty. Do it in
+     `RenderService`'s add path rather than in `EditEngine::addImage`, so the non-threaded build
+     keeps its current inline behaviour.
+  2. **Size the pools from the machine, not from a constant.** 800 MB / 1 GB are literals chosen
+     blind; on this 27.7 GB box a 3 GB proxy pool holds all 120 and is still ~11% of RAM. The host
+     can query physical memory (`GlobalMemoryStatusEx` / `sysconf`) and call the existing
+     `setMemoryCaps` — no new seam, and the platform call stays in the host layer where it belongs.
+  3. **Make the decode a cold slot needs cheaper** — this is **D-24**, still open, whose own fixture
+     already measured `user_qual=0` at ~7x faster with identical dimensions. A re-decode for a
+     *preview* does not need the highest-quality demosaic. Landing D-24 shrinks what remains of this
+     defect and every other decode in the app.
+- **Also fix, and justified by the silence (§6):** `frame.ready` **never reports its ms**.
+  `Event::ms` exists and `formatEvent` prints it when non-zero (`Event.cpp:67-70`), but
+  `CosmoService.cpp:256` emits the event without it — so neither the user's log nor a script can tell
+  a 250 ms hop from a 2537 ms one without timestamps and arithmetic. The user had to notice this by
+  feel. One argument at the emit site, and the reproduction above becomes a one-line `cosmo-cc`
+  script for everyone.
+- **Guarded by:** pending. `preview_hop_latency.cpp` is the measurement; the assertion R-MEM-5 now
+  asks for is a service test that walks N photos and requires the rehydration count to stay near zero
+  for a rack that fits the cap — which fails on today's code at the first hop.
+
+### D-45 — A 1600 px preview render costs ~600 ms with 16 threads, at default parameters
+- **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2
+- **Found:** 2026-08-23, while measuring D-44 — it is the floor D-44's warm hops could not get under.
+- **Front end:** none — measured against `EditEngine` directly.
+- **Reproduce:** `apps/cosmo/core/tests/fixtures/preview_hop_latency.cpp <one.ARW>`, stage 4.
+- **Expected:** no requirement states a preview budget, which is itself the finding — see
+  **Judgement**. As an order of magnitude: 1600x1067 is 1.7 Mpx, and seventeen point/area processors
+  over it at 16 threads is tens of milliseconds of arithmetic, not six hundred.
+- **Actual:**
+  ```
+  4. render again, proxy warm       601.4 ms      (engine threads = 16, EditParams all default)
+  ```
+  Every parameter is at its neutral value, so this is what cosmo costs to render a photo it has
+  already cached with no edits applied at all. It is paid on **every** hop and **every** slider move
+  — D-44 is the variance on top of it and this is the floor underneath.
+- **Evidence:** the number above, taken with `par::setThreads(0)` pinned first, because earlier tests
+  in the same binary leave a `ThreadBudget`'s count behind and an unpinned measurement would have
+  been measuring somebody else's budget. It read 645 ms at whatever they left and 617/601 ms at 16,
+  so the thread count is NOT the explanation.
+- **Judgement:** **requirement gap.** Nothing in `REQUIREMENTS.md` says what an interactive preview
+  may cost, so there is no line for this to be under — R-LOADPERF governs *opening a project* and
+  R-CPU governs *how many threads*, and neither bounds the latency of the interaction the user
+  performs most. Not closed while filing, deliberately: the right number is a product decision (100
+  ms reads as instant, 600 ms does not) and it should be written with the user rather than guessed
+  here. Filed against the gap so it is not lost.
+- **Regression?** No. `git log -S "renderInto"` and `-S "ensurePreviewProxy"` on `EditEngine.cpp`
+  both return only `af95c65` (the repo reorganisation): the render path is original and untouched by
+  any of the last week's commits.
+- **RECOMMENDED FIX — not applied, and the first step is a measurement, not a change.** Extend
+  `cosmo-cc bench` to time the **preview** pipeline per stage the way it already does for
+  `renderFull`, so the 600 ms is attributed to named processors before anything is optimised. Two
+  hypotheses worth testing first, in order: **(a) processors run at identity** — seventeen full
+  passes over the buffer happen whether or not a parameter differs from neutral, and an early-out per
+  processor would remove most of them for a default photo; **(b) per-pixel transcendentals** —
+  `ToneCurve`/`ColorGrading`/`Dehaze` calling `pow`/`exp` per pixel rather than through a LUT, which
+  is the shape `fromEncodedBytes` already solved for sRGB decode with `kSrgbToLinear`. Do not guess
+  between them: the D-41 and (3b) entries in the decisions log are both "measure before optimising".
 
 ### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
 - **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
