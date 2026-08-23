@@ -67,6 +67,15 @@ namespace arstro
 
         // ── images / slots ──
         int addImage(const uint8_t *rgba, int width, int height, int channels = 4);
+        /** Add an image as a PREVIEW ONLY: builds the proxy straight from the encoded bytes in one
+         *  fused pass and keeps no full-resolution source (R-MEM-5 / D-44).
+         *
+         *  This is what a project load should use. `addImage` keeps the 387 MB linear-float source
+         *  a 24 MP frame decodes to, and the byte caps then evict it — so after a load nothing was
+         *  cached at all and the first visit to every photo paid a fresh LibRaw decode (~1 s). A
+         *  proxy is ~14x smaller, so a whole rack of them fits where a handful of sources did.
+         *  `renderFull` re-decodes through the SourceLoader when export needs real pixels. */
+        int addImagePreviewOnly(const uint8_t *rgba, int width, int height, int channels = 4);
         void selectImage(int slot);
         /** Free a slot's source pixels in place (its index stays valid but unusable) --
          *  for "remove from session" without shifting every other slot's index. */
@@ -223,7 +232,11 @@ namespace arstro
         // existed the engine could read "no source" as "dead" because the two never differed
         // — `releaseImage` was the only way a source went away. Now eviction is routine, so
         // conflating them would make every cached-out photo unselectable instead of slow.
-        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1; bool released = false; };
+        // `srcWidth/srcHeight` are the FULL-RESOLUTION dimensions, kept even when the source
+        // itself is not: a preview-only slot still has to be able to say how big the photo
+        // really is, and a re-decode has to land at the same size it was added at.
+        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1;
+                      int srcWidth = 0; int srcHeight = 0; bool released = false; };
 
         void buildPipeline();
         PreviewBuffer renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes);

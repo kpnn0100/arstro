@@ -67,6 +67,9 @@ namespace cosmo
             case Event::Kind::FrameReady:
                 o << " slot=" << e.a << " width=" << e.b;
                 if (e.ms > 0) o << " ms=" << e.ms;
+                // Appended, never inserted: the shape of a line is an interface once anything
+                // quotes it, so a new fact goes on the end (Event.h).
+                if (!e.text.empty()) o << ' ' << e.text;
                 break;
             case Event::Kind::ExportProgress: o << " done=" << e.a << " total=" << e.b << " name=" << e.text; break;
             case Event::Kind::ExportFinished: o << " written=" << e.a << " failures=" << e.b; break;

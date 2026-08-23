@@ -15,8 +15,8 @@ file, and commit.
 
 ## NEXT
 
-**► 2026-08-23 (later) — "sometime changing photo take too long". Diagnosed, filed, NOT fixed:
-D-44 and D-45. These are the ledger's NEXT.**
+**► 2026-08-23 (later) — "sometime changing photo take too long". D-44 FIXED; D-45 open and is
+the ledger's NEXT.**
 
 Measured on a real 120-photo ARW project with the new fixture
 `apps/cosmo/core/tests/fixtures/preview_hop_latency.cpp`:
@@ -27,7 +27,7 @@ the cold path:      LibRaw decode 1020.9 ms | to linear 105.3 | +proxy+render 84
                     render again, proxy warm  601.4 ms   <- the floor, fully cached
 ```
 
-1. **D-44 (S2) — and it is a regression I introduced.** Yesterday's R-MEM commit (`1897d27`) capped
+1. ~~**D-44 (S2)**~~ — **CLOSED.** It was a regression I introduced.** Yesterday's R-MEM commit (`1897d27`) capped
    resident pixels and traded 465 MB/photo for ~1 s/hop; **nothing measured the second half of that
    trade.** Two causes: the proxy is built only when a photo is *rendered*, so after a load the whole
    rack is cold; and a 26 MB proxy against a 1 GB cap holds 37 of 120 anyway. Recommended: build the
@@ -44,8 +44,30 @@ the cold path:      LibRaw decode 1020.9 ms | to linear 105.3 | +proxy+render 84
    product decision to take with the user rather than guess. First step is a measurement — extend
    `cosmo-cc bench` to time the preview pipeline per stage — not an optimisation.
 
-Neither is fixed: `arstro.cosmo.core.debug` filed them and applied nothing. Run
-`arstro.cosmo.core.implement` to land D-44 (and decide D-45's target first).
+**D-44 is fixed.** The proxy is now built at ingest (fused convert-and-downscale, no 387 MB
+intermediate) and the caps are sized from physical RAM by the host:
+
+```
+                       BEFORE                        AFTER
+walking the rack   8 of 10 re-decoded            0 of 10
+                   cold ~1.8 s / warm ~0.65 s    uniformly ~0.62 s
+resident           765 MB                        3079 MB (120 proxies, cap 5.6 GB)
+load, 120 photos   50 s                          65 s
+```
+
+**Two things left open, both stated rather than buried:**
+
+- **[ ] The load is ~30% slower (50 s → 65 s).** The fused downscale runs on the render worker, which
+  holds exactly ONE engine thread while a load is in flight (R-CPU-2), so 120 proxies are built
+  serially. **Fix: build the proxy on the DECODE worker instead**, where the thumbnail is already
+  built and handed over ready-made — R-LOADPERF-2 established that pattern for exactly this reason.
+  It means `ProjectLoader::Result` carrying the proxy `Image` and `RenderService::addImage` taking a
+  pre-built one. Worth doing; it turns a serial 15 s into a parallel ~2 s.
+- **[ ] D-45 — the ~600 ms floor.** Every hop and every slider move costs this even fully cached, at
+  default parameters. Needs the preview pipeline timed per stage (`cosmo-cc bench`) before anything
+  is optimised, and needs a target number decided with the user — see the entry.
+
+Run `arstro.cosmo.core.implement` for either.
 
 **► 2026-08-23 — four problems reported against a 120-photo RAW project. (2) and (4) are DONE;
 (1) and (3) are next.**

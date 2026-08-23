@@ -16,6 +16,7 @@
 #include "EditParams.h"
 #include "../analysis/Histogram.h"
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -39,6 +40,12 @@ namespace arstro
             HistogramData hist;         // final output histogram
             HistogramData preCurveHist; // luma entering the tone curve
             HueHistogram preMixerHue;   // hue entering the colour mixer
+            /** What this frame cost, wall-clock, and whether a cold slot had to be re-decoded
+             *  to produce it (R-MEM-2). Carried on the frame because the service cannot time
+             *  work it does not do — and without it `frame.ready` reported no number at all, so
+             *  a 250 ms hop and a 2537 ms one looked identical in the log (D-44). */
+            double ms = 0.0;
+            bool rehydrated = false;
         };
 
         RenderService();
@@ -129,7 +136,9 @@ namespace arstro
 
 #ifdef ARSTRO_ENABLE_THREADS
         void workerLoop();
-        struct AddCmd { std::vector<uint8_t> bytes; int w, h, ch; };
+        // `slot` travels with the add so the worker can ask whether this image has a file
+        // behind it — which decides whether it may be kept as a proxy alone (R-MEM-5).
+        struct AddCmd { std::vector<uint8_t> bytes; int w, h, ch; int slot = -1; };
 
         std::thread mWorker;
         std::mutex mMu;

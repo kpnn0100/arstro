@@ -74,6 +74,8 @@ namespace arstro
             return -1;
         Slot s;
         s.source = fromEncodedBytes(rgba, width, height, channels);
+        s.srcWidth = width;
+        s.srcHeight = height;
         mSlots.push_back(std::move(s));
         const int slot = (int)mSlots.size() - 1;
         // R-MEM-1: the new source joins the capped pool immediately, so a load of 120
@@ -93,6 +95,7 @@ namespace arstro
             !rgba || width <= 0 || height <= 0 || channels < 1)
             return false;
         mSlots[slot].source = fromEncodedBytes(rgba, width, height, channels);
+        if (mSlots[slot].srcWidth <= 0) { mSlots[slot].srcWidth = width; mSlots[slot].srcHeight = height; }
         ++mRehydrations;
         touchSourceLRU(slot);
         return true;
@@ -429,6 +432,87 @@ namespace arstro
             }
         });
         return out;
+    }
+
+    /** Box-downscale straight from 8-bit sRGB bytes into a linear-light Image, in ONE pass.
+     *
+     *  The same box filter as `downscaleLinear`, with `fromEncodedBytes`'s sRGB LUT folded into
+     *  the accumulation — so it is arithmetically identical to running the two in sequence, and
+     *  it never allocates the full-resolution float image in between. That intermediate is 387 MB
+     *  for a 24 MP frame, which is the whole of R-MEM's problem, and the preview path never
+     *  actually wanted it: it wanted a 26 MB proxy.
+     *
+     *  Averaging happens in LINEAR light, not on the encoded bytes — that is the engine's
+     *  standing invariant and the reason this converts per SAMPLE rather than per output pixel.
+     */
+    static Image downscaleEncodedToLinear(const uint8_t *rgba, int sw, int sh, int ch, int maxEdge)
+    {
+        static const std::array<Pixel, 256> kSrgbToLinear = [] {
+            std::array<Pixel, 256> t{};
+            for (int i = 0; i < 256; ++i) t[i] = color::srgbDecode((Pixel)i / (Pixel)255);
+            return t;
+        }();
+        static const std::array<Pixel, 256> kByteToUnit = [] {
+            std::array<Pixel, 256> t{};
+            for (int i = 0; i < 256; ++i) t[i] = (Pixel)i / (Pixel)255;
+            return t;
+        }();
+
+        const int longEdge = sw > sh ? sw : sh;
+        const double scale = longEdge > maxEdge ? (double)maxEdge / (double)longEdge : 1.0;
+        int tw = (int)(sw * scale + 0.5); if (tw < 1) tw = 1;
+        int th = (int)(sh * scale + 0.5); if (th < 1) th = 1;
+        const int colorCh = ch >= 3 ? 3 : ch;   // matches fromEncodedBytes' colour-channel rule
+        Image out(tw, th, ch, ColorSpace::LinearSRGB);
+        const size_t rowN = (size_t)sw * ch;
+
+        par::parallelFor(th, [&](int r0, int r1) {
+            for (int ty = r0; ty < r1; ++ty)
+            {
+                const int y0 = (int)((double)ty * sh / th);
+                int y1 = (int)((double)(ty + 1) * sh / th); if (y1 <= y0) y1 = y0 + 1;
+                Pixel *o = out.row(ty);
+                for (int tx = 0; tx < tw; ++tx)
+                {
+                    const int x0 = (int)((double)tx * sw / tw);
+                    int x1 = (int)((double)(tx + 1) * sw / tw); if (x1 <= x0) x1 = x0 + 1;
+                    const double inv = 1.0 / ((double)(y1 - y0) * (x1 - x0));
+                    for (int c = 0; c < ch; ++c)
+                    {
+                        const std::array<Pixel, 256> &lut = c < colorCh ? kSrgbToLinear : kByteToUnit;
+                        double sum = 0.0;
+                        for (int y = y0; y < y1; ++y)
+                        {
+                            const uint8_t *srow = rgba + (size_t)y * rowN;
+                            for (int x = x0; x < x1; ++x) sum += lut[srow[(size_t)x * ch + c]];
+                        }
+                        o[tx * ch + c] = (Pixel)(sum * inv);
+                    }
+                }
+            }
+        });
+        return out;
+    }
+
+    int EditEngine::addImagePreviewOnly(const uint8_t *rgba, int width, int height, int channels)
+    {
+        // R-MEM-5 / D-44: the browse cache is filled by the LOAD, not by the user happening to
+        // visit a photo. A slot added this way arrives with its proxy already built and NO
+        // full-resolution source — which is both faster (one fused pass instead of convert-then-
+        // downscale) and ~14x smaller, so a whole rack of proxies fits where a handful of sources
+        // did. `renderFull` re-decodes when export needs the real pixels (R-MEM-2).
+        if (!rgba || width <= 0 || height <= 0 || channels < 1)
+            return -1;
+        Slot s;
+        s.proxy = downscaleEncodedToLinear(rgba, width, height, channels, mPreviewMaxEdge);
+        s.proxyEdge = mPreviewMaxEdge;
+        s.srcWidth = width;
+        s.srcHeight = height;
+        mSlots.push_back(std::move(s));
+        const int slot = (int)mSlots.size() - 1;
+        touchProxyLRU(slot);
+        if (mCurrent < 0) selectImage(slot);
+        return slot;
     }
 
     bool EditEngine::ensurePreviewProxy()

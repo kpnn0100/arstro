@@ -1178,6 +1178,57 @@ and the host makes 2 `svc->session()` calls. Both must reach zero for S to be do
 nothing, since a converted method keeps its fallback — see `PROGRESS.md` S4b for why that metric
 was replaced.
 
+### DR-MEM-2 The load fills the browse cache, and the caches are sized from the machine (R-MEM-5)
+**The proxy is built at ingest, and no full-resolution source is kept for it.**
+`EditEngine::addImagePreviewOnly` (`engine/EditEngine.cpp`) downscales straight from the encoded
+bytes into the linear-float proxy in ONE fused pass — `downscaleEncodedToLinear`, which is
+`downscaleLinear`'s box filter with `fromEncodedBytes`' sRGB LUT folded into the accumulation, so
+the arithmetic is identical and the 387 MB intermediate is never allocated. `RenderService`'s worker
+uses it for any image that has a **source path** behind it (an image with no file cannot be
+re-decoded, so it keeps its source and takes the old path).
+
+Before this, the proxy was built lazily by `ensurePreviewProxy` — i.e. only for a photo the user had
+already *visited* — so after a load nothing was cached at all and the first hop to each photo paid a
+fresh ~1 s LibRaw decode (D-44). Averaging happens in linear light, per sample, because that is the
+engine's standing invariant and the reason the conversion cannot be hoisted out of the inner loop.
+
+**The caps come from the machine.** `apps/cosmo/PixelBudget.h` (host layer, because it is a platform
+call) reports physical RAM and returns ~1/12 for sources and ~1/5 for proxies, floored at 256 MB /
+512 MB and capped at 4 GB / 8 GB. Both hosts apply it through the existing `setMemoryCaps`. Proxies
+get the larger share because they are what browsing touches — a proxy is ~14x smaller than its
+source, so the same bytes buy fourteen times as many photos that are instant to step onto. On a
+27.7 GB machine that is 2.3 GB / 5.6 GB, which holds ~210 previews at 1600 px.
+
+Measured on the reported case — 120 real 24 MP ARWs, `preview_hop_latency.cpp`:
+
+```
+                       BEFORE                              AFTER
+walking the rack   8 of 10 hops re-decoded             0 of 10
+                   cold ~1.8 s / warm ~0.65 s          uniformly ~0.62 s
+resident           765 MB                              3079 MB (120 proxies, under a 5.6 GB cap)
+load, 120 photos   50 s                                65 s
+```
+
+The trade is explicit: ~2.3 GB more resident and ~15 s more load, in exchange for removing a ~1 s
+re-decode from nearly every photo switch for the rest of the session. The load cost is the fused
+downscale running on the render worker, which holds **one** engine thread while a load is in flight
+(R-CPU-2) — moving it onto the decode pool, where the thumbnail is already built (R-LOADPERF-2), is
+the follow-up recorded in `PROGRESS.md`.
+
+**`frame.ready` now reports what it cost** — `ms=`, and the word `rehydrated` when a cold slot had to
+be re-decoded (`RenderService::Frame::ms/rehydrated` → `CosmoService.cpp`). The field existed and
+`formatEvent` already printed it when non-zero; nothing ever set it, so a 250 ms hop and a 2537 ms
+one were the same line and the user had to notice the difference by feel:
+
+```
+[evt] frame.ready slot=1 width=1600 ms=751.821
+[evt] frame.ready slot=5 width=1600 ms=652.89
+```
+
+Guarded by `walking_a_rack_that_fits_the_cap_never_re_decodes` — twelve photos, two full walks, and
+the decode count must not move past the load's — checked to fail with the preview-only ingest
+removed.
+
 ### DR-SVC-2d Selecting a photo is a Command, including while a project is loading (R-SVC-2)
 `Filmstrip::onSelect` used to call `EditSession::selectNode(cell, shift, ctrl)` straight through
 (`App.cpp:100`), so a click on a photo emitted no `Event`, wrote no log line, and no second front

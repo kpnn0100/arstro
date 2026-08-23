@@ -42,6 +42,7 @@
 #include "core/AppSettings.h"
 #include "core/ThreadBudget.h"
 #include "core/decode/NativeImageDecoder.h"
+#include "PixelBudget.h"
 #include "engine/EditEngine.h"
 #include "base/Parallel.h"
 
@@ -108,6 +109,14 @@ namespace
         AppSettings st;
         st.previewEdge = 1600; st.cpuPercent = 50; st.useGpu = false;
         svc.applySettings(st);
+        // The same pixel-cache policy the hosts apply (R-MEM-1/5). Without it this measures the
+        // engine's blind defaults rather than what the app actually does, which is how D-44's
+        // first re-measurement still showed the early photos re-decoding.
+        const auto caps = cosmo_v2::pixelCapsForThisMachine();
+        svc.session().renderService().setMemoryCaps(caps.sourceBytes, caps.proxyBytes);
+        std::printf("  caps: %zu MB sources + %zu MB proxies (of %zu MB physical)\n",
+                    caps.sourceBytes / (1024 * 1024), caps.proxyBytes / (1024 * 1024),
+                    cosmo_v2::physicalMemoryBytes() / (1024 * 1024));
 
         std::string err;
         if (!svc.dispatchText(std::string("project open ") + project, err))

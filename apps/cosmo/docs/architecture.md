@@ -284,6 +284,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 |------|-------|----------------|
 | `apps/cosmo/linux_main.cpp` | host | GTK app, events, dialogs, the load's UI-side consumer (`startEntriesLoad`/`pollLoad` — the decode itself moved down, R-SVC-1), threaded batch exporter, fonts, logging |
 | `apps/cosmo/OmpPin.{h,cpp}` | host | sizes the nested OpenMP team of the calling thread, resolved by `dlsym`/`GetProcAddress` rather than linked; counts the threads it bound, so R-CPU-4's honesty clause is a number (R-CPU-2c, fixes D-12 + D-41) |
+| `apps/cosmo/PixelBudget.h` | host | how big the engine's pixel caches may be on THIS machine — physical RAM queried here because it is the only layer allowed a platform call (R-MEM-1/5, fixes D-44) |
 | `apps/cosmo/PinnedDecoder.h` | host | the ONE decoder the host constructs: wraps `NativeImageDecoder` and pins the decoding thread first, so the budget covers every decode and not only the load pool's (R-CPU-2c, fixes D-41) |
 | `apps/cosmo/App.{h,cpp}` | app | screen state machine, transitions, Segment tree, host-callback seam |
 | `apps/cosmo/Theme.{h,cpp}` | app | palette, radii, font family names, type ramp |

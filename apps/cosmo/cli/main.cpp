@@ -32,6 +32,7 @@
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
 #include "PinnedDecoder.h"
+#include "PixelBudget.h"
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
 #include "base/Parallel.h"
@@ -268,6 +269,14 @@ namespace
         // how the pool was sized — which is exactly how the last version of the CPU budget
         // came to be "verified" by a log line nobody had seen.
         h.svc.setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });
+
+        // Same pixel-cache policy as the window (R-MEM-1/5) — a headless run that cached
+        // differently would measure a latency the app never sees, which is the whole reason
+        // D-44's fixture drives the service rather than the GUI.
+        {
+            const auto caps = arstro::cosmo_v2::pixelCapsForThisMachine();
+            h.svc.session().renderService().setMemoryCaps(caps.sourceBytes, caps.proxyBytes);
+        }
 
         h.svc.setImageWriter([&h](const std::string &outPath, const std::string &sourcePath,
                                   const uint8_t *rgba, int w, int h2, std::string &err) {

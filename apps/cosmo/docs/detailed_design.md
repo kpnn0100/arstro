@@ -387,6 +387,40 @@ Guarded by `engine_memory_is_capped_and_a_cold_slot_is_re_decoded` (20 images re
 a 2-source cap) and `a_cold_slot_is_re_decoded_through_the_service` (browsing past the cap
 re-decodes and still produces frames), both checked to fail with eviction disabled.
 
+### 2.4h Filling the browse cache, and sizing it (`EditEngine` + `PixelBudget.h`) — R-MEM-5
+
+**The defect (D-44).** Capping resident pixels (2.4g) fixed the memory but left the cache *empty*:
+the proxy was built lazily by `ensurePreviewProxy`, so it existed only for a photo already visited.
+After a load nothing was cached, and the first hop to each photo paid a fresh ~1 s LibRaw decode —
+8 of 10 hops on a 120-photo project, ~1.8 s each against ~0.65 s warm. That is the user's "sometime
+changing photo take too long", and it was the un-measured half of the memory trade.
+
+**Two changes.**
+
+- `EditEngine::addImagePreviewOnly` builds the proxy **at ingest** and keeps no source, via
+  `downscaleEncodedToLinear` — `downscaleLinear`'s box filter with `fromEncodedBytes`' sRGB LUT
+  folded into the accumulation. Same arithmetic, one pass, and the 387 MB linear-float intermediate
+  is never allocated. Conversion is per SAMPLE, not per output pixel, because averaging must happen
+  in linear light. `RenderService`'s worker uses it whenever the slot has a source path (`AddCmd`
+  now carries its slot so the worker can ask); an image with no file behind it cannot be re-decoded
+  and so keeps its source.
+- `apps/cosmo/PixelBudget.h` sizes both caps from physical RAM (~1/12 sources, ~1/5 proxies, floored
+  and capped), applied by both hosts through `setMemoryCaps`. The literals it replaced were chosen
+  blind: a 26 MB proxy against a 1 GB default held 37 of 120 photos while 27 GB of RAM sat unused.
+  Host layer because it is a platform call.
+
+**The trade, stated because it is real.** Resident goes 765 MB → 3.1 GB (120 proxies under a 5.6 GB
+cap) and a 120-photo load goes 50 s → 65 s, in exchange for 0 of 10 re-decodes instead of 8 and a
+uniform ~0.62 s hop. The load cost is the fused downscale on the render worker, which holds **one**
+engine thread while a load runs (R-CPU-2); moving it onto the decode pool, where the thumbnail is
+already built (R-LOADPERF-2), is the recorded follow-up.
+
+**`frame.ready` reports its own cost** now — `ms=`, plus `rehydrated` when a cold slot was
+re-decoded. `Event::ms` and `formatEvent`'s printing of it both already existed; nothing set it, so
+a 250 ms hop and a 2537 ms one were indistinguishable in the log.
+
+Guarded by `walking_a_rack_that_fits_the_cap_never_re_decodes`.
+
 ### 2.4e The service layer (`core/service/*`) — R-SVC-1…10
 
 **`AppModel`** (`service/AppModel.h`) is the whole observable state as plain data: `revision`,

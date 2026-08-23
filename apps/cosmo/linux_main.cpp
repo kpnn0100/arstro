@@ -22,6 +22,7 @@
 #include "core/ThreadBudget.h"
 #include "widgets/SplashScreen.h"
 #include "PinnedDecoder.h"
+#include "PixelBudget.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include <gtk/gtk.h>
 #include <gdk/gdkkeysyms.h>
@@ -1562,6 +1563,16 @@ int main(int argc, char **argv)
     // more. The pool's own decoders come from makePinnedDecoder() with no budget, so each of
     // them opens a team of one and `decodeWorkers() x 1` is again exactly the budget.
     host.decoder.setBudget(&host.budget);
+    // R-MEM-1/5: the engine's pixel caches are a share of THIS machine, not two literals. A
+    // 26 MB proxy against the old 1 GB default held 37 photos, so browsing a 120-photo project
+    // re-decoded on most hops (D-44) while 27 GB of RAM sat unused.
+    {
+        const auto caps = arstro::cosmo_v2::pixelCapsForThisMachine();
+        host.svc.session().renderService().setMemoryCaps(caps.sourceBytes, caps.proxyBytes);
+        LOGI("mem: pixel caches %zu MB sources + %zu MB proxies of %zu MB physical (R-MEM-1)",
+             caps.sourceBytes / (1024 * 1024), caps.proxyBytes / (1024 * 1024),
+             arstro::cosmo_v2::physicalMemoryBytes() / (1024 * 1024));
+    }
     LOGI("cpu: budget %d%% = %d of %d cores; %d schedulable after the UI's %d (R-CPU-2d); "
          "engine %d threads, decode pool would be %d",
          host.budget.percent(), host.budget.total(), host.budget.cores(),

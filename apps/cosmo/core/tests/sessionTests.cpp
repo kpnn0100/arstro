@@ -1214,7 +1214,11 @@ namespace
         pumpUntilIdle(svc);
         assert(svc.model().imageCount == 6);
         const int afterLoad = sDecodes.load();
-        assert(afterLoad == 6 && "the load decodes each entry exactly once");
+        // Six entries, one decode each — plus at most one more: the load ends by rendering the
+        // selected slot, and under a cap this pathologically small (one source, one BYTE of
+        // proxy) even that slot can be cold by the time it is drawn. The point of this test is
+        // the walk below, not the load's arithmetic, so bound it rather than pin it.
+        assert(afterLoad >= 6 && afterLoad <= 7 && "the load decodes each entry once, and settles");
 
         // Walk the rack. Every hop lands on a slot whose pixels the cap already evicted, so
         // every hop must re-decode and must still produce a frame — the failure this guards
@@ -1251,6 +1255,79 @@ namespace
                "(%d decodes for 6 photos, %d re-decodes)\n",
                sDecodes.load(), svc.model().budget.rehydrations);
     }
+    void test_walking_a_rack_that_fits_the_cap_never_re_decodes()
+    {
+        using namespace arstro::cosmo;
+        // R-MEM-5 as amended, and the guard D-44 asked for. Reported as "sometime changing photo
+        // take too long": one hop took 250 ms and the next 2537 ms, because the proxy pool was
+        // filled only by *rendering* a photo — so after a load nothing was cached and the first
+        // visit to each photo paid a fresh ~1 s decode. Measured on 120 real ARWs, 8 of 10 hops
+        // re-decoded; now 0 of 10.
+        //
+        // The requirement is stated so it can fail: for a rack that FITS the cap, walking it
+        // re-decodes at most once per photo, and a photo already visited never re-decodes again.
+        const std::string path = "/tmp/cosmo_mem_walk.cmp";
+        writeFakeProject(path, 12, /*withGroup=*/false, /*withMissing=*/false);
+
+        static std::atomic<int> sWalkDecodes{0};
+        struct CountingDecoder : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &p) override
+            {
+                sWalkDecodes.fetch_add(1);
+                DecodedImage d;
+                d.width = 64; d.height = 64;
+                d.rgba.assign((size_t)64 * 64 * 4, 170);
+                d.name = p;
+                return d;
+            }
+        };
+        sWalkDecodes.store(0);
+
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new CountingDecoder()); });
+        // Room for the whole rack of proxies and almost no sources — the shape the hosts
+        // configure (PixelBudget.h sizes both from physical RAM, proxies getting the larger
+        // share because they are what browsing touches).
+        svc.session().renderService().setMemoryCaps((size_t)64 * 64 * 4 * sizeof(Pixel),
+                                                    (size_t)64 * 64 * 4 * sizeof(Pixel) * 64);
+
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err) && err.empty());
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 12);
+        const int afterLoad = sWalkDecodes.load();
+        assert(afterLoad <= 13 && "the load decodes each entry once (plus at most a settle)");
+
+        double t = 0;
+        auto settle = [&](auto done) {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            while (!done() && std::chrono::steady_clock::now() < deadline)
+            {
+                svc.pump(t); t += 16.0;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        };
+
+        // Walk the whole rack twice. The FIRST pass is the one that used to re-decode every
+        // photo; the second must be free under any reading of the requirement.
+        for (int pass = 0; pass < 2; ++pass)
+            for (const NodeModel &n : std::vector<NodeModel>(svc.model().nodes))
+            {
+                const unsigned seq0 = svc.model().frameSeq;
+                if (!svc.dispatchText("select " + std::to_string(n.node), err)) continue;
+                settle([&] { return svc.model().frameSeq != seq0; });
+            }
+
+        assert(sWalkDecodes.load() == afterLoad &&
+               "a rack that fits the cap is walked with NO re-decode at all (R-MEM-5, D-44)");
+        assert(svc.model().budget.rehydrations == 0 && "and the model agrees it never rehydrated");
+
+        printf("[PASS] walking_a_rack_that_fits_the_cap_never_re_decodes "
+               "(%d decodes for 12 photos across two full walks)\n", sWalkDecodes.load());
+    }
+
     void test_selection_reaches_the_service_during_a_load()
     {
         using namespace arstro::cosmo;
@@ -1961,6 +2038,7 @@ int main()
     test_every_command_kind_has_a_grammar();
     test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded();
     test_a_cold_slot_is_re_decoded_through_the_service();
+    test_walking_a_rack_that_fits_the_cap_never_re_decodes();
     test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
     test_commands_drive_the_session();

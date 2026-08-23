@@ -253,7 +253,12 @@ namespace cosmo
             mModel.frameHeight = mFrame.height;
             ++mModel.frameSeq;
             ++mModel.revision;
-            emit(Event::Kind::FrameReady, std::string(), mModel.frameSlot, mFrame.width);
+            // The numbers this event claims to be about (§6 "emit the numbers you claim"): how
+            // long the frame took, and whether a cold slot had to be re-decoded to produce it.
+            // Without them a 250 ms hop and a 2537 ms one were the same line in the log, and the
+            // user had to notice the difference by feel (D-44).
+            emit(Event::Kind::FrameReady, mFrame.rehydrated ? "rehydrated" : std::string(),
+                 mModel.frameSlot, mFrame.width, mFrame.ms);
         }
 
         if (!mLoader.active() && mLoader.total() == 0) return;

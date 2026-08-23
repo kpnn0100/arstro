@@ -23,6 +23,10 @@ package "host (linux_main.cpp)  <<GTK/Cairo>>" as host {
     + ompPinnedThreadCount() : int    ' distinct threads bound — MEASURED (R-CPU-4, D-41)
     + ompPinUserOverride() : int      ' their OMP_NUM_THREADS wins; 0 = unset (R-CPU-2c)
   }
+  class PixelBudget <<namespace, host, R-MEM-5>> {
+    + physicalMemoryBytes() : size_t   ' the platform call, in the only layer allowed one
+    + pixelCapsForThisMachine() : PixelCaps
+  }
   class PinnedDecoder <<host, R-CPU-2c>> {
     + setBudget(const ThreadBudget *)  ' attached only for a decode that runs ALONE
     + decodeFile(path) / decodeThumb(path, maxEdge)
@@ -255,6 +259,7 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   }
   class Frame
   class EditEngine <<fixed pipeline>> {
+    + addImagePreviewOnly(rgba, w, h, ch)     ' proxy built at ingest, no source kept (R-MEM-5, D-44)
     + setMemoryCaps(sourceBytes, proxyBytes)  ' byte-capped LRU pools (R-MEM-1)
     + residentSourceBytes() / residentProxyBytes()
     + slotNeedsSource(slot) / slotHasSource(slot)
@@ -364,6 +369,7 @@ PinnedDecoder ..|> IImageDecoder
 PinnedDecoder ..> OmpPin : pins the thread before EVERY decode (D-41)
 PinnedDecoder ..> ThreadBudget : total() sizes a lone decode's team
 GtkMain ..> PinnedDecoder : the one decoder the host constructs
+GtkMain ..> PixelBudget : sizes the engine's caches from RAM (R-MEM-5)
 ThreadBudget ..> RenderService : par::setThreads(engineThreads())
 HomeScreen ..> SettingsDialog : sidebar Settings link (R-SETTINGS-5)
 RenderService ..> EditEngine

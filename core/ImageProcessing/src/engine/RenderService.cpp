@@ -28,12 +28,13 @@ namespace arstro
         if (!rgba || w <= 0 || h <= 0 || channels < 1)
             return -1;
         std::lock_guard<std::mutex> lk(mMu);
+        const int slot = mNextSlot++;   // engine assigns the same id (queue is FIFO)
         AddCmd c;
         c.bytes.assign(rgba, rgba + (size_t)w * h * channels);
-        c.w = w; c.h = h; c.ch = channels;
+        c.w = w; c.h = h; c.ch = channels; c.slot = slot;
         mAddQueue.push_back(std::move(c));
         mCv.notify_all();
-        return mNextSlot++;  // engine assigns the same id (queue is FIFO)
+        return slot;
     }
 
     int RenderService::addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels)
@@ -47,11 +48,11 @@ namespace arstro
         if (w <= 0 || h <= 0 || channels < 1) return -1;
         if (bytes.size() < (size_t)w * h * channels) return -1;
         std::lock_guard<std::mutex> lk(mMu);
+        const int slot = mNextSlot++;
         AddCmd c;
         c.bytes = std::move(bytes);   // the whole point: no ~100 MB copy
-        c.w = w; c.h = h; c.ch = channels;
+        c.w = w; c.h = h; c.ch = channels; c.slot = slot;
         mAddQueue.push_back(std::move(c));
-        const int slot = mNextSlot++;
         // The path travels with the slot so an evicted slot can be re-decoded without the
         // worker ever reading session state (R-MEM-2).
         if ((int)mSourcePaths.size() <= slot) mSourcePaths.resize(slot + 1);
@@ -211,7 +212,18 @@ namespace arstro
                 mEngine.clearImages();
             for (auto &a : adds)  // apply queued image adds, in order
             {
-                mEngine.addImage(a.bytes.data(), a.w, a.h, a.ch);
+                // R-MEM-5 / D-44: an image that knows where it came from is added PREVIEW ONLY —
+                // its proxy is built here, in one fused pass off the encoded bytes, and no
+                // 387 MB linear-float source is ever materialised. That is what fills the browse
+                // cache during the load; before it, the cache was filled only by the user
+                // happening to visit a photo, so the first hop to each of them paid a fresh
+                // ~1 s LibRaw decode. An image with no path behind it cannot be re-decoded, so it
+                // keeps its source and takes the old path.
+                const bool recoverable = a.slot >= 0 && a.slot < (int)mSourcePaths.size() &&
+                                         !mSourcePaths[a.slot].empty();
+                mEngine.setPreviewSize(maxEdge);
+                if (recoverable) mEngine.addImagePreviewOnly(a.bytes.data(), a.w, a.h, a.ch);
+                else             mEngine.addImage(a.bytes.data(), a.w, a.h, a.ch);
                 a.bytes = std::vector<uint8_t>();   // ~100 MB of encoded pixels, done with
             }
             for (int s : releases)  // apply queued image releases, in order
@@ -251,6 +263,8 @@ namespace arstro
 
     void RenderService::doPreview(int slot, const EditParams &params, int maxEdge)
     {
+        const auto t0 = std::chrono::steady_clock::now();
+        const int rehyBefore = mEngine.rehydrations();
         mEngine.setPreviewSize(maxEdge);
         // Before selecting: slotNeedsSource is answered against the preview size that is
         // about to be used, so a proxy built for a different size counts as cold.
@@ -270,6 +284,8 @@ namespace arstro
         f.hist = mEngine.histogram();
         f.preCurveHist = mEngine.preCurveHistogram();
         f.preMixerHue = mEngine.preMixerHue();
+        f.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        f.rehydrated = mEngine.rehydrations() > rehyBefore;
         {
             std::lock_guard<std::mutex> lk(mMu);
             mReady = std::move(f);
@@ -375,6 +391,8 @@ namespace arstro
     }
     void RenderService::doPreview(int slot, const EditParams &params, int maxEdge)
     {
+        const auto t0 = std::chrono::steady_clock::now();
+        const int rehyBefore = mEngine.rehydrations();
         mEngine.setPreviewSize(maxEdge);
         ensureSource(slot, /*needFullRes=*/false);   // R-MEM-2
         mEngine.selectImage(slot);
@@ -386,6 +404,8 @@ namespace arstro
         mReady.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
         mReady.width = pb.width; mReady.height = pb.height; mReady.hist = mEngine.histogram();
         mReady.preCurveHist = mEngine.preCurveHistogram(); mReady.preMixerHue = mEngine.preMixerHue();
+        mReady.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        mReady.rehydrated = mEngine.rehydrations() > rehyBefore;
         mFrameReady = true;
     }
 #endif
