@@ -282,7 +282,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   script for everyone.
   for a rack that fits the cap — which fails on today's code at the first hop.
 
-- **Fix:** commit `PENDING-D44`. Two changes, and both were needed — the first alone still left the
+- **Fix:** commit `70e6abb`. Two changes, and both were needed — the first alone still left the
   early photos cold, which the re-measurement caught:
   1. `EditEngine::addImagePreviewOnly` builds the proxy **at ingest** and keeps no source, through
      `downscaleEncodedToLinear` — the same box filter with the sRGB LUT folded in, so the 387 MB
