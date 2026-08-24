@@ -93,7 +93,15 @@ namespace arstro
 
     float ColorMixer::sampleCyclic(int c, float hue) const
     {
+        // A NaN hue reached this only because `rgbToHsl` was handed one, and it survived
+        // here only because `INT_MIN % 256` happens to be 0 — an accident of kLut being a
+        // power of two, not a guarantee. It then returned NaN and poisoned the pixel. Both
+        // halves are now deliberate: a non-finite hue contributes nothing (0 is this
+        // curve's neutral), and the index is bounded rather than modulo'd from whatever the
+        // cast produced. Same family as D-36 / D-47a.
+        if (!(hue >= 0.0f) && !(hue < 0.0f)) return 0.0f;   // true only for NaN
         float f = hue / 360.0f * kLut;
+        if (!(f > -1e9f) || !(f < 1e9f)) return 0.0f;       // absurd or non-finite
         int i = (int)f;
         i = ((i % kLut) + kLut) % kLut;
         const int j = (i + 1) % kLut;

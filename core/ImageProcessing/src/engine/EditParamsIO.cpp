@@ -218,3 +218,124 @@ namespace arstro
         return any;
     }
 }
+
+// ── Non-finite parameter guards (D-36) ───────────────────────────────────────────────
+namespace arstro
+{
+    namespace
+    {
+        /** Every scalar in an EditParams, walked once, **by reference**, so one list serves
+         *  the check and the repair. A field list rather than a loop over memory:
+         *  `EditParams` also holds vectors, arrays and a bool, so reinterpreting the struct
+         *  as an array of floats would break the first time somebody reorders it — silently,
+         *  which is the failure mode this whole family keeps producing.
+         *
+         *  Adding a scalar to EditParams means adding it here. `guardedParamScalarCount()`
+         *  exists so a test fails when that is forgotten. */
+        template <class Fn> void forEachScalar(EditParams &p, Fn fn)
+        {
+            fn("exposure", p.exposure);           fn("contrast", p.contrast);
+            fn("highlights", p.highlights);       fn("shadows", p.shadows);
+            fn("whites", p.whites);               fn("blacks", p.blacks);
+            fn("temp", p.temp);                   fn("tint", p.tint);
+            fn("vibrance", p.vibrance);           fn("saturation", p.saturation);
+            fn("texture", p.texture);             fn("clarity", p.clarity);
+            fn("dehaze", p.dehaze);               fn("grainAmount", p.grainAmount);
+            fn("grainSize", p.grainSize);         fn("sharpenAmount", p.sharpenAmount);
+            fn("sharpenRadius", p.sharpenRadius); fn("sharpenMasking", p.sharpenMasking);
+            fn("nrLuminance", p.nrLuminance);     fn("nrColor", p.nrColor);
+            fn("lensDistortion", p.lensDistortion);
+            fn("lensCA", p.lensCA);               fn("lensVignette", p.lensVignette);
+            fn("balance", p.balance);             fn("remapSrc", p.remapSrc);
+            fn("remapRange", p.remapRange);       fn("remapDst", p.remapDst);
+            fn("remapStrength", p.remapStrength);
+            fn("cropX", p.cropX);                 fn("cropY", p.cropY);
+            fn("cropW", p.cropW);                 fn("cropH", p.cropH);
+            fn("rotation", p.rotation);
+            for (int r = 0; r < 3; ++r)
+            {
+                fn("gradeHue", p.grade[r].hue);
+                fn("gradeSat", p.grade[r].sat);
+                fn("gradeLum", p.grade[r].lum);
+            }
+            // Masks too: geometry AND the local adjustments. A mask with a NaN radius is
+            // exactly as fatal as a NaN exposure, and a hand-edited project can carry one.
+            for (MaskParams &m : p.masks)
+            {
+                fn("mask.feather", m.feather);
+                fn("mask.cx", m.cx); fn("mask.cy", m.cy);
+                fn("mask.rx", m.rx); fn("mask.ry", m.ry);
+                fn("mask.x0", m.x0); fn("mask.y0", m.y0);
+                fn("mask.x1", m.x1); fn("mask.y1", m.y1);
+                fn("mask.exposure", m.adjust.exposure);
+                fn("mask.contrast", m.adjust.contrast);
+                fn("mask.highlights", m.adjust.highlights);
+                fn("mask.shadows", m.adjust.shadows);
+                fn("mask.whites", m.adjust.whites);
+                fn("mask.blacks", m.adjust.blacks);
+                fn("mask.temp", m.adjust.temp);
+                fn("mask.tint", m.adjust.tint);
+                fn("mask.saturation", m.adjust.saturation);
+                fn("mask.texture", m.adjust.texture);
+                fn("mask.clarity", m.adjust.clarity);
+                fn("mask.dehaze", m.adjust.dehaze);
+                for (BrushDab &d : m.dabs)
+                {
+                    fn("dab.x", d.x); fn("dab.y", d.y);
+                    fn("dab.radius", d.radius); fn("dab.flow", d.flow);
+                }
+            }
+            // Curve and mixer control points: a NaN x makes the LUT builder's sort
+            // ill-defined and a NaN y poisons every sample taken from it.
+            auto points = [&fn](std::vector<CurvePoint> &pts, const char *name) {
+                for (CurvePoint &cp : pts) { fn(name, cp.x); fn(name, cp.y); }
+            };
+            points(p.curve, "curve");
+            for (int c = 0; c < 3; ++c) points(p.curveChannel[c], "curveChannel");
+            for (int c = 0; c < 3; ++c) points(p.mixer[c], "mixer");
+        }
+
+        /** Finite AND inside float's range. An `inf` fails `v == v` no more than a huge
+         *  finite value does, and `2^1e30` is as fatal downstream as a NaN. */
+        inline bool finiteValue(float v) { return v == v && v > -3.4e38f && v < 3.4e38f; }
+    }
+
+    const char *firstNonFiniteParam(const EditParams &p)
+    {
+        EditParams copy = p;   // forEachScalar needs mutable references; the caller's is const
+        const char *bad = nullptr;
+        forEachScalar(copy, [&bad](const char *name, float &v) {
+            if (!bad && !finiteValue(v)) bad = name;
+        });
+        return bad;
+    }
+
+    int sanitizeParams(EditParams &p)
+    {
+        // The neutral value for a field is that field's value in a default-constructed
+        // EditParams, read positionally through the SAME walk — so there is no second table
+        // of defaults to drift out of step with the first.
+        EditParams neutral;
+        // A default EditParams has no masks and a 2-point curve, so the neutral walk is
+        // shorter than the real one. Pad with 0, which is the neutral value for every mask
+        // adjustment and every curve deviation anyway.
+        std::vector<float> neutralValues;
+        forEachScalar(neutral, [&neutralValues](const char *, float &v) { neutralValues.push_back(v); });
+        std::size_t i = 0;
+        int fixed = 0;
+        forEachScalar(p, [&](const char *, float &v) {
+            const float n = i < neutralValues.size() ? neutralValues[i] : 0.f;
+            ++i;
+            if (!finiteValue(v)) { v = n; ++fixed; }
+        });
+        return fixed;
+    }
+
+    int guardedParamScalarCount()
+    {
+        EditParams p;
+        int n = 0;
+        forEachScalar(p, [&n](const char *, float &) { ++n; });
+        return n;
+    }
+}

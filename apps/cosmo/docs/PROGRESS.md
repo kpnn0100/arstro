@@ -23,7 +23,8 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T4.2 — a disk-backed proxy cache.** Everything else on the SBC plan is done and measured:
+**► NEXT: T4.2 — a disk-backed proxy cache.** (Two crash fixes landed first — D-48 and D-49, both
+regressions I introduced in T0.2 and T1; see the decisions log.) Everything else on the SBC plan is done and measured:
 T0.1-T0.4, T1, T2 (core + design), T3.1 and T4.1. T4.2 is scoped in detail below and left unstarted
 on purpose — it is the only item that adds a persistence format, and a stale cache does not make
 cosmo slow, it makes it show the wrong photo. T3.2/T3.3 are now optional rather than necessary (with
@@ -864,6 +865,29 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-24 (later) — a user's core dump, and both halves of it were mine.** Dragging exposure
+  segfaulted a render worker. Symbolising the reported offsets took one command and pointed straight
+  at `sampleTf`, the sRGB table I added in T0.2, indexing itself with `(int)NaN`.
+  * **The crash** (D-48) was D-36 in two new places. D-36 filed exactly this — `if (d < 0)` and
+    `if (d > 1)` are both false for NaN — against `ToneCurve::sampleLut` four days earlier, and I
+    wrote the same guard again. Worse: `srgbEncode` used to use `std::pow`, which returns NaN
+    harmlessly, so **making it a table converted a wrong-pixel bug into a crash on every pixel of
+    every frame**. The lesson is narrow and worth keeping: *"same answer, faster" is not the same as
+    "same behaviour"* — the LUT was measured for accuracy and for speed, and not once for what it
+    does with a value the old code tolerated.
+  * **The NaN's source** (D-49) was the pool, for the third time. `stop()` touched the worker set
+    outside the lock — it had to, since joining under `mMu` deadlocks — and nothing replaced the
+    guard, so a concurrent `setThreads` (which `ThreadBudget::endLoad` issues when a load finishes,
+    while R-LOADPERF-3 has the editor live) could leave a worker **unjoined**. It then ran a batch
+    whose owner had returned and called a destroyed `std::function`, reading freed memory as pixels.
+  * **Across all three pool defects the pattern is identical**: every correctness argument I wrote
+    was about the WORK — do all chunks run, do they run once, are results identical — and every
+    actual failure was about LIFETIME: who is still inside when this object dies. **A pool needs a
+    test per lifetime edge, not per work property.** D-47's tests were good tests of the wrong thing.
+  * Also worth recording: **ASan on the CLI found nothing**, twice. The race needs a load finishing
+    against a live drag, which `cosmo-cc` never does. The bug was found by reading the symbolised
+    trace and then by a test written to hit the specific edge — not by a sanitiser sweep.
 
 - **2026-08-24 — one green run of a threading change is not evidence, and this is the second time
   the project has paid for that.** The parallelFor pool passed its two tests, passed `ctest`, and

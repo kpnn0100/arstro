@@ -24,10 +24,17 @@ typedef float Pixel;
 
 namespace arstro
 {
-    /** Clamp x into the unit range [0, 1]. */
+    /** Clamp x into the unit range [0, 1]. **NaN maps to 0**, deliberately: this feeds the
+     *  float -> 8-bit pack, and `(uint8_t)(NaN * 255 + 0.5)` is undefined — a garbage byte
+     *  that differs between builds and reads as a plausible pixel. 0 at least differs the
+     *  same way every time, so a NaN reaching a frame is reproducible instead of spooky.
+     *
+     *  This is a backstop, not the protection: a NaN should never get this far, which is
+     *  what the guards in `sampleTf`/`sampleLut` and the non-finite parameter rejection in
+     *  `CosmoService::applySetFields` are for (D-36 / D-47a). */
     inline Pixel clamp01(Pixel x)
     {
-        return x < (Pixel)0 ? (Pixel)0 : (x > (Pixel)1 ? (Pixel)1 : x);
+        return !(x > (Pixel)0) ? (Pixel)0 : (x > (Pixel)1 ? (Pixel)1 : x);
     }
 
     /** Linear interpolation: a at t=0, b at t=1. */

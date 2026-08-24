@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-48**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-50**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -138,6 +138,102 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `renderInto`'s three working buffers, opt-in histogram taps), which are now the whole of what a
   default-params render costs.
 
+### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
+- **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
+- **Found:** 2026-08-20, on the first frames `cosmo_touch_shots` ever produced — the phone UI had
+  never been rendered anywhere but on a device, which is why this shipped through M3.
+- **Reproduce:** `cosmo_touch_shots --outdir /tmp/t --only portrait` and `--only landscape`, then
+  look at `cosmo-touch-editor-*`.
+- **Expected:** R-TOUCH-2 — no component overlaps another; R-TOUCH-3 — both orientations work.
+- **Actual:** **Portrait:** the Save / Import / Export action bar sits on top of the last slider row
+  ("Blacks" is cut in half behind the Save button), and the tray's row list is clipped mid-row rather
+  than ending above the bar. **Landscape (852×393):** the photo is a thin strip at the top and the
+  tray covers the rest, with the section chips, the action bar and the 5-tab tool bar all drawn into
+  the same band — three layers of controls in the same pixels, most of them unreachable.
+- **Cause:** the tray is laid out as an overlay that rises **over** the photo (the design brief's own
+  model, now amended), its content height is not measured against the space left after the action bar
+  and tool bar, and there is no landscape layout at all — `resize()` applies one set of portrait
+  metrics whatever the aspect.
+- **RECOMMENDED FIX:** the R-TOUCH-2/3 work: give the tray its own box that the photo's box shrinks
+  to make room for (no overlay), measure the row list against `bodyTop()..actionBarTop()` and scroll
+  it (R6), and add the landscape two-pane layout — photo left, tray a fixed right-hand panel — so
+  neither orientation stacks controls. Guard it in `cosmo_touch_shots --assert` with a sibling-rect
+  intersection check once the tray is a real box rather than an overlay.
+
+### D-17 — The control socket does nothing on Windows
+- **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
+- **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
+  than remembered.
+- **Reproduce:** `cosmo.exe --control \\.\pipe\cosmo` on Windows → the log carries
+  `control channel is not implemented on Windows yet` and the app runs normally, unattended.
+- **Expected:** R-SVC-8 on every platform cosmo ships to.
+- **Actual:** POSIX only. `ControlChannel::open()` returns false with a reason on Windows and
+  every other method is an inert no-op, so `--control` fails loudly at startup instead of hanging
+  later. The branch is `-fsyntax-only` clean but has never been built or run.
+- **Judgement:** requirement gap against R-SVC-8, which does not name platforms. Deferred rather
+  than open because it is a deliberate stop, not an oversight: an overlapped named pipe needs a
+  per-instance state machine (`CreateNamedPipe` + `FILE_FLAG_OVERLAPPED`, a pending
+  `ConnectNamedPipe` per client with its own event, a pending `ReadFile` per client,
+  `GetOverlappedResult(..., FALSE)` per frame) whose failure mode is a **hung UI thread** — and
+  it cannot be tested from this Linux host at all. `PIPE_NOWAIT` is not the shortcut: it is
+  legacy and its writes silently drop data when the buffer fills, so the event stream would lose
+  lines with no error anywhere.
+- **Fix:** pending, and the cheaper route is recorded in `ControlChannel.cpp`: Winsock `AF_UNIX`
+  (Win10 1803+, `<afunix.h>`) makes the POSIX branch nearly portable — `ioctlsocket(FIONBIO)`
+  for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
+  box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
+  and it is unaffected.
+
+### D-5 — The UI logs nothing, so a visual bug report cannot be traced
+- **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** `grep -rn "LOG[DIWE]" apps/cosmo/App.cpp apps/cosmo/widgets/ | wc -l` → 0. The only
+  `LOGI` calls in the whole desktop app are startup and the export batch start/finish.
+- **Expected:** the user says "this button does nothing" and the log says which widget consumed the
+  click, or that nothing did.
+- **Actual:** clicks, screen transitions, selections, panel and tab changes, scroll clamping, value
+  commits and renders are all invisible. This is the single biggest observability gap in the app and it
+  blocks the intended workflow (user reports a symptom → agent reads the log).
+- **Judgement:** defect — no requirement guarantees it, but the reporting workflow is unusable without
+  it. `R-AGENT-*` will state the contract.
+- **Fix:** pending. P0.4 + P0.5.
+
+## Closed
+
+### D-46 — `cosmo-cc`'s `wait <ms>` advanced the service clock sixteen times too fast
+- **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-24, while verifying R-PREVIEW-3's settle walk through `cosmo-cc --watch`.
+- **Reproduce (before the fix):**
+  ```
+  gesture on
+  set exposure=0.5 contrast=15 vibrance=25
+  wait 80
+  set exposure=0.6 contrast=16 vibrance=25
+  wait 80
+  ...
+  ```
+  → `frame.ready ... level=0 / level=1 / level=0 / level=1 / level=0 ...`
+- **Expected:** a paced drag stays at the coarse level for its whole duration; the settle walk runs
+  once, after `gesture off`.
+- **Actual:** the level oscillated 1, 0, 1, 0 — a full-resolution render between every simulated
+  move, which on a slow board is precisely the stall R-PREVIEW-1 exists to prevent.
+- **Cause:** `waitFor`'s numeric branch spun `pumpOnce` until **wall** time ran out, sleeping 1 ms
+  per iteration, while `pumpOnce` advances the service clock by a fixed **16 ms** per call
+  (`apps/cosmo/cli/main.cpp`, `pumpOnce`). So `wait 80` ran ~80 pumps and told the service that
+  **1280 ms** had passed. Anything in the service that reasons about elapsed time saw a script as a
+  slideshow, and R-PREVIEW-3's 80 ms settle window was crossed between every move.
+- **Judgement:** defect against the standing rule that **the same script must work headless and
+  live**. A fixed tick is right — it is what makes a scripted run reproducible (R-SVC-6) — but then
+  `wait <ms>` has to mean *that many ms of service time*, not "spin until a different clock says so".
+  The two clocks disagreeing by 16x made the headless run a different program.
+- **Fixed:** `wait <ms>` now advances `h.tickMs` by exactly that much, sleeping a real 16 ms per
+  tick so wall time and service time agree, and it is what a GTK timeout at frame rate does. The
+  `--timeout` deadline stays wall-clock, because that one bounds real work.
+- **Guarded by** the R-PREVIEW walk being observable at all: with the old clock the `cosmo-cc` run
+  in DR-PREVIEW-3 produces the oscillation above instead of a clean 0, 1, 1, 0. Filed and fixed in
+  the same commit as T2 because it is the reason T2 could not be demonstrated.
+
+
 ### D-47 — The new parallelFor pool called a destroyed lambda, and segfaulted one ctest run in three
 - **Area:** core / engine · **Status:** **Fixed** · **Severity:** S1 (crash)
 - **Found:** 2026-08-24, minutes after landing it in `7585b80` — by running `ctest` five times in a
@@ -194,63 +290,92 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   pooling anything, enumerate who calls it: "who else is on another thread right now" was answerable
   by `grep -c par::parallelFor` from the start.
 
-### D-46 — `cosmo-cc`'s `wait <ms>` advanced the service clock sixteen times too fast
-- **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S2
-- **Found:** 2026-08-24, while verifying R-PREVIEW-3's settle walk through `cosmo-cc --watch`.
-- **Reproduce (before the fix):**
-  ```
-  gesture on
-  set exposure=0.5 contrast=15 vibrance=25
-  wait 80
-  set exposure=0.6 contrast=16 vibrance=25
-  wait 80
-  ...
-  ```
-  → `frame.ready ... level=0 / level=1 / level=0 / level=1 / level=0 ...`
-- **Expected:** a paced drag stays at the coarse level for its whole duration; the settle walk runs
-  once, after `gesture off`.
-- **Actual:** the level oscillated 1, 0, 1, 0 — a full-resolution render between every simulated
-  move, which on a slow board is precisely the stall R-PREVIEW-1 exists to prevent.
-- **Cause:** `waitFor`'s numeric branch spun `pumpOnce` until **wall** time ran out, sleeping 1 ms
-  per iteration, while `pumpOnce` advances the service clock by a fixed **16 ms** per call
-  (`apps/cosmo/cli/main.cpp`, `pumpOnce`). So `wait 80` ran ~80 pumps and told the service that
-  **1280 ms** had passed. Anything in the service that reasons about elapsed time saw a script as a
-  slideshow, and R-PREVIEW-3's 80 ms settle window was crossed between every move.
-- **Judgement:** defect against the standing rule that **the same script must work headless and
-  live**. A fixed tick is right — it is what makes a scripted run reproducible (R-SVC-6) — but then
-  `wait <ms>` has to mean *that many ms of service time*, not "spin until a different clock says so".
-  The two clocks disagreeing by 16x made the headless run a different program.
-- **Fixed:** `wait <ms>` now advances `h.tickMs` by exactly that much, sleeping a real 16 ms per
-  tick so wall time and service time agree, and it is what a GTK timeout at frame rate does. The
-  `--timeout` deadline stays wall-clock, because that one bounds real work.
-- **Guarded by** the R-PREVIEW walk being observable at all: with the old clock the `cosmo-cc` run
-  in DR-PREVIEW-3 produces the oscillation above instead of a clean 0, 1, 1, 0. Filed and fixed in
-  the same commit as T2 because it is the reason T2 could not be demonstrated.
 
-### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
-- **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
-- **Found:** 2026-08-20, on the first frames `cosmo_touch_shots` ever produced — the phone UI had
-  never been rendered anywhere but on a device, which is why this shipped through M3.
-- **Reproduce:** `cosmo_touch_shots --outdir /tmp/t --only portrait` and `--only landscape`, then
-  look at `cosmo-touch-editor-*`.
-- **Expected:** R-TOUCH-2 — no component overlaps another; R-TOUCH-3 — both orientations work.
-- **Actual:** **Portrait:** the Save / Import / Export action bar sits on top of the last slider row
-  ("Blacks" is cut in half behind the Save button), and the tray's row list is clipped mid-row rather
-  than ending above the bar. **Landscape (852×393):** the photo is a thin strip at the top and the
-  tray covers the rest, with the section chips, the action bar and the 5-tab tool bar all drawn into
-  the same band — three layers of controls in the same pixels, most of them unreachable.
-- **Cause:** the tray is laid out as an overlay that rises **over** the photo (the design brief's own
-  model, now amended), its content height is not measured against the space left after the action bar
-  and tool bar, and there is no landscape layout at all — `resize()` applies one set of portrait
-  metrics whatever the aspect.
-- **RECOMMENDED FIX:** the R-TOUCH-2/3 work: give the tray its own box that the photo's box shrinks
-  to make room for (no overlay), measure the row list against `bodyTop()..actionBarTop()` and scroll
-  it (R6), and add the landscape two-pane layout — photo left, tray a fixed right-hand panel — so
-  neither orientation stacks controls. Guard it in `cosmo_touch_shots --assert` with a sibling-rect
-  intersection check once the tray is a real box rather than an overlay.
+### D-49 — The parallelFor pool's worker set was mutated outside the lock, so a stale worker outlived its batch
+- **Area:** core / engine · **Status:** **Fixed** · **Severity:** S1 (crash) · **Introduced by me**, in `7585b80`/`08027f3`
+- **Found:** 2026-08-24, from a user's crash report — a SIGSEGV in a render worker while dragging an
+  exposure slider — after the symbolised trace pointed at the pool and D-48's guard alone did not
+  explain how a NaN got into the pixels.
+- **Reproduce:** `image_tests` →
+  `ParallelFor_survives_setThreads_racing_against_a_live_batch`. Against the pre-fix pool: run 1
+  **segfaults**, run 2 **hangs**. With the fix: three runs of ~550,000 batches each, clean.
+- **Cause:** `Pool::stop()` iterated and cleared `mWorkers` **outside `mMu`** — it had to, because
+  joining a worker while holding the mutex that worker waits on is an instant deadlock — and nothing
+  replaced the guard. Two threads can call it concurrently, and the trigger is ordinary:
+  `ThreadBudget::endLoad()` calls `par::setThreads` from whichever thread finishes a load, while the
+  render worker is inside `parallelFor` calling `resize()`. **R-LOADPERF-3 streams decoded images
+  into a LIVE editor**, so "a load finishes while the photographer drags a slider" is the normal
+  case, not a corner. `parallelFor` also called `resize()` on *every* invocation, so the racy path
+  was reachable from the render worker on every frame.
+  Two concurrent `stop()`s then double-join, or — the lethal outcome — leave a worker **never joined
+  at all**. That worker survives into the next batch, picks up a `Batch*` whose owning `run()` has
+  long returned, and calls a **destroyed `std::function`**. The stale body still reads its captured
+  image pointer, which is freed memory, and the garbage floats arrive at `srgbEncode` — **which is
+  why the crash surfaced inside a LUT lookup, nowhere near the pool** (D-48).
+- **Fixed:** a dedicated `mLifecycleMu` guards the worker set and the whole stop-then-spawn
+  sequence. It cannot be `mMu` for the deadlock reason above; it is always taken *before* `mMu` and
+  never the other way round. Plus `parallelFor` now only touches the lifecycle when the size is
+  actually wrong (`Pool::sized`), so the common call does no lifecycle work at all.
+- **Judgement:** third defect in this pool, and the third one that a single-batch, single-thread
+  test could not express. The pattern across all three: the correctness argument was about the WORK
+  (do all chunks run? do they run once?) while every actual failure was about LIFETIME (who is still
+  inside when this object dies?). **A pool needs a test per lifetime edge, not per work property.**
+
+### D-48 — A NaN indexed a lookup table out of bounds, and the sRGB table made it reachable on every pixel
+- **Area:** core / engine · **Status:** **Fixed** · **Severity:** S1 (crash) · **Made reachable by me**, in `8a66c42`
+- **Found:** 2026-08-24, reported by the user: a core dump while dragging exposure, with a backtrace.
+- **Reproduce:** one line — `color::srgbEncode(std::nanf(""))` segfaults. Also `set exposure=250` on
+  a loaded image, which is D-36's original repro.
+- **Symbolised trace** (`addr2line` on the reported offsets), innermost first:
+  ```
+  sampleTf(float const*, float)            ColorSpace.cpp:78     <- crash
+  srgbEncode(float)                        ColorSpace.cpp:82
+  encodeInPlace(Image&)::lambda(int,int)   ColorSpace.cpp:102
+  std::function<void(int,int)>::operator()
+  par::detail::Pool::claim(Batch*)         Parallel.h:211
+  par::detail::Pool::workerLoop()          Parallel.h:234
+  ```
+- **Cause:** `sampleTf` guarded its input with `if (x <= 0) … if (x >= 1) …` and **every comparison
+  with NaN is false**, so a NaN went straight through, `(int)(NaN * 4095)` is undefined (INT_MIN in
+  practice) and `lut[INT_MIN]` read unmapped memory. Identical to **D-36**, which filed the same
+  mistake against `ToneCurve::sampleLut` — and turning the two transfer functions into tables
+  (`8a66c42`, T0.2) gave that mistake two more sites and made them reachable **on every colour
+  channel of every pixel of every frame**, instead of only when a tone curve was in use. Before that
+  commit `srgbEncode` used `std::pow`, which returns NaN harmlessly. **I converted a
+  wrong-pixel bug into a crash.**
+- **Where the NaN came from:** D-49 — a stale pool worker calling a destroyed lambda whose captured
+  image pointer was freed memory. That is fixed separately; this entry is about the fact that
+  *garbage arriving at a LUT must not be able to kill the process*, whatever produced it.
+- **Fixed** — the class, not the site. Every float-to-index conversion in the pipeline now guards
+  NaN-safely **and** clamps the index:
+  * `sampleTf` (both transfer tables) — `!(x > 0)` / `!(x < 1)`, plus an index clamp;
+  * `ToneCurve::sampleLut` — D-36's site, same treatment;
+  * `ColorMixer::sampleCyclic` — survived only because `INT_MIN % 256` happens to be 0, an accident
+    of `kLut` being a power of two, and returned NaN either way; a non-finite hue now contributes
+    nothing;
+  * `clamp01` — NaN now maps to 0 rather than reaching `(uint8_t)(NaN * 255)`, which is undefined;
+  * `Histogram::binOf` was **already correct**, and is the pattern the others now follow: it clamps
+    the INDEX after the cast rather than trusting a check on the input.
+  And the value is stopped earlier too (D-36's other recommendation): `firstNonFiniteParam` /
+  `sanitizeParams` in `EditParamsIO` — a `set` with a non-finite value is **refused, naming the
+  field**, while a project or preset FILE is **repaired to neutral and the count logged**, because
+  refusing to open somebody's work over one stray key is the worse failure.
+- **Guarded by** `A_NaN_cannot_index_a_lookup_table_out_of_bounds` (every transfer-function edge,
+  the whole pipeline fed a NaN/inf/1e39/250 parameter with curve + mixer + vibrance active so the
+  HSL round trip and both LUT paths run, a fully-NaN image through `ToneCurve`/`ColorMixer`/
+  `encodeInPlace`, and `clamp01`) and `Non_finite_parameters_are_refused_or_neutralised` (the strict
+  half names the field; the lenient half restores the NEUTRAL value — 6500 for `temp`, 1 for
+  `cropW`, not 0 — and counts; and `guardedParamScalarCount()` is asserted so adding an
+  `EditParams` field without listing it fails a build). Verified: the suite **segfaults** against
+  the pre-fix guards.
+- **Lesson:** a change that only makes something *faster* can still change its failure mode. The
+  LUT was measured for accuracy (1.6e-5, tested) and for speed — and not for what it does with a
+  value the old code tolerated. **"Same answer, faster" is not the same as "same behaviour".**
+
+
 
 ### D-36 — An adjustment outside the UI's range crashes the render worker (NaN through a clamp)
-- **Area:** core / engine · **Status:** Confirmed (crashed under gdb) · **Severity:** S1 (crash)
+- **Area:** core / engine · **Status:** **Fixed** · **Severity:** S1 (crash)
 - **Found:** 2026-08-20, while adding the `editor-dissolve` shot for R-VIEW-1. The shot asked for a
   deliberately huge change so the dissolve would be visible in a PNG, and the process died.
 - **Reproduce:** any front end, no UI needed — `set exposure=250` on a loaded image, then let a
@@ -290,45 +415,21 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Guard for the shot in the meantime:** `editor-dissolve` now uses `exposure=1.5`, inside the
   UI's range, so the harness does not depend on the fix.
 
-### D-17 — The control socket does nothing on Windows
-- **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
-- **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
-  than remembered.
-- **Reproduce:** `cosmo.exe --control \\.\pipe\cosmo` on Windows → the log carries
-  `control channel is not implemented on Windows yet` and the app runs normally, unattended.
-- **Expected:** R-SVC-8 on every platform cosmo ships to.
-- **Actual:** POSIX only. `ControlChannel::open()` returns false with a reason on Windows and
-  every other method is an inert no-op, so `--control` fails loudly at startup instead of hanging
-  later. The branch is `-fsyntax-only` clean but has never been built or run.
-- **Judgement:** requirement gap against R-SVC-8, which does not name platforms. Deferred rather
-  than open because it is a deliberate stop, not an oversight: an overlapped named pipe needs a
-  per-instance state machine (`CreateNamedPipe` + `FILE_FLAG_OVERLAPPED`, a pending
-  `ConnectNamedPipe` per client with its own event, a pending `ReadFile` per client,
-  `GetOverlappedResult(..., FALSE)` per frame) whose failure mode is a **hung UI thread** — and
-  it cannot be tested from this Linux host at all. `PIPE_NOWAIT` is not the shortcut: it is
-  legacy and its writes silently drop data when the buffer fills, so the event stream would lose
-  lines with no error anywhere.
-- **Fix:** pending, and the cheaper route is recorded in `ControlChannel.cpp`: Winsock `AF_UNIX`
-  (Win10 1803+, `<afunix.h>`) makes the POSIX branch nearly portable — `ioctlsocket(FIONBIO)`
-  for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
-  box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
-  and it is unaffected.
+- **FIXED 2026-08-24, together with D-48**, which is the same bug in two more places and is how
+  it finally reached a user. The recommended fix was right and is what landed, with two additions:
+  the **index is clamped as well** as the input guarded (an index derived from a float is clamped
+  where it is USED, never trusted because something upstream checked the input), and the parameter
+  guard is split into a strict half and a lenient half — a `set` carrying a non-finite value is
+  **refused with the field name**, while a project or preset FILE is **repaired** and the count
+  reported, because refusing to open somebody's work over one stray key is the worse failure.
+  See **D-48** for the full account; the note there about `core/ImageProcessing` not being this
+  skill's to change was wrong — it is tracked directly by this repo and `arstro.cosmo.core.implement`
+  owns it.
+- **Guarded by** `A_NaN_cannot_index_a_lookup_table_out_of_bounds` and
+  `Non_finite_parameters_are_refused_or_neutralised` in `image_tests`, both verified to segfault
+  against the pre-fix code. The `editor-dissolve` shot can go back to a large exposure now, though
+  it has been left at 1.5 since nothing about the shot needed the extreme value.
 
-### D-5 — The UI logs nothing, so a visual bug report cannot be traced
-- **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** `grep -rn "LOG[DIWE]" apps/cosmo/App.cpp apps/cosmo/widgets/ | wc -l` → 0. The only
-  `LOGI` calls in the whole desktop app are startup and the export batch start/finish.
-- **Expected:** the user says "this button does nothing" and the log says which widget consumed the
-  click, or that nothing did.
-- **Actual:** clicks, screen transitions, selections, panel and tab changes, scroll clamping, value
-  commits and renders are all invisible. This is the single biggest observability gap in the app and it
-  blocks the intended workflow (user reports a symptom → agent reads the log).
-- **Judgement:** defect — no requirement guarantees it, but the reporting workflow is unusable without
-  it. `R-AGENT-*` will state the contract.
-- **Fix:** pending. P0.4 + P0.5.
-
-## Closed
 
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
 - **Area:** core / load · **Status:** **Fixed** · **Severity:** S2

@@ -7,6 +7,7 @@
 #include "image_processing.h"
 #include <cmath>
 #include <atomic>
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -1026,6 +1027,67 @@ TEST(ParallelFor_is_safe_when_several_threads_call_it_at_once)
     printf("    %d concurrent batches across 6 caller threads\n", batches.load());
     CHECK(!bad.load());
     CHECK(batches.load() == 6 * 250);
+    par::setThreads(0);
+}
+
+// ── D-47b: setThreads() from one thread while another is inside parallelFor ──────
+//
+// This is the shape that actually crashed the app. `ThreadBudget::endLoad()` calls
+// `par::setThreads` from whichever thread finishes a load, while the render worker is
+// inside `parallelFor` — and R-LOADPERF-3 streams decoded images into a LIVE editor, so
+// "a load finishes while the photographer drags a slider" is the normal case.
+//
+// The pool's worker set was touched outside the lock (a join may not happen while holding
+// the mutex the joinee waits on, so the join was moved out and nothing replaced the
+// guard). Two concurrent restarts then iterated and cleared the same
+// vector<std::thread>. The lethal outcome is a worker that is never joined: it survives
+// into the next batch, picks up a Batch whose owning run() has returned, and calls a
+// DESTROYED std::function whose captured image pointer is freed memory. The garbage floats
+// then reached srgbEncode and the process died in a LUT lookup, nowhere near the pool.
+TEST(ParallelFor_survives_setThreads_racing_against_a_live_batch)
+{
+    std::atomic<bool> stop{false}, bad{false};
+    std::atomic<long long> batches{0};
+
+    // Two workers hammering parallelFor with per-call tags, as the render worker and the
+    // export path do.
+    std::vector<std::thread> workers;
+    for (int c = 0; c < 3; ++c)
+        workers.emplace_back([c, &stop, &bad, &batches] {
+            long long round = 0;
+            while (!stop.load())
+            {
+                const int n = 80 + (int)((c * 31 + round * 7) % 500);
+                const int tag = (int)((c + 1) * 1000000 + (round % 100000));
+                std::vector<int> out(n, -1);
+                par::parallelFor(n, [&out, tag](int b, int e) {
+                    for (int i = b; i < e; ++i) out[i] = tag;
+                });
+                for (int i = 0; i < n; ++i)
+                    if (out[i] != tag) { bad.store(true); return; }
+                batches.fetch_add(1);
+                ++round;
+            }
+        });
+
+    // ...and a third thread doing what endLoad()/beginLoad() do: changing the count.
+    std::thread resizer([&stop] {
+        int i = 0;
+        while (!stop.load())
+        {
+            par::setThreads(1 + (i++ % 12));
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+    });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    stop.store(true);
+    for (auto &t : workers) t.join();
+    resizer.join();
+
+    printf("    %lld batches while the thread count was changing underneath\n", batches.load());
+    CHECK(!bad.load());
+    CHECK(batches.load() > 100);   // it really did keep working, not deadlock
     par::setThreads(0);
 }
 

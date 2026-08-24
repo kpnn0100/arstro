@@ -1433,3 +1433,127 @@ TEST(An_evicted_level_is_rebuilt_by_halving_a_finer_one_not_upscaling_a_coarser_
     for (int l = 0; l < EditEngine::previewLevels(); ++l)
         CHECK(eng.previewLevelResident(l));
 }
+
+// ── D-36 / D-47a: a NaN may make a pixel wrong; it may not kill the process ───────
+//
+// Every one of these calls segfaulted before the fix, and the crash the user reported was
+// this exact line reached from a render worker: `sampleTf` indexing its 4096-entry table
+// with `(int)NaN`, which is INT_MIN in practice.
+//
+// The bug is older than the table. `ToneCurve::sampleLut` had it first (D-36), guarded by
+// `if (d < 0) d = 0; if (d > 1) d = 1;` — and **every comparison with NaN is false**, so the
+// clamp was a no-op for exactly the value that needed clamping. Turning srgbEncode/Decode
+// into tables gave the same mistake two more sites and made them reachable on every pixel
+// of every frame instead of only when a tone curve was in use.
+TEST(A_NaN_cannot_index_a_lookup_table_out_of_bounds)
+{
+    const float nan = std::nanf("");
+
+    // The transfer functions: NaN and both infinities, in both directions.
+    CHECK(color::srgbEncode(nan) == 0.f);
+    CHECK(color::srgbDecode(nan) == 0.f);
+    CHECK(color::srgbEncode(INFINITY) == 1.f);
+    CHECK(color::srgbEncode(-INFINITY) == 0.f);
+    CHECK(color::srgbDecode(INFINITY) == 1.f);
+    CHECK(color::srgbDecode(-INFINITY) == 0.f);
+    // ...and still exact where it matters, so the guard did not cost accuracy.
+    CHECK(color::srgbEncode(0.f) == 0.f);
+    CHECK(color::srgbEncode(1.f) == 1.f);
+    CHECK_NEAR(color::srgbEncode(0.5f), color::srgbEncodeExact(0.5f), 1e-5);
+
+    // The whole pipeline, fed a NaN parameter directly — the shape a hand-edited preset or
+    // a fuzzed socket client produces, and the shape `set exposure=250` produces via 2^250.
+    auto bytes = variedRGBA8b(40, 28);
+    for (float poison : {std::nanf(""), INFINITY, -INFINITY, 1e39f, 250.f})
+    {
+        EditEngine eng;
+        eng.addImage(bytes.data(), 40, 28, 4);
+        eng.setPreviewSize(4096);
+        EditParams p;
+        p.exposure = poison;
+        p.curve = {CurvePoint{0.f, 0.f}, CurvePoint{0.5f, 0.6f}, CurvePoint{1.f, 1.f}};
+        p.mixer[1] = {CurvePoint{0.f, 0.3f}, CurvePoint{360.f, 0.3f}};
+        p.vibrance = 20.f;                       // forces the HSL round trip
+        eng.applyParams(p);
+        const PreviewBuffer pb = eng.renderPreview();
+        CHECK(pb.rgba != nullptr);                // it renders...
+        CHECK(pb.width == 40 && pb.height == 28); // ...at the right size...
+        bool allBytesDefined = true;              // ...and every byte is a real value
+        for (size_t i = 0; i < (size_t)pb.width * pb.height * 4; ++i)
+            if (pb.rgba[i] > 255) allBytesDefined = false;
+        CHECK(allBytesDefined);
+    }
+
+    // A NaN through every other float-to-index site the pipeline has.
+    ToneCurve tc;
+    tc.setPoints({CurvePoint{0.f, 0.f}, CurvePoint{0.4f, 0.5f}, CurvePoint{1.f, 1.f}});
+    ColorMixer cm;
+    cm.setCurve(ColorMixer::Sat, {CurvePoint{0.f, 0.5f}, CurvePoint{360.f, 0.5f}});
+    Image poisoned(8, 4, 4, ColorSpace::LinearSRGB);
+    for (size_t i = 0; i < poisoned.pixelCount() * 4; ++i) poisoned.data()[i] = nan;
+    Image out;
+    tc.apply(poisoned, out);        // would have died in sampleLut
+    cm.apply(poisoned, out);        // would have returned NaN from sampleCyclic
+    Image enc = poisoned.clone();
+    color::encodeInPlace(enc);      // would have died in sampleTf
+    CHECK(out.width() == 8 && enc.width() == 8);
+
+    // clamp01 is the last line of defence before the 8-bit pack, where a NaN cast is
+    // undefined. It must produce a DEFINITE value.
+    CHECK(clamp01(nan) == 0.f);
+    CHECK(clamp01(-1.f) == 0.f);
+    CHECK(clamp01(2.f) == 1.f);
+    CHECK(clamp01(0.25f) == 0.25f);
+}
+
+// ── D-36: a non-finite parameter is refused on the way in, and repaired in a file ──
+TEST(Non_finite_parameters_are_refused_or_neutralised)
+{
+    // Strict: the name of the offending field, so a rejection is debuggable.
+    EditParams p;
+    CHECK(firstNonFiniteParam(p) == nullptr);
+    p.exposure = std::nanf("");
+    CHECK(firstNonFiniteParam(p) != nullptr);
+    CHECK(std::string(firstNonFiniteParam(p)) == "exposure");
+    p.exposure = 0.f;
+    p.lensVignette = INFINITY;
+    CHECK(std::string(firstNonFiniteParam(p)) == "lensVignette");
+
+    // Masks and curve points count too — a NaN mask radius is as fatal as a NaN exposure,
+    // and both arrive by the same route (a hand-edited file).
+    EditParams q;
+    MaskParams m;
+    m.rx = std::nanf("");
+    q.masks.push_back(m);
+    CHECK(firstNonFiniteParam(q) != nullptr);
+    EditParams r;
+    r.curve = {CurvePoint{0.f, 0.f}, CurvePoint{std::nanf(""), 0.5f}, CurvePoint{1.f, 1.f}};
+    CHECK(firstNonFiniteParam(r) != nullptr);
+
+    // Lenient: repaired to the NEUTRAL value, and counted.
+    EditParams bad;
+    bad.exposure = std::nanf("");
+    bad.temp = INFINITY;              // neutral is 6500, not 0 — the walk must know that
+    bad.contrast = -INFINITY;
+    bad.cropW = std::nanf("");        // neutral is 1, not 0
+    const int fixed = sanitizeParams(bad);
+    CHECK(fixed == 4);
+    CHECK(firstNonFiniteParam(bad) == nullptr);
+    const EditParams neutral;
+    CHECK(bad.exposure == neutral.exposure);
+    CHECK(bad.temp == neutral.temp);          // 6500 restored, not zeroed
+    CHECK(bad.contrast == neutral.contrast);
+    CHECK(bad.cropW == neutral.cropW);        // 1 restored, not zeroed
+    // A clean set is left completely alone.
+    EditParams good; good.exposure = 1.25f; good.temp = 5200.f;
+    CHECK(sanitizeParams(good) == 0);
+    CHECK(good.exposure == 1.25f && good.temp == 5200.f);
+
+    // The field list is walked, not the struct's memory, so a new EditParams field would be
+    // silently unguarded. This is the assertion that fails when one is added — 58 is the 42
+    // named scalars plus the 16 coordinates of a DEFAULT params' curves (the master curve's
+    // two points and the three channel curves' two each). Masks and mixer curves are empty
+    // by default, so they add nothing here; they are covered by the assertions above.
+    printf("    %d scalars guarded\n", guardedParamScalarCount());
+    CHECK(guardedParamScalarCount() == 58);
+}

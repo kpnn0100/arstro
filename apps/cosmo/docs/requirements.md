@@ -2318,3 +2318,76 @@ fidelity is never quietly given the cheap answer.
 ```
 [PASS] a_load_decodes_cheaply_and_an_export_decodes_properly (load: 2 preview / 0 full, export: 2 full)
 ```
+
+### DR-PREVIEW-6a Garbage arriving at a lookup table may not kill the process (D-48, D-49, D-36)
+A user's core dump while dragging an exposure slider. Two defects, and both were regressions from
+this plan's own commits.
+
+**The crash (D-48).** `color::srgbEncode` became a 4096-knot table in T0.2 (`8a66c42`) with the guard
+spelled `if (x <= 0) … if (x >= 1) …`. **Every comparison with NaN is false**, so a NaN passed both,
+`(int)(NaN * 4095)` is undefined (INT_MIN in practice) and `lut[INT_MIN]` read unmapped memory. The
+symbolised trace is exactly that: `sampleTf` ← `srgbEncode` ← `encodeInPlace`'s lambda ← a pool
+worker.
+
+This is **D-36**, filed four days earlier against `ToneCurve::sampleLut`, with the identical clamp
+and the identical reasoning — and making the transfer functions tables gave it two more sites and
+made them reachable on every colour channel of every pixel of every frame instead of only when a
+tone curve was in use. Before that commit `srgbEncode` called `std::pow`, which returns NaN
+harmlessly. **The optimisation converted a wrong-pixel bug into a crash**, which is the part worth
+remembering: the LUT was measured for accuracy (1.6e-5) and for speed, and never once for what it
+does with a value the old code tolerated.
+
+**As built**, the class rather than the site. Every float-to-index conversion now guards NaN-safely
+**and** clamps the index:
+
+| site | before | after |
+|---|---|---|
+| `sampleTf` (both tables) | `x <= 0` / `x >= 1`, unclamped index | `!(x > 0)` / `!(x < 1)`, index clamped |
+| `ToneCurve::sampleLut` | `d < 0` / `d > 1` (D-36) | `!(d > 0)`, index clamped |
+| `ColorMixer::sampleCyclic` | survived only because `INT_MIN % 256 == 0`; returned NaN | non-finite hue contributes nothing |
+| `clamp01` | NaN through to `(uint8_t)(NaN*255)`, undefined | NaN → 0 |
+| `Histogram::binOf` | **already correct** | unchanged — it is the pattern the rest now follow |
+
+`binOf` is worth naming: it clamps the **index after the cast** instead of trusting a check on the
+input, which is why it was the only one of the five that was never broken. That is now the rule —
+*an index derived from a float is clamped where it is used, never trusted because something upstream
+checked the input.*
+
+**And the value is stopped earlier**, D-36's other recommendation, split into two halves because a
+file and a command deserve different answers (`EditParamsIO`):
+- `firstNonFiniteParam` — **strict**. A `set` carrying a NaN or an infinity is refused **naming the
+  field** (`set: exposure is not a finite number`), because nothing legitimate sends one and a
+  refusal is debuggable. Every UI slider sends a finite decimal, so nothing real is refused.
+- `sanitizeParams` — **lenient**. A `.cmp`/`.cosmo` project or `.apf` preset is **repaired** to the
+  neutral value and the count is emitted as an `info` event, because refusing to open somebody's work
+  over one stray key is the worse failure. Neutral means *that field's* default — 6500 for `temp`, 1
+  for `cropW`, not 0 — read positionally through the same walk so there is no second table of
+  defaults to drift.
+
+**Where the NaN came from (D-49).** Not from any processor — from the pool. `Pool::stop()` iterated
+and cleared the worker set **outside `mMu`**, which it had to (joining under the mutex the joinee
+waits on deadlocks) and nothing replaced the guard. `ThreadBudget::endLoad()` calls `par::setThreads`
+from whichever thread finishes a load while the render worker is inside `parallelFor`, and
+R-LOADPERF-3 streams decoded images into a **live** editor — so "a load finishes while the
+photographer drags a slider" is the normal case. Two concurrent stops could leave a worker
+**unjoined**; it then ran a batch whose owner had returned and called a **destroyed
+`std::function`** whose captured image pointer was freed memory. The garbage floats became the NaN.
+
+Fixed with a dedicated `mLifecycleMu` guarding the worker set and the whole stop-then-spawn
+sequence, always taken before `mMu` and never after; and `parallelFor` now only touches the
+lifecycle when the size is actually wrong, so the common call does none.
+
+**Guarded by**, all verified to fail against the pre-fix code:
+- `A_NaN_cannot_index_a_lookup_table_out_of_bounds` — segfaults pre-fix;
+- `Non_finite_parameters_are_refused_or_neutralised` — including `guardedParamScalarCount() == 58`,
+  so adding an `EditParams` field without listing it fails a build rather than leaving it unguarded;
+- `ParallelFor_survives_setThreads_racing_against_a_live_batch` — pre-fix: run 1 **segfaults**,
+  run 2 **hangs**; post-fix, three runs of ~550,000 batches, clean.
+
+**And a note on how it was found**, because it says something about the tools: **ASan+UBSan on
+`cosmo-cc` found nothing, twice.** The race needs a load finishing against a live drag, which the CLI
+never does. It was found by symbolising the user's backtrace — one `addr2line` command — and then by
+writing a test aimed at the specific lifetime edge. Across all three pool defects the pattern is the
+same: every correctness argument was about the **work** (do all chunks run, exactly once, with
+identical results) and every real failure was about **lifetime** (who is still inside when this
+object dies). A pool needs a test per lifetime edge, not per work property.

@@ -98,10 +98,16 @@ namespace arstro
 
     Pixel ToneCurve::sampleLut(const Pixel *lut, Pixel d)
     {
-        if (d < 0) d = 0;
-        if (d > 1) d = 1;
+        // D-36: `if (d < 0)` and `if (d > 1)` are BOTH false for NaN, so a NaN survived the
+        // clamp, `(int)(NaN * 1023)` gave INT_MIN and `lut[i]` read wild memory — a segfault
+        // in the render worker, reachable from `set exposure=250` through a script, a preset
+        // or the control socket. The fix is not a better clamp on the input; it is to spell
+        // the guard so NaN fails it, and to clamp the INDEX regardless.
+        if (!(d > (Pixel)0)) d = 0;      // negatives AND NaN
+        else if (d > (Pixel)1) d = 1;
         const Pixel f = d * (Pixel)(kLut - 1);
         int i = (int)f;
+        if (i < 0) i = 0;
         if (i >= kLut - 1) return lut[kLut - 1];
         const Pixel frac = f - (Pixel)i;
         return lut[i] * ((Pixel)1 - frac) + lut[i + 1] * frac;

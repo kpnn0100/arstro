@@ -261,7 +261,12 @@ namespace cosmo
             History history;                // branching edit timeline (empty = none saved)
             bool bypass = false;            // R-BYPASS-6: node's filter disabled
         };
-        static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out);
+        /** `repairedOut`, when given, receives how many non-finite parameter values had to
+         *  be neutralised while reading (D-36). A file is repaired rather than refused — one
+         *  stray `nan` must not make somebody's project unopenable — so the caller reports
+         *  the count instead of the repair happening in silence. */
+        static bool readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out,
+                                      int *repairedOut = nullptr);
         bool saveWorkspaceAs(const std::string &path);
         std::string workspacePath() const { return mWorkspacePath; }
         /** Release every open image and reset to an empty, single-root session. */

@@ -147,6 +147,7 @@ namespace cosmo
         bool startProjectLoad(const std::string &path, std::vector<EditSession::WorkspaceEntry> entries,
                               bool saveOnFinish);
         bool applySetFields(const Command &c);
+
         bool applySettingsFields(const Command &c);
         bool runExport(const Command &c);
 

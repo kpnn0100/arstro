@@ -70,10 +70,25 @@ namespace arstro
 
             inline Pixel sampleTf(const Pixel *lut, Pixel x)
             {
-                if (x <= (Pixel)0) return (Pixel)0;
-                if (x >= (Pixel)1) return (Pixel)1;
+                // `!(x > 0)` rather than `x <= 0`, and `!(x < 1)` rather than `x >= 1`:
+                // **every comparison with NaN is false**, so the obvious spelling lets a NaN
+                // straight through, `(int)(NaN * 4095)` is undefined (INT_MIN in practice)
+                // and `lut[INT_MIN]` reads wild memory. That is not hypothetical — it is
+                // D-47a, a segfault in a render worker while the user dragged an exposure
+                // slider, and it is the same bug D-36 filed against `ToneCurve::sampleLut`.
+                // Turning these two functions into tables is what made a NaN fatal instead
+                // of merely wrong, so the guard belongs here whatever produced the NaN.
+                if (!(x > (Pixel)0)) return (Pixel)0;    // negatives AND NaN
+                if (!(x < (Pixel)1)) return (Pixel)1;
                 const Pixel f = x * (Pixel)(kTfLut - 1);
-                const int i = (int)f;                    // 0..kTfLut-2, since x < 1
+                int i = (int)f;
+                // Clamped anyway. The guards above already bound `x`, so this cannot trigger
+                // today — and that is the point: an index derived from a float must be
+                // clamped where it is USED, not trusted because something upstream checked
+                // the input. Every crash in this family has been an upstream check that did
+                // not hold for one value.
+                if (i < 0) i = 0;
+                if (i > kTfLut - 2) i = kTfLut - 2;
                 const Pixel frac = f - (Pixel)i;
                 return lut[i] + (lut[i + 1] - lut[i]) * frac;
             }

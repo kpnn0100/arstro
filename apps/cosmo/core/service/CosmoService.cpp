@@ -448,6 +448,19 @@ namespace cosmo
         for (const auto &kv : c.fields) text += kv.first + "=" + kv.second + "\n";
         EditParams probe = *p;
         if (!deserializeParams(text, probe)) return fail("set: no field matched: " + text);
+        // D-36: reject a value that is not a finite number, BEFORE it reaches the engine.
+        //
+        // The engine is now hardened against a NaN reaching a LUT index (that was the crash),
+        // but hardening only turns a crash into a wrong pixel. A NaN or an infinity in an
+        // EditParams field is never something a photographer asked for — `set exposure=nan`,
+        // `set exposure=1e40` whose 2^x overflows, a hand-edited preset, a fuzzed socket
+        // client — so it is rejected here with a message, which is also what makes it
+        // debuggable. Nothing legitimate is refused: every slider in the UI sends a finite
+        // decimal, and a project FILE is treated more leniently on purpose (see
+        // sanitizeParams) because refusing to open someone's work over one bad key would be
+        // the worse failure.
+        if (const char *whichField = firstNonFiniteParam(probe))
+            return fail(std::string("set: ") + whichField + " is not a finite number");
         *p = probe;
         // R-PREVIEW-1: while a gesture is in flight, latency outranks resolution. Nothing
         // else about a `set` changes — same params, same history, same event — so a script
@@ -567,8 +580,15 @@ namespace cosmo
             case Command::Kind::ProjectOpen:
             {
                 std::vector<EditSession::WorkspaceEntry> entries;
-                if (!EditSession::readWorkspaceFile(c.path, entries))
+                int repaired = 0;
+                if (!EditSession::readWorkspaceFile(c.path, entries, &repaired))
                     return fail("cannot read project " + c.path);
+                // D-36: repaired, not refused — but said out loud. A project that carried a
+                // non-finite parameter opens with that field neutralised, and the log names
+                // how many, so "my edit disappeared" has an answer in the journal.
+                if (repaired > 0)
+                    emit(Event::Kind::Info, "project had " + std::to_string(repaired) +
+                                            " non-finite parameter value(s), neutralised");
                 return startProjectLoad(c.path, std::move(entries), false);
             }
             case Command::Kind::ProjectNew:

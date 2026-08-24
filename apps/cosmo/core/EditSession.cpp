@@ -688,6 +688,10 @@ namespace cosmo
         while (std::getline(ss, line))
             if (line.rfind("image=", 0) == 0) { imagePath = line.substr(6); break; }
         deserializeParams(text, params);
+        // A PRESET is a file too (R-PRESET / .apf), and a hand-edited one is exactly where a
+        // bad number comes from. Repaired in place; this reader has nowhere to report to and
+        // the repair is the point.
+        (void)sanitizeParams(params);
         return true;
     }
 
@@ -739,7 +743,8 @@ namespace cosmo
         return true;
     }
 
-    bool EditSession::readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out)
+    bool EditSession::readWorkspaceFile(const std::string &path, std::vector<WorkspaceEntry> &out,
+                                        int *repairedOut)
     {
         std::ifstream f(path);
         if (!f) return false;
@@ -756,8 +761,24 @@ namespace cosmo
         HistoryNode node;
 
         auto closeParamBlock = [&] {
-            if (inNode) { deserializeParams(paramsBuf, node.params); cur.history.nodes.push_back(node); node = HistoryNode{}; }
-            else if (haveCur) deserializeParams(paramsBuf, cur.params);  // group OR image own params
+            // D-36: a FILE is repaired, not refused — one stray `nan` in somebody's project
+            // must not make it unopenable, and a non-finite parameter is what turns the
+            // whole downstream pipeline into NaN pixels. `sanitizeParams` reports how many
+            // it neutralised so the caller can say so instead of repairing in silence.
+            if (inNode)
+            {
+                deserializeParams(paramsBuf, node.params);
+                const int r = sanitizeParams(node.params);
+                if (repairedOut) *repairedOut += r;
+                cur.history.nodes.push_back(node);
+                node = HistoryNode{};
+            }
+            else if (haveCur)
+            {
+                deserializeParams(paramsBuf, cur.params);   // group OR image own params
+                const int r = sanitizeParams(cur.params);
+                if (repairedOut) *repairedOut += r;
+            }
             paramsBuf.clear();
         };
         auto flushEntry = [&] {

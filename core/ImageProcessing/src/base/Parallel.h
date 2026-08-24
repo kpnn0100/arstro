@@ -136,6 +136,14 @@ namespace par
                 restart(n - 1);
             }
 
+            /** Is the pool the size it was last asked to be? Cheap, lock-held read used only
+             *  by parallelFor's fast path so the common call does no lifecycle work at all. */
+            bool sized(int n) const
+            {
+                std::lock_guard<std::mutex> lk(mMu);
+                return (int)mWorkers.size() == n - 1;
+            }
+
             /** Run `body(begin,end)` over `chunks` chunks covering [0,count). Blocks until
              *  every chunk has been run. The caller participates, so it is never idle. */
             void run(const std::function<void(int, int)> &body, int count, int chunks)
@@ -171,20 +179,53 @@ namespace par
 
             void stop()
             {
+                std::lock_guard<std::mutex> life(mLifecycleMu);
+                stopLocked();
+            }
+
+        private:
+            /**
+             *  ── Why there is a second mutex ──
+             *
+             *  `mWorkers` may only be touched while `mLifecycleMu` is held, and the whole
+             *  stop-then-spawn sequence happens under it. It cannot be `mMu`: joining a
+             *  worker while holding the mutex that worker waits on is an instant deadlock,
+             *  so the join has to happen outside `mMu` — which is exactly how the first
+             *  version raced.
+             *
+             *  It really is reachable. `ThreadBudget::endLoad()` calls `par::setThreads` from
+             *  the thread that finishes a load, while the render worker is inside
+             *  `parallelFor` calling `resize()` — and R-LOADPERF-3 streams decoded images
+             *  into a LIVE editor, so a load finishing while the photographer drags a slider
+             *  is the normal case, not a corner. Two concurrent `stop()`s then iterated and
+             *  cleared the same `std::vector<std::thread>`: at best a double join, at worst a
+             *  worker that was never joined at all.
+             *
+             *  An unjoined worker is the dangerous outcome, and it is what D-47b actually
+             *  produced: it survives into the next batch, picks up a `Batch*` whose owning
+             *  `run()` has long returned, and calls a **destroyed** `std::function`. The
+             *  stale body still reads its captured image pointer, gets freed memory, and the
+             *  garbage floats arrive at `srgbEncode` — which is why the crash surfaced inside
+             *  a LUT lookup (`lut[(int)NaN]`) rather than anywhere near the pool.
+             */
+            void stopLocked()
+            {
                 {
                     std::lock_guard<std::mutex> lk(mMu);
                     mStop = true;
                 }
                 mCv.notify_all();
+                // Joined OUTSIDE mMu (a worker holds it while waiting) but INSIDE
+                // mLifecycleMu, so no other thread can be joining or spawning meanwhile.
                 for (auto &t : mWorkers)
                     if (t.joinable()) t.join();
                 mWorkers.clear();
             }
 
-        private:
             void restart(int workers)
             {
-                stop();
+                std::lock_guard<std::mutex> life(mLifecycleMu);
+                stopLocked();
                 std::lock_guard<std::mutex> lk(mMu);
                 mStop = false;
                 for (int i = 0; i < workers; ++i)
@@ -245,7 +286,11 @@ namespace par
                 }
             }
 
-            std::mutex mMu;
+            /** Guards the WORKER SET and the stop-then-spawn sequence. Separate from mMu
+             *  because a join may not happen while holding the mutex the joinee waits on.
+             *  Always taken before mMu; never the other way round. */
+            mutable std::mutex mLifecycleMu;
+            mutable std::mutex mMu;
             std::condition_variable mCv;      // "there is a new batch"
             std::condition_variable mIdleCv;  // "a worker left a batch"
             std::vector<std::thread> mWorkers;
@@ -286,7 +331,10 @@ namespace par
         // parallelism runs serially rather than deadlocking on an exhausted pool).
         if (t <= 1 || count < 2 * t || detail::inParallel()) { fn(0, count); return; }
         detail::Pool &p = detail::pool();
-        p.resize(t);
+        // Only touch the lifecycle when the size is actually wrong. Calling resize() on every
+        // parallelFor made the (rare, racy) restart path reachable from the render worker on
+        // every frame, which is what turned a settings change into a crash window (D-47b).
+        if (!p.sized(t)) p.resize(t);
         // More chunks than threads, so a fast core takes more of them than a slow one.
         // Never more chunks than rows, or empty chunks would spin the atomic for nothing.
         int chunks = t * detail::kChunksPerThread;
