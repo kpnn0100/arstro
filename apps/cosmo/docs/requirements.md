@@ -2195,3 +2195,75 @@ commands with no display: an unmeetable budget must still offer the coarsest lev
 watching it fail. Also depends on **D-46**, filed and fixed in the same commit: `cosmo-cc`'s
 `wait <ms>` advanced the service clock 16x too fast, so a scripted drag looked like a slideshow and
 the settle walk fired between every move.
+
+### DR-PREVIEW-4 / DR-G-4 The view reports gestures, and stops repainting at rest (R-PREVIEW-1, R-PREVIEW-4, R-G-1)
+The view half of T2, plus T3.1 and T0.4's unwired half. Three small changes, each with a reason that
+is not obvious from the diff.
+
+**1. Gestures are reported at the ROOT, on any press** (`App::pointer`, `apps/cosmo/App.cpp`). A
+`Down` dispatches `gesture on`, an `Up` dispatches `gesture off`. Not per widget, and not only for
+draggable ones:
+- every draggable surface is covered by construction — the 23 slider rows, the tone curve, the three
+  hue curves, the grade wheels, mask handles, and whatever is added next — with no per-widget wiring
+  to forget;
+- a press that edits nothing is **harmless**: no `set` follows, so no interactive render happens and
+  the settle walk has nothing to refine. Marking a press that turns out not to be a drag costs
+  exactly nothing, while *missing* one costs a full-resolution render on every mouse move, which on a
+  small board is the lag the requirement exists to remove.
+
+**2. R-PREVIEW-4 needs no new code, and that is the finding.** A level landing is a visible change, so
+it must dissolve — and **R-VIEW-1 already cross-dissolves every render**, including R-VIEW-1a's rule
+that a frame arriving mid-dissolve is held rather than written into a layer with non-zero weight. A
+coarse frame is a frame; `ImageView`'s object-contain fit sizes it from the frame's own dimensions, so
+an 800 px frame is drawn into the same canvas rect as a 1600 px one and Cairo upscales it with
+`CAIRO_FILTER_GOOD` (measured 1.50 ms). Refinement therefore reads as the photo resolving, through
+the mechanism that already existed. Verified on rendered frames: `cosmo-editor-project`,
+`cosmo-editor-dissolve-early` and `cosmo-editor-dissolve-late` at 1600x1000 and 1280x800.
+
+**3. The window stops repainting at rest** (T3.1). `linux_main.cpp`'s tick called
+`gtk_widget_queue_draw` **unconditionally every 16 ms**, so the whole window was re-rendered in
+software Cairo sixty times a second forever, with nothing moving. Measured, a frame is cheap — 1.50 ms
+for the scaled photo paint, 0.07 ms for a full-window fill — so the cost was never per-frame: it was
+that it never stopped, and on a small board that is the core the render engine needs. **R-G-1 forbids
+a visible change in one frame; it does not require a repaint at rest.**
+
+`App::needsRedraw(nowMs)` is true when the model's `frameSeq` or `revision` has moved since the last
+**paint**, when a load, an export or a refinement walk is in flight, while the screen is `Loading` or
+a transition phase is running, while the UI-scale or screen-fade tween is animating, or within
+`kActiveWindowMs` (1000 ms) of the last input. The pump still runs every tick unconditionally
+(R-SVC-6) — the service must never depend on the view wanting to draw.
+
+Two decisions worth naming:
+- **It is a pure query, cleared by `render`, not by asking.** The first version cleared the seen
+  counters inside `needsRedraw`, so asking twice without painting reported "nothing to do" while the
+  screen still showed the old frame. A predicate a host may call freely must not have a side effect —
+  caught by the test below, not by reading the code.
+- **It is deliberately conservative, not exact.** Artboard's `Segment` has no tree-wide "is anything
+  animating" query, and adding one is an Artboard change — a submodule, and `implement_artboard`'s
+  territory. So the 1000 ms window is longer than every duration in cosmo's motion vocabulary: it can
+  waste a few frames and can never truncate a tween. Being wrong the other way is a visible stutter.
+
+**4. The intermediate histogram taps follow the visible tab** (T0.4's other half). `RightColumn`
+gained `onTabChanged`; `App::syncIntermediateHistograms` turns both taps on exactly when the
+Mixer/Curve tab — the one page that draws them — is selected. That is ~11 ms of every slider move
+that the other four tabs no longer pay.
+
+**Guarded by** `cosmo_ui_tests::anIdleAppStopsAskingToBeRepainted`: a fresh app wants a frame; after
+three seconds of nothing it stops asking; a press, a wheel and a key each wake it on the same frame;
+and — the assertion that protects R-G-1 — **every one of the 16 frames of a UI-scale tween is
+requested**, so drawing on demand cannot make a transition step. The wake/settle cycle is checked on
+the *editor* screen deliberately: a press on the home grid can land on a real project card and start
+an open transition, and a transition in flight legitimately keeps asking for frames.
+
+**That the recents file reached a unit test at all was its own problem**, and it is fixed here:
+`cosmo_ui` now runs with a sandboxed `XDG_CONFIG_HOME`, the same way `cosmo_shots` already did.
+`CosmoService`'s constructor reads `recent.tsv`, so without it the assembled-app tests were driven by
+whatever projects the developer happened to have opened — a click landing on a card on one machine
+and on empty space on another. Found by T3.1's idle test wedging into `Screen::Loading` because the
+click opened one of my own projects.
+
+**Not done, and deliberately:** `CairoTarget::buildEntry` still premultiplies every new preview frame
+at 1.75 ms although the engine emits alpha=255 for every photo, and `drawImage` still rescales the
+full photo every frame rather than caching by destination size. Both are in **Artboard**, which is a
+submodule and belongs to `implement_artboard`, not to this skill. Left as T3.4 with the measurement
+attached so whoever picks it up does not have to re-derive it.

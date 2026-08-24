@@ -23,7 +23,12 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T2.5 (design) then T3.** T2's core half is done and demonstrated end to end. What is
+**► NEXT: T4 — the load path.** T0, T1, T2 and T3.1 are done. T3.2/T3.3 (damage rectangles, a
+30 fps shell) are now optional rather than necessary: with the window idle at rest, the remaining
+per-frame cost only matters while something is moving, and a frame measured 1.50 ms. T3.4 is
+**Artboard's**, not this skill's — see below.
+
+**► (done) T2.5 (design) and T3.1.** T2's core half is done and demonstrated end to end. What is
 left is the view: crossfading level to level (R-PREVIEW-4), sending `gesture on|off` from the
 widgets that drag, and wiring `setWantIntermediateHistograms` to whether the Curve/Mixer panel is
 open (T0.4's unwired half).
@@ -147,7 +152,12 @@ which is what makes this work.
       a paced drag oscillated 1,0,1,0 without it. ~~Settle-and-refine.~~ Gesture end (or ~120 ms of no input) walks the level up one step at
       a time. Every level is a complete, correct frame, so there is never a blank or torn state — and
       because each level is a real render, `frame.ready` stays honest.
-- [ ] T2.5 **Design half (separate commit, `arstro.cosmo.design.implement`).** A coarse frame must
+- [x] T2.5 **Design half** — DONE, and R-PREVIEW-4 turned out to need **no new code**: R-VIEW-1
+      already cross-dissolves every render, and a coarse frame is a frame, so refinement reads as the
+      photo resolving through the mechanism that existed. What the view DID need was to report
+      gestures: `App::pointer` dispatches `gesture on` on any Down and `gesture off` on any Up — at
+      the root and on any press, so every draggable surface is covered by construction and a press
+      that edits nothing costs nothing. Verified on rendered frames. ~~Design half~~ A coarse frame must
       arrive as a *visible* refinement, not a pop: Cairo already upscales the preview with
       `CAIRO_FILTER_GOOD` for 1.5 ms, so a 400 px frame is soft but live. Crossfade level-to-level per
       R-G-1 — a sharpness change is a visible property change. Shots at 2+ sizes, mid-refine and at
@@ -160,7 +170,14 @@ Measured on this box a frame's photo paint is cheap (1.50 ms scaled paint, 0.07 
 the sin is not that it is expensive, it is that it is **always on**, and on an SBC that is the core the
 engine needs. R-G-1 says nothing may change in one frame; it does **not** say repaint at rest.
 
-- [ ] T3.1 `App::needsRedraw()` — true while any property is animating, a frame arrived, or input
+- [x] T3.1 `App::needsRedraw()` — **DONE.** An idle window stops asking to be repainted; every
+      frame of a UI-scale tween is still requested, so R-G-1 is untouched. It is a PURE query cleared
+      by `render` (the first version cleared it on the ask, which reported "nothing to do" while the
+      screen still showed the old frame — caught by the test, not by reading). Conservative by
+      design: Artboard has no tree-wide "is anything animating" query and adding one is
+      `implement_artboard`'s territory, so a 1000 ms activity window can waste a frame and can never
+      truncate a tween. Also fixed: `cosmo_ui` now sandboxes `XDG_CONFIG_HOME`, so the assembled-app
+      tests stop being driven by the developer's own recents file. ~~`App::needsRedraw()`~~ — true while any property is animating, a frame arrived, or input
       landed since the last paint; `onTick` honours it. A tween in flight keeps requesting frames, so
       R-G-1 is untouched. Guard: a test that advances an idle app N ticks and asserts zero repaints,
       and one that asserts a live tween requests every frame.
@@ -168,7 +185,7 @@ engine needs. R-G-1 says nothing may change in one frame; it does **not** say re
       the canvas, not the whole window.
 - [ ] T3.3 A 30 fps shell option for slow devices. cosmo's durations are 120-520 ms, so 30 fps still
       gives 4-16 frames per tween.
-- [ ] T3.4 `CairoTarget::buildEntry` premultiplies every new preview frame at 1.75 ms
+- [ ] T3.4 **NOT OURS — `implement_artboard`.** `CairoTarget::buildEntry` premultiplies every new preview frame at 1.75 ms
       (`CairoTarget.cpp:287-315`) although the engine emits alpha=255 for every photo. Fast path for
       known-opaque, and better: have the engine pack BGRA directly on little-endian so `buildEntry`
       becomes a per-row `memcpy`. (Artboard is a submodule and goes through `implement_artboard`.)
