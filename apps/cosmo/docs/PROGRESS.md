@@ -23,8 +23,27 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T4.2 — a disk-backed proxy cache**, then T5 if any of it still proves necessary. T0, T1,
-T2, T3.1 and T4.1 are all done and measured.
+**► NEXT: T4.2 — a disk-backed proxy cache.** Everything else on the SBC plan is done and measured:
+T0.1-T0.4, T1, T2 (core + design), T3.1 and T4.1. T4.2 is scoped in detail below and left unstarted
+on purpose — it is the only item that adds a persistence format, and a stale cache does not make
+cosmo slow, it makes it show the wrong photo. T3.2/T3.3 are now optional rather than necessary (with
+the window idle at rest, per-frame cost only matters while something is moving, and a frame measured
+1.50 ms). T3.4 belongs to `implement_artboard`. T5 stays deferred until the target hardware says the
+above is not enough.
+
+**Where the numbers landed**, 1600x1066 preview, every parameter at its neutral value:
+
+```
+                    D-45 baseline   after T0+T1   speed-up
+threads=24              193 ms         32.3 ms      6.0x     (18.9 ms with the taps off -> 10.2x)
+threads=8               221 ms         40.6 ms      5.4x     (26.6 -> 8.3x)
+threads=4               326 ms         67.6 ms      4.8x     (38.3 -> 8.5x)
+threads=1               980 ms        189.8 ms      5.2x     (112.6 -> 8.7x)
+```
+
+...and a REAL edit (exposure + contrast + vibrance + curve + clarity) still costs ~10x a neutral one,
+which is what T2 exists for: the level ladder puts a 33 ms interactive frame at 800 px on 24 threads,
+400 px on 4, and 200 px on 1 — so the budget is met on any of them, and only the resolution differs.
 
 **► (done) T4.1 — the load path.** T0, T1, T2 and T3.1 are done. T3.2/T3.3 (damage rectangles, a
 30 fps shell) are now optional rather than necessary: with the window idle at rest, the remaining
@@ -204,7 +223,32 @@ engine needs. R-G-1 says nothing may change in one frame; it does **not** say re
       and "re-decode in the background". On a 4 GB board this is the whole opening experience.
 - [ ] T4.2 A **disk-backed proxy cache** beside the project, so a board with 4 GB does not re-decode
       the rack every session. R-MEM's caps are sized from physical RAM now, which on an SBC means the
-      caps bind almost immediately.
+      caps bind almost immediately. **NOT STARTED, and deliberately not rushed** — scoped below,
+      because it is the one item on this list that is a new PERSISTENCE FORMAT rather than an
+      optimisation, and a stale cache does not make cosmo slow, it makes it show the wrong photo.
+
+      What it needs decided first, none of which is guesswork the implementer should be left to do:
+      * **Where the bytes come from.** The thing worth caching is the engine's proxy PYRAMID, which
+        is engine-internal linear float. Caching it means `EditEngine`/`RenderService` growing a
+        "hand me slot N's pyramid" / "here it is back" pair, and a stored form — 8-bit per channel is
+        6.8 MB per photo at previewEdge 1600 against 27 MB as float, and the levels below level 0 are
+        cheap to rebuild by halving, so storing level 0 alone is probably right.
+      * **Where the file goes, without breaking layering.** `cosmo_core` may not touch an OS path —
+        `ProjectStore::configDir()` is the one standing exception and gets no company (§4). So this
+        is either `IFileStore` (**R-SVC-7, which does not exist yet**) or a `std::function` seam
+        mirroring `setImageWriter`. The latter matches existing precedent and needs no new class.
+      * **Invalidation, which is the part that can lose data.** Keyed on at least path + mtime + size
+        + previewEdge + a format version. A cache that survives a file being edited outside cosmo, or
+        a `previewEdge` change, or an engine change to the downscale filter, shows the photographer
+        pixels that are not their photo. It must fail CLOSED: any doubt means decode.
+      * **Eviction and a budget.** 120 photos is ~820 MB at 6.8 MB each. That is a number the user
+        should see and bound, next to `cpuPercent` — not a directory that grows forever.
+      * **And the measurement that says it worked**, per R-MEM-5's amendment: a fixture that opens the
+        same project twice and asserts the second open does zero decodes.
+
+      Estimated value on the target hardware is high — it turns the second and every later session on
+      a 120-photo project from ~6 s of decoding (post-T4.1) into a few hundred ms of reads — but it is
+      a session's work with a real design, not a follow-on to T4.1.
 
 **T5 — deferred, deliberately: only if T0-T4 prove insufficient. Measure first.**
 - **Tile-fused execution.** A real edit still costs 5-8 whole-buffer passes = ~400 MB of DRAM traffic
