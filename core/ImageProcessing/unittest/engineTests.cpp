@@ -1190,3 +1190,107 @@ TEST(Srgb_tables_match_the_closed_form_far_below_one_8bit_step)
         CHECK_NEAR(color::srgbDecode(color::srgbEncode(x)), x, 3e-4);
     }
 }
+
+// ── R-PREVIEW-6: the intermediate histogram taps are opt-in, and turning them off
+//    changes nothing but the cost ────────────────────────────────────────────────
+TEST(Intermediate_histogram_taps_are_optional_and_pixel_neutral)
+{
+    auto bytes = variedRGBA8b(64, 48);
+    EditParams p;
+    p.exposure = 0.4f;                 // a real edit, so stages actually run
+    p.curve = {CurvePoint{0.f, 0.f}, CurvePoint{0.5f, 0.6f}, CurvePoint{1.f, 1.f}};
+
+    auto renderWith = [&](bool wantPreCurve, bool wantHue, std::vector<uint8_t> &out,
+                          HistogramData &finalHist) {
+        EditEngine eng;
+        eng.addImage(bytes.data(), 64, 48, 4);
+        eng.setPreviewSize(4096);       // no downscale; compare like for like
+        eng.setWantIntermediateHistograms(wantPreCurve, wantHue);
+        CHECK(eng.wantsPreCurveHistogram() == wantPreCurve);
+        CHECK(eng.wantsPreMixerHue() == wantHue);
+        eng.applyParams(p);
+        const PreviewBuffer pb = eng.renderPreview();
+        CHECK(pb.rgba != nullptr);
+        out.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4);
+        finalHist = eng.histogram();
+    };
+
+    std::vector<uint8_t> withTaps, withoutTaps;
+    HistogramData histWith, histWithout;
+    renderWith(true, true, withTaps, histWith);
+    renderWith(false, false, withoutTaps, histWithout);
+
+    // The whole point: the taps are OBSERVATION, so switching them off may not move a
+    // single output pixel, and may not touch the final histogram either.
+    CHECK(withTaps.size() == withoutTaps.size());
+    CHECK(withTaps == withoutTaps);
+    for (int b = 0; b < HistogramData::kBins; ++b)
+        CHECK(histWith.lum[b] == histWithout.lum[b]);
+
+    // Default is ON, so a caller that never asks keeps the old behaviour.
+    EditEngine fresh;
+    CHECK(fresh.wantsPreCurveHistogram() && fresh.wantsPreMixerHue());
+
+    // With a tap off, its accessor holds the last value computed while it was on —
+    // so a panel that opens has something to draw before the next frame lands.
+    EditEngine eng;
+    eng.addImage(bytes.data(), 64, 48, 4);
+    eng.setPreviewSize(4096);
+    eng.applyParams(p);
+    eng.renderPreview();                                  // both taps on
+    const HistogramData warm = eng.preCurveHistogram();
+    long long warmTotal = 0;
+    for (int b = 0; b < HistogramData::kBins; ++b) warmTotal += warm.lum[b];
+    CHECK(warmTotal > 0);                                 // it really was computed
+    eng.setWantIntermediateHistograms(false, false);
+    eng.renderPreview();                                  // taps off
+    long long stillTotal = 0;
+    for (int b = 0; b < HistogramData::kBins; ++b) stillTotal += eng.preCurveHistogram().lum[b];
+    CHECK(stillTotal == warmTotal);                       // retained, not cleared
+}
+
+// ── R-PREVIEW-6 / R-MEM-1: a preview render is allocation-free at steady state, and a
+//    FULL-RESOLUTION render does not park its scratch afterwards ──────────────────
+TEST(Render_reuses_its_working_buffers_but_full_res_releases_them)
+{
+    // Repeated preview renders must not grow: the three working Images and the three
+    // chains' ping-pong scratch are members, so after the first render the pipeline
+    // reuses capacity instead of faulting ~82 MB of fresh pages every slider move.
+    auto bytes = variedRGBA8b(96, 64);
+    EditEngine eng;
+    const int slot = eng.addImage(bytes.data(), 96, 64, 4);
+    CHECK(slot == 0);
+    eng.setPreviewSize(4096);
+    EditParams p; p.exposure = 0.25f; p.clarity = 12.f;   // spatial + point stages both run
+    eng.applyParams(p);
+
+    const PreviewBuffer a = eng.renderPreview();
+    CHECK(a.rgba != nullptr && a.width == 96 && a.height == 64);
+    std::vector<uint8_t> first(a.rgba, a.rgba + (size_t)a.width * a.height * 4);
+
+    // Rendering again with identical params must produce identical pixels — a reused
+    // buffer that was not fully rewritten would show up here as stale rows.
+    for (int i = 0; i < 4; ++i)
+    {
+        const PreviewBuffer b = eng.renderPreview();
+        CHECK(b.rgba != nullptr && b.width == a.width && b.height == a.height);
+        std::vector<uint8_t> again(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+        CHECK(again == first);
+    }
+
+    // And a full-resolution render still returns valid pixels after releasing its
+    // scratch — the release must not take the OUTPUT buffer with it.
+    const PreviewBuffer f = eng.renderFull();
+    CHECK(f.rgba != nullptr && f.width == 96 && f.height == 64);
+    long long sum = 0;
+    for (size_t i = 0; i < (size_t)f.width * f.height * 4; ++i) sum += f.rgba[i];
+    CHECK(sum > 0);
+
+    // A preview render straight after a full-res one must still work: the buffers it
+    // reuses were just released, so this is the path that would crash if the release
+    // left a dangling size behind.
+    const PreviewBuffer c = eng.renderPreview();
+    CHECK(c.rgba != nullptr && c.width == a.width && c.height == a.height);
+    std::vector<uint8_t> afterFull(c.rgba, c.rgba + (size_t)c.width * c.height * 4);
+    CHECK(afterFull == first);
+}

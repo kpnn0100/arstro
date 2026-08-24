@@ -33,6 +33,10 @@ namespace arstro
         /** True when every stage in the chain is itself bypassed or at identity, so a
          *  nested block can be dropped by its parent rather than copied through. */
         bool isIdentity() const override;
+        /** Drop the two ping-pong scratch buffers. They are members so a preview render
+         *  reuses them, but at FULL resolution they are ~96 MB each and parking them
+         *  after a one-shot export is exactly what R-MEM-1 caps exist to prevent. */
+        void releaseScratch();
         void prepare() override;
 
     private:

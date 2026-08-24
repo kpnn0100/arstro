@@ -16,6 +16,12 @@ namespace arstro
 
     void ImageBlock::clear() { mChain.clear(); }
 
+    void ImageBlock::releaseScratch()
+    {
+        mScratchA = Image();
+        mScratchB = Image();
+    }
+
     bool ImageBlock::isIdentity() const
     {
         // Const, so it may not resolve its children's parameters — it answers on what

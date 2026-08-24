@@ -98,6 +98,26 @@ namespace arstro
         /** Hue distribution of the image entering the colour mixer (pre-mixer). */
         const HueHistogram &preMixerHue() const { return mPreMixerHue; }
 
+        /** Ask for (or stop asking for) the two INTERMEDIATE histogram taps
+         *  (R-PREVIEW-6). Each is a full statistics pass over the framed image — 6.65 ms
+         *  and 4.06 ms on a 1.7 Mpx preview — and each exists solely to draw the data
+         *  behind one panel: the pre-curve luma behind the tone-curve editor, the
+         *  pre-mixer hue behind the colour mixer. A front end that is not showing those
+         *  panels was paying ~11 ms on every slider move for two answers nobody read.
+         *
+         *  Default is ON for both, so a caller that never asks keeps the old behaviour
+         *  and no existing front end changes meaning. When a tap is off its accessor
+         *  returns the last value computed while it was on, which is the right shape for
+         *  a panel that is about to open: the view already has something to draw from,
+         *  and the next render refreshes it. The FINAL histogram is never optional. */
+        void setWantIntermediateHistograms(bool preCurveLuma, bool preMixerHue)
+        {
+            mWantPreCurveHist = preCurveLuma;
+            mWantPreMixerHue = preMixerHue;
+        }
+        bool wantsPreCurveHistogram() const { return mWantPreCurveHist; }
+        bool wantsPreMixerHue() const { return mWantPreMixerHue; }
+
         // ── whole-EditParams API (UI-independent; the reusable seam) ──
         void applyParams(const EditParams &p);                  // push a full set to the pipeline
         const EditParams &currentParams() const;                // current slot's params
@@ -240,6 +260,12 @@ namespace arstro
 
         void buildPipeline();
         PreviewBuffer renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes);
+        /** Free every buffer the render pipeline parks between calls — the three working
+         *  Images plus the three chains' ping-pong scratch. Keeping them is what makes a
+         *  PREVIEW render allocation-free; keeping them after a FULL-RESOLUTION render
+         *  would park ~600 MB for a 24 MP frame, which is what R-MEM-1 caps exist to
+         *  prevent, so `renderFull` calls this on its way out. */
+        void releaseWorkBuffers();
         /** False when the slot is cold — no proxy at this size and no source to build one
          *  from (R-MEM-2). The caller must re-decode before it can render. */
         bool ensurePreviewProxy();
@@ -292,9 +318,23 @@ namespace arstro
         bool mPreferGpu = false;                  // user opt-in; only takes effect when mAccel->available()
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;
+        // The three working Images renderInto ping-pongs through. MEMBERS, not locals:
+        // as locals each preview render freshly allocated and first-touched ~82 MB at
+        // 1600 px (three 27 MB buffers), which page-faulted every render and was the
+        // bulk of what remained after the identity skip. ImageBlock's own mScratchA/B
+        // were already members for exactly this reason; these three were missed.
+        // `resizeLike` reuses the vector's capacity, so at steady state a render is
+        // allocation-free (R-PREVIEW-6).
+        Image mWorkPreCurve, mWorkPreMixer, mWorkProcessed;
         HistogramData mLastHistogram;
         bool mLastAccelerated = false;  ///< did the accelerator take the last render?
         HistogramData mPreCurveHist;   // luma entering ToneCurve
         HueHistogram mPreMixerHue;     // hue entering ColorMixer
+        // T0.4 / R-PREVIEW-6: the two INTERMEDIATE taps are opt-in. They exist for the
+        // Curve and Mixer panel backgrounds, cost a full statistics pass each, and were
+        // computed on every render whether or not either panel was open. The FINAL
+        // histogram is not optional — the histogram widget is always on screen.
+        bool mWantPreCurveHist = true;
+        bool mWantPreMixerHue = true;
     };
 }

@@ -95,6 +95,12 @@ namespace arstro
          *  opened image gets an out-of-range id (the reset-then-open segfault). */
         void reset();
         void setPreviewSize(int maxEdge);
+        /** Ask for (or stop asking for) the two INTERMEDIATE histogram taps
+         *  (R-PREVIEW-6). Each costs a full statistics pass over every rendered frame and
+         *  feeds exactly one panel background, so a front end showing neither should say
+         *  so. A benign scalar the engine re-reads on the next render, exactly like
+         *  `setPreviewSize` and `setPreferGpu`. Default is both ON. */
+        void setWantIntermediateHistograms(bool preCurveLuma, bool preMixerHue);
         /** Opt into GPU-accelerated rendering when a backend is available (else CPU).
          *  A benign scalar the engine re-reads on the next render (like preview size). */
         void setPreferGpu(bool prefer);

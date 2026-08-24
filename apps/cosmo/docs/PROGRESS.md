@@ -23,7 +23,12 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T0.2 — LUT `srgbEncode`/`srgbDecode`.** With T0.1 in, the whole of what a default-params
+**► NEXT: T1 — a real thread pool.** T0 is complete: **193 -> 23.8 ms at 24 threads (8.1x) and
+980 -> 113.4 ms single-threaded (8.6x)** for a 1600 px default-params preview. The single-thread
+column is the one that predicts an SBC, because the pipeline stops scaling near four threads anyway
+— which is also exactly why T1 matters there and barely shows here.
+
+**► (done) T0.2 — LUT `srgbEncode`/`srgbDecode`.** With T0.1 in, the whole of what a default-params
 render now costs is the floor: three histogram passes, one `pow`-based sRGB encode, and the
 per-render allocation of three working Images. T0.2 attacks the first two at once, because every
 one of them calls `srgbEncode`/`srgbDecode` per channel per pixel
@@ -72,8 +77,15 @@ fails without it.
 - [x] T0.2 LUT the sRGB transfer function both ways — **DONE.** 69 -> 53 ms (24 thr),
       331 -> 208 ms (1 thr). Worst error 1.6e-5 encode / 1.2e-7 decode, i.e. 1/240th of one 8-bit
       step; guarded by `Srgb_tables_match_the_closed_form_far_below_one_8bit_step`. DR-PREVIEW-6 step 2.
-- [ ] T0.3 hoist `preCurve` / `preMixer` / `processed` to members
-- [ ] T0.4 opt-in pre-curve + pre-mixer histogram taps
+- [x] T0.3 hoist `preCurve` / `preMixer` / `processed` to members — **DONE.** 53 -> 42 ms (24 thr).
+      `renderFull` releases them (plus the chains' scratch, via the new `ImageBlock::releaseScratch()`)
+      so a 24 MP export does not park ~600 MB against R-MEM-1's caps; `renderImage` keeps them,
+      because that is the fixed-size video seam.
+- [x] T0.4 opt-in pre-curve + pre-mixer histogram taps — **DONE.** 42 -> 23.8 ms (24 thr),
+      195 -> 113 ms (1 thr). `EditEngine::setWantIntermediateHistograms` + `RenderService`
+      passthrough; both default ON. **The front-end half is not wired yet** — nothing calls it, so
+      the app still pays for both taps. Wiring it to "is the Curve or Mixer panel open" belongs to
+      `arstro.cosmo.design.implement` and is listed under T3.
 
 **T1 — a real thread pool (core; one commit). SBC-critical, cheap here.**
 `par::parallelFor` spawns fresh `std::thread`s per call, ~13 times per render, in **equal** chunks
@@ -756,6 +768,14 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-24 — T0.3 and T0.4 landed in ONE commit, deliberately.** The skill says never batch two
+  features, and these are two ledger tasks. They are both edits to the same dozen lines of
+  `renderInto`'s buffer-and-observation handling, and splitting them would have meant committing an
+  intermediate state where the working buffers are members but both histogram taps still run — a
+  state nobody would ever want to bisect to, and one whose measurement means nothing on its own.
+  Both are separately measured and separately guarded by their own test, which is what the rule is
+  actually protecting.
 
 - **2026-08-24 — "porting to a small SBC" turned out not to be a porting problem, and the measurement
   is what showed it.** The request was to make cosmo survive on an Allwinner A733 / RK3588 class board

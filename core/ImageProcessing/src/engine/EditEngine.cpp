@@ -539,7 +539,9 @@ namespace arstro
 
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes)
     {
-        Image processed;
+        // The working buffers are members (see EditEngine.h): a fresh Image per render
+        // meant ~82 MB of newly-faulted anonymous memory every time a slider moved.
+        Image &processed = mWorkProcessed;
 
         // GPU-accelerated path: only when the user opted in AND a backend is
         // available AND it accepts the job. The CPU path below is the guaranteed
@@ -565,11 +567,19 @@ namespace arstro
             // CPU reference path: run the three segments, tapping histograms at the
             // boundaries. Histograms + encode are parallelised (Histogram.cpp /
             // ColorSpace.cpp) since they run on every preview render.
-            Image preCurve, preMixer;
+            Image &preCurve = mWorkPreCurve;
+            Image &preMixer = mWorkPreMixer;
             mChainPre.apply(linearSource, preCurve);
-            mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
+            // The two intermediate taps are opt-in (R-PREVIEW-6): each is a full pass over
+            // the framed image and each feeds exactly one panel background, so a front end
+            // showing neither was paying ~11 ms per render for answers nobody read. The
+            // last value is left in place rather than cleared — a panel that opens has
+            // something to draw immediately and the next render refreshes it.
+            if (mWantPreCurveHist)
+                mPreCurveHist = Histogram::compute(preCurve);   // luma entering the tone curve
             mChainMid.apply(preCurve, preMixer);
-            mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
+            if (mWantPreMixerHue)
+                mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
             mChainPost.apply(preMixer, processed);
             applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
             color::encodeInPlace(processed);
@@ -613,6 +623,16 @@ namespace arstro
         return renderInto(mSlots[mCurrent].proxy, mSlots[mCurrent].params, mPreviewOut);
     }
 
+    void EditEngine::releaseWorkBuffers()
+    {
+        mWorkPreCurve = Image();
+        mWorkPreMixer = Image();
+        mWorkProcessed = Image();
+        mChainPre.releaseScratch();
+        mChainMid.releaseScratch();
+        mChainPost.releaseScratch();
+    }
+
     PreviewBuffer EditEngine::renderFull()
     {
         if (mCurrent < 0) return PreviewBuffer{};
@@ -620,7 +640,13 @@ namespace arstro
         // source is always cold here — export re-decodes rather than exporting a preview.
         if (mSlots[mCurrent].source.empty()) return PreviewBuffer{};
         touchSourceLRU(mCurrent);
-        return renderInto(mSlots[mCurrent].source, mSlots[mCurrent].params, mFullOut);
+        const PreviewBuffer pb = renderInto(mSlots[mCurrent].source, mSlots[mCurrent].params, mFullOut);
+        // `pb` points into mFullOut, which is NOT released here — the caller is about to
+        // encode from it. What goes is the intermediate scratch, which at 24 MP is six
+        // buffers of ~380 MB each and would otherwise sit there until the next export
+        // (R-MEM-1). A preview render deliberately keeps them; see renderInto.
+        releaseWorkBuffers();
+        return pb;
     }
 
     PreviewBuffer EditEngine::renderImage(const Image &linearSrc, const EditParams &p, int maxEdge)
@@ -630,5 +656,9 @@ namespace arstro
         applyParams(p);
         Image src = downscaleLinear(linearSrc, maxEdge);
         return renderInto(src, p, mFullOut);  // engine-owned; consume before the next render
+        // NOTE: no releaseWorkBuffers() here on purpose. This is the seam a video editor
+        // reuses frame after frame at a FIXED size, so it wants the buffers kept exactly
+        // as a preview does; renderFull is the one-shot export path and is the one that
+        // must not park them.
     }
 }

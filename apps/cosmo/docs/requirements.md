@@ -1968,3 +1968,48 @@ asserts the error bound, that the endpoints and out-of-range inputs still clamp 
 sub-knee region is still exactly `12.92x`, and that `srgbDecode(srgbEncode(x)) == x` — the last
 because `ToneCurve` round-trips every pixel through the pair, so a biased table would tint the
 whole image rather than merely blur a value.
+
+#### Steps 3 and 4 — the render stops allocating, and stops answering questions nobody asked
+**Step 3: the working buffers are members.** `renderInto` declared `Image preCurve, preMixer;` and
+`Image processed;` as **locals**, so every preview render freshly allocated and first-touched ~82 MB
+at 1600 px (three 27 MB buffers) — page-faulting the lot on every slider move. `ImageBlock`'s own
+`mScratchA`/`mScratchB` were already members for exactly this reason; these three were missed. They
+are now `mWorkPreCurve` / `mWorkPreMixer` / `mWorkProcessed` (`EditEngine.h:295`), so `resizeLike`
+reuses capacity and a preview render is allocation-free at steady state.
+
+**Keeping them is right for a preview and wrong for an export**, so `renderFull` calls
+`releaseWorkBuffers()` on its way out (`EditEngine.cpp:625`) — the three Images plus the three
+chains' ping-pong scratch, via the new `ImageBlock::releaseScratch()`. At 24 MP those six buffers are
+~380 MB each and would otherwise sit there until the next export, which is precisely what R-MEM-1's
+caps exist to prevent. `renderImage` deliberately does **not** release: it is the seam a video editor
+reuses frame after frame at a fixed size, so it wants the buffers kept exactly as a preview does.
+
+**Step 4: the two intermediate histogram taps are opt-in.** `Histogram::compute` on the pre-curve
+image and `Histogram::computeHue` on the pre-mixer image are each a full statistics pass, and each
+feeds exactly one panel background — the tone-curve editor's and the colour mixer's. They ran on
+every render whether or not either panel was open. `EditEngine::setWantIntermediateHistograms`
+(`EditEngine.h:101`) and its `RenderService` passthrough turn them off; both default **ON**, so a
+front end that never asks keeps the old behaviour. With a tap off its accessor **retains** the last
+value computed while it was on, which is the right shape for a panel about to open: the view has
+something to draw immediately and the next render refreshes it. The final histogram is never
+optional — the histogram widget is always on screen.
+
+```
+1600x1066, all params default    T0.1    T0.2    T0.3    T0.4 (taps off)
+threads=24                        69      53      42      23.8
+threads=8                         75      58      46      29.1
+threads=4                        109      78      61      35.8
+threads=1                        331     208     195     113.4
+```
+
+**Cumulative against the D-45 baseline:** 193 -> 23.8 ms at 24 threads (**8.1x**), 221 -> 29.1 at 8
+(**7.6x**), 326 -> 35.8 at 4 (**9.1x**), and 980 -> 113.4 single-threaded (**8.6x**) — the last being
+the column that predicts an SBC, since the pipeline stops scaling near four threads anyway.
+
+Guarded by `Intermediate_histogram_taps_are_optional_and_pixel_neutral` (switching the taps off may
+not move a single output pixel nor touch the final histogram; the default is on; a disabled tap
+retains its last value) and `Render_reuses_its_working_buffers_but_full_res_releases_them` (repeated
+preview renders return byte-identical pixels, so a reused buffer cannot be leaving stale rows; a
+full-res render still returns valid pixels *after* the release, so the release does not take the
+output with it; and a preview render immediately after a full-res one still works, which is the path
+that would crash if the release left a dangling size behind).

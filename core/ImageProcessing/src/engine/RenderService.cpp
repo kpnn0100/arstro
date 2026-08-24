@@ -133,6 +133,12 @@ namespace arstro
         mEngine.setPreviewSize(mPreviewMaxEdge);  // value is plain; safe to set, worker re-reads via render
     }
 
+    void RenderService::setWantIntermediateHistograms(bool preCurveLuma, bool preMixerHue)
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
+    }
+
     void RenderService::render(int slot, const EditParams &params)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -354,6 +360,10 @@ namespace arstro
     {
         mPreviewMaxEdge = maxEdge < 1 ? 1 : maxEdge;
         mEngine.setPreviewSize(mPreviewMaxEdge);
+    }
+    void RenderService::setWantIntermediateHistograms(bool preCurveLuma, bool preMixerHue)
+    {
+        mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
     }
     void RenderService::render(int slot, const EditParams &params) { doPreview(slot, params, mPreviewMaxEdge); }
 
