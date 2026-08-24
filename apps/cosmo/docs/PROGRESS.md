@@ -23,7 +23,11 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T1 — a real thread pool.** T0 is complete: **193 -> 23.8 ms at 24 threads (8.1x) and
+**► NEXT: T2 — progressive resolution.** T0 and T1 are complete. T2 is the item that changes the
+shape of the experience rather than a constant factor, and the user's numbers for it are recorded
+above: 33 ms live, 500 ms to settle, stepping up.
+
+**► (done) T1 — a real thread pool.** T0 is complete: **193 -> 23.8 ms at 24 threads (8.1x) and
 980 -> 113.4 ms single-threaded (8.6x)** for a 1600 px default-params preview. The single-thread
 column is the one that predicts an SBC, because the pipeline stops scaling near four threads anyway
 — which is also exactly why T1 matters there and barely shows here.
@@ -95,7 +99,12 @@ and changes nothing about results — `parallelFor`'s contract already guarantee
 serial and parallel output stay byte-identical. Must keep working with `ARSTRO_ENABLE_THREADS` off,
 and needs the randomized/TSan argument the skill requires for anything thread-shaped.
 
-- [ ] T1.1 persistent pool + work-stealing chunks behind the existing `par::parallelFor` signature
+- [x] T1.1 persistent pool + work-stealing chunks behind the existing `par::parallelFor` signature —
+      **DONE.** Measured against the OLD equal-split scheme run side by side on a deliberately
+      uneven workload (the same scheduling problem as asymmetric cores): **1.5-2.4x on a 3x spread**,
+      landing within 4-56% of perfect balance. `parallelFor(empty)` 0.37 -> 0.08 ms per call; the
+      1600 px render 42 -> 29.5 ms at 24 threads. A wash at 4-8 symmetric threads, which is the
+      honest result — there is no imbalance there to absorb. DR-PREVIEW-2a.
 
 **T2 — THE BREAKTHROUGH: progressive resolution, so interaction never waits for a render (core +
 design). This is the one item that changes the shape of the experience rather than a constant factor.**

@@ -6,6 +6,8 @@
 #include "MiniTest.h"
 #include "image_processing.h"
 #include <cmath>
+#include <atomic>
+#include <vector>
 
 using namespace arstro;
 
@@ -869,3 +871,105 @@ TEST(LensCorrection_identity_vignette_distortion)
 }
 
 MINITEST_MAIN
+
+// ── R-PREVIEW-2 / T1: the parallelFor pool ───────────────────────────────────────
+//
+// parallelFor now keeps a persistent pool and cuts the range into many more chunks than
+// there are threads, claimed by an atomic counter. The MOTIVE is big.LITTLE — equal
+// static slices made every parallel pass finish at little-core speed — and that motive
+// cannot be tested on a symmetric desktop. What CAN be tested, and is what would
+// actually break, are the properties the contract in Parallel.h promises:
+//
+//   * every index is visited exactly once, whatever the schedule;
+//   * the SPLIT is deterministic even though the SCHEDULE is not — the byte-identical
+//     serial-vs-parallel guarantee rests on chunk boundaries coming from the chunk
+//     INDEX, not from which thread happened to claim it;
+//   * a nested parallelFor runs serially instead of deadlocking on an exhausted pool;
+//   * setThreads() can grow and shrink the pool repeatedly without losing work.
+//
+// The load-balancing behaviour itself is measured by
+// apps/cosmo/core/tests/fixtures/parallel_imbalance.cpp, which prints numbers rather
+// than asserting on a clock — a timing assertion in a unit suite is a flake generator.
+
+TEST(ParallelFor_visits_every_index_exactly_once)
+{
+    for (int t : {1, 2, 3, 4, 8, 16, 24})
+    {
+        par::setThreads(t);
+        for (int n : {0, 1, 2, 7, 63, 64, 1066, 4099})
+        {
+            std::vector<std::atomic<int>> hits(n > 0 ? n : 1);
+            for (auto &h : hits) h.store(0);
+            par::parallelFor(n, [&](int b, int e) {
+                CHECK(b >= 0 && e <= n && b <= e);
+                for (int i = b; i < e; ++i) hits[i].fetch_add(1);
+            });
+            for (int i = 0; i < n; ++i)
+                CHECK(hits[i].load() == 1);
+        }
+    }
+    par::setThreads(0);
+}
+
+TEST(ParallelFor_result_is_identical_to_serial_at_every_thread_count)
+{
+    // A deliberately order-sensitive body: each output depends only on its own index, so
+    // any difference between thread counts would mean a chunk boundary moved or a range
+    // was visited twice. This is the property every processor in the library relies on.
+    const int n = 3001;
+    std::vector<double> reference(n);
+    par::setThreads(1);
+    par::parallelFor(n, [&](int b, int e) {
+        for (int i = b; i < e; ++i) reference[i] = std::sin((double)i) * 1e6 + (double)i;
+    });
+
+    for (int t : {2, 3, 5, 8, 13, 24})
+    {
+        par::setThreads(t);
+        std::vector<double> got(n, 0.0);
+        par::parallelFor(n, [&](int b, int e) {
+            for (int i = b; i < e; ++i) got[i] = std::sin((double)i) * 1e6 + (double)i;
+        });
+        for (int i = 0; i < n; ++i)
+            CHECK(got[i] == reference[i]);   // bit-identical, not merely close
+    }
+    par::setThreads(0);
+}
+
+TEST(ParallelFor_nested_runs_serially_instead_of_deadlocking)
+{
+    // The pool is not reentrant. A nested call must degrade to running on the calling
+    // thread — if it waited for a pool whose every worker is already inside the outer
+    // body, this test would hang rather than fail, which is why it exists at all.
+    par::setThreads(8);
+    const int outer = 200, inner = 50;
+    std::vector<std::atomic<int>> hits(outer * inner);
+    for (auto &h : hits) h.store(0);
+    par::parallelFor(outer, [&](int b, int e) {
+        for (int i = b; i < e; ++i)
+            par::parallelFor(inner, [&](int ib, int ie) {
+                for (int j = ib; j < ie; ++j) hits[(size_t)i * inner + j].fetch_add(1);
+            });
+    });
+    for (size_t k = 0; k < hits.size(); ++k)
+        CHECK(hits[k].load() == 1);
+    par::setThreads(0);
+}
+
+TEST(ParallelFor_survives_repeated_resizing_under_load)
+{
+    // setThreads() restarts the pool. Doing that between batches must not drop work or
+    // leave a worker waiting on a generation that will never come.
+    const int n = 5000;
+    for (int round = 0; round < 30; ++round)
+    {
+        par::setThreads(1 + (round * 7) % 17);       // 1..17, jumping around
+        std::vector<int> sum(n, 0);
+        par::parallelFor(n, [&](int b, int e) {
+            for (int i = b; i < e; ++i) sum[i] = i * 2;
+        });
+        for (int i = 0; i < n; i += 137)
+            CHECK(sum[i] == i * 2);
+    }
+    par::setThreads(0);
+}

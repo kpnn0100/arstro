@@ -2013,3 +2013,62 @@ preview renders return byte-identical pixels, so a reused buffer cannot be leavi
 full-res render still returns valid pixels *after* the release, so the release does not take the
 output with it; and a preview render immediately after a full-res one still works, which is the path
 that would crash if the release left a dangling size behind).
+
+### DR-PREVIEW-2a The parallelFor pool, and why equal slices were the SBC's real tax (R-PREVIEW-2)
+`par::parallelFor` (`core/ImageProcessing/src/base/Parallel.h`) spawned **fresh `std::thread`s on
+every call** and handed each an **equal** slice of the range. A preview render makes ~13 such calls,
+so a render paid ~13 x (threads-1) thread creations and joins — but that is the smaller half.
+
+**The larger half is that equal slices assume equal cores.** On an RK3588 (4xA76 + 4xA55) or an
+A733-class part, an A55 takes 2-3x as long as an A76 for the same slice, and `parallelFor` **blocks
+until every slice is done** — so every parallel pass in the library finished at little-core speed.
+That is a standing multiple, not a constant, and nothing done elsewhere in the pipeline can recover
+it.
+
+**As built:** one persistent pool (`par::detail::Pool`), and the range is cut into
+`threads * kChunksPerThread` (8) chunks claimed by an atomic counter. A fast core simply claims more
+chunks than a slow one — work-stealing in its simplest correct form, needing no core-speed
+knowledge, no affinity and no configuration. The calling thread claims chunks too, so it is never
+idle. `setThreads()` resizes the pool eagerly, because a settings change is a rare event on a thread
+allowed to block whereas the next `parallelFor` is on the render worker with a frame to produce.
+
+**Chunk boundaries come from the chunk INDEX**, not from which thread claimed it
+(`Parallel.h`, `claimUntilDone`) — that is what preserves the contract's byte-identical
+serial-vs-parallel guarantee while the *schedule* is nondeterministic.
+
+**Not reentrant, on purpose.** A `parallelFor` called from inside one runs its body serially on the
+calling thread rather than waiting on a pool whose every worker is already inside the outer body.
+The library has no nested parallel loops today; this makes adding one a performance question instead
+of a hang.
+
+**Measured.** The motive is big.LITTLE and there is no big.LITTLE machine here — but asymmetric
+*cores* and asymmetric *work* are the same scheduling problem, so
+`apps/cosmo/core/tests/fixtures/parallel_imbalance.cpp` gives the first 1/T of the range 3x the cost
+of the rest, which is exactly what one slow core out of T looks like to the scheduler. It runs the
+new pool **and the old equal-split scheme** side by side, so the comparison is between two
+implementations rather than between one implementation and arithmetic:
+
+```
+threads     pool (new)   ideal (perfect)   equal (old, run)   gain
+2             33.52ms       33.38ms            49.63ms        1.48x
+4             13.93ms       12.56ms            25.03ms        1.80x
+8              5.68ms        5.23ms            12.95ms        2.28x
+16             2.73ms        2.66ms             6.61ms        2.42x
+24             2.41ms        1.54ms             4.64ms        1.93x
+```
+
+The pool lands within 4-56% of *perfect* balance and beats the equal split by 1.5-2.4x on a 3x
+spread. That is the number to expect on a big.LITTLE board, and it is orthogonal to everything in
+T0 — it multiplies with it rather than overlapping.
+
+On this symmetric desktop the pool's other half (no thread creation) shows up as
+`parallelFor(empty body)` **0.37 ms -> 0.08 ms** per call, and a 1600 px default-params render at
+24 threads going **42 -> 29.5 ms** (taps on) or **23.8 -> 17.6 ms** (taps off). At 4 and 8 threads
+on symmetric cores it is a wash, which is the honest result: there is no imbalance there to absorb.
+
+Guarded by four tests in `image_tests` — `ParallelFor_visits_every_index_exactly_once` (7 thread
+counts x 8 range sizes, atomically counted), `ParallelFor_result_is_identical_to_serial_at_every_thread_count`
+(bit-identical, not merely close), `ParallelFor_nested_runs_serially_instead_of_deadlocking` (which
+would hang rather than fail if the pool waited, and that is the point of having it), and
+`ParallelFor_survives_repeated_resizing_under_load`. Timing is measured by the fixture, not asserted
+in the suite: a clock assertion in a unit test is a flake generator.
