@@ -207,7 +207,9 @@ control drag → widget callback → RightColumn: mutate mSession.curParams() fi
   → EditSession.recordHistory() (coalesce / branch)
   → effectiveParams(slot) = slot params + ancestor group offsets
   → RenderService.render(slot, params)         [worker thread, coalesced]
-        ── EditEngine applies the fixed pipeline on a downscaled proxy ──
+        ── EditEngine applies the fixed pipeline on a downscaled proxy, ──
+        ── DROPPING every stage that is bypassed or at its default value ──
+        ──   (R-PREVIEW-6 / D-45: at default params that is 17 of 17)     ──
   → RenderService publishes a Frame
 App::renderEditor (next frame): tryAcquire(Frame) → cache mLastAfterFrame
   → refreshPhotoForMode() pushes it into the photo ImageView

@@ -18,6 +18,9 @@ namespace arstro
         enum PropertyIndex { amountID, propertyCount };
         Clarity();
         void setAmount(float v) { setProperty(amountID, v); }
+        /** Zero amount skips the large-radius blur entirely (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(amountID) == (Pixel)0; }
+
         void process(const Image &in, Image &out) override;
     };
 }

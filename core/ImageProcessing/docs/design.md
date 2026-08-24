@@ -86,6 +86,21 @@ See [`architecture.puml`](architecture.puml) for the class diagram.
 - **Preview vs full-res.** Interactive edits run on a fitted, area-averaged preview
   proxy (`renderPreview`); export runs the full-res path (`renderFull`). Resolution-
   independent params (gain-based ops, normalized crop) match between the two.
+- **A stage at its default value is DROPPED, not run.** Every processor answers
+  `isIdentity()`, and `ImageBlock` leaves an identity stage out of the run exactly as it
+  already leaves out a bypassed one — so no buffer is touched at all, not even copied.
+  This is a *correctness-preserving* removal in the strict sense: several stages are only
+  **approximately** identity at their neutral value (`Contrast` computes
+  `(x − pivot) · 1 + pivot`, which is not `x` in float; `ToneCurve` at the default
+  `curveLog` domain round-trips every channel through `srgbEncode` → a 1024-entry LUT →
+  `srgbDecode`), so skipping is *more* accurate as well as free — and the guard test
+  asserts the chain returns its input **bit for bit**, which is what fails without it.
+  The reason it exists is that it was not a micro-optimisation: a preview render at
+  default parameters spent **132 of 193 ms** on seventeen stages reproducing the buffer
+  they were handed, and that is the cost of the interaction a photographer performs most
+  (D-45). Identity is never claimed while smoothing is *enabled*, because a ramping
+  parameter may read neutral at its target while `current` is still on its way there —
+  so the video path pays for its own generality and the stills path does not.
 - **Smoothing is its own concern (SRP).** `ImageProcessor` decides *when* a ramp
   advances; `ParameterSet`/`SmoothedParameter` know *how*. Disabled by default for
   stills; `VideoProcessor::enableSmoothing(true)` re-arms it for temporal interpolation.

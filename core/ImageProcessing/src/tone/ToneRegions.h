@@ -30,6 +30,13 @@ namespace arstro
         void setWhites(Pixel v) { setProperty(whitesID, v); }          // -100..+100
         void setBlacks(Pixel v) { setProperty(blacksID, v); }          // -100..+100
 
+        /** All four regions flat means every weight multiplies zero (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            return paramValue(highlightsID) == (Pixel)0 && paramValue(shadowsID) == (Pixel)0 &&
+                   paramValue(whitesID) == (Pixel)0 && paramValue(blacksID) == (Pixel)0;
+        }
+
     protected:
         void processPixel(const Pixel *in, Pixel *out, int channels) override;
     };

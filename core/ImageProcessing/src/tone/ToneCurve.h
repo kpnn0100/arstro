@@ -39,6 +39,14 @@ namespace arstro
         void setLogScale(bool log);
         bool logScale() const { return mLog; }
 
+        /** True when the master and all three channel curves are the identity, so no
+         *  pixel would move. Worth having as a cached flag rather than a scan: this is
+         *  the most expensive stage in the pipeline at identity — 28.11 ms on a 1.7 Mpx
+         *  preview — because `curveLog` is on by default, so every channel of every
+         *  pixel paid an srgbEncode + srgbDecode (two `std::pow`) to look up a straight
+         *  line: 10.3 M transcendentals to reproduce the input (R-PREVIEW-6, D-45). */
+        bool isIdentity() const override { return mIdentity; }
+
     protected:
         void processPixel(const Pixel *in, Pixel *out, int channels) override;
 
@@ -46,10 +54,17 @@ namespace arstro
         // Clamp/sort a copy of `pts` (identity if empty) and fill `lut` by evaluating
         // the piecewise-linear curve at each entry.
         static void buildLut(std::vector<std::pair<float, float>> pts, Pixel *lut);
+        /** Is `lut` the straight line, to within the error buildLut's own piecewise-
+         *  linear evaluation can introduce? Judged on the LUT rather than on the control
+         *  points because the points arrive by several routes (two-point identity, empty,
+         *  a flattened bezier that happens to be straight) and the LUT is what renders. */
+        static bool lutIsIdentity(const Pixel *lut);
+        void refreshIdentity();
         static Pixel sampleLut(const Pixel *lut, Pixel d);  // sample at display coord d in [0,1]
 
         Pixel mLut[kLut];                      // RGB master
         Pixel mChanLut[kChannels][kLut];       // per-channel R/G/B
         bool mLog = true;
+        bool mIdentity = true;   // refreshed by refreshIdentity() on every LUT rebuild
     };
 }

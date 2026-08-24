@@ -26,6 +26,9 @@ namespace arstro
         void setSize(Pixel v) { setProperty(sizeID, v); }      // 0..100 (feature size)
         void setSeed(unsigned s) { mSeed = s; }                // VideoProcessor can vary per frame
 
+        /** No amount means the noise field is never generated (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(amountID) <= (Pixel)0; }
+
         void process(const Image &in, Image &out) override;
 
     private:

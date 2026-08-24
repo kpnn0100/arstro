@@ -1834,3 +1834,91 @@ Verified by `cosmo_widget_tests`: `homeSettingsLinkOpensSettings`,
 field, so a truncated or garbled file cannot stop the app starting. The host applies it via
 `App::applySettings` **before the first render**, and each `SettingsDialog` callback updates the
 in-force copy and fires `App::onSettingsChanged`, which the host saves.
+
+### DR-PREVIEW-6 A stage at its default value is dropped, not run (R-PREVIEW-6)
+D-45 measured a 1600×1066 preview render at **193 ms with every `EditParams` field at its neutral
+value**, and attributed **132 of those ms to the seventeen pipeline stages reproducing the buffer
+they were handed**. `ImageBlock::process` filtered on `isBypassed()` alone, so "at its default"
+was not a state the chain could see.
+
+**The contract.** `ImageProcessor` gained two methods
+(`core/ImageProcessing/src/base/ImageProcessor.h:48,71`):
+
+- `virtual bool isIdentity() const` — false by default, so a processor that does not answer is
+  always run and adding a stage can never silently drop pixels. It reads
+  `paramValue(id)` (`ImageProcessor.h:120`), a const view of the parameter's `target`, because the
+  question is asked after `apply()` has snapped and `target` is the meaningful value either way.
+- `bool resolveAndIsSkippable()` (`ImageProcessor.cpp:49`) — snaps the parameters, runs `update()`,
+  then returns `mBypass || (!mSmoothEnable && isIdentity())`. **Identity is never claimed while
+  smoothing is enabled**: a ramping parameter may read neutral at its target while `current` is
+  still travelling, and skipping would jump the ramp. Stills set `mSmoothEnable = false`, so this
+  costs the still path nothing and keeps `VideoProcessor`'s temporal interpolation correct.
+
+`ImageBlock::process` (`ImageBlock.cpp:55`) now builds its active list from
+`!p->resolveAndIsSkippable()`, so a skipped stage is **left out of the run entirely** rather than
+copied through. That distinction is most of the win: `apply()`'s own skip still costs a
+`std::copy` of the buffer, and the nine spatial stages that already early-outed were doing exactly
+that — a **serial** 27 MB copy each, 1.46 ms apiece. `ImageBlock::isIdentity()` (`ImageBlock.cpp:19`)
+reports true when every stage is skippable, so a nested block is dropped by its parent too.
+
+**Every processor answers.** Property-driven stages compare against their constructed defaults —
+`Exposure` 0 EV, `Contrast` 0, `ToneRegions` all four flat, `WhiteBalance` **6500 K** and 0 tint
+(the working white, where `kelvinToRgbGain`'s luminance normalisation gives gains of exactly 1),
+`Vibrance` both 0, `Dehaze`/`Grain`/`Texture`/`Clarity`/`Sharpen` on `amount`, `NoiseReduction` on
+both channels, `LensCorrection` on all three, `Crop` on the full rect, `Rotate` on angle **and**
+quarter-turns, `ColorGrading` on each wheel's saturation and luminance plus the hue remap. Two
+judgements worth naming: `ColorGrading` ignores `balance` and a wheel's `hue` (both only shape a
+contribution that is zero), and `Sharpen` ignores `radius`/`masking` for the same reason.
+`ToneCurve` and `ColorMixer` are LUT-driven with no properties, so they cache a flag refreshed on
+every rebuild — `ToneCurve::refreshIdentity` (`ToneCurve.cpp:52`) tests all four LUTs against the
+straight line within 1e-6, and `ColorMixer::refreshIdentity` (`ColorMixer.cpp:15`) tests all three
+against exact zero.
+
+**`Crop` and `Rotate` had no early-out at all**, which is why they appear here as fixes rather than
+as free wins: at the default rect `Crop` still copied the frame row by row (3.73 ms) and `Rotate`
+early-outed on the *angle* only, so it still ran `quarterTurn` over the whole frame first (1.90 ms).
+
+**Measured, at 1600×1066, all parameters default** (`preview_stage_cost.cpp`, `floor` fixture):
+
+```
+                 BEFORE      AFTER
+threads=24       193 ms      69 ms      (and 69 == the all-stages-bypassed floor, exactly)
+threads=8        221 ms      75 ms
+threads=4        326 ms     109 ms
+threads=1        980 ms     331 ms
+800 px, 8 thr     55 ms      18 ms
+400 px, 8 thr     15 ms       5 ms
+```
+
+The after column matching the bypassed floor to within noise is the real check that the skip is
+*complete*: at default parameters the chain now costs what an empty chain costs.
+
+**End to end, through the app**, on a 3000×2000 image — `cosmo-cc bench`, the full export render:
+
+```
+$ cosmo-cc bench bench.png --iters 3
+                    BEFORE          AFTER
+stage=renderFull    714.57 ms       240.23 ms      (3.0x, engineThreads=23)
+totalMs            1034.95         549.60
+```
+
+**Guarded by two tests in `image_tests`** (`core/ImageProcessing/unittest/engineTests.cpp`):
+`Identity_stages_report_themselves_and_stop_when_moved` checks every processor's predicate in both
+directions, and `A_chain_of_identity_stages_returns_its_input_bit_for_bit` builds the real
+seventeen-stage pipeline at defaults and asserts the output is **bit-identical** to the input.
+That second one **fails on the unfixed code** — verified by reverting both files and watching
+`CHECK failed: differing == 0` — and it fails for a substantive reason, not a timing one: several
+stages are only *approximately* identity at neutral (`Contrast` computes `(x − pivot)·1 + pivot`,
+which is not `x` in float; `ToneCurve` at the default `curveLog` domain round-trips every channel
+through `srgbEncode` → LUT → `srgbDecode`), so **dropping the stage is the more accurate answer as
+well as the free one**. `ctest` reports 17/17 suites and `image_tests` 74/74, including the
+GPU-vs-CPU conformance tests that would have caught a changed edit.
+
+Reproduce the measurement:
+
+```
+g++ -O2 -std=c++17 -DARSTRO_ENABLE_THREADS -I core/ImageProcessing/src \
+    -o /tmp/stagecost apps/cosmo/core/tests/fixtures/preview_stage_cost.cpp \
+    build/core/ImageProcessing/libarstro_image.a -lpthread -lEGL
+/tmp/stagecost 1600 8
+```

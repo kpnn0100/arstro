@@ -24,6 +24,10 @@ namespace arstro
 
         void setAmount(Pixel v) { setProperty(amountID, v); }  // -100..+100
 
+        /** Zero amount also skips the whole-image atmospheric-light scan, which is a full
+         *  serial pass over the buffer before any pixel is written (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(amountID) == (Pixel)0; }
+
         void process(const Image &in, Image &out) override;
     };
 }

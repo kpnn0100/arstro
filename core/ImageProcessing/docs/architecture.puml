@@ -35,7 +35,10 @@ package base {
     + setProperty(id, value)
     + getProperty(id) : Pixel
     + setBypass(b) / isBypassed()
+    + isIdentity() : bool          ' R-PREVIEW-6: would this stage change anything?
+    + resolveAndIsSkippable() : bool  ' snap+update, then bypassed-or-identity
     # mParams : ParameterSet
+    # paramValue(id) : Pixel       ' const read of `target`, for isIdentity()
   }
 
   abstract class PointProcessor {
@@ -50,7 +53,8 @@ package base {
 
   class ImageBlock {
     + add(p) / remove(p) / clear()
-    + process(in, out)  ' runs the ordered chain
+    + process(in, out)  ' runs the chain, DROPPING bypassed + identity stages (R-PREVIEW-6)
+    + isIdentity() : bool  ' true when every stage is skippable, so a nested block drops too
   }
 
   class SmoothedParameter {

@@ -25,6 +25,11 @@ namespace arstro
         /** Contrast amount, nominally -100..+100 (0 = identity). */
         void setContrast(Pixel amount) { setProperty(contrastID, amount); }
 
+        /** 0 makes the slope exactly 1 — and `(x - pivot) * 1 + pivot` is not even
+         *  bit-identical to x in float, so skipping is the MORE accurate answer as well
+         *  as the free one (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(contrastID) == (Pixel)0; }
+
         void update() override;
 
     protected:

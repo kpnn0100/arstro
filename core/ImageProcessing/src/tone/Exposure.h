@@ -24,6 +24,9 @@ namespace arstro
         /** Exposure compensation in stops (EV), nominally -5..+5. */
         void setExposureEv(Pixel ev) { setProperty(exposureEvID, ev); }
 
+        /** +0 EV is a gain of exactly 1, so the pass is a copy (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(exposureEvID) == (Pixel)0; }
+
         void update() override;
 
     protected:

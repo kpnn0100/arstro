@@ -119,6 +119,25 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   pixel. **They do not by themselves make a slider real-time on a weak SBC** — that needs the
   progressive-resolution requirement this entry filed as the gap; see `PROGRESS.md`'s SBC plan.
 
+- **PARTIALLY FIXED 2026-08-24 — step 1 of 4 landed (T0.1).** `ImageProcessor::isIdentity()` plus
+  the `ImageBlock` skip; **R-PREVIEW** now exists, so the requirement gap this entry was filed
+  against is closed and the remaining work is under a written budget. As-built: **DR-PREVIEW-6**.
+
+  ```
+                   BEFORE      AFTER          1600x1066, all params default
+  threads=24       193 ms      69 ms          <- and 69 == the bypassed floor, exactly
+  threads=8        221 ms      75 ms
+  threads=4        326 ms     109 ms
+  threads=1        980 ms     331 ms
+  cosmo-cc bench renderFull, 3000x2000:  714.57 ms -> 240.23 ms  (3.0x)
+  ```
+
+  Guarded by `Identity_stages_report_themselves_and_stop_when_moved` and
+  `A_chain_of_identity_stages_returns_its_input_bit_for_bit` in `image_tests`; the second was
+  verified to fail on the unfixed code. **Stays open** for steps 2-4 (LUT the sRGB transfer, hoist
+  `renderInto`'s three working buffers, opt-in histogram taps), which are now the whole of what a
+  default-params render costs.
+
 ### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
 - **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2
 - **Found:** 2026-08-20, on the first frames `cosmo_touch_shots` ever produced — the phone UI had

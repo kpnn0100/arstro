@@ -24,6 +24,12 @@ namespace arstro
         void setLuminance(float v) { setProperty(luminanceID, v); }
         void setColor(float v) { setProperty(colorID, v); }
 
+        /** Neither channel means no neighbourhood pass at all (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            return paramValue(luminanceID) <= (Pixel)0 && paramValue(colorID) <= (Pixel)0;
+        }
+
         void process(const Image &in, Image &out) override;
     };
 }

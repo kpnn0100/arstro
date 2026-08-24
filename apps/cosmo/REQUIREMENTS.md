@@ -1318,3 +1318,63 @@ Windows host it was written for.
   system header pulled in for one Win32 call defines `near`, `far`, `small`, `min` and `max`, and a
   test that legitimately names one of those must keep compiling. Platform CRT entry points are used
   only where they are known to link, not merely where they are declared.
+
+---
+
+## R-PREVIEW — An interactive preview has a latency budget, and resolution follows it — 🚧 IN PROGRESS
+
+R-CPU bounds *how many threads* cosmo may use and R-LOADPERF bounds *opening a project*, but nothing
+bounded the latency of the interaction the photographer performs most: moving a slider and watching
+the photo. D-45 filed that as a requirement gap after measuring the thing nobody had a line for — a
+1600 px preview costs **~200 ms on a 24-thread desktop with every parameter at its neutral value**,
+and ~0.8-2.5 s on the Allwinner A733 / RK3588 class boards cosmo is being ported to. A drag that
+produces one picture per second is not an edit, it is a series of guesses.
+
+The gap was not "the render is too slow". It is that **the preview resolution is a constant**
+(`previewEdge`, one number in `settings.txt`) while the machine underneath it is not, so the same
+code has to be simultaneously real-time on a Ryzen and on two A76 cores. No constant can be. The
+requirement is therefore written as a **latency** budget with resolution as the *dependent* variable,
+which makes it hardware-independent, measurable, and able to fail.
+
+- **R-PREVIEW-1 A live gesture gets a new frame every 33 ms, on every supported machine.** While an
+  adjustment gesture is in flight — a slider drag, a curve-node drag, a wheel-driven value — a new
+  preview frame lands **at least every 33 ms (~30 fps)**. 30 rather than 60 because the budget is set
+  by the *weakest* target (an A733-class board) and at 60 fps its live resolution would fall low
+  enough to stop showing the photographer what they are adjusting; 30 fps still tracks a finger, and
+  a preview that tracks is the entire point. This is a **latency** promise, not a throughput one: the
+  frame that lands may be coarse, and R-PREVIEW-2 says that is correct.
+- **R-PREVIEW-2 Resolution is chosen from measured cost, never configured.** Each slot keeps a
+  **pyramid** of preview proxies (1600 / 800 / 400 / 200 px). The level a live gesture renders at is
+  the largest one whose **last measured render cost** fits R-PREVIEW-1's budget — `Frame::ms` already
+  carries that number, added for D-44. So a Ryzen settles on 1600 and an A733 on 400 **by themselves**,
+  with no hardware detection, no per-device tuning and no setting for the user to get wrong. A machine
+  that gets slower under load (thermal throttling, a load running concurrently, R-CPU's budget
+  shrinking the engine's share) walks *down* a level on its own and back up when it can, because the
+  input to the decision is always the last real measurement.
+- **R-PREVIEW-3 The full level is reached within 500 ms of the gesture ending, stepping up.** When the
+  gesture settles (release, or ~120 ms with no input) the engine renders the next level up, then the
+  next, until `previewEdge`. **Every level is a complete, correct frame** — not a partial or a
+  scaled-up copy of a previous one — so there is no state in which the photograph on screen is wrong,
+  only states in which it is soft. This is also why the ladder steps rather than jumping: a single
+  jump from 400 to 1600 is a ~1 s gap on a weak board followed by one visible pop, and the steps cost
+  nothing extra because a smaller level is cheap in exactly the proportion that makes it worth having.
+- **R-PREVIEW-4 A level arriving is a visible change, so it dissolves.** Sharpness is a visible
+  property. Each level lands through **R-VIEW-1's existing cross-dissolve** — including R-VIEW-1a's
+  rule that a frame arriving mid-dissolve is held, never written into a layer with non-zero weight —
+  so refinement reads as the photo resolving rather than as three pictures in a row. R-G-1 governs
+  this and no exception is claimed: a coarse frame is not a "loading state" that gets to snap.
+- **R-PREVIEW-5 Meeting the budget may not cost output quality, memory, or the CPU share.** The
+  pyramid is built by the **fused convert-and-downscale** R-MEM-5 already established
+  (`downscaleEncodedToLinear`), emitting every level from **one read of the decoded source**, on the
+  **decode worker** — so it neither allocates the 387 MB full-resolution float intermediate R-MEM
+  exists to prevent, nor serialises behind the single engine thread a load leaves free (R-CPU-2d).
+  The whole pyramid is ~1.33× one 1600 px proxy, so R-MEM-1's caps absorb it. Export and the
+  full-resolution path are untouched: they render from the source, at full quality, always
+  (**this amends nothing in R-MEM or R-CPU** — it is the same budget spent on more levels of a
+  cheaper thing, and the conflict check for this requirement found no line it contradicts).
+- **R-PREVIEW-6 The budget is measured, not asserted.** `apps/cosmo/core/tests/fixtures/preview_stage_cost.cpp`
+  attributes a render per stage, and the service must expose the level a frame came from and what it
+  cost so a script can read the promise back — a latency requirement with nothing measuring it is the
+  mistake R-MEM-5 already had to be amended for. **A stage that is at its default value must not be
+  rendered at all** (D-45: 132 of 193 ms was exactly that), because a budget spent on identity
+  arithmetic is a budget the photographer never gets.

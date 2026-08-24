@@ -12,6 +12,21 @@ namespace arstro
             rebuild(c);  // empty points -> flat 0 (identity)
     }
 
+    void ColorMixer::refreshIdentity()
+    {
+        // Judged on the LUT, not on the point list: an "empty" curve and a curve whose
+        // points are all at y = 0 are both identity and arrive by different routes.
+        // Exact zero, not a tolerance — rebuild() writes literal 0.0f for a flat curve.
+        for (int c = 0; c < 3; ++c)
+            for (int i = 0; i < kLut; ++i)
+                if (mLut[c][i] != 0.0f)
+                {
+                    mIdentity = false;
+                    return;
+                }
+        mIdentity = true;
+    }
+
     void ColorMixer::setCurve(Channel c, const std::vector<CurvePoint> &points)
     {
         // Flatten the bezier control points to a dense polyline (honouring smooth
@@ -32,6 +47,12 @@ namespace arstro
     }
 
     void ColorMixer::rebuild(int c)
+    {
+        rebuildLut(c);
+        refreshIdentity();
+    }
+
+    void ColorMixer::rebuildLut(int c)
     {
         const auto &pts = mPoints[c];
         if (pts.empty())

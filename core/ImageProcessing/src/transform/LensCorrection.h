@@ -26,6 +26,13 @@ namespace arstro
         void setChromaticAberration(float v) { setProperty(caID, v); }
         void setVignette(float v) { setProperty(vignetteID, v); }
 
+        /** No distortion, no CA, no vignette (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            return paramValue(distortionID) == (Pixel)0 && paramValue(caID) == (Pixel)0 &&
+                   paramValue(vignetteID) == (Pixel)0;
+        }
+
         void process(const Image &in, Image &out) override;
     };
 }

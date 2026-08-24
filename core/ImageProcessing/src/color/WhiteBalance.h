@@ -24,6 +24,13 @@ namespace arstro
         void setTemperature(Pixel kelvin) { setProperty(tempID, kelvin); }  // 2000..50000
         void setTint(Pixel tint) { setProperty(tintID, tint); }             // -150..+150
 
+        /** The working-space white with no tint gives gains of exactly 1 after
+         *  `kelvinToRgbGain`'s luminance normalisation (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            return paramValue(tempID) == (Pixel)6500 && paramValue(tintID) == (Pixel)0;
+        }
+
         void update() override;
 
     protected:

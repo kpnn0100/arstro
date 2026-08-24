@@ -25,6 +25,10 @@ namespace arstro
         void setRadius(float px) { setProperty(radiusID, px); }
         void setMasking(float v) { setProperty(maskingID, v); }
 
+        /** Radius and masking shape a sharpen that is not happening; amount is the one
+         *  that decides whether the unsharp mask runs at all (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(amountID) == (Pixel)0; }
+
         void process(const Image &in, Image &out) override;
     };
 }

@@ -16,7 +16,20 @@ file, and commit.
 ## NEXT
 
 **► 2026-08-24 — "port it to a small SBC (Allwinner A733, RK3588); the render may be slow but the
-UI must never lag". Analysed and planned; nothing implemented yet. This is the NEXT.**
+UI must never lag". Analysed, planned, and T0.1 landed. NEXT is T0.2.**
+
+**The user set T2's numbers** (2026-08-24, so no other machine re-litigates them): a live gesture
+gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within **500 ms of the
+gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
+tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
+
+**► NEXT: T0.2 — LUT `srgbEncode`/`srgbDecode`.** With T0.1 in, the whole of what a default-params
+render now costs is the floor: three histogram passes, one `pow`-based sRGB encode, and the
+per-render allocation of three working Images. T0.2 attacks the first two at once, because every
+one of them calls `srgbEncode`/`srgbDecode` per channel per pixel
+(`Histogram.cpp:43-52`, `ColorSpace.cpp:18,29`). Mirror `kSrgbToLinear`: a 4096-entry table plus
+linear interpolation, well under 1/255 of error, with a max-abs-error assertion against the `pow`
+reference as the guard.
 
 The plan is committed here rather than left in a chat, because it spans core and design and will take
 several sessions. **D-45 now carries the per-stage measurement** it asked for — read that entry first.
@@ -50,7 +63,12 @@ and pre-mixer histogram taps opt-in. Expected 1600 px: ~200 ms -> ~20 ms. Each s
 measured by `apps/cosmo/core/tests/fixtures/preview_stage_cost.cpp`, and each needs a guard test that
 fails without it.
 
-- [ ] T0.1 `isIdentity()` on every processor + `ImageBlock` skip
+- [x] T0.1 `isIdentity()` on every processor + `ImageBlock` skip — **DONE, 3.0x measured.**
+      1600 px at default params: 193 -> 69 ms (24 thr), 221 -> 75 (8 thr), 326 -> 109 (4 thr),
+      980 -> 331 (1 thr); `cosmo-cc bench` `renderFull` on a 3000x2000 image 714.57 -> 240.23 ms.
+      The after number **equals the all-stages-bypassed floor**, which is the check that the skip
+      is complete. Guarded by two tests in `image_tests`, the second of which was verified to fail
+      on the unfixed code (`CHECK failed: differing == 0`). DR-PREVIEW-6.
 - [ ] T0.2 LUT the sRGB transfer function both ways
 - [ ] T0.3 hoist `preCurve` / `preMixer` / `processed` to members
 - [ ] T0.4 opt-in pre-curve + pre-mixer histogram taps

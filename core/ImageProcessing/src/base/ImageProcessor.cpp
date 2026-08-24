@@ -46,12 +46,19 @@ namespace arstro
     Pixel ImageProcessor::getProperty(int id) { return mParams.current(id); }
     Pixel ImageProcessor::getPropertyTargetValue(int id) { return mParams.target(id); }
 
-    void ImageProcessor::apply(const Image &in, Image &out)
+    bool ImageProcessor::resolveAndIsSkippable()
     {
         if (!mSmoothEnable)
             mParams.snapAll();
         update();
-        if (mBypass)
+        // A ramping parameter may read neutral at its target while `current` is still
+        // mid-ramp, so identity is only claimed where there is no ramp (see the header).
+        return mBypass || (!mSmoothEnable && isIdentity());
+    }
+
+    void ImageProcessor::apply(const Image &in, Image &out)
+    {
+        if (resolveAndIsSkippable())
         {
             out.resizeLike(in);
             const size_t n = (size_t)in.width() * in.height() * in.channels();

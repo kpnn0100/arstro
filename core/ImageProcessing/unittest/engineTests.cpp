@@ -983,3 +983,151 @@ TEST(RenderService_gpu_worker_matches_cpu)
     for (size_t i = 0; i < cpuF.rgba.size(); ++i) { int d = (int)gpuF.rgba[i] - (int)cpuF.rgba[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
     CHECK(maxd <= 2);
 }
+
+// ── R-PREVIEW-6 / D-45: a stage at its default value is DROPPED, not run ──────────
+//
+// The whole edit pipeline used to run at default parameters, and 132 of a 193 ms
+// preview render went to seventeen stages reproducing the buffer they were handed.
+// Two things have to be true for the skip to be correct, and only one of them is a
+// performance claim:
+//
+//   * every processor answers isIdentity() truthfully at its defaults, and stops
+//     answering it the moment a parameter moves;
+//   * a chain of identity stages returns its input BIT-IDENTICALLY. This is the
+//     assertion that fails without the fix, and it fails for a real reason rather
+//     than a timing one: several stages are only APPROXIMATELY identity at their
+//     neutral value. Contrast computes `(x - pivot) * 1 + pivot`, which is not x in
+//     float, and ToneCurve at `curveLog` (the default) round-trips every channel
+//     through srgbEncode -> a 1024-entry LUT -> srgbDecode. Skipping is therefore
+//     the more accurate answer as well as the free one.
+
+// A gradient with values that are not exactly representable, so an approximate
+// identity shows up as a bit difference rather than surviving by luck.
+static Image variedLinear(int w, int h)
+{
+    Image img(w, h, 4, ColorSpace::LinearSRGB);
+    Pixel *d = img.data();
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+            Pixel *p = d + ((size_t)y * w + x) * 4;
+            p[0] = (Pixel)((x * 7 + y * 3) % 251) / (Pixel)251;
+            p[1] = (Pixel)((x * 3 + y * 11) % 241) / (Pixel)241;
+            p[2] = (Pixel)((x * 13 + y * 5) % 233) / (Pixel)233;
+            p[3] = (Pixel)1;
+        }
+    return img;
+}
+
+TEST(Identity_stages_report_themselves_and_stop_when_moved)
+{
+    Exposure exposure;      CHECK(exposure.isIdentity());
+    exposure.setExposureEv(0.5f);           CHECK(!exposure.isIdentity());
+    exposure.setExposureEv(0.0f);           CHECK(exposure.isIdentity());
+
+    Contrast contrast;      CHECK(contrast.isIdentity());
+    contrast.setContrast(10.f);             CHECK(!contrast.isIdentity());
+
+    ToneRegions regions;    CHECK(regions.isIdentity());
+    regions.setBlacks(-5.f);                CHECK(!regions.isIdentity());
+
+    // 6500 K is the working white, so the default is identity but 5000 K is not.
+    WhiteBalance wb;        CHECK(wb.isIdentity());
+    wb.setTemperature(5000.f);              CHECK(!wb.isIdentity());
+
+    Vibrance vib;           CHECK(vib.isIdentity());
+    vib.setSaturation(20.f);                CHECK(!vib.isIdentity());
+
+    ColorGrading grade;     CHECK(grade.isIdentity());
+    // Hue alone does nothing while saturation is zero — the wheel is still identity.
+    grade.setGradeHue(ColorGrading::Midtones, 210.f);         CHECK(grade.isIdentity());
+    grade.setGradeSaturation(ColorGrading::Midtones, 30.f);   CHECK(!grade.isIdentity());
+
+    Dehaze dehaze;          CHECK(dehaze.isIdentity());
+    dehaze.setAmount(25.f);                 CHECK(!dehaze.isIdentity());
+
+    Grain grain;            CHECK(grain.isIdentity());
+    grain.setAmount(30.f);                  CHECK(!grain.isIdentity());
+
+    Texture texture;        CHECK(texture.isIdentity());
+    texture.setAmount(15.f);                CHECK(!texture.isIdentity());
+
+    Clarity clarity;        CHECK(clarity.isIdentity());
+    clarity.setAmount(15.f);                CHECK(!clarity.isIdentity());
+
+    Sharpen sharpen;        CHECK(sharpen.isIdentity());
+    sharpen.setRadius(2.f);                 CHECK(sharpen.isIdentity());  // radius alone: nothing
+    sharpen.setAmount(40.f);                CHECK(!sharpen.isIdentity());
+
+    NoiseReduction nr;      CHECK(nr.isIdentity());
+    nr.setLuminance(20.f);                  CHECK(!nr.isIdentity());
+
+    Crop crop;              CHECK(crop.isIdentity());
+    crop.setRect(0.1f, 0.1f, 0.8f, 0.8f);   CHECK(!crop.isIdentity());
+    crop.reset();                           CHECK(crop.isIdentity());
+
+    Rotate rotate;          CHECK(rotate.isIdentity());
+    rotate.setAngle(1.5f);                  CHECK(!rotate.isIdentity());
+    rotate.setAngle(0.f);                   CHECK(rotate.isIdentity());
+    rotate.setQuarterTurns(1);              CHECK(!rotate.isIdentity());
+
+    LensCorrection lens;    CHECK(lens.isIdentity());
+    lens.setVignette(30.f);                 CHECK(!lens.isIdentity());
+
+    // The two LUT-driven stages carry a cached flag instead of properties.
+    ToneCurve curve;        CHECK(curve.isIdentity());
+    curve.setPoints({CurvePoint{0.f, 0.f}, CurvePoint{0.5f, 0.7f}, CurvePoint{1.f, 1.f}});
+    CHECK(!curve.isIdentity());
+    curve.setPoints({CurvePoint{0.f, 0.f}, CurvePoint{1.f, 1.f}});
+    CHECK(curve.isIdentity());              // back to a straight line
+    curve.setChannelPoints(1, {CurvePoint{0.f, 0.1f}, CurvePoint{1.f, 1.f}});
+    CHECK(!curve.isIdentity());             // a channel curve counts too
+
+    ColorMixer mixer;       CHECK(mixer.isIdentity());
+    mixer.setCurve(ColorMixer::Sat, {CurvePoint{0.f, 0.4f}, CurvePoint{360.f, 0.4f}});
+    CHECK(!mixer.isIdentity());
+    mixer.setCurve(ColorMixer::Sat, {});
+    CHECK(mixer.isIdentity());
+}
+
+TEST(A_chain_of_identity_stages_returns_its_input_bit_for_bit)
+{
+    // The full pipeline order from EditEngine.h, every stage at its constructed
+    // default. Without the identity skip this is only APPROXIMATELY the input —
+    // ToneCurve's log round trip and Contrast's `(x-p)*1+p` both move low bits — so
+    // an exact comparison is what makes the test fail on the unfixed code.
+    Crop crop; Rotate rotate; LensCorrection lens; NoiseReduction nr;
+    Exposure exposure; Contrast contrast; ToneRegions regions; WhiteBalance wb;
+    ToneCurve curve; Texture texture; Clarity clarity; Vibrance vib;
+    ColorMixer mixer; ColorGrading grade; Dehaze dehaze; Sharpen sharpen; Grain grain;
+
+    ImageBlock chain;
+    chain.add(&crop); chain.add(&rotate); chain.add(&lens); chain.add(&nr);
+    chain.add(&exposure); chain.add(&contrast); chain.add(&regions); chain.add(&wb);
+    chain.add(&curve); chain.add(&texture); chain.add(&clarity); chain.add(&vib);
+    chain.add(&mixer); chain.add(&grade); chain.add(&dehaze); chain.add(&sharpen);
+    chain.add(&grain);
+    CHECK(chain.size() == 17);
+    CHECK(chain.isIdentity());   // a chain of no-ops is itself a no-op
+
+    const Image in = variedLinear(37, 23);
+    Image out;
+    chain.apply(in, out);
+
+    CHECK(out.width() == in.width() && out.height() == in.height());
+    CHECK(out.channels() == in.channels());
+    const size_t n = in.pixelCount() * (size_t)in.channels();
+    size_t differing = 0;
+    for (size_t i = 0; i < n; ++i)
+        if (out.data()[i] != in.data()[i])
+            ++differing;
+    CHECK(differing == 0);
+
+    // ...and one stage moving off its default is enough to make the chain run again,
+    // so the skip cannot be hiding a real edit.
+    exposure.setExposureEv(1.0f);
+    CHECK(!chain.isIdentity());
+    Image lifted;
+    chain.apply(in, lifted);
+    CHECK_NEAR(lifted.at(5, 5, 0), in.at(5, 5, 0) * (Pixel)2, 1e-4);
+}

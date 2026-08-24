@@ -40,6 +40,19 @@ namespace arstro
             setProperty(remapStrengthID, strength01);
         }
 
+        /** A wheel with no saturation and no luminance contributes nothing whatever its
+         *  hue, and `balance` only moves the crossover BETWEEN contributions — so the
+         *  three wheels being flat is identity regardless of it. The hue remap counts
+         *  only when it is both enabled and has strength (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            for (int region = 0; region < 3; ++region)
+                if (paramValue(shadowSatID + region * 3) != (Pixel)0 ||
+                    paramValue(shadowLumID + region * 3) != (Pixel)0)
+                    return false;
+            return paramValue(remapEnableID) <= (Pixel)0.5 || paramValue(remapStrengthID) == (Pixel)0;
+        }
+
     protected:
         void processPixel(const Pixel *in, Pixel *out, int channels) override;
     };

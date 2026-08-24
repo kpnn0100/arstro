@@ -9,6 +9,9 @@
  *  dimensions (Crop/Rotate), so the scratch buffers are full Images.
  *
  *  The chain is non-owning: the EditEngine owns the concrete processors.
+ *
+ *  A stage that is bypassed OR whose parameters make it a no-op is DROPPED from the
+ *  run, not copied through (R-PREVIEW-6, D-45) — see process().
  */
 #pragma once
 #include "ImageProcessor.h"
@@ -27,6 +30,9 @@ namespace arstro
         int size() const { return (int)mChain.size(); }
 
         void process(const Image &in, Image &out) override;
+        /** True when every stage in the chain is itself bypassed or at identity, so a
+         *  nested block can be dropped by its parent rather than copied through. */
+        bool isIdentity() const override;
         void prepare() override;
 
     private:

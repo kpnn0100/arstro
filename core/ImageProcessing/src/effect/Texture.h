@@ -17,6 +17,10 @@ namespace arstro
         enum PropertyIndex { amountID, propertyCount };
         Texture();
         void setAmount(float v) { setProperty(amountID, v); }
+        /** Zero amount skips the luminance plane and its blur, not just the blend
+         *  (R-PREVIEW-6). */
+        bool isIdentity() const override { return paramValue(amountID) == (Pixel)0; }
+
         void process(const Image &in, Image &out) override;
     };
 }

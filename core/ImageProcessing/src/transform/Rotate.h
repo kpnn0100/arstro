@@ -20,6 +20,13 @@ namespace arstro
         void setAngle(Pixel degrees) { setProperty(angleID, degrees); }  // straighten, e.g. -45..+45
         void setQuarterTurns(int turns) { setProperty(quarterTurnsID, (Pixel)(turns & 3)); }
 
+        /** No turn and no straighten. `process` early-outs on the ANGLE only, so at the
+         *  default it still ran `quarterTurn` over the whole frame first (R-PREVIEW-6). */
+        bool isIdentity() const override
+        {
+            return paramValue(angleID) == (Pixel)0 && paramValue(quarterTurnsID) == (Pixel)0;
+        }
+
         void process(const Image &in, Image &out) override;
     };
 }

@@ -58,14 +58,23 @@ namespace arstro
          *  are honoured instead of linearly connecting the bare control points. */
         void setCurve(Channel c, const std::vector<CurvePoint> &points);
 
+        /** True when all three curves are flat at zero: no hue shift, no saturation and
+         *  no luminance move, so `rgbToHsl`/`hslToRgb` and the chroma weight never run
+         *  (12.29 ms on a 1.7 Mpx preview — R-PREVIEW-6, D-45). */
+        bool isIdentity() const override { return mIdentity; }
+
     protected:
         void processPixel(const Pixel *in, Pixel *out, int channels) override;
 
     private:
-        void rebuild(int c);
+        void rebuild(int c);      // rebuildLut + refreshIdentity
+        void rebuildLut(int c);   // fill mLut[c] from mPoints[c]
         float sampleCyclic(int c, float hue) const;  // hue in [0,360) -> interpolated y
+
+        void refreshIdentity();
 
         std::vector<std::pair<float, float>> mPoints[3];
         float mLut[3][kLut];
+        bool mIdentity = true;   // refreshed by refreshIdentity() on every rebuild
     };
 }

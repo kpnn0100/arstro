@@ -10,6 +10,7 @@ namespace arstro
         buildLut({{0.0f, 0.0f}, {1.0f, 1.0f}}, mLut);  // identity master
         for (int c = 0; c < kChannels; ++c)
             buildLut({{0.0f, 0.0f}, {1.0f, 1.0f}}, mChanLut[c]);  // identity channels
+        refreshIdentity();
     }
 
     void ToneCurve::setPoints(const std::vector<CurvePoint> &points)
@@ -17,15 +18,43 @@ namespace arstro
         // Flatten the bezier control points to a dense polyline (corners = straight,
         // smooth = bezier) with the SAME sampler the editor draws with, then LUT it.
         buildLut(curve::sample(points, false, 0.f), mLut);
+        refreshIdentity();
     }
 
     void ToneCurve::setChannelPoints(int ch, const std::vector<CurvePoint> &points)
     {
         if (ch < 0 || ch >= kChannels) return;
         buildLut(curve::sample(points, false, 0.f), mChanLut[ch]);
+        refreshIdentity();
     }
 
+    // The domain flag does not change WHETHER the curve is identity — an identity curve
+    // is identity in either domain, and a log round trip of a straight line is the
+    // no-op this skip exists to remove — so it does not touch mIdentity.
     void ToneCurve::setLogScale(bool log) { mLog = log; }
+
+    bool ToneCurve::lutIsIdentity(const Pixel *lut)
+    {
+        // buildLut evaluates a piecewise-linear curve at each entry, so an identity
+        // curve lands on i/(kLut-1) up to float rounding of that division. A tolerance
+        // far below one 8-bit step (1/255) keeps the claim honest while tolerating it.
+        const Pixel kEps = (Pixel)1e-6;
+        for (int i = 0; i < kLut; ++i)
+        {
+            const Pixel want = (Pixel)i / (Pixel)(kLut - 1);
+            const Pixel d = lut[i] - want;
+            if (d > kEps || d < -kEps)
+                return false;
+        }
+        return true;
+    }
+
+    void ToneCurve::refreshIdentity()
+    {
+        mIdentity = lutIsIdentity(mLut);
+        for (int c = 0; c < kChannels && mIdentity; ++c)
+            mIdentity = lutIsIdentity(mChanLut[c]);
+    }
 
     void ToneCurve::buildLut(std::vector<std::pair<float, float>> pts, Pixel *lut)
     {
