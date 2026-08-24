@@ -70,6 +70,10 @@ namespace cosmo
                 // Appended, never inserted: the shape of a line is an interface once anything
                 // quotes it, so a new fact goes on the end (Event.h).
                 if (!e.text.empty()) o << ' ' << e.text;
+                // ...which is why `level` sits after `rehydrated` even though it reads oddly:
+                // an `expect` that already quoted "... ms=1200 rehydrated" must keep matching
+                // (R-PREVIEW-2).
+                o << " level=" << e.c;
                 break;
             case Event::Kind::ExportProgress: o << " done=" << e.a << " total=" << e.b << " name=" << e.text; break;
             case Event::Kind::ExportFinished: o << " written=" << e.a << " failures=" << e.b; break;

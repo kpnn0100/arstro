@@ -23,7 +23,12 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T2 — progressive resolution.** T0 and T1 are complete. T2 is the item that changes the
+**► NEXT: T2.5 (design) then T3.** T2's core half is done and demonstrated end to end. What is
+left is the view: crossfading level to level (R-PREVIEW-4), sending `gesture on|off` from the
+widgets that drag, and wiring `setWantIntermediateHistograms` to whether the Curve/Mixer panel is
+open (T0.4's unwired half).
+
+**► (done) T2 core — progressive resolution.** T0 and T1 are complete. T2 is the item that changes the
 shape of the experience rather than a constant factor, and the user's numbers for it are recorded
 above: 33 ms live, 500 ms to settle, stepping up.
 
@@ -113,20 +118,30 @@ trying: **a live gesture renders at whatever resolution meets a latency budget, 
 when the gesture settles.** Cost is near-linear in pixels (`800px 55 ms`, `400px 15 ms` at 8 threads),
 which is what makes this work.
 
-- [ ] T2.1 **Write the missing requirement first** — D-45 filed a requirement gap and said the number
+- [x] T2.1 **Requirement written** — R-PREVIEW-1..6, with the user's numbers (33 ms live, 500 ms
+      settle stepping up, A733 the floor). R-PREVIEW-3 was then **AMENDED by measurement before the
+      code shipped**: a real edit costs ~10x a neutral one (21 ms vs 200 ms at 1600 px/24 thr), so
+      500 ms cannot cover a heavy edit's level-0 render on a weak board. The walk always completes;
+      500 ms is the target for the machine and edit in front of it; `previewEdge` is the lever.
+      ~~Write the missing requirement first~~ — D-45 filed a requirement gap and said the number
       is a product decision to take with the user, not to guess here. It must be stated as a *latency*
       budget, not a resolution, so it is hardware-independent and can fail: "while an adjustment
       gesture is live a new preview frame lands within N ms; the full preview level is reached within
       M ms of the gesture ending." **Ask the user for N and M before coding.**
-- [ ] T2.2 **Proxy pyramid per slot** (1600 / 800 / 400 / 200). `downscaleEncodedToLinear` already
+- [x] T2.2 **Proxy pyramid per slot** — 4 levels, built at ingest from one read of the source,
+      **1.328x** one proxy in bytes (measured exactly). ~~Proxy pyramid per slot~~ (1600 / 800 / 400 / 200). `downscaleEncodedToLinear` already
       does a fused convert-and-downscale in one read of the source (D-44); emit every level from that
       same read, so the pyramid is nearly free and no full-resolution float image is ever allocated.
       Also moves proxy building to the DECODE worker — the ledger's existing open item below, which
       is what turns D-44's serial 15 s back into a parallel ~2 s.
-- [ ] T2.3 **Level selection from measured cost.** `Frame::ms` already carries what the last render
+- [x] T2.3 **Level selection from measured cost** — `RenderService::levelForBudget()` from ONE
+      number (ms per megapixel, exponential average, re-decodes excluded). No hardware detection,
+      no setting. ~~Level selection from measured cost.~~ `Frame::ms` already carries what the last render
       cost (added for D-44). Pick the level whose last measured cost fits the budget; no hardware
       detection, no configuration — the Ryzen settles on 1600 and the A733 on 400 by themselves.
-- [ ] T2.4 **Settle-and-refine.** Gesture end (or ~120 ms of no input) walks the level up one step at
+- [x] T2.4 **Settle-and-refine** — `gesture on|off` command + `maybeRefine` in `pump`, one level
+      per frame, no history. Never refines while the finger is down, and that guard is measured:
+      a paced drag oscillated 1,0,1,0 without it. ~~Settle-and-refine.~~ Gesture end (or ~120 ms of no input) walks the level up one step at
       a time. Every level is a complete, correct frame, so there is never a blank or torn state — and
       because each level is a real render, `frame.ready` stays honest.
 - [ ] T2.5 **Design half (separate commit, `arstro.cosmo.design.implement`).** A coarse frame must

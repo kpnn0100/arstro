@@ -108,6 +108,22 @@ namespace cosmo
             kvi(s, j, "engineRehydrations", m.budget.rehydrations);
         }
 
+        // The preview pyramid (R-PREVIEW-1/2/3). The CONTRACT is stable — how many levels
+        // exist and what latency an interactive frame is allowed — while the OUTCOME is not:
+        // the level a machine settles on and the cost it measured are the whole point of the
+        // requirement being written as a budget instead of a resolution, so two services
+        // given identical commands on a fast and a slow box must still agree on their stable
+        // dump (R-SVC-9) while legitimately showing different levels.
+        kvi(s, j, "previewLevels", m.previewLevels);
+        kvi(s, j, "previewBudgetMs", (int)(m.interactiveBudgetMs + 0.5));
+        if (!o.stable)
+        {
+            kvi(s, j, "frameLevel", m.frameLevel);
+            kvi(s, j, "frameLevelEdge", m.frameLevelEdge);
+            kvb(s, j, "refining", m.refining);
+            kvi(s, j, "previewMsPerMpx", (int)(m.msPerMegapixel + 0.5));
+        }
+
         kvb(s, j, "gpuAvailable", m.gpuAvailable);
         kvb(s, j, "gpuActive", m.gpuActive);
         if (!m.lastError.empty()) kv(s, j, "lastError", m.lastError);

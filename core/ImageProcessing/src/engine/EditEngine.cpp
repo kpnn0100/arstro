@@ -110,7 +110,20 @@ namespace arstro
         // A proxy already at the current preview size is enough to render a preview from,
         // so a slot is only COLD when neither is present. renderFull is the other caller
         // and it asks for the source explicitly.
-        return s.proxy.empty() || s.proxyEdge != mPreviewMaxEdge;
+        // Cold means the level we are about to render is missing AND there is nothing
+        // resident to build it from. A pyramid makes that a weaker condition than it used
+        // to be: a coarse level alone cannot rebuild a finer one (upscaling is not a
+        // render), but ANY resident level at the right edge means a coarse request is
+        // already satisfiable, which is exactly why an interactive gesture on an evicted
+        // photo can still draw something (R-PREVIEW-2).
+        if (s.proxyEdge != mPreviewMaxEdge) return true;
+        const int want = mPreviewLevel;
+        if (want >= 0 && want < (int)s.proxy.size() && !s.proxy[want].empty()) return false;
+        // A finer level can produce a coarser one by halving; a coarser one cannot produce
+        // a finer one at all.
+        for (int l = 0; l < want && l < (int)s.proxy.size(); ++l)
+            if (!s.proxy[l].empty()) return false;
+        return true;
     }
 
     bool EditEngine::slotHasSource(int slot) const
@@ -136,11 +149,61 @@ namespace arstro
         return n;
     }
 
+    size_t EditEngine::pyramidBytes(const Slot &s)
+    {
+        size_t n = 0;
+        for (const Image &lvl : s.proxy) n += imageBytes(lvl);
+        return n;
+    }
+
     size_t EditEngine::residentProxyBytes() const
     {
         size_t n = 0;
-        for (const Slot &s : mSlots) n += imageBytes(s.proxy);
+        for (const Slot &s : mSlots) n += pyramidBytes(s);
         return n;
+    }
+
+    int EditEngine::previewLevelEdge(int l) const
+    {
+        if (l < 0) l = 0;
+        if (l >= kPreviewLevels) l = kPreviewLevels - 1;
+        int e = mPreviewMaxEdge >> l;
+        return e < 1 ? 1 : e;
+    }
+
+    void EditEngine::setPreviewLevel(int l)
+    {
+        if (l < 0) l = 0;
+        if (l >= kPreviewLevels) l = kPreviewLevels - 1;
+        mPreviewLevel = l;
+    }
+
+    bool EditEngine::previewLevelResident(int l) const
+    {
+        if (mCurrent < 0 || l < 0 || l >= kPreviewLevels) return false;
+        const Slot &s = mSlots[mCurrent];
+        return s.proxyEdge == mPreviewMaxEdge && l < (int)s.proxy.size() && !s.proxy[l].empty();
+    }
+
+    // Defined further down with the rest of the resampling helpers; declared here because
+    // the pyramid builder is the first caller.
+    static Image downscaleLinear(const Image &src, int maxEdge);
+
+    void EditEngine::buildPyramidBelow(Slot &s, int fromLevel)
+    {
+        s.proxy.resize(kPreviewLevels);
+        for (int l = fromLevel + 1; l < kPreviewLevels; ++l)
+        {
+            if (!s.proxy[l].empty()) continue;
+            // From the level ABOVE, not from the source: halving a 27 MB image costs a
+            // quarter of building it, and the whole tail below level 0 is a third of level
+            // 0's own cost. Averaging still happens in linear light, which is the standing
+            // invariant — every level in the pyramid is already linear.
+            const Image &above = s.proxy[l - 1];
+            if (above.empty()) break;
+            const int edge = previewLevelEdge(l);
+            s.proxy[l] = downscaleLinear(above, edge);
+        }
     }
 
     void EditEngine::selectImage(int slot)
@@ -175,13 +238,16 @@ namespace arstro
         {
             const int old = mProxyLRU[i];
             if (old == mCurrent) continue;
-            if (old < 0 || old >= (int)mSlots.size() || mSlots[old].proxy.empty())
+            if (old < 0 || old >= (int)mSlots.size() || pyramidBytes(mSlots[old]) == 0)
             {
                 mProxyLRU.erase(mProxyLRU.begin() + i);   // stale entry, nothing to free
                 continue;
             }
-            bytes -= imageBytes(mSlots[old].proxy);
-            mSlots[old].proxy = Image{};
+            // The whole pyramid goes, not one level: the levels of one photo are one cache
+            // entry, and keeping a stray coarse level of an evicted photo would make the
+            // byte accounting depend on which level was rendered last.
+            bytes -= pyramidBytes(mSlots[old]);
+            mSlots[old].proxy.clear();
             mSlots[old].proxyEdge = -1;
             mProxyLRU.erase(mProxyLRU.begin() + i);
         }
@@ -215,7 +281,7 @@ namespace arstro
     {
         auto it = std::find(mProxyLRU.begin(), mProxyLRU.end(), slot);
         if (it != mProxyLRU.end()) mProxyLRU.erase(it);
-        if (slot >= 0 && slot < (int)mSlots.size()) { mSlots[slot].proxy = Image{}; mSlots[slot].proxyEdge = -1; }
+        if (slot >= 0 && slot < (int)mSlots.size()) { mSlots[slot].proxy.clear(); mSlots[slot].proxyEdge = -1; }
     }
 
     void EditEngine::dropSource(int slot)
@@ -504,8 +570,14 @@ namespace arstro
         if (!rgba || width <= 0 || height <= 0 || channels < 1)
             return -1;
         Slot s;
-        s.proxy = downscaleEncodedToLinear(rgba, width, height, channels, mPreviewMaxEdge);
+        s.proxy.resize(kPreviewLevels);
+        s.proxy[0] = downscaleEncodedToLinear(rgba, width, height, channels, mPreviewMaxEdge);
         s.proxyEdge = mPreviewMaxEdge;
+        // R-PREVIEW-5: every level from ONE read of the encoded source. Level 0 is the read;
+        // the rest are halvings of a 27 MB image and together cost a third of it. Building
+        // them now rather than on demand is the whole point — an interactive gesture must
+        // not be the thing that discovers a level is missing (R-PREVIEW-1).
+        buildPyramidBelow(s, 0);
         s.srcWidth = width;
         s.srcHeight = height;
         mSlots.push_back(std::move(s));
@@ -518,23 +590,40 @@ namespace arstro
     bool EditEngine::ensurePreviewProxy()
     {
         Slot &s = mSlots[mCurrent];
-        if (!s.proxy.empty() && s.proxyEdge == mPreviewMaxEdge)  // cached at this preview size -> reuse
+        const int want = mPreviewLevel;
+        if (s.proxyEdge == mPreviewMaxEdge)
         {
-            touchProxyLRU(mCurrent);
-            return true;
+            s.proxy.resize(kPreviewLevels);
+            if (!s.proxy[want].empty())          // the level we want is resident -> reuse
+            {
+                touchProxyLRU(mCurrent);
+                return true;
+            }
+            // The level is missing but a FINER one is resident, so halve down to it rather
+            // than going back to the source. This is the path a coarse interactive request
+            // takes on a photo whose pyramid was partially evicted.
+            for (int l = want - 1; l >= 0; --l)
+                if (!s.proxy[l].empty())
+                {
+                    buildPyramidBelow(s, l);
+                    touchProxyLRU(mCurrent);
+                    return !s.proxy[want].empty();
+                }
         }
-        // Cold: the proxy is missing or stale AND the source it would be built from has
-        // been evicted (R-MEM-2). Say so rather than downscaling an empty image — the
-        // caller re-decodes and comes back.
+        // Cold: no usable level AND the source it would be built from has been evicted
+        // (R-MEM-2). Say so rather than downscaling an empty image — the caller
+        // re-decodes and comes back.
         if (s.source.empty()) return false;
-        s.proxy = downscaleLinear(s.source, mPreviewMaxEdge);
+        s.proxy.assign(kPreviewLevels, Image{});
+        s.proxy[0] = downscaleLinear(s.source, mPreviewMaxEdge);
         s.proxyEdge = mPreviewMaxEdge;
+        buildPyramidBelow(s, 0);
         touchProxyLRU(mCurrent);
         // Building the proxy is also the moment the source stops being the only copy, so
         // it goes to the back of its own pool rather than staying pinned by having been
         // used most recently.
         touchSourceLRU(mCurrent);
-        return true;
+        return !s.proxy[want].empty();
     }
 
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes)
@@ -620,7 +709,7 @@ namespace arstro
         // evicted and the caller must re-decode. RenderService does that through its
         // SourceLoader and renders on the second attempt.
         if (!ensurePreviewProxy()) return PreviewBuffer{};
-        return renderInto(mSlots[mCurrent].proxy, mSlots[mCurrent].params, mPreviewOut);
+        return renderInto(mSlots[mCurrent].proxy[mPreviewLevel], mSlots[mCurrent].params, mPreviewOut);
     }
 
     void EditEngine::releaseWorkBuffers()

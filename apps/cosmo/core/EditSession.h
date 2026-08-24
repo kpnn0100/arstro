@@ -184,6 +184,23 @@ namespace cosmo
          *  (empty `history` falls back to a single-node root). Used on project load. */
         void applyParamsToSlot(int slot, const EditParams &p, const History &history);
         void submit();                                 // record history + re-render the current slot
+        /** As `submit()`, but tells the render service a GESTURE IS IN FLIGHT, so latency
+         *  outranks resolution and it renders whichever pyramid level fits the interactive
+         *  budget (R-PREVIEW-1/2). Every other path — a photo change, a preset, undo, a
+         *  committed value — uses `submit()` and gets the full level. History is recorded
+         *  either way: coalescing lives in `recordHistory`, and a drag that produced no
+         *  history entry would be an undo bug, not a performance win.
+         *
+         *  The caller decides which of the two it is, because only the caller knows whether
+         *  a finger is still down. `CosmoService` then walks the level back up when the
+         *  gesture settles (R-PREVIEW-3). */
+        void submitInteractive();
+        /** Ask for ONE refinement step: re-render the current slot at `level`, stepping the
+         *  pyramid up rather than jumping to full (R-PREVIEW-3). Records no history and does
+         *  not mark the session dirty — a refinement is not an edit, and going through
+         *  `submit()` would add a second undo entry for a value the user never touched
+         *  again. A no-op when there is no current slot. */
+        void submitRefine(int level);
 
         /** Unsaved-changes flag: true once an edit is submitted, cleared on
          *  save/load/reset. Drives the "save or discard?" prompt (R-HOME). */
@@ -286,6 +303,7 @@ namespace cosmo
         const RenderService::Frame *renderBefore();
 
     private:
+        void submitWith(arstro::RenderService::RenderIntent intent);
         const EditParams *applyHistoryParams(const EditParams *p);
         void recordHistory();  // snapshot the current edit target (slot or group) into its history
         int firstImageSlotUnder(int node) const;  // representative member for a group's live preview

@@ -1351,7 +1351,22 @@ which makes it hardware-independent, measurable, and able to fail.
   that gets slower under load (thermal throttling, a load running concurrently, R-CPU's budget
   shrinking the engine's share) walks *down* a level on its own and back up when it can, because the
   input to the decision is always the last real measurement.
-- **R-PREVIEW-3 The full level is reached within 500 ms of the gesture ending, stepping up.** When the
+- **R-PREVIEW-3 The full level is reached within 500 ms of the gesture ending, stepping up.**
+  (**AMENDED 2026-08-24, by measurement, before the code shipped.** The 500 ms was set against
+  the ~200 ms neutral render D-45 measured — and `preview_level_ladder.cpp` then showed that a
+  *real* edit costs about **ten times** a neutral one: at 1600 px on a 24-thread desktop,
+  21 ms neutral against **200 ms** with exposure + contrast + vibrance + a curve + clarity. T0's
+  identity skip removed the cost of stages nobody is using; it cannot remove the cost of stages
+  somebody is. So on an A733-class board a level-0 render of a heavy edit is over a second, and no
+  amount of stepping fits that into 500 ms.
+  The requirement therefore says what is actually true and still fails when it should: **the walk
+  always completes to `previewEdge`, one level per frame, and 500 ms is the target for the machine
+  and the edit in front of it — not a promise the walk will be truncated to keep.** Where it cannot
+  be met, `AppModel::refining` stays true for as long as the walk is still climbing, so the view can
+  say so and a script can measure it, and the lever the photographer has is `previewEdge` itself,
+  which is already a setting: a smaller preview is the quality/speed trade they are entitled to make
+  deliberately, and it is the honest place for that decision to live rather than hidden in a
+  truncated refinement.) When the
   gesture settles (release, or ~120 ms with no input) the engine renders the next level up, then the
   next, until `previewEdge`. **Every level is a complete, correct frame** — not a partial or a
   scaled-up copy of a previous one — so there is no state in which the photograph on screen is wrong,

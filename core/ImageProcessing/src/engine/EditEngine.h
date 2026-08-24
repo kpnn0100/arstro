@@ -90,6 +90,27 @@ namespace arstro
 
         // ── preview / render ──
         void setPreviewSize(int maxEdge);
+
+        // ── the preview pyramid (R-PREVIEW-1/2/3) ──
+        /** How many levels a slot's preview pyramid has. Level 0 is `previewSize()`; each
+         *  further level halves the long edge, so with four levels a 1600 px preview also
+         *  has 800, 400 and 200 px versions. Four because that spans the ~64x cost range
+         *  between a desktop and an A733-class board (a level is ~4x cheaper than the one
+         *  below it) and because the whole pyramid is only 1.33x one full proxy. */
+        static constexpr int kPreviewLevels = 4;
+        static int previewLevels() { return kPreviewLevels; }
+        /** The long edge of level `l`, never below 1. */
+        int previewLevelEdge(int l) const;
+        /** Which level `renderPreview()` renders. Clamped into [0, kPreviewLevels).
+         *  This is the ONE knob R-PREVIEW-1's latency budget turns: the engine holds no
+         *  opinion about how fast a frame should be, it just renders the level it is told
+         *  to and reports what that cost (RenderService decides — R-PREVIEW-2). */
+        void setPreviewLevel(int l);
+        int previewLevel() const { return mPreviewLevel; }
+        /** True when level `l` of the CURRENT slot is already resident, so rendering it
+         *  needs no downscale and no re-decode. */
+        bool previewLevelResident(int l) const;
+
         PreviewBuffer renderPreview();
         PreviewBuffer renderFull();
         const HistogramData &histogram() const { return mLastHistogram; }
@@ -255,7 +276,12 @@ namespace arstro
         // `srcWidth/srcHeight` are the FULL-RESOLUTION dimensions, kept even when the source
         // itself is not: a preview-only slot still has to be able to say how big the photo
         // really is, and a re-decode has to land at the same size it was added at.
-        struct Slot { Image source; EditParams params; Image proxy; int proxyEdge = -1;
+        /** A slot's cached pixels. `proxy` is a PYRAMID (R-PREVIEW-2): index 0 is the
+         *  finest level, at `proxyEdge`; each further level halves the long edge. A level
+         *  may be empty — levels are built together at ingest, but eviction and a preview
+         *  size change both leave gaps that `ensurePreviewProxy` fills on demand. */
+        struct Slot { Image source; EditParams params;
+                      std::vector<Image> proxy; int proxyEdge = -1;
                       int srcWidth = 0; int srcHeight = 0; bool released = false; };
 
         void buildPipeline();
@@ -269,6 +295,12 @@ namespace arstro
         /** False when the slot is cold — no proxy at this size and no source to build one
          *  from (R-MEM-2). The caller must re-decode before it can render. */
         bool ensurePreviewProxy();
+        /** Build every missing pyramid level of `slot` from the finest one that exists,
+         *  halving as it goes. Cheap on purpose: level 1 costs a quarter of level 0 and
+         *  the whole tail below level 0 is a third of it, so a pyramid is ~1.33x the work
+         *  and the bytes of the single proxy it replaces (R-PREVIEW-5). */
+        void buildPyramidBelow(Slot &s, int fromLevel);
+        static size_t pyramidBytes(const Slot &s);
         void touchProxyLRU(int slot);   // mark `slot`'s proxy most-recently-used; evict back to the byte cap
         void touchSourceLRU(int slot);  // same, for full-resolution sources (R-MEM-1)
         void dropProxy(int slot);       // free a slot's cached proxy + drop it from the LRU
@@ -286,6 +318,7 @@ namespace arstro
         std::vector<Slot> mSlots;
         int mCurrent = -1;
         int mPreviewMaxEdge = 2048;
+        int mPreviewLevel = 0;   // 0 = finest; see setPreviewLevel
         std::vector<int> mProxyLRU;    // slots holding a live proxy, most-recent first
         std::vector<int> mSourceLRU;   // slots holding full-resolution pixels, most-recent first
         size_t mSourceCap = kDefaultSourceCap;

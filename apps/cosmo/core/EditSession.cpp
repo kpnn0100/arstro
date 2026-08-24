@@ -480,7 +480,23 @@ namespace cosmo
         h->record(*p, mNowMs);
     }
 
-    void EditSession::submit()
+    void EditSession::submit() { submitWith(RenderService::RenderIntent::Final); }
+
+    void EditSession::submitInteractive() { submitWith(RenderService::RenderIntent::Interactive); }
+
+    void EditSession::submitRefine(int level)
+    {
+        // A refinement is not an edit: no history, no dirty flag, same params — only the
+        // level changes. Going through submit() would record a second history entry for
+        // a value the user never touched again (R-PREVIEW-3).
+        if (mCurrentSlot < 0) return;
+        EditParams p = effectiveParams(mCurrentSlot);
+        if (mCropPreviewMode)
+        { p.cropX = 0; p.cropY = 0; p.cropW = 1; p.cropH = 1; }
+        mService.render(mCurrentSlot, p, RenderService::RenderIntent::Final, level);
+    }
+
+    void EditSession::submitWith(RenderService::RenderIntent intent)
     {
         if (mCurrentSlot < 0) return;
         mDirty = true;   // an edit is being committed -> unsaved changes
@@ -488,7 +504,7 @@ namespace cosmo
         EditParams p = effectiveParams(mCurrentSlot);
         if (mCropPreviewMode)
         { p.cropX = 0; p.cropY = 0; p.cropW = 1; p.cropH = 1; }
-        mService.render(mCurrentSlot, p);
+        mService.render(mCurrentSlot, p, intent);
     }
 
     // ---- clipboard ----

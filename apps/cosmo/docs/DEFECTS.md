@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-46**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-47**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -137,6 +137,39 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   verified to fail on the unfixed code. **Stays open** for steps 2-4 (LUT the sRGB transfer, hoist
   `renderInto`'s three working buffers, opt-in histogram taps), which are now the whole of what a
   default-params render costs.
+
+### D-46 — `cosmo-cc`'s `wait <ms>` advanced the service clock sixteen times too fast
+- **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-24, while verifying R-PREVIEW-3's settle walk through `cosmo-cc --watch`.
+- **Reproduce (before the fix):**
+  ```
+  gesture on
+  set exposure=0.5 contrast=15 vibrance=25
+  wait 80
+  set exposure=0.6 contrast=16 vibrance=25
+  wait 80
+  ...
+  ```
+  → `frame.ready ... level=0 / level=1 / level=0 / level=1 / level=0 ...`
+- **Expected:** a paced drag stays at the coarse level for its whole duration; the settle walk runs
+  once, after `gesture off`.
+- **Actual:** the level oscillated 1, 0, 1, 0 — a full-resolution render between every simulated
+  move, which on a slow board is precisely the stall R-PREVIEW-1 exists to prevent.
+- **Cause:** `waitFor`'s numeric branch spun `pumpOnce` until **wall** time ran out, sleeping 1 ms
+  per iteration, while `pumpOnce` advances the service clock by a fixed **16 ms** per call
+  (`apps/cosmo/cli/main.cpp`, `pumpOnce`). So `wait 80` ran ~80 pumps and told the service that
+  **1280 ms** had passed. Anything in the service that reasons about elapsed time saw a script as a
+  slideshow, and R-PREVIEW-3's 80 ms settle window was crossed between every move.
+- **Judgement:** defect against the standing rule that **the same script must work headless and
+  live**. A fixed tick is right — it is what makes a scripted run reproducible (R-SVC-6) — but then
+  `wait <ms>` has to mean *that many ms of service time*, not "spin until a different clock says so".
+  The two clocks disagreeing by 16x made the headless run a different program.
+- **Fixed:** `wait <ms>` now advances `h.tickMs` by exactly that much, sleeping a real 16 ms per
+  tick so wall time and service time agree, and it is what a GTK timeout at frame rate does. The
+  `--timeout` deadline stays wall-clock, because that one bounds real work.
+- **Guarded by** the R-PREVIEW walk being observable at all: with the old clock the `cosmo-cc` run
+  in DR-PREVIEW-3 produces the oscillation above instead of a clean 0, 1, 1, 0. Filed and fixed in
+  the same commit as T2 because it is the reason T2 could not be demonstrated.
 
 ### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
 - **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2

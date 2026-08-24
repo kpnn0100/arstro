@@ -48,7 +48,7 @@ namespace cosmo
             ParamsChanged,    // text = the fields that changed
             HistoryChanged,   // a = current, b = nodes, text = label
             SettingsChanged,  // text = key=value tail
-            FrameReady,       // a = slot, b = width, ms = render time
+            FrameReady,       // a = slot, b = width, ms = render time, c = pyramid level
             ExportProgress,   // a = done, b = total, text = name
             ExportFinished,   // a = written, b = failures
             CommandRejected   // text = the line, plus why
@@ -58,6 +58,9 @@ namespace cosmo
         std::string text;
         int a = 0;
         int b = 0;
+        /** A third integer, appended after `b` rather than squeezed into it. Today only
+         *  FrameReady uses it, for the preview pyramid level (R-PREVIEW-2). */
+        int c = 0;
         double ms = 0.0;
     };
 

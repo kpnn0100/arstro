@@ -1264,8 +1264,25 @@ namespace
         const double deadline = wallMs() + (timeoutMs > 0 ? timeoutMs : 120000);
         if (!cond.empty() && std::isdigit((unsigned char)cond[0]))
         {
-            const double until = wallMs() + std::atof(cond.c_str());
-            while (wallMs() < until) { pumpOnce(h); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+            // `wait <ms>` advances the SERVICE clock by that many ms, at the same 16 ms
+            // tick a GTK timeout drives, and sleeps a real 16 ms per tick so wall time and
+            // service time agree.
+            //
+            // It used to spin `pumpOnce` with a 1 ms sleep until WALL time ran out — so a
+            // `wait 80` ran ~80 pumps and advanced the service clock by 1280 ms, sixteen
+            // times what the script asked for. Anything in the service that reasons about
+            // elapsed time then saw a script as a slideshow: R-PREVIEW-3's settle walk
+            // fired mid-drag because 80 ms of scripted pause looked like 1.3 s of silence.
+            // "The same file must work headless and live" is not satisfied by a clock that
+            // runs sixteen times too fast (D-46).
+            const double target = std::atof(cond.c_str());
+            const double until = h.tickMs + (target > 0 ? target : 0);
+            while (h.tickMs < until)
+            {
+                pumpOnce(h);
+                if (wallMs() > deadline) return true;   // the timeout is still wall-clock
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            }
             return true;
         }
         for (;;)

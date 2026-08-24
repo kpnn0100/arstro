@@ -2072,3 +2072,116 @@ counts x 8 range sizes, atomically counted), `ParallelFor_result_is_identical_to
 would hang rather than fail if the pool waited, and that is the point of having it), and
 `ParallelFor_survives_repeated_resizing_under_load`. Timing is measured by the fixture, not asserted
 in the suite: a clock assertion in a unit test is a flake generator.
+
+### DR-PREVIEW-1/2/3 A gesture renders coarse and refines when it stops (R-PREVIEW-1, R-PREVIEW-2, R-PREVIEW-3)
+The item that changes the shape of the experience rather than a constant factor. Three layers, each
+with one job.
+
+**The engine holds the pyramid and no opinion.** `EditEngine::Slot::proxy` is a
+`std::vector<Image>` of `kPreviewLevels` (4) levels: index 0 at `previewSize()`, each further level
+halving the long edge. `addImagePreviewOnly` builds level 0 with the fused
+`downscaleEncodedToLinear` — one read of the encoded source — and `buildPyramidBelow` halves down
+from there, so the tail below level 0 costs a third of level 0 and the whole pyramid is **1.328x**
+one proxy in bytes (asserted: `Preview_pyramid_costs_about_a_third_extra_in_bytes` measured exactly
+1.328). `setPreviewLevel(l)` chooses what `renderPreview()` renders. `ensurePreviewProxy` rebuilds a
+missing level by **halving a finer resident one**, never by upscaling a coarser one, and still
+reports COLD when there is nothing resident and no source (R-MEM-2 unchanged).
+
+**`RenderService` decides, from one measured number.** `render(slot, params, intent, explicitLevel)`
+takes a `RenderIntent` — `Final` (the default, so every existing caller is unchanged) or
+`Interactive`. For `Interactive` it calls `levelForBudget()`: the finest level whose predicted cost
+fits `interactiveBudgetMs` (33). The prediction is `msPerMegapixel * megapixels(level)`, and
+`msPerMegapixel` is an exponential average (0.3) of every completed frame's `ms / Mpx`.
+
+Four decisions inside that, each of which would be a bug the other way:
+- **One number, not a per-level table.** Cost is near-linear in pixels, so a measurement at *any*
+  level predicts every other one. A table would need every level visited before it could choose and
+  would go stale whenever the machine changed speed — thermal throttling, a concurrent load,
+  R-CPU shrinking the engine's share.
+- **No measurement yet -> level 0.** Optimistic on purpose: a desktop must never render coarse, and
+  being wrong on a slow board costs exactly *one* slow frame at the start of the first gesture.
+  Starting pessimistic would make every fast machine begin every session blurry — a permanent cost
+  to avoid a transient one.
+- **A re-decoded frame teaches nothing.** `learnCost` skips frames with `rehydrated` set: those
+  measure LibRaw, not the render, and folding a ~1 s decode into ms-per-megapixel would drive every
+  later gesture to the coarsest level for no reason (D-44's cold hops are exactly that shape).
+- **An unmeetable budget offers the coarsest level rather than refusing.** Asserted.
+
+**`CosmoService` decides *when*.** A new `Command::Kind::Gesture` (`gesture on|off`) says a gesture
+is in flight; while it is on, `set` calls `submitInteractive()` instead of `submit()` — same params,
+same history, same event, only the level differs. `maybeRefine(nowMs)` runs once per `pump` and, when
+the gesture is off and 80 ms have passed with no interactive render, asks for **one level up** via
+`submitRefine(level)`. It records no history and does not dirty the session: a refinement is not an
+edit, and going through `submit()` would add an undo entry for a value the user never touched again.
+
+**`gesture` is a Command rather than something inferred, and the reason is measured.** While the
+finger is down `maybeRefine` refuses to run at all — not even after a pause — because a full-level
+render cannot be cancelled once the worker starts it, so a refinement begun during a mid-drag pause
+makes the *next* move wait for it. On this desktop that is 36 ms and invisible; on an A733-class
+board a level-0 render of a real edit is over a second, which is exactly the lag the requirement
+exists to remove. An 80 ms-paced drag through `cosmo-cc --watch` oscillated `1,0,1,0` until that
+check existed. `kStuckMs` (500 ms) is a safety net for a front end that sends `gesture on` and
+forgets `gesture off` — a wasted render beats a photo that stays coarse forever.
+
+**Observable.** `AppModel` gains `frameLevel`, `frameLevelEdge`, `refining`, `previewLevels`,
+`interactiveBudgetMs` and `msPerMegapixel`; `Event` gains a third integer `c`, and `frame.ready`
+appends `level=N` **at the very end of the line** so an `expect` that already quoted
+`... ms=1200 rehydrated` still matches. In `formatModel` the *contract* (`previewLevels`,
+`previewBudgetMs`) is stable and the *outcome* (`frameLevel`, `frameLevelEdge`, `refining`,
+`previewMsPerMpx`) is not — two services given identical commands on a fast and a slow box are in
+the same state while showing different levels, which is the whole point of the requirement being a
+budget instead of a resolution, and would otherwise break R-SVC-9.
+
+**Measured — the level ladder** (`apps/cosmo/core/tests/fixtures/preview_level_ladder.cpp`, 24 MP
+source, previewEdge 1600, budget 33 ms). Two columns because they are two different questions:
+`neutral` is every parameter at its default, `edited` is exposure + contrast + vibrance + a tone
+curve + clarity:
+
+```
+threads=24   pyramid built in 37.1 ms (36.3 MB resident)
+  level  size          neutral     edited    fits budget
+  0      1600x1067     21.14ms    200.20ms   neutral only
+  1      800x534        5.90ms     32.95ms   yes
+  2      400x267        2.98ms      8.97ms   yes
+  3      200x134        2.56ms      3.94ms   yes
+
+threads=4    pyramid built in 77.4 ms
+  0      1600x1067     55.09ms    504.37ms   no
+  1      800x534       13.34ms     83.23ms   neutral only
+  2      400x267        3.41ms     17.78ms   yes
+  3      200x134        1.14ms      5.15ms   yes
+
+threads=1    pyramid built in 271.1 ms
+  0      1600x1067    182.96ms   1868.75ms   no
+  1      800x534       46.00ms    296.17ms   no
+  2      400x267       11.32ms     62.26ms   neutral only
+  3      200x134        2.87ms     16.14ms   yes
+```
+
+**A real edit costs about ten times a neutral one**, and that is the number that matters most here:
+T0's identity skip removed the cost of stages nobody is using and could never remove the cost of
+stages somebody is. It is also why **R-PREVIEW-3 was amended before this shipped** — 500 ms cannot
+cover a level-0 render of a heavy edit on a weak board, so the requirement now says the walk always
+completes and 500 ms is the target for the machine and the edit in front of it, with `previewEdge`
+as the photographer's deliberate lever.
+
+**End to end**, `cosmo-cc --watch` on a real 6 MP image with a heavy edit, moves 48 ms apart:
+
+```
+gesture on
+set exposure=0.5 contrast=15 vibrance=25   ->  frame.ready width=1600 ms=95.4  level=0   (no measurement yet)
+set exposure=0.6 ...                       ->  frame.ready width=800  ms=14.3  level=1   (chooser engages)
+set exposure=0.7 ...                       ->  frame.ready width=800  ms=10.1  level=1   (stays coarse)
+gesture off                                ->  frame.ready width=1600 ms=41.8  level=0   (refined)
+```
+
+**Guarded by** `image_tests` (four pyramid tests: every level exists after ingest and renders; every
+level renders the *same edit* — mean brightness agrees within 4/255, which is what makes refinement
+converge instead of changing the look; the 1.33x byte ratio; and rebuild-by-halving) and by
+`cosmo_core_tests::a_gesture_renders_coarse_and_then_refines`, which drives the whole thing through
+commands with no display: an unmeetable budget must still offer the coarsest level, the walk climbs
+**one step per frame** and terminates at 0, a generous budget never renders coarse, and the walk adds
+**no history**. The one-step assertion was verified to have teeth by making the walk jump to 0 and
+watching it fail. Also depends on **D-46**, filed and fixed in the same commit: `cosmo-cc`'s
+`wait <ms>` advanced the service clock 16x too fast, so a scripted drag looked like a slideshow and
+the settle walk fired between every move.

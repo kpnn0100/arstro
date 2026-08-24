@@ -1073,7 +1073,9 @@ namespace
             "set exposure=1.2 temp=7000", "bypass 4 on", "bypass 4 off", "group new \"Tokyo Night\"",
             "group ungroup 2", "undo", "redo", "preset apply \"Portrait/Soft Skin\"",
             "preset save MyLook", "settings set cpuPercent=25 previewEdge=1600", "screen home",
-            "state print", "state print --json", "quit"};
+            "state print", "state print --json",
+            "gesture on", "gesture off",     // R-PREVIEW-1
+            "quit"};
         for (const char *line : lines)
         {
             std::string err;
@@ -1097,6 +1099,11 @@ namespace
         assert(!err.empty() && "set without key=value must say so");
         arstro::cosmo::parseCommand("export --format jpg", err);
         assert(!err.empty() && "export without --outdir must say so");
+        arstro::cosmo::parseCommand("gesture maybe", err);
+        assert(!err.empty() && "gesture takes on|off, nothing else");
+        // ...but a bare `gesture` means on, the same way `bypass <n>` does.
+        const Command bare = arstro::cosmo::parseCommand("gesture", err);
+        assert(err.empty() && bare.kind == Command::Kind::Gesture && bare.flag);
 
         // Quoting survives a name with a space (no escapes anywhere in cosmo's formats).
         const Command g = arstro::cosmo::parseCommand("group new \"Tokyo Night\"", err);
@@ -1502,6 +1509,120 @@ namespace
         printf("[PASS] an_event_sees_the_model_it_describes\n");
     }
 
+    // R-PREVIEW-1/2/3: a gesture renders coarse to keep up, and the level walks back to
+    // full once the gesture stops. Driven entirely by commands with no display, which is
+    // the whole point of the requirement being a LATENCY budget: the behaviour is the same
+    // shape on every machine, so it can be asserted on any of them.
+    //
+    // The one thing that cannot be asserted here is the *number* — a 33 ms budget picks
+    // level 0 on this desktop and a coarse level on an A733, and asserting either would be
+    // asserting the hardware. So this asserts the MECHANISM: that a budget small enough to
+    // rule out level 0 produces a coarse frame, that the walk climbs one step per frame,
+    // that it terminates at level 0, and that a refinement adds no history.
+    void test_a_gesture_renders_coarse_and_then_refines()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_preview.cmp";
+        writeFakeProject(path, 2, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 2);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        // The contract half is published whatever happens.
+        assert(svc.model().previewLevels == arstro::EditEngine::previewLevels());
+        assert(svc.model().previewLevels == 4);
+        assert(svc.model().interactiveBudgetMs > 0.0 && "a budget must exist to be met");
+
+        auto pumpForFrame = [&](double &now, int maxTicks = 400) {
+            const unsigned before = svc.model().frameSeq;
+            for (int i = 0; i < maxTicks; ++i)
+            {
+                svc.pump(now);
+                now += 16.0;
+                if (svc.model().frameSeq != before) return true;
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            return false;
+        };
+
+        double now = 1000.0;
+        // A settled edit renders level 0, always — that is the default and it must not have
+        // changed for anyone who never sends `gesture`.
+        assert(svc.dispatchText("set exposure=0.2", err) && err.empty());
+        assert(pumpForFrame(now) && "a set must produce a frame");
+        assert(svc.model().frameLevel == 0 && "a settled edit renders the full level");
+        assert(!svc.model().refining);
+
+        // Now force the level chooser's hand: a budget of 1 ms cannot be met by any level,
+        // so `levelForBudget` must offer the coarsest rather than giving up. This is the
+        // A733 case reproduced on a fast machine by moving the budget instead of the CPU.
+        svc.session().renderService().setInteractiveBudgetMs(1.0);
+        assert(svc.dispatchText("gesture on", err) && err.empty());
+        int coarsest = -1;
+        for (int i = 0; i < 6; ++i)   // a few moves, as a drag would send
+        {
+            assert(svc.dispatchText("set exposure=" + std::to_string(0.3 + i * 0.05), err));
+            assert(pumpForFrame(now) && "every move in a gesture must produce a frame");
+            coarsest = svc.model().frameLevel;
+        }
+        assert(coarsest == arstro::EditEngine::previewLevels() - 1 &&
+               "an unmeetable budget must still offer the coarsest level, not refuse");
+        assert(svc.model().frameLevelEdge > 0);
+        assert(svc.model().msPerMegapixel > 0.0 && "the estimate the choice is made from must be readable");
+        assert(svc.model().refining && "a coarse frame on screen means a refinement is owed");
+
+        const int historyBeforeWalk = svc.model().history.nodes;
+
+        // Finger up. The walk must climb ONE level per frame — not jump — and must end at 0.
+        assert(svc.dispatchText("gesture off", err) && err.empty());
+        int prevLevel = svc.model().frameLevel;
+        int steps = 0;
+        while (svc.model().frameLevel > 0 && steps < 10)
+        {
+            assert(pumpForFrame(now) && "the walk must keep producing frames");
+            const int lvl = svc.model().frameLevel;
+            assert(lvl == prevLevel - 1 && "one step at a time, never a jump (R-PREVIEW-3)");
+            prevLevel = lvl;
+            ++steps;
+        }
+        assert(svc.model().frameLevel == 0 && "the walk must reach the full level");
+        assert(steps == arstro::EditEngine::previewLevels() - 1 && "one step per level");
+        assert(!svc.model().refining && "and then stop claiming it is refining");
+
+        // A refinement is not an edit: the walk must not have added undo entries.
+        assert(svc.model().history.nodes == historyBeforeWalk &&
+               "refining is not editing — no history for a value the user never touched");
+
+        // A generous budget picks the full level, so the same code is a no-op on a machine
+        // that does not need it — no configuration, no per-device branch (R-PREVIEW-2).
+        svc.session().renderService().setInteractiveBudgetMs(100000.0);
+        assert(svc.dispatchText("gesture on", err));
+        assert(svc.dispatchText("set contrast=8", err));
+        assert(pumpForFrame(now));
+        assert(svc.model().frameLevel == 0 && "a fast machine must never render coarse");
+        assert(svc.dispatchText("gesture off", err));
+
+        // The event line carries the level, appended at the END so an older `expect` that
+        // quoted "... ms=..." or "... rehydrated" still matches (R-SVC-5 / Event.h).
+        std::vector<std::string> lines;
+        svc.subscribe([&lines](const arstro::cosmo::Event &e) {
+            if (e.kind == arstro::cosmo::Event::Kind::FrameReady)
+                lines.push_back(arstro::cosmo::formatEvent(e));
+        });
+        assert(svc.dispatchText("set exposure=0.9", err));
+        assert(pumpForFrame(now));
+        assert(!lines.empty() && "a frame must announce itself");
+        assert(lines.back().find("[evt] frame.ready") == 0);
+        assert(lines.back().find(" level=") != std::string::npos && "and say which level it is");
+
+        printf("[PASS] a_gesture_renders_coarse_and_then_refines (%d steps up)\n", steps);
+    }
+
     void test_commands_drive_the_session()
     {
         using namespace arstro::cosmo;
@@ -1663,9 +1784,10 @@ namespace
             {K::StatePrint, "state print"},
             {K::UiDump, "ui dump --root splash"},
             {K::Wait, "wait load.finished"},
+            {K::Gesture, "gesture on"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 27;   // Kind::None is not a command
+        const int kKindCount = 28;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2041,6 +2163,7 @@ int main()
     test_walking_a_rack_that_fits_the_cap_never_re_decodes();
     test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
+    test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();
     test_a_view_may_reset_on_project_opening();

@@ -2,6 +2,65 @@
 
 namespace arstro
 {
+    // ── R-PREVIEW-1/2: the latency budget, and the level that fits it ────────────────
+    //
+    // The engine holds no opinion about how fast a frame should be; it renders the level
+    // it is told to and reports what that cost. This is where the deciding happens, and it
+    // is deliberately tiny: ONE measured number (ms per megapixel), ONE budget, and a
+    // walk from the finest level down until the prediction fits.
+    //
+    // Cost is very close to linear in pixels — measured 113 / 28 / 7 ms at 1600 / 800 / 400
+    // px on one thread — so a measurement taken at ANY level predicts every other one, and
+    // the estimate keeps working as the machine changes speed (thermal throttling, a load
+    // running concurrently, R-CPU shrinking the engine's share). A per-level table would
+    // need every level visited before it could choose, and would go stale on each of those
+    // events.
+
+    void RenderService::setInteractiveBudgetMs(double ms)
+    {
+        mInteractiveBudgetMs = ms < 1.0 ? 1.0 : ms;
+    }
+
+    int RenderService::levelForBudget() const
+    {
+        const double perMpx = mMsPerMpx.load(std::memory_order_relaxed);
+        // No measurement yet -> level 0. Optimistic on purpose: a desktop should never
+        // render coarse, and the cost of being wrong on a slow board is exactly ONE slow
+        // frame at the start of the first gesture, after which the measurement exists.
+        // Starting pessimistic would instead make every fast machine begin every session
+        // blurry, which is a permanent cost to avoid a transient one.
+        if (perMpx <= 0.0) return 0;
+        const int edge0 = mPreviewMaxEdge < 1 ? 1 : mPreviewMaxEdge;
+        for (int l = 0; l < EditEngine::previewLevels(); ++l)
+        {
+            const int e = std::max(1, edge0 >> l);
+            // Megapixels of a 3:2 frame at this edge. The exact aspect is unknown here and
+            // does not matter: it is the same factor at every level, so it cancels out of
+            // the comparison the moment the first real frame updates perMpx.
+            const double mpx = (double)e * (double)e * (2.0 / 3.0) / 1e6;
+            if (perMpx * mpx <= mInteractiveBudgetMs) return l;
+        }
+        return EditEngine::previewLevels() - 1;   // nothing fits: the coarsest is the best offer
+    }
+
+    void RenderService::learnCost(const Frame &f)
+    {
+        // A frame that had to RE-DECODE its photo is not a measurement of rendering — it is
+        // a measurement of LibRaw, and folding a ~1 s decode into ms-per-megapixel would
+        // drive every subsequent gesture to the coarsest level for no reason (D-44's cold
+        // hops are exactly this shape). Skip them.
+        if (f.rehydrated || f.width <= 0 || f.height <= 0 || f.ms <= 0.0) return;
+        const double mpx = (double)f.width * (double)f.height / 1e6;
+        if (mpx <= 0.0) return;
+        const double sample = f.ms / mpx;
+        const double prev = mMsPerMpx.load(std::memory_order_relaxed);
+        // An exponential average, not the last sample: one frame that lost its slice to the
+        // decode pool or to another application must not drop the whole session to a coarse
+        // level. 0.3 settles within a few frames of a drag while still riding out a spike.
+        const double next = prev <= 0.0 ? sample : prev * 0.7 + sample * 0.3;
+        mMsPerMpx.store(next, std::memory_order_relaxed);
+    }
+
 #ifdef ARSTRO_ENABLE_THREADS
     // ───────────────────────── threaded ─────────────────────────
     RenderService::RenderService()
@@ -139,12 +198,17 @@ namespace arstro
         mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
     }
 
-    void RenderService::render(int slot, const EditParams &params)
+    void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {
         std::lock_guard<std::mutex> lk(mMu);
         mPendingPreview = true;
         mPendingSlot = slot;
         mPendingParams = params;
+        mPendingLevel = explicitLevel;
+        // Coalescing keeps the LATEST request, and that has to include the intent: a
+        // settle-and-refine request arriving on top of a superseded interactive one must
+        // render fine, or the refinement would silently stay coarse (R-PREVIEW-3).
+        mPendingIntent = intent;
         mCv.notify_all();
     }
 
@@ -198,6 +262,8 @@ namespace arstro
             std::vector<int> releases;
             bool doPrev = false, doFull = false, fullPreviewOnly = false, doReset = false;
             int slot = -1, fullSlot = -1, maxEdge = 1600;
+            RenderIntent intent = RenderIntent::Final;
+            int explicitLevel = -1;
             EditParams params, fullParams;
             {
                 std::unique_lock<std::mutex> lk(mMu);
@@ -211,7 +277,7 @@ namespace arstro
                 releases.swap(mReleaseQueue);
                 maxEdge = mPreviewMaxEdge;
                 if (mPendingFull) { doFull = true; fullSlot = mFullSlot; fullParams = mFullParams; fullPreviewOnly = mFullPreviewOnly; mPendingFull = false; }
-                if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; mPendingPreview = false; }
+                if (mPendingPreview) { doPrev = true; slot = mPendingSlot; params = mPendingParams; intent = mPendingIntent; explicitLevel = mPendingLevel; mPendingPreview = false; }
             }
 
             if (doReset)  // full workspace reset: drop all slots so the next add is slot 0
@@ -252,6 +318,9 @@ namespace arstro
                 ensureSource(fullSlot, /*needFullRes=*/!fullPreviewOnly);
                 mEngine.selectImage(fullSlot);
                 mEngine.setCurrentParams(fullParams);
+                // A blocking request is never a live gesture — the before/after baseline and
+                // the export both want the real thing — so level 0, explicitly.
+                if (fullPreviewOnly) mEngine.setPreviewLevel(0);
                 PreviewBuffer pb = fullPreviewOnly ? mEngine.renderPreview() : mEngine.renderFull();
                 Frame f;
                 if (pb.rgba) { f.rgba.assign(pb.rgba, pb.rgba + (size_t)pb.width * pb.height * 4); f.width = pb.width; f.height = pb.height; f.hist = mEngine.histogram(); f.preCurveHist = mEngine.preCurveHistogram(); f.preMixerHue = mEngine.preMixerHue(); }
@@ -263,15 +332,25 @@ namespace arstro
                 mCv.notify_all();
             }
             if (doPrev)
-                doPreview(slot, params, maxEdge);
+                doPreview(slot, params, maxEdge, intent, explicitLevel);
         }
     }
 
-    void RenderService::doPreview(int slot, const EditParams &params, int maxEdge)
+    void RenderService::doPreview(int slot, const EditParams &params, int maxEdge, RenderIntent intent,
+                                  int explicitLevel)
     {
         const auto t0 = std::chrono::steady_clock::now();
         const int rehyBefore = mEngine.rehydrations();
         mEngine.setPreviewSize(maxEdge);
+        // R-PREVIEW-1/2: a gesture in flight gets the finest level that fits the budget;
+        // anything else gets level 0. Chosen BEFORE ensureSource, because the level decides
+        // which pyramid level counts as "cold" and therefore whether a re-decode is needed
+        // at all — a coarse request on a partially evicted photo can often be served.
+        // An explicit level wins over the intent: that is how the settle-and-refine walk
+        // asks for ONE step up rather than a jump to level 0 (R-PREVIEW-3).
+        const int level = explicitLevel >= 0 ? explicitLevel
+                                             : (intent == RenderIntent::Interactive ? levelForBudget() : 0);
+        mEngine.setPreviewLevel(level);
         // Before selecting: slotNeedsSource is answered against the preview size that is
         // about to be used, so a proxy built for a different size counts as cold.
         ensureSource(slot, /*needFullRes=*/false);
@@ -292,6 +371,9 @@ namespace arstro
         f.preMixerHue = mEngine.preMixerHue();
         f.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         f.rehydrated = mEngine.rehydrations() > rehyBefore;
+        f.level = mEngine.previewLevel();
+        f.levelEdge = mEngine.previewLevelEdge(f.level);
+        learnCost(f);
         {
             std::lock_guard<std::mutex> lk(mMu);
             mReady = std::move(f);
@@ -365,7 +447,10 @@ namespace arstro
     {
         mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
     }
-    void RenderService::render(int slot, const EditParams &params) { doPreview(slot, params, mPreviewMaxEdge); }
+    void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
+    {
+        doPreview(slot, params, mPreviewMaxEdge, intent, explicitLevel);
+    }
 
     bool RenderService::tryAcquire(Frame &out)
     {

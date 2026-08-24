@@ -87,7 +87,7 @@ namespace cosmo
             "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
-            "settings set", "screen", "state print", "ui dump", "wait", "quit"};
+            "settings set", "screen", "state print", "ui dump", "wait", "gesture", "quit"};
         return names;
     }
 
@@ -160,6 +160,15 @@ namespace cosmo
                 if (!splitField(t[i], kv)) { err = "not a key=value: " + t[i]; return Command{}; }
                 c.fields.push_back(kv);
             }
+        }
+        else if (v == "gesture")
+        {
+            // `gesture` alone means on, matching how `bypass <n>` defaults to on.
+            c.kind = Command::Kind::Gesture;
+            const std::string on = t.size() > 1 ? t[1] : "on";
+            if (on != "on" && on != "off" && on != "1" && on != "0" && on != "true" && on != "false")
+            { err = "gesture: expected on|off"; return Command{}; }
+            c.flag = (on == "on" || on == "1" || on == "true");
         }
         else if (v == "bypass")
         {
@@ -339,6 +348,7 @@ namespace cosmo
                 for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
                 break;
             case Command::Kind::Bypass: o << "bypass " << c.index << (c.flag ? " on" : " off"); break;
+            case Command::Kind::Gesture: o << "gesture " << (c.flag ? "on" : "off"); break;
             case Command::Kind::GroupNew: o << "group new " << q(c.name); break;
             case Command::Kind::GroupUngroup: o << "group ungroup " << c.index; break;
             case Command::Kind::GroupRename:

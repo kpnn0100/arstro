@@ -116,7 +116,31 @@ namespace cosmo
 
     private:
         void emit(const Event &e);
-        void emit(Event::Kind k, const std::string &text = std::string(), int a = 0, int b = 0, double ms = 0);
+        void emit(Event::Kind k, const std::string &text = std::string(), int a = 0, int b = 0, double ms = 0,
+                  int c = 0);
+        /** R-PREVIEW-3: if a gesture has gone quiet and the frame on screen is coarse, ask
+         *  for the next level up. Called once per `pump`; never blocks. */
+        void maybeRefine(double nowMs);
+
+        /** How long a gesture must be silent before the walk starts, ms. See maybeRefine
+         *  for why it is this short. */
+        static constexpr double kSettleMs = 80.0;
+        /** ...and how long a gesture that is still nominally ON may be silent before the
+         *  walk refines anyway. A safety net, not a mechanism: a front end that sends
+         *  `gesture on` and then forgets `gesture off` would otherwise leave the photo
+         *  coarse forever, which is a worse failure than one wasted render. Long enough
+         *  (500 ms) that no real drag ever reaches it. */
+        static constexpr double kStuckMs = 500.0;
+        /** When the last INTERACTIVE render was asked for, or -1 if none yet. */
+        double mLastInteractiveMs = -1.0;
+        /** The level a refinement step is waiting on, or -1 when no step is in flight. */
+        int mRefinePendingLevel = -1;
+        /** True between `gesture on` and `gesture off`. */
+        bool mGestureActive = false;
+        /** The last clock the caller passed to `pump`. `dispatch` has no time of its own
+         *  (R-SVC-6: the caller owns the clock), and a command lands between pumps, so this
+         *  is at most one frame stale — which is far inside kSettleMs. */
+        double mNowMs = 0.0;
         bool fail(const std::string &why);
         void refreshModel();
         void refreshRecents();

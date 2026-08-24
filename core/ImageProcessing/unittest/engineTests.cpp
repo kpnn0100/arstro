@@ -1294,3 +1294,142 @@ TEST(Render_reuses_its_working_buffers_but_full_res_releases_them)
     std::vector<uint8_t> afterFull(c.rgba, c.rgba + (size_t)c.width * c.height * 4);
     CHECK(afterFull == first);
 }
+
+// ── R-PREVIEW-2: the preview pyramid ─────────────────────────────────────────────
+//
+// A slot keeps four preview levels (previewEdge, /2, /4, /8) so a live gesture can
+// render whichever one fits R-PREVIEW-1's 33 ms budget and refine upward when the
+// gesture settles. The properties that matter, and would each break something real:
+//
+//   * every level exists after ingest, so an interactive gesture never DISCOVERS that
+//     a level is missing — building one mid-drag is the stall the budget exists to
+//     prevent;
+//   * a coarse level renders the same EDIT, just fewer pixels — the params are the
+//     slot's, not a reduced set, so refinement converges rather than changing look;
+//   * the whole pyramid costs ~1.33x one proxy in bytes, which is what lets R-MEM-1's
+//     caps absorb it;
+//   * a level that has been evicted is rebuilt from a FINER resident level by halving,
+//     never from a coarser one by upscaling.
+TEST(Preview_pyramid_exists_after_ingest_and_every_level_renders)
+{
+    auto bytes = variedRGBA8b(400, 300);
+    EditEngine eng;
+    eng.setPreviewSize(320);                       // level edges: 320 / 160 / 80 / 40
+    const int slot = eng.addImagePreviewOnly(bytes.data(), 400, 300, 4);
+    CHECK(slot == 0);
+    CHECK(EditEngine::previewLevels() == 4);
+
+    CHECK(eng.previewLevelEdge(0) == 320);
+    CHECK(eng.previewLevelEdge(1) == 160);
+    CHECK(eng.previewLevelEdge(2) == 80);
+    CHECK(eng.previewLevelEdge(3) == 40);
+    // Out of range clamps rather than reading past the pyramid.
+    CHECK(eng.previewLevelEdge(-5) == 320);
+    CHECK(eng.previewLevelEdge(99) == 40);
+
+    // Ingest built ALL of them — this is the property R-PREVIEW-1 rests on.
+    for (int l = 0; l < EditEngine::previewLevels(); ++l)
+        CHECK(eng.previewLevelResident(l));
+
+    // Each level renders, at its own size, and dimensions halve as the level rises.
+    int prevW = 1 << 30;
+    for (int l = 0; l < EditEngine::previewLevels(); ++l)
+    {
+        eng.setPreviewLevel(l);
+        CHECK(eng.previewLevel() == l);
+        const PreviewBuffer pb = eng.renderPreview();
+        CHECK(pb.rgba != nullptr);
+        CHECK(pb.width > 0 && pb.height > 0);
+        CHECK(pb.width <= eng.previewLevelEdge(l));
+        CHECK(pb.width < prevW);
+        prevW = pb.width;
+    }
+    // setPreviewLevel clamps, it does not read out of bounds.
+    eng.setPreviewLevel(99);
+    CHECK(eng.previewLevel() == EditEngine::previewLevels() - 1);
+    eng.setPreviewLevel(-1);
+    CHECK(eng.previewLevel() == 0);
+}
+
+TEST(Preview_pyramid_renders_the_same_edit_at_every_level)
+{
+    // Refinement only converges if a coarse level is the SAME edit at fewer pixels. If a
+    // level rendered different params the photo would visibly change as it sharpened,
+    // which is the thing R-PREVIEW-3 promises does not happen.
+    auto bytes = variedRGBA8b(240, 160);
+    EditEngine eng;
+    eng.setPreviewSize(240);
+    eng.addImagePreviewOnly(bytes.data(), 240, 160, 4);
+    EditParams p;
+    p.exposure = 1.0f;                 // +1 EV: exactly doubles linear values
+    p.temp = 6500.f;                   // keep WB neutral so the check is unambiguous
+    eng.applyParams(p);
+
+    // Mean brightness must agree across levels: a box downscale preserves the mean, and
+    // every stage here is resolution-independent, so the levels are the same picture.
+    double means[4] = {0, 0, 0, 0};
+    for (int l = 0; l < EditEngine::previewLevels(); ++l)
+    {
+        eng.setPreviewLevel(l);
+        const PreviewBuffer pb = eng.renderPreview();
+        CHECK(pb.rgba != nullptr);
+        long long sum = 0;
+        const size_t n = (size_t)pb.width * pb.height;
+        for (size_t i = 0; i < n; ++i)
+            sum += pb.rgba[i * 4] + pb.rgba[i * 4 + 1] + pb.rgba[i * 4 + 2];
+        means[l] = (double)sum / (double)(n * 3);
+    }
+    for (int l = 1; l < EditEngine::previewLevels(); ++l)
+        CHECK_NEAR(means[l], means[0], 4.0);   // 8-bit units; downscaling shifts a mean a little
+}
+
+TEST(Preview_pyramid_costs_about_a_third_extra_in_bytes)
+{
+    // 1 + 1/4 + 1/16 + 1/64 = 1.328. R-PREVIEW-5 leans on this: if a pyramid cost 4x a
+    // proxy, R-MEM-1's caps could not absorb it and the browse cache from D-44 would
+    // shrink by the same factor.
+    auto bytes = variedRGBA8b(512, 512);
+    EditEngine eng;
+    eng.setPreviewSize(512);
+    eng.addImagePreviewOnly(bytes.data(), 512, 512, 4);
+
+    const size_t total = eng.residentProxyBytes();
+    const size_t levelZero = (size_t)512 * 512 * 4 * sizeof(Pixel);
+    const double ratio = (double)total / (double)levelZero;
+    printf("    pyramid / level-0 bytes = %.3f (ideal 1.328)\n", ratio);
+    CHECK(ratio > 1.2 && ratio < 1.45);
+}
+
+TEST(An_evicted_level_is_rebuilt_by_halving_a_finer_one_not_upscaling_a_coarser_one)
+{
+    // The pyramid is one cache entry, so eviction takes all of it — but a preview SIZE
+    // change leaves level 0 valid and the rest stale, and that is the path where "rebuild
+    // from a finer level" matters. Rendering coarse must then still work without a source.
+    auto bytes = variedRGBA8b(300, 200);
+    EditEngine eng;
+    eng.setPreviewSize(256);
+    eng.addImagePreviewOnly(bytes.data(), 300, 200, 4);   // preview-only: NO source kept
+
+    // Coarse render straight after ingest.
+    eng.setPreviewLevel(3);
+    const PreviewBuffer coarse = eng.renderPreview();
+    CHECK(coarse.rgba != nullptr);
+    const int coarseW = coarse.width;
+
+    // Change the preview size: level 0 must be rebuilt, and there is no source to do it
+    // from, so the engine must report COLD rather than render an empty image.
+    eng.setPreviewSize(200);
+    eng.setPreviewLevel(0);
+    const PreviewBuffer cold = eng.renderPreview();
+    CHECK(cold.rgba == nullptr);          // cold, not wrong — the caller re-decodes
+
+    // Give the pixels back; now every level is available again at the new size.
+    eng.setPreviewSize(256);
+    CHECK(eng.supplySource(0, bytes.data(), 300, 200, 4));
+    eng.setPreviewLevel(3);
+    const PreviewBuffer again = eng.renderPreview();
+    CHECK(again.rgba != nullptr);
+    CHECK(again.width == coarseW);        // same level, same size as before
+    for (int l = 0; l < EditEngine::previewLevels(); ++l)
+        CHECK(eng.previewLevelResident(l));
+}

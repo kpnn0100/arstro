@@ -15,6 +15,7 @@
 #include "EditEngine.h"
 #include "EditParams.h"
 #include "../analysis/Histogram.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -33,6 +34,17 @@ namespace arstro
     class RenderService
     {
     public:
+        /** What a preview render is FOR (R-PREVIEW-1/2/3).
+         *
+         *  `Interactive` means a gesture is in flight, so LATENCY outranks resolution: the
+         *  worker renders the finest pyramid level its own last measurement says will fit
+         *  the interactive budget. `Final` means the gesture has settled (or this is a
+         *  photo change, a preset, an undo — anything the user is not dragging), so it
+         *  renders level 0 whatever that costs.
+         *
+         *  Default is `Final`, so every existing caller keeps its exact behaviour and only
+         *  a front end that knows it is mid-gesture opts in. */
+        enum class RenderIntent { Final, Interactive };
         struct Frame
         {
             std::vector<uint8_t> rgba;  // straight RGBA8
@@ -46,6 +58,12 @@ namespace arstro
              *  a 250 ms hop and a 2537 ms one looked identical in the log (D-44). */
             double ms = 0.0;
             bool rehydrated = false;
+            /** Which pyramid level produced this frame, 0 = finest, and that level's long
+             *  edge (R-PREVIEW-2). A view needs both: the level to know whether to keep
+             *  refining, the edge because a coarse frame is drawn at the SAME canvas rect
+             *  as a fine one and so is upscaled on the way to the screen. */
+            int level = 0;
+            int levelEdge = 0;
         };
 
         RenderService();
@@ -107,8 +125,25 @@ namespace arstro
         /** True when a platform GPU accelerator exists and is usable (queried once at
          *  construction, so it is safe to read from the UI thread). */
         bool gpuAvailable() const;
-        /** Request a preview render of (slot, params); coalesced to the latest request. */
-        void render(int slot, const EditParams &params);
+        /** Request a preview render of (slot, params); coalesced to the latest request.
+         *  `intent` decides whether resolution or latency wins — see RenderIntent. */
+        void render(int slot, const EditParams &params, RenderIntent intent = RenderIntent::Final,
+                    int explicitLevel = -1);
+        /** How long an INTERACTIVE frame may take, in ms (R-PREVIEW-1; 33 = ~30 fps, the
+         *  number the product decision set). The level is chosen to fit this from the
+         *  worker's own measured cost per megapixel, so the same budget produces level 0
+         *  on a desktop and a coarse level on a small board with no configuration
+         *  (R-PREVIEW-2). Values below 1 ms are treated as 1. */
+        void setInteractiveBudgetMs(double ms);
+        double interactiveBudgetMs() const { return mInteractiveBudgetMs; }
+        /** The worker's measured cost per megapixel, ms — 0 until the first frame lands.
+         *  Exposed so a front end (and a test) can read back the number the level choice
+         *  is actually made from, rather than trusting that it exists: R-PREVIEW-6 asks
+         *  for the budget to be measurable and this is the measurement. */
+        double msPerMegapixel() const { return mMsPerMpx.load(std::memory_order_relaxed); }
+        /** The level `intent == Interactive` would pick right now. Pure function of the
+         *  measurement above and the budget; safe to call from any thread. */
+        int levelForBudget() const;
         /** Pick up the most recent completed preview, if any (moves it out). */
         bool tryAcquire(Frame &out);
         /** Full-resolution render (blocks until done) — for export. */
@@ -120,7 +155,11 @@ namespace arstro
         bool threaded() const;
 
     private:
-        void doPreview(int slot, const EditParams &params, int maxEdge);
+        void doPreview(int slot, const EditParams &params, int maxEdge, RenderIntent intent,
+                       int explicitLevel);
+        /** Fold a completed frame into the ms-per-megapixel estimate. Ignores frames that
+         *  had to re-decode: those measure LibRaw, not the render. */
+        void learnCost(const Frame &f);
         /** Re-decode `slot` through the SourceLoader if the engine says it is cold, so the
          *  render that follows has pixels to work with (R-MEM-2). Runs on whichever thread
          *  is about to render. False when the slot is cold and cannot be recovered. */
@@ -139,6 +178,14 @@ namespace arstro
         // Outside the threads guard because doPreview is shared with the synchronous build.
         std::atomic<size_t> mResidentBytes{0};
         std::atomic<int> mRehydrations{0};
+        // R-PREVIEW-2: ONE number, not a per-level table. Cost is very close to linear in
+        // pixels (measured: 1600 px 113 ms, 800 px 28, 400 px 7 at one thread), so ms per
+        // megapixel transfers between levels — which means a measurement taken at level 2
+        // predicts level 0 and the estimate keeps working as the machine speeds up or slows
+        // down under load. A per-level table would need every level to be visited before it
+        // could choose, and would go stale the moment the CPU budget changed.
+        std::atomic<double> mMsPerMpx{0.0};
+        double mInteractiveBudgetMs = 33.0;   // ~30 fps; the product decision, 2026-08-24
 
 #ifdef ARSTRO_ENABLE_THREADS
         void workerLoop();
@@ -157,6 +204,11 @@ namespace arstro
         bool mPendingPreview = false;
         int mPendingSlot = -1;
         EditParams mPendingParams;
+        // Coalescing keeps the LATEST request, so the intent travels with it: a
+        // settle-and-refine request landing on top of a superseded interactive one must
+        // still render fine, or the refinement would silently stay coarse (R-PREVIEW-3).
+        RenderIntent mPendingIntent = RenderIntent::Final;
+        int mPendingLevel = -1;          // >= 0 overrides the intent's choice
 
         bool mPendingFull = false;       // blocking full-res request
         int mFullSlot = -1;

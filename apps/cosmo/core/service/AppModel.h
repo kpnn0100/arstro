@@ -189,6 +189,28 @@ namespace cosmo
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;
         unsigned frameSeq = 0;
+        /** Which pyramid level the last frame came from, 0 = full (R-PREVIEW-2), and that
+         *  level's long edge. A view needs both: the level to know whether a refinement is
+         *  still coming, the edge because a coarse frame is drawn into the SAME canvas rect
+         *  as a full one and is therefore upscaled on the way to the screen.
+         *
+         *  MACHINE-DEPENDENT, so excluded from the stable dump: two services given the same
+         *  commands on a fast and a slow box are in the same *state* while showing different
+         *  levels — which is the entire point of R-PREVIEW-2, and would otherwise break
+         *  R-SVC-9's "identical commands, identical stable text". */
+        int frameLevel = 0;
+        int frameLevelEdge = 0;
+        /** True while the settle-and-refine walk still has a step to take (R-PREVIEW-3), so
+         *  a view can say "sharpening" rather than guessing from the level. */
+        bool refining = false;
+        /** How many levels the pyramid has, and the interactive latency budget in ms. Both
+         *  are stable — they are the CONTRACT, not the outcome. */
+        int previewLevels = 1;
+        double interactiveBudgetMs = 0.0;
+        /** The measured cost the level choice is actually made from, ms per megapixel — 0
+         *  until the first frame lands. R-PREVIEW-6 asks for the budget to be readable back
+         *  rather than asserted; this is that number. Machine-dependent, so unstable. */
+        double msPerMegapixel = 0.0;
 
         std::string lastError;      // the most recent rejected command or failure
         bool gpuAvailable = false;

@@ -67,10 +67,11 @@ namespace cosmo
         for (auto &s : mSinks) if (s) s(e);
     }
 
-    void CosmoService::emit(Event::Kind k, const std::string &text, int a, int b, double ms)
+    void CosmoService::emit(Event::Kind k, const std::string &text, int a, int b, double ms, int c)
     {
         Event e;
         e.kind = k; e.text = text; e.a = a; e.b = b; e.ms = ms;
+        e.c = c;
         emit(e);
     }
 
@@ -95,6 +96,13 @@ namespace cosmo
 
     void CosmoService::refreshModel()
     {
+        // R-PREVIEW-1/2: the contract half of the pyramid — how many levels exist and what
+        // an interactive frame is allowed to cost. Published from the render service rather
+        // than duplicated, so there is one owner of the number (the same reason ThreadBudget
+        // owns the CPU budget outright — R-SVC-10).
+        mModel.previewLevels = EditEngine::previewLevels();
+        mModel.interactiveBudgetMs = mSession.renderService().interactiveBudgetMs();
+
         // Rebuilt wholesale rather than patched per command: the tree is small (hundreds of
         // nodes), and a snapshot that is always derived cannot drift from the session the way
         // incrementally-maintained mirror state does.
@@ -235,8 +243,52 @@ namespace cosmo
         return true;
     }
 
-    void CosmoService::pump(double)
+    // ── R-PREVIEW-3: walk the level back up once the gesture stops ───────────────────
+    //
+    // A live gesture renders coarse so it can keep up (R-PREVIEW-1). The moment it stops,
+    // the photo has to become sharp again — one level at a time, because every level is a
+    // complete correct frame and a jump from 400 px to 1600 px is a long gap followed by a
+    // single visible pop, which is what R-PREVIEW-4's cross-dissolve exists to avoid.
+    //
+    // "Stopped" is measured as SILENCE, not as a release event: the service is not told
+    // when a finger lifts and should not be — a script driving `set` in a loop and a human
+    // dragging a slider must behave identically (R-SVC-2). kSettleMs is the width of that
+    // silence, and it is a compromise with a number attached: R-PREVIEW-3 gives the whole
+    // walk 500 ms, three steps from the coarsest level cost roughly 40 + 85 + 340 ms on an
+    // A733-class board, so the silence has to be short. 80 ms is ~2.5 interactive frames —
+    // long enough that a pause mid-drag does not trigger a full render the next move throws
+    // away, short enough to leave the walk its budget.
+    void CosmoService::maybeRefine(double nowMs)
     {
+        if (mModel.frameLevel <= 0) { mModel.refining = false; return; }
+        if (mRefinePendingLevel >= 0) return;             // a step is already in flight
+        if (mLastInteractiveMs < 0) return;               // no gesture has happened yet
+        const double silence = nowMs - mLastInteractiveMs;
+        // While the finger is still DOWN, do not refine at all — not even after a pause.
+        // This is the whole reason `gesture` is a command rather than something inferred:
+        // a full-level render cannot be cancelled once the worker has started it, so a
+        // refinement begun during a mid-drag pause makes the NEXT move wait for it. On this
+        // desktop that is 36 ms and invisible; on an A733-class board a level-0 render of a
+        // real edit is over a second, and the photographer would feel exactly the lag this
+        // requirement exists to remove. Measured with an 80 ms-paced drag through
+        // `cosmo-cc --watch`, which oscillated 1,0,1,0 until this check existed.
+        if (mGestureActive && silence < kStuckMs) return;
+        if (!mGestureActive && silence < kSettleMs) return;
+        const int next = mModel.frameLevel - 1;
+        mRefinePendingLevel = next;
+        mModel.refining = true;
+        mSession.submitRefine(next);
+    }
+
+    void CosmoService::pump(double nowMs)
+    {
+        // R-PREVIEW-3: the settle-and-refine walk. `nowMs` used to be ignored here; the
+        // clock is the caller's (R-SVC-6) and this is the first thing in the service that
+        // needs it. Nothing blocks and nothing sleeps — a step is just another coalesced
+        // render request, so a live run and a scripted one take the same path.
+        mNowMs = nowMs;
+        maybeRefine(nowMs);
+
         // Frames first, and UNCONDITIONALLY — this used to sit behind the load's early-return,
         // which is half of why nothing ever produced `frameSeq` (D-21). `tryAcquire` moves the
         // frame out, so exactly one owner may poll it; that owner is the service now, and the
@@ -257,8 +309,16 @@ namespace cosmo
             // long the frame took, and whether a cold slot had to be re-decoded to produce it.
             // Without them a 250 ms hop and a 2537 ms one were the same line in the log, and the
             // user had to notice the difference by feel (D-44).
+            // A step has landed (or a newer interactive request superseded it — either way
+            // this level is now the truth), so the walk may take its next step.
+            if (mRefinePendingLevel >= 0 && mFrame.level <= mRefinePendingLevel)
+                mRefinePendingLevel = -1;
+            mModel.frameLevel = mFrame.level;
+            mModel.frameLevelEdge = mFrame.levelEdge;
+            mModel.msPerMegapixel = mSession.renderService().msPerMegapixel();
+            mModel.refining = mFrame.level > 0;
             emit(Event::Kind::FrameReady, mFrame.rehydrated ? "rehydrated" : std::string(),
-                 mModel.frameSlot, mFrame.width, mFrame.ms);
+                 mModel.frameSlot, mFrame.width, mFrame.ms, mFrame.level);
         }
 
         if (!mLoader.active() && mLoader.total() == 0) return;
@@ -387,7 +447,18 @@ namespace cosmo
         EditParams probe = *p;
         if (!deserializeParams(text, probe)) return fail("set: no field matched: " + text);
         *p = probe;
-        mSession.submit();
+        // R-PREVIEW-1: while a gesture is in flight, latency outranks resolution. Nothing
+        // else about a `set` changes — same params, same history, same event — so a script
+        // and a drag differ only in which pyramid level the frame came from.
+        if (mGestureActive)
+        {
+            mLastInteractiveMs = mNowMs;
+            mSession.submitInteractive();
+        }
+        else
+        {
+            mSession.submit();
+        }
 
         std::string names;
         for (const auto &kv : c.fields) { if (!names.empty()) names += ","; names += kv.first; }
@@ -591,6 +662,17 @@ namespace cosmo
             // applySetFields refreshes before it emits (D-34); refreshing again here would be
             // harmless but would leave two places deciding the order.
             case Command::Kind::Set: return applySetFields(c);
+
+            // R-PREVIEW-1. Turning a gesture OFF backdates the silence timer so the
+            // settle-and-refine walk starts on the very next pump rather than kSettleMs
+            // later: the front end has told us the finger is up, which is better
+            // information than waiting to infer it.
+            case Command::Kind::Gesture:
+                mGestureActive = c.flag;
+                if (!c.flag && mLastInteractiveMs >= 0) mLastInteractiveMs = mNowMs - kSettleMs;
+                refreshModel();
+                emit(Event::Kind::Info, c.flag ? "gesture on" : "gesture off");
+                return true;
 
             case Command::Kind::Bypass:
                 mSession.setBypassed(c.index, c.flag);

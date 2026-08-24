@@ -78,6 +78,17 @@ namespace cosmo
             StatePrint,      // flag = json
             UiDump,          // flag = json, name = root, fields: visible / depth
             Wait,            // name = condition, index = timeout ms
+            /** R-PREVIEW-1: "a gesture is in flight". While on, `set` renders whichever
+             *  pyramid level fits the interactive latency budget instead of the full one;
+             *  turning it off starts the settle-and-refine walk immediately.
+             *
+             *  A Command rather than a guess, because "is the user still dragging" is real
+             *  application state that a second front end also needs, and because guessing it
+             *  from the arrival rate of `set` would make the FIRST frame of every drag the
+             *  slow one — a visible hitch at the start of every gesture on a small board,
+             *  which is exactly what this exists to remove. A script that sends one `set`
+             *  and no gesture keeps today's behaviour and renders full. */
+            Gesture,         // flag = on
             Quit
         };
 
