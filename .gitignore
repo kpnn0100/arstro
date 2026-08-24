@@ -43,3 +43,6 @@ apps/launcher/plasma.android/
 
 # vendored LibRaw source tree (user-managed; build.sh builds its static lib on demand)
 # core/ImageProcessing/lib/
+
+# Sanitizer build tree (ASan/UBSan), created by hand when chasing a crash
+build-asan/
