@@ -517,9 +517,87 @@ namespace
     }
 }
 
+namespace
+{
+    // ── T3.1: an idle window stops asking to be repainted ────────────────────────────
+    //
+    // The host used to queue a draw unconditionally every 16 ms, so the whole window was
+    // re-rendered in software Cairo sixty times a second forever, at rest, with nothing
+    // moving. On a desktop that is invisible; on a small board it is the core the render
+    // engine needs.
+    //
+    // The rule this must not break is R-G-1: nothing a user can see may change in one
+    // frame. R-G-1 is about CHANGE, not about repainting — so the two things to prove are
+    // that an app at rest eventually goes quiet, and that anything in flight keeps every
+    // frame it would have had.
+    void anIdleAppStopsAskingToBeRepainted()
+    {
+        std::printf("\n-- T3.1 an idle app goes quiet, a moving one does not --\n");
+        Rig rig(1440.0, 900.0);
+
+        // Fresh app: activity has just happened, so it must want to draw.
+        check(rig.app.needsRedraw(rig.now), "a just-built app wants a frame");
+
+        // Let it sit. Nothing has been clicked, no project is loading, nothing animates.
+        rig.settle(3000.0);
+        check(!rig.app.needsRedraw(rig.now),
+              "and after three seconds of nothing at all, it stops asking");
+
+        // A click must wake it immediately — this is the half that would show up as a dead
+        // UI rather than as wasted CPU, so it matters more than the saving does.
+        //
+        // On the EDITOR screen, deliberately: a press on the home grid can land on a real
+        // project card and start an open transition, and a transition in flight legitimately
+        // keeps asking for frames — so testing the wake/settle cycle there would be testing
+        // the developer's recents file. (That the recents file reached a unit test at all is
+        // its own problem; cosmo_ui now runs with a sandboxed XDG_CONFIG_HOME.)
+        rig.app.showEditor();
+        rig.settle(3000.0);
+        check(!rig.app.needsRedraw(rig.now), "quiet on the editor screen");
+        rig.app.pointer(0, 700.0, 450.0, 1, rig.now);
+        check(rig.app.needsRedraw(rig.now), "a press wakes it on the same frame");
+        rig.app.pointer(2, 700.0, 450.0, 1, rig.now);
+        rig.settle(3000.0);
+        check(!rig.app.needsRedraw(rig.now), "then it settles again");
+
+        // A wheel and a key are the other two input paths; both must wake it.
+        rig.app.wheel(700.0, 450.0, -1.0, false);
+        check(rig.app.needsRedraw(rig.now), "a wheel wakes it");
+        rig.settle(3000.0);
+        artboard::KeyEvent k;
+        k.type = artboard::KeyEvent::Type::Down;
+        k.keyCode = 0x25;                       // Left; the code does not matter here
+        rig.app.key(k);
+        check(rig.app.needsRedraw(rig.now), "a key wakes it");
+
+        // AN ANIMATION IN FLIGHT KEEPS EVERY FRAME. A UI-scale change is the longest and
+        // most structural tween in the app (R-SCALE-2a), so it is the strictest case: the
+        // window must be requested on every single frame while the transform is moving, or
+        // the tween would visibly step.
+        rig.settle(3000.0);
+        check(!rig.app.needsRedraw(rig.now), "quiet before the tween");
+        rig.app.setUiScale(200);
+        int askedEveryFrame = 0, framesWhileMoving = 0;
+        for (int i = 0; i < 60; ++i)
+        {
+            const bool moving = rig.app.drawnUiScale() < 2.0 - 1e-4;
+            if (!moving) break;
+            ++framesWhileMoving;
+            if (rig.app.needsRedraw(rig.now)) ++askedEveryFrame;
+            rig.frame();
+        }
+        std::printf("      (%d frames while the scale tween ran, %d of them requested)\n",
+                    framesWhileMoving, askedEveryFrame);
+        check(framesWhileMoving > 4, "the scale change really did take several frames");
+        check(askedEveryFrame == framesWhileMoving,
+              "and every one of them was requested — R-G-1 is untouched by drawing on demand");
+    }
+}
+
 int main()
 {
     std::printf("cosmo assembled-app UI tests\n\n");
+    anIdleAppStopsAskingToBeRepainted();
     panelsFollowTheEditTarget();
     curveNodeGrabThroughTheAppDoesNotTeleport();
     scaleChangeIsAnimatedNotSnapped();

@@ -43,6 +43,7 @@
 #ifdef ARSTRO_ENABLE_THREADS
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <thread>
@@ -84,58 +85,94 @@ namespace par
             return v;
         }
 
+        /**
+         *  ── Why this is a LIST of batches and not one batch ──
+         *
+         *  `parallelFor` is called from several threads at once, and that is not incidental:
+         *  the render worker runs the pipeline while the export path renders full-resolution
+         *  frames and a project load converts and downscales freshly decoded images, and
+         *  every one of those paths goes through `parallelFor`. There are 19 call sites.
+         *
+         *  The old implementation was safe against that by accident — it spawned its own
+         *  threads per call, so callers could not interfere. The first pooled version was
+         *  not: one shared batch descriptor, so two concurrent callers clobbered each
+         *  other's body pointer, chunk count and claim index. That segfaulted about one
+         *  `ctest` run in three (D-47), and a generation-tagged claim index — which fixes the
+         *  *sequential* hazard of a worker waking after its batch ended — does nothing for it.
+         *
+         *  So each `run()` owns its batch **on its own stack** and publishes a pointer to it.
+         *  Workers pick up any live batch that still has chunks. Lifetime is the whole trick,
+         *  and it is one invariant: a worker may only touch a batch while it is counted in
+         *  `active`, `active` is only incremented under the lock and only for a batch that is
+         *  still in `mLive`, and `run()` removes its batch from `mLive` and then waits for
+         *  `active == 0` before returning. So no worker can enter a batch after it is
+         *  unpublished, and no batch can die with a worker inside it.
+         */
+        struct Batch
+        {
+            const std::function<void(int, int)> *body = nullptr;
+            int count = 0;
+            int chunks = 0;
+            std::atomic<int> next{0};
+            std::atomic<int> remaining{0};
+            int active = 0;   // workers currently inside; guarded by Pool::mMu
+        };
+
         class Pool
         {
         public:
             ~Pool() { stop(); }
 
-            /** Grow or shrink to `n` workers (n counts the CALLING thread, so n-1 are
-             *  spawned). Called only from run(), i.e. from one thread at a time in
-             *  practice; the mutex keeps it honest anyway. */
             void resize(int n)
             {
                 if (n < 1) n = 1;
-                std::unique_lock<std::mutex> lk(mMu);
-                if ((int)mWorkers.size() == n - 1) return;
-                // Shrinking or growing both restart the pool: it happens on a settings
-                // change, not per frame, so simplicity beats cleverness here.
-                lk.unlock();
-                stop();
-                lk.lock();
-                mStop = false;
-                mGeneration = 0;
-                for (int i = 0; i < n - 1; ++i)
-                    mWorkers.emplace_back([this] { workerLoop(); });
+                {
+                    std::lock_guard<std::mutex> lk(mMu);
+                    if ((int)mWorkers.size() == n - 1) return;
+                    // Never restart the pool while a batch is in flight: a worker joined
+                    // mid-batch would leave `remaining` short and the caller spinning forever.
+                    if (!mLive.empty()) { mWantWorkers = n - 1; return; }
+                }
+                restart(n - 1);
             }
 
             /** Run `body(begin,end)` over `chunks` chunks covering [0,count). Blocks until
-             *  every chunk is done. The caller participates. */
+             *  every chunk has been run. The caller participates, so it is never idle. */
             void run(const std::function<void(int, int)> &body, int count, int chunks)
             {
+                Batch b;
+                b.body = &body;
+                b.count = count;
+                b.chunks = chunks;
+                b.remaining.store(chunks, std::memory_order_relaxed);
+                int pendingResize = 0;
                 {
                     std::lock_guard<std::mutex> lk(mMu);
-                    mBody = &body;
-                    mCount = count;
-                    mChunks = chunks;
-                    mNext.store(0, std::memory_order_relaxed);
-                    mRemaining.store(chunks, std::memory_order_relaxed);
-                    ++mGeneration;
+                    mLive.push_back(&b);
+                    ++mSeq;
                 }
                 mCv.notify_all();
-                claimUntilDone();                  // the caller is a worker too
-                // Wait for any chunk still in flight on a worker. Chunks are short, so a
-                // spin-then-yield beats a second condition variable here.
-                while (mRemaining.load(std::memory_order_acquire) > 0)
+                claim(&b);                        // the caller is a worker too
+                // Chunks are short, so a spin-then-yield beats a second condition variable
+                // for the work itself.
+                while (b.remaining.load(std::memory_order_acquire) > 0)
                     std::this_thread::yield();
-                std::lock_guard<std::mutex> lk(mMu);
-                mBody = nullptr;
+                {
+                    std::unique_lock<std::mutex> lk(mMu);
+                    for (std::size_t i = 0; i < mLive.size(); ++i)
+                        if (mLive[i] == &b) { mLive.erase(mLive.begin() + i); break; }
+                    // Unpublished, so nobody new can enter; wait out whoever is still inside.
+                    mIdleCv.wait(lk, [&b] { return b.active == 0; });
+                    if (mWantWorkers >= 0 && mLive.empty())
+                    { pendingResize = mWantWorkers + 1; mWantWorkers = -1; }
+                }
+                if (pendingResize > 0) restart(pendingResize - 1);
             }
 
             void stop()
             {
                 {
                     std::lock_guard<std::mutex> lk(mMu);
-                    if (mWorkers.empty()) { mStop = true; return; }
                     mStop = true;
                 }
                 mCv.notify_all();
@@ -145,26 +182,35 @@ namespace par
             }
 
         private:
-            /** Claim and run chunks until the current batch is exhausted. */
-            void claimUntilDone()
+            void restart(int workers)
             {
-                const int count = mCount, chunks = mChunks;
-                const std::function<void(int, int)> *body = mBody;
-                if (!body || chunks <= 0) return;
+                stop();
+                std::lock_guard<std::mutex> lk(mMu);
+                mStop = false;
+                for (int i = 0; i < workers; ++i)
+                    mWorkers.emplace_back([this] { workerLoop(); });
+            }
+
+            /** Run chunks of `b` until it is exhausted. Caller must have ensured `b` stays
+             *  alive for the duration — the owner by construction, a worker via `active`. */
+            void claim(Batch *b)
+            {
+                if (!b->body || b->chunks <= 0) return;
+                const bool wasInside = inParallel();
                 inParallel() = true;
                 for (;;)
                 {
-                    const int k = mNext.fetch_add(1, std::memory_order_relaxed);
-                    if (k >= chunks) break;
-                    // Chunk boundaries from the index, so they are identical however the
-                    // chunks are distributed — the byte-identical guarantee in the contract
-                    // above depends on the SPLIT being deterministic, not the schedule.
-                    const long long b = (long long)k * count / chunks;
-                    const long long e = (long long)(k + 1) * count / chunks;
-                    if (e > b) (*body)((int)b, (int)e);
-                    mRemaining.fetch_sub(1, std::memory_order_release);
+                    const int idx = b->next.fetch_add(1, std::memory_order_relaxed);
+                    if (idx >= b->chunks) break;
+                    // Boundaries from the chunk INDEX, so the split is identical however the
+                    // chunks are distributed — the byte-identical serial-vs-parallel guarantee
+                    // in the header rests on the SPLIT being deterministic, not the schedule.
+                    const long long lo = (long long)idx * b->count / b->chunks;
+                    const long long hi = (long long)(idx + 1) * b->count / b->chunks;
+                    if (hi > lo) (*b->body)((int)lo, (int)hi);
+                    b->remaining.fetch_sub(1, std::memory_order_release);
                 }
-                inParallel() = false;
+                inParallel() = wasInside;
             }
 
             void workerLoop()
@@ -172,26 +218,41 @@ namespace par
                 unsigned long long seen = 0;
                 for (;;)
                 {
+                    Batch *mine = nullptr;
                     {
                         std::unique_lock<std::mutex> lk(mMu);
-                        mCv.wait(lk, [&] { return mStop || mGeneration != seen; });
+                        mCv.wait(lk, [&] { return mStop || mSeq != seen; });
                         if (mStop) return;
-                        seen = mGeneration;
+                        seen = mSeq;
+                        for (Batch *b : mLive)
+                            if (b->next.load(std::memory_order_relaxed) < b->chunks)
+                            { mine = b; ++b->active; break; }
                     }
-                    claimUntilDone();
+                    while (mine)
+                    {
+                        claim(mine);
+                        std::unique_lock<std::mutex> lk(mMu);
+                        --mine->active;
+                        if (mine->active == 0) { lk.unlock(); mIdleCv.notify_all(); lk.lock(); }
+                        // Another caller's batch may still have chunks; take it rather than
+                        // going back to sleep, or a concurrent load would run alone.
+                        mine = nullptr;
+                        seen = mSeq;
+                        for (Batch *b : mLive)
+                            if (b->next.load(std::memory_order_relaxed) < b->chunks)
+                            { mine = b; ++b->active; break; }
+                    }
                 }
             }
 
             std::mutex mMu;
-            std::condition_variable mCv;
+            std::condition_variable mCv;      // "there is a new batch"
+            std::condition_variable mIdleCv;  // "a worker left a batch"
             std::vector<std::thread> mWorkers;
+            std::vector<Batch *> mLive;       // published batches, guarded by mMu
             bool mStop = false;
-            unsigned long long mGeneration = 0;
-            const std::function<void(int, int)> *mBody = nullptr;
-            int mCount = 0;
-            int mChunks = 0;
-            std::atomic<int> mNext{0};
-            std::atomic<int> mRemaining{0};
+            unsigned long long mSeq = 0;
+            int mWantWorkers = -1;            // deferred resize, applied when nothing is live
         };
 
         inline Pool &pool()

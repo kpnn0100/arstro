@@ -55,6 +55,10 @@ namespace cosmo_v2
         addChild(mHistogram);
 
         mTabs = std::make_shared<EditStackTabs>();
+        // Forward the tab change outward. The column itself has no use for it — the pages
+        // are already swapped by EditStackTabs — but the view above needs it to stop paying
+        // for histograms whose panel is not visible (R-PREVIEW-6, T0.4).
+        mTabs->onChange = [this](int index) { if (onTabChanged) onTabChanged(index); };
         mTabs->tabHeight = 27.0;
 
         // R-SVC-2: the one funnel all 23 slider rows go through, and what leaves it is a

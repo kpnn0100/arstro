@@ -165,6 +165,13 @@ if(TARGET cosmo_core)
   target_compile_definitions(cosmo_ui_tests PRIVATE
     COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}" ARTBOARD_CAIRO_FT)
   add_test(NAME cosmo_ui COMMAND cosmo_ui_tests)
+  # Sandbox the config dir, for the same reason cosmo_shots does: CosmoService's constructor
+  # reads recent.tsv, so without this the assembled-app tests are driven by whatever projects
+  # the developer happens to have opened — a click on the home grid lands on a real card on
+  # one machine and on empty space on another. Found by T3.1's idle test, which wedged into
+  # Screen::Loading because the click opened one of MY projects.
+  set_tests_properties(cosmo_ui PROPERTIES
+    ENVIRONMENT "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/ui-tests-config")
 
   # ── cosmo_touch_shots: the TOUCH shell, with no device (R-TOUCH-5) ───────────────────
   # PhoneApp is Artboard Segments over CairoTarget, so the phone UI builds on this host as

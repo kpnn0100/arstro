@@ -45,6 +45,34 @@ namespace cosmo_v2
         App(cosmo::CosmoService &svc, double width, double height);
 
         void render(artboard::IRenderTarget &target, double nowMs);
+        /** Does anything on screen need repainting right now? (T3.1)
+         *
+         *  The host used to call `gtk_widget_queue_draw` unconditionally every 16 ms, so the
+         *  whole window was re-rendered in software Cairo sixty times a second forever, at
+         *  rest, with nothing moving. Measured on a desktop a frame is cheap — 1.50 ms for
+         *  the scaled photo paint, 0.07 ms for a full-window fill — so the sin was never
+         *  that it was expensive: it was that it was ALWAYS ON, and on a small board that is
+         *  the core the render engine needs.
+         *
+         *  **R-G-1 says nothing a user can see may change in one frame. It does not say
+         *  repaint at rest.** While anything is in flight this keeps returning true, so every
+         *  tween still gets every frame.
+         *
+         *  Deliberately CONSERVATIVE rather than exact. Artboard's `Segment` has no
+         *  tree-wide "is anything animating" query, and adding one is an Artboard change
+         *  (a submodule, and `implement_artboard`'s territory, not this skill's). So this
+         *  keeps painting for `kActiveWindowMs` after the last thing that could have started
+         *  an animation, which is longer than cosmo's longest duration — it can waste a few
+         *  frames and can never truncate a tween. Being wrong in the other direction would
+         *  be a visible stutter, which is the failure this codebase treats as unacceptable. */
+        bool needsRedraw(double nowMs) const;
+        /** Turn the two intermediate histogram taps on exactly when the tab that draws them
+         *  is visible (T0.4 / R-PREVIEW-6). Called at construction and on every tab change. */
+        void syncIntermediateHistograms();
+        /** Note that something happened which may have started an animation: input, a frame
+         *  arriving, a model change, a screen switch. Called from the input entry points and
+         *  from `render`; a host may also call it after anything it did itself. */
+        void noteActivity(double nowMs) { mLastActivityMs = nowMs; }
         void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
         void wheel(double x, double y, double delta, bool ctrl);
         /** Forward a key/text event; returns true if consumed (host suppresses its
@@ -415,6 +443,14 @@ namespace cosmo_v2
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher
+        /** T3.1: when something last happened that could have started an animation, and how
+         *  long after it we keep painting. 1000 ms is longer than every duration in cosmo's
+         *  motion vocabulary (the longest is the 900 ms splash intro, which runs in its own
+         *  window), so a tween can never be cut short by this. */
+        static constexpr double kActiveWindowMs = 1000.0;
+        double mLastActivityMs = 0.0;
+        unsigned mSeenFrameSeq = 0;
+        unsigned mSeenRevision = 0;
         std::shared_ptr<HomeScreen> mHome;
         artboard::AnimatedProperty mScreenFade{0.0};      // cross-fade scrim on screen switch (1->0)
         artboard::AnimatedProperty mInFlight{0.0};        // eased target for started/total (R-LOADUX-4)

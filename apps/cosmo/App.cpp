@@ -139,6 +139,14 @@ namespace cosmo_v2
         // sink would report success merely because App's own channel was set, and drop the
         // command when App's was not wired in turn.
         mRightColumn->onCommand = [this](cosmo::Command c) { return emitCommand(c); };
+        // T0.4 / R-PREVIEW-6: the pre-curve luma and pre-mixer hue histograms exist ONLY to
+        // draw the data behind the tone-curve and colour-mixer editors, and each costs a
+        // full statistics pass on every render (6.65 ms and 4.06 ms on a 1.7 Mpx preview).
+        // They were computed whether or not that tab was visible, which is ~11 ms of every
+        // slider move spent on two answers nobody could see. The Mixer/Curve tab is the one
+        // page that draws them, so it is the one page that asks for them.
+        syncIntermediateHistograms();
+        mRightColumn->onTabChanged = [this](int) { syncIntermediateHistograms(); };
         mRightColumn->actionBar()->onSave = [this] { presetSaveClicked(); };
         mRightColumn->actionBar()->onImport = [this] { if (onImportPresetRequested) onImportPresetRequested(); };
         mRightColumn->actionBar()->onExport = [this] { presetExportClicked(); };
@@ -757,10 +765,34 @@ namespace cosmo_v2
         RawPointer rp{k, Point{x, y}, b, timeMs};
         rp.alt = alt; rp.shift = shift; rp.ctrl = ctrl;
         mRecognizer.feed(rp);
+        noteActivity(mNowMs);   // T3.1: a press or a move may have started a tween
+
+        // R-PREVIEW-1: tell the service a gesture is in flight, so a `set` arriving while
+        // the button is down renders whichever pyramid level meets the latency budget
+        // instead of the full one.
+        //
+        // At the ROOT, not per widget, and on ANY press rather than only on a draggable one.
+        // Two reasons, and the second is the important one. (a) Every draggable surface is
+        // covered by construction — sliders, the tone curve, the hue curves, the grade
+        // wheels, mask handles, and whatever gets added next — with no per-widget wiring to
+        // forget. (b) A press that edits nothing is harmless: no `set` follows, so no
+        // interactive render happens and there is nothing for the settle walk to refine.
+        // Marking a press that turns out not to be a drag costs exactly nothing, while
+        // MISSING one costs a full-resolution render on every mouse move, which on a small
+        // board is the lag this whole requirement exists to remove.
+        if (k == RawPointer::Kind::Down || k == RawPointer::Kind::Up)
+        {
+            cosmo::Command g;
+            g.kind = cosmo::Command::Kind::Gesture;
+            g.flag = (k == RawPointer::Kind::Down);
+            mSvc.dispatch(g);
+            CLOGD(Input, "gesture %s", g.flag ? "on" : "off");
+        }
     }
 
     void App::wheel(double x, double y, double delta, bool ctrl)
     {
+        noteActivity(mNowMs);   // T3.1: a wheel starts an eased scroll
         { const Point p = toLogical(x, y); x = p.x; y = p.y; }   // R-SCALE-2, as in pointer()
         if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
         if (mScreen == Screen::Loading) return;                           // non-interactive transition
@@ -818,9 +850,51 @@ namespace cosmo_v2
         // Center-stage ctrl+scroll zoom wires in with mask/crop tool support.
     }
 
+    void App::syncIntermediateHistograms()
+    {
+        const bool want = mRightColumn && mRightColumn->activeTab() == RightColumn::kTabColor;
+        mSvc.session().renderService().setWantIntermediateHistograms(want, want);
+        CLOGD(Ui, "intermediate histograms %s (tab %d)", want ? "on" : "off",
+              mRightColumn ? mRightColumn->activeTab() : -1);
+    }
+
+    bool App::needsRedraw(double nowMs) const
+    {
+        // A frame or a model change since the last PAINT is activity, whoever caused it — a
+        // render landing, a load step, a command off the control socket.
+        //
+        // Since the last *paint*, not since the last *ask*: this function is a pure query, and
+        // `render` is what records having caught up. Clearing the counters here instead was the
+        // first version, and it was wrong in a way that only a test caught — asking twice
+        // without painting reported "nothing to do" while the screen still showed the old
+        // frame, and asking once after many un-asked paints reported work that was already
+        // drawn. A predicate the host may call freely must not have a side effect.
+        const cosmo::AppModel &m = mSvc.model();
+        if (m.frameSeq != mSeenFrameSeq || m.revision != mSeenRevision) return true;
+        // Anything with a running clock of its own keeps the window alive regardless of the
+        // window above: a load's progress bar and an export's counter both animate from
+        // state the view does not own, and a refinement walk is about to deliver frames.
+        if (m.load.active || m.exports.active || m.refining) return true;
+        if (mScreen == Screen::Loading || mPhase != Phase::None) return true;
+        if (mScaleAnim.isAnimating() || mScreenFade.isAnimating()) return true;
+        return nowMs - mLastActivityMs < kActiveWindowMs;
+    }
+
     void App::render(IRenderTarget &target, double nowMs)
     {
         mNowMs = nowMs;
+        // T3.1: painting is what catches up with the model. If something had changed since
+        // the last paint it also counts as activity, so the window stays awake long enough
+        // for whatever tween that change started.
+        {
+            const cosmo::AppModel &m = mSvc.model();
+            if (m.frameSeq != mSeenFrameSeq || m.revision != mSeenRevision)
+            {
+                mSeenFrameSeq = m.frameSeq;
+                mSeenRevision = m.revision;
+                mLastActivityMs = nowMs;
+            }
+        }
         // R-SCALE-2a: the drawn scale advances FIRST, and while it is moving the logical box
         // and the whole layout are re-derived from it every frame. Deriving them once when the
         // setting changed would animate the transform and leave the layout at the old size —
@@ -1576,6 +1650,7 @@ namespace cosmo_v2
 
     bool App::key(const artboard::KeyEvent &e)
     {
+        noteActivity(mNowMs);   // T3.1
         if (mScreen == Screen::Loading) return true;  // swallow keys during the transition
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
         // R-BROWSE-2: Left/Right walk the rack — but only once nothing in the tree wanted

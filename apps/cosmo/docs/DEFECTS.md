@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-47**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-48**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -137,6 +137,62 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   verified to fail on the unfixed code. **Stays open** for steps 2-4 (LUT the sRGB transfer, hoist
   `renderInto`'s three working buffers, opt-in histogram taps), which are now the whole of what a
   default-params render costs.
+
+### D-47 — The new parallelFor pool called a destroyed lambda, and segfaulted one ctest run in three
+- **Area:** core / engine · **Status:** **Fixed** · **Severity:** S1 (crash)
+- **Found:** 2026-08-24, minutes after landing it in `7585b80` — by running `ctest` five times in a
+  row instead of once. **A defect I introduced.**
+- **Reproduce:** `ctest` repeatedly; `cosmo_core` or `cosmo_ui` SEGFAULTs intermittently, roughly one
+  run in three, in whichever suite links `arstro_image`. Deterministically reproducible with
+  `image_tests`' new `ParallelFor_survives_thousands_of_overlapping_batches`: 4 of 4 runs crash on
+  the pre-fix handshake, 3 of 3 pass on the fixed one.
+- **Cause — and it took two attempts, because the first diagnosis was a real bug that was not THE
+  bug.** `Pool` held **one** batch descriptor: a pointer to the caller's `std::function` (a local in
+  `parallelFor`'s frame), a chunk count, and a claim index.
+  * *First diagnosis (real, insufficient):* a worker wakes late for batch N holding N's body
+    pointer; N completes; `run()` returns and N's lambda is destroyed; N+1 resets the claim index;
+    the stale worker's `fetch_add` returns a valid index and it calls the destroyed function object.
+    Fixed with a generation-tagged claim — and `ctest` **still segfaulted 2 runs in 5**.
+  * *Actual cause:* **`parallelFor` is called from several threads at once.** The render worker runs
+    the pipeline while the export path renders full-resolution frames and a load converts and
+    downscales freshly decoded images; there are 19 call sites. Two concurrent callers simply
+    overwrote each other's body pointer, chunk count and claim index. The old implementation was
+    safe against this *by accident* — it spawned its own threads per call, so callers could not
+    interfere — and no amount of care about a single batch's lifetime addresses it.
+  Neither of the two tests written alongside the pool could see either failure: both run one batch
+  at a time, on one thread, with slack around it.
+- **Judgement:** defect, and the interesting part is why it survived being written. The pool's
+  correctness argument was about *chunk coverage*, which the tests checked, while the actual hazard
+  was *object lifetime*, which nothing checked. "Anything touching the load pipeline or the render
+  worker needs a randomized or ThreadSanitizer argument, not a looks-fine" is the rule in
+  `arstro.cosmo.core.implement` §4 — and a single-batch coverage test is a looks-fine wearing a
+  test's clothes.
+- **Fixed:** each `run()` now owns its batch **on its own stack** and publishes a pointer to it in
+  a list; workers pick up any live batch that still has chunks. Lifetime is one invariant: a worker
+  may only touch a batch while it is counted in that batch's `active`, `active` is only incremented
+  under the lock and only for a batch still in `mLive`, and `run()` removes its batch from `mLive`
+  and *then* waits for `active == 0` before returning. So no worker can enter a batch after it is
+  unpublished, and no batch can die with a worker inside it. Completion stays a per-batch
+  `remaining`, so `run()` returns as soon as its own work is done rather than waiting for every
+  worker to wake and report. A worker finishing one batch looks for another before sleeping, so a
+  concurrent load does not run alone. `setThreads` during a live batch is DEFERRED — a worker joined
+  mid-batch would leave `remaining` short and the caller spinning forever.
+- **Guarded by two tests**, and the second is the one that mattered:
+  * `ParallelFor_survives_thousands_of_overlapping_batches` — 3200 tiny back-to-back batches, each
+    with a **different** lambda capturing its own vector, so a stale body call is a use-after-free
+    rather than a harmless re-run of the same code. Verified to segfault 4/4 runs against the
+    first (single-descriptor) handshake.
+  * `ParallelFor_is_safe_when_several_threads_call_it_at_once` — **six caller threads x 250 batches**
+    with per-caller tags, so a batch that picked up another caller's body is detected rather than
+    merely surviving. Against the pool as shipped in `7585b80` this does not crash — it **hangs**
+    (10-minute timeout, exit 124), which is worse, and is exactly the failure a single-threaded
+    coverage test cannot express.
+  Then `ctest` six times in a row: clean.
+- **Lesson recorded in the ledger:** run a concurrency suite *repeatedly* before believing it, and
+  when a fix does not make the flake go away, do not assume the fix was wrong — check whether it was
+  fixing a different bug. Both diagnoses here were real; only the second was the crash. And before
+  pooling anything, enumerate who calls it: "who else is on another thread right now" was answerable
+  by `grep -c par::parallelFor` from the start.
 
 ### D-46 — `cosmo-cc`'s `wait <ms>` advanced the service clock sixteen times too fast
 - **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S2

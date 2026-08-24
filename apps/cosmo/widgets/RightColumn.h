@@ -61,6 +61,11 @@ namespace cosmo_v2
          *  makes, because a widget tree built with no service behind it must still edit. */
         bool emitCommand(const cosmo::Command &c) const { return onCommand && onCommand(c); }
 
+        /** Fires when the edit-stack tab changes, with the new index. The view above uses it
+         *  to stop paying for histograms whose panel is not on screen (R-PREVIEW-6); it is a
+         *  notification, not a request, so an unwired one is simply silent. */
+        std::function<void(int)> onTabChanged;
+
         std::shared_ptr<HistogramWidget> histogram() { return mHistogram; }
         std::shared_ptr<ActionBar> actionBar() { return mActionBar; }
 

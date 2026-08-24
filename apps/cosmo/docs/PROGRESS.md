@@ -108,8 +108,11 @@ and needs the randomized/TSan argument the skill requires for anything thread-sh
       **DONE.** Measured against the OLD equal-split scheme run side by side on a deliberately
       uneven workload (the same scheduling problem as asymmetric cores): **1.5-2.4x on a 3x spread**,
       landing within 4-56% of perfect balance. `parallelFor(empty)` 0.37 -> 0.08 ms per call; the
-      1600 px render 42 -> 29.5 ms at 24 threads. A wash at 4-8 symmetric threads, which is the
+      1600 px render 42 -> 32 ms at 24 threads. A wash at 4-8 symmetric threads, which is the
       honest result — there is no imbalance there to absorb. DR-PREVIEW-2a.
+      **The first two versions of the batch handshake were broken (D-47)** — a segfault, then a hang
+      under concurrent callers. Fixed in `9c7020d`; guarded by a 6-thread concurrent-caller test and
+      six consecutive clean `ctest` runs.
 
 **T2 — THE BREAKTHROUGH: progressive resolution, so interaction never waits for a render (core +
 design). This is the one item that changes the shape of the experience rather than a constant factor.**
@@ -792,6 +795,22 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-24 — one green run of a threading change is not evidence, and this is the second time
+  the project has paid for that.** The parallelFor pool passed its two tests, passed `ctest`, and
+  segfaulted one run in three (D-47). Both tests checked *chunk coverage*; the hazards were *object
+  lifetime* and *concurrent callers*, and neither is expressible in a test that runs one batch on one
+  thread. Worse: the first fix was correct about a real bug and the crash stayed, because
+  `parallelFor` is called from the render worker, the export path AND a load's convert-and-downscale
+  at the same time — 19 call sites, and one shared batch descriptor cannot serve two of them. **When
+  a fix does not make a flake go away, check whether it fixed a different bug rather than assuming it
+  was wrong.** And "who else is on another thread right now" was answerable by
+  `grep -c par::parallelFor` before a line of the pool was written.
+  **So: after any change to the pool, the load pipeline or the render worker, run the suite at least
+  five times in a row, and write the test that makes the batches OVERLAP.** The same family as D-42
+  (a condition variable signalled without the lock) and D-11 (a concurrency claim "verified" by a log
+  line nobody ran); §4's "randomized or TSan argument, not a looks-fine" was already the rule and a
+  looks-fine wearing a test's clothes still got through.
 
 - **2026-08-24 — T0.3 and T0.4 landed in ONE commit, deliberately.** The skill says never batch two
   features, and these are two ledger tasks. They are both edits to the same dozen lines of

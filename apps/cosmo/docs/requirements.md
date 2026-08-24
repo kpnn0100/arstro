@@ -2066,6 +2066,16 @@ On this symmetric desktop the pool's other half (no thread creation) shows up as
 24 threads going **42 -> 29.5 ms** (taps on) or **23.8 -> 17.6 ms** (taps off). At 4 and 8 threads
 on symmetric cores it is a wash, which is the honest result: there is no imbalance there to absorb.
 
+**The handshake needed a second attempt, and that is worth recording.** The version that shipped in
+`7585b80` published the batch as a pointer to the caller's `std::function` — a local in
+`parallelFor`'s frame — and claimed chunks with a plain `fetch_add`. A worker waking late for batch
+N could then claim a chunk of batch N+1 after N's lambda had been destroyed, and call it: an
+intermittent segfault, about one `ctest` run in three (**D-47**). The claim is now a
+**generation-tagged ticket**, one 64-bit atomic holding `(batch << 32) | next chunk`, advanced by
+CAS — so a stale worker fails its first claim and returns without ever dereferencing the pointer it
+holds. Completion stays `mRemaining`, so `run()` still returns as soon as the work is done rather
+than waiting for every worker to wake and report.
+
 Guarded by four tests in `image_tests` — `ParallelFor_visits_every_index_exactly_once` (7 thread
 counts x 8 range sizes, atomically counted), `ParallelFor_result_is_identical_to_serial_at_every_thread_count`
 (bit-identical, not merely close), `ParallelFor_nested_runs_serially_instead_of_deadlocking` (which

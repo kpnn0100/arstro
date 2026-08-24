@@ -7,6 +7,7 @@
 #include "image_processing.h"
 #include <cmath>
 #include <atomic>
+#include <thread>
 #include <vector>
 
 using namespace arstro;
@@ -970,6 +971,82 @@ TEST(ParallelFor_survives_repeated_resizing_under_load)
         });
         for (int i = 0; i < n; i += 137)
             CHECK(sum[i] == i * 2);
+    }
+    par::setThreads(0);
+}
+
+// ── T1: the batch handshake, which is the part that actually broke ────────────────
+//
+// The first version of the pool segfaulted about one ctest run in three, and neither the
+// coverage test nor the determinism test above caught it, because both do ONE batch at a
+// time with plenty of slack around it. The failure needed batches to overlap: a worker
+// waking late for batch N, holding N's body pointer, then claiming a chunk of batch N+1
+// after `run()` had returned and N's `std::function` — a local in parallelFor's frame —
+// was destroyed.
+//
+// So this hammers the handshake: thousands of tiny back-to-back batches, each with a
+// DIFFERENT lambda capturing its own state, so a stale body pointer is a use-after-free
+// rather than a harmless call to the same code. Interleaved with thread-count changes,
+// which restart the pool underneath it. It is a stress test, not a proof — but it is the
+// shape that reproduced the crash, and it runs clean now where it did not before.
+// ...and the case the first two crash-fixes both missed: parallelFor is called from
+// SEVERAL THREADS AT ONCE. That is not incidental — the render worker runs the pipeline
+// while the export path renders full-resolution frames and a load converts and downscales
+// freshly decoded images, and all of them go through parallelFor (19 call sites).
+//
+// The old implementation was safe against this by accident: it spawned its own threads per
+// call, so callers could not interfere. A pool with ONE batch descriptor is not, and no
+// amount of care about a single batch's lifetime fixes it — two callers simply overwrite
+// each other's body pointer, chunk count and claim index. That is what segfaulted
+// `cosmo_core` and `cosmo_ui` intermittently (D-47), and it is why the pool holds a LIST.
+TEST(ParallelFor_is_safe_when_several_threads_call_it_at_once)
+{
+    par::setThreads(8);
+    std::atomic<bool> bad{false};
+    std::atomic<int> batches{0};
+    std::vector<std::thread> callers;
+    for (int c = 0; c < 6; ++c)
+        callers.emplace_back([c, &bad, &batches] {
+            for (int round = 0; round < 250; ++round)
+            {
+                // A distinct size and a distinct tag per caller per round, so a batch that
+                // picked up another caller's body writes a value this one can detect.
+                const int n = 50 + (c * 37 + round * 11) % 400;
+                const int tag = c * 100000 + round;
+                std::vector<int> out(n, -1);
+                par::parallelFor(n, [&out, tag](int b, int e) {
+                    for (int i = b; i < e; ++i) out[i] = tag;
+                });
+                for (int i = 0; i < n; ++i)
+                    if (out[i] != tag) { bad.store(true); return; }
+                batches.fetch_add(1);
+            }
+        });
+    for (auto &t : callers) t.join();
+    printf("    %d concurrent batches across 6 caller threads\n", batches.load());
+    CHECK(!bad.load());
+    CHECK(batches.load() == 6 * 250);
+    par::setThreads(0);
+}
+
+TEST(ParallelFor_survives_thousands_of_overlapping_batches)
+{
+    for (int round = 0; round < 400; ++round)
+    {
+        par::setThreads(2 + (round % 15));          // 2..16, restarting the pool as it goes
+        for (int batch = 0; batch < 8; ++batch)
+        {
+            // A fresh vector per batch, captured by reference: if a stale worker called a
+            // previous batch's body it would write through a dangling reference.
+            const int n = 40 + (batch * 7 + round) % 300;
+            std::vector<int> out(n, -1);
+            const int tag = round * 8 + batch;
+            par::parallelFor(n, [&out, tag](int b, int e) {
+                for (int i = b; i < e; ++i) out[i] = tag;
+            });
+            for (int i = 0; i < n; ++i)
+                CHECK(out[i] == tag);               // every index written, by THIS batch
+        }
     }
     par::setThreads(0);
 }

@@ -1301,9 +1301,21 @@ namespace
         // One pump, every frame, unconditionally (R-SVC-6). The old code added and removed a
         // dedicated 15 ms GTK source per load; a service that is always pumped cannot forget
         // to be, and pump() is a cheap early-out when nothing is in flight.
-        a->svc.pump(nowMs(*a));
+        const double now = nowMs(*a);
+        a->svc.pump(now);
         pollControl(a);
-        gtk_widget_queue_draw(a->area);
+        // T3.1: repaint only when something on screen is actually moving. This line used to
+        // be an unconditional queue_draw, so the whole window was re-rendered in software
+        // Cairo sixty times a second forever — at rest, with nothing changing. A frame is
+        // cheap (1.50 ms for the scaled photo, 0.07 ms for a full-window fill), so the cost
+        // was never per-frame: it was that it never stopped, and on a small board that is the
+        // core the render engine needs. R-G-1 forbids a change in one frame; it does not
+        // require a repaint at rest.
+        //
+        // The pump still runs every tick unconditionally (R-SVC-6) — the service must never
+        // depend on the view wanting to draw.
+        if (a->touchMode || a->touchFade.isAnimating() || a->app.needsRedraw(now))
+            gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
     }
 
