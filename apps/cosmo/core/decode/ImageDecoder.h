@@ -27,10 +27,38 @@ namespace cosmo
         bool ok() const { return width > 0 && height > 0 && (int)rgba.size() == width * height * 4; }
     };
 
+    /** How good the pixels have to be (D-24 / R-LOADPERF).
+     *
+     *  `Preview` is for pixels that will be downscaled to `previewEdge` before anyone sees
+     *  them — which is every pixel a project LOAD produces. `Full` is for pixels that will
+     *  be written to a file. The difference is worth ~7x on a RAW: 90% of an 8.5 s decode is
+     *  one `dcraw_process()` call running the highest-quality demosaic over 26 megapixels
+     *  that are then thrown away to draw a 1600 px preview.
+     *
+     *  The dimensions are IDENTICAL either way — that is the whole reason this is a demosaic
+     *  quality switch and not `half_size`. Crop rectangles, normalised mask geometry and
+     *  every slot's coordinates stay valid, so a `Full` re-decode drops straight into the
+     *  same slot, which is what makes export-time re-decoding a contained change rather than
+     *  a coordinate migration. */
+    enum class Fidelity
+    {
+        Preview,
+        Full
+    };
+
     struct IImageDecoder
     {
         virtual ~IImageDecoder() = default;
         virtual DecodedImage decodeFile(const std::string &path) = 0;
+
+        /** As `decodeFile`, at the requested fidelity. The default forwards to the
+         *  full-quality path, so a decoder that has no cheaper mode costs nothing to keep
+         *  and no implementor is broken by this existing. */
+        virtual DecodedImage decodeFile(const std::string &path, Fidelity f)
+        {
+            (void)f;
+            return decodeFile(path);
+        }
 
         /** Sub-image progress: `fraction` in 0..1 and a short stage name. **Called on the
          *  decoding thread**, so an implementation of this must not touch shared state

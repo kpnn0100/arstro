@@ -290,8 +290,48 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Guard for the shot in the meantime:** `editor-dissolve` now uses `exposure=1.5`, inside the
   UI's range, so the harness does not depend on the fix.
 
+### D-17 — The control socket does nothing on Windows
+- **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
+- **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
+  than remembered.
+- **Reproduce:** `cosmo.exe --control \\.\pipe\cosmo` on Windows → the log carries
+  `control channel is not implemented on Windows yet` and the app runs normally, unattended.
+- **Expected:** R-SVC-8 on every platform cosmo ships to.
+- **Actual:** POSIX only. `ControlChannel::open()` returns false with a reason on Windows and
+  every other method is an inert no-op, so `--control` fails loudly at startup instead of hanging
+  later. The branch is `-fsyntax-only` clean but has never been built or run.
+- **Judgement:** requirement gap against R-SVC-8, which does not name platforms. Deferred rather
+  than open because it is a deliberate stop, not an oversight: an overlapped named pipe needs a
+  per-instance state machine (`CreateNamedPipe` + `FILE_FLAG_OVERLAPPED`, a pending
+  `ConnectNamedPipe` per client with its own event, a pending `ReadFile` per client,
+  `GetOverlappedResult(..., FALSE)` per frame) whose failure mode is a **hung UI thread** — and
+  it cannot be tested from this Linux host at all. `PIPE_NOWAIT` is not the shortcut: it is
+  legacy and its writes silently drop data when the buffer fills, so the event stream would lose
+  lines with no error anywhere.
+- **Fix:** pending, and the cheaper route is recorded in `ControlChannel.cpp`: Winsock `AF_UNIX`
+  (Win10 1803+, `<afunix.h>`) makes the POSIX branch nearly portable — `ioctlsocket(FIONBIO)`
+  for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
+  box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
+  and it is unaffected.
+
+### D-5 — The UI logs nothing, so a visual bug report cannot be traced
+- **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
+- **Found:** 2026-08-16, source inspection
+- **Reproduce:** `grep -rn "LOG[DIWE]" apps/cosmo/App.cpp apps/cosmo/widgets/ | wc -l` → 0. The only
+  `LOGI` calls in the whole desktop app are startup and the export batch start/finish.
+- **Expected:** the user says "this button does nothing" and the log says which widget consumed the
+  click, or that nothing did.
+- **Actual:** clicks, screen transitions, selections, panel and tab changes, scroll clamping, value
+  commits and renders are all invisible. This is the single biggest observability gap in the app and it
+  blocks the intended workflow (user reports a symptom → agent reads the log).
+- **Judgement:** defect — no requirement guarantees it, but the reporting workflow is unusable without
+  it. `R-AGENT-*` will state the contract.
+- **Fix:** pending. P0.4 + P0.5.
+
+## Closed
+
 ### D-24 — One RAF takes 8.5 s, and 90% of it is one call that reports nothing
-- **Area:** core / load · **Status:** Confirmed (measured) · **Severity:** S2
+- **Area:** core / load · **Status:** **Fixed** · **Severity:** S2
 - **Found:** 2026-08-18, reported by the user: "loading 1 image takes too long … hard to track the
   progress".
 - **Reproduce:** `apps/cosmo/core/tests/fixtures/raw_phase_timing.cpp` — the same call sequence
@@ -342,45 +382,39 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   10%/92% steps plus a named stage. That is the ceiling of reporting; the cost is the remaining
   work.
 
-### D-17 — The control socket does nothing on Windows
-- **Area:** core / service · **Status:** **Deferred** (stubbed, and it says so) · **Severity:** S3
-- **Found:** 2026-08-17, while building S5 — a known limitation, filed so it is tracked rather
-  than remembered.
-- **Reproduce:** `cosmo.exe --control \\.\pipe\cosmo` on Windows → the log carries
-  `control channel is not implemented on Windows yet` and the app runs normally, unattended.
-- **Expected:** R-SVC-8 on every platform cosmo ships to.
-- **Actual:** POSIX only. `ControlChannel::open()` returns false with a reason on Windows and
-  every other method is an inert no-op, so `--control` fails loudly at startup instead of hanging
-  later. The branch is `-fsyntax-only` clean but has never been built or run.
-- **Judgement:** requirement gap against R-SVC-8, which does not name platforms. Deferred rather
-  than open because it is a deliberate stop, not an oversight: an overlapped named pipe needs a
-  per-instance state machine (`CreateNamedPipe` + `FILE_FLAG_OVERLAPPED`, a pending
-  `ConnectNamedPipe` per client with its own event, a pending `ReadFile` per client,
-  `GetOverlappedResult(..., FALSE)` per frame) whose failure mode is a **hung UI thread** — and
-  it cannot be tested from this Linux host at all. `PIPE_NOWAIT` is not the shortcut: it is
-  legacy and its writes silently drop data when the buffer fills, so the event stream would lose
-  lines with no error anywhere.
-- **Fix:** pending, and the cheaper route is recorded in `ControlChannel.cpp`: Winsock `AF_UNIX`
-  (Win10 1803+, `<afunix.h>`) makes the POSIX branch nearly portable — `ioctlsocket(FIONBIO)`
-  for `O_NONBLOCK`, `DeleteFileA` for `unlink`, and no SIGPIPE to suppress. Do that on a Windows
-  box, where it can be run. Until then the CLI (`cosmo-cc run`) is the whole harness on Windows,
-  and it is unaffected.
+- **FIXED 2026-08-24 — option (1), and by then it was barely a choice.** The entry offered
+  "re-decode at export" or "re-decode in the background" and called the first contained and
+  reversible. In the meantime R-MEM-5/D-44 changed the architecture underneath it: the load now uses
+  `addImagePreviewOnly` and keeps **no full-resolution source at all**, so `renderFull` was already
+  going back to the file for export. Option (1) had become the architecture; all that was missing was
+  asking for the cheap demosaic on the way in.
 
-### D-5 — The UI logs nothing, so a visual bug report cannot be traced
-- **Area:** design / observability · **Status:** Confirmed (by source inspection) · **Severity:** S2
-- **Found:** 2026-08-16, source inspection
-- **Reproduce:** `grep -rn "LOG[DIWE]" apps/cosmo/App.cpp apps/cosmo/widgets/ | wc -l` → 0. The only
-  `LOGI` calls in the whole desktop app are startup and the export batch start/finish.
-- **Expected:** the user says "this button does nothing" and the log says which widget consumed the
-  click, or that nothing did.
-- **Actual:** clicks, screen transitions, selections, panel and tab changes, scroll clamping, value
-  commits and renders are all invisible. This is the single biggest observability gap in the app and it
-  blocks the intended workflow (user reports a symptom → agent reads the log).
-- **Judgement:** defect — no requirement guarantees it, but the reporting workflow is unusable without
-  it. `R-AGENT-*` will state the contract.
-- **Fix:** pending. P0.4 + P0.5.
+  As built: `cosmo::Fidelity{Preview, Full}` on the decode seam (`decode/ImageDecoder.h`), with a
+  `decodeFile(path, Fidelity)` overload whose **default forwards to the full-quality path** — so no
+  implementor is broken by it existing and a decoder with no cheaper mode costs nothing to keep.
+  `NativeImageDecoder` sets `imgdata.params.user_qual = 0` for `Preview`. `ProjectLoader` asks for
+  `Preview`; `RenderService::ensureSource` passes its existing `needFullRes` through the
+  `SourceLoader` seam, so a cold slot rehydrated for a **preview** also decodes cheaply while an
+  **export** decodes properly. That last part matters more than the load does: R-MEM's eviction means
+  the rehydration path runs for the rest of the session.
 
-## Closed
+  **`user_qual` and not `half_size`**, for the reason the entry gave: the dimensions stay identical,
+  so crop rectangles, normalised mask geometry and every slot's coordinates stay valid and the
+  full-fidelity re-decode drops into the same slot.
+
+  **The honest trade, stated:** a preview is now built from a bilinear demosaic while the exported
+  file comes from the quality one, so the two are not bit-identical. At `previewEdge` the difference
+  is not visible — that is why the load is allowed to be cheap — but it is a real difference and it
+  is the one this fix buys the 7x with. Shipping bilinear *everywhere* remains explicitly not the
+  plan.
+- **Guarded by** `cosmo_core_tests::a_load_decodes_cheaply_and_an_export_decodes_properly`, which
+  counts the asks: a load must produce **zero** full-fidelity decodes, an export must produce one per
+  photo, and neither may leak into the other. Counting is the only way to guard it — the requirement
+  is about which of two code paths runs and is invisible in the output, which is precisely why
+  silently exporting from a bilinear decode could have gone unnoticed. The test also pins that the
+  un-hinted `decodeFile(path)` overload still means **Full**: a caller that does not know about
+  fidelity may not be quietly given the cheap answer.
+
 
 ### D-44 — Switching to a photo re-decodes it, because the preview cache is filled only by rendering
 - **Area:** core / engine · **Status:** **Fixed** (same session it was filed) · **Severity:** S2

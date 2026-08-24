@@ -14,6 +14,9 @@ namespace cosmo
     {
     public:
         DecodedImage decodeFile(const std::string &path) override;
+        /** D-24: a LOAD asks for `Preview` and gets LibRaw's bilinear demosaic — same
+         *  dimensions, ~7x faster — while export asks for `Full` and gets the quality one. */
+        DecodedImage decodeFile(const std::string &path, Fidelity f) override;
         /** The embedded preview for RAW, a size-limited GdkPixbuf load otherwise. */
         DecodedImage decodeThumb(const std::string &path, int maxEdge) override;
         /** D-24: LibRaw announces its own phases, so the bar can move inside one image. */

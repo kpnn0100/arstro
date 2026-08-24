@@ -191,13 +191,26 @@ namespace cosmo
             return 0;   // non-zero would ask LibRaw to abort
         }
 
-        DecodedImage decodeRaw(const std::string &path, IImageDecoder::Progress *sink)
+        DecodedImage decodeRaw(const std::string &path, IImageDecoder::Progress *sink,
+                               Fidelity fidelity = Fidelity::Full)
         {
             DecodedImage out;
             LibRaw raw;
             RawProgressCtx ctx{sink, 0.0};
             if (sink && *sink) raw.set_progress_handler(rawProgressCb, &ctx);
             if (raw.open_file(path.c_str()) != LIBRAW_SUCCESS) return out;
+            // D-24: the demosaic is the decode. Measured per phase on a 4170x6246 X-Trans
+            // RAF: open 0 ms, unpack 713 ms, **process 7688 ms**, make_mem 107 ms. Asking for
+            // bilinear (`user_qual = 0`) takes that 7688 down to 337 — and leaves the
+            // DIMENSIONS untouched, which `half_size` would not, so the pixels drop straight
+            // into the same slot and every crop rect and mask coordinate stays valid.
+            //
+            // A load only ever produces pixels that are downscaled to previewEdge before
+            // anyone sees them, so this costs nothing anyone can look at. Export asks for
+            // Fidelity::Full and re-decodes properly, which the R-MEM-2 architecture already
+            // does anyway: the load keeps no full-resolution source, so `renderFull` was
+            // going back to the file regardless.
+            if (fidelity == Fidelity::Preview) raw.imgdata.params.user_qual = 0;
             if (raw.unpack() != LIBRAW_SUCCESS) return out;
             if (raw.dcraw_process() != LIBRAW_SUCCESS) return out;
             int code = 0;
@@ -333,13 +346,19 @@ namespace cosmo
 
     DecodedImage NativeImageDecoder::decodeFile(const std::string &path)
     {
+        return decodeFile(path, Fidelity::Full);
+    }
+
+    DecodedImage NativeImageDecoder::decodeFile(const std::string &path, Fidelity fidelity)
+    {
         DecodedImage out;
 #ifdef COSMO_HAVE_LIBRAW
         if (isRawExtension(path))
-            out = decodeRaw(path, &mProgress);
+            out = decodeRaw(path, &mProgress, fidelity);
         else
-            out = decodePixbuf(path);
+            out = decodePixbuf(path);   // a JPEG/PNG decode has no quality knob to trade
 #else
+        (void)fidelity;
         out = decodePixbuf(path);  // RAW (without LibRaw) will simply fail to decode
 #endif
         out.name = baseName(path);

@@ -54,6 +54,16 @@ namespace cosmo_v2
          *  budget unused is not fixing it. */
         void setBudget(const arstro::cosmo::ThreadBudget *b) { mBudget = b; }
 
+        arstro::cosmo::DecodedImage decodeFile(const std::string &path,
+                                              arstro::cosmo::Fidelity f) override
+        {
+            // Pinned exactly as the full-fidelity overload is: a cheaper demosaic is still a
+            // demosaic, and LibRaw's OpenMP team is sized from the environment either way
+            // (R-CPU-2c / D-41).
+            pinNestedOpenMPForThisThread(teamSize());
+            return mInner.decodeFile(path, f);
+        }
+
         arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
         {
             pinNestedOpenMPForThisThread(teamSize());

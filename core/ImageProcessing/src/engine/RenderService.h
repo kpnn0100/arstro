@@ -80,8 +80,8 @@ namespace arstro
          *  A `std::function` seam, exactly like `EditEngine::setComputeAccelerator`: no
          *  codec enters arstro_image, and the host's own decoder — budgeted, per R-CPU-2c
          *  — is what actually runs. */
-        using SourceLoader = std::function<bool(const std::string &path, std::vector<uint8_t> &rgba,
-                                                int &w, int &h)>;
+        using SourceLoader = std::function<bool(const std::string &path, bool fullFidelity,
+                                                std::vector<uint8_t> &rgba, int &w, int &h)>;
         void setSourceLoader(SourceLoader loader);
 
         /** Cap the engine's two pixel pools in bytes (R-MEM-1). Applied on the worker. */

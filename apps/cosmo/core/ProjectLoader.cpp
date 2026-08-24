@@ -78,7 +78,11 @@ namespace cosmo
         r.imagePath = e.imagePath;
         r.name = baseName(e.imagePath);
         if (!dec) return r;                // no decoder supplied: every leaf reads as missing
-        DecodedImage img = dec->decodeFile(e.imagePath);
+        // D-24: a load produces pixels that are downscaled to previewEdge before anyone sees
+        // them, so it asks for the cheap demosaic. Export re-decodes at full fidelity — which
+        // R-MEM-2's architecture already forces, since the load keeps no full-resolution
+        // source and `renderFull` goes back to the file regardless.
+        DecodedImage img = dec->decodeFile(e.imagePath, Fidelity::Preview);
         if (!img.ok()) return r;           // decoded stays false: reads as missing, not as a stall
         r.w = img.width;
         r.h = img.height;

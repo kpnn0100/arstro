@@ -2267,3 +2267,54 @@ at 1.75 ms although the engine emits alpha=255 for every photo, and `drawImage` 
 full photo every frame rather than caching by destination size. Both are in **Artboard**, which is a
 submodule and belongs to `implement_artboard`, not to this skill. Left as T3.4 with the measurement
 attached so whoever picks it up does not have to re-derive it.
+
+### DR-LOADPERF-5 A load decodes cheaply; an export decodes properly (R-LOADPERF, D-24)
+90% of a RAW decode is one `dcraw_process()` call, and a project load spent it producing 26
+megapixels that were immediately downscaled to `previewEdge`. Per-phase, on a 4170x6246 X-Trans RAF:
+`open 0 ms | unpack 713 | process 7688 | make_mem 107`. Asking LibRaw for bilinear
+(`imgdata.params.user_qual = 0`) takes that 7688 down to **337** — an 8.5 s decode becomes 1.2 s.
+
+**As built.** `cosmo::Fidelity{Preview, Full}` on the decode seam (`decode/ImageDecoder.h`), plus a
+`decodeFile(path, Fidelity)` overload whose **default forwards to the existing full-quality
+`decodeFile(path)`** — so no implementor is broken by it existing, and a decoder with no cheaper mode
+(`AndroidImageDecoder`, the test fakes) costs nothing to keep. `NativeImageDecoder` overrides it and
+sets `user_qual = 0` for `Preview`. `PinnedDecoder` forwards, pinned exactly as the full path is: a
+cheaper demosaic is still a demosaic and LibRaw's OpenMP team is sized from the environment either
+way (R-CPU-2c).
+
+Two callers ask for `Preview`:
+- **`ProjectLoader`** — the load, which is what D-24 was about;
+- **`RenderService::ensureSource`**, by passing its existing `needFullRes` through the `SourceLoader`
+  seam. This is the part that matters more than the load: R-MEM's eviction means a cold slot is
+  rehydrated from the file for the rest of the session, and every one of those rehydrations is for a
+  preview.
+
+Export is the one caller that asks for `Full`, through the same seam, on `renderFull`.
+
+**`user_qual`, not `half_size`** — the dimensions stay **identical**, so crop rectangles, normalised
+mask geometry and every slot's coordinates stay valid and a full-fidelity re-decode drops straight
+into the same slot. That is what makes this a contained change instead of a coordinate migration.
+
+**Why it is now barely a choice.** D-24 offered "re-decode at export" or "re-decode in the
+background" and preferred the first as contained and reversible. R-MEM-5/D-44 then changed the
+architecture underneath it: the load uses `addImagePreviewOnly` and keeps **no full-resolution
+source**, so `renderFull` was already going back to the file. Option (1) had become the architecture;
+what was missing was only asking for the cheap demosaic on the way in.
+
+**The trade, stated rather than buried:** a preview is built from a bilinear demosaic while the
+exported file comes from the quality one, so the two are not bit-identical. At `previewEdge` the
+difference is not visible — that is why the load is allowed to be cheap — but it is real, and it is
+what buys the 7x. Shipping bilinear *everywhere* remains explicitly not the plan: silently lowering
+output quality is the one thing a photo editor may not trade for speed.
+
+**Guarded by** `cosmo_core_tests::a_load_decodes_cheaply_and_an_export_decodes_properly`, which
+**counts the asks** — a load must produce zero full-fidelity decodes, an export must produce one per
+photo, and neither may leak into the other. Counting is the only available guard: this is a
+requirement about which of two code paths runs, and it is invisible in the output, which is exactly
+why silently exporting from a bilinear decode could have gone unnoticed. The test also pins that the
+un-hinted `decodeFile(path)` overload still means **Full**, so a caller that does not know about
+fidelity is never quietly given the cheap answer.
+
+```
+[PASS] a_load_decodes_cheaply_and_an_export_decodes_properly (load: 2 preview / 0 full, export: 2 full)
+```

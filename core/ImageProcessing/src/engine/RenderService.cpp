@@ -158,7 +158,9 @@ namespace arstro
 
         std::vector<uint8_t> rgba;
         int w = 0, h = 0;
-        if (!loader(path, rgba, w, h)) return false;
+        // D-24: only pixels that will be WRITTEN need the expensive demosaic; a cold slot
+        // being rehydrated for a preview is about to be downscaled to previewEdge anyway.
+        if (!loader(path, needFullRes, rgba, w, h)) return false;
         return mEngine.supplySource(slot, rgba.data(), w, h, 4);
     }
 
@@ -427,7 +429,11 @@ namespace arstro
         if (!mSourceLoader || path.empty()) return !needFullRes && !mEngine.slotNeedsSource(slot);
         std::vector<uint8_t> rgba;
         int w = 0, h = 0;
-        if (!mSourceLoader(path, rgba, w, h)) return false;
+        // D-24: only a render that will be WRITTEN needs the expensive demosaic. A cold slot
+        // being rehydrated for a preview is about to be downscaled to previewEdge, so it asks
+        // for the cheap one — which is the same trade the load makes, applied to the one path
+        // that reaches back to the file after the load is over.
+        if (!mSourceLoader(path, needFullRes, rgba, w, h)) return false;
         return mEngine.supplySource(slot, rgba.data(), w, h, 4);
     }
     void RenderService::releaseImage(int slot) { mEngine.releaseImage(slot); }

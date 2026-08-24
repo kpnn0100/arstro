@@ -23,7 +23,10 @@ gets a frame every **33 ms (~30 fps)**, the full 1600 px level is reached within
 gesture ending, stepping up** through the pyramid, and the **A733 is the floor that must work** —
 tune for it and RK3588 plus the desktop come free. Written up as **R-PREVIEW-1..6**.
 
-**► NEXT: T4 — the load path.** T0, T1, T2 and T3.1 are done. T3.2/T3.3 (damage rectangles, a
+**► NEXT: T4.2 — a disk-backed proxy cache**, then T5 if any of it still proves necessary. T0, T1,
+T2, T3.1 and T4.1 are all done and measured.
+
+**► (done) T4.1 — the load path.** T0, T1, T2 and T3.1 are done. T3.2/T3.3 (damage rectangles, a
 30 fps shell) are now optional rather than necessary: with the window idle at rest, the remaining
 per-frame cost only matters while something is moving, and a frame measured 1.50 ms. T3.4 is
 **Artboard's**, not this skill's — see below.
@@ -191,7 +194,12 @@ engine needs. R-G-1 says nothing may change in one frame; it does **not** say re
       becomes a per-row `memcpy`. (Artboard is a submodule and goes through `implement_artboard`.)
 
 **T4 — the load path, which on an SBC is the difference between usable and not.**
-- [ ] T4.1 **D-24** — decode the LOAD with `user_qual = 0` and keep the quality demosaic for export.
+- [x] T4.1 **D-24 — FIXED.** `cosmo::Fidelity{Preview, Full}` on the decode seam; the load AND the
+      cold-slot rehydration path ask for `Preview`, export asks for `Full`. By now it was barely a
+      choice: R-MEM-5/D-44 had already made export re-decode from the file, so option (1) WAS the
+      architecture and only the cheap ask was missing. Guarded by a test that counts the asks, since
+      the requirement is about which code path runs and is invisible in the output. ~~decode the LOAD
+      with `user_qual = 0`~~ and keep the quality demosaic for export.
       7x on decode, already measured, and still needs the user's call between "re-decode at export"
       and "re-decode in the background". On a 4 GB board this is the whole opening experience.
 - [ ] T4.2 A **disk-backed proxy cache** beside the project, so a board with 4 GB does not re-decode

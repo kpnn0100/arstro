@@ -48,10 +48,12 @@ namespace cosmo
             return;
         }
         mSession.renderService().setSourceLoader(
-            [make](const std::string &path, std::vector<uint8_t> &rgba, int &w, int &h) {
+            [make](const std::string &path, bool fullFidelity, std::vector<uint8_t> &rgba,
+                   int &w, int &h) {
                 auto dec = make();
                 if (!dec) return false;
-                DecodedImage img = dec->decodeFile(path);
+                DecodedImage img = dec->decodeFile(path, fullFidelity ? Fidelity::Full
+                                                                      : Fidelity::Preview);
                 if (!img.ok()) return false;
                 rgba = std::move(img.rgba);
                 w = img.width;

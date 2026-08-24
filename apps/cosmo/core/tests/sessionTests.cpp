@@ -1519,6 +1519,78 @@ namespace
     // asserting the hardware. So this asserts the MECHANISM: that a budget small enough to
     // rule out level 0 produces a coarse frame, that the walk climbs one step per frame,
     // that it terminates at level 0, and that a refinement adds no history.
+    // D-24: a LOAD asks for the cheap demosaic and an EXPORT asks for the quality one.
+    //
+    // This is a requirement about which of two code paths is taken, and it is invisible in
+    // the output — a bilinear-decoded preview and a quality-decoded one look the same at
+    // previewEdge, which is exactly why the load is allowed to be cheap. So the only way to
+    // guard it is to count the asks, and it is worth guarding: silently exporting from a
+    // bilinear decode would lower output quality, which is the one thing a photo editor may
+    // never trade for speed.
+    void test_a_load_decodes_cheaply_and_an_export_decodes_properly()
+    {
+        using namespace arstro::cosmo;
+        static std::atomic<int> sPreviewAsks{0}, sFullAsks{0};
+        sPreviewAsks.store(0);
+        sFullAsks.store(0);
+
+        struct CountingDecoder : IImageDecoder
+        {
+            DecodedImage make(const std::string &path)
+            {
+                DecodedImage d;
+                if (path.find("missing") != std::string::npos) return d;
+                d.width = 12; d.height = 8;
+                d.rgba.assign((size_t)12 * 8 * 4, 180);
+                d.name = path;
+                return d;
+            }
+            DecodedImage decodeFile(const std::string &path) override
+            {
+                // The un-hinted overload must still mean FULL: a caller that does not know
+                // about fidelity may not be silently given the cheap answer.
+                sFullAsks.fetch_add(1);
+                return make(path);
+            }
+            DecodedImage decodeFile(const std::string &path, Fidelity f) override
+            {
+                (f == Fidelity::Preview ? sPreviewAsks : sFullAsks).fetch_add(1);
+                return make(path);
+            }
+        };
+
+        const std::string path = "/tmp/cosmo_svc_fidelity.cmp";
+        writeFakeProject(path, 2, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new CountingDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == 2);
+
+        // Every decode the load did was a preview decode. Not "mostly" — the load has no
+        // reason to want output pixels, and one full decode here is 7x of a photo's cost.
+        assert(sPreviewAsks.load() >= 2 && "the load must decode every entry");
+        assert(sFullAsks.load() == 0 && "and must not ask for output quality even once");
+        const int afterLoad = sPreviewAsks.load();
+
+        // Export re-decodes, and it must ask properly. The load kept no full-resolution
+        // source (R-MEM-5), so this genuinely goes back to the file.
+        int written = 0;
+        svc.setImageWriter([&written](const std::string &, const std::string &, const uint8_t *,
+                                      int, int, std::string &) { ++written; return true; });
+        assert(svc.dispatchText("export --outdir /tmp", err) && err.empty());
+        assert(written == 2 && "both photos exported");
+        assert(sFullAsks.load() >= 2 && "export must ask for the quality demosaic");
+        assert(sPreviewAsks.load() == afterLoad &&
+               "and must not sneak a preview decode into the output path");
+
+        printf("[PASS] a_load_decodes_cheaply_and_an_export_decodes_properly "
+               "(load: %d preview / 0 full, export: %d full)\n",
+               afterLoad, sFullAsks.load());
+    }
+
     void test_a_gesture_renders_coarse_and_then_refines()
     {
         using namespace arstro::cosmo;
@@ -1578,20 +1650,30 @@ namespace
 
         const int historyBeforeWalk = svc.model().history.nodes;
 
-        // Finger up. The walk must climb ONE level per frame — not jump — and must end at 0.
+        // Finger up. The walk must climb ONE level per frame — never jumping — and end at 0.
+        //
+        // The loop tolerates a frame at the SAME level, because one can legitimately arrive:
+        // `RenderService` coalesces, so the last `set` of the drag may still have a superseded
+        // interactive render queued behind the one we waited for, and it lands at the coarse
+        // level after the gesture has already ended. What may never happen is the level going
+        // UP, or going down by more than one — that second one is the jump R-PREVIEW-3
+        // forbids, and it is what this assertion is here to catch.
         assert(svc.dispatchText("gesture off", err) && err.empty());
         int prevLevel = svc.model().frameLevel;
-        int steps = 0;
-        while (svc.model().frameLevel > 0 && steps < 10)
+        const int startLevel = prevLevel;
+        int steps = 0, frames = 0;
+        while (svc.model().frameLevel > 0 && frames < 20)
         {
             assert(pumpForFrame(now) && "the walk must keep producing frames");
+            ++frames;
             const int lvl = svc.model().frameLevel;
-            assert(lvl == prevLevel - 1 && "one step at a time, never a jump (R-PREVIEW-3)");
+            assert(lvl <= prevLevel && "the walk never goes backwards to a coarser level");
+            assert(lvl >= prevLevel - 1 && "one step at a time, never a jump (R-PREVIEW-3)");
+            if (lvl < prevLevel) ++steps;
             prevLevel = lvl;
-            ++steps;
         }
         assert(svc.model().frameLevel == 0 && "the walk must reach the full level");
-        assert(steps == arstro::EditEngine::previewLevels() - 1 && "one step per level");
+        assert(steps == startLevel && "one step per level, from wherever it started");
         assert(!svc.model().refining && "and then stop claiming it is refining");
 
         // A refinement is not an edit: the walk must not have added undo entries.
@@ -2163,6 +2245,7 @@ int main()
     test_walking_a_rack_that_fits_the_cap_never_re_decodes();
     test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
+    test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();
     test_two_services_dump_the_same_state();
