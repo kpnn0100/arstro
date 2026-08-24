@@ -47,15 +47,77 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Regression?** No. `git log -S "renderInto"` and `-S "ensurePreviewProxy"` on `EditEngine.cpp`
   both return only `af95c65` (the repo reorganisation): the render path is original and untouched by
   any of the last week's commits.
-- **RECOMMENDED FIX — not applied, and the first step is a measurement, not a change.** Extend
-  `cosmo-cc bench` to time the **preview** pipeline per stage the way it already does for
-  `renderFull`, so the 600 ms is attributed to named processors before anything is optimised. Two
-  hypotheses worth testing first, in order: **(a) processors run at identity** — seventeen full
-  passes over the buffer happen whether or not a parameter differs from neutral, and an early-out per
-  processor would remove most of them for a default photo; **(b) per-pixel transcendentals** —
-  `ToneCurve`/`ColorGrading`/`Dehaze` calling `pow`/`exp` per pixel rather than through a LUT, which
-  is the shape `fromEncodedBytes` already solved for sRGB decode with `kSrgbToLinear`. Do not guess
-  between them: the D-41 and (3b) entries in the decisions log are both "measure before optimising".
+- **ATTRIBUTED 2026-08-24** — the measurement this entry asked for, run on a 24-thread Ryzen 9 9900X
+  with the new fixture `apps/cosmo/core/tests/fixtures/preview_stage_cost.cpp`. **Both hypotheses were
+  right, and a third one nobody had proposed is the largest single item.** At 1600x1066 (1.71 Mpx,
+  27.3 MB per float-RGBA buffer), every `EditParams` field at its neutral value:
+
+  ```
+  threads=24  full chain (all default)   193.25 ms
+  threads=24  ALL STAGES BYPASSED         61.02 ms   <- so 132 ms is stages doing nothing
+  threads=8   full chain (all default)   221.30 ms
+  threads=4   full chain (all default)   326.20 ms
+  threads=1   full chain (all default)   980.13 ms
+  ```
+
+  Per stage, at identity, measured individually:
+
+  ```
+  ToneCurve   28.11   ColorGrading 12.40   ToneRegions 8.80   Crop      3.73
+  ColorMixer  12.29   Exposure/Contrast/WhiteBalance/Vibrance 2.69 each  Rotate 1.90
+  spatial early-out copy (x9, SERIAL std::copy of 27 MB)      1.46 each
+  Histogram::compute  15.15 (encoded in) / 11.22 (linear in) x2   computeHue 4.51
+  encodeInPlace 8.40   float->RGBA8 pack 1.10   parallelFor(empty body) 0.30 x ~13
+  ```
+
+  **(a) Processors run at identity — confirmed, and it is 132 of the 193 ms.** `ImageBlock::process`
+  filters on `isBypassed()` only; there is no notion of a stage being *at its default*, so all
+  seventeen run. `Crop` with `cropW=cropH=1` still copies the frame row by row, `Rotate` with angle 0
+  still runs `quarterTurn` before its early-out, and the nine spatial stages that DO early-out do it
+  with a **serial** `std::copy` of 27 MB each — which is why 24 threads (193 ms) barely beat 8 (221 ms)
+  and only 5x beat 1 (980 ms). More cores cannot fix this; that is the whole SBC problem in one number.
+
+  **(b) Per-pixel transcendentals — confirmed, and `ToneCurve` is the worst stage in the pipeline at
+  28 ms.** `EditParams::curveLog` defaults to **true** (`EditParams.h:72`), so
+  `ToneCurve::processPixel` calls `color::srgbEncode` + `srgbDecode` per colour channel
+  (`ToneCurve.cpp:87,90`) — each a `std::pow(double, ...)` (`ColorSpace.cpp:18,29`) — **10.3 M pow
+  calls per render, to look up an identity curve**. `encodeInPlace` and all three histogram taps pay
+  the same `pow`; together those are ~39 ms more. `fromEncodedBytes` already solved exactly this with
+  `kSrgbToLinear`; the encode direction never got the same treatment.
+
+  **(c) NEW — `renderInto` allocates its working buffers on every call.** `Image preCurve, preMixer;`
+  and `Image processed;` are **locals** (`EditEngine.cpp:542,568`), so each preview render freshly
+  allocates and first-touches ~82 MB of anonymous memory. `ImageBlock`'s `mScratchA/mScratchB` are
+  members and correctly reused — these three were simply missed. This is the bulk of the 61 ms
+  all-bypassed floor: the floor is allocation, three histogram passes and one `pow`-based encode, none
+  of which any stage is responsible for.
+
+  **(d) `par::parallelFor` has no thread pool.** It spawns fresh `std::thread`s per call
+  (`Parallel.h:44-58`), ~13 times per render, and splits into **equal** chunks. Cheap here (0.30 ms a
+  call) and nearly free to fix, but on a big.LITTLE SBC equal chunks mean every parallel pass finishes
+  at little-core speed — a 2-3x standing loss on exactly the hardware this matters for.
+
+  Cost is very close to linear in pixels, which is what makes a coarse-first strategy work:
+  `800px 54.85 ms` · `400px 15.07 ms` (threads=8).
+
+- **RECOMMENDED FIX — not applied. Four contained changes, in this order, each independently measurable
+  with `preview_stage_cost.cpp`:**
+  1. **`ImageProcessor::isIdentity()`** — virtual, `return false` by default, each processor answers
+     from its own properties; `ImageBlock::process` drops identity stages from the active list exactly
+     as it already drops bypassed ones. Removes 132 of 193 ms at default params and costs nothing when
+     a stage is in use. Guard: a test asserting an identity stage's output is bit-identical to its
+     input AND that the chain reports it skipped.
+  2. **LUT `srgbEncode`/`srgbDecode`** — a 4096-entry table plus linear interpolation is well under
+     1/255 of error, mirroring `kSrgbToLinear`. Fixes `ToneCurve` (28 ms), `encodeInPlace` and all
+     three histogram taps in one change. Guard: max-abs-error assertion against the `pow` reference.
+  3. **Hoist `preCurve`/`preMixer`/`processed` to `EditEngine` members.** One-line-per-buffer change;
+     removes ~30 ms of per-render page-faulting and makes the render allocation-free at steady state.
+  4. **Make the pre-curve and pre-mixer histogram taps opt-in** — they exist for the Curve and Mixer
+     panels, and cost 16 ms on every render whether or not either is open.
+
+  Together these are expected to take 1600 px from ~200 ms to ~20 ms without changing a single output
+  pixel. **They do not by themselves make a slider real-time on a weak SBC** — that needs the
+  progressive-resolution requirement this entry filed as the gap; see `PROGRESS.md`'s SBC plan.
 
 ### D-38 — The touch editor draws its action bar over its own controls, and landscape is unusable
 - **Area:** design / touch shell · **Status:** Confirmed (rendered) · **Severity:** S2

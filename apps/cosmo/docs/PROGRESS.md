@@ -15,6 +15,134 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-24 — "port it to a small SBC (Allwinner A733, RK3588); the render may be slow but the
+UI must never lag". Analysed and planned; nothing implemented yet. This is the NEXT.**
+
+The plan is committed here rather than left in a chat, because it spans core and design and will take
+several sessions. **D-45 now carries the per-stage measurement** it asked for — read that entry first.
+
+**What the measurement says.** At 1600x1066 with every parameter neutral, on a 24-thread Ryzen:
+
+```
+threads=24  193 ms      threads=8  221 ms      threads=4  326 ms      threads=1  980 ms
+of which, with ALL STAGES BYPASSED:  61 ms
+```
+
+Two conclusions, and they set the whole strategy:
+
+1. **~132 of the 193 ms is spent by stages that are at their default value**, and **the remaining
+   61 ms is not spent by stages at all** — it is per-render allocation, three histogram passes and a
+   `pow`-based sRGB encode. Almost none of the current cost is the user's edit.
+2. **Cores do not help.** 24 threads beat 8 by 13% and beat 1 by only 5x, because nine spatial stages
+   early-out through a *serial* 27 MB `std::copy` and `renderInto` page-faults 82 MB per render. So an
+   SBC's problem is NOT its core count — RK3588's 4xA76 is within ~2x of this box's *useful*
+   parallelism. It is per-core throughput and memory bandwidth, which is exactly what the wasted work
+   above consumes. Extrapolating from the 4-thread number and ~2.5-3x lower per-core throughput:
+   **~0.8-1.0 s per preview on RK3588, ~1.5-2.5 s on an A733-class part** — matching the report.
+
+**Therefore the port is not a port.** Nothing here is ARM-specific work. Fixing what the measurement
+found makes cosmo fast on the Ryzen too, and it is what makes it *possible* on the SBC.
+
+**T0 — stop doing work nobody asked for (core; four commits; no output pixel changes).**
+Exactly D-45's recommended fix, in its order. `ImageProcessor::isIdentity()` + chain skip · LUT
+`srgbEncode`/`srgbDecode` · hoist `renderInto`'s three working Images to members · make the pre-curve
+and pre-mixer histogram taps opt-in. Expected 1600 px: ~200 ms -> ~20 ms. Each step is independently
+measured by `apps/cosmo/core/tests/fixtures/preview_stage_cost.cpp`, and each needs a guard test that
+fails without it.
+
+- [ ] T0.1 `isIdentity()` on every processor + `ImageBlock` skip
+- [ ] T0.2 LUT the sRGB transfer function both ways
+- [ ] T0.3 hoist `preCurve` / `preMixer` / `processed` to members
+- [ ] T0.4 opt-in pre-curve + pre-mixer histogram taps
+
+**T1 — a real thread pool (core; one commit). SBC-critical, cheap here.**
+`par::parallelFor` spawns fresh `std::thread`s per call, ~13 times per render, in **equal** chunks
+(`Parallel.h:44-58`). On big.LITTLE, equal chunks mean every pass finishes at little-core speed. A
+persistent pool with many more chunks than threads (work-stealing) removes a standing 2-3x SBC loss
+and changes nothing about results — `parallelFor`'s contract already guarantees row independence, so
+serial and parallel output stay byte-identical. Must keep working with `ARSTRO_ENABLE_THREADS` off,
+and needs the randomized/TSan argument the skill requires for anything thread-shaped.
+
+- [ ] T1.1 persistent pool + work-stealing chunks behind the existing `par::parallelFor` signature
+
+**T2 — THE BREAKTHROUGH: progressive resolution, so interaction never waits for a render (core +
+design). This is the one item that changes the shape of the experience rather than a constant factor.**
+Even at 20 ms on this box, a 1600 px render cannot be real-time on an A733. The answer is to stop
+trying: **a live gesture renders at whatever resolution meets a latency budget, and refines upward
+when the gesture settles.** Cost is near-linear in pixels (`800px 55 ms`, `400px 15 ms` at 8 threads),
+which is what makes this work.
+
+- [ ] T2.1 **Write the missing requirement first** — D-45 filed a requirement gap and said the number
+      is a product decision to take with the user, not to guess here. It must be stated as a *latency*
+      budget, not a resolution, so it is hardware-independent and can fail: "while an adjustment
+      gesture is live a new preview frame lands within N ms; the full preview level is reached within
+      M ms of the gesture ending." **Ask the user for N and M before coding.**
+- [ ] T2.2 **Proxy pyramid per slot** (1600 / 800 / 400 / 200). `downscaleEncodedToLinear` already
+      does a fused convert-and-downscale in one read of the source (D-44); emit every level from that
+      same read, so the pyramid is nearly free and no full-resolution float image is ever allocated.
+      Also moves proxy building to the DECODE worker — the ledger's existing open item below, which
+      is what turns D-44's serial 15 s back into a parallel ~2 s.
+- [ ] T2.3 **Level selection from measured cost.** `Frame::ms` already carries what the last render
+      cost (added for D-44). Pick the level whose last measured cost fits the budget; no hardware
+      detection, no configuration — the Ryzen settles on 1600 and the A733 on 400 by themselves.
+- [ ] T2.4 **Settle-and-refine.** Gesture end (or ~120 ms of no input) walks the level up one step at
+      a time. Every level is a complete, correct frame, so there is never a blank or torn state — and
+      because each level is a real render, `frame.ready` stays honest.
+- [ ] T2.5 **Design half (separate commit, `arstro.cosmo.design.implement`).** A coarse frame must
+      arrive as a *visible* refinement, not a pop: Cairo already upscales the preview with
+      `CAIRO_FILTER_GOOD` for 1.5 ms, so a 400 px frame is soft but live. Crossfade level-to-level per
+      R-G-1 — a sharpness change is a visible property change. Shots at 2+ sizes, mid-refine and at
+      rest.
+
+**T3 — stop burning a core drawing identical frames (design).**
+`onTick` calls `gtk_widget_queue_draw` **unconditionally every 16 ms** (`linux_main.cpp:1306`), so the
+whole window is re-rendered in software Cairo 60 times a second forever, at rest, with nothing moving.
+Measured on this box a frame's photo paint is cheap (1.50 ms scaled paint, 0.07 ms full-window fill) —
+the sin is not that it is expensive, it is that it is **always on**, and on an SBC that is the core the
+engine needs. R-G-1 says nothing may change in one frame; it does **not** say repaint at rest.
+
+- [ ] T3.1 `App::needsRedraw()` — true while any property is animating, a frame arrived, or input
+      landed since the last paint; `onTick` honours it. A tween in flight keeps requesting frames, so
+      R-G-1 is untouched. Guard: a test that advances an idle app N ticks and asserts zero repaints,
+      and one that asserts a live tween requests every frame.
+- [ ] T3.2 Damage rectangles (`gtk_widget_queue_draw_area`) — a slider drag dirties the slider row and
+      the canvas, not the whole window.
+- [ ] T3.3 A 30 fps shell option for slow devices. cosmo's durations are 120-520 ms, so 30 fps still
+      gives 4-16 frames per tween.
+- [ ] T3.4 `CairoTarget::buildEntry` premultiplies every new preview frame at 1.75 ms
+      (`CairoTarget.cpp:287-315`) although the engine emits alpha=255 for every photo. Fast path for
+      known-opaque, and better: have the engine pack BGRA directly on little-endian so `buildEntry`
+      becomes a per-row `memcpy`. (Artboard is a submodule and goes through `implement_artboard`.)
+
+**T4 — the load path, which on an SBC is the difference between usable and not.**
+- [ ] T4.1 **D-24** — decode the LOAD with `user_qual = 0` and keep the quality demosaic for export.
+      7x on decode, already measured, and still needs the user's call between "re-decode at export"
+      and "re-decode in the background". On a 4 GB board this is the whole opening experience.
+- [ ] T4.2 A **disk-backed proxy cache** beside the project, so a board with 4 GB does not re-decode
+      the rack every session. R-MEM's caps are sized from physical RAM now, which on an SBC means the
+      caps bind almost immediately.
+
+**T5 — deferred, deliberately: only if T0-T4 prove insufficient. Measure first.**
+- **Tile-fused execution.** A real edit still costs 5-8 whole-buffer passes = ~400 MB of DRAM traffic
+  per render; on a ~12 GB/s part that is a ~35 ms floor no arithmetic fix can go under. Running the
+  *point* stages fused over L2-resident tiles turns N passes over DRAM into one. Big change, big win,
+  but it is a rewrite of the chain's execution model — not before T0 has removed the waste.
+- **Half-float or 16-bit fixed preview buffers.** Halves bandwidth, doubles NEON lanes. Preview only;
+  export stays float, because the CPU float path is the correctness reference.
+- **Make the GPU actually reachable.** `glcompute::computeSupports()` accepts only exposure / contrast
+  / temp / tint with *everything else* at identity (`GlComputeShared.h:66-86`), so in practice it
+  declines and the CPU runs. Both target SoCs have a GPU that is better at this than their CPUs and,
+  crucially, does not compete with the UI thread for cores. Porting the remaining **point** stages
+  (ToneRegions, ToneCurve as a 1D LUT texture, Vibrance, ColorMixer, ColorGrading) is shader-shaped
+  work; keep decline-and-fallback for the spatial ones and extend the conformance tests in the same
+  commit. Highest-variance item on the list (Mali driver quality on these boards), which is why it is
+  last and not first.
+
+**Order: T0 -> T1 -> T2 -> T3 -> T4.** T0 and T1 are constant factors and pay off everywhere. T2 is
+the item that answers the actual request — "the render can be slow but usage must not lag" is a
+statement about *decoupling*, and T2 is that decoupling. T5 is only for after the cheap wins are in.
+
+
 **► 2026-08-23 (later) — "sometime changing photo take too long". D-44 FIXED; D-45 open and is
 the ledger's NEXT.**
 
@@ -190,7 +318,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on
@@ -608,6 +736,28 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-08-24 — "porting to a small SBC" turned out not to be a porting problem, and the measurement
+  is what showed it.** The request was to make cosmo survive on an Allwinner A733 / RK3588 class board
+  where a slow render is acceptable but a laggy UI is not. The obvious readings were both wrong:
+  * *"the SBC has too few cores"* — no. 24 threads beat 8 by 13% and beat **one** by only 5x, because
+    nine spatial stages early-out through a serial 27 MB `std::copy` and `renderInto` page-faults 82 MB
+    of freshly-allocated working buffers per render. The pipeline stopped scaling somewhere around four
+    threads, so RK3588's four A76s are within ~2x of this machine's *useful* parallelism. Adding cores
+    was never going to be the fix, and neither was taking them away the cause.
+  * *"it needs ARM-specific optimisation"* — no. 132 of 193 ms goes to stages sitting at their default
+    value, and the 61 ms that remains is allocation + three histogram passes + a `pow`-based sRGB
+    encode. **Nothing on the T0/T1 list is ARM work**; it all makes the Ryzen faster too. The port is a
+    defect list, not a platform.
+  * The one thing that IS genuinely about the target hardware is the **shape** of the interaction, not
+    its speed: no fixed resolution can be real-time on every board, so the preview resolution has to
+    follow a measured latency budget instead of a constant (T2). That is also the requirement D-45
+    filed as missing, and the number in it is the user's to set.
+  * Decided **not** to reach for the GPU first, although both target SoCs have one and it would not
+    compete with the UI thread. `computeSupports()` accepts only exposure/contrast/temp/tint with
+    everything else at identity, so it declines in real use; widening it is real work, and Mali driver
+    quality on these boards is the highest-variance thing on the list. Cheap, certain wins first.
+
 
 - **2026-08-23 — a reported symptom was traced to the wrong layer twice, and measuring was what
   settled it both times.** Of the four problems reported against a 120-photo RAW project, only two
