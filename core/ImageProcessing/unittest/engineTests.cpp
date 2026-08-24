@@ -6,6 +6,7 @@
 #include "image_processing.h"
 #include "compute/GlesComputeBackend.h"  // createGlesComputeAccelerator (ARSTRO_GLES_COMPUTE)
 #include <chrono>
+#include <cmath>
 #include <thread>
 #include <vector>
 
@@ -1130,4 +1131,62 @@ TEST(A_chain_of_identity_stages_returns_its_input_bit_for_bit)
     Image lifted;
     chain.apply(in, lifted);
     CHECK_NEAR(lifted.at(5, 5, 0), in.at(5, 5, 0) * (Pixel)2, 1e-4);
+}
+
+// ── R-PREVIEW-6: the table-driven transfer functions must be accurate ────────────
+//
+// srgbEncode/srgbDecode became 4096-entry LUTs with linear interpolation because
+// `std::pow(double, 1/2.4)` per colour channel per pixel was ~39 ms of a 1600 px
+// render (encodeInPlace + three histogram taps + ToneCurve's log round trip). The
+// speed is not what needs guarding — a table is obviously faster. What needs guarding
+// is that the shortcut is invisible, so this asserts the error against the closed
+// form that IS the specification, at a bound far below one 8-bit step.
+TEST(Srgb_tables_match_the_closed_form_far_below_one_8bit_step)
+{
+    // One 8-bit step is 1/255 = 3.92e-3. The bound is set two orders of magnitude
+    // under that, which is what the 4096-knot spacing actually delivers; a regression
+    // that coarsened the table or dropped the interpolation would break this long
+    // before anything became visible.
+    const Pixel kBound = (Pixel)5e-5;
+
+    Pixel worstEnc = 0, worstDec = 0, atEnc = 0, atDec = 0;
+    // Dense sweep, deliberately NOT on the knot spacing — sampling only at knots would
+    // report zero error and prove nothing about the interpolation between them.
+    const int kSamples = 200003;   // prime, so it never lands on a 4096-grid point
+    for (int i = 0; i <= kSamples; ++i)
+    {
+        const Pixel x = (Pixel)i / (Pixel)kSamples;
+        const Pixel de = std::fabs(color::srgbEncode(x) - color::srgbEncodeExact(x));
+        const Pixel dd = std::fabs(color::srgbDecode(x) - color::srgbDecodeExact(x));
+        if (de > worstEnc) { worstEnc = de; atEnc = x; }
+        if (dd > worstDec) { worstDec = dd; atDec = x; }
+    }
+    printf("    srgbEncode worst |err| = %.3e at x=%.6f\n", (double)worstEnc, (double)atEnc);
+    printf("    srgbDecode worst |err| = %.3e at x=%.6f\n", (double)worstDec, (double)atDec);
+    CHECK(worstEnc < kBound);
+    CHECK(worstDec < kBound);
+
+    // The endpoints and the two knees stay exact — they are where a table is most
+    // tempting to get wrong, and where clipping behaviour is visible.
+    CHECK(color::srgbEncode((Pixel)0) == (Pixel)0);
+    CHECK(color::srgbEncode((Pixel)1) == (Pixel)1);
+    CHECK(color::srgbDecode((Pixel)0) == (Pixel)0);
+    CHECK(color::srgbDecode((Pixel)1) == (Pixel)1);
+    CHECK(color::srgbEncode((Pixel)-0.5) == (Pixel)0);   // out of range clamps, not wraps
+    CHECK(color::srgbEncode((Pixel)1.5) == (Pixel)1);
+    CHECK(color::srgbDecode((Pixel)-0.5) == (Pixel)0);
+    CHECK(color::srgbDecode((Pixel)1.5) == (Pixel)1);
+
+    // Below its knee the encode is exactly linear (12.92x), and the knee sits at LUT
+    // index ~12.8 — so the first cells interpolate a straight line and are error-free.
+    CHECK_NEAR(color::srgbEncode((Pixel)0.001), (Pixel)0.01292, 1e-6);
+
+    // Round-tripping must return the value, which is the property every caller relies
+    // on: ToneCurve encodes, looks up, and decodes on every pixel at the default
+    // `curveLog` domain, so a biased pair of tables would tint the whole image.
+    for (int i = 0; i <= 1000; ++i)
+    {
+        const Pixel x = (Pixel)i / (Pixel)1000;
+        CHECK_NEAR(color::srgbDecode(color::srgbEncode(x)), x, 3e-4);
+    }
 }

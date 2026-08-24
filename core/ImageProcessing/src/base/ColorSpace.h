@@ -6,6 +6,13 @@
  *  (for file ingest/egress and the histogram) and compute luminance.
  *
  *  HSL / Kelvin helpers are added alongside the colour processors that need them.
+ *
+ *  The two transfer functions are TABLE-DRIVEN (R-PREVIEW-6). They are the hottest
+ *  scalar functions in the library — a preview render calls them per colour channel
+ *  per pixel from encodeInPlace, from all three histogram taps and, at the default
+ *  `curveLog` domain, twice more from ToneCurve — and `std::pow(double, 1/2.4)` per
+ *  call was ~39 ms of a 1600 px render on a 24-thread desktop. `srgbExact*()` keeps
+ *  the closed form available as the reference the accuracy test asserts against.
  */
 #pragma once
 #include "Pixel.h"
@@ -15,11 +22,20 @@ namespace arstro
 {
     namespace color
     {
-        /** Gamma-encode one linear-light channel value to sRGB (IEC 61966-2-1). */
+        /** Gamma-encode one linear-light channel value to sRGB (IEC 61966-2-1).
+         *  Table-driven: a 4096-entry LUT with linear interpolation, whose worst-case
+         *  error is ~2e-5 — two orders of magnitude below one 8-bit step (1/255). */
         Pixel srgbEncode(Pixel linear);
 
-        /** Decode one gamma-encoded sRGB channel value to linear light. */
+        /** Decode one gamma-encoded sRGB channel value to linear light. Table-driven
+         *  as above; the decode direction is far gentler, worst case ~1e-7. */
         Pixel srgbDecode(Pixel encoded);
+
+        /** The closed-form transfer functions, straight from IEC 61966-2-1. These are
+         *  the REFERENCE the tables are built from and measured against — call them
+         *  when correctness matters more than throughput, not in a per-pixel loop. */
+        Pixel srgbEncodeExact(Pixel linear);
+        Pixel srgbDecodeExact(Pixel encoded);
 
         /** Convert an Image LinearSRGB -> EncodedSRGB in place (RGB channels only). */
         void encodeInPlace(Image &img);

@@ -7,7 +7,7 @@ namespace arstro
 {
     namespace color
     {
-        Pixel srgbEncode(Pixel linear)
+        Pixel srgbEncodeExact(Pixel linear)
         {
             if (linear <= (Pixel)0)
                 return (Pixel)0;
@@ -18,7 +18,7 @@ namespace arstro
             return (Pixel)1.055 * (Pixel)std::pow((double)linear, 1.0 / 2.4) - (Pixel)0.055;
         }
 
-        Pixel srgbDecode(Pixel encoded)
+        Pixel srgbDecodeExact(Pixel encoded)
         {
             if (encoded <= (Pixel)0)
                 return (Pixel)0;
@@ -29,6 +29,59 @@ namespace arstro
             return (Pixel)std::pow(((double)encoded + 0.055) / 1.055, 2.4);
         }
 
+        namespace
+        {
+            // 4096 knots + linear interpolation, built once from the closed form. The size
+            // is set by ERROR, not by taste: linear-interpolation error is bounded by
+            // |f''|max * h^2 / 8, and the encode direction's second derivative peaks at the
+            // 0.0031308 knee where it is ~2.4e3, giving ~1.8e-5 across a cell of 1/4095.
+            // Everything below that knee is exactly linear, so the first thirteen cells are
+            // interpolated with no error at all — which matters, because that is where a
+            // uniform table over a power function would otherwise be at its worst.
+            //
+            // 16 KB per table, so both sit in L1 alongside the pixels being streamed. A
+            // steeper table would not buy accuracy anyone can see: 1.8e-5 is 1/218th of one
+            // 8-bit step, and every consumer of these functions quantises to 8 bits or bins
+            // to 256 buckets immediately afterwards.
+            constexpr int kTfLut = 4096;
+
+            struct TransferTables
+            {
+                Pixel encode[kTfLut];
+                Pixel decode[kTfLut];
+                TransferTables()
+                {
+                    for (int i = 0; i < kTfLut; ++i)
+                    {
+                        const Pixel x = (Pixel)i / (Pixel)(kTfLut - 1);
+                        encode[i] = srgbEncodeExact(x);
+                        decode[i] = srgbDecodeExact(x);
+                    }
+                }
+            };
+
+            // Function-local static: built once, thread-safe initialisation, and no static
+            // initialisation order to reason about (arstro_image is a library).
+            const TransferTables &tables()
+            {
+                static const TransferTables t;
+                return t;
+            }
+
+            inline Pixel sampleTf(const Pixel *lut, Pixel x)
+            {
+                if (x <= (Pixel)0) return (Pixel)0;
+                if (x >= (Pixel)1) return (Pixel)1;
+                const Pixel f = x * (Pixel)(kTfLut - 1);
+                const int i = (int)f;                    // 0..kTfLut-2, since x < 1
+                const Pixel frac = f - (Pixel)i;
+                return lut[i] + (lut[i + 1] - lut[i]) * frac;
+            }
+        }
+
+        Pixel srgbEncode(Pixel linear) { return sampleTf(tables().encode, linear); }
+        Pixel srgbDecode(Pixel encoded) { return sampleTf(tables().decode, encoded); }
+
         void encodeInPlace(Image &img)
         {
             if (img.space() == ColorSpace::EncodedSRGB)
@@ -37,8 +90,9 @@ namespace arstro
             const int colorCh = ch >= 3 ? 3 : ch;  // leave alpha untouched
             Pixel *d = img.data();
             const int h = img.height(), rowN = img.width() * ch;
-            // Row-independent sRGB encode (pow per channel) — parallelised; this runs
-            // on every preview render, so serialising it stalls switching + edits.
+            // Row-independent sRGB encode — parallelised; this runs on every preview
+            // render, so serialising it stalls switching + edits. Each call is now a
+            // table lookup rather than a `pow` (R-PREVIEW-6).
             par::parallelFor(h, [&](int y0, int y1) {
                 for (int y = y0; y < y1; ++y)
                 {
@@ -60,7 +114,9 @@ namespace arstro
             Pixel *d = img.data();
             const int h = img.height(), rowN = img.width() * ch;
             // Row-independent sRGB→linear decode, parallelised (the dominant cost of
-            // decoding an image into the engine on load).
+            // decoding an image into the engine on load). Table-driven (R-PREVIEW-6);
+            // note the 8-bit ingest path has its own exact 256-entry table in
+            // EditEngine's `kSrgbToLinear`, which this does not replace.
             par::parallelFor(h, [&](int y0, int y1) {
                 for (int y = y0; y < y1; ++y)
                 {

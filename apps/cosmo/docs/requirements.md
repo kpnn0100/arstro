@@ -1922,3 +1922,49 @@ g++ -O2 -std=c++17 -DARSTRO_ENABLE_THREADS -I core/ImageProcessing/src \
     build/core/ImageProcessing/libarstro_image.a -lpthread -lEGL
 /tmp/stagecost 1600 8
 ```
+
+#### Step 2 — the sRGB transfer function is table-driven (R-PREVIEW-6)
+With the identity skip in, the whole of what a default-params render costs is the *floor*, and the
+biggest item in it was `std::pow`. `color::srgbEncode`/`srgbDecode` are called per colour channel
+per pixel from `encodeInPlace`, from all three histogram taps (`Histogram.cpp:43-52`) and — at the
+default `curveLog` domain — twice more from `ToneCurve::processPixel`. `srgbEncode` alone was
+`1.055 * std::pow(double, 1/2.4) - 0.055`.
+
+Both are now 4096-knot LUTs with linear interpolation, built once from the closed form
+(`ColorSpace.cpp:32-83`). The closed forms survive as `srgbEncodeExact`/`srgbDecodeExact`
+(`ColorSpace.h:37`) — they are what the table is built from and measured against.
+
+**4096 is set by error, not by taste.** Linear-interpolation error is bounded by
+`|f''|max · h²/8`; the encode direction's second derivative peaks at the 0.0031308 knee at ~2.4e3,
+giving ~1.8e-5 over a cell of 1/4095. Everything below that knee is exactly linear, so the first
+thirteen cells interpolate a straight line with no error at all — which is exactly where a uniform
+table over a power function would otherwise be worst. Two 16 KB tables sit in L1 next to the pixels
+being streamed.
+
+Measured worst-case error over 200003 samples chosen off the knot grid, so the interpolation is
+actually exercised:
+
+```
+srgbEncode worst |err| = 1.626e-05 at x=0.003295      (the knee, as predicted)
+srgbDecode worst |err| = 1.192e-07 at x=0.706664
+```
+
+One 8-bit step is 3.92e-3, so the encode error is 1/240th of one step — and every consumer
+quantises to 8 bits or bins to 256 buckets immediately afterwards.
+
+```
+1600x1066, all params default    AFTER STEP 1    AFTER STEP 2
+threads=24                       69 ms           53 ms
+threads=8                        75 ms           58 ms
+threads=4                       109 ms           78 ms
+threads=1                       331 ms          208 ms      <- the ARM-relevant column
+encodeInPlace                   8.40 ms         4.92 ms
+Histogram::compute              11.22 ms        6.65 ms
+Histogram::computeHue           4.51 ms         4.06 ms
+```
+
+Guarded by `Srgb_tables_match_the_closed_form_far_below_one_8bit_step` in `image_tests`, which
+asserts the error bound, that the endpoints and out-of-range inputs still clamp exactly, that the
+sub-knee region is still exactly `12.92x`, and that `srgbDecode(srgbEncode(x)) == x` — the last
+because `ToneCurve` round-trips every pixel through the pair, so a biased table would tint the
+whole image rather than merely blur a value.

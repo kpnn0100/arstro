@@ -69,7 +69,9 @@ fails without it.
       The after number **equals the all-stages-bypassed floor**, which is the check that the skip
       is complete. Guarded by two tests in `image_tests`, the second of which was verified to fail
       on the unfixed code (`CHECK failed: differing == 0`). DR-PREVIEW-6.
-- [ ] T0.2 LUT the sRGB transfer function both ways
+- [x] T0.2 LUT the sRGB transfer function both ways — **DONE.** 69 -> 53 ms (24 thr),
+      331 -> 208 ms (1 thr). Worst error 1.6e-5 encode / 1.2e-7 decode, i.e. 1/240th of one 8-bit
+      step; guarded by `Srgb_tables_match_the_closed_form_far_below_one_8bit_step`. DR-PREVIEW-6 step 2.
 - [ ] T0.3 hoist `preCurve` / `preMixer` / `processed` to members
 - [ ] T0.4 opt-in pre-curve + pre-mixer histogram taps
 
