@@ -64,6 +64,12 @@ namespace arstro
              *  as a fine one and so is upscaled on the way to the screen. */
             int level = 0;
             int levelEdge = 0;
+            /** How many non-finite pixel values the transfer functions had to substitute
+             *  while producing this frame (D-48). Normally 0. Non-zero means something
+             *  upstream produced a NaN and the frame is wrong — reported rather than either
+             *  crashing (which it used to) or being silent (which the fix would otherwise
+             *  have made it). */
+            unsigned long long nonFinite = 0;
         };
 
         RenderService();

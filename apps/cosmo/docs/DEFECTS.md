@@ -356,6 +356,20 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   * `clamp01` — NaN now maps to 0 rather than reaching `(uint8_t)(NaN * 255)`, which is undefined;
   * `Histogram::binOf` was **already correct**, and is the pattern the others now follow: it clamps
     the INDEX after the cast rather than trusting a check on the input.
+  **The overflow is also stopped at its source**, which the parameter guard cannot do: `exposure=250`
+  is a *finite* parameter and `2^250` is `+inf`, so `Exposure::update` now clamps the derived gain to
+  a huge-but-finite bound — an absurd value renders **white**, which is what D-36 said the expected
+  behaviour was, and the engine clamps to 1.0 on output anyway so nothing visible changes.
+
+  **And a NaN that still gets through is now reported**, because the fix otherwise made the failure
+  silent — a worse thing to own than a crash. `color::takeNonFiniteCount()` counts what the guard
+  substituted (a relaxed atomic on the not-taken branch, so free), `RenderService` reads and resets
+  it per frame, and `frame.ready` appends `nonfinite=N`:
+  ```
+  set exposure=250, before the gain clamp:  frame.ready ... ms=93.756 nonfinite=80403 level=0
+  set exposure=250, after:                  frame.ready ... ms=94.095 level=0
+  ```
+
   And the value is stopped earlier too (D-36's other recommendation): `firstNonFiniteParam` /
   `sanitizeParams` in `EditParamsIO` — a `set` with a non-finite value is **refused, naming the
   field**, while a project or preset FILE is **repaired to neutral and the count logged**, because

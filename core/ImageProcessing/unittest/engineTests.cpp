@@ -1498,6 +1498,31 @@ TEST(A_NaN_cannot_index_a_lookup_table_out_of_bounds)
     color::encodeInPlace(enc);      // would have died in sampleTf
     CHECK(out.width() == 8 && enc.width() == 8);
 
+    // D-36's own repro, and the reason a finite PARAMETER is not enough on its own:
+    // `2^250` is +inf, so the overflow happens in the derived gain, past every parameter
+    // check. Exposure clamps it, so an absurd value renders WHITE rather than poisoning the
+    // frame — which is what D-36 said the expected behaviour was.
+    {
+        Exposure ex;
+        ex.setExposureEv(250.f);
+        Image one(2, 2, 4, ColorSpace::LinearSRGB);
+        for (size_t i = 0; i < one.pixelCount() * 4; ++i) one.data()[i] = 0.5f;
+        Image lifted;
+        ex.apply(one, lifted);
+        for (size_t px = 0; px < lifted.pixelCount(); ++px)
+            for (int c = 0; c < 4; ++c)
+            {
+                const float v = lifted.data()[px * 4 + c];
+                CHECK(v == v);                   // finite, not NaN — every channel
+                // Alpha is passed through by every colour op, so only the three colour
+                // channels are blown. Checking alpha too is how this test first failed.
+                if (c < 3) CHECK(v > 1.0f);      // blown, which is the honest answer
+            }
+        ex.setExposureEv(-250.f);
+        ex.apply(one, lifted);
+        for (size_t i = 0; i < lifted.pixelCount() * 4; ++i) CHECK(lifted.data()[i] == lifted.data()[i]);
+    }
+
     // clamp01 is the last line of defence before the 8-bit pack, where a NaN cast is
     // undefined. It must produce a DEFINITE value.
     CHECK(clamp01(nan) == 0.f);

@@ -2377,8 +2377,35 @@ Fixed with a dedicated `mLifecycleMu` guarding the worker set and the whole stop
 sequence, always taken before `mMu` and never after; and `parallelFor` now only touches the
 lifecycle when the size is actually wrong, so the common call does none.
 
+**Two more things, added because the first fix left the failure quiet.**
+
+*The overflow is stopped at its source.* `set exposure=250` is a **finite** parameter, so the
+non-finite guard cannot catch it — the overflow happens in the derived gain, where `2^250` is `+inf`,
+and inf becomes NaN at the first `inf - inf`. `Exposure::update` now clamps the gain to a
+huge-but-finite bound, so an absurd value renders **white**, which is what D-36 said the expected
+behaviour was. The engine clamps to 1.0 on output anyway, so nothing a photographer can see changes.
+
+*And a NaN that still gets through says so.* Making a crash into a substituted zero means the next
+occurrence would be invisible, which is a worse kind of bug to own. So the guard **counts** what it
+substitutes (`color::takeNonFiniteCount()`, a relaxed atomic on the branch that is normally not
+taken, so it is free), `RenderService` reads and resets it per frame onto `Frame::nonFinite`, and
+`frame.ready` appends `nonfinite=N` when it is not zero:
+
+```
+$ cosmo-cc --watch ... set exposure=250        # BEFORE the gain clamp
+[evt] frame.ready slot=0 width=2400 ms=93.756 nonfinite=80403 level=0
+$ cosmo-cc --watch ... set exposure=250        # AFTER
+[evt] frame.ready slot=0 width=2400 ms=94.095 level=0
+```
+
+The first line is what "a NaN reached a frame" now looks like in the journal — a number, on the frame
+it happened to, instead of a core dump or a mystery. The second is the same command with the gain
+clamped: no NaN was produced at all.
+
 **Guarded by**, all verified to fail against the pre-fix code:
-- `A_NaN_cannot_index_a_lookup_table_out_of_bounds` — segfaults pre-fix;
+- `A_NaN_cannot_index_a_lookup_table_out_of_bounds` — segfaults pre-fix; also asserts that
+  `exposure=250` yields finite, blown colour channels (and caught its own first version, which
+  checked alpha too — alpha is passed through by every colour op);
 - `Non_finite_parameters_are_refused_or_neutralised` — including `guardedParamScalarCount() == 58`,
   so adding an `EditParams` field without listing it fails a build rather than leaving it unguarded;
 - `ParallelFor_survives_setThreads_racing_against_a_live_batch` — pre-fix: run 1 **segfaults**,

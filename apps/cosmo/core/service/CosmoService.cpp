@@ -319,8 +319,17 @@ namespace cosmo
             mModel.frameLevelEdge = mFrame.levelEdge;
             mModel.msPerMegapixel = mSession.renderService().msPerMegapixel();
             mModel.refining = mFrame.level > 0;
-            emit(Event::Kind::FrameReady, mFrame.rehydrated ? "rehydrated" : std::string(),
-                 mModel.frameSlot, mFrame.width, mFrame.ms, mFrame.level);
+            // D-48: a NaN reaching a frame used to be a core dump. It is now a substituted
+            // zero, which would be invisible — so it is named here, on the frame it happened
+            // to, appended after the existing text so an older `expect` still matches.
+            std::string note = mFrame.rehydrated ? "rehydrated" : std::string();
+            if (mFrame.nonFinite > 0)
+            {
+                if (!note.empty()) note += ' ';
+                note += "nonfinite=" + std::to_string(mFrame.nonFinite);
+            }
+            emit(Event::Kind::FrameReady, note, mModel.frameSlot, mFrame.width, mFrame.ms,
+                 mFrame.level);
         }
 
         if (!mLoader.active() && mLoader.total() == 0) return;

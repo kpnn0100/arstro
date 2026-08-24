@@ -1,4 +1,5 @@
 #include "RenderService.h"
+#include "../base/ColorSpace.h"   // color::takeNonFiniteCount (D-48)
 
 namespace arstro
 {
@@ -375,6 +376,9 @@ namespace arstro
         f.rehydrated = mEngine.rehydrations() > rehyBefore;
         f.level = mEngine.previewLevel();
         f.levelEdge = mEngine.previewLevelEdge(f.level);
+        // Read-and-reset, so the number belongs to THIS frame. Taken after the render and
+        // before the frame is published, on the worker that did the work (D-48).
+        f.nonFinite = color::takeNonFiniteCount();
         learnCost(f);
         {
             std::lock_guard<std::mutex> lk(mMu);

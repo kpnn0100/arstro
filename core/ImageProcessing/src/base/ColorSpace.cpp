@@ -1,5 +1,6 @@
 #include "ColorSpace.h"
 #include "Parallel.h"
+#include <atomic>
 #include <cmath>
 #include <algorithm>
 
@@ -45,6 +46,10 @@ namespace arstro
             // to 256 buckets immediately afterwards.
             constexpr int kTfLut = 4096;
 
+            /** See takeNonFiniteCount() in the header: the guard below counts what it had to
+             *  substitute, so a NaN reaching a frame is reportable rather than silent. */
+            std::atomic<unsigned long long> gNonFinite{0};
+
             struct TransferTables
             {
                 Pixel encode[kTfLut];
@@ -78,7 +83,11 @@ namespace arstro
                 // slider, and it is the same bug D-36 filed against `ToneCurve::sampleLut`.
                 // Turning these two functions into tables is what made a NaN fatal instead
                 // of merely wrong, so the guard belongs here whatever produced the NaN.
-                if (!(x > (Pixel)0)) return (Pixel)0;    // negatives AND NaN
+                // NaN fails BOTH of these, which is the whole point of the spelling — and a
+                // NaN is the case worth counting, so it is separated from an ordinary
+                // out-of-range value that clamps for perfectly good reasons.
+                if (x != x) { gNonFinite.fetch_add(1, std::memory_order_relaxed); return (Pixel)0; }
+                if (!(x > (Pixel)0)) return (Pixel)0;    // negatives (and, harmlessly, -0)
                 if (!(x < (Pixel)1)) return (Pixel)1;
                 const Pixel f = x * (Pixel)(kTfLut - 1);
                 int i = (int)f;
@@ -92,6 +101,11 @@ namespace arstro
                 const Pixel frac = f - (Pixel)i;
                 return lut[i] + (lut[i + 1] - lut[i]) * frac;
             }
+        }
+
+        unsigned long long takeNonFiniteCount()
+        {
+            return gNonFinite.exchange(0, std::memory_order_relaxed);
         }
 
         Pixel srgbEncode(Pixel linear) { return sampleTf(tables().encode, linear); }

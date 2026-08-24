@@ -37,6 +37,17 @@ namespace arstro
         Pixel srgbEncodeExact(Pixel linear);
         Pixel srgbDecodeExact(Pixel encoded);
 
+        /** How many non-finite values the transfer functions have had to substitute, since
+         *  the last `takeNonFiniteCount()`. **This exists because the fix for D-48 made the
+         *  failure quiet.** A NaN pixel used to crash the process, which at least reported
+         *  itself; now it becomes 0 and nobody would ever know. So the guard counts, the
+         *  engine reads the count per render, and `frame.ready` says so — a NaN reaching a
+         *  frame is now a log line instead of either a core dump or a mystery.
+         *
+         *  Free in the normal case: the increment sits on the branch that is not taken, and
+         *  is relaxed because the number is a diagnostic, not a decision. */
+        unsigned long long takeNonFiniteCount();
+
         /** Convert an Image LinearSRGB -> EncodedSRGB in place (RGB channels only). */
         void encodeInPlace(Image &img);
 
