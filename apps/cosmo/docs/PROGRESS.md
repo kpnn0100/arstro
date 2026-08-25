@@ -15,6 +15,48 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-25 — three UI problems reported. ALL THREE DONE.**
+
+Reported: *(1) the curve used to show a bezier curve by using alt + drag but now it can't;
+(2) split needs to be able to move the split limit; (3) free ratio crop doesn't work, also add
+custom ratio — when a ratio is locked user can freely choose region (this feature is missing).*
+
+- **[x] (1) alt+drag on a curve node — a REGRESSION, and not in the curve editor.** `Down` sets
+  `smooth` and emits nothing (nothing has moved yet); R-SVC-12 re-seeds every panel whenever a frame
+  lands, so `setCurves` ran *between the Down and the Drag of one gesture* and flattened the node.
+  The handles were then written to a point the sampler ignores by definition. **It works with no
+  photo loaded**, which is why the widget test never saw it. Fixed by stating the rule where it is
+  enforced — *state the user is actively editing may not be overwritten by a refresh* — and applied
+  to `HueCurveEditor` and `MaskOverlay` too. D-50, DR-CURVE-3, `8fb22e8`.
+- **[x] (2) the split seam is draggable.** PARITY #6, never implemented — the seam was `w * 0.5` in
+  the two places that drew it. Grab radius = the shared 13 px, moves by the drag not to the pointer,
+  clamped inside the canvas, brightens + thickens on hover, double-click re-centres eased.
+  R-VIEW-3, DR-VIEW-3, `60d9993`.
+- **[x] (3) crop — all three parts.** `3f5dd69` + `a594b8c`:
+  * *"free ratio doesn't work"* — **Free was destroying the crop.** It ran the same code as every
+    other chip with `r = 0`, fell through to `w = h = 1` and wrote a full-frame rectangle. The one
+    control whose job is "stop constraining me" was the one that threw the framing away.
+  * *"add custom ratio"* — a seventh chip plus two typed fields, polled in `advance()` and applied
+    only when the PARSED ratio changes.
+  * *"when a ratio is locked user can freely choose region"* — there was **no crop box at all**
+    (PARITY #3). Now there is: corner and edge handles, drag-inside to move, dimmed discard area,
+    thirds grid, over the UNCROPPED photo.
+  * And a bug nobody reported: **the ratio was computed against a square.** The old code said so and
+    called it "directionally correct" — a 16:9 request on a 3:2 photo gave 16:10.7. The photo's real
+    dimensions are now plumbed engine → service → model → panel.
+
+**Three things worth carrying forward from this batch:**
+1. **`Rig::loadFakePhoto()` now exists**, and it should be used by any app-level test that EDITS.
+   Without a selected slot the service rejects every `set` with "nothing selected to edit", so the
+   older app-level tests were quietly asserting against a service that had refused all their
+   commands — and bug (1) only reproduces with a photo loaded.
+2. **`App::emitCommand` silently DROPS the command when the host has not wired `onCommand`** — which
+   is every shot rig and every test. Route a widget's edits through `RightColumn`, which has the
+   direct-to-service fallback, the way the mask overlay already did.
+3. **`EditParamsIO`'s key for the crop is the single blob `crop=x,y,w,h`.** There is no `cropX` key;
+   four separate keys are rejected with "no field matched", silently.
+
+
 **► 2026-08-24 — "port it to a small SBC (Allwinner A733, RK3588); the render may be slow but the
 UI must never lag". Analysed, planned, and T0.1 landed. NEXT is T0.2.**
 
