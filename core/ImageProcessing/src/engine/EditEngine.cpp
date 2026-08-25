@@ -126,6 +126,15 @@ namespace arstro
         return true;
     }
 
+    bool EditEngine::sourceSize(int slot, int &w, int &h) const
+    {
+        w = h = 0;
+        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].released) return false;
+        w = mSlots[slot].srcWidth;
+        h = mSlots[slot].srcHeight;
+        return w > 0 && h > 0;
+    }
+
     bool EditEngine::slotHasSource(int slot) const
     {
         return slot >= 0 && slot < (int)mSlots.size() && !mSlots[slot].released &&

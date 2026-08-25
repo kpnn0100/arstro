@@ -43,6 +43,7 @@
 #include "App.h"
 #include "UiDump.h"              // findSegmentByType — R-VIEW-3's shot asks the tree for the canvas
 #include "widgets/PhotoCanvas.h"  // ...and the canvas where its seam is
+#include "widgets/XformPanel.h"    // R-CROP: the shot asks the panel where its chips are
 #include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
@@ -849,6 +850,52 @@ namespace
         rig.settleQuiet(f, 300.0, 300);
     }
 
+    /** R-CROP: the Xform tab, with a ratio locked and the Custom row open, plus the crop box
+     *  on the photo. Two shots because the panel and the overlay are two halves of one
+     *  feature and a reader has to be able to see both. */
+    void shotCrop(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-crop")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        const artboard::Segment *tabs =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
+        if (!tabs) { std::printf("  (no edit-stack tabs: skipping editor-crop)\n"); return; }
+        // Xform is the last of five tabs.
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        const double tx = tw.e + tabW * 4.5, ty = tw.f + 13.0;
+        rig.app.pointer(0, tx, ty, 1, rig.now);
+        rig.app.pointer(2, tx, ty, 1, rig.now);
+        rig.settleQuiet(f, 400.0, 300);
+        save(f, "editor-crop-free");
+
+        // Pick 16:9 (chip index 3), so the panel shows a locked ratio and the photo shows the
+        // box that ratio produced — against the PHOTO's shape, which is the R-CROP-1 fix.
+        auto *xf = const_cast<arstro::cosmo_v2::XformPanel *>(
+            static_cast<const arstro::cosmo_v2::XformPanel *>(
+                arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "XformPanel")));
+        if (xf)
+        {
+            const artboard::Transform xw = xf->worldTransform();
+            // The chips are laid out left to right on the aspect row; ask the panel where the
+            // one we want is rather than restating its arithmetic here.
+            const artboard::Rect chip = xf->aspectChipRect(3);
+            rig.app.pointer(0, xw.e + chip.x + chip.w * 0.5, xw.f + chip.y + chip.h * 0.5, 1, rig.now);
+            rig.app.pointer(2, xw.e + chip.x + chip.w * 0.5, xw.f + chip.y + chip.h * 0.5, 1, rig.now);
+            rig.settleQuiet(f, 400.0, 400);
+            save(f, "editor-crop-16x9");
+
+            // ...and Custom, so the two typed fields are in a frame.
+            const artboard::Rect cc = xf->aspectChipRect(arstro::cosmo_v2::XformPanel::kAspectCustom);
+            rig.app.pointer(0, xw.e + cc.x + cc.w * 0.5, xw.f + cc.y + cc.h * 0.5, 1, rig.now);
+            rig.app.pointer(2, xw.e + cc.x + cc.w * 0.5, xw.f + cc.y + cc.h * 0.5, 1, rig.now);
+            rig.settleQuiet(f, 400.0, 400);
+            save(f, "editor-crop-custom");
+        }
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -860,7 +907,8 @@ namespace
             return 0;
         }
         if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
-            && !wanted("editor-dissolve") && !wanted("editor-split-seam"))
+            && !wanted("editor-dissolve") && !wanted("editor-split-seam")
+            && !wanted("editor-crop"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -882,6 +930,7 @@ namespace
         }
         shotDissolve(rig, w0, h0, "1.5", "70");
         shotSplitSeam(rig, w0, h0);          // R-VIEW-3
+        shotCrop(rig, w0, h0);              // R-CROP
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)

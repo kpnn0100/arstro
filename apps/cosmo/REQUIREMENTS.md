@@ -1417,3 +1417,45 @@ which makes it hardware-independent, measurable, and able to fail.
   mistake R-MEM-5 already had to be amended for. **A stage that is at its default value must not be
   rendered at all** (D-45: 132 of 193 ms was exactly that), because a budget spent on identity
   arithmetic is a budget the photographer never gets.
+
+---
+
+## R-CROP — Cropping: a real crop box, a real ratio lock — 🚧 IN PROGRESS
+
+Reported together: *"free ratio crop doesn't work, also add custom ratio. when a ratio is locked
+user can freely choose region (this feature is missing)."* Three complaints with one root: cosmo had
+**numeric** crop only. `XformPanel` offered an aspect-ratio chip row, and picking a chip wrote one
+centred rectangle and stopped. There was nothing to drag, nothing to move, and no way back.
+
+This is PARITY #3, which recorded the gap as "no interactive crop box on the photo" — the original
+had one.
+
+- **R-CROP-1 A ratio means the ratio of the PHOTO, not of a square.** Crop is stored normalised
+  (`cropX/Y/W/H` in 0..1 of the source), so a pixel aspect ratio only becomes a normalised one once
+  the photo's shape is known: `cropW/cropH = r · sourceHeight/sourceWidth`. `XformPanel` did not know
+  it and assumed a square — the code said so in a comment and called the result "directionally
+  correct", which for a 3:2 photo asked for 16:9 and produced 16:10.7. So `AppModel` carries
+  `sourceWidth`/`sourceHeight` for the selected photo, out of the engine's per-slot record (kept even
+  when the pixels are evicted), and every ratio is computed against them.
+- **R-CROP-2 "Free" unlocks the ratio; it does not reset the crop.** Picking Free used to run the
+  same code as every other chip with `r = 0`, which fell through to a full-frame rectangle — so the
+  one control whose job is "stop constraining me" was the one that threw the crop away. Free now
+  changes **only** whether the ratio is enforced. The rectangle stays exactly where it is.
+- **R-CROP-3 A locked ratio constrains the SHAPE, never the position or the size.** With a ratio
+  locked the photographer still chooses which part of the photo to keep and how much of it: the box
+  can be moved anywhere and resized freely, and the ratio is maintained by adjusting the other axis
+  rather than by refusing the gesture. Picking a ratio **fits it to the crop already there**, keeping
+  that rectangle's centre, instead of jumping back to a centred box over the whole image — a
+  photographer who has framed a shot and then asks for 16:9 wants their framing at 16:9.
+- **R-CROP-4 Any ratio, not six.** The six presets stay, plus **Custom**, where a width and a height
+  are typed in. A custom ratio behaves exactly like a preset once set, and is remembered while the
+  session lasts.
+- **R-CROP-5 The crop is done ON THE PHOTO.** An interactive box over the image with corner and edge
+  handles: drag a corner or an edge to resize, drag inside to move the region, and see the discarded
+  area dimmed with a thirds grid over what is kept. Numeric entry stays — it is the only way to be
+  exact — but it is no longer the only way to crop. The box appears with the Xform tab, the way the
+  mask overlay appears with the Mask tab (R-MASK-3), so the photo is uncluttered the rest of the time.
+- **R-CROP-6 A crop is never degenerate and never leaves the photo.** Every gesture clamps so the box
+  stays inside the frame and keeps a minimum size in both axes. A 1-pixel crop is not a crop, and
+  the pyramid made small crops reachable at coarse preview levels (a level-3 preview of a 0.2% crop
+  is a 1×1 image), so the clamp is a correctness requirement rather than a nicety.

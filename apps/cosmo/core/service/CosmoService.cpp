@@ -102,6 +102,15 @@ namespace cosmo
         // an interactive frame is allowed to cost. Published from the render service rather
         // than duplicated, so there is one owner of the number (the same reason ThreadBudget
         // owns the CPU budget outright — R-SVC-10).
+        // R-CROP-1: the selected photo's real shape, so a UI can turn a requested aspect
+        // ratio into a normalised crop instead of assuming the photo is square.
+        {
+            int sw = 0, sh = 0;
+            const int slot = mSession.currentSlot();
+            if (slot >= 0) mSession.renderService().sourceSize(slot, sw, sh);
+            mModel.sourceWidth = sw;
+            mModel.sourceHeight = sh;
+        }
         mModel.previewLevels = EditEngine::previewLevels();
         mModel.interactiveBudgetMs = mSession.renderService().interactiveBudgetMs();
 
@@ -317,6 +326,16 @@ namespace cosmo
                 mRefinePendingLevel = -1;
             mModel.frameLevel = mFrame.level;
             mModel.frameLevelEdge = mFrame.levelEdge;
+            // R-CROP-1: a landing frame is proof the engine actually holds this slot. The
+            // adds are QUEUED to the render worker, so `refreshModel` at the end of a load can
+            // run before the worker has applied them and read {0,0} — which it did, and which
+            // is why the dimensions are refreshed here as well as there rather than only there.
+            {
+                int sw = 0, sh = 0;
+                if (mModel.frameSlot >= 0)
+                    mSession.renderService().sourceSize(mModel.frameSlot, sw, sh);
+                if (sw > 0 && sh > 0) { mModel.sourceWidth = sw; mModel.sourceHeight = sh; }
+            }
             mModel.msPerMegapixel = mSession.renderService().msPerMegapixel();
             mModel.refining = mFrame.level > 0;
             // D-48: a NaN reaching a frame used to be a core dump. It is now a substituted

@@ -2506,3 +2506,60 @@ which is why travel is what is asserted.
 **Looked at:** `cosmo_shots --only editor-split-seam`, photographed mid-drag with the button still
 down so the hover brighten and the thickened line are in the frame — at rest they would have faded
 and the shot would not show the affordance at all.
+
+### DR-CROP-1/2/4 A ratio means the photo's ratio, and Free unlocks instead of resetting (R-CROP-1/2/4)
+Three of the reported crop complaints share one cause: `XformPanel`'s aspect chips wrote a rectangle
+and knew nothing else.
+
+**R-CROP-1 — the ratio was computed against a square.** The old handler said so itself: *"without the
+source image's real pixel dimensions plumbed into this panel, the target ratio is applied against a
+normalized square — exact for a square source, directionally correct otherwise."* Crop is stored
+normalised (0..1 per axis), so a pixel ratio only becomes a normalised one once the photo's shape is
+known: `cropW/cropH = r · sourceHeight/sourceWidth`. On a 3000×2000 photo, "16:9" produced 16:10.7.
+
+As built, the dimensions are plumbed: `EditEngine::sourceSize(slot)` reads the per-slot
+`srcWidth/srcHeight` (kept even when the pixels are evicted, so a preview-only slot can still answer)
+→ `RenderService::sourceSize` → `AppModel::sourceWidth/sourceHeight` → `XformPanel::State`. **Refreshed
+on frame arrival as well as in `refreshModel`**, and that is not belt-and-braces: image adds are
+*queued* to the render worker, so a `refreshModel` at the end of a load can run before the worker has
+applied them and read {0,0} — which it did, and a landing frame is proof the slot exists.
+
+```
+$ cosmo-cc state print          # 3000x2000 source
+sourceWidth=3000
+sourceHeight=2000
+```
+
+**R-CROP-2 — "Free" destroyed the crop.** Free ran the same code as every other chip with `r = 0`,
+fell through to `w = h = 1`, and wrote a full-frame rectangle. So the one control whose job is *stop
+constraining me* was the one that threw the framing away. Free now changes **only** the lock, via a
+new `onAspectLockChange` notification — the rectangle is untouched.
+
+The lock is reported separately from the crop on purpose: it is a **mode**, not a value. A crop
+arriving from elsewhere (a preset, an undo, the box on the photo) must not silently relight a
+different chip, and Free must be able to unlock without emitting an edit at all.
+
+**R-CROP-3 — picking a ratio keeps your framing.** `crop::applyRatio` reshapes the crop *already
+there* about its own centre instead of resetting to a centred box over the whole photo. A photographer
+who has framed a shot and then asks for 16:9 wants their framing at 16:9.
+
+**R-CROP-4 — Custom.** A seventh chip, plus two fields. `TextBox` has no commit callback, so they are
+polled in `advance()` — the same thing `HomeScreen`'s search box does — and applied only when the
+**parsed** ratio changes, so typing "1" on the way to "16" does not re-crop the photo to a shape
+nobody asked for. The value survives the session, so re-picking Custom does not forget it.
+
+**The arithmetic lives in one header**, `widgets/CropGeometry.h`: `normalisedRatio`, `applyRatio`,
+`clampToFrame`, `partAt`, `resizeBy`, `moveTo`. Free functions, no state, no widgets — because the
+panel that types a ratio in and the box that drags a corner have to agree *exactly*, and the surest
+way to make two callers agree is one implementation rather than two careful ones. It is also directly
+testable, which is why the 27 assertions below are unit tests and not UI ones.
+
+**Guarded by** five tests in `cosmo_widget_tests`: the ratio is against the photo's shape (asserting
+the resulting box really is 16:9 **in pixels** — 3000×1688 = 1.7778); picking a ratio preserves the
+centre and is **not** a centred reset; a crop is never degenerate and slides rather than shrinks when
+dragged off-frame; a locked ratio constrains the shape but never the position, and an edge drag moves
+the *other* axis rather than being refused; and corners beat edges in the hit test while the interior
+is a **Move** — the gesture the user reported missing.
+
+**Looked at:** `cosmo_shots --only editor-crop` → `editor-crop-free`, `editor-crop-16x9`,
+`editor-crop-custom`. The last shows all seven chips with Custom lit and the `16 : 10` fields under it.

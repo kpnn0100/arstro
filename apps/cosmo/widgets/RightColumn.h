@@ -65,6 +65,12 @@ namespace cosmo_v2
          *  to stop paying for histograms whose panel is not on screen (R-PREVIEW-6); it is a
          *  notification, not a request, so an unwired one is simply silent. */
         std::function<void(int)> onTabChanged;
+        /** The crop aspect lock changed (w/h, or 0 for Free) — R-CROP-2. A notification, not a
+         *  request: the panel owns which chip is lit, and the crop box on the photo needs to
+         *  know so a corner drag keeps the shape. */
+        std::function<void(double)> onAspectLockChange;
+        /** The locked ratio right now, for a view that is created after the choice was made. */
+        double aspectLock() const;
 
         std::shared_ptr<HistogramWidget> histogram() { return mHistogram; }
         std::shared_ptr<ActionBar> actionBar() { return mActionBar; }

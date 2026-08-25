@@ -201,6 +201,12 @@ namespace arstro
         mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
     }
 
+    bool RenderService::sourceSize(int slot, int &w, int &h) const
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        return mEngine.sourceSize(slot, w, h);
+    }
+
     void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -456,6 +462,10 @@ namespace arstro
     void RenderService::setWantIntermediateHistograms(bool preCurveLuma, bool preMixerHue)
     {
         mEngine.setWantIntermediateHistograms(preCurveLuma, preMixerHue);
+    }
+    bool RenderService::sourceSize(int slot, int &w, int &h) const
+    {
+        return mEngine.sourceSize(slot, w, h);
     }
     void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {

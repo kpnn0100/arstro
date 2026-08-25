@@ -114,6 +114,10 @@ namespace cosmo
         // requirement being written as a budget instead of a resolution, so two services
         // given identical commands on a fast and a slow box must still agree on their stable
         // dump (R-SVC-9) while legitimately showing different levels.
+        // Stable: the photo's own dimensions are a property of the FILE, so two front ends
+        // given the same project must agree on them.
+        kvi(s, j, "sourceWidth", m.sourceWidth);
+        kvi(s, j, "sourceHeight", m.sourceHeight);
         kvi(s, j, "previewLevels", m.previewLevels);
         kvi(s, j, "previewBudgetMs", (int)(m.interactiveBudgetMs + 0.5));
         if (!o.stable)

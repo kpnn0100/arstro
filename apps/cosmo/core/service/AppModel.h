@@ -186,6 +186,16 @@ namespace cosmo
          *  `tryAcquire` MOVES the frame out, so exactly one owner may call it, and while that
          *  owner was the view no headless front end could tell a preview had arrived (D-21).
          *  `pump()` acquires; `takeFrame()` hands it on. */
+        /** The SELECTED photo's full-resolution pixel size, {0,0} when nothing is selected.
+         *
+         *  Not the frame's size — that is the rendered preview of the *framed* (cropped,
+         *  rotated) image and so cannot answer "what shape is the original". A crop aspect
+         *  ratio needs exactly this: `EditParams`' crop is normalised 0..1 per axis, so a
+         *  requested 16:9 is `cropW/cropH = 16/9 * sourceHeight/sourceWidth`. Without it a UI
+         *  can only assume a square, which is what `XformPanel` did — and said so in a comment
+         *  rather than being able to fix it (R-CROP-1). */
+        int sourceWidth = 0, sourceHeight = 0;
+
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;
         unsigned frameSeq = 0;

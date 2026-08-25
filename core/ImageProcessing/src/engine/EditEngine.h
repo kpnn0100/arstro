@@ -84,6 +84,15 @@ namespace arstro
          *  which the next addImage() starts from slot 0 again (restores the
          *  "slot id == index" invariant the front end relies on). */
         void clearImages();
+        /** A slot's FULL-RESOLUTION pixel dimensions, or {0,0} for an unknown slot.
+         *
+         *  Kept even when the source pixels are not (see the Slot comment), so a preview-only
+         *  slot can still say how big the photo really is. Exposed because a crop aspect ratio
+         *  is meaningless without it: `EditParams`' crop is NORMALISED 0..1 per axis, so a
+         *  requested 16:9 becomes `cw/ch = 16/9 * srcHeight/srcWidth` — and a UI that does not
+         *  know the source shape can only guess, which is what `XformPanel` was doing (it
+         *  assumed a square and said so in a comment). */
+        bool sourceSize(int slot, int &w, int &h) const;
         int imageCount() const { return (int)mSlots.size(); }
         int currentSlot() const { return mCurrent; }
         bool hasImage() const { return mCurrent >= 0; }

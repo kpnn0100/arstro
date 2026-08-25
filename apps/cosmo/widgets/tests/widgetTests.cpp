@@ -17,7 +17,9 @@
 #include "../HomeScreen.h"
 #include "../MaskOverlay.h"
 #include "../HueCurveEditor.h"
+#include "../CropGeometry.h"
 #include "../CurvePanel.h"
+#include "../XformPanel.h"
 #include "../ExportDialog.h"
 #include "../Filmstrip.h"
 #include "../../Theme.h"
@@ -1190,6 +1192,115 @@ namespace
     }
 }
 
+namespace
+{
+    // ── R-CROP-1/2/3/6: the crop arithmetic ─────────────────────────────────────────────
+    //
+    // Pure functions, so they are tested directly rather than through a widget. Each of these
+    // was a reported bug or the thing that made one possible.
+    void cropRatioUsesThePhotosShapeNotASquare()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: a ratio is against the PHOTO's shape (R-CROP-1)\n");
+
+        // The reported case: 16:9 on a 3:2 photo. Crop is normalised per axis, so the
+        // normalised w/h is NOT 16/9 — it is 16/9 * (h/w) of the source.
+        const double nr = crop::normalisedRatio(16.0 / 9.0, 3000, 2000);
+        check(near(nr, (16.0 / 9.0) * (2000.0 / 3000.0)), "16:9 on a 3:2 photo is normalised");
+        // ...and the box that comes out really is 16:9 in PIXELS, which is the whole point.
+        const artboard::Rect box = crop::applyRatio(artboard::Rect{0, 0, 1, 1}, nr);
+        const double pxW = box.w * 3000.0, pxH = box.h * 2000.0;
+        char msg[160];
+        std::snprintf(msg, sizeof(msg), "and the resulting box is %.0fx%.0f px = %.4f (16:9 = %.4f)",
+                      pxW, pxH, pxW / pxH, 16.0 / 9.0);
+        check(near(pxW / pxH, 16.0 / 9.0, 1e-3), msg);
+
+        // A square photo is the case the old code was accidentally right for; it must stay right.
+        check(near(crop::normalisedRatio(1.0, 500, 500), 1.0), "1:1 on a square photo is 1.0");
+        // Unknown dimensions mean "nothing honest to compute" — 0, which callers read as free.
+        check(near(crop::normalisedRatio(1.5, 0, 0), 0.0), "unknown dimensions report 0, not a guess");
+    }
+
+    void cropRatioFitsTheExistingCropRatherThanResetting()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: picking a ratio keeps YOUR framing (R-CROP-3)\n");
+        // A crop the photographer has already placed, off-centre and small.
+        const artboard::Rect framed{0.10, 0.55, 0.30, 0.30};
+        const double cx = framed.x + framed.w * 0.5, cy = framed.y + framed.h * 0.5;
+        const artboard::Rect out = crop::applyRatio(framed, 16.0 / 9.0);
+        check(near(out.x + out.w * 0.5, cx, 1e-6), "the centre is preserved in x");
+        check(near(out.y + out.h * 0.5, cy, 1e-6), "and in y");
+        check(near(out.w / out.h, 16.0 / 9.0, 1e-6), "and the shape is the requested one");
+        check(out.w <= 1.0 && out.h <= 1.0 && out.x >= 0.0 && out.y >= 0.0,
+               "and it is still inside the photo");
+        // The bug this replaces: a centred full-width box, i.e. the framing thrown away.
+        check(!near(out.x, (1.0 - out.w) * 0.5, 1e-3), "NOT reset to a centred box");
+    }
+
+    void cropNeverGoesDegenerateOrOffFrame()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: clamped inside the frame, never degenerate (R-CROP-6)\n");
+        const artboard::Rect tiny = crop::clampToFrame(artboard::Rect{0.5, 0.5, 0.0, 0.0});
+        check(tiny.w >= crop::minSize() && tiny.h >= crop::minSize(), "a zero-size crop is grown to the minimum");
+        const artboard::Rect off = crop::clampToFrame(artboard::Rect{1.5, -0.4, 0.3, 0.3});
+        check(off.x >= 0.0 && off.y >= 0.0 && off.x + off.w <= 1.0 + 1e-9 && off.y + off.h <= 1.0 + 1e-9,
+               "a box dragged off the photo slides back in");
+        check(near(off.w, 0.3) && near(off.h, 0.3), "...and slides rather than shrinking");
+        const artboard::Rect huge = crop::clampToFrame(artboard::Rect{-1.0, -1.0, 5.0, 5.0});
+        check(near(huge.w, 1.0) && near(huge.h, 1.0) && near(huge.x, 0.0) && near(huge.y, 0.0),
+               "an oversized crop becomes the whole photo");
+    }
+
+    void cropMoveAndResizeRespectTheLock()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: a locked ratio constrains the shape, not the position (R-CROP-3)\n");
+        const double nr = 1.0;   // square, in normalised terms
+        const artboard::Rect start{0.2, 0.2, 0.4, 0.4};
+
+        // MOVE: the gesture the user reported missing. A locked ratio must not prevent it, and
+        // must not change the shape either.
+        const artboard::Rect moved = crop::moveTo(start, 0.55, 0.10);
+        check(near(moved.w, start.w) && near(moved.h, start.h), "moving does not change the shape");
+        check(near(moved.x, 0.55) && near(moved.y, 0.10), "and it goes where it was put");
+
+        // RESIZE by a corner, locked: the shape survives.
+        const artboard::Rect corner = crop::resizeBy(start, crop::Part::BottomRight, 0.8, 0.5, nr);
+        check(near(corner.w / corner.h, nr, 1e-6), "a corner drag keeps the locked ratio");
+        check(corner.w > start.w, "and actually resizes");
+
+        // RESIZE by an EDGE, locked: the other axis follows rather than the drag being refused.
+        const artboard::Rect edge = crop::resizeBy(start, crop::Part::Right, 0.9, 0.4, nr);
+        check(near(edge.w / edge.h, nr, 1e-6), "an edge drag keeps it too, by moving the other axis");
+        check(edge.w > start.w, "and is not simply ignored");
+
+        // FREE: an edge drag changes ONE axis, which is what free means.
+        const artboard::Rect free = crop::resizeBy(start, crop::Part::Right, 0.9, 0.4, 0.0);
+        check(near(free.h, start.h), "free: the other axis is untouched");
+        check(free.w > start.w, "and the dragged one moves");
+    }
+
+    void cropPartHitTestPrefersCornersOverEdges()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: corners beat edges, the interior is a MOVE (R-CROP-5)\n");
+        const artboard::Rect box{100, 100, 200, 150};
+        const double grab = 10.0;
+        check(crop::partAt(box, artboard::Point{100, 100}, grab) == crop::Part::TopLeft,
+               "the top-left corner is a corner, not an edge");
+        check(crop::partAt(box, artboard::Point{300, 250}, grab) == crop::Part::BottomRight,
+               "and so is the bottom-right");
+        check(crop::partAt(box, artboard::Point{200, 100}, grab) == crop::Part::Top, "mid-top is an edge");
+        check(crop::partAt(box, artboard::Point{100, 175}, grab) == crop::Part::Left, "mid-left is an edge");
+        check(crop::partAt(box, artboard::Point{200, 175}, grab) == crop::Part::Move,
+               "the interior is a MOVE — the gesture that was missing");
+        check(crop::partAt(box, artboard::Point{500, 500}, grab) == crop::Part::None,
+               "and well outside is nothing, so the press falls through to the pan");
+    }
+}
+
 int main()
 {
     arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
@@ -1209,6 +1320,12 @@ int main()
     curveGrabMovesByTheDragNotToThePointer();
     curveReferenceIsNotEditable();
     curveReferenceLooksLikeAReadout();
+
+    cropRatioUsesThePhotosShapeNotASquare();
+    cropRatioFitsTheExistingCropRatherThanResetting();
+    cropNeverGoesDegenerateOrOffFrame();
+    cropMoveAndResizeRespectTheLock();
+    cropPartHitTestPrefersCornersOverEdges();
 
     exportTreeStartsFullySelected();
     exportDeselectParentClearsChildren();

@@ -222,6 +222,9 @@ namespace cosmo_v2
 
         mXform = std::make_shared<XformPanel>();
         mXform->onRotationChange = [this](double deg) { sendSet({{"rotation", num(deg)}}); };
+        // R-CROP-2/3: the lock is a MODE, so it goes out as a notification rather than as an
+        // edit. The crop box on the photo is the thing that needs it.
+        mXform->onAspectLockChange = [this](double r) { if (onAspectLockChange) onAspectLockChange(r); };
         mXform->onQuarterTurn = [this](int dir) {
             // The button says "turn by dir"; the command says what the value BECOMES, so the
             // panel reads the current one first. syncToSlot() then pushes it back, which is
@@ -321,7 +324,15 @@ namespace cosmo_v2
         gs.grade = p->grade; gs.balance = p->balance; gs.remapEnable = p->remapEnable;
         gs.remapSrc = p->remapSrc; gs.remapRange = p->remapRange; gs.remapDst = p->remapDst; gs.remapStrength = p->remapStrength;
         mGrade->setState(gs);
-        mXform->setState({p->rotation, p->quarterTurns, p->cropX, p->cropY, p->cropW, p->cropH});
+        // R-CROP-1: the panel needs the PHOTO's shape to turn a pixel ratio into a normalised
+        // crop. It comes from the model rather than being guessed here, and a slot with no
+        // dimensions yet reports {0,0}, which the panel reads as "nothing honest to compute".
+        XformPanel::State xs;
+        xs.rotation = p->rotation; xs.quarterTurns = p->quarterTurns;
+        xs.cropX = p->cropX; xs.cropY = p->cropY; xs.cropW = p->cropW; xs.cropH = p->cropH;
+        xs.sourceWidth = mSvc.model().sourceWidth;
+        xs.sourceHeight = mSvc.model().sourceHeight;
+        mXform->setState(xs);
     }
 
     void RightColumn::refreshCurveReferences()
@@ -334,6 +345,7 @@ namespace cosmo_v2
     }
 
     int RightColumn::activeTab() const { return mTabs->selectedIndex(); }
+    double RightColumn::aspectLock() const { return mXform ? mXform->lockedRatio() : 0.0; }
     bool RightColumn::maskTabActive() const { return mTabs->selectedIndex() == kTabMask; }
 
     const MaskParams *RightColumn::selectedMaskParams() const
