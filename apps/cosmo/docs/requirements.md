@@ -2463,3 +2463,46 @@ smooth, that the handles are **symmetric** (an alt drag on a *handle* is what br
 `CosmoService`'s own params carry the smooth node with its offsets, and that a further re-bind does
 not flatten it again. It fails on all four counts against the pre-fix code, and only reproduces with
 a photo loaded.
+
+### DR-VIEW-3 The split seam is grabbable and slides (R-VIEW-3, PARITY #6)
+`PhotoCanvas` had Before/Split/After but the seam was `w * 0.5` in three places — the clip width, the
+divider's x, and nothing else — so there was nothing to drag. PARITY #6, the last sub-gap in a
+feature otherwise at parity.
+
+**As built.** `mSplitPos` is an `AnimatedProperty` in the canvas, default 0.5, read by `layout()`
+every frame (which is why one property serves both a drag and an eased re-centre with no extra
+plumbing). It is **presentation** and stays in the view (R-SVC-4): where *this* window is comparing
+is not something the project contains, so it is not in `AppModel`, is not persisted, and a second
+front end may have its own.
+
+Five decisions, each of which would be a bug the other way:
+- **The grab area is the shared pick radius, not the line width.** The seam draws 1.5 px and nobody
+  can hit that, so `onSeam()` uses `metrics::anchorHitRadius()` — the same 13 px the curve and mask
+  editors use, so "how close counts as on it" is one number across the app.
+- **It moves by the drag, not to the pointer.** The pointer-to-seam offset is kept at the grab and
+  added back on every move. That is D-32's lesson applied before it could recur: a generous pick
+  radius without it means grabbing the seam 11 px off-centre teleports it 11 px.
+- **A drag does not ease.** R-G-1 governs what the app changes on the user's behalf; in direct
+  manipulation the pointer *is* the animation and easing reads as lag. Local precedent already says
+  so — `panBy`/`zoomAbout` apply immediately. What the app moves by itself still eases: the
+  Split fade (R-VIEW-2) is untouched, and a **double-click re-centres over 180 ms**.
+- **Hover is the affordance.** The seam brightens (0.55 → 0.95 alpha) and thickens (1.5 → 3 px) over
+  the standard 120 ms, because the HAL has no cursor to change and a 1.5 px line gives no hint that
+  it can be grabbed. Both are recomputed in `layout()` from the **eased** hover amount every frame —
+  R-G-1 clause (d): a value derived from an animated one is re-derived from it, or it snaps.
+- **It is a hit test, not a mode, and it never leaves the photo.** `onSeam()` is false whenever the
+  seam is not on screen, so a press in Before/After still reaches the pan; the seam check runs
+  *before* the pan so a press on it slides the seam even while zoomed; and the position is clamped to
+  one pick radius from each edge, because a seam at the very edge has nothing left to compare and
+  nothing left to grab it by.
+
+**Guarded by** `cosmo_ui_tests::splitSeamCanBeDraggedAndRecentres` (14 assertions): the seam does not
+claim a press while hidden; it does once Split is on via the pill; it travels 200.0 px for a 200 px
+drag grabbed 9 px off-centre (a teleport would read 209); the clipped before-half is as wide as the
+seam; dragging past either edge clamps inside but still travels most of the way; and the re-centre
+produces **intermediate frames** (9 of them) before landing — a snap would pass an "it arrives" test,
+which is why travel is what is asserted.
+
+**Looked at:** `cosmo_shots --only editor-split-seam`, photographed mid-drag with the button still
+down so the hover brighten and the thickened line are in the frame — at rest they would have faded
+and the shot would not show the affordance at all.

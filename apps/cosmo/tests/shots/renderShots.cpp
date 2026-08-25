@@ -41,6 +41,8 @@
  *  fixture-free subset is what `ctest -R cosmo_shots_headless` runs.
  */
 #include "App.h"
+#include "UiDump.h"              // findSegmentByType — R-VIEW-3's shot asks the tree for the canvas
+#include "widgets/PhotoCanvas.h"  // ...and the canvas where its seam is
 #include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
@@ -807,6 +809,46 @@ namespace
         rig.settleQuiet(f, 200.0, 300);
     }
 
+    /** R-VIEW-3: the split seam, dragged off centre. The whole point of the feature is that
+     *  the seam is somewhere the photographer put it, so a shot at 50% would prove nothing —
+     *  this drags it to about a third across and photographs that, plus the hover state, which
+     *  is the affordance that tells anyone the seam can be grabbed at all. */
+    void shotSplitSeam(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-split-seam")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        auto *canvas = const_cast<arstro::cosmo_v2::PhotoCanvas *>(
+            static_cast<const arstro::cosmo_v2::PhotoCanvas *>(
+                arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "PhotoCanvas")));
+        if (!canvas) { std::printf("  (no photo canvas: skipping editor-split-seam)\n"); return; }
+        const artboard::Segment *pill =
+            arstro::cosmo_v2::findSegmentByType(*canvas, "SegmentedControl");
+        if (!pill) { std::printf("  (no compare pill: skipping editor-split-seam)\n"); return; }
+
+        // Split mode on, through the pill, so the shot shows the state a user can reach.
+        const artboard::Transform pw = pill->worldTransform();
+        rig.app.pointer(0, pw.e + pill->width.value() * 0.5, pw.f + pill->height.value() * 0.5, 1, rig.now);
+        rig.app.pointer(2, pw.e + pill->width.value() * 0.5, pw.f + pill->height.value() * 0.5, 1, rig.now);
+        rig.settleQuiet(f, 300.0, 300);
+
+        const artboard::Transform cw = canvas->worldTransform();
+        const double CW = canvas->width.value(), CH = canvas->height.value();
+        const double y = cw.f + CH * 0.5;
+        const double from = cw.e + canvas->seamX(), to = cw.e + CW * 0.34;
+        rig.app.pointer(0, from, y, 1, rig.now);
+        for (int i = 1; i <= 6; ++i)
+            rig.app.pointer(1, from + (to - from) * i / 6.0, y, 1, rig.now);
+        // Photographed WITH THE BUTTON STILL DOWN and the pointer on the seam, so the hover
+        // brighten and the thickened line are both in the frame — at rest they would have
+        // faded out and the shot would not show the affordance at all.
+        rig.step(f, 6);
+        save(f, "editor-split-seam");
+        rig.app.pointer(2, to, y, 1, rig.now);
+        rig.settleQuiet(f, 300.0, 300);
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -818,7 +860,7 @@ namespace
             return 0;
         }
         if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
-            && !wanted("editor-dissolve"))
+            && !wanted("editor-dissolve") && !wanted("editor-split-seam"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -839,6 +881,7 @@ namespace
             if (wanted("editor-project")) save(f, "editor-project");
         }
         shotDissolve(rig, w0, h0, "1.5", "70");
+        shotSplitSeam(rig, w0, h0);          // R-VIEW-3
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)

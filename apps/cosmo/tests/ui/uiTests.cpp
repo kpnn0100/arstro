@@ -391,6 +391,100 @@ namespace
               "and a model re-bind does not flatten it again");
     }
 
+    // ── R-VIEW-3: the split seam is grabbable, slides, clamps, and re-centres eased ──────
+    void splitSeamCanBeDraggedAndRecentres()
+    {
+        std::printf("App: the split seam slides, clamps, and re-centres with easing (R-VIEW-3)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        auto *canvas = const_cast<arstro::cosmo_v2::PhotoCanvas *>(
+            static_cast<const arstro::cosmo_v2::PhotoCanvas *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas")));
+        check(canvas != nullptr, "the photo canvas exists");
+        if (!canvas) return;
+
+        const artboard::Transform cwT = canvas->worldTransform();
+        const double CW = canvas->width.value(), CH = canvas->height.value();
+        const double midY = cwT.f + CH * 0.5;
+
+        // Before Split mode is on, the seam must NOT claim a press — otherwise it would
+        // swallow the pan, which is the one thing a hit test rather than a mode has to get
+        // right.
+        check(!canvas->onSeam(artboard::Point{CW * 0.5, CH * 0.5}),
+              "with the seam hidden, a press at the middle is not a seam grab");
+
+        // Turn Split on via the pill, the way a user does: it is the middle of three
+        // segments, at the bottom-centre of the canvas.
+        const artboard::Segment *pill =
+            arstro::cosmo_v2::findSegmentByType(*canvas, "SegmentedControl");
+        check(pill != nullptr, "the Before/Split/After pill exists");
+        if (!pill) return;
+        const artboard::Transform pw = pill->worldTransform();
+        rig.click(pw.e + pill->width.value() * 0.5, pw.f + pill->height.value() * 0.5);
+        rig.settle(400.0);
+        check(canvas->onSeam(artboard::Point{CW * 0.5, CH * 0.5}),
+              "in Split mode the middle IS a seam grab");
+        const double startSeam = canvas->seamX();
+        check(near(startSeam, CW * 0.5, 1.0), "and the seam starts centred");
+
+        // Grab it 9 px off-centre and drag 200 px right. D-32's lesson: it must move BY the
+        // drag, not jump to the pointer — a 9 px teleport is exactly the bug that cost a day
+        // on the curve editor.
+        const double kOff = 9.0, kDrag = 200.0;
+        rig.drag(cwT.e + startSeam + kOff, midY, cwT.e + startSeam + kOff + kDrag, midY);
+        rig.settle(200.0);
+        const double moved = canvas->seamX() - startSeam;
+        char msg[192];
+        std::snprintf(msg, sizeof(msg),
+                      "the seam travelled %.1f px for a %.0f px drag (a teleport would be %.0f)",
+                      moved, kDrag, kDrag + kOff);
+        check(std::fabs(moved - kDrag) < 2.0, msg);
+
+        // The clipped "before" half must follow the seam, or the seam is a decoration.
+        const artboard::Segment *clip = nullptr;
+        for (const auto &ch : canvas->children())
+            if (ch && ch->clipToBounds && ch->width.value() > 1.0 &&
+                std::fabs(ch->width.value() - canvas->seamX()) < 2.0)
+                clip = ch.get();
+        check(clip != nullptr, "and the clipped before-half is as wide as the seam position");
+
+        // Drag far past the right edge: it must clamp INSIDE the canvas, because a seam at
+        // the very edge has nothing left to compare and nothing left to grab.
+        rig.drag(cwT.e + canvas->seamX(), midY, cwT.e + CW + 400.0, midY);
+        rig.settle(200.0);
+        check(canvas->seamX() < CW, "dragged past the edge, the seam stays inside the canvas");
+        check(canvas->seamX() > CW - 40.0, "but does go most of the way");
+        // ...and the same at the left.
+        rig.drag(cwT.e + canvas->seamX(), midY, cwT.e - 400.0, midY);
+        rig.settle(200.0);
+        check(canvas->seamX() > 0.0, "and the same at the left edge");
+        check(canvas->seamX() < 40.0, "having travelled most of the way there");
+
+        // Double-click re-centres — and EASES, because that is the app moving it rather than
+        // the user. R-G-1: sample mid-tween and require the drawn value to differ from both
+        // ends. A snap would pass an "it arrives" test, which is why this checks travel.
+        const double before = canvas->seamX();
+        rig.app.pointer(0, cwT.e + before, midY, 1, rig.now); rig.frames(1);
+        rig.app.pointer(2, cwT.e + before, midY, 1, rig.now); rig.frames(1);
+        rig.app.pointer(0, cwT.e + before, midY, 1, rig.now); rig.frames(1);
+        rig.app.pointer(2, cwT.e + before, midY, 1, rig.now);
+        int between = 0;
+        for (int i = 0; i < 30; ++i)
+        {
+            rig.frame();
+            const double x = canvas->seamX();
+            if (x > before + 2.0 && x < CW * 0.5 - 2.0) ++between;
+        }
+        std::snprintf(msg, sizeof(msg), "the re-centre travelled (%d intermediate frames)", between);
+        check(between >= 2, msg);
+        rig.settle(400.0);
+        check(near(canvas->seamX(), CW * 0.5, 1.5), "and it lands back in the middle");
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -733,6 +827,7 @@ int main()
     panelsFollowTheEditTarget();
     curveNodeGrabThroughTheAppDoesNotTeleport();
     curveAltDragSurvivesTheRoundTripThroughTheModel();
+    splitSeamCanBeDraggedAndRecentres();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

@@ -691,6 +691,30 @@ any other.
   seam **fade** in and out instead of flipping `visible` (R-G-1). The pill's own highlight keeps
   sliding as it already did.
 
+- **R-VIEW-3 The split seam is draggable.** In Split mode the seam is grabbed and slid, so the
+  photographer chooses *where* to compare rather than being given the middle. This closes PARITY #6,
+  the last sub-gap in the compare feature — the original `CompareView` had it and cosmo's seam was
+  fixed at 50%.
+  - **The grab area is far wider than the line.** The seam draws 1.5 px wide; nobody can hit 1.5 px,
+    so the pick radius is the same `metrics::anchorHitRadius()` the curve and mask editors use. One
+    number for "how close counts as on it" across the whole app, and the reason D-32's generosity is
+    safe here for the same reason it was there: the grab offset is added back, so grabbing the seam
+    11 px off-centre slides it by the drag rather than teleporting it under the pointer.
+  - **A drag follows the pointer exactly**, with no easing. R-G-1 governs values the app changes on
+    the user's behalf; in direct manipulation the pointer *is* the animation, and easing it would
+    read as lag. That is already the established local precedent — `panBy` and `zoomAbout` apply
+    immediately. Everything the app moves by itself still eases: the fade in and out (R-VIEW-2) is
+    unchanged, and a **double-click on the seam returns it to the centre over 180 ms** rather than
+    snapping.
+  - **The seam says it is grabbable.** It brightens on hover, eased over the standard 120 ms, so the
+    affordance is discoverable without a tooltip and without a cursor change the HAL does not have.
+  - **It never leaves the photo, and it never fights the pan.** The position is clamped so the seam
+    stays inside the canvas, and a press that is *not* on the seam still pans when zoomed (R-ZOOM) —
+    the seam only claims the press it is actually under.
+  - **The position is presentation, and stays in the view** (R-SVC-4): it is where *this* window is
+    comparing, not what the project contains, so it is not in `AppModel`, is not persisted, and a
+    second front end is free to have its own.
+
 ## R-ZOOM — Zoom & pan inside the photo (item 2) — ✅ IMPLEMENTED (except R-ZOOM-5)
 
 Status: implemented in `PhotoCanvas` (owns zoom/pan, mirrors to before+after views) +

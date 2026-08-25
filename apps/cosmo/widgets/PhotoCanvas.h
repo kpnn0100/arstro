@@ -36,6 +36,7 @@
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
+#include "HoverFade.h"
 #include "SegmentedControl.h"
 #include "MaskOverlay.h"
 #include <cstdint>
@@ -71,6 +72,15 @@ namespace cosmo_v2
         bool showAfter() const { return mPill->selected() != Before; }  // "show the edited result?"
         void setMode(int m) { mPill->setSelectedImmediate(m); applyMode(); }
         std::function<void(int)> onModeChange;      // 0=before, 1=split, 2=after
+
+        // ── R-VIEW-3: the split seam. Public because a test that drives the ASSEMBLED app
+        //    has to ask where the seam IS and whether a point counts as on it; restating the
+        //    pick radius in the test is how a test comes to aim where the widget does not.
+        /** Where the seam is drawn, in canvas-local px. */
+        double seamX() const { return mSplitPos.value() * width.value(); }
+        /** Is `local` close enough to the seam to count as a grab? False whenever the seam is
+         *  not on screen, so a press in Before/After mode still reaches the pan. */
+        bool onSeam(const artboard::Point &local) const;
         std::function<void(double, double)> onContext;  // right-click on the photo (world x,y)
 
         // ── zoom / pan (ctrl-scroll magnify + drag-to-pan) ──
@@ -114,6 +124,22 @@ namespace cosmo_v2
         artboard::Point mPanLast{0, 0};   // previous drag position while panning a zoomed view
         bool mSplitWanted = false;        // pill state; advance() eases the clip + seam to it
         bool mSplitApplied = false;
+        // ── R-VIEW-3: the seam's position, and the state of dragging it ──
+        //
+        // PRESENTATION, so it lives here and not in AppModel (R-SVC-4): it is where THIS
+        // window is comparing, not something the project contains. Not persisted, and a
+        // second front end is free to have its own.
+        //
+        // An AnimatedProperty even though a drag writes it directly: the drag is direct
+        // manipulation, where the pointer IS the animation and easing would read as lag —
+        // but a double-click returns it to the centre, and that the app does on the user's
+        // behalf, so it eases (R-G-1). One property serves both because `set` and
+        // `animateTo` are the two ways to write it.
+        artboard::AnimatedProperty mSplitPos{0.5};
+        bool mSeamDrag = false;           // a press landed on the seam and has not been released
+        double mSeamGrabDX = 0.0;         // pointer-to-seam offset at the grab (D-32: no teleport)
+        HoverFade mSeamHover;             // eased brighten, so the seam looks grabbable
+        double mNowMs = 0.0;              // last advance()'s clock, for the re-centre tween
         // The render that arrived while a dissolve was in flight (R-VIEW-1a). One slot, newest
         // wins; the buffer keeps its capacity so a drag does not reallocate per frame.
         std::vector<uint8_t> mHeld;

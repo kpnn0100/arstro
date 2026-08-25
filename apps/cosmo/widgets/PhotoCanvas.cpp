@@ -27,6 +27,14 @@ namespace cosmo_v2
         constexpr double kPhotoFadeMs = 160.0;
         constexpr Easing kPhotoFadeEase = Easing::Linear;
         constexpr double kModeFadeMs = 180.0;   // Split's clip + seam: cosmo's cross-fade step
+        // R-VIEW-3: the seam at rest and under the pointer. Bright enough at rest to read as a
+        // deliberate edge rather than a rendering seam, and clearly brighter on hover so it
+        // says "grab me" without a cursor the HAL does not have.
+        constexpr double kSeamAlpha = 0.55;
+        constexpr double kSeamAlphaHover = 0.95;
+        // ...and it thickens slightly, because on a dark photo alpha alone is easy to miss.
+        constexpr double kSeamW = 1.5;
+        constexpr double kSeamWHover = 3.0;
     }
 
     PhotoCanvas::PhotoCanvas()
@@ -55,7 +63,7 @@ namespace cosmo_v2
         addChild(mSplitClip);
 
         mDivider = std::make_shared<RectangleSegment>();
-        mDivider->style = {Paint::filled(palette::whiteAlpha(0.55)), 0.0};
+        mDivider->style = {Paint::filled(palette::whiteAlpha(kSeamAlpha)), 0.0};
         mDivider->inputTransparent = true;
         addChild(mDivider);
 
@@ -98,6 +106,16 @@ namespace cosmo_v2
 
     void PhotoCanvas::advance(double nowMs)
     {
+        mNowMs = nowMs;   // a gesture handler has no clock of its own (R-VIEW-3's re-centre)
+        // R-VIEW-3: the seam's own tween and its hover brighten. `layout()` reads
+        // `mSplitPos` every frame, so advancing it here is all the plumbing the eased
+        // re-centre needs — and while a drag writes the value directly, `update` on a
+        // settled property is a no-op, so the two paths cannot fight.
+        const bool seamMoving = mSplitPos.isAnimating();
+        mSplitPos.update(nowMs);
+        mSeamHover.advance(nowMs);
+        if (seamMoving) layout();
+
         if (mSplitApplied != mSplitWanted)
         {
             const double a = mSplitWanted ? 1.0 : 0.0;
@@ -209,15 +227,26 @@ namespace cosmo_v2
             iv->width.set(w); iv->height.set(h);
         }
 
-        // Clip covers the left half; the before-image inside spans the FULL canvas
-        // (same fit as the edited image) so the two stay pixel-aligned.
+        // Clip covers everything LEFT OF THE SEAM; the before-image inside spans the FULL
+        // canvas (same fit as the edited image) so the two stay pixel-aligned whatever the
+        // seam is doing. R-VIEW-3 made the seam movable, so this reads the position rather
+        // than the 0.5 it used to hardcode — and `layout()` runs every frame, which is what
+        // makes both a drag and the eased return to centre land here with no extra plumbing.
+        const double seam = mSplitPos.value() * w;
         mSplitClip->x.set(0.0); mSplitClip->y.set(0.0);
-        mSplitClip->width.set(w * 0.5); mSplitClip->height.set(h);
+        mSplitClip->width.set(seam); mSplitClip->height.set(h);
         mBeforeView->x.set(0.0); mBeforeView->y.set(0.0);
         mBeforeView->width.set(w); mBeforeView->height.set(h);
 
-        mDivider->x.set(w * 0.5 - 0.75); mDivider->y.set(0.0);
-        mDivider->width.set(1.5); mDivider->height.set(h);
+        // Derived from the EASED hover amount every frame, not set once when the pointer
+        // arrived — R-G-1's clause (d): a value computed from an animated one is recomputed
+        // from the animated one, or it snaps.
+        const double hv = mSeamHover.amount(0);
+        const double sw = kSeamW + (kSeamWHover - kSeamW) * hv;
+        mDivider->x.set(seam - sw * 0.5); mDivider->y.set(0.0);
+        mDivider->width.set(sw); mDivider->height.set(h);
+        mDivider->style.paint = Paint::filled(
+            palette::whiteAlpha(kSeamAlpha + (kSeamAlphaHover - kSeamAlpha) * hv));
 
         // The mask overlay fills the canvas; its fitted rect tracks the photo's
         // display area INCLUDING the current zoom/pan (R-MASK-3, R-ZOOM).
@@ -250,9 +279,76 @@ namespace cosmo_v2
             iv->resetView();
     }
 
+    bool PhotoCanvas::onSeam(const Point &local) const
+    {
+        // Only while the seam is actually on screen — grabbing an invisible seam would be a
+        // dead press in Before/After mode, and worse, one that swallowed the pan.
+        if (!mSplitWanted) return false;
+        // The line is 1.5 px; nobody can hit 1.5 px. The pick radius is the SAME number the
+        // curve and mask editors use, so "how close counts as on it" is one value across the
+        // app rather than three (R-VIEW-3).
+        return std::fabs(local.x - seamX()) <= metrics::anchorHitRadius();
+    }
+
     bool PhotoCanvas::handleGesture(const Gesture &g, const Point &local)
     {
         if (g.type == Gesture::Type::RightClick && onContext) { onContext(g.pos.x, g.pos.y); return true; }
+
+        // ── R-VIEW-3: slide the seam ────────────────────────────────────────────────────
+        // Checked BEFORE the pan, so a press on the seam moves the seam even while zoomed;
+        // a press anywhere else still pans, which is the whole reason this is a hit test and
+        // not a mode.
+        if (g.type == Gesture::Type::Move)
+        {
+            // Hover feedback, so the seam looks grabbable without a cursor change (the HAL
+            // has none) and without a tooltip.
+            if (onSeam(local)) mSeamHover.setHovered(0); else mSeamHover.clear();
+        }
+        if (g.type == Gesture::Type::DoubleClick && onSeam(local))
+        {
+            // Back to the middle — and this the app does on the user's behalf, so it EASES
+            // (R-G-1). The drag below does not, because there the pointer is the animation.
+            mSplitPos.animateTo(0.5, kModeFadeMs, Easing::EaseOutCubic, mNowMs);
+            WLOG("photo: seam re-centred over %.0fms", kModeFadeMs);
+            return true;
+        }
+        if ((g.type == Gesture::Type::Down || g.type == Gesture::Type::DragStart) && onSeam(local))
+        {
+            mSeamDrag = true;
+            // D-32's lesson, applied here: keep the pointer-to-seam offset and add it back on
+            // every move, so grabbing the seam 11 px off-centre slides it BY the drag instead
+            // of teleporting it under the pointer.
+            mSeamGrabDX = local.x - seamX();
+            mSeamHover.setHovered(0);
+            return true;
+        }
+        if (mSeamDrag)
+        {
+            switch (g.type)
+            {
+            case Gesture::Type::Drag:
+            case Gesture::Type::DragStart:
+            {
+                const double w = width.value();
+                if (w > 0.0)
+                {
+                    // Clamped so the seam never leaves the canvas: at 0 or 1 there is nothing
+                    // left to compare and, worse, nothing left to grab it by.
+                    const double margin = metrics::anchorHitRadius();
+                    const double x = std::clamp(local.x - mSeamGrabDX, margin, w - margin);
+                    mSplitPos.set(x / w);   // direct: the pointer IS the animation
+                    layout();
+                }
+                return true;
+            }
+            case Gesture::Type::Up:
+            case Gesture::Type::Drop:
+                mSeamDrag = false;
+                return true;
+            default:
+                break;
+            }
+        }
 
         // Drag-to-pan while zoomed (>1x) — pan every view so the split stays aligned.
         if (mPhotoBase->zoom() > 1.0)

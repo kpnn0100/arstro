@@ -15,7 +15,7 @@ column points at files in the now-removed app, kept for provenance.
 | 3 | **Crop overlay on the photo** — drag-to-crop rectangle with corner/edge handles + aspect lock, over the full (uncropped) frame while the Transform/Xform tab is active. | `widgets/CropOverlay.{h,cpp}` | **Partial.** `XformPanel` exposes numeric crop (`onCropChange`, cropX/Y/W/H) but there is **no interactive crop box on the photo**. | R-PARITY (crop) |
 | 4 | **Preset category picker modal** — choose which categories (tone/color/detail/…) to apply / save / export, instead of all-or-nothing. | `widgets/PresetDialog.{h,cpp}` | **Missing.** cosmo applies every present category immediately (documented stub in `App.h`). | R-PARITY (preset-picker) |
 | 5 | **App/engine settings panel** — preview quality (render resolution: speed vs detail) and CPU thread count for the multicore engine. | `panels/SettingsPanel.{h,cpp}` | **Missing.** cosmo's "Settings" menu is only Copy/Paste-settings; no engine-quality/threads UI. | R-PARITY (settings) |
-| 6 | **Draggable split divider** in before/after compare — slide the seam to reveal the difference. | `widgets/CompareView.{h,cpp}` | **Partial.** `PhotoCanvas` has Before/Split/After but the split seam is **fixed at 50%** (not draggable). | R-PARITY (split-drag) |
+| 6 | **Draggable split divider** in before/after compare — slide the seam to reveal the difference. | `widgets/CompareView.{h,cpp}` | **Done** (R-VIEW-3). Grab radius = `metrics::anchorHitRadius()`, moves by the drag not to the pointer, clamped inside the canvas, brightens + thickens on hover, double-click re-centres eased. | R-VIEW-3 |
 
 ## Already at parity (were present in both)
 
