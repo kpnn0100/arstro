@@ -93,6 +93,11 @@ namespace cosmo_v2
         bool maskTabActive() const;                     // true while the Mask tab is selected
         const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
         void writeSelectedMask(const MaskParams &m);    // overlay drag -> write geometry back + submit
+        /** The on-photo crop box hands its rectangle back here (R-CROP-5), rather than going
+         *  straight to `App::emitCommand`: this is the channel with the direct-to-service
+         *  fallback, so it works in a rig or a shot where the host never wired App's own — and
+         *  the crop belongs to the Xform panel's domain anyway, so the panel is kept in step. */
+        void writeCrop(double x, double y, double w, double h);
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;  // card body (blends with active tab)

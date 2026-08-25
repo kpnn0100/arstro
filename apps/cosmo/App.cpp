@@ -155,6 +155,26 @@ namespace cosmo_v2
         // On-photo mask overlay: a drag writes the dragged geometry back into the
         // selected mask (R-MASK). The overlay's active state + mask are pushed each
         // frame from the RightColumn in render().
+        // R-CROP-5: the box edits the crop through the SAME Command path a slider does
+        // (R-SVC-2), so a drag on the photo, a number typed in the panel and `set cropW=…` from
+        // a script are three views of one operation.
+        //
+        // `live` is what makes the drag cheap: while the pointer is down the edit is
+        // interactive, so R-PREVIEW-1 renders whichever pyramid level meets the 33 ms budget;
+        // on release it goes out once more as a settled edit, which is the value history keeps.
+        mCenterStage->photo()->cropOverlay()->onChange =
+            [this](double x, double y, double w, double h, bool live) {
+                cosmo::Command g;
+                g.kind = cosmo::Command::Kind::Gesture;
+                g.flag = live;
+                mSvc.dispatch(g);
+                // Through RightColumn, exactly as the mask overlay's edits go: that channel has
+                // the direct-to-service fallback, while `App::emitCommand` silently DROPS the
+                // command when the host has not wired `onCommand` — which is every shot rig and
+                // every test, so the drag worked and the edit vanished.
+                mRightColumn->writeCrop(x, y, w, h);
+            };
+
         mCenterStage->photo()->maskOverlay()->onChange =
             [this](const MaskParams &m) { mRightColumn->writeSelectedMask(m); };
 
@@ -957,6 +977,33 @@ namespace cosmo_v2
             const MaskParams *sel = mRightColumn->selectedMaskParams();
             if (mRightColumn->maskTabActive() && sel) ov->setMask(*sel, true);
             else                                      ov->setMask(MaskParams{}, false);
+        }
+
+        // R-CROP-5: the on-photo crop box, shown only while the Xform tab is open — the same
+        // rule the mask overlay follows, so the photo is uncluttered the rest of the time and
+        // an inactive overlay is click-through rather than a press-eater.
+        {
+            auto ov = mCenterStage->photo()->cropOverlay();
+            const bool on = mRightColumn->activeTab() == RightColumn::kTabXform;
+            // R-CROP-5: while the box is up, the photo is rendered UNCROPPED, so the box can be
+            // dragged over the whole image. Without this you could only ever shrink a crop —
+            // never move it outside what is already kept, and never grow it back — because the
+            // photo on screen would already be the crop. `setCropPreviewMode` existed for
+            // exactly this and nothing had ever called it; the slot's real crop is untouched.
+            //
+            // Toggled here and re-rendered on the CHANGE only: submitting every frame would
+            // record a history entry per frame and re-render a photo nobody edited.
+            if (on != mCropPreviewOn)
+            {
+                mCropPreviewOn = on;
+                mSession.setCropPreviewMode(on);
+                mSession.submitRefine(0);   // re-render at full level; not an edit, so no history
+            }
+            ov->setActive(on);
+            ov->setAspectLock(mRightColumn->aspectLock());
+            ov->setSourceSize(mSvc.model().sourceWidth, mSvc.model().sourceHeight);
+            if (const EditParams *p = mSession.curParams())
+                ov->setCrop(p->cropX, p->cropY, p->cropW, p->cropH);
         }
 
         // While a batch export is running, the host's worker owns RenderService's

@@ -355,6 +355,26 @@ namespace cosmo_v2
         return &p->masks[mSelectedMask];
     }
 
+    void RightColumn::writeCrop(double x, double y, double w, double h)
+    {
+        // ONE key, `crop=x,y,w,h` — the blob `EditParamsIO` reads and writes. There is no
+        // `cropX` key, and four separate keys are rejected with "no field matched", silently:
+        // a drag then looks like it does nothing at all. Sent through `sendSet` for the same
+        // reason `writeSelectedMask` is — it is the path with the direct-to-service fallback.
+        sendSet({{"crop", num(x) + "," + num(y) + "," + num(w) + "," + num(h)}});
+        // Keep the panel's own copy in step, so its readouts and a following ratio pick work
+        // from what is actually on screen rather than from what was there before the drag.
+        XformPanel::State st;
+        if (const EditParams *p = params())
+        {
+            st.rotation = p->rotation; st.quarterTurns = p->quarterTurns;
+        }
+        st.cropX = (float)x; st.cropY = (float)y; st.cropW = (float)w; st.cropH = (float)h;
+        st.sourceWidth = mSvc.model().sourceWidth;
+        st.sourceHeight = mSvc.model().sourceHeight;
+        mXform->setState(st);
+    }
+
     void RightColumn::writeSelectedMask(const MaskParams &m)
     {
         // The on-photo overlay hands back the FULL current mask each frame — the dragged

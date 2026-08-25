@@ -443,6 +443,9 @@ namespace cosmo_v2
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher
+        /** Whether the photo is currently being rendered uncropped for the crop box
+         *  (R-CROP-5). Tracked so the mode is applied on the CHANGE rather than every frame. */
+        bool mCropPreviewOn = false;
         /** T3.1: when something last happened that could have started an animation, and how
          *  long after it we keep painting. 1000 ms is longer than every duration in cosmo's
          *  motion vocabulary (the longest is the 900 ms splash intro, which runs in its own

@@ -20,6 +20,9 @@
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
 #include "../../widgets/PhotoCanvas.h"
+#include "../../widgets/CropOverlay.h"
+#include "../../widgets/XformPanel.h"
+#include "../../widgets/RightColumn.h"
 #include "../../core/service/Command.h"
 #include "../../core/decode/ImageDecoder.h"
 #include <chrono>
@@ -485,6 +488,129 @@ namespace
         check(near(canvas->seamX(), CW * 0.5, 1.5), "and it lands back in the middle");
     }
 
+    // ── R-CROP-5/3: the crop box on the photo — move the region, and keep a locked shape ──
+    //
+    // This is the feature the user reported as missing outright: "when a ratio is locked user
+    // can freely choose region". There was no crop box at all (PARITY #3), so the answer was
+    // not a bug fix but the missing half of the feature — and the assertion that matters most
+    // is the plain one: dragging inside the box MOVES it, with a ratio locked, without
+    // changing its shape.
+    void cropBoxMovesTheRegionAndKeepsALockedRatio()
+    {
+        std::printf("App: the crop box moves the region and keeps a locked ratio (R-CROP-3/5)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        auto *canvas = const_cast<arstro::cosmo_v2::PhotoCanvas *>(
+            static_cast<const arstro::cosmo_v2::PhotoCanvas *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas")));
+        check(canvas != nullptr, "the photo canvas exists");
+        if (!canvas) return;
+        auto overlay = canvas->cropOverlay();
+        check(overlay != nullptr, "and it carries a crop overlay");
+        if (!overlay) return;
+
+        // Inactive until the Xform tab is open — an overlay that eats presses it has no use for
+        // is how four panels once made the whole editor unclickable.
+        check(!overlay->active(), "the crop box is inactive while another tab is showing");
+        check(overlay->partAt(artboard::Point{100, 100}) == arstro::cosmo_v2::crop::Part::None,
+              "so it hit-tests as nothing and the press falls through to the pan");
+
+        // Open Xform — the last of five tabs.
+        const artboard::Segment *tabs = arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs");
+        check(tabs != nullptr, "the tabs exist");
+        if (!tabs) return;
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 4.5, tw.f + 13.0);
+        rig.settle(400.0);
+        check(overlay->active(), "opening Xform activates the crop box");
+
+        // Lock 16:9 through the panel, so the lock arrives the way a user sets it.
+        auto *xf = const_cast<arstro::cosmo_v2::XformPanel *>(
+            static_cast<const arstro::cosmo_v2::XformPanel *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "XformPanel")));
+        check(xf != nullptr, "the Xform panel is in the tree");
+        if (!xf) return;
+        const artboard::Transform xw = xf->worldTransform();
+        const artboard::Rect chip = xf->aspectChipRect(3);   // 16:9
+        rig.click(xw.e + chip.x + chip.w * 0.5, xw.f + chip.y + chip.h * 0.5);
+        rig.settle(400.0);
+        check(near(xf->lockedRatio(), 16.0 / 9.0, 1e-6), "16:9 is locked");
+
+        const artboard::Rect before = overlay->cropRect();
+        check(before.w < 1.0 || before.h < 1.0, "and the crop is no longer the whole photo");
+        // The box really is 16:9 in PIXELS on this 96x64 (3:2) photo — the R-CROP-1 fix.
+        const double pxRatio = (before.w * 96.0) / (before.h * 64.0);
+        char msg[192];
+        std::snprintf(msg, sizeof(msg), "the box is %.4f in pixels (16:9 = %.4f)", pxRatio, 16.0 / 9.0);
+        check(near(pxRatio, 16.0 / 9.0, 1e-2), msg);
+
+        // ── THE REPORTED GAP: drag INSIDE the box to move the region. ──
+        const artboard::Transform cw = canvas->worldTransform();
+        const artboard::Rect fitted = canvas->photoFittedRect();
+        auto pxOf = [&](double nx, double ny) {
+            return artboard::Point{cw.e + fitted.x + nx * fitted.w, cw.f + fitted.y + ny * fitted.h};
+        };
+        const artboard::Point centre = pxOf(before.x + before.w * 0.5, before.y + before.h * 0.5);
+        check(overlay->partAt(artboard::Point{centre.x - cw.e, centre.y - cw.f}) ==
+                  arstro::cosmo_v2::crop::Part::Move,
+              "the interior of the box hit-tests as a MOVE");
+        rig.drag(centre.x, centre.y, centre.x, centre.y - fitted.h * 0.15);
+        rig.settle(200.0);
+        const artboard::Rect moved = overlay->cropRect();
+        check(moved.y < before.y - 1e-4, "dragging inside MOVES the region up");
+        check(near(moved.w, before.w, 1e-4) && near(moved.h, before.h, 1e-4),
+              "and a move never changes the shape, even with a ratio locked");
+        check(near(moved.x, before.x, 1e-4), "nor drifts sideways on a vertical drag");
+
+        // ...and the model got it, so the box edits through the same Command path a slider does.
+        const arstro::EditParams *mp = rig.svc.session().curParams();
+        check(mp != nullptr, "there are params to check");
+        if (mp) check(near(mp->cropY, moved.y, 1e-3), "and the SERVICE has the moved crop");
+
+        // ── Resizing a CORNER keeps the locked shape. ──
+        const artboard::Rect pre = overlay->cropRect();
+        // Aimed a few px INSIDE the corner, which is where a user presses: the grab band
+        // reaches 13 px in, and a full-width crop's corner sits exactly on the photo's edge —
+        // a press dead on it is one pixel outside the canvas and lands in the right column.
+        const artboard::Point br = pxOf(pre.x + pre.w, pre.y + pre.h);
+        const artboard::Point brIn{br.x - 4.0, br.y - 4.0};
+        check(overlay->partAt(artboard::Point{brIn.x - cw.e, brIn.y - cw.f}) ==
+                  arstro::cosmo_v2::crop::Part::BottomRight, "the bottom-right corner is a corner");
+        rig.drag(brIn.x, brIn.y, brIn.x - fitted.w * 0.12, brIn.y);
+        rig.settle(200.0);
+        const artboard::Rect resized = overlay->cropRect();
+        check(resized.w < pre.w - 1e-4, "dragging the corner resizes");
+        const double r2 = (resized.w * 96.0) / (resized.h * 64.0);
+        std::snprintf(msg, sizeof(msg), "and the ratio held at %.4f", r2);
+        check(near(r2, 16.0 / 9.0, 2e-2), msg);
+
+        // ── Free unlocks WITHOUT resetting — the other reported bug, end to end. ──
+        const artboard::Rect kept = overlay->cropRect();
+        const artboard::Rect freeChip = xf->aspectChipRect(arstro::cosmo_v2::XformPanel::kAspectFree);
+        rig.click(xw.e + freeChip.x + freeChip.w * 0.5, xw.f + freeChip.y + freeChip.h * 0.5);
+        rig.settle(400.0);
+        check(near(xf->lockedRatio(), 0.0), "Free unlocks the ratio");
+        const artboard::Rect afterFree = overlay->cropRect();
+        check(near(afterFree.x, kept.x, 1e-4) && near(afterFree.y, kept.y, 1e-4) &&
+                  near(afterFree.w, kept.w, 1e-4) && near(afterFree.h, kept.h, 1e-4),
+              "and leaves the crop EXACTLY where it was (it used to reset to the whole photo)");
+
+        // ...and now an edge drag changes one axis only, which is what free means.
+        const artboard::Rect f0 = overlay->cropRect();
+        const artboard::Point re0 = pxOf(f0.x + f0.w, f0.y + f0.h * 0.5);
+        const artboard::Point rightEdge{re0.x - 4.0, re0.y};
+        rig.drag(rightEdge.x, rightEdge.y, rightEdge.x - fitted.w * 0.1, rightEdge.y);
+        rig.settle(200.0);
+        const artboard::Rect f1 = overlay->cropRect();
+        check(f1.w < f0.w - 1e-4, "free: the dragged edge moves");
+        check(near(f1.h, f0.h, 1e-4), "and the other axis is left alone");
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -828,6 +954,7 @@ int main()
     curveNodeGrabThroughTheAppDoesNotTeleport();
     curveAltDragSurvivesTheRoundTripThroughTheModel();
     splitSeamCanBeDraggedAndRecentres();
+    cropBoxMovesTheRegionAndKeepsALockedRatio();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

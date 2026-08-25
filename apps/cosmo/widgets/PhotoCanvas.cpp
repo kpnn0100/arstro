@@ -71,6 +71,8 @@ namespace cosmo_v2
         // (topmost child wins on overlap); it is click-through until a mask is active.
         mMaskOverlay = std::make_shared<MaskOverlay>(palette::primary());
         addChild(mMaskOverlay);
+        mCropOverlay = std::make_shared<CropOverlay>();
+        addChild(mCropOverlay);   // R-CROP-5: above the mask overlay, below the compare pill
 
         mPill = std::make_shared<SegmentedControl>(std::vector<std::string>{"Before", "Split", "After"});
         mPill->containerBox = {Paint::filledStroked(Color{0x11 / 255.0, 0x11 / 255.0, 0x11 / 255.0, 0.9},
@@ -254,6 +256,13 @@ namespace cosmo_v2
         mMaskOverlay->width.set(w); mMaskOverlay->height.set(h);
         mMaskOverlay->setFittedRect(visibleView()->fittedRect());
 
+        // R-CROP-5: the same fitted rect, so the crop box tracks the photo's display area
+        // including zoom and pan. A crop is a region of the PHOTO — using the canvas would put
+        // the box out in the letterbox.
+        mCropOverlay->x.set(0.0); mCropOverlay->y.set(0.0);
+        mCropOverlay->width.set(w); mCropOverlay->height.set(h);
+        mCropOverlay->setFittedRect(visibleView()->fittedRect());
+
         double pillW = 0.0;
         for (const char *s : {"Before", "Split", "After"})
             pillW += estimateTextWidth(s, kFontPx) + 2 * kSegPadX;
@@ -278,6 +287,8 @@ namespace cosmo_v2
         for (auto &iv : {mPhotoBase, mPhotoTop, mBeforeView})
             iv->resetView();
     }
+
+    Rect PhotoCanvas::photoFittedRect() const { return visibleView()->fittedRect(); }
 
     bool PhotoCanvas::onSeam(const Point &local) const
     {

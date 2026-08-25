@@ -1420,7 +1420,7 @@ which makes it hardware-independent, measurable, and able to fail.
 
 ---
 
-## R-CROP — Cropping: a real crop box, a real ratio lock — 🚧 IN PROGRESS
+## R-CROP — Cropping: a real crop box, a real ratio lock — ✅ IMPLEMENTED
 
 Reported together: *"free ratio crop doesn't work, also add custom ratio. when a ratio is locked
 user can freely choose region (this feature is missing)."* Three complaints with one root: cosmo had

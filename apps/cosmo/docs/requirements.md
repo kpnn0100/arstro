@@ -2563,3 +2563,65 @@ is a **Move** — the gesture the user reported missing.
 
 **Looked at:** `cosmo_shots --only editor-crop` → `editor-crop-free`, `editor-crop-16x9`,
 `editor-crop-custom`. The last shows all seven chips with Custom lit and the `16 : 10` fields under it.
+
+### DR-CROP-3/5 The crop box on the photo (R-CROP-3, R-CROP-5, PARITY #3)
+The half that was missing outright. "When a ratio is locked user can freely choose region" had no
+answer because there was **no crop box at all** — only four numbers in a panel.
+
+`widgets/CropOverlay.{h,cpp}`, a sibling of `MaskOverlay` and deliberately modelled on it: same place
+in the z-order (above the image, below the compare pill), same click-through-while-inactive contract,
+same normalised coordinate space, same fitted rect from `ImageView::fittedRect` so it tracks zoom and
+pan. It appears with the Xform tab the way the mask overlay appears with the Mask tab, and fades in
+over 180 ms rather than flipping `visible` (R-G-1).
+
+**Gestures**, all through `CropGeometry.h` so the panel and the box cannot disagree:
+- **drag inside → move the region.** The gesture the user reported missing. A move is *never*
+  constrained by the ratio lock: the lock is about shape.
+- **drag a corner → resize**, ratio maintained by driving height from width.
+- **drag an edge → resize one side**; with a ratio locked the *other* axis follows about the box's
+  centre line rather than the gesture being refused, which is what makes a lock feel like a
+  constraint instead of a wall.
+- Corners beat edges in the hit test, because a corner sits inside both edges' bands and is the
+  harder target. The grab band is `metrics::anchorHitRadius()` — the same 13 px as everywhere else.
+- **The pointer-to-anchor offset is kept and added back**, so a corner grabbed 10 px off-centre
+  resizes *by* the drag rather than jumping under the pointer (D-32, applied before it could recur).
+
+**Two bugs found by the test while building it**, both worth recording:
+
+1. **`DragStart` re-picked the part.** The claim ran on `Down || DragStart`, and `DragStart` arrives
+   *after* the drag threshold — so the pointer had already left the spot it pressed, the hit test at
+   the new position returned a different part, and a **corner grab silently became an edge grab**
+   (and an edge grab a move). The resize then moved the wrong axis, or nothing. A part is now claimed
+   only when none is claimed: the same principle as D-50, a gesture in flight outranks a fresh hit
+   test.
+2. **The crop was sent as four keys.** `set cropX=… cropY=…` is rejected with "no field matched",
+   silently — `EditParamsIO`'s key is the single blob `crop=x,y,w,h`. Every drag looked like it did
+   nothing. Routing `set` through the params codec is what makes it reach exactly what a project file
+   reaches; the corollary is that the key has to be the codec's.
+
+   Related, and fixed with it: the edit goes out through `RightColumn::writeCrop`, not
+   `App::emitCommand`. `emitCommand` **drops the command** when the host has not wired `onCommand` —
+   which is every shot rig and every test — while `RightColumn`'s channel has the
+   direct-to-service fallback. The mask overlay already routed through `RightColumn` for this reason.
+
+**The photo is rendered UNCROPPED while the box is up.** Without that you can only ever shrink a crop
+— never move it outside what is already kept, never grow it back — because the photo on screen *is*
+the crop. `EditSession::setCropPreviewMode` existed for exactly this and **nothing had ever called
+it**; it is now toggled with the tab, and only on the change (submitting every frame would record a
+history entry per frame). The slot's real crop is untouched.
+
+**Drawing:** the discarded area dimmed as four rectangles around the box rather than one with a hole
+— the HAL has no even-odd fill, and two stacked alphas over the kept area would read as a different
+exposure. Thirds grid over what is kept, a 1 px border, and corner *brackets* rather than dots
+because they say "this corner is a handle" without covering the photo. The brackets brighten and
+thicken from the **eased** hover amount, recomputed every frame (R-G-1 clause d).
+
+**Guarded by** `cosmo_ui_tests::cropBoxMovesTheRegionAndKeepsALockedRatio` — 24 assertions: inactive
+and click-through until the Xform tab opens; the box really is 16:9 **in pixels** on a 3:2 photo; the
+interior hit-tests as **Move**; dragging inside moves the region and changes neither the shape nor the
+other axis, *with a ratio locked*; the service receives it; a corner drag resizes and the ratio holds;
+Free unlocks and leaves the rectangle **exactly** where it was; and a free edge drag moves one axis
+only.
+
+**Looked at:** `editor-crop-16x9` — the photo drawn uncropped, the 16:9 region bright-bordered inside
+it, the discarded strips visibly dimmed, and the 16:9 chip lit in the panel.

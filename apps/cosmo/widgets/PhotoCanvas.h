@@ -38,6 +38,7 @@
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "HoverFade.h"
 #include "SegmentedControl.h"
+#include "CropOverlay.h"
 #include "MaskOverlay.h"
 #include <cstdint>
 #include <functional>
@@ -67,6 +68,11 @@ namespace cosmo_v2
 
         std::shared_ptr<artboard::ImageView> beforeView() { return mBeforeView; }  // left-half split image
         std::shared_ptr<MaskOverlay> maskOverlay() { return mMaskOverlay; }        // on-photo mask editor
+        std::shared_ptr<CropOverlay> cropOverlay() { return mCropOverlay; }        // on-photo crop box (R-CROP-5)
+        /** The photo's display rect in canvas-local coords, zoom and pan included. Public
+         *  because a test that aims at the crop box has to convert normalised crop coordinates
+         *  to pixels the same way the overlay does. */
+        artboard::Rect photoFittedRect() const;
 
         int mode() const { return mPill->selected(); }
         bool showAfter() const { return mPill->selected() != Before; }  // "show the edited result?"
@@ -120,6 +126,10 @@ namespace cosmo_v2
         std::shared_ptr<artboard::ImageView> mBeforeView;
         std::shared_ptr<artboard::RectangleSegment> mDivider;
         std::shared_ptr<MaskOverlay> mMaskOverlay;   // above the image, below the pill (z-order)
+        // Above the mask overlay and below the pill. Only one of the two is ever active — the
+        // Mask tab and the Xform tab are different tabs — so their gestures cannot collide, and
+        // an inactive overlay is click-through by contract.
+        std::shared_ptr<CropOverlay> mCropOverlay;
         std::shared_ptr<SegmentedControl> mPill;
         artboard::Point mPanLast{0, 0};   // previous drag position while panning a zoomed view
         bool mSplitWanted = false;        // pill state; advance() eases the clip + seam to it
