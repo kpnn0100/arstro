@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-50**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-51**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,39 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-50 — A model re-seed landing mid-gesture flattened the curve node being alt-dragged
+- **Area:** design / widgets · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-25, reported by the user: "the curve used to show a bezier curve by using
+  alt + drag but now it can't".
+- **Reproduce:** load a photo, open Mixer/Curve, double-click the plot to add a node, then alt+drag
+  it. No handles appear and the node stays a corner. **With no photo loaded it works** — which is
+  why it survived: `cosmo_widget_tests::curveAltDragMakesSmoothSpline` drives the widget in
+  isolation and has been passing throughout.
+- **Cause:** alt+drag is a two-event gesture with state in between. `Down` sets `smooth = true` and
+  `mDragKind = 3` on the picked node and emits **nothing**, because nothing has moved yet; the
+  handles are written on the first `Drag`. Meanwhile **R-SVC-12 re-seeds every panel from the
+  view-model whenever the revision moves**, and a frame landing moves it — every few tens of
+  milliseconds while editing. So `RightColumn::syncToSlot` → `CurvePanel::setCurves` ran *between
+  the Down and the Drag of one gesture*, carrying a model that had never heard of the flag, and
+  flattened the node. The Drag then wrote handle offsets onto a point with `smooth == false`, which
+  `curve::sampleSeg` ignores by definition.
+- **Judgement:** defect, and a regression caused by R-SVC-12's re-bind rather than by anything in
+  the curve editor. Same family as D-34 (an edit answered by the view being handed back the value it
+  had just replaced) and D-35 (a panel showing the previous target's values) — a refresh colliding
+  with a live edit.
+- **Fixed:** `setCurves` returns early while a drag is in flight, and the rule is written where it
+  is enforced: **state the user is actively editing may not be overwritten by a refresh.** Applied
+  to the two other editors with the identical shape — `HueCurveEditor::setPoints` (the mixer curves,
+  same alt-on-press mechanism) and `MaskOverlay::setMask`/`updateMask` (geometry only; visibility
+  still applies, because a mask deselected mid-drag must still disappear).
+- **Guarded by** `cosmo_ui_tests::curveAltDragSurvivesTheRoundTripThroughTheModel` — Alt held for
+  the whole gesture through `App::pointer`, then asserting the node is smooth, the handles are
+  symmetric, `CosmoService`'s params carry them, and a further re-bind does not flatten it. Fails on
+  four counts pre-fix. It also needed `Rig::loadFakePhoto()` to exist: without a selected slot the
+  service rejects every `set` with "nothing selected to edit", so the older app-level tests were
+  quietly asserting against a service that had refused all their commands.
+
 
 ### D-46 — `cosmo-cc`'s `wait <ms>` advanced the service clock sixteen times too fast
 - **Area:** core / CLI · **Status:** **Fixed** · **Severity:** S2

@@ -37,6 +37,11 @@ namespace cosmo_v2
 
     void HueCurveEditor::setPoints(const std::vector<CurvePoint> &pts)
     {
+        // A gesture in flight outranks the model — the same rule, and the same bug, as
+        // CurvePanel::setCurves: this editor has the identical alt-on-press mechanism, so a
+        // re-seed landing between the Down and the first Drag flattened the node the user was
+        // pulling handles out of. See the long comment there for why it is safe to skip.
+        if (mDragIdx >= 0) return;
         // Restore the control points verbatim (handles + smooth flag preserved), only
         // wrapping/clamping the anchor position back into range.
         mPts.clear();

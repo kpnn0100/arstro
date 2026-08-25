@@ -21,7 +21,10 @@
 #include "../../widgets/EditStackTabs.h"
 #include "../../widgets/PhotoCanvas.h"
 #include "../../core/service/Command.h"
+#include "../../core/decode/ImageDecoder.h"
 #include <chrono>
+#include <cstdio>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <utility>
@@ -88,18 +91,69 @@ namespace
             app.pointer(2, x, y, 1, now); frames(1);
         }
         void doubleClick(double x, double y) { click(x, y); click(x, y); }
-        void drag(double x0, double y0, double x1, double y1)
+        void drag(double x0, double y0, double x1, double y1) { dragMod(x0, y0, x1, y1, false); }
+        /** As `drag`, with the Alt modifier held for the WHOLE gesture — press, every move and
+         *  the release — which is what GTK reports while the key is down. Separate from `drag`
+         *  because the modifier has to be on the PRESS: CurvePanel decides there whether a
+         *  node drag pulls tangent handles or moves the node. */
+        void dragMod(double x0, double y0, double x1, double y1, bool alt)
         {
-            app.pointer(0, x0, y0, 1, now); frames(1);
+            app.pointer(0, x0, y0, 1, now, alt); frames(1);
             for (int i = 1; i <= 6; ++i)
             {
                 const double t = (double)i / 6.0;
-                app.pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 1, now);
+                app.pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 1, now, alt);
                 frames(1);
             }
-            app.pointer(2, x1, y1, 1, now); frames(1);
+            app.pointer(2, x1, y1, 1, now, alt); frames(1);
         }
         void settle(double ms) { frames((int)(ms / 16.0) + 2); }
+
+        /** Put a real (fake-decoded) photo in the editor.
+         *
+         *  Most assertions in this file are about geometry and motion, which need no pixels —
+         *  but anything that edits needs a SELECTED SLOT, because `set` is rejected outright
+         *  with "nothing selected to edit" when there is none. Three of the features tested
+         *  below (the tone curve's round trip, the split seam, the crop box) are edits, so
+         *  they were silently asserting against a service that had refused every command.
+         *
+         *  A fake decoder rather than a real file: the point is a slot with params, not pixels,
+         *  and a repo that needs a RAW file on disk to run its UI tests does not run them. */
+        bool loadFakePhoto(int images = 2)
+        {
+            struct FakeDecoder : arstro::cosmo::IImageDecoder
+            {
+                arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+                {
+                    arstro::cosmo::DecodedImage d;
+                    d.width = 96; d.height = 64;                 // 3:2, so aspect maths is testable
+                    d.rgba.assign((size_t)96 * 64 * 4, 150);
+                    d.name = path;
+                    return d;
+                }
+            };
+            svc.setDecoderFactory([] {
+                return std::unique_ptr<arstro::cosmo::IImageDecoder>(new FakeDecoder());
+            });
+            const std::string path = "/tmp/cosmo_ui_fake.cmp";
+            {
+                std::ofstream f(path, std::ios::trunc);
+                f << "cosmoworkspace=1\n";
+                for (int i = 0; i < images; ++i)
+                    f << "#image\nparent=-1\npath=/fake/ui" << i << ".raf\n";
+            }
+            std::string err;
+            if (!svc.dispatchText("project open " + path, err)) return false;
+            for (int i = 0; i < 400 && svc.model().load.active; ++i)
+            {
+                frames(1);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            settle(300.0);
+            if (svc.model().imageCount != images) return false;
+            if (svc.model().nodes.empty()) return false;
+            return svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err);
+        }
     };
 
     // ── R-G-1 / R-SCALE-2a: a scale change TRAVELS ───────────────────────────────────────
@@ -257,6 +311,84 @@ namespace
                       "the node travelled %.1f px for a %.0f px drag (a teleport would be %.0f)",
                       movedPx, kDrag, kDrag + kOff);
         check(std::fabs(movedPx - kDrag) < 1.5, msg);
+    }
+
+    // ── The reported regression: "alt+drag used to show a bezier curve, now it can't" ────
+    //
+    // `cosmo_widget_tests::curveAltDragMakesSmoothSpline` already drives CurvePanel's gesture
+    // entry directly and passes, so the widget's own arithmetic is fine. What that test cannot
+    // see is everything between the window and the widget, and everything after: the gesture
+    // router, the Command the panel emits, the service's round trip, and — the new part —
+    // R-SVC-12's re-bind, which re-seeds every panel from the model whenever the model's
+    // revision moves. A frame landing mid-drag bumps that revision, so if the handles do not
+    // survive the trip through EditParams they are wiped between one move and the next, which
+    // is exactly what "it can't any more" looks like from the outside.
+    void curveAltDragSurvivesTheRoundTripThroughTheModel()
+    {
+        std::printf("App: alt+drag pulls tangent handles, and the model keeps them\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded and selected, so `set` is not refused");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        check(tabs != nullptr, "the edit-stack tabs exist");
+        if (!tabs) return;
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 2.5, tw.f + 13.0);          // the Mixer/Curve tab
+        rig.settle(400.0);
+
+        auto *curve = const_cast<arstro::cosmo_v2::CurvePanel *>(
+            static_cast<const arstro::cosmo_v2::CurvePanel *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "CurvePanel")));
+        check(curve != nullptr, "and the tone curve is in the tree");
+        if (!curve) return;
+
+        const artboard::Transform cw = curve->worldTransform();
+        const artboard::Rect plot = curve->plotBox();
+        const double px0 = cw.e + plot.x, py0 = cw.f + plot.y;
+        const double PW = plot.w, PH = plot.h;
+
+        rig.doubleClick(px0 + PW * 0.5, py0 + PH * 0.5);
+        rig.settle(200.0);
+        check(curve->curveFor(0).size() == 3, "a double-click adds an interior node");
+        if (curve->curveFor(0).size() != 3) return;
+        check(!curve->curveFor(0)[1].smooth, "which starts as a CORNER, handles ignored");
+
+        // Alt+drag it. The node sits on the identity curve at the plot's centre.
+        const double nodeY = py0 + (1.0 - curve->curveFor(0)[1].y) * PH;
+        rig.dragMod(px0 + PW * 0.5, nodeY, px0 + PW * 0.5 + 26.0, nodeY - 18.0, /*alt=*/true);
+        rig.settle(200.0);
+
+        const arstro::CurvePoint &n = curve->curveFor(0)[1];
+        check(n.smooth, "alt+drag makes the node SMOOTH");
+        const bool pulled = (n.ox != 0.0f || n.oy != 0.0f) && (n.ix != 0.0f || n.iy != 0.0f);
+        check(pulled, "and pulls tangent handles out of it");
+        // Symmetric: the in-handle mirrors the out-handle, which is what makes it a spline
+        // rather than two independent tangents (Alt on a HANDLE is what breaks symmetry).
+        check(near(n.ix, -n.ox, 1e-4) && near(n.iy, -n.oy, 1e-4),
+              "symmetrically, so the curve through the node is smooth");
+
+        // ...and the model agrees. This is the half the widget test cannot reach: if the
+        // Command dropped the handles, or EditParams could not carry them, the panel would be
+        // re-seeded flat on the next frame and the bezier would vanish under the pointer.
+        const arstro::EditParams *p = rig.svc.session().curParams();
+        check(p != nullptr, "there is a params set to inspect");
+        bool modelHasSmooth = false;
+        if (p)
+            for (const arstro::CurvePoint &cp : p->curve)
+                if (cp.smooth && (cp.ox != 0.0f || cp.oy != 0.0f)) modelHasSmooth = true;
+        check(modelHasSmooth, "and the SERVICE's params carry the smooth node with its handles");
+
+        // Finally: a re-bind must not undo it. Force the revision to move the way an arriving
+        // frame does, let the app re-read the model, and check the handles are still there.
+        rig.settle(400.0);
+        const arstro::CurvePoint &after = curve->curveFor(0)[1];
+        check(after.smooth && (after.ox != 0.0f || after.oy != 0.0f),
+              "and a model re-bind does not flatten it again");
     }
 
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
@@ -600,6 +732,7 @@ int main()
     anIdleAppStopsAskingToBeRepainted();
     panelsFollowTheEditTarget();
     curveNodeGrabThroughTheAppDoesNotTeleport();
+    curveAltDragSurvivesTheRoundTripThroughTheModel();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

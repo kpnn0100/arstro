@@ -31,10 +31,22 @@ namespace cosmo_v2
         /** The photo's display rect in this overlay's local space (from ImageView,
          *  including the current zoom/pan — R-MASK-3). */
         void setFittedRect(const artboard::Rect &localFitted) { mFitted = localFitted; }
-        void setMask(const arstro::MaskParams &m, bool active) { mMask = m; mActive = active; }
+        void setMask(const arstro::MaskParams &m, bool active)
+        {
+            // Visibility always applies; the GEOMETRY does not while a handle is being
+            // dragged — see updateMask.
+            if (mDrag < 0) mMask = m;
+            mActive = active;
+        }
         /** Keep the overlay's working copy in sync WITHOUT changing visibility, so a
-         *  later drag writes back the current mask instead of a stale one. */
-        void updateMask(const arstro::MaskParams &m) { mMask = m; }
+         *  later drag writes back the current mask instead of a stale one.
+         *
+         *  Ignored while a handle is in flight: R-SVC-12 re-seeds every panel from the model
+         *  whenever a frame lands, which during a drag is every few tens of milliseconds, so
+         *  this would replace the geometry the user is dragging with the last value the model
+         *  happened to have. Same rule as `CurvePanel::setCurves` — a gesture in flight
+         *  outranks the model — and the same bug it was fixed for. */
+        void updateMask(const arstro::MaskParams &m) { if (mDrag < 0) mMask = m; }
         void setBrushRadius(double normRadius) { mBrushRadius = normRadius; }
         bool active() const { return mActive; }
 

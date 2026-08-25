@@ -2418,3 +2418,48 @@ writing a test aimed at the specific lifetime edge. Across all three pool defect
 same: every correctness argument was about the **work** (do all chunks run, exactly once, with
 identical results) and every real failure was about **lifetime** (who is still inside when this
 object dies). A pool needs a test per lifetime edge, not per work property.
+
+### DR-CURVE-3 A gesture in flight outranks the model (D-50)
+Reported as "alt+drag used to show a bezier curve, now it can't". It was a real regression, and it
+was not in the curve editor: `cosmo_widget_tests::curveAltDragMakesSmoothSpline` drives
+`CurvePanel::handleGesture` directly and had been passing the whole time.
+
+**The mechanism.** Alt+drag is a two-event gesture with state in between. On `Down`,
+`CurvePanel` sets `smooth = true` on the picked node and remembers `mDragKind = 3`; it does **not**
+emit anything, because nothing has moved yet. The handles are then written on the first `Drag`.
+
+**R-SVC-12 re-seeds every panel from the view-model whenever the model's revision moves** — and a
+revision moves every time a frame lands, which during editing is every few tens of milliseconds. So
+`RightColumn::syncToSlot` → `CurvePanel::setCurves` ran *between the Down and the Drag of one
+gesture*, carrying a model that had never heard of the smooth flag, and flattened the node back to a
+corner. The Drag then wrote `ix/iy/ox/oy` onto a point whose `smooth` is false — which
+`curve::sampleSeg` ignores by definition — so the bezier the user was dragging out never appeared.
+
+That also explains why it "used to" work: with no photo loaded there are no frames, so no re-seed,
+so it works. The failing test in this file needed a **loaded photo** before it could reproduce at
+all, which is why the Rig gained `loadFakePhoto()`.
+
+**As built:** `setCurves` returns early while `mDragIdx >= 0`. The rule is general and is stated
+where it is enforced —
+
+> **State the user is actively editing may not be overwritten by a refresh.**
+
+— which is the same rule R-VIEW-1a states for pixels ("never write into a layer that is on screen")
+and D-34 states for slider values ("refresh before emit"). Skipping is safe: an undo, a preset or a
+selection change cannot arrive while a button is held, and the re-seed after the release is
+unconditional.
+
+**Applied to every editor with the same shape**, because one fix at one site would have left the
+others waiting to be reported:
+- `CurvePanel::setCurves` — the reported one;
+- `HueCurveEditor::setPoints` — the mixer curves, identical alt-on-press mechanism;
+- `MaskOverlay::setMask` / `updateMask` — geometry only; **visibility still applies**, because a
+  mask being deselected mid-drag must still disappear.
+
+**Guarded by** `cosmo_ui_tests::curveAltDragSurvivesTheRoundTripThroughTheModel`, which drives
+`App::pointer` with the Alt modifier held for the whole gesture — press, every move and the release,
+which is what GTK reports — and then asserts what the widget test cannot see: that the node is
+smooth, that the handles are **symmetric** (an alt drag on a *handle* is what breaks symmetry), that
+`CosmoService`'s own params carry the smooth node with its offsets, and that a further re-bind does
+not flatten it again. It fails on all four counts against the pre-fix code, and only reproduces with
+a photo loaded.

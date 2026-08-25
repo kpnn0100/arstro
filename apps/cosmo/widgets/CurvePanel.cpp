@@ -89,6 +89,26 @@ namespace cosmo_v2
 
     void CurvePanel::setCurves(const Points &master, const std::array<Points, 3> &channels)
     {
+        // A GESTURE IN FLIGHT OUTRANKS THE MODEL.
+        //
+        // R-SVC-12 re-seeds every panel from the view-model whenever the model's revision
+        // moves, and during a drag a frame lands every few tens of milliseconds — so this
+        // runs *between* the Down and the Drag of the same gesture. Alt+drag sets `smooth`
+        // on the press and only emits on the first move, so the re-seed arrived carrying a
+        // model that had never heard of it and flattened the node back to a corner. The
+        // handles were then written to a point the sampler ignores, and the bezier the user
+        // was dragging out simply never appeared.
+        //
+        // The rule is general, and it is the same one R-VIEW-1a states for pixels and D-34
+        // for slider values: state the user is actively editing may not be overwritten by a
+        // refresh. It is safe to skip — an undo, a preset or a selection change cannot
+        // happen while a button is held, and the next re-seed after the release is
+        // unconditional.
+        if (mDragIdx >= 0)
+        {
+            WLOG("curve: setCurves IGNORED (drag in flight on node %d)", mDragIdx);
+            return;
+        }
         // Logged because this is the panel being RE-SEEDED from the model: if the curve the
         // user is looking at is ever replaced by something else it happens on this line, and a
         // trace has to show what arrived and what it displaced (D-33's territory).
