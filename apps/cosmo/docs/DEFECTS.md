@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-51**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-52**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,52 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-51 — With a fixed ratio, dragging a crop corner off the photo changed the ratio
+- **Area:** design / widgets · **Status:** **Fixed** · **Severity:** S2 · **Introduced by me**, in `a594b8c`
+- **Found:** 2026-08-25, reported by the user: *"when use fixed ratio, I drag the corner out of image
+  region, it result in the ratio got change due to height still expand but width is limited."*
+- **Reproduce:** lock any ratio, then drag a corner well past the edge of the photo. The shape drifts,
+  and at any real overshoot the box becomes the **whole frame** — ratio 1:1 whatever was asked for.
+  As a test: `cosmo_widget_tests::cropLockedRatioSurvivesADragOutsideTheImage` (11 handles × 3
+  assertions) and `cosmo_ui_tests::cropLockedRatioHoldsWhenDraggedOffThePhoto`.
+- **Actual, pre-fix** — 10 of the 11 handles collapsed the box to `1.0000x1.0000`:
+  ```
+  bottom-right, far past both edges: ratio 1.00000 (wanted 1.77778), box 0.0000,0.0000 1.0000x1.0000
+  right edge,   far past the right:  ratio 1.00000 (wanted 1.77778), box 0.0000,0.0000 1.0000x1.0000
+  ...and through the real app, a 1:1 lock dragged 900 px off the photo: ratio 1.2500
+  ```
+  The user's description is the mild form of the same thing: one axis saturates against the frame
+  while the other keeps following the pointer.
+- **Cause:** `resizeBy` derived a ratio-correct `(w, h)` pair and then handed it to
+  `clampToFrame`, which clamps `w` and `h` **independently**:
+  ```cpp
+  rect.w = std::clamp(rect.w, m, 1.0);
+  rect.h = std::clamp(rect.h, m, 1.0);
+  ```
+  Two correct-in-isolation pieces: the ratio maths was right, and a per-axis clamp is right for a
+  FREE crop. Composing them is what was wrong — the clamp has no idea it is holding a shape.
+- **Judgement:** defect, mine, and a gap in my own tests rather than in my reasoning about the
+  feature. `cropMoveAndResizeRespectTheLock` checked that a locked resize keeps the ratio — and
+  dragged **inside** the frame every time, so the clamp it would have to survive never fired. The
+  lesson is narrow and reusable: *a constraint has to be tested at the boundary that competes with
+  it.* A ratio lock and a frame clamp are two constraints on one rectangle, and the only interesting
+  case is where they disagree.
+- **Fixed:** `resizeBy`'s locked branch is rewritten around an explicit **anchor** — the handle
+  opposite the one being dragged, which must not move — with one `fitKeepingRatio()` per case.
+  `fitKeepingRatio` scales **both** axes by a single factor, so the shape cannot drift, and the
+  minimum size is applied as a pair for the same reason. The final placement uses the new
+  `clampPositionOnly`, which slides the box without touching its size. `clampToFrame` now carries a
+  warning naming this defect, because it remains correct for the free path and dangerous for the
+  locked one. `applyRatio` was moved onto the same pair.
+  * A corner grows away from the opposite corner in both axes.
+  * An **edge** grows along its own axis from the opposite edge, while the other axis grows about
+    the box's centre line — an edge drag must not appear to slide the box sideways.
+- **Guarded by** both tests above, each verified to fail against the pre-fix clamp (11 failures in
+  the unit sweep; `ratio is 1.2500` in the app). They cover all four corners and all four edges,
+  dragged past every edge in both directions, plus a **tall** ratio so the fix cannot be "whichever
+  axis happens to be the wide one", and they assert the anchor stays put as well as the shape.
+
 
 ### D-50 — A model re-seed landing mid-gesture flattened the curve node being alt-dragged
 - **Area:** design / widgets · **Status:** **Fixed** · **Severity:** S2

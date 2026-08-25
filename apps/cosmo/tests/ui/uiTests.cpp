@@ -611,6 +611,84 @@ namespace
         check(near(f1.h, f0.h, 1e-4), "and the other axis is left alone");
     }
 
+    // ── D-51, through the real app: drag a locked corner OFF the photo ───────────────────
+    //
+    // The geometry is unit-tested, but the report was about the live window, and the path from
+    // a pointer past the canvas edge to a normalised coordinate goes through the fitted rect
+    // and the gesture router. So this drags well outside and asserts the shape survived.
+    void cropLockedRatioHoldsWhenDraggedOffThePhoto()
+    {
+        std::printf("App: a locked ratio holds when the corner is dragged off the photo (D-51)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        auto *canvas = const_cast<arstro::cosmo_v2::PhotoCanvas *>(
+            static_cast<const arstro::cosmo_v2::PhotoCanvas *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas")));
+        const artboard::Segment *tabs = arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs");
+        if (!canvas || !tabs) { check(false, "canvas and tabs exist"); return; }
+        const artboard::Transform tw = tabs->worldTransform();
+        rig.click(tw.e + tabs->width.value() / 5.0 * 4.5, tw.f + 13.0);   // Xform
+        rig.settle(400.0);
+
+        auto *xf = const_cast<arstro::cosmo_v2::XformPanel *>(
+            static_cast<const arstro::cosmo_v2::XformPanel *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "XformPanel")));
+        if (!xf) { check(false, "the Xform panel exists"); return; }
+        const artboard::Transform xw = xf->worldTransform();
+
+        // 1:1 — a square is the easiest shape to see break, and the reported symptom was one
+        // axis running while the other stopped.
+        const artboard::Rect chip = xf->aspectChipRect(1);
+        rig.click(xw.e + chip.x + chip.w * 0.5, xw.f + chip.y + chip.h * 0.5);
+        rig.settle(400.0);
+        check(near(xf->lockedRatio(), 1.0, 1e-6), "1:1 is locked");
+
+        auto overlay = canvas->cropOverlay();
+        const artboard::Transform cw = canvas->worldTransform();
+        const artboard::Rect fitted = canvas->photoFittedRect();
+        auto pxOf = [&](double nx, double ny) {
+            return artboard::Point{cw.e + fitted.x + nx * fitted.w, cw.f + fitted.y + ny * fitted.h};
+        };
+        // Shrink it first, so there is somewhere to grow FROM and the corner is not already on
+        // the frame edge.
+        {
+            const artboard::Rect r = overlay->cropRect();
+            const artboard::Point br = pxOf(r.x + r.w, r.y + r.h);
+            rig.drag(br.x - 4.0, br.y - 4.0, pxOf(r.x + r.w * 0.5, r.y + r.h * 0.5).x,
+                     pxOf(r.x + r.w * 0.5, r.y + r.h * 0.5).y);
+            rig.settle(200.0);
+        }
+        const artboard::Rect before = overlay->cropRect();
+        const double pxRatioOf = [&](const artboard::Rect &r) {
+            return (r.w * 96.0) / (r.h * 64.0);
+        }(before);
+        char msg[224];
+        std::snprintf(msg, sizeof(msg), "the box starts square in pixels: %.4f", pxRatioOf);
+        check(near(pxRatioOf, 1.0, 2e-2), msg);
+
+        // Now drag the bottom-right corner FAR past the bottom-right of the photo — hundreds of
+        // px outside the canvas, which is what a user does when they want "as big as possible".
+        const artboard::Point br = pxOf(before.x + before.w, before.y + before.h);
+        rig.drag(br.x - 4.0, br.y - 4.0, br.x + 900.0, br.y + 700.0);
+        rig.settle(300.0);
+
+        const artboard::Rect after = overlay->cropRect();
+        const double ratioAfter = (after.w * 96.0) / (after.h * 64.0);
+        std::snprintf(msg, sizeof(msg),
+                      "after dragging %.0f px off the photo the ratio is %.4f (was 1.0), box %.3f,%.3f %.3fx%.3f",
+                      900.0, ratioAfter, after.x, after.y, after.w, after.h);
+        check(near(ratioAfter, 1.0, 2e-2), msg);
+        check(after.w > before.w + 1e-4, "and it did grow");
+        check(after.x + after.w <= 1.0 + 1e-6 && after.y + after.h <= 1.0 + 1e-6,
+              "and stayed inside the photo");
+        check(near(after.x, before.x, 1e-4) && near(after.y, before.y, 1e-4),
+              "and the un-dragged corner did not move");
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -955,6 +1033,7 @@ int main()
     curveAltDragSurvivesTheRoundTripThroughTheModel();
     splitSeamCanBeDraggedAndRecentres();
     cropBoxMovesTheRegionAndKeepsALockedRatio();
+    cropLockedRatioHoldsWhenDraggedOffThePhoto();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

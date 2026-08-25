@@ -41,7 +41,12 @@ namespace crop
 
     /** Clamp `rect` (normalised) into the unit square, keeping at least `minSize()` in each
      *  axis. Position is adjusted before size: a box dragged past the edge should slide back
-     *  in, not shrink (R-CROP-6). */
+     *  in, not shrink (R-CROP-6).
+     *
+     *  **Never use this on a ratio-locked box.** It clamps `w` and `h` INDEPENDENTLY, so
+     *  whichever axis overflows is capped on its own and the shape changes — which is exactly
+     *  D-51: dragging a locked corner out of the photo collapsed the box to the full frame.
+     *  `clampPositionOnly` and `fitKeepingRatio` are the ratio-safe pair. */
     inline artboard::Rect clampToFrame(artboard::Rect rect)
     {
         const double m = minSize();
@@ -50,6 +55,47 @@ namespace crop
         rect.x = std::clamp(rect.x, 0.0, 1.0 - rect.w);
         rect.y = std::clamp(rect.y, 0.0, 1.0 - rect.h);
         return rect;
+    }
+
+    /** Slide `rect` inside the frame WITHOUT touching its size — the only clamp that is safe
+     *  on a shape that must be preserved. */
+    inline artboard::Rect clampPositionOnly(artboard::Rect rect)
+    {
+        rect.x = std::clamp(rect.x, 0.0, std::max(0.0, 1.0 - rect.w));
+        rect.y = std::clamp(rect.y, 0.0, std::max(0.0, 1.0 - rect.h));
+        return rect;
+    }
+
+    /** Scale `w`/`h` by ONE factor so a box of ratio `nr` anchored per `maxW`/`maxH` fits, and
+     *  enforce the minimum without breaking the shape.
+     *
+     *  This is the whole of D-51's fix. The failure it replaces was clamping the two axes
+     *  separately: `w` hit the frame and stopped while `h` kept following the pointer, so the
+     *  ratio drifted — "height still expand but width is limited" — and at a large overshoot
+     *  both axes saturated at 1.0 and the box became a square.
+     *
+     *  `maxW`/`maxH` are how much room there is in the direction the box is growing, which the
+     *  caller knows because it knows which handle is anchored where. */
+    inline void fitKeepingRatio(double &w, double &h, double nr, double maxW, double maxH)
+    {
+        const double m = minSize();
+        if (nr <= 0.0) return;
+        // Grow to the minimum first, as a pair — a floor applied to one axis alone is the same
+        // bug in miniature.
+        if (w < m) { w = m; h = w / nr; }
+        if (h < m) { h = m; w = h * nr; }
+        // Then shrink to fit, also as a pair. `s` is one factor for both, which is what makes
+        // the shape survive.
+        double s = 1.0;
+        if (maxW > 0.0 && w > maxW) s = std::min(s, maxW / w);
+        if (maxH > 0.0 && h > maxH) s = std::min(s, maxH / h);
+        if (s < 1.0) { w *= s; h *= s; }
+        // The frame itself is the last word: a ratio so extreme that the minimum cannot fit
+        // gets the biggest box that does, still of the right shape.
+        double s2 = 1.0;
+        if (w > 1.0) s2 = std::min(s2, 1.0 / w);
+        if (h > 1.0) s2 = std::min(s2, 1.0 / h);
+        if (s2 < 1.0) { w *= s2; h *= s2; }
     }
 
     /** Reshape `rect` to the normalised ratio `nr` (w/h), keeping its CENTRE and staying inside
@@ -64,15 +110,14 @@ namespace crop
     {
         if (nr <= 0.0) return clampToFrame(rect);   // free: shape is whatever it is
         const double cx = rect.x + rect.w * 0.5, cy = rect.y + rect.h * 0.5;
-        // Candidate A: keep the width, derive the height. Candidate B: the other way round.
+        // Candidate: keep the width, derive the height — unless that is absurdly tall for this
+        // box, in which case fit by height instead so the result stays inside what the user had.
         double w = rect.w, h = rect.w / nr;
-        if (h > 1.0 || h > rect.h * 4.0)   // absurdly tall for this box: fit by height instead
-        { h = rect.h; w = rect.h * nr; }
-        // Whichever we chose, it must fit in the frame; scale both down together if not.
-        const double over = std::max(w > 1.0 ? w : 1.0, h > 1.0 ? h : 1.0);
-        w /= over; h /= over;
-        artboard::Rect out{cx - w * 0.5, cy - h * 0.5, w, h};
-        return clampToFrame(out);
+        if (h > 1.0 || h > rect.h * 4.0) { h = rect.h; w = rect.h * nr; }
+        // Grown about the centre, so the room available is twice the distance to the nearer
+        // edge on each axis. Scaled as a PAIR (D-51) — never clamped per axis.
+        fitKeepingRatio(w, h, nr, 2.0 * std::min(cx, 1.0 - cx), 2.0 * std::min(cy, 1.0 - cy));
+        return clampPositionOnly(artboard::Rect{cx - w * 0.5, cy - h * 0.5, w, h});
     }
 
     /** Which part of the box a point is on. Corners take priority over edges, because a corner
@@ -117,44 +162,81 @@ namespace crop
     inline artboard::Rect resizeBy(artboard::Rect rect, Part part, double nx, double ny, double nr)
     {
         const double m = minSize();
-        double l = rect.x, t = rect.y, r = rect.x + rect.w, b = rect.y + rect.h;
+        const double l0 = rect.x, t0 = rect.y, r0 = rect.x + rect.w, b0 = rect.y + rect.h;
+
+        // ── FREE: each axis is independent, which is what free means. ────────────────────
+        if (nr <= 0.0)
+        {
+            double l = l0, t = t0, r = r0, b = b0;
+            switch (part)
+            {
+            case Part::Left:        l = std::min(nx, r - m); break;
+            case Part::Right:       r = std::max(nx, l + m); break;
+            case Part::Top:         t = std::min(ny, b - m); break;
+            case Part::Bottom:      b = std::max(ny, t + m); break;
+            case Part::TopLeft:     l = std::min(nx, r - m); t = std::min(ny, b - m); break;
+            case Part::TopRight:    r = std::max(nx, l + m); t = std::min(ny, b - m); break;
+            case Part::BottomRight: r = std::max(nx, l + m); b = std::max(ny, t + m); break;
+            case Part::BottomLeft:  l = std::min(nx, r - m); b = std::max(ny, t + m); break;
+            default: return rect;
+            }
+            return clampToFrame(artboard::Rect{l, t, r - l, b - t});
+        }
+
+        // ── LOCKED: anchored, and clamped as a PAIR. ─────────────────────────────────────
+        //
+        // Written around an explicit ANCHOR — the handle opposite the one being dragged, which
+        // must not move — and one `fitKeepingRatio` call per case. The version this replaces
+        // derived a ratio-correct pair and then handed it to `clampToFrame`, which clamps the
+        // axes SEPARATELY: dragging a locked corner out of the photo capped the width, let the
+        // height keep following the pointer, and at any real overshoot saturated both at 1.0
+        // and turned the box into a square (D-51).
+        //
+        // A corner grows away from the opposite corner in both axes. An EDGE grows along its
+        // own axis from the opposite edge, and the other axis grows about the box's centre line
+        // — an edge drag must not appear to slide the box sideways.
+        const double cx0 = (l0 + r0) * 0.5, cy0 = (t0 + b0) * 0.5;
+        const double roomAboutCx = 2.0 * std::min(cx0, 1.0 - cx0);
+        const double roomAboutCy = 2.0 * std::min(cy0, 1.0 - cy0);
+        double w = 0.0, h = 0.0;
+
         switch (part)
         {
-        case Part::Left:        l = std::min(nx, r - m); break;
-        case Part::Right:       r = std::max(nx, l + m); break;
-        case Part::Top:         t = std::min(ny, b - m); break;
-        case Part::Bottom:      b = std::max(ny, t + m); break;
-        case Part::TopLeft:     l = std::min(nx, r - m); t = std::min(ny, b - m); break;
-        case Part::TopRight:    r = std::max(nx, l + m); t = std::min(ny, b - m); break;
-        case Part::BottomRight: r = std::max(nx, l + m); b = std::max(ny, t + m); break;
-        case Part::BottomLeft:  l = std::min(nx, r - m); b = std::max(ny, t + m); break;
-        default: return rect;
+        case Part::BottomRight:
+            w = nx - l0;  h = w / nr;
+            fitKeepingRatio(w, h, nr, 1.0 - l0, 1.0 - t0);
+            return clampPositionOnly(artboard::Rect{l0, t0, w, h});
+        case Part::TopLeft:
+            w = r0 - nx;  h = w / nr;
+            fitKeepingRatio(w, h, nr, r0, b0);
+            return clampPositionOnly(artboard::Rect{r0 - w, b0 - h, w, h});
+        case Part::TopRight:
+            w = nx - l0;  h = w / nr;
+            fitKeepingRatio(w, h, nr, 1.0 - l0, b0);
+            return clampPositionOnly(artboard::Rect{l0, b0 - h, w, h});
+        case Part::BottomLeft:
+            w = r0 - nx;  h = w / nr;
+            fitKeepingRatio(w, h, nr, r0, 1.0 - t0);
+            return clampPositionOnly(artboard::Rect{r0 - w, t0, w, h});
+        case Part::Right:
+            w = nx - l0;  h = w / nr;
+            fitKeepingRatio(w, h, nr, 1.0 - l0, roomAboutCy);
+            return clampPositionOnly(artboard::Rect{l0, cy0 - h * 0.5, w, h});
+        case Part::Left:
+            w = r0 - nx;  h = w / nr;
+            fitKeepingRatio(w, h, nr, r0, roomAboutCy);
+            return clampPositionOnly(artboard::Rect{r0 - w, cy0 - h * 0.5, w, h});
+        case Part::Bottom:
+            h = ny - t0;  w = h * nr;
+            fitKeepingRatio(w, h, nr, roomAboutCx, 1.0 - t0);
+            return clampPositionOnly(artboard::Rect{cx0 - w * 0.5, t0, w, h});
+        case Part::Top:
+            h = b0 - ny;  w = h * nr;
+            fitKeepingRatio(w, h, nr, roomAboutCx, b0);
+            return clampPositionOnly(artboard::Rect{cx0 - w * 0.5, b0 - h, w, h});
+        default:
+            return rect;
         }
-        artboard::Rect out{l, t, r - l, b - t};
-        if (nr > 0.0)
-        {
-            // Keep the ratio by driving the SHORTER-changing axis from the other, anchored on
-            // the corner/edge that did not move — so the handle under the pointer stays under
-            // the pointer and the opposite side stays put.
-            const bool horizontalDrag = part == Part::Left || part == Part::Right;
-            const bool verticalDrag = part == Part::Top || part == Part::Bottom;
-            double w = out.w, h = out.h;
-            if (horizontalDrag)      h = w / nr;
-            else if (verticalDrag)   w = h * nr;
-            else                     h = w / nr;   // a corner: width leads, height follows
-            if (h < m) { h = m; w = h * nr; }
-            if (w < m) { w = m; h = w / nr; }
-            // Re-anchor: whichever side was dragged keeps its new position.
-            const double ax = (part == Part::Left || part == Part::TopLeft || part == Part::BottomLeft)
-                                  ? (out.x + out.w) - w : out.x;
-            // For a horizontal edge drag the height changed, so grow/shrink about the centre
-            // line — an edge drag should not appear to move the box sideways.
-            const double ay = verticalDrag || part == Part::TopLeft || part == Part::TopRight
-                                  ? (out.y + out.h) - h
-                                  : (horizontalDrag ? out.y + (out.h - h) * 0.5 : out.y);
-            out = artboard::Rect{ax, ay, w, h};
-        }
-        return clampToFrame(out);
     }
 
     /** Move `rect` (normalised) so its top-left is (nx, ny), clamped inside the frame.

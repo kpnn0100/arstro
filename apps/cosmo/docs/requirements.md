@@ -2625,3 +2625,58 @@ only.
 
 **Looked at:** `editor-crop-16x9` — the photo drawn uncropped, the 16:9 region bright-bordered inside
 it, the discarded strips visibly dimmed, and the 16:9 chip lit in the panel.
+
+### DR-CROP-3a A locked ratio survives the frame clamp (R-CROP-3, R-CROP-6, D-51)
+Reported: *"when use fixed ratio, I drag the corner out of image region, it result in the ratio got
+change due to height still expand but width is limited."*
+
+`resizeBy` derived a ratio-correct `(w, h)` and then called `clampToFrame`, which clamps the two axes
+**independently** — correct for a free crop, fatal for a locked one. Whichever axis reached the frame
+first stopped while the other kept following the pointer, and at any real overshoot both saturated at
+1.0 and the box became the whole frame: **10 of 11 handles produced `1.0000x1.0000`**, i.e. 1:1
+whatever ratio was asked for.
+
+Neither piece was wrong on its own. The ratio maths was right and the per-axis clamp is right where
+it belongs; **composing them was the defect**, because a clamp does not know it is holding a shape.
+
+**As built.** The locked branch of `resizeBy` is written around an explicit **anchor** — the handle
+opposite the one being dragged, which by definition must not move — with one `fitKeepingRatio()` call
+per case:
+
+| handle | anchor | room to grow |
+|---|---|---|
+| a corner | the opposite corner | to the frame in both axes |
+| a vertical edge (Left/Right) | the opposite edge | its own axis to the frame; the other about the box's centre line |
+| a horizontal edge (Top/Bottom) | the opposite edge | mirror of the above |
+
+`fitKeepingRatio` scales **both** axes by one factor, so the shape cannot drift, and applies the
+minimum size as a pair for the same reason. Placement then uses the new `clampPositionOnly`, which
+slides the box without touching its size. `clampToFrame` keeps its per-axis behaviour — it is what the
+free path wants — and now carries a comment naming this defect so the next caller does not repeat it.
+An edge drag growing the *other* axis about the centre line is deliberate: an edge drag must not
+appear to slide the box sideways.
+
+**Measured, post-fix** — every handle dragged well past every edge, ratio exact to 1e-6:
+
+```
+bottom-right, far past both edges: 1.77778 (wanted 1.77778), box 0.3000,0.3000 0.7000x0.3938
+right edge,   far past the right:  1.77778 (wanted 1.77778), box 0.3000,0.2156 0.7000x0.3937
+bottom edge,  far past the bottom: 1.77778 (wanted 1.77778), box 0.0000,0.3000 1.0000x0.5625
+through the app, 1:1 dragged 900 px off the photo: 1.0000, box 0.167,0.000 0.667x1.000
+```
+
+That last line is the largest square that fits a 96×64 photo — 64×64 px — with the un-dragged corner
+where it was.
+
+**Guarded by** `cropLockedRatioSurvivesADragOutsideTheImage` (all four corners and all four edges,
+past every edge in both directions, plus a **tall** ratio so the fix cannot be "whichever axis happens
+to be the wide one", asserting shape, containment, non-degeneracy and that the anchor stays put) and
+`cropLockedRatioHoldsWhenDraggedOffThePhoto` (the same through `App::pointer`, since the report was
+about the live window and the path from a pointer outside the canvas to a normalised coordinate runs
+through the fitted rect and the gesture router). Both fail against the pre-fix clamp.
+
+**Why the earlier test missed it**, recorded because it generalises: `cropMoveAndResizeRespectTheLock`
+did assert that a locked resize keeps the ratio — and dragged **inside** the frame every time, so the
+clamp it would have to survive never fired. *A constraint has to be tested at the boundary that
+competes with it.* A ratio lock and a frame clamp are two constraints on one rectangle; the only
+interesting case is where they disagree.

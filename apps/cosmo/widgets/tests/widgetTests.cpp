@@ -1282,6 +1282,72 @@ namespace
         check(free.w > start.w, "and the dragged one moves");
     }
 
+    /** The reported bug: with a fixed ratio, dragging a corner OUT OF THE IMAGE changed the
+     *  ratio — "height still expand but width is limited". Every handle, dragged well past
+     *  every edge, must keep the shape exactly and stay inside the frame. */
+    void cropLockedRatioSurvivesADragOutsideTheImage()
+    {
+        using namespace arstro::cosmo_v2;
+        std::printf("Crop: a locked ratio survives a drag outside the image (D-51)\n");
+
+        const double nr = 16.0 / 9.0;              // normalised, for a square photo
+        const artboard::Rect start{0.30, 0.30, 0.40, 0.40 / nr};
+        struct Case { const char *name; crop::Part part; double nx, ny; };
+        const Case cases[] = {
+            {"bottom-right, far past both edges", crop::Part::BottomRight,  3.0,  3.0},
+            {"bottom-right, far past the right",  crop::Part::BottomRight,  3.0,  0.6},
+            {"bottom-right, far past the bottom", crop::Part::BottomRight,  0.6,  3.0},
+            {"top-left, far past both edges",     crop::Part::TopLeft,     -2.0, -2.0},
+            {"top-left, far past the left",       crop::Part::TopLeft,     -2.0,  0.1},
+            {"top-right, far past both",          crop::Part::TopRight,     3.0, -2.0},
+            {"bottom-left, far past both",        crop::Part::BottomLeft,  -2.0,  3.0},
+            {"right edge, far past the right",    crop::Part::Right,        4.0,  0.5},
+            {"left edge, far past the left",      crop::Part::Left,        -4.0,  0.5},
+            {"top edge, far past the top",        crop::Part::Top,          0.5, -4.0},
+            {"bottom edge, far past the bottom",  crop::Part::Bottom,       0.5,  4.0},
+        };
+        for (const Case &c : cases)
+        {
+            const artboard::Rect out = crop::resizeBy(start, c.part, c.nx, c.ny, nr);
+            char msg[224];
+            const double got = out.h > 0.0 ? out.w / out.h : 0.0;
+            std::snprintf(msg, sizeof(msg), "%s: ratio %.5f (wanted %.5f), box %.4f,%.4f %.4fx%.4f",
+                          c.name, got, nr, out.x, out.y, out.w, out.h);
+            check(near(got, nr, 1e-6), msg);
+            std::snprintf(msg, sizeof(msg), "%s: stays inside the photo", c.name);
+            check(out.x >= -1e-9 && out.y >= -1e-9 &&
+                      out.x + out.w <= 1.0 + 1e-9 && out.y + out.h <= 1.0 + 1e-9, msg);
+            std::snprintf(msg, sizeof(msg), "%s: and is not degenerate", c.name);
+            check(out.w >= crop::minSize() - 1e-9 && out.h >= crop::minSize() - 1e-9, msg);
+        }
+
+        // ...and the ANCHOR — the corner that was not dragged — must not move. Dragging the
+        // bottom-right out of the frame may not drag the top-left with it.
+        {
+            const artboard::Rect out = crop::resizeBy(start, crop::Part::BottomRight, 3.0, 3.0, nr);
+            check(near(out.x, start.x, 1e-9) && near(out.y, start.y, 1e-9),
+                  "the un-dragged corner stays put when the drag leaves the frame");
+        }
+        {
+            const artboard::Rect out = crop::resizeBy(start, crop::Part::TopLeft, -2.0, -2.0, nr);
+            check(near(out.x + out.w, start.x + start.w, 1e-9) &&
+                      near(out.y + out.h, start.y + start.h, 1e-9),
+                  "and the opposite corner stays put dragging the other way");
+        }
+
+        // A TALL ratio too, so the fix cannot be "whichever axis happens to be the wide one".
+        {
+            const double tall = 9.0 / 16.0;
+            const artboard::Rect s2{0.4, 0.4, 0.2, 0.2 / tall};
+            const artboard::Rect out = crop::resizeBy(s2, crop::Part::BottomRight, 5.0, 5.0, tall);
+            char msg[160];
+            std::snprintf(msg, sizeof(msg), "a tall ratio holds too: %.5f (wanted %.5f)",
+                          out.w / out.h, tall);
+            check(near(out.w / out.h, tall, 1e-6), msg);
+            check(out.y + out.h <= 1.0 + 1e-9, "and it is the HEIGHT that binds for a tall box");
+        }
+    }
+
     void cropPartHitTestPrefersCornersOverEdges()
     {
         using namespace arstro::cosmo_v2;
@@ -1325,6 +1391,7 @@ int main()
     cropRatioFitsTheExistingCropRatherThanResetting();
     cropNeverGoesDegenerateOrOffFrame();
     cropMoveAndResizeRespectTheLock();
+    cropLockedRatioSurvivesADragOutsideTheImage();
     cropPartHitTestPrefersCornersOverEdges();
 
     exportTreeStartsFullySelected();
