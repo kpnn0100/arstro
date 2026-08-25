@@ -689,6 +689,101 @@ namespace
               "and the un-dragged corner did not move");
     }
 
+    // ── R-CROP-7 / R-G-1: entering and leaving the crop ZOOMS, it does not cut ───────────
+    //
+    // Reported as "choose another tab make it suddenly crop and when click back to xform it
+    // suddenly expand". The assertion that matters is not "it arrives" — a snap arrives too,
+    // sooner. It is that there exist frames where the RENDERED FRAMING is strictly between the
+    // crop and the whole photo, which is R-G-1's own compliance clause.
+    void leavingAndEnteringTheCropZoomsRatherThanCutting()
+    {
+        std::printf("App: entering/leaving the crop zooms, it does not cut (R-CROP-7, D-52)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs = arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs");
+        auto *canvas = const_cast<arstro::cosmo_v2::PhotoCanvas *>(
+            static_cast<const arstro::cosmo_v2::PhotoCanvas *>(
+                arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas")));
+        if (!tabs || !canvas) { check(false, "the tabs and canvas exist"); return; }
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        auto clickTab = [&](int i) { rig.click(tw.e + tabW * (i + 0.5), tw.f + 13.0); };
+
+        // Xform on, and a real crop set, so there is something to zoom BETWEEN. Without a crop
+        // the framing never changes and the test would pass on a snap.
+        clickTab(4);
+        rig.settle(500.0);
+        std::string err;
+        check(rig.svc.dispatchText("set crop=0.25,0.25,0.5,0.5", err), "a crop is applied");
+        rig.settle(400.0);
+        const arstro::EditParams *p = rig.svc.session().curParams();
+        check(p != nullptr && near(p->cropW, 0.5, 1e-4), "and the slot really has it");
+
+        auto framingNow = [&] { return rig.svc.session().cropPreviewAmount(); };
+        check(near(framingNow(), 1.0, 1e-3),
+              "with Xform open the photo is rendered UNCROPPED (amount 1)");
+
+        // ── LEAVE the tab: the framing must travel from 1 back to 0, not jump. ──
+        clickTab(0);
+        int between = 0, frames = 0;
+        double last = framingNow();
+        bool monotonic = true;
+        for (int i = 0; i < 40; ++i)
+        {
+            rig.frame();
+            ++frames;
+            const double t = framingNow();
+            if (t > 1e-3 && t < 1.0 - 1e-3) ++between;
+            if (t > last + 1e-6) monotonic = false;    // it must only ever decrease
+            last = t;
+            if (t <= 1e-6) break;
+        }
+        char msg[192];
+        std::snprintf(msg, sizeof(msg), "leaving Xform travelled through %d intermediate framings",
+                      between);
+        check(between >= 3, msg);
+        check(monotonic, "and only ever in one direction");
+        rig.settle(500.0);
+        check(near(framingNow(), 0.0, 1e-3), "landing on the real crop");
+
+        // ── COME BACK: the same in reverse. ──
+        clickTab(4);
+        between = 0;
+        last = framingNow();
+        monotonic = true;
+        for (int i = 0; i < 40; ++i)
+        {
+            rig.frame();
+            const double t = framingNow();
+            if (t > 1e-3 && t < 1.0 - 1e-3) ++between;
+            if (t < last - 1e-6) monotonic = false;
+            last = t;
+            if (t >= 1.0 - 1e-6) break;
+        }
+        std::snprintf(msg, sizeof(msg), "returning travelled through %d intermediate framings",
+                      between);
+        check(between >= 3, msg);
+        check(monotonic, "and only ever in one direction");
+        rig.settle(500.0);
+        check(near(framingNow(), 1.0, 1e-3), "landing on the whole photo again");
+
+        // ── The box converges onto the crop rather than sitting in the wrong place. ──
+        // Mid-transition the box covers MORE of the photo than at rest, because the photo is
+        // still zoomed in; at rest it is exactly the crop.
+        auto overlay = canvas->cropOverlay();
+        check(overlay->settled(), "at rest the overlay reports a settled framing");
+        clickTab(0);
+        rig.frames(3);
+        check(!overlay->settled(), "and not while the zoom is running");
+        check(overlay->partAt(artboard::Point{10.0, 10.0}) == arstro::cosmo_v2::crop::Part::None,
+              "so it refuses gestures mid-flight, when the mapping is moving");
+        rig.settle(600.0);
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -1034,6 +1129,7 @@ int main()
     splitSeamCanBeDraggedAndRecentres();
     cropBoxMovesTheRegionAndKeepsALockedRatio();
     cropLockedRatioHoldsWhenDraggedOffThePhoto();
+    leavingAndEnteringTheCropZoomsRatherThanCutting();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

@@ -69,6 +69,13 @@ namespace cosmo_v2
         std::shared_ptr<artboard::ImageView> beforeView() { return mBeforeView; }  // left-half split image
         std::shared_ptr<MaskOverlay> maskOverlay() { return mMaskOverlay; }        // on-photo mask editor
         std::shared_ptr<CropOverlay> cropOverlay() { return mCropOverlay; }        // on-photo crop box (R-CROP-5)
+        /** While set, an arriving render is taken IMMEDIATELY instead of cross-dissolving
+         *  (R-CROP-7). R-VIEW-1 dissolves because a CONTENT change must not pop; consecutive
+         *  frames of a zoom are not a content change, and dissolving them would smear the
+         *  motion and — through R-VIEW-1a's hold — drop most of the frames. R-VIEW-1c already
+         *  carried this reasoning for a differently-shaped frame; this states it as a mode
+         *  rather than leaving it to a shape comparison to notice. */
+        void setGeometricTransition(bool on) { mGeometric = on; }
         /** The photo's display rect in canvas-local coords, zoom and pan included. Public
          *  because a test that aims at the crop box has to convert normalised crop coordinates
          *  to pixels the same way the overlay does. */
@@ -155,6 +162,7 @@ namespace cosmo_v2
         std::vector<uint8_t> mHeld;
         int mHeldW = 0, mHeldH = 0;
         bool mHeldPending = false;
+        bool mGeometric = false;   // a zoom is in flight: take frames whole, do not dissolve
     };
 }
 }

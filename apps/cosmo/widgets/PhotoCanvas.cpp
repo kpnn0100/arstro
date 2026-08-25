@@ -191,10 +191,11 @@ namespace cosmo_v2
         // Nothing to dissolve FROM (an empty stage, R-VIEW-1b), or a frame of a different SHAPE,
         // which cannot cover what is on screen (a different photo, R-VIEW-1c): both views take it,
         // so no stale pixels can peek around it, and the dissolve rests where it already was.
-        if (!cur->hasImage() || !sameShape(cur->imageWidth(), cur->imageHeight(), w, h))
+        if (mGeometric || !cur->hasImage() || !sameShape(cur->imageWidth(), cur->imageHeight(), w, h))
         {
             WLOG("photo: SET %dx%d (%s) -- no dissolve", w, h,
-                 cur->hasImage() ? "different shape" : "empty stage");
+                 mGeometric ? "geometric transition"
+                            : (cur->hasImage() ? "different shape" : "empty stage"));
             mPhotoBase->setImage(rgba, w, h);
             mPhotoTop->setImage(rgba, w, h);
             return;

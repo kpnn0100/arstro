@@ -1450,6 +1450,32 @@ had one.
 - **R-CROP-4 Any ratio, not six.** The six presets stay, plus **Custom**, where a width and a height
   are typed in. A custom ratio behaves exactly like a preset once set, and is remembered while the
   session lasts.
+- **R-CROP-7 Entering and leaving the crop is a ZOOM, not a cut.** The crop box is drawn over the
+  **uncropped** photo (R-CROP-5), and the editor otherwise shows the **cropped** one — so opening or
+  closing the Xform tab changes what the photo *is*. Switching that in one frame is exactly what
+  R-G-1 forbids, and it read as the photo suddenly jumping out and then snapping back
+  (**D-52**): "choose another tab make it suddenly crop and when click back to xform it suddenly
+  expand".
+  - **The framing is interpolated, not switched.** What the engine renders eases between the real
+    crop and the full frame over 220 ms, so the photo genuinely zooms: every intermediate frame is a
+    real render of a real framing, not a resampled blow-up of the last one. `setCropPreviewMode`'s
+    boolean becomes an **amount**.
+  - **The transition renders coarse.** Fourteen renders in 220 ms would be unaffordable at full
+    resolution on a small board, so they go out as R-PREVIEW-1 *interactive* renders — whichever
+    pyramid level meets the latency budget — with one final full-level render when the motion
+    settles. The mechanism T2 built for slider drags is the same mechanism a transition wants.
+  - **A zoom does not dissolve.** R-VIEW-1 cross-dissolves an arriving render because a *content*
+    change must not pop; consecutive frames of a zoom are not a content change, and dissolving them
+    would smear the motion and, via R-VIEW-1a's hold, drop most of the frames. So the canvas is told
+    a geometric transition is in flight and takes each frame immediately. R-VIEW-1c already carried
+    the same reasoning for a differently-shaped frame; this states it as a mode rather than leaving
+    it to a shape comparison.
+  - **The crop box converges onto the crop.** The box is drawn relative to what is *currently*
+    rendered, so as the photo zooms out the box shrinks from covering the whole frame to its true
+    rectangle — which is the honest picture of what is happening, and free, because it falls out of
+    mapping the crop into the rendered framing instead of assuming the framing is the full photo.
+  - **It does not accept a drag mid-flight.** The coordinate mapping is moving while the framing is,
+    so the box takes gestures only once the framing is the full photo.
 - **R-CROP-5 The crop is done ON THE PHOTO.** An interactive box over the image with corner and edge
   handles: drag a corner or an edge to resize, drag inside to move the region, and see the discarded
   area dimmed with a thirds grid over what is kept. Numeric entry stays — it is the only way to be

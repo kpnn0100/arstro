@@ -27,19 +27,42 @@ namespace cosmo_v2
         inputTransparent = false;
     }
 
+    bool CropOverlay::settled() const
+    {
+        return std::fabs(mFraming.x) < 1e-4 && std::fabs(mFraming.y) < 1e-4 &&
+               std::fabs(mFraming.w - 1.0) < 1e-4 && std::fabs(mFraming.h - 1.0) < 1e-4;
+    }
+
+    // ── source-normalised <-> overlay pixels, THROUGH the rendered framing (R-CROP-7) ──
+    //
+    // The fitted rect is where the RENDERED image is drawn, and what is rendered is
+    // `mFraming` — the whole photo once settled, something between the crop and the photo
+    // while the zoom is running. So a source-normalised coordinate is first expressed inside
+    // the framing, then scaled into the fitted rect. When `mFraming` is (0,0,1,1) both steps
+    // collapse to what this used to do.
     Rect CropOverlay::boxPx() const
     {
-        return Rect{mFitted.x + mCrop.x * mFitted.w, mFitted.y + mCrop.y * mFitted.h,
-                    mCrop.w * mFitted.w, mCrop.h * mFitted.h};
+        const double fw = mFraming.w > 1e-9 ? mFraming.w : 1.0;
+        const double fh = mFraming.h > 1e-9 ? mFraming.h : 1.0;
+        const double nx = (mCrop.x - mFraming.x) / fw;
+        const double ny = (mCrop.y - mFraming.y) / fh;
+        const double nw = mCrop.w / fw;
+        const double nh = mCrop.h / fh;
+        return Rect{mFitted.x + nx * mFitted.w, mFitted.y + ny * mFitted.h,
+                    nw * mFitted.w, nh * mFitted.h};
     }
 
     double CropOverlay::nxOf(double localX) const
     {
-        return mFitted.w > 0.0 ? (localX - mFitted.x) / mFitted.w : 0.0;
+        if (mFitted.w <= 0.0) return 0.0;
+        const double inFraming = (localX - mFitted.x) / mFitted.w;
+        return mFraming.x + inFraming * (mFraming.w > 1e-9 ? mFraming.w : 1.0);
     }
     double CropOverlay::nyOf(double localY) const
     {
-        return mFitted.h > 0.0 ? (localY - mFitted.y) / mFitted.h : 0.0;
+        if (mFitted.h <= 0.0) return 0.0;
+        const double inFraming = (localY - mFitted.y) / mFitted.h;
+        return mFraming.y + inFraming * (mFraming.h > 1e-9 ? mFraming.h : 1.0);
     }
 
     crop::Part CropOverlay::partAt(const Point &local) const
@@ -68,7 +91,11 @@ namespace cosmo_v2
 
     bool CropOverlay::handleGesture(const Gesture &g, const Point &local)
     {
-        if (!mActive) return Segment::handleGesture(g, local);
+        // R-CROP-7: no gestures while the framing is still moving — the mapping from pixels to
+        // the photo is changing under the pointer, so a drag would land somewhere else by the
+        // time it finished. Move events still pass through for hover.
+        if (!mActive || (!settled() && g.type != Gesture::Type::Move))
+            return Segment::handleGesture(g, local);
 
         if (g.type == Gesture::Type::Move)
         {
@@ -153,7 +180,14 @@ namespace cosmo_v2
     {
         const double a = mAppear.value();
         if (a <= 0.001 || mFitted.w <= 0.0 || mFitted.h <= 0.0) return;
-        const Rect box = boxPx();
+        Rect box = boxPx();
+        // While the zoom is running the box can round a hair outside the photo; clamped so the
+        // dim rectangles below never take a negative width.
+        box.x = std::max(box.x, mFitted.x);
+        box.y = std::max(box.y, mFitted.y);
+        box.w = std::min(box.w, mFitted.x + mFitted.w - box.x);
+        box.h = std::min(box.h, mFitted.y + mFitted.h - box.y);
+        if (box.w <= 0.0 || box.h <= 0.0) return;
 
         // 1. Dim what will be discarded — four rectangles around the box rather than one big
         //    one with a hole, because the HAL has no even-odd fill and two stacked alphas over

@@ -443,9 +443,15 @@ namespace cosmo_v2
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher
-        /** Whether the photo is currently being rendered uncropped for the crop box
-         *  (R-CROP-5). Tracked so the mode is applied on the CHANGE rather than every frame. */
+        /** Whether the Xform tab wants the photo rendered uncropped (R-CROP-5). Tracked so the
+         *  reveal is STARTED on the change rather than restarted every frame. */
         bool mCropPreviewOn = false;
+        /** R-CROP-7: how far the rendered framing is eased from the crop (0) toward the whole
+         *  photo (1). 220 ms, long enough to read as a zoom and short enough not to be in the
+         *  way — a touch longer than the 180 ms cross-fades because it moves the whole picture. */
+        static constexpr double kCropRevealMs = 220.0;
+        artboard::AnimatedProperty mCropReveal{0.0};
+        double mCropRevealApplied = 0.0;
         /** T3.1: when something last happened that could have started an animation, and how
          *  long after it we keep painting. 1000 ms is longer than every duration in cosmo's
          *  motion vocabulary (the longest is the 900 ms splash intro, which runs in its own

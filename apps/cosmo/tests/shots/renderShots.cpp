@@ -896,6 +896,55 @@ namespace
         }
     }
 
+    /** R-CROP-7: the zoom out of the crop, photographed MID-FLIGHT. A shot at either end shows
+     *  nothing about the transition — the whole point is that the intermediate framings exist,
+     *  so this catches two of them. */
+    void shotCropZoom(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-crop-zoom")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        const artboard::Segment *tabs =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
+        if (!tabs) { std::printf("  (no tabs: skipping editor-crop-zoom)\n"); return; }
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        auto clickTab = [&](int i) {
+            rig.app.pointer(0, tw.e + tabW * (i + 0.5), tw.f + 13.0, 1, rig.now);
+            rig.app.pointer(2, tw.e + tabW * (i + 0.5), tw.f + 13.0, 1, rig.now);
+        };
+
+        // Xform, and a crop worth zooming between.
+        clickTab(4);
+        rig.settleQuiet(f, 400.0, 300);
+        Command set;
+        set.kind = Command::Kind::Set;
+        set.fields = {{"crop", "0.22,0.20,0.56,0.58"}};
+        if (!rig.svc.dispatch(set)) { std::printf("  (no edit target: skipping)\n"); return; }
+        rig.settleQuiet(f, 500.0, 600);
+        save(f, "editor-crop-zoom-000-open");
+
+        // Leave the tab and catch the zoom IN toward the crop, two frames apart. The renders
+        // land on a worker, so each step waits for a frame in real time the way shotDissolve
+        // does — advancing the shot clock without waiting would run straight past the motion.
+        clickTab(0);
+        for (int step = 0; step < 2; ++step)
+        {
+            const unsigned seq0 = rig.svc.model().frameSeq;
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            while (rig.svc.model().frameSeq == seq0 && std::chrono::steady_clock::now() < deadline)
+            {
+                rig.svc.pump(rig.now);
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            rig.step(f, 2);
+            save(f, step == 0 ? "editor-crop-zoom-060-mid" : "editor-crop-zoom-140-mid");
+        }
+        rig.settleQuiet(f, 700.0, 900);
+        save(f, "editor-crop-zoom-999-closed");
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -908,7 +957,7 @@ namespace
         }
         if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
             && !wanted("editor-dissolve") && !wanted("editor-split-seam")
-            && !wanted("editor-crop"))
+            && !wanted("editor-crop") && !wanted("editor-crop-zoom"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -931,6 +980,7 @@ namespace
         shotDissolve(rig, w0, h0, "1.5", "70");
         shotSplitSeam(rig, w0, h0);          // R-VIEW-3
         shotCrop(rig, w0, h0);              // R-CROP
+        shotCropZoom(rig, w0, h0);          // R-CROP-7
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)

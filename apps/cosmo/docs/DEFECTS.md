@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-52**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-53**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,53 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-52 — Leaving and re-entering the Xform tab cut between the cropped and uncropped photo
+- **Area:** design / shell · **Status:** **Fixed** · **Severity:** S2 · **Introduced by me**, in `a594b8c`
+- **Found:** 2026-08-25, reported by the user: *"when cropping, choose another tab make it suddenly
+  crop and when click back to xform it suddenly expand, violate the rule, need to do animation with
+  zooming it in for better transition."*
+- **Reproduce:** apply a crop, open the Xform tab, then switch tabs back and forth. The photo jumps
+  between the crop and the whole frame in one frame, each way.
+- **Cause:** the crop box has to be drawn over the **uncropped** photo (R-CROP-5), while the editor
+  otherwise shows the **cropped** one — so opening or closing the tab changes what the photo *is*.
+  I wired that as a boolean, `setCropPreviewMode(on)`, followed by one re-render. Straight into
+  R-G-1: *no property a user can see may change suddenly.* The photo is the most visible property
+  there is, and R-VIEW-1 exists precisely because it used to pop.
+- **Judgement:** defect, mine, and the third time this project has shipped a snap that read correctly
+  in the diff. It is the same shape as R-SCALE-2a (a *setting* changed the whole shell's transform in
+  one frame) and R-G-1a (a *window resize* re-laid every card in one frame): the change did not feel
+  like motion while I was writing it, it felt like configuration — and R-G-1's own note says there is
+  no such category. What makes it worse than those two is that R-VIEW-1/1a are entirely about not
+  popping the photo, and I bypassed them from above.
+- **Fixed (R-CROP-7):** the framing the engine renders **eases** between the real crop and the full
+  frame over 220 ms, so the photo genuinely zooms — every intermediate frame is a real render of a
+  real framing, not a resampled blow-up of the last one. `setCropPreviewMode`'s boolean became
+  `setCropPreviewAmount(t)`, and `EditSession::applyCropPreview` lerps the crop. Three things fall out
+  of that and are all deliberate:
+  * **The transition renders coarse.** Fourteen full-resolution renders in 220 ms is not affordable
+    on a small board, so they go out with R-PREVIEW-1's *interactive* intent — whichever pyramid
+    level meets the latency budget — and one full-level render when the motion settles. `submitRefine`
+    gained an intent for this; neither path records history, because a transition is not an edit.
+  * **A zoom must not cross-dissolve.** R-VIEW-1 dissolves a *content* change; consecutive frames of
+    a zoom are not one, and R-VIEW-1a's hold would have dropped most of them. `PhotoCanvas` is told a
+    geometric transition is in flight and takes each frame whole. R-VIEW-1c already carried the same
+    reasoning for a differently-shaped frame — this states it as a mode instead of leaving a shape
+    comparison to notice.
+  * **The crop box converges onto the crop.** It is drawn relative to what is *currently* rendered,
+    so as the photo zooms out the box shrinks from covering everything to its true rectangle. That is
+    the honest picture of what is happening, and it is free — it falls out of mapping the crop into
+    the rendered framing rather than assuming the framing is the whole photo. It also refuses
+    gestures until the framing settles, because the mapping is moving while it is.
+- **Guarded by** `cosmo_ui_tests::leavingAndEnteringTheCropZoomsRatherThanCutting`, which asserts
+  R-G-1's compliance clause rather than the outcome: that there EXIST frames whose rendered framing is
+  strictly between the crop and the whole photo — **12 of them each way** — that the travel is
+  monotonic, that both ends land exactly, and that the overlay reports unsettled and refuses gestures
+  mid-flight. Verified to fail against the one-frame version: **`travelled through 0 intermediate
+  framings`**, both directions.
+- **Looked at:** `cosmo_shots --only editor-crop-zoom` — four frames, two of them mid-flight, showing
+  the photo part-way between the crop and the whole frame with the box converging.
+
 
 ### D-51 — With a fixed ratio, dragging a crop corner off the photo changed the ratio
 - **Area:** design / widgets · **Status:** **Fixed** · **Severity:** S2 · **Introduced by me**, in `a594b8c`

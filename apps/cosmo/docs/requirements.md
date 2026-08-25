@@ -2680,3 +2680,51 @@ did assert that a locked resize keeps the ratio — and dragged **inside** the f
 clamp it would have to survive never fired. *A constraint has to be tested at the boundary that
 competes with it.* A ratio lock and a frame clamp are two constraints on one rectangle; the only
 interesting case is where they disagree.
+
+### DR-CROP-7 Entering and leaving the crop is a zoom (R-CROP-7, R-G-1, D-52)
+The crop box is drawn over the **uncropped** photo (R-CROP-5) and the editor otherwise shows the
+**cropped** one, so opening or closing the Xform tab changes what the photo is. I wired that as a
+boolean plus one re-render, which is a one-frame swap of the most visible property in the app.
+
+**As built.** `EditSession::setCropPreviewMode(bool)` became `setCropPreviewAmount(double t)`, and
+`applyCropPreview` lerps the rendered crop toward the full frame:
+
+```cpp
+p.cropX *= (1 - t);   p.cropW += (1 - p.cropW) * t;
+p.cropY *= (1 - t);   p.cropH += (1 - p.cropH) * t;
+```
+
+`App` eases `t` with an `AnimatedProperty` over **220 ms** (a touch longer than the 180 ms
+cross-fades, because it moves the whole picture) and submits a render on every frame the value
+changes. Because the engine renders each intermediate framing for real, this is a true zoom — not a
+resampled blow-up of the previous frame, which is what animating the view's transform would have
+given.
+
+Three consequences, all deliberate:
+
+1. **The transition renders coarse.** Fourteen full-resolution renders inside 220 ms is unaffordable
+   on an A733, so they go out with **R-PREVIEW-1's interactive intent** — whichever pyramid level
+   meets the 33 ms budget — with one full-level render when the motion settles. `submitRefine` gained
+   an intent parameter, and `level < 0` means "let the intent choose", which is what a transition
+   wants: many cheap frames without pretending to know what this machine can afford. Neither path
+   records history; a transition is not an edit.
+2. **A zoom does not cross-dissolve.** `PhotoCanvas::setGeometricTransition(true)` makes an arriving
+   render land immediately. R-VIEW-1 dissolves because a *content* change must not pop; successive
+   frames of a zoom are not a content change, and R-VIEW-1a's hold would have dropped most of them,
+   turning the motion into a stutter. R-VIEW-1c already skipped the dissolve for a differently-shaped
+   frame — this states the same reasoning as a mode rather than leaving a 0.5%-tolerance shape
+   comparison to notice it.
+3. **The box converges onto the crop.** `CropOverlay::setRenderedFraming` gives it the framing being
+   rendered, and every coordinate conversion goes *through* it — so at rest (framing = the whole
+   photo) the maths collapses to what it was, and mid-zoom the box shrinks from covering everything to
+   its true rectangle. It also refuses gestures until `settled()`, because the mapping from pixels to
+   the photo is moving while the framing is.
+
+**Guarded by** `leavingAndEnteringTheCropZoomsRatherThanCutting`, which asserts R-G-1's compliance
+clause and not the outcome — a snap arrives too, sooner. It requires frames whose rendered framing is
+**strictly between** the crop and the whole photo (12 each way), monotonic travel, exact landings at
+both ends, and that the overlay reports unsettled and refuses a press mid-flight. Against the
+one-frame version it reports `travelled through 0 intermediate framings` in both directions.
+
+**Looked at:** `editor-crop-zoom-{000-open,060-mid,140-mid,999-closed}` — the two mid frames show the
+photo part-way between the crop and the whole frame with the box converging onto it.

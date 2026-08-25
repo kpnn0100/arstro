@@ -200,15 +200,26 @@ namespace cosmo
          *  not mark the session dirty — a refinement is not an edit, and going through
          *  `submit()` would add a second undo entry for a value the user never touched
          *  again. A no-op when there is no current slot. */
-        void submitRefine(int level);
+        void submitRefine(int level, arstro::RenderService::RenderIntent intent =
+                                         arstro::RenderService::RenderIntent::Final);
 
         /** Unsaved-changes flag: true once an edit is submitted, cleared on
          *  save/load/reset. Drives the "save or discard?" prompt (R-HOME). */
         bool isDirty() const { return mDirty; }
         void markClean() { mDirty = false; }
-        /** While true, submit() renders the full (uncropped) frame so a crop box can
-         *  be dragged over the whole image; the slot's real crop is unaffected. */
-        void setCropPreviewMode(bool on) { mCropPreviewMode = on; }
+        /** How far the rendered framing is eased from the slot's real crop (0) toward the
+         *  full uncropped frame (1), so a crop box can be dragged over the whole image
+         *  (R-CROP-5). The slot's real crop is never touched — this only changes what is
+         *  RENDERED.
+         *
+         *  An amount and not a flag, because switching it in one frame is what R-G-1 forbids:
+         *  the photo jumped out when the Xform tab opened and snapped back when it closed
+         *  (D-52). The view eases this value and the engine renders each intermediate framing,
+         *  so the photo genuinely zooms rather than being resampled (R-CROP-7). */
+        void setCropPreviewAmount(double t) { mCropPreview = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t); }
+        double cropPreviewAmount() const { return mCropPreview; }
+        /** The two ends of the same knob, for callers that only want to switch it. */
+        void setCropPreviewMode(bool on) { setCropPreviewAmount(on ? 1.0 : 0.0); }
 
         // ---- clipboard ----
         void copyCurrent();                            // stash the current slot's params
@@ -308,6 +319,8 @@ namespace cosmo
         const RenderService::Frame *renderBefore();
 
     private:
+        /** Ease `p`'s crop toward the full frame by `mCropPreview` (R-CROP-7). */
+        void applyCropPreview(arstro::EditParams &p) const;
         void submitWith(arstro::RenderService::RenderIntent intent);
         const EditParams *applyHistoryParams(const EditParams *p);
         void recordHistory();  // snapshot the current edit target (slot or group) into its history
@@ -343,7 +356,7 @@ namespace cosmo
         int mHistorySteps = 100;
         double mHistoryCoalesceMs = 450.0;
         bool mSuppressHistory = false;
-        bool mCropPreviewMode = false;
+        double mCropPreview = 0.0;   // 0 = the real crop, 1 = the full frame (R-CROP-7)
         int mPreviewEdge = 1600;
         bool mUseGpu = false;  // R-GPU opt-in (session setting; effective only when a GPU backend is available)
         bool mDirty = false;   // unsaved edits since the last save/load/reset

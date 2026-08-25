@@ -985,21 +985,54 @@ namespace cosmo_v2
         {
             auto ov = mCenterStage->photo()->cropOverlay();
             const bool on = mRightColumn->activeTab() == RightColumn::kTabXform;
-            // R-CROP-5: while the box is up, the photo is rendered UNCROPPED, so the box can be
-            // dragged over the whole image. Without this you could only ever shrink a crop —
-            // never move it outside what is already kept, and never grow it back — because the
-            // photo on screen would already be the crop. `setCropPreviewMode` existed for
-            // exactly this and nothing had ever called it; the slot's real crop is untouched.
+            // R-CROP-5: while the box is up the photo is rendered UNCROPPED, so the box can be
+            // dragged over the whole image. Without it you could only ever shrink a crop — never
+            // move it outside what is already kept, never grow it back — because the photo on
+            // screen would already BE the crop.
             //
-            // Toggled here and re-rendered on the CHANGE only: submitting every frame would
-            // record a history entry per frame and re-render a photo nobody edited.
+            // R-CROP-7: and the change between the two is a ZOOM, not a cut. Switching it in one
+            // frame is what R-G-1 forbids, and it read as the photo jumping out when the tab
+            // opened and snapping back when it closed (D-52). So the framing the engine renders
+            // eases between the crop and the full frame, and every intermediate frame is a real
+            // render of a real framing rather than a resampled blow-up of the last one.
             if (on != mCropPreviewOn)
             {
                 mCropPreviewOn = on;
-                mSession.setCropPreviewMode(on);
-                mSession.submitRefine(0);   // re-render at full level; not an edit, so no history
+                mCropReveal.animateTo(on ? 1.0 : 0.0, kCropRevealMs, Easing::EaseOutCubic, nowMs);
             }
-            ov->setActive(on);
+            const bool revealing = mCropReveal.isAnimating();
+            mCropReveal.update(nowMs);
+            if (revealing || mCropRevealApplied != mCropReveal.value())
+            {
+                mCropRevealApplied = mCropReveal.value();
+                mSession.setCropPreviewAmount(mCropRevealApplied);
+                // INTERACTIVE while the motion runs — fourteen full-resolution renders in
+                // 220 ms is not affordable on a small board, and R-PREVIEW-1 already knows how
+                // to pick a level that fits the budget. One FULL-level render when it settles.
+                // Neither path records history: a transition is not an edit, and a history
+                // entry per frame of a zoom would be absurd.
+                if (revealing)
+                    mSession.submitRefine(-1, RenderService::RenderIntent::Interactive);
+                else
+                    mSession.submitRefine(0);
+            }
+            // A zoom must not cross-dissolve: successive frames of it are not a content change,
+            // and R-VIEW-1a's hold would drop most of them (R-CROP-7).
+            mCenterStage->photo()->setGeometricTransition(revealing);
+            // The box is drawn relative to what is CURRENTLY rendered, so it converges onto the
+            // crop as the photo zooms out instead of sitting in the wrong place throughout.
+            {
+                const double t = mCropReveal.value();
+                artboard::Rect framing{0, 0, 1, 1};
+                if (const EditParams *cp = mSession.curParams())
+                    framing = artboard::Rect{cp->cropX * (1.0 - t), cp->cropY * (1.0 - t),
+                                             cp->cropW + (1.0 - cp->cropW) * t,
+                                             cp->cropH + (1.0 - cp->cropH) * t};
+                ov->setRenderedFraming(framing);
+            }
+            // Active for the whole transition, so the box fades in over the zoom rather than
+            // appearing after it.
+            ov->setActive(on || mCropReveal.value() > 0.001);
             ov->setAspectLock(mRightColumn->aspectLock());
             ov->setSourceSize(mSvc.model().sourceWidth, mSvc.model().sourceHeight);
             if (const EditParams *p = mSession.curParams())

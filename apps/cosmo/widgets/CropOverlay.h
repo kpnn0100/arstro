@@ -55,6 +55,21 @@ namespace cosmo_v2
             mCrop = artboard::Rect{x, y, w, h};
         }
 
+        /** The framing the engine is currently rendering, in source-normalised coords
+         *  (R-CROP-7). `(0,0,1,1)` — the whole photo — is the settled state the box is designed
+         *  for; during the zoom into and out of the crop it is something between the crop and
+         *  the photo, and the box has to be drawn *inside* it or it would sit in the wrong
+         *  place for the whole transition.
+         *
+         *  Mapping the crop into this rect also gives the transition its meaning for free: as
+         *  the photo zooms out the box shrinks from covering everything to its true rectangle,
+         *  which is the honest picture of what is happening. */
+        void setRenderedFraming(const artboard::Rect &sourceNormalised) { mFraming = sourceNormalised; }
+
+        /** True once the framing is the whole photo, i.e. the transition has settled. Gestures
+         *  are refused until then: the coordinate mapping is moving while the framing is. */
+        bool settled() const;
+
         /** The locked pixel ratio (w/h), or 0 for Free (R-CROP-2). */
         void setAspectLock(double pixelRatio) { mRatio = pixelRatio; }
         /** The photo's full-resolution shape, needed to turn the pixel ratio into a normalised
@@ -89,6 +104,7 @@ namespace cosmo_v2
 
         artboard::Rect mFitted{0, 0, 0, 0};
         artboard::Rect mCrop{0, 0, 1, 1};
+        artboard::Rect mFraming{0, 0, 1, 1};   // what is rendered right now (R-CROP-7)
         bool mActive = false;
         double mRatio = 0.0;          // pixel w/h, 0 = free
         int mSrcW = 0, mSrcH = 0;

@@ -480,20 +480,34 @@ namespace cosmo
         h->record(*p, mNowMs);
     }
 
+    void EditSession::applyCropPreview(EditParams &p) const
+    {
+        // R-CROP-7: ease the RENDERED framing between the real crop and the full frame. At
+        // t = 0 this is a no-op and the photo is the crop; at t = 1 it is the whole photo, which
+        // is what the crop box needs to be dragged over. Anything between is a real framing the
+        // engine really renders — which is what makes the transition a zoom instead of a
+        // resampled blow-up of the previous frame.
+        const double t = mCropPreview;
+        if (t <= 0.0) return;
+        p.cropX = (float)(p.cropX * (1.0 - t));
+        p.cropY = (float)(p.cropY * (1.0 - t));
+        p.cropW = (float)(p.cropW + (1.0 - p.cropW) * t);
+        p.cropH = (float)(p.cropH + (1.0 - p.cropH) * t);
+    }
+
     void EditSession::submit() { submitWith(RenderService::RenderIntent::Final); }
 
     void EditSession::submitInteractive() { submitWith(RenderService::RenderIntent::Interactive); }
 
-    void EditSession::submitRefine(int level)
+    void EditSession::submitRefine(int level, RenderService::RenderIntent intent)
     {
         // A refinement is not an edit: no history, no dirty flag, same params — only the
         // level changes. Going through submit() would record a second history entry for
         // a value the user never touched again (R-PREVIEW-3).
         if (mCurrentSlot < 0) return;
         EditParams p = effectiveParams(mCurrentSlot);
-        if (mCropPreviewMode)
-        { p.cropX = 0; p.cropY = 0; p.cropW = 1; p.cropH = 1; }
-        mService.render(mCurrentSlot, p, RenderService::RenderIntent::Final, level);
+        applyCropPreview(p);
+        mService.render(mCurrentSlot, p, intent, level);
     }
 
     void EditSession::submitWith(RenderService::RenderIntent intent)
@@ -502,8 +516,7 @@ namespace cosmo
         mDirty = true;   // an edit is being committed -> unsaved changes
         recordHistory();
         EditParams p = effectiveParams(mCurrentSlot);
-        if (mCropPreviewMode)
-        { p.cropX = 0; p.cropY = 0; p.cropW = 1; p.cropH = 1; }
+        applyCropPreview(p);
         mService.render(mCurrentSlot, p, intent);
     }
 
