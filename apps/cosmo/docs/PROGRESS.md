@@ -15,6 +15,101 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-27 — RELEASE AUDIT: "what feature or optimisation would improve this to release to
+market". Findings below, prioritised. Nothing implemented — this is the assessment.**
+
+The engine and the interaction work are in good shape (T0-T4.1 landed, PARITY #3 and #6 closed).
+What stands between this and a release is **not** performance. It is four ship-blockers, three of
+which are cheap, and one quality gap that is the difference between "a photo editor" and "a photo
+editor a photographer would use".
+
+**S1 — RAW is decoded to 8-bit sRGB with auto-brightness and the wrong white balance.**
+`NativeImageDecoder::decodeRaw` sets exactly one LibRaw parameter (`user_qual`, for D-24) and leaves
+the rest at their defaults. From the vendored source (`src/utils/init_close_utils.cpp:77-78` and the
+fields it does *not* set):
+```
+output_color  = 1      -> sRGB          : gamut-clipped AT INGEST, before any edit
+output_bps    = 8      -> 8-bit         : RAW's headroom discarded at ingest
+use_camera_wb = 0      (never set)      : the as-shot white balance is NOT applied
+no_auto_bright= 0      (never set)      : LibRaw stretches each file's histogram independently
+```
+Consequences, in the order a photographer notices them: **every RAW opens with a colour cast** (not
+the camera's WB, and not what any other editor shows); **two frames of the same bracket are
+normalised differently** (auto-bright is per-file); **+2 EV bands** because there are only 8 bits to
+push; and **saturated reds and blues are already clipped** before the first slider moves. This is the
+one finding that is about the product rather than the code — cosmo currently throws away the reason
+to shoot RAW. `use_camera_wb`, `no_auto_bright` and `output_color` are one line each. `output_bps = 16`
+is not: `DecodedImage` is RGBA8 end to end, so 16-bit ingest is a real change to the decode seam, the
+proxy builder and `fromEncodedBytes`. Worth scoping as its own milestone.
+
+**S1 — closing the window silently discards unsaved work.** `linux_main.cpp:1708` is
+`g_signal_connect(host.window, "destroy", G_CALLBACK(gtk_main_quit), nullptr)` and there is **no
+`delete-event` handler** (grep count: 0). The unsaved-changes prompt exists and is good — but only on
+the path back to the launcher (`App.cpp:1720`). Edit fifty photos, click the X, lose all of it with
+no warning. Half a day, and it is the single worst review a photo editor can get.
+
+**S2 — there is no autosave or crash recovery.** Related to the above and worth its own line because
+this app crashed twice in three days (D-48, D-49). A periodic write of the open project to a recovery
+file, offered back on next launch, is the standard answer.
+
+**S2 — four buttons in the shipping UI do nothing.** `XformPanel.cpp:112` — Flip Horizontal, Flip
+Vertical, Auto Horizon, Auto Geometry are drawn, hoverable and inert, because `EditEngine` has no flip
+or auto-straighten API. The comment says "left inert rather than faking it", which was the right call
+while building; it is the wrong call to ship. **Flip is genuinely easy** — it is a `quarterTurns`
+sibling, a mirror in `Rotate`, one `EditParams` field and one `EditParamsIO` case. Auto Horizon and
+Auto Geometry are real features; if they are not in scope, the buttons should come out rather than
+ship dead.
+
+**S2 — no About / third-party licences surface.** The repo is LGPL-2.1; LibRaw ships LGPL + CDDL;
+GdkPixbuf/GTK are LGPL; the vendored fonts carry OFL. The licence files are all present in the tree
+(`assets/fonts/*/OFL.txt`, `lib/LibRaw/LICENSE.*`) but nothing surfaces them **in the application**,
+and there is no top-level NOTICE/THIRD-PARTY. OFL requires the licence to travel with the font and
+LGPL requires the notice; an About dialog listing them is the normal, cheap fix. This is a legal
+blocker, not a nicety, and it is an afternoon.
+
+**S2 — the UI still logs nothing (D-5).** Already filed, and it is a *support* blocker rather than a
+user-facing one: when a user reports "the slider does nothing", there is no trace to read. Everything
+needed is specified in `arstro.cosmo.design.implement` §7 and the event/log plumbing exists.
+
+**S2 — the touch shell is not shippable (D-38).** Portrait overlaps its own controls; landscape is
+unusable. Fine if the phone UI is out of scope for v1 — but then it should not be reachable from the
+Settings dialog's Touch row.
+
+**Then, in rough value order — market expectations, not blockers:**
+1. **EXIF survives a RAW export.** Today `ExportWriter` lifts the APP1 segment from a **JPEG** source
+   only, so a RAW export lands with no camera, lens, exposure, date or copyright at all. For the
+   format most of the library is in, that is the metadata story missing entirely.
+2. **The scripted `export` ignores its own documented flags.** `--format`, `--quality` and
+   `--long-edge` parse into `Command::fields` and `runExport` never reads them; the GUI path honours
+   all three through `ExportWriter`. A published flag that silently does nothing is worse than an
+   absent one — either wire it or reject it.
+3. **Culling: flags, ratings, and a filter.** There is no way to mark a keeper or hide a reject, so a
+   120-photo shoot is walked linearly. This is the most-used feature of every competing tool and the
+   biggest workflow gap after the RAW issue.
+4. **Preset category picker (PARITY #4).** Applying a preset is all-or-nothing today.
+5. **Highlight recovery.** With `highlight = 0` (clip) and 8-bit ingest there is nothing to recover
+   from; it becomes possible once S1's 16-bit work lands, and it is what "RAW" means to most people.
+
+**Optimisation — mostly done; what is actually left:**
+- **T4.2, the disk-backed proxy cache**, is the remaining big win and is already scoped in this file.
+  On a 4 GB board it turns every session after the first from ~6 s of decoding into a few hundred ms
+  of reads.
+- **T5** (tile fusion, half-float previews, widening the GPU's accepted subset) stays deferred. After
+  T0/T1 a default-params 1600 px preview is 23.8 ms at 24 threads and 113 ms single-threaded; the
+  remaining cost is a REAL edit (~10x a neutral one), which is what T2's progressive resolution
+  already hides. **Do not spend on T5 before the S1 items** — nobody rejects a photo editor for being
+  30% slower, and everybody rejects one that shows the wrong colours.
+
+**Recommendation, in order:** (1) the four RAW parameters that are one line each — biggest visible
+quality gain in the codebase for the least work; (2) the `delete-event` guard; (3) remove or implement
+the dead buttons, and land Flip since it is nearly free; (4) the About/licences dialog; (5) autosave;
+(6) EXIF for RAW exports. Then 16-bit ingest as its own milestone, then culling, then T4.2.
+
+**Ledger correction made during this audit:** PARITY #5 ("no engine-quality/threads UI") was **stale**
+— `SettingsDialog` has carried UI scale, preview quality, engine threads, CPU limit, GPU and touch
+since R-SETTINGS. Row corrected.
+
+
 **► 2026-08-25 — three UI problems reported. ALL THREE DONE.**
 
 Reported: *(1) the curve used to show a bezier curve by using alt + drag but now it can't;
