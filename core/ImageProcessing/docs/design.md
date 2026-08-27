@@ -145,7 +145,7 @@ carry the weight with it, or GPU and CPU diverge on exactly the pixels this exis
 | `detail/` | Sharpen (unsharp mask on perceptual luma, amount/radius/edge-masking), NoiseReduction (Gaussian chroma blur for colour speckle + edge-preserving bilateral on luma) |
 | `transform/` | Crop (normalized rect), Rotate (90° steps + arbitrary straighten, bilinear), LensCorrection (radial distortion + chromatic-aberration + vignette, one resample pass) |
 | `base/` (shared) | `spatial::` separable Gaussian + luminance plane helpers, used by the detail/presence processors so none re-implements a blur |
-| `engine/MaskStack` | local adjustments: each `MaskParams` (radial / linear / brush) builds a 0..1 coverage plane in normalised framed coords, renders an adjusted copy through the same processors, and blends it over the base. Applied post-pipeline in `renderInto`, so it rides preview, full-res, and the video seam alike. |
+| `engine/MaskStack` | local adjustments: each `MaskParams` (radial / linear / brush / a closed hand-drawn path) builds a 0..1 coverage plane in normalised framed coords, renders an adjusted copy through the same processors, and blends it over the base. Applied post-pipeline in `renderInto`, so it rides preview, full-res, and the video seam alike. A **path** mask is the one type whose coverage is materialised as a plane rather than evaluated per pixel: its feather is a distance from the outline, so it is filled once (scanline) and blurred, which is O(pixels) instead of O(pixels × segments). `maskPathPolygon` is the single flattener the render and the editor's drawing share — deliberately NOT `curve::sample`, which sorts by x (R-MASK-6). |
 
 ## Status (milestones)
 

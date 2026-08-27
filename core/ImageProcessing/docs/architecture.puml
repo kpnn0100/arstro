@@ -206,9 +206,12 @@ package video {
 package engine {
   class MaskParams {
     + type / inverted / feather / geometry / dabs[] / adjust:LocalAdjust
+    + path : CurvePoint[]   ' R-MASK-6: a closed hand-drawn outline
   }
   class MaskStack <<free fn>> {
     + maskCoverage(m,nx,ny) / applyMaskStack(img, masks[])
+    + maskPathPolygon(pts) : (x,y)[]   ' R-MASK-6: the ONE flattener, render + editor
+    + buildMaskCoverage(m,w,h,out)     ' a plane, because a path's feather is a distance
   }
   MaskStack ..> MaskParams
   class composeParams <<free fn>> {

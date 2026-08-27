@@ -44,6 +44,16 @@ namespace arstro
      *  instead of repairing in silence. */
     int sanitizeParams(EditParams &p);
 
+    /** ── The control-point list codec ───────────────────────────────────────────────
+     *
+     *  `x,y[,ix,iy,ox,oy];…` — the format every tone curve, every mixer curve and a path
+     *  mask's outline is written in (six numbers = a SMOOTH point with tangent handles, two =
+     *  a corner). Exported because a front end that needs to write one of those lists without
+     *  serializing a whole `EditParams` — `mask set path=…` is the case that forced it — must
+     *  use this parser rather than a second one that drifts (R-SVC-5). */
+    std::string formatCurvePoints(const std::vector<CurvePoint> &pts);
+    std::vector<CurvePoint> parseCurvePoints(const std::string &s);
+
     /** How many scalars the two functions above walk. Exists only so a test can assert the
      *  count and fail when a new `EditParams` field is added without being listed. */
     int guardedParamScalarCount();

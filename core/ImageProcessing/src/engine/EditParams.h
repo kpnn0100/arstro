@@ -35,7 +35,7 @@ namespace arstro
      *  resolution-independent (and matches the UI overlay 1:1). */
     struct MaskParams
     {
-        enum Type { Radial = 0, Linear = 1, Brush = 2 };
+        enum Type { Radial = 0, Linear = 1, Brush = 2, Path = 3 };
         int type = Radial;
         bool inverted = false;
         float feather = 0.5f;                 // 0..1 edge softness
@@ -45,6 +45,19 @@ namespace arstro
         float x0 = 0.5f, y0 = 0.35f, x1 = 0.5f, y1 = 0.65f;
         // brush: union of dabs
         std::vector<BrushDab> dabs;
+        /** path: a CLOSED bezier outline, in order — the shape a user draws by hand when no
+         *  radial or gradient describes the light they want (R-MASK-6).
+         *
+         *  `CurvePoint` is reused as the storage because a path point is exactly what it
+         *  already models: a position plus independent in/out tangent handles and a
+         *  corner/smooth flag, so the editor, the serializer and this struct need no new
+         *  vocabulary. What is NOT reused is `curve::sample`: it SORTS by x, because a tone
+         *  curve is a function of x, and a closed outline is not — it may double back. The
+         *  path sampler is `maskPathPolygon` in MaskStack.h, which walks the points in the
+         *  order they are stored and closes the loop.
+         *
+         *  Fewer than three points has no area and the mask is skipped. */
+        std::vector<CurvePoint> path;
         LocalAdjust adjust;
     };
 

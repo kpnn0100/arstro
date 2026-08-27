@@ -7,6 +7,7 @@
 #include "compute/GlesComputeBackend.h"  // createGlesComputeAccelerator (ARSTRO_GLES_COMPUTE)
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <thread>
 #include <vector>
 
@@ -689,6 +690,140 @@ TEST(MaskCoverage_shapes)
     brush.dabs.push_back({0.25f, 0.25f, 0.1f, 1.f});
     CHECK(maskCoverage(brush, 0.25f, 0.25f) > 0.9f);   // dab centre
     CHECK(maskCoverage(brush, 0.75f, 0.75f) < 0.01f);  // away from any dab
+}
+
+// ── R-MASK-6: a hand-drawn closed path is a mask ──
+TEST(MaskPath_covers_the_drawn_shape)
+{
+    // A triangle over the middle of the frame, corner points (no handles).
+    MaskParams m;
+    m.type = MaskParams::Path;
+    m.feather = 0.f;                      // hard edge, so the geometry is what is asserted
+    m.path.push_back(CurvePoint{0.5f, 0.15f});
+    m.path.push_back(CurvePoint{0.85f, 0.8f});
+    m.path.push_back(CurvePoint{0.15f, 0.8f});
+
+    CHECK(maskCoverage(m, 0.5f, 0.6f) > 0.99f);    // inside
+    CHECK(maskCoverage(m, 0.05f, 0.05f) < 0.01f);  // outside, near a corner
+    CHECK(maskCoverage(m, 0.5f, 0.05f) < 0.01f);   // above the apex
+    MaskParams inv = m; inv.inverted = true;
+    CHECK(maskCoverage(inv, 0.5f, 0.6f) < 0.01f);  // inversion flips it
+
+    // Fewer than three points is not a shape, and asking is not an error.
+    MaskParams two = m; two.path.pop_back();
+    CHECK(maskPathPolygon(two.path).empty());
+    CHECK(maskCoverage(two, 0.5f, 0.6f) < 0.01f);
+
+    // The polygon is walked IN ORDER, not sorted by x — the whole reason curve::sample is not
+    // reused. A path that doubles back would be reordered into a different shape by a sort.
+    MaskParams zig;
+    zig.type = MaskParams::Path;
+    zig.path.push_back(CurvePoint{0.2f, 0.2f});
+    zig.path.push_back(CurvePoint{0.8f, 0.2f});
+    zig.path.push_back(CurvePoint{0.2f, 0.8f});
+    zig.path.push_back(CurvePoint{0.8f, 0.8f});
+    const auto poly = maskPathPolygon(zig.path, 1);
+    CHECK(poly.size() == 4);
+    CHECK_NEAR(poly[2].first, 0.2, 1e-6);          // third point is still the third point
+    CHECK_NEAR(poly[2].second, 0.8, 1e-6);
+
+    // A smooth point bows the outline out past the straight line between its neighbours.
+    MaskParams bowed;
+    bowed.type = MaskParams::Path;
+    bowed.feather = 0.f;
+    bowed.path.push_back(CurvePoint{0.2f, 0.5f});
+    CurvePoint top{0.5f, 0.45f};
+    top.smooth = true; top.ix = -0.2f; top.iy = -0.25f; top.ox = 0.2f; top.oy = -0.25f;
+    bowed.path.push_back(top);
+    bowed.path.push_back(CurvePoint{0.8f, 0.5f});
+    bowed.path.push_back(CurvePoint{0.5f, 0.9f});
+    // The bow is BETWEEN the points, not at one of them — at x = 0.275 the smooth outline has
+    // risen to y ~= 0.38 while the straight chord is still at ~0.49, so a point at 0.42 is
+    // inside one shape and outside the other. Asserted at the point where the two differ,
+    // because at a control point they agree by definition.
+    CHECK(maskCoverage(bowed, 0.275f, 0.42f) > 0.99f);
+    MaskParams cornered = bowed;
+    cornered.path[1].smooth = false;
+    CHECK(maskCoverage(cornered, 0.275f, 0.42f) < 0.01f);
+}
+
+TEST(MaskPath_feather_softens_the_edge)
+{
+    MaskParams m;
+    m.type = MaskParams::Path;
+    m.feather = 0.f;
+    m.path.push_back(CurvePoint{0.3f, 0.3f});
+    m.path.push_back(CurvePoint{0.7f, 0.3f});
+    m.path.push_back(CurvePoint{0.7f, 0.7f});
+    m.path.push_back(CurvePoint{0.3f, 0.7f});
+
+    std::vector<Pixel> hard, soft;
+    buildMaskCoverage(m, 100, 100, hard);
+    CHECK(hard.size() == 100u * 100u);
+    auto at = [](const std::vector<Pixel> &p, int x, int y) { return (double)p[(size_t)y * 100 + x]; };
+    CHECK(at(hard, 50, 50) > 0.99);
+    CHECK(at(hard, 5, 5) < 0.01);
+    // A hard edge is hard: one pixel inside the boundary is fully covered.
+    CHECK(at(hard, 50, 31) > 0.99);
+
+    m.feather = 0.6f;
+    buildMaskCoverage(m, 100, 100, soft);
+    CHECK(at(soft, 50, 50) > 0.9);                 // still solid in the middle
+    CHECK(at(soft, 50, 30) < at(hard, 50, 30) + 1.0);
+    // The point of a feather: values strictly between 0 and 1 near the outline.
+    int partial = 0;
+    for (int y = 20; y < 45; ++y)
+    {
+        const double v = at(soft, 50, y);
+        if (v > 0.05 && v < 0.95) ++partial;
+    }
+    CHECK(partial >= 3);
+    // And the boundary itself is around half covered, not snapped to one side.
+    CHECK(at(soft, 50, 30) > 0.2 && at(soft, 50, 30) < 0.8);
+}
+
+TEST(MaskPath_roundtrips_through_the_project_format)
+{
+    EditParams p;
+    MaskParams m;
+    m.type = MaskParams::Path;
+    m.feather = 0.25f;
+    m.adjust.exposure = 1.5f;
+    m.path.push_back(CurvePoint{0.1f, 0.2f});
+    CurvePoint smooth{0.6f, 0.3f};
+    smooth.smooth = true; smooth.ix = -0.1f; smooth.iy = 0.05f; smooth.ox = 0.12f; smooth.oy = -0.06f;
+    m.path.push_back(smooth);
+    m.path.push_back(CurvePoint{0.4f, 0.9f});
+    p.masks.push_back(m);
+
+    EditParams back;
+    CHECK(deserializeParams(serializeParams(p), back));
+    CHECK(back.masks.size() == 1u);
+    const MaskParams &r = back.masks[0];
+    CHECK(r.type == MaskParams::Path);
+    CHECK(r.path.size() == 3u);
+    CHECK_NEAR(r.path[0].x, 0.1, 1e-5);
+    CHECK(r.path[1].smooth);
+    CHECK_NEAR(r.path[1].ox, 0.12, 1e-5);
+    CHECK_NEAR(r.path[1].oy, -0.06, 1e-5);
+    CHECK(!r.path[2].smooth);
+    CHECK_NEAR(r.adjust.exposure, 1.5, 1e-5);
+
+    // A project written BEFORE path masks existed has no fourth group, and must still load —
+    // and one written now must still load in a build that stops after the third.
+    EditParams old;
+    CHECK(deserializeParams("mask=3,0,0.25,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65|1.5,0,0,0,0,0,0,0,0,0,0,0|\n", old));
+    CHECK(old.masks.size() == 1u);
+    CHECK(old.masks[0].path.empty());
+    CHECK_NEAR(old.masks[0].adjust.exposure, 1.5, 1e-5);
+
+    // A NaN in a path point is neutralised like any other bad scalar, not carried into the
+    // crossing test that decides a whole row.
+    EditParams bad = p;
+    bad.masks[0].path[1].x = std::numeric_limits<float>::quiet_NaN();
+    CHECK(firstNonFiniteParam(bad) != nullptr);
+    CHECK(sanitizeParams(bad) == 1);
+    CHECK(firstNonFiniteParam(bad) == nullptr);
 }
 
 TEST(MaskStack_blends_local_adjustment)

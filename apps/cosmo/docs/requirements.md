@@ -2880,3 +2880,46 @@ Covered by `test_metadata_reads_the_file_without_decoding_it` (which builds a re
 40 lines rather than committing a binary fixture, and asserts the decode count does not move),
 `rightClickShowsTheImageInformation` (the whole route: right-click, menu item, rows, eased scroll,
 Escape) and the `editor-context-menu` / `editor-image-info` / `editor-image-info-scrolled` shots.
+
+### DR-MASK-6 (core) A mask can be a shape the user draws (R-MASK-6)
+`MaskParams` gains `Path = 3` and `std::vector<CurvePoint> path`
+(`engine/EditParams.h:38,56`) — a **closed** outline, stored in the order the points were placed.
+
+`CurvePoint` is reused because a path point is exactly what it already models: a position, two
+independent tangent handles and a corner/smooth flag. What is *not* reused is `curve::sample`,
+which **sorts by x** because a tone curve is a function of x; a closed outline is not, and a sort
+would silently reorder a shape that doubles back into a different one. `maskPathPolygon`
+(`engine/MaskStack.cpp:31`) walks the points in order, wraps the last segment to the first, and
+honours `smooth` per point exactly as a tone curve does — a polygon drawn with plain clicks stays a
+polygon. It is the **one** flattener the render and the editor's drawing both use, for the same
+reason `curve::sample` is shared.
+
+Coverage is a **plane, not a per-pixel function** (`buildMaskCoverage`, `MaskStack.cpp:129`):
+scanline-fill the outline (gather each row's edge crossings, sort, fill alternate spans — O(rows ×
+edges) against the O(pixels × edges) a per-pixel test would cost), then feather by blurring the
+filled shape with `spatial::gaussianBlurPlane` at `feather × 0.08 × min(w,h)` pixels — a fraction of
+the short edge, so the softness does not change with the preview resolution. `feather = 0` leaves
+the fill hard, which is a legitimate request. `applyMaskStack` builds a plane only for `Path`; the
+closed-form types still evaluate per pixel and allocate nothing. Inside/outside is **even-odd**, so
+overlapping loops cut holes. `maskCoverage` still answers for a single point, hard-edged, which is
+what a hit test or an overlay wants.
+
+Serialization is a **fourth, optional group** in the mask blob (`EditParamsIO.cpp:65,92,131`),
+written by the same control-point codec as the curves and omitted entirely when a mask has no path.
+So a project written here loads in a build that predates path masks (the old parser stops after the
+third group) and a project written there loads here (a missing group leaves the path empty). The
+codec itself is now exported as `formatCurvePoints`/`parseCurvePoints` (`EditParamsIO.h`), because
+`mask set path=` needs it and a second parser in the service is exactly what R-SVC-5 forbids. Path
+points join the non-finite walk: a NaN x poisons the crossing test that decides a whole row.
+
+Reachable as `mask set <i> path=x,y[,ix,iy,ox,oy];…` (`CosmoService.cpp:969`), which also sets the
+type once there are three points — drawing a shape and leaving the type on Radial would render
+nothing and read as a bug in the mask rather than in the caller. Like `dabs` it cannot be reached by
+any per-scalar field, because its length is variable, and `set mask=` cannot stand in because it
+appends rather than addresses.
+
+Covered by `MaskPath_covers_the_drawn_shape` (inside/outside/inverted, order preserved, a smooth
+point bowing the outline where it differs from the chord), `MaskPath_feather_softens_the_edge`
+(partial values near the boundary, ~0.5 on it), `MaskPath_roundtrips_through_the_project_format`
+(handles, the old three-group blob, and the NaN guard) and
+`a_path_mask_is_drawn_by_command_and_renders` in `cosmo_core_tests`.

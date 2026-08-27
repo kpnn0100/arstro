@@ -966,6 +966,18 @@ namespace cosmo
                             m.dabs.push_back({f[0], f[1], f[2], f[3]});
                         }
                     }
+                    else if (k == "path")
+                    {
+                        // `x,y[,ix,iy,ox,oy];…` through the engine's OWN codec — the same one
+                        // the curves and the mixer use (R-SVC-5). A path is the one part of a
+                        // mask whose length is variable, so like `dabs` it cannot be reached by
+                        // any per-scalar field, and `set mask=` cannot stand in because it
+                        // appends rather than addresses (R-MASK-6).
+                        m.path = parseCurvePoints(kv.second);
+                        // Drawing a shape and leaving the type on Radial would render nothing
+                        // and look like a bug in the mask, not in the caller.
+                        if (m.path.size() >= 3) m.type = MaskParams::Path;
+                    }
                     else return fail("mask set: unknown field " + k);
                 }
                 mSession.submit();

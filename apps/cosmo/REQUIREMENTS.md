@@ -632,6 +632,33 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   "the slider stops at the border" rather than "the mask renders wrong".
   Radii stay strictly positive: a zero or negative radius is not a small mask, it is a
   division-by-zero the engine guards with an epsilon.
+- **R-MASK-6 A mask can be a shape the user draws.** (**Added 2026-08-27.**) Radial and linear
+  describe light that falls in an ellipse or a straight gradient. A great deal of light does
+  neither — a shaft through a window, a reflector on one side of a face, a building edge cutting a
+  sky — and every one of those is a shape somebody has to draw. A **path mask** is a closed bezier
+  outline: click to place corner points, drag a point's handles to bow the segments either side of
+  it, and the enclosed area is the mask.
+  - **The outline is the geometry, in the same normalised framed-image space every other mask
+    uses**, so R-MASK-3 and R-MASK-5 apply unchanged: it tracks zoom and pan, and a point may sit
+    outside the image, because a shaft of light entering from off-frame is an ordinary request.
+  - **The points are `CurvePoint`s**, the same struct the tone curve and the mixer persist, so the
+    editor, the project format and the engine share one vocabulary and one parser. What is *not*
+    shared is the sampler: `curve::sample` sorts by x because a tone curve is a function of x, and
+    a closed outline is not — it may double back. `maskPathPolygon` walks the points in order and
+    closes the loop, and it is the one flattener the render and the drawing both use, because a
+    mask whose drawn outline is not the outline it renders is worse than no mask.
+  - **Feather is a distance from the outline**, not a radius, so it is built by filling the shape
+    once and softening the result rather than measured per pixel against every segment. `feather=0`
+    is a hard edge and is a legitimate request.
+  - **Overlapping loops cut holes** (even-odd), which is how every vector editor behaves and the
+    only way to take a bite out of a mask without a second mask.
+  - **Fewer than three points is not a shape**: it renders nothing rather than something arbitrary,
+    because half a drawn outline is a normal state to be in for a few seconds.
+  - **Scriptable**: `mask set <i> path=x,y[,ix,iy,ox,oy];…`, through the engine's own control-point
+    codec, so a drawn mask is reachable and assertable with no GUI (R-SVC-2). Like `dabs`, it
+    cannot be reached by any per-scalar field, because its length is variable.
+  - **Old projects still load and new ones still open in old builds**: the path is a fourth,
+    optional group in the mask blob.
 
 ## R-VIEW — The photo dissolves; it never pops — ✅ IMPLEMENTED
 

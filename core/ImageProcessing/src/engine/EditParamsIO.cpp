@@ -11,40 +11,48 @@ namespace arstro
         // "x,y" (2 fields) — identical to the old sampled format, so pre-bezier project
         // files still load (as corner points); a smooth point writes
         // "x,y,ix,iy,ox,oy" (6 fields) and the field count alone flags it as smooth.
-        std::string mixerStr(const std::vector<CurvePoint> &v)
-        {
-            std::ostringstream o;
-            o.precision(7);
-            for (size_t i = 0; i < v.size(); ++i)
-            {
-                if (i) o << ';';
-                const CurvePoint &p = v[i];
-                o << p.x << ',' << p.y;
-                if (p.smooth) o << ',' << p.ix << ',' << p.iy << ',' << p.ox << ',' << p.oy;
-            }
-            return o.str();
-        }
+        std::string mixerStr(const std::vector<CurvePoint> &v) { return formatCurvePoints(v); }
+        std::vector<CurvePoint> parseMixer(const std::string &s) { return parseCurvePoints(s); }
+    }
 
-        std::vector<CurvePoint> parseMixer(const std::string &s)
+    // The one codec, exported (R-SVC-5). The two names above are kept because forty call sites
+    // read better as `mixerStr(p.mixer[0])`.
+    std::string formatCurvePoints(const std::vector<CurvePoint> &v)
+    {
+        std::ostringstream o;
+        o.precision(7);
+        for (size_t i = 0; i < v.size(); ++i)
         {
-            std::vector<CurvePoint> v;
-            std::stringstream ss(s);
-            std::string seg;
-            while (std::getline(ss, seg, ';'))
-            {
-                std::vector<float> n;
-                std::stringstream fs(seg);
-                std::string tok;
-                while (std::getline(fs, tok, ',')) { try { n.push_back(std::stof(tok)); } catch (...) {} }
-                if (n.size() < 2) continue;
-                CurvePoint p;
-                p.x = n[0]; p.y = n[1];
-                if (n.size() >= 6) { p.smooth = true; p.ix = n[2]; p.iy = n[3]; p.ox = n[4]; p.oy = n[5]; }
-                v.push_back(p);
-            }
-            return v;
+            if (i) o << ';';
+            const CurvePoint &p = v[i];
+            o << p.x << ',' << p.y;
+            if (p.smooth) o << ',' << p.ix << ',' << p.iy << ',' << p.ox << ',' << p.oy;
         }
+        return o.str();
+    }
 
+    std::vector<CurvePoint> parseCurvePoints(const std::string &s)
+    {
+        std::vector<CurvePoint> v;
+        std::stringstream ss(s);
+        std::string seg;
+        while (std::getline(ss, seg, ';'))
+        {
+            std::vector<float> n;
+            std::stringstream fs(seg);
+            std::string tok;
+            while (std::getline(fs, tok, ',')) { try { n.push_back(std::stof(tok)); } catch (...) {} }
+            if (n.size() < 2) continue;
+            CurvePoint p;
+            p.x = n[0]; p.y = n[1];
+            if (n.size() >= 6) { p.smooth = true; p.ix = n[2]; p.iy = n[3]; p.ox = n[4]; p.oy = n[5]; }
+            v.push_back(p);
+        }
+        return v;
+    }
+
+    namespace
+    {
         float f(const std::string &s) { try { return std::stof(s); } catch (...) { return 0.f; } }
 
         std::vector<float> floats(const std::string &s, char sep)
@@ -54,7 +62,16 @@ namespace arstro
             return v;
         }
 
-        // One mask packed as: geometry(11) | localAdjust(12) | dabs(x:y:r:f;...)
+        // One mask packed as: geometry(11) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts)
+        //
+        // The fourth group is APPENDED rather than folded into the first: a project written by
+        // this build must still load in one that predates path masks (the old parser stops after
+        // the third group), and a project written by the old build must still load here (a
+        // missing group leaves the path empty). Same reason the third group was separate.
+        //
+        // The path is written by `mixerStr`, the same codec the curves use, because a path point
+        // IS a CurvePoint — one format, one parser, and no second place for a handle to be
+        // dropped.
         std::string maskStr(const MaskParams &m)
         {
             std::ostringstream o; o.precision(7);
@@ -70,6 +87,9 @@ namespace arstro
                 if (i) o << ';';
                 o << d.x << ':' << d.y << ':' << d.radius << ':' << d.flow;
             }
+            // Only when there IS one: an empty trailing group on every radial mask ever written
+            // is noise in a file people read and diff.
+            if (!m.path.empty()) o << '|' << mixerStr(m.path);
             return o.str();
         }
 
@@ -108,6 +128,7 @@ namespace arstro
                     if (df.size() >= 4) m.dabs.push_back({df[0], df[1], df[2], df[3]});
                 }
             }
+            if (parts.size() >= 4 && !parts[3].empty()) m.path = parseMixer(parts[3]);
             return m;
         }
     }
@@ -283,6 +304,14 @@ namespace arstro
                 {
                     fn("dab.x", d.x); fn("dab.y", d.y);
                     fn("dab.radius", d.radius); fn("dab.flow", d.flow);
+                }
+                // A NaN in a path point is as fatal as a NaN radius: it poisons the polygon's
+                // crossing test, which decides whether every pixel of the row is inside.
+                for (CurvePoint &cp : m.path)
+                {
+                    fn("path.x", cp.x); fn("path.y", cp.y);
+                    fn("path.ix", cp.ix); fn("path.iy", cp.iy);
+                    fn("path.ox", cp.ox); fn("path.oy", cp.oy);
                 }
             }
             // Curve and mixer control points: a NaN x makes the LUT builder's sort

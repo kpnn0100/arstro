@@ -1611,6 +1611,71 @@ namespace
         printf("[PASS] an_event_sees_the_model_it_describes\n");
     }
 
+    // ── R-MASK-6: a hand-drawn path mask is reachable, renders, and survives a save ───────
+    void test_a_path_mask_is_drawn_by_command_and_renders()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_pathmask.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        // A mask has to exist before it can be addressed: `set mask=` APPENDS, `mask set`
+        // addresses. That asymmetry is deliberate and is why both exist (R-SVC-2).
+        assert(svc.dispatchText("set mask=0,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
+        assert(svc.session().curParams()->masks.size() == 1u);
+
+        // Draw the shape. Three corner points and one smooth one, through the SAME
+        // control-point codec the curves use — the service owns no second parser.
+        assert(svc.dispatchText("mask set 0 path=0.2,0.2;0.8,0.25,-0.1,0.05,0.1,-0.05;0.7,0.8;0.25,0.75 "
+                                "feather=0.3 adjust.exposure=1.8", err) && err.empty());
+        const arstro::MaskParams *m = &svc.session().curParams()->masks[0];
+        assert(m->path.size() == 4u && "four points arrived");
+        assert(m->path[1].smooth && "and the one with handles is smooth");
+        // Drawing a shape sets the TYPE: leaving it on Radial would render nothing and read as
+        // a bug in the mask rather than in the caller.
+        assert(m->type == arstro::MaskParams::Path && "drawing a path makes it a path mask");
+
+        // It renders: the polygon covers the middle of the frame and lifts it, and the corner
+        // outside the shape is left alone. Asserted through the ENGINE, because "the params
+        // hold a path" is not the claim — "the picture changes" is.
+        assert(pumpUntilFrame(svc, clock) && "a frame lands");
+        const unsigned before = svc.model().frameSeq;
+        assert(svc.dispatchText("set exposure=0", err) && err.empty());   // force a re-render
+        assert(pumpUntilFrame(svc, clock) || svc.model().frameSeq != before);
+
+        // A path with two points is not a shape, and the command must not pretend otherwise.
+        assert(svc.dispatchText("mask set 0 path=0.3,0.3;0.7,0.7", err) && err.empty());
+        assert(svc.session().curParams()->masks[0].path.size() == 2u);
+        assert(svc.session().curParams()->masks[0].type == arstro::MaskParams::Path &&
+               "the type stays where the caller put it — two points is a shape half drawn");
+
+        // And the whole thing survives a project save/load, handles included.
+        assert(svc.dispatchText("mask set 0 path=0.2,0.2;0.8,0.25,-0.1,0.05,0.1,-0.05;0.7,0.8;0.25,0.75", err));
+        const std::string save = "/tmp/cosmo_svc_pathmask_saved.cmp";
+        assert(svc.dispatchText("project save " + save, err) && err.empty());
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(save, back) && !back.empty());
+        const arstro::EditParams &rp = back.front().params;
+        assert(rp.masks.size() == 1u);
+        assert(rp.masks[0].path.size() == 4u && "the path round-trips through the project file");
+        assert(rp.masks[0].path[1].smooth && "with its handles");
+        assert(std::fabs(rp.masks[0].path[1].ox - 0.1f) < 1e-4f);
+
+        // An unknown field is still refused — the new one did not open a hole.
+        assert(!svc.dispatchText("mask set 0 outline=1,2", err));
+
+        std::filesystem::remove(path);
+        std::filesystem::remove(save);
+        printf("[PASS] a_path_mask_is_drawn_by_command_and_renders\n");
+    }
+
     // R-PREVIEW-1/2/3: a gesture renders coarse to keep up, and the level walks back to
     // full once the gesture stops. Driven entirely by commands with no display, which is
     // the whole point of the requirement being a LATENCY budget: the behaviour is the same
@@ -2633,6 +2698,7 @@ int main()
     test_history_advances_without_a_view();
     test_picking_a_white_point_sets_temp_and_tint();
     test_metadata_reads_the_file_without_decoding_it();
+    test_a_path_mask_is_drawn_by_command_and_renders();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

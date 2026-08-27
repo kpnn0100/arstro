@@ -1,5 +1,6 @@
 #include "MaskStack.h"
 #include "../base/Parallel.h"
+#include "../base/Spatial.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
 #include "../tone/ToneRegions.h"
@@ -15,11 +16,67 @@ namespace arstro
 {
     static inline float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi ? hi : x); }
 
+    /** A path mask's feather, at 1.0, as a fraction of the image's short edge. 8% is soft
+     *  enough to blend a hand-drawn light into a sky and tight enough that the default 0.5
+     *  still reads as a defined shape. */
+    static constexpr float kPathFeatherFraction = 0.08f;
+
     static inline float smoothstep(float e0, float e1, float x)
     {
         if (e1 <= e0) return x >= e1 ? 1.f : 0.f;
         float t = clampf((x - e0) / (e1 - e0), 0.f, 1.f);
         return t * t * (3.f - 2.f * t);
+    }
+
+    std::vector<std::pair<float, float>> maskPathPolygon(const std::vector<CurvePoint> &pts,
+                                                         int perSeg)
+    {
+        std::vector<std::pair<float, float>> out;
+        if (pts.size() < 3) return out;      // no area: not a shape yet
+        if (perSeg < 1) perSeg = 1;
+        const std::size_t n = pts.size();
+        out.reserve(n * (std::size_t)perSeg + 1);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const CurvePoint &a = pts[i];
+            const CurvePoint &b = pts[(i + 1) % n];   // closed: the last segment wraps
+            // A corner point ignores its handles, exactly as a corner does on a tone curve —
+            // so a polygon drawn with plain clicks stays a polygon and does not bulge.
+            const float x1 = a.smooth ? a.x + a.ox : a.x;
+            const float y1 = a.smooth ? a.y + a.oy : a.y;
+            const float x2 = b.smooth ? b.x + b.ix : b.x;
+            const float y2 = b.smooth ? b.y + b.iy : b.y;
+            out.push_back({a.x, a.y});
+            for (int s = 1; s < perSeg; ++s)
+            {
+                const float t = (float)s / (float)perSeg;
+                out.push_back({curve::cubic(a.x, x1, x2, b.x, t),
+                               curve::cubic(a.y, y1, y2, b.y, t)});
+            }
+        }
+        return out;
+    }
+
+    namespace
+    {
+        /** Even-odd (crossing) test against a closed polygon. Even-odd rather than nonzero
+         *  winding on purpose: a user who draws a figure-of-eight gets a hole where the loops
+         *  overlap, which is the behaviour every vector editor has and the only one that lets
+         *  someone cut a hole in a mask without a second mask. */
+        bool insidePolygon(const std::vector<std::pair<float, float>> &poly, float x, float y)
+        {
+            bool in = false;
+            const std::size_t n = poly.size();
+            for (std::size_t i = 0, j = n - 1; i < n; j = i++)
+            {
+                const float xi = poly[i].first, yi = poly[i].second;
+                const float xj = poly[j].first, yj = poly[j].second;
+                if ((yi > y) != (yj > y) &&
+                    x < (xj - xi) * (y - yi) / ((yj - yi) != 0.f ? (yj - yi) : 1e-8f) + xi)
+                    in = !in;
+            }
+            return in;
+        }
     }
 
     float maskCoverage(const MaskParams &m, float nx, float ny)
@@ -44,6 +101,14 @@ namespace arstro
             cov = smoothstep(0.f, 1.f, t);
             break;
         }
+        case MaskParams::Path:
+        {
+            // Hard-edged here — see the header. The polygon is rebuilt per call, which is why
+            // no render uses this path: `buildMaskCoverage` flattens once for the whole plane.
+            const auto poly = maskPathPolygon(m.path);
+            if (poly.size() >= 3) cov = insidePolygon(poly, nx, ny) ? 1.f : 0.f;
+            break;
+        }
         case MaskParams::Brush:
         {
             for (const auto &dab : m.dabs)
@@ -59,6 +124,85 @@ namespace arstro
         }
         if (m.inverted) cov = 1.f - cov;
         return clampf(cov, 0.f, 1.f);
+    }
+
+    void buildMaskCoverage(const MaskParams &m, int w, int h, std::vector<Pixel> &out)
+    {
+        if (w <= 0 || h <= 0) { out.clear(); return; }
+        out.assign((std::size_t)w * h, (Pixel)0);
+        if (m.type != MaskParams::Path)
+        {
+            // Closed-form types: the plane is just the per-pixel answer, materialised. Nothing
+            // in the render asks for this, but a caller that wants a plane for any mask should
+            // get one rather than a special case.
+            par::parallelFor(h, [&](int y0, int y1) {
+                for (int y = y0; y < y1; ++y)
+                {
+                    const float ny = (y + 0.5f) / h;
+                    for (int x = 0; x < w; ++x)
+                        out[(std::size_t)y * w + x] = (Pixel)maskCoverage(m, (x + 0.5f) / w, ny);
+                }
+            });
+            return;
+        }
+
+        const auto poly = maskPathPolygon(m.path);
+        if (poly.size() < 3)
+        {
+            // No area. An INVERTED empty path covers everything, which is the consistent
+            // answer (`maskCoverage` says the same) even though it is a strange thing to ask.
+            if (m.inverted) std::fill(out.begin(), out.end(), (Pixel)1);
+            return;
+        }
+
+        // Fill the outline, one row at a time: gather the x where each edge crosses the row's
+        // centre, sort them, and fill between alternate pairs. O(rows x edges), against the
+        // O(pixels x edges) a per-pixel test would cost.
+        par::parallelFor(h, [&](int yy0, int yy1) {
+            std::vector<float> xs;
+            xs.reserve(poly.size());
+            for (int y = yy0; y < yy1; ++y)
+            {
+                const float ny = (y + 0.5f) / h;
+                xs.clear();
+                const std::size_t n = poly.size();
+                for (std::size_t i = 0, j = n - 1; i < n; j = i++)
+                {
+                    const float yi = poly[i].second, yj = poly[j].second;
+                    if ((yi > ny) != (yj > ny))
+                    {
+                        const float dy = (yj - yi) != 0.f ? (yj - yi) : 1e-8f;
+                        xs.push_back(poly[i].first + (poly[j].first - poly[i].first) * (ny - yi) / dy);
+                    }
+                }
+                if (xs.size() < 2) continue;
+                std::sort(xs.begin(), xs.end());
+                Pixel *row = out.data() + (std::size_t)y * w;
+                for (std::size_t k = 0; k + 1 < xs.size(); k += 2)
+                {
+                    int a = (int)std::floor(xs[k] * w);
+                    int b = (int)std::ceil(xs[k + 1] * w);
+                    if (a < 0) a = 0;
+                    if (b > w) b = w;
+                    for (int x = a; x < b; ++x) row[x] = (Pixel)1;
+                }
+            }
+        });
+
+        // Feather = blur the filled shape. A distance transform would give the same 0.5 contour
+        // and cost more; blurring is what makes the edge fall off SMOOTHLY on both sides of the
+        // outline, which is what a photographer means by feathering a shape. feather == 0 leaves
+        // the fill alone, because a hard-edged path is a legitimate request.
+        const float feather = clampf(m.feather, 0.f, 1.f);
+        if (feather > 0.f)
+        {
+            // Fraction of the SHORT edge, so the softness a user sets does not change when the
+            // preview resolution does — the same reason every mask coordinate is normalised.
+            const float sigma = feather * kPathFeatherFraction * (float)std::min(w, h);
+            if (sigma >= 0.5f) spatial::gaussianBlurPlane(out, out, w, h, sigma);
+        }
+        if (m.inverted)
+            for (Pixel &v : out) v = (Pixel)1 - v;
     }
 
     static bool isIdentity(const LocalAdjust &a)
@@ -78,6 +222,9 @@ namespace arstro
         {
             const LocalAdjust &a = m.adjust;
             if (isIdentity(a)) continue;
+            // A path with fewer than three points has no area, and building a plane to
+            // discover that would mean cloning the image first.
+            if (m.type == MaskParams::Path && m.path.size() < 3 && !m.inverted) continue;
 
             // Adjusted copy through the same processors the global pipeline uses.
             Image adj = img.clone();
@@ -98,6 +245,13 @@ namespace arstro
             if (a.clarity != 0) { Clarity cl; cl.setAmount(a.clarity); adj = cl.apply(adj); }
             if (a.dehaze != 0) { Dehaze dh; dh.setAmount(a.dehaze); adj = dh.apply(adj); }
 
+            // A path's feather is a distance from its boundary, so its coverage is built once
+            // for the whole plane rather than evaluated per pixel (see the header). Every other
+            // type is closed-form and allocates nothing.
+            std::vector<Pixel> plane;
+            if (m.type == MaskParams::Path) buildMaskCoverage(m, w, h, plane);
+            const Pixel *cov0 = plane.empty() ? nullptr : plane.data();
+
             Pixel *base = img.data();
             const Pixel *over = adj.data();
             par::parallelFor(h, [&](int y0, int y1) {
@@ -106,7 +260,8 @@ namespace arstro
                     float ny = (y + 0.5f) / h;
                     for (int x = 0; x < w; ++x)
                     {
-                        float cov = maskCoverage(m, (x + 0.5f) / w, ny);
+                        float cov = cov0 ? (float)cov0[(std::size_t)y * w + x]
+                                         : maskCoverage(m, (x + 0.5f) / w, ny);
                         if (cov <= 0.f) continue;
                         Pixel *q = base + ((size_t)y * w + x) * ch;
                         const Pixel *o = over + ((size_t)y * w + x) * ch;
