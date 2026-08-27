@@ -88,6 +88,11 @@ namespace cosmo
              *  slow one — a visible hitch at the start of every gesture on a small board,
              *  which is exactly what this exists to remove. A script that sends one `set`
              *  and no gesture keeps today's behaviour and renders full. */
+            /** R-WB-1: "this pixel should be white". `fields` carries x and y, normalised 0..1
+             *  of the whole photo. A Command and not a view-only gesture, because the SOLVE is
+             *  behaviour — a second front end asking the same question must get the same
+             *  temperature and tint, and a script must be able to ask it at all. */
+            WhiteBalancePick,   // fields: x, y (0..1)
             Gesture,         // flag = on
             Quit
         };

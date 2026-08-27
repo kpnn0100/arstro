@@ -45,6 +45,10 @@ namespace icon
     void check(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.6);
     /** lucide CheckCircle — the export-complete confirmation (R-EXPORT-6 beat 3). */
     void checkCircle(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c, double strokeWidth = 1.4);
+    /** A pipette / eyedropper — the white-balance picker's tool button (R-WB-1). Drawn rather
+     *  than imported so it matches the other glyphs' weight and 0..1 box convention. */
+    void pipette(artboard::IRenderTarget &t, const artboard::Rect &box, const artboard::Color &c,
+                 double strokeWidth = 1.2);
 }
 }
 }

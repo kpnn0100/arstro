@@ -229,6 +229,43 @@ namespace arstro
             }
         }
 
+        bool solveNeutralWhiteBalance(Pixel r, Pixel g, Pixel b,
+                                      Pixel kelvinMin, Pixel kelvinMax,
+                                      Pixel tintMin, Pixel tintMax,
+                                      Pixel &kelvin, Pixel &tint)
+        {
+            // A NaN or an infinity here would propagate into the parameters and from there into
+            // every render (D-48's family), so it is refused rather than clamped.
+            auto finite = [](Pixel v) { return v == v && v > (Pixel)-3.4e38 && v < (Pixel)3.4e38; };
+            if (!finite(r) || !finite(g) || !finite(b)) return false;
+            // Nothing usable: a black pixel has no colour to balance, and dividing by it would
+            // manufacture an answer out of noise. The caller reports "pick somewhere brighter"
+            // rather than moving the sliders to something arbitrary.
+            const Pixel eps = (Pixel)1e-4;
+            if (r < eps && g < eps && b < eps) return false;
+            if (g < eps || (r + b) < eps) return false;
+
+            double w = ((double)b - (double)r) / (0.45 * ((double)r + (double)b));
+            // The same bounds kelvinToRgbGain applies to `w`, so a solve outside them would be
+            // describing a gain the applier cannot produce.
+            if (w > 2.0) w = 2.0;
+            if (w < -1.0) w = -1.0;
+            const double gr = 1.0 + 0.45 * w;
+            double t = (1.0 - (double)r * gr / (double)g) / 0.30;
+            if (t > 1.0) t = 1.0;
+            if (t < -1.0) t = -1.0;
+
+            double k = 6500.0 * (1.0 + w);
+            double ti = t * 150.0;
+            if (k < (double)kelvinMin) k = kelvinMin;
+            if (k > (double)kelvinMax) k = kelvinMax;
+            if (ti < (double)tintMin) ti = tintMin;
+            if (ti > (double)tintMax) ti = tintMax;
+            kelvin = (Pixel)k;
+            tint = (Pixel)ti;
+            return true;
+        }
+
         Pixel hueDelta(Pixel a, Pixel b)
         {
             Pixel d = std::fmod(b - a + (Pixel)540, (Pixel)360) - (Pixel)180;

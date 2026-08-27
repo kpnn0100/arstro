@@ -93,6 +93,22 @@ namespace arstro
          *  know the source shape can only guess, which is what `XformPanel` was doing (it
          *  assumed a square and said so in a comment). */
         bool sourceSize(int slot, int &w, int &h) const;
+
+        /** Average the slot's LINEAR-LIGHT source pixels in a small square around the normalised
+         *  point (nx, ny), for the white-balance picker (R-WB-1). Returns false when the slot has
+         *  no resident pixels at all.
+         *
+         *  From the PROXY, and pre-processing, both deliberately. Pre-processing because "this
+         *  should be white" is a statement about the PHOTO, not about the rendered result — a
+         *  picker that read the screen would fold the exposure and curve already applied into its
+         *  answer, and the answer would then change every time an unrelated slider moved. The
+         *  proxy because it is what is resident (R-MEM-5) and the difference from full resolution
+         *  is a box average either way.
+         *
+         *  `radius` is in proxy pixels and is why this averages rather than samples: one pixel of
+         *  a real photo is sensor noise, and a white balance derived from one noisy pixel is a
+         *  white balance that jumps when you click 1 px to the left. */
+        bool sampleSourceLinear(int slot, double nx, double ny, int radius, Pixel out[3]) const;
         int imageCount() const { return (int)mSlots.size(); }
         int currentSlot() const { return mCurrent; }
         bool hasImage() const { return mCurrent >= 0; }

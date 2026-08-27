@@ -82,6 +82,8 @@ namespace cosmo_v2
                 {"Whites", -100, 100, set("whites")},
                 {"Blacks", -100, 100, set("blacks")},
             }},
+            // R-WB-1: the eyedropper rides on the COLOUR header, which is the section
+            // Temperature and Tint live in — a tool belongs to the scope it acts on.
             {"COLOUR", {
                 // Temperature / Tint tracks carry a colour ramp so the drag
                 // direction reads as the colour it pushes toward (task point 6):
@@ -92,7 +94,9 @@ namespace cosmo_v2
                  true, Color::rgba(88, 196, 118), Color::rgba(206, 104, 196)},
                 {"Vibrance", -100, 100, set("vibrance")},
                 {"Saturation", -100, 100, set("saturation")},
-            }},
+            },
+             ParamPanel::Section::Action::Pipette, /*toggles=*/true, false,
+             [this](bool armed) { if (onWhiteBalancePickArmed) onWhiteBalancePickArmed(armed); }},
             {"PRESENCE", {
                 {"Texture", -100, 100, set("texture")},
                 {"Clarity", -100, 100, set("clarity")},
@@ -346,6 +350,10 @@ namespace cosmo_v2
 
     int RightColumn::activeTab() const { return mTabs->selectedIndex(); }
     double RightColumn::aspectLock() const { return mXform ? mXform->lockedRatio() : 0.0; }
+    void RightColumn::setWhiteBalancePickArmed(bool armed)
+    {
+        if (mBasicDetail) mBasicDetail->setSectionActionArmed("COLOUR", armed);
+    }
     bool RightColumn::maskTabActive() const { return mTabs->selectedIndex() == kTabMask; }
 
     const MaskParams *RightColumn::selectedMaskParams() const

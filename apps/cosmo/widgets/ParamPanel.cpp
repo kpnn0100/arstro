@@ -1,4 +1,5 @@
 #include "ParamPanel.h"
+#include "Icons.h"   // icon::pipette — the white-balance picker's tool button (R-WB-1)
 #include "SectionHeader.h"
 #include <algorithm>
 
@@ -21,6 +22,52 @@ namespace cosmo_v2
                 if (spec.hasGradient) row->setTrackGradient(spec.gradLeft, spec.gradRight);
                 addChild(row);
                 mFlatRows.push_back(row);
+            }
+        // R-WB-1: one optional tool button per section, added AFTER the rows so it sits above
+        // them in hit-test order — it overlaps no row, but a header button that lost to a slider
+        // would be the kind of dead control D-32's family is made of.
+        for (auto &section : mSections)
+        {
+            std::shared_ptr<IconButton> btn;
+            if (section.action == Section::Action::Pipette)
+            {
+                // The Painter signature drops the stroke width, so the glyph is wrapped rather
+                // than passed by name — its default weight matches the other header glyphs.
+                btn = std::make_shared<IconButton>(
+                    [](artboard::IRenderTarget &t, const artboard::Rect &b, const artboard::Color &c) {
+                        icon::pipette(t, b, c);
+                    });
+                btn->idleColor = palette::mutedForeground();
+                btn->activeColor = palette::primary();
+                btn->onClick = [this, &section] {
+                    if (section.toggles)
+                    {
+                        // Latching: the button IS the armed state, so the callback reports what
+                        // it became rather than the caller having to track it.
+                        const bool armed = !section.armed;
+                        section.armed = armed;
+                        if (section.onAction) section.onAction(armed);
+                    }
+                    else if (section.onAction)
+                    {
+                        section.onAction(true);
+                    }
+                };
+                addChild(btn);
+            }
+            mSectionActions.push_back(btn);
+        }
+    }
+
+    void ParamPanel::setSectionActionArmed(const std::string &sectionTitle, bool armed)
+    {
+        for (size_t i = 0; i < mSections.size(); ++i)
+            if (mSections[i].title == sectionTitle)
+            {
+                mSections[i].armed = armed;
+                if (i < mSectionActions.size() && mSectionActions[i])
+                    mSectionActions[i]->active = armed;
+                return;
             }
     }
 
@@ -65,9 +112,22 @@ namespace cosmo_v2
         double y = -mScroll.value();
         size_t rowIdx = 0;
         mSectionHeaderY.clear();
-        for (const auto &section : mSections)
+        for (size_t si = 0; si < mSections.size(); ++si)
         {
+            const auto &section = mSections[si];
             mSectionHeaderY.push_back(y);
+            // R-WB-1: the section's tool button rides on its header row, right-aligned, and is
+            // culled with it — a header scrolled off the top must not leave a button behind.
+            if (si < mSectionActions.size() && mSectionActions[si])
+            {
+                auto &btn = mSectionActions[si];
+                const double bs = kSectionHeaderHeight - 2.0;
+                btn->width.set(bs); btn->height.set(bs);
+                btn->x.set(std::max(0.0, w - kPadX - bs));
+                btn->y.set(y + 1.0);
+                btn->visible = (y + kSectionHeaderHeight >= 0 && y <= height.value());
+                btn->active = mSections[si].armed;   // lit while armed (R-WB-1)
+            }
             y += kSectionHeaderHeight;
             for (size_t i = 0; i < section.rows.size(); ++i, ++rowIdx)
             {

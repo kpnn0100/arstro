@@ -207,6 +207,13 @@ namespace arstro
         return mEngine.sourceSize(slot, w, h);
     }
 
+    bool RenderService::sampleSourceLinear(int slot, double nx, double ny, int radius,
+                                          Pixel out[3]) const
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        return mEngine.sampleSourceLinear(slot, nx, ny, radius, out);
+    }
+
     void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {
         std::lock_guard<std::mutex> lk(mMu);
@@ -466,6 +473,11 @@ namespace arstro
     bool RenderService::sourceSize(int slot, int &w, int &h) const
     {
         return mEngine.sourceSize(slot, w, h);
+    }
+    bool RenderService::sampleSourceLinear(int slot, double nx, double ny, int radius,
+                                          Pixel out[3]) const
+    {
+        return mEngine.sampleSourceLinear(slot, nx, ny, radius, out);
     }
     void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {

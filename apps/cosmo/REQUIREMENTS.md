@@ -1495,3 +1495,44 @@ had one.
   stays inside the frame and keeps a minimum size in both axes. A 1-pixel crop is not a crop, and
   the pyramid made small crops reachable at coarse preview levels (a level-3 preview of a 0.2% crop
   is a 1×1 image), so the clamp is a correctness requirement rather than a nicety.
+
+---
+
+## R-WB — White balance by picking what should be white — ✅ IMPLEMENTED
+
+Setting white balance by dragging two sliders until the cast goes away is guesswork. Every editor
+offers the direct answer instead: point at something that ought to be neutral and let the software
+work out the numbers.
+
+- **R-WB-1 Click what should be white, and both sliders move.** An eyedropper on the COLOUR section
+  header arms the tool; the next click on the photo samples there and sets **temperature and tint
+  together**, because a cast has two axes and correcting one without the other just trades a blue
+  cast for a green one.
+  - **Sampled from the PHOTO, not from the screen.** The probe reads the source pixels in linear
+    light, before the pipeline. "This should be white" is a statement about the photograph; a picker
+    that read the rendered frame would fold the exposure and curve already applied into its answer,
+    and that answer would then change every time an unrelated slider moved.
+  - **Averaged, not sampled.** One pixel of a real photograph is sensor noise. The probe box-averages
+    a small neighbourhood, so clicking one pixel to the left does not give a different white balance.
+  - **Solved exactly, not searched.** `color::solveNeutralWhiteBalance` is the algebraic inverse of
+    `kelvinToRgbGain` and lives beside it, because an inverse kept anywhere else drifts from the
+    function it inverts.
+  - **One undoable step**, applied through the same params path a slider uses — so the picker, the
+    sliders, a preset and `set temp=…` are one operation with four front doors, and Ctrl+Z takes it
+    back like anything else.
+  - **It refuses rather than invents.** A patch too dark to carry colour has no white balance that
+    neutralises it; the tool says so and leaves the sliders alone instead of moving them to
+    something arbitrary. It also disarms after one sample, so the pointer never keeps meaning
+    something unexpected.
+  - **Scriptable**: `wb pick --x 0.5 --y 0.5`, normalised to the whole photo, so the behaviour is
+    reachable and assertable with no GUI (R-SVC-2).
+- **R-WB-2 The temperature slider covers the range the engine can express, in mired.** The old
+  mapping was `6500 + v/100 · 3500` — **3000..10000 K** — while its own comment claimed 2000..50000 K.
+  Two things were wrong with it. It was **too narrow to be useful**: a photo shot in shade needs
+  ~12000 K, so the picker solved the right answer and had it clamped away, correcting about half the
+  cast (D-54). And it was **linear in kelvin**, which is the wrong axis — 3000→4000 K is a large
+  visible shift while 9000→10000 K is almost nothing, so the slider did nearly all its work in the
+  first third of its travel. It is now linear in **mired** (10⁶/K), the unit that makes equal slider
+  distances equal visible steps, spanning **2000..19500 K** with neutral at the centre. The top is
+  not a taste: `kelvinToRgbGain` clamps its own `w` to 2.0, so 19500 K is the warmest gain the engine
+  can produce and anything beyond it would be dead slider.

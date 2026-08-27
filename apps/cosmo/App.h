@@ -459,6 +459,9 @@ namespace cosmo_v2
         /** Whether the Xform tab wants the photo rendered uncropped (R-CROP-5). Tracked so the
          *  reveal is STARTED on the change rather than restarted every frame. */
         bool mCropPreviewOn = false;
+        /** R-WB-1: the eyedropper is armed, so the next click on the photo samples instead of
+         *  doing whatever it usually does. View state — which click means what is presentation. */
+        bool mWbPickArmed = false;
         /** R-CROP-7: how far the rendered framing is eased from the crop (0) toward the whole
          *  photo (1). 220 ms, long enough to read as a zoom and short enough not to be in the
          *  way — a touch longer than the 180 ms cross-fades because it moves the whole picture. */

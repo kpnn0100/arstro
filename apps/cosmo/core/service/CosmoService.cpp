@@ -298,6 +298,16 @@ namespace cosmo
         // needs it. Nothing blocks and nothing sleeps — a step is just another coalesced
         // render request, so a live run and a scripted one take the same path.
         mNowMs = nowMs;
+        // The session's clock, which ONLY the two views used to advance (`App::render` and
+        // `PhoneApp`). `History::record` coalesces edits that arrive close together — a whole
+        // slider drag is one undoable step — and it reads that clock, so a front end that never
+        // ticked it left it at 0 and **every edit in the session merged into one history node**.
+        // Undo was therefore broken for `cosmo-cc`, for a script, and for the control socket, and
+        // worked in the GUI only because a view happened to do the service's job (D-55).
+        //
+        // It belongs here: `pump` already owns the clock (R-SVC-6, the caller drives it), and
+        // history is behaviour, not presentation (R-SVC-1).
+        mSession.tick(nowMs);
         maybeRefine(nowMs);
 
         // Frames first, and UNCONDITIONALLY — this used to sit behind the load's early-return,
@@ -464,6 +474,44 @@ namespace cosmo
     }
 
     // ── fields ────────────────────────────────────────────────────────────────────────
+    bool CosmoService::pickWhiteBalance(const Command &c)
+    {
+        // R-WB-1: "this pixel should be white". Three steps, and each one is somewhere it can be
+        // reused: the engine samples, `color::solveNeutralWhiteBalance` solves, and the result is
+        // applied through the SAME params path a slider uses — so the picker lands one history
+        // entry, one event and one render, exactly like dragging the two sliders would.
+        EditParams *p = mSession.curParams();
+        if (!p) return fail("wb pick: nothing selected to edit");
+        const int slot = mSession.currentSlot();
+        if (slot < 0) return fail("wb pick: no image");
+
+        const double x = std::atof(c.field("x").c_str());
+        const double y = std::atof(c.field("y").c_str());
+        if (!(x >= 0.0 && x <= 1.0 && y >= 0.0 && y <= 1.0))
+            return fail("wb pick: x and y must be 0..1");
+
+        // A box average, not a pixel: one pixel of a real photo is sensor noise, and a white
+        // balance derived from it jumps when you click 1 px to the left.
+        Pixel rgb[3] = {0, 0, 0};
+        if (!mSession.renderService().sampleSourceLinear(slot, x, y, kWbPickRadius, rgb))
+            return fail("wb pick: no pixels resident for this image yet");
+
+        Pixel kelvin = 6500, tint = 0;
+        // Clamped to the range the UI exposes, so the picker can never set a value the sliders
+        // cannot show or the user cannot undo by dragging.
+        if (!color::solveNeutralWhiteBalance(rgb[0], rgb[1], rgb[2],
+                                            (Pixel)kWbKelvinMin, (Pixel)kWbKelvinMax,
+                                            (Pixel)kWbTintMin, (Pixel)kWbTintMax, kelvin, tint))
+            return fail("wb pick: that area is too dark to balance — pick somewhere brighter");
+
+        p->temp = (float)kelvin;
+        p->tint = (float)tint;
+        mSession.submit();
+        refreshModel();                       // D-34: before the emit
+        emit(Event::Kind::ParamsChanged, "temp,tint");
+        return true;
+    }
+
     bool CosmoService::applySetFields(const Command &c)
     {
         EditParams *p = mSession.curParams();
@@ -712,6 +760,7 @@ namespace cosmo
             // applySetFields refreshes before it emits (D-34); refreshing again here would be
             // harmless but would leave two places deciding the order.
             case Command::Kind::Set: return applySetFields(c);
+            case Command::Kind::WhiteBalancePick: return pickWhiteBalance(c);
 
             // R-PREVIEW-1. Turning a gesture OFF backdates the silence timer so the
             // settle-and-refine walk starts on the very next pump rather than kSettleMs

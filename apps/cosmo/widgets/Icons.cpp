@@ -236,6 +236,32 @@ namespace icon
         t.strokePath();
     }
 
+    void pipette(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    {
+        Frac f{box};
+        t.setStroke(c, strokeWidth);
+        // The barrel: a diagonal tube from the top-right down to a tip at the bottom-left, which
+        // is the orientation every eyedropper cursor has had since MacPaint — the tip points at
+        // what it will sample.
+        t.beginPath();
+        t.moveTo(f.x(0.58), f.y(0.26));
+        t.lineTo(f.x(0.80), f.y(0.48));
+        t.lineTo(f.x(0.40), f.y(0.88));
+        t.lineTo(f.x(0.18), f.y(0.66));
+        t.closePath();
+        t.strokePath();
+        // The bulb, up the same diagonal.
+        t.beginPath();
+        t.moveTo(f.x(0.66), f.y(0.18));
+        t.lineTo(f.x(0.88), f.y(0.40));
+        t.strokePath();
+        // A cross-tick near the tip: what makes it read as sampling rather than as a pen.
+        t.beginPath();
+        t.moveTo(f.x(0.24), f.y(0.58));
+        t.lineTo(f.x(0.46), f.y(0.80));
+        t.strokePath();
+    }
+
     void image(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
     {
         Frac f{box};

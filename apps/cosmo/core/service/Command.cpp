@@ -87,7 +87,8 @@ namespace cosmo
             "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
-            "settings set", "screen", "state print", "ui dump", "wait", "gesture", "quit"};
+            "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "gesture",
+            "quit"};
         return names;
     }
 
@@ -160,6 +161,15 @@ namespace cosmo
                 if (!splitField(t[i], kv)) { err = "not a key=value: " + t[i]; return Command{}; }
                 c.fields.push_back(kv);
             }
+        }
+        else if (v == "wb")
+        {
+            if (!need(2, "wb pick")) return c;
+            if (sub != "pick") { err = "wb: expected pick"; return Command{}; }
+            c.kind = Command::Kind::WhiteBalancePick;
+            collectFlags(t, 2, c);
+            if (c.field("x").empty() || c.field("y").empty())
+            { err = "wb pick: needs --x and --y (0..1)"; return Command{}; }
         }
         else if (v == "gesture")
         {
@@ -349,6 +359,10 @@ namespace cosmo
                 break;
             case Command::Kind::Bypass: o << "bypass " << c.index << (c.flag ? " on" : " off"); break;
             case Command::Kind::Gesture: o << "gesture " << (c.flag ? "on" : "off"); break;
+            case Command::Kind::WhiteBalancePick:
+                o << "wb pick";
+                for (const auto &kv : c.fields) o << " --" << kv.first << ' ' << kv.second;
+                break;
             case Command::Kind::GroupNew: o << "group new " << q(c.name); break;
             case Command::Kind::GroupUngroup: o << "group ungroup " << c.index; break;
             case Command::Kind::GroupRename:

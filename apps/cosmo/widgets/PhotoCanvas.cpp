@@ -306,6 +306,20 @@ namespace cosmo_v2
     {
         if (g.type == Gesture::Type::RightClick && onContext) { onContext(g.pos.x, g.pos.y); return true; }
 
+        // R-WB-1: offered FIRST, so an armed eyedropper wins the click. Normalised against the
+        // fitted rect, so zoom and pan are already in it and the coordinate is a point on the
+        // PHOTO rather than on the canvas — which is what the engine samples against.
+        if (g.type == Gesture::Type::Click && onPickPoint)
+        {
+            const Rect fit = visibleView()->fittedRect();
+            if (fit.w > 0.0 && fit.h > 0.0)
+            {
+                const double nx = (local.x - fit.x) / fit.w, ny = (local.y - fit.y) / fit.h;
+                if (nx >= 0.0 && nx <= 1.0 && ny >= 0.0 && ny <= 1.0 && onPickPoint(nx, ny))
+                    return true;
+            }
+        }
+
         // ── R-VIEW-3: slide the seam ────────────────────────────────────────────────────
         // Checked BEFORE the pan, so a press on the seam moves the seam even while zoomed;
         // a press anywhere else still pans, which is the whole reason this is a hit test and

@@ -98,6 +98,9 @@ namespace arstro
          *  the threaded build: the value is written once when the slot is added and never
          *  changes, so this is a cheap read the UI thread may make whenever it likes. */
         bool sourceSize(int slot, int &w, int &h) const;
+        /** Box-average the slot's linear source pixels around a normalised point, for the
+         *  white-balance picker (R-WB-1). Takes the render mutex; a cheap read the UI may make. */
+        bool sampleSourceLinear(int slot, double nx, double ny, int radius, Pixel out[3]) const;
         size_t residentBytes() const;
         int rehydrations() const;
 

@@ -2762,3 +2762,52 @@ the input is a bug waiting to happen.
 question; a real edit makes it dirty; a dirty project does **not** close on its own; the modal is in
 the tree; **Escape** cancels and neither closes the app nor quietly marks the work clean; and Discard
 closes it and clears the flag.
+
+### DR-WB-1/2 White balance by picking what should be white (R-WB-1, R-WB-2)
+Three layers, one per job. `EditEngine::sampleSourceLinear` box-averages the **source** pixels in
+linear light around a normalised point — pre-pipeline, because "this should be white" is a statement
+about the photograph and a picker that read the rendered frame would fold the exposure and curve into
+its answer. `color::solveNeutralWhiteBalance` is the algebraic inverse of `kelvinToRgbGain` and sits
+beside it, because an inverse kept anywhere else drifts from the function it inverts:
+
+```
+after WB:  r·gr = g·gg = b·gb
+from r,b:  w = (b − r) / (0.45·(r + b))        ->  kelvin = 6500·(1 + w)
+from g:    t = (1 − r(1+0.45w)/g) / 0.30       ->  tint   = 150·t
+```
+The luminance normalisation inside `kelvinToRgbGain` divides all three gains by one factor, so it
+cannot affect those equalities and is ignored — which is why the solve is exact rather than iterative.
+`CosmoService::pickWhiteBalance` then applies the result through the **same params path a slider
+uses**, so the picker lands one history entry, one event and one render.
+
+Reachable as `wb pick --x 0.5 --y 0.5` (R-SVC-2). In the UI an eyedropper on the **COLOUR** section
+header arms it — a tool belongs to the scope it acts on — and the next click on the photo samples
+there. `ParamPanel::Section` gained a generic optional header action for this. Arming is view state
+(which click means what is presentation); the solve is behaviour. It **disarms after one sample**,
+including a failed one, so the pointer never keeps meaning something unexpected.
+
+It refuses rather than invents: a patch too dark to carry colour gets
+`"that area is too dark to balance — pick somewhere brighter"` and the sliders are left alone.
+
+**R-WB-2, and this is what made the feature actually work.** The first version corrected only half of
+a real cast, because `toKelvin` mapped the slider to **3000..10000 K** while its own comment claimed
+2000..50000 K. The picker solved 11923 K and the clamp threw it away. The mapping is now linear in
+**mired** (10⁶/K) over **2000..19500 K** — mired because equal slider distances should be equal
+visible steps, and 19500 K because that is `kelvinToRgbGain`'s own ceiling (`w` clamps at 2.0). Stored
+values are untouched: `temp` is kelvin in `EditParams`, so a project keeps its value and only the
+slider position moves. See **D-54**.
+
+**Guarded by** `cosmo_core_tests::picking_a_white_point_sets_temp_and_tint`, whose central assertion
+is not "the temperature went up" but that the picked gains **actually neutralise the sampled colour** —
+applying `kelvinToRgbGain(temp, tint)` to the sampled RGB must leave the three channels equal. That is
+the assertion that would catch an inverse drifting from its forward function:
+
+```
+balanced spread = 0.0000% (was 52.4%)          picked temp=11923K tint=-91.4
+```
+
+It also checks that a pick is **one** undoable step and that undo returns to the neutral white, that
+out-of-range coordinates are refused with a message, and — via the new
+`history_advances_without_a_view` — that history steps at all without a view, which it did not
+(**D-55**: only `App` and `PhoneApp` ever advanced the session's clock, so every headless edit merged
+into one node).

@@ -147,6 +147,19 @@ namespace cosmo
         bool startProjectLoad(const std::string &path, std::vector<EditSession::WorkspaceEntry> entries,
                               bool saveOnFinish);
         bool applySetFields(const Command &c);
+        /** R-WB-1: sample the photo where the user clicked, solve for the temperature and tint
+         *  that make it neutral, and apply them through the ordinary params path. */
+        bool pickWhiteBalance(const Command &c);
+        /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
+         *  small enough that clicking a small neutral patch does not drag its neighbours in. */
+        static constexpr int kWbPickRadius = 4;
+        /** The range the temperature and tint sliders expose (`UnitConversions::toKelvin` maps
+         *  -100..100 onto these), so a picked value is always one the user can see and drag away
+         *  from. The top is `kelvinToRgbGain`'s own limit — it clamps `w` to 2.0, so 19500 K is
+         *  the warmest gain the engine can express and a wider slider would be dead at the end.
+         *  It used to be 10000 K, which clamped away half of a real shade correction (D-54). */
+        static constexpr double kWbKelvinMin = 2000.0, kWbKelvinMax = 19500.0;
+        static constexpr double kWbTintMin = -150.0, kWbTintMax = 150.0;
 
         bool applySettingsFields(const Command &c);
         bool runExport(const Command &c);

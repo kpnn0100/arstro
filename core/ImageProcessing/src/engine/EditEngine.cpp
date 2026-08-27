@@ -135,6 +135,41 @@ namespace arstro
         return w > 0 && h > 0;
     }
 
+    bool EditEngine::sampleSourceLinear(int slot, double nx, double ny, int radius, Pixel out[3]) const
+    {
+        out[0] = out[1] = out[2] = 0;
+        if (slot < 0 || slot >= (int)mSlots.size() || mSlots[slot].released) return false;
+        const Slot &s = mSlots[slot];
+        // The finest resident level. A coarser one is a perfectly good answer for a box average,
+        // and insisting on level 0 would fail on a slot whose finest level has been evicted.
+        const Image *img = nullptr;
+        for (const Image &lvl : s.proxy)
+            if (!lvl.empty()) { img = &lvl; break; }
+        if (!img && !s.source.empty()) img = &s.source;
+        if (!img || img->empty()) return false;
+
+        const int w = img->width(), h = img->height(), ch = img->channels();
+        if (w <= 0 || h <= 0 || ch < 3) return false;
+        // The crop is NOT applied here: nx/ny are normalised to the whole photo, which is what
+        // the picker has — it clicks on the uncropped frame the crop box is drawn over, and a
+        // white balance is a property of the light, not of the framing.
+        const int cx = (int)(std::clamp(nx, 0.0, 1.0) * (w - 1) + 0.5);
+        const int cy = (int)(std::clamp(ny, 0.0, 1.0) * (h - 1) + 0.5);
+        const int r = radius < 0 ? 0 : radius;
+        double acc[3] = {0, 0, 0};
+        long long n = 0;
+        for (int y = std::max(0, cy - r); y <= std::min(h - 1, cy + r); ++y)
+            for (int x = std::max(0, cx - r); x <= std::min(w - 1, cx + r); ++x)
+            {
+                const Pixel *p = img->data() + ((size_t)y * w + x) * ch;
+                acc[0] += p[0]; acc[1] += p[1]; acc[2] += p[2];
+                ++n;
+            }
+        if (n <= 0) return false;
+        for (int c = 0; c < 3; ++c) out[c] = (Pixel)(acc[c] / (double)n);
+        return true;
+    }
+
     bool EditEngine::slotHasSource(int slot) const
     {
         return slot >= 0 && slot < (int)mSlots.size() && !mSlots[slot].released &&

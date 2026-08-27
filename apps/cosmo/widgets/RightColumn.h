@@ -69,6 +69,11 @@ namespace cosmo_v2
          *  request: the panel owns which chip is lit, and the crop box on the photo needs to
          *  know so a corner drag keeps the shape. */
         std::function<void(double)> onAspectLockChange;
+        /** R-WB-1: the white-balance eyedropper was armed or disarmed. The view above turns the
+         *  next click on the photo into a `wb pick`; the panel only owns the button. */
+        std::function<void(bool armed)> onWhiteBalancePickArmed;
+        /** Turn the eyedropper off — the picker disarms after one sample, so the button follows. */
+        void setWhiteBalancePickArmed(bool armed);
         /** The locked ratio right now, for a view that is created after the choice was made. */
         double aspectLock() const;
 

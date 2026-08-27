@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-54**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-56**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,50 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-55 — The service never advanced the session's clock, so undo collapsed to one step headlessly
+- **Area:** core / service · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-27, while testing the white-balance picker: an assertion that a pick is *one*
+  undoable step failed, and the reason was not the picker.
+- **Reproduce:** drive the service with no view — `cosmo-cc`, a script, the control socket — and make
+  several separate edits. They all merge into **one** history node, so undo jumps back past all of
+  them at once. `cosmo_core_tests::history_advances_without_a_view` asserts three separated edits are
+  three steps; it fails with `after == base + 3` against the pre-fix service.
+- **Cause:** `History::record` coalesces edits that arrive within a time window — deliberately, so a
+  whole slider drag is one undoable step — and it reads `EditSession::mNowMs`. That clock is set by
+  `EditSession::tick(nowMs)`, and **only the two views ever called it** (`App::render`,
+  `PhoneApp::advance`). `CosmoService::pump` set its own `mNowMs` and never passed it down, so a
+  headless front end left the session's clock at 0 forever and every edit looked simultaneous.
+- **Judgement:** defect against R-SVC-1 — history is behaviour, not presentation, so it may not
+  depend on a view happening to do the service's job. It is the same shape as D-21 (`frameSeq`
+  produced by nobody because the view was polling) and D-13: a thing that works in the GUI for a
+  reason that is not the GUI's business.
+- **Fixed:** `CosmoService::pump` calls `mSession.tick(nowMs)`. One line, and it belongs there —
+  `pump` already owns the clock (R-SVC-6, the caller drives it).
+- **Guarded by** `history_advances_without_a_view`: three edits separated by pumped time are three
+  steps and each undo steps back one of them; and two edits in one burst still merge, so the fix did
+  not simply disable coalescing. Verified to fail pre-fix.
+
+### D-54 — The temperature slider could not reach the white balance the picker solved
+- **Area:** design / widgets · **Status:** **Fixed** · **Severity:** S3
+- **Found:** 2026-08-27, building the white-balance picker: on a blue-cast image the picker solved
+  11923 K, the slider stopped at 10000 K, and the result corrected about half the cast (spread 52% →
+  25% instead of → 0%).
+- **Cause:** `UnitConversions::toKelvin` was `6500 + v/100 · 3500`, i.e. **3000..10000 K** — while the
+  comment on that very line claimed "-100..100 -> 2000..50000K", which nothing implemented. Shade
+  needs ~12000 K and tungsten ~2800 K; neither end was reachable.
+- **Also wrong, and worth naming:** the mapping was linear in **kelvin**. 3000→4000 K is a large
+  visible shift and 9000→10000 K is almost none, so the slider did nearly all its work in the first
+  third of its travel.
+- **Fixed:** linear in **mired** (10⁶/K) — the unit that makes equal slider distances equal visible
+  steps — spanning **2000..19500 K** with 6500 K at the centre. The top is `kelvinToRgbGain`'s own
+  limit (it clamps `w` to 2.0), so a wider slider would be dead at the end rather than more useful.
+  The stale comment is gone with it. Stored values are unaffected: `temp` is kelvin in `EditParams`,
+  so an existing project keeps its value and only the slider POSITION that shows it moves.
+- **Guarded by** `cosmo_core_tests::picking_a_white_point_sets_temp_and_tint`, which asserts the
+  picked gains **actually neutralise the sampled colour** — spread 0.0000% where the old range
+  managed 25.5%.
+
 
 ### D-53 — Closing the window discarded the whole editing session with no warning
 - **Area:** design / host · **Status:** **Fixed** · **Severity:** S1 (data loss)

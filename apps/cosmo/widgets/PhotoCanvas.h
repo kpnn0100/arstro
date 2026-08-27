@@ -85,6 +85,11 @@ namespace cosmo_v2
         bool showAfter() const { return mPill->selected() != Before; }  // "show the edited result?"
         void setMode(int m) { mPill->setSelectedImmediate(m); applyMode(); }
         std::function<void(int)> onModeChange;      // 0=before, 1=split, 2=after
+        /** A click landed on the photo, as a point normalised 0..1 of the PHOTO (not the canvas),
+         *  zoom and pan already accounted for. Return true to consume it. Used by the
+         *  white-balance eyedropper (R-WB-1); unset, or returning false, leaves the click to do
+         *  whatever it did before. */
+        std::function<bool(double nx, double ny)> onPickPoint;
 
         // ── R-VIEW-3: the split seam. Public because a test that drives the ASSEMBLED app
         //    has to ask where the seam IS and whether a point counts as on it; restating the

@@ -139,6 +139,25 @@ namespace cosmo_v2
         // sink would report success merely because App's own channel was set, and drop the
         // command when App's was not wired in turn.
         mRightColumn->onCommand = [this](cosmo::Command c) { return emitCommand(c); };
+        // R-WB-1: arming is view state — which click means "sample this" is presentation, while
+        // the SOLVE is behaviour and lives in the service. The overlay-free route is deliberate:
+        // the picker needs the whole photo, including the part a crop would hide, so it listens
+        // on the canvas rather than adding another overlay to the stack.
+        mRightColumn->onWhiteBalancePickArmed = [this](bool armed) { mWbPickArmed = armed; };
+        mCenterStage->photo()->onPickPoint = [this](double nx, double ny) {
+            if (!mWbPickArmed) return false;
+            cosmo::Command c;
+            c.kind = cosmo::Command::Kind::WhiteBalancePick;
+            c.fields = {{"x", editcmd::num(nx)}, {"y", editcmd::num(ny)}};
+            const bool ok = mSvc.dispatch(c);
+            // Disarmed either way: a pick that failed (too dark) must not leave the tool armed
+            // and the pointer still meaning something other than what it usually means. The
+            // message in `lastError` is what tells the user to try somewhere brighter.
+            mWbPickArmed = false;
+            mRightColumn->setWhiteBalancePickArmed(false);
+            (void)ok;
+            return true;
+        };
         // T0.4 / R-PREVIEW-6: the pre-curve luma and pre-mixer hue histograms exist ONLY to
         // draw the data behind the tone-curve and colour-mixer editors, and each costs a
         // full statistics pass on every render (6.65 ms and 4.06 ms on a 1.7 Mpx preview).

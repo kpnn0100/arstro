@@ -1075,6 +1075,7 @@ namespace
             "preset save MyLook", "settings set cpuPercent=25 previewEdge=1600", "screen home",
             "state print", "state print --json",
             "gesture on", "gesture off",     // R-PREVIEW-1
+            "wb pick --x 0.5 --y 0.5",       // R-WB-1
             "quit"};
         for (const char *line : lines)
         {
@@ -1101,6 +1102,10 @@ namespace
         assert(!err.empty() && "export without --outdir must say so");
         arstro::cosmo::parseCommand("gesture maybe", err);
         assert(!err.empty() && "gesture takes on|off, nothing else");
+        arstro::cosmo::parseCommand("wb pick --x 0.5", err);
+        assert(!err.empty() && "wb pick needs both coordinates");
+        arstro::cosmo::parseCommand("wb nudge", err);
+        assert(!err.empty() && "wb takes pick, nothing else");
         // ...but a bare `gesture` means on, the same way `bypass <n>` does.
         const Command bare = arstro::cosmo::parseCommand("gesture", err);
         assert(err.empty() && bare.kind == Command::Kind::Gesture && bare.flag);
@@ -1527,6 +1532,157 @@ namespace
     // guard it is to count the asks, and it is worth guarding: silently exporting from a
     // bilinear decode would lower output quality, which is the one thing a photo editor may
     // never trade for speed.
+    // R-WB-1: "this pixel should be white" — sampled from the PHOTO, solved exactly, and applied
+    // through the ordinary params path so it lands one history entry like a slider drag would.
+    // D-55: the SERVICE advances the session's clock, so history coalescing works headlessly.
+    //
+    // `History::record` merges edits that arrive within its coalesce window — a whole slider drag
+    // must be one undoable step — and it reads `EditSession::mNowMs`. Only the two VIEWS used to
+    // tick that (`App::render`, `PhoneApp`), so a front end that never did left it at 0 and every
+    // edit in the session merged into ONE node: undo was broken for `cosmo-cc`, for a script and
+    // for the control socket, and worked in the GUI only because a view happened to do the
+    // service's job.
+    void test_history_advances_without_a_view()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_histclock.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        double now = 5000.0;
+        auto pumpPast = [&] { for (int i = 0; i < 80; ++i) svc.pump(now += 16.0); };
+
+        pumpPast();
+        const int base = svc.model().history.nodes;
+        // Three edits, each separated by more than the coalesce window. Three steps, not one.
+        assert(svc.dispatchText("set exposure=0.3", err));
+        pumpPast();
+        assert(svc.dispatchText("set exposure=0.6", err));
+        pumpPast();
+        assert(svc.dispatchText("set exposure=0.9", err));
+        pumpPast();
+        const int after = svc.model().history.nodes;
+        assert(after == base + 3 && "three separated edits are three undoable steps");
+
+        // ...and each undo really steps back one of them, which is what the count has to mean.
+        assert(svc.dispatchText("undo", err));
+        assert(svc.session().curParams()->exposure == 0.6f);
+        assert(svc.dispatchText("undo", err));
+        assert(svc.session().curParams()->exposure == 0.3f);
+
+        // The other half of the contract: edits arriving TOGETHER still merge, so a drag is one
+        // step. No pump between these two, so they share an instant.
+        const int beforeBurst = svc.model().history.nodes;
+        assert(svc.dispatchText("set contrast=10", err));
+        assert(svc.dispatchText("set contrast=20", err));
+        assert(svc.model().history.nodes == beforeBurst + 1 &&
+               "and edits in one burst are still one step");
+
+        printf("[PASS] history_advances_without_a_view (%d separated edits -> %d steps)\n",
+               3, after - base);
+    }
+
+    void test_picking_a_white_point_sets_temp_and_tint()
+    {
+        using namespace arstro::cosmo;
+
+        // A decoder that hands back a deliberately BLUE-CAST image: every pixel is neutral grey
+        // with the blue channel lifted, which is what a photo shot under shade looks like. A
+        // correct picker must pull the temperature WARM to cancel it.
+        struct CastDecoder : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &path) override
+            {
+                DecodedImage d;
+                d.width = 32; d.height = 24;
+                d.rgba.assign((size_t)32 * 24 * 4, 255);
+                for (size_t i = 0; i < (size_t)32 * 24; ++i)
+                {
+                    d.rgba[i * 4 + 0] = 140;   // r
+                    d.rgba[i * 4 + 1] = 150;   // g
+                    d.rgba[i * 4 + 2] = 200;   // b  <- blue cast
+                    d.rgba[i * 4 + 3] = 255;
+                }
+                d.name = path;
+                return d;
+            }
+        };
+
+        const std::string path = "/tmp/cosmo_svc_wb.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new CastDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        const arstro::EditParams *p = svc.session().curParams();
+        assert(p && "there is a params set");
+        assert(p->temp == 6500.f && p->tint == 0.f && "which starts at the neutral white");
+
+        // Pick the middle of the photo.
+        assert(svc.dispatchText("wb pick --x 0.5 --y 0.5", err) && err.empty());
+        p = svc.session().curParams();
+        const float pickedTemp = p->temp, pickedTint = p->tint;
+        // WARMER than the working white: the image is blue, so the correction is to add red.
+        assert(p->temp > 6500.f && "a blue cast pulls the temperature warm");
+        // And inside the range the sliders expose, so the user can drag it back.
+        assert(p->temp <= 19500.f && p->tint >= -150.f && p->tint <= 150.f &&
+               "and stays inside the sliders' range (2000..19500 K — kelvinToRgbGain's own limit)");
+
+        // The proof that it is CORRECT and not merely warm: applying the picked gains to the
+        // sampled colour must neutralise it. This is the assertion that would catch an inverse
+        // that drifted from `kelvinToRgbGain`.
+        {
+            float gr = 0, gg = 0, gb = 0;   // `Pixel` is a global typedef, not arstro::Pixel
+            ::arstro::color::kelvinToRgbGain(p->temp, p->tint, gr, gg, gb);
+            // The same linear values the engine sampled (sRGB 140/150/200 -> linear).
+            const double lr = (double)::arstro::color::srgbDecode(140.f / 255.f) * gr;
+            const double lg = (double)::arstro::color::srgbDecode(150.f / 255.f) * gg;
+            const double lb = (double)::arstro::color::srgbDecode(200.f / 255.f) * gb;
+            const double mx = std::max(lr, std::max(lg, lb));
+            const double mn = std::min(lr, std::min(lg, lb));
+            assert(mx > 0.0);
+            const double spread = (mx - mn) / mx;
+            printf("       balanced spread = %.4f%% (was %.1f%%)\n", spread * 100.0,
+                   (0.5647 - 0.2686) / 0.5647 * 100.0);
+            assert(spread < 0.02 && "the picked white balance really does neutralise that colour");
+        }
+
+        // One history entry, like a slider drag — not two, and not zero. Reset first: this image
+        // is uniform, so picking a SECOND point gives the identical answer, and an edit that
+        // changes nothing correctly records nothing. Measuring across a no-op would have been
+        // measuring the coalescing, not the pick.
+        assert(svc.dispatchText("set temp=6500 tint=0", err) && err.empty());
+        // Let the clock pass the history coalesce window. `History::record` merges edits that
+        // arrive close together, on purpose — a whole slider drag is one undoable step — and two
+        // back-to-back `dispatchText` calls have no pump between them, so they arrive at the same
+        // instant and legitimately merge. Measuring across that would be measuring the
+        // coalescing, not the pick.
+        for (int i = 0; i < 80; ++i) svc.pump(1000.0 + i * 16.0);
+        const int hist = svc.model().history.nodes;
+        assert(svc.dispatchText("wb pick --x 0.25 --y 0.75", err) && err.empty());
+        assert(svc.model().history.nodes == hist + 1 && "a pick is one undoable step");
+        // ...and undo really does take it back, which is what "one step" has to mean.
+        assert(svc.dispatchText("undo", err) && err.empty());
+        assert(svc.session().curParams()->temp == 6500.f && "undo returns to the neutral white");
+
+        // Out-of-range coordinates are refused with a message rather than clamped silently.
+        assert(!svc.dispatchText("wb pick --x 1.4 --y 0.5", err));
+        assert(!svc.model().lastError.empty());
+
+        printf("[PASS] picking_a_white_point_sets_temp_and_tint (picked temp=%.0fK tint=%.1f)\n",
+               (double)pickedTemp, (double)pickedTint);
+    }
+
     void test_a_load_decodes_cheaply_and_an_export_decodes_properly()
     {
         using namespace arstro::cosmo;
@@ -1866,10 +2022,11 @@ namespace
             {K::StatePrint, "state print"},
             {K::UiDump, "ui dump --root splash"},
             {K::Wait, "wait load.finished"},
+            {K::WhiteBalancePick, "wb pick --x 0.5 --y 0.5"},
             {K::Gesture, "gesture on"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 28;   // Kind::None is not a command
+        const int kKindCount = 29;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2245,6 +2402,8 @@ int main()
     test_walking_a_rack_that_fits_the_cap_never_re_decodes();
     test_selection_reaches_the_service_during_a_load();
     test_service_opens_a_project_with_no_ui();
+    test_history_advances_without_a_view();
+    test_picking_a_white_point_sets_temp_and_tint();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

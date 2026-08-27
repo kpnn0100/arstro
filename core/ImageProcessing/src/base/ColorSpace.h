@@ -66,6 +66,31 @@ namespace arstro
          *  (green<->magenta), normalized so a neutral grey keeps its luminance. */
         void kelvinToRgbGain(Pixel kelvin, Pixel tint, Pixel &gr, Pixel &gg, Pixel &gb);
 
+        /** Solve for the (temperature, tint) that make a given linear-light RGB triple NEUTRAL —
+         *  the "click what should be white" picker (R-WB-1).
+         *
+         *  This is the exact inverse of `kelvinToRgbGain`, and it lives beside it deliberately:
+         *  the two must agree, and the surest way to keep an inverse honest is to keep it next
+         *  to the function it inverts. Both are heuristic in the same way, so the solve is exact
+         *  rather than iterative:
+         *
+         *      after WB:  r·gr = g·gg = b·gb
+         *      from r,b:  r(1+0.45w) = b(1−0.45w)  ->  w = (b−r) / (0.45·(r+b))
+         *      from g:    g(1−0.30t) = r(1+0.45w)  ->  t = (1 − r(1+0.45w)/g) / 0.30
+         *
+         *  The luminance normalisation inside `kelvinToRgbGain` divides all three gains by one
+         *  factor, so it cannot affect those equalities and is simply ignored here.
+         *
+         *  `kelvin` and `tint` are written CLAMPED to the range the UI exposes, because a pixel
+         *  that is nearly pure red has no white balance that neutralises it and the honest answer
+         *  is the nearest one that exists. Returns false — and writes nothing — for a triple with
+         *  no usable signal at all (black, or a non-finite channel), where any answer would be
+         *  invented. */
+        bool solveNeutralWhiteBalance(Pixel r, Pixel g, Pixel b,
+                                      Pixel kelvinMin, Pixel kelvinMax,
+                                      Pixel tintMin, Pixel tintMax,
+                                      Pixel &kelvin, Pixel &tint);
+
         /** Smallest signed angular delta from hue a to hue b, in degrees [-180,180]. */
         Pixel hueDelta(Pixel a, Pixel b);
     }

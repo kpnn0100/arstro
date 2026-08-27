@@ -9,6 +9,7 @@
  */
 #pragma once
 #include "../../../core/Artboard/include/artboard/artboard.h"
+#include "IconButton.h"
 #include "SliderRow.h"
 #include <functional>
 #include <memory>
@@ -34,6 +35,15 @@ namespace cosmo_v2
         {
             std::string title;
             std::vector<Spec> rows;
+            /** An optional tool button on the section HEADER row, right-aligned — used by the
+             *  white-balance picker (R-WB-1), and generic because a section is exactly the scope
+             *  such a tool belongs to. `toggles` makes it latch (armed / not armed) rather than
+             *  fire once. */
+            enum class Action { None, Pipette };
+            Action action = Action::None;
+            bool toggles = false;
+            bool armed = false;      // latched state, when `toggles`
+            std::function<void(bool armed)> onAction;
         };
 
         explicit ParamPanel(std::vector<Section> sections);
@@ -46,6 +56,9 @@ namespace cosmo_v2
          *  setValues; 0 hides a row's green reach (DR-EDIT-4). */
         void setSubValues(const std::vector<double> &offsets);
         void scrollBy(double delta);
+        /** Set a section action's armed state from outside — the picker disarms itself once it
+         *  has taken its sample, and the button has to follow. */
+        void setSectionActionArmed(const std::string &sectionTitle, bool armed);
         void layout();  // call after width/height changes
 
     protected:
@@ -56,6 +69,7 @@ namespace cosmo_v2
         std::vector<Section> mSections;
         std::vector<std::shared_ptr<SliderRow>> mFlatRows;
         std::vector<double> mSectionHeaderY;  // cached per-section header y, from the last layout()
+        std::vector<std::shared_ptr<IconButton>> mSectionActions;  // one per section, null when none
         // Scroll eases toward mScrollTarget rather than jumping per wheel notch.
         artboard::AnimatedProperty mScroll{0.0};
         double mScrollTarget = 0.0, mScrollLastTarget = 0.0;
