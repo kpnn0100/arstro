@@ -92,6 +92,11 @@ namespace cosmo
              *  of the whole photo. A Command and not a view-only gesture, because the SOLVE is
              *  behaviour — a second front end asking the same question must get the same
              *  temperature and tint, and a script must be able to ask it at all. */
+            /** R-INFO: read a photo's metadata into the model. `index` = node id, or -1 for the
+             *  current selection. A Command because a second front end wants the same answer,
+             *  and on demand rather than on selection because reading a file to print its ISO
+             *  should not happen every time somebody arrows through the filmstrip. */
+            Metadata,           // index = node (-1 = current)
             WhiteBalancePick,   // fields: x, y (0..1)
             Gesture,         // flag = on
             Quit

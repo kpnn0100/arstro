@@ -87,8 +87,8 @@ namespace cosmo
             "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
-            "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "gesture",
-            "quit"};
+            "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata",
+            "gesture", "quit"};
         return names;
     }
 
@@ -161,6 +161,12 @@ namespace cosmo
                 if (!splitField(t[i], kv)) { err = "not a key=value: " + t[i]; return Command{}; }
                 c.fields.push_back(kv);
             }
+        }
+        else if (v == "metadata")
+        {
+            c.kind = Command::Kind::Metadata;
+            // Bare = the current selection, which is what a right-click on the open photo means.
+            c.index = t.size() > 1 ? std::atoi(t[1].c_str()) : -1;
         }
         else if (v == "wb")
         {
@@ -359,6 +365,10 @@ namespace cosmo
                 break;
             case Command::Kind::Bypass: o << "bypass " << c.index << (c.flag ? " on" : " off"); break;
             case Command::Kind::Gesture: o << "gesture " << (c.flag ? "on" : "off"); break;
+            case Command::Kind::Metadata:
+                o << "metadata";
+                if (c.index >= 0) o << ' ' << c.index;
+                break;
             case Command::Kind::WhiteBalancePick:
                 o << "wb pick";
                 for (const auto &kv : c.fields) o << " --" << kv.first << ' ' << kv.second;

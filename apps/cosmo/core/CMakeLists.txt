@@ -29,7 +29,10 @@ file(GLOB COSMO_SERVICE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/se
 add_library(cosmo_core STATIC
   ${COSMO_CORE_SOURCES}
   ${COSMO_SERVICE_SOURCES}
-  ${CMAKE_CURRENT_SOURCE_DIR}/decode/NativeImageDecoder.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/decode/NativeImageDecoder.cpp
+  # R-INFO: the JPEG Exif tag reader, beside its only consumer. Listed rather than globbed
+  # because decode/ is deliberately explicit — the Android decoder must NOT be picked up here.
+  ${CMAKE_CURRENT_SOURCE_DIR}/decode/Exif.cpp)
 
 target_include_directories(cosmo_core
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}

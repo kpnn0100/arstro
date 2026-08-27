@@ -155,6 +155,32 @@ namespace cosmo
         }
         if (j) s << "  ]";
 
+        // R-INFO: the last answered `metadata` request. Stable — every field here is a property
+        // of the FILE, so two front ends given the same command must print the same rows. Emitted
+        // only when there is an answer: an unasked question is not state worth a line.
+        if (!m.metadata.empty())
+        {
+            if (j)
+            {
+                s << ",\n  \"metadataNode\": " << m.metadataNode
+                  << ",\n  \"metadataName\": \"" << jsonEscape(m.metadataName)
+                  << "\",\n  \"metadata\": [\n";
+                for (size_t i = 0; i < m.metadata.size(); ++i)
+                    s << "    {\"label\": \"" << jsonEscape(m.metadata[i].first) << "\", \"value\": \""
+                      << jsonEscape(m.metadata[i].second) << "\"}"
+                      << (i + 1 < m.metadata.size() ? "," : "") << '\n';
+                s << "  ]";
+            }
+            else
+            {
+                s << "metadataNode=" << m.metadataNode << '\n'
+                  << "metadataName=" << m.metadataName << '\n'
+                  << "metadata=" << m.metadata.size() << '\n';
+                for (const auto &kv : m.metadata)
+                    s << "  meta " << kv.first << " = " << kv.second << '\n';
+            }
+        }
+
         if (o.params)
         {
             // BOTH, and always labelled: `params` is the EFFECTIVE value the engine renders

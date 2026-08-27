@@ -15,6 +15,50 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-08-27 — four features requested. THREE DONE, ONE TO GO.**
+
+Requested: *(1) when right-click a photo, add option to show image information (metadata);
+(2) white balance needs a colour picker so the user can pick the colour that should be white (both
+temp and tint); (3) prompt save when closing the app; (4) add a custom mask bezier draw to do a
+custom lighting.*
+
+- **[x] (3) prompt save when closing the app.** The window's `delete-event` was never handled, so
+  the X discarded unsaved work silently — the release audit had already filed it as a ship-blocker.
+  `App::requestQuit()` + `onQuitApproved`, the same three-button prompt the wordmark route uses, and
+  a modal that now owns the keyboard (Escape cancels, Enter saves, Discard stays deliberately
+  unbound). R-HOME-1c, DR-HOME-1c, D-53, `7090c74`.
+- **[x] (2) white balance by picking what should be white.** An eyedropper on the COLOUR section
+  header arms it; the next click samples the SOURCE pixels in linear light and solves temperature and
+  tint together, exactly, through `color::solveNeutralWhiteBalance` — the algebraic inverse of
+  `kelvinToRgbGain`, kept beside it. Two defects came out of it: the temperature slider covered only
+  3000..10000 K while claiming 2000..50000 K, so the picker’s answer was clamped away (D-54), and
+  `pump` never advanced the session clock, so a refine could sit unfinished forever (D-55).
+  R-WB-1/2, DR-WB-1/2, `6c13b90`.
+- **[x] (1) right-click ▸ Image Information.** A modal panel of label/value rows from the file
+  itself: camera, lens, shutter, aperture, ISO, focal length, date, orientation, dimensions, path and
+  size. Four layers — `IImageDecoder::readMetadata` (LibRaw `open_file` with **no** `unpack` for a
+  RAW; cosmo’s own `Exif.cpp` marker/IFD walk for a JPEG), `PinnedDecoder`’s forwarder, the
+  `metadata [node]` command, and `InfoDialog`. Three things worth remembering:
+  * **It must not decode.** The panel has to answer for a photo whose pixels R-MEM-1 has evicted, and
+    a 26 MB demosaic to print an ISO would be absurd. The core test counts decodes and asserts the
+    number does not move.
+  * **`PinnedDecoder` forwards four calls and not the fifth.** The panel came up blank on a file
+    whose Exif a standalone harness read perfectly, because the base’s default `readMetadata`
+    returns an empty set. A virtual with a harmless default is a virtual that gets silently skipped
+    by a wrapper; one line of the test now holds it shut.
+  * **Dimensions had to come from the FILE.** Taken from the engine, the row appeared in one run and
+    not the next, because the engine only knows a photo’s size once a frame has landed — which
+    breaks R-SVC-9’s promise that two front ends print the same state. It now comes from the JPEG’s
+    SOF header (and LibRaw’s sizes for a RAW), with the engine only as a fallback.
+    R-INFO-1/2, DR-INFO-1/2.
+- **[ ] (4) a custom bezier mask, for custom lighting.** Not started. This is the largest of the
+  four by a wide margin and it is a **core-then-design** pair: a new `MaskParams::Type` with control
+  points, coverage in `MaskStack`, `EditParamsIO`/`.apf` round-tripping (so an old project still
+  loads), `composeParams` concatenation, then an on-photo bezier editor with add/move/delete of
+  points, closing the path, and a feather. Everything else in R-MASK is a shape with two or three
+  numbers; this is the first one whose parameter list is variable-length, so the serialization
+  decision comes first and the editor second.
+
 **► 2026-08-27 — RELEASE AUDIT: "what feature or optimisation would improve this to release to
 market". Findings below, prioritised. Nothing implemented — this is the assessment.**
 

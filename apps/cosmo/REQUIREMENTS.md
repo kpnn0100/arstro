@@ -1536,3 +1536,37 @@ work out the numbers.
   distances equal visible steps, spanning **2000..19500 K** with neutral at the centre. The top is
   not a taste: `kelvinToRgbGain` clamps its own `w` to 2.0, so 19500 K is the warmest gain the engine
   can produce and anything beyond it would be dead slider.
+
+## R-INFO — What the file says about itself — ✅ IMPLEMENTED
+
+A photograph carries the record of how it was taken, and an editor that hides it makes the
+photographer go and open a second application to answer "what lens was this?". The answer is in
+the file cosmo already has open.
+
+- **R-INFO-1 Right-click a photo ▸ Image Information.** A modal panel of label/value rows — camera,
+  lens, shutter, aperture, ISO, focal length, date, orientation, dimensions, and the path and size
+  on disk. The panel scrolls, because a RAW carries more rows than fit a card that must also fit a
+  720p screen, and it closes on Escape, the Close button, the X, or a click outside — every route
+  the other modals already answer to.
+  - **On demand, not on selection.** Reading a file to print its ISO must not happen every time
+    somebody arrows through the filmstrip, so nothing is read until it is asked for, and the answer
+    stays in the model afterwards as the answer *for that node*.
+  - **It does not decode.** `IImageDecoder::readMetadata` parses a header and stops: LibRaw's
+    `open_file` without `unpack` for a RAW, the JPEG marker walk for everything else. A 26 MB
+    demosaic to print an ISO would be absurd, and the panel must also work for a photo whose pixels
+    the memory cap has evicted (R-MEM-1).
+  - **Every row is a property of the FILE.** Dimensions come from the JPEG's SOF header or LibRaw's
+    sizes — never from the engine's rendered frame, which only knows them once a frame has landed. A
+    row that appears or vanishes depending on timing would break R-SVC-9's promise that two front
+    ends given the same commands print the same state, and it did exactly that before the SOF walk
+    existed.
+  - **A group has no file**, and says so rather than opening an empty panel; the previous answer is
+    left standing, because an empty panel reads as "this photo has no metadata".
+  - **Scriptable**: `metadata [node]` (bare = the selection), with the rows in `state print`, so the
+    reader is assertable with no GUI (R-SVC-2).
+- **R-INFO-2 The tag reader is cosmo's own, and reads only what it can name.** JPEG Exif is parsed by
+  `core/decode/Exif.cpp` — IFD0 plus the Exif sub-IFD, the ~15 tags the panel shows, and no more.
+  Deliberately not merged with `ExportWriter`'s APP1 splicer, which copies a segment without
+  understanding it: one of the two must know what a rational is and the other must not care. It
+  reads the first 256 KB, tolerates a truncated or tagless file by reporting fewer rows, and never
+  throws — a file that cannot be parsed produces the rows the caller already knew and nothing else.

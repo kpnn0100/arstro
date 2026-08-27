@@ -1045,6 +1045,79 @@ namespace
         return path;
     }
 
+
+    // ── R-INFO: a real JPEG with a real Exif block, built here rather than committed ──────
+    // A binary fixture in the repo is a fixture nobody can read or amend; this is 40 lines that
+    // say exactly which tags the parser is expected to find. Only the markers matter — the
+    // parser never looks at compressed data — so the "image" is an SOF header and nothing else.
+    std::string writeExifJpeg(const std::string &path, bool withExif, int w = 1000, int h = 667)
+    {
+        std::vector<uint8_t> f{0xFF, 0xD8};
+        if (withExif)
+        {
+            std::vector<uint8_t> tiff{'I', 'I', 42, 0, 8, 0, 0, 0};   // little-endian, IFD0 at 8
+            auto u16 = [](std::vector<uint8_t> &v, unsigned x) {
+                v.push_back((uint8_t)(x & 0xFF)); v.push_back((uint8_t)(x >> 8));
+            };
+            auto u32 = [](std::vector<uint8_t> &v, unsigned long x) {
+                for (int i = 0; i < 4; ++i) v.push_back((uint8_t)((x >> (8 * i)) & 0xFF));
+            };
+            const std::string make = "ARSTRO", model = "Test Cam 1";
+            // Sizes are fixed by the entry counts below: IFD0 has 3 entries, the Exif sub-IFD 4.
+            const unsigned ifd0 = 8, ifd0Size = 2 + 3 * 12 + 4;
+            const unsigned exifIfd = ifd0 + ifd0Size, exifSize = 2 + 4 * 12 + 4;
+            unsigned dataAt = exifIfd + exifSize;
+            const unsigned makeAt = dataAt;                     dataAt += 8;   // 7 bytes, padded
+            const unsigned modelAt = dataAt;                    dataAt += 12;  // 11 bytes, padded
+            const unsigned shutterAt = dataAt;                  dataAt += 8;
+            const unsigned apertureAt = dataAt;                 dataAt += 8;
+            const unsigned focalAt = dataAt;                    dataAt += 8;
+            u16(tiff, 3);
+            u16(tiff, 0x010F); u16(tiff, 2); u32(tiff, make.size() + 1);  u32(tiff, makeAt);
+            u16(tiff, 0x0110); u16(tiff, 2); u32(tiff, model.size() + 1); u32(tiff, modelAt);
+            u16(tiff, 0x8769); u16(tiff, 4); u32(tiff, 1);                u32(tiff, exifIfd);
+            u32(tiff, 0);
+            u16(tiff, 4);
+            u16(tiff, 0x829A); u16(tiff, 5); u32(tiff, 1); u32(tiff, shutterAt);   // ExposureTime
+            u16(tiff, 0x829D); u16(tiff, 5); u32(tiff, 1); u32(tiff, apertureAt);  // FNumber
+            u16(tiff, 0x8827); u16(tiff, 3); u32(tiff, 1); u32(tiff, 400);         // ISO (inline)
+            u16(tiff, 0x920A); u16(tiff, 5); u32(tiff, 1); u32(tiff, focalAt);     // FocalLength
+            u32(tiff, 0);
+            // The data section, in the order the offsets above were reserved. Each string is
+            // padded out to the slot it was given, so the next offset still lands where the
+            // entry said it would.
+            assert(tiff.size() == makeAt && "the data section starts where the entries point");
+            auto emitStr = [&tiff](const std::string &str, std::size_t slot) {
+                const std::size_t start = tiff.size();
+                for (char ch : str) tiff.push_back((uint8_t)ch);
+                tiff.push_back(0);
+                while (tiff.size() - start < slot) tiff.push_back(0);
+            };
+            emitStr(make, 8);
+            emitStr(model, 12);
+            u32(tiff, 1); u32(tiff, 250);   // 1/250 s
+            u32(tiff, 28); u32(tiff, 10);   // f/2.8
+            u32(tiff, 50); u32(tiff, 1);    // 50 mm
+            const unsigned len = (unsigned)(2 + 6 + tiff.size());
+            f.push_back(0xFF); f.push_back(0xE1);
+            f.push_back((uint8_t)(len >> 8)); f.push_back((uint8_t)(len & 0xFF));   // big-endian!
+            for (const char *e = "Exif"; *e; ++e) f.push_back((uint8_t)*e);
+            f.push_back(0); f.push_back(0);
+            f.insert(f.end(), tiff.begin(), tiff.end());
+        }
+        // SOF0: 8-bit, h, w, 3 components. AFTER the APP1, exactly as a camera writes it — which
+        // is the ordering that caught the parser returning at the Exif segment (D-56).
+        const uint8_t sof[] = {0xFF, 0xC0, 0x00, 0x11, 0x08,
+                               (uint8_t)(h >> 8), (uint8_t)(h & 0xFF),
+                               (uint8_t)(w >> 8), (uint8_t)(w & 0xFF), 3,
+                               1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1};
+        f.insert(f.end(), sof, sof + sizeof(sof));
+        f.push_back(0xFF); f.push_back(0xD9);
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write((const char *)f.data(), (std::streamsize)f.size());
+        return path;
+    }
+
     // Drive a load to completion the way any front end does: pump, don't block.
     void pumpUntilIdle(arstro::cosmo::CosmoService &svc, int maxMs = 20000)
     {
@@ -2022,11 +2095,12 @@ namespace
             {K::StatePrint, "state print"},
             {K::UiDump, "ui dump --root splash"},
             {K::Wait, "wait load.finished"},
+            {K::Metadata, "metadata 2"},   // bare form (the selection) covered by the R-INFO test
             {K::WhiteBalancePick, "wb pick --x 0.5 --y 0.5"},
             {K::Gesture, "gesture on"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 29;   // Kind::None is not a command
+        const int kKindCount = 30;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2364,6 +2438,123 @@ namespace
 
         printf("[PASS] a_thumbnail_is_turned_the_way_the_photo_is\n");
     }
+
+    // ── R-INFO: metadata is read from the FILE, on demand, without decoding it ────────────
+    void test_metadata_reads_the_file_without_decoding_it()
+    {
+        using namespace arstro::cosmo;
+
+        const std::string jpg = "/tmp/cosmo_meta_exif.jpg";
+        writeExifJpeg(jpg, /*withExif=*/true);
+        const std::string plain = "/tmp/cosmo_meta_plain.jpg";
+        writeExifJpeg(plain, /*withExif=*/false, 640, 480);
+
+        // The host's wrapper, asserted directly: `readMetadata` is virtual, PinnedDecoder
+        // forwards four other calls, and the one it did not forward returned an empty set from
+        // the base — which is how the panel came up blank on a file whose Exif a standalone
+        // harness read perfectly. One line, so that cannot come back.
+        {
+            auto pinned = arstro::cosmo_v2::makePinnedDecoder();
+            assert(!pinned->readMetadata(jpg).rows.empty() &&
+                   "the host's pinned decoder forwards readMetadata to the real one");
+        }
+
+        // A decoder that counts DECODES and forwards metadata to the real reader: the point of
+        // the requirement is that printing an ISO must not cost a demosaic.
+        static std::atomic<int> sDecodes{0};
+        struct MetaDecoder : IImageDecoder
+        {
+            DecodedImage decodeFile(const std::string &p) override { return decodeFile(p, Fidelity::Full); }
+            DecodedImage decodeFile(const std::string &p, Fidelity) override
+            {
+                ++sDecodes;
+                // Not a real decode: this suite must not depend on GdkPixbuf reading the
+                // header-only JPEG the fixture writes. The pixels are irrelevant here.
+                DecodedImage d;
+                d.width = 8; d.height = 8;
+                d.rgba.assign(8 * 8 * 4, 128);
+                d.name = p;
+                return d;
+            }
+            ImageMetadata readMetadata(const std::string &p) override { return mInner.readMetadata(p); }
+            NativeImageDecoder mInner;
+        };
+
+        const std::string proj = "/tmp/cosmo_svc_meta.cmp";
+        {
+            std::ofstream f(proj, std::ios::trunc);
+            f << "cosmoworkspace=1\n";
+            f << "#group\nparent=-1\nname=Tokyo\n";
+            f << "#image\nparent=-1\npath=" << jpg << "\n";
+            f << "#image\nparent=-1\npath=" << plain << "\n";
+        }
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new MetaDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + proj, err));
+        pumpUntilIdle(svc);
+
+        int exifNode = -1, plainNode = -1, groupNode = -1;
+        for (const auto &n : svc.model().nodes)
+        {
+            if (n.group) groupNode = n.node;
+            else if (n.name.find("exif") != std::string::npos) exifNode = n.node;
+            else if (n.name.find("plain") != std::string::npos) plainNode = n.node;
+        }
+        assert(exifNode >= 0 && plainNode >= 0 && groupNode >= 0);
+        assert(svc.dispatchText("select " + std::to_string(exifNode), err));
+        const int decodesAfterLoad = sDecodes.load();
+
+        assert(svc.dispatchText("metadata", err) && err.empty());
+        auto rowOf = [&svc](const char *label) {
+            for (const auto &kv : svc.model().metadata)
+                if (kv.first == label) return kv.second;
+            return std::string();
+        };
+        assert(svc.model().metadataNode == exifNode && "the answer says which photo it is about");
+        assert(rowOf("Camera make") == "ARSTRO");
+        assert(rowOf("Camera model") == "Test Cam 1");
+        assert(rowOf("ISO") == "ISO 400");
+        assert(rowOf("Shutter") == "1/250 s");
+        assert(rowOf("Aperture") == "f/2.8");
+        assert(rowOf("Focal length") == "50 mm");
+        // From the SOF header, not from the engine: a size that appears only once a frame has
+        // landed is not a property of the file (R-SVC-9), and this is the row that proved it —
+        // two identical runs disagreed until it came from the JPEG itself.
+        assert(rowOf("Dimensions") == "1000 x 667");
+        assert(!rowOf("File size").empty() && "and what the caller already knew, always");
+        assert(rowOf("File").empty() && svc.model().metadataName.find("exif") != std::string::npos &&
+               "the file's NAME is the heading, not a row repeating it");
+        {
+            int dims = 0;
+            for (const auto &kv : svc.model().metadata) dims += kv.first == "Dimensions";
+            assert(dims == 1 && "exactly one Dimensions row: the fallback must not double it");
+        }
+        assert(sDecodes.load() == decodesAfterLoad && "printing an ISO costs no decode");
+
+        // ANY node, not just the selected one — a right-click names a node, and the panel must
+        // answer for the photo that was clicked rather than the one on the stage.
+        assert(svc.dispatchText("metadata " + std::to_string(plainNode), err) && err.empty());
+        assert(svc.model().metadataNode == plainNode);
+        assert(rowOf("Camera make").empty() && "a file with no Exif claims no camera");
+        assert(rowOf("Dimensions") == "640 x 480" && "but a JPEG always knows its own size");
+        assert(sDecodes.load() == decodesAfterLoad && "still no decode");
+
+        // A group has no file. Refused with a reason, and the previous answer left standing —
+        // an empty panel would read as "this photo has no metadata".
+        const auto before = svc.model().metadata;
+        assert(!svc.dispatchText("metadata " + std::to_string(groupNode), err));
+        // `err` is the PARSE channel and stays empty: the line was well formed. The reason a
+        // valid command was refused travels as a CommandRejected event, as every other refusal
+        // does — and the previous answer is left standing, because an empty panel would read as
+        // "this photo has no metadata".
+        assert(svc.model().metadata == before);
+        assert(svc.model().lastError.find("group") != std::string::npos &&
+               "and it says why, in words a user can act on");
+
+        printf("[PASS] metadata_reads_the_file_without_decoding_it\n");
+    }
 }
 
 int main()
@@ -2404,6 +2595,7 @@ int main()
     test_service_opens_a_project_with_no_ui();
     test_history_advances_without_a_view();
     test_picking_a_white_point_sets_temp_and_tint();
+    test_metadata_reads_the_file_without_decoding_it();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

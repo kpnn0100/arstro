@@ -291,6 +291,12 @@ namespace cosmo_v2
         mConfirmDialog = std::make_shared<ConfirmDialog>(mAccent);
         mRoot->addChild(mConfirmDialog);
 
+        // R-INFO. Added after the confirm prompt, so it draws above it — the only way the two
+        // can be up together is a metadata panel opened before a quit prompt, and in that order
+        // the newer question is the one on top.
+        mInfoDialog = std::make_shared<InfoDialog>();
+        mRoot->addChild(mInfoDialog);
+
         // ── home screen (R-HOME): a standalone full-window launcher, not part of the
         // editor's mRoot tree. render()/input route to it while mScreen == Home. ──
         mHome = std::make_shared<HomeScreen>();
@@ -346,6 +352,8 @@ namespace cosmo_v2
         mExportDialog->width.set(mW); mExportDialog->height.set(mH);       // full-window modal
         mConfirmDialog->x.set(0.0); mConfirmDialog->y.set(0.0);
         mConfirmDialog->width.set(mW); mConfirmDialog->height.set(mH);
+        mInfoDialog->x.set(0.0); mInfoDialog->y.set(0.0);
+        mInfoDialog->width.set(mW); mInfoDialog->height.set(mH);
 
         mTopBar->width.set(mW);
         mTopBar->layout();
@@ -552,6 +560,20 @@ namespace cosmo_v2
         mHistoryView->show(std::move(nodes), h->current);
     }
 
+    void App::openImageInfo(int node)
+    {
+        // The service reads the file; the view only shows what came back (R-SVC-4). A failure
+        // leaves `lastError` set and no rows, and an empty dialog would be a worse answer than
+        // none — so nothing opens, exactly as the picker does when a pick fails.
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::Metadata;
+        c.index = node;
+        if (!mSvc.dispatch(c)) return;
+        const cosmo::AppModel &m = mSvc.model();
+        if (m.metadata.empty()) return;
+        mInfoDialog->show(m.metadataName, m.metadata);
+    }
+
     void App::openEditContext(double x, double y, int cell)
     {
         // Photo/filmstrip right-click: group the selection or add a photo to the
@@ -583,6 +605,14 @@ namespace cosmo_v2
                 mRenameTargetNode = node;
                 mContextMenu->enterRenameMode(name);
             }});
+        }
+        // R-INFO: last but one, above Delete — it is the item a user reaches for most often on a
+        // right-click and the only one that changes nothing, so it must not sit next to Delete.
+        {
+            const int node = (cell >= 0 && cell < (int)cells.size()) ? cells[cell].node : -1;
+            const bool group = (cell >= 0 && cell < (int)cells.size()) && cells[cell].group;
+            if (!group)
+                items.push_back({"Image Information", [this, node] { openImageInfo(node); }});
         }
         if (cell >= 0)
             items.push_back({"Delete",        [this] { deleteSelected(); }});
@@ -835,6 +865,7 @@ namespace cosmo_v2
         { const Point p = toLogical(x, y); x = p.x; y = p.y; }   // R-SCALE-2, as in pointer()
         if (mScreen == Screen::Home) { mHome->scrollBy(delta); return; }  // launcher grid scroll
         if (mScreen == Screen::Loading) return;                           // non-interactive transition
+        if (mInfoDialog->isOpen()) { mInfoDialog->scrollBy(delta); return; }     // R-INFO: modal owns the wheel
         if (mHistoryView->isOpen()) { mHistoryView->scrollBy(delta); return; }  // modal owns the wheel
         if (mExportDialog->isOpen()) { mExportDialog->scrollBy(delta, x, y); return; }  // R-EXPORT-2 tree/body scroll
 
@@ -1317,6 +1348,7 @@ namespace cosmo_v2
     {
         const bool fromProject = (mScreen == Screen::Editor);
         if (mConfirmDialog) mConfirmDialog->close();  // don't leave a modal lingering in the editor tree
+        if (mInfoDialog) mInfoDialog->close();
 
         if (!fromProject)  // initial launch (or already transitioning): straight to home
         {
@@ -1770,6 +1802,7 @@ namespace cosmo_v2
         // A modal owns the keyboard while it is up (R-HOME-1c): Escape cancels, Enter takes the
         // primary action, and everything else is swallowed rather than reaching the editor behind
         // it. Checked before the tree, because the tree does not know a modal is over it.
+        if (mInfoDialog && mInfoDialog->isOpen() && mInfoDialog->handleKey(e)) return true;
         if (mConfirmDialog && mConfirmDialog->isOpen() && mConfirmDialog->handleKey(e)) return true;
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
         // R-BROWSE-2: Left/Right walk the rack — but only once nothing in the tree wanted

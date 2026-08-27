@@ -1,4 +1,7 @@
 #include "NativeImageDecoder.h"
+#include "Exif.h"   // R-INFO: the JPEG tag reader
+#include <cstring>
+#include <ctime>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <algorithm>
 #include <cctype>
@@ -342,6 +345,79 @@ namespace cosmo
 #endif
         out.name = baseName(path);
         return out;
+    }
+
+    ImageMetadata NativeImageDecoder::readMetadata(const std::string &path)
+    {
+        ImageMetadata m;
+#ifdef COSMO_HAVE_LIBRAW
+        if (isRawExtension(path))
+        {
+            // `open_file` parses the maker notes and stops — no unpack, no demosaic. This is why
+            // metadata is its own call: the panel must work on a photo whose pixels are evicted,
+            // and a 26 MB decode to print an ISO would be absurd.
+            LibRaw raw;
+            if (raw.open_file(path.c_str()) == LIBRAW_SUCCESS)
+            {
+                const libraw_image_sizes_t &sz = raw.imgdata.sizes;
+                const libraw_iparams_t &id = raw.imgdata.idata;
+                const libraw_imgother_t &o = raw.imgdata.other;
+                char buf[128];
+                m.add("Camera make", id.make);
+                m.add("Camera model", id.model);
+                m.add("Lens", raw.imgdata.lens.Lens);
+                if (sz.width > 0 && sz.height > 0)
+                {
+                    std::snprintf(buf, sizeof(buf), "%u x %u", sz.width, sz.height);
+                    m.add("Dimensions", buf);
+                    std::snprintf(buf, sizeof(buf), "%.1f MP",
+                                  (double)sz.width * (double)sz.height / 1e6);
+                    m.add("Resolution", buf);
+                }
+                if (o.iso_speed > 0) { std::snprintf(buf, sizeof(buf), "ISO %.0f", (double)o.iso_speed); m.add("ISO", buf); }
+                if (o.shutter > 0)
+                {
+                    if (o.shutter >= 1.0f) std::snprintf(buf, sizeof(buf), "%.4g s", (double)o.shutter);
+                    else                   std::snprintf(buf, sizeof(buf), "1/%.0f s", 1.0 / (double)o.shutter);
+                    m.add("Shutter", buf);
+                }
+                if (o.aperture > 0) { std::snprintf(buf, sizeof(buf), "f/%.3g", (double)o.aperture); m.add("Aperture", buf); }
+                if (o.focal_len > 0) { std::snprintf(buf, sizeof(buf), "%.0f mm", (double)o.focal_len); m.add("Focal length", buf); }
+                if (o.timestamp > 0)
+                {
+                    const std::time_t tt = (std::time_t)o.timestamp;
+                    std::tm tmv{};
+#ifdef _WIN32
+                    localtime_s(&tmv, &tt);
+#else
+                    localtime_r(&tt, &tmv);
+#endif
+                    if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tmv) > 0)
+                        m.add("Taken", buf);
+                }
+                m.add("Artist", o.artist);
+                if (o.desc[0]) m.add("Description", o.desc);
+                // The as-shot white balance, which is the one piece of RAW metadata the engine
+                // does NOT currently apply — worth showing, because a photographer comparing
+                // cosmo's colour with the camera's will want to know the number exists.
+                if (raw.imgdata.color.cam_mul[0] > 0 && raw.imgdata.color.cam_mul[1] > 0)
+                {
+                    std::snprintf(buf, sizeof(buf), "R %.3f  G %.3f  B %.3f",
+                                  (double)raw.imgdata.color.cam_mul[0] / (double)raw.imgdata.color.cam_mul[1],
+                                  1.0,
+                                  (double)raw.imgdata.color.cam_mul[2] / (double)raw.imgdata.color.cam_mul[1]);
+                    m.add("As-shot WB", buf);
+                }
+                raw.recycle();
+                return m;
+            }
+        }
+#endif
+        // Not a RAW (or LibRaw could not open it): the Exif reader handles JPEG, and anything
+        // else simply reports fewer rows — which is the honest outcome for a PNG that carries no
+        // shooting data at all.
+        for (auto &kv : cosmo_v2::exif::read(path)) m.add(kv.first, kv.second);
+        return m;
     }
 
     DecodedImage NativeImageDecoder::decodeFile(const std::string &path)

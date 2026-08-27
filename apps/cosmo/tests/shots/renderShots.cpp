@@ -945,6 +945,51 @@ namespace
         save(f, "editor-crop-zoom-999-closed");
     }
 
+
+    /** R-INFO: the image-information panel, opened the way a user opens it — a right-click on
+     *  the photo and a click on the item. The rows come from the REAL file the shot was given,
+     *  so this is also the only place the Exif reader's output is ever looked at by a human.
+     */
+    void shotImageInfo(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-image-info")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        auto *canvas = arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "PhotoCanvas");
+        if (!canvas) { std::printf("  (no photo canvas: skipping editor-image-info)\n"); return; }
+        const artboard::Transform cw = canvas->worldTransform();
+        const double cx = cw.e + canvas->width.value() * 0.5;
+        const double cy = cw.f + canvas->height.value() * 0.4;
+        rig.app.pointer(0, cx, cy, 2, rig.now);
+        rig.app.pointer(2, cx, cy, 2, rig.now);
+        rig.settleQuiet(f, 300.0, 300);
+        save(f, "editor-context-menu");
+
+        // Item 3 of the photo menu: Add Photo / Group / Ungroup / Image Information. Clicked
+        // rather than called, so the shot proves the ROUTE and not just the dialog.
+        rig.click(f, cx + 20.0, cy + 4.0 + 3 * 24.0 + 12.0);
+        rig.settleQuiet(f, 400.0, 400);
+        if (!rig.app.infoDialog()->isOpen())
+        {
+            std::printf("  (the info panel did not open: skipping editor-image-info)\n");
+            return;
+        }
+        save(f, "editor-image-info");
+
+        // Mid-scroll, so the shot shows the thumb and proves the list moves over frames
+        // rather than jumping (R-G-1).
+        rig.app.wheel(cx, cy, -90.0, false);
+        rig.step(f, 4);
+        save(f, "editor-image-info-scrolled");
+
+        artboard::KeyEvent esc;
+        esc.type = artboard::KeyEvent::Type::Down;
+        esc.keyCode = 0x1B;
+        rig.app.key(esc);
+        rig.settleQuiet(f, 300.0, 300);
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -957,7 +1002,8 @@ namespace
         }
         if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
             && !wanted("editor-dissolve") && !wanted("editor-split-seam")
-            && !wanted("editor-crop") && !wanted("editor-crop-zoom"))
+            && !wanted("editor-crop") && !wanted("editor-crop-zoom")
+            && !wanted("editor-image-info") && !wanted("editor-context-menu"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -981,6 +1027,7 @@ namespace
         shotSplitSeam(rig, w0, h0);          // R-VIEW-3
         shotCrop(rig, w0, h0);              // R-CROP
         shotCropZoom(rig, w0, h0);          // R-CROP-7
+        shotImageInfo(rig, w0, h0);         // R-INFO
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)
@@ -1055,7 +1102,9 @@ int main(int argc, char **argv)
                     "editor-dissolve-early  editor-dissolve-late\n"
                     "scale-75-*  scale-90-*  scale-100-*  scale-125-*   (-home-min, -editor-min,\n"
                     "                            -settings-min, -editor-1280x800)\n"
-                    "scale-zoom-{000-before,060-mid,140-mid,999-after}\n");
+                    "scale-zoom-{000-before,060-mid,140-mid,999-after}\n"
+                    "editor-split-seam  editor-crop-{free,16x9,custom}  editor-crop-zoom-*\n"
+                    "editor-context-menu  editor-image-info  editor-image-info-scrolled\n");
         return 0;
     }
 

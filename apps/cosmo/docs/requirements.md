@@ -2811,3 +2811,52 @@ out-of-range coordinates are refused with a message, and — via the new
 `history_advances_without_a_view` — that history steps at all without a view, which it did not
 (**D-55**: only `App` and `PhoneApp` ever advanced the session's clock, so every headless edit merged
 into one node).
+
+### DR-INFO-1/2 Image information: what the file says about itself (R-INFO-1, R-INFO-2)
+Four layers, one per job, and the seam is the point.
+
+**The reader.** `IImageDecoder::readMetadata` (`core/decode/ImageDecoder.h:117`) returns
+`ImageMetadata` — a flat list of label/value pairs (`ImageDecoder.h:56`), not typed fields, because
+the set differs per format and the panel's job is to show what the file carries.
+`NativeImageDecoder::readMetadata` (`NativeImageDecoder.cpp:350`) uses LibRaw's `open_file` **without
+`unpack`** for a RAW — make, model, lens, sizes, ISO, shutter, aperture, focal length, timestamp,
+artist, description and the as-shot WB multipliers — and falls back to `cosmo_v2::exif::read` for
+everything else. Neither path decodes: a 26 MB demosaic to print an ISO would be absurd, and the
+panel has to answer for a photo whose pixels R-MEM-1 has already evicted.
+
+`core/decode/Exif.cpp` is the JPEG reader: walk the markers, remember the APP1/Exif block **and keep
+going** (SOF comes after APP1, and returning at the Exif segment is exactly how the dimensions went
+missing), then parse IFD0 plus the Exif sub-IFD for the ~15 tags the panel names.
+`tiffBlockOf(path, sofW, sofH)` (`Exif.cpp:19,40`) is where the SOF walk lives, and it is the reason
+**Dimensions is a property of the file**: taking it from the engine's frame instead made two
+identical runs disagree, because the engine only knows a photo's size once a frame has landed, and
+R-SVC-9 promises two front ends given the same commands print the same state.
+
+**The host wrapper.** `PinnedDecoder::readMetadata` (`PinnedDecoder.h:87`) forwards to the real
+decoder and is the **one** forwarder there that does not pin an OpenMP team — there is no team to
+size when nothing is demosaiced. It exists because the base's default returns nothing: the panel came
+up blank on a file whose Exif a standalone harness read perfectly, and one line of the core test now
+holds that shut.
+
+**The service.** `Command::Kind::Metadata` (`service/Command.h:99`, grammar at `Command.cpp:368`) is
+handled by `CosmoService::readMetadata` (`CosmoService.cpp:477`): resolve the node (`-1` = the
+selection), refuse a group or a photo with no file with a reason, then assemble `Path`, `File size`,
+the decoder's rows, and — only if the decoder gave none — the engine's dimensions as a fallback. The
+answer lands in `AppModel::metadataNode` / `metadataName` / `metadata` (`AppModel.h:208`) and is
+dumped by `formatModel` (`AppModelCodec.cpp:165`), so `metadata` + `state print` asserts the reader
+with no GUI. The file's NAME is the heading, not a row: a row repeating the heading costs a line and
+says nothing.
+
+**The view.** `widgets/InfoDialog.{h,cpp}` is a modal card in ConfirmDialog's chrome and timings
+(150 ms in, 120 ms out) with a two-column list that **scrolls** — 16 rows exceed the 292.5 px body
+cap, which itself yields to the window so the card stays on a 720p screen. The value column takes
+the mono face when the value `looksNumeric`, decided from the value rather than carried per row,
+because a presentation flag on a service-produced list is exactly where R-SVC-4 leaks. Labels and
+values are elided to fit (paths from the left, so the filename survives). `App::openImageInfo`
+(`App.cpp:563`) dispatches the command and opens the dialog only if rows came back; the menu item is
+added in `openEditContext` (`App.cpp:615`), above Delete and only for non-group cells.
+
+Covered by `test_metadata_reads_the_file_without_decoding_it` (which builds a real Exif JPEG in
+40 lines rather than committing a binary fixture, and asserts the decode count does not move),
+`rightClickShowsTheImageInformation` (the whole route: right-click, menu item, rows, eased scroll,
+Escape) and the `editor-context-menu` / `editor-image-info` / `editor-image-info-scrolled` shots.

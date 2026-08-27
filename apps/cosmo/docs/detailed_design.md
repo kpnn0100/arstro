@@ -811,6 +811,25 @@ A confirm/choose prompt (save-or-discard on leaving an edited project). `Confirm
 `struct Button{label,bool destructive,bool primary,onClick}`; `show(title,message,buttons)`;
 `close()` (snap shut). Right-aligned button row; destructive=red, primary=accent, else outline.
 
+### 7.6b InfoDialog (R-INFO)
+The image-information modal. `show(title, rows)` where `rows` is `vector<pair<label,value>>` exactly
+as `AppModel::metadata` produced them — the widget interprets nothing, which is why it works
+unchanged for a JPEG's eleven rows and a RAW's sixteen. ConfirmDialog's chrome and timings
+(`kCardW=400`, `kPad=20`, 150 ms appear / 120 ms close, scrim `rgba(0,0,0,0.55)`), plus:
+
+- `kRowH=19.5` (6 spacing units), `kMaxBodyH=292.5` (15 rows), `kLabelW=110.5`, `kThumbW=3`.
+  `bodyHeight()` is `min(content, kMaxBodyH, room in the window)` so the card stays on a 720p screen.
+- **Scrolls** through the standard pattern: `scrollBy(delta)` sets a target, `advance()` eases it in
+  180 ms `EaseOutCubic`, `onOverlay` clips the body and culls rows outside it. A thumb is drawn only
+  when the content overflows. `App::wheel` routes the wheel here first while it is open.
+- Value column takes `font::mono()` when `looksNumeric(value)` (leading digit / sign, or `f/`,
+  `ISO `, `R ` prefixes) or the label is `Path` — decided from the VALUE, because a per-row font flag
+  on a service-produced list is where R-SVC-4 leaks. Labels and values are elided to fit; paths
+  elide from the LEFT so the filename survives.
+- Closes on Escape/Enter (`handleKey`, routed before the tree in `App::key`), the X, the Close
+  button, or a click outside. `rowCount()`, `valueOf(label)` and `scrollOffset()` exist for the
+  headless assertions.
+
 ### 7.7 ActionBar
 The pinned Save/Import/Export row (`kHeight=39`). `onSave`, `onImport`, `onExport`. Save is the
 accent button; the others outline. Per-button `HoverFade` + `hoverBox`. Icons `save`/`upload`/

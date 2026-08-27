@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace arstro
@@ -44,6 +45,22 @@ namespace cosmo
     {
         Preview,
         Full
+    };
+
+    /** What a photo says about itself, as label/value pairs in display order (R-INFO).
+     *
+     *  Strings, not typed fields, deliberately: the panel's job is to SHOW what the file carries,
+     *  the set differs per format, and a struct of optionals would have to grow a member for every
+     *  tag anyone ever wants. Nothing downstream computes with these — the values the engine needs
+     *  (dimensions, orientation) come through the decode path proper. */
+    struct ImageMetadata
+    {
+        std::vector<std::pair<std::string, std::string>> rows;
+        bool empty() const { return rows.empty(); }
+        void add(std::string label, std::string value)
+        {
+            if (!value.empty()) rows.emplace_back(std::move(label), std::move(value));
+        }
     };
 
     struct IImageDecoder
@@ -85,6 +102,22 @@ namespace cosmo
         {
             (void)maxEdge;
             return decodeFile(path);
+        }
+
+        /** What the file says about itself: camera, lens, exposure, date (R-INFO).
+         *
+         *  A separate call and not a field on `DecodedImage`, because it must be answerable
+         *  WITHOUT decoding — the panel is opened on a photo whose pixels may have been evicted,
+         *  and reading a 26 MB RAW to print its ISO would be absurd. Cheap by construction: the
+         *  RAW path opens the file and stops before `unpack`, and the JPEG path reads the first
+         *  256 KB.
+         *
+         *  The default is empty rather than a guess. A decoder with nothing to say says nothing,
+         *  and the panel then shows only what the caller itself knows (name, path, size). */
+        virtual ImageMetadata readMetadata(const std::string &path)
+        {
+            (void)path;
+            return {};
         }
     };
 }

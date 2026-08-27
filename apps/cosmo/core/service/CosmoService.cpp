@@ -474,6 +474,74 @@ namespace cosmo
     }
 
     // ── fields ────────────────────────────────────────────────────────────────────────
+    bool CosmoService::readMetadata(const Command &c)
+    {
+        // The node, not the slot: a right-click names a node, and the menu is offered on group
+        // rows too — answering "that has no file behind it" there is better than no answer.
+        const int node = c.index >= 0 ? c.index : mModel.selectedNode;
+        if (node < 0 || node >= (int)mSession.nodes().size())
+            return fail("metadata: nothing selected");
+        const EditSession::GNode &n = mSession.nodes()[(std::size_t)node];
+        const int slot = n.slot;
+        const std::string path = slot >= 0 ? mSession.sourcePathForSlot(slot) : std::string();
+        if (path.empty())
+            return fail(n.group ? "metadata: a group has no file behind it"
+                                : "metadata: that photo's pixels are not loaded yet");
+        std::string name = mSession.nameForSlot(slot);
+
+        mModel.metadataNode = node;
+        mModel.metadataName = name.empty() ? path : name;
+        mModel.metadata.clear();
+
+        // What the CALLER knows, first, and always — a file with no readable tags at all still
+        // deserves a panel rather than an empty box. The NAME is not a row: it is
+        // `metadataName`, which every surface shows as the heading, and a row repeating the
+        // heading is a row that costs a line and says nothing.
+        mModel.metadata.emplace_back("Path", path);
+        {
+            std::error_code ec;
+            const auto bytes = std::filesystem::file_size(path, ec);
+            if (!ec)
+            {
+                char buf[64];
+                if (bytes >= 1024ull * 1024ull)
+                    std::snprintf(buf, sizeof(buf), "%.1f MB", (double)bytes / (1024.0 * 1024.0));
+                else
+                    std::snprintf(buf, sizeof(buf), "%.0f KB", (double)bytes / 1024.0);
+                mModel.metadata.emplace_back("File size", buf);
+            }
+        }
+
+        // Then whatever the file itself says. Through the decoder seam, so no codec enters the
+        // service (the same rule `setImageWriter` follows) — and via `readMetadata`, which does
+        // not decode: the panel must work on a photo whose pixels have been evicted.
+        bool haveDims = false;
+        if (mMakeDecoder)
+            if (auto dec = mMakeDecoder())
+                for (auto &kv : dec->readMetadata(path).rows)
+                {
+                    if (kv.first == "Dimensions") haveDims = true;
+                    mModel.metadata.emplace_back(kv.first, kv.second);
+                }
+
+        // Only as a fallback, and last: the engine knows the size of a photo whose pixels are
+        // resident, but a row that appears or vanishes depending on whether a frame has landed
+        // is not a property of the file (R-SVC-9) — so the file's own answer wins whenever the
+        // decoder could give one, and this covers the formats that carry no header we read.
+        if (!haveDims && mModel.sourceWidth > 0 && mModel.sourceHeight > 0 &&
+            slot == mSession.currentSlot())
+        {
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "%d x %d", mModel.sourceWidth, mModel.sourceHeight);
+            mModel.metadata.emplace_back("Dimensions", buf);
+        }
+
+        ++mModel.revision;
+        emit(Event::Kind::Info, "metadata " + std::to_string((int)mModel.metadata.size()) +
+                                    " field(s) for " + mModel.metadataName);
+        return true;
+    }
+
     bool CosmoService::pickWhiteBalance(const Command &c)
     {
         // R-WB-1: "this pixel should be white". Three steps, and each one is somewhere it can be
@@ -761,6 +829,7 @@ namespace cosmo
             // harmless but would leave two places deciding the order.
             case Command::Kind::Set: return applySetFields(c);
             case Command::Kind::WhiteBalancePick: return pickWhiteBalance(c);
+            case Command::Kind::Metadata: return readMetadata(c);
 
             // R-PREVIEW-1. Turning a gesture OFF backdates the silence timer so the
             // settle-and-refine walk starts on the very next pump rather than kSettleMs

@@ -150,6 +150,8 @@ namespace cosmo
         /** R-WB-1: sample the photo where the user clicked, solve for the temperature and tint
          *  that make it neutral, and apply them through the ordinary params path. */
         bool pickWhiteBalance(const Command &c);
+        /** R-INFO: read a photo's metadata into the model, on demand. */
+        bool readMetadata(const Command &c);
         /** The picker's averaging radius, in proxy pixels — big enough to swamp sensor noise,
          *  small enough that clicking a small neutral patch does not drag its neighbours in. */
         static constexpr int kWbPickRadius = 4;

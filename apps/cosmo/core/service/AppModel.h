@@ -26,6 +26,7 @@
 #include "../ProjectStore.h"
 #include "engine/EditParams.h"
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace arstro
@@ -195,6 +196,18 @@ namespace cosmo
          *  can only assume a square, which is what `XformPanel` did — and said so in a comment
          *  rather than being able to fix it (R-CROP-1). */
         int sourceWidth = 0, sourceHeight = 0;
+
+        /** R-INFO: the last photo whose metadata was asked for, and what it said. Filled by the
+         *  `metadata` command and left alone otherwise — reading a file to print its ISO should
+         *  not happen every time somebody arrows through the filmstrip, so this is on demand and
+         *  not part of the selection.
+         *
+         *  Label/value pairs rather than typed fields: the set differs per format, and the panel's
+         *  job is to show what the file carries. `metadataNode` says which photo they belong to, so
+         *  a view can tell "no metadata" from "metadata for the photo you were last looking at". */
+        int metadataNode = -1;
+        std::string metadataName;
+        std::vector<std::pair<std::string, std::string>> metadata;
 
         int frameSlot = -1;
         int frameWidth = 0, frameHeight = 0;

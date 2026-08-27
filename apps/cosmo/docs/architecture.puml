@@ -116,6 +116,11 @@ package "app  (namespace arstro::cosmo_v2)" as app {
       + advance() / onOverlay()  ' public: Home drives it too (R-SETTINGS-5)
     }
     class ConfirmDialog
+    class InfoDialog {
+      + show(title, rows)          ' R-INFO: label/value rows, straight from AppModel::metadata
+      + scrollBy(delta) / handleKey()
+      + rowCount/valueOf/scrollOffset   ' headless assertions
+    }
     class ExportDialog {
       + show(nodes, preselect)
       + rowCount/rowIsGroup/rowState
@@ -241,9 +246,17 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     - produce(i, decoder) : Result   ' decode + thumbnail, on the worker (R-LOADPERF-2)
   }
   AppSettings ..> ProjectStore : configDir()
-  interface IImageDecoder
+  interface IImageDecoder {
+    + decodeFile(path, fidelity)
+    + decodeThumb(path, maxEdge)
+    + readMetadata(path) : ImageMetadata   ' R-INFO: parses a header, never decodes
+  }
   class NativeImageDecoder
+  class Exif <<free functions>> {
+    + read(path) : (label, value)[]   ' R-INFO-2: JPEG IFD0 + Exif sub-IFD + SOF sizes
+  }
   NativeImageDecoder ..|> IImageDecoder
+  NativeImageDecoder ..> Exif : non-RAW metadata
 }
 
 package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
@@ -301,6 +314,7 @@ App *--> PresetDialog
 App *--> SettingsDialog
 App *--> ExportDialog
 App *--> ConfirmDialog
+App *--> InfoDialog
 App *--> Starfield
 App o--> Screen
 App o--> Phase

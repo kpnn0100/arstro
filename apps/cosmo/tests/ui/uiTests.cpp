@@ -1171,6 +1171,105 @@ namespace
         check(askedEveryFrame == framesWhileMoving,
               "and every one of them was requested — R-G-1 is untouched by drawing on demand");
     }
+
+    // ── R-INFO: right-click ▸ Image Information puts the file's metadata on screen ────────
+    void rightClickShowsTheImageInformation()
+    {
+        std::printf("App: right-click offers Image Information, and it opens the metadata panel (R-INFO)\n");
+        Rig rig(1440.0, 900.0);
+        // A decoder that also answers `readMetadata` — the whole point of the panel is that the
+        // rows come from the FILE through the seam, so a rig with pixels but no metadata would
+        // be testing an empty dialog.
+        struct MetaDecoder : arstro::cosmo::IImageDecoder
+        {
+            arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+            {
+                arstro::cosmo::DecodedImage d;
+                d.width = 96; d.height = 64;
+                d.rgba.assign((size_t)96 * 64 * 4, 150);
+                d.name = path;
+                return d;
+            }
+            arstro::cosmo::ImageMetadata readMetadata(const std::string &) override
+            {
+                arstro::cosmo::ImageMetadata m;
+                // More rows than the card can show, deliberately: the list must scroll, and a
+                // dialog sized to its content is a dialog that runs off a 720p screen.
+                m.add("Camera make", "ARSTRO");
+                m.add("Camera model", "Test Cam 1");
+                m.add("Lens", "24-70mm f/2.8");
+                m.add("ISO", "ISO 400");
+                m.add("Shutter", "1/250 s");
+                m.add("Aperture", "f/2.8");
+                m.add("Focal length", "50 mm");
+                m.add("Exposure bias", "-0.30 EV");
+                m.add("Taken", "2026:08:27 10:30:00");
+                m.add("Orientation", "Normal");
+                m.add("Software", "cosmo test");
+                m.add("Dimensions", "6000 x 4000");
+                m.add("Resolution", "24.0 MP");
+                m.add("Artist", "A Photographer");
+                m.add("Copyright", "(c) 2026");
+                m.add("As-shot WB", "R 2.104  G 1.000  B 1.548");
+                return m;
+            }
+        };
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.svc.setDecoderFactory([] {
+            return std::unique_ptr<arstro::cosmo::IImageDecoder>(new MetaDecoder());
+        });
+        rig.app.showEditor();
+        rig.settle(400.0);
+
+        // Right-click the middle of the stage, exactly as a user does. Button 2 is Right at
+        // App::pointer's entry (the GTK host passes the same number).
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        auto *photo = arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas");
+        check(photo != nullptr, "the photo canvas is in the tree");
+        if (!photo) return;
+        const artboard::Transform pw = photo->worldTransform();
+        const double cx = pw.e + photo->width.value() * 0.5;
+        const double cy = pw.f + photo->height.value() * 0.5;
+        rig.app.pointer(0, cx, cy, 2, rig.now);
+        rig.app.pointer(2, cx, cy, 2, rig.now);
+        rig.settle(300.0);
+
+        auto *menu = arstro::cosmo_v2::findSegmentByType(*root, "ContextMenu");
+        check(menu != nullptr, "and the right-click opened a menu");
+
+        // Item 3 of the photo-menu order: Add Photo / Group / Ungroup / Image Information.
+        // (No cell was clicked, so the per-cell items — bypass, rename, delete — are absent.)
+        // kPadY = 4, kItemH = 24, both private to ContextMenu, so the row centre is derived
+        // here the same way the widget lays it out.
+        rig.click(cx + 20.0, cy + 4.0 + 3 * 24.0 + 12.0);
+        rig.settle(300.0);
+
+        auto info = rig.app.infoDialog();
+        check(info->isOpen(), "clicking it opens the image-information panel");
+        check(info->rowCount() >= 16, "with the rows the service produced");
+        check(info->valueOf("ISO") == "ISO 400", "and the values the file carries");
+        check(info->valueOf("Path").find(".raf") != std::string::npos,
+              "including what the caller already knew");
+
+        // R-G-1: the list eases. A wheel must not teleport the rows — asserted the only way
+        // that can tell an eased list from a snapping one, by looking mid-tween.
+        const double before = info->scrollOffset();
+        rig.app.wheel(cx, cy, -60.0, false);
+        rig.frames(2);
+        const double mid = info->scrollOffset();
+        rig.settle(400.0);
+        const double after = info->scrollOffset();
+        check(after > before, "the wheel scrolls the list");
+        check(mid > before && mid < after, "and gets there over several frames, not in one");
+
+        // Escape closes it, as it does every modal here.
+        artboard::KeyEvent esc;
+        esc.type = artboard::KeyEvent::Type::Down;
+        esc.keyCode = 0x1B;
+        check(rig.app.key(esc), "Escape is consumed by the modal");
+        rig.settle(300.0);
+        check(!info->isOpen(), "and closes it");
+    }
 }
 
 int main()
@@ -1185,6 +1284,7 @@ int main()
     cropLockedRatioHoldsWhenDraggedOffThePhoto();
     leavingAndEnteringTheCropZoomsRatherThanCutting();
     closingTheAppAsksAboutUnsavedWork();
+    rightClickShowsTheImageInformation();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

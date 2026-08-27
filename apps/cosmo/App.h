@@ -21,6 +21,7 @@
 #include "widgets/ExportDialog.h"
 #include "widgets/SettingsDialog.h"
 #include "widgets/ConfirmDialog.h"
+#include "widgets/InfoDialog.h"
 #include "widgets/HomeScreen.h"
 #include "widgets/Starfield.h"
 #include "core/AppSettings.h"
@@ -159,6 +160,11 @@ namespace cosmo_v2
         /** The save/discard modal, so the host can route keys to it and a test can answer it
          *  (R-HOME-1c). Exposed rather than mirrored: one dialog, one owner. */
         std::shared_ptr<ConfirmDialog> confirmDialog() { return mConfirmDialog; }
+        /** R-INFO: the "Image information" modal, exposed for the same reason every other dialog
+         *  is — a headless test and a shot need to open it without a right-click. */
+        std::shared_ptr<InfoDialog> infoDialog() { return mInfoDialog; }
+        /** Ask the service for `node`'s metadata (-1 = the selection) and put it on screen. */
+        void openImageInfo(int node);
         /** Wired by the host to whatever actually ends the process. */
         std::function<void()> onQuitApproved;
 
@@ -454,6 +460,7 @@ namespace cosmo_v2
         std::shared_ptr<SettingsDialog> mSettingsDialog;  // modal engine settings (overlay)
         std::shared_ptr<ExportDialog> mExportDialog;      // modal batch export (overlay, R-EXPORT)
         std::shared_ptr<ConfirmDialog> mConfirmDialog;    // modal save/discard prompt (overlay)
+        std::shared_ptr<InfoDialog> mInfoDialog;          // R-INFO: metadata panel (overlay)
 
         Screen mScreen = Screen::Home;                    // app starts on the launcher
         /** Whether the Xform tab wants the photo rendered uncropped (R-CROP-5). Tracked so the

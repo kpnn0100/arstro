@@ -309,6 +309,6 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/core/ProjectStore.{h,cpp}` | core | recents index (config dir) |
 | `apps/cosmo/core/AppSettings.{h,cpp}` | core | engine preferences persisted across launches (R-SETTINGS-4). It still holds `cpuPercent`, but no longer converts it — `workersFor()` survives only for the legacy test; `ThreadBudget` owns the conversion (R-SVC-10) |
 | `apps/cosmo/core/PresetLibrary.{h,cpp}` | core | `.apf` preset tree scan |
-| `apps/cosmo/core/decode/*` | core | `IImageDecoder` + GdkPixbuf/LibRaw `NativeImageDecoder` |
+| `apps/cosmo/core/decode/*` | core | `IImageDecoder` + GdkPixbuf/LibRaw `NativeImageDecoder`, plus `Exif.{h,cpp}` — the JPEG tag reader behind `readMetadata`, which parses a header and never decodes (R-INFO-2) |
 | `core/ImageProcessing/src/engine/*` | engine | `EditEngine`, `RenderService`, `EditParams`, serialization |
 | `core/Artboard/*` | framework | `Segment`, `IRenderTarget`, gestures, `AnimatedProperty`, controls |

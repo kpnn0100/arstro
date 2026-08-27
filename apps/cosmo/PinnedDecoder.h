@@ -80,6 +80,15 @@ namespace cosmo_v2
             return mInner.decodeThumb(path, maxEdge);
         }
 
+        /** NOT pinned, and the only forwarder here that is not: `readMetadata` parses a header
+         *  and never demosaics, so there is no OpenMP team to size. Forwarded all the same,
+         *  because the default in the base returns nothing — which is exactly how the metadata
+         *  panel came up empty on a file whose Exif a standalone harness read fine. */
+        arstro::cosmo::ImageMetadata readMetadata(const std::string &path) override
+        {
+            return mInner.readMetadata(path);
+        }
+
         void setProgress(Progress p) override { mInner.setProgress(std::move(p)); }
 
         // Static passthroughs so a caller asking about RAW support does not need to reach
