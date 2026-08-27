@@ -90,7 +90,10 @@ package "app  (namespace arstro::cosmo_v2)" as app {
       - mPhotoBase / mPhotoTop    ' two stacked ImageViews
       - mTopIsCurrent : bool
     }
-    class MaskOverlay
+    class MaskOverlay {
+      + setMask(m, active) / onChange(MaskParams) : cb
+      + pathPointCount/pathPointAt   ' R-MASK-6: the drawn outline's points
+    }
     class Filmstrip
     class Breadcrumb
     class RightColumn
@@ -102,7 +105,9 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class CurvePanel
     class GradePanel
     class XformPanel
-    class MaskPanel
+    class MaskPanel {
+      + addChipRect(i)   ' R-MASK-6: Radial / Linear / Brush / Draw
+    }
     class StackPanel
     class ActionBar
     class HomeScreen

@@ -44,6 +44,7 @@
 #include "UiDump.h"              // findSegmentByType — R-VIEW-3's shot asks the tree for the canvas
 #include "widgets/PhotoCanvas.h"  // ...and the canvas where its seam is
 #include "widgets/XformPanel.h"    // R-CROP: the shot asks the panel where its chips are
+#include "widgets/MaskPanel.h"     // R-MASK-6: and where the Draw chip is
 #include "EmbeddedFonts.h"
 #include "OmpPin.h"
 #include "adapter/native/CairoTarget.h"
@@ -990,6 +991,65 @@ namespace
         rig.settleQuiet(f, 300.0, 300);
     }
 
+
+    /** R-MASK-6: a hand-drawn mask, drawn the way a user draws one — the Draw chip, then clicks
+     *  on the photo, then an Alt-drag to bow one segment. Two frames: the outline while it is
+     *  still being placed, and the finished shape with its handles out. */
+    void shotMaskDraw(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-mask-draw")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        const artboard::Segment *tabs =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
+        if (!tabs) { std::printf("  (no edit-stack tabs: skipping editor-mask-draw)\n"); return; }
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.app.pointer(0, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);   // Mask is tab 2 of 5
+        rig.app.pointer(2, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);
+        rig.settleQuiet(f, 400.0, 300);
+
+        auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "MaskPanel"));
+        if (!panel) { std::printf("  (no mask panel: skipping editor-mask-draw)\n"); return; }
+        const artboard::Transform mw = panel->worldTransform();
+        const artboard::Rect chip = panel->addChipRect(3);   // Draw
+        rig.click(f, mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5);
+        rig.settleQuiet(f, 400.0, 300);
+
+        auto *photo = arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "PhotoCanvas");
+        if (!photo) { std::printf("  (no photo canvas: skipping editor-mask-draw)\n"); return; }
+        const artboard::Transform pw = photo->worldTransform();
+        const double PW = photo->width.value(), PH = photo->height.value();
+        auto at = [&](double fx, double fy) {
+            return artboard::Point{pw.e + PW * fx, pw.f + PH * fy};
+        };
+
+        // Two points down: the half-drawn state, which is a normal thing to be looking at and
+        // is drawn dimmer because it renders nothing yet.
+        rig.click(f, at(0.30, 0.28).x, at(0.30, 0.28).y);
+        rig.click(f, at(0.62, 0.22).x, at(0.62, 0.22).y);
+        rig.settleQuiet(f, 250.0, 250);
+        save(f, "editor-mask-draw-placing");
+
+        // Kept inside the photo rather than out in the letterbox: a point MAY sit off-frame
+        // (R-MASK-5) but a shot is not the place to demonstrate that.
+        rig.click(f, at(0.70, 0.52).x, at(0.70, 0.52).y);
+        rig.click(f, at(0.34, 0.58).x, at(0.34, 0.58).y);
+        rig.settleQuiet(f, 300.0, 300);
+
+        // Alt-drag the second point's handles, so the finished shot shows a bowed segment and
+        // the tangent handles that produced it.
+        const artboard::Point p = at(0.62, 0.22);
+        rig.app.pointer(0, p.x, p.y, 1, rig.now, /*alt=*/true);
+        for (int i = 1; i <= 6; ++i)
+            rig.app.pointer(1, p.x + 70.0 * i / 6.0, p.y - 26.0 * i / 6.0, 1, rig.now, true);
+        rig.app.pointer(2, p.x + 70.0, p.y - 26.0, 1, rig.now, true);
+        rig.settleQuiet(f, 400.0, 400);
+        save(f, "editor-mask-draw");
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -1003,7 +1063,8 @@ namespace
         if (!wanted("editor-project") && !wanted("loading-reveal") && !wanted("loading-dissolve")
             && !wanted("editor-dissolve") && !wanted("editor-split-seam")
             && !wanted("editor-crop") && !wanted("editor-crop-zoom")
-            && !wanted("editor-image-info") && !wanted("editor-context-menu"))
+            && !wanted("editor-image-info") && !wanted("editor-context-menu")
+            && !wanted("editor-mask-draw"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -1028,6 +1089,7 @@ namespace
         shotCrop(rig, w0, h0);              // R-CROP
         shotCropZoom(rig, w0, h0);          // R-CROP-7
         shotImageInfo(rig, w0, h0);         // R-INFO
+        shotMaskDraw(rig, w0, h0);          // R-MASK-6
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)
@@ -1104,7 +1166,8 @@ int main(int argc, char **argv)
                     "                            -settings-min, -editor-1280x800)\n"
                     "scale-zoom-{000-before,060-mid,140-mid,999-after}\n"
                     "editor-split-seam  editor-crop-{free,16x9,custom}  editor-crop-zoom-*\n"
-                    "editor-context-menu  editor-image-info  editor-image-info-scrolled\n");
+                    "editor-context-menu  editor-image-info  editor-image-info-scrolled\n"
+                    "editor-mask-draw-placing  editor-mask-draw\n");
         return 0;
     }
 

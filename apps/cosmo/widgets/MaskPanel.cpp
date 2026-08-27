@@ -17,11 +17,21 @@ namespace cosmo_v2
     {
         constexpr double kChipGap = 4.875, kChipH = 22.75, kChipMarginBottom = 9.75;
         constexpr double kSelectRowH = 22.75, kSelectRowMB = 8.125;
-        const char *kTypeNames[3] = {"Radial", "Linear", "Brush"};
+        // R-MASK-6: "Draw" rather than "Path" or "Bezier" — the chip names what the user does
+        // with it, as the other three do, not the data structure underneath.
+        constexpr int kTypeCount = 4;
+        const char *kTypeNames[kTypeCount] = {"Radial", "Linear", "Brush", "Draw"};
 
         std::string maskLabel(const MaskParams &m, int index)
         {
-            std::string s = kTypeNames[m.type] + std::string(" ") + std::to_string(index + 1);
+            const int t = m.type >= 0 && m.type < kTypeCount ? m.type : 0;
+            std::string s = kTypeNames[t] + std::string(" ") + std::to_string(index + 1);
+            // A drawn mask says how far along it is: three points is the threshold where it
+            // starts to render, and a panel that stayed silent about that would leave the user
+            // wondering why nothing happened (R-MASK-6).
+            if (t == MaskParams::Path)
+                s += m.path.size() < 3 ? " (" + std::to_string(m.path.size()) + " pts)"
+                                       : " (" + std::to_string(m.path.size()) + ")";
             if (m.inverted) s += " (inv)";
             return s;
         }
@@ -41,7 +51,7 @@ namespace cosmo_v2
     MaskPanel::MaskPanel()
     {
         clipToBounds = true;
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kTypeCount; ++i)
         {
             auto chip = std::make_shared<PillButton>(kTypeNames[i]);
             chip->idleBox = {Paint::filledStroked(Color{0, 0, 0, 0}, palette::border(), 1.0), radius::control()};
@@ -149,6 +159,13 @@ namespace cosmo_v2
         Segment::advance(nowMs);
     }
 
+    Rect MaskPanel::addChipRect(int i) const
+    {
+        if (i < 0 || i >= (int)mAddChips.size()) return Rect{0, 0, 0, 0};
+        const auto &c = mAddChips[(std::size_t)i];
+        return Rect{c->x.value(), c->y.value(), c->width.value(), c->height.value()};
+    }
+
     void MaskPanel::layout()
     {
         const double w = width.value(), innerW = std::max(0.0, w - 2 * kPadX);
@@ -156,8 +173,8 @@ namespace cosmo_v2
 
         mHeaderY[0] = y;
         y += kSectionHeaderHeight;  // "Add Mask" header
-        const double chipW = (innerW - 2 * kChipGap) / 3.0;
-        for (int i = 0; i < 3; ++i)
+        const double chipW = (innerW - (kTypeCount - 1) * kChipGap) / (double)kTypeCount;
+        for (int i = 0; i < kTypeCount; ++i)
         {
             mAddChips[i]->x.set(kPadX + i * (chipW + kChipGap));
             mAddChips[i]->y.set(y);

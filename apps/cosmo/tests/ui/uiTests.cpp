@@ -17,6 +17,7 @@
 #include "../../core/service/CosmoService.h"
 #include "../../core/ThreadBudget.h"
 #include "../../widgets/HomeScreen.h"
+#include "../../widgets/MaskPanel.h"
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
 #include "../../widgets/PhotoCanvas.h"
@@ -1270,6 +1271,72 @@ namespace
         rig.settle(300.0);
         check(!info->isOpen(), "and closes it");
     }
+    // ── R-MASK-6: draw a mask on the photo, through the whole app ────────────────────────
+    void drawingAMaskOnThePhotoReachesTheModel()
+    {
+        std::printf("App: the Draw chip plus three clicks on the photo make a path mask (R-MASK-6)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        check(tabs != nullptr, "the edit-stack tabs exist");
+        if (!tabs) return;
+        // Mask is the second of five tabs.
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 1.5, tw.f + 13.0);
+        rig.settle(400.0);
+
+        auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
+            arstro::cosmo_v2::findSegmentByType(*root, "MaskPanel"));
+        check(panel != nullptr, "and the Mask panel is up");
+        if (!panel) return;
+
+        // The Draw chip is the fourth of the four "add mask" chips — asked for by position from
+        // the panel itself, not indexed out of a child list whose order is a layout detail.
+        // Clicked rather than dispatched, so this asserts the route a user takes.
+        const artboard::Transform mw = panel->worldTransform();
+        const artboard::Rect chip = panel->addChipRect(3);
+        check(chip.w > 0.0, "the Draw chip is there");
+        rig.click(mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5);
+        rig.settle(400.0);
+
+        const arstro::EditParams &p = rig.svc.model().params;
+        check(p.masks.size() == 1u, "which adds a mask");
+        if (p.masks.empty()) return;
+        check(p.masks[0].type == arstro::MaskParams::Path, "of the drawn kind");
+        check(p.masks[0].path.empty(), "with nothing drawn yet — the photo is where it is drawn");
+
+        // Now draw on the photo. The overlay maps to the photo's fitted rect, so the clicks go
+        // through the canvas exactly as a user's do.
+        auto photo = rig.app.uiRoot("editor")
+                         ? arstro::cosmo_v2::findSegmentByType(*root, "PhotoCanvas") : nullptr;
+        check(photo != nullptr, "the photo canvas is in the tree");
+        if (!photo) return;
+        const artboard::Transform pw = photo->worldTransform();
+        const double px = pw.e, py = pw.f;
+        const double PW = photo->width.value(), PH = photo->height.value();
+        rig.click(px + PW * 0.45, py + PH * 0.30);
+        rig.click(px + PW * 0.62, py + PH * 0.62);
+        rig.click(px + PW * 0.35, py + PH * 0.60);
+        rig.settle(400.0);
+
+        const arstro::EditParams &q = rig.svc.model().params;
+        check(q.masks.size() == 1u && q.masks[0].path.size() == 3u,
+              "three clicks on the photo place three points, in the MODEL");
+        if (q.masks.empty() || q.masks[0].path.size() != 3u) return;
+        // Inside the photo's own coordinate space, which is what makes the mask survive a zoom.
+        for (const auto &cp : q.masks[0].path)
+            check(cp.x > 0.0f && cp.x < 1.0f && cp.y > 0.0f && cp.y < 1.0f,
+                  "each point is in normalised photo coordinates");
+        // And the shape they make covers the middle of the photo, which is the whole point.
+        check(arstro::maskCoverage(q.masks[0], 0.47f, 0.5f) > 0.99f,
+              "and the engine covers the inside of what was drawn");
+    }
 }
 
 int main()
@@ -1285,6 +1352,7 @@ int main()
     leavingAndEnteringTheCropZoomsRatherThanCutting();
     closingTheAppAsksAboutUnsavedWork();
     rightClickShowsTheImageInformation();
+    drawingAMaskOnThePhotoReachesTheModel();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

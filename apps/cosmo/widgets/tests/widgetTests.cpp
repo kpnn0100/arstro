@@ -1190,6 +1190,128 @@ namespace
         ov->handleGesture(ev(Gesture::Type::Up), ov->normToLocal(m.cx, m.cy));
         check(m.rx > 0.0f, "a radius dragged onto the centre stays strictly positive");
     }
+
+    // ── R-MASK-6: drawing a closed outline on the photo ──────────────────────────────
+    struct TestPathOverlay : MaskOverlay
+    {
+        TestPathOverlay() : MaskOverlay(arstro::cosmo_v2::palette::primary()) {}
+        using MaskOverlay::handleGesture;
+        using MaskOverlay::normToLocal;
+        using MaskOverlay::pathPointAt;
+        using MaskOverlay::pathPointCount;
+    };
+
+    std::shared_ptr<TestPathOverlay> makePathOverlay(arstro::MaskParams &out)
+    {
+        auto ov = std::make_shared<TestPathOverlay>();
+        ov->width.set(1000.0);
+        ov->height.set(800.0);
+        out = arstro::MaskParams{};
+        out.type = arstro::MaskParams::Path;      // empty: nothing drawn yet
+        ov->setFittedRect(artboard::Rect{200.0, 150.0, 600.0, 500.0});
+        ov->setMask(out, true);
+        ov->onChange = [&out](const arstro::MaskParams &m) { out = m; };
+        return ov;
+    }
+
+    /** One click: press and release at the same place, which is what placing a point is. */
+    void tapAt(std::shared_ptr<TestPathOverlay> &ov, Point p, bool alt = false)
+    {
+        Gesture down = ev(Gesture::Type::Down); down.alt = alt;
+        ov->handleGesture(down, p);
+        ov->handleGesture(ev(Gesture::Type::Up), p);
+    }
+
+    void aPathMaskIsDrawnByClickingThePhoto()
+    {
+        std::printf("Mask: clicking the photo places the points of a closed outline (R-MASK-6)\n");
+        arstro::MaskParams m;
+        auto ov = makePathOverlay(m);
+
+        // Three clicks inside the photo = a triangle. Each press places its point immediately,
+        // so the shape appears as it is drawn rather than on release.
+        tapAt(ov, ov->normToLocal(0.5f, 0.2f));
+        check(m.path.size() == 1u, "the first click places a point");
+        tapAt(ov, ov->normToLocal(0.8f, 0.7f));
+        tapAt(ov, ov->normToLocal(0.2f, 0.7f));
+        check(m.path.size() == 3u, "and each further click adds one");
+        check(!m.path[0].smooth, "a click makes a CORNER point, so a polygon stays a polygon");
+        check(near(m.path[1].x, 0.8, 1e-3) && near(m.path[1].y, 0.7, 1e-3),
+              "placed where the pointer was, in normalised photo coordinates");
+
+        // The outline the overlay draws comes from the ENGINE's flattener, so asserting the
+        // polygon here asserts the rendered shape too — that sharing is the requirement, and it
+        // is why this suite can make the claim without linking the engine.
+        const auto poly = arstro::maskPathPolygon(m.path);
+        check(poly.size() >= 3, "three points flatten to a closed polygon");
+        check(near(poly.front().first, 0.5, 1e-3) && near(poly.front().second, 0.2, 1e-3),
+              "which starts at the first point the user placed");
+
+        // Dragging a point moves it; it does not add another.
+        const Point p1 = ov->pathPointAt(1);
+        ov->handleGesture(ev(Gesture::Type::Down), p1);
+        ov->handleGesture(ev(Gesture::Type::Drag), ov->normToLocal(0.95f, 0.9f));
+        ov->handleGesture(ev(Gesture::Type::Up), ov->normToLocal(0.95f, 0.9f));
+        check(m.path.size() == 3u, "grabbing an existing point moves it rather than adding one");
+        check(near(m.path[1].x, 0.95, 1e-3), "and it follows the pointer");
+
+        // R-MASK-5 applies here too: a point may sit outside the photo.
+        ov->handleGesture(ev(Gesture::Type::Down), ov->pathPointAt(2));
+        ov->handleGesture(ev(Gesture::Type::Drag), Point{40.0, 760.0});
+        ov->handleGesture(ev(Gesture::Type::Up), Point{40.0, 760.0});
+        check(m.path[2].x < 0.0f, "a point may be dragged off the frame (R-MASK-5)");
+        check(m.path[2].x > -8.0f, "and stays finite");
+
+        // Double-click removes a point — and only when it lands ON one.
+        const int before = ov->pathPointCount();
+        ov->handleGesture(ev(Gesture::Type::DoubleClick), ov->pathPointAt(0));
+        check(ov->pathPointCount() == before - 1, "double-clicking a point removes it");
+        ov->handleGesture(ev(Gesture::Type::DoubleClick), ov->normToLocal(0.5f, 0.99f));
+        check(ov->pathPointCount() == before - 1, "and a double-click on empty canvas removes none");
+    }
+
+    void altDraggingAPathPointPullsItsHandles()
+    {
+        std::printf("Mask: Alt-dragging a drawn point bends the outline (R-MASK-6)\n");
+        arstro::MaskParams m;
+        auto ov = makePathOverlay(m);
+        tapAt(ov, ov->normToLocal(0.2f, 0.5f));
+        tapAt(ov, ov->normToLocal(0.5f, 0.45f));
+        tapAt(ov, ov->normToLocal(0.8f, 0.5f));
+        tapAt(ov, ov->normToLocal(0.5f, 0.9f));
+        check(m.path.size() == 4u, "four corner points");
+        check(!m.path[1].smooth, "and none of them smooth yet");
+
+        // Alt on the press, held for the whole gesture — the same rule the tone curve follows.
+        Gesture down = ev(Gesture::Type::Down);
+        down.alt = true;
+        const Point pt = ov->pathPointAt(1);
+        check(ov->handleGesture(down, pt), "Alt+press on a point is claimed");
+        Gesture drag = ev(Gesture::Type::Drag);
+        drag.alt = true;
+        ov->handleGesture(drag, Point{pt.x + 80.0, pt.y - 60.0});
+        ov->handleGesture(ev(Gesture::Type::Up), Point{pt.x + 80.0, pt.y - 60.0});
+
+        check(m.path[1].smooth, "Alt+drag makes the point smooth");
+        check(m.path[1].ox > 0.0f && m.path[1].oy < 0.0f, "the out-handle follows the drag");
+        check(near(m.path[1].ix, -m.path[1].ox, 1e-5) && near(m.path[1].iy, -m.path[1].oy, 1e-5),
+              "and the in-handle mirrors it, so the outline stays continuous");
+        // The point itself did NOT move: that is the difference between Alt+drag and a drag.
+        check(near(m.path[1].x, 0.5, 1e-3) && near(m.path[1].y, 0.45, 1e-3),
+              "and the point itself stays where it was placed");
+
+        // The bend is real, and measurable in the shape itself: the bowed outline reaches
+        // further up (a smaller y) between the points than the straight one ever could.
+        auto topOf = [](const std::vector<arstro::CurvePoint> &pts) {
+            double top = 1e9;
+            for (const auto &pt : arstro::maskPathPolygon(pts)) top = std::min(top, (double)pt.second);
+            return top;
+        };
+        std::vector<arstro::CurvePoint> cornered = m.path;
+        cornered[1].smooth = false;
+        check(topOf(m.path) < topOf(cornered) - 1e-3,
+              "and the bowed outline reaches past the straight chord");
+    }
 }
 
 namespace
@@ -1417,6 +1539,8 @@ int main()
     maskRadiusCanGrowPastTheImageEdge();
     maskCentreCanLeaveTheImage();
     maskRadiusStaysPositive();
+    aPathMaskIsDrawnByClickingThePhoto();
+    altDraggingAPathPointPullsItsHandles();
     homeGridReflowIsAnimated();
     homeMinimumHeightClearsBothAnchoredBlocks();
     homeHeaderTitleNeverRunsUnderTheSearchField();

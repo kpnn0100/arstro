@@ -15,7 +15,7 @@ file, and commit.
 
 ## NEXT
 
-**► 2026-08-27 — four features requested. THREE DONE, ONE TO GO.**
+**► 2026-08-27 — four features requested. ALL FOUR DONE.**
 
 Requested: *(1) when right-click a photo, add option to show image information (metadata);
 (2) white balance needs a colour picker so the user can pick the colour that should be white (both
@@ -59,13 +59,24 @@ custom lighting.*
   was a test reading pixels before a frame had landed, plus a clock that went backwards; both fixed
   in the test, because refusing a pick on a slot with no resident pixels is correct behaviour.
   DR-SVC-9a.
-- **[ ] (4) a custom bezier mask, for custom lighting.** Not started. This is the largest of the
-  four by a wide margin and it is a **core-then-design** pair: a new `MaskParams::Type` with control
-  points, coverage in `MaskStack`, `EditParamsIO`/`.apf` round-tripping (so an old project still
-  loads), `composeParams` concatenation, then an on-photo bezier editor with add/move/delete of
-  points, closing the path, and a feather. Everything else in R-MASK is a shape with two or three
-  numbers; this is the first one whose parameter list is variable-length, so the serialization
-  decision comes first and the editor second.
+- **[x] (4) a custom bezier mask, for custom lighting.** Two commits, core then design.
+  * **Core** (`3f46920`): `MaskParams::Path` + `std::vector<CurvePoint> path`, a closed outline.
+    `CurvePoint` is reused; `curve::sample` is **not** — it sorts by x, and a closed outline is not
+    a function of x, so a sort would silently reorder a shape that doubles back.
+    `maskPathPolygon` walks the points in order and is the ONE flattener the render and the drawing
+    share. Coverage is a plane, not a per-pixel function, because a path's feather is a distance
+    from its boundary: scanline-fill then blur, O(pixels) instead of O(pixels × segments).
+    Even-odd, so overlapping loops cut holes. A fourth OPTIONAL group in the mask blob, so old and
+    new projects load in either build. `mask set <i> path=…` makes it scriptable through the
+    engine's own control-point codec, now exported.
+  * **Design**: a **Draw** chip (the panel decides the kind; the photo is where the shape is
+    drawn), a press on empty canvas places a point and goes straight on to positioning it, Alt+drag
+    pulls mirrored tangent handles (the tone curve's gesture, and its read-the-modifier-at-the-press
+    rule), double-click removes a point. Two points draw a dim line, because half an outline
+    renders nothing and saying so beats drawing a confident shape with no effect.
+  * One thing worth keeping: `pointsStr` in `EditCommands` was a **second copy** of the engine's
+    control-point format. It is a one-line delegate now. R-SVC-5 exists for exactly that, and the
+    copy would have gone unnoticed until the first time a point grew a field.
 
 **► 2026-08-27 — RELEASE AUDIT: "what feature or optimisation would improve this to release to
 market". Findings below, prioritised. Nothing implemented — this is the assessment.**

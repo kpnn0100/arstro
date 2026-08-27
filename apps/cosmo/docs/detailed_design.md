@@ -688,7 +688,11 @@ normalized crop. Callbacks `onRotationChange`, `onQuarterTurn(±1)`, `onResetRot
 `onCropChange(x,y,w,h)`. Flip/Auto rows are drawn but inert.
 
 ### 5.7 MaskPanel
-Three add chips {Radial,Linear,Brush} → `onAddMask(type)`; a `ComboBox` → `onSelectMask(index)`;
+Four add chips {Radial,Linear,Brush,**Draw**} → `onAddMask(type)` (`kTypeCount`, laid out as
+`(innerW - 3·kChipGap)/4`; "Draw" names what the user does with it, as the other three do, not the
+data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is, for the same reason
+`XformPanel::aspectChipRect` does; the ComboBox label of a drawn mask carries its point count, so
+"nothing happened yet" reads as "1 pts" rather than as a bug; a `ComboBox` → `onSelectMask(index)`; a `ComboBox` → `onSelectMask(index)`;
 `Inv` `PillButton` → `onToggleInvert`; trash `IconButton` (`icon::trash2`) → `onDeleteMask`;
 Feather `SliderRow` (0..100 → 0..1) → `onFeatherChange`; then Basic-style Tone/Colour/Presence rows
 writing a working `LocalAdjust` → `onAdjustChange(LocalAdjust)`. Per-mask controls hidden until a
@@ -746,6 +750,29 @@ The interactive layer over the photo (R-MASK). `MaskOverlay(accent)`; `onChange(
 `localToNorm` map against the fitted rect. Draws handles as accent dots outlined in the canvas bg;
 Radial = ellipse + center + edge handles; Linear = two boundary lines + endpoints; Brush = dab
 ellipses. `pickHandle`/`applyDrag` write geometry then `onChange`. Geometry-only (no pixels).
+
+**Draw / path masks (R-MASK-6).** A fourth branch, and the only one whose geometry is a
+variable-length list, so `mDrag` grows three families of ids: `kDragPoint + i` (move point i),
+`kDragIn + i` / `kDragOut + i` (bend the segment before / after it). Kept as arithmetic on the one
+`mDrag` field so the Down/Drag/Up flow and `applyDrag`'s signature stay the same for all four types.
+
+- **A press on empty canvas places a point** — `pickPathHandle` returns the *new* point's own drag
+  id (`kDragPoint + size()`), so the press that creates a point can go straight on to position it:
+  placing and adjusting are one gesture, not a click followed by a hunt for what you made.
+- **Alt at the press pulls the tangent handles** of an existing point instead of moving it (the same
+  gesture, and the same read-the-modifier-once rule, as `CurvePanel` — D-50). Handles are
+  **mirrored**: a point whose two sides bend independently is a corner with extra steps, and leaving
+  `smooth` false is how you ask for a corner. Alt on empty canvas still places a point; there is
+  nothing there to bend.
+- **Double-click on a point removes it**, and only when it lands on one.
+- **The outline is drawn from `arstro::maskPathPolygon`**, the engine's own flattener (inline in
+  `MaskStack.h` precisely so a widget need not link the engine), so what is on screen is what
+  renders — segment count included. Two points draw a dim single line: half an outline renders
+  nothing and saying so is better than drawing a confident shape that has no effect. Tangent
+  handles are drawn only for smooth points, so the affordance appears exactly when it means
+  something.
+- `pathPointCount()` / `pathPointAt(i)` are protected for the same reason `normToLocal` is: a test
+  grabs a point where it is *drawn*.
 
 ### 7.2 HistoryView
 The "Show History Tree…" modal — a git-log branching layout of `struct Node{parent,label}`.

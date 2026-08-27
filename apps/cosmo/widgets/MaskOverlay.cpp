@@ -79,11 +79,80 @@ namespace cosmo_v2
             if (near(normToLocal(mMask.x1, mMask.y1))) return 1;
             return -1;
         }
+        if (mMask.type == MP::Path) return pickPathHandle(local);
         return 99;  // brush: any press paints
+    }
+
+    Point MaskOverlay::pathPointAt(int i) const
+    {
+        if (i < 0 || i >= (int)mMask.path.size()) return Point{0, 0};
+        const arstro::CurvePoint &p = mMask.path[(std::size_t)i];
+        return normToLocal(p.x, p.y);
+    }
+
+    int MaskOverlay::pickPathHandle(const Point &local) const
+    {
+        auto near = [&](Point h) { return std::hypot(local.x - h.x, local.y - h.y) <= kPick; };
+        // Handles first: a tangent handle sits close to its point and would otherwise be
+        // unreachable, exactly as in the curve editor.
+        for (int i = 0; i < (int)mMask.path.size(); ++i)
+        {
+            const arstro::CurvePoint &p = mMask.path[(std::size_t)i];
+            if (!p.smooth) continue;
+            if (near(normToLocal(p.x + p.ix, p.y + p.iy))) return kDragIn + i;
+            if (near(normToLocal(p.x + p.ox, p.y + p.oy))) return kDragOut + i;
+        }
+        for (int i = 0; i < (int)mMask.path.size(); ++i)
+            if (near(pathPointAt(i))) return kDragPoint + i;
+        // Empty canvas: this is where a point is PLACED. Returning the new point's own drag id
+        // means the press that created it can go straight on to position it, so placing and
+        // adjusting are one gesture rather than a click followed by a hunt for what you made.
+        return kDragPoint + (int)mMask.path.size();
+    }
+
+    void MaskOverlay::applyPathDrag(int handle, const Point &local)
+    {
+        float nx, ny; localToNorm(local, nx, ny);
+        const int kind = handle - handle % 1000;
+        const std::size_t i = (std::size_t)(handle % 1000);
+        if (kind == kDragPoint)
+        {
+            // A press on empty canvas asks for a point that does not exist yet. Appending here
+            // rather than in handleGesture keeps the "where did the drag land" arithmetic in one
+            // place — and a drag that begins off the end of the list is exactly a new point.
+            if (i >= mMask.path.size())
+            {
+                if (i > mMask.path.size()) return;
+                arstro::CurvePoint p;
+                p.x = nx; p.y = ny;
+                mMask.path.push_back(p);
+            }
+            else
+            {
+                // Moving a point carries its handles with it: they are stored as OFFSETS, so
+                // this is free — and it is the behaviour a pen tool has everywhere.
+                mMask.path[i].x = nx;
+                mMask.path[i].y = ny;
+            }
+        }
+        else if (i < mMask.path.size())
+        {
+            arstro::CurvePoint &p = mMask.path[i];
+            p.smooth = true;
+            const float dx = nx - p.x, dy = ny - p.y;
+            if (kind == kDragIn) { p.ix = dx; p.iy = dy; p.ox = -dx; p.oy = -dy; }
+            else                 { p.ox = dx; p.oy = dy; p.ix = -dx; p.iy = -dy; }
+            // Mirrored, not independent: a point whose two sides bend in unrelated directions
+            // is a corner with extra steps, and cosmo already has corners — leaving `smooth`
+            // false is how you ask for one. Mirroring is what makes a hand-drawn outline
+            // continuous, which is the whole reason to reach for the handles at all.
+        }
+        if (onChange) onChange(mMask);
     }
 
     void MaskOverlay::applyDrag(int handle, const Point &local)
     {
+        if (mMask.type == MP::Path) { applyPathDrag(handle, local); return; }
         float nx, ny; localToNorm(local, nx, ny);
         if (mMask.type == MP::Radial)
         {
@@ -111,9 +180,40 @@ namespace cosmo_v2
         switch (g.type)
         {
         case Gesture::Type::Down:
+        {
+            // The modifier is read at the PRESS and held for the whole gesture, the same rule
+            // CurvePanel follows: GTK reports Alt on every event, but a user who lets go of the
+            // key mid-drag has not asked for the drag to change meaning (D-50).
+            mDragAlt = g.alt;
             mDrag = pickHandle(local);
+            if (mMask.type == MP::Path && mDragAlt && mDrag >= kDragPoint && mDrag < kDragIn)
+            {
+                // Alt on an EXISTING point pulls its tangents instead of moving it. Alt on empty
+                // canvas still places a point: there is nothing there to bend.
+                const int i = mDrag - kDragPoint;
+                if (i < (int)mMask.path.size()) mDrag = kDragOut + i;
+            }
             if (mDrag == 99) applyDrag(mDrag, local);  // brush: paint on press
+            if (mMask.type == MP::Path && mDrag >= kDragPoint)
+                applyDrag(mDrag, local);               // place the point on the press, not on a drag
             return mDrag >= 0;
+        }
+        case Gesture::Type::DoubleClick:
+        {
+            // Remove a point. Only on a point — a double-click on empty canvas has already
+            // placed two points through the Down handler, and deleting one of those would make
+            // the tool feel like it was fighting the user.
+            if (mMask.type != MP::Path) return false;
+            for (int i = 0; i < (int)mMask.path.size(); ++i)
+                if (std::hypot(local.x - pathPointAt(i).x, local.y - pathPointAt(i).y) <= kPick)
+                {
+                    mMask.path.erase(mMask.path.begin() + i);
+                    mDrag = -1;
+                    if (onChange) onChange(mMask);
+                    return true;
+                }
+            return false;
+        }
         case Gesture::Type::DragStart:
         case Gesture::Type::Drag:
             if (mDrag >= 0) { applyDrag(mDrag, local); return true; }
@@ -176,6 +276,51 @@ namespace cosmo_v2
             t.beginPath(); t.moveTo(p0.x, p0.y); t.lineTo(p1.x, p1.y); t.strokePath();
             drawCircle(t, p0.x, p0.y, kHandle, dot);
             drawCircle(t, p1.x, p1.y, kHandle, dot);
+        }
+        else if (mMask.type == MP::Path)
+        {
+            // The outline, from the ENGINE's flattener — so the shape on screen is the shape
+            // that renders, down to the segment count (R-MASK-6).
+            const auto poly = arstro::maskPathPolygon(mMask.path);
+            if (poly.size() >= 3)
+            {
+                t.setStroke(line, 1.5);
+                t.beginPath();
+                for (std::size_t i = 0; i < poly.size(); ++i)
+                {
+                    const Point p = normToLocal(poly[i].first, poly[i].second);
+                    if (i == 0) t.moveTo(p.x, p.y);
+                    else t.lineTo(p.x, p.y);
+                }
+                t.closePath();
+                t.strokePath();
+            }
+            else if (mMask.path.size() == 2)
+            {
+                // Two points is not a shape yet, and drawing nothing would look broken. The
+                // half-drawn outline is dimmer, which is the honest signal: this renders
+                // nothing until there is a third point.
+                t.setStroke(Color{line.r, line.g, line.b, 0.45f}, 1.5);
+                const Point a = pathPointAt(0), b = pathPointAt(1);
+                t.beginPath(); t.moveTo(a.x, a.y); t.lineTo(b.x, b.y); t.strokePath();
+            }
+            // Tangent handles, for the smooth points only — an outline of plain corners shows
+            // no handles at all, so the affordance appears exactly when it means something.
+            for (const auto &p : mMask.path)
+            {
+                if (!p.smooth) continue;
+                const Point hi = normToLocal(p.x + p.ix, p.y + p.iy);
+                const Point ho = normToLocal(p.x + p.ox, p.y + p.oy);
+                t.setStroke(Color{line.r, line.g, line.b, 0.5f}, 1.0);
+                t.beginPath(); t.moveTo(hi.x, hi.y); t.lineTo(ho.x, ho.y); t.strokePath();
+                drawCircle(t, hi.x, hi.y, kHandle * 0.6, dot);
+                drawCircle(t, ho.x, ho.y, kHandle * 0.6, dot);
+            }
+            for (int i = 0; i < (int)mMask.path.size(); ++i)
+            {
+                const Point c = pathPointAt(i);
+                drawCircle(t, c.x, c.y, kHandle, dot);
+            }
         }
         else  // brush
         {

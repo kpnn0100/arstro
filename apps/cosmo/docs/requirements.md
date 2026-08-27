@@ -2923,3 +2923,47 @@ point bowing the outline where it differs from the chord), `MaskPath_feather_sof
 (partial values near the boundary, ~0.5 on it), `MaskPath_roundtrips_through_the_project_format`
 (handles, the old three-group blob, and the NaN guard) and
 `a_path_mask_is_drawn_by_command_and_renders` in `cosmo_core_tests`.
+
+### DR-MASK-6 (design) Drawing the outline on the photo (R-MASK-6, R-G-1)
+The Mask panel's fourth chip is **Draw** (`MaskPanel`, `addChipRect(3)`), and it creates a mask with
+no points: the photo is where a shape is drawn, so the panel's job ends at "which kind". The
+ComboBox label carries the point count (`Draw 1 (2 pts)`), because three points is the threshold
+where a path starts to render and a panel that stayed silent about that would leave the user
+wondering why nothing happened.
+
+`MaskOverlay` gains a fourth branch. Its geometry is the only one that is a variable-length list, so
+`mDrag` carries three families of ids — `kDragPoint + i`, `kDragIn + i`, `kDragOut + i` — as
+arithmetic on the one field, so the Down/Drag/Up flow and `applyDrag`'s signature are unchanged for
+all four mask types.
+
+- **A press on empty canvas places a point**, and `pickPathHandle` hands back that new point's own
+  drag id, so the press that creates a point goes straight on to positioning it. Placing and
+  adjusting are one gesture rather than a click followed by a hunt for what you just made.
+- **Alt at the press pulls the point's tangent handles** instead of moving it — the same gesture,
+  and the same read-the-modifier-once-at-the-press rule, as the tone curve (D-50). The handles are
+  **mirrored**, because a point whose two sides bend independently is a corner with extra steps and
+  leaving `smooth` false is already how you ask for a corner.
+- **Double-click on a point removes it**; on empty canvas it removes nothing.
+- **The drawn outline comes from `arstro::maskPathPolygon`** — the engine's own flattener, which is
+  `inline` in `MaskStack.h` exactly so a widget can call it without linking the engine's processors
+  and thread pool. What is on screen is therefore what renders, segment count included. Two points
+  draw a single dim line: half an outline renders nothing, and saying so is better than drawing a
+  confident shape with no effect. Tangent handles are drawn only for smooth points.
+
+The write path is unchanged: the overlay hands the whole mask to `RightColumn::writeSelectedMask`,
+which sends `mask set <i>` with `editcmd::maskFields`, now including `path` — a variable-length list
+no per-scalar field can carry, exactly like `dabs`, with an empty value as the erase. `pointsStr`
+there is now a one-line delegate to the engine's `formatCurvePoints`: it *was* a second copy of the
+control-point format, which is what R-SVC-5 forbids and what would have had to be found and changed
+the first time a point grew a field. The service applies its type inference only when the command
+carries no explicit `type`, so the overlay re-sending a whole mask every frame cannot silently
+convert one somebody switched back to Radial.
+
+R-G-1 is untouched: a control point is *data*, not a visible property that eases — the same rule
+R-MASK-4 already states for the other handle types.
+
+Covered by `aPathMaskIsDrawnByClickingThePhoto` and `altDraggingAPathPointPullsItsHandles`
+(`cosmo_widget_tests`, which assert the shared polygon rather than engine coverage, since that suite
+deliberately links no engine), `drawingAMaskOnThePhotoReachesTheModel` (`cosmo_ui_tests` — the whole
+route: Mask tab, Draw chip, three clicks, the points in the MODEL, and the engine covering the
+inside) and the `editor-mask-draw-placing` / `editor-mask-draw` shots.

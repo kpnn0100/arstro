@@ -41,6 +41,12 @@ namespace cosmo_v2
         std::function<void(double)> onFeatherChange;              // 0..1
         std::function<void(const LocalAdjust &)> onAdjustChange;  // selected mask's local adjust
 
+        /** Where "add mask" chip `i` is, in widget-local coords (0 Radial, 1 Linear, 2 Brush,
+         *  3 Draw). Public for the same reason `XformPanel::aspectChipRect` is: a test or a shot
+         *  that aims at a chip must ask the widget where it drew it, or it ends up aiming where
+         *  the widget no longer does. */
+        artboard::Rect addChipRect(int i) const;
+
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
         void advance(double nowMs) override;  // eases the scroll toward its target (R-G-1)

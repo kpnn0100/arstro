@@ -18,16 +18,11 @@ namespace editcmd
 
     std::string pointsStr(const std::vector<arstro::CurvePoint> &pts)
     {
-        std::ostringstream o;
-        o.precision(7);
-        for (size_t i = 0; i < pts.size(); ++i)
-        {
-            if (i) o << ';';
-            const arstro::CurvePoint &c = pts[i];
-            o << c.x << ',' << c.y;
-            if (c.smooth) o << ',' << c.ix << ',' << c.iy << ',' << c.ox << ',' << c.oy;
-        }
-        return o.str();
+        // Delegated, not reimplemented: this WAS a second copy of the engine's control-point
+        // format, which is precisely what R-SVC-5 forbids — and the copy would have had to be
+        // found and changed the first time a point grew a field. The engine exports the codec
+        // now (`formatCurvePoints`), so there is one.
+        return arstro::formatCurvePoints(pts);
     }
 
     std::string maskBlob(const arstro::MaskParams &m)
@@ -64,6 +59,10 @@ namespace editcmd
             dabs += num(d.x) + ':' + num(d.y) + ':' + num(d.radius) + ':' + num(d.flow);
         }
         f.emplace_back("dabs", dabs);   // empty clears them, which is the correct erase
+        // R-MASK-6, same rule as dabs: a variable-length list no per-scalar field can carry, and
+        // an empty value is the erase. `pointsStr` is the control-point codec the curves use, so
+        // a path point is written exactly once, in one format.
+        f.emplace_back("path", pointsStr(m.path));
         return f;
     }
 

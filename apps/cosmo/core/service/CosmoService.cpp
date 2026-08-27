@@ -919,6 +919,7 @@ namespace cosmo
                 // EditParamsIO names it.
                 MaskParams &m = p->masks[c.index];
                 LocalAdjust &adj = m.adjust;
+                bool sawType = false;
                 for (const auto &kv : c.fields)
                 {
                     const std::string &k = kv.first;
@@ -926,7 +927,7 @@ namespace cosmo
                     const bool on = kv.second != "0" && kv.second != "false";
                     if (k == "feather") m.feather = v;
                     else if (k == "inverted") m.inverted = on;
-                    else if (k == "type") m.type = std::atoi(kv.second.c_str());
+                    else if (k == "type") { m.type = std::atoi(kv.second.c_str()); sawType = true; }
                     else if (k == "cx") m.cx = v; else if (k == "cy") m.cy = v;
                     else if (k == "rx") m.rx = v; else if (k == "ry") m.ry = v;
                     else if (k == "x0") m.x0 = v; else if (k == "y0") m.y0 = v;
@@ -974,12 +975,15 @@ namespace cosmo
                         // any per-scalar field, and `set mask=` cannot stand in because it
                         // appends rather than addresses (R-MASK-6).
                         m.path = parseCurvePoints(kv.second);
-                        // Drawing a shape and leaving the type on Radial would render nothing
-                        // and look like a bug in the mask, not in the caller.
-                        if (m.path.size() >= 3) m.type = MaskParams::Path;
                     }
                     else return fail("mask set: unknown field " + k);
                 }
+                // Drawing a shape and leaving the type on Radial would render nothing and read
+                // as a bug in the mask rather than in the caller — so a path arriving on its own
+                // sets the type. Only when the caller did NOT say: the overlay sends the whole
+                // mask every frame, `type` included, and a stale path left on a mask somebody
+                // switched back to Radial must not silently convert it (R-MASK-6).
+                if (!sawType && m.path.size() >= 3) m.type = MaskParams::Path;
                 mSession.submit();
                 refreshModel();
                 emit(Event::Kind::ParamsChanged, "mask index=" + std::to_string(c.index));

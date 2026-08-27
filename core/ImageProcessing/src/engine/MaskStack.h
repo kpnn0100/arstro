@@ -11,6 +11,7 @@
  *  the UI can mirror for its overlay and a video editor can reuse unchanged.
  */
 #pragma once
+#include "../base/CurvePoint.h"
 #include "../base/Image.h"
 #include "EditParams.h"
 #include <utility>
@@ -33,9 +34,40 @@ namespace arstro
      *  mask whose drawn outline is not the outline it renders is worse than no mask.
      *
      *  Deliberately does NOT sort by x: a closed outline is not a function of x. Returns
-     *  fewer than 3 points (usually none) when there is no area to fill. */
-    std::vector<std::pair<float, float>> maskPathPolygon(const std::vector<CurvePoint> &pts,
-                                                         int perSeg = 12);
+     *  fewer than 3 points (usually none) when there is no area to fill.
+     *
+     *  `inline`, and here rather than in the .cpp, precisely BECAUSE it is shared: the overlay
+     *  that draws the outline is a widget, and a widget must not have to link the whole engine
+     *  (with its processors and its thread pool) to ask what shape it is drawing. Nothing in it
+     *  needs more than `curve::cubic`. */
+    inline std::vector<std::pair<float, float>> maskPathPolygon(const std::vector<CurvePoint> &pts,
+                                                                int perSeg = 12)
+    {
+        std::vector<std::pair<float, float>> out;
+        if (pts.size() < 3) return out;      // no area: not a shape yet
+        if (perSeg < 1) perSeg = 1;
+        const std::size_t n = pts.size();
+        out.reserve(n * (std::size_t)perSeg + 1);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const CurvePoint &a = pts[i];
+            const CurvePoint &b = pts[(i + 1) % n];   // closed: the last segment wraps
+            // A corner point ignores its handles, exactly as a corner does on a tone curve —
+            // so a polygon drawn with plain clicks stays a polygon and does not bulge.
+            const float x1 = a.smooth ? a.x + a.ox : a.x;
+            const float y1 = a.smooth ? a.y + a.oy : a.y;
+            const float x2 = b.smooth ? b.x + b.ix : b.x;
+            const float y2 = b.smooth ? b.y + b.iy : b.y;
+            out.push_back({a.x, a.y});
+            for (int s = 1; s < perSeg; ++s)
+            {
+                const float t = (float)s / (float)perSeg;
+                out.push_back({curve::cubic(a.x, x1, x2, b.x, t),
+                               curve::cubic(a.y, y1, y2, b.y, t)});
+            }
+        }
+        return out;
+    }
 
     /** Build a mask's coverage plane at `w`x`h` (row-major, one value per pixel, 0..1).
      *

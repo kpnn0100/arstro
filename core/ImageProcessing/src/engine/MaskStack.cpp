@@ -28,35 +28,6 @@ namespace arstro
         return t * t * (3.f - 2.f * t);
     }
 
-    std::vector<std::pair<float, float>> maskPathPolygon(const std::vector<CurvePoint> &pts,
-                                                         int perSeg)
-    {
-        std::vector<std::pair<float, float>> out;
-        if (pts.size() < 3) return out;      // no area: not a shape yet
-        if (perSeg < 1) perSeg = 1;
-        const std::size_t n = pts.size();
-        out.reserve(n * (std::size_t)perSeg + 1);
-        for (std::size_t i = 0; i < n; ++i)
-        {
-            const CurvePoint &a = pts[i];
-            const CurvePoint &b = pts[(i + 1) % n];   // closed: the last segment wraps
-            // A corner point ignores its handles, exactly as a corner does on a tone curve —
-            // so a polygon drawn with plain clicks stays a polygon and does not bulge.
-            const float x1 = a.smooth ? a.x + a.ox : a.x;
-            const float y1 = a.smooth ? a.y + a.oy : a.y;
-            const float x2 = b.smooth ? b.x + b.ix : b.x;
-            const float y2 = b.smooth ? b.y + b.iy : b.y;
-            out.push_back({a.x, a.y});
-            for (int s = 1; s < perSeg; ++s)
-            {
-                const float t = (float)s / (float)perSeg;
-                out.push_back({curve::cubic(a.x, x1, x2, b.x, t),
-                               curve::cubic(a.y, y1, y2, b.y, t)});
-            }
-        }
-        return out;
-    }
-
     namespace
     {
         /** Even-odd (crossing) test against a closed polygon. Even-odd rather than nonzero
