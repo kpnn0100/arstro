@@ -939,6 +939,16 @@ cards (16:9 cover thumbnail, "Edited" badge, name, `N photos · size · date`) p
   returns to home; if the project has **unsaved changes** (`EditSession::isDirty()`), a modal
   first asks to **Save** (accent) or **Discard** (red/destructive), with Cancel/click-outside to
   stay (`ConfirmDialog`). Screen transitions cross-fade (R-G-1).
+- **R-HOME-1c The same question is asked when the APP closes.** `isDirty()` guarded exactly one
+  exit — the wordmark back to the launcher — so closing the window discarded the whole session
+  silently: the host wired only GTK's `destroy` and there was no `delete-event` handler at all
+  (D-53). Every route out of an unsaved project now asks the same question, through the same modal
+  and the same three buttons: **Cancel** stays, **Discard** (red) leaves, **Save** writes and then
+  leaves. The close request is *refused* while the modal is up, so the window cannot vanish out from
+  under the question — and a clean project closes immediately, because a prompt with nothing to lose
+  is a prompt nobody reads.
+  This is about the exit the user takes, not about the process: `quit` from a script or the control
+  socket means quit, and is not second-guessed.
 - **R-HOME-1b Project name in the top bar.** The open project's name (the `.cmp` stem) is shown
   centred in the editor top bar; set on New/Open/Import/Recent-open.
 - **R-HOME-2 Project file format `.cmp` = catalog/manifest.** A `.cmp` is a JSON catalog that

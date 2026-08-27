@@ -149,6 +149,19 @@ namespace cosmo_v2
          *  service now (R-SVC-1) and the host is what hears about each arrival. */
         void registerThumb(int slot);
 
+        /** The user asked to close the application. Asks about unsaved changes first (R-HOME-1c)
+         *  and calls `onQuitApproved` when — and only when — it is safe to go. A clean project
+         *  approves immediately.
+         *
+         *  The host must REFUSE its own close request and call this instead: the dialog is drawn
+         *  inside the window, so a window that has already begun closing has nowhere to ask. */
+        void requestQuit();
+        /** The save/discard modal, so the host can route keys to it and a test can answer it
+         *  (R-HOME-1c). Exposed rather than mirrored: one dialog, one owner. */
+        std::shared_ptr<ConfirmDialog> confirmDialog() { return mConfirmDialog; }
+        /** Wired by the host to whatever actually ends the process. */
+        std::function<void()> onQuitApproved;
+
         void showHome();     // leave the editor, show the project launcher (refreshes recents)
         void showEditor();   // enter the editor (after a project is created/opened)
         bool onHomeScreen() const { return mScreen == Screen::Home; }

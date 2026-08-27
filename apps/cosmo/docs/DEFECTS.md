@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-53**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-54**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,26 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-53 — Closing the window discarded the whole editing session with no warning
+- **Area:** design / host · **Status:** **Fixed** · **Severity:** S1 (data loss)
+- **Found:** 2026-08-27, in the release audit, and then asked for directly by the user.
+- **Reproduce:** open a project, edit anything, click the window's close button. The app exits and
+  every unsaved edit is gone. No prompt, no autosave, no recovery.
+- **Cause:** `linux_main.cpp` wired `g_signal_connect(window, "destroy", gtk_main_quit)` and nothing
+  else — **no `delete-event` handler existed** (grep count: 0). The unsaved-changes prompt was real
+  and worked, but guarded a single route: `App::requestHome`, the wordmark back to the launcher. One
+  exit was covered and the other, the one most people use, was not.
+- **Judgement:** defect, S1 — it destroys work, silently, on the most ordinary action there is. The
+  interesting part is that the *feature* was present and correct; what was missing was the second
+  caller. A guard on one path is not a guard.
+- **Fixed:** `App::requestQuit()` mirrors `requestHome` exactly — same modal, same three buttons,
+  same order — and the host's `delete-event` handler **refuses** the close and calls it, because the
+  dialog is drawn inside the window and a window that has begun closing cannot ask anything. See
+  **DR-HOME-1c**. A `quit` from a script is still not second-guessed.
+- **Guarded by** `cosmo_ui_tests::closingTheAppAsksAboutUnsavedWork`, including that Cancel does not
+  quietly mark the work clean — which is the mistake that would turn this prompt into theatre.
+
 
 ### D-52 — Leaving and re-entering the Xform tab cut between the cropped and uncropped photo
 - **Area:** design / shell · **Status:** **Fixed** · **Severity:** S2 · **Introduced by me**, in `a594b8c`

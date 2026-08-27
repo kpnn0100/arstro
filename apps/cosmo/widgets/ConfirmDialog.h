@@ -34,6 +34,24 @@ namespace cosmo_v2
         /** Snap shut immediately (used when leaving the editor mid-prompt). */
         void close() { mOpen = false; mClosing = false; mAppear.set(0.0); }
 
+        /** Press a button by index, as a click would — runs its action and closes.
+         *  Public so the keyboard can reach it: a modal that can only be answered with a mouse
+         *  is not answerable by everyone, and it is also how a headless test answers one. */
+        bool activate(int index);
+        /** Answer with the CANCEL button — the one that is neither primary nor destructive, which
+         *  is what Escape means. Falls back to simply closing if the dialog has no such button. */
+        bool cancel();
+        /** Answer with the PRIMARY button, which is what Enter means. False if there is none. */
+        bool confirmDefault();
+        /** Answer with the DESTRUCTIVE button. Deliberately NOT bound to a key — "discard my work"
+         *  should cost a deliberate click — but reachable so a test can take that branch. */
+        bool confirmDestructive();
+        int buttonCount() const { return (int)mButtons.size(); }
+
+        /** Handle a key while open: Escape cancels, Enter/Return takes the primary action.
+         *  Returns true when the key was consumed, so the caller stops routing it. */
+        bool handleKey(const artboard::KeyEvent &e);
+
     protected:
         void advance(double nowMs) override;
         void onOverlay(artboard::IRenderTarget &t) const override;

@@ -1728,10 +1728,30 @@ namespace cosmo_v2
                              {cancel, discard, save});
     }
 
+    void App::requestQuit()
+    {
+        // R-HOME-1c: the same question `requestHome` asks, for the other way out. Deliberately
+        // the same modal, the same three buttons and the same order, because a user who has
+        // answered it once should not have to read it again.
+        auto go = [this] { if (onQuitApproved) onQuitApproved(); };
+        if (!mSession.isDirty()) { go(); return; }
+        ConfirmDialog::Button save{"Save", false, true, [this, go] { saveWorkspace(); go(); }};
+        ConfirmDialog::Button discard{"Discard", true, false, [this, go] { mSession.markClean(); go(); }};
+        ConfirmDialog::Button cancel{"Cancel", false, false, {}};
+        mConfirmDialog->show("Unsaved changes",
+                             "Save your changes to this project before closing cosmo?",
+                             {cancel, discard, save});
+        noteActivity(mNowMs);   // T3.1: the modal has to be drawn to be answered
+    }
+
     bool App::key(const artboard::KeyEvent &e)
     {
         noteActivity(mNowMs);   // T3.1
         if (mScreen == Screen::Loading) return true;  // swallow keys during the transition
+        // A modal owns the keyboard while it is up (R-HOME-1c): Escape cancels, Enter takes the
+        // primary action, and everything else is swallowed rather than reaching the editor behind
+        // it. Checked before the tree, because the tree does not know a modal is over it.
+        if (mConfirmDialog && mConfirmDialog->isOpen() && mConfirmDialog->handleKey(e)) return true;
         const bool handled = (mScreen == Screen::Home) ? mHome->dispatchKey(e) : mRoot->dispatchKey(e);
         // R-BROWSE-2: Left/Right walk the rack — but only once nothing in the tree wanted
         // the key (a focused field, an open modal) has claimed it.

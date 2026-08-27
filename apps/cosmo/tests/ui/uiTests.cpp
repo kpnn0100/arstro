@@ -784,6 +784,60 @@ namespace
         rig.settle(600.0);
     }
 
+    // ── R-HOME-1c: closing the app asks about unsaved work ───────────────────────────────
+    void closingTheAppAsksAboutUnsavedWork()
+    {
+        std::printf("App: closing asks about unsaved changes, and a clean project just goes (R-HOME-1c)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(400.0);
+
+        int approvals = 0;
+        rig.app.onQuitApproved = [&approvals] { ++approvals; };
+
+        // A CLEAN project must go immediately — a prompt with nothing to lose is a prompt nobody
+        // reads, and one that appears anyway teaches people to dismiss it.
+        rig.svc.session().markClean();
+        rig.app.requestQuit();
+        check(approvals == 1, "a clean project closes with no question");
+
+        // Now dirty it the way a user does, through a real edit.
+        std::string err;
+        check(rig.svc.dispatchText("set exposure=0.8", err), "an edit lands");
+        rig.settle(300.0);
+        check(rig.svc.session().isDirty(), "and the session is dirty");
+
+        approvals = 0;
+        rig.app.requestQuit();
+        rig.settle(300.0);
+        check(approvals == 0, "a dirty project does NOT close on its own");
+
+        // The modal is up, and it is the one the wordmark route uses.
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *dlg =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "ConfirmDialog") : nullptr;
+        check(dlg != nullptr, "the confirm dialog is in the tree");
+
+        // Cancel keeps the app: nothing is approved and the session stays dirty. Answered the
+        // way a user can now answer it — Escape.
+        artboard::KeyEvent esc;
+        esc.type = artboard::KeyEvent::Type::Down;
+        esc.keyCode = 0x1B;
+        check(rig.app.key(esc), "Escape is consumed by the modal");
+        rig.settle(300.0);
+        check(approvals == 0, "cancelling keeps the app open");
+        check(rig.svc.session().isDirty(), "and does not quietly mark the work clean");
+
+        // Discard: approved, and the dirty flag cleared so a second ask cannot appear.
+        rig.app.requestQuit();
+        rig.settle(200.0);
+        check(rig.app.confirmDialog()->confirmDestructive(), "the dialog offers a Discard");
+        rig.settle(300.0);
+        check(approvals == 1, "discarding closes the app");
+        check(!rig.svc.session().isDirty(), "and clears the dirty flag");
+    }
+
     // ── R-SCALE-3: every offered scale has a window it can be laid out in ────────────────
     void everyScaleLaysOutAtItsOwnMinimum()
     {
@@ -1130,6 +1184,7 @@ int main()
     cropBoxMovesTheRegionAndKeepsALockedRatio();
     cropLockedRatioHoldsWhenDraggedOffThePhoto();
     leavingAndEnteringTheCropZoomsRatherThanCutting();
+    closingTheAppAsksAboutUnsavedWork();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

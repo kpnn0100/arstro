@@ -1430,6 +1430,22 @@ namespace
         // shortcuts (Delete, o, s, ...) so those keys edit the text instead.
         if (a->app.isTextEditing()) { gtk_widget_queue_draw(a->area); return TRUE; }
 
+        // R-HOME-1c: a modal owns the keyboard. Routed BEFORE the host's own accelerators, or
+        // Ctrl+S behind an unsaved-changes prompt would start a second save while the first
+        // question is still on screen.
+        if (auto dlg = a->app.confirmDialog())
+            if (dlg->isOpen())
+            {
+                ::artboard::KeyEvent ke;
+                ke.type = ::artboard::KeyEvent::Type::Down;
+                ke.keyCode = (e->keyval == GDK_KEY_Escape) ? 0x1B
+                             : (e->keyval == GDK_KEY_Return || e->keyval == GDK_KEY_KP_Enter) ? 0x0D
+                                                                                             : 0;
+                dlg->handleKey(ke);
+                gtk_widget_queue_draw(a->area);
+                return TRUE;
+            }
+
         // On the home screen the launcher owns the keyboard, and during the open
         // transition input is swallowed — don't leak editor keys in either case.
         if (a->app.onHomeScreen() || a->app.inOpenTransition()) return TRUE;
@@ -1705,6 +1721,19 @@ int main(int argc, char **argv)
     gtk_widget_add_events(host.area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
                                         GDK_POINTER_MOTION_MASK | GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
 
+    // R-HOME-1c: REFUSE the close (return TRUE) and ask inside the window instead. `destroy`
+    // alone was the whole exit path, so clicking the X discarded an entire editing session with
+    // no warning — the unsaved-changes prompt existed but guarded only the route back to the
+    // launcher (D-53). `App::requestQuit` calls back here once it is safe to go.
+    host.app.onQuitApproved = [] { gtk_main_quit(); };
+    g_signal_connect(host.window, "delete-event",
+                     G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer user) -> gboolean {
+                         auto *a = static_cast<Host *>(user);
+                         a->app.requestQuit();
+                         if (a->area) gtk_widget_queue_draw(a->area);
+                         return TRUE;   // never let GTK close it for us
+                     }),
+                     &host);
     g_signal_connect(host.window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
     g_signal_connect(host.area, "draw", G_CALLBACK(onDraw), &host);
     g_signal_connect(host.area, "button-press-event", G_CALLBACK(onButton), &host);

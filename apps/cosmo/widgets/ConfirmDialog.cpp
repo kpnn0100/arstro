@@ -31,6 +31,59 @@ namespace cosmo_v2
         raise();
     }
 
+    bool ConfirmDialog::activate(int index)
+    {
+        if (!isOpen() || index < 0 || index >= (int)mButtons.size()) return false;
+        // The action is copied out and the dialog closed FIRST: an action may open another modal
+        // (Save can raise a file chooser), and running it while this one still considers itself
+        // open would leave two dialogs believing they own the input.
+        auto action = mButtons[index].onClick;
+        beginClose();
+        if (action) action();
+        return true;
+    }
+
+    bool ConfirmDialog::cancel()
+    {
+        for (int i = 0; i < (int)mButtons.size(); ++i)
+            if (!mButtons[i].primary && !mButtons[i].destructive) return activate(i);
+        if (!isOpen()) return false;
+        beginClose();   // no explicit cancel button: dismissing IS the cancel
+        return true;
+    }
+
+    bool ConfirmDialog::confirmDefault()
+    {
+        for (int i = 0; i < (int)mButtons.size(); ++i)
+            if (mButtons[i].primary) return activate(i);
+        return false;
+    }
+
+    bool ConfirmDialog::confirmDestructive()
+    {
+        for (int i = 0; i < (int)mButtons.size(); ++i)
+            if (mButtons[i].destructive) return activate(i);
+        return false;
+    }
+
+    bool ConfirmDialog::handleKey(const artboard::KeyEvent &e)
+    {
+        if (!isOpen() || e.type != artboard::KeyEvent::Type::Down) return false;
+        // Escape cancels and Enter confirms — the two bindings every modal has had for forty
+        // years. The DESTRUCTIVE action is deliberately not bound: "discard my work" should cost
+        // a deliberate click, not a stray Return on a dialog the user has not read.
+        constexpr int kEsc = 0x1B, kReturn = 0x0D, kEnter = 0x0A;
+        if (e.keyCode == kEsc) { cancel(); return true; }
+        if (e.keyCode == kReturn || e.keyCode == kEnter)
+        {
+            if (!confirmDefault()) cancel();   // nothing primary: Enter dismisses
+            return true;
+        }
+        // Swallow everything else: a modal that lets keys through to the editor behind it is a
+        // modal in name only.
+        return true;
+    }
+
     void ConfirmDialog::beginClose()
     {
         mClosing = true;

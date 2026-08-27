@@ -2728,3 +2728,37 @@ one-frame version it reports `travelled through 0 intermediate framings` in both
 
 **Looked at:** `editor-crop-zoom-{000-open,060-mid,140-mid,999-closed}` — the two mid frames show the
 photo part-way between the crop and the whole frame with the box converging onto it.
+
+### DR-HOME-1c Closing the app asks about unsaved work (R-HOME-1c, D-53)
+`isDirty()` guarded exactly one exit — `App::requestHome`, the wordmark back to the launcher. The
+host wired only GTK's `destroy` signal and there was **no `delete-event` handler at all**, so
+clicking the window's close button discarded an entire editing session with no warning. Found in the
+release audit, then asked for directly.
+
+**As built.** `App::requestQuit()` is `requestHome`'s twin: a clean project calls `onQuitApproved`
+immediately, a dirty one raises the **same** modal with the same three buttons in the same order
+(Cancel · Discard · Save), because a user who has answered that question once should not have to read
+it again. The host's `delete-event` handler **returns TRUE** — refusing the close — and calls
+`requestQuit()`; `onQuitApproved` is wired to `gtk_main_quit`. Refusing matters: the dialog is drawn
+*inside* the window, so a window that has already begun closing has nowhere to ask.
+
+A `quit` command from a script or the control socket is **not** second-guessed. This is about the exit
+a person takes.
+
+**And the modal grew a keyboard**, which it needed anyway: `ConfirmDialog::handleKey` binds Escape to
+cancel and Enter to the primary action, and swallows everything else — a modal that lets keys through
+to the editor behind it is a modal in name only. The **destructive** action is deliberately *not*
+bound: "discard my work" should cost a deliberate click, not a stray Return on a dialog nobody read.
+Routed before the tree in `App::key` and before the host's accelerators in `onKey`, so Ctrl+S behind
+an unsaved-changes prompt cannot start a second save while the first question is still up.
+
+`activate(i)` / `cancel()` / `confirmDefault()` / `confirmDestructive()` are public because the
+keyboard needs them — which also means a headless test answers the dialog through the real API rather
+than a test-only hook. The action is copied out and the dialog closed *before* it runs, because an
+action may raise another modal (Save can open a file chooser) and two dialogs both believing they own
+the input is a bug waiting to happen.
+
+**Guarded by** `cosmo_ui_tests::closingTheAppAsksAboutUnsavedWork`: a clean project closes with no
+question; a real edit makes it dirty; a dirty project does **not** close on its own; the modal is in
+the tree; **Escape** cancels and neither closes the app nor quietly marks the work clean; and Discard
+closes it and clears the flag.
