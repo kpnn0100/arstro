@@ -2812,6 +2812,26 @@ out-of-range coordinates are refused with a message, and — via the new
 (**D-55**: only `App` and `PhoneApp` ever advanced the session's clock, so every headless edit merged
 into one node).
 
+### DR-SVC-9a A slot's size is known when the add is queued, not when the worker gets to it (R-SVC-9, D-56)
+`RenderService::addImage` queues the pixels for the render worker and returns a slot id at once, so
+anything derived from the slot's contents has a window in which the engine knows nothing about it.
+`sourceSize` used to ask the engine and got `{0,0}` inside that window — while `sourceWidth`/
+`sourceHeight` sit in the **stable** dump, because a photo's dimensions are a property of the file.
+The front end that had pumped more times printed the size and the one that had not printed `0`: two
+front ends given identical commands disagreeing, which is the one thing R-SVC-9 exists to forbid.
+
+The size is now recorded when the add is **queued** (`RenderService::mSourceSizes`, written by both
+`addImage` overloads on both builds, read by `recordedSourceSize`) and `sourceSize` answers from it,
+falling back to the engine. It is known at ingest and never changes, so there was nothing to wait
+for — and the answer now also survives eviction, which the engine's could not.
+
+What still legitimately waits for the worker is anything that reads **pixels** —
+`sampleSourceLinear`, and therefore `wb pick`. Refusing there is correct, and a GUI cannot reach the
+refusal because a user cannot click a photo that is not on the stage yet; the headless tests enforce
+that order with `pumpUntilFrame`, and `pumpUntilIdle` reports the clock it reached so a caller's
+clock stays monotonic (a clock that goes backwards makes the service's coalesce and settle windows
+never elapse).
+
 ### DR-INFO-1/2 Image information: what the file says about itself (R-INFO-1, R-INFO-2)
 Four layers, one per job, and the seam is the point.
 

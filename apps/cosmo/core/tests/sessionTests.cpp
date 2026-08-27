@@ -1118,8 +1118,28 @@ namespace
         return path;
     }
 
+    /** Pump until a preview has actually LANDED for the selection, which is not the same thing
+     *  as the load being over: an add is queued to the render worker, so `load.active == false`
+     *  only means the decode finished. Anything that reads a slot's PIXELS — the white-balance
+     *  picker, a histogram — has to wait for this, and a GUI always has, because a user cannot
+     *  click a photo that is not on the stage yet. A test that skipped it was a test that failed
+     *  about one run in fourteen (D-56). */
+    bool pumpUntilFrame(arstro::cosmo::CosmoService &svc, double &now, int maxMs = 20000)
+    {
+        const unsigned before = svc.model().frameSeq;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxMs);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            svc.pump(now);
+            now += 16.0;                       // the CALLER's clock, and it only ever goes up:
+            if (svc.model().frameSeq != before) return true;   // the service's coalesce and
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));   // settle windows are
+        }                                                               // measured in it.
+        return false;
+    }
+
     // Drive a load to completion the way any front end does: pump, don't block.
-    void pumpUntilIdle(arstro::cosmo::CosmoService &svc, int maxMs = 20000)
+    void pumpUntilIdle(arstro::cosmo::CosmoService &svc, int maxMs = 20000, double *nowOut = nullptr)
     {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxMs);
         double now = 0;
@@ -1131,6 +1151,10 @@ namespace
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         svc.pump(now);
+        // Reported so a caller that goes on pumping keeps the clock MONOTONIC. A test that
+        // restarted its own clock after this handed the service a time in its past, and the
+        // coalesce window it was trying to step over never elapsed (D-56).
+        if (nowOut) *nowOut = now;
     }
 
     // R-SVC-5: the struct is the truth and the text is generated from it, so every command
@@ -1693,9 +1717,14 @@ namespace
         CosmoService svc(budget);
         svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new CastDecoder()); });
         std::string err;
+        double clock = 0.0;
         assert(svc.dispatchText("project open " + path, err));
-        pumpUntilIdle(svc);
+        pumpUntilIdle(svc, 20000, &clock);
         assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+        // The pick reads PIXELS, and the add is queued to the render worker — so wait for a
+        // frame, which is the same order the GUI enforces by construction: a user cannot click
+        // a photo that is not on the stage yet.
+        assert(pumpUntilFrame(svc, clock) && "a preview lands before anything samples the source");
 
         const arstro::EditParams *p = svc.session().curParams();
         assert(p && "there is a params set");
@@ -1740,7 +1769,7 @@ namespace
         // back-to-back `dispatchText` calls have no pump between them, so they arrive at the same
         // instant and legitimately merge. Measuring across that would be measuring the
         // coalescing, not the pick.
-        for (int i = 0; i < 80; ++i) svc.pump(1000.0 + i * 16.0);
+        for (int i = 0; i < 80; ++i) svc.pump(clock += 16.0);
         const int hist = svc.model().history.nodes;
         assert(svc.dispatchText("wb pick --x 0.25 --y 0.75", err) && err.empty());
         assert(svc.model().history.nodes == hist + 1 && "a pick is one undoable step");
@@ -2029,7 +2058,15 @@ namespace
 
         const std::string cli = runOne(0);
         const std::string gui = runOne(120);
+        // D-56: this comparison was flaky, ~1 run in 7, and the flake was real. `sourceWidth`
+        // is in the STABLE dump — a photo's dimensions are a property of the file — but it was
+        // read from the engine, which does not know them until the render worker has applied
+        // the queued add. So the front end that had pumped 120 more times knew the size and the
+        // one that had not printed 0, which is precisely the disagreement R-SVC-9 forbids. The
+        // size is now recorded when the add is QUEUED, so there is nothing to wait for.
         assert(cli == gui && "same commands -> same state, whatever the frame count");
+        assert(cli.find("sourceWidth=0\n") == std::string::npos &&
+               "and the size is known without pumping for it (D-56)");
 
         // And the unstable dump really does differ, or the exclusion above proves nothing.
         ThreadBudget b3(50, 8);

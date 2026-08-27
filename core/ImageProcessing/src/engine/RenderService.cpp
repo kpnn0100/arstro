@@ -62,6 +62,24 @@ namespace arstro
         mMsPerMpx.store(next, std::memory_order_relaxed);
     }
 
+    // ── shared by both builds: the size a slot was added with (D-56) ─────────────────────
+    void RenderService::recordSourceSize(int slot, int w, int h)
+    {
+        if (slot < 0) return;
+        if ((int)mSourceSizes.size() <= slot) mSourceSizes.resize(slot + 1, {0, 0});
+        mSourceSizes[(std::size_t)slot] = {w, h};
+    }
+
+    bool RenderService::recordedSourceSize(int slot, int &w, int &h) const
+    {
+        if (slot < 0 || slot >= (int)mSourceSizes.size()) return false;
+        const auto &wh = mSourceSizes[(std::size_t)slot];
+        if (wh.first <= 0 || wh.second <= 0) return false;
+        w = wh.first;
+        h = wh.second;
+        return true;
+    }
+
 #ifdef ARSTRO_ENABLE_THREADS
     // ───────────────────────── threaded ─────────────────────────
     RenderService::RenderService()
@@ -93,6 +111,7 @@ namespace arstro
         c.bytes.assign(rgba, rgba + (size_t)w * h * channels);
         c.w = w; c.h = h; c.ch = channels; c.slot = slot;
         mAddQueue.push_back(std::move(c));
+        recordSourceSize(slot, w, h);   // D-56: known now, not when the worker gets to it
         mCv.notify_all();
         return slot;
     }
@@ -113,6 +132,7 @@ namespace arstro
         c.bytes = std::move(bytes);   // the whole point: no ~100 MB copy
         c.w = w; c.h = h; c.ch = channels; c.slot = slot;
         mAddQueue.push_back(std::move(c));
+        recordSourceSize(slot, w, h);   // D-56
         // The path travels with the slot so an evicted slot can be re-decoded without the
         // worker ever reading session state (R-MEM-2).
         if ((int)mSourcePaths.size() <= slot) mSourcePaths.resize(slot + 1);
@@ -181,6 +201,7 @@ namespace arstro
         mAddQueue.clear();
         mReleaseQueue.clear();
         mSourcePaths.clear();
+        mSourceSizes.clear();
         mResetEngine = true;
         mNextSlot = 0;
         mFrameReady = false;
@@ -204,6 +225,7 @@ namespace arstro
     bool RenderService::sourceSize(int slot, int &w, int &h) const
     {
         std::lock_guard<std::mutex> lk(mMu);
+        if (recordedSourceSize(slot, w, h)) return true;
         return mEngine.sourceSize(slot, w, h);
     }
 
@@ -410,6 +432,7 @@ namespace arstro
     {
         const int slot = mEngine.addImage(rgba, w, h, channels);
         if (slot >= 0) mNextSlot = slot + 1;
+        recordSourceSize(slot, w, h);   // D-56: one owner of the answer on both builds
         return slot;
     }
     int RenderService::addImage(std::vector<uint8_t> &&bytes, int w, int h, int channels)
@@ -460,6 +483,7 @@ namespace arstro
         mNextSlot = 0;
         mFrameReady = false;
         mSourcePaths.clear();
+        mSourceSizes.clear();
     }
     void RenderService::setPreviewSize(int maxEdge)
     {
@@ -472,6 +496,7 @@ namespace arstro
     }
     bool RenderService::sourceSize(int slot, int &w, int &h) const
     {
+        if (recordedSourceSize(slot, w, h)) return true;
         return mEngine.sourceSize(slot, w, h);
     }
     bool RenderService::sampleSourceLinear(int slot, double nx, double ny, int radius,

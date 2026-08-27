@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-56**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-57**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -199,6 +199,38 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-56 — A queued image add made two front ends disagree, and the suite red about 1 run in 7
+- **Area:** core / engine + service · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-08-27, running `ctest` repeatedly after landing the metadata panel. `cosmo_core`
+  aborted on roughly one sweep in seven, in two different tests, and the two failures had one cause.
+- **Reproduce:** run `cosmo_core_tests` in a loop. `test_two_services_dump_the_same_state` fails with
+  `cli == gui` (about 1 in 7); `test_picking_a_white_point_sets_temp_and_tint` fails on the first
+  `wb pick` (about 1 in 14).
+- **Cause:** `RenderService::addImage` **queues** the pixels for the render worker and returns a slot
+  id immediately. Everything derived from the slot's contents therefore has a window in which the
+  engine knows nothing about it:
+  * `sourceSize(slot)` asked the engine, which returned `{0,0}` until the worker applied the add. But
+    `sourceWidth`/`sourceHeight` are in the **stable** model dump — a photo's dimensions are a
+    property of the file — so the front end that had pumped 120 more times printed the size and the
+    one that had not printed `0`. That is exactly the disagreement R-SVC-9 forbids, and the dump test
+    was catching a real defect, not being flaky.
+  * `wb pick` samples the slot's pixels, which genuinely must wait for the worker. `pumpUntilIdle`
+    returns when the **decode** is over, which is not the same event.
+- **Judgement:** defect against R-SVC-9 for the first half. The second half is a defect in the
+  **test**, not the service: refusing a pick on a slot with no resident pixels is correct behaviour,
+  and a GUI cannot reach it because a user cannot click a photo that is not on the stage yet — so the
+  test had to enforce the order the GUI enforces by construction.
+- **Fixed:** `RenderService` records a slot's size when the add is **queued**
+  (`mSourceSizes`, `recordSourceSize`/`recordedSourceSize`) and `sourceSize` answers from that,
+  falling back to the engine. The size is known at ingest and never changes, so there was nothing to
+  wait for — and this also makes the answer survive eviction. Test side: a `pumpUntilFrame` helper,
+  and `pumpUntilIdle` now reports the clock it reached so a caller's clock stays **monotonic** —
+  restarting it handed the service a time in its own past, and the coalesce window the test was
+  trying to step over then never elapsed, which is how the fix's first attempt failed on run 1.
+- **Guarded by** `two_services_dump_the_same_state`, which now also asserts `sourceWidth` is known
+  without pumping for it, and `picking_a_white_point_sets_temp_and_tint`, which waits for a frame.
+  40 consecutive `cosmo_core_tests` runs and 8 consecutive full `ctest` sweeps clean.
 
 ### D-55 — The service never advanced the session's clock, so undo collapsed to one step headlessly
 - **Area:** core / service · **Status:** **Fixed** · **Severity:** S2

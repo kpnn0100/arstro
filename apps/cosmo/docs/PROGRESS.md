@@ -51,6 +51,14 @@ custom lighting.*
     breaks R-SVC-9’s promise that two front ends print the same state. It now comes from the JPEG’s
     SOF header (and LibRaw’s sizes for a RAW), with the engine only as a fallback.
     R-INFO-1/2, DR-INFO-1/2.
+- **[x] Two flakes found while verifying the above, one cause, both real — D-56.** `ctest` was red
+  about one sweep in seven and it was not noise: `RenderService::addImage` queues the pixels for the
+  worker, so `sourceSize` returned `{0,0}` for a window — and `sourceWidth` is in the **stable** dump,
+  so the front end that had pumped more printed the size and the one that had not printed `0`. The
+  size is now recorded when the add is queued, where it has been known all along. The second flake
+  was a test reading pixels before a frame had landed, plus a clock that went backwards; both fixed
+  in the test, because refusing a pick on a slot with no resident pixels is correct behaviour.
+  DR-SVC-9a.
 - **[ ] (4) a custom bezier mask, for custom lighting.** Not started. This is the largest of the
   four by a wide margin and it is a **core-then-design** pair: a new `MaskParams::Type` with control
   points, coverage in `MaskStack`, `EditParamsIO`/`.apf` round-tripping (so an old project still

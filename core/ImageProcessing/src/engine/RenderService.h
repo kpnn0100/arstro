@@ -94,9 +94,12 @@ namespace arstro
         void setMemoryCaps(size_t sourceBytes, size_t proxyBytes);
         /** Measured resident pixel bytes and the number of re-decodes eviction has caused
          *  (R-MEM-4). Cheap snapshots kept by the worker, so the UI thread may read them. */
-        /** A slot's full-resolution pixel size, {0,0} if unknown. Takes the render mutex on
-         *  the threaded build: the value is written once when the slot is added and never
-         *  changes, so this is a cheap read the UI thread may make whenever it likes. */
+        /** A slot's full-resolution pixel size, {0,0} if unknown. Answered from the size
+         *  recorded when the slot was ADDED, not from the engine: an add is queued to the
+         *  worker, so asking the engine returned {0,0} until the worker got round to it and
+         *  the answer depended on how many times the caller had pumped (D-56). The size is
+         *  known at ingest and never changes, so there is nothing to wait for. Takes the
+         *  render mutex on the threaded build; a cheap read the UI may make whenever it likes. */
         bool sourceSize(int slot, int &w, int &h) const;
         /** Box-average the slot's linear source pixels around a normalised point, for the
          *  white-balance picker (R-WB-1). Takes the render mutex; a cheap read the UI may make. */
@@ -177,6 +180,10 @@ namespace arstro
          *  render that follows has pixels to work with (R-MEM-2). Runs on whichever thread
          *  is about to render. False when the slot is cold and cannot be recovered. */
         bool ensureSource(int slot, bool needFullRes);
+        /** D-56: remember / read back a slot's size at ADD time. Both are plain vector
+         *  accesses; on the threaded build the caller already holds mMu. */
+        void recordSourceSize(int slot, int w, int h);
+        bool recordedSourceSize(int slot, int &w, int &h) const;
         mutable EditEngine mEngine;
         int mNextSlot = 0;
         int mPreviewMaxEdge = 1600;
@@ -187,6 +194,10 @@ namespace arstro
         // Slot -> the file its pixels came from. Written by addImage, read by the worker;
         // both under mMu on the threaded build, so the worker never touches session state.
         std::vector<std::string> mSourcePaths;
+        // Slot -> its full-resolution pixel size, recorded when the add is QUEUED. The
+        // engine is the wrong place to ask: it does not know until the worker has applied
+        // the add, which makes the answer depend on the caller's frame count (D-56).
+        std::vector<std::pair<int, int>> mSourceSizes;
         // Snapshots the UI thread may read without taking the render mutex (R-MEM-4).
         // Outside the threads guard because doPreview is shared with the synchronous build.
         std::atomic<size_t> mResidentBytes{0};
