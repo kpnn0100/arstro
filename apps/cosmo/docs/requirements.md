@@ -3336,3 +3336,82 @@ sky mask over a sky-above-grass scene outlines 184 points, all at `y ∈ [0.396,
 horizon — and changes no pixel. `a_semantic_mask_is_created_by_naming_its_subject`
 (`cosmo_core_tests`) asserts the plumbing out to a front end:
 `[evt] frame.ready slot=0 width=12 ms=1.6761 outlines=1/0/0 level=0`.
+
+### DR-AISEG-15..17 (core) A real model behind the seam (R-AISEG-15, R-AISEG-16, R-AISEG-17)
+`apps/cosmo/segment/OnnxSegmenter.{h,cpp}` implements `arstro::ISegmenter` over ONNX Runtime. Host
+layer: `arstro_image` opens no files and links no runtime, and a network is a file plus a runtime.
+
+**Nothing is linked.** The runtime is loaded with `LoadLibrary`/`dlopen` and reached through its one
+exported C symbol, `OrtGetApiBase`, which returns a struct of function pointers — the pattern
+`OmpPin` already uses for OpenMP. So cosmo builds and runs identically on a machine that has never
+heard of ONNX, and a missing runtime is `segment()` returning false. Version negotiation is the
+runtime's own: `GetApi(ORT_API_VERSION)` returns null against an older build, and that is reported
+rather than worked around. Only `third_party/onnxruntime_c_api.h` is vendored (MIT, 275 KB) because
+the struct's **field order is the ABI**; a hand-written subset would compile and call the wrong
+pointer.
+
+Two portability details that cost real time and are therefore written down in the code: MinGW in
+strict `-std=c++NN` mode rejects the single-underscore `_stdcall` the header uses for every member,
+so the file defines it before the include; and the `DynLib` handle is deliberately **never closed**,
+because a session holds thread pools created inside the library.
+
+**The manifest** (`SegModelSpec`, `parseSegModelSpec`) is line-based `key=value` with `#` comments and
+no escaping, like every other cosmo text format. It carries `inputWidth`/`inputHeight`, `layout`
+(nchw/nhwc), `range` (0..1 / -1..1 / imagenet), `output` (alpha/classes), `activation`
+(none/sigmoid/softmax), the subject an alpha model answers for, `class.<n>=<subject>` for a
+multi-class one, and the licence. **An unknown key is refused with its line number** — a manifest is
+hand-written, and a silently defaulted typo is a model that does nothing for no visible reason.
+
+**Preprocessing follows the manifest**: area-average down to the model's input size in **linear
+light** (the only place averaging pixels is physically meaningful), encode to sRGB, normalise. The
+encode is R-AISEG-3's reasoning again — every published preprocessing recipe is stated in
+gamma-encoded terms.
+
+**Declining is the contract.** `SegModelSpec::handles` answers only for what the manifest declares,
+and `segment()` returns false for anything else so `buildMaskCoverage` falls back to the built-in.
+The output is turned into a score (an alpha channel, or the mapped classes' share after an optional
+softmax over the class axis) and then run through **`segment::scoreToCoverage`, the same function the
+built-in uses**, before being resampled to the render's size — so `sensitivity` means one thing
+whichever segmenter answered. `scoreToCoverage` and `resamplePlane` were lifted out of
+`builtinCoverage` for exactly that.
+
+**Installed by the host, injected into the service.** `CosmoService::setSegmenterFactory` takes a
+factory (opening a model means reading a file and loading a library, which `cosmo_core` may not do —
+the same shape as `setDecoderFactory`); the service installs it on `RenderService`, which forwards it
+to the worker's engine under `mMu`, the same benign-scalar rule `setMemoryCaps` follows.
+`AppModel::segmenter` then carries `"built-in"` or the model's name, in the **stable** dump, and the
+Mask panel's Detect header shows it.
+
+`linux_main.cpp` looks in one place — `configDir()/models/`, alphabetically first `*.cosmoseg` — and
+logs all three outcomes at the right level: found, broken (WARN, with the parser's reason), or absent
+(INFO). There is no setting to get wrong.
+
+**`SemanticSubject::Person` was added** (appended, never inserted — the number is what a project file
+stores), because it is the subject a permissively-licensed model can actually be had for.
+`segment::builtinHandles` says the built-in has no model for it, `builtinCoverage` returns an empty
+plane rather than a wrong one, and the panel's caption says so before it is chosen.
+
+**Which models, and why none ship:** `docs/segmentation-models.md` is the survey. Every permissively
+licensed ONNX segmentation model is subject-versus-background matting; everything with a class for
+sky or hair inherits ADE20K's or CelebAMask-HQ's non-commercial terms.
+`tools/fetch-segmentation-model.sh` fetches the runtime and one of three Apache-2.0 models, prints the
+licence first, and writes the manifest.
+
+Covered by `aModelManifestIsParsedStrictly` (`cosmo_ui_tests`, 20 assertions: a good manifest, a
+class-mapped one, relative model resolution, `handles`/declines, and seven malformed manifests each
+refused with a reason) and `an_installed_segmenter_answers_and_declines` (`cosmo_core_tests`, which
+drives a fake model through the real service: the name reaches the stable dump, the model is asked,
+a subject it declines falls back to the built-in, and a decline is not an error — *asked 2,
+declined 1*).
+
+**Verified against the real thing**, since a seam nothing has ever driven is not evidence. ONNX
+Runtime 1.22.0 (Microsoft's prebuilt Windows x64 release, MIT) loaded dynamically from a MinGW binary
+that links nothing, driving `onnx-community/mediapipe_selfie_segmentation` (Apache-2.0, 462 KB) over a
+512×512 portrait, through the manifest the fetch script itself generated:
+
+```
+segmenter: MediaPipe Selfie Segmentation   (licence Apache-2.0)
+  sky/skin/foliage/water/hair -> declined      person -> ANSWERED
+  coverage: 262144 values, mean 0.4217, range [0.000, 1.000]  (42.2% of the frame)
+  outline: 6 loop(s), 866 points
+```

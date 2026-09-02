@@ -295,6 +295,12 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   class EditParams
   class CurvePoint
   class MaskParams
+  class OnnxSegmenter <<host; links nothing>> {
+    + open(manifest, libraryHint, why)
+    + findManifest(dir)
+    ' declines every subject its manifest does not declare, so the built-in still
+    ' answers the ones it is good at (R-AISEG-15)
+  }
   interface ISegmenter <<seam: a real model>> {
     + segment(img, subject, sensitivity, out) : bool   ' false = DECLINE -> built-in answers
     + name()
@@ -432,6 +438,8 @@ EditParams *--> MaskParams
 Frame *--> MaskOutline : where a COMPUTED mask landed (R-AISEG-13)
 EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
 EditEngine o--> ISegmenter : setSegmenter (optional)     ' R-AISEG-6
+OnnxSegmenter ..|> ISegmenter : the host's real model (R-AISEG-15); links nothing,
+                              ' loads onnxruntime via its one exported C symbol
 EditEngine ..> MaskParams : applyMaskStack(img, masks, seg)
 Segmenter ..> Spatial : fastBlurPlane
 MaskParams ..> Segmenter : builtinCoverage when the seam declines or is absent

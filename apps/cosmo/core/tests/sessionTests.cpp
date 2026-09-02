@@ -1684,6 +1684,77 @@ namespace
     // silently on Sky would be a mask that quietly does the wrong thing) and that naming a
     // subject on a mask nobody typed a type for makes it a semantic mask rather than leaving an
     // ellipse that reports a subject.
+    // ── R-AISEG-15: an installed model answers, and a declining one falls back ───────────
+    //
+    // The seam's whole contract in one test, driven with no display and no model file: the
+    // service takes a FACTORY (opening a model means reading a file and loading a shared
+    // library, and cosmo_core may do neither), the installed model's name reaches the model
+    // dump so a front end can say which of two very different things produced a mask, and a
+    // subject the model declines is answered by the built-in rather than by nothing.
+    void test_an_installed_segmenter_answers_and_declines()
+    {
+        using namespace arstro::cosmo;
+        struct StripeModel : arstro::ISegmenter
+        {
+            int asked = 0, declined = 0;
+            bool segment(const arstro::Image &img, arstro::SemanticSubject s, float,
+                         std::vector<::Pixel> &out) override
+            {
+                ++asked;
+                // Person only — the shape of every permissively-licensed model there actually
+                // is (R-AISEG-16), and the reason declining has to work.
+                if (s != arstro::SemanticSubject::Person) { ++declined; return false; }
+                out.assign((std::size_t)img.width() * img.height(), (::Pixel)1);
+                return true;
+            }
+            const char *name() const override { return "stripe-test-model"; }
+        };
+        StripeModel *installed = nullptr;
+
+        const std::string path = "/tmp/cosmo_svc_segmodel.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+
+        assert(svc.model().segmenter == "built-in" && "with nothing installed, the built-in answers");
+        svc.setSegmenterFactory([&installed]() -> std::unique_ptr<arstro::ISegmenter> {
+            auto m = std::unique_ptr<StripeModel>(new StripeModel());
+            installed = m.get();
+            return m;
+        });
+        assert(svc.model().segmenter == "stripe-test-model" &&
+               "and the installed model's NAME is in the model, not just its behaviour");
+        assert(formatModel(svc.model(), {true, false, false}).find("segmenter=stripe-test-model") !=
+                   std::string::npos &&
+               "so a second front end sees the same thing (R-SVC-9)");
+
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+        assert(svc.dispatchText("set mask=0,0,0,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
+
+        // A subject the model handles: it is asked, and it answers.
+        assert(svc.dispatchText("mask set 0 subject=person adjust.exposure=1.0", err) && err.empty());
+        assert(pumpUntilFrame(svc, clock));
+        assert(installed && installed->asked > 0 && "the installed model was asked");
+        const int askedForPerson = installed->asked;
+
+        // A subject it does not: it declines, and the built-in answers rather than the mask
+        // silently covering nothing. Declining is a normal answer, not an error.
+        assert(svc.dispatchText("mask set 0 subject=sky", err) && err.empty());
+        assert(pumpUntilFrame(svc, clock));
+        assert(installed->asked > askedForPerson && "it is asked for every subject...");
+        assert(installed->declined > 0 && "...and declines the ones it was not trained for");
+        assert(svc.model().lastError.empty() && "a decline is not an error");
+
+        std::filesystem::remove(path);
+        printf("[PASS] an_installed_segmenter_answers_and_declines (asked %d, declined %d)\n",
+               installed->asked, installed->declined);
+    }
+
     void test_a_semantic_mask_is_created_by_naming_its_subject()
     {
         using namespace arstro::cosmo;
@@ -1748,13 +1819,21 @@ namespace
             if (e.kind == Event::Kind::FrameReady) lastFrameLine = formatEvent(e);
         });
         assert(svc.dispatchText("mask set 0 subject=sky adjust.exposure=0.8", err) && err.empty());
-        assert(pumpUntilFrame(svc, clock) && "a frame lands");
+        // Pump until a frame reports the mask, not merely until A frame lands. A render already
+        // in flight from before the mask existed carries no outline and is a perfectly valid
+        // frame — waiting for "a frame" therefore passes or fails on timing, which is what this
+        // assertion did until it was watched failing and passing with only a printf between.
+        bool sawOutlines = false;
+        for (int i = 0; i < 40 && !sawOutlines; ++i)
+        {
+            if (!pumpUntilFrame(svc, clock)) break;
+            sawOutlines = lastFrameLine.find("outlines=") != std::string::npos;
+        }
         // `outlines=<masks>/<loops>/<points>`. The fake photo is 12 px wide, so the classifier
         // has nothing to find and the loop count is 0 — which is the point of asserting HERE on
         // the plumbing and in `image_tests` on the geometry. What this proves is that a mask
         // whose region is computed reports itself all the way out to a front end.
-        assert(lastFrameLine.find("outlines=") != std::string::npos &&
-               "the frame says the mask was outlined");
+        assert(sawOutlines && "a frame says the mask was outlined");
         printf("       %s\n", lastFrameLine.c_str());
 
         std::filesystem::remove(path);
@@ -2859,6 +2938,7 @@ int main()
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();
     test_a_semantic_mask_is_created_by_naming_its_subject();
+    test_an_installed_segmenter_answers_and_declines();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

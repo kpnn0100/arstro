@@ -1096,8 +1096,10 @@ namespace
         if (seg)
         {
             const artboard::Transform sw = seg->worldTransform();
-            const double segW = seg->width.value() / 5.0;
-            rig.click(f, sw.e + segW * 4.5, sw.f + seg->height.value() * 0.5);
+            const int nSub = (int)arstro::SemanticSubject::Count;
+            const double segW = seg->width.value() / (double)nSub;
+            rig.click(f, sw.e + segW * ((int)arstro::SemanticSubject::Hair + 0.5),
+                      sw.f + seg->height.value() * 0.5);
             rig.settleQuiet(f, 400.0, 400);
             save(f, "editor-mask-detect-hair");
         }

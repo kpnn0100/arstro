@@ -98,6 +98,13 @@ namespace arstro
 
         /** Cap the engine's two pixel pools in bytes (R-MEM-1). Applied on the worker. */
         void setMemoryCaps(size_t sourceBytes, size_t proxyBytes);
+        /** Install a real segmentation model on the worker's engine (R-AISEG-6/15), or nullptr
+         *  to go back to the built-in classifier. Same benign-scalar rule as `setMemoryCaps`:
+         *  taken under the lock, set once at startup, and read by the worker only inside a
+         *  render it has not begun. */
+        void setSegmenter(std::unique_ptr<ISegmenter> seg);
+        /** Which segmenter the worker will use — "built-in", or the model's own name. */
+        std::string segmenterName() const;
         /** Measured resident pixel bytes and the number of re-decodes eviction has caused
          *  (R-MEM-4). Cheap snapshots kept by the worker, so the UI thread may read them. */
         /** A slot's full-resolution pixel size, {0,0} if unknown. Answered from the size

@@ -236,6 +236,10 @@ namespace cosmo
         double msPerMegapixel = 0.0;
 
         std::string lastError;      // the most recent rejected command or failure
+        /** Which segmenter a semantic mask will be decided by: "built-in", or an installed
+         *  model's name (R-AISEG-15). Constant for a session, so it belongs in the STABLE dump:
+         *  two front ends over the same service must agree about it, and they do. */
+        std::string segmenter = "built-in";
         bool gpuAvailable = false;
         bool gpuActive = false;
     };

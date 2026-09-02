@@ -131,6 +131,9 @@ namespace cosmo
         kvb(s, j, "gpuAvailable", m.gpuAvailable);
         kvb(s, j, "gpuActive", m.gpuActive);
         if (!m.lastError.empty()) kv(s, j, "lastError", m.lastError);
+        // Stable: which segmenter decides a semantic mask is constant for a session, and two
+        // front ends over one service must agree about it (R-SVC-9).
+        kv(s, j, "segmenter", m.segmenter);
 
         // ── the tree, one line per node, parent by node id so it reads as a tree ──
         if (j) s << "  \"nodes\": [\n";

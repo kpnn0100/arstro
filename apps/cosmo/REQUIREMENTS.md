@@ -775,6 +775,50 @@ UI copy, not only here.
   loads here (they take their defaults). A build that predates this renders a Semantic mask as no
   coverage rather than as something wrong, which is the same answer it already gives for any mask
   type it does not know.
+- **R-AISEG-15 A real model decides the mask when one is installed.** (**Added 2026-09-02.**)
+  Reported: *"for detection, need to use model to segmentation and construct a mask from that … not
+  just use color for detection."* Correct, and R-AISEG-6 already put the seam there for it. What
+  fills the seam is `OnnxSegmenter` in the **host**: `arstro_image` opens no files and links no
+  runtime, and a neural network is a file plus a runtime, so this is exactly the split the seam was
+  drawn for.
+  - **cosmo links nothing.** The runtime is found with `LoadLibrary`/`dlopen` through ONNX Runtime's
+    one exported C symbol, the way `OmpPin` finds OpenMP and for the same reason: a missing library
+    is then not a build error, not a crash and not a broken feature — it is `segment()` returning
+    false and the built-in answering. Only the C API **header** is vendored, because the struct's
+    field order *is* the ABI and a hand-written subset would compile and then call the wrong
+    function pointer, silently.
+  - **A model that cannot answer for a subject declines**, and the built-in answers that subject
+    instead. Without this a person-matting model would claim to have found the sky, and the built-in
+    would stop being consulted for the subjects it is genuinely good at.
+  - **The photographer is told which one answered.** The Detect header reads *"Detect (colour &
+    texture)"* or *"Detect (<model name>)"*, and `AppModel::segmenter` carries the same string, so a
+    front end, a script and a log line all agree. A mask from a network and a mask from a hue band
+    are not the same claim.
+  - **Sensitivity means one thing.** A model's raw output goes through the *same*
+    `segment::scoreToCoverage` the built-in uses — regularise, then threshold — because a promise to
+    the photographer implemented twice is two different promises.
+- **R-AISEG-16 cosmo ships no weights, and the honest reason is stated.** There is **no single
+  open-source model that covers sky, skin, hair, foliage and water.** Every ONNX segmentation model
+  with a permissive licence is a subject-versus-background matting model (`docs/segmentation-models.md`
+  has the survey); the ones with a class for sky or hair are trained on **ADE20K** or
+  **CelebAMask-HQ**, both non-commercial-research datasets, and the best-known checkpoints add
+  NVIDIA's non-commercial source licence on top. So:
+  - `SemanticSubject::Person` exists **because it is the subject a real model can be had for**, and
+    the built-in declines it outright — "is this a person" is not a question colour, position and
+    texture can answer, and a class that answered it badly would be worse than one that says it
+    cannot.
+  - The model is described by a **manifest** beside it (input size, layout, normalisation, what the
+    output means, which class is which subject), so anyone can install a model they are entitled to
+    use and cosmo never has to know its name. `tools/fetch-segmentation-model.sh` offers only
+    permissively-licensed ones and prints the licence before downloading; anything else is installed
+    by hand, deliberately, because that is a decision and not a download.
+  - **An unknown key in a manifest is an error**, not an ignored line. A manifest is written by
+    hand, and defaulting a typo away turns "I misspelled `inputWidth`" into "the model does nothing
+    and I cannot see why".
+- **R-AISEG-17 The model runs inside the budget, not beside it.** One intra-op thread: the render
+  worker is already one of a budgeted set (R-CPU, R-SVC-10), and a model helping itself to every core
+  behind the budget's back is exactly the duplication D-11 was about.
+
 - **R-AISEG-13 A mask whose region is COMPUTED shows its boundary, like a drawn one.**
   (**Added 2026-09-02.**) Reported: *"show boundary of mask like draw mask."* A path mask draws its
   outline because it *is* an outline — the control points are the mask. A semantic mask has no

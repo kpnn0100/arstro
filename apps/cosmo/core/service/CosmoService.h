@@ -62,6 +62,17 @@ namespace cosmo
         /** The host's decoder, used for the project load AND — since R-MEM-2 — to re-decode
          *  a slot the engine evicted. Installing it here wires both, so there can be no
          *  second, unbudgeted decode path (the D-41 shape). */
+        /** Install a real segmentation model (R-AISEG-15). The FACTORY, not the model: opening
+         *  one means reading a file and loading a shared library, and `cosmo_core` may do
+         *  neither — the same reason `setDecoderFactory` exists and takes the same shape. Called
+         *  before the first render; a factory that returns nullptr (no model installed, runtime
+         *  missing, manifest broken) leaves the built-in classifier answering, which is not an
+         *  error state but the ordinary one. */
+        void setSegmenterFactory(std::function<std::unique_ptr<ISegmenter>()> f);
+        /** Which segmenter is answering: "built-in", or the installed model's name. In the
+         *  model because a photographer looking at a mask needs to know which of two very
+         *  different things produced it, and a script asserting on a mask needs to know that its
+         *  answer depends on what is installed. */
         void setDecoderFactory(ProjectLoader::DecoderFactory f);
         /** Runs on every decode worker before it works — the OpenMP pin (R-CPU-2c, D-12). */
         void setWorkerInit(std::function<void()> f) { mWorkerInit = std::move(f); }

@@ -18,6 +18,7 @@
 #include "../../core/ThreadBudget.h"
 #include "../../widgets/HomeScreen.h"
 #include "../../widgets/MaskPanel.h"
+#include "../../segment/OnnxSegmenter.h"
 #include "../../../../core/ImageProcessing/src/analysis/Segmenter.h"
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
@@ -1280,6 +1281,75 @@ namespace
     // R-G-1's compliance clause, and it is asserted the only way it can be: by requiring the
     // DRAWN height to differ from the target while the tween runs. A block that appeared in one
     // frame would pass every other assertion here.
+    // ── R-AISEG-15/16: the manifest is the model's description, and a typo in it is an ERROR ──
+    //
+    // cosmo ships no weights and knows no model by name, so everything it believes about one
+    // comes from a hand-written text file beside it. That makes the parser the place a
+    // photographer's mistake surfaces — and the only useful thing it can do with an unknown key
+    // is refuse. Defaulting it away turns "I misspelled inputWidth" into "the model does nothing
+    // and I cannot see why", which is the failure the whole seam exists to avoid.
+    void aModelManifestIsParsedStrictly()
+    {
+        std::printf("App: a segmentation model manifest is parsed strictly (R-AISEG-15/16)\n");
+        using arstro::cosmo_v2::SegModelSpec;
+        using arstro::cosmo_v2::parseSegModelSpec;
+
+        SegModelSpec sp;
+        std::string err;
+        const std::string good =
+            "# a comment\n"
+            "name=MediaPipe Selfie Segmentation\n"
+            "model=selfie.onnx\n"
+            "inputSize=256\n"
+            "layout=nchw\n"
+            "range=0..1\n"
+            "output=alpha\n"
+            "subject=person\n"
+            "license=Apache-2.0\n";
+        check(parseSegModelSpec(good, "/tmp/models", sp, err), "a well-formed manifest parses");
+        check(sp.inputWidth == 256 && sp.inputHeight == 256, "inputSize sets both edges");
+        check(sp.output == SegModelSpec::Output::Alpha, "output=alpha");
+        check(sp.alphaSubject == arstro::SemanticSubject::Person, "and it answers for person");
+        check(sp.licence == "Apache-2.0", "the licence is carried, so it can be reported");
+        // `model=` is relative to the manifest, because a model and its description travel
+        // together and an absolute path in a file people copy between machines is a trap.
+        check(sp.modelPath.find("selfie.onnx") != std::string::npos, "the model path is resolved");
+        check(sp.modelPath.find("models") != std::string::npos, "beside the manifest");
+
+        // What it answers for is what it DECLARES, and nothing else. This is the property the
+        // whole fallback rests on: a person-matting model must never claim the sky.
+        check(sp.handles(arstro::SemanticSubject::Person), "handles what it declares");
+        check(!sp.handles(arstro::SemanticSubject::Sky), "and declines what it does not");
+
+        SegModelSpec cls;
+        const std::string classes =
+            "model=m.onnx\ninputSize=512\noutput=classes\nactivation=softmax\n"
+            "class.2=sky\nclass.9=foliage\nclass.21=water\n";
+        check(parseSegModelSpec(classes, ".", cls, err), "a class-mapped manifest parses");
+        check(cls.handles(arstro::SemanticSubject::Sky) && cls.handles(arstro::SemanticSubject::Water),
+              "a class model handles every subject it maps");
+        check(!cls.handles(arstro::SemanticSubject::Hair), "and no others");
+
+        struct Bad { const char *text; const char *what; };
+        for (const Bad &b : {Bad{"model=m.onnx\ninputSize=256\ninputWidht=5\n", "an unknown key is refused, not ignored"},
+                             Bad{"inputSize=256\noutput=alpha\n", "a manifest with no model= is refused"},
+                             Bad{"model=m.onnx\noutput=alpha\n", "a manifest with no input size is refused"},
+                             Bad{"model=m.onnx\ninputSize=256\noutput=classes\n", "output=classes with no class map is refused"},
+                             Bad{"model=m.onnx\ninputSize=256\nsubject=skyy\n", "a misspelled subject is refused"},
+                             Bad{"model=m.onnx\ninputSize=256\nlayout=nhcw\n", "a misspelled layout is refused"},
+                             Bad{"model=m.onnx\njust a line\n", "a line with no = is refused"}})
+        {
+            SegModelSpec junk;
+            std::string e;
+            check(!parseSegModelSpec(b.text, ".", junk, e) && !e.empty(), b.what);
+        }
+
+        // And with nothing installed there is nothing to find — the ordinary case, and not an
+        // error: `findManifest` on a directory that does not exist is empty, not a throw.
+        check(arstro::cosmo_v2::OnnxSegmenter::findManifest("/tmp/cosmo-no-such-dir-here").empty(),
+              "no model installed is an empty answer, not a failure");
+    }
+
     void addingADetectMaskOpensItsBlockAndReachesTheModel()
     {
         std::printf("App: the Detect chip adds a semantic mask and its block eases open (R-AISEG-10..12)\n");
@@ -1336,8 +1406,13 @@ namespace
         check(subject != nullptr, "the subject picker is in the block");
         if (!subject) return;
         const artboard::Transform sw = subject->worldTransform();
-        const double segW = subject->width.value() / 5.0;
-        rig.click(sw.e + segW * 4.5, sw.f + subject->height.value() * 0.5);   // Hair, the 5th
+        // Sized from the subject COUNT, not from a literal: Person was added later and a
+        // hard-coded 5 aimed the click one segment past the end — which is how the crash that
+        // this comment exists because of got in (a caption array with a null sixth entry).
+        const int nSub = (int)arstro::SemanticSubject::Count;
+        const double segW = subject->width.value() / (double)nSub;
+        const int hair = (int)arstro::SemanticSubject::Hair;
+        rig.click(sw.e + segW * (hair + 0.5), sw.f + subject->height.value() * 0.5);
         rig.settle(400.0);
         check(rig.svc.model().params.masks[0].subject == (int)arstro::SemanticSubject::Hair,
               "picking Hair reaches the MODEL, not just the picker");
@@ -1438,6 +1513,7 @@ int main()
     rightClickShowsTheImageInformation();
     drawingAMaskOnThePhotoReachesTheModel();
     addingADetectMaskOpensItsBlockAndReachesTheModel();
+    aModelManifestIsParsedStrictly();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

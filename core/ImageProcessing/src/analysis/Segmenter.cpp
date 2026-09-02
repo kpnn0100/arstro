@@ -157,6 +157,7 @@ namespace arstro
         case SemanticSubject::Foliage: return "foliage";
         case SemanticSubject::Water: return "water";
         case SemanticSubject::Hair: return "hair";
+        case SemanticSubject::Person: return "person";
         default: return "sky";
         }
     }
@@ -246,11 +247,57 @@ namespace arstro
                          std::vector<Pixel> &out);
         }
 
+        bool builtinHandles(SemanticSubject subject)
+        {
+            // Person is the one subject with no built-in model. "Is this a person" is not a
+            // question colour, position and texture can answer, and a class that answered it
+            // badly would be worse than one that says it cannot — a photographer can install a
+            // model for it (R-AISEG-15) or use another subject, but only if told which.
+            return subject != SemanticSubject::Person && subject < SemanticSubject::Count;
+        }
+
+        void scoreToCoverage(std::vector<Pixel> &score, int w, int h, float sensitivity)
+        {
+            if (w <= 0 || h <= 0 || score.size() < (std::size_t)w * h) return;
+            sensitivity = clampf(sensitivity, 0.f, 1.f);
+            // ── regularise, THEN threshold (R-AISEG-4) ──
+            // In this order and not the other: thresholding first would decide each pixel alone
+            // and then blur the decision, which turns a speckled score into a speckled mask with
+            // soft edges on every speck. Softening the SCORE lets a pixel's neighbours outvote it,
+            // which is the whole point — a lone sky-coloured pixel inside a roof stays a roof.
+            std::vector<Pixel> smooth;
+            const float regSigma = kRegulariseFraction * (float)std::min(w, h);
+            if (regSigma >= 0.5f) spatial::fastBlurPlane(score, smooth, w, h, regSigma);
+            else smooth = score;
+
+            // Sensitivity IS the threshold (R-AISEG-5): 0 takes only what the model is sure of,
+            // 1 takes anything it suspects, 0.5 is the default. The band around it is what keeps
+            // the mask's edge soft without a second control. An installed model runs through this
+            // same function, so the knob means one thing and not two.
+            const float t = 0.80f - 0.70f * sensitivity;
+            const float bandHalf = 0.16f;
+            par::parallelFor(h, [&](int y0, int y1) {
+                for (int y = y0; y < y1; ++y)
+                    for (int x = 0; x < w; ++x)
+                    {
+                        const std::size_t i = (std::size_t)y * w + x;
+                        score[i] = (Pixel)smoothstep(t - bandHalf, t + bandHalf, (float)smooth[i]);
+                    }
+            });
+        }
+
+        void resamplePlane(const std::vector<Pixel> &src, int sw, int sh,
+                           std::vector<Pixel> &dst, int dw, int dh)
+        {
+            upsamplePlane(src, sw, sh, dst, dw, dh);
+        }
+
         void builtinCoverage(const Image &img, SemanticSubject subject, float sensitivity,
                              std::vector<Pixel> &out)
         {
             const int w = img.width(), h = img.height(), ch = img.channels();
-            if (w <= 0 || h <= 0 || ch < 3) { out.assign((std::size_t)std::max(0, w * h), (Pixel)0); return; }
+            if (w <= 0 || h <= 0 || ch < 3 || !builtinHandles(subject))
+            { out.assign((std::size_t)std::max(0, w * h), (Pixel)0); return; }
             sensitivity = clampf(sensitivity, 0.f, 1.f);
 
             // Decide the regions ONCE, at a bounded resolution, and stretch the answer back
@@ -311,29 +358,8 @@ namespace arstro
                 }
             });
 
-            // ── regularise, THEN threshold (R-AISEG-4) ──
-            // In this order and not the other: thresholding first would decide each pixel alone
-            // and then blur the decision, which turns a speckled score into a speckled mask with
-            // soft edges on every speck. Softening the SCORE lets a pixel's neighbours outvote it,
-            // which is the whole point — a lone sky-coloured pixel inside a roof stays a roof.
-            std::vector<Pixel> smooth;
-            const float regSigma = kRegulariseFraction * (float)std::min(w, h);
-            if (regSigma >= 0.5f) spatial::fastBlurPlane(score, smooth, w, h, regSigma);
-            else smooth = score;
-
-            // Sensitivity IS the threshold (R-AISEG-5): 0 takes only what the model is sure of,
-            // 1 takes anything it suspects, 0.5 is the default. The band around it is what keeps
-            // the mask's edge soft without a second control.
-            const float t = 0.80f - 0.70f * sensitivity;
-            const float bandHalf = 0.16f;
-            par::parallelFor(h, [&](int y0, int y1) {
-                for (int y = y0; y < y1; ++y)
-                    for (int x = 0; x < w; ++x)
-                    {
-                        const std::size_t i = (std::size_t)y * w + x;
-                        out[i] = (Pixel)smoothstep(t - bandHalf, t + bandHalf, (float)smooth[i]);
-                    }
-            });
+            scoreToCoverage(score, w, h, sensitivity);
+            out.swap(score);
         }
         }   // anonymous namespace
     }

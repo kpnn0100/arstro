@@ -246,6 +246,18 @@ namespace cosmo
         return true;
     }
 
+    void CosmoService::setSegmenterFactory(std::function<std::unique_ptr<ISegmenter>()> f)
+    {
+        if (!f) return;
+        std::unique_ptr<ISegmenter> seg = f();
+        // Reported either way. "No model installed" and "a model is installed and it is this
+        // one" are the two states a photographer has to be able to tell apart, and the mask
+        // itself is not evidence — a good built-in answer and a good model answer look alike.
+        mSession.renderService().setSegmenter(std::move(seg));
+        mModel.segmenter = mSession.renderService().segmenterName();
+        emit(Event::Kind::Info, "segmenter=" + mModel.segmenter);
+    }
+
     bool CosmoService::takeFrame(RenderService::Frame &out)
     {
         if (!mFrameWaiting) return false;

@@ -35,7 +35,21 @@ namespace cosmo_v2
             "Warm mid-tones with red over green — faces and hands.",
             "Green with real saturation, anywhere in the frame.",
             "Blue-cyan, low in the frame, a little texture.",
-            "Dark, muted and textured — may take fabric too."};
+            "Dark, muted and textured — may take fabric too.",
+            // Person has no built-in model at all (R-AISEG-15) — "is this a person" is not a
+            // question colour, position and texture can answer. Saying so here is the only
+            // place a photographer finds out BEFORE choosing it and getting an empty mask.
+            "People, whole. Needs an installed model — see Detect, above."};
+
+        /** A caption by index, never a null. The array is sized from `SemanticSubject::Count`,
+         *  so adding a subject and forgetting its line leaves a null here — which is exactly
+         *  what happened when Person was added, and it crashed on assignment rather than
+         *  showing a blank line. A missing caption is now a missing caption. */
+        const char *subjectCaption(int i)
+        {
+            if (i < 0 || i >= (int)SemanticSubject::Count) return "";
+            return kSubjectCaption[i] ? kSubjectCaption[i] : "";
+        }
 
         std::string subjectLabel(int subject)
         {
@@ -129,7 +143,7 @@ namespace cosmo_v2
         mSubject->activeText = {palette::white(), 10.0, font::sans()};
         mSubject->height.set(DetectBlock::kPickerH);
         mSubject->onChange = [this](int i) {
-            if (mDetect) mDetect->caption = kSubjectCaption[i < 0 || i >= (int)SemanticSubject::Count ? 0 : i];
+            if (mDetect) mDetect->caption = subjectCaption(i);
             if (onSubjectChange) onSubjectChange(i);
         };
         mDetect->addChild(mSubject);
@@ -190,8 +204,7 @@ namespace cosmo_v2
         // about, and it would look correct in every still frame.
         mDetectTarget = (m.type == MaskParams::Semantic) ? 1.0 : 0.0;
         mSubject->setSelectedImmediate(m.subject);   // programmatic sync must not fire onChange
-        mDetect->caption = kSubjectCaption[(m.subject >= 0 && m.subject < (int)SemanticSubject::Count)
-                                               ? m.subject : 0];
+        mDetect->caption = subjectCaption(m.subject);
         mSensitivity->setValue(m.sensitivity * 100.0);
         mFeather->setValue(m.feather * 100.0);
         mExposure->setValue(fromEv(m.adjust.exposure));
@@ -200,6 +213,15 @@ namespace cosmo_v2
         mTemperature->setValue(m.adjust.temp);
         mSaturation->setValue(m.adjust.saturation);
         mDehaze->setValue(m.adjust.dehaze);
+    }
+
+    void MaskPanel::setSegmenter(const std::string &name)
+    {
+        if (!mDetect) return;
+        // "built-in" is not a name to show a photographer; it is the absence of one, and the
+        // built-in's honest self-description is what it keys on.
+        mDetect->header = (name.empty() || name == "built-in") ? "Detect (colour & texture)"
+                                                              : "Detect (" + name + ")";
     }
 
     void MaskPanel::scrollBy(double delta)
@@ -324,7 +346,11 @@ namespace cosmo_v2
         // "Detect (colour & texture)", not "AI Subject" (R-AISEG-11). The header is where the
         // honesty belongs: it is read once, by everyone, before the first click — and a label
         // claiming more than the code does is worse than a plain one.
-        drawSectionHeader(t, kPadX, 0.0, innerW, "Detect (colour & texture)");
+        // Which of two very different things is answering, said where the photographer
+         // chooses (R-AISEG-15). "colour & texture" is the built-in classifier being honest
+         // about itself; a model's own name replaces it when one is installed, because a mask
+         // from a network and a mask from a hue band are not the same claim.
+        drawSectionHeader(t, kPadX, 0.0, innerW, header);
         // What THIS subject is found by. 9px muted, on the type ramp's caption size, sitting in
         // the gap the layout already reserves for it.
         const double y = kHeaderH + kPickerH + kPickerMB + kCaptionH * 0.5;

@@ -349,6 +349,10 @@ namespace cosmo_v2
         mBasicDetail->setSubValues(offsets);
 
         mSelectedMask = p->masks.empty() ? -1 : std::min(mSelectedMask < 0 ? 0 : mSelectedMask, (int)p->masks.size() - 1);
+        // R-AISEG-15: which segmenter is answering, from the model. A mask from a network and
+        // a mask from a hue band are not the same claim, and the panel is where the difference
+        // has to be visible.
+        mMask->setSegmenter(mSvc.model().segmenter);
         mMask->setMasks(p->masks, mSelectedMask);
         mMixer->setMixer(p->mixer);
         mCurve->setCurves(p->curve, p->curveChannel);

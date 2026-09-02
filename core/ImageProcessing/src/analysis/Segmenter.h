@@ -58,7 +58,15 @@ namespace arstro
         Foliage = 2,
         Water = 3,
         Hair = 4,
-        Count = 5
+        /** Appended, never inserted: the number is what a project file stores, so a subject
+         *  added in the middle would silently re-point every mask ever saved.
+         *
+         *  Person is here because it is what a real MODEL can actually be had for under a
+         *  permissive licence (R-AISEG-15) — the built-in classifier declines it outright, since
+         *  "is this a person" is not a question colour, position and texture can answer, and a
+         *  subject that answers badly is worse than one that says it cannot. */
+        Person = 5,
+        Count = 6
     };
 
     /** The ONE codec for a subject's name, in both directions (R-SVC-5, R-AISEG-8).
@@ -119,8 +127,29 @@ namespace arstro
         constexpr int kAnalysisEdge = 1024;
 
         /** The built-in classifier: `subject`'s coverage of `img`, into `out` (sized w*h).
-         *  Always answers — it is the fallback, so it has nothing to decline to. */
+         *  Answers for every subject it has a model for, and writes an all-zero plane for one it
+         *  does not (Person) — a fallback has nobody to fall back to, so "cannot" has to be
+         *  expressed as "nothing selected" rather than as a refusal. */
         void builtinCoverage(const Image &img, SemanticSubject subject, float sensitivity,
                              std::vector<Pixel> &out);
+
+        /** True when the built-in has a model for `subject` at all. A front end uses it to say
+         *  so; `builtinCoverage` uses it to return an empty plane instead of a wrong one. */
+        bool builtinHandles(SemanticSubject subject);
+
+        /** Turn a raw 0..1 score plane into coverage, in place: soften it, then threshold it at
+         *  `sensitivity` (R-AISEG-4/5).
+         *
+         *  Exported so that **an installed model uses the same one**. Sensitivity is a promise to
+         *  the photographer — 0 takes only what is certain, 1 takes anything suspected — and a
+         *  promise implemented twice is two different promises. This is the same rule R-SVC-5
+         *  states for the command grammar, applied to a number instead of a string. */
+        void scoreToCoverage(std::vector<Pixel> &score, int w, int h, float sensitivity);
+
+        /** Bilinear resample of a scalar plane. Exported for the same reason: a model runs at its
+         *  own input size and its answer has to reach the render's size, and a second resampler
+         *  would be a second set of edge conventions. */
+        void resamplePlane(const std::vector<Pixel> &src, int sw, int sh,
+                           std::vector<Pixel> &dst, int dw, int dh);
     }
 }

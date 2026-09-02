@@ -38,17 +38,52 @@ boundary of the mask like a drawn mask; (c) find an open-source model.*
     gives 389, not sixteen times as many, and loops under six points are dropped because a
     classifier's output has specks and a mask outlined with confetti reads as broken.
     R-AISEG-13/14, DR-AISEG-13/14.
-- **[ ] (a)+(c) a real model behind `ISegmenter`, and which open-source model.**
+- **[x] (a)+(c) a real model behind `ISegmenter`, and the honest answer about which one.**
+  `OnnxSegmenter` in the HOST, driven by a text manifest beside the model. Five things worth
+  carrying forward:
+  * **cosmo links nothing.** ONNX Runtime is found with `LoadLibrary`/`dlopen` through its one
+    exported C symbol — the `OmpPin` pattern — so a machine with no runtime builds and runs
+    identically and a missing library is `segment()` returning false. Only the C API header is
+    vendored, because the struct's **field order is the ABI**: a hand-written subset would compile
+    and then call the wrong function pointer, silently.
+  * **THE FINDING, and it is not the one anyone wants: there is no single open-source model
+    covering sky, skin, hair, foliage and water.** Every permissively-licensed ONNX segmentation
+    model is subject-versus-background matting. Everything with a class for sky or hair is trained
+    on ADE20K or CelebAMask-HQ — both non-commercial-research datasets — and the best checkpoints
+    add NVIDIA's non-commercial licence on top. So cosmo ships no weights, describes models by
+    manifest so anyone can install one they are entitled to use, and `SemanticSubject::Person`
+    exists **because it is the subject a real model can actually be had for**. Written up in
+    `docs/segmentation-models.md`, which is the deliverable for "find only open source model".
+  * **Declining is the contract.** A person-matting model must never claim to have found the sky,
+    or the built-in stops being consulted for the subjects it is genuinely good at.
+  * **Sensitivity means ONE thing.** A model's output goes through the same
+    `segment::scoreToCoverage` the built-in uses. A promise to the photographer implemented twice
+    is two different promises.
+  * **Verified against the real thing, not argued.** ORT 1.22.0 loaded dynamically from a MinGW
+    binary, driving a 462 KB Apache-2.0 model over a 512×512 portrait, through the manifest the
+    fetch script itself generated: five subjects declined, person answered, 42.2% of the frame,
+    six outline loops. R-AISEG-15..17, DR-AISEG-15..17.
 - **[ ] (b2) draw the outline on the photo (design).**
 
-**► NEXT: (a)+(c), then (b2).**
+**► NEXT: (b2) — draw the outline on the photo (`arstro.cosmo.design.implement`).** The engine
+hands the view `Frame::maskOutlines` already; `MaskOverlay` has to stroke it the way it strokes a
+drawn path, tracking zoom and pan (R-MASK-3) like everything else on that canvas.
 
-**Environment note, and it cost half an hour:** this build tree does **not** reliably rebuild
-`cosmo_core` when a struct in `core/ImageProcessing/src/engine/*.h` gains a field. The symptom is an
-ABI mismatch that reads as impossible — `mFrame.maskOutlines.empty()` was true while
-`mFrame.maskOutlines.size()` printed 1, because `CosmoService.cpp` and `RenderService.cpp` disagreed
-about `Frame`'s layout. `rm -rf build/apps/cosmo/core/CMakeFiles/cosmo_core.dir` and rebuild after
-any such change; do not spend the time re-reading the logic, it is not the logic.
+**Two environment notes, both of which cost time:**
+
+1. **`cosmo.exe` running aborts the WHOLE build.** ninja stops at the first failure, and a running
+   cosmo holds a lock on its own link output — so every target after it in the graph silently stays
+   at its previous binary and `ctest` then runs stale tests. That is the real cause of what looked
+   like a dependency-tracking bug: an ABI mismatch reading as impossible (`maskOutlines.empty()`
+   true while `maskOutlines.size()` printed 1) because `CosmoService.cpp` and `RenderService.cpp`
+   had been built against different `Frame` layouts. **Build with `cmake --build build -j 8 -- -k 0`**
+   so a locked binary cannot stall everything else, and `rm -rf
+   build/apps/cosmo/core/CMakeFiles/cosmo_core.dir` when a struct in
+   `core/ImageProcessing/src/engine/*.h` has gained a field and the symptom looks impossible.
+2. **A test that waits for "a frame" is racy** when the thing it wants is a property of a
+   *particular* render. `pumpUntilFrame` returns on the next frame, which may be one already in
+   flight from before the edit — the outline assertion passed or failed depending on whether a
+   `printf` sat in front of it. Pump until the frame SAYS what you are waiting for, bounded.
 
 **► 2026-09-02 — four features requested. IN PROGRESS.**
 

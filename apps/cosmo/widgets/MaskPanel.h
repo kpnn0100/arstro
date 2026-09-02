@@ -49,6 +49,9 @@ namespace cosmo_v2
         static constexpr double kCaptionH = 13.0;
         DetectBlock() { clipToBounds = true; }
         std::string caption;   // what THIS subject is found by (R-AISEG-11)
+        /** Which segmenter is answering (R-AISEG-15) — the built-in's honest description of
+         *  itself, or an installed model's name. */
+        std::string header = "Detect (colour & texture)";
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
     };
@@ -61,6 +64,8 @@ namespace cosmo_v2
         /** Refresh from the current image's masks + which one is focused
          *  (-1 = none). Does not fire callbacks. */
         void setMasks(const std::vector<MaskParams> &masks, int selected);
+        /** Name the segmenter deciding these masks: "built-in", or a model's name. */
+        void setSegmenter(const std::string &name);
         void layout();
         void scrollBy(double delta);
 

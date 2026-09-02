@@ -157,6 +157,18 @@ namespace arstro
         mEngine.setMemoryCaps(sourceBytes, proxyBytes);
     }
 
+    void RenderService::setSegmenter(std::unique_ptr<ISegmenter> seg)
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        mEngine.setSegmenter(std::move(seg));
+    }
+
+    std::string RenderService::segmenterName() const
+    {
+        std::lock_guard<std::mutex> lk(mMu);
+        return mEngine.segmenterName();
+    }
+
     size_t RenderService::residentBytes() const { return mResidentBytes.load(); }
     int RenderService::rehydrations() const { return mRehydrations.load(); }
 
@@ -455,6 +467,8 @@ namespace arstro
         return slot;
     }
     void RenderService::setSourceLoader(SourceLoader loader) { mSourceLoader = std::move(loader); }
+    void RenderService::setSegmenter(std::unique_ptr<ISegmenter> seg) { mEngine.setSegmenter(std::move(seg)); }
+    std::string RenderService::segmenterName() const { return mEngine.segmenterName(); }
     void RenderService::setMemoryCaps(size_t sourceBytes, size_t proxyBytes)
     {
         mEngine.setMemoryCaps(sourceBytes, proxyBytes);
