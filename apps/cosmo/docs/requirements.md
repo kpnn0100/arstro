@@ -3198,3 +3198,42 @@ the function into a `RecordingTarget` and reads the `LineTo` back: the rule ends
 only just before it, absorbs the whole of a width change while the fixed members stay put, and
 disappears entirely when there is no room. Visible in `cosmo-editor-empty-1600x1000.png`, where the
 COLOUR rule now stops a gap short of the eyedropper.
+
+### DR-ICON-1..4 The colour-picker and delete glyphs are the supplied artwork (R-ICON-1 … R-ICON-4)
+Both are transcribed into `widgets/Icons.cpp`'s normalised 0..1 box (`Frac`) by dividing each source
+coordinate by its viewBox — written as the division rather than as the result, so any number can be
+checked against the file it came from.
+
+**`deleteBin`** (was `trash2`), from `delete-2`, viewBox 24, stroke 2 (= 0.083 of the box, which is
+1.1 px at the 13 px it renders at — the same default weight it replaces). Four subpaths, carried
+across as they are: the lid `M4 7 H20`; the rounded handle `M9 5 C9 3.895 9.895 3 11 3 H13 C14.105 3
+15 3.895 15 5 V7`; the can `M6 10 V18 C6 19.657 7.343 21 9 21 H15 C16.657 21 18 19.657 18 18 V10` —
+straight sides with rounded bottom corners, which is what distinguishes it from the tapered lucide
+bin; and two **parallel** ridges where the old glyph splayed them. Renamed because the silhouette is
+no longer lucide's `Trash2` and a name that says otherwise is only ever found by the next person
+redrawing it. One call site (`MaskPanel`'s delete-mask button).
+
+**`pipette`**, from `color-picker-dropper-colour`, viewBox 32. The source is one **filled** path with
+a second subpath hollowing the barrel out, and two places where fidelity had to yield to legibility —
+both stated in the code (R-ICON-4):
+
+- **The hollow barrel is 1.98 source units across, which is 0.8 px at 13 px.** Reproducing it as a
+  fill asks the rasteriser to resolve a sub-pixel hole and produces a grey smear, so the barrel is
+  drawn as the stroke it visually is. Only the **head** is filled, where the artwork is genuinely
+  solid at 7.6 units across — corners `(17,8.6) (22.3,3.3) (27.7,8.7) (22.4,14)` with the source's
+  rounded cap as one cubic. That split is what keeps the glyph reading as an eyedropper rather than
+  as a pen.
+- **The two collar stubs** — `(14.3,7.3)..(14.3,8.7)` on the barrel's upper edge and
+  `(23.7,15.3)..(23.7,16.7)` on its lower one, at different points along it — render literally as
+  one visible tab and one detached 2 px speck, because the head is drawn over everything between
+  them. They are drawn as the one collar they read as: perpendicular to the barrel, just below the
+  head, equal on both sides. The barrel's direction is `(-11, 11.6)`, so the perpendicular is
+  `(0.686, 0.650)` and ±4.5 units puts the upper end at `(14.5, 7.7)` — the source's own stub, so
+  this is the artwork's geometry rather than a substitute for it.
+- **The tip** stops where the source's rounded foot begins. Tracing that foot's cubics as a stroke
+  curls the end back on itself and the glyph reads as a walking stick — which is what the first
+  attempt rendered as, and the reason this sentence is here.
+
+Verified by looking, not by reading: `cosmo-editor-empty-1600x1000.png` cropped and scaled 12× at the
+COLOUR header for the dropper, and `cosmo-editor-mask-draw-1600x1000.png` scaled 14× at the mask row
+for the bin.

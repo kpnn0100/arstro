@@ -166,35 +166,48 @@ namespace icon
         t.strokePath();
     }
 
-    void trash2(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
+    void deleteBin(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
     {
+        // Traced from the supplied `delete-2` artwork, viewBox 24 — every number below is a
+        // source coordinate divided by 24, so it can be checked against the file. The source
+        // strokes at 2/24 (~0.083 of the box), which is 1.1 px at the 13 px this renders at,
+        // so the default weight is unchanged from what it replaces.
         Frac f{box};
         t.setStroke(c, strokeWidth);
-        // Lid.
+        // Lid: M4 7 H20
         t.beginPath();
-        t.moveTo(f.x(0.15), f.y(0.28));
-        t.lineTo(f.x(0.85), f.y(0.28));
+        t.moveTo(f.x(4 / 24.0), f.y(7 / 24.0));
+        t.lineTo(f.x(20 / 24.0), f.y(7 / 24.0));
         t.strokePath();
-        // Handle.
+        // Handle: M9 5 C9 3.895 9.895 3 11 3 H13 C14.105 3 15 3.895 15 5 V7
         t.beginPath();
-        t.moveTo(f.x(0.38), f.y(0.28));
-        t.lineTo(f.x(0.4), f.y(0.14));
-        t.lineTo(f.x(0.6), f.y(0.14));
-        t.lineTo(f.x(0.62), f.y(0.28));
+        t.moveTo(f.x(9 / 24.0), f.y(5 / 24.0));
+        t.cubicTo(f.x(9 / 24.0), f.y(3.895 / 24.0), f.x(9.895 / 24.0), f.y(3 / 24.0),
+                  f.x(11 / 24.0), f.y(3 / 24.0));
+        t.lineTo(f.x(13 / 24.0), f.y(3 / 24.0));
+        t.cubicTo(f.x(14.105 / 24.0), f.y(3 / 24.0), f.x(15 / 24.0), f.y(3.895 / 24.0),
+                  f.x(15 / 24.0), f.y(5 / 24.0));
+        t.lineTo(f.x(15 / 24.0), f.y(7 / 24.0));
         t.strokePath();
-        // Body.
+        // Can: M6 10 V18 C6 19.657 7.343 21 9 21 H15 C16.657 21 18 19.657 18 18 V10.
+        // Straight sides with rounded bottom corners — the shape that distinguishes this from
+        // the tapered lucide bin it replaces.
         t.beginPath();
-        t.moveTo(f.x(0.22), f.y(0.28));
-        t.lineTo(f.x(0.28), f.y(0.88));
-        t.lineTo(f.x(0.72), f.y(0.88));
-        t.lineTo(f.x(0.78), f.y(0.28));
+        t.moveTo(f.x(6 / 24.0), f.y(10 / 24.0));
+        t.lineTo(f.x(6 / 24.0), f.y(18 / 24.0));
+        t.cubicTo(f.x(6 / 24.0), f.y(19.657 / 24.0), f.x(7.343 / 24.0), f.y(21 / 24.0),
+                  f.x(9 / 24.0), f.y(21 / 24.0));
+        t.lineTo(f.x(15 / 24.0), f.y(21 / 24.0));
+        t.cubicTo(f.x(16.657 / 24.0), f.y(21 / 24.0), f.x(18 / 24.0), f.y(19.657 / 24.0),
+                  f.x(18 / 24.0), f.y(18 / 24.0));
+        t.lineTo(f.x(18 / 24.0), f.y(10 / 24.0));
         t.strokePath();
-        // Ridges.
+        // Ridges: M10 12 V17 and M14 12 V17 — parallel here, where the old glyph splayed them.
         t.beginPath();
-        t.moveTo(f.x(0.4), f.y(0.4));
-        t.lineTo(f.x(0.42), f.y(0.76));
-        t.moveTo(f.x(0.6), f.y(0.4));
-        t.lineTo(f.x(0.58), f.y(0.76));
+        t.moveTo(f.x(10 / 24.0), f.y(12 / 24.0));
+        t.lineTo(f.x(10 / 24.0), f.y(17 / 24.0));
+        t.moveTo(f.x(14 / 24.0), f.y(12 / 24.0));
+        t.lineTo(f.x(14 / 24.0), f.y(17 / 24.0));
         t.strokePath();
     }
 
@@ -238,27 +251,48 @@ namespace icon
 
     void pipette(IRenderTarget &t, const Rect &box, const Color &c, double strokeWidth)
     {
+        // Traced from the supplied `color-picker-dropper-colour` artwork, viewBox 32 — the
+        // numbers below are source coordinates divided by 32.
+        //
+        // The source is ONE filled path with a second subpath hollowing the barrel out. That
+        // hollow is 1.98 source units across, which is 0.8 px at the 13 px this renders at, so
+        // reproducing it as a fill would ask the rasteriser to resolve a sub-pixel hole and
+        // would come out as a grey smear. It is drawn as the stroke it visually is instead, and
+        // only the HEAD — where the artwork is genuinely solid, 7.6 units across — is filled.
+        // That split is what keeps the glyph reading as an eyedropper rather than as a pen.
         Frac f{box};
-        t.setStroke(c, strokeWidth);
-        // The barrel: a diagonal tube from the top-right down to a tip at the bottom-left, which
-        // is the orientation every eyedropper cursor has had since MacPaint — the tip points at
-        // what it will sample.
+        // Head: the rounded 45-degree bar, corners (17,8.6) (22.3,3.3) (27.7,8.7) (22.4,14).
+        t.setFill(c);
         t.beginPath();
-        t.moveTo(f.x(0.58), f.y(0.26));
-        t.lineTo(f.x(0.80), f.y(0.48));
-        t.lineTo(f.x(0.40), f.y(0.88));
-        t.lineTo(f.x(0.18), f.y(0.66));
+        t.moveTo(f.x(17 / 32.0), f.y(8.6 / 32.0));
+        t.cubicTo(f.x(19.8 / 32.0), f.y(5.8 / 32.0), f.x(23.8 / 32.0), f.y(1.8 / 32.0),
+                  f.x(26.2 / 32.0), f.y(1.8 / 32.0));   // the source's rounded cap, one cubic
+        t.cubicTo(f.x(29.2 / 32.0), f.y(4.8 / 32.0), f.x(29.2 / 32.0), f.y(7.2 / 32.0),
+                  f.x(27.7 / 32.0), f.y(8.7 / 32.0));
+        t.lineTo(f.x(22.4 / 32.0), f.y(14 / 32.0));
         t.closePath();
-        t.strokePath();
-        // The bulb, up the same diagonal.
+        t.fillPath();
+
+        t.setStroke(c, strokeWidth);
+        // Collar: the source has TWO small rounded stubs, (14.3,7.3)..(14.3,8.7) on the upper
+        // edge of the barrel and (23.7,15.3)..(23.7,16.7) on the lower one, at different points
+        // along it. Transcribed literally they come out as one visible tab and one detached
+        // 2 px speck, because the head is drawn over everything between them. So they are drawn
+        // as the one collar they read as: perpendicular to the barrel, just below the head,
+        // equal on both sides. The barrel's direction is (-11, 11.6), so the perpendicular is
+        // (0.686, 0.650) and +/-4.5 units puts the upper end at (14.5, 7.7) — which is where the
+        // source's own stub is, so this is the artwork's geometry and not a substitute for it.
         t.beginPath();
-        t.moveTo(f.x(0.66), f.y(0.18));
-        t.lineTo(f.x(0.88), f.y(0.40));
+        t.moveTo(f.x(14.51 / 32.0), f.y(7.67 / 32.0));
+        t.lineTo(f.x(20.69 / 32.0), f.y(13.53 / 32.0));
         t.strokePath();
-        // A cross-tick near the tip: what makes it read as sampling rather than as a pen.
+        // Barrel: the centreline between the source's two parallel edges, (17,8.6)->(5,20.6)
+        // and (17,11.4)->(9,24.6), carried down to the tip at (4.5,26.5). Straight, and stopping
+        // where the source's rounded foot begins: tracing that foot's cubics as a stroke curls
+        // the end back on itself and the glyph reads as a walking stick.
         t.beginPath();
-        t.moveTo(f.x(0.24), f.y(0.58));
-        t.lineTo(f.x(0.46), f.y(0.80));
+        t.moveTo(f.x(17.6 / 32.0), f.y(10.6 / 32.0));
+        t.lineTo(f.x(5.6 / 32.0), f.y(25.2 / 32.0));
         t.strokePath();
     }
 

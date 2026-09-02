@@ -69,7 +69,16 @@ fixed-width text and icon and a dynamic line between.*
     the semantic mask's `subject` would have been the next field dropped by it. The copy is
     **deleted**, not patched. R-AISEG-1..9, DR-AISEG-1..9.
 - **[ ] (2b) the semantic mask's panel — subject picker + sensitivity (design).**
-- **[ ] (3) colour-picker + delete icons from the supplied SVGs (design).**
+- **[x] (3) colour-picker + delete icons, from the supplied SVGs.** Transcribed rather than
+  approximated — each number written as `source / viewBox` so it can be checked against the file.
+  `trash2` became `deleteBin`, because the silhouette is no longer lucide's and a name that says
+  otherwise is only found by the next person redrawing it. Two places where fidelity yielded to
+  legibility, both stated in the code: the dropper's hollow barrel is **0.8 px** wide at the size it
+  renders, so it is drawn as the stroke it visually is and only the head is filled; and its two
+  collar stubs sit at different points along the barrel, which renders as one tab plus a detached
+  2 px speck, so they are drawn as the single collar they read as. The first attempt traced the
+  source's rounded foot literally and the glyph came out as a walking stick — which is why R-ICON-4
+  exists rather than a general instruction to be faithful. R-ICON-1..4, DR-ICON-1..4.
 - **[x] (4) the Colour section's separator line overlaps the picker icon.** It did: the header
   drew a hairline to the full panel width, and `ParamPanel` right-aligned the eyedropper inside
   that same span, so two pieces of code laid out one row with no knowledge of each other. The

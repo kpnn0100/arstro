@@ -693,7 +693,7 @@ Four add chips {Radial,Linear,Brush,**Draw**} → `onAddMask(type)` (`kTypeCount
 data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is, for the same reason
 `XformPanel::aspectChipRect` does; the ComboBox label of a drawn mask carries its point count, so
 "nothing happened yet" reads as "1 pts" rather than as a bug; a `ComboBox` → `onSelectMask(index)`; a `ComboBox` → `onSelectMask(index)`;
-`Inv` `PillButton` → `onToggleInvert`; trash `IconButton` (`icon::trash2`) → `onDeleteMask`;
+`Inv` `PillButton` → `onToggleInvert`; bin `IconButton` (`icon::deleteBin`) → `onDeleteMask`;
 Feather `SliderRow` (0..100 → 0..1) → `onFeatherChange`; then Basic-style Tone/Colour/Presence rows
 writing a working `LocalAdjust` → `onAdjustChange(LocalAdjust)`. Per-mask controls hidden until a
 mask is selected. `setMasks(masks, selected)`.

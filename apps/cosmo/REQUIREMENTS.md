@@ -776,6 +776,36 @@ UI copy, not only here.
   coverage rather than as something wrong, which is the same answer it already gives for any mask
   type it does not know.
 
+## R-ICON — Icons are traced, not approximated — ✅ IMPLEMENTED
+
+`widgets/Icons.{h,cpp}` is a set of glyphs drawn with `IRenderTarget` path primitives, because
+Artboard has no icon library and no SVG loader. Most were authored as *approximations* of a lucide
+silhouette — the header says so — which was the right call when the alternative was adding an SVG
+parser to draw fifteen shapes. It stops being the right call the moment somebody hands over the
+artwork they actually want.
+
+- **R-ICON-1 Artwork the user chose is transcribed, not impersonated.** When a specific SVG is
+  supplied, its coordinates are carried into this file's normalised 0..1 box by dividing each source
+  coordinate by its viewBox, cubic control points included — so the glyph is *the artwork*, and the
+  arithmetic that produced each number is written beside it so it can be checked against the file.
+  Adding an SVG loader to Artboard to draw two glyphs would be the wrong trade; hand-transcribing
+  two glyphs and saying which file they came from is not.
+- **R-ICON-2 The colour picker is the supplied dropper.** A filled head, a collar at the neck, and a
+  thin barrel down to a tip at the lower left — the tip points at what it will sample.
+- **R-ICON-3 Delete is the supplied bin.** Straight-sided can with rounded bottom corners, a rounded
+  lid handle, and parallel ridges — a different silhouette from lucide's tapered `Trash2`, which is
+  why the function is `deleteBin` and not `trash2`: a name that says lucide while drawing something
+  else is the kind of thing that is only found by somebody redrawing it.
+- **R-ICON-4 Fidelity yields to legibility at 13 px, and where it does, the code says why.** The
+  dropper's source is one filled path with the barrel hollowed out; that hollow is 1.98 source units
+  — **0.8 px** at the size this renders — so reproducing it as a fill would ask the rasteriser to
+  resolve a sub-pixel hole and produce a grey smear. It is drawn as the stroke it visually is, and
+  only the head, where the artwork is genuinely solid at 7.6 units, is filled. Likewise the source's
+  two collar stubs sit at different points along the barrel; transcribed literally they render as
+  one tab and one detached 2 px speck, so they are drawn as the single collar they read as — at the
+  upper end the source's own coordinate. A departure from the artwork is allowed; an unexplained one
+  is not.
+
 ## R-VIEW — The photo dissolves; it never pops — ✅ IMPLEMENTED
 
 Dragging a slider is the one place in cosmo where the *photo itself* changes, and it changed the

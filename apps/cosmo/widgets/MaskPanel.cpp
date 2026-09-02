@@ -77,7 +77,7 @@ namespace cosmo_v2
         addChild(mInvBtn);
 
         mTrashBtn = std::make_shared<IconButton>(
-            [](IRenderTarget &t, const Rect &r, const Color &c) { icon::trash2(t, r, c); });
+            [](IRenderTarget &t, const Rect &r, const Color &c) { icon::deleteBin(t, r, c); });
         mTrashBtn->idleColor = palette::mutedForeground();
         mTrashBtn->activeColor = palette::destructive();
         mTrashBtn->width.set(kSelectRowH);
