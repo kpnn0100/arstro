@@ -854,6 +854,193 @@ TEST(MaskStack_blends_local_adjustment)
     CHECK(std::abs((int)back.rgba[((size_t)cy * back.width + cx) * 4] - center0) <= 1);
 }
 
+
+// ── R-AISEG: a semantic mask, end to end through the stack, and the seam under it ─────
+//
+// A blue sky over green grass, big enough for the regularisation radius (0.6% of the short
+// edge) to be more than half a pixel — below that the softening is skipped and the test would
+// be measuring a different code path than the one that ships.
+static Image skyOverGrass(int n = 192)
+{
+    Image im(n, n, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+        {
+            const bool sky = y < n * 4 / 10;
+            const int c8[3] = {sky ? 110 : 60, sky ? 160 : 140, sky ? 225 : 60};
+            for (int c = 0; c < 3; ++c)
+                im.at(x, y, c) = color::srgbDecode((Pixel)(c8[c] / 255.0));
+        }
+    return im;
+}
+
+namespace
+{
+    /** The seam a host with a real model implements (R-AISEG-6), here as the fake that proves
+     *  the seam is honoured — the same role `FakeDecoder` plays for `IImageDecoder`. It paints
+     *  a stripe nothing in the picture justifies, so "the seam answered" and "the built-in
+     *  answered" cannot possibly be confused, and it DECLINES everything but Sky. */
+    class StripeSegmenter : public ISegmenter
+    {
+    public:
+        int asked = 0, declined = 0;
+        bool segment(const Image &img, SemanticSubject subject, float, std::vector<Pixel> &out) override
+        {
+            ++asked;
+            if (subject != SemanticSubject::Sky) { ++declined; return false; }
+            const int w = img.width(), h = img.height();
+            out.assign((size_t)w * h, (Pixel)0);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    if (x < w / 4) out[(size_t)y * w + x] = (Pixel)1;
+            return true;
+        }
+        const char *name() const override { return "stripe"; }
+    };
+}
+
+TEST(MaskSemantic_finds_its_subject_through_the_stack)
+{
+    const int n = 192;
+    auto lumaAt = [](const Image &im, int x, int y) {
+        return (double)color::luminance(im.at(x, y, 0), im.at(x, y, 1), im.at(x, y, 2));
+    };
+    const Image scene = skyOverGrass(n);
+
+    MaskParams m;
+    m.type = MaskParams::Semantic;
+    m.subject = (int)SemanticSubject::Sky;
+    m.sensitivity = 0.5f;
+    m.feather = 0.f;                  // a classifier's edge is already soft (R-AISEG-4)
+    m.adjust.exposure = 1.5f;
+
+    Image lit = scene.clone();
+    applyMaskStack(lit, {m});
+    const double skyBefore = lumaAt(scene, n / 2, n / 8), skyAfter = lumaAt(lit, n / 2, n / 8);
+    const double gndBefore = lumaAt(scene, n / 2, n * 7 / 8), gndAfter = lumaAt(lit, n / 2, n * 7 / 8);
+    std::printf("      semantic sky mask: sky %.4f -> %.4f   ground %.4f -> %.4f\n",
+                skyBefore, skyAfter, gndBefore, gndAfter);
+    CHECK(skyAfter > skyBefore * 2.0);              // ~+1.5 EV where the subject is...
+    CHECK(std::fabs(gndAfter - gndBefore) < 1e-4);  // ...and nowhere else
+
+    // Inverted is the same mask read the other way, which is how "everything except the sky"
+    // is expressed — there is no second subject for "not sky".
+    MaskParams inv = m;
+    inv.inverted = true;
+    Image other = scene.clone();
+    applyMaskStack(other, {inv});
+    CHECK(std::fabs(lumaAt(other, n / 2, n / 8) - skyBefore) < 1e-4);
+    CHECK(lumaAt(other, n / 2, n * 7 / 8) > gndBefore * 2.0);
+
+    // A subject nothing in the picture matches leaves the picture alone. Not a special case —
+    // the coverage is simply zero — but worth an assertion, because "the mask did nothing" is
+    // the failure mode a broken classifier is most likely to hide behind.
+    MaskParams none = m;
+    none.subject = (int)SemanticSubject::Skin;
+    Image untouched = scene.clone();
+    applyMaskStack(untouched, {none});
+    CHECK(std::fabs(lumaAt(untouched, n / 2, n / 8) - skyBefore) < 1e-4);
+
+    // R-AISEG-7 / the header's promise: asked WITHOUT the image, a semantic mask answers zero
+    // rather than guessing. This is the call an overlay would make, and it is why there is no
+    // on-photo overlay for this type.
+    std::vector<Pixel> blind;
+    buildMaskCoverage(m, n, n, blind);
+    CHECK(blind.size() == (size_t)n * n);
+    double any = 0;
+    for (Pixel v : blind) any += v;
+    CHECK(any == 0.0);
+    CHECK(maskCoverage(m, 0.5f, 0.1f) == 0.f);
+}
+
+TEST(MaskSemantic_seam_is_asked_first_and_may_decline)
+{
+    const int n = 192;
+    const Image scene = skyOverGrass(n);
+    StripeSegmenter seam;
+
+    MaskParams sky;
+    sky.type = MaskParams::Semantic;
+    sky.subject = (int)SemanticSubject::Sky;
+    sky.feather = 0.f;
+
+    // Installed: its answer is used, in full, and it is nothing the built-in would ever say —
+    // a vertical stripe over a horizontal sky. That is the point of the fake.
+    std::vector<Pixel> cov;
+    buildMaskCoverage(sky, scene, cov, &seam);
+    CHECK(seam.asked == 1);
+    CHECK(cov[(size_t)(n / 2) * n + 2] > 0.9f);              // inside the stripe, low in the frame
+    CHECK(cov[(size_t)(n / 2) * n + n - 3] < 0.1f);          // outside it, same row
+
+    // Declining is a NORMAL answer, not an error: a model not trained on this subject says so
+    // and the built-in takes over, the same contract a compute backend has.
+    MaskParams grass = sky;
+    grass.subject = (int)SemanticSubject::Foliage;
+    buildMaskCoverage(grass, scene, cov, &seam);
+    CHECK(seam.asked == 2 && seam.declined == 1);
+    CHECK(cov[(size_t)(n * 7 / 8) * n + n / 2] > 0.9f);      // the built-in found the grass...
+    CHECK(cov[(size_t)(n / 8) * n + n / 2] < 0.1f);          // ...and not the sky
+
+    // And the engine says which one is answering, so it is never a guess (like activeBackendName).
+    EditEngine eng;
+    CHECK(std::string(eng.segmenterName()) == "built-in");
+    eng.setSegmenter(std::unique_ptr<ISegmenter>(new StripeSegmenter()));
+    CHECK(std::string(eng.segmenterName()) == "stripe");
+    eng.setSegmenter(nullptr);
+    CHECK(std::string(eng.segmenterName()) == "built-in");
+}
+
+// R-AISEG-9 + D-57. Two claims in one test because they are one mechanism: a mask survives
+// being written and read back, by BOTH formats, because there is now only one codec.
+TEST(MaskSemantic_roundtrips_through_the_project_and_the_preset)
+{
+    EditParams p;
+    MaskParams sem;
+    sem.type = MaskParams::Semantic;
+    sem.subject = (int)SemanticSubject::Water;
+    sem.sensitivity = 0.72f;
+    sem.feather = 0.4f;
+    sem.adjust.exposure = -0.8f;
+    MaskParams drawn;                       // D-57's own case, in the same test
+    drawn.type = MaskParams::Path;
+    drawn.adjust.clarity = 30.f;
+    CurvePoint a{0.2f, 0.2f}, b{0.8f, 0.3f}, c{0.5f, 0.9f};
+    b.smooth = true; b.ix = -0.1f; b.iy = 0.05f; b.ox = 0.1f; b.oy = -0.05f;
+    drawn.path = {a, b, c};
+    p.masks = {sem, drawn};
+
+    // The project format.
+    EditParams q;
+    CHECK(deserializeParams(serializeParams(p), q));
+    CHECK(q.masks.size() == 2);
+    CHECK(q.masks[0].type == MaskParams::Semantic);
+    CHECK(q.masks[0].subject == (int)SemanticSubject::Water);
+    CHECK_NEAR(q.masks[0].sensitivity, 0.72, 1e-4);
+
+    // The preset format — which used to be a SECOND hand-written copy of the same blob, one
+    // group short, so a drawn path was silently dropped by every preset (D-57). It delegates
+    // now, so this passes for the same reason the project format does and cannot drift again.
+    const auto cats = apfImageCategories();
+    EditParams viaApf;
+    CHECK(applyApfToEditParams(editParamsToApf(p, cats, "t"), cats, viaApf));
+    CHECK(viaApf.masks.size() == 2);
+    CHECK(viaApf.masks[0].subject == (int)SemanticSubject::Water);
+    CHECK_NEAR(viaApf.masks[0].sensitivity, 0.72, 1e-4);
+    CHECK(viaApf.masks[1].path.size() == 3 && "D-57: a drawn path survives a preset");
+    CHECK(viaApf.masks[1].path[1].smooth);
+    CHECK_NEAR(viaApf.masks[1].path[1].ox, 0.1, 1e-4);
+
+    // R-AISEG-9: a project written before this existed has eleven numbers in the first group
+    // and must keep the defaults rather than being rejected or reading garbage off the end.
+    EditParams legacy;
+    CHECK(deserializeParams("mask=0,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65|"
+                            "1.5,0,0,0,0,0,0,0,0,0,0,0|\n", legacy));
+    CHECK(legacy.masks.size() == 1);
+    CHECK(legacy.masks[0].subject == 0);
+    CHECK_NEAR(legacy.masks[0].sensitivity, 0.5, 1e-4);
+    CHECK_NEAR(legacy.masks[0].adjust.exposure, 1.5, 1e-4);
+}
+
 TEST(EditParamsIO_masks_roundtrip)
 {
     EditParams p;

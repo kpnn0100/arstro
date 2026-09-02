@@ -747,6 +747,168 @@ TEST(Spatial_fastBlurPlane_approximates_the_gaussian_at_constant_cost)
     CHECK(step[(size_t)(h / 2) * w + w - 1] > 0.99f);
 }
 
+
+// ── Segmenter: a mask that finds its own subject (R-AISEG) ────────────────────────────
+//
+// The scene is synthetic and deliberately adversarial rather than easy: a smooth blue sky
+// across the top, GREEN grass across the bottom, a skin-coloured patch in the middle, a
+// TEXTURED BLUE rectangle low in the frame (a denim jacket — the same colour as the sky, which
+// is the whole reason the model looks at structure and position and not only at colour), and a
+// dark textured patch (hair). Every assertion below is "the right region and not the wrong one";
+// a classifier that only ever said yes would pass a one-region test.
+static Image sceneForSegmentation(int n)
+{
+    auto put = [](Image &im, int x, int y, int r8, int g8, int b8) {
+        // Written display-referred and decoded on the way in, because that is the direction a
+        // real photo arrives from and because the model's thresholds are stated in those units.
+        im.at(x, y, 0) = color::srgbDecode((Pixel)(r8 / 255.0));
+        im.at(x, y, 1) = color::srgbDecode((Pixel)(g8 / 255.0));
+        im.at(x, y, 2) = color::srgbDecode((Pixel)(b8 / 255.0));
+    };
+    Image im(n, n, 3, ColorSpace::LinearSRGB);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+        {
+            const float ny = (float)y / n, nx = (float)x / n;
+            const int checker = ((x + y) & 1) ? 1 : -1;
+            if (ny < 0.42f)                                   put(im, x, y, 110, 160, 225);   // sky
+            else if (nx > 0.62f && ny > 0.72f)                                                // hair
+                put(im, x, y, 45 + 25 * checker, 42 + 25 * checker, 40 + 25 * checker);
+            else if (nx < 0.34f && ny > 0.70f)                                                // denim
+                put(im, x, y, 110 + 38 * checker, 160 + 38 * checker, 225 - 20 * checker);
+            else if (nx > 0.38f && nx < 0.60f && ny > 0.46f && ny < 0.64f)
+                put(im, x, y, 222, 168, 142);                                                 // skin
+            else                                              put(im, x, y, 60, 140, 60);     // grass
+        }
+    return im;
+}
+
+// Mean coverage over a normalised rectangle — "how much of this region did the mask take".
+static double meanOver(const std::vector<Pixel> &cov, int n, float x0, float y0, float x1, float y1)
+{
+    double sum = 0; int count = 0;
+    for (int y = (int)(y0 * n); y < (int)(y1 * n); ++y)
+        for (int x = (int)(x0 * n); x < (int)(x1 * n); ++x)
+        { sum += cov[(size_t)y * n + x]; ++count; }
+    return count ? sum / count : 0.0;
+}
+
+TEST(Segmenter_finds_each_subject_and_not_the_others)
+{
+    const int n = 256;
+    const Image scene = sceneForSegmentation(n);
+    std::vector<Pixel> cov;
+
+    segment::builtinCoverage(scene, SemanticSubject::Sky, 0.5f, cov);
+    const double skySky = meanOver(cov, n, 0.10f, 0.05f, 0.90f, 0.35f);
+    const double skyGrass = meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f);
+    const double skyDenim = meanOver(cov, n, 0.05f, 0.78f, 0.28f, 0.96f);
+    std::printf("      sky:     sky %.3f  grass %.3f  denim %.3f\n", skySky, skyGrass, skyDenim);
+    CHECK(skySky > 0.90);
+    CHECK(skyGrass < 0.05);
+    // The one that matters. The denim is the SAME BLUE as the sky: only its texture and its
+    // place in the frame say otherwise, which is exactly what a colour-only rule cannot do.
+    CHECK(skyDenim < 0.20);
+
+    segment::builtinCoverage(scene, SemanticSubject::Foliage, 0.5f, cov);
+    std::printf("      foliage: grass %.3f  sky %.3f  skin %.3f\n",
+                meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f),
+                meanOver(cov, n, 0.10f, 0.05f, 0.90f, 0.35f),
+                meanOver(cov, n, 0.42f, 0.50f, 0.56f, 0.60f));
+    CHECK(meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f) > 0.90);
+    CHECK(meanOver(cov, n, 0.10f, 0.05f, 0.90f, 0.35f) < 0.05);
+    CHECK(meanOver(cov, n, 0.42f, 0.50f, 0.56f, 0.60f) < 0.05);
+
+    segment::builtinCoverage(scene, SemanticSubject::Skin, 0.5f, cov);
+    std::printf("      skin:    skin %.3f  grass %.3f  sky %.3f\n",
+                meanOver(cov, n, 0.42f, 0.50f, 0.56f, 0.60f),
+                meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f),
+                meanOver(cov, n, 0.10f, 0.05f, 0.90f, 0.35f));
+    CHECK(meanOver(cov, n, 0.42f, 0.50f, 0.56f, 0.60f) > 0.90);
+    CHECK(meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f) < 0.05);
+    CHECK(meanOver(cov, n, 0.10f, 0.05f, 0.90f, 0.35f) < 0.05);
+
+    // Hair is the weakest of the five and R-AISEG-2 says so out loud — it is found as dark,
+    // muted and textured. What it must NOT do is take the smooth dark-ish grass, which is the
+    // difference between "hair" and "shadows".
+    segment::builtinCoverage(scene, SemanticSubject::Hair, 0.5f, cov);
+    const double hairHair = meanOver(cov, n, 0.70f, 0.78f, 0.95f, 0.96f);
+    const double hairGrass = meanOver(cov, n, 0.40f, 0.85f, 0.58f, 0.98f);
+    std::printf("      hair:    hair %.3f  grass %.3f\n", hairHair, hairGrass);
+    CHECK(hairHair > 0.80);
+    CHECK(hairGrass < 0.10);
+}
+
+// R-AISEG-5: sensitivity is the threshold and it is the whole control. Monotone, in the
+// direction the label promises — a photographer turning it up must never watch the mask shrink.
+TEST(Segmenter_sensitivity_is_the_only_knob_and_it_is_monotone)
+{
+    const int n = 256;
+    const Image scene = sceneForSegmentation(n);
+    std::vector<Pixel> cov;
+    double last = -1;
+    for (float s : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f})
+    {
+        segment::builtinCoverage(scene, SemanticSubject::Sky, s, cov);
+        double total = 0;
+        for (Pixel v : cov) total += v;
+        const double frac = total / (double)cov.size();
+        std::printf("      sensitivity %.2f -> %.3f of the frame\n", s, frac);
+        CHECK(frac >= last - 1e-6);
+        last = frac;
+    }
+    // ...and it is a threshold on a REGION, not a global gain: even wide open it must not have
+    // taken the whole frame, or the control would be a fader and the mask would be pointless.
+    CHECK(last < 0.85);
+}
+
+// R-AISEG-8 / R-SVC-5: one parser for the subject, accepting the name or the number, refusing
+// anything else. A misspelling silently landing on Sky is a mask that quietly does the wrong
+// thing, which is why this returns a bool at all.
+// R-PREVIEW, via `kAnalysisEdge`: the SAME photo at two render sizes must produce the same
+// mask, not two similar ones. Before the analysis was capped it did not — the structure feature
+// is measured against a radius that scales with the render, so a 1600 px preview and a 4000 px
+// export disagreed about the edges, and a photographer judging a mask on screen was judging a
+// different mask than the one the file would get. This is the assertion that holds it shut.
+TEST(Segmenter_decides_the_same_regions_at_any_render_size)
+{
+    const int small = 256, big = 1536;   // 1536 forces the 1/2 analysis path; 256 does not
+    std::vector<Pixel> covSmall, covBig;
+    segment::builtinCoverage(sceneForSegmentation(small), SemanticSubject::Sky, 0.5f, covSmall);
+    segment::builtinCoverage(sceneForSegmentation(big), SemanticSubject::Sky, 0.5f, covBig);
+
+    // Compared as coverage of the same NORMALISED regions, since the planes differ in size.
+    struct Region { const char *what; float x0, y0, x1, y1; };
+    for (const Region &r : {Region{"sky", 0.10f, 0.05f, 0.90f, 0.35f},
+                            Region{"denim", 0.05f, 0.78f, 0.28f, 0.96f},
+                            Region{"grass", 0.40f, 0.85f, 0.58f, 0.98f},
+                            Region{"skin", 0.42f, 0.50f, 0.56f, 0.60f}})
+    {
+        const double a = meanOver(covSmall, small, r.x0, r.y0, r.x1, r.y1);
+        const double b = meanOver(covBig, big, r.x0, r.y0, r.x1, r.y1);
+        std::printf("      %-6s 256px %.3f  1536px %.3f\n", r.what, a, b);
+        CHECK(std::fabs(a - b) < 0.10);
+    }
+}
+
+TEST(Segmenter_subject_names_are_one_codec)
+{
+    SemanticSubject s = SemanticSubject::Hair;
+    CHECK(parseSemanticSubject("sky", s) && s == SemanticSubject::Sky);
+    CHECK(parseSemanticSubject("SKIN", s) && s == SemanticSubject::Skin);
+    CHECK(parseSemanticSubject("3", s) && s == SemanticSubject::Water);
+    CHECK(!parseSemanticSubject("skyy", s));
+    CHECK(!parseSemanticSubject("", s));
+    CHECK(!parseSemanticSubject("9", s));
+    CHECK(s == SemanticSubject::Water && "a refusal leaves the caller's value alone");
+    for (int i = 0; i < (int)SemanticSubject::Count; ++i)
+    {
+        SemanticSubject back{};
+        CHECK(parseSemanticSubject(semanticSubjectName((SemanticSubject)i), back));
+        CHECK((int)back == i);
+    }
+}
+
 // ── ColorGrading ──
 TEST(ColorGrading_hue_remap_and_identity)
 {

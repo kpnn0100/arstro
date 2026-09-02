@@ -1676,6 +1676,73 @@ namespace
         printf("[PASS] a_path_mask_is_drawn_by_command_and_renders\n");
     }
 
+    // ── R-AISEG-8: a mask that finds its own subject, driven with no GUI ─────────────────
+    //
+    // The point of the requirement being about REACHABILITY: a semantic mask has no geometry to
+    // drag, so the only way anyone — a script, a test, or the panel — creates one is by naming a
+    // subject. The two assertions that matter are that a misspelled subject is REFUSED (landing
+    // silently on Sky would be a mask that quietly does the wrong thing) and that naming a
+    // subject on a mask nobody typed a type for makes it a semantic mask rather than leaving an
+    // ellipse that reports a subject.
+    void test_a_semantic_mask_is_created_by_naming_its_subject()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_semantic.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        // `set mask=` appends, `mask set` addresses — the same asymmetry every mask type uses.
+        assert(svc.dispatchText("set mask=0,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
+        assert(svc.session().curParams()->masks.size() == 1u);
+
+        assert(svc.dispatchText("mask set 0 subject=sky sensitivity=0.7 adjust.exposure=-0.6", err) &&
+               err.empty());
+        const arstro::MaskParams *m = &svc.session().curParams()->masks[0];
+        assert(m->subject == (int)arstro::SemanticSubject::Sky);
+        assert(std::fabs(m->sensitivity - 0.7f) < 1e-4f);
+        assert(m->type == arstro::MaskParams::Semantic &&
+               "naming a subject makes it a semantic mask — an ellipse that reports a subject "
+               "would render the ellipse");
+
+        // The number is accepted too, because the project file writes one and a script that
+        // pasted a value out of one should not be refused for it.
+        assert(svc.dispatchText("mask set 0 subject=2", err) && err.empty());
+        assert(svc.session().curParams()->masks[0].subject == (int)arstro::SemanticSubject::Foliage);
+
+        // And anything else is REFUSED, with the reason in the model (R-SVC-3).
+        assert(!svc.dispatchText("mask set 0 subject=skyy", err));
+        assert(svc.model().lastError.find("skyy") != std::string::npos);
+        assert(svc.session().curParams()->masks[0].subject == (int)arstro::SemanticSubject::Foliage &&
+               "and nothing moved");
+
+        // An explicit type still wins, so the panel re-sending a whole mask every frame cannot
+        // silently convert one somebody switched back to Radial — the same rule the path has.
+        assert(svc.dispatchText("mask set 0 type=0 subject=water", err) && err.empty());
+        assert(svc.session().curParams()->masks[0].type == arstro::MaskParams::Radial);
+
+        // Through the project file, subject and sensitivity included.
+        assert(svc.dispatchText("mask set 0 subject=water sensitivity=0.35", err) && err.empty());
+        const std::string save = "/tmp/cosmo_svc_semantic_saved.cmp";
+        assert(svc.dispatchText("project save " + save, err) && err.empty());
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(save, back) && !back.empty());
+        assert(back.front().params.masks.size() == 1u);
+        assert(back.front().params.masks[0].type == arstro::MaskParams::Semantic);
+        assert(back.front().params.masks[0].subject == (int)arstro::SemanticSubject::Water);
+        assert(std::fabs(back.front().params.masks[0].sensitivity - 0.35f) < 1e-4f);
+
+        std::filesystem::remove(path);
+        std::filesystem::remove(save);
+        printf("[PASS] a_semantic_mask_is_created_by_naming_its_subject\n");
+    }
+
     // ── R-MIXER-9: the mixer's neighbourhood spread is reachable, persists, and is one undo ──
     //
     // The point of the field costing nothing to reach: `EditParamsIO` names it, `set` feeds
@@ -2772,6 +2839,7 @@ int main()
     test_metadata_reads_the_file_without_decoding_it();
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();
+    test_a_semantic_mask_is_created_by_naming_its_subject();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

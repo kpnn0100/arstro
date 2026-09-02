@@ -720,7 +720,9 @@ namespace arstro
             if (mWantPreMixerHue)
                 mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
             mChainPost.apply(preMixer, processed);
-            applyMaskStack(processed, mMasks);  // local adjustments on the framed image (linear)
+            // The segmenter is handed down rather than reached for: MaskStack owns no state and
+            // must keep owning none, or a mask could outlive the model that decided it.
+            applyMaskStack(processed, mMasks, mSegmenter.get());  // local adjustments, framed, linear
             color::encodeInPlace(processed);
             mLastHistogram = Histogram::compute(processed);
         }

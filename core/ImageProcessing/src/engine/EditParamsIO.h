@@ -54,6 +54,20 @@ namespace arstro
     std::string formatCurvePoints(const std::vector<CurvePoint> &pts);
     std::vector<CurvePoint> parseCurvePoints(const std::string &s);
 
+    /** ── The mask blob codec ────────────────────────────────────────────────────────
+     *
+     *  `geometry | localAdjust | dabs | path` — one mask as one line's worth of text, the
+     *  value of a `mask=` key in a project and of a `mask` value in a preset.
+     *
+     *  Exported for the same reason the control-point codec above was, and after the same
+     *  lesson: `EditParamsApf` kept its own hand-written copy of this format, the project
+     *  side grew a fourth group for a drawn path, and the preset side did not — so a path
+     *  mask was silently dropped by every preset (D-57). Two hand-maintained representations
+     *  of one format drift the first time one of them grows a field, which is precisely what
+     *  R-SVC-5 says and precisely what happened. There is one now. */
+    std::string formatMaskBlob(const MaskParams &m);
+    MaskParams parseMaskBlob(const std::string &s);
+
     /** How many scalars the two functions above walk. Exists only so a test can assert the
      *  count and fail when a new `EditParams` field is added without being listed. */
     int guardedParamScalarCount();

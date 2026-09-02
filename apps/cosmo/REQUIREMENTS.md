@@ -697,6 +697,70 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   - **Old projects still load and new ones still open in old builds**: the path is a fourth,
     optional group in the mask blob.
 
+## R-AISEG — A mask that finds its own subject — 🚧 IN PROGRESS
+
+Every mask cosmo has is a shape the photographer positions: an ellipse, a gradient, a brush, a
+drawn outline. All four ask the same thing of them — *tell the software where the sky is* — when the
+software is looking at the sky. A **semantic mask** is a mask whose region is decided from the
+pixels: pick a subject, and the coverage is wherever that subject is.
+
+**What "AI" means here, said plainly, because the alternative is a claim the code does not
+support.** cosmo ships no neural network and no model file: `arstro_image` has to stay portable to
+WASM and Android, carries no assets, opens no files, and a segmentation network is tens of megabytes
+of weights and a runtime. What ships is a **per-class statistical model** — colour, position in the
+frame and local structure, combined into a score, regularised spatially and thresholded — which is
+what image segmentation was before deep learning and is genuinely good at exactly the classes below.
+It is a real classifier, not a stand-in, and it is also not a network. Both halves of that go in the
+UI copy, not only here.
+
+- **R-AISEG-1 A fifth mask type: Semantic.** `MaskParams::Semantic`, carrying a **subject** and a
+  **sensitivity**. It shares everything else a mask has — the local adjustments, `inverted`,
+  `feather`, its place in the stack, its history entry, its project file. It is a mask; only where
+  its coverage comes from is new.
+- **R-AISEG-2 The subjects are Sky, Skin, Foliage, Water and Hair.** Chosen because each has a
+  colour/position/structure signature a classical model can actually find, and because they are the
+  five a photographer masks by hand most often. **Their reliability is not equal and the UI must not
+  pretend it is**: sky and foliage are strong, skin and water are good, and **hair is the weakest** —
+  it is found as *dark, not-very-saturated, highly textured*, which is also a description of a wool
+  coat. A subject that mis-fires is not a bug to be filed; it is a classifier being a classifier, and
+  the honest response is that the mask is editable and stackable like any other.
+- **R-AISEG-3 The classifier reads display-referred values, not linear light.** Every published
+  threshold for skin tone, for a blue sky, for foliage is stated in gamma-encoded terms, and so is
+  human judgement about "how bright" and "how saturated" something is. The engine works in linear
+  light for good reasons (R-ENGINE), and this is the one place where those reasons do not apply: a
+  perceptual threshold belongs in a perceptual space. So the feature pass encodes as it reads.
+- **R-AISEG-4 A decision about a pixel is regularised by its neighbours.** The raw per-pixel score is
+  speckled — the same fact R-MIXER-5 is about, met a second time. The score plane is softened before
+  it is thresholded, so a lone pixel that reads as sky inside a roof does not become a hole, and the
+  boundary lands where the *region* changes rather than where one pixel did. Radii are fractions of
+  the short edge, so a preview predicts the export (R-PREVIEW).
+- **R-AISEG-5 Sensitivity is the threshold, and it is the whole control.** 0 takes only what the
+  model is certain of, 1 takes anything it suspects, 0.5 is the default. One number, because a
+  photographer judging a mask wants to turn one knob and watch the edge move — not to tune a
+  classifier.
+- **R-AISEG-6 A real model plugs in without touching the engine.** `ISegmenter` is an injected seam
+  on `EditEngine`, exactly like `IImageDecoder` and `IComputeBackend`: a host that can run ONNX,
+  NCNN or Core ML implements it, installs it, and the built-in becomes the fallback. The seam exists
+  now rather than later because it is what makes the sentence above honest — the built-in is a
+  *default*, not the definition of the feature — and because retrofitting a seam under a shipped
+  mask type would mean migrating everybody's projects. It is exercised by a fake segmenter in the
+  tests, the way the decode seam is.
+- **R-AISEG-7 There is no on-photo overlay, and that is not an omission.** A semantic mask has no
+  geometry to drag: nothing to move, nothing to resize, no handle that would mean anything. The
+  panel owns it entirely — subject, sensitivity, invert, feather — and the photo shows the result.
+  (R-MASK-1's overlay stays exactly as it is for the four geometric types.)
+- **R-AISEG-8 Scriptable, like every other mask.** `mask set <i> type=4 subject=sky sensitivity=0.6`,
+  with `subject` accepting the **name** as well as the number, through one parser in the engine
+  (R-SVC-5) — a script that says `subject=sky` is readable and a script that says `subject=0` is
+  not. The project format keeps the number, because the mask blob is a fixed group of floats and a
+  second textual format for one field is exactly what R-SVC-5 forbids.
+- **R-AISEG-9 Old and new builds still read each other's projects.** The two new fields are appended
+  to the mask blob's FIRST group, which every existing parser reads by index and stops at eleven —
+  so a project written here loads there (the extra fields are ignored) and a project written there
+  loads here (they take their defaults). A build that predates this renders a Semantic mask as no
+  coverage rather than as something wrong, which is the same answer it already gives for any mask
+  type it does not know.
+
 ## R-VIEW — The photo dissolves; it never pops — ✅ IMPLEMENTED
 
 Dragging a slider is the one place in cosmo where the *photo itself* changes, and it changed the

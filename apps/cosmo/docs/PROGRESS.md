@@ -43,16 +43,40 @@ fixed-width text and icon and a dynamic line between.*
     project format, the `.apf` preset, the `Mixer` history label, the model dump and the non-finite
     walk. That is R-SVC-5 paying out, and it is the argument for never adding a second key table.
     R-MIXER-5..9, DR-MIXER-5..9.
-- **[ ] (2) basic AI segmentation masks — sky / skin / hair and more.**
+- **[x] (2) a semantic mask — the core half.** A fifth mask type whose region comes from the
+  *pixels*: pick Sky, Skin, Foliage, Water or Hair and the coverage is wherever that subject is.
+  Four things worth carrying forward:
+  * **Said plainly what it is.** No neural network and no model file — `arstro_image` carries no
+    assets and opens no files, and a segmentation network is tens of megabytes plus a runtime. What
+    ships is a **per-class statistical model** (colour, position, local structure), which is what
+    segmentation was before deep learning and is genuinely good at these five. `ISegmenter` is the
+    seam a host with a real model installs, and it exists NOW because it is what makes "the built-in
+    is a default, not the definition of the feature" a true sentence — and because retrofitting a
+    seam under a shipped mask type would mean migrating everybody's projects.
+  * **Colour alone does not separate the classes, and the test is built to prove it.** The synthetic
+    scene puts a denim jacket in the frame in *exactly* the sky's blue; only smoothness and position
+    tell them apart. Sky scores 1.000 on the sky and 0.000 on the denim.
+  * **Soften the SCORE, then threshold — not the other way round.** Thresholding first decides each
+    pixel alone and then blurs the decision, which is a speckled mask with soft edges on every
+    speck. This is R-MIXER-5's fact met a second time in a different tool, on the same day.
+  * **`kAnalysisEdge` started as a performance fix and is kept as a correctness one.** The structure
+    feature is measured against a radius that scales with the render, so a 1600 px preview and a
+    4000 px export disagreed about the edges — the photographer was judging a different mask than
+    the file would get. Capping the analysis at 1024 px makes them the same mask, and takes 36.7 ms
+    → 15.6 ms on a preview and 300 ms → 44.8 ms on a 10.7 Mpx export as a side effect.
+  * **D-57 closed in the same commit**, deliberately: R-AISEG-9 promises a mask survives a save, and
+    that cannot be true while `EditParamsApf` keeps a second hand-written copy of the mask blob —
+    the semantic mask's `subject` would have been the next field dropped by it. The copy is
+    **deleted**, not patched. R-AISEG-1..9, DR-AISEG-1..9.
+- **[ ] (2b) the semantic mask's panel — subject picker + sensitivity (design).**
 - **[ ] (3) colour-picker + delete icons from the supplied SVGs (design).**
 - **[ ] (4) the Colour section's separator line overlaps the picker icon (design).**
 
-**► NEXT: (2) a semantic mask — the core half.** Then (3) and (4), which are
-`arstro.cosmo.design.implement`'s.
-
-**Noted while working, not fixed** — `EditParamsApf`'s mask codec writes only three groups, so a
-**path mask does not survive a preset** (`EditParamsApf.cpp:39`), unlike the project format which
-grew the fourth group in `3f46920`. Filed as D-57.
+**► NEXT: (2b), (3) and (4) — all three are `arstro.cosmo.design.implement`'s.** The semantic
+mask has no UI yet: it is reachable only as `mask set <i> subject=sky`, so the Mask panel needs a
+fifth chip plus a subject picker and a sensitivity slider. R-AISEG-7 says there is deliberately no
+on-photo overlay for it — there is nothing to drag — so the panel owns it entirely, and the UI copy
+has to carry R-AISEG-2's honesty about hair being the weakest of the five.
 
 **Environment note (this machine):** `g++` fails silently with exit 1 and no diagnostic unless
 `/c/msys64/mingw64/bin` is on `PATH`; so do the test binaries (`0xc0000139`). Export it before any

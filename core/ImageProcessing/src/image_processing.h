@@ -52,6 +52,7 @@
 
 // Analysis + video + engine
 #include "analysis/Histogram.h"
+#include "analysis/Segmenter.h"
 #include "video/VideoProcessor.h"
 #include "engine/EditParams.h"
 #include "engine/EditParamsIO.h"

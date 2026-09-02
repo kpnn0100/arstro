@@ -80,6 +80,11 @@ namespace arstro
             if (poly.size() >= 3) cov = insidePolygon(poly, nx, ny) ? 1.f : 0.f;
             break;
         }
+        case MaskParams::Semantic:
+            // 0, and see the header: this function is handed a point, and whether that point is
+            // sky is a question about the picture. Answering anything here would be a guess
+            // dressed as an answer.
+            break;
         case MaskParams::Brush:
         {
             for (const auto &dab : m.dabs)
@@ -101,6 +106,13 @@ namespace arstro
     {
         if (w <= 0 || h <= 0) { out.clear(); return; }
         out.assign((std::size_t)w * h, (Pixel)0);
+        if (m.type == MaskParams::Semantic)
+        {
+            // Reachable only by a caller that has no image — the overlay asking what a mask
+            // covers, say. Empty is the same answer `maskCoverage` gives, for the same reason.
+            if (m.inverted) std::fill(out.begin(), out.end(), (Pixel)1);
+            return;
+        }
         if (m.type != MaskParams::Path)
         {
             // Closed-form types: the plane is just the per-pixel answer, materialised. Nothing
@@ -176,6 +188,41 @@ namespace arstro
             for (Pixel &v : out) v = (Pixel)1 - v;
     }
 
+    void buildMaskCoverage(const MaskParams &m, const Image &img, std::vector<Pixel> &out,
+                           ISegmenter *seg)
+    {
+        const int w = img.width(), h = img.height();
+        if (m.type != MaskParams::Semantic) { buildMaskCoverage(m, w, h, out); return; }
+        if (w <= 0 || h <= 0) { out.clear(); return; }
+
+        const SemanticSubject subject =
+            (m.subject >= 0 && m.subject < (int)SemanticSubject::Count) ? (SemanticSubject)m.subject
+                                                                       : SemanticSubject::Sky;
+        const float sensitivity = clampf(m.sensitivity, 0.f, 1.f);
+
+        // The seam first, the built-in second (R-AISEG-6). A model that declines is answering
+        // normally — it was not trained on this subject, or cannot take this image — so this is
+        // an `if`, not an error path. The size is re-checked because a foreign implementation
+        // returning the wrong number of values would otherwise be read out of bounds by the
+        // blend loop, and "the host's model was wrong" must not become "cosmo crashed".
+        bool answered = false;
+        if (seg) answered = seg->segment(img, subject, sensitivity, out) &&
+                            out.size() == (std::size_t)w * h;
+        if (!answered) segment::builtinCoverage(img, subject, sensitivity, out);
+
+        // Feather is the same idea it is for a path — soften the boundary — and it is applied
+        // the same way, on top of whatever decided the region. A classifier's edge is already
+        // soft (R-AISEG-4 sees to that), so 0 is a perfectly ordinary setting here.
+        const float feather = clampf(m.feather, 0.f, 1.f);
+        if (feather > 0.f)
+        {
+            const float sigma = feather * kPathFeatherFraction * (float)std::min(w, h);
+            if (sigma >= 0.5f) spatial::fastBlurPlane(out, out, w, h, sigma);
+        }
+        if (m.inverted)
+            for (Pixel &v : out) v = (Pixel)1 - v;
+    }
+
     static bool isIdentity(const LocalAdjust &a)
     {
         return a.exposure == 0 && a.contrast == 0 && a.highlights == 0 && a.shadows == 0 &&
@@ -183,7 +230,7 @@ namespace arstro
                a.saturation == 0 && a.texture == 0 && a.clarity == 0 && a.dehaze == 0;
     }
 
-    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks)
+    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks, ISegmenter *seg)
     {
         const int w = img.width(), h = img.height(), ch = img.channels();
         const int colorCh = ch >= 3 ? 3 : ch;
@@ -221,6 +268,7 @@ namespace arstro
             // type is closed-form and allocates nothing.
             std::vector<Pixel> plane;
             if (m.type == MaskParams::Path) buildMaskCoverage(m, w, h, plane);
+            else if (m.type == MaskParams::Semantic) buildMaskCoverage(m, img, plane, seg);
             const Pixel *cov0 = plane.empty() ? nullptr : plane.data();
 
             Pixel *base = img.data();

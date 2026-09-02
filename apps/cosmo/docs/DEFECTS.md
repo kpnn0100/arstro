@@ -19,32 +19,6 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
-### D-57 — A hand-drawn path mask is silently dropped by a preset
-- **Area:** core / engine · **Status:** **Confirmed** (by reading the codec) · **Severity:** S3
-- **Found:** 2026-09-02, while adding `mixerSpread` to `EditParamsApf` — the mask codec next to it is
-  a *fourth* copy of the mask blob format and it is one group short.
-- **Front end:** none — it is in `arstro_image` and reproduces headlessly.
-- **Reproduce:** draw a path mask (R-MASK-6), save it as a preset, apply the preset to another
-  photo. The mask arrives with `type == Path` and an **empty** `path`, which renders nothing.
-- **Expected:** what the project format does. `EditParamsIO::maskStr` grew a fourth, optional group
-  for the path in `3f46920` precisely so a drawn shape survives being written and read back.
-- **Actual:** `EditParamsApf.cpp:39` (`maskStr`) writes three groups and stops; `parseMask` at
-  `:53` reads three. The `.apf` file is not a truncated project file — it is a **separate,
-  hand-maintained copy of the same format**, and only one of the two copies was updated.
-- **Judgement:** **defect**, and the interesting part is the shape rather than the symptom: this is
-  the second time a mask field has had to be added in two places, and R-SVC-5's rule ("one codec,
-  never two hand-written representations") is stated for `Command`/`Event` but was never applied to
-  the mask blob. Two copies of a format drift the first time one grows a field, which is exactly
-  what happened.
-- **Recommended fix:** do not patch the second copy — **delete it.** Export `EditParamsIO`'s
-  `maskStr`/`parseMask` the way `formatCurvePoints`/`parseCurvePoints` were exported for the same
-  reason in `3f46920`, and have `EditParamsApf` call them. Then guard it with a test that saves a
-  path mask to a preset, applies it, and asserts the points come back with their handles — the
-  mirror of `MaskPath_roundtrips_through_the_project_format`. `dabs` should be checked at the same
-  time; it is in both copies today but has no round-trip test through `.apf` either.
-- **Regression?** Yes, of a kind: introduced by `3f46920` (the path mask), which updated the project
-  codec and not the preset one. Not shipped long — filed the first time anyone read the two together.
-
 ### D-45 — A 1600 px preview render costs ~600 ms with 16 threads, at default parameters
 - **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2
 - **Found:** 2026-08-23, while measuring D-44 — it is the floor D-44's warm hops could not get under.
@@ -225,6 +199,42 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-57 — A hand-drawn path mask is silently dropped by a preset
+- **Area:** core / engine · **Status:** **CLOSED** — fixed the same day it was filed · **Severity:** S3
+- **Found:** 2026-09-02, while adding `mixerSpread` to `EditParamsApf` — the mask codec next to it is
+  a *fourth* copy of the mask blob format and it is one group short.
+- **Front end:** none — it is in `arstro_image` and reproduces headlessly.
+- **Reproduce:** draw a path mask (R-MASK-6), save it as a preset, apply the preset to another
+  photo. The mask arrives with `type == Path` and an **empty** `path`, which renders nothing.
+- **Expected:** what the project format does. `EditParamsIO::maskStr` grew a fourth, optional group
+  for the path in `3f46920` precisely so a drawn shape survives being written and read back.
+- **Actual:** `EditParamsApf.cpp:39` (`maskStr`) writes three groups and stops; `parseMask` at
+  `:53` reads three. The `.apf` file is not a truncated project file — it is a **separate,
+  hand-maintained copy of the same format**, and only one of the two copies was updated.
+- **Judgement:** **defect**, and the interesting part is the shape rather than the symptom: this is
+  the second time a mask field has had to be added in two places, and R-SVC-5's rule ("one codec,
+  never two hand-written representations") is stated for `Command`/`Event` but was never applied to
+  the mask blob. Two copies of a format drift the first time one grows a field, which is exactly
+  what happened.
+- **Recommended fix:** do not patch the second copy — **delete it.** Export `EditParamsIO`'s
+  `maskStr`/`parseMask` the way `formatCurvePoints`/`parseCurvePoints` were exported for the same
+  reason in `3f46920`, and have `EditParamsApf` call them. Then guard it with a test that saves a
+  path mask to a preset, applies it, and asserts the points come back with their handles — the
+  mirror of `MaskPath_roundtrips_through_the_project_format`. `dabs` should be checked at the same
+  time; it is in both copies today but has no round-trip test through `.apf` either.
+- **Regression?** Yes, of a kind: introduced by `3f46920` (the path mask), which updated the project
+  codec and not the preset one. Not shipped long — filed the first time anyone read the two together.
+- **FIXED 2026-09-02**, in the R-AISEG commit rather than on its own, because R-AISEG-9 promises
+  that a mask survives being written and read back and that promise cannot be kept while a second
+  copy of the mask codec exists — the semantic mask's `subject` would have been the very next field
+  to be dropped by it. The recommendation was taken as written: the copy is **deleted**, not
+  patched. `formatMaskBlob`/`parseMaskBlob` are exported from `EditParamsIO.h` (the same move
+  `formatCurvePoints`/`parseCurvePoints` made in `3f46920`, for the same reason) and
+  `EditParamsApf.cpp` calls them.
+- **Guarded by** `MaskSemantic_roundtrips_through_the_project_and_the_preset` (`image_tests`), which
+  round-trips a path mask **and** a semantic one through both formats and asserts the tangent
+  handles survive the preset — `viaApf.masks[1].path.size() == 3` is the line that was false before.
 
 ### D-56 — A queued image add made two front ends disagree, and the suite red about 1 run in 7
 - **Area:** core / engine + service · **Status:** **Fixed** · **Severity:** S2

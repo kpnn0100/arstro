@@ -919,7 +919,7 @@ namespace cosmo
                 // EditParamsIO names it.
                 MaskParams &m = p->masks[c.index];
                 LocalAdjust &adj = m.adjust;
-                bool sawType = false;
+                bool sawType = false, sawSubject = false;
                 for (const auto &kv : c.fields)
                 {
                     const std::string &k = kv.first;
@@ -967,6 +967,21 @@ namespace cosmo
                             m.dabs.push_back({f[0], f[1], f[2], f[3]});
                         }
                     }
+                    else if (k == "subject")
+                    {
+                        // The NAME or the number, through the engine's one parser (R-SVC-5,
+                        // R-AISEG-8) — `subject=sky` is readable a year later and `subject=0` is
+                        // not, and a second table here would be the copy R-SVC-5 exists to
+                        // forbid. A misspelling is REFUSED rather than silently taken as 0: the
+                        // whole reason `parseSemanticSubject` returns a bool is that `skyy`
+                        // landing on Sky would be a mask that quietly does the wrong thing.
+                        arstro::SemanticSubject sub{};
+                        if (!arstro::parseSemanticSubject(kv.second, sub))
+                            return fail("mask set: unknown subject " + kv.second);
+                        m.subject = (int)sub;
+                        sawSubject = true;
+                    }
+                    else if (k == "sensitivity") m.sensitivity = v;
                     else if (k == "path")
                     {
                         // `x,y[,ix,iy,ox,oy];…` through the engine's OWN codec — the same one
@@ -984,6 +999,11 @@ namespace cosmo
                 // mask every frame, `type` included, and a stale path left on a mask somebody
                 // switched back to Radial must not silently convert it (R-MASK-6).
                 if (!sawType && m.path.size() >= 3) m.type = MaskParams::Path;
+                // A semantic mask has no geometry, so there is nothing to infer a type FROM —
+                // `subject=` on a Radial mask is a caller that meant `type=4` and forgot, and
+                // the alternative is a mask that renders an ellipse and reports a subject.
+                // Same rule as the path's: only when the caller did not say.
+                if (!sawType && sawSubject) m.type = MaskParams::Semantic;
                 mSession.submit();
                 refreshModel();
                 emit(Event::Kind::ParamsChanged, "mask index=" + std::to_string(c.index));

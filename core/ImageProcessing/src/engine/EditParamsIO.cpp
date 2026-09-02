@@ -62,7 +62,7 @@ namespace arstro
             return v;
         }
 
-        // One mask packed as: geometry(11) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts)
+        // One mask packed as: geometry(11 + 2) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts)
         //
         // The fourth group is APPENDED rather than folded into the first: a project written by
         // this build must still load in one that predates path masks (the old parser stops after
@@ -72,11 +72,17 @@ namespace arstro
         // The path is written by `mixerStr`, the same codec the curves use, because a path point
         // IS a CurvePoint — one format, one parser, and no second place for a handle to be
         // dropped.
-        std::string maskStr(const MaskParams &m)
+        std::string maskStrImpl(const MaskParams &m)
         {
             std::ostringstream o; o.precision(7);
             o << m.type << ',' << (m.inverted ? 1 : 0) << ',' << m.feather << ',' << m.cx << ',' << m.cy
-              << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1;
+              << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1
+              // R-AISEG-9: APPENDED to the first group rather than made a fifth one. Every parser
+              // that has ever read this group reads it BY INDEX and stops at eleven, so an older
+              // build ignores these two and a project written by an older build leaves them at
+              // their defaults. A fifth group would have worked too; this is smaller, and the
+              // trailing-group trick is already spent on `path`.
+              << ',' << m.subject << ',' << m.sensitivity;
             const LocalAdjust &a = m.adjust;
             o << '|' << a.exposure << ',' << a.contrast << ',' << a.highlights << ',' << a.shadows
               << ',' << a.whites << ',' << a.blacks << ',' << a.temp << ',' << a.tint << ',' << a.saturation
@@ -93,7 +99,7 @@ namespace arstro
             return o.str();
         }
 
-        MaskParams parseMask(const std::string &s)
+        MaskParams parseMaskImpl(const std::string &s)
         {
             MaskParams m;
             std::vector<std::string> parts; std::stringstream ss(s); std::string part;
@@ -107,6 +113,9 @@ namespace arstro
                     m.cx = g[3]; m.cy = g[4]; m.rx = g[5]; m.ry = g[6];
                     m.x0 = g[7]; m.y0 = g[8]; m.x1 = g[9]; m.y1 = g[10];
                 }
+                // Separately, and not as part of the `>= 11` block: a pre-R-AISEG project has
+                // exactly eleven and must keep its defaults rather than being rejected.
+                if (g.size() >= 13) { m.subject = (int)g[11]; m.sensitivity = g[12]; }
             }
             if (parts.size() >= 2)
             {
@@ -132,6 +141,9 @@ namespace arstro
             return m;
         }
     }
+
+    std::string formatMaskBlob(const MaskParams &m) { return maskStrImpl(m); }
+    MaskParams parseMaskBlob(const std::string &s) { return parseMaskImpl(s); }
 
     std::string serializeParams(const EditParams &p)
     {
@@ -164,7 +176,7 @@ namespace arstro
           << "\nremapDst=" << p.remapDst << "\nremapStrength=" << p.remapStrength
           << "\ncrop=" << p.cropX << ',' << p.cropY << ',' << p.cropW << ',' << p.cropH
           << "\nrotation=" << p.rotation << "\nquarterTurns=" << p.quarterTurns << "\n";
-        for (const auto &m : p.masks) o << "mask=" << maskStr(m) << "\n";
+        for (const auto &m : p.masks) o << "mask=" << formatMaskBlob(m) << "\n";
         return o.str();
     }
 
@@ -223,7 +235,7 @@ namespace arstro
             else if (k == "remapStrength") out.remapStrength = f(v);
             else if (k == "rotation") out.rotation = f(v);
             else if (k == "quarterTurns") out.quarterTurns = (int)f(v);
-            else if (k == "mask") out.masks.push_back(parseMask(v));
+            else if (k == "mask") out.masks.push_back(parseMaskBlob(v));
             else if (k.rfind("grade", 0) == 0 && k.size() == 6)
             {
                 const int r = k[5] - '0';
@@ -294,6 +306,7 @@ namespace arstro
                 fn("mask.rx", m.rx); fn("mask.ry", m.ry);
                 fn("mask.x0", m.x0); fn("mask.y0", m.y0);
                 fn("mask.x1", m.x1); fn("mask.y1", m.y1);
+                fn("mask.sensitivity", m.sensitivity);
                 fn("mask.exposure", m.adjust.exposure);
                 fn("mask.contrast", m.adjust.contrast);
                 fn("mask.highlights", m.adjust.highlights);

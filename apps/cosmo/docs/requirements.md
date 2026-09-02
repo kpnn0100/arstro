@@ -3048,3 +3048,117 @@ weight, and keeps a step edge monotone. `EditParams_mixerSpread_persists_and_com
 `mixer_spread_is_reachable_and_persists` (`cosmo_core_tests`) drives the real service: `set`, the
 `Mixer` history label, undo, the model dump, a project save, the **migration** (the key stripped
 from a saved project comes back at 25, not 0), and the NaN refusal.
+
+### DR-AISEG-1..9 (core) A mask that finds its own subject (R-AISEG-1 … R-AISEG-9)
+`MaskParams` gains `Semantic = 4` plus `int subject` and `float sensitivity`
+(`engine/EditParams.h`). It is a mask in every other respect — the same `LocalAdjust`, the same
+`inverted`/`feather`, the same place in the stack, the same history entry, the same project file.
+Only where its coverage comes from is new.
+
+**What ships is a per-class statistical model, not a network**
+([`analysis/Segmenter.{h,cpp}`](../../../core/ImageProcessing/src/analysis/Segmenter.cpp)), and the
+header says so at the top because the alternative is a claim the code does not support:
+`arstro_image` has to stay portable to WASM and Android, carries no assets, opens no files, and a
+segmentation network is tens of megabytes of weights plus a runtime. Each of the five subjects is a
+handful of **soft band memberships** — a hue range, a saturation range, a lightness range, a
+position prior, a local-structure term — multiplied together. Soft rather than boolean throughout,
+or the mask would have a visible step wherever a pixel crossed a threshold.
+
+What separates the classes is not colour alone, and that is the point of the design:
+
+- **Sky** is two skies. A blue one is a hue band with real saturation; an overcast or blown one is
+  bright and nearly neutral, which the blue test would refuse outright — "the sky is white today" is
+  not an unusual photo. Then a **position prior** (a floor of 0.25 rather than 0, because a sky
+  reflected in a window is still a sky: the model is made to hesitate there, not forbidden to
+  answer) and **smoothness**, which is the single most useful of the three — it is what tells a sky
+  from a denim jacket of exactly the same blue.
+- **Skin** is the classical locus: orange-red hue, moderate saturation, mid lightness, and
+  `R > G > B` — the ordering is what keeps a terracotta wall from scoring as well as a face.
+- **Foliage** is green, with deliberately **no** position and **no** structure term: foliage is at
+  the top of a landscape and the bottom of a portrait, smooth in a lawn and violent in a hedge, so
+  both would only add noise.
+- **Water** shares its whole colour signature with sky — it is usually a picture *of* the sky — so
+  the two are separated by the mirrored position prior and by a laxer structure term.
+- **Hair** is the weakest and R-AISEG-2 says so out loud: dark, muted, and full of fine structure,
+  which is also a fair description of a wool coat. Structure is the dominant term rather than a
+  modifier, because without it this is just "shadows".
+
+**Features are read display-referred** (R-AISEG-3): every published threshold for a skin tone, a
+blue sky or foliage is stated in gamma-encoded terms, and so is human judgement about "how bright".
+The feature pass therefore calls `color::srgbEncode` as it reads — table-driven, so three lookups
+rather than three `pow`s.
+
+**The score is softened before it is thresholded, not after** (R-AISEG-4). In that order and not the
+other: thresholding first decides each pixel alone and then blurs the *decision*, which turns a
+speckled score into a speckled mask with soft edges on every speck. Softening the score lets a
+pixel's neighbours outvote it, so a lone sky-coloured pixel inside a roof stays a roof. This is the
+same fact R-MIXER-5 is about, met a second time in a different tool.
+
+**Sensitivity is the threshold and it is the whole control** (R-AISEG-5): `t = 0.80 − 0.70·s`, with
+a ±0.16 smoothstep band around it that keeps the edge soft without a second knob.
+
+**The analysis runs at a bounded resolution** (`segment::kAnalysisEdge`, 1024 px on the short edge,
+integer reduction factor). This started as a performance fix and is kept as a **correctness** one:
+the structure feature is measured against a radius that scales with the render, so a 1600 px preview
+and a 4000 px export disagreed about the edges — a photographer judging a mask on screen was judging
+a different mask than the file would get, which is exactly what R-PREVIEW forbids. Capping it makes
+the two the same mask. Measured on a 16-thread desktop, release: **36.7 ms → 15.6 ms** on a
+1600×1066 preview and **300 ms → 44.8 ms** on a 10.7 Mpx export. The downscale is a linear-light box
+average (the only place averaging pixels is physically meaningful) and the coverage is bilinearly
+upsampled back, because a nearest-neighbour edge would put steps into the plane the classifier
+worked to soften.
+
+**`ISegmenter` is an injected seam on `EditEngine`** (R-AISEG-6), the same shape as `IImageDecoder`
+and `IComputeBackend`: `setSegmenter()` installs one, `segmenterName()` reports which is answering
+(the mirror of `activeBackendName()`), and `EditEngine` hands it *down* to `applyMaskStack` rather
+than `MaskStack` reaching for it — MaskStack owns no state and must keep owning none, or a mask
+could outlive the model that decided it. A model **declines** by returning false, which is a normal
+answer and not an error, and the built-in takes over. The returned plane's size is re-checked before
+use, because "the host's model was wrong" must not become "cosmo crashed".
+
+**A semantic mask has no on-photo overlay and that is not an omission** (R-AISEG-7). There is
+nothing to drag: no centre, no radius, no endpoint, no vertex. `maskCoverage(m, nx, ny)` returns
+**0** for one and the geometry-only `buildMaskCoverage(m, w, h, out)` returns an empty plane —
+answering anything else would be a guess dressed as an answer, since whether a point is sky is a
+question about the picture and neither function has one. The image-taking overload is the way to
+ask, and `applyMaskStack` uses it.
+
+**Reachable as `mask set <i> subject=sky sensitivity=0.6`** (`CosmoService.cpp`). `subject` takes the
+**name** or the number through one parser in the engine (`parseSemanticSubject`), because
+`subject=sky` is readable a year later and `subject=0` is not — and a misspelling is **refused**
+rather than silently landing on Sky, which is the whole reason that function returns a bool. Naming
+a subject on a mask whose type nobody set makes it Semantic, the same inference the path mask does
+and with the same guard: an explicit `type=` always wins, so the panel re-sending a whole mask every
+frame cannot silently convert one.
+
+**Old and new builds still read each other's projects** (R-AISEG-9): the two fields are appended to
+the mask blob's **first** group, which every parser that has ever read it reads by index and stops
+at eleven. A pre-R-AISEG project keeps the defaults; a build that predates this renders a Semantic
+mask as no coverage, which is what it already does for any type it does not know.
+
+**And there is now one mask codec, not two.** `EditParamsApf` kept its own hand-written copy of the
+blob format and it was a group short, so a drawn path mask was silently dropped by every preset
+(**D-57**) — and a semantic mask's subject would have been the next field to go the same way.
+`formatMaskBlob`/`parseMaskBlob` are exported from `EditParamsIO` and the copy is deleted, exactly
+as `formatCurvePoints` was exported for `mask set path=`. Two hand-maintained representations of one
+format drift the first time one of them grows a field; that is what R-SVC-5 says and that is what
+happened.
+
+**Known consequence, stated rather than filed:** the segmentation reads the image *as it enters the
+mask stack*, which is after the global adjustments. So a large exposure or white-balance move can
+shift a mask's boundary. It is the image the photographer is looking at, which is the argument for
+it; segmenting the pre-adjustment framed image would need a second geometry-only pass and is the
+obvious next step if it proves annoying in use.
+
+Covered by `Segmenter_finds_each_subject_and_not_the_others` (a synthetic scene built to be
+adversarial: the **denim jacket is the same blue as the sky**, and only structure and position say
+otherwise — sky 1.000 on the sky, 0.000 on the denim, 0.000 on the grass),
+`Segmenter_sensitivity_is_the_only_knob_and_it_is_monotone` (never shrinks as it is turned up, and
+never takes the whole frame), `Segmenter_decides_the_same_regions_at_any_render_size` (256 px vs
+1536 px, which forces the ½ analysis path), `Segmenter_subject_names_are_one_codec`,
+`MaskSemantic_finds_its_subject_through_the_stack` (+1.5 EV on the sky, nothing on the ground,
+inverted, a subject nothing matches, and the blind overloads answering zero),
+`MaskSemantic_seam_is_asked_first_and_may_decline` (a fake segmenter painting a stripe nothing in
+the picture justifies, so "the seam answered" cannot be confused with "the built-in answered"),
+`MaskSemantic_roundtrips_through_the_project_and_the_preset` (which is also D-57's regression test)
+and `a_semantic_mask_is_created_by_naming_its_subject` in `cosmo_core_tests`.

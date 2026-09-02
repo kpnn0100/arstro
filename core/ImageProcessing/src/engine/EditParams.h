@@ -35,7 +35,7 @@ namespace arstro
      *  resolution-independent (and matches the UI overlay 1:1). */
     struct MaskParams
     {
-        enum Type { Radial = 0, Linear = 1, Brush = 2, Path = 3 };
+        enum Type { Radial = 0, Linear = 1, Brush = 2, Path = 3, Semantic = 4 };
         int type = Radial;
         bool inverted = false;
         float feather = 0.5f;                 // 0..1 edge softness
@@ -58,6 +58,17 @@ namespace arstro
          *
          *  Fewer than three points has no area and the mask is skipped. */
         std::vector<CurvePoint> path;
+        /** semantic: WHICH subject to find, as `SemanticSubject` (analysis/Segmenter.h), and how
+         *  readily to accept a pixel as part of it (R-AISEG-1/5). Stored as an int and a float
+         *  rather than as the enum so `EditParams` keeps depending on nothing — it is the one
+         *  struct every front end, every file format and every future engine has to be able to
+         *  read, and an enum here would drag the classifier's header along with it.
+         *
+         *  `sensitivity` is the whole control: 0 takes only what the model is certain of, 1 takes
+         *  anything it suspects. One number, because a photographer judging a mask turns one knob
+         *  and watches the edge move. */
+        int subject = 0;
+        float sensitivity = 0.5f;
         LocalAdjust adjust;
     };
 

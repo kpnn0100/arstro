@@ -3,7 +3,8 @@
  *
  *  MaskStack: applies the local-adjustment masks of an EditParams to a linear-light
  *  framed image, in place. Each mask builds a 0..1 coverage plane from its geometry
- *  (radial / linear / brush / a hand-drawn closed path), renders an adjusted copy of the image through the same
+ *  (radial / linear / brush / a hand-drawn closed path) — or, for a SEMANTIC mask, from the
+ *  pixels themselves — renders an adjusted copy of the image through the same
  *  point/effect processors the global pipeline uses (so a local edit behaves exactly
  *  like its global counterpart), then blends adjusted over base by coverage.
  *
@@ -13,6 +14,7 @@
 #pragma once
 #include "../base/CurvePoint.h"
 #include "../base/Image.h"
+#include "../analysis/Segmenter.h"
 #include "EditParams.h"
 #include <utility>
 #include <vector>
@@ -25,7 +27,13 @@ namespace arstro
      *  feather of a path is a distance from its boundary, which no per-point function can
      *  give without measuring every segment for every pixel; the render builds a coverage
      *  plane instead (`buildMaskCoverage`). Callers that want one point's coverage (a hit
-     *  test, an overlay) want the hard answer anyway. */
+     *  test, an overlay) want the hard answer anyway.
+     *
+     *  For a `Semantic` mask it returns **0**, and there is no honest alternative: the coverage
+     *  is decided from the pixels and their neighbours, and this function has neither. A caller
+     *  that needs a semantic mask's coverage must ask `buildMaskCoverage` with the image — which
+     *  is why that overload exists and why the on-photo overlay does not draw one (R-AISEG-7:
+     *  there is no geometry to drag). */
     float maskCoverage(const MaskParams &m, float nx, float ny);
 
     /** Flatten a path mask's closed bezier outline to a polygon in normalised coords, in the
@@ -78,6 +86,17 @@ namespace arstro
      *  per pixel and never allocate a plane — `applyMaskStack` only builds one for `Path`. */
     void buildMaskCoverage(const MaskParams &m, int w, int h, std::vector<Pixel> &out);
 
-    /** Apply every mask in `masks` to `img` (linear light), in order. */
-    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks);
+    /** The same, for a mask whose coverage depends on the PICTURE (R-AISEG-1). `img` is the
+     *  linear-light framed image the mask stack is being applied to, `w`/`h` come from it, and
+     *  `seg` is the optional real-model seam: it is asked first and may DECLINE, in which case
+     *  the built-in classifier answers (R-AISEG-6).
+     *
+     *  Every other mask type falls through to the geometric overload, so one call site serves
+     *  all five and a caller never has to know which kind it is holding. */
+    void buildMaskCoverage(const MaskParams &m, const Image &img, std::vector<Pixel> &out,
+                           ISegmenter *seg = nullptr);
+
+    /** Apply every mask in `masks` to `img` (linear light), in order. `seg` is the optional
+     *  segmentation seam a host installed (R-AISEG-6); nullptr means the built-in answers. */
+    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks, ISegmenter *seg = nullptr);
 }

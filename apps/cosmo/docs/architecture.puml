@@ -287,6 +287,15 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   class EditParams
   class CurvePoint
   class MaskParams
+  interface ISegmenter <<seam: a real model>> {
+    + segment(img, subject, sensitivity, out) : bool   ' false = DECLINE -> built-in answers
+    + name()
+  }
+  class Segmenter <<statistical, not a network>> {
+    + semanticSubjectName(s) / parseSemanticSubject(text, out)   ' ONE codec (R-SVC-5)
+    + builtinCoverage(img, subject, sensitivity, out)
+    - kAnalysisEdge = 1024                    ' preview and export decide the SAME regions
+  }
   class Spatial <<free functions>> {
     + luminancePlane(img, out)
     + gaussianBlurPlane(src, dst, w, h, sigma)   ' exact; O(pixels x sigma)
@@ -409,6 +418,10 @@ EditEngine ..> EditParams
 EditParams *--> CurvePoint
 EditParams *--> MaskParams
 EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
+EditEngine o--> ISegmenter : setSegmenter (optional)     ' R-AISEG-6
+EditEngine ..> MaskParams : applyMaskStack(img, masks, seg)
+Segmenter ..> Spatial : fastBlurPlane
+MaskParams ..> Segmenter : builtinCoverage when the seam declines or is absent
 ColorMixer ..> Spatial : fastBlurPlane
 
 @enduml
