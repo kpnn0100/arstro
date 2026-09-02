@@ -357,6 +357,22 @@ namespace cosmo
                 if (!note.empty()) note += ' ';
                 note += "nonfinite=" + std::to_string(mFrame.nonFinite);
             }
+            // R-AISEG-13: a mask whose region is COMPUTED has no geometry a front end could
+            // print, so "the mask was found and here is how much of it there is" would
+            // otherwise be visible only by looking at the photo. Appended after the existing
+            // text, never inserted, so every `expect` written against this line still matches.
+            if (!mFrame.maskOutlines.empty())
+            {
+                std::size_t loops = 0, points = 0;
+                for (const auto &o : mFrame.maskOutlines)
+                {
+                    loops += o.loops.size();
+                    for (const auto &l : o.loops) points += l.size();
+                }
+                if (!note.empty()) note += ' ';
+                note += "outlines=" + std::to_string(mFrame.maskOutlines.size()) + "/" +
+                        std::to_string(loops) + "/" + std::to_string(points);
+            }
             emit(Event::Kind::FrameReady, note, mModel.frameSlot, mFrame.width, mFrame.ms,
                  mFrame.level);
         }

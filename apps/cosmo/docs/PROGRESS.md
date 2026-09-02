@@ -15,6 +15,41 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-02 (later) — "for detection, use a MODEL, and show the mask's boundary like a drawn
+mask." IN PROGRESS.**
+
+Requested: *(a) use a model for segmentation and build the mask from that, not colour; (b) show the
+boundary of the mask like a drawn mask; (c) find an open-source model.*
+
+- **[x] (b) a computed mask reports its boundary.** The render traces the coverage's 0.5 contour
+  (marching squares) into closed loops in normalised framed-image coordinates and hands them to the
+  view on the FRAME, beside the histograms. Four things worth carrying forward:
+  * **Geometry is what a view is allowed to hold.** `AppModel` carries no pixels, so handing a
+    front end the coverage plane was never an option; a few hundred normalised points are the same
+    kind of thing every other mask's geometry already is, which means the overlay maps them with the
+    transform it has and R-MASK-3's zoom/pan tracking comes free.
+  * **Produced BY the render, not on request.** The plane exists for one instant inside the mask
+    stack; answering "where is this mask?" afterwards would mean segmenting the photo again.
+  * **The plane is now built BEFORE the adjusted copy.** A mask that is only being outlined must not
+    pay for a 27 MB clone of the framed image to produce a picture nobody blends — and an identity
+    mask has to be outlined at all, because a photographer who has just added a Detect mask and
+    touched no slider is looking at the photo to judge the region.
+  * **The tracer is coarsened on purpose** (R-AISEG-14): 1024×768 gives 549 points where 256×192
+    gives 389, not sixteen times as many, and loops under six points are dropped because a
+    classifier's output has specks and a mask outlined with confetti reads as broken.
+    R-AISEG-13/14, DR-AISEG-13/14.
+- **[ ] (a)+(c) a real model behind `ISegmenter`, and which open-source model.**
+- **[ ] (b2) draw the outline on the photo (design).**
+
+**► NEXT: (a)+(c), then (b2).**
+
+**Environment note, and it cost half an hour:** this build tree does **not** reliably rebuild
+`cosmo_core` when a struct in `core/ImageProcessing/src/engine/*.h` gains a field. The symptom is an
+ABI mismatch that reads as impossible — `mFrame.maskOutlines.empty()` was true while
+`mFrame.maskOutlines.size()` printed 1, because `CosmoService.cpp` and `RenderService.cpp` disagreed
+about `Frame`'s layout. `rm -rf build/apps/cosmo/core/CMakeFiles/cosmo_core.dir` and rebuild after
+any such change; do not spend the time re-reading the logic, it is not the logic.
+
 **► 2026-09-02 — four features requested. IN PROGRESS.**
 
 Requested: *(1) for the lum curve, a pixel surrounded by pixels of the colour being remapped should

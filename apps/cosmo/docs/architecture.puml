@@ -304,6 +304,10 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
     + builtinCoverage(img, subject, sensitivity, out)
     - kAnalysisEdge = 1024                    ' preview and export decide the SAME regions
   }
+  class MaskOutline <<geometry, not pixels>> {
+    + maskIndex
+    + loops : normalised 0..1 closed contours   ' R-AISEG-13, rides on Frame
+  }
   class Spatial <<free functions>> {
     + luminancePlane(img, out)
     + gaussianBlurPlane(src, dst, w, h, sigma)   ' exact; O(pixels x sigma)
@@ -425,6 +429,7 @@ RenderService ..> Frame
 EditEngine ..> EditParams
 EditParams *--> CurvePoint
 EditParams *--> MaskParams
+Frame *--> MaskOutline : where a COMPUTED mask landed (R-AISEG-13)
 EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
 EditEngine o--> ISegmenter : setSegmenter (optional)     ' R-AISEG-6
 EditEngine ..> MaskParams : applyMaskStack(img, masks, seg)

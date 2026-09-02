@@ -1738,6 +1738,25 @@ namespace
         assert(back.front().params.masks[0].subject == (int)arstro::SemanticSubject::Water);
         assert(std::fabs(back.front().params.masks[0].sensitivity - 0.35f) < 1e-4f);
 
+        // R-AISEG-13: the boundary reaches a front end. It rides on the FRAME, not on the
+        // model — it is a product of one render and only true of that render, exactly like the
+        // histograms beside it — so what a headless caller can assert is the `frame.ready` line
+        // that reports it. That line is also the only place a script can see that a mask which
+        // changes no pixel yet was nonetheless found.
+        std::string lastFrameLine;
+        svc.subscribe([&](const Event &e) {
+            if (e.kind == Event::Kind::FrameReady) lastFrameLine = formatEvent(e);
+        });
+        assert(svc.dispatchText("mask set 0 subject=sky adjust.exposure=0.8", err) && err.empty());
+        assert(pumpUntilFrame(svc, clock) && "a frame lands");
+        // `outlines=<masks>/<loops>/<points>`. The fake photo is 12 px wide, so the classifier
+        // has nothing to find and the loop count is 0 — which is the point of asserting HERE on
+        // the plumbing and in `image_tests` on the geometry. What this proves is that a mask
+        // whose region is computed reports itself all the way out to a front end.
+        assert(lastFrameLine.find("outlines=") != std::string::npos &&
+               "the frame says the mask was outlined");
+        printf("       %s\n", lastFrameLine.c_str());
+
         std::filesystem::remove(path);
         std::filesystem::remove(save);
         printf("[PASS] a_semantic_mask_is_created_by_naming_its_subject\n");

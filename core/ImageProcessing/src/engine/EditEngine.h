@@ -26,6 +26,7 @@
 #include "../analysis/Segmenter.h"
 #include "../compute/ComputeBackend.h"
 #include "EditParams.h"
+#include "MaskStack.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
 #include "../tone/ToneRegions.h"
@@ -209,6 +210,15 @@ namespace arstro
          *  mask is never a guess, the same reason `activeBackendName()` exists. */
         const char *segmenterName() const { return mSegmenter ? mSegmenter->name() : "built-in"; }
 
+        /** The boundary of every mask whose coverage the LAST render built as a plane, in
+         *  normalised framed-image coordinates (R-AISEG-13).
+         *
+         *  Produced by the render rather than on request, and that is the point: the coverage
+         *  plane exists for one instant inside `applyMaskStack`, and answering "where is this
+         *  mask?" afterwards would mean segmenting the photo a second time. It is geometry, so
+         *  a view may hold it — unlike the plane it came from. */
+        const std::vector<MaskOutline> &maskOutlines() const { return mMaskOutlines; }
+
         // ── basic tone ──
         void setExposure(float ev);       // -5..+5
         void setContrast(float v);        // -100..+100
@@ -391,6 +401,7 @@ namespace arstro
         std::vector<MaskParams> mMasks;
         std::unique_ptr<IComputeBackend> mAccel;  // optional accelerator (nullptr = CPU only); the CPU path is the reference
         std::unique_ptr<ISegmenter> mSegmenter;   // optional real model (nullptr = the built-in classifier)
+        std::vector<MaskOutline> mMaskOutlines;   // boundaries from the last render (R-AISEG-13)
         bool mPreferGpu = false;                  // user opt-in; only takes effect when mAccel->available()
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;

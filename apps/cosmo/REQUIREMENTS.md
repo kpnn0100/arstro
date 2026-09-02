@@ -775,6 +775,34 @@ UI copy, not only here.
   loads here (they take their defaults). A build that predates this renders a Semantic mask as no
   coverage rather than as something wrong, which is the same answer it already gives for any mask
   type it does not know.
+- **R-AISEG-13 A mask whose region is COMPUTED shows its boundary, like a drawn one.**
+  (**Added 2026-09-02.**) Reported: *"show boundary of mask like draw mask."* A path mask draws its
+  outline because it *is* an outline — the control points are the mask. A semantic mask has no
+  control points at all, so until now the only way to find out what it had selected was to give it
+  an adjustment big enough to see. That is not a mask a photographer can judge; it is a guess they
+  can develop.
+  So the render **traces the coverage's 0.5 contour** into closed loops and hands them to the view,
+  which strokes them exactly as it strokes a drawn outline (R-MASK-6). Three consequences, all of
+  them load-bearing:
+  - **It is geometry, and that is why a view may hold it.** `AppModel` carries no pixels, and
+    handing a front end a coverage plane would put pixels where the architecture says they do not
+    go. A few hundred normalised points are not pixels — they are the same kind of thing every
+    other mask's geometry already is, in the same 0..1 framed-image space, so the overlay maps them
+    with the transform it already has and R-MASK-3's zoom/pan tracking comes free.
+  - **It is produced BY the render, not on request.** The coverage plane exists for one instant
+    inside the mask stack; answering "where is this mask?" afterwards would mean segmenting the
+    photo a second time. So the outline rides on the frame, beside the histograms, and is true of
+    exactly the render that produced it.
+  - **A mask that changes no pixel yet is still outlined.** A photographer who has just added a
+    Detect mask and touched no slider is looking at the photo to decide whether the region is
+    right. An outline that waited for an effect would be missing at the only moment it is wanted.
+- **R-AISEG-14 The outline is drawn at a resolution chosen for drawing, not for precision.**
+  A coverage plane is smooth by construction, so tracing it at full preview resolution spends
+  thousands of points describing a curve a few hundred already describe — and every one of them is
+  transformed and stroked on every frame. The tracer walks a coarsened grid (short edge ≈ 320) and
+  drops loops shorter than six points, because a classifier's raw output has specks and a mask
+  outlined with confetti reads as broken even when the coverage underneath is right.
+
 - **R-AISEG-10 A fifth chip: Detect.** It sits beside Radial / Linear / Brush / Draw and names what
   the user does with it, as the other four do. Adding one creates a mask with no geometry and a
   subject, and the panel grows a block for it.

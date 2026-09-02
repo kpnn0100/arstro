@@ -70,6 +70,12 @@ namespace arstro
              *  crashing (which it used to) or being silent (which the fix would otherwise
              *  have made it). */
             unsigned long long nonFinite = 0;
+            /** Where the masks whose region is COMPUTED actually landed, in normalised
+             *  framed-image coordinates (R-AISEG-13). It rides on the frame for the same reason
+             *  the histograms do: it is a product of this render, it is only true of this
+             *  render, and the view that draws the frame is the view that draws it. Geometry,
+             *  not pixels — which is what makes it something a view is allowed to hold. */
+            std::vector<MaskOutline> maskOutlines;
         };
 
         RenderService();

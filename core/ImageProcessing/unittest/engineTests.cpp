@@ -5,6 +5,7 @@
 #include "MiniTest.h"
 #include "image_processing.h"
 #include "compute/GlesComputeBackend.h"  // createGlesComputeAccelerator (ARSTRO_GLES_COMPUTE)
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -988,6 +989,135 @@ TEST(MaskSemantic_seam_is_asked_first_and_may_decline)
     CHECK(std::string(eng.segmenterName()) == "stripe");
     eng.setSegmenter(nullptr);
     CHECK(std::string(eng.segmenterName()) == "built-in");
+}
+
+// ── R-AISEG-13: a computed mask has a boundary, and it is geometry ────────────────────
+//
+// A semantic mask has no control points, so the only honest answer to "where is it?" is the
+// contour of its coverage. Asserted against shapes whose outline is known in advance — a disc
+// is the one shape where every point of the answer can be checked, not just its bounding box.
+TEST(MaskOutline_traces_the_coverage_contour)
+{
+    const int w = 256, h = 192;
+    auto disc = [&](std::vector<Pixel> &plane, double cx, double cy, double r, bool add) {
+        if (!add) plane.assign((size_t)w * h, (Pixel)0);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+            {
+                const double d = std::sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                // A soft edge, because a real coverage plane has one — R-AISEG-4 softens it and
+                // a path's feather blurs it, and a hard step would let the tracer look better
+                // than it is.
+                const double v = 1.0 - std::min(1.0, std::max(0.0, (d - (r - 2.0)) / 4.0));
+                plane[(size_t)y * w + x] = (Pixel)std::max((double)plane[(size_t)y * w + x], v);
+            }
+    };
+
+    std::vector<Pixel> plane;
+    disc(plane, 120.0, 96.0, 50.0, false);
+    auto loops = traceCoverageOutline(plane, w, h);
+    std::printf("      one disc -> %d loop(s), %d points\n", (int)loops.size(),
+                loops.empty() ? 0 : (int)loops[0].size());
+    CHECK(loops.size() == 1);
+    if (loops.empty()) return;
+
+    // Every point on the 0.5 contour of a disc is at the disc's radius. Back out of normalised
+    // coordinates the same way the tracer went in, so this also pins that convention.
+    double worst = 0.0;
+    for (const auto &p : loops[0])
+    {
+        const double px = (double)p.first * w - 0.5, py = (double)p.second * h - 0.5;
+        worst = std::max(worst, std::fabs(std::sqrt((px - 120.0) * (px - 120.0) +
+                                                    (py - 96.0) * (py - 96.0)) - 50.0));
+    }
+    std::printf("      worst radial error %.2f px\n", worst);
+    CHECK(worst < 1.5);   // one grid cell: the contour is where the plane crosses 0.5
+
+    // Closed: the walk comes back to where it started, so a stroke has no seam.
+    const auto &L = loops[0];
+    CHECK(std::fabs(L.front().first - L.back().first) < 1.0f / w * 1.5f);
+    CHECK(std::fabs(L.front().second - L.back().second) < 1.0f / h * 1.5f);
+
+    // Two regions are two loops — the stitcher must not join them just because both exist.
+    disc(plane, 60.0, 60.0, 26.0, false);
+    disc(plane, 190.0, 130.0, 26.0, true);
+    CHECK(traceCoverageOutline(plane, w, h).size() == 2);
+
+    // A speck is not a boundary. A classifier's raw output has them, and a mask outlined with
+    // confetti reads as broken even when the coverage underneath is right.
+    plane.assign((size_t)w * h, (Pixel)0);
+    plane[(size_t)96 * w + 128] = (Pixel)1;
+    CHECK(traceCoverageOutline(plane, w, h).empty());
+
+    // Nothing, and everything, both have no boundary INSIDE the frame — and neither may invent
+    // one along the edge.
+    plane.assign((size_t)w * h, (Pixel)0);
+    CHECK(traceCoverageOutline(plane, w, h).empty());
+    plane.assign((size_t)w * h, (Pixel)1);
+    CHECK(traceCoverageOutline(plane, w, h).empty());
+
+    // The grid is coarsened for drawing, so a big plane must not produce a proportionally
+    // bigger answer: the same circle, four times the pixels, roughly the same point count.
+    const int W2 = 1024, H2 = 768;
+    std::vector<Pixel> big((size_t)W2 * H2, (Pixel)0);
+    for (int y = 0; y < H2; ++y)
+        for (int x = 0; x < W2; ++x)
+        {
+            const double d = std::sqrt((x - 480.0) * (x - 480.0) + (y - 384.0) * (y - 384.0));
+            big[(size_t)y * W2 + x] = (Pixel)(1.0 - std::min(1.0, std::max(0.0, (d - 198.0) / 16.0)));
+        }
+    auto bigLoops = traceCoverageOutline(big, W2, H2);
+    CHECK(bigLoops.size() == 1);
+    if (!bigLoops.empty())
+    {
+        std::printf("      256x192 disc %d points, 1024x768 disc %d points\n",
+                    (int)loops[0].size(), (int)bigLoops[0].size());
+        CHECK(bigLoops[0].size() < loops[0].size() * 3);
+    }
+}
+
+// The same thing one layer up: a semantic mask, through the real stack, reports where it went.
+// This is the assertion that matters to the view — it draws `Frame::maskOutlines`, not a plane.
+TEST(MaskOutline_reports_where_a_semantic_mask_landed)
+{
+    const int n = 192;
+    const Image scene = skyOverGrass(n);
+
+    MaskParams sky;
+    sky.type = MaskParams::Semantic;
+    sky.subject = (int)SemanticSubject::Sky;
+    sky.feather = 0.f;
+
+    // Deliberately IDENTITY: a photographer who has just added a Detect mask has not touched a
+    // slider yet, and that is exactly when they are looking at the photo to judge the region.
+    // An outline that waited for an effect would be missing at the only moment it is wanted.
+    Image img = scene.clone();
+    std::vector<MaskOutline> outlines;
+    applyMaskStack(img, {sky}, nullptr, &outlines);
+    CHECK(outlines.size() == 1);
+    if (outlines.empty()) return;
+    CHECK(outlines[0].maskIndex == 0);
+    CHECK(!outlines[0].loops.empty());
+
+    // The scene is sky above 0.4 and grass below, so the boundary is a horizontal line there.
+    double lo = 1.0, hi = 0.0;
+    int points = 0;
+    for (const auto &loop : outlines[0].loops)
+        for (const auto &p : loop)
+        {
+            // The frame edges are not a boundary of the REGION; only the horizon is.
+            if (p.first < 0.02f || p.first > 0.98f) continue;
+            lo = std::min(lo, (double)p.second);
+            hi = std::max(hi, (double)p.second);
+            ++points;
+        }
+    std::printf("      sky outline: %d points, y in [%.3f, %.3f]\n", points, lo, hi);
+    CHECK(points > 10);
+    CHECK(lo > 0.30 && hi < 0.50);   // the horizon, not the whole frame
+
+    // And an identity mask still changes no pixel — outlining must not have started rendering.
+    for (size_t i = 0; i < img.pixelCount() * 3; ++i)
+        if (std::fabs((double)img.data()[i] - (double)scene.data()[i]) > 1e-6) { CHECK(false); break; }
 }
 
 // R-AISEG-9 + D-57. Two claims in one test because they are one mechanism: a mask survives

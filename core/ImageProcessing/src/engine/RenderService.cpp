@@ -409,6 +409,7 @@ namespace arstro
         f.preMixerHue = mEngine.preMixerHue();
         f.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         f.rehydrated = mEngine.rehydrations() > rehyBefore;
+        f.maskOutlines = mEngine.maskOutlines();
         f.level = mEngine.previewLevel();
         f.levelEdge = mEngine.previewLevelEdge(f.level);
         // Read-and-reset, so the number belongs to THIS frame. Taken after the render and

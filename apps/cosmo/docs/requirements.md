@@ -3291,3 +3291,48 @@ other assertion in that test. Shots: `editor-mask-detect-opening` (mid-tween),
 `editor-mask-detect`, `editor-mask-detect-hair` (the caption carrying R-AISEG-2's warning), and
 `editor-mask-detect-small` at 1280x800, because the block adds ~90 px to the tallest panel in the
 app and "it fits on my monitor" is not a layout claim.
+
+### DR-AISEG-13/14 (core) A computed mask reports its boundary (R-AISEG-13, R-AISEG-14)
+`MaskOutline` (`engine/MaskStack.h`) is one mask's boundary: `maskIndex` plus closed loops of
+points in **normalised framed-image coordinates** — the same 0..1 space every other mask's geometry
+lives in. `traceCoverageOutline(plane, w, h, threshold, maxEdge, minLoopPoints)` produces it by
+marching squares: classify each cell's four corners against the threshold, emit the one or two
+segments that separate inside from outside, interpolate the crossings, stitch the segments into
+loops.
+
+Three details in the tracer are decisions rather than algorithm:
+
+- **The case table stores unordered pairs of edge indices.** The stitcher walks chains by endpoint,
+  so which way round a segment was emitted never matters — and not pretending to track winding
+  removes the one place marching squares is usually got wrong.
+- **The two ambiguous saddles (cases 5 and 10) are resolved from the cell's centre value**, which is
+  the standard resolution and also the only one that stays consistent with what the neighbouring
+  cells decide.
+- **Endpoints are quantised into the stitch key rather than compared as floats.** Neighbouring cells
+  do compute the crossing on their shared edge from the same two corner values and so do produce
+  bit-identical points today — but that is a property of the code, not of the algorithm, and a data
+  structure should not rest on it. The walk is bounded by the segment count, so a key collision
+  cannot turn it into an infinite loop, which is the failure a hash-keyed stitcher has if it trusts
+  its keys.
+
+**It rides on the frame** (`RenderService::Frame::maskOutlines`, filled from
+`EditEngine::maskOutlines()`), beside the histograms, for the same reason they do: it is a product
+of one render and only true of that render. `applyMaskStack` gained an optional out-parameter and
+now builds the coverage plane **before** the adjusted copy, so a mask that is only being outlined
+does not pay for a 27 MB clone of the framed image to produce a picture nobody blends — and an
+identity mask is outlined and then skipped, which is what R-AISEG-13's third clause requires.
+
+Reachable with no GUI through the `frame.ready` line, which gained
+`outlines=<masks>/<loops>/<points>` — **appended**, never inserted, so every `expect` already
+written against that line still matches (`Event.h`'s frozen-shape rule).
+
+Covered by `MaskOutline_traces_the_coverage_contour` (`image_tests`): a soft-edged disc traces to
+exactly one closed loop whose every point is within **0.00 px** of the true radius; two discs give
+two loops; a one-pixel speck gives none; an empty plane and a full one both give none rather than
+inventing a boundary along the frame edge; and the same circle at 1024×768 yields 549 points against
+389 at 256×192 rather than sixteen times as many, which is R-AISEG-14.
+`MaskOutline_reports_where_a_semantic_mask_landed` runs it through the real stack: an **identity**
+sky mask over a sky-above-grass scene outlines 184 points, all at `y ∈ [0.396, 0.396]` — the
+horizon — and changes no pixel. `a_semantic_mask_is_created_by_naming_its_subject`
+(`cosmo_core_tests`) asserts the plumbing out to a front end:
+`[evt] frame.ready slot=0 width=12 ms=1.6761 outlines=1/0/0 level=0`.

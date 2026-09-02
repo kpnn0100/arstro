@@ -722,7 +722,7 @@ namespace arstro
             mChainPost.apply(preMixer, processed);
             // The segmenter is handed down rather than reached for: MaskStack owns no state and
             // must keep owning none, or a mask could outlive the model that decided it.
-            applyMaskStack(processed, mMasks, mSegmenter.get());  // local adjustments, framed, linear
+            applyMaskStack(processed, mMasks, mSegmenter.get(), &mMaskOutlines);  // local, framed, linear
             color::encodeInPlace(processed);
             mLastHistogram = Histogram::compute(processed);
         }

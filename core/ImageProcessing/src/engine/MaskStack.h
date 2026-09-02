@@ -77,6 +77,35 @@ namespace arstro
         return out;
     }
 
+    /** One mask's boundary, ready to draw: the `threshold` contour of its coverage, as closed
+     *  loops of points in NORMALISED framed-image coordinates — the same 0..1 space every mask's
+     *  geometry lives in, so the overlay maps it with the transform it already has.
+     *
+     *  Geometry, not pixels. That distinction is the whole reason this type exists: a mask whose
+     *  region is COMPUTED (a semantic mask, or a feathered path) has no control points a view
+     *  could draw, and the alternative — handing the view a coverage plane — would put pixels
+     *  somewhere the architecture says pixels do not go. A few hundred points do go there. */
+    struct MaskOutline
+    {
+        int maskIndex = -1;
+        std::vector<std::vector<std::pair<float, float>>> loops;
+    };
+
+    /** Trace the `threshold` contour of a coverage plane into closed loops (marching squares).
+     *
+     *  `maxEdge` is the SHORT edge of the grid it walks, not of the plane: a coverage plane is
+     *  smooth by construction (R-AISEG-4 softens it, a path's feather blurs it), so tracing it at
+     *  full preview resolution would spend thousands of points describing a curve that a few
+     *  hundred already describe — and every one of them would have to be transformed and stroked
+     *  every frame. `minLoopPoints` drops specks: a classifier's output has them, and a mask
+     *  outlined with confetti reads as broken even when the coverage is right.
+     *
+     *  Loops are CLOSED where the region does not touch the frame edge and open where it does;
+     *  the caller strokes them either way, so the distinction never has to be reported. */
+    std::vector<std::vector<std::pair<float, float>>>
+    traceCoverageOutline(const std::vector<Pixel> &cov, int w, int h, float threshold = 0.5f,
+                         int maxEdge = 320, int minLoopPoints = 6);
+
     /** Build a mask's coverage plane at `w`x`h` (row-major, one value per pixel, 0..1).
      *
      *  A plane rather than a per-pixel call because a path's feather is a distance from its
@@ -97,6 +126,13 @@ namespace arstro
                            ISegmenter *seg = nullptr);
 
     /** Apply every mask in `masks` to `img` (linear light), in order. `seg` is the optional
-     *  segmentation seam a host installed (R-AISEG-6); nullptr means the built-in answers. */
-    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks, ISegmenter *seg = nullptr);
+     *  segmentation seam a host installed (R-AISEG-6); nullptr means the built-in answers.
+     *
+     *  `outlines`, when given, collects the boundary of every mask whose coverage was BUILT as a
+     *  plane here — which is exactly the set the view cannot draw from the parameters alone.
+     *  Produced during the render rather than on request, because the plane exists for one
+     *  instant and rebuilding it later would mean segmenting the photo a second time to answer a
+     *  question the render has already answered. */
+    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks, ISegmenter *seg = nullptr,
+                        std::vector<MaskOutline> *outlines = nullptr);
 }
