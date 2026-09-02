@@ -700,6 +700,12 @@ data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is
 ~91 px) holding a five-way `SegmentedControl` (Sky/Skin/Foliage/Water/Hair) and a `Sensitivity`
 `SliderRow`; it paints its own `"Detect (colour & texture)"` header and the per-subject caption, and
 **clips that painting itself** because `clipToBounds` covers only the child subtree.
+`MaskOverlay` gained `setComputedOutline(loops)` + `outlineFade()`: the boundary of a mask whose
+region was COMPUTED (R-AISEG-18), stroked in the accent at 1.5 px through the same `normToLocal`
+a drawn path uses, **open rather than closed** (a region touching the frame edge gives an open
+chain), drawn above the `!mActive` early return so a fade has something to fade, and eased in/out
+by `mOutlineFade` over **180 ms EaseOutCubic** started in `advance()`. `App::render` pushes the
+loops for the selected mask off `mLastAfterFrame`, and only when its type is `Semantic`.
 `MaskPanel::mDetectOpen` eases its height 0↔1 over **200 ms EaseOutCubic**, started in `advance()`
 (a setter has no clock), and `MaskPanel::detectOpenAmount()` exposes the LIVE value so a test can
 tell an eased implementation from a snapping one. Callbacks: `onSubjectChange(int)` /

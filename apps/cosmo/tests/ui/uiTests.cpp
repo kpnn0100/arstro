@@ -18,6 +18,7 @@
 #include "../../core/ThreadBudget.h"
 #include "../../widgets/HomeScreen.h"
 #include "../../widgets/MaskPanel.h"
+#include "../../widgets/MaskOverlay.h"
 #include "../../segment/OnnxSegmenter.h"
 #include "../../../../core/ImageProcessing/src/analysis/Segmenter.h"
 #include "../../widgets/CurvePanel.h"
@@ -125,21 +126,38 @@ namespace
          *
          *  A fake decoder rather than a real file: the point is a slot with params, not pixels,
          *  and a repo that needs a RAW file on disk to run its UI tests does not run them. */
-        bool loadFakePhoto(int images = 2)
+        /** `scene` paints sky over grass instead of flat grey. Flat grey is the right fixture
+         *  for geometry — nothing in it distracts — but it is the wrong one for anything that
+         *  has to FIND something, because a classifier handed a uniform field correctly finds
+         *  nothing and the test then proves only that nothing happened. */
+        bool loadFakePhoto(int images = 2, bool scene = false)
         {
             struct FakeDecoder : arstro::cosmo::IImageDecoder
             {
+                bool scene = false;
                 arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
                 {
                     arstro::cosmo::DecodedImage d;
                     d.width = 96; d.height = 64;                 // 3:2, so aspect maths is testable
                     d.rgba.assign((size_t)96 * 64 * 4, 150);
+                    if (scene)
+                        for (int y = 0; y < 64; ++y)
+                            for (int x = 0; x < 96; ++x)
+                            {
+                                const bool sky = y < 26;
+                                const size_t i = ((size_t)y * 96 + x) * 4;
+                                d.rgba[i] = sky ? 110 : 60;
+                                d.rgba[i + 1] = sky ? 160 : 140;
+                                d.rgba[i + 2] = sky ? 225 : 60;
+                            }
                     d.name = path;
                     return d;
                 }
             };
-            svc.setDecoderFactory([] {
-                return std::unique_ptr<arstro::cosmo::IImageDecoder>(new FakeDecoder());
+            svc.setDecoderFactory([scene] {
+                auto d = std::unique_ptr<FakeDecoder>(new FakeDecoder());
+                d->scene = scene;
+                return std::unique_ptr<arstro::cosmo::IImageDecoder>(std::move(d));
             });
             const std::string path = "/tmp/cosmo_ui_fake.cmp";
             {
@@ -1288,6 +1306,78 @@ namespace
     // photographer's mistake surfaces — and the only useful thing it can do with an unknown key
     // is refuse. Defaulting it away turns "I misspelled inputWidth" into "the model does nothing
     // and I cannot see why", which is the failure the whole seam exists to avoid.
+    // ── R-AISEG-18: the boundary of a computed mask is drawn on the photo ────────────────
+    //
+    // The whole route, end to end, with no display: a scene the built-in can actually find
+    // something in, the Detect chip, and then the OVERLAY holding a boundary that came off the
+    // render — plus the thing a still frame cannot show, which is that it fades in rather than
+    // appearing.
+    void aDetectMasksBoundaryIsDrawnOnThePhoto()
+    {
+        std::printf("App: a Detect mask draws its boundary on the photo (R-AISEG-18)\n");
+        Rig rig(1440.0, 900.0);
+        // Sky over grass: a uniform grey is the right fixture for geometry and the wrong one
+        // for a classifier, which would correctly find nothing and prove nothing.
+        check(rig.loadFakePhoto(2, /*scene=*/true), "a photo with a sky in it is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        check(tabs != nullptr, "the edit-stack tabs exist");
+        if (!tabs) return;
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 1.5, tw.f + 13.0);
+        rig.settle(400.0);
+
+        auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
+            arstro::cosmo_v2::findSegmentByType(*root, "MaskPanel"));
+        auto *ov = static_cast<const arstro::cosmo_v2::MaskOverlay *>(
+            arstro::cosmo_v2::findSegmentByType(*root, "MaskOverlay"));
+        check(panel && ov, "the Mask panel and the on-photo overlay are both there");
+        if (!panel || !ov) return;
+        check(ov->outlineFade() == 0.0, "and nothing is outlined yet");
+
+        const artboard::Transform mw = panel->worldTransform();
+        const artboard::Rect chip = panel->addChipRect(4);   // Detect
+        rig.click(mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5);
+        rig.frames(3);
+        check(rig.svc.model().params.masks.size() == 1u, "the chip added a mask");
+
+        // Pump one frame at a time until a render carries the outline, and keep the FIRST
+        // non-zero fade. The render is asynchronous, so "settle and then look" is the racy
+        // version of this — and worse, it hides R-G-1: settling for 400 ms is long enough for
+        // the fade to finish, so the assertion below would read 1.0 and pass a snap.
+        bool outlined = false;
+        double first = 0.0;
+        for (int i = 0; i < 400 && !outlined; ++i)
+        {
+            rig.frames(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (ov->outlineFade() > 0.0) { first = ov->outlineFade(); outlined = true; }
+        }
+        check(outlined, "the render found the sky and the overlay has its boundary");
+        if (!outlined) return;
+
+        // R-G-1: it FADES. A still frame cannot tell this from a flip, so the assertion is that
+        // the first drawn value sits strictly between the two ends.
+        std::printf("      first drawn fade %.3f\n", first);
+        check(first > 0.0 && first < 1.0, "and it is fading in, not switched on");
+        rig.settle(400.0);
+        check(near(ov->outlineFade(), 1.0, 1e-3), "then it settles fully drawn");
+
+        // Leaving the Mask tab takes it away, eased the same way — an outline left behind on a
+        // photo nobody is masking is the kind of thing that reads as a rendering bug.
+        rig.click(tw.e + tabW * 0.5, tw.f + 13.0);   // back to Basic/Detail
+        rig.frames(4);
+        const double closing = ov->outlineFade();
+        check(closing < 1.0, "leaving the Mask tab fades it out");
+        rig.settle(400.0);
+        check(near(ov->outlineFade(), 0.0, 1e-3), "and it is gone");
+    }
+
     void aModelManifestIsParsedStrictly()
     {
         std::printf("App: a segmentation model manifest is parsed strictly (R-AISEG-15/16)\n");
@@ -1513,6 +1603,7 @@ int main()
     rightClickShowsTheImageInformation();
     drawingAMaskOnThePhotoReachesTheModel();
     addingADetectMaskOpensItsBlockAndReachesTheModel();
+    aDetectMasksBoundaryIsDrawnOnThePhoto();
     aModelManifestIsParsedStrictly();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();

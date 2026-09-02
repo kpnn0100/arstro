@@ -1027,6 +1027,22 @@ namespace cosmo_v2
             const MaskParams *sel = mRightColumn->selectedMaskParams();
             if (mRightColumn->maskTabActive() && sel) ov->setMask(*sel, true);
             else                                      ov->setMask(MaskParams{}, false);
+            // R-AISEG-18: a mask whose region was COMPUTED has no control points to draw, so
+            // the boundary comes off the last frame — the render is the only thing that knows
+            // where the mask went. Taken from `mLastAfterFrame` rather than asked for, because
+            // asking would mean segmenting the photo a second time to answer a question the
+            // render has already answered.
+            //
+            // Semantic ONLY, though the render traces every mask whose coverage it builds as a
+            // plane. A drawn path already draws its own outline from its control points — that
+            // outline IS the mask — so adding the feathered contour beside it would be two lines
+            // saying the same thing slightly differently. The computed one is for the masks a
+            // view cannot draw from the parameters at all.
+            std::vector<std::vector<std::pair<float, float>>> outline;
+            if (mRightColumn->maskTabActive() && sel && sel->type == MaskParams::Semantic)
+                for (const auto &o : mLastAfterFrame.maskOutlines)
+                    if (o.maskIndex == mRightColumn->selectedMaskIndex()) { outline = o.loops; break; }
+            ov->setComputedOutline(outline);
         }
 
         // R-CROP-5: the on-photo crop box, shown only while the Xform tab is open — the same

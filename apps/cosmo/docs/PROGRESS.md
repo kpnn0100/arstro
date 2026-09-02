@@ -63,11 +63,28 @@ boundary of the mask like a drawn mask; (c) find an open-source model.*
     binary, driving a 462 KB Apache-2.0 model over a 512×512 portrait, through the manifest the
     fetch script itself generated: five subjects declined, person answered, 42.2% of the frame,
     six outline loops. R-AISEG-15..17, DR-AISEG-15..17.
-- **[ ] (b2) draw the outline on the photo (design).**
+- **[x] (b2) the outline is drawn on the photo.** Same accent, same stroke, same `normToLocal` as
+  a drawn path, so zoom/pan tracking is free (R-MASK-3). Three things worth carrying forward:
+  * **Only for Semantic**, though the render traces every planar mask. A drawn path already draws
+    itself from its control points; the feathered contour beside it would be two lines making the
+    same claim.
+  * **Stroked open, never closed.** A region touching the frame edge gives an OPEN chain, and
+    `closePath` would draw a straight line across the photo between two points that are neighbours
+    only in trace order.
+  * **The test originally settled 400 ms and then looked at the fade — which is long enough for the
+    fade to FINISH, so it would have passed a snap.** It now pumps one frame at a time and keeps
+    the first non-zero value (0.244). That is the same trap R-G-1's compliance clause exists for,
+    met from a new direction. R-AISEG-18, DR-AISEG-18.
 
-**► NEXT: (b2) — draw the outline on the photo (`arstro.cosmo.design.implement`).** The engine
-hands the view `Frame::maskOutlines` already; `MaskOverlay` has to stroke it the way it strokes a
-drawn path, tracking zoom and pan (R-MASK-3) like everything else on that canvas.
+**► NEXT: nothing outstanding from this batch.** The follow-ups worth doing next, in order:
+
+1. **A model that answers for sky / foliage / water.** The seam and the manifest take one; what is
+   missing is a permissively-licensed model, not code (`docs/segmentation-models.md`). Converting a
+   PaddleSeg ADE20K checkpoint (Apache-2.0 weights) to ONNX would give all three — the licence
+   question is the DATASET's, and it should be answered before the work, not after.
+2. **A `mixerSpread` control in the Mixer panel** — still reachable only as `set mixerSpread=`.
+3. **Segment the pre-adjustment image**, so a large exposure move cannot shift a mask's boundary.
+4. **The touch shell has no Detect anything.**
 
 **Two environment notes, both of which cost time:**
 

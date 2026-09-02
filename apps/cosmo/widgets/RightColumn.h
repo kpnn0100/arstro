@@ -97,6 +97,9 @@ namespace cosmo_v2
         int activeTab() const;                          // edit-stack tab index
         bool maskTabActive() const;                     // true while the Mask tab is selected
         const MaskParams *selectedMaskParams() const;   // the mask being edited, or nullptr
+        /** Its INDEX, which is what a frame's outlines are keyed by (R-AISEG-18) — a
+         *  pointer cannot be matched against them. */
+        int selectedMaskIndex() const { return mSelectedMask; }
         void writeSelectedMask(const MaskParams &m);    // overlay drag -> write geometry back + submit
         /** The on-photo crop box hands its rectangle back here (R-CROP-5), rather than going
          *  straight to `App::emitCommand`: this is the channel with the direct-to-service

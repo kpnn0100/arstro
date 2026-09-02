@@ -3415,3 +3415,34 @@ segmenter: MediaPipe Selfie Segmentation   (licence Apache-2.0)
   coverage: 262144 values, mean 0.4217, range [0.000, 1.000]  (42.2% of the frame)
   outline: 6 loop(s), 866 points
 ```
+
+### DR-AISEG-18 (design) The boundary on the photo (R-AISEG-18, R-G-1, R-MASK-3)
+`MaskOverlay::setComputedOutline` takes the loops the render produced and `onPaint` strokes them in
+the overlay's accent at 1.5 px — the same treatment a drawn path gets, through the same
+`normToLocal`, so zoom and pan track without a line of new code (R-MASK-3).
+
+Three details that are decisions:
+
+- **Drawn above the `!mActive` early return**, so the outline survives the frame on which the
+  overlay goes inactive. A fade needs something to fade.
+- **`strokePath` without `closePath`.** A region that reaches the frame edge produces an OPEN chain;
+  closing it would draw a straight line across the photo joining two points that are neighbours only
+  in the order the tracer walked them.
+- **`App::render` pushes it, and only for `Semantic`.** The frame's outlines are keyed by mask index
+  (`RightColumn::selectedMaskIndex`), and the render traces every planar mask — but a drawn path
+  already draws itself from its control points, so drawing the feathered contour as well would be
+  two lines making the same claim. Taken from `mLastAfterFrame` rather than requested, because
+  requesting would mean segmenting the photo a second time.
+
+**It fades** (`mOutlineFade`, 180 ms `EaseOutCubic`, started in `advance()` because a setter has no
+clock). The boundary itself is not eased — it is data, exactly as R-MASK-4 already says a mask's
+geometry is; what eases is whether it is on screen.
+
+Covered by `aDetectMasksBoundaryIsDrawnOnThePhoto` (`cosmo_ui_tests`): the Mask tab, the Detect
+chip, then pumping ONE frame at a time until a render carries the outline and keeping the **first**
+non-zero fade — `0.244`, strictly between the ends, which is the only assertion that can tell the
+fade from a flip. Settling for 400 ms first, which is what the test did originally, is long enough
+for the fade to finish and would have passed a snap. Leaving the Mask tab fades it back out.
+`Rig::loadFakePhoto` grew a `scene` option for this: a uniform grey is the right fixture for
+geometry and the wrong one for a classifier, which correctly finds nothing in it and proves nothing.
+Visible in `cosmo-editor-mask-detect-1600x1000.png` as the accent line along the horizon.

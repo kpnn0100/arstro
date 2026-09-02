@@ -447,5 +447,6 @@ ColorMixer ..> Spatial : fastBlurPlane
 
 @enduml
 
+MaskOverlay ..> MaskOutline : strokes it like a drawn path (R-AISEG-18)
 MaskPanel *--> DetectBlock : while the selected mask is Semantic  ' R-AISEG-10
 DetectBlock *--> SegmentedControl : Sky | Skin | Foliage | Water | Hair

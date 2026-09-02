@@ -840,6 +840,22 @@ UI copy, not only here.
   - **A mask that changes no pixel yet is still outlined.** A photographer who has just added a
     Detect mask and touched no slider is looking at the photo to decide whether the region is
     right. An outline that waited for an effect would be missing at the only moment it is wanted.
+- **R-AISEG-18 The boundary is drawn on the photo, in the same language a drawn mask uses.**
+  (**Added 2026-09-02.**) Same accent, same 1.5 px stroke, mapped through the overlay's own
+  normalised-to-local transform so it tracks zoom and pan for free (R-MASK-3). It is the same thing
+  to the photographer — the edge of the mask — and a second visual language for "where the mask is"
+  would be a distinction without a difference.
+  - **Only for a mask the view cannot draw from its parameters.** The render traces every mask
+    whose coverage it builds as a plane, but a drawn path already draws its outline from its
+    control points — that outline *is* the mask — so drawing the feathered contour beside it would
+    be two lines saying the same thing slightly differently.
+  - **The loops are stroked open, not closed.** A region that runs off the edge of the frame gives
+    an open chain, and closing it would draw a straight line across the photo between two points
+    that are only neighbours in the trace order.
+  - **It fades in and out** (R-G-1, no exemption for "the render produced something new"), and the
+    boundary itself is *not* eased — it is data, exactly as R-MASK-4 says a mask's geometry is.
+    What eases is whether it is on screen.
+
 - **R-AISEG-14 The outline is drawn at a resolution chosen for drawing, not for precision.**
   A coverage plane is smooth by construction, so tracing it at full preview resolution spends
   thousands of points describing a curve a few hundred already describe — and every one of them is
