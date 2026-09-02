@@ -155,7 +155,7 @@ namespace arstro
           << "\ncurveG=" << mixerStr(p.curveChannel[1])
           << "\ncurveB=" << mixerStr(p.curveChannel[2])
           << "\nmixer0=" << mixerStr(p.mixer[0]) << "\nmixer1=" << mixerStr(p.mixer[1])
-          << "\nmixer2=" << mixerStr(p.mixer[2]);
+          << "\nmixer2=" << mixerStr(p.mixer[2]) << "\nmixerSpread=" << p.mixerSpread;
         for (int r = 0; r < 3; ++r)
             o << "\ngrade" << r << '=' << p.grade[r].hue << ',' << p.grade[r].sat << ',' << p.grade[r].lum;
         o << "\nbalance=" << p.balance
@@ -210,6 +210,11 @@ namespace arstro
             else if (k == "mixer0") out.mixer[0] = parseMixer(v);
             else if (k == "mixer1") out.mixer[1] = parseMixer(v);
             else if (k == "mixer2") out.mixer[2] = parseMixer(v);
+            // Absent in every project written before R-MIXER-5, which leaves the field at its
+            // constructed default — that is the intended migration, not an oversight: the
+            // spread only adds reach (R-MIXER-6), so an old project renders more of what it
+            // already asked for. `set mixerSpread=0` is how a photographer opts out.
+            else if (k == "mixerSpread") out.mixerSpread = f(v);
             else if (k == "balance") out.balance = f(v);
             else if (k == "remapEnable") out.remapEnable = (v != "0");
             else if (k == "remapSrc") out.remapSrc = f(v);
@@ -267,6 +272,7 @@ namespace arstro
             fn("nrLuminance", p.nrLuminance);     fn("nrColor", p.nrColor);
             fn("lensDistortion", p.lensDistortion);
             fn("lensCA", p.lensCA);               fn("lensVignette", p.lensVignette);
+            fn("mixerSpread", p.mixerSpread);
             fn("balance", p.balance);             fn("remapSrc", p.remapSrc);
             fn("remapRange", p.remapRange);       fn("remapDst", p.remapDst);
             fn("remapStrength", p.remapStrength);

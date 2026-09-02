@@ -554,6 +554,43 @@ X-Trans frame.
   non-identity mixer, so CPU is the only implementation and cannot diverge. When the mixer moves to
   GLES (ledger T6) the weight goes with it in the same change, and the conformance test covers a
   neutral patch — otherwise GPU and CPU would differ on precisely the pixels this exists for.
+- **R-MIXER-5 A pixel surrounded by the colour being remapped is remapped too.** (**Added
+  2026-09-02.**) R-MIXER-1 fixed the speckle by *refusing* the noise pixel, and that is only half an
+  answer: the grain in the middle of a red flower is still red grain, it just does not read as red,
+  so the flower ends up peppered with pixels the curve declined to move. The same hole appears
+  wherever chroma is genuinely low but the colour is not in doubt — the **bokeh** behind a subject is
+  a smeared version of the colours in front of it, and a per-pixel chroma gate treats a defocused
+  green as neutral and leaves it behind while the in-focus green moves.
+  Both are one fact: **whether a pixel belongs to a colour is a question about its neighbourhood,
+  not about the pixel.** So the mixer's per-pixel adjustment is spread spatially before it is
+  applied: for each channel the weighted adjustment `w · y(hue)` is built as a plane, softened over
+  a radius set by `mixerSpread`, and the pixel is moved by whichever of its own and the softened
+  value is **larger in magnitude**.
+- **R-MIXER-6 The spread may only add reach, never remove it.** Taking the softened value outright
+  would *dilute* the effect at the edge of any colour region smaller than the radius — a small red
+  flower would move less than it does today, which is a regression for every project that already
+  exists. Larger-magnitude-wins is therefore not a detail of the implementation but the rule: inside
+  a region the pixel keeps its own full adjustment, outside one it picks up its neighbours', and no
+  pixel that moves today moves less afterwards.
+- **R-MIXER-7 The radius is a fraction of the image, not a count of pixels.** `mixerSpread` is
+  0..100 and maps to `spread/100 · 0.004 · min(w,h)` of blur sigma — 0.4% of the short edge at
+  full strength. It has to be relative because cosmo renders the same edit at 200, 400, 800, 1600
+  and full resolution (R-PREVIEW), and a radius in pixels would make the preview stop predicting the
+  export at exactly the moment the photographer is judging colour. The cost is constant in the
+  radius: the softening is a three-pass box blur (`spatial::fastBlurPlane`), so a 4000 px export
+  does not pay for its own size twice.
+- **R-MIXER-8 The default is 25, and that changes what existing projects render.** Stated rather
+  than hidden, exactly as R-MIXER-3 was. The reported symptom is the default behaviour of the tool,
+  so the fix has to be the default behaviour too; a switch the photographer has to find first is not
+  a fix. By R-MIXER-6 the change is one-directional — an existing project gets *more* of the
+  adjustment it already asked for, spread over 0.1% of the short edge, and never less. Only a
+  non-identity mixer is affected at all: a flat curve is still skipped whole (R-PREVIEW-6).
+  `mixerSpread` composes by **maximum**, not by addition, so a photo at the default inside a group
+  at the default still spreads by 25 — an amount that compounded with nesting depth would make the
+  default itself a bug.
+- **R-MIXER-9 Reachable with no GUI.** `set mixerSpread=<0..100>`, because `EditParamsIO` names it —
+  which is also what makes it survive a project file, a preset and an undo step (labelled *Mixer*,
+  since it lives in the preset's `mixer` category).
 
 ## R-BUGFIX-3 — Mixer curve saved as samples, not bezier points — ✅ FIXED
 

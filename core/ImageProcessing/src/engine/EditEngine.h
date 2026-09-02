@@ -233,6 +233,8 @@ namespace arstro
         // ── colour mixer (cyclic per-hue curves) ──
         // points: bezier control points (hue 0..360, y in [-1,1]); the curve wraps at the 360/0 seam.
         void setMixerCurve(MixerChannel c, const std::vector<CurvePoint> &points);
+        /** 0..100: how far the per-hue selection reaches into its neighbourhood (R-MIXER-5). */
+        void setMixerSpread(float v);
 
         // ── colour grading (3-way wheels + hue remap) ──
         void setGradeHue(GradeRegion r, float deg);   // 0..360

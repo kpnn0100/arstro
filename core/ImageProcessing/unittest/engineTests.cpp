@@ -1710,10 +1710,57 @@ TEST(Non_finite_parameters_are_refused_or_neutralised)
     CHECK(good.exposure == 1.25f && good.temp == 5200.f);
 
     // The field list is walked, not the struct's memory, so a new EditParams field would be
-    // silently unguarded. This is the assertion that fails when one is added — 58 is the 42
+    // silently unguarded. This is the assertion that fails when one is added — 59 is the 43
     // named scalars plus the 16 coordinates of a DEFAULT params' curves (the master curve's
     // two points and the three channel curves' two each). Masks and mixer curves are empty
     // by default, so they add nothing here; they are covered by the assertions above.
     printf("    %d scalars guarded\n", guardedParamScalarCount());
-    CHECK(guardedParamScalarCount() == 58);
+    CHECK(guardedParamScalarCount() == 59);
+}
+
+// The mixer's neighbourhood spread is a persisted parameter like any other (R-MIXER-9), which
+// is what makes `set mixerSpread=` free, a project file carry it, and an undo step label it.
+// Its two departures from "like any other" are both deliberate and both asserted here: an old
+// file that never heard of it keeps the DEFAULT rather than getting 0, and it composes by
+// MAXIMUM rather than by addition.
+TEST(EditParams_mixerSpread_persists_and_composes_by_maximum)
+{
+    EditParams p;
+    CHECK(p.mixerSpread == 25.f);          // the reported symptom is the default behaviour...
+
+    p.mixerSpread = 60.f;
+    EditParams q;
+    CHECK(deserializeParams(serializeParams(p), q));
+    CHECK_NEAR(q.mixerSpread, 60.0, 1e-4);
+    CHECK(deserializeParams("mixerSpread=0\n", q));
+    CHECK(q.mixerSpread == 0.f);           // ...and opting out is one command
+
+    // A project written before R-MIXER-5 has no such key at all. It must land on the default,
+    // not on zero — the spread only ever ADDS reach (R-MIXER-6), so an old project gets more of
+    // the adjustment it already asked for, and a silent 0 would be a different decision.
+    EditParams legacy;
+    CHECK(deserializeParams("exposure=0.5\ncontrast=10\n", legacy));
+    CHECK(legacy.mixerSpread == 25.f);
+
+    // Presets too, and the .apf default matches the struct's.
+    const auto cats = apfImageCategories();
+    EditParams viaApf;
+    CHECK(applyApfToEditParams(editParamsToApf(p, cats, "t"), cats, viaApf));
+    CHECK_NEAR(viaApf.mixerSpread, 60.0, 1e-4);
+
+    // MAXIMUM, not addition: a photo at the default inside a group at the default must still
+    // spread by 25. Adding would make the default compound with the depth of the tree.
+    EditParams base, over;
+    CHECK(composeParams(base, over).mixerSpread == 25.f);
+    base.mixerSpread = 10.f; over.mixerSpread = 70.f;
+    CHECK(composeParams(base, over).mixerSpread == 70.f);
+    base.mixerSpread = 70.f; over.mixerSpread = 10.f;
+    CHECK(composeParams(base, over).mixerSpread == 70.f);
+
+    // And the engine's flat setter reaches the processor (0..100 in, 0..1 at the stage).
+    EditEngine eng;
+    auto bytes = solidRGBA8(8, 8, 128);
+    eng.addImage(bytes.data(), 8, 8, 4);
+    eng.setMixerSpread(40.f);
+    CHECK_NEAR(eng.currentParams().mixerSpread, 40.0, 1e-4);
 }

@@ -1,11 +1,13 @@
 #include "ColorMixer.h"
 #include "../base/ColorSpace.h"
+#include "../base/Parallel.h"
+#include "../base/Spatial.h"
 #include <algorithm>
 #include <cmath>
 
 namespace arstro
 {
-    ColorMixer::ColorMixer() : PointProcessor(0)
+    ColorMixer::ColorMixer() : ImageProcessor(0)
     {
         mSmoothEnable = false;
         for (int c = 0; c < 3; ++c)
@@ -17,14 +19,17 @@ namespace arstro
         // Judged on the LUT, not on the point list: an "empty" curve and a curve whose
         // points are all at y = 0 are both identity and arrive by different routes.
         // Exact zero, not a tolerance — rebuild() writes literal 0.0f for a flat curve.
-        for (int c = 0; c < 3; ++c)
-            for (int i = 0; i < kLut; ++i)
-                if (mLut[c][i] != 0.0f)
-                {
-                    mIdentity = false;
-                    return;
-                }
+        //
+        // Recorded PER CHANNEL as well, because the spread path allocates and blurs one plane
+        // per channel: a photographer bending only the Lum curve — which is the reported case —
+        // should pay for one plane, not three.
         mIdentity = true;
+        for (int c = 0; c < 3; ++c)
+        {
+            mFlat[c] = true;
+            for (int i = 0; i < kLut; ++i)
+                if (mLut[c][i] != 0.0f) { mFlat[c] = false; mIdentity = false; break; }
+        }
     }
 
     void ColorMixer::setCurve(Channel c, const std::vector<CurvePoint> &points)
@@ -44,6 +49,11 @@ namespace arstro
         std::sort(mPoints[c].begin(), mPoints[c].end(),
                   [](auto &a, auto &b) { return a.first < b.first; });
         rebuild(c);
+    }
+
+    void ColorMixer::setSpread(float amount01)
+    {
+        mSpread = amount01 < 0.f ? 0.f : (amount01 > 1.f ? 1.f : amount01);
     }
 
     void ColorMixer::rebuild(int c)
@@ -109,14 +119,10 @@ namespace arstro
         return mLut[c][i] * (1.0f - frac) + mLut[c][j] * frac;
     }
 
-    void ColorMixer::processPixel(const Pixel *in, Pixel *out, int channels)
+    void ColorMixer::weightedAdjust(const Pixel *in, int channels, float adj[3]) const
     {
-        const int colorCh = channels >= 3 ? 3 : channels;
-        if (colorCh < 3)
-        {
-            for (int ch = 0; ch < channels; ++ch) out[ch] = in[ch];
-            return;
-        }
+        adj[0] = adj[1] = adj[2] = 0.f;
+        if (channels < 3) return;
         Pixel h, s, l;
         color::rgbToHsl(in[0], in[1], in[2], h, s, l);
 
@@ -129,17 +135,114 @@ namespace arstro
         w = w < 0.0f ? 0.0f : (w > 1.0f ? 1.0f : w);
         w = w * w * (3.0f - 2.0f * w);   // smoothstep: no edge where the effect switches on
 
-        const float yh = sampleCyclic(Hue, (float)h) * w;
-        const float ys = sampleCyclic(Sat, (float)h) * w;
-        const float yl = sampleCyclic(Lum, (float)h) * w;
-        h += (Pixel)(yh * 180.0f);  // full ±180deg bend so any hue can reach any target
-        s *= (Pixel)1 + (Pixel)ys;
-        l += (Pixel)(yl * 0.5f);
+        for (int c = 0; c < 3; ++c)
+            adj[c] = mFlat[c] ? 0.f : sampleCyclic(c, (float)h) * w;
+    }
+
+    void ColorMixer::applyAdjust(const Pixel *in, Pixel *out, int channels, const float adj[3]) const
+    {
+        const int colorCh = channels >= 3 ? 3 : channels;
+        if (colorCh < 3)
+        {
+            for (int ch = 0; ch < channels; ++ch) out[ch] = in[ch];
+            return;
+        }
+        Pixel h, s, l;
+        color::rgbToHsl(in[0], in[1], in[2], h, s, l);
+        h += (Pixel)(adj[Hue] * 180.0f);  // full +/-180deg bend so any hue can reach any target
+        s *= (Pixel)1 + (Pixel)adj[Sat];
+        l += (Pixel)(adj[Lum] * 0.5f);
         if (h < 0) h += 360;
         if (h >= 360) h -= 360;
         if (s < 0) s = 0; if (s > 1) s = 1;
         if (l < 0) l = 0; if (l > 1) l = 1;
         color::hslToRgb(h, s, l, out[0], out[1], out[2]);
         for (int ch = 3; ch < channels; ++ch) out[ch] = in[ch];
+    }
+
+    void ColorMixer::process(const Image &in, Image &out)
+    {
+        out.resizeLike(in);
+        const int w = in.width(), h = in.height(), ch = in.channels();
+        if (w <= 0 || h <= 0) return;
+        const Pixel *src = in.data();
+        Pixel *dst = out.data();
+
+        const float sigma = mSpread * kSpreadFraction * (float)std::min(w, h);
+        if (ch < 3 || mSpread <= 0.f || sigma < kMinSpreadSigma)
+        {
+            // The original point op, unchanged: one rgbToHsl per pixel and no allocation. This
+            // is also the path a very small preview level takes, because 0.4% of 200 px is not
+            // yet half a pixel — and a blur that cannot move anything should not be paid for.
+            par::parallelFor(h, [&](int y0, int y1) {
+                for (int y = y0; y < y1; ++y)
+                {
+                    const Pixel *sr = src + (std::size_t)y * w * ch;
+                    Pixel *dr = dst + (std::size_t)y * w * ch;
+                    for (int x = 0; x < w; ++x)
+                    {
+                        float adj[3];
+                        weightedAdjust(sr + x * ch, ch, adj);
+                        applyAdjust(sr + x * ch, dr + x * ch, ch, adj);
+                    }
+                }
+            });
+            return;
+        }
+
+        // ── the spread path (R-MIXER-5..7) ──
+        // One plane per NON-FLAT channel: the reported case bends Lum alone, and three planes
+        // for one curve would be two blurs of zero.
+        const std::size_t n = (std::size_t)w * h;
+        std::vector<Pixel> plane[3], blurred[3];
+        for (int c = 0; c < 3; ++c)
+            if (!mFlat[c]) plane[c].resize(n);
+
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+            {
+                const Pixel *sr = src + (std::size_t)y * w * ch;
+                for (int x = 0; x < w; ++x)
+                {
+                    float adj[3];
+                    weightedAdjust(sr + x * ch, ch, adj);
+                    for (int c = 0; c < 3; ++c)
+                        if (!plane[c].empty()) plane[c][(std::size_t)y * w + x] = (Pixel)adj[c];
+                }
+            }
+        });
+
+        // `fastBlurPlane`, not the exact kernel: sigma is a fraction of the image (R-MIXER-7), so
+        // an export's radius grows with its own size and an O(pixels x sigma) kernel would make a
+        // full-resolution render pay for that size twice. A weight plane needs to be smooth; the
+        // precise shape of a Gaussian tail is not what it is for.
+        for (int c = 0; c < 3; ++c)
+            if (!plane[c].empty()) spatial::fastBlurPlane(plane[c], blurred[c], w, h, sigma);
+
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+            {
+                const Pixel *sr = src + (std::size_t)y * w * ch;
+                Pixel *dr = dst + (std::size_t)y * w * ch;
+                for (int x = 0; x < w; ++x)
+                {
+                    const std::size_t i = (std::size_t)y * w + x;
+                    float adj[3] = {0.f, 0.f, 0.f};
+                    for (int c = 0; c < 3; ++c)
+                    {
+                        if (plane[c].empty()) continue;
+                        const float own = (float)plane[c][i];
+                        const float nb = (float)blurred[c][i];
+                        // Larger magnitude wins (R-MIXER-6). The softened value ALONE would
+                        // dilute a colour region smaller than the radius — a small red flower
+                        // would move less than it does today, which is a regression for every
+                        // project that already exists. So the spread is a floor on how much a
+                        // pixel moves, never a ceiling.
+                        adj[c] = std::fabs(nb) > std::fabs(own) ? nb : own;
+                    }
+                    applyAdjust(sr + x * ch, dr + x * ch, ch, adj);
+                }
+            }
+        });
     }
 }

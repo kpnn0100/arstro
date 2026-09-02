@@ -90,6 +90,15 @@ namespace arstro
         // colour mixer: 3 cyclic per-hue curves (hue / sat / lum), stored as bezier
         // CONTROL points so a reopened project restores the exact editable curve.
         std::array<std::vector<CurvePoint>, 3> mixer{};
+        /** How far the mixer's per-hue selection reaches into its neighbourhood, 0..100
+         *  (R-MIXER-5..8). Whether a pixel belongs to a colour is a question about the pixels
+         *  around it: grain inside a red flower is red grain, and the bokeh behind a subject is
+         *  a smeared version of the colours in front of it — a per-pixel chroma gate declines
+         *  both. 0 is the strict per-pixel answer. The default is deliberately NOT 0: the
+         *  reported symptom is the tool's default behaviour, so the fix has to be too, and by
+         *  R-MIXER-6 the spread can only ever ADD reach, so an existing project gets more of the
+         *  adjustment it already asked for and never less. */
+        float mixerSpread = 25;
         // colour grading: 3-way wheels + balance + hue-range remap
         std::array<GradeWheel, 3> grade{};
         float balance = 0;

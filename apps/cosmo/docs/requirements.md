@@ -538,6 +538,13 @@ computes each row's offset as `effectiveEditParams − own` in slider units and 
   on the flattest patch of a real X-Trans frame, against 1.00× with the weight. The editor is
   unchanged — this is entirely in the engine — but the panel's effect on a desaturated region is
   deliberately smaller now (R-MIXER-3).
+  **And that weight is then spread over a neighbourhood (R-MIXER-5..9, see DR-MIXER-5..9).** Refusing
+  the noise pixel was only half an answer: the grain inside a red flower is red grain, and the bokeh
+  behind a subject is a smeared version of the colours in front of it, so a per-pixel gate declined
+  both. `EditParams::mixerSpread` (0..100, default 25) softens each channel's weighted adjustment over
+  `0.004 × min(w,h) × spread/100` pixels and takes the larger magnitude of the pixel's own and its
+  neighbourhood's — so the spread only ever ADDS reach. There is no panel control for it yet; it is
+  reachable as `set mixerSpread=`.
 
 - **CurvePanel**: an RGB/R/G/B picker + Reset over a tone-curve plot that edits with the **same
   UX as the mixer's HueCurveEditor** — points are **bezier `CurvePoint`s** (`EditParams::curve` /
@@ -2967,3 +2974,77 @@ Covered by `aPathMaskIsDrawnByClickingThePhoto` and `altDraggingAPathPointPullsI
 deliberately links no engine), `drawingAMaskOnThePhotoReachesTheModel` (`cosmo_ui_tests` — the whole
 route: Mask tab, Draw chip, three clicks, the points in the MODEL, and the engine covering the
 inside) and the `editor-mask-draw-placing` / `editor-mask-draw` shots.
+
+### DR-MIXER-5..9 The mixer's selection is spread over a neighbourhood (R-MIXER-5, R-MIXER-6, R-MIXER-7, R-MIXER-8, R-MIXER-9)
+R-MIXER-1 stopped the speckle by refusing the noise pixel, which is only half an answer. The grain
+inside a red flower **is** red grain — it just does not read as red — so the flower moved and the
+grain did not, and the flower ended up peppered. The same hole swallows **bokeh**: a defocused green
+is a smeared green, its chroma sits below `kChromaFloor`, and a per-pixel gate leaves the whole
+out-of-focus background behind while the in-focus subject moves.
+
+Both are one fact: whether a pixel belongs to a colour is a question about its **neighbourhood**.
+
+`ColorMixer` is therefore no longer a `PointProcessor` — it derives from `ImageProcessor` and owns
+its own loop (`core/ImageProcessing/src/color/ColorMixer.h:50`,
+[ColorMixer.cpp](../../../core/ImageProcessing/src/color/ColorMixer.cpp)). The old per-pixel kernel
+is split in two so the spread can substitute for half of it: `weightedAdjust` computes
+`w · y(hue)` for each channel (the chroma weight of R-MIXER-1/2, unchanged), and `applyAdjust` takes
+three already-decided adjustments and does the HSL round trip. With `spread == 0` the two run back
+to back on one pixel and the stage is **exactly** what it was before, allocating nothing — which is
+also the path a very small preview level takes, since 0.4% of 200 px is not yet half a pixel.
+
+Above that, `process` builds one plane per **non-flat** channel (`mFlat[3]`, recorded by
+`refreshIdentity` alongside the whole-stage identity flag — the reported case bends Lum alone and
+should not pay for two blurs of zero), softens each with `spatial::fastBlurPlane`, and then takes,
+per pixel and per channel, **whichever of its own and the softened value is larger in magnitude**.
+
+Larger-wins, not the softened value outright, is R-MIXER-6 and it is the load-bearing decision: a
+plain blur would *dilute* the effect at the edge of any colour region smaller than the radius, so a
+small red flower would move **less** than it does today — a regression for every project that
+already exists. As written the spread is a floor on how much a pixel moves and never a ceiling, so
+the change is one-directional, which is what makes a non-zero default defensible at all.
+
+**Sigma is a fraction of the image**, `mixerSpread/100 × ColorMixer::kSpreadFraction (0.004) ×
+min(w,h)`, not a pixel count: cosmo renders the same edit at 200/400/800/1600 and full resolution
+(R-PREVIEW), and a radius in pixels would make the preview stop predicting the export at exactly the
+moment the photographer is judging colour.
+
+That makes the radius grow with the render, so the blur may not be O(pixels × sigma).
+`spatial::fastBlurPlane` ([Spatial.cpp](../../../core/ImageProcessing/src/base/Spatial.cpp)) is
+three running-sum box passes per axis at Kovesi's widths — two adds per pixel per pass regardless of
+radius — **delegating to the exact kernel below sigma 4**, because the two methods are strong in
+opposite regimes: three integer box widths reach only coarse variances (sigma 1 comes out at 0.82),
+and a small sigma is precisely where the exact kernel is cheap. So the accurate method is used
+wherever it is also the cheap one, and the cost stops growing where it would otherwise hurt.
+
+`EditParams::mixerSpread` defaults to **25**, and that changes what existing projects render —
+stated rather than hidden, exactly as R-MIXER-3 was. The reported symptom is the tool's default
+behaviour, so the fix has to be the default too. It composes by **maximum**
+(`EditParamsCompose.cpp`), not by addition: adding would make a photo at the default inside a group
+at the default spread by 50, so the default itself would compound with the depth of the tree. A
+project written before this key existed simply has no `mixerSpread=` line and lands on the default,
+which is the intended migration — by R-MIXER-6 it can only get *more* of the adjustment it already
+asked for. `set mixerSpread=0` is how a photographer opts out.
+
+Reachable as **`set mixerSpread=<0..100>`** with no command code at all, because `EditParamsIO`
+names it (`EditParamsIO.cpp:158,217`) and `set` feeds the same `deserializeParams` the project and
+preset formats use. The same one line gives it a place in `.cmp`/`.cosmoproj`, in `.apf` presets
+(the `mixer` category, so an undo step is labelled **Mixer** with no special case), in the
+`formatModel` params dump, and in the non-finite walk — `guardedParamScalarCount()` is now 59.
+
+The GPU story is unchanged: the compute backends still **decline** any non-identity mixer
+(R-MIXER-4), so there is one implementation and it cannot diverge.
+
+Covered by `ColorMixer_spread_treats_noise_and_bokeh_as_part_of_their_colour` (`image_tests`), which
+measures the same image at `spread == 0` and `spread == 1` — so it fails without the fix by
+construction rather than by assertion. On a 512 px frame: a grey noise pixel inside a red field
+lifts **+0.000 → +0.485**; a bokeh fringe whose chroma sits below the floor lifts **+0.000 →
++0.105**; a 4×4 red square smaller than the radius lifts **+0.638 → +0.638**, unchanged, which is
+R-MIXER-6; and the flat noisy grey of R-MIXER-1 still comes out unsaturated.
+`Spatial_fastBlurPlane_approximates_the_gaussian_at_constant_cost` holds the blur to the radius
+asked for (within 7%, measured as the second moment of a blurred impulse), conserves the plane's
+weight, and keeps a step edge monotone. `EditParams_mixerSpread_persists_and_composes_by_maximum`
+(`image_tests`) covers the default, the round trip, the preset, and the max rule.
+`mixer_spread_is_reachable_and_persists` (`cosmo_core_tests`) drives the real service: `set`, the
+`Mixer` history label, undo, the model dump, a project save, the **migration** (the key stripped
+from a saved project comes back at 25, not 0), and the NaN refusal.

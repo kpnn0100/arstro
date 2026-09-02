@@ -393,6 +393,7 @@ namespace arstro
         mColorMixer.setCurve(ColorMixer::Hue, p.mixer[0]);
         mColorMixer.setCurve(ColorMixer::Sat, p.mixer[1]);
         mColorMixer.setCurve(ColorMixer::Lum, p.mixer[2]);
+        mColorMixer.setSpread(p.mixerSpread / 100.f);
         for (int r = 0; r < 3; ++r)
         {
             mColorGrading.setGradeHue((ColorGrading::Region)r, p.grade[r].hue);
@@ -470,6 +471,11 @@ namespace arstro
             p->mixer[c] = points;
             mColorMixer.setCurve((ColorMixer::Channel)c, points);
         }
+    }
+
+    void EditEngine::setMixerSpread(float v)
+    {
+        if (auto *p = cur()) { p->mixerSpread = v; mColorMixer.setSpread(v / 100.f); }
     }
 
     void EditEngine::setGradeHue(GradeRegion r, float v) { if (auto *p = cur()) { p->grade[r].hue = v; mColorGrading.setGradeHue((ColorGrading::Region)r, v); } }

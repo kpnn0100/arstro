@@ -151,6 +151,11 @@ namespace arstro
             r.curveChannel[c] = addCurveDeltaY(base.curveChannel[c], over.curveChannel[c]);
         for (int c = 0; c < 3; ++c)
             r.mixer[c] = addMixerDeltaY(base.mixer[c], over.mixer[c]);
+        // MAXIMUM, not addition (R-MIXER-8). Spread is a quality of the selection, not a dose:
+        // adding would make a photo at the default inside a group at the default spread by 50,
+        // so the default itself would compound with nesting depth and mean something different
+        // at every level of a tree. Max is idempotent, which is what a default needs.
+        r.mixerSpread = base.mixerSpread > over.mixerSpread ? base.mixerSpread : over.mixerSpread;
         // curveLog and crop follow `base` (already copied): framing/domain are per-item.
 
         // ── masks concatenate: the member's own first, the group's on top ──

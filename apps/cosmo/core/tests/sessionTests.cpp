@@ -1676,6 +1676,78 @@ namespace
         printf("[PASS] a_path_mask_is_drawn_by_command_and_renders\n");
     }
 
+    // ── R-MIXER-9: the mixer's neighbourhood spread is reachable, persists, and is one undo ──
+    //
+    // The point of the field costing nothing to reach: `EditParamsIO` names it, `set` feeds
+    // `deserializeParams`, and so a script can set it, a project carries it, and history labels
+    // it — none of which needed a line of command code. The assertion that matters is the
+    // MIGRATION: a project written before this existed has no key at all, and must come back at
+    // the DEFAULT rather than at 0, because the spread only ever adds reach (R-MIXER-6/8).
+    void test_mixer_spread_is_reachable_and_persists()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_mixerspread.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+
+        assert(std::fabs(svc.model().ownParams.mixerSpread - 25.f) < 1e-4f &&
+               "a fresh photo carries the default, because the reported symptom IS the default");
+        assert(svc.dispatchText("set mixerSpread=70", err) && err.empty());
+        assert(std::fabs(svc.model().ownParams.mixerSpread - 70.f) < 1e-4f);
+        // Labelled by the preset category it lives in, so an undo step reads as "Mixer" with
+        // no special case anywhere — which is the whole reason it went in that category.
+        assert(svc.model().history.lastLabel == "Mixer");
+        assert(svc.dispatchText("undo", err) && err.empty());
+        assert(std::fabs(svc.model().ownParams.mixerSpread - 25.f) < 1e-4f);
+
+        // Out through the model dump, which is what a second front end reads (R-SVC-9).
+        assert(svc.dispatchText("set mixerSpread=70", err) && err.empty());
+        const std::string dump = formatModel(svc.model(), {true, false, true});
+        assert(dump.find("mixerSpread=70") != std::string::npos && "and it prints in the dump");
+
+        // Through a project file...
+        const std::string save = "/tmp/cosmo_svc_mixerspread_saved.cmp";
+        assert(svc.dispatchText("project save " + save, err) && err.empty());
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(save, back) && !back.empty());
+        assert(std::fabs(back.front().params.mixerSpread - 70.f) < 1e-4f);
+
+        // ...and the migration: strip the key the way a pre-R-MIXER-5 project has it, and the
+        // photo must come back at the default. A silent 0 is a different decision than the one
+        // R-MIXER-8 records, and it would stay invisible until somebody compared two frames.
+        {
+            std::ifstream in(save);
+            std::string line, kept;
+            while (std::getline(in, line))
+                if (line.rfind("mixerSpread=", 0) != 0) kept += line + "\n";
+            in.close();
+            std::ofstream out(save, std::ios::trunc);
+            out << kept;
+        }
+        back.clear();
+        assert(EditSession::readWorkspaceFile(save, back) && !back.empty());
+        assert(std::fabs(back.front().params.mixerSpread - 25.f) < 1e-4f &&
+               "an old project lands on the default, not on zero");
+
+        // And a value it cannot mean is refused like any other bad number (D-36). The reason
+        // is in `lastError` and not in `err`: `dispatchText` fills `err` from the PARSER, and a
+        // rejected-on-dispatch command reports through the model so a front end that was not
+        // listening can still find out why (R-SVC-3).
+        assert(!svc.dispatchText("set mixerSpread=nan", err));
+        assert(svc.model().lastError.find("mixerSpread") != std::string::npos);
+        assert(std::fabs(svc.model().ownParams.mixerSpread - 70.f) < 1e-4f && "and nothing moved");
+
+        std::filesystem::remove(path);
+        std::filesystem::remove(save);
+        printf("[PASS] mixer_spread_is_reachable_and_persists\n");
+    }
+
     // R-PREVIEW-1/2/3: a gesture renders coarse to keep up, and the level walks back to
     // full once the gesture stops. Driven entirely by commands with no display, which is
     // the whole point of the requirement being a LATENCY budget: the behaviour is the same
@@ -2699,6 +2771,7 @@ int main()
     test_picking_a_white_point_sets_temp_and_tint();
     test_metadata_reads_the_file_without_decoding_it();
     test_a_path_mask_is_drawn_by_command_and_renders();
+    test_mixer_spread_is_reachable_and_persists();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();
     test_commands_drive_the_session();

@@ -287,6 +287,18 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   class EditParams
   class CurvePoint
   class MaskParams
+  class Spatial <<free functions>> {
+    + luminancePlane(img, out)
+    + gaussianBlurPlane(src, dst, w, h, sigma)   ' exact; O(pixels x sigma)
+    + fastBlurPlane(src, dst, w, h, sigma)       ' 3-box cascade; cost flat in sigma (R-MIXER-7)
+  }
+  class ColorMixer <<not a point op>> {
+    + setCurve(channel, points)
+    + setSpread(amount01)                     ' 0..1; sigma = 0.004 x min(w,h) (R-MIXER-7)
+    + process(in, out)                        ' two passes: weight plane -> blur -> apply
+    - weightedAdjust / applyAdjust            ' split so the spread can replace half of it
+    - mFlat[3]                                ' one plane per NON-flat channel only
+  }
 }
 
 package "Artboard  (namespace artboard)  <<platform-free UI framework>>" as artboard {
@@ -396,5 +408,7 @@ RenderService ..> Frame
 EditEngine ..> EditParams
 EditParams *--> CurvePoint
 EditParams *--> MaskParams
+EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
+ColorMixer ..> Spatial : fastBlurPlane
 
 @enduml

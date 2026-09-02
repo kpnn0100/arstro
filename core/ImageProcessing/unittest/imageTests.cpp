@@ -553,6 +553,200 @@ TEST(ColorMixer_lum_curve_does_not_amplify_noise_in_a_grey)
     CHECK(pl1 - pl0 < 0.45);
 }
 
+
+// ── ColorMixer: whether a pixel BELONGS to a colour is a question about its neighbours ──
+//
+// R-MIXER-1 fixed the speckle by refusing the noise pixel, which is only half an answer. The
+// grain inside a red flower is red grain — it just does not READ as red — so the flower moved
+// and the grain did not, leaving it peppered. The same hole swallows BOKEH: a defocused green
+// is a smeared green, its chroma is below the floor, and a per-pixel gate leaves it behind
+// while the in-focus green moves.
+//
+// Both halves are measured here against the SAME image with `spread == 0`, which is exactly the
+// pre-R-MIXER-5 behaviour — so this test fails without the fix by construction rather than by
+// assertion, and the third block guards the thing the naive implementation gets wrong.
+TEST(ColorMixer_spread_treats_noise_and_bokeh_as_part_of_their_colour)
+{
+    const int N = 512;   // 0.4% of 512 is ~2 px of sigma at full spread: a spread, not a smear
+    auto lumOf = [](const Image &im, int x, int y) {
+        return 0.2126 * im.at(x, y, 0) + 0.7152 * im.at(x, y, 1) + 0.0722 * im.at(x, y, 2);
+    };
+
+    // A curve that lifts RED hard and does nothing anywhere else, so every number below is
+    // "how much did this pixel get treated as red".
+    auto liftRed = [](float spread) {
+        ColorMixer m;
+        m.setCurve(ColorMixer::Lum, {{0.f, 1.f}, {60.f, 0.f}, {300.f, 0.f}});
+        m.setSpread(spread);
+        return m;
+    };
+
+    // ── 1. noise inside a colour ──
+    // A field of saturated red with one pixel in every 8x8 knocked to neutral grey of the same
+    // luminance: chroma noise, which is what a high-ISO red actually looks like up close.
+    Image red(N, N, 3, ColorSpace::LinearSRGB);
+    const Image redPx = pxHsl(0, (Pixel)0.8, (Pixel)0.4);
+    const Image greyPx = solidLinear(1, 1, 3, (Pixel)0.13);   // ~the same luminance, no chroma
+    std::vector<std::pair<int, int>> noisy;
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x)
+        {
+            const bool dead = (x % 8 == 3) && (y % 8 == 5);
+            for (int c = 0; c < 3; ++c)
+                red.at(x, y, c) = dead ? greyPx.at(0, 0, c) : redPx.at(0, 0, c);
+            if (dead) noisy.push_back({x, y});
+        }
+
+    auto meanLift = [&](const Image &before, const Image &after,
+                        const std::vector<std::pair<int, int>> &pts) {
+        double s = 0;
+        for (auto &p : pts) s += lumOf(after, p.first, p.second) - lumOf(before, p.first, p.second);
+        return pts.empty() ? 0.0 : s / (double)pts.size();
+    };
+
+    ColorMixer off = liftRed(0.f), on = liftRed(1.f);
+    const Image redOff = off.apply(red), redOn = on.apply(red);
+    const double noiseOff = meanLift(red, redOff, noisy);
+    const double noiseOn = meanLift(red, redOn, noisy);
+    std::printf("      noise pixel lift  spread 0: %+.4f   spread 1: %+.4f\n", noiseOff, noiseOn);
+    CHECK(noiseOff < 0.01);          // the defect: the grain stays where it was...
+    CHECK(noiseOn > 0.10);           // ...and now it comes along with its neighbours
+
+    // ── 2. bokeh ──
+    // A saturated red disc smeared into a neutral background — the chroma falls off with the
+    // blur, so the fringe reads as neutral to a per-pixel gate even though it is plainly red.
+    Image bokeh(N, N, 3, ColorSpace::LinearSRGB);
+    const Image discPx = pxHsl(0, (Pixel)0.8, (Pixel)0.4);   // the SAME hue the curve lifts
+    const double cx = N * 0.5, cy = N * 0.5, R = N * 0.22, soft = N * 0.05;
+    std::vector<std::pair<int, int>> fringe;
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x)
+        {
+            const double d = std::sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+            double t = (d - R) / soft;                       // 0 at the core edge, 1 outside
+            t = t < 0 ? 0 : (t > 1 ? 1 : t);
+            const double k = 1.0 - t * t * (3.0 - 2.0 * t);  // coverage of the defocused disc
+            for (int c = 0; c < 3; ++c)
+                bokeh.at(x, y, c) = (Pixel)(greyPx.at(0, 0, c) + (discPx.at(0, 0, c) - greyPx.at(0, 0, c)) * k);
+            // The band where the disc has faded to a HINT of colour — chroma 0.002..0.010
+            // against a floor of 0.010, so the per-pixel gate declines it outright. Chosen by
+            // the disc's own coverage rather than by a radius: it is the chroma that decides
+            // whether the gate fires, so that is what the band has to be picked on.
+            if (k > 0.003 && k < 0.016) fringe.push_back({x, y});
+        }
+
+    const Image bokehOff = off.apply(bokeh), bokehOn = on.apply(bokeh);
+    const double fringeOff = meanLift(bokeh, bokehOff, fringe);
+    const double fringeOn = meanLift(bokeh, bokehOn, fringe);
+    std::printf("      bokeh fringe lift spread 0: %+.4f   spread 1: %+.4f\n", fringeOff, fringeOn);
+    CHECK(fringeOff < 0.02);                     // the defect: the bokeh is left behind...
+    CHECK(fringeOn > fringeOff * 3.0 + 0.02);    // ...and now it joins the colour it came from
+
+    // ── 3. R-MIXER-6: the spread may only ADD reach ──
+    // A red square SMALLER than the blur radius, on grey. Taking the softened value outright
+    // would dilute it — the square would move LESS than it does today, which is a regression for
+    // every project that already exists. Larger-magnitude-wins is what forbids that.
+    Image small(N, N, 3, ColorSpace::LinearSRGB);
+    std::vector<std::pair<int, int>> square, outside;
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x)
+        {
+            const bool in = x >= 250 && x < 254 && y >= 250 && y < 254;   // 4x4, sigma is ~2
+            for (int c = 0; c < 3; ++c)
+                small.at(x, y, c) = in ? redPx.at(0, 0, c) : greyPx.at(0, 0, c);
+            if (in) square.push_back({x, y});
+            if (x >= 258 && x < 262 && y >= 250 && y < 254) outside.push_back({x, y});
+        }
+    const Image smallOff = off.apply(small), smallOn = on.apply(small);
+    const double sqOff = meanLift(small, smallOff, square);
+    const double sqOn = meanLift(small, smallOn, square);
+    std::printf("      small square lift spread 0: %+.4f   spread 1: %+.4f\n", sqOff, sqOn);
+    CHECK(sqOn >= sqOff - 1e-6);   // never less than it moves today — the whole point of R-MIXER-6
+    // ...and the grey just outside picks a little of it up, which is the spread doing its job.
+    CHECK(meanLift(small, smallOn, outside) > meanLift(small, smallOff, outside));
+
+    // ── 4. and R-MIXER-1 still holds: a spread of nothing is still nothing ──
+    // The flat grey that started all of this. The spread averages a plane that is zero
+    // everywhere, so it cannot resurrect the speckle it was built to prevent.
+    Image flat(N, N, 3, ColorSpace::LinearSRGB);
+    unsigned seed = 7u;
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x)
+            for (int c = 0; c < 3; ++c)
+            {
+                seed = seed * 1664525u + 1013904223u;
+                flat.at(x, y, c) = (Pixel)0.18 + (Pixel)((int)((seed >> 16) % 3u) - 1) * (Pixel)(1.0 / 255.0);
+            }
+    ColorMixer swing;
+    swing.setCurve(ColorMixer::Lum, {{0.f, 1.f}, {180.f, -1.f}});
+    swing.setSpread(1.f);
+    CHECK(satOf(swing.apply(flat)) < 0.05);
+}
+
+// The spread's blur is `fastBlurPlane`, not the exact kernel, because sigma is a fraction of
+// the image (R-MIXER-7) and an O(pixels x sigma) kernel would make a full-resolution export pay
+// for its own size twice. What a WEIGHT plane needs from a blur is a radius, smoothness and its
+// total weight back — not the precise shape of a Gaussian tail — so that is what is asserted.
+// A three-box cascade is measurably boxy at small sigma (the box widths are integers and there
+// are only two of them to choose from), which is why it delegates to the exact kernel below
+// sigma 4 — the regime where the exact kernel is also the cheap one. Both regimes are covered
+// here, and the effective-radius bound is the one that matters to a weight plane.
+TEST(Spatial_fastBlurPlane_approximates_the_gaussian_at_constant_cost)
+{
+    const int w = 129, h = 65;
+    std::vector<Pixel> impulse((size_t)w * h, (Pixel)0);
+    impulse[(size_t)(h / 2) * w + w / 2] = (Pixel)1;
+
+    // Effective sigma straight out of the blurred impulse: the second moment of a separable
+    // 2D kernel is 2*sigma^2, so this measures the radius the caller actually got.
+    auto effectiveSigma = [&](const std::vector<Pixel> &pl) {
+        double mass = 0, m2 = 0;
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+            {
+                const double v = pl[(size_t)y * w + x];
+                const double dx = x - w / 2, dy = y - h / 2;
+                mass += v; m2 += v * (dx * dx + dy * dy);
+            }
+        return mass > 0 ? std::sqrt(m2 / mass / 2.0) : 0.0;
+    };
+
+    for (float sigma : {1.0f, 3.0f, 6.0f, 16.0f})
+    {
+        std::vector<Pixel> exact, fast;
+        spatial::gaussianBlurPlane(impulse, exact, w, h, sigma);
+        spatial::fastBlurPlane(impulse, fast, w, h, sigma);
+
+        double peak = 0, worst = 0, sumE = 0, sumF = 0;
+        for (size_t i = 0; i < impulse.size(); ++i)
+        {
+            peak = std::max(peak, (double)exact[i]);
+            worst = std::max(worst, std::fabs((double)exact[i] - (double)fast[i]));
+            sumE += exact[i]; sumF += fast[i];
+        }
+        const double se = effectiveSigma(fast);
+        std::printf("      sigma %.0f: effective %.2f  worst diff %.5f of peak %.5f  mass %.4f vs %.4f\n",
+                    sigma, se, worst, peak, sumE, sumF);
+        CHECK(std::fabs(se - sigma) < sigma * 0.07);   // the radius asked for, to within 7%
+        CHECK(std::fabs(sumE - sumF) < 0.02);          // and the plane's total weight back
+        // Shape: exact below the crossover, and a cascade above it that is boxier in the tail
+        // than a Gaussian by a tenth of its own peak — which a weight plane does not care about.
+        CHECK(worst < peak * (sigma < 4.f ? 1e-4 : 0.12));
+    }
+
+    // In place, and a step edge stays monotone (a box cascade with the wrong radii rings).
+    std::vector<Pixel> step((size_t)w * h, (Pixel)0);
+    for (int y = 0; y < h; ++y)
+        for (int x = w / 2; x < w; ++x) step[(size_t)y * w + x] = (Pixel)1;
+    spatial::fastBlurPlane(step, step, w, h, 4.f);
+    bool monotone = true;
+    for (int x = 1; x < w; ++x)
+        if (step[(size_t)(h / 2) * w + x] < step[(size_t)(h / 2) * w + x - 1] - 1e-6f) monotone = false;
+    CHECK(monotone);
+    CHECK(step[(size_t)(h / 2) * w + 0] < 0.01f);      // clamped edges, not wrapped
+    CHECK(step[(size_t)(h / 2) * w + w - 1] > 0.99f);
+}
+
 // ── ColorGrading ──
 TEST(ColorGrading_hue_remap_and_identity)
 {

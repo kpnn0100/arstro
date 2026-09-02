@@ -106,7 +106,8 @@ namespace arstro
             c.set("curveR", mixerStr(p.curveChannel[0])); c.set("curveG", mixerStr(p.curveChannel[1]));
             c.set("curveB", mixerStr(p.curveChannel[2])); }
         if (has(cats, "mixer")) { auto &c = d.category("mixer");
-            c.set("mixer0", mixerStr(p.mixer[0])); c.set("mixer1", mixerStr(p.mixer[1])); c.set("mixer2", mixerStr(p.mixer[2])); }
+            c.set("mixer0", mixerStr(p.mixer[0])); c.set("mixer1", mixerStr(p.mixer[1])); c.set("mixer2", mixerStr(p.mixer[2]));
+            c.set("mixerSpread", fs(p.mixerSpread)); }
         if (has(cats, "grade")) { auto &c = d.category("grade");
             for (int r = 0; r < 3; ++r) { std::ostringstream g; g.precision(7);
                 g << p.grade[r].hue << ',' << p.grade[r].sat << ',' << p.grade[r].lum;
@@ -160,7 +161,8 @@ namespace arstro
             io.curveChannel[2] = parseMixer(val(c, "curveB", "0,0;1,1")); }
         if (const apf::Category *c = has(cats, "mixer") ? doc.find("mixer") : nullptr) {
             io.mixer[0] = parseMixer(val(c, "mixer0")); io.mixer[1] = parseMixer(val(c, "mixer1"));
-            io.mixer[2] = parseMixer(val(c, "mixer2")); }
+            io.mixer[2] = parseMixer(val(c, "mixer2"));
+            io.mixerSpread = f(val(c, "mixerSpread", "25")); }
         if (const apf::Category *c = has(cats, "grade") ? doc.find("grade") : nullptr) {
             for (int r = 0; r < 3; ++r) { auto g = floats(val(c, "grade" + std::to_string(r)), ',');
                 if (g.size() >= 3) { io.grade[r].hue = g[0]; io.grade[r].sat = g[1]; io.grade[r].lum = g[2]; } }

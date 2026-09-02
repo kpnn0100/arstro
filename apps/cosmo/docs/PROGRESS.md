@@ -15,6 +15,50 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-02 — four features requested. IN PROGRESS.**
+
+Requested: *(1) for the lum curve, a pixel surrounded by pixels of the colour being remapped should
+get the effect too, so noise is handled, and the weight should spread a little so bokeh is treated
+correctly; (2) a basic AI segmentation feature — the user adds a mask that detects sky, skin, hair
+and more; (3) build the colour-picker and delete icons in Artboard from the two supplied SVGs;
+(4) the separate line in the Colour section overlaps the colour-picker icon — make it a row with
+fixed-width text and icon and a dynamic line between.*
+
+- **[x] (1) the mixer's selection is spread over a neighbourhood.** R-MIXER-1 stopped the speckle by
+  *refusing* the noise pixel, which is only half an answer: the grain inside a red flower is red
+  grain, so the flower moved and the grain did not. Same hole swallows bokeh — a defocused green is a
+  smeared green with chroma below the floor. `ColorMixer` is no longer a `PointProcessor`; it builds
+  one weight plane per non-flat channel, softens it, and takes **whichever of the pixel's own and the
+  softened value is larger in magnitude**. Three things worth carrying forward:
+  * **Larger-magnitude-wins is the load-bearing decision, not a detail.** A plain blur *dilutes* the
+    effect at the edge of any region smaller than the radius — a small red flower would move LESS
+    than it does today, a regression for every existing project. As written the spread is a floor and
+    never a ceiling, which is the only reason a non-zero default (25) is defensible.
+  * **Sigma had to be a fraction of the image**, because the same edit renders at 200…1600 px and
+    full size and the preview must keep predicting the export. That makes the radius grow with the
+    render, so the blur may not be O(pixels × sigma) — hence `spatial::fastBlurPlane`, a three-box
+    cascade that **delegates to the exact kernel below sigma 4**: the two methods are strong in
+    opposite regimes, and this way the accurate one is used wherever it is also the cheap one.
+  * **The parameter cost nothing to reach.** One `EditParamsIO` case bought `set mixerSpread=`, the
+    project format, the `.apf` preset, the `Mixer` history label, the model dump and the non-finite
+    walk. That is R-SVC-5 paying out, and it is the argument for never adding a second key table.
+    R-MIXER-5..9, DR-MIXER-5..9.
+- **[ ] (2) basic AI segmentation masks — sky / skin / hair and more.**
+- **[ ] (3) colour-picker + delete icons from the supplied SVGs (design).**
+- **[ ] (4) the Colour section's separator line overlaps the picker icon (design).**
+
+**► NEXT: (2) a semantic mask — the core half.** Then (3) and (4), which are
+`arstro.cosmo.design.implement`'s.
+
+**Noted while working, not fixed** — `EditParamsApf`'s mask codec writes only three groups, so a
+**path mask does not survive a preset** (`EditParamsApf.cpp:39`), unlike the project format which
+grew the fourth group in `3f46920`. Filed as D-57.
+
+**Environment note (this machine):** `g++` fails silently with exit 1 and no diagnostic unless
+`/c/msys64/mingw64/bin` is on `PATH`; so do the test binaries (`0xc0000139`). Export it before any
+build or `ctest`. And `cosmo.exe` running holds a lock on its own link output — the app has to be
+closed before `cmake --build build --target cosmo` can relink it.
+
 **► 2026-08-27 — four features requested. ALL FOUR DONE.**
 
 Requested: *(1) when right-click a photo, add option to show image information (metadata);

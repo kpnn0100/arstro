@@ -24,16 +24,32 @@
  *  value for a tiny chroma in the shadows — exactly where noise lives. Chroma is recovered
  *  from the HSL pair without a second min/max pass: `d = s * (1 - |2l - 1|)`, the algebraic
  *  inverse of that formula.
+ *
+ *  ...and that weight is then SPREAD over a neighbourhood (R-MIXER-5..8), which is what turns a
+ *  correct refusal into a correct answer. Refusing the noise pixel stopped the speckle but left the
+ *  grain inside a red flower untouched while the flower moved, and left the BOKEH behind a subject
+ *  behind entirely — a defocused green is a smeared green, and a per-pixel chroma gate reads it as
+ *  neutral. Whether a pixel belongs to a colour is a question about its neighbourhood.
+ *
+ *  So each channel's `w * y(hue)` is built as a plane, softened by `mixerSpread`, and the pixel is
+ *  moved by whichever of its own and the softened value is LARGER IN MAGNITUDE. Larger-wins, not
+ *  the softened value outright: a plain blur would dilute the effect at the edge of any region
+ *  smaller than the radius, so a small red flower would move LESS than it does today. The spread
+ *  may only add reach, never remove it.
  */
 #pragma once
 #include "../base/CurvePoint.h"
+#include "../base/Image.h"
 #include "../base/ImageProcessor.h"
 #include <utility>
 #include <vector>
 
 namespace arstro
 {
-    class ColorMixer : public PointProcessor
+    /** Not a `PointProcessor` any more, and that is the whole of R-MIXER-5: the answer for a
+     *  pixel depends on its neighbours, so the stage owns its own two-pass loop. With
+     *  `spread == 0` the two passes collapse to the one the point op ran, byte for byte. */
+    class ColorMixer : public ImageProcessor
     {
     public:
         enum Channel { Hue = 0, Sat = 1, Lum = 2 };
@@ -50,6 +66,16 @@ namespace arstro
         static constexpr float kChromaFloor = 0.010f;
         static constexpr float kChromaFull = 0.040f;
 
+        /** Blur sigma at spread == 1, as a fraction of the image's SHORT EDGE. Relative and not
+         *  a pixel count because cosmo renders the same edit at 200/400/800/1600 and full
+         *  resolution (R-PREVIEW): a radius in pixels would make the preview stop predicting the
+         *  export at the moment the photographer is judging colour. 0.4% is ~4 px on a 1000 px
+         *  preview and ~16 px on a 4000 px export — a spread, not a smear. */
+        static constexpr float kSpreadFraction = 0.004f;
+        /** Below half a pixel the blur cannot move anything, so the spread path is skipped and
+         *  the plain per-pixel one runs — which is also the exact old behaviour. */
+        static constexpr float kMinSpreadSigma = 0.5f;
+
         ColorMixer();
 
         /** Set a channel's curve: bezier CONTROL points (hue 0..360, y in [-1,1]); the
@@ -58,15 +84,26 @@ namespace arstro
          *  are honoured instead of linearly connecting the bare control points. */
         void setCurve(Channel c, const std::vector<CurvePoint> &points);
 
+        /** Neighbourhood spread of the per-hue selection, 0..1 (the engine maps EditParams'
+         *  0..100). 0 is exactly the per-pixel behaviour and allocates nothing. */
+        void setSpread(float amount01);
+        float spread() const { return mSpread; }
+
         /** True when all three curves are flat at zero: no hue shift, no saturation and
          *  no luminance move, so `rgbToHsl`/`hslToRgb` and the chroma weight never run
          *  (12.29 ms on a 1.7 Mpx preview — R-PREVIEW-6, D-45). */
         bool isIdentity() const override { return mIdentity; }
 
-    protected:
-        void processPixel(const Pixel *in, Pixel *out, int channels) override;
+        void process(const Image &in, Image &out) override;
 
     private:
+        /** The per-pixel kernel, unchanged from the PointProcessor days. `adj` is the three
+         *  channels' already-weighted y values; passing them in is what lets the spread path
+         *  substitute a softened plane for the pixel's own answer. */
+        void applyAdjust(const Pixel *in, Pixel *out, int channels, const float adj[3]) const;
+        /** `w * y(hue)` for each channel of one pixel — the value the spread plane holds. */
+        void weightedAdjust(const Pixel *in, int channels, float adj[3]) const;
+
         void rebuild(int c);      // rebuildLut + refreshIdentity
         void rebuildLut(int c);   // fill mLut[c] from mPoints[c]
         float sampleCyclic(int c, float hue) const;  // hue in [0,360) -> interpolated y
@@ -75,6 +112,8 @@ namespace arstro
 
         std::vector<std::pair<float, float>> mPoints[3];
         float mLut[3][kLut];
-        bool mIdentity = true;   // refreshed by refreshIdentity() on every rebuild
+        bool mIdentity = true;      // refreshed by refreshIdentity() on every rebuild
+        bool mFlat[3] = {true, true, true};  ///< per-channel: LUT is all zero, so no plane for it
+        float mSpread = 0.f;        // 0..1
     };
 }
