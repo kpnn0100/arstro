@@ -200,6 +200,29 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Closed
 
+### D-58 — The COLOUR section's divider runs under the eyedropper
+- **Area:** design / widgets · **Status:** **CLOSED** — fixed the day it was reported · **Severity:** S3
+- **Found:** 2026-09-02, reported by the user: *"there is a separate line at colour section that
+  overlap the color picker icon."*
+- **Front end:** desktop, Basic/Detail tab, COLOUR section.
+- **Reproduce:** `cosmo_shots --outdir DIR --only editor-empty`, then look at the COLOUR header in
+  `cosmo-editor-empty-1600x1000.png` — no photo needed, the panel draws with the editor.
+- **Expected:** the header reads as a row: a label, a rule, and the section's tool button. The rule
+  should stop where the button starts.
+- **Actual:** the rule ran to the full width of the panel and the button was right-aligned inside
+  that same span, so the hairline crossed the glyph **and** the button's hover box.
+- **Evidence:** `SectionHeader.h` drew `lineTo(x + w, lineY)` unconditionally;
+  `ParamPanel::layout` placed the button at `w - kPadX - bs`, i.e. inside `[x, x+w]`. Two pieces of
+  code laying out the same row with no knowledge of each other.
+- **Judgement:** **defect**, and a requirement gap under it — nothing said what a section header's
+  geometry is, so the eyedropper was added to a header that had no place to put it (R-WB-1 landed
+  the button; nothing owned the row). Written up as **R-G-4** so the next header control inherits
+  the answer instead of rediscovering the bug.
+- **FIXED 2026-09-02** — `drawSectionHeader` takes a `trailingW` and the rule stops a gap short of
+  it; `kSectionActionSize` is the one number both the layout and the paint read.
+- **Guarded by** `sectionHeaderRuleStopsBeforeItsTrailingControl` (`cosmo_widget_tests`), which
+  reads the drawn `LineTo` out of a `RecordingTarget` rather than looking at a picture.
+
 ### D-57 — A hand-drawn path mask is silently dropped by a preset
 - **Area:** core / engine · **Status:** **CLOSED** — fixed the same day it was filed · **Severity:** S3
 - **Found:** 2026-09-02, while adding `mixerSpread` to `EditParamsApf` — the mask codec next to it is

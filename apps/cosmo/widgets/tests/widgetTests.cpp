@@ -15,6 +15,7 @@
 // now unified to 13, so a click 10-12 px from an anchor must now grab it.
 
 #include "../HomeScreen.h"
+#include "../SectionHeader.h"
 #include "../MaskOverlay.h"
 #include "../HueCurveEditor.h"
 #include "../CropGeometry.h"
@@ -32,6 +33,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "../../../../core/Artboard/src/render/RecordingTarget.h"
 #include "../../core/tests/TestMain.h"
 
 using artboard::Gesture;
@@ -1489,6 +1491,59 @@ namespace
     }
 }
 
+
+// ── R-G-4: a section header is a row, and the rule is its flexible member ─────────────
+//
+// Reported: the divider in the COLOUR section runs under the eyedropper. It did — the header
+// drew a hairline to the FULL panel width while the section's tool button was right-aligned
+// inside that same span (D-58). This asserts the arithmetic directly rather than through a
+// rendered frame, because "the line ends before the button" is a number, and a number is what
+// drifts the next time somebody changes the button's size.
+void sectionHeaderRuleStopsBeforeItsTrailingControl()
+{
+    using arstro::cosmo_v2::drawSectionHeader;
+    using arstro::cosmo_v2::kSectionActionSize;
+    using artboard::DrawOp;
+
+    // The right end of the one stroked segment the header draws, or -1 if it drew none.
+    auto ruleEndOf = [](double x, double w, double trailingW) {
+        artboard::RecordingTarget t;
+        drawSectionHeader(t, x, 0.0, w, "COLOUR", trailingW);
+        double end = -1.0;
+        bool sawStroke = false;
+        for (const auto &op : t.ops())
+        {
+            if (op.kind == DrawOp::Kind::LineTo) end = op.args[0];
+            if (op.kind == DrawOp::Kind::StrokePath) sawStroke = true;
+        }
+        return sawStroke ? end : -1.0;
+    };
+
+    const double x = 9.75, w = 304.5;   // the ParamPanel's own geometry at the shipping width
+
+    // No trailing control: unchanged behaviour, the rule runs to the end of the row.
+    check(near(ruleEndOf(x, w, 0.0), x + w, 1e-6),
+          "R-G-4: with no trailing control the rule still reaches the row's end");
+
+    // With one: it stops short of the button's BOX, not merely of its glyph — the button's
+    // hover wash is as wide as the box, and a hairline crossing that wash is the same bug one
+    // pixel further out.
+    const double withBtn = ruleEndOf(x, w, kSectionActionSize);
+    check(withBtn < x + w - kSectionActionSize,
+          "R-G-4: the rule ends before the section action button's box");
+    check(withBtn > x + w - kSectionActionSize - 13.0,
+          "R-G-4: ...and only just before it — the gap is a gap, not a second margin");
+
+    // The rule is the FLEXIBLE member: widen the row and only the rule grows.
+    const double wide = ruleEndOf(x, w + 100.0, kSectionActionSize);
+    check(near(wide - withBtn, 100.0, 1e-6),
+          "R-G-4: the rule absorbs the whole width change; the fixed members do not move");
+
+    // And a row too narrow for both fixed members draws no rule at all, rather than one
+    // running backwards — the label is what has to survive, not the decoration (R5).
+    check(ruleEndOf(x, kSectionActionSize + 4.0, kSectionActionSize) < 0.0,
+          "R-G-4: a row with no room left simply has no rule");
+}
 int main()
 {
     arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
@@ -1546,6 +1601,8 @@ int main()
     homeHeaderTitleNeverRunsUnderTheSearchField();
     homeReservedLinksStaySilentButSwallowTheClick();
     homeSettingsLinkIsReachableAtASmallWindow();
+    sectionHeaderRuleStopsBeforeItsTrailingControl();
+
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all passed",
                 failures, failures == 1 ? "" : "s");

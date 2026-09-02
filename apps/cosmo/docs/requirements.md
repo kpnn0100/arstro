@@ -3162,3 +3162,39 @@ inverted, a subject nothing matches, and the blind overloads answering zero),
 the picture justifies, so "the seam answered" cannot be confused with "the built-in answered"),
 `MaskSemantic_roundtrips_through_the_project_and_the_preset` (which is also D-57's regression test)
 and `a_semantic_mask_is_created_by_naming_its_subject` in `cosmo_core_tests`.
+
+### DR-G-4 A section header is a row, and the rule is its flexible member (R-G-4)
+Reported: *"there is a separate line at colour section that overlap the color picker icon, make it
+a row with fixed width text and icon but the line between is dynamic."*
+
+`drawSectionHeader` ([widgets/SectionHeader.h](../widgets/SectionHeader.h)) drew the label and then
+a hairline from the end of the label to **`x + w`** — the full width of the panel — while
+`ParamPanel::layout` right-aligned the section's tool button inside that *same* span
+(`btn->x = w - kPadX - bs`). So the rule crossed the eyedropper's glyph and its hover box. **D-58.**
+
+It is now the row it looks like: **fixed-width label · flexible rule · fixed-width trailing
+control.** The function takes a `trailingW` (default 0) for the width the caller has already
+reserved at the right end, and the rule runs from `x + labelW + kGap` to
+`x + w − (trailingW + kGap)`. The label is as wide as its text and the trailing control is as wide
+as its box, so the rule is the only member that changes when the panel resizes — it never has to be
+told a number.
+
+Three details that are decisions rather than arithmetic:
+
+- **The reserved width is the button's BOX, not its glyph.** `IconButton` paints its hover wash
+  across the whole box, so a hairline stopping at the glyph would still cross the wash — the same
+  visual bug one pixel further out.
+- **One code path, not two.** A header with no trailing control passes 0 and is the same row with a
+  zero-width third member, which is every other header in the app and is why nothing else had to
+  change.
+- **A row too narrow for both fixed members draws no rule at all**, rather than one running
+  backwards. The label is what has to survive; the decoration is not (R5).
+- `kSectionActionSize` (`SectionHeader.h`) is now the single source of that width, read by the
+  layout that *places* the button and by the paint that *stops short of* it. Two numbers there would
+  drift, and the symptom of the drift would be a hairline one pixel inside a hover box.
+
+Covered by `sectionHeaderRuleStopsBeforeItsTrailingControl` (`cosmo_widget_tests`), which drives
+the function into a `RecordingTarget` and reads the `LineTo` back: the rule ends before the box,
+only just before it, absorbs the whole of a width change while the fixed members stay put, and
+disappears entirely when there is no room. Visible in `cosmo-editor-empty-1600x1000.png`, where the
+COLOUR rule now stops a gap short of the eyedropper.

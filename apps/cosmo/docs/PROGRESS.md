@@ -70,7 +70,15 @@ fixed-width text and icon and a dynamic line between.*
     **deleted**, not patched. R-AISEG-1..9, DR-AISEG-1..9.
 - **[ ] (2b) the semantic mask's panel — subject picker + sensitivity (design).**
 - **[ ] (3) colour-picker + delete icons from the supplied SVGs (design).**
-- **[ ] (4) the Colour section's separator line overlaps the picker icon (design).**
+- **[x] (4) the Colour section's separator line overlaps the picker icon.** It did: the header
+  drew a hairline to the full panel width, and `ParamPanel` right-aligned the eyedropper inside
+  that same span, so two pieces of code laid out one row with no knowledge of each other. The
+  header is now the row it looks like — fixed label, flexible rule, fixed trailing control — with
+  `kSectionActionSize` as the one number both the layout and the paint read. Written up as
+  **R-G-4** rather than patched, so the next header control inherits the answer; **D-58** filed and
+  closed. Worth keeping: the reserved width is the button's BOX, not its glyph, because
+  `IconButton` washes the whole box on hover and a rule stopping at the glyph is the same bug one
+  pixel further out. DR-G-4.
 
 **► NEXT: (2b), (3) and (4) — all three are `arstro.cosmo.design.implement`'s.** The semantic
 mask has no UI yet: it is reachable only as `mask set <i> subject=sky`, so the Mask panel needs a

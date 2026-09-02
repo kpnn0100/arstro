@@ -61,6 +61,21 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
   to their label (+ even padding to fill the strip) via `EditStackTabs::tabW/tabX`, so wider merged
   labels are never clipped. The Mask overlay bridge keys off `RightColumn::maskTabActive()`, not a
   hard-coded index.
+- **R-G-4 A section header is a ROW, and the rule is its flexible member.** (**Added 2026-09-02.**)
+  Reported: the divider in the COLOUR section runs straight under the eyedropper. It did — the header
+  drew its label, then a hairline from the end of the label to the **full width of the panel**, and
+  the section's tool button was right-aligned inside that same span, so the line crossed the glyph
+  and the button's hover box.
+  The fix is to stop treating the header as "a label plus a line to the edge" and treat it as what it
+  looks like: **fixed-width label · flexible rule · fixed-width trailing control**. The label is as
+  wide as its text, the trailing control is as wide as its box, and the rule takes **whatever is
+  left** — so it shortens as either end grows and never has to be told a number. A header with no
+  trailing control is the same row with a zero-width third member, which is why there is one code
+  path and not two.
+  This is a rule about every section header in every panel, not about the eyedropper: any future
+  header control — a reset, a menu, a second tool — inherits it by existing. And a rule that ends
+  before a control rather than under it is not a nicety: a hairline crossing a hoverable box makes
+  the box read as decoration, which is the same family of mistake as R-G-3's un-hovered button.
 - **R-G-3 Everything interactive hovers.** Every button and every clickable region shows an
   animated hover treatment under the pointer — never a hard flip. Child-`Segment` controls
   (`Button`/`PillButton`/`IconButton`/`ComboBox`/`ToggleSwitch`/`Slider`) key off the framework's

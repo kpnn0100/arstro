@@ -121,7 +121,7 @@ namespace cosmo_v2
             if (si < mSectionActions.size() && mSectionActions[si])
             {
                 auto &btn = mSectionActions[si];
-                const double bs = kSectionHeaderHeight - 2.0;
+                const double bs = kSectionActionSize;
                 btn->width.set(bs); btn->height.set(bs);
                 btn->x.set(std::max(0.0, w - kPadX - bs));
                 btn->y.set(y + 1.0);
@@ -150,7 +150,12 @@ namespace cosmo_v2
         {
             const double y = mSectionHeaderY[i];
             if (y + kSectionHeaderHeight < 0 || y > height.value()) continue;
-            drawSectionHeader(t, kPadX, y, w, mSections[i].title);
+            // R-G-4: the header is a row, and the tool button is its fixed third member — so the
+            // rule is told how much of the row is already spoken for and stops short of it,
+            // rather than being drawn to the panel edge underneath the glyph (D-58).
+            const bool hasAction = i < mSectionActions.size() && mSectionActions[i] != nullptr;
+            drawSectionHeader(t, kPadX, y, w, mSections[i].title,
+                              hasAction ? kSectionActionSize : 0.0);
         }
     }
 }
