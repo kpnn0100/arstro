@@ -176,6 +176,35 @@ namespace cosmo_v2
                 sendMaskSet(mSelectedMask, {{"feather", num(f)}}, next);
             }
         };
+        // R-AISEG-10: a detect mask's whole geometry is these two fields, so they take the same
+        // route every other mask field does — `mask set <i>`, addressed by index.
+        mMask->onSubjectChange = [this](int subject) {
+            if (const MaskParams *sel = selectedMaskParams())
+            {
+                MaskParams next = *sel;
+                next.subject = subject;
+                // The chip creates the mask with the right type, but a mask somebody switched to
+                // Detect from the picker has to be told: the service infers Semantic from a bare
+                // `subject=`, and sending the type explicitly is what keeps that inference from
+                // being the only thing holding it up.
+                next.type = MaskParams::Semantic;
+                sendMaskSet(mSelectedMask, {{"type", std::to_string((int)MaskParams::Semantic)},
+                                            {"subject", arstro::semanticSubjectName(
+                                                            (arstro::SemanticSubject)subject)}},
+                            next);
+                if (const EditParams *p = params()) mMask->setMasks(p->masks, mSelectedMask);
+            }
+        };
+        mMask->onSensitivityChange = [this](double v) {
+            if (const MaskParams *sel = selectedMaskParams())
+            {
+                MaskParams next = *sel;
+                next.sensitivity = (float)v;
+                // No setMasks(): it would fight a live drag, exactly as the feather slider's
+                // comment says two callbacks above.
+                sendMaskSet(mSelectedMask, {{"sensitivity", num(v)}}, next);
+            }
+        };
         mMask->onAdjustChange = [this](const LocalAdjust &a) {
             if (const MaskParams *sel = selectedMaskParams())
             {

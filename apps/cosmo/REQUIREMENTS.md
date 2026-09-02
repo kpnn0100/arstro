@@ -775,6 +775,24 @@ UI copy, not only here.
   loads here (they take their defaults). A build that predates this renders a Semantic mask as no
   coverage rather than as something wrong, which is the same answer it already gives for any mask
   type it does not know.
+- **R-AISEG-10 A fifth chip: Detect.** It sits beside Radial / Linear / Brush / Draw and names what
+  the user does with it, as the other four do. Adding one creates a mask with no geometry and a
+  subject, and the panel grows a block for it.
+- **R-AISEG-11 The panel says what the detector is, and says it in the header.** The section header
+  reads **"Detect (colour & texture)"**, and the subject picker carries a one-line caption saying
+  what *that* subject is found by — "Blue or bright, smooth, high in the frame" for Sky; "Dark,
+  muted and textured — may take fabric too" for Hair. This is R-AISEG-2's honesty in the place it
+  is actually useful: a photographer who knows the sky detector keys on *smoothness* understands
+  immediately why it declined a textured blue awning, and can reach for Sensitivity or invert
+  instead of concluding the feature is broken. A UI that said "AI Subject" and nothing else would
+  be both a claim the code does not support and worse to use.
+- **R-AISEG-12 The block opens and closes; it does not appear.** R-G-1, with no exemption for
+  "configuration". Switching the selected mask to or from a semantic one animates the block's height
+  through a **clipped** container, so its rows slide out from under the Feather row at full spacing
+  and everything below them moves in step — rather than the rows being flipped visible and the Tone
+  section jumping down a frame later. The clip is what makes it an accordion instead of a fade:
+  children keep their real positions throughout, so nothing is ever drawn compressed or overlapping.
+
 
 ## R-ICON — Icons are traced, not approximated — ✅ IMPLEMENTED
 

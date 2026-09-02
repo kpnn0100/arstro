@@ -18,6 +18,7 @@
 #include "../../core/ThreadBudget.h"
 #include "../../widgets/HomeScreen.h"
 #include "../../widgets/MaskPanel.h"
+#include "../../../../core/ImageProcessing/src/analysis/Segmenter.h"
 #include "../../widgets/CurvePanel.h"
 #include "../../widgets/EditStackTabs.h"
 #include "../../widgets/PhotoCanvas.h"
@@ -1272,6 +1273,89 @@ namespace
         check(!info->isOpen(), "and closes it");
     }
     // ── R-MASK-6: draw a mask on the photo, through the whole app ────────────────────────
+    // ── R-AISEG-10..12: the Detect chip, the subject picker, and the block that OPENS ──
+    //
+    // Two claims, and only one of them can be established by looking at a still frame. The
+    // first is the route — chip, mask, subject, all the way into the model. The second is
+    // R-G-1's compliance clause, and it is asserted the only way it can be: by requiring the
+    // DRAWN height to differ from the target while the tween runs. A block that appeared in one
+    // frame would pass every other assertion here.
+    void addingADetectMaskOpensItsBlockAndReachesTheModel()
+    {
+        std::printf("App: the Detect chip adds a semantic mask and its block eases open (R-AISEG-10..12)\n");
+        Rig rig(1440.0, 900.0);
+        check(rig.loadFakePhoto(), "a photo is loaded");
+        rig.app.showEditor();
+        rig.settle(600.0);
+
+        const artboard::Segment *root = rig.app.uiRoot("editor");
+        const artboard::Segment *tabs =
+            root ? arstro::cosmo_v2::findSegmentByType(*root, "EditStackTabs") : nullptr;
+        check(tabs != nullptr, "the edit-stack tabs exist");
+        if (!tabs) return;
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.click(tw.e + tabW * 1.5, tw.f + 13.0);   // Mask is tab 2 of 5
+        rig.settle(400.0);
+
+        auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
+            arstro::cosmo_v2::findSegmentByType(*root, "MaskPanel"));
+        check(panel != nullptr, "and the Mask panel is up");
+        if (!panel) return;
+        check(panel->detectOpenAmount() == 0.0, "with the Detect block shut");
+
+        // The fifth chip, asked for by position from the panel rather than indexed out of a
+        // child list whose order is a layout detail.
+        const artboard::Transform mw = panel->worldTransform();
+        const artboard::Rect chip = panel->addChipRect(4);
+        check(chip.w > 0.0, "the Detect chip is there");
+        rig.app.pointer(0, mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5, 1, rig.now);
+        rig.frames(1);
+        rig.app.pointer(2, mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5, 1, rig.now);
+
+        // Three frames in: the tween is 200 ms, so this is unmistakably part-way. THIS is the
+        // assertion — a snapping implementation reads 1.0 here and is otherwise identical.
+        rig.frames(3);
+        const double mid = panel->detectOpenAmount();
+        check(mid > 0.0 && mid < 1.0, "the block is part-open mid-tween, not open or shut");
+        rig.frames(2);
+        check(panel->detectOpenAmount() > mid, "and still moving on the next frames");
+        rig.settle(500.0);
+        check(near(panel->detectOpenAmount(), 1.0, 1e-3), "then it settles fully open");
+
+        const arstro::EditParams &p = rig.svc.model().params;
+        check(p.masks.size() == 1u, "the chip added a mask");
+        if (p.masks.empty()) return;
+        check(p.masks[0].type == arstro::MaskParams::Semantic, "of the semantic kind");
+        check(p.masks[0].subject == (int)arstro::SemanticSubject::Sky, "looking for the sky by default");
+
+        // The subject picker, clicked. Searched inside the PANEL: the first SegmentedControl in
+        // the editor tree is the canvas's Before/Split/After pill, and clicking that would have
+        // changed nothing while looking like it worked.
+        auto *subject = arstro::cosmo_v2::findSegmentByType(*panel, "SegmentedControl");
+        check(subject != nullptr, "the subject picker is in the block");
+        if (!subject) return;
+        const artboard::Transform sw = subject->worldTransform();
+        const double segW = subject->width.value() / 5.0;
+        rig.click(sw.e + segW * 4.5, sw.f + subject->height.value() * 0.5);   // Hair, the 5th
+        rig.settle(400.0);
+        check(rig.svc.model().params.masks[0].subject == (int)arstro::SemanticSubject::Hair,
+              "picking Hair reaches the MODEL, not just the picker");
+        check(rig.svc.model().params.masks[0].type == arstro::MaskParams::Semantic,
+              "and the mask is still semantic — the type goes with the subject");
+
+        // Switching to a mask with geometry shuts the block again, eased the same way. The
+        // closing direction is asserted too, because an animation that only plays one way is a
+        // thing that has shipped here before.
+        const artboard::Rect radial = panel->addChipRect(0);
+        rig.click(mw.e + radial.x + radial.w * 0.5, mw.f + radial.y + radial.h * 0.5);
+        rig.frames(3);
+        const double closing = panel->detectOpenAmount();
+        check(closing > 0.0 && closing < 1.0, "and it eases SHUT when the selection is not semantic");
+        rig.settle(500.0);
+        check(near(panel->detectOpenAmount(), 0.0, 1e-3), "settling closed");
+    }
+
     void drawingAMaskOnThePhotoReachesTheModel()
     {
         std::printf("App: the Draw chip plus three clicks on the photo make a path mask (R-MASK-6)\n");
@@ -1353,6 +1437,7 @@ int main()
     closingTheAppAsksAboutUnsavedWork();
     rightClickShowsTheImageInformation();
     drawingAMaskOnThePhotoReachesTheModel();
+    addingADetectMaskOpensItsBlockAndReachesTheModel();
     scaleChangeIsAnimatedNotSnapped();
     theStartupScaleDoesNotAnimate();
     everyScaleLaysOutAtItsOwnMinimum();

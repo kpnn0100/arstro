@@ -694,6 +694,16 @@ data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is
 `XformPanel::aspectChipRect` does; the ComboBox label of a drawn mask carries its point count, so
 "nothing happened yet" reads as "1 pts" rather than as a bug; a `ComboBox` → `onSelectMask(index)`; a `ComboBox` → `onSelectMask(index)`;
 `Inv` `PillButton` → `onToggleInvert`; bin `IconButton` (`icon::deleteBin`) → `onDeleteMask`;
+**Five** add-mask chips now — Radial / Linear / Brush / Draw / **Detect** (R-AISEG-10) — and a
+`DetectBlock` between Feather and Tone when the selected mask is `Semantic`. `DetectBlock` is a
+`clipToBounds` Segment (`kHeaderH=27.95, kPickerH=22.75, kPickerMB=4.875, kCaptionH=13.0`, total
+~91 px) holding a five-way `SegmentedControl` (Sky/Skin/Foliage/Water/Hair) and a `Sensitivity`
+`SliderRow`; it paints its own `"Detect (colour & texture)"` header and the per-subject caption, and
+**clips that painting itself** because `clipToBounds` covers only the child subtree.
+`MaskPanel::mDetectOpen` eases its height 0↔1 over **200 ms EaseOutCubic**, started in `advance()`
+(a setter has no clock), and `MaskPanel::detectOpenAmount()` exposes the LIVE value so a test can
+tell an eased implementation from a snapping one. Callbacks: `onSubjectChange(int)` /
+`onSensitivityChange(double)`;
 Feather `SliderRow` (0..100 → 0..1) → `onFeatherChange`; then Basic-style Tone/Colour/Presence rows
 writing a working `LocalAdjust` → `onAdjustChange(LocalAdjust)`. Per-mask controls hidden until a
 mask is selected. `setMasks(masks, selected)`.

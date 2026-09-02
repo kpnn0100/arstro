@@ -1050,6 +1050,72 @@ namespace
         save(f, "editor-mask-draw");
     }
 
+    /** R-AISEG-10..12: a detect mask, added the way a user adds one — the Detect chip — and its
+     *  block caught OPENING as well as open. Three frames, and the mid-tween one is the point:
+     *  a block that appeared in a frame would look identical in the other two.
+     */
+    void shotMaskDetect(Rig &rig, int w, int h)
+    {
+        if (!wanted("editor-mask-detect")) return;
+        Frame f(w, h);
+        rig.settleQuiet(f, 200.0, 300);
+
+        const artboard::Segment *tabs =
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "EditStackTabs");
+        if (!tabs) { std::printf("  (no edit-stack tabs: skipping editor-mask-detect)\n"); return; }
+        const artboard::Transform tw = tabs->worldTransform();
+        const double tabW = tabs->width.value() / 5.0;
+        rig.app.pointer(0, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);   // Mask is tab 2 of 5
+        rig.app.pointer(2, tw.e + tabW * 1.5, tw.f + 13.0, 1, rig.now);
+        rig.settleQuiet(f, 400.0, 300);
+
+        auto *panel = static_cast<const arstro::cosmo_v2::MaskPanel *>(
+            arstro::cosmo_v2::findSegmentByType(*rig.app.uiRoot("editor"), "MaskPanel"));
+        if (!panel) { std::printf("  (no mask panel: skipping editor-mask-detect)\n"); return; }
+        const artboard::Transform mw = panel->worldTransform();
+        const artboard::Rect chip = panel->addChipRect(4);   // Detect
+
+        // Press and release, then step only a couple of frames: the block's tween is 200 ms, so
+        // ~48 ms in it is unmistakably part-open. This is the frame R-G-1 is asserted on.
+        rig.app.pointer(0, mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5, 1, rig.now);
+        rig.step(f, 2);
+        rig.app.pointer(2, mw.e + chip.x + chip.w * 0.5, mw.f + chip.y + chip.h * 0.5, 1, rig.now);
+        rig.step(f, 3);
+        save(f, "editor-mask-detect-opening");
+
+        rig.settleQuiet(f, 500.0, 400);
+        save(f, "editor-mask-detect");
+
+        // Hair, because it is the subject whose caption carries R-AISEG-2's warning — the shot
+        // that proves the honesty is on screen and not only in the requirement.
+        // Searched inside the PANEL, not from the editor root: the first SegmentedControl in
+        // the tree is the canvas's Before/Split/After pill, and a shot that clicked THAT would
+        // have looked exactly like this one — which is what the first run of it did.
+        const artboard::Segment *seg =
+            arstro::cosmo_v2::findSegmentByType(*panel, "SegmentedControl");
+        if (seg)
+        {
+            const artboard::Transform sw = seg->worldTransform();
+            const double segW = seg->width.value() / 5.0;
+            rig.click(f, sw.e + segW * 4.5, sw.f + seg->height.value() * 0.5);
+            rig.settleQuiet(f, 400.0, 400);
+            save(f, "editor-mask-detect-hair");
+        }
+
+        // The laptop height, because the block adds ~90 px to the tallest panel in the app and
+        // "it fits on my monitor" is not a layout claim (R4). The panel scrolls; the point of
+        // the shot is that everything below the block is still REACHABLE, not that it is
+        // visible at rest.
+        {
+            Frame g(1280, 800);
+            rig.app.setSize(1280.0, 800.0);
+            rig.settleQuiet(g, 600.0, 500);
+            save(g, "editor-mask-detect-small");
+            rig.app.setSize((double)w, (double)h);
+            rig.settleQuiet(g, 400.0, 400);
+        }
+    }
+
     /** The editor with a real project open, at two window sizes. This is the shot the whole
      *  harness exists for: the assembled app, real photos on the stage and in the filmstrip,
      *  every panel filled from a real session. */
@@ -1064,7 +1130,7 @@ namespace
             && !wanted("editor-dissolve") && !wanted("editor-split-seam")
             && !wanted("editor-crop") && !wanted("editor-crop-zoom")
             && !wanted("editor-image-info") && !wanted("editor-context-menu")
-            && !wanted("editor-mask-draw"))
+            && !wanted("editor-mask-draw") && !wanted("editor-mask-detect"))
             return 0;
         setEnv("XDG_CONFIG_HOME", (gOpt.outdir / "config-project").string());
         const fs::path cmp = gOpt.outdir / "projects" / "Tokyo Streets (shots).cmp";
@@ -1090,6 +1156,7 @@ namespace
         shotCropZoom(rig, w0, h0);          // R-CROP-7
         shotImageInfo(rig, w0, h0);         // R-INFO
         shotMaskDraw(rig, w0, h0);          // R-MASK-6
+        shotMaskDetect(rig, w0, h0);        // R-AISEG-10..12
         // The same app, resized — the path a real window resize takes (R4), so the second
         // size proves the editor REFLOWS rather than that it can be built small.
         for (size_t i = 2; i + 1 < sizes.size(); i += 2)
@@ -1167,7 +1234,8 @@ int main(int argc, char **argv)
                     "scale-zoom-{000-before,060-mid,140-mid,999-after}\n"
                     "editor-split-seam  editor-crop-{free,16x9,custom}  editor-crop-zoom-*\n"
                     "editor-context-menu  editor-image-info  editor-image-info-scrolled\n"
-                    "editor-mask-draw-placing  editor-mask-draw\n");
+                    "editor-mask-draw-placing  editor-mask-draw\n"
+                    "editor-mask-detect-opening  editor-mask-detect  editor-mask-detect-hair\n");
         return 0;
     }
 

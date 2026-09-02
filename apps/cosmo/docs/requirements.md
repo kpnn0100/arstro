@@ -3237,3 +3237,57 @@ both stated in the code (R-ICON-4):
 Verified by looking, not by reading: `cosmo-editor-empty-1600x1000.png` cropped and scaled 12× at the
 COLOUR header for the dropper, and `cosmo-editor-mask-draw-1600x1000.png` scaled 14× at the mask row
 for the bin.
+
+### DR-AISEG-10..12 (design) The Detect chip and the block that opens (R-AISEG-10, R-AISEG-11, R-AISEG-12)
+The Mask panel's fifth chip is **Detect** (`MaskPanel`, `addChipRect(4)`), beside Radial / Linear /
+Brush / Draw. Each chip names what the user *does*, not the data structure underneath, which is why
+it is not "Semantic". The mask it adds has no geometry, so the panel — not the photo — owns it
+entirely (R-AISEG-7: there is nothing to drag). The ComboBox label carries the subject
+(`Detect 1 (Sky)`), because the only difference between two detect masks in that list is what each
+one is looking for.
+
+Selecting one opens **`DetectBlock`**: a section header, a subject picker, a caption, and
+Sensitivity.
+
+- **`SegmentedControl`, not a `ComboBox`.** The subject set is small, fixed and worth seeing at once
+  — the same reasoning as Hue/Sat/Lum — its highlight already slides (R-G-1), and a popup would have
+  to escape the block's clip.
+- **The header reads "Detect (colour & texture)"** and not "AI Subject" (R-AISEG-11). It is read
+  once, by everyone, before the first click, and a label claiming more than the code does is worse
+  than a plain one.
+- **The caption says what THAT subject is found by** — "Blue or bright, smooth, high in the frame"
+  for Sky, "Dark, muted and textured — may take fabric too" for Hair. This is R-AISEG-2's honesty in
+  the place it is useful rather than only in a document: a photographer who knows the sky detector
+  keys on *smoothness* understands immediately why it declined a textured blue awning, and reaches
+  for Sensitivity or Inv instead of concluding the feature is broken.
+
+**The block opens; it does not appear** (R-AISEG-12, R-G-1 — which has no exemption for "the
+selected mask changed kind"). `DetectBlock` is a `Segment` with `clipToBounds`, and `MaskPanel`
+animates its **height** 0 → ~91 px over 200 ms `EaseOutCubic` while the children keep their real
+positions. So the rows slide out from under Feather at full spacing and Tone/Colour/Presence move in
+step. The clip is what makes it an accordion rather than a fade: nothing is ever drawn compressed or
+overlapping. The tween is started in `advance()` and not in `setMasks`, because a setter has no
+clock — setting the height in the setter is exactly the snap this requirement is about, and it would
+have looked correct in every still frame.
+
+**One thing the framework does that cost a render to find:** `clipToBounds` clips the **child
+subtree only**. `Segment::renderContent` calls `onPaint` *before* it installs the clip, deliberately,
+so a widget can draw a ring or a shadow outside its own box. The consequence here was that the
+block's caption stayed on screen at every intermediate height while the picker beside it was
+correctly clipped away — visible in the first `editor-mask-detect-opening` render, printed under the
+Tone header. `DetectBlock::onPaint` now saves, clips itself to its own bounds, and restores.
+
+Wired through `RightColumn::onSubjectChange` / `onSensitivityChange` to `mask set <i>` like every
+other mask field. The subject command sends `type=` **explicitly** alongside `subject=`: the service
+infers Semantic from a bare `subject=`, and relying on that inference would make it the only thing
+holding the mask's kind up.
+
+Covered by `addingADetectMaskOpensItsBlockAndReachesTheModel` (`cosmo_ui_tests`), which drives the
+whole route — Mask tab, Detect chip, the mask in the MODEL, the subject picker, Hair reaching the
+model — and asserts the animation the only way it can be asserted: the **drawn** open amount is
+strictly between 0 and 1 three frames in, still rising two frames later, settles at 1, and eases
+back down when the selection stops being semantic. A block that appeared in one frame passes every
+other assertion in that test. Shots: `editor-mask-detect-opening` (mid-tween),
+`editor-mask-detect`, `editor-mask-detect-hair` (the caption carrying R-AISEG-2's warning), and
+`editor-mask-detect-small` at 1280x800, because the block adds ~90 px to the tallest panel in the
+app and "it fits on my monitor" is not a layout claim.

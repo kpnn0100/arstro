@@ -106,7 +106,15 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class GradePanel
     class XformPanel
     class MaskPanel {
-      + addChipRect(i)   ' R-MASK-6: Radial / Linear / Brush / Draw
+      + addChipRect(i)         ' Radial / Linear / Brush / Draw (R-MASK-6) / Detect (R-AISEG-10)
+      + detectOpenAmount()     ' the LIVE eased value, so a test can tell a snap from a tween
+    }
+    class DetectBlock <<clipped accordion>> {
+      ' R-AISEG-12: height eases 0 -> ~91 px over 200 ms while the children keep their real
+      ' positions, so the block OPENS instead of appearing. Paints its own header and caption
+      ' AND clips them, because Segment::clipToBounds covers the CHILD SUBTREE only.
+      + caption
+      + kHeaderH / kPickerH / kPickerMB / kCaptionH
     }
     class StackPanel
     class ActionBar
@@ -425,3 +433,6 @@ MaskParams ..> Segmenter : builtinCoverage when the seam declines or is absent
 ColorMixer ..> Spatial : fastBlurPlane
 
 @enduml
+
+MaskPanel *--> DetectBlock : while the selected mask is Semantic  ' R-AISEG-10
+DetectBlock *--> SegmentedControl : Sky | Skin | Foliage | Water | Hair

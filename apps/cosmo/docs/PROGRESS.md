@@ -68,7 +68,22 @@ fixed-width text and icon and a dynamic line between.*
     that cannot be true while `EditParamsApf` keeps a second hand-written copy of the mask blob —
     the semantic mask's `subject` would have been the next field dropped by it. The copy is
     **deleted**, not patched. R-AISEG-1..9, DR-AISEG-1..9.
-- **[ ] (2b) the semantic mask's panel — subject picker + sensitivity (design).**
+- **[x] (2b) the semantic mask's panel.** A fifth chip, **Detect**, and a block that opens under
+  Feather: subject picker, a line saying what that subject is found by, Sensitivity. Three things
+  worth carrying forward:
+  * **The honesty is on screen, not only in the requirement.** The header reads
+    *"Detect (colour & texture)"* rather than "AI Subject", and each subject's caption says what it
+    keys on — Hair's says it *"may take fabric too"*. A photographer who knows the sky detector keys
+    on smoothness understands at once why it declined a textured blue awning, and reaches for
+    Sensitivity instead of concluding the feature is broken.
+  * **`clipToBounds` clips the CHILD SUBTREE ONLY.** `Segment::renderContent` calls `onPaint` before
+    it installs the clip — deliberately, so a widget can draw outside its box — so the block's own
+    caption stayed on screen at every intermediate height while the picker beside it was correctly
+    clipped. Found by rendering the mid-tween frame, which is the only frame that shows it. The
+    block clips its own paint now.
+  * **The mid-tween shot and the mid-tween assertion are the same evidence.** A block that appeared
+    in one frame would look identical in the open shot and pass every assertion except
+    `0 < detectOpenAmount() < 1`. R-AISEG-10..12, DR-AISEG-10..12.
 - **[x] (3) colour-picker + delete icons, from the supplied SVGs.** Transcribed rather than
   approximated — each number written as `source / viewBox` so it can be checked against the file.
   `trash2` became `deleteBin`, because the silhouette is no longer lucide's and a name that says
@@ -89,11 +104,22 @@ fixed-width text and icon and a dynamic line between.*
   `IconButton` washes the whole box on hover and a rule stopping at the glyph is the same bug one
   pixel further out. DR-G-4.
 
-**► NEXT: (2b), (3) and (4) — all three are `arstro.cosmo.design.implement`'s.** The semantic
-mask has no UI yet: it is reachable only as `mask set <i> subject=sky`, so the Mask panel needs a
-fifth chip plus a subject picker and a sensitivity slider. R-AISEG-7 says there is deliberately no
-on-photo overlay for it — there is nothing to drag — so the panel owns it entirely, and the UI copy
-has to carry R-AISEG-2's honesty about hair being the weakest of the five.
+**► NEXT: nothing outstanding from this batch — all four features are done.** The obvious
+follow-ups, in the order they are worth doing:
+
+1. **A `mixerSpread` control in the Mixer panel.** It is reachable only as `set mixerSpread=` today.
+   One `SliderRow` under the Hue/Sat/Lum picker, and the panel is where a photographer would look
+   for it. (Design.)
+2. **Segment the pre-adjustment image.** A semantic mask currently reads the image as it *enters the
+   mask stack*, which is after the global adjustments — so a large exposure or white-balance move
+   can shift the mask's boundary. It is the image the photographer is looking at, which is the
+   argument for it; the alternative needs a second geometry-only pass. Stated in DR-AISEG rather
+   than filed, because it may well be the behaviour people prefer.
+3. **The touch shell has no equivalent of either.** A new desktop panel with no phone counterpart is
+   a ledger task, not an oversight to leave silent (`touch-ui-brief.md`).
+
+Then the release-audit list below, which is unchanged and still the thing standing between this and
+a release — starting with the four one-line RAW decode parameters.
 
 **Environment note (this machine):** `g++` fails silently with exit 1 and no diagnostic unless
 `/c/msys64/mingw64/bin` is on `PATH`; so do the test binaries (`0xc0000139`). Export it before any

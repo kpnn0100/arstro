@@ -1,10 +1,12 @@
 #include "MaskPanel.h"
 #include "SectionHeader.h"
+#include "../../../core/ImageProcessing/src/analysis/Segmenter.h"
 #include "Icons.h"
 #include "TextMetrics.h"
 #include "UnitConversions.h"
 #include "../Theme.h"
 #include <algorithm>
+#include <cctype>
 #include <string>
 
 namespace arstro
@@ -17,10 +19,31 @@ namespace cosmo_v2
     {
         constexpr double kChipGap = 4.875, kChipH = 22.75, kChipMarginBottom = 9.75;
         constexpr double kSelectRowH = 22.75, kSelectRowMB = 8.125;
-        // R-MASK-6: "Draw" rather than "Path" or "Bezier" — the chip names what the user does
-        // with it, as the other three do, not the data structure underneath.
-        constexpr int kTypeCount = 4;
-        const char *kTypeNames[kTypeCount] = {"Radial", "Linear", "Brush", "Draw"};
+        // R-MASK-6 / R-AISEG-10: "Draw" rather than "Path", "Detect" rather than "Semantic" —
+        // each chip names what the user DOES with it, as the first three do, not the data
+        // structure underneath.
+        constexpr int kTypeCount = 5;
+        const char *kTypeNames[kTypeCount] = {"Radial", "Linear", "Brush", "Draw", "Detect"};
+
+        /** What each subject is actually found by (R-AISEG-11). Not decoration: a photographer
+         *  who knows the sky detector keys on SMOOTHNESS understands at once why it declined a
+         *  textured blue awning, and reaches for Sensitivity or Inv instead of concluding the
+         *  feature is broken. Hair's line is the one R-AISEG-2 insists on — the reliability of
+         *  the five is not equal and the UI may not pretend it is. */
+        const char *kSubjectCaption[(int)SemanticSubject::Count] = {
+            "Blue or bright, smooth, high in the frame.",
+            "Warm mid-tones with red over green — faces and hands.",
+            "Green with real saturation, anywhere in the frame.",
+            "Blue-cyan, low in the frame, a little texture.",
+            "Dark, muted and textured — may take fabric too."};
+
+        std::string subjectLabel(int subject)
+        {
+            const int s = (subject >= 0 && subject < (int)SemanticSubject::Count) ? subject : 0;
+            std::string n = semanticSubjectName((SemanticSubject)s);
+            if (!n.empty()) n[0] = (char)std::toupper((unsigned char)n[0]);
+            return n;
+        }
 
         std::string maskLabel(const MaskParams &m, int index)
         {
@@ -32,6 +55,9 @@ namespace cosmo_v2
             if (t == MaskParams::Path)
                 s += m.path.size() < 3 ? " (" + std::to_string(m.path.size()) + " pts)"
                                        : " (" + std::to_string(m.path.size()) + ")";
+            // A detect mask says WHAT it is looking for, for the same reason: the difference
+            // between two of them in the list is their subject and nothing else.
+            if (t == MaskParams::Semantic) s += " (" + subjectLabel(m.subject) + ")";
             if (m.inverted) s += " (inv)";
             return s;
         }
@@ -85,6 +111,33 @@ namespace cosmo_v2
         mTrashBtn->onClick = [this] { if (onDeleteMask) onDeleteMask(); };
         addChild(mTrashBtn);
 
+        // R-AISEG-10..12. A SegmentedControl and not a ComboBox: the subject set is small,
+        // fixed and worth seeing all at once — the same reasoning as Hue/Sat/Lum — and its
+        // highlight already slides (R-G-1) where a popup would have to escape the block's clip.
+        mDetect = std::make_shared<DetectBlock>();
+        mDetect->visible = false;
+        addChild(mDetect);
+
+        std::vector<std::string> subjects;
+        for (int i = 0; i < (int)SemanticSubject::Count; ++i) subjects.push_back(subjectLabel(i));
+        mSubject = std::make_shared<SegmentedControl>(subjects);
+        mSubject->containerBox = {Paint::filledStroked(palette::segmentedBg(), palette::border(), 1.0), radius::control()};
+        mSubject->idleSegBox = {Paint{}, radius::hairline()};
+        mSubject->activeSegBox = {Paint::filled(palette::primary()), radius::hairline()};
+        mSubject->edgeRadius = radius::control();
+        mSubject->idleText = {palette::mutedForeground(), 10.0, font::sans()};
+        mSubject->activeText = {palette::white(), 10.0, font::sans()};
+        mSubject->height.set(DetectBlock::kPickerH);
+        mSubject->onChange = [this](int i) {
+            if (mDetect) mDetect->caption = kSubjectCaption[i < 0 || i >= (int)SemanticSubject::Count ? 0 : i];
+            if (onSubjectChange) onSubjectChange(i);
+        };
+        mDetect->addChild(mSubject);
+
+        mSensitivity = std::make_shared<SliderRow>("Sensitivity", 0, 100, 50.0);
+        mSensitivity->onChange = [this](double v) { if (onSensitivityChange) onSensitivityChange(v / 100.0); };
+        mDetect->addChild(mSensitivity);
+
         auto adjust = [this] { if (onAdjustChange) onAdjustChange(mEditing); };
         mFeather = std::make_shared<SliderRow>("Feather", 0, 100, 0.0);
         mFeather->onChange = [this](double v) { if (onFeatherChange) onFeatherChange(v / 100.0); };
@@ -119,6 +172,7 @@ namespace cosmo_v2
         mMasks = masks;
         mSelected = (selected >= 0 && selected < (int)masks.size()) ? selected : -1;
         const bool has = mSelected >= 0;
+        if (!has) mDetectTarget = 0.0;
         mSelect->visible = mInvBtn->visible = mTrashBtn->visible = mFeather->visible = has;
         mExposure->visible = mHighlights->visible = mShadows->visible = has;
         mTemperature->visible = mSaturation->visible = mDehaze->visible = has;
@@ -131,6 +185,14 @@ namespace cosmo_v2
 
         const MaskParams &m = mMasks[mSelected];
         mEditing = m.adjust;
+        // The block's TARGET, not its height: `advance` starts the tween, because a setter with
+        // no `nowMs` cannot (R-G-1). Setting the height here is exactly the snap R-AISEG-12 is
+        // about, and it would look correct in every still frame.
+        mDetectTarget = (m.type == MaskParams::Semantic) ? 1.0 : 0.0;
+        mSubject->setSelectedImmediate(m.subject);   // programmatic sync must not fire onChange
+        mDetect->caption = kSubjectCaption[(m.subject >= 0 && m.subject < (int)SemanticSubject::Count)
+                                               ? m.subject : 0];
+        mSensitivity->setValue(m.sensitivity * 100.0);
         mFeather->setValue(m.feather * 100.0);
         mExposure->setValue(fromEv(m.adjust.exposure));
         mHighlights->setValue(m.adjust.highlights);
@@ -153,9 +215,18 @@ namespace cosmo_v2
             mScroll.animateTo(mScrollTarget, 180.0, Easing::EaseOutCubic, nowMs);
             mScrollLastTarget = mScrollTarget;
         }
+        // R-AISEG-12: the Detect block opens and closes, it does not appear. Started here and
+        // not in the setter, because a setter has no clock.
+        if (mDetectTarget != mDetectLastTarget)
+        {
+            mDetectOpen.animateTo(mDetectTarget, 200.0, Easing::EaseOutCubic, nowMs);
+            mDetectLastTarget = mDetectTarget;
+        }
+        const bool opening = mDetectOpen.isAnimating();
+        mDetectOpen.update(nowMs);
         const bool moving = mScroll.isAnimating();
         mScroll.update(nowMs);
-        if (moving) layout();
+        if (moving || opening) layout();
         Segment::advance(nowMs);
     }
 
@@ -197,6 +268,29 @@ namespace cosmo_v2
             mFeather->x.set(kPadX); mFeather->y.set(y); mFeather->width.set(innerW); mFeather->layout();
             y += SliderRow::kRowHeight;
 
+            // The Detect block: full-height children inside a container whose HEIGHT eases, so
+            // the rows slide out from under Feather at their real positions and everything below
+            // moves in step. Nothing is ever drawn compressed — that is what the clip buys, and
+            // it is why this is a container rather than an opacity fade (R-AISEG-12).
+            const double open = mDetectOpen.value();
+            const double blockH = DetectBlock::kHeaderH + DetectBlock::kPickerH +
+                                  DetectBlock::kPickerMB + DetectBlock::kCaptionH +
+                                  SliderRow::kRowHeight;
+            mDetect->x.set(0.0);
+            mDetect->y.set(y);
+            mDetect->width.set(w);
+            mDetect->height.set(open * blockH);
+            mDetect->visible = open > 0.004;
+            {
+                double by = DetectBlock::kHeaderH;
+                mSubject->x.set(kPadX); mSubject->y.set(by); mSubject->width.set(innerW);
+                mSubject->layout();
+                by += DetectBlock::kPickerH + DetectBlock::kPickerMB + DetectBlock::kCaptionH;
+                mSensitivity->x.set(kPadX); mSensitivity->y.set(by);
+                mSensitivity->width.set(innerW); mSensitivity->layout();
+            }
+            y += open * blockH;
+
             mHeaderY[1] = y; y += kSectionHeaderHeight;  // "Tone"
             for (auto *row : {mExposure.get(), mHighlights.get(), mShadows.get()})
             {
@@ -214,6 +308,29 @@ namespace cosmo_v2
             y += SliderRow::kRowHeight;
         }
         mContentHeight = y + mScroll.value() + 13.0;
+    }
+
+    void DetectBlock::onPaint(IRenderTarget &t) const
+    {
+        constexpr double kPadX = 9.75;
+        const double innerW = std::max(0.0, width.value() - 2 * kPadX);
+        // `clipToBounds` clips the CHILD SUBTREE only — `Segment::renderContent` calls onPaint
+        // before it installs the clip, deliberately, so a widget can draw a ring or a shadow
+        // outside its own box. Here that meant the caption stayed on screen at every
+        // intermediate height while the picker beside it was correctly clipped away, which
+        // looked exactly like a bug and was one. So this pass clips itself.
+        t.save();
+        t.clipRect(0.0, 0.0, width.value(), height.value());
+        // "Detect (colour & texture)", not "AI Subject" (R-AISEG-11). The header is where the
+        // honesty belongs: it is read once, by everyone, before the first click — and a label
+        // claiming more than the code does is worse than a plain one.
+        drawSectionHeader(t, kPadX, 0.0, innerW, "Detect (colour & texture)");
+        // What THIS subject is found by. 9px muted, on the type ramp's caption size, sitting in
+        // the gap the layout already reserves for it.
+        const double y = kHeaderH + kPickerH + kPickerMB + kCaptionH * 0.5;
+        t.setFill(palette::mutedForeground());
+        t.drawText(caption, kPadX, y + 9.0 * 0.35, 9.0, font::sans());
+        t.restore();
     }
 
     void MaskPanel::onPaint(IRenderTarget &t) const
