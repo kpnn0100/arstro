@@ -1760,7 +1760,7 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
   `list(REMOVE_ITEM … linux_main.cpp)` stands in the way. `cosmo_widget_tests` covers isolated widget
   hit-testing only, never the assembled app.
 - **Judgement:** defect against the family design rule that a UI change must be *seen* before it ships
-  (`arstro.design.desktop` §5) — currently unsatisfiable for cosmo.
+  (`arstro.design.desktop` §5, now `arstro.design.rule` §8) — currently unsatisfiable for cosmo.
 - **Fix:** commit `c755a76`. **One line was the whole of it** — `list(REMOVE_ITEM COSMO_APP_NOMAIN
   … linux_main.cpp)`, named and shaped after Genesis's `GENESIS_APP_NOMAIN`, which has had it all
   along. On top of that, `apps/cosmo/tests/shots/renderShots.cpp` renders **13 PNGs across 2 window

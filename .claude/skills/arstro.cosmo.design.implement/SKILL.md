@@ -28,9 +28,8 @@ first, then design.
 contract, the non-negotiable motion rule, R1–R6, the layout and widget conventions, the twenty
 gotchas). **Invoke it before this file.** That skill is the law; this one is cosmo's concrete
 dialect of it, plus cosmo's process. When they appear to disagree, `arstro.design.rule` wins on
-*rules* and this file wins on *cosmo's values*. (It supersedes `arstro.design.desktop`, which is now
-a redirect.) A genuinely reusable control belongs in Artboard via **`implement_artboard`**, not in
-`widgets/`.
+*rules* and this file wins on *cosmo's values*. (It replaces the retired `arstro.design.desktop`.)
+A genuinely reusable control belongs in Artboard via **`implement_artboard`**, not in `widgets/`.
 
 ---
 

@@ -473,7 +473,7 @@ Three things follow from that layout:
 - **`BaseCatalog` is data, not code.** Adding a new authorable base is a table entry plus
   the Artboard base class — not a new code path in the emitter.
 
-Visual language follows `arstro.design.desktop` with `cosmo` as reference: same tokens,
+Visual language follows `arstro.design.rule` with `cosmo` as reference: same tokens,
 same motion, its own palette.
 
 ### Screen

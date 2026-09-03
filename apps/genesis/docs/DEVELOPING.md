@@ -56,7 +56,7 @@ mistake in this repo.
 | What must Artboard do? | `core/Artboard/docs/requirements.md` (`FR-*`, `NFR-*`) |
 | Why is the code shaped this way? | `docs/architecture.md` |
 | How does this class work? What are the traps? | `docs/detailed_design.md` |
-| What should the UI look and feel like? | `.claude/skills/arstro.design.desktop` (R1–R6) |
+| What should the UI look and feel like? | `.claude/skills/arstro.design.rule` — the design law for every Arstro front end (tokens, motion, R1–R6, the gotchas) |
 | How do I change Artboard? | `.claude/skills/implement_artboard` (V-model, per-stage) |
 
 **Requirements first, always.** If a change has no requirement, write the requirement, check it

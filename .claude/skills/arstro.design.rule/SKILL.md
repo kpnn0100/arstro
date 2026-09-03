@@ -1,6 +1,6 @@
 ---
 name: arstro.design.rule
-description: The design law for every Arstro front end — cosmo, pulsar, genesis, arstrobench, the launcher shell, and the coming interstellar and solaris UIs. Carries the token contract, the non-negotiable motion rule, the six R-rules (smooth, responsive, contained, window-responsive, text fits, reachable), the layout and widget conventions, the twenty gotchas already paid for, the every-state checklist, and how to verify by looking. Invoked FIRST by every design skill; supersedes arstro.design.desktop. Invoke directly for "add a panel/screen/dialog", "restyle this", "make it consistent with cosmo", "audit this app's design", "why does this snap", or when starting a UI for an app that has none.
+description: The design law for every Arstro front end — cosmo, pulsar, genesis, arstrobench, the launcher shell, and the coming interstellar and solaris UIs. Carries the token contract, the non-negotiable motion rule, the six R-rules (smooth, responsive, contained, window-responsive, text fits, reachable), the layout and widget conventions, the twenty gotchas already paid for, the every-state checklist, and how to verify by looking. Invoked FIRST by every design skill; replaces the retired arstro.design.desktop. Invoke directly for "add a panel/screen/dialog", "restyle this", "make it consistent with cosmo", "audit this app's design", "why does this snap", or when starting a UI for an app that has none.
 ---
 
 # arstro.design.rule
@@ -14,8 +14,12 @@ rather than four.
 > three; where this file and an app's skill overlap, this one wins on RULES and the app's wins on
 > its own VALUES** — an app may choose its accent; it may not choose whether things animate.
 
-**This supersedes `arstro.design.desktop`**, whose R1–R6 are hoisted here intact. Where an older
-skill still says "arstro.design.desktop is the law", read it as this file.
+**This replaces `arstro.design.desktop`, which is deleted**; its R1–R6 are hoisted here intact.
+"Desktop" was the wrong boundary: nothing-snaps, tokens-only, text-fits and overflow-scrolls bind
+the touch shell and the phone launcher exactly as hard as they bind a desktop window — R-TOUCH
+already says the touch shell may diverge in *metrics* and never in palette, radii, accent or motion
+vocabulary, which is one law with a metric exemption, not two design systems. Anything that still
+names `arstro.design.desktop` means this file.
 
 **Reference implementation: `apps/cosmo`.** Where this file states a value without qualification it
 is cosmo's, and it is the family default.
