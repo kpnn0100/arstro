@@ -55,28 +55,11 @@ namespace cosmo_v2
          *  happened to have. Same rule as `CurvePanel::setCurves` — a gesture in flight
          *  outranks the model — and the same bug it was fixed for. */
         void updateMask(const arstro::MaskParams &m) { if (mDrag < 0) mMask = m; }
-        /** The boundary of a Detect mask — closed loops in the same normalised framed-image
-         *  space every other mask's geometry uses (R-AISEG-18).
-         *
-         *  It comes from the mask's own `regions` now (R-AISEG-21), not off a frame, so it is
-         *  there the instant the detection lands and stays there whatever the render is doing.
-         *
-         *  Pushed rather than pulled, and not eased: it is DATA, exactly as R-MASK-4 says a
-         *  mask's geometry is. What eases is whether it is on screen at all. */
-        void setComputedOutline(const std::vector<std::vector<std::pair<float, float>>> &loops)
-        {
-            mOutline = loops;
-        }
-        /** How much of the computed outline is drawn, 0..1 — the LIVE eased value, so a test
-         *  can tell a fade from a flip (R-G-1). */
-        double outlineFade() const { return mOutlineFade.value(); }
-
         void setBrushRadius(double normRadius) { mBrushRadius = normRadius; }
         bool active() const { return mActive; }
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
-        void advance(double nowMs) override;   // eases the computed outline in and out (R-G-1)
         bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
         bool hitTestSelf(const artboard::Point &p) const override;
 
@@ -94,9 +77,6 @@ namespace cosmo_v2
         artboard::Point pathPointAt(int i) const;
 
     private:
-        std::vector<std::vector<std::pair<float, float>>> mOutline;
-        artboard::AnimatedProperty mOutlineFade{0.0};
-        double mOutlineTarget = 0.0, mOutlineLastTarget = 0.0;
 
         /** `mDrag` is one int for every mask type, which is why these are offsets rather than
          *  an enum: 0..2 are the radial/linear handles, 99 is a brush stroke, and a path adds

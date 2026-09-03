@@ -157,18 +157,6 @@ namespace arstro
         mEngine.setMemoryCaps(sourceBytes, proxyBytes);
     }
 
-    void RenderService::setSegmenter(std::unique_ptr<ISegmenter> seg)
-    {
-        std::lock_guard<std::mutex> lk(mMu);
-        mEngine.setSegmenter(std::move(seg));
-    }
-
-    std::string RenderService::segmenterName() const
-    {
-        std::lock_guard<std::mutex> lk(mMu);
-        return mEngine.segmenterName();
-    }
-
     size_t RenderService::residentBytes() const { return mResidentBytes.load(); }
     int RenderService::rehydrations() const { return mRehydrations.load(); }
 
@@ -272,42 +260,6 @@ namespace arstro
         return true;
     }
 
-    bool RenderService::requestDetect(int slot, const EditParams &params, int maskIndex,
-                                      SemanticSubject subject, float sensitivity)
-    {
-        std::lock_guard<std::mutex> lk(mMu);
-        // One at a time, refused rather than queued (see the header). `mDetectBusy` is set HERE
-        // and not on the worker, so a second request in the same frame as the first is refused
-        // by the first — setting it on the worker would leave a window in which two requests
-        // both looked like the only one.
-        if (mPendingDetect || mDetectBusy.load()) return false;
-        mPendingDetect = true;
-        mDetectBusy.store(true);
-        mDetectFraction.store(0.0);
-        mDetectStage.store("queued");
-        mDetectSlot = slot;
-        mDetectMask = maskIndex;
-        mDetectSubject = subject;
-        mDetectSensitivity = sensitivity;
-        mDetectParams = params;
-        mCv.notify_all();
-        return true;
-    }
-
-    bool RenderService::tryAcquireDetect(Detection &out)
-    {
-        std::lock_guard<std::mutex> lk(mMu);
-        if (!mDetectHaveResult) return false;
-        out = std::move(mDetectReady);
-        mDetectReady = Detection{};
-        mDetectHaveResult = false;
-        // Cleared only once the answer has been COLLECTED, not when the worker finished it: a
-        // front end that reads `detectBusy()` to decide whether to draw a progress bar must not
-        // see the bar disappear a frame before the regions appear.
-        mDetectBusy.store(false);
-        return true;
-    }
-
     bool RenderService::renderFull(int slot, const EditParams &params, Frame &out)
     {
         std::unique_lock<std::mutex> lk(mMu);
@@ -351,24 +303,13 @@ namespace arstro
             RenderIntent intent = RenderIntent::Final;
             int explicitLevel = -1;
             EditParams params, fullParams;
-            bool doDetect = false;
-            int detectSlot = -1, detectMask = -1;
-            SemanticSubject detectSubject = SemanticSubject::Skin;
-            float detectSensitivity = 0.5f;
-            EditParams detectParams;
             {
                 std::unique_lock<std::mutex> lk(mMu);
                 mCv.wait(lk, [this] {
-                    return mStop || mResetEngine || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull || mPendingDetect;
+                    return mStop || mResetEngine || !mAddQueue.empty() || !mReleaseQueue.empty() || mPendingPreview || mPendingFull;
                 });
                 if (mStop)
                     return;
-                if (mPendingDetect)
-                {
-                    doDetect = true; detectSlot = mDetectSlot; detectMask = mDetectMask;
-                    detectSubject = mDetectSubject; detectSensitivity = mDetectSensitivity;
-                    detectParams = mDetectParams; mPendingDetect = false;
-                }
                 doReset = mResetEngine; mResetEngine = false;
                 adds.swap(mAddQueue);
                 releases.swap(mReleaseQueue);
@@ -427,31 +368,6 @@ namespace arstro
                     mFullDone = true;
                 }
                 mCv.notify_all();
-            }
-            if (doDetect)
-            {
-                // Before the preview, deliberately. A detection is something the user asked for
-                // and is watching a bar for; a preview is something they will get again in
-                // 16 ms. Running it first also means the frame that lands after it is the first
-                // frame that can show the new mask.
-                //
-                // The engine is touched from this thread only, exactly as a render is — which
-                // is the whole reason the detection was put on the worker rather than run where
-                // the request came from.
-                Detection d;
-                d.maskIndex = detectMask;
-                d.result = mEngine.detectSubject(
-                    detectSlot, detectParams, detectSubject, detectSensitivity,
-                    [this](const char *stage, float f) {
-                        mDetectStage.store(stage);
-                        mDetectFraction.store((double)f);
-                    });
-                {
-                    std::lock_guard<std::mutex> lk(mMu);
-                    mDetectReady = std::move(d);
-                    mDetectHaveResult = true;
-                }
-                mDetectFraction.store(1.0);
             }
             if (doPrev)
                 doPreview(slot, params, maxEdge, intent, explicitLevel);
@@ -538,8 +454,6 @@ namespace arstro
         return slot;
     }
     void RenderService::setSourceLoader(SourceLoader loader) { mSourceLoader = std::move(loader); }
-    void RenderService::setSegmenter(std::unique_ptr<ISegmenter> seg) { mEngine.setSegmenter(std::move(seg)); }
-    std::string RenderService::segmenterName() const { return mEngine.segmenterName(); }
     void RenderService::setMemoryCaps(size_t sourceBytes, size_t proxyBytes)
     {
         mEngine.setMemoryCaps(sourceBytes, proxyBytes);
@@ -593,40 +507,6 @@ namespace arstro
     void RenderService::render(int slot, const EditParams &params, RenderIntent intent, int explicitLevel)
     {
         doPreview(slot, params, mPreviewMaxEdge, intent, explicitLevel);
-    }
-
-    bool RenderService::requestDetect(int slot, const EditParams &params, int maskIndex,
-                                      SemanticSubject subject, float sensitivity)
-    {
-        // Synchronously, and the fraction goes 0 -> 1 in one step (R-AISEG-20). That is how
-        // every threaded thing in this engine degrades with the threads switched off, and it is
-        // honest: there is no other thread to make progress on, so a bar that crept would be
-        // animating a number nobody was producing.
-        if (mDetectHaveResult) return false;
-        mDetectBusy.store(true);
-        mDetectStage.store("queued");
-        mDetectFraction.store(0.0);
-        Detection d;
-        d.maskIndex = maskIndex;
-        d.result = mEngine.detectSubject(slot, params, subject, sensitivity,
-                                         [this](const char *stage, float f) {
-                                             mDetectStage.store(stage);
-                                             mDetectFraction.store((double)f);
-                                         });
-        mDetectReady = std::move(d);
-        mDetectHaveResult = true;
-        mDetectFraction.store(1.0);
-        return true;
-    }
-
-    bool RenderService::tryAcquireDetect(Detection &out)
-    {
-        if (!mDetectHaveResult) return false;
-        out = std::move(mDetectReady);
-        mDetectReady = Detection{};
-        mDetectHaveResult = false;
-        mDetectBusy.store(false);
-        return true;
     }
 
     bool RenderService::tryAcquire(Frame &out)

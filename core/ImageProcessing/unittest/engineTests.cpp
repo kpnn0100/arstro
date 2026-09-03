@@ -856,370 +856,33 @@ TEST(MaskStack_blends_local_adjustment)
 }
 
 
-// ── R-AISEG: a Detect mask, end to end through the stack, and the seam under it ───────
-//
-// A blue sky over green grass, big enough for the regularisation radius (0.6% of the short
-// edge) to be more than half a pixel — below that the softening is skipped and the test would
-// be measuring a different code path than the one that ships.
-static Image skyOverGrass(int n = 192)
-{
-    Image im(n, n, 3, ColorSpace::LinearSRGB);
-    for (int y = 0; y < n; ++y)
-        for (int x = 0; x < n; ++x)
-        {
-            const bool sky = y < n * 4 / 10;
-            const int c8[3] = {sky ? 110 : 60, sky ? 160 : 140, sky ? 225 : 60};
-            for (int c = 0; c < 3; ++c)
-                im.at(x, y, c) = color::srgbDecode((Pixel)(c8[c] / 255.0));
-        }
-    return im;
-}
-
-/** A square of loop points, as the detection would have stored them (R-AISEG-21): corner
- *  CurvePoints in normalised framed-image coords. */
-static std::vector<CurvePoint> boxLoop(float x0, float y0, float x1, float y1)
-{
-    return {CurvePoint{x0, y0}, CurvePoint{x1, y0}, CurvePoint{x1, y1}, CurvePoint{x0, y1}};
-}
-
-namespace
-{
-    /** The seam a host with a real model implements (R-AISEG-6), here as the fake that proves
-     *  the seam is honoured — the same role `FakeDecoder` plays for `IImageDecoder`. It paints
-     *  a stripe nothing in the picture justifies, so "the seam answered" and "the built-in
-     *  answered" cannot possibly be confused, and it DECLINES everything but Sky. */
-    class StripeSegmenter : public ISegmenter
-    {
-    public:
-        int asked = 0, declined = 0;
-        bool segment(const Image &img, SemanticSubject subject, float, std::vector<Pixel> &out) override
-        {
-            ++asked;
-            if (subject != SemanticSubject::Sky) { ++declined; return false; }
-            const int w = img.width(), h = img.height();
-            out.assign((size_t)w * h, (Pixel)0);
-            for (int y = 0; y < h; ++y)
-                for (int x = 0; x < w; ++x)
-                    if (x < w / 4) out[(size_t)y * w + x] = (Pixel)1;
-            return true;
-        }
-        const char *name() const override { return "stripe"; }
-    };
-}
-
-// R-AISEG-19, and it is the whole of what was reported: choosing Detect must show NOTHING.
-// The mask exists, it is in the stack, it has an adjustment big enough to be unmissable — and
-// it changes not one pixel, because no detection has been run.
-TEST(MaskDetect_covers_nothing_until_a_detection_has_run)
-{
-    const int n = 192;
-    const Image scene = skyOverGrass(n);
-
-    MaskParams m;
-    m.type = MaskParams::Semantic;
-    m.subject = (int)SemanticSubject::Skin;
-    m.sensitivity = 0.5f;
-    m.adjust.exposure = 2.0f;
-    CHECK(m.regions.empty());
-
-    Image img = scene.clone();
-    applyMaskStack(img, {m});
-    for (size_t i = 0; i < img.pixelCount() * 3; ++i)
-        if (std::fabs((double)img.data()[i] - (double)scene.data()[i]) > 1e-9) { CHECK(false); break; }
-
-    // The plane and the point query agree with it — a mask that renders as nothing but reports
-    // coverage somewhere would put the on-photo outline in a place the pixels deny.
-    std::vector<Pixel> plane;
-    buildMaskCoverage(m, n, n, plane);
-    CHECK(plane.size() == (size_t)n * n);
-    double any = 0;
-    for (Pixel v : plane) any += v;
-    CHECK(any == 0.0);
-    CHECK(maskCoverage(m, 0.5f, 0.1f) == 0.f);
-    CHECK(maskLoops(m).empty());
-}
-
-// R-AISEG-21: once it HAS regions it is a drawn mask, and behaves as one in every respect the
-// stack cares about — it fills, it inverts, it feathers, and its loops are what the view draws.
-TEST(MaskDetect_with_regions_fills_exactly_like_a_drawn_path)
-{
-    const int n = 192;
-    auto lumaAt = [](const Image &im, int x, int y) {
-        return (double)color::luminance(im.at(x, y, 0), im.at(x, y, 1), im.at(x, y, 2));
-    };
-    const Image scene = skyOverGrass(n);
-
-    MaskParams m;
-    m.type = MaskParams::Semantic;
-    m.subject = (int)SemanticSubject::Skin;
-    m.feather = 0.f;
-    m.adjust.exposure = 1.5f;
-    m.regions = {boxLoop(0.10f, 0.10f, 0.40f, 0.40f)};
-
-    Image lit = scene.clone();
-    applyMaskStack(lit, {m});
-    const double inBefore = lumaAt(scene, n / 4, n / 4), inAfter = lumaAt(lit, n / 4, n / 4);
-    const double outBefore = lumaAt(scene, n * 3 / 4, n / 4), outAfter = lumaAt(lit, n * 3 / 4, n / 4);
-    std::printf("      detect mask: inside %.4f -> %.4f   outside %.4f -> %.4f\n",
-                inBefore, inAfter, outBefore, outAfter);
-    CHECK(inAfter > inBefore * 2.0);                  // ~+1.5 EV where the region is...
-    CHECK(std::fabs(outAfter - outBefore) < 1e-4);    // ...and nowhere else
-
-    // The same region, drawn by hand as a Path mask, must produce the SAME pixels. That is the
-    // literal content of "the output is a custom drawn mask" — not similar behaviour, identical.
-    MaskParams drawn = m;
-    drawn.type = MaskParams::Path;
-    drawn.regions.clear();
-    drawn.path = boxLoop(0.10f, 0.10f, 0.40f, 0.40f);
-    Image byHand = scene.clone();
-    applyMaskStack(byHand, {drawn});
-    double worst = 0;
-    for (size_t i = 0; i < lit.pixelCount() * 3; ++i)
-        worst = std::max(worst, std::fabs((double)lit.data()[i] - (double)byHand.data()[i]));
-    std::printf("      worst difference against the same shape drawn by hand: %.3g\n", worst);
-    CHECK(worst < 1e-9);
-
-    // Inverted is the same mask read the other way, which is how "everything except this" is
-    // expressed — there is no second detection for "not skin".
-    MaskParams inv = m;
-    inv.inverted = true;
-    Image other = scene.clone();
-    applyMaskStack(other, {inv});
-    CHECK(std::fabs(lumaAt(other, n / 4, n / 4) - inBefore) < 1e-4);
-    CHECK(lumaAt(other, n * 3 / 4, n / 4) > outBefore * 2.0);
-
-    // And the loops the view will stroke are the loops that were filled (R-AISEG-18).
-    const auto loops = maskLoops(m);
-    CHECK(loops.size() == 1);
-    CHECK(loops[0].size() == 4);
-    CHECK(maskCoverage(m, 0.25f, 0.25f) == 1.f);
-    CHECK(maskCoverage(m, 0.75f, 0.25f) == 0.f);
-}
-
-// R-AISEG-21: even-odd ACROSS the loops, so a loop inside a loop is a HOLE. A face wearing
-// sunglasses traces two loops and the glasses must stay unselected; the alternative — each loop
-// filled independently — would select them, and no later step could tell.
-TEST(MaskDetect_a_loop_inside_a_loop_is_a_hole)
-{
-    const int n = 128;
-    MaskParams m;
-    m.type = MaskParams::Semantic;
-    m.feather = 0.f;
-    m.adjust.exposure = 1.0f;
-    m.regions = {boxLoop(0.20f, 0.20f, 0.80f, 0.80f),    // the region
-                 boxLoop(0.40f, 0.40f, 0.60f, 0.60f)};   // the hole in it
-
-    std::vector<Pixel> plane;
-    buildMaskCoverage(m, n, n, plane);
-    auto at = [&](float nx, float ny) {
-        return (float)plane[(size_t)(int)(ny * n) * n + (int)(nx * n)];
-    };
-    std::printf("      ring %.2f   hole %.2f   outside %.2f\n",
-                at(0.30f, 0.50f), at(0.50f, 0.50f), at(0.05f, 0.50f));
-    CHECK(at(0.30f, 0.50f) > 0.9f);    // inside the outer loop only
-    CHECK(at(0.50f, 0.50f) < 0.1f);    // inside both -> a hole
-    CHECK(at(0.05f, 0.50f) < 0.1f);    // outside both
-    CHECK(maskCoverage(m, 0.50f, 0.50f) == 0.f && "the point query agrees with the plane");
-}
-
-// R-AISEG-6/15: the seam is asked FIRST and may decline, and the detection is where that now
-// happens — the render asks nothing of a model any more (R-AISEG-21).
-TEST(MaskDetect_seam_is_asked_first_and_may_decline)
-{
-    const int n = 192;
-    const Image scene = skyOverGrass(n);
-    StripeSegmenter seam;
-
-    // Installed: its answer is used, in full, and it is nothing the built-in would ever say —
-    // a vertical stripe over a horizontal sky. That is the point of the fake. It also answers
-    // for Sky, which the built-in has WITHDRAWN (R-AISEG-22): a model may declare any subject.
-    DetectionResult r = detectSubjectRegions(scene, SemanticSubject::Sky, 0.5f, &seam);
-    CHECK(seam.asked == 1);
-    CHECK(r.handled);
-    CHECK(r.by == std::string("stripe"));
-    CHECK(!r.regions.empty());
-    std::printf("      stripe model: %zu loops, %.1f%% covered\n",
-                r.regions.size(), (double)r.coverage * 100.0);
-    // The stripe is the left quarter of the frame, and nothing else.
-    CHECK(r.coverage > 0.20f && r.coverage < 0.30f);
-    MaskParams m;
-    m.type = MaskParams::Semantic;
-    for (const auto &loop : r.regions)
-    {
-        std::vector<CurvePoint> pts;
-        for (const auto &xy : loop) pts.push_back(CurvePoint{xy.first, xy.second});
-        m.regions.push_back(pts);
-    }
-    CHECK(maskCoverage(m, 0.10f, 0.50f) == 1.f);
-    CHECK(maskCoverage(m, 0.60f, 0.50f) == 0.f);
-
-    // Declining is a NORMAL answer, not an error: a model not trained on this subject says so
-    // and the built-in takes over, the same contract a compute backend has. Skin is the one the
-    // built-in has, and there is no skin in a sky over grass — so the honest result is
-    // `handled` (somebody looked) with no regions (they found nothing), which is a different
-    // answer from Sky's `!handled` and a UI needs to be able to tell them apart.
-    DetectionResult skin = detectSubjectRegions(scene, SemanticSubject::Skin, 0.5f, &seam);
-    CHECK(seam.asked == 2 && seam.declined == 1);
-    CHECK(skin.handled && skin.by == std::string("built-in"));
-    CHECK(skin.regions.empty());
-
-    // And the engine says which one is answering, so it is never a guess (like activeBackendName).
-    EditEngine eng;
-    CHECK(std::string(eng.segmenterName()) == "built-in");
-    eng.setSegmenter(std::unique_ptr<ISegmenter>(new StripeSegmenter()));
-    CHECK(std::string(eng.segmenterName()) == "stripe");
-    eng.setSegmenter(nullptr);
-    CHECK(std::string(eng.segmenterName()) == "built-in");
-}
-
-
-// ── R-AISEG-13: a computed mask has a boundary, and it is geometry ────────────────────
-//
-// A semantic mask has no control points, so the only honest answer to "where is it?" is the
-// contour of its coverage. Asserted against shapes whose outline is known in advance — a disc
-// is the one shape where every point of the answer can be checked, not just its bounding box.
-TEST(MaskOutline_traces_the_coverage_contour)
-{
-    const int w = 256, h = 192;
-    auto disc = [&](std::vector<Pixel> &plane, double cx, double cy, double r, bool add) {
-        if (!add) plane.assign((size_t)w * h, (Pixel)0);
-        for (int y = 0; y < h; ++y)
-            for (int x = 0; x < w; ++x)
-            {
-                const double d = std::sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                // A soft edge, because a real coverage plane has one — R-AISEG-4 softens it and
-                // a path's feather blurs it, and a hard step would let the tracer look better
-                // than it is.
-                const double v = 1.0 - std::min(1.0, std::max(0.0, (d - (r - 2.0)) / 4.0));
-                plane[(size_t)y * w + x] = (Pixel)std::max((double)plane[(size_t)y * w + x], v);
-            }
-    };
-
-    std::vector<Pixel> plane;
-    disc(plane, 120.0, 96.0, 50.0, false);
-    auto loops = traceCoverageOutline(plane, w, h);
-    std::printf("      one disc -> %d loop(s), %d points\n", (int)loops.size(),
-                loops.empty() ? 0 : (int)loops[0].size());
-    CHECK(loops.size() == 1);
-    if (loops.empty()) return;
-
-    // Every point on the 0.5 contour of a disc is at the disc's radius. Back out of normalised
-    // coordinates the same way the tracer went in, so this also pins that convention.
-    double worst = 0.0;
-    for (const auto &p : loops[0])
-    {
-        const double px = (double)p.first * w - 0.5, py = (double)p.second * h - 0.5;
-        worst = std::max(worst, std::fabs(std::sqrt((px - 120.0) * (px - 120.0) +
-                                                    (py - 96.0) * (py - 96.0)) - 50.0));
-    }
-    std::printf("      worst radial error %.2f px\n", worst);
-    CHECK(worst < 1.5);   // one grid cell: the contour is where the plane crosses 0.5
-
-    // Closed: the walk comes back to where it started, so a stroke has no seam.
-    const auto &L = loops[0];
-    CHECK(std::fabs(L.front().first - L.back().first) < 1.0f / w * 1.5f);
-    CHECK(std::fabs(L.front().second - L.back().second) < 1.0f / h * 1.5f);
-
-    // Two regions are two loops — the stitcher must not join them just because both exist.
-    disc(plane, 60.0, 60.0, 26.0, false);
-    disc(plane, 190.0, 130.0, 26.0, true);
-    CHECK(traceCoverageOutline(plane, w, h).size() == 2);
-
-    // A speck is not a boundary. A classifier's raw output has them, and a mask outlined with
-    // confetti reads as broken even when the coverage underneath is right.
-    plane.assign((size_t)w * h, (Pixel)0);
-    plane[(size_t)96 * w + 128] = (Pixel)1;
-    CHECK(traceCoverageOutline(plane, w, h).empty());
-
-    // Nothing has no boundary. EVERYTHING has one, and it is the frame — which is the border
-    // rule doing its job, not an invented edge: the honest outline of "all of it" is a loop
-    // round all of it, and a caller filling that loop gets the whole frame back. With the
-    // border open (the old behaviour, still reachable) neither has a boundary, and the mask a
-    // fully-covering detection produced came back empty.
-    plane.assign((size_t)w * h, (Pixel)0);
-    CHECK(traceCoverageOutline(plane, w, h).empty());
-    plane.assign((size_t)w * h, (Pixel)1);
-    auto whole = traceCoverageOutline(plane, w, h);
-    CHECK(whole.size() == 1);
-    if (!whole.empty()) CHECK(loopArea(whole[0]) > 0.95f);
-    CHECK(traceCoverageOutline(plane, w, h, 0.5f, 0, 6, /*closeAtBorder=*/false).empty());
-
-    // The case that matters in a photograph: a region running off the edge — a portrait cropped
-    // at the shoulders. It must come back as a SHAPE, with the area it actually covers, not as
-    // an open chain whose area is zero and which every later step therefore discards.
-    plane.assign((size_t)w * h, (Pixel)0);
-    for (int y = 0; y < h; ++y)
-        for (int x = 0; x < w / 2; ++x) plane[(size_t)y * w + x] = (Pixel)1;
-    auto halves = traceCoverageOutline(plane, w, h);
-    CHECK(halves.size() == 1);
-    if (!halves.empty())
-    {
-        std::printf("      a region running off the edge: %d points, area %.3f\n",
-                    (int)halves[0].size(), (double)loopArea(halves[0]));
-        CHECK(loopArea(halves[0]) > 0.45f && loopArea(halves[0]) < 0.55f);
-    }
-
-    // R-AISEG-14 as amended: the DEFAULT is now every cell, because a contour that is traced
-    // once and stored is not on a per-frame budget — and `maxEdge` still coarsens when a caller
-    // asks. Both directions are asserted, because "it traces at full resolution" and "the
-    // coarsening still works" are two things a single default could quietly break.
-    const int W2 = 1024, H2 = 768;
-    std::vector<Pixel> big((size_t)W2 * H2, (Pixel)0);
-    for (int y = 0; y < H2; ++y)
-        for (int x = 0; x < W2; ++x)
-        {
-            const double d = std::sqrt((x - 480.0) * (x - 480.0) + (y - 384.0) * (y - 384.0));
-            big[(size_t)y * W2 + x] = (Pixel)(1.0 - std::min(1.0, std::max(0.0, (d - 198.0) / 16.0)));
-        }
-    auto bigLoops = traceCoverageOutline(big, W2, H2);
-    auto coarseLoops = traceCoverageOutline(big, W2, H2, 0.5f, /*maxEdge=*/320);
-    CHECK(bigLoops.size() == 1);
-    CHECK(coarseLoops.size() == 1);
-    if (!bigLoops.empty() && !coarseLoops.empty())
-    {
-        std::printf("      1024x768 disc: %d points at full grid, %d coarsened to 320\n",
-                    (int)bigLoops[0].size(), (int)coarseLoops[0].size());
-        // A 198 px radius circle walked cell by cell is ~4 x 198 x pi/4 crossings.
-        CHECK(bigLoops[0].size() > 1000);
-        CHECK(coarseLoops[0].size() * 2 < bigLoops[0].size());
-    }
-
-    // ...and simplification is what makes the full-resolution trace storable (R-AISEG-14).
-    if (!bigLoops.empty())
-    {
-        const ContourLoop thin = simplifyLoop(bigLoops[0], detect::kSimplifyTolerance);
-        std::printf("      simplified to %d points at tolerance %.4f\n",
-                    (int)thin.size(), (double)detect::kSimplifyTolerance);
-        CHECK(thin.size() * 4 < bigLoops[0].size());
-    }
-}
-
-// R-AISEG-9 + D-57. Two claims in one test because they are one mechanism: a mask survives
-// being written and read back, by BOTH formats, because there is now only one codec.
-TEST(MaskSemantic_roundtrips_through_the_project_and_the_preset)
+// D-57, plus the R-AISEG withdrawal's compatibility promise. A mask survives being written and
+// read back by BOTH formats, because there is only one codec — and a project written while the
+// Detect mask existed still LOADS, with the two withdrawn fields and any found regions skipped
+// rather than rejected.
+TEST(Mask_roundtrips_through_the_project_and_the_preset)
 {
     EditParams p;
-    MaskParams sem;
-    sem.type = MaskParams::Semantic;
-    sem.subject = (int)SemanticSubject::Water;
-    sem.sensitivity = 0.72f;
-    sem.feather = 0.4f;
-    sem.adjust.exposure = -0.8f;
+    MaskParams brush;
+    brush.type = MaskParams::Brush;
+    brush.feather = 0.4f;
+    brush.adjust.exposure = -0.8f;
+    brush.dabs = {{0.3f, 0.4f, 0.08f, 0.9f}, {0.5f, 0.5f, 0.06f, 0.5f}};
     MaskParams drawn;                       // D-57's own case, in the same test
     drawn.type = MaskParams::Path;
     drawn.adjust.clarity = 30.f;
     CurvePoint a{0.2f, 0.2f}, b{0.8f, 0.3f}, c{0.5f, 0.9f};
     b.smooth = true; b.ix = -0.1f; b.iy = 0.05f; b.ox = 0.1f; b.oy = -0.05f;
     drawn.path = {a, b, c};
-    p.masks = {sem, drawn};
+    p.masks = {brush, drawn};
 
     // The project format.
     EditParams q;
     CHECK(deserializeParams(serializeParams(p), q));
     CHECK(q.masks.size() == 2);
-    CHECK(q.masks[0].type == MaskParams::Semantic);
-    CHECK(q.masks[0].subject == (int)SemanticSubject::Water);
-    CHECK_NEAR(q.masks[0].sensitivity, 0.72, 1e-4);
+    CHECK(q.masks[0].type == MaskParams::Brush);
+    CHECK(q.masks[0].dabs.size() == 2);
+    CHECK_NEAR(q.masks[0].dabs[1].flow, 0.5, 1e-4);
 
     // The preset format — which used to be a SECOND hand-written copy of the same blob, one
     // group short, so a drawn path was silently dropped by every preset (D-57). It delegates
@@ -1228,36 +891,42 @@ TEST(MaskSemantic_roundtrips_through_the_project_and_the_preset)
     EditParams viaApf;
     CHECK(applyApfToEditParams(editParamsToApf(p, cats, "t"), cats, viaApf));
     CHECK(viaApf.masks.size() == 2);
-    CHECK(viaApf.masks[0].subject == (int)SemanticSubject::Water);
-    CHECK_NEAR(viaApf.masks[0].sensitivity, 0.72, 1e-4);
+    CHECK(viaApf.masks[0].dabs.size() == 2);
     CHECK(viaApf.masks[1].path.size() == 3 && "D-57: a drawn path survives a preset");
     CHECK(viaApf.masks[1].path[1].smooth);
     CHECK_NEAR(viaApf.masks[1].path[1].ox, 0.1, 1e-4);
 
-    // R-AISEG-9: a project written before this existed has eleven numbers in the first group
-    // and must keep the defaults rather than being rejected or reading garbage off the end.
-    // The blob is a RADIAL mask, which is the only kind an eleven-number project can hold — so
-    // the default subject it comes back with is a field that mask has never read, and the fact
-    // that the default is now Skin rather than Sky (R-AISEG-22) changes nothing about it.
+    // A project written before the two withdrawn R-AISEG numbers existed has eleven in the
+    // first group, and must keep its defaults rather than being rejected or reading garbage off
+    // the end. The blob is a RADIAL mask, which is the only kind an eleven-number project holds.
     EditParams legacy;
     CHECK(deserializeParams("mask=0,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65|"
                             "1.5,0,0,0,0,0,0,0,0,0,0,0|\n", legacy));
     CHECK(legacy.masks.size() == 1);
     CHECK(legacy.masks[0].type == MaskParams::Radial);
-    CHECK(legacy.masks[0].subject == (int)SemanticSubject::Skin);
-    CHECK(legacy.masks[0].regions.empty());
-    CHECK_NEAR(legacy.masks[0].sensitivity, 0.5, 1e-4);
     CHECK_NEAR(legacy.masks[0].adjust.exposure, 1.5, 1e-4);
 
-    // ...and a project that DOES name a subject still gets that one back, withdrawn or not.
-    EditParams older;
-    CHECK(deserializeParams("mask=4,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65,0,0.7|"
-                            "0,0,0,0,0,0,0,0,0,0,0,0|\n", older));
-    CHECK(older.masks[0].subject == (int)SemanticSubject::Sky &&
-          "a withdrawn subject is READ BACK, never silently re-pointed (R-AISEG-9/22)");
-    CHECK(older.masks[0].regions.empty() &&
-          "and it comes back with nothing found, which is what a build that predates the "
-          "feature already did for a mask type it did not know");
+    // ...and the other direction, which is the promise the R-AISEG withdrawal has to keep: a
+    // project written WHILE the Detect mask existed still loads. It carries thirteen numbers in
+    // the first group and a trailing group per found region; both are skipped rather than
+    // rejected, and the mask comes back as type 4 — a type nothing renders, which is the answer
+    // this format has always given for one it does not know. The alternative, re-pointing 4 at a
+    // live type, would turn a mask that does nothing into a mask that does something wrong.
+    EditParams withDetect;
+    CHECK(deserializeParams("mask=4,0,0.5,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65,1,0.7|"
+                            "2.0,0,0,0,0,0,0,0,0,0,0,0||"
+                            "|0.1,0.1;0.4,0.1;0.4,0.5\n", withDetect));
+    CHECK(withDetect.masks.size() == 1);
+    CHECK(withDetect.masks[0].type == 4 && "the withdrawn type is preserved, not re-pointed");
+    CHECK_NEAR(withDetect.masks[0].adjust.exposure, 2.0, 1e-4);
+    Image img(32, 32, 3, ColorSpace::LinearSRGB);
+    for (size_t i = 0; i < img.pixelCount() * 3; ++i) img.data()[i] = (Pixel)0.5;
+    const Image before = img.clone();
+    applyMaskStack(img, withDetect.masks);
+    for (size_t i = 0; i < img.pixelCount() * 3; ++i)
+        if (std::fabs((double)img.data()[i] - (double)before.data()[i]) > 1e-9) { CHECK(false); break; }
+    CHECK(maskCoverage(withDetect.masks[0], 0.5f, 0.5f) == 0.f &&
+          "and it covers nothing, rather than covering something arbitrary");
 }
 
 TEST(EditParamsIO_masks_roundtrip)

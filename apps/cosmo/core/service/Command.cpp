@@ -84,7 +84,7 @@ namespace cosmo
         static const std::vector<std::string> names = {
             "project open", "project new", "project save", "project close", "import",
             "select", "select next", "select prev", "set", "bypass", "group new",
-            "group ungroup", "group rename", "delete", "mask set", "mask delete", "mask detect",
+            "group ungroup", "group rename", "delete", "mask set", "mask delete",
             "undo", "redo", "preset apply",
             "preset save", "export",
             "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata",
@@ -227,7 +227,7 @@ namespace cosmo
         }
         else if (v == "mask")
         {
-            if (!need(3, "mask set <i> k=v… | mask delete <i> | mask detect <i> [k=v…]")) return c;
+            if (!need(3, "mask set <i> k=v… | mask delete <i>")) return c;
             if (sub == "set")
             {
                 if (!need(4, "mask set <i> <key>=<value>")) return c;
@@ -244,19 +244,6 @@ namespace cosmo
             {
                 c.kind = Command::Kind::MaskDelete;
                 c.index = std::atoi(t[2].c_str());
-            }
-            else if (sub == "detect")
-            {
-                // Bare `key=value`, the same style `mask set` takes and not the `--flag` style
-                // `export` takes, because the keys it accepts are the mask's own fields.
-                c.kind = Command::Kind::MaskDetect;
-                c.index = std::atoi(t[2].c_str());
-                for (size_t i = 3; i < t.size(); ++i)
-                {
-                    std::pair<std::string, std::string> kv;
-                    if (!splitField(t[i], kv)) { err = "not a key=value: " + t[i]; return Command{}; }
-                    c.fields.push_back(kv);
-                }
             }
             else err = "unknown mask subcommand: " + sub;
         }
@@ -398,10 +385,6 @@ namespace cosmo
                 for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
                 break;
             case Command::Kind::MaskDelete: o << "mask delete " << c.index; break;
-            case Command::Kind::MaskDetect:
-                o << "mask detect " << c.index;
-                for (const auto &kv : c.fields) o << ' ' << kv.first << '=' << kv.second;
-                break;
             case Command::Kind::Delete:
                 o << "delete";
                 if (c.index >= 0) o << ' ' << c.index;

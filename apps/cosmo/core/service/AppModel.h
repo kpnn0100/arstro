@@ -120,28 +120,6 @@ namespace cosmo
         std::string outDir;
     };
 
-    /** A detection in flight, or the last one that finished (R-AISEG-20).
-     *
-     *  In the model and not only in the event stream because a front end that opened after the
-     *  detection started — or one that simply was not listening — still has to draw the bar.
-     *  The same reason `LoadModel` exists beside `load.progress`. */
-    struct DetectModel
-    {
-        bool active = false;
-        int maskIndex = -1;
-        double fraction = 0.0;    // 0..1
-        std::string stage;        // "preparing" | "colour" | "regions" | "shapes" | "outline"
-        std::string subject;      // what is being looked for
-        /** The result of the LAST finished detection, kept after `active` goes false so a panel
-         *  can say what it found without holding its own copy. `regions == 0` with
-         *  `handled == true` is "looked, found nothing", which is a different sentence from
-         *  `handled == false` — "nobody has a model for this" — and a UI needs both. */
-        int regions = 0;
-        double coverage = 0.0;    // 0..1 of the frame
-        bool handled = false;
-        std::string by;           // "built-in", or the installed model's name
-    };
-
     struct HistoryModel
     {
         int nodes = 0;          // size of the branching DAG for the edit target
@@ -201,7 +179,6 @@ namespace cosmo
         HistoryModel history;
         LoadModel load;
         ExportModel exports;
-        DetectModel detect;
         AppSettings settings;
         BudgetModel budget;
 
@@ -259,10 +236,6 @@ namespace cosmo
         double msPerMegapixel = 0.0;
 
         std::string lastError;      // the most recent rejected command or failure
-        /** Which segmenter a semantic mask will be decided by: "built-in", or an installed
-         *  model's name (R-AISEG-15). Constant for a session, so it belongs in the STABLE dump:
-         *  two front ends over the same service must agree about it, and they do. */
-        std::string segmenter = "built-in";
         bool gpuAvailable = false;
         bool gpuActive = false;
     };

@@ -176,28 +176,6 @@ namespace cosmo_v2
                 sendMaskSet(mSelectedMask, {{"feather", num(f)}}, next);
             }
         };
-        // R-AISEG-27: the button starts the detection, and that is all the view does about it.
-        // A `Command` and not a call into the session (R-SVC-2), so a script reaches it the same
-        // way; the answer comes back through `AppModel::detect` and the mask's own regions, which
-        // `setDetectStatus` below reads on every model refresh.
-        mMask->onDetect = [this] {
-            if (mSelectedMask < 0) return;
-            cosmo::Command c;
-            c.kind = cosmo::Command::Kind::MaskDetect;
-            c.index = mSelectedMask;
-            if (emitCommand(c)) return;
-            mSvc.dispatch(c);   // unwired: the service is right here (see sendMaskSet)
-        };
-        mMask->onSensitivityChange = [this](double v) {
-            if (const MaskParams *sel = selectedMaskParams())
-            {
-                MaskParams next = *sel;
-                next.sensitivity = (float)v;
-                // No setMasks(): it would fight a live drag, exactly as the feather slider's
-                // comment says two callbacks above.
-                sendMaskSet(mSelectedMask, {{"sensitivity", num(v)}}, next);
-            }
-        };
         mMask->onAdjustChange = [this](const LocalAdjust &a) {
             if (const MaskParams *sel = selectedMaskParams())
             {
@@ -342,29 +320,7 @@ namespace cosmo_v2
         mBasicDetail->setSubValues(offsets);
 
         mSelectedMask = p->masks.empty() ? -1 : std::min(mSelectedMask < 0 ? 0 : mSelectedMask, (int)p->masks.size() - 1);
-        // R-AISEG-15: which segmenter is answering, from the model. A mask from a network and
-        // a mask from a hue band are not the same claim, and the panel is where the difference
-        // has to be visible.
-        mMask->setSegmenter(mSvc.model().segmenter);
         mMask->setMasks(p->masks, mSelectedMask);
-        // R-AISEG-26/27/28. The count comes off the MASK and the rest off the last detection —
-        // deliberately, because after a project is reopened nothing has been detected this
-        // session while the mask is exactly what it was, and a panel that read both from the
-        // report would say "No detection yet" about a mask that plainly has a boundary on the
-        // photo.
-        {
-            const cosmo::DetectModel &d = mSvc.model().detect;
-            DetectStatus st;
-            st.ranForThisMask = d.maskIndex == mSelectedMask;
-            st.running = d.active && st.ranForThisMask;
-            st.fraction = d.fraction;
-            st.stage = d.stage;
-            st.handled = !st.ranForThisMask || d.handled;
-            st.coverage = d.coverage;
-            if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
-                st.regions = (int)p->masks[mSelectedMask].regions.size();
-            mMask->setDetectStatus(st);
-        }
         mMixer->setMixer(p->mixer);
         mCurve->setCurves(p->curve, p->curveChannel);
         refreshCurveReferences();  // the effective ("final") curves, drawn faint behind

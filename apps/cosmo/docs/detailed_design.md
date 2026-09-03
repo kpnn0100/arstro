@@ -524,83 +524,9 @@ The complete non-destructive description:
 - **CurvePoint** (`base/CurvePoint.h`): `{float x,y; float ix,iy; float ox,oy; bool smooth;}`;
   the shared `curve::sample()` flattens control points to the LUT the mixer engine consumes.
 
-`MaskParams` also carries the two Detect types added since: `int type` reaches `Path = 3` and
-`Semantic = 4`, with `std::vector<CurvePoint> path` for the first and, for the second,
-`int subject = 1` (Skin), `float sensitivity = 0.5`, and
-**`std::vector<std::vector<CurvePoint>> regions`** — what a detection found, and since R-AISEG-21
-what the mask *is*. Empty until a detection has run, which is why a fresh Detect mask covers
-nothing.
-
-### 3.4 Segmenter (`analysis/Segmenter.{h,cpp}`) — R-AISEG-22/23
-`enum class SemanticSubject { Sky, Skin, Foliage, Water, Hair, Person, Count }` — the values stay
-for the project format, but **`builtinHandles` answers true for `Skin` alone**. One codec both ways
-(`semanticSubjectName` / `parseSemanticSubject`, name or number, a withdrawn name still parses).
-
-`builtinScore(img, subject, out)` is deepgaze's two-stage colour detector and produces a 0..1
-**likelihood**, never a region:
-
-| constant | value | what it is |
-|---|---|---|
-| `kSkinHueMin/Max` | `0 / 60` degrees | deepgaze's `[0,58,50]..[30,255,255]` HSV gate, converted out of OpenCV's units |
-| `kSkinSatMin/Max` | `58/255 .. 1` | " |
-| `kSkinValMin` | `50/255` | " |
-| `kMinSeedFraction` | `0.0015` | below this the answer is "no skin here", not a model built from stray pixels |
-| `kHueBins x kSatBins` | `36 x 32` | the back-projection histogram; bilinear lookup, 3x3 smoothed (wrapping in hue), normalised to max = 1 |
-| `kRegulariseFraction` | `0.006` | soften before thresholding (R-AISEG-4) |
-| `kAnalysisEdge` | `1024` | preview and export decide the SAME regions |
-
-`scoreToCoverage(score, w, h, sensitivity)` regularises then thresholds at
-`t = 0.80 - 0.70 * sensitivity` with a `±0.16` band — exported so an installed model goes through
-it too, because sensitivity is one promise (R-AISEG-5).
-
-`ISegmenter` is unchanged: `segment(img, subject, sensitivity, out) -> bool` (false = decline) plus
-`name()`.
-
-### 3.5 Detection (`analysis/Detection.{h,cpp}`) — R-AISEG-19..24
-`detectSubjectRegions(framedLinear, subject, sensitivity, seg, onProgress) -> DetectionResult`.
-Stages, each reported through `onProgress(stage, fraction)` with stable names:
-`preparing` 0.05 → `colour` 0.20 → `regions` 0.45 → `shapes` 0.70 → `outline` 0.85 → 1.0.
-
-`DetectionResult { std::vector<ContourLoop> regions; float coverage; bool handled; std::string by; }`
-— `handled == false` means *nobody* has a model for the subject, which is a different sentence from
-`handled == true` with no regions ("looked, found nothing"), and a UI needs both.
-
-| constant | value | why |
-|---|---|---|
-| `kOpenFraction` | `0.006` | opening radius: erases specks (deepgaze) |
-| `kCloseFraction` | `0.010` | closing radius: fills the pinhole a specular highlight leaves. deepgaze omits this and the contour comes out lacy |
-| `kMinBlobFraction` | `0.0008` | of the whole frame |
-| `kRelBlobFraction` | `0.03` | of the LARGEST blob — a hand is ~a tenth of its face, so a tighter rule throws hands away |
-| `kPreTraceBlurFraction` | `0.0025` | the plane is binary; without this the contour is a staircase along pixel edges |
-| `kSimplifyTolerance` | `0.0015` | ~1.5 px at the analysis size |
-| `kMinLoopPoints` / `kMinLoopArea` | `8` / `0.0004` | a speck is not a boundary |
-
-`erodePlane` / `dilatePlane` are separable sliding min/max over a square (O(pixels), against
-O(pixels x radius²) for deepgaze's ellipse — smaller than the blur that follows).
-`keepSignificantBlobs` is an iterative 8-connected flood fill; iterative because a component can be
-most of a megapixel and the recursive form is one stack frame per pixel.
-
-### 3.6 Contour (`analysis/Contour.{h,cpp}`)
-`traceCoverageOutline(cov, w, h, threshold = 0.5, maxEdge = 0, minLoopPoints = 6,
-closeAtBorder = true)` — marching squares with the saddle resolved from the cell centre, stitched
-by quantised endpoint key, emitted in normalised 0..1 coordinates. `maxEdge = 0` walks every cell.
-**`closeAtBorder` reads outside the plane as below the threshold**, so a region running off the
-frame comes back closed along that edge instead of as an open chain with no area and no interior.
-
-`simplifyLoop(loop, tolerance)` is Douglas-Peucker with an explicit stack, never reducing a loop
-below three points. `loopArea(loop)` is the unsigned shoelace area in normalised units.
-
-### 3.7 The detection on the wire (`RenderService`, `EditEngine`) — R-AISEG-20
-`EditEngine::detectSubject(slot, params, subject, sensitivity, onProgress)` selects the slot,
-ensures its proxy, applies a **local** `Crop` + `Rotate` from `params` and nothing else
-(R-AISEG-24), and hands the framed image to `detectSubjectRegions`.
-
-`RenderService::requestDetect(slot, params, maskIndex, subject, sensitivity) -> bool` queues it on
-the worker beside the renders — refused, not coalesced, while one is in flight. Progress is read
-lock-free: `detectBusy()`, `detectFraction()`, `detectStage()` (a string literal, so publishing the
-pointer publishes the string). `tryAcquireDetect(Detection&)` moves the answer out and is what
-clears `detectBusy`. The worker runs a queued detection **before** the pending preview, so the
-first frame after it is the first frame that can show the new mask.
+`MaskParams` also carries `Path = 3` with its `std::vector<CurvePoint> path` (R-MASK-6). Type
+value **4 is retired, not reused**: it was the withdrawn Detect mask (see DR-AISEG (removed)), and
+a project that stores it must keep rendering nothing rather than start rendering an ellipse.
 
 ---
 
@@ -772,46 +698,9 @@ data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is
 `XformPanel::aspectChipRect` does; the ComboBox label of a drawn mask carries its point count, so
 "nothing happened yet" reads as "1 pts" rather than as a bug; a `ComboBox` → `onSelectMask(index)`; a `ComboBox` → `onSelectMask(index)`;
 `Inv` `PillButton` → `onToggleInvert`; bin `IconButton` (`icon::deleteBin`) → `onDeleteMask`;
-**Five** add-mask chips now — Radial / Linear / Brush / Draw / **Detect** (R-AISEG-10) — and a
-`DetectBlock` between Feather and Tone when the selected mask is `Semantic`. `DetectBlock` is a
-`clipToBounds` Segment (`kHeaderH=27.95, kPickerH=22.75, kPickerMB=4.875, kCaptionH=13.0`, total
-~103 px) holding **no subject picker** (R-AISEG-25: one subject is not a choice, and a control
-with one option looks like a choice, invites a click and does nothing), a `Sensitivity` `SliderRow`,
-a `Detect` `PillButton`, and a progress bar. It paints its own section header
-(`"Detect skin (colour & texture)"`, or the model's name in place of the parenthesis), the caption,
-the status line and the bar, and **clips that painting itself** because `clipToBounds` covers only
-the child subtree. Layout constants: `kHeaderH=27.95`, `kCaptionH=13.0`, `kCaptionMB=4.875`,
-`kButtonH=22.75`, `kButtonMB=4.875`, `kBarH=3.25`, `kBarMB=6.5`.
-
-`DetectStatus{running, fraction, stage, regions, ranForThisMask, handled, coverage}` comes in from
-`RightColumn` on every model refresh; `MaskPanel::setDetectStatus` composes the sentence
-(`detectStatusLine`, five states — *No detection yet* / *Reading colour…* / *Found n regions · x%
-of the frame* / *Found nothing — try Sensitivity* / *No detector for this subject*), sets
-`mDetectBtn->enabled = !running` (an animated fade through `disabledAmount`, not a flip), and
-records the two bar TARGETS. **`regions` comes off the mask and the rest off the last detection**,
-so a reopened project still says what its mask holds, at which point no detection has run this
-session (R-AISEG-28).
-
-The bar is two `AnimatedProperty`s and not one: `mBarFill` eases toward the service's fraction over
-**220 ms** and `mBarShow` fades **120 ms in / 300 ms out**, so the fill can finish while the bar
-fades and the last thing seen is a full bar rather than one vanishing at 70%. Eased, because the
-stages are uneven — `colour` is a third of the work and `shapes` a tenth — so the same numbers
-taken raw read as three stalls (R-AISEG-27). `detectBarFill()` / `detectBarShow()` /
-`detectStatusText()` expose the LIVE values so a test can tell an eased bar from a snapping one.
-The bar's row is **always laid out** and what changes is its opacity: growing the block instead
-would move everything below it twice for one button press.
-
-`MaskOverlay` gained `setComputedOutline(loops)` + `outlineFade()`: the boundary of a Detect mask
-(R-AISEG-18), stroked in the accent at 1.5 px through the same `normToLocal` a drawn path uses,
-**open rather than closed** (a region touching the frame edge gives an open chain), drawn above the
-`!mActive` early return so a fade has something to fade, and eased in/out by `mOutlineFade` over
-**180 ms EaseOutCubic** started in `advance()`. `App::render` pushes
-`arstro::maskLoops(*sel)` — the mask's OWN geometry (R-AISEG-21), not the last frame's outlines —
-and only when its type is `Semantic`.
-`MaskPanel::mDetectOpen` eases its height 0↔1 over **200 ms EaseOutCubic**, started in `advance()`
-(a setter has no clock), and `MaskPanel::detectOpenAmount()` exposes the LIVE value so a test can
-tell an eased implementation from a snapping one. Callbacks: `onSubjectChange(int)` /
-`onSensitivityChange(double)`;
+**Four** add-mask chips — Radial / Linear / Brush / Draw (R-MASK-6). A fifth, **Detect**, and
+the block under it existed between 2026-09-02 and 2026-09-03; both are gone with the feature (see
+DR-AISEG (removed)).
 Feather `SliderRow` (0..100 → 0..1) → `onFeatherChange`; then Basic-style Tone/Colour/Presence rows
 writing a working `LocalAdjust` → `onAdjustChange(LocalAdjust)`. Per-mask controls hidden until a
 mask is selected. `setMasks(masks, selected)`.

@@ -30,9 +30,6 @@ namespace cosmo
             case Event::Kind::FrameReady: return "frame.ready";
             case Event::Kind::ExportProgress: return "export.progress";
             case Event::Kind::ExportFinished: return "export.finished";
-            case Event::Kind::DetectStarted: return "detect.started";
-            case Event::Kind::DetectProgress: return "detect.progress";
-            case Event::Kind::DetectFinished: return "detect.finished";
             case Event::Kind::CommandRejected: return "command.rejected";
         }
         return "unknown";
@@ -80,16 +77,6 @@ namespace cosmo
                 break;
             case Event::Kind::ExportProgress: o << " done=" << e.a << " total=" << e.b << " name=" << e.text; break;
             case Event::Kind::ExportFinished: o << " written=" << e.a << " failures=" << e.b; break;
-            case Event::Kind::DetectStarted: o << " mask=" << e.a << " subject=" << e.text; break;
-            case Event::Kind::DetectProgress:
-                // The fraction as a whole-number percent, the shape `entry.progress` already
-                // uses — a line a human reads should not carry six decimal places of a number
-                // that is only ever drawn as a bar.
-                o << " mask=" << e.a << " stage=" << e.text << " pct=" << (int)(e.ms + 0.5);
-                break;
-            case Event::Kind::DetectFinished:
-                o << " mask=" << e.a << " regions=" << e.b << " coverage="
-                  << (int)(e.ms + 0.5) << "% by=" << e.text;
                 break;
             default:
                 if (!e.text.empty()) o << ' ' << e.text;

@@ -106,26 +106,8 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class GradePanel
     class XformPanel
     class MaskPanel {
-      + addChipRect(i)         ' Radial / Linear / Brush / Draw (R-MASK-6) / Detect (R-AISEG-10)
-      + setDetectStatus(DetectStatus)   ' R-AISEG-26/27/28, pushed from the model
-      + onDetect()             ' -> `mask detect <i>` (R-AISEG-27)
       + detectOpenAmount() / detectBarFill() / detectBarShow() / detectStatusText()
       ' every one of those is the LIVE eased value, so a test can tell a snap from a tween
-    }
-    struct DetectStatus <<from AppModel::detect + the mask>> {
-      + running / fraction / stage
-      + regions          ' off the MASK, so it survives a reopen (R-AISEG-28)
-      + ranForThisMask   ' tells "found nothing" from "never run" (R-AISEG-26)
-      + handled / coverage
-    }
-    class DetectBlock <<clipped accordion>> {
-      ' R-AISEG-12: height eases 0 -> ~103 px over 200 ms while the children keep their real
-      ' positions, so the block OPENS instead of appearing. Paints its own header, caption,
-      ' status line and progress bar AND clips them, because Segment::clipToBounds covers the
-      ' CHILD SUBTREE only. No subject picker: there is one subject (R-AISEG-25).
-      + caption / header / status
-      + barFill / barShow   ' written by MaskPanel::advance; drawn from, never from the target
-      + kHeaderH / kCaptionH / kCaptionMB / kButtonH / kButtonMB / kBarH / kBarMB
     }
     class StackPanel
     class ActionBar
@@ -306,40 +288,6 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
   class EditParams
   class CurvePoint
   class MaskParams
-  class OnnxSegmenter <<host; links nothing>> {
-    + open(manifest, libraryHint, why)
-    + findManifest(dir)
-    ' declines every subject its manifest does not declare, so the built-in still
-    ' answers the ones it is good at (R-AISEG-15)
-  }
-  interface ISegmenter <<seam: a real model>> {
-    + segment(img, subject, sensitivity, out) : bool   ' false = DECLINE -> built-in answers
-    + name()
-  }
-  class Segmenter <<deepgaze colour detector, not a network>> {
-    + semanticSubjectName(s) / parseSemanticSubject(text, out)   ' ONE codec (R-SVC-5)
-    + builtinHandles(subject) : bool          ' Skin, and only Skin (R-AISEG-22)
-    + builtinScore(img, subject, out)         ' a LIKELIHOOD, never a region
-    + scoreToCoverage(score, w, h, sensitivity)   ' shared with an installed model
-    - kSkinHueMin/Max, kSkinSatMin/Max, kSkinValMin  ' deepgaze's published gate (R-AISEG-23)
-    - kMinSeedFraction = 0.0015               ' too few seeds is an ANSWER, not a licence
-    - kAnalysisEdge = 1024                    ' preview and export decide the SAME regions
-  }
-  class Detection <<the operation (R-AISEG-19..24)>> {
-    + detectSubjectRegions(framedLinear, subject, sensitivity, seg, onProgress) : DetectionResult
-    + erodePlane / dilatePlane                ' open then close (R-AISEG-23 step 3)
-    + keepSignificantBlobs(plane, w, h)       ' two floors, not deepgaze's single largest
-    ' preparing -> colour -> regions -> shapes -> outline; runs ONCE, on the render worker
-  }
-  class DetectionResult <<geometry, not pixels>> {
-    + regions : normalised 0..1 closed loops  ' R-AISEG-21 — these BECOME the mask
-    + coverage / handled / by
-  }
-  class Contour <<free functions>> {
-    + traceCoverageOutline(cov, w, h, threshold, maxEdge, minPts, closeAtBorder)
-    + simplifyLoop(loop, tolerance)           ' Douglas-Peucker (R-AISEG-14 as amended)
-    + loopArea(loop)
-  }
   class Spatial <<free functions>> {
     + luminancePlane(img, out)
     + gaussianBlurPlane(src, dst, w, h, sigma)   ' exact; O(pixels x sigma)
@@ -462,22 +410,8 @@ EditEngine ..> EditParams
 EditParams *--> CurvePoint
 EditParams *--> MaskParams
 EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
-EditEngine o--> ISegmenter : setSegmenter (optional)     ' R-AISEG-6
-OnnxSegmenter ..|> ISegmenter : the host's real model (R-AISEG-15); links nothing,
                               ' loads onnxruntime via its one exported C symbol
-EditEngine ..> MaskParams : applyMaskStack(img, masks)   ' no segmenter: R-AISEG-21
-Segmenter ..> Spatial : fastBlurPlane
-Detection ..> Segmenter : builtinScore when the seam declines or is absent
-Detection ..> Contour : trace + simplify what it found
-Detection *--> DetectionResult
-EditEngine ..> Detection : detectSubject(slot, params, subject, sensitivity)  ' R-AISEG-24: framed, UNADJUSTED
-RenderService ..> Detection : requestDetect / tryAcquireDetect on the worker  ' R-AISEG-20
-MaskParams *--> CurvePoint : regions[] — what the detection found (R-AISEG-21)
 ColorMixer ..> Spatial : fastBlurPlane
 
 @enduml
 
-MaskOverlay ..> MaskParams : strokes maskLoops(m) like a drawn path (R-AISEG-18/21)
-MaskPanel *--> DetectBlock : while the selected mask is Semantic  ' R-AISEG-10
-DetectBlock *--> PillButton : Detect — the only control here that starts work (R-AISEG-27)
-MaskPanel ..> DetectStatus : setDetectStatus, every model refresh

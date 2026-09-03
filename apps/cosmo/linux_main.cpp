@@ -11,7 +11,6 @@
 #include "touch/PhoneApp.h"
 #include "TouchViewport.h"
 #include "ExportWriter.h"
-#include "segment/OnnxSegmenter.h"
 #include "Log.h"
 #include "ControlChannel.h"
 #include "UiDump.h"
@@ -1568,35 +1567,6 @@ int main(int argc, char **argv)
     // and App becomes a view holding a CosmoService&.
     host.svc.setDecoderFactory(
         [] { return arstro::cosmo_v2::makePinnedDecoder(); });
-    // R-AISEG-15: a real segmentation model, if one is installed. Both halves of that
-    // sentence are load-bearing — cosmo ships no weights and links no runtime, so this is
-    // a lookup that usually finds nothing, and finding nothing is the ordinary case rather
-    // than a failure. One place to look, named in docs/segmentation-models.md and written
-    // by tools/fetch-segmentation-model.sh, so there is no setting to get wrong.
-    host.svc.setSegmenterFactory([]() -> std::unique_ptr<arstro::ISegmenter> {
-        const std::string dir =
-            (std::filesystem::path(arstro::cosmo::ProjectStore::configDir()) / "models").string();
-        const std::string manifest = arstro::cosmo_v2::OnnxSegmenter::findManifest(dir);
-        if (manifest.empty())
-        {
-            LOGI("segment: no model installed in %s (built-in classifier)", dir.c_str());
-            return nullptr;
-        }
-        std::string why;
-        auto seg = arstro::cosmo_v2::OnnxSegmenter::open(manifest, dir, why);
-        if (!seg)
-        {
-            // Loud, and at WARN. A photographer who has gone to the trouble of installing a
-            // model and got the built-in anyway has no way to tell from the picture — the
-            // only place that difference can be reported is here.
-            LOGW("segment: %s could not be used: %s", manifest.c_str(), why.c_str());
-            return nullptr;
-        }
-        LOGI("segment: using %s (licence %s) from %s", seg->name(),
-             seg->spec().licence.empty() ? "unstated" : seg->spec().licence.c_str(),
-             manifest.c_str());
-        return seg;
-    });
     // Per-thread, on the thread: the OpenMP count is a per-thread ICV, which is why the old
     // env-var pin in main() bound nothing (D-12).
     host.svc.setWorkerInit([] { arstro::cosmo_v2::pinNestedOpenMPForThisThread(); });

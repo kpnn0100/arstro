@@ -22,14 +22,9 @@ if(TARGET cosmo_core)
 
   # touch/ is in the DESKTOP app's sources too (R-TOUCH-6): the same binary can draw the touch
   # shell, so linux_main.cpp holds a PhoneApp and switches to it when the setting says so.
-  # segment/ holds the ONNX Runtime binding (R-AISEG-15). It is app source, not core
-  # source, on purpose: it opens a file and loads a shared library, and cosmo_core may do
-  # neither. It links NOTHING — the runtime is found with LoadLibrary/dlopen at startup —
-  # so this builds and runs identically on a machine that has never heard of ONNX.
   file(GLOB COSMO_SOURCES CONFIGURE_DEPENDS
        ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
        ${CMAKE_CURRENT_SOURCE_DIR}/widgets/*.cpp
-       ${CMAKE_CURRENT_SOURCE_DIR}/segment/*.cpp
        ${CMAKE_CURRENT_SOURCE_DIR}/touch/*.cpp)
 
   set(CAIRO_ADAPTER ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src/adapter/native/CairoTarget.cpp)
@@ -84,8 +79,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party)   # onnxruntime_c_api.h (MIT, header only)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
 
   target_link_libraries(cosmo PRIVATE artboard_core arstro_image cosmo_core)
 
@@ -143,8 +137,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party)   # onnxruntime_c_api.h (MIT, header only)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
   target_link_libraries(cosmo_shots PRIVATE artboard_core arstro_image cosmo_core
                         ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_shots PRIVATE
@@ -166,8 +159,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party)   # onnxruntime_c_api.h (MIT, header only)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
   target_link_libraries(cosmo_ui_tests PRIVATE artboard_core arstro_image cosmo_core
                         ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_ui_tests PRIVATE
@@ -199,8 +191,7 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party)   # onnxruntime_c_api.h (MIT, header only)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
   target_link_libraries(cosmo_touch_shots PRIVATE artboard_core arstro_image cosmo_core
                         ${CMAKE_DL_LIBS} PkgConfig::GTK3 PkgConfig::COSMO_FREETYPE)
   target_compile_definitions(cosmo_touch_shots PRIVATE

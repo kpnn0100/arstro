@@ -15,6 +15,34 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-03 (later) — "the detection is completely wrong, remove that feature out of cosmo."
+DONE.**
+
+- **[x] R-AISEG withdrawn, and the whole feature is out of the tree.** `ctest` 17/17,
+  `image_tests` 97/97. Four things worth carrying forward:
+  * **The method had a ceiling and the ceiling was too low.** Three passes were built — a
+    five-class statistical model, an `ISegmenter` seam with an ONNX binding, and a rebuild as
+    deepgaze's two-stage colour detector run as an explicit operation storing geometry. The last
+    is a better ARCHITECTURE than the first two by every measure that was being tracked, and it
+    still gets the region wrong on real photographs, because a colour detector cannot tell a face
+    from anything else the same colour. R-AISEG-23 said so in writing while the feature shipped;
+    what this establishes is that saying so is not enough.
+  * **A removal is a forward commit, not a chain of reverts.** The eight AISEG commits are
+    interleaved with unrelated ones and each rewrote the last, so reverting them in sequence would
+    have conflicted eight times and left the docs describing a feature in three different states.
+    Deleting it as it stands, with the requirement and the docs updated in the same commit, is one
+    reviewable change.
+  * **Type value 4 is retired, never reused.** A project written while the feature existed stores
+    it, plus two extra numbers in the mask blob's first group and one trailing group per found
+    region. All three are read and ignored, so such a project loads and its Detect mask renders as
+    no coverage. Re-pointing 4 at a live type would turn a mask that does nothing into a mask that
+    does something WRONG, which is the one outcome worse than losing the feature.
+  * **The seam was never the blocker.** `ISegmenter` and the manifest format worked; what is
+    missing is a permissively-licensed model. If this comes back, it comes back as a model — and
+    the survey that says why there isn't one is in the history at `208ba53`.
+
+**► NEXT: the lum curve is not natural (asked 2026-09-03).** `arstro.cosmo.core.implement`.
+
 **► 2026-09-03 — "the skin detection is not good: show nothing until the user detects (with a
 progress bar), then a drawn mask with a precise segment; learn from deepgaze; keep only skin."
 DONE — both halves.**
@@ -909,7 +937,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-09-03 · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-09-03 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on

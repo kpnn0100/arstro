@@ -246,18 +246,6 @@ namespace cosmo
         return true;
     }
 
-    void CosmoService::setSegmenterFactory(std::function<std::unique_ptr<ISegmenter>()> f)
-    {
-        if (!f) return;
-        std::unique_ptr<ISegmenter> seg = f();
-        // Reported either way. "No model installed" and "a model is installed and it is this
-        // one" are the two states a photographer has to be able to tell apart, and the mask
-        // itself is not evidence — a good built-in answer and a good model answer look alike.
-        mSession.renderService().setSegmenter(std::move(seg));
-        mModel.segmenter = mSession.renderService().segmenterName();
-        emit(Event::Kind::Info, "segmenter=" + mModel.segmenter);
-    }
-
     bool CosmoService::takeFrame(RenderService::Frame &out)
     {
         if (!mFrameWaiting) return false;
@@ -301,84 +289,6 @@ namespace cosmo
         mRefinePendingLevel = next;
         mModel.refining = true;
         mSession.submitRefine(next);
-    }
-
-    void CosmoService::pumpDetect()
-    {
-        RenderService &rs = mSession.renderService();
-
-        // Progress first, so the last `detect.progress` before the answer is a real one and not
-        // a frame stale. Only emitted when the STAGE changes: the fraction is published into the
-        // model every pump for the bar to ease toward, but an event per frame for 100 ms of work
-        // would be sixty lines in the journal saying the same thing (R-AISEG-20 asks for a
-        // stream of progress, not for a stream of noise).
-        if (mModel.detect.active)
-        {
-            mModel.detect.fraction = rs.detectFraction();
-            const std::string stage = rs.detectStage();
-            if (stage != mModel.detect.stage)
-            {
-                mModel.detect.stage = stage;
-                emit(Event::Kind::DetectProgress, stage, mModel.detect.maskIndex, 0,
-                     mModel.detect.fraction * 100.0);
-            }
-            ++mModel.revision;
-        }
-
-        RenderService::Detection d;
-        if (!rs.tryAcquireDetect(d)) return;
-
-        mModel.detect.active = false;
-        mModel.detect.fraction = 1.0;
-        mModel.detect.stage.clear();
-        mModel.detect.regions = (int)d.result.regions.size();
-        mModel.detect.coverage = d.result.coverage;
-        mModel.detect.handled = d.result.handled;
-        mModel.detect.by = d.result.by;
-
-        // The answer becomes the mask (R-AISEG-21). Through `curParams()` + `submit()` — the
-        // same route `mask set` takes — so it is one undoable history step and not a mutation
-        // that appears from nowhere: a photographer who does not like what the detector found
-        // presses undo, and gets the mask back the way it was.
-        EditParams *p = mSession.curParams();
-        const int mi = d.maskIndex;
-        if (p && mi >= 0 && mi < (int)p->masks.size() && p->masks[mi].type == MaskParams::Semantic)
-        {
-            MaskParams &m = p->masks[mi];
-            m.regions.clear();
-            m.regions.reserve(d.result.regions.size());
-            for (const auto &loop : d.result.regions)
-            {
-                std::vector<CurvePoint> pts;
-                pts.reserve(loop.size());
-                // Corner points: a traced contour has no tangents, and a smooth point would
-                // make the serializer write four handle values per point that all mean zero.
-                for (const auto &xy : loop) pts.push_back(CurvePoint{xy.first, xy.second});
-                m.regions.push_back(std::move(pts));
-            }
-            // Its OWN history step, always. `History::record` merges edits that arrive within
-            // 450 ms so that a whole slider drag is one undoable thing — and a detection landing
-            // is not a continuation of whatever the user did while it ran. Without this, adding
-            // the mask, choosing the subject and the result arriving all merged into one node,
-            // so "I do not like what it found" undid the mask along with the finding.
-            if (History *h = mSession.currentHistory()) h->breakCoalesce();
-            mSession.submit();
-            refreshModel();
-            emit(Event::Kind::ParamsChanged,
-                 "mask.regions index=" + std::to_string(mi) + " loops=" +
-                     std::to_string(m.regions.size()));
-        }
-        else
-        {
-            // The mask went away while the detection ran — deleted, or the selection moved to
-            // another photo. Not an error: the work is simply dropped, and the event still
-            // reports what was found so a log reads as what happened rather than as a gap.
-            refreshModel();
-        }
-
-        emit(Event::Kind::DetectFinished, d.result.by, mi, (int)d.result.regions.size(),
-             d.result.coverage * 100.0);
-        ++mModel.revision;
     }
 
     void CosmoService::pump(double nowMs)
@@ -450,8 +360,6 @@ namespace cosmo
             emit(Event::Kind::FrameReady, note, mModel.frameSlot, mFrame.width, mFrame.ms,
                  mFrame.level);
         }
-
-        pumpDetect();
 
         if (!mLoader.active() && mLoader.total() == 0) return;
 
@@ -1011,7 +919,7 @@ namespace cosmo
                 // EditParamsIO names it.
                 MaskParams &m = p->masks[c.index];
                 LocalAdjust &adj = m.adjust;
-                bool sawType = false, sawSubject = false;
+                bool sawType = false;
                 for (const auto &kv : c.fields)
                 {
                     const std::string &k = kv.first;
@@ -1059,21 +967,6 @@ namespace cosmo
                             m.dabs.push_back({f[0], f[1], f[2], f[3]});
                         }
                     }
-                    else if (k == "subject")
-                    {
-                        // The NAME or the number, through the engine's one parser (R-SVC-5,
-                        // R-AISEG-8) — `subject=sky` is readable a year later and `subject=0` is
-                        // not, and a second table here would be the copy R-SVC-5 exists to
-                        // forbid. A misspelling is REFUSED rather than silently taken as 0: the
-                        // whole reason `parseSemanticSubject` returns a bool is that `skyy`
-                        // landing on Sky would be a mask that quietly does the wrong thing.
-                        arstro::SemanticSubject sub{};
-                        if (!arstro::parseSemanticSubject(kv.second, sub))
-                            return fail("mask set: unknown subject " + kv.second);
-                        m.subject = (int)sub;
-                        sawSubject = true;
-                    }
-                    else if (k == "sensitivity") m.sensitivity = v;
                     else if (k == "path")
                     {
                         // `x,y[,ix,iy,ox,oy];…` through the engine's OWN codec — the same one
@@ -1091,70 +984,9 @@ namespace cosmo
                 // mask every frame, `type` included, and a stale path left on a mask somebody
                 // switched back to Radial must not silently convert it (R-MASK-6).
                 if (!sawType && m.path.size() >= 3) m.type = MaskParams::Path;
-                // A semantic mask has no geometry, so there is nothing to infer a type FROM —
-                // `subject=` on a Radial mask is a caller that meant `type=4` and forgot, and
-                // the alternative is a mask that renders an ellipse and reports a subject.
-                // Same rule as the path's: only when the caller did not say.
-                if (!sawType && sawSubject) m.type = MaskParams::Semantic;
                 mSession.submit();
                 refreshModel();
                 emit(Event::Kind::ParamsChanged, "mask index=" + std::to_string(c.index));
-                return true;
-            }
-            case Command::Kind::MaskDetect:
-            {
-                // R-AISEG-20. Everything this validates is validated HERE and not on the worker,
-                // so a bad request is rejected in the same breath it was made — a front end that
-                // started a progress bar and then learned two seconds later that there was no
-                // mask 3 would have shown a lie for two seconds.
-                EditParams *p = mSession.curParams();
-                if (!p) return fail("mask detect: nothing selected to edit");
-                if (c.index < 0 || c.index >= (int)p->masks.size())
-                    return fail("mask detect: no mask " + std::to_string(c.index) + " (have " +
-                                std::to_string(p->masks.size()) + ")");
-                MaskParams &m = p->masks[c.index];
-                if (m.type != MaskParams::Semantic)
-                    return fail("mask detect: mask " + std::to_string(c.index) +
-                                " is not a Detect mask");
-                const int slot = mSession.currentSlot();
-                if (slot < 0) return fail("mask detect: no image on the stage");
-
-                // Subject and sensitivity may arrive with the request, because a photographer
-                // who moves Sensitivity and presses Detect means both and two commands would
-                // put a wasted detection between them. Applied to the mask BEFORE the run, so
-                // what the mask says it was looking for is what it was looking for.
-                bool changed = false;
-                for (const auto &kv : c.fields)
-                {
-                    if (kv.first == "subject")
-                    {
-                        arstro::SemanticSubject sub{};
-                        if (!arstro::parseSemanticSubject(kv.second, sub))
-                            return fail("mask detect: unknown subject " + kv.second);
-                        m.subject = (int)sub;
-                        changed = true;
-                    }
-                    else if (kv.first == "sensitivity")
-                    { m.sensitivity = (float)std::atof(kv.second.c_str()); changed = true; }
-                    else return fail("mask detect: unknown field " + kv.first);
-                }
-                if (changed) { mSession.submit(); refreshModel(); }
-
-                const arstro::SemanticSubject subject =
-                    (m.subject >= 0 && m.subject < (int)arstro::SemanticSubject::Count)
-                        ? (arstro::SemanticSubject)m.subject
-                        : arstro::SemanticSubject::Skin;
-                if (!mSession.renderService().requestDetect(slot, mSession.effectiveEditParams(),
-                                                            c.index, subject, m.sensitivity))
-                    return fail("mask detect: a detection is already running");
-
-                mModel.detect = DetectModel{};
-                mModel.detect.active = true;
-                mModel.detect.maskIndex = c.index;
-                mModel.detect.stage = "queued";
-                mModel.detect.subject = arstro::semanticSubjectName(subject);
-                ++mModel.revision;
-                emit(Event::Kind::DetectStarted, mModel.detect.subject, c.index);
                 return true;
             }
             case Command::Kind::Undo:

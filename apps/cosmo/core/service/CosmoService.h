@@ -58,21 +58,8 @@ namespace cosmo
          *  first and hands it to the view, rather than the other way round. */
         explicit CosmoService(ThreadBudget &budget);
 
-        // ── wiring the host supplies once ──
-        /** The host's decoder, used for the project load AND — since R-MEM-2 — to re-decode
-         *  a slot the engine evicted. Installing it here wires both, so there can be no
-         *  second, unbudgeted decode path (the D-41 shape). */
-        /** Install a real segmentation model (R-AISEG-15). The FACTORY, not the model: opening
-         *  one means reading a file and loading a shared library, and `cosmo_core` may do
-         *  neither — the same reason `setDecoderFactory` exists and takes the same shape. Called
-         *  before the first render; a factory that returns nullptr (no model installed, runtime
-         *  missing, manifest broken) leaves the built-in classifier answering, which is not an
-         *  error state but the ordinary one. */
-        void setSegmenterFactory(std::function<std::unique_ptr<ISegmenter>()> f);
-        /** Which segmenter is answering: "built-in", or the installed model's name. In the
-         *  model because a photographer looking at a mask needs to know which of two very
-         *  different things produced it, and a script asserting on a mask needs to know that its
-         *  answer depends on what is installed. */
+        /** The decode seam (R-SVC-7's one real member). A host installs a factory; the loader
+         *  builds one decoder per worker from it. */
         void setDecoderFactory(ProjectLoader::DecoderFactory f);
         /** Runs on every decode worker before it works — the OpenMP pin (R-CPU-2c, D-12). */
         void setWorkerInit(std::function<void()> f) { mWorkerInit = std::move(f); }
@@ -132,10 +119,6 @@ namespace cosmo
         /** R-PREVIEW-3: if a gesture has gone quiet and the frame on screen is coarse, ask
          *  for the next level up. Called once per `pump`; never blocks. */
         void maybeRefine(double nowMs);
-        /** R-AISEG-20: publish a running detection's progress into the model, and — once it has
-         *  an answer — write the regions it found onto the mask that asked (R-AISEG-21). Called
-         *  once per `pump`; polls, never waits. */
-        void pumpDetect();
 
         /** How long a gesture must be silent before the walk starts, ms. See maybeRefine
          *  for why it is this short. */

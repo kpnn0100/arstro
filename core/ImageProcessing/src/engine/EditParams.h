@@ -35,7 +35,13 @@ namespace arstro
      *  resolution-independent (and matches the UI overlay 1:1). */
     struct MaskParams
     {
-        enum Type { Radial = 0, Linear = 1, Brush = 2, Path = 3, Semantic = 4 };
+        /** `4` was `Semantic` — a mask whose region a classifier decided (R-AISEG). The whole
+         *  feature was removed on 2026-09-03 (R-AISEG WITHDRAWN): the detector was wrong often
+         *  enough to be worse than nothing. The value is NOT reused, because a project written
+         *  while it existed stores it, and re-pointing it at a real type would turn a mask that
+         *  does nothing into a mask that does something wrong. An unknown type renders as no
+         *  coverage, which is the answer this format has always given for one. */
+        enum Type { Radial = 0, Linear = 1, Brush = 2, Path = 3 };
         int type = Radial;
         bool inverted = false;
         float feather = 0.5f;                 // 0..1 edge softness
@@ -58,43 +64,6 @@ namespace arstro
          *
          *  Fewer than three points has no area and the mask is skipped. */
         std::vector<CurvePoint> path;
-        /** semantic: WHICH subject to find, as `SemanticSubject` (analysis/Segmenter.h), and how
-         *  readily to accept a pixel as part of it (R-AISEG-1/5). Stored as an int and a float
-         *  rather than as the enum so `EditParams` keeps depending on nothing — it is the one
-         *  struct every front end, every file format and every future engine has to be able to
-         *  read, and an enum here would drag the classifier's header along with it.
-         *
-         *  `sensitivity` is the whole control: 0 takes only what the model is certain of, 1 takes
-         *  anything it suspects. One number, because a photographer judging a mask turns one knob
-         *  and watches the edge move. */
-        /** `1` is `SemanticSubject::Skin`, and the default is a NUMBER here rather than the enum
-         *  for the reason stated above — `EditParams` depends on nothing.
-         *
-         *  It was 0 (Sky) until R-AISEG-22 withdrew every subject but Skin. Changing a default
-         *  is normally a migration; this one is not, because a mask that was ever ABOUT a
-         *  subject wrote the number into its blob and gets it back on load, and a mask that was
-         *  not (a radial, a path) has never read this field. What the change fixes is the only
-         *  case the default actually reaches: a Detect mask created fresh, which used to be
-         *  born looking for a subject nothing can answer for. */
-        int subject = 1;
-        float sensitivity = 0.5f;
-        /** detect: WHERE the detection found the subject, as closed loops of points in the same
-         *  normalised framed-image space `path` uses — and, since R-AISEG-21, this IS the mask.
-         *
-         *  Empty until a detection has been run, which is exactly why a fresh Detect mask covers
-         *  nothing (R-AISEG-19): there is no answer yet, and inventing one by segmenting inside
-         *  the render is what this replaced.
-         *
-         *  `CurvePoint` again, and not a lighter pair of floats, for the reason `path` uses it:
-         *  a found boundary and a drawn boundary are the same kind of thing, so they share the
-         *  sampler (`maskPathPolygon`), the fill, the serializer (`formatCurvePoints`) and the
-         *  stroke on the photo. The points are corners — a traced contour has no tangents to
-         *  preserve — which is also what makes them cheap to write: the codec emits the handles
-         *  only for a smooth point.
-         *
-         *  The fill across the loops is EVEN-ODD, so a loop inside a loop is a hole and a pair
-         *  of sunglasses stays unselected. */
-        std::vector<std::vector<CurvePoint>> regions;
         LocalAdjust adjust;
     };
 

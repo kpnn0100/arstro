@@ -10,11 +10,6 @@
  *
  *  Kept separate from EditEngine so the mask math is a single-responsibility unit
  *  the UI can mirror for its overlay and a video editor can reuse unchanged.
- *
- *  Since R-AISEG-21 (2026-09-03) NOTHING here looks at the picture. A Detect mask's region
- *  is decided once, by `analysis/Detection.h`, and stored on the mask as loops; here it is
- *  filled exactly as a drawn path is. That is why `applyMaskStack` no longer takes a
- *  segmenter and no longer produces boundary outlines — the mask carries its own.
  */
 #pragma once
 #include "../base/CurvePoint.h"
@@ -33,19 +28,10 @@ namespace arstro
      *  plane instead (`buildMaskCoverage`). Callers that want one point's coverage (a hit
      *  test, an overlay) want the hard answer anyway.
      *
-     *  A `Semantic` mask answers the same way (R-AISEG-21): its found regions ARE geometry, so
-     *  "is this point in the mask" is an even-odd test against them, and a mask on which no
-     *  detection has been run yet answers 0 because it has no loops (R-AISEG-19). It used to
-     *  return 0 unconditionally, because the coverage was a question about the pixels that this
-     *  function had no way to answer. */
+     *  An unknown type answers 0 — which is what a project holding the withdrawn `Semantic`
+     *  type (4) gets, and the answer this function has always given for a type it does not
+     *  know. */
     float maskCoverage(const MaskParams &m, float nx, float ny);
-
-    /** The closed polygons a mask is made of, in normalised framed-image coords: a `Path`'s
-     *  flattened outline, or a `Detect` mask's found regions, and nothing for the closed-form
-     *  types. One function, so the fill, the point query and the on-photo stroke are all looking
-     *  at the same shapes — the bug it prevents is a mask that renders one outline and draws
-     *  another. */
-    std::vector<std::vector<std::pair<float, float>>> maskLoops(const MaskParams &m);
 
     /** Flatten a path mask's closed bezier outline to a polygon in normalised coords, in the
      *  order the points are stored. ONE sampler, shared by the render and the editor's
@@ -97,10 +83,6 @@ namespace arstro
      *  per pixel and never allocate a plane — `applyMaskStack` only builds one for `Path`. */
     void buildMaskCoverage(const MaskParams &m, int w, int h, std::vector<Pixel> &out);
 
-    /** Apply every mask in `masks` to `img` (linear light), in order.
-     *
-     *  Takes no segmenter and produces no outlines since R-AISEG-21: a render decides nothing
-     *  about where a mask is any more. It reads the parameters, and every mask type's region is
-     *  in them. */
+    /** Apply every mask in `masks` to `img` (linear light), in order. */
     void applyMaskStack(Image &img, const std::vector<MaskParams> &masks);
 }

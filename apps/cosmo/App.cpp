@@ -1027,20 +1027,6 @@ namespace cosmo_v2
             const MaskParams *sel = mRightColumn->selectedMaskParams();
             if (mRightColumn->maskTabActive() && sel) ov->setMask(*sel, true);
             else                                      ov->setMask(MaskParams{}, false);
-            // R-AISEG-18/21: the boundary of a Detect mask, drawn from the mask's OWN
-            // parameters. It used to be lifted off the last frame, because the render was the
-            // only thing that knew where the mask had gone; since the detection stores what it
-            // found (`MaskParams::regions`), the mask knows, and `maskLoops` is the same
-            // function the fill and the hit test ask. One source, so the line on the photo can
-            // no longer disagree with the pixels under it.
-            //
-            // Detect ONLY. A drawn path already draws its outline from its control points —
-            // that outline IS the mask — so a second contour beside it would be two lines
-            // saying the same thing slightly differently.
-            std::vector<std::vector<std::pair<float, float>>> outline;
-            if (mRightColumn->maskTabActive() && sel && sel->type == MaskParams::Semantic)
-                outline = arstro::maskLoops(*sel);
-            ov->setComputedOutline(outline);
         }
 
         // R-CROP-5: the on-photo crop box, shown only while the Xform tab is open — the same

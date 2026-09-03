@@ -1,5 +1,4 @@
 #include "EditCommands.h"
-#include "analysis/Segmenter.h"
 #include "engine/EditParamsIO.h"
 #include <sstream>
 
@@ -32,7 +31,7 @@ namespace editcmd
         o.precision(7);
         o << m.type << ',' << (m.inverted ? 1 : 0) << ',' << m.feather << ',' << m.cx << ',' << m.cy
           << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1
-          << ',' << m.subject << ',' << m.sensitivity;   // R-AISEG-9, same group, appended
+;
         return o.str();
     }
 
@@ -51,12 +50,7 @@ namespace editcmd
         Fields f = {{"type", std::to_string(m.type)}, {"inverted", m.inverted ? "1" : "0"},
                     {"feather", num(m.feather)},
                     {"cx", num(m.cx)}, {"cy", num(m.cy)}, {"rx", num(m.rx)}, {"ry", num(m.ry)},
-                    {"x0", num(m.x0)}, {"y0", num(m.y0)}, {"x1", num(m.x1)}, {"y1", num(m.y1)},
-                    // The NAME, not the number: this is what a script and a log line show, and
-                    // `subject=sky` is readable a year later where `subject=0` is not. One codec
-                    // in the engine parses both (R-SVC-5, R-AISEG-8).
-                    {"subject", arstro::semanticSubjectName((arstro::SemanticSubject)m.subject)},
-                    {"sensitivity", num(m.sensitivity)}};
+                    {"x0", num(m.x0)}, {"y0", num(m.y0)}, {"x1", num(m.x1)}, {"y1", num(m.y1)}};
         for (auto &kv : adjustFields(m.adjust)) f.push_back(std::move(kv));
         std::string dabs;
         for (size_t i = 0; i < m.dabs.size(); ++i)

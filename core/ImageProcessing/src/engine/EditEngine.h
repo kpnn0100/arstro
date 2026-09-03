@@ -23,11 +23,9 @@
 #include "../base/Image.h"
 #include "../base/ImageBlock.h"
 #include "../analysis/Histogram.h"
-#include "../analysis/Segmenter.h"
 #include "../compute/ComputeBackend.h"
 #include "EditParams.h"
 #include "MaskStack.h"
-#include "../analysis/Detection.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
 #include "../tone/ToneRegions.h"
@@ -196,35 +194,6 @@ namespace arstro
         /** Injection seam (tests / a per-platform host): replace the accelerator the
          *  ctor installed from createComputeAccelerator(). nullptr forces CPU-only. */
         void setComputeAccelerator(std::unique_ptr<IComputeBackend> backend) { mAccel = std::move(backend); }
-
-        /** Injection seam for a real segmentation model (R-AISEG-6), the exact shape of the two
-         *  seams above: a host that can run ONNX, NCNN or Core ML installs one here and the
-         *  built-in statistical classifier becomes the fallback for whatever it declines.
-         *  nullptr (the default) means the built-in answers everything.
-         *
-         *  It is here now rather than when the first model arrives because it is what makes
-         *  "the built-in is a default, not the definition of the feature" a true statement —
-         *  and because retrofitting a seam under a shipped mask type would mean migrating
-         *  every project that already has one. */
-        void setSegmenter(std::unique_ptr<ISegmenter> seg) { mSegmenter = std::move(seg); }
-        /** The segmenter deciding semantic masks, or "built-in" — so which model produced a
-         *  mask is never a guess, the same reason `activeBackendName()` exists. */
-        const char *segmenterName() const { return mSegmenter ? mSegmenter->name() : "built-in"; }
-
-        /** Detect `subject` in `slot`, and report WHERE, as loops of normalised framed-image
-         *  points (R-AISEG-19..24).
-         *
-         *  Once, when asked — not on every render. `params` supplies the crop and the rotation
-         *  and NOTHING else: the classifier reads the FRAMED but UNADJUSTED photo (R-AISEG-24),
-         *  because a finding about a photograph must not change when a slider does. The result
-         *  becomes the mask (`MaskParams::regions`), so nothing later re-decides it.
-         *
-         *  Runs on whichever thread calls it — the render worker, in cosmo — and reports each
-         *  stage through `onProgress` as it goes. Returns an empty, `handled == false` result
-         *  when the slot is cold or nobody has a model for the subject. */
-        DetectionResult detectSubject(int slot, const EditParams &params, SemanticSubject subject,
-                                      float sensitivity,
-                                      const DetectionProgress &onProgress = DetectionProgress());
 
         // ── basic tone ──
         void setExposure(float ev);       // -5..+5
@@ -407,7 +376,6 @@ namespace arstro
 
         std::vector<MaskParams> mMasks;
         std::unique_ptr<IComputeBackend> mAccel;  // optional accelerator (nullptr = CPU only); the CPU path is the reference
-        std::unique_ptr<ISegmenter> mSegmenter;   // optional real model (nullptr = the built-in classifier)
         bool mPreferGpu = false;                  // user opt-in; only takes effect when mAccel->available()
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;

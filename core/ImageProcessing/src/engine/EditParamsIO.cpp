@@ -62,8 +62,13 @@ namespace arstro
             return v;
         }
 
-        // One mask packed as:
-        //   geometry(11 + 2) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts) | region(pts) | ...
+        // One mask packed as: geometry(11) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts)
+        //
+        // The R-AISEG groups — two extra numbers in the first group and one trailing group per
+        // found region — are GONE from what this writes (the feature was withdrawn), but a
+        // project written while they existed still loads: the first group is read by index and
+        // stops at eleven, and any group after the path is skipped. That is the same forward-
+        // compatibility rule the format has always had, used in the other direction.
         //
         // The fourth group is APPENDED rather than folded into the first: a project written by
         // this build must still load in one that predates path masks (the old parser stops after
@@ -78,12 +83,7 @@ namespace arstro
             std::ostringstream o; o.precision(7);
             o << m.type << ',' << (m.inverted ? 1 : 0) << ',' << m.feather << ',' << m.cx << ',' << m.cy
               << ',' << m.rx << ',' << m.ry << ',' << m.x0 << ',' << m.y0 << ',' << m.x1 << ',' << m.y1
-              // R-AISEG-9: APPENDED to the first group rather than made a fifth one. Every parser
-              // that has ever read this group reads it BY INDEX and stops at eleven, so an older
-              // build ignores these two and a project written by an older build leaves them at
-              // their defaults. A fifth group would have worked too; this is smaller, and the
-              // trailing-group trick is already spent on `path`.
-              << ',' << m.subject << ',' << m.sensitivity;
+;
             const LocalAdjust &a = m.adjust;
             o << '|' << a.exposure << ',' << a.contrast << ',' << a.highlights << ',' << a.shadows
               << ',' << a.whites << ',' << a.blacks << ',' << a.temp << ',' << a.tint << ',' << a.saturation
@@ -95,18 +95,8 @@ namespace arstro
                 o << d.x << ':' << d.y << ':' << d.radius << ':' << d.flow;
             }
             // Only when there IS one: an empty trailing group on every radial mask ever written
-            // is noise in a file people read and diff. A mask with regions but no path still
-            // writes the empty path group, because the region groups are found BY POSITION and
-            // dropping an empty one in the middle would shift every loop up by one.
-            if (!m.path.empty() || !m.regions.empty()) o << '|' << mixerStr(m.path);
-            // R-AISEG-21: one group per found loop, appended. A fifth group holding all of them
-            // would have needed a fourth separator nested inside `;` and `,`, and the file has
-            // no escaping — so the loop that contained a `;` would be two loops. Groups are the
-            // separator this format already has spare, and the trailing-group rule (an older
-            // parser stops when it runs out of groups it knows) covers a variable number of them
-            // for free, which is the same trick `path` itself is spent on.
-            for (const auto &loop : m.regions)
-                if (!loop.empty()) o << '|' << mixerStr(loop);
+            // is noise in a file people read and diff.
+            if (!m.path.empty()) o << '|' << mixerStr(m.path);
             return o.str();
         }
 
@@ -124,9 +114,9 @@ namespace arstro
                     m.cx = g[3]; m.cy = g[4]; m.rx = g[5]; m.ry = g[6];
                     m.x0 = g[7]; m.y0 = g[8]; m.x1 = g[9]; m.y1 = g[10];
                 }
-                // Separately, and not as part of the `>= 11` block: a pre-R-AISEG project has
-                // exactly eleven and must keep its defaults rather than being rejected.
-                if (g.size() >= 13) { m.subject = (int)g[11]; m.sensitivity = g[12]; }
+                // A project written while R-AISEG existed has thirteen; the extra two named a
+                // subject and a sensitivity for a feature that is gone. Read by index and
+                // stopped at eleven, so they are ignored rather than rejected.
             }
             if (parts.size() >= 2)
             {
@@ -149,11 +139,8 @@ namespace arstro
                 }
             }
             if (parts.size() >= 4 && !parts[3].empty()) m.path = parseMixer(parts[3]);
-            // Everything after the path is a found region (R-AISEG-21). A build that predates
-            // them stops at the path and renders a Detect mask as no coverage — which is the
-            // answer R-AISEG-9 already chose for a mask type an old build does not understand.
-            for (std::size_t g = 4; g < parts.size(); ++g)
-                if (!parts[g].empty()) m.regions.push_back(parseMixer(parts[g]));
+            // Any group after the path was a found region while R-AISEG existed. Skipped, not
+            // rejected: a mask of the withdrawn type renders as no coverage anyway.
             return m;
         }
     }
@@ -322,7 +309,6 @@ namespace arstro
                 fn("mask.rx", m.rx); fn("mask.ry", m.ry);
                 fn("mask.x0", m.x0); fn("mask.y0", m.y0);
                 fn("mask.x1", m.x1); fn("mask.y1", m.y1);
-                fn("mask.sensitivity", m.sensitivity);
                 fn("mask.exposure", m.adjust.exposure);
                 fn("mask.contrast", m.adjust.contrast);
                 fn("mask.highlights", m.adjust.highlights);

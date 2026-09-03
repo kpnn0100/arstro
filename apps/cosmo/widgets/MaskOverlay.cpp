@@ -240,51 +240,8 @@ namespace cosmo_v2
         t.strokePath();
     }
 
-    void MaskOverlay::advance(double nowMs)
-    {
-        // R-G-1: the boundary appears and disappears; it does not blink. The target is "there is
-        // an outline and this overlay is live", and the tween is started HERE because the setter
-        // has no clock. 180 ms, the same figure everything else on this canvas fades at.
-        mOutlineTarget = (mActive && !mOutline.empty()) ? 1.0 : 0.0;
-        if (mOutlineTarget != mOutlineLastTarget)
-        {
-            mOutlineFade.animateTo(mOutlineTarget, 180.0, Easing::EaseOutCubic, nowMs);
-            mOutlineLastTarget = mOutlineTarget;
-        }
-        mOutlineFade.update(nowMs);
-        Segment::advance(nowMs);
-    }
-
     void MaskOverlay::onPaint(IRenderTarget &t) const
     {
-        // The computed boundary is drawn even while the overlay is fading OUT, which is why it
-        // is above the `mActive` early return: a fade needs something to fade.
-        const double fade = mOutlineFade.value();
-        if (fade > 0.004 && !mOutline.empty())
-        {
-            // R-AISEG-18. The same accent and the same 1.5 px stroke a drawn path gets, because
-            // it is the same thing to the photographer — the edge of the mask — and a second
-            // visual language for "where the mask is" would be a distinction without a
-            // difference. Mapped through `normToLocal` like every other mask, so it tracks zoom
-            // and pan for free (R-MASK-3).
-            //
-            // NOT closed with closePath(): a region that runs off the edge of the frame gives an
-            // open chain, and closing it would draw a straight line across the photo joining two
-            // points that are only neighbours in the trace order.
-            t.setStroke(Color{mAccent.r, mAccent.g, mAccent.b, (float)(mAccent.a * fade)}, 1.5);
-            for (const auto &loop : mOutline)
-            {
-                if (loop.size() < 2) continue;
-                t.beginPath();
-                for (std::size_t i = 0; i < loop.size(); ++i)
-                {
-                    const Point p = normToLocal(loop[i].first, loop[i].second);
-                    if (i == 0) t.moveTo(p.x, p.y);
-                    else t.lineTo(p.x, p.y);
-                }
-                t.strokePath();
-            }
-        }
         if (!mActive) return;
         const Color line = mAccent;
         // A coloured dot ringed by the dark photo-stage colour so handles read on any photo.

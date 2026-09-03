@@ -712,7 +712,47 @@ Status: implemented. `apps/cosmo/widgets/MaskOverlay.{h,cpp}` (ported from cosmo
   - **Old projects still load and new ones still open in old builds**: the path is a fourth,
     optional group in the mask blob.
 
-## R-AISEG — A mask that finds its own subject — 🚧 IN PROGRESS
+## R-AISEG — A mask that finds its own subject — ❌ WITHDRAWN (2026-09-03)
+
+**The whole area is removed from cosmo.** Reported, after the rework that was supposed to fix it:
+*"detection performance is too bad right now, the detection completely wrong, remove that feature
+out of cosmo."*
+
+**What was tried, so nobody tries the same thing again.** Three passes: a per-class statistical
+model over five subjects (R-AISEG-1..9); an `ISegmenter` seam with an ONNX binding for anyone who
+installs a model (R-AISEG-15..17); and a rebuild as deepgaze's two-stage colour detector, Skin
+only, run once as an explicit operation whose result is stored as geometry (R-AISEG-19..24). The
+last of those is a better *architecture* than the first two by every measure that was being
+tracked — it costs nothing per render, it cannot drift when a slider moves, it undoes in one step,
+and it drew a contour that followed a jaw. It still gets the region wrong on real photographs
+often enough to be worse than no feature, because **a colour detector cannot tell a face from
+anything else the same colour**, and that is not a bug in the implementation — it is the ceiling
+of the method. The rework's own requirement said so (R-AISEG-23: *"a patch bigger than the face
+wins, and no colour detector can do otherwise"*); what the removal establishes is that the ceiling
+is too low to ship under, not merely low.
+
+**So the only honest next attempt is a real segmentation model**, and the blocker there was never
+the code — the seam and the manifest format were built and worked. It is that there is no
+permissively-licensed model covering the subjects a photographer wants (the survey lived in
+`docs/segmentation-models.md`, removed with the rest; it is in the history at `208ba53`). Until
+that changes, cosmo has four mask types and they are all shapes the photographer positions.
+
+**What the withdrawal must not break**, and the one thing that survives in code:
+`MaskParams::Type` value **4 is not reused**. A project written while the feature existed stores
+it, along with two extra numbers in the mask blob's first group and one trailing group per found
+region. All three are read and ignored — the first group is parsed by index and stops at eleven,
+and any group after the path is skipped — so such a project loads, and its Detect mask renders as
+no coverage. That is the answer this format has always given for a mask type it does not know.
+Re-pointing 4 at a live type would turn a mask that does nothing into a mask that does something
+wrong, which is the one outcome worse than losing the feature. Guarded by
+`Mask_roundtrips_through_the_project_and_the_preset`.
+
+The requirements below are kept as written, for the history and for whoever builds the model-based
+version. **None of them is in force.**
+
+<details>
+<summary>R-AISEG-1 … R-AISEG-28, as they stood when the feature was removed</summary>
+
 
 Every mask cosmo has is a shape the photographer positions: an ellipse, a gradient, a brush, a
 drawn outline. All four ask the same thing of them — *tell the software where the sky is* — when the
@@ -1039,6 +1079,8 @@ than the one it replaces for reasons that have nothing to do with the UI.
   The count comes from the **mask's own regions**, not from the last detection's report, so it is
   still right after a project is reopened — at which point no detection has run in this session
   and the report is empty, but the mask is exactly what it was.
+
+</details>
 
 
 ## R-ICON — Icons are traced, not approximated — ✅ IMPLEMENTED

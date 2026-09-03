@@ -51,30 +51,6 @@ namespace arstro
         }
     }
 
-    std::vector<std::vector<std::pair<float, float>>> maskLoops(const MaskParams &m)
-    {
-        std::vector<std::vector<std::pair<float, float>>> loops;
-        if (m.type == MaskParams::Path)
-        {
-            auto poly = maskPathPolygon(m.path);
-            if (poly.size() >= 3) loops.push_back(std::move(poly));
-            return loops;
-        }
-        if (m.type != MaskParams::Semantic) return loops;
-        // A detection's loops are already dense polylines (R-AISEG-21), so they are walked at
-        // one point per stored point: `perSeg = 1`. Running the bezier sampler over them at the
-        // path default would emit twelve interpolated points between every pair of neighbours
-        // that are a pixel and a half apart — the same curve, twelve times the memory, and a
-        // fill that is twelve times slower for no visible difference.
-        loops.reserve(m.regions.size());
-        for (const auto &loop : m.regions)
-        {
-            auto poly = maskPathPolygon(loop, 1);
-            if (poly.size() >= 3) loops.push_back(std::move(poly));
-        }
-        return loops;
-    }
-
     float maskCoverage(const MaskParams &m, float nx, float ny)
     {
         float cov = 0.f;
@@ -98,22 +74,11 @@ namespace arstro
             break;
         }
         case MaskParams::Path:
-        case MaskParams::Semantic:
         {
-            // Hard-edged here — see the header. The polygons are rebuilt per call, which is why
+            // Hard-edged here — see the header. The polygon is rebuilt per call, which is why
             // no render uses this path: `buildMaskCoverage` flattens once for the whole plane.
-            //
-            // The two share a case since R-AISEG-21: a detection's result IS geometry, so
-            // "where is this mask?" stopped being a question about the picture and became the
-            // same question a drawn path answers. Before a detection has been run there are no
-            // loops and the answer is 0, which is the whole of R-AISEG-19.
-            //
-            // Even-odd ACROSS the loops, not per loop: that is what makes a loop inside a loop
-            // a hole rather than a second region drawn on top of the first.
-            bool in = false;
-            for (const auto &poly : maskLoops(m))
-                if (insidePolygon(poly, nx, ny)) in = !in;
-            cov = in ? 1.f : 0.f;
+            const auto poly = maskPathPolygon(m.path);
+            if (poly.size() >= 3) cov = insidePolygon(poly, nx, ny) ? 1.f : 0.f;
             break;
         }
         case MaskParams::Brush:
@@ -137,7 +102,7 @@ namespace arstro
     {
         if (w <= 0 || h <= 0) { out.clear(); return; }
         out.assign((std::size_t)w * h, (Pixel)0);
-        if (m.type != MaskParams::Path && m.type != MaskParams::Semantic)
+        if (m.type != MaskParams::Path)
         {
             // Closed-form types: the plane is just the per-pixel answer, materialised. Nothing
             // in the render asks for this, but a caller that wants a plane for any mask should
@@ -153,16 +118,15 @@ namespace arstro
             return;
         }
 
-        // Path and Detect share every line below (R-AISEG-21): one is a boundary a person drew
-        // and the other is a boundary the detector found, and a fill has no way to tell them
-        // apart — nor any reason to want to.
-        const auto polys = maskLoops(m);
+        std::vector<std::vector<std::pair<float, float>>> polys;
+        {
+            auto poly = maskPathPolygon(m.path);
+            if (poly.size() >= 3) polys.push_back(std::move(poly));
+        }
         if (polys.empty())
         {
-            // No area: an empty path, or — the ordinary case now — a Detect mask on which no
-            // detection has been run yet (R-AISEG-19). An INVERTED empty shape covers
-            // everything, which is the consistent answer (`maskCoverage` says the same) even
-            // though it is a strange thing to ask.
+            // No area. An INVERTED empty path covers everything, which is the consistent answer
+            // (`maskCoverage` says the same) even though it is a strange thing to ask.
             if (m.inverted) std::fill(out.begin(), out.end(), (Pixel)1);
             return;
         }
@@ -244,23 +208,16 @@ namespace arstro
         {
             const MaskParams &m = masks[mi];
             const LocalAdjust &a = m.adjust;
-            // A mask that changes no pixel is skipped outright. It used to be built anyway, so
-            // its boundary could be traced for the view; under R-AISEG-21 the boundary is in the
-            // mask's own parameters and the view reads it from there, so there is nothing left
-            // here for a mask with an identity adjust to contribute.
-            if (isIdentity(a)) continue;
-            // Fewer than three points has no area — a path nobody finished drawing, or a Detect
-            // mask nobody has run a detection on yet (R-AISEG-19).
+            if (isIdentity(a)) continue;   // a mask that changes no pixel
+            // Fewer than three points has no area: a path nobody finished drawing.
             if (m.type == MaskParams::Path && m.path.size() < 3 && !m.inverted) continue;
-            if (m.type == MaskParams::Semantic && m.regions.empty() && !m.inverted) continue;
 
-            // A boundary's feather is a distance FROM that boundary, which no per-point
-            // function can give without measuring every segment for every pixel — so a Path and
-            // a Detect mask are filled once for the whole plane and blurred (see the header).
-            // Every other type is closed-form and allocates nothing.
+            // A path's feather is a distance FROM its boundary, which no per-point function can
+            // give without measuring every segment for every pixel — so it is filled once for
+            // the whole plane and blurred (see the header). Every other type is closed-form and
+            // allocates nothing.
             std::vector<Pixel> plane;
-            if (m.type == MaskParams::Path || m.type == MaskParams::Semantic)
-                buildMaskCoverage(m, w, h, plane);
+            if (m.type == MaskParams::Path) buildMaskCoverage(m, w, h, plane);
 
             // Adjusted copy through the same processors the global pipeline uses.
             Image adj = img.clone();
