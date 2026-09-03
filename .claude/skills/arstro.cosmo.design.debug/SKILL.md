@@ -211,7 +211,8 @@ yet; PROGRESS NEXT now points at it.
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 
-Do not push unless asked.
+**Then pull and push** (`arstro.rule` §7) — a filed defect that only exists on this machine is a
+defect nobody else can pick up.
 
 ---
 

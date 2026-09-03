@@ -385,9 +385,16 @@ usually means the entry knows something you have not read.
 ## 7. Commit
 
 One focused commit per completed task, on `main`, **including the doc and ledger updates**. Never
-batch two features. Do not open a side branch unless the skill you are running says to. Do not
-`git push` unless asked — remind the user at the end of a session, since pushing is what makes the
-work portable to their other machine.
+batch two features. Do not open a side branch unless the skill you are running says to.
+
+**Then pull, and push. Every task, without being asked.**
+
+(**AMENDED 2026-09-03.** This rule used to be *"do not push unless asked — remind the user at the
+end of a session"*, and every skill carried a copy of it. It was wrong for the same reason a stale
+ledger is wrong: **this whole discipline exists so work resumes on another machine**, and a commit
+that only exists on this one defeats that exactly as completely as a `[x]` nobody ticked. Reminding
+the user at the end of a session put the last and most failure-prone step of the loop outside the
+loop.)
 
 ```
 <unit>: <lowercase sentence naming the user-visible effect> (<intent tags>, <as-built tags>)
@@ -402,10 +409,47 @@ Co-Authored-By: <the model writing it> <noreply@anthropic.com>
 skill that hard-coded one has drifted — three different values across eleven files is what proved
 it.
 
-`core/Artboard` and `core/DigitalSignalProcessing` are **git submodules**: a change there is two
-commits — the submodule first, then the umbrella bumping the pointer. Forgetting the second is this
-repo's most common mistake. `core/ImageProcessing` is *not* a submodule in this checkout despite the
-nested `.git`; it commits with the umbrella.
+### The order, and why it is not negotiable
+
+`core/Artboard` and `core/DigitalSignalProcessing` are **git submodules** (on `feature/1.0.0`, not
+`main`). `core/ImageProcessing` is *not* one in this checkout despite the nested `.git`; it commits
+with the umbrella.
+
+**A submodule is finished — committed, pulled, tested and PUSHED — before the umbrella records its
+pointer.** Not because it is tidier: a pointer bump names a specific commit hash, and a rebase
+during a later pull rewrites that hash. Record the pointer first and you have committed the umbrella
+to a commit that no longer exists on any branch, which every other machine then fails to check out.
+
+```
+in each changed submodule:      commit → pull --rebase → re-run its tests → push
+then, in the umbrella:          stage the pointer bump + your files → commit
+                                → pull --rebase → re-run ctest → push
+```
+
+Forgetting the umbrella's pointer bump is this repo's most common mistake; pushing it before the
+submodule is the one that breaks other people rather than yourself.
+
+### Pull before you push, and test after you pull
+
+`git pull --rebase` — this history is linear and a merge commit per push would bury it.
+
+**Then re-run the tests, before pushing, if the pull brought anything down.** A rebase produces a
+state that neither you nor the other author has ever built: your change against their code. "Both
+sides were green" is not evidence about the combination, and the combination is what you are about
+to publish.
+
+**Never force-push over a commit you did not write.** A conflict is resolved, re-tested and pushed
+forward — a conflict is information about work someone else did, not an obstacle.
+
+### When NOT to push
+
+Three cases, and they are the only ones:
+
+- the skill you are running names a different branch (`arstro.dsp.implement.experimental` commits to
+  `experimental` and pushes *that* — it must never merge or fast-forward `main`);
+- **the tests do not pass.** An unpushed red commit is a local problem; a pushed one is everybody's.
+  Say so plainly rather than pushing and mentioning it;
+- the user has said not to, this session.
 
 ---
 
@@ -461,7 +505,8 @@ build it or write it as a gap with the reason — never as an instruction.
       the grammar.
 - [ ] Ledger ticked and **NEXT** rewritten; defect list updated with the commit hash and the
       guarding test.
-- [ ] Committed to `main` (submodule first, then the pointer bump).
+- [ ] Committed to `main`, **pulled, re-tested, and pushed** — submodules fully pushed *before* the
+      umbrella records their pointers.
 
 ---
 

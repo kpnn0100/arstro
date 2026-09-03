@@ -574,8 +574,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 `core/ImageProcessing` and `core/Artboard` are **git submodules**: a change there is two commits — the
 submodule first, then the umbrella bumping the pointer. Forgetting the second is this repo's most common
-mistake. Do not `git push` unless asked; remind the user at the end of a session, since pushing is what
-actually makes the work portable to their other machine.
+mistake. **Then pull and push** — `arstro.rule` §7 has the order and why it is not negotiable
+(a submodule is fully pushed before the umbrella records its pointer, and the tests are re-run
+after the pull, before the push).
 
 ---
 

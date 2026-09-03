@@ -483,7 +483,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Include in the same commit: `DEFECTS.md`, any requirement you wrote or amended, the fixture, the command
 script or the throwaway service test your reproduction needs, and the `PROGRESS.md` update. **A
 reproduction that lives only in the commit message is not committed** — put the script in
-`apps/cosmo/core/tests/fixtures/` or the test in `sessionTests.cpp`. Do not push unless asked.
+`apps/cosmo/core/tests/fixtures/` or the test in `sessionTests.cpp`. **Then pull and push**
+(`arstro.rule` §7) — a filed defect that only exists on this machine is a defect nobody else can
+pick up.
 
 ---
 

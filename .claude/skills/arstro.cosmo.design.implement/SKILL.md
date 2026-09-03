@@ -466,7 +466,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 
 Artboard changes are a **submodule** commit plus an umbrella pointer bump — and they go through
-`implement_artboard`, not this skill. Do not push unless asked; remind the user at session end.
+`implement_artboard`, not this skill. **Then pull and push** — `arstro.rule` §7 has the order.
 
 ---
 
