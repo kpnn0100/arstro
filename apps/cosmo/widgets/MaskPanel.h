@@ -17,7 +17,6 @@
 #include "../../../core/Artboard/include/artboard/artboard.h"
 #include "../../../core/ImageProcessing/src/engine/EditParams.h"
 #include "PillButton.h"
-#include "SegmentedControl.h"
 #include "IconButton.h"
 #include "SliderRow.h"
 #include <functional>
