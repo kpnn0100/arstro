@@ -3432,7 +3432,7 @@ segmenter: MediaPipe Selfie Segmentation   (licence Apache-2.0)
 
 ### DR-AISEG-18 (design) The boundary on the photo (R-AISEG-18, R-G-1, R-MASK-3)
 
-> **Partly superseded by DR-AISEG-19..24 (2026-09-03).** Everything about the DRAWING is current —
+> **Partly superseded by DR-AISEG-19..24 and DR-AISEG-25..28 (2026-09-03).** Everything about the DRAWING is current —
 > the accent, the 1.5 px stroke, `normToLocal`, the open stroke, the fade. What changed is where the
 > loops come from: `App::render` passes `arstro::maskLoops(*sel)`, the mask's own geometry, not the
 > last frame's outlines. The `cosmo_ui_tests` case now asserts that adding a Detect mask outlines
@@ -3642,7 +3642,86 @@ end that was not listening, and `formatModel` dumps `detectMask` / `detectRegion
 how far a running detection has got is a property of when the dump was taken, not of the state the
 commands produced (the rule `budgetPeakDecode` is already excluded under).
 
-**Still to do, and it is the design half:** the Mask panel still shows a five-subject picker and has
-no Detect button and no progress bar. Until it lands, the detection is reachable only as
-`mask detect <i>`, and the Detect chip creates a mask that correctly shows nothing and cannot yet
-be told to look.
+The design half landed in the commit after this one — see DR-AISEG-25..28.
+
+### DR-AISEG-25..28 (design) The Detect block: nothing, a button, a bar, an answer (R-AISEG-25 … R-AISEG-28)
+
+**2026-09-03, the design half of the same report.** The core landed first and left the panel
+offering a five-subject picker for four subjects that no longer answer, with no way to start a
+detection at all. What the block holds now, top to bottom:
+
+```
+DETECT SKIN (COLOUR & TEXTURE)          the section header, and where the honesty lives
+Warm mid-tones with red over green — faces and hands.
+Sensitivity  ───────●───────  +50
+[ Detect ]   Found 6 regions · 15% of the frame
+─────────                                the progress bar; opacity 0 at rest
+```
+
+**The picker is gone (R-AISEG-25).** A `SegmentedControl` with one segment looks like a choice,
+invites a click and does nothing. What it was carrying — *what this detector actually keys on* —
+moves into the header, which now names the subject (`"Detect skin (colour & texture)"`, or the
+model's name in place of the parenthesis, R-AISEG-15), and into the caption, which was already
+doing that work and is unchanged.
+
+**Five states in one line (R-AISEG-26/28)**, composed by `detectStatusLine` in `MaskPanel.cpp`:
+
+| state | line | why it is its own sentence |
+|---|---|---|
+| never run | *No detection yet* | a mask that covers nothing and says nothing is indistinguishable from one that looked and found nothing — and those ask for different things from the photographer |
+| running | *Reading colour…* | the engine's stable stage name (`colour`) mapped to a sentence; the two must not be one string, because the first is what an `expect` matches |
+| found | *Found 6 regions · 15% of the frame* | the boundary on the photo cannot settle *did it find the whole subject, or a piece of it* — one region at 21% and four at 3% look alike at a glance |
+| found nothing | *Found nothing — try Sensitivity* | names the control that would help |
+| nobody handles it | *No detector for this subject* | only reachable through an installed model today; `handled == false` is not "found nothing" |
+
+The count comes off **the mask's own `regions`** and the percentage off the last detection, so a
+reopened project still says what its mask holds — at which point nothing has been detected this
+session and a made-up percentage would be worse than an absent one.
+
+**The button and the bar (R-AISEG-27).** `mDetectBtn` is a `PillButton` in the accent, because it
+is the only control in the panel that *starts work* rather than changing a number; everything else
+there is a slider or an outline. It sends `mask detect <i>` as a `Command` through
+`RightColumn::emitCommand`, with the direct-`dispatch` fallback every other emitter in that file
+has — which is what lets `cosmo_ui_tests` drive it with no host wired.
+
+While a detection runs the button is **disabled** — one at a time is the service's rule
+(R-AISEG-20), and a control that could be pressed to no effect is a control that lies. `enabled` is
+animated by the framework (`disabledAmount`), so it is a fade.
+
+The bar is **two** animated properties and not one:
+
+- `mBarFill` eases toward the service's fraction over **220 ms** — a little longer than the 180 ms
+  the rest of the app uses, because it is deliberately catching up rather than responding. Eased
+  and not taken raw, because the stages are uneven: `colour` is a third of the work and `shapes` a
+  tenth, so five raw numbers read as three stalls where the same numbers eased read as continuous
+  progress, which is what they are (R-SVC-4: the service knows it is at 45%, the view knows the bar
+  travels there).
+- `mBarShow` fades **120 ms in, 300 ms out**. Slower out on purpose: the fill is still finishing
+  when the fade starts, and the last thing a photographer should see of a detection is a full bar,
+  not one vanishing at 70% — which reads as a failure.
+
+Its row is **always laid out** and only its opacity changes. An accordion inside an accordion would
+move everything below it twice for one button press, and the whole panel jumping the moment
+somebody presses a button is the opposite of feeling responsive. Below `2r` a rounded rect
+degenerates into a dot, so a fill shorter than `kBarH` draws nothing at all — which is the honest
+picture of "it has not got anywhere yet".
+
+**Text fits by measurement, not by hope (R5).** `layout()` publishes `statusX` — where the button
+ends — and the paint pass ellipsizes the sentence against what is actually left, using
+`IRenderTarget::measureText` rather than `estimateTextWidth`: a line whose length varies with the
+number in it is exactly where the 0.6-per-character estimate is wrong by a visible margin.
+
+**Shots**, rendered against a synthetic portrait (a face, a neck, two hands, and a terracotta patch
+smaller than the face — the case R-AISEG-23 is about):
+`editor-mask-detect-opening` (mid-tween), `editor-mask-detect`, `editor-mask-detect-empty`,
+`editor-mask-detect-running` (caught mid-bar), `editor-mask-detect-found`, and
+`editor-mask-detect-small` at 1280x800. The found shot is the one worth keeping: the contour
+follows the jaw, **the eyes and the mouth come back as holes** (even-odd across the loops,
+R-AISEG-21), both hands survive the blob rule, and the terracotta patch is not selected.
+
+`cosmo_ui_tests` asserts the empty state by its sentence, that the click reaches the **service**
+and not merely the button, that the button disables while it runs, that the bar's first non-zero
+opacity is strictly between the ends (0.349 — settling first would read 1.0 and pass a snap), that
+it finishes full before it fades, and that the line afterwards names both the count and the
+percentage.
+

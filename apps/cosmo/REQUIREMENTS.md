@@ -883,7 +883,11 @@ UI copy, not only here.
   subject, and the panel grows a block for it.
 - **R-AISEG-11 The panel says what the detector is, and says it in the header.** The section header
   reads **"Detect (colour & texture)"**, and the subject picker carries a one-line caption saying
-  what *that* subject is found by — "Blue or bright, smooth, high in the frame" for Sky; "Dark,
+  what *that* subject is found by
+  (**AMENDED (R-AISEG-25), 2026-09-03:** the picker is gone — one subject is not a choice — and
+  the header carries the subject instead: *"Detect skin (colour & texture)"*, or the model's name
+  in place of the parenthesis. The caption survives unchanged, because it is the half that was
+  doing the work) — "Blue or bright, smooth, high in the frame" for Sky; "Dark,
   muted and textured — may take fabric too" for Hair. This is R-AISEG-2's honesty in the place it
   is actually useful: a photographer who knows the sky detector keys on *smoothness* understands
   immediately why it declined a textured blue awning, and can reach for Sensitivity or invert
@@ -997,6 +1001,44 @@ than the one it replaces for reasons that have nothing to do with the UI.
   a mask made before a white-balance change would disagree with the same detection made after.
   This was on the follow-up list before it was asked for; making detection an explicit act is what
   made it easy, because there is now exactly one moment at which the pixels have to be chosen.
+
+
+- **R-AISEG-25 One subject is not a choice, so there is no picker.** (**Added 2026-09-03. AMENDS
+  R-AISEG-10/11.**) The five-way `SegmentedControl` goes; what it was telling the photographer —
+  *what this detector actually keys on* — moves into the header and the caption, which is where
+  R-AISEG-11 already said the honesty belongs. A control with one option is worse than no control:
+  it looks like a choice, invites a click, and does nothing.
+- **R-AISEG-26 A Detect mask that has not been run says so.** (**Added 2026-09-03.**) The block's
+  empty state is a sentence — *"No detection yet"* — beside the button that fixes it.
+  This is R-AISEG-19 seen from the front. A mask that covers nothing and says nothing is
+  indistinguishable from a mask that looked and found nothing, and those two need different
+  responses from the photographer: press the button, versus try another photo or move Sensitivity.
+  The panel therefore distinguishes **four** states in one line — never run, running, found *n*
+  regions covering *x*% of the frame, and looked-but-found-nothing — plus the fifth that only an
+  installed model can produce, *nobody has a detector for this subject* (`handled == false`).
+- **R-AISEG-27 The detection is started by a button, and the button reports the work.**
+  (**Added 2026-09-03.**) A `Detect` button in the block sends `mask detect <i>`. While one is in
+  flight the button is **disabled** — one detection at a time is the service's rule (R-AISEG-20)
+  and a control that could be pressed to no effect is a control that lies — and a **progress bar**
+  runs under it, with the stage in words beside it.
+  **The bar EASES toward the fraction; it does not jump to it** (R-G-1, R-SVC-4). The service
+  knows a detection is 45% done; the view knows the bar travels there. That split is not
+  pedantry here: the stages are uneven — `colour` is a third of the work and `shapes` is a tenth —
+  so a bar that snapped from 20% to 45% to 70% would read as three stalls, while the same numbers
+  eased read as continuous progress, which is what they are.
+  It appears and disappears by **opacity**, in a row that is always laid out, rather than by
+  growing the block: an accordion inside an accordion moves everything below it twice for one
+  event, and the whole panel jumping the moment a photographer presses a button is the opposite
+  of feeling responsive.
+- **R-AISEG-28 What it found is written where it was asked for.** (**Added 2026-09-03.**)
+  *"Found 1 region · 21% of the frame."* The photographer can already see the boundary on the
+  photo (R-AISEG-18), and the sentence is not a substitute for it — it is the answer to the
+  question the boundary cannot settle: *did it find the whole subject, or a piece of it?* A face
+  found as four regions covering 3% of the frame looks, at a glance and at a distance, much like a
+  face found as one region covering 21%.
+  The count comes from the **mask's own regions**, not from the last detection's report, so it is
+  still right after a project is reopened — at which point no detection has run in this session
+  and the report is empty, but the mask is exactly what it was.
 
 
 ## R-ICON — Icons are traced, not approximated — ✅ IMPLEMENTED

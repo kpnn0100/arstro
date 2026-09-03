@@ -107,14 +107,25 @@ package "app  (namespace arstro::cosmo_v2)" as app {
     class XformPanel
     class MaskPanel {
       + addChipRect(i)         ' Radial / Linear / Brush / Draw (R-MASK-6) / Detect (R-AISEG-10)
-      + detectOpenAmount()     ' the LIVE eased value, so a test can tell a snap from a tween
+      + setDetectStatus(DetectStatus)   ' R-AISEG-26/27/28, pushed from the model
+      + onDetect()             ' -> `mask detect <i>` (R-AISEG-27)
+      + detectOpenAmount() / detectBarFill() / detectBarShow() / detectStatusText()
+      ' every one of those is the LIVE eased value, so a test can tell a snap from a tween
+    }
+    struct DetectStatus <<from AppModel::detect + the mask>> {
+      + running / fraction / stage
+      + regions          ' off the MASK, so it survives a reopen (R-AISEG-28)
+      + ranForThisMask   ' tells "found nothing" from "never run" (R-AISEG-26)
+      + handled / coverage
     }
     class DetectBlock <<clipped accordion>> {
-      ' R-AISEG-12: height eases 0 -> ~91 px over 200 ms while the children keep their real
-      ' positions, so the block OPENS instead of appearing. Paints its own header and caption
-      ' AND clips them, because Segment::clipToBounds covers the CHILD SUBTREE only.
-      + caption
-      + kHeaderH / kPickerH / kPickerMB / kCaptionH
+      ' R-AISEG-12: height eases 0 -> ~103 px over 200 ms while the children keep their real
+      ' positions, so the block OPENS instead of appearing. Paints its own header, caption,
+      ' status line and progress bar AND clips them, because Segment::clipToBounds covers the
+      ' CHILD SUBTREE only. No subject picker: there is one subject (R-AISEG-25).
+      + caption / header / status
+      + barFill / barShow   ' written by MaskPanel::advance; drawn from, never from the target
+      + kHeaderH / kCaptionH / kCaptionMB / kButtonH / kButtonMB / kBarH / kBarMB
     }
     class StackPanel
     class ActionBar
@@ -468,4 +479,5 @@ ColorMixer ..> Spatial : fastBlurPlane
 
 MaskOverlay ..> MaskParams : strokes maskLoops(m) like a drawn path (R-AISEG-18/21)
 MaskPanel *--> DetectBlock : while the selected mask is Semantic  ' R-AISEG-10
-DetectBlock *--> SegmentedControl : Sky | Skin | Foliage | Water | Hair
+DetectBlock *--> PillButton : Detect — the only control here that starts work (R-AISEG-27)
+MaskPanel ..> DetectStatus : setDetectStatus, every model refresh

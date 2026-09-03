@@ -1086,22 +1086,33 @@ namespace
         rig.settleQuiet(f, 500.0, 400);
         save(f, "editor-mask-detect");
 
-        // Hair, because it is the subject whose caption carries R-AISEG-2's warning — the shot
-        // that proves the honesty is on screen and not only in the requirement.
-        // Searched inside the PANEL, not from the editor root: the first SegmentedControl in
-        // the tree is the canvas's Before/Split/After pill, and a shot that clicked THAT would
-        // have looked exactly like this one — which is what the first run of it did.
-        const artboard::Segment *seg =
-            arstro::cosmo_v2::findSegmentByType(*panel, "SegmentedControl");
-        if (seg)
+        // R-AISEG-26: the EMPTY state, which is the whole point of the rework and the state
+        // nobody would think to shoot — a mask that shows nothing looks, in a still frame,
+        // exactly like a broken one. What makes it not broken is the sentence beside the button.
+        save(f, "editor-mask-detect-empty");
+
+        // R-AISEG-27: pressed, and caught mid-bar. Found by type inside the BLOCK — the first
+        // PillButton in the editor tree is an add-mask chip, and a shot that pressed THAT would
+        // have looked plausible and proved nothing.
+        const artboard::Segment *block =
+            arstro::cosmo_v2::findSegmentByType(*panel, "DetectBlock");
+        const artboard::Segment *btn =
+            block ? arstro::cosmo_v2::findSegmentByType(*block, "PillButton") : nullptr;
+        if (btn)
         {
-            const artboard::Transform sw = seg->worldTransform();
-            const int nSub = (int)arstro::SemanticSubject::Count;
-            const double segW = seg->width.value() / (double)nSub;
-            rig.click(f, sw.e + segW * ((int)arstro::SemanticSubject::Hair + 0.5),
-                      sw.f + seg->height.value() * 0.5);
-            rig.settleQuiet(f, 400.0, 400);
-            save(f, "editor-mask-detect-hair");
+            const artboard::Transform bw = btn->worldTransform();
+            rig.click(f, bw.e + btn->width.value() * 0.5, bw.f + btn->height.value() * 0.5);
+            // A handful of frames: long enough for the bar to have faded in and started
+            // filling, short enough that it is nowhere near the end. This is the frame that
+            // distinguishes an eased bar from one that appears full.
+            rig.step(f, 4);
+            save(f, "editor-mask-detect-running");
+
+            // Then let it finish, and shoot what it found — the boundary on the photo and the
+            // sentence in the panel, which are the two halves of the same answer (R-AISEG-28).
+            for (int i = 0; i < 900 && rig.svc.model().detect.active; ++i) rig.step(f, 1);
+            rig.settleQuiet(f, 600.0, 500);
+            save(f, "editor-mask-detect-found");
         }
 
         // The laptop height, because the block adds ~90 px to the tallest panel in the app and
@@ -1237,7 +1248,9 @@ int main(int argc, char **argv)
                     "editor-split-seam  editor-crop-{free,16x9,custom}  editor-crop-zoom-*\n"
                     "editor-context-menu  editor-image-info  editor-image-info-scrolled\n"
                     "editor-mask-draw-placing  editor-mask-draw\n"
-                    "editor-mask-detect-opening  editor-mask-detect  editor-mask-detect-hair\n");
+                    "editor-mask-detect-opening  editor-mask-detect  editor-mask-detect-empty\n"
+                    "editor-mask-detect-running  editor-mask-detect-found\n"
+                    "editor-mask-detect-small\n");
         return 0;
     }
 

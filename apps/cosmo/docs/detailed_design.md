@@ -775,13 +775,32 @@ data structure underneath — R-MASK-6); `addChipRect(i)` says where chip `i` is
 **Five** add-mask chips now — Radial / Linear / Brush / Draw / **Detect** (R-AISEG-10) — and a
 `DetectBlock` between Feather and Tone when the selected mask is `Semantic`. `DetectBlock` is a
 `clipToBounds` Segment (`kHeaderH=27.95, kPickerH=22.75, kPickerMB=4.875, kCaptionH=13.0`, total
-~91 px) holding a five-way `SegmentedControl` (Sky/Skin/Foliage/Water/Hair) and a `Sensitivity`
-`SliderRow`; it paints its own `"Detect (colour & texture)"` header and the per-subject caption, and
-**clips that painting itself** because `clipToBounds` covers only the child subtree.
-> **The five-way picker is stale as of 2026-09-03** (R-AISEG-22: Skin is the only subject the
-> built-in answers for) and there is no Detect button and no progress bar yet — the core half of
-> R-AISEG-19..24 landed first and the detection is reachable only as `mask detect <i>`. The block
-> as described still builds and still opens; what it offers is wrong.
+~103 px) holding **no subject picker** (R-AISEG-25: one subject is not a choice, and a control
+with one option looks like a choice, invites a click and does nothing), a `Sensitivity` `SliderRow`,
+a `Detect` `PillButton`, and a progress bar. It paints its own section header
+(`"Detect skin (colour & texture)"`, or the model's name in place of the parenthesis), the caption,
+the status line and the bar, and **clips that painting itself** because `clipToBounds` covers only
+the child subtree. Layout constants: `kHeaderH=27.95`, `kCaptionH=13.0`, `kCaptionMB=4.875`,
+`kButtonH=22.75`, `kButtonMB=4.875`, `kBarH=3.25`, `kBarMB=6.5`.
+
+`DetectStatus{running, fraction, stage, regions, ranForThisMask, handled, coverage}` comes in from
+`RightColumn` on every model refresh; `MaskPanel::setDetectStatus` composes the sentence
+(`detectStatusLine`, five states — *No detection yet* / *Reading colour…* / *Found n regions · x%
+of the frame* / *Found nothing — try Sensitivity* / *No detector for this subject*), sets
+`mDetectBtn->enabled = !running` (an animated fade through `disabledAmount`, not a flip), and
+records the two bar TARGETS. **`regions` comes off the mask and the rest off the last detection**,
+so a reopened project still says what its mask holds, at which point no detection has run this
+session (R-AISEG-28).
+
+The bar is two `AnimatedProperty`s and not one: `mBarFill` eases toward the service's fraction over
+**220 ms** and `mBarShow` fades **120 ms in / 300 ms out**, so the fill can finish while the bar
+fades and the last thing seen is a full bar rather than one vanishing at 70%. Eased, because the
+stages are uneven — `colour` is a third of the work and `shapes` a tenth — so the same numbers
+taken raw read as three stalls (R-AISEG-27). `detectBarFill()` / `detectBarShow()` /
+`detectStatusText()` expose the LIVE values so a test can tell an eased bar from a snapping one.
+The bar's row is **always laid out** and what changes is its opacity: growing the block instead
+would move everything below it twice for one button press.
+
 `MaskOverlay` gained `setComputedOutline(loops)` + `outlineFade()`: the boundary of a Detect mask
 (R-AISEG-18), stroked in the accent at 1.5 px through the same `normToLocal` a drawn path uses,
 **open rather than closed** (a region touching the frame edge gives an open chain), drawn above the

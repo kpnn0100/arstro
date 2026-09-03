@@ -1470,9 +1470,10 @@ namespace
 
     void addingADetectMaskOpensItsBlockAndReachesTheModel()
     {
-        std::printf("App: the Detect chip adds a semantic mask and its block eases open (R-AISEG-10..12)\n");
+        std::printf("App: the Detect chip, its block, the button and the bar (R-AISEG-10..12/25..28)\n");
         Rig rig(1440.0, 900.0);
-        check(rig.loadFakePhoto(), "a photo is loaded");
+        check(rig.loadFakePhoto(2, /*scene=*/true),
+              "a photo with a face in it — this test runs a real detection");
         rig.app.showEditor();
         rig.settle(600.0);
 
@@ -1518,25 +1519,66 @@ namespace
         check(p.masks[0].subject == (int)arstro::SemanticSubject::Skin,
               "looking for skin by default — the one subject there is (R-AISEG-22)");
 
-        // The subject picker, clicked. Searched inside the PANEL: the first SegmentedControl in
-        // the editor tree is the canvas's Before/Split/After pill, and clicking that would have
-        // changed nothing while looking like it worked.
-        auto *subject = arstro::cosmo_v2::findSegmentByType(*panel, "SegmentedControl");
-        check(subject != nullptr, "the subject picker is in the block");
-        if (!subject) return;
-        const artboard::Transform sw = subject->worldTransform();
-        // Sized from the subject COUNT, not from a literal: Person was added later and a
-        // hard-coded 5 aimed the click one segment past the end — which is how the crash that
-        // this comment exists because of got in (a caption array with a null sixth entry).
-        const int nSub = (int)arstro::SemanticSubject::Count;
-        const double segW = subject->width.value() / (double)nSub;
-        const int hair = (int)arstro::SemanticSubject::Hair;
-        rig.click(sw.e + segW * (hair + 0.5), sw.f + subject->height.value() * 0.5);
-        rig.settle(400.0);
-        check(rig.svc.model().params.masks[0].subject == (int)arstro::SemanticSubject::Hair,
-              "picking Hair reaches the MODEL, not just the picker");
-        check(rig.svc.model().params.masks[0].type == arstro::MaskParams::Semantic,
-              "and the mask is still semantic — the type goes with the subject");
+        // ── R-AISEG-26: the empty state, which is the point of the rework ─────────────────
+        // A mask that covers nothing and SAYS nothing is indistinguishable from a mask that
+        // looked and found nothing, and those two ask for different things from the user.
+        check(panel->detectStatusText() == "No detection yet",
+              "a mask nobody has run says so, rather than looking like a failed detection");
+        check(near(panel->detectBarShow(), 0.0, 1e-3), "and there is no progress bar");
+
+        // ── R-AISEG-27: the button starts it, and the bar reports it ──────────────────────
+        // The button is found by type inside the PANEL, and it is the only PillButton inside the
+        // Detect block — searching the whole editor would find an add-mask chip and clicking
+        // that would have looked like it worked while doing something else entirely.
+        auto *block = arstro::cosmo_v2::findSegmentByType(*panel, "DetectBlock");
+        check(block != nullptr, "the Detect block is in the panel");
+        if (!block) return;
+        auto *btn = arstro::cosmo_v2::findSegmentByType(*block, "PillButton");
+        check(btn != nullptr, "and the Detect button is in the block");
+        if (!btn) return;
+        check(btn->enabled, "which is pressable before anything is running");
+
+        const artboard::Transform bw = btn->worldTransform();
+        rig.click(bw.e + btn->width.value() * 0.5, bw.f + btn->height.value() * 0.5);
+        check(rig.svc.model().detect.active, "the click reached the SERVICE, not just the button");
+        check(rig.svc.model().lastError.empty(), "and was not refused");
+        check(!btn->enabled,
+              "and the button is disabled while it runs — one at a time is the service's rule, "
+              "so a button that could be pressed would be a control that lies (R-AISEG-20/27)");
+
+        // The bar EASES in. Sampled one frame at a time and keeping the FIRST non-zero value:
+        // settling and then looking is long enough for the fade to finish, so it would read 1.0
+        // and pass a snap — the trap R-G-1's compliance clause exists for.
+        double firstShow = 0.0;
+        for (int i = 0; i < 40 && firstShow == 0.0; ++i)
+        {
+            rig.frames(1);
+            if (panel->detectBarShow() > 0.0) firstShow = panel->detectBarShow();
+        }
+        check(firstShow > 0.0 && firstShow < 1.0, "the progress bar fades IN rather than appearing");
+        std::printf("      first non-zero bar opacity %.3f\n", firstShow);
+
+        for (int i = 0; i < 800 && rig.svc.model().detect.active; ++i)
+        {
+            rig.frames(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        check(!rig.svc.model().detect.active, "the detection finishes");
+        rig.settle(600.0);
+        check(btn->enabled, "the button comes back");
+        check(near(panel->detectBarShow(), 0.0, 1e-3), "and the bar fades back out");
+
+        // ── R-AISEG-28: what it found, where it was asked for ────────────────────────────
+        const std::string found = panel->detectStatusText();
+        std::printf("      status line: \"%s\"\n", found.c_str());
+        check(found.rfind("Found ", 0) == 0 && found.find("% of the frame") != std::string::npos,
+              "the panel says what it found and how much of the frame it covers");
+        check(!rig.svc.model().params.masks[0].regions.empty(),
+              "and the mask holds the regions the sentence is about");
+
+        // The bar's fill ended full rather than wherever the last stage left it: the last thing
+        // a photographer sees of a detection must not be a bar vanishing at 70%.
+        check(panel->detectBarFill() > 0.99, "the bar finished filling before it faded");
 
         // Switching to a mask with geometry shuts the block again, eased the same way. The
         // closing direction is asserted too, because an animation that only plays one way is a

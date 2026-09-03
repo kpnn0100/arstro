@@ -25,30 +25,51 @@ namespace cosmo_v2
         constexpr int kTypeCount = 5;
         const char *kTypeNames[kTypeCount] = {"Radial", "Linear", "Brush", "Draw", "Detect"};
 
-        /** What each subject is actually found by (R-AISEG-11). Not decoration: a photographer
-         *  who knows the sky detector keys on SMOOTHNESS understands at once why it declined a
-         *  textured blue awning, and reaches for Sensitivity or Inv instead of concluding the
-         *  feature is broken. Hair's line is the one R-AISEG-2 insists on — the reliability of
-         *  the five is not equal and the UI may not pretend it is. */
-        const char *kSubjectCaption[(int)SemanticSubject::Count] = {
-            "Blue or bright, smooth, high in the frame.",
-            "Warm mid-tones with red over green — faces and hands.",
-            "Green with real saturation, anywhere in the frame.",
-            "Blue-cyan, low in the frame, a little texture.",
-            "Dark, muted and textured — may take fabric too.",
-            // Person has no built-in model at all (R-AISEG-15) — "is this a person" is not a
-            // question colour, position and texture can answer. Saying so here is the only
-            // place a photographer finds out BEFORE choosing it and getting an empty mask.
-            "People, whole. Needs an installed model — see Detect, above."};
+        /** What the detector is actually found by (R-AISEG-11). Not decoration: a photographer
+         *  who knows it keys on red-over-green understands at once why it took a terracotta pot,
+         *  and reaches for Sensitivity instead of concluding the feature is broken.
+         *
+         *  One line, because there is one subject (R-AISEG-25). The other four are withdrawn
+         *  (R-AISEG-22) and their captions went with them; when they come back, each comes back
+         *  with the sentence that says what IT keys on. */
+        const char *kSkinCaption = "Warm mid-tones with red over green — faces and hands.";
 
-        /** A caption by index, never a null. The array is sized from `SemanticSubject::Count`,
-         *  so adding a subject and forgetting its line leaves a null here — which is exactly
-         *  what happened when Person was added, and it crashed on assignment rather than
-         *  showing a blank line. A missing caption is now a missing caption. */
-        const char *subjectCaption(int i)
+        /** The stage names `Detection.cpp` publishes, in words a photographer reads (R-AISEG-27).
+         *  The mapping is here and not in the engine because "colour" is the stable name an
+         *  `expect` assertion and a log line match on, and "Reading colour" is a sentence in one
+         *  language — the two must not be the same string. */
+        std::string stageLabel(const std::string &stage)
         {
-            if (i < 0 || i >= (int)SemanticSubject::Count) return "";
-            return kSubjectCaption[i] ? kSubjectCaption[i] : "";
+            if (stage == "preparing") return "Preparing";
+            if (stage == "colour") return "Reading colour";
+            if (stage == "regions") return "Finding regions";
+            if (stage == "shapes") return "Cleaning up";
+            if (stage == "outline") return "Tracing the outline";
+            return "Detecting";                      // "queued", and anything added later
+        }
+
+        /** The five states of R-AISEG-26, in the order they can be told apart.
+         *
+         *  "Found nothing" and "not detected yet" being different sentences is the whole point:
+         *  they ask for different things from the photographer — try another photo or move
+         *  Sensitivity, versus press the button. A mask that covers nothing looks identical in
+         *  both cases and this line is the only thing that separates them. */
+        std::string detectStatusLine(const DetectStatus &d)
+        {
+            if (d.running) return stageLabel(d.stage) + "…";
+            if (d.regions > 0)
+            {
+                const int pct = (int)(d.coverage * 100.0 + 0.5);
+                std::string s = "Found " + std::to_string(d.regions) +
+                                (d.regions == 1 ? " region" : " regions");
+                // The percentage comes from the last detection, so it is absent after a reopen —
+                // at which point the count is still true and a made-up percentage would not be.
+                if (d.ranForThisMask) s += " · " + std::to_string(pct) + "% of the frame";
+                return s;
+            }
+            if (!d.handled) return "No detector for this subject";
+            if (d.ranForThisMask) return "Found nothing — try Sensitivity";
+            return "No detection yet";
         }
 
         std::string subjectLabel(int subject)
@@ -125,28 +146,24 @@ namespace cosmo_v2
         mTrashBtn->onClick = [this] { if (onDeleteMask) onDeleteMask(); };
         addChild(mTrashBtn);
 
-        // R-AISEG-10..12. A SegmentedControl and not a ComboBox: the subject set is small,
-        // fixed and worth seeing all at once — the same reasoning as Hue/Sat/Lum — and its
-        // highlight already slides (R-G-1) where a popup would have to escape the block's clip.
+        // R-AISEG-10..12/25/27. No subject picker: there is one subject, and a control with one
+        // option looks like a choice, invites a click and does nothing. What the picker was
+        // carrying — what this detector keys on — is in the header and the caption instead.
         mDetect = std::make_shared<DetectBlock>();
         mDetect->visible = false;
+        mDetect->caption = kSkinCaption;
         addChild(mDetect);
 
-        std::vector<std::string> subjects;
-        for (int i = 0; i < (int)SemanticSubject::Count; ++i) subjects.push_back(subjectLabel(i));
-        mSubject = std::make_shared<SegmentedControl>(subjects);
-        mSubject->containerBox = {Paint::filledStroked(palette::segmentedBg(), palette::border(), 1.0), radius::control()};
-        mSubject->idleSegBox = {Paint{}, radius::hairline()};
-        mSubject->activeSegBox = {Paint::filled(palette::primary()), radius::hairline()};
-        mSubject->edgeRadius = radius::control();
-        mSubject->idleText = {palette::mutedForeground(), 10.0, font::sans()};
-        mSubject->activeText = {palette::white(), 10.0, font::sans()};
-        mSubject->height.set(DetectBlock::kPickerH);
-        mSubject->onChange = [this](int i) {
-            if (mDetect) mDetect->caption = subjectCaption(i);
-            if (onSubjectChange) onSubjectChange(i);
-        };
-        mDetect->addChild(mSubject);
+        // The one thing in the block that DOES something. Styled as the accent action it is,
+        // rather than as the outlined "Inv" beside it: this is the only control in the panel
+        // that starts work rather than changing a number.
+        mDetectBtn = std::make_shared<PillButton>("Detect");
+        mDetectBtn->idleBox = {Paint::filled(palette::primary()), radius::control()};
+        mDetectBtn->idleText = {palette::primaryForeground(), 10.0, font::sansMedium()};
+        mDetectBtn->width.set(estimateTextWidth("Detect", 10.0) + 4 * 6.5);
+        mDetectBtn->height.set(DetectBlock::kButtonH);
+        mDetectBtn->onClick = [this] { if (onDetect) onDetect(); };
+        mDetect->addChild(mDetectBtn);
 
         mSensitivity = std::make_shared<SliderRow>("Sensitivity", 0, 100, 50.0);
         mSensitivity->onChange = [this](double v) { if (onSensitivityChange) onSensitivityChange(v / 100.0); };
@@ -203,8 +220,6 @@ namespace cosmo_v2
         // no `nowMs` cannot (R-G-1). Setting the height here is exactly the snap R-AISEG-12 is
         // about, and it would look correct in every still frame.
         mDetectTarget = (m.type == MaskParams::Semantic) ? 1.0 : 0.0;
-        mSubject->setSelectedImmediate(m.subject);   // programmatic sync must not fire onChange
-        mDetect->caption = subjectCaption(m.subject);
         mSensitivity->setValue(m.sensitivity * 100.0);
         mFeather->setValue(m.feather * 100.0);
         mExposure->setValue(fromEv(m.adjust.exposure));
@@ -220,8 +235,30 @@ namespace cosmo_v2
         if (!mDetect) return;
         // "built-in" is not a name to show a photographer; it is the absence of one, and the
         // built-in's honest self-description is what it keys on.
-        mDetect->header = (name.empty() || name == "built-in") ? "Detect (colour & texture)"
-                                                              : "Detect (" + name + ")";
+        mDetect->header = (name.empty() || name == "built-in") ? "Detect skin (colour & texture)"
+                                                              : "Detect skin (" + name + ")";
+    }
+
+    void MaskPanel::setDetectStatus(const DetectStatus &s)
+    {
+        mStatus = s;
+        if (!mDetect) return;
+        mDetect->status = detectStatusLine(s);
+        // R-AISEG-20/27: one detection at a time is the SERVICE's rule, so a button that could
+        // be pressed while one runs would be a control that lies. `enabled` is animated by the
+        // framework (`disabledAmount`), so this is a fade and not a flip.
+        if (mDetectBtn) mDetectBtn->enabled = !s.running;
+        // TARGETS only. `advance` starts both tweens, because a setter has no clock — and a bar
+        // that jumped to the fraction here would look right in every still frame and read as
+        // three stalls in motion (R-G-1's compliance clause, met from the same direction again).
+        mBarFillTarget = s.running ? s.fraction : (s.fraction > 0.0 ? 1.0 : 0.0);
+        mBarShowTarget = s.running ? 1.0 : 0.0;
+    }
+
+    const std::string &MaskPanel::detectStatusText() const
+    {
+        static const std::string kNone;
+        return mDetect ? mDetect->status : kNone;
     }
 
     void MaskPanel::scrollBy(double delta)
@@ -243,6 +280,32 @@ namespace cosmo_v2
         {
             mDetectOpen.animateTo(mDetectTarget, 200.0, Easing::EaseOutCubic, nowMs);
             mDetectLastTarget = mDetectTarget;
+        }
+        // R-AISEG-27: the bar EASES toward the service's fraction. The stages are uneven —
+        // `colour` is a third of the work and `shapes` a tenth — so a bar that took each number
+        // as it arrived would read as three stalls, while the same numbers eased read as
+        // continuous progress, which is what they are. 220 ms, a little longer than the 180 ms
+        // everything else uses, because it is deliberately catching up rather than responding.
+        if (mBarFillTarget != mBarFillLast)
+        {
+            mBarFill.animateTo(mBarFillTarget, 220.0, Easing::EaseOutCubic, nowMs);
+            mBarFillLast = mBarFillTarget;
+        }
+        if (mBarShowTarget != mBarShowLast)
+        {
+            // Slower out than in: the fill is still finishing when the fade starts, and the last
+            // thing a photographer should see of a detection is a full bar, not one vanishing at
+            // 70% — which reads as a failure.
+            mBarShow.animateTo(mBarShowTarget, mBarShowTarget > 0.0 ? 120.0 : 300.0,
+                               Easing::EaseOutCubic, nowMs);
+            mBarShowLast = mBarShowTarget;
+        }
+        mBarFill.update(nowMs);
+        mBarShow.update(nowMs);
+        if (mDetect)
+        {
+            mDetect->barFill = mBarFill.value();
+            mDetect->barShow = mBarShow.value();
         }
         const bool opening = mDetectOpen.isAnimating();
         mDetectOpen.update(nowMs);
@@ -295,21 +358,25 @@ namespace cosmo_v2
             // moves in step. Nothing is ever drawn compressed — that is what the clip buys, and
             // it is why this is a container rather than an opacity fade (R-AISEG-12).
             const double open = mDetectOpen.value();
-            const double blockH = DetectBlock::kHeaderH + DetectBlock::kPickerH +
-                                  DetectBlock::kPickerMB + DetectBlock::kCaptionH +
-                                  SliderRow::kRowHeight;
+            const double blockH = DetectBlock::kHeaderH + DetectBlock::kCaptionH +
+                                  DetectBlock::kCaptionMB + SliderRow::kRowHeight +
+                                  DetectBlock::kButtonH + DetectBlock::kButtonMB +
+                                  DetectBlock::kBarH + DetectBlock::kBarMB;
             mDetect->x.set(0.0);
             mDetect->y.set(y);
             mDetect->width.set(w);
             mDetect->height.set(open * blockH);
             mDetect->visible = open > 0.004;
             {
-                double by = DetectBlock::kHeaderH;
-                mSubject->x.set(kPadX); mSubject->y.set(by); mSubject->width.set(innerW);
-                mSubject->layout();
-                by += DetectBlock::kPickerH + DetectBlock::kPickerMB + DetectBlock::kCaptionH;
+                double by = DetectBlock::kHeaderH + DetectBlock::kCaptionH + DetectBlock::kCaptionMB;
                 mSensitivity->x.set(kPadX); mSensitivity->y.set(by);
                 mSensitivity->width.set(innerW); mSensitivity->layout();
+                by += SliderRow::kRowHeight;
+                mDetectBtn->x.set(kPadX); mDetectBtn->y.set(by);
+                // The status text starts after the button and gets whatever is left, so R5 is a
+                // measurement rather than a hope: the block tells the paint pass where the space
+                // begins and the paint pass ellipsizes against it.
+                mDetect->statusX = kPadX + mDetectBtn->width.value() + 8.125;
             }
             y += open * blockH;
 
@@ -343,19 +410,61 @@ namespace cosmo_v2
         // looked exactly like a bug and was one. So this pass clips itself.
         t.save();
         t.clipRect(0.0, 0.0, width.value(), height.value());
-        // "Detect (colour & texture)", not "AI Subject" (R-AISEG-11). The header is where the
-        // honesty belongs: it is read once, by everyone, before the first click — and a label
-        // claiming more than the code does is worse than a plain one.
-        // Which of two very different things is answering, said where the photographer
-         // chooses (R-AISEG-15). "colour & texture" is the built-in classifier being honest
-         // about itself; a model's own name replaces it when one is installed, because a mask
-         // from a network and a mask from a hue band are not the same claim.
+
+        // "Detect skin (colour & texture)", not "AI Subject" (R-AISEG-11/25). The header is where
+        // the honesty belongs: it is read once, by everyone, before the first click — and a label
+        // claiming more than the code does is worse than a plain one. It carries the SUBJECT now
+        // that there is no picker, and the parenthesis says which of two very different things is
+        // answering (R-AISEG-15): "colour & texture" is the built-in being honest about itself, a
+        // model's own name replaces it when one is installed.
         drawSectionHeader(t, kPadX, 0.0, innerW, header);
-        // What THIS subject is found by. 9px muted, on the type ramp's caption size, sitting in
-        // the gap the layout already reserves for it.
-        const double y = kHeaderH + kPickerH + kPickerMB + kCaptionH * 0.5;
+
+        // What the detector is found by. 9px muted, on the type ramp's caption size.
+        double y = kHeaderH + kCaptionH * 0.5;
         t.setFill(palette::mutedForeground());
         t.drawText(caption, kPadX, y + 9.0 * 0.35, 9.0, font::sans());
+
+        // ── the status sentence (R-AISEG-26/28) ────────────────────────────────────────────
+        // Beside the button, starting where `layout()` said the button ends, and ELLIPSIZED
+        // against the space that is actually left rather than trusted to fit (R5). Measured with
+        // the real primitive, not the estimate, because a sentence whose length varies with the
+        // number in it is exactly where an estimate is wrong by a visible margin.
+        const double rowY = kHeaderH + kCaptionH + kCaptionMB + SliderRow::kRowHeight;
+        const double avail = std::max(0.0, width.value() - kPadX - statusX);
+        std::string line = status;
+        if (t.measureText(line, 9.0, font::sans()) > avail && avail > 0.0)
+        {
+            while (line.size() > 1 &&
+                   t.measureText(line + "…", 9.0, font::sans()) > avail)
+                line.erase(line.size() - 1);
+            line += "…";
+        }
+        t.setFill(palette::mutedForeground());
+        t.drawText(line, statusX, rowY + kButtonH * 0.5 + 9.0 * 0.35, 9.0, font::sans());
+
+        // ── the progress bar (R-AISEG-27) ──────────────────────────────────────────────────
+        // In a row that is ALWAYS laid out; what changes is its opacity. Growing the block
+        // instead would move everything below it twice for one button press, and the panel
+        // jumping the moment somebody presses a button is the opposite of feeling responsive.
+        //
+        // Drawn from `barShow`/`barFill`, both LIVE eased values written by MaskPanel::advance —
+        // never from the service's fraction, which arrives in five uneven steps.
+        if (barShow > 0.002)
+        {
+            const double barY = rowY + kButtonH + kButtonMB;
+            const double r = kBarH * 0.5;
+            drawRoundedRect(t, Rect{kPadX, barY, innerW, kBarH}, r,
+                            Paint::filled(palette::whiteAlpha(0.10 * barShow)));
+            const double fill = std::max(0.0, std::min(1.0, barFill)) * innerW;
+            // Below 2r a rounded rect degenerates — the two caps overlap and the shape reads as
+            // a dot that pops rather than a bar that starts. Nothing at all is the honest
+            // picture of "it has not got anywhere yet".
+            if (fill > kBarH)
+            {
+                drawRoundedRect(t, Rect{kPadX, barY, fill, kBarH}, r,
+                                Paint::filled(palette::primaryAlpha(barShow)));
+            }
+        }
         t.restore();
     }
 

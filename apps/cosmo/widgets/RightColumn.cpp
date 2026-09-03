@@ -176,24 +176,17 @@ namespace cosmo_v2
                 sendMaskSet(mSelectedMask, {{"feather", num(f)}}, next);
             }
         };
-        // R-AISEG-10: a detect mask's whole geometry is these two fields, so they take the same
-        // route every other mask field does — `mask set <i>`, addressed by index.
-        mMask->onSubjectChange = [this](int subject) {
-            if (const MaskParams *sel = selectedMaskParams())
-            {
-                MaskParams next = *sel;
-                next.subject = subject;
-                // The chip creates the mask with the right type, but a mask somebody switched to
-                // Detect from the picker has to be told: the service infers Semantic from a bare
-                // `subject=`, and sending the type explicitly is what keeps that inference from
-                // being the only thing holding it up.
-                next.type = MaskParams::Semantic;
-                sendMaskSet(mSelectedMask, {{"type", std::to_string((int)MaskParams::Semantic)},
-                                            {"subject", arstro::semanticSubjectName(
-                                                            (arstro::SemanticSubject)subject)}},
-                            next);
-                if (const EditParams *p = params()) mMask->setMasks(p->masks, mSelectedMask);
-            }
+        // R-AISEG-27: the button starts the detection, and that is all the view does about it.
+        // A `Command` and not a call into the session (R-SVC-2), so a script reaches it the same
+        // way; the answer comes back through `AppModel::detect` and the mask's own regions, which
+        // `setDetectStatus` below reads on every model refresh.
+        mMask->onDetect = [this] {
+            if (mSelectedMask < 0) return;
+            cosmo::Command c;
+            c.kind = cosmo::Command::Kind::MaskDetect;
+            c.index = mSelectedMask;
+            if (emitCommand(c)) return;
+            mSvc.dispatch(c);   // unwired: the service is right here (see sendMaskSet)
         };
         mMask->onSensitivityChange = [this](double v) {
             if (const MaskParams *sel = selectedMaskParams())
@@ -354,6 +347,24 @@ namespace cosmo_v2
         // has to be visible.
         mMask->setSegmenter(mSvc.model().segmenter);
         mMask->setMasks(p->masks, mSelectedMask);
+        // R-AISEG-26/27/28. The count comes off the MASK and the rest off the last detection —
+        // deliberately, because after a project is reopened nothing has been detected this
+        // session while the mask is exactly what it was, and a panel that read both from the
+        // report would say "No detection yet" about a mask that plainly has a boundary on the
+        // photo.
+        {
+            const cosmo::DetectModel &d = mSvc.model().detect;
+            DetectStatus st;
+            st.ranForThisMask = d.maskIndex == mSelectedMask;
+            st.running = d.active && st.ranForThisMask;
+            st.fraction = d.fraction;
+            st.stage = d.stage;
+            st.handled = !st.ranForThisMask || d.handled;
+            st.coverage = d.coverage;
+            if (mSelectedMask >= 0 && mSelectedMask < (int)p->masks.size())
+                st.regions = (int)p->masks[mSelectedMask].regions.size();
+            mMask->setDetectStatus(st);
+        }
         mMixer->setMixer(p->mixer);
         mCurve->setCurves(p->curve, p->curveChannel);
         refreshCurveReferences();  // the effective ("final") curves, drawn faint behind
