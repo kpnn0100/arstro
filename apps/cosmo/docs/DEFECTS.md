@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-57**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-60**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,57 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-59 — `set` accepts a key it does not understand, and reports success
+- **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2
+- **Found:** 2026-09-03, while auditing the agent-drivable surface for `arstro.rule`.
+- **Front end:** every one — the bug is in the shared params codec, so `cosmo-cc run`,
+  `cosmo-cc attach`, the control socket and the GUI's own `set` path all inherit it.
+- **Reproduce:**
+  ```cpp
+  arstro::EditParams p;
+  bool ok = arstro::deserializeParams("exposre=1.2\n", p);   // deliberate typo
+  ```
+  ```
+  deserializeParams("exposre=1.2") -> TRUE (accepted), exposure is now 0.000
+  deserializeParams("frobnicate=9")  -> TRUE (accepted)
+  ```
+  Through the ordinary surface: `printf 'set exposre=1.2\n' | cosmo-cc run - --watch` returns 0 and
+  prints `[evt] params.changed exposre`.
+- **Expected:** an unknown key is refused, the command is rejected with the key named, and the
+  reason lands in `AppModel::lastError` — the contract R-SVC-3 states for every other rejection.
+- **Actual:** the call returns true, the command succeeds, an event announces a field that does not
+  exist, and nothing changes.
+- **Evidence:** `EditParamsIO.cpp:196` sets `any = true` for **any** line containing `=`, before the
+  key is tested; the `if/else if` chain that follows (`EditParamsIO.cpp:198-259`) has no final
+  `else`. `CosmoService::applySetFields` rejects only when `deserializeParams` returns false
+  (`CosmoService.cpp:594`), so it never sees the failure.
+- **Judgement:** **defect.** It contradicts R-SVC-3 (a rejected command must say why and populate
+  `lastError`) and, more sharply, R-AISEG-8's own principle applied to a different parser: *"A
+  misspelling is REFUSED rather than silently taken as 0 … the whole reason `parseSemanticSubject`
+  returns a bool is that `skyy` landing on Sky would be a mask that quietly does the wrong thing."*
+  The params codec is the one parser in the app that never got that treatment.
+- **Why it matters more than it looks:** this is the worst failure mode an agent-driven surface can
+  have. A crash is recoverable and a rejection is informative; a **positive acknowledgement of a
+  no-op** is neither. Every later step in a script is then built on a state that never changed, and
+  the run fails somewhere else entirely, or worse, appears to succeed. It also silently defeats the
+  round-trip guarantee `set` is supposed to inherit from the project format: a project file with a
+  misspelled key loads clean and loses the value.
+- **Cause:** `any` was written to mean "this text looked like key=value lines at all" — a
+  reasonable guard against handing the parser an empty string — and is being read by the caller as
+  "the fields were applied".
+- **Recommended fix:** separate the two questions. Count *matched* keys and unmatched keys
+  separately; return false, or better, report the unmatched key list to the caller, so
+  `applySetFields` can reject with `set: unknown field <k>` exactly as `mask set` already does
+  (`CosmoService.cpp` rejects an unknown mask field by name). Keep tolerance for keys that a NEWER
+  build wrote — that is a version-skew case, not a typo, and it wants a distinct, non-silent
+  answer (a warning event, not a rejection).
+- **Requirement:** R-SVC-3 (existing). A new requirement is probably wanted for the version-skew
+  half, since nothing currently says what an old build should do with a key from a new one.
+- **Regression?** No — `git log -S "any = true"` shows the line is original to the codec.
+- **Guarded by:** nothing yet. The test to write asserts `deserializeParams("frobnicate=9")` is
+  false and that `set frobnicate=9` leaves `lastError` naming the key — checked to fail on the
+  current code first.
 
 ### D-45 — A 1600 px preview render costs ~600 ms with 16 threads, at default parameters
 - **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2

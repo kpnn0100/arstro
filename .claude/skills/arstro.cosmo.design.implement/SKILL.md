@@ -5,6 +5,12 @@ description: Use to implement or resume ANY front-end work in the cosmo photo ed
 
 # arstro.cosmo.design.implement
 
+> **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
+> core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
+> agent-drivable surface and its API document, and the ledger/defect/commit conventions. **Follow
+> both; where they overlap, this file's checklist is the one to satisfy** — except on the
+> architecture, requirement and agent-drivability laws, where `arstro.rule` wins.
+
 The **resume-driven V-model workflow for everything the user can see in cosmo.** All state lives in
 committed files, so a session on any machine can pick up exactly where the last one stopped.
 
@@ -18,10 +24,13 @@ harness (`cosmo_shots`, `cosmo_ui_tests`).
 orchestration. Those are **`arstro.cosmo.core.implement`**. A task spanning both is two commits: core
 first, then design.
 
-**You sit on top of `arstro.design.desktop`**, the family-wide design system (R1–R6 + the taste rules).
-That skill is the law; this one is cosmo's concrete dialect of it, plus cosmo's process. When they
-appear to disagree, `arstro.design.desktop` wins on *rules* and this file wins on *cosmo's values*.
-A genuinely reusable control belongs in Artboard via **`implement_artboard`**, not in `widgets/`.
+**You sit on top of `arstro.design.rule`**, the design law for every Arstro front end (the token
+contract, the non-negotiable motion rule, R1–R6, the layout and widget conventions, the twenty
+gotchas). **Invoke it before this file.** That skill is the law; this one is cosmo's concrete
+dialect of it, plus cosmo's process. When they appear to disagree, `arstro.design.rule` wins on
+*rules* and this file wins on *cosmo's values*. (It supersedes `arstro.design.desktop`, which is now
+a redirect.) A genuinely reusable control belongs in Artboard via **`implement_artboard`**, not in
+`widgets/`.
 
 ---
 
@@ -122,12 +131,15 @@ design. A widget that invents a fourth radius is a bug.
 
 ### 1.3 Fonts (`font::`) — weight is a family name, not a flag
 
-`sans() = "DM Sans"` · `sansMedium() = "DM Sans Medium"` · `sansSemiBold() = "DM Sans SemiBold"` ·
+`sans() = "Roboto"` · `sansMedium() = "Roboto Medium"` · `sansSemiBold() = "Roboto SemiBold"` ·
 `mono() = "JetBrains Mono"` · `monoMedium() = "JetBrains Mono Medium"`.
 
-Vendored under `apps/cosmo/assets/fonts/`, registered app-private via Fontconfig at startup
-(`registerBundledFonts()` in `linux_main.cpp`, path baked in as `COSMO_SOURCE_DIR`). **Never
-system-installed.** Adding a face means adding the TTF, its OFL, and a `font::` accessor together.
+**Compiled INTO the binary** (`EmbeddedFonts.{h,cpp}`, `registerEmbeddedFonts()`, R-FONT-1) — no
+font file beside the exe, no Fontconfig, no system-installed family, and the same glyphs on Linux
+and Windows. Cosmo *used* to register vendored TTFs with Fontconfig from a path baked in at build
+time and abandoned it: the path and Fontconfig's family resolution both differ between machines, and
+the app's own type is not a thing that may differ between machines. Adding a face means adding the
+TTF, its OFL, the `COSMO_FONT_LIST` entry and a `font::` accessor together.
 
 Usage split: `sans` for body/labels · `sansMedium` for tab labels, project name, emphasised buttons ·
 `sansSemiBold` for the wordmark, 9px uppercase section headers, "Recent Projects" · **`mono` for
@@ -355,7 +367,7 @@ The one structural blocker: `apps/cosmo/CMakeLists.txt` globs `*.cpp` **includin
 no second `main()` can link the cosmo UI. Add `COSMO_APP_NOMAIN` via
 `list(REMOVE_ITEM … linux_main.cpp)` first. Then:
 
-- **`cosmo_shots <outdir> [--only <name>] [--size WxH] [--list] [--script <f>]`** — builds a real `App`,
+- **`cosmo_shots --outdir <DIR> [--only <substr>] [--images A,B] [--check] [--list]`** — builds a real `App`,
   drives it to a named state, renders through `artboard::CairoTarget` into a PNG, writes it, prints
   `wrote <name> (WxH)`. `App` is already platform-free (`App(w,h)`, `setSize`, `render(target, nowMs)`,
   `pointer(...)`, `wheel(...)`, `key(...)`), and `showHome/showEditor/beginOpenTransition/
@@ -370,10 +382,18 @@ no second `main()` can link the cosmo UI. Add `COSMO_APP_NOMAIN` via
   offset, text fits its box, the layout reflows at a second size. Registered with `add_test`, plain
   `assert()` in the local style. (`cosmo_widget_tests` today only covers isolated hit-test geometry —
   it stays, but it is not enough.)
-- **`--dump-ui <file>`** — the single best UI debugging tool: walk the Segment tree and write each node's
-  class, world rect, visible/enabled/opacity, scroll offset and hover state as text. Reachable from
-  `cosmo_shots`, from a `--script` step, and from a key chord in the live app. When the user says "the
-  panel is empty", this tells you whether the rows are missing, off-screen, or transparent.
+- **`ui dump [--json] [--root editor|home|splash] [--visible] [--depth N]`** — the single best UI
+  debugging tool: the Segment tree as text, each node's class, world rect, visible/enabled/opacity,
+  scroll offset and hover state. **It is a `Command` over the control socket, not a flag** — run
+  `cosmo --control /tmp/c.sock`, then `cosmo-cc attach /tmp/c.sock` and send it; the reply is framed
+  by `[evt] ui.begin` / `[evt] ui.end`. When the user says "the panel is empty", this tells you
+  whether the rows are missing, off-screen, or transparent.
+  **It needs a live window.** `cosmo-cc run` answers "no view attached", because there is no view.
+  **Two real gaps, both worth filing the moment they cost you an investigation:** `cosmo_shots` has
+  **no `--size`** and **no `--script`**, so you cannot ask it for an arbitrary window geometry or
+  for the state your own click sequence produced; and there is **no headless tree dump** at all. Use
+  `cosmo_ui_tests` for geometry questions without a display, add a *named* shot for a new state, and
+  reproduce live over the socket for anything else.
 - **`--script`** replays scripted input at a fixed 16 ms tick; the grammar is in
   `arstro.cosmo.core.implement` §5.3 and the same file must run headless and live.
 
@@ -392,7 +412,7 @@ from the log. That is the single biggest observability gap in the app. Under `--
   every selection change with node ids; every modal open/close; every scroll with offset, viewport,
   content, and whether it clamped; every value commit with the param name and the value sent to the
   session.
-- **layout**: on `--log-frames` or a `dump-ui` step, the tree with rects — not every frame by default.
+- **layout**: on `--log-frames` or a `ui dump`, the tree with rects — not every frame by default.
 - **motion**: when an animation starts and settles, with target, duration and easing, so "it snapped"
   can be confirmed or refuted from text.
 
@@ -472,5 +492,5 @@ Artboard changes are a **submodule** commit plus an umbrella pointer bump — an
 - [ ] **Every state drawn**, including empty and loading; contrast ≈ WCAG AA.
 - [ ] Built on Artboard; a genuinely reusable control went to Artboard via `implement_artboard`.
 - [ ] **You looked at it** — shots rendered at 2+ sizes, mid-transition and at rest (§8).
-- [ ] UI debug logging covers the new surface (§7); `--dump-ui` shows it correctly.
+- [ ] UI debug logging covers the new surface (§7); `ui dump` over the socket shows it correctly.
 - [ ] Docs and puml in sync (§9); `PROGRESS.md` and `DEFECTS.md` updated; committed to `main`.

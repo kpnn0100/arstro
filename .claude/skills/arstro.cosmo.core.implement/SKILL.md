@@ -5,6 +5,12 @@ description: Use to implement or resume ANY non-UI work in the cosmo photo edito
 
 # arstro.cosmo.core.implement
 
+> **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
+> core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
+> agent-drivable surface and its API document, and the ledger/defect/commit conventions. **Follow
+> both; where they overlap, this file's checklist is the one to satisfy** — except on the
+> architecture, requirement and agent-drivability laws, where `arstro.rule` wins.
+
 The **resume-driven V-model workflow for everything in cosmo that is not a pixel on a widget.**
 All state lives in committed files, never in a session's memory, so you can stop on one machine,
 `git pull` on another, invoke this skill, and know exactly where you are.
@@ -404,9 +410,7 @@ click 320 540
 drag 320 540 -> 420 540
 key ctrl+z
 wheel 640 400 -1
-dump-ui ui-after-undo.txt
 shot editor-after-undo.png
-expect event "[evt] params.changed exposure"
 ```
 
 The same file must work **headless** and **live**. `expect` matches a **stable prefix of a `formatEvent`

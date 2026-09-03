@@ -98,7 +98,8 @@ is on — check there before concluding a RAW file is corrupt.
 | How does this class work, and what are its traps? | [`detailed_design.md`](detailed_design.md) |
 | Why is the core a service at all? | [`service-architecture-proposal.md`](service-architecture-proposal.md) — the design behind R-SVC, approved 2026-08-17. **Not a ledger**: it is not updated per commit |
 | What is still missing versus the original app? | [`../PARITY.md`](../PARITY.md) |
-| What should the UI look and feel like? | `.claude/skills/arstro.design.desktop` (R1–R6) |
+| What should the UI look and feel like? | `.claude/skills/arstro.design.rule` — the design law for every front end (tokens, motion, R1–R6, the gotchas) |
+| What are the rules here, whatever I am doing? | `.claude/skills/arstro.rule` — invoked first by every skill |
 | How do I work on this? | `.claude/skills/arstro.cosmo.core.implement` (non-UI) · `arstro.cosmo.design.implement` (widgets/layout/theme) · the two matching `.debug` skills |
 
 **Both requirement tiers are authoritative, for different things, and every change touches both.**

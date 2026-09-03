@@ -5,6 +5,12 @@ description: Use to investigate any suspected visual, layout, motion or interact
 
 # arstro.cosmo.design.debug
 
+> **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
+> core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
+> agent-drivable surface and its API document, and the ledger/defect/commit conventions. **Follow
+> both; where they overlap, this file's checklist is the one to satisfy** — except on the
+> architecture, requirement and agent-drivability laws, where `arstro.rule` wins.
+
 The **reproduce → judge → file → commit** workflow for everything the user can see. It exists for one
 specific situation: *the user is looking at the app, something is wrong, and they can only describe it.*
 Your job is to turn that description into a rendered frame, a log excerpt and a UI tree dump — evidence
@@ -61,31 +67,33 @@ widget consumed the gesture, whether the scroll clamped, whether a transition st
 whether a value ever reached the session. **"click at 320,540 consumed by nobody" resolves most
 dead-control reports on its own.**
 
-**b) The UI tree dump.** `--dump-ui <file>` (or a `dump-ui` step in a `--script` file) walks the Segment
-tree and writes each node's class, world rect, visible/enabled/opacity, scroll offset and hover state.
-This is what distinguishes the three ways a panel can "look empty": the rows were never created, they
-are positioned off-screen, or they are drawn at opacity 0.
+**b) The UI tree dump.** `ui dump [--json] [--root editor|home|splash] [--visible] [--depth N]` —
+a **Command over the control socket**, not a flag. Start the app with `cosmo --control /tmp/c.sock`,
+then `cosmo-cc attach /tmp/c.sock` and send it; the reply is framed by `[evt] ui.begin` /
+`[evt] ui.end`. It walks the Segment tree and writes each node's class, world rect,
+visible/enabled/opacity, scroll offset and hover state — which is what distinguishes the three ways
+a panel can "look empty": the rows were never created, they are positioned off-screen, or they are
+drawn at opacity 0. (Note `opacity <= 1e-3` also disables hit-testing.)
 
-**c) A headless render.** `cosmo_shots <outdir> --only <state> --size 1440x900` renders a real frame to
-PNG with no display. Render **the broken state and a known-good neighbour**, at **two window sizes**, and
+It needs a **live window**: `cosmo-cc run` answers `ui dump` with *"no view attached"*, because
+there is no view. There is no headless tree dump today — that gap is real and is the first thing to
+file when it costs you an investigation.
+
+**c) A headless render.** `cosmo_shots <outdir> --only <substring>` renders real frames to PNG with
+no display; `--list` names the states, `--images A,B` supplies photos for the project shots,
+`--check` fails on a uniform-colour PNG. Render **the broken state and a known-good neighbour**, and
 sample **mid-transition as well as at rest** — a snap and a settle look identical in a single still.
 
-Wrap it in a scripted run so the reproduction is a committed file rather than a sequence of clicks:
+**Two limits, and they decide how you reproduce.** `cosmo_shots` renders a *fixed, named* list of
+states: there is **no `--size`** and **no `--script`**, so you cannot ask it for an arbitrary window
+geometry or for the state your own click sequence produced. Where a shot exists that covers the
+symptom, use it. Where one does not, either add the named shot to `renderShots.cpp` (the shots are
+product code, not test scaffolding) or reproduce live with `cosmo <image>` and the control socket,
+and say in the defect which of the two you used.
 
-```
-size 1440 900
-open /path/photo.jpg
-wait 900
-click 1180 420          # the control the user described
-dump-ui after-click.txt
-shot after-click.png
-expect log "ui: tab changed masks -> curve"
-```
-
-The same script must run headless and live (`arstro.cosmo.core.implement` §5.3). If the harness item you
-need does not exist yet (`COSMO_APP_NOMAIN`, `cosmo_shots`, `--dump-ui`, `--script`, UI logging), file
-the blind spot as a defect, reproduce with what exists — running `cosmo.exe <image>` and looking, plus
-`cosmo_widget_tests` — and record which harness item would have made this a one-liner.
+For the assembled app there is also `cosmo_ui_tests`, which renders through a `RecordingTarget` and
+asserts geometry and animated values with no display — the right instrument when the question is
+"do these two widgets overlap" rather than "what does it look like".
 
 ---
 
@@ -98,7 +106,7 @@ explanation before you go hunting.
 |---|---|
 | A button or whole panel is dead | Something above it is capturing: a `hitTestSelf` that returns `true` unconditionally, or a modal left `mOpen`. Child order is reverse hit-test order; `MenuStrip` calls `raise()`. Also check `inputTransparent` and `enabled`. |
 | Clicks land on the wrong control | Draw order vs hit order, or a stale `layout()` — geometry is recomputed every frame from animated values, so a widget mid-tween is not where the last still showed it. |
-| A panel looks empty | `dump-ui`: rows missing (never created / `visible=false`), off-screen (scroll offset or a parent that never laid out), or `opacity≈0` (a fade that never ran). Note `opacity <= 1e-3` also disables hit-testing. |
+| A panel looks empty | `ui dump`: rows missing (never created / `visible=false`), off-screen (scroll offset or a parent that never laid out), or `opacity≈0` (a fade that never ran). Note `opacity <= 1e-3` also disables hit-testing. |
 | Content is cut off and unreachable | R6: clipped without scrolling, or the viewport measured is not the box the rows are laid out in — the classic is a viewport a padding taller than the rows can occupy, which makes the last row unreachable at *every* offset. |
 | The last row is missing at every scroll offset | Same as above. Assert *reachability*, not that the offset moved. |
 | Something snaps / teleports | R1: a value written directly instead of through `animateTo`, or a setter with no `nowMs` that never recorded a pending target for `advance()` to start. Tab highlights and content swaps must travel or cross-fade. |
@@ -119,7 +127,7 @@ explanation before you go hunting.
 Read the requirement before forming an opinion, and quote it in the entry. The rule is the same as
 `arstro.cosmo.core.debug` §3, with one addition specific to the UI:
 
-- **Contradicts a requirement, or breaks `R-G-1…R-G-3` or `arstro.design.desktop`'s R1–R6 → defect.**
+- **Contradicts a requirement, or breaks `R-G-1…R-G-3` or `arstro.design.rule`'s R1–R6 → defect.**
   Those rules are requirements, not preferences: a snap violates R1, an unreachable row violates R6, an
   overflowing string violates R5, a hardcoded size that breaks at 1024px violates R4. You do not need a
   feature-specific requirement to call one of these a defect.
@@ -145,7 +153,7 @@ enough to drop frames; unreadable contrast on a normal surface.
 Use the entry format in `arstro.cosmo.core.debug` §4 verbatim, with `**Area:** design`, plus two
 UI-specific additions:
 
-- **Attach the evidence**: the shot filename(s), the `dump-ui` excerpt (the relevant nodes, not the whole
+- **Attach the evidence**: the shot filename(s), the `ui dump` excerpt (the relevant nodes, not the whole
   tree), and the log lines. Commit the fixture `--script` file; commit a baseline PNG only if it is small
   and genuinely the point of the entry.
 - **Name the rule**: which of `R-G-1…R-G-3` / R1–R6 it breaks, or the requirement it contradicts, or the
@@ -181,7 +189,7 @@ right is most of the value this skill adds over guessing.
 
 Also name **the assertion that should guard it** — a `cosmo_ui_tests` property (reachability,
 non-overlap, fit, reflow), never a pixel — and what it must assert to fail on today's code. And if the
-log or `dump-ui` could not have shown you the answer, recommend that too: a defect the log could not
+log or `ui dump` could not have shown you the answer, recommend that too: a defect the log could not
 reveal is also an observability defect, worth its own entry.
 
 ---
@@ -195,7 +203,7 @@ read the commit and disagree with the recommendation before anything is built on
 ```
 cosmo: file D-14 — the preset list's last row is unreachable at 1024x640 (R6)
 
-Reproduced with cosmo_shots --only presets-crowded --size 1024x640; dump-ui
+Reproduced with cosmo_shots --only presets-crowded; ui dump over the socket
 shows row 11 at y=612 with a viewport of 604, and the scroll offset already
 clamped. The measured viewport is a pad taller than the rows occupy. Not fixed
 yet; PROGRESS NEXT now points at it.
@@ -211,7 +219,8 @@ Do not push unless asked.
 
 - [ ] The symptom was reproduced with a **written-down command** producing a shot, a dump, or a log line
       — or filed as `Unreproduced` with everything tried.
-- [ ] Evidence attached: shot(s) at 2+ sizes where layout is involved, `dump-ui` excerpt, log lines.
+- [ ] Evidence attached: the shot(s), the `ui dump` excerpt, log lines. Where layout is involved
+      and no second-size shot exists, say so — `cosmo_shots` has no `--size`.
 - [ ] Judged against a **quoted** requirement or a named rule (R-G-*, R1–R6).
 - [ ] Any requirement gap **closed in `REQUIREMENTS.md`**, conflict-checked, including the surface's
       states and overflow behaviour.

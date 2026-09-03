@@ -5,6 +5,12 @@ description: Use to build (or resume building, on any computer) the Android-17-s
 
 # android.theme.implement
 
+> **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
+> core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
+> agent-drivable surface and its API document, and the ledger/defect/commit conventions. **Follow
+> both; where they overlap, this file's checklist is the one to satisfy** — except on the
+> architecture, requirement and agent-drivability laws, where `arstro.rule` wins.
+
 The **resume-driven** workflow for the Android-theme-for-Linux project. It is designed so you can
 stop on one computer, `git pull` on another, invoke this skill, and it knows exactly what to do next
 — because all state lives in committed files, never in machine-local memory.
@@ -80,7 +86,7 @@ and therefore builds into `build/apps/launcher/android-shell/`. Artboard work ha
   inline hack in an app or adapter.
 - **Task builds/styles the shell app UI** (`apps/launcher/android-shell/` surfaces, widgets, screens,
   panels — the launcher, status bar, QS, notifications, recents, drawn with Artboard segments): follow
-  the **`arstro.design.desktop`** skill's design language (tokens, motion, layout, states) but with the
+  the **`arstro.design.rule`** skill's design language (tokens, motion, layout, states) but with the
   Android-theme palette/metrics from the plan. This is app code, not library code — it consumes
   Artboard, it does not modify it.
 - **Task is host / compositor-bridge / services / packaging** (GTK3+layer-shell host, `CompositorBridge`

@@ -5,6 +5,12 @@ description: Use to investigate any suspected non-UI problem in the cosmo photo 
 
 # arstro.cosmo.core.debug
 
+> **Invoke `arstro.rule` first.** It carries the rules this skill used to restate: the
+> core/front-end split, requirements-first and the conflict rule, the V-model doc-sync loop, the
+> agent-drivable surface and its API document, and the ledger/defect/commit conventions. **Follow
+> both; where they overlap, this file's checklist is the one to satisfy** — except on the
+> architecture, requirement and agent-drivability laws, where `arstro.rule` wins.
+
 The **reproduce → judge → file → commit** workflow for cosmo's engine, session, persistence, load and
 export. Its output is never just an answer in chat: it is a **committed defect entry with a command
 anyone on any machine can re-run**, plus — when the requirements turned out to be silent — a requirement
