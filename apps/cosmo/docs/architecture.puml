@@ -294,11 +294,12 @@ package "ImageProcessing  (namespace arstro)  <<headless engine>>" as engine {
     + fastBlurPlane(src, dst, w, h, sigma)       ' 3-box cascade; cost flat in sigma (R-MIXER-7)
   }
   class ColorMixer <<not a point op>> {
-    + setCurve(channel, points)
-    + setSpread(amount01)                     ' 0..1; sigma = 0.004 x min(w,h) (R-MIXER-7)
-    + process(in, out)                        ' two passes: weight plane -> blur -> apply
-    - weightedAdjust / applyAdjust            ' split so the spread can replace half of it
-    - mFlat[3]                                ' one plane per NON-flat channel only
+    + setCurve(channel, points)   ' Hue | Sat | Lum, cyclic over [0,360)
+    + setSpread(0..1)             ' R-MIXER-5..8
+    + {static} lumAdjust(v, gain, &scale, &toNeutral)   ' R-MIXER-10..13
+    - kChromaFloor / kChromaFull  ' a per-hue tool needs a hue (R-MIXER-1/2)
+    - kLumStops = 1.5             ' the Lum curve is a GAIN in stops, not an HSL offset
+    - kShoulderKnee = 0.75        ' linear; brightening rolls off to white, never clips a channel
   }
 }
 

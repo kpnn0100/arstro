@@ -41,7 +41,42 @@ DONE.**
     missing is a permissively-licensed model. If this comes back, it comes back as a model — and
     the survey that says why there isn't one is in the history at `208ba53`.
 
-**► NEXT: the lum curve is not natural (asked 2026-09-03).** `arstro.cosmo.core.implement`.
+**► 2026-09-03 (later) — "fix the lum curve, it is not natural, how lightroom achieve this."
+DONE.**
+
+- **[x] the Lum curve is a gain, not an HSL offset.** R-MIXER-10..14, DR-MIXER-10..14.
+  `image_tests` 98/98, `ctest` 17/17. Five things worth carrying forward:
+  * **It was not merely unnatural, it was black.** Measured before touching anything: Lum −100
+    turned a blue sky pure black, −50 crushed four of five steps of a gradient to black, +25
+    pushed HSL saturation 0.505 → 0.874, and +100 arrived at sRGB(0.900, 0.925, 0.990) — white.
+    Measuring first is what turned "not natural" into three specific faults in one line.
+  * **Three faults, and each alone was enough**: additive (so the tonal relationships inside a
+    hue collapsed), applied to LINEAR light (where mid-grey is 0.214, so `l -= 0.5` is below zero
+    and clamps to black), and through HSL (whose `l` and `s` are coupled, so the saturation
+    wandered on the way past).
+  * **Adobe's model, and the identity that makes it a one-liner.** The DNG spec's HueSatMap
+    stores a hue shift, a saturation SCALE and a value SCALE, in HSV. And scaling V in HSV is
+    exactly scaling the linear RGB triple by a constant — so the implementation is a multiply,
+    and hue and HSV saturation are preserved by construction rather than by care.
+  * **A pure scale stalls on the + side, and the first cut of the fix did.** A colour whose max
+    channel is at 1 cannot get brighter by scaling; +25 through +100 all returned the same
+    saturated blue. The pull toward the pixel's own new brightness is what carries it to white
+    through its own hue. In a bounded space you cannot brighten a saturated colour without making
+    it paler, which is also what adding light does.
+  * **Measure saturation in HSV, not HSL, or the ruler invents a defect.** HSL normalises by the
+    lightness envelope, so its `s` moves under a uniform scale even though the colour did not —
+    the first version of the test failed on exactly that and the operation was correct.
+  * **No design half.** The Lum tab is a plain curve editor over hue with no copy stating units or
+    a model, so there was nothing in the UI to correct — and `set mixer2=` already reached it.
+
+**► NEXT: nothing outstanding.** The follow-ups worth doing next, in order:
+
+1. **The Sat curve has a milder version of the same complaint** — it scales HSL saturation where
+   Adobe scales HSV saturation. Deliberately left alone (R-MIXER-14): it was not what was
+   reported, it crushes nothing, and two colour controls changed in one commit is neither of them
+   reviewable.
+2. **A `mixerSpread` control in the Mixer panel** — still reachable only as `set mixerSpread=`.
+3. **The touch shell has no Mixer panel.**
 
 **► 2026-09-03 — "the skin detection is not good: show nothing until the user detects (with a
 progress bar), then a drawn mask with a precise segment; learn from deepgaze; keep only skin."
@@ -937,7 +972,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-09-03 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on

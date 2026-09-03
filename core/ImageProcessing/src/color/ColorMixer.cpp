@@ -139,6 +139,42 @@ namespace arstro
             adj[c] = mFlat[c] ? 0.f : sampleCyclic(c, (float)h) * w;
     }
 
+    void ColorMixer::lumAdjust(float v, float gain, float &scale, float &toNeutral)
+    {
+        scale = 1.f;
+        toNeutral = 0.f;
+        if (v <= 0.f) return;              // black has no colour to brighten
+
+        // The shoulder itself: identity below the knee, asymptotic to 1 above it. Exponential
+        // rather than a polynomial because it is C1 at the knee and can never reach 1, so there
+        // is no second corner to find and no setting at which it starts clipping again.
+        auto shoulder = [](float x) {
+            if (x <= kShoulderKnee) return x;
+            const float headroom = 1.f - kShoulderKnee;
+            return kShoulderKnee + headroom * (1.f - std::exp(-(x - kShoulderKnee) / headroom));
+        };
+
+        const float base = shoulder(v);
+        if (base <= 0.f) return;
+        const float wanted = v * gain;                  // where the max channel asked to go
+        float landed = shoulder(wanted) / base * v;
+        // Never push the max channel above 1 — nor above where it already was, for a pixel that
+        // arrived over-range from an earlier stage. Without the second half of that, the mixer
+        // would DARKEN a highlight it was never asked to touch.
+        const float ceiling = v > 1.f ? v : 1.f;
+        if (landed > ceiling) landed = ceiling;
+        scale = landed / v;
+
+        // Whatever the scale could not deliver becomes a pull toward the pixel's own new
+        // brightness — the colour keeps going, and it goes pale rather than stalling.
+        if (wanted > landed && landed > 0.f)
+        {
+            const float residual = wanted / landed;     // >= 1
+            toNeutral = 1.f - 1.f / residual;
+            if (toNeutral > 1.f) toNeutral = 1.f;
+        }
+    }
+
     void ColorMixer::applyAdjust(const Pixel *in, Pixel *out, int channels, const float adj[3]) const
     {
         const int colorCh = channels >= 3 ? 3 : channels;
@@ -147,16 +183,45 @@ namespace arstro
             for (int ch = 0; ch < channels; ++ch) out[ch] = in[ch];
             return;
         }
-        Pixel h, s, l;
-        color::rgbToHsl(in[0], in[1], in[2], h, s, l);
-        h += (Pixel)(adj[Hue] * 180.0f);  // full +/-180deg bend so any hue can reach any target
-        s *= (Pixel)1 + (Pixel)adj[Sat];
-        l += (Pixel)(adj[Lum] * 0.5f);
-        if (h < 0) h += 360;
-        if (h >= 360) h -= 360;
-        if (s < 0) s = 0; if (s > 1) s = 1;
-        if (l < 0) l = 0; if (l > 1) l = 1;
-        color::hslToRgb(h, s, l, out[0], out[1], out[2]);
+        Pixel r = in[0], g = in[1], b = in[2];
+
+        // Hue and saturation still travel through HSL, unchanged (R-MIXER-14 says why they were
+        // left alone). Skipped entirely when both are flat, which is the reported case and is
+        // also what keeps a Lum-only edit free of a round trip it does not need.
+        if (adj[Hue] != 0.f || adj[Sat] != 0.f)
+        {
+            Pixel h, s, l;
+            color::rgbToHsl(r, g, b, h, s, l);
+            h += (Pixel)(adj[Hue] * 180.0f);  // full +/-180deg bend so any hue can reach any target
+            s *= (Pixel)1 + (Pixel)adj[Sat];
+            if (h < 0) h += 360;
+            if (h >= 360) h -= 360;
+            if (s < 0) s = 0; if (s > 1) s = 1;
+            color::hslToRgb(h, s, l, r, g, b);
+        }
+
+        // Lum is a GAIN on the pixel (R-MIXER-10..13) — Adobe's `value scale`, which for a
+        // uniform multiply is the same thing. One factor for all three channels, so the hue and
+        // the HSV saturation come out bit-identical and only the brightness moves.
+        if (adj[Lum] != 0.f)
+        {
+            const float gain = std::exp2(adj[Lum] * kLumStops);
+            const float v = (float)std::max(r, std::max(g, b));
+            float k = 1.f, d = 0.f;
+            lumAdjust(v, gain, k, d);
+            if (d > 0.f)
+            {
+                // Toward the pixel's own new max, not toward a fixed white: the same affine map
+                // on all three ratios, so the hue is bit-identical and only the saturation moves.
+                const float nv = v * k;
+                r = (Pixel)(nv * ((float)r / v * (1.f - d) + d));
+                g = (Pixel)(nv * ((float)g / v * (1.f - d) + d));
+                b = (Pixel)(nv * ((float)b / v * (1.f - d) + d));
+            }
+            else { r *= (Pixel)k; g *= (Pixel)k; b *= (Pixel)k; }
+        }
+
+        out[0] = r; out[1] = g; out[2] = b;
         for (int ch = 3; ch < channels; ++ch) out[ch] = in[ch];
     }
 

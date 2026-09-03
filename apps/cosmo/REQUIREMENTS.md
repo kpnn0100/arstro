@@ -607,6 +607,104 @@ X-Trans frame.
   which is also what makes it survive a project file, a preset and an undo step (labelled *Mixer*,
   since it lives in the preset's `mixer` category).
 
+### The 2026-09-03 fix — the Lum curve is a gain, not an offset
+
+Reported: *"fix the lum curve, it is not natural, how lightroom achieve this, apply that."* It was
+not merely unnatural. Measured on a blue sky at sRGB(0.30, 0.52, 0.85), hue 212°, with a flat Lum
+curve and nothing else:
+
+| Lum | result | what happened |
+|---|---|---|
+| −100 | sRGB 0.000 0.000 0.000 | **pure black** — hue and saturation gone entirely |
+| −50 | 0.173 0.315 0.527 | plausible |
+| +25 | 0.365 0.597 0.957 | saturation jumps 0.505 → **0.874** |
+| +50 | 0.614 0.728 0.968 | hue drifts 212° → 221° |
+| +100 | 0.900 0.925 0.990 | very nearly white; the colour is gone |
+
+and at Lum −50 over a five-step gradient of one hue, **four of the five steps came out pure
+black**. That is the report: a tool that flattens a sky to a silhouette long before the slider
+reaches its end.
+
+- **R-MIXER-10 The Lum curve is a GAIN on the pixel, not an offset on HSL lightness.**
+  (**Added 2026-09-03. AMENDS the `y -> l += y*0.5` contract in R-MIXER's header.**)
+  Three independent faults met in that one line, and each alone would have been enough:
+  1. **It was additive.** Every pixel of a hue moved by the same absolute amount, so the tonal
+     relationships *inside* that hue collapsed — which is exactly what flattens a sky and is what
+     "not natural" names. A gain preserves ratios, so the gradient survives.
+  2. **It was applied to LINEAR light.** The engine works in linear light for good reasons
+     (R-ENGINE), and HSL lightness of linear values is not a perceptual quantity at all: mid-grey
+     is 0.214 there, so `l -= 0.5` is not "darker", it is *below zero*, clamped to black. That is
+     why −100 was black and why −50 crushed most of a gradient.
+  3. **It went through HSL.** HSL's `l` and `s` are coupled — the actual chroma is
+     `s * (1 - |2l - 1|)` — so moving `l` with `s` held changes the colour's saturation on the way
+     past. That is the 0.505 → 0.874 jump, and it is unavoidable in that space.
+  A gain has none of the three. It is what a photographer means by making a colour brighter.
+- **R-MIXER-11 The gain is Adobe's `value scale`, and that is not a coincidence.**
+  (**Added 2026-09-03.**) The DNG specification's `ProfileHueSatMapData` and `ProfileLookTableData`
+  — the tables Lightroom and Camera Raw apply for every profile and every HSL move — store, per
+  grid point, a **hue shift**, a **saturation scaling factor** and a **value scaling factor**. The
+  last two are *scales*, not offsets, and they are applied in **HSV**, not HSL.
+  And there is an identity worth stating, because it is what makes the fix simple: **scaling V in
+  HSV is exactly scaling the linear RGB triple by a constant.** `V = max(r,g,b)`, and hue and HSV
+  saturation are both ratios of the channels — so a uniform scale moves V and leaves the other two
+  bit-identical. The right implementation of "Adobe's value scale" is therefore not an HSV round
+  trip; it is a multiply. Hue and saturation are then preserved by construction rather than by
+  care, which is a much stronger guarantee than the old code was even trying for.
+- **R-MIXER-12 The range is stated in STOPS, because that is what a gain is.**
+  `±1` on the curve is `±1.5` stops, a gain of ×2.83 to ×0.354. Stops rather than a percentage
+  because a gain composes multiplicatively and a photographer already reads brightness that way:
+  the same slider move does the same *perceptual* thing to a shadow and to a highlight, which is
+  the property the old additive version could not have at any setting.
+- **R-MIXER-13 Brightening rolls off to white; it does not clip a channel and does not stall.**
+  A plain gain drives the brightest channel past 1 first, and the encode clamps per channel — so
+  the pixel's hue swings toward whichever channel clipped last, which is the ugliest failure a
+  colour tool has. So the gain resolves into **two** things: a uniform `scale` through a shoulder
+  on the pixel's brightest channel (`k = shoulder(v·g) / shoulder(v)`, capped so the max channel
+  lands no higher than `max(1, v)`), and — only when the scale alone could not deliver the gain —
+  a pull toward the pixel's own new brightness.
+  - **The scale is uniform**, so it preserves hue and **HSV** saturation exactly in the space it
+    works in. As READ in encoded sRGB it is very nearly exact too, because the transfer function
+    is a power law over the range that matters: measured, the whole darkening range comes out at
+    the input's hue to the printed precision, and its HSV saturation to within 0.024 at −100 —
+    that residue is the sRGB *toe*, the linear segment below 0.0031 that a deep darkening pushes
+    the dimmest channel into.
+    **HSV and not HSL saturation, and the difference is the point.** HSL normalises by the
+    lightness envelope, so its `s` moves under a uniform scale even though the colour has not
+    changed — the same coupling that made the old additive code wander. It is why Adobe states
+    the model in HSV, and why quoting an HSL saturation here would look like a defect and be an
+    artefact of the ruler.
+  - **`shoulder(v)` in the denominator** is what makes `gain == 1` exactly identity. Dividing by
+    `v` instead would compress every highlight the moment the curve left zero by any amount, which
+    is a discontinuity at the setting a photographer passes through most often. Nothing is
+    compressed below the knee (0.75 linear ≈ sRGB 0.89), so the gain is exact over the whole range
+    a photograph actually lives in.
+  - **The pull to neutral is not decoration — without it the + side does not work.** A uniform
+    scale cannot brighten a colour whose brightest channel is already at 1: it stalls, and a
+    saturated sky pushed to +100 comes back the same saturated sky. In a bounded display space you
+    cannot make a saturated colour brighter without making it paler, and adding light to a real
+    colour does exactly that. The pull maps each channel's ratio to the max as
+    `c/v -> (c/v)(1-d) + d` — one affine map on all three — so the ratios of the *differences*
+    that define hue are unchanged and only the saturation moves.
+  - **The pull is physical, and it costs a few degrees of measured hue.** It is a linear-light
+    blend, which is what adding light is and what film and sensors actually do to a highlight.
+    A per-channel transfer curve does not commute with a linear blend, so the hue *as read in
+    encoded sRGB* drifts as the pull engages: measured on the blue sky, 216° at rest, 217.1° at
+    +25, 219.6° at +50, 222.3° at +100. That is stated rather than claimed away. For scale, the
+    old additive code drifted to 223.8° at +100 — and arrived at sRGB(0.900, 0.925, 0.990), which
+    is white. The new one arrives at (0.763, 0.833, 0.999), which is a pale blue sky. Doing the
+    pull in encoded space instead would pin the reading at 216° and desaturate unphysically; the
+    drift is the price of the honest operation and it is under a degree at settings anyone uses.
+- **R-MIXER-14 This changes what existing projects render, and that is stated rather than hidden.**
+  The same reasoning as R-MIXER-8, and a stronger case: the old behaviour was not a defensible
+  choice rendered differently, it was black where a colour should be. A project with a non-zero Lum
+  curve will look different, and it will look different in the direction of what it was asking
+  for. A project with a flat Lum curve is bit-identical, because a flat channel is still skipped
+  whole (R-PREVIEW-6).
+  **The Hue and Sat curves are NOT changed here.** `Sat` has a milder version of the same
+  complaint — it scales HSL saturation, where Adobe scales HSV saturation — but it was not what was
+  reported, it does not crush anything to black, and changing two colour controls in one commit
+  would make neither of them reviewable. Written down so it is a decision and not an oversight.
+
 ## R-BUGFIX-3 — Mixer curve saved as samples, not bezier points — ✅ FIXED
 
 The colour-mixer (Mixer/Curve tab) is edited as a bezier curve with smooth, Alt-dragged tangent

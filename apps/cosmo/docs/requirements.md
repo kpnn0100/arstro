@@ -3049,6 +3049,120 @@ weight, and keeps a step edge monotone. `EditParams_mixerSpread_persists_and_com
 `Mixer` history label, undo, the model dump, a project save, the **migration** (the key stripped
 from a saved project comes back at 25, not 0), and the NaN refusal.
 
+### DR-MIXER-10..14 The Lum curve is a gain (R-MIXER-10 … R-MIXER-14)
+
+**2026-09-03.** Reported: *"fix the lum curve, it is not natural, how lightroom achieve this,
+apply that."*
+
+**What it was doing, measured** — a blue sky at sRGB(0.30, 0.52, 0.85), hue 216°, a flat Lum curve
+and nothing else:
+
+| Lum | old result | |
+|---|---|---|
+| −100 | 0.000 0.000 0.000 | **pure black** |
+| −50 | 0.173 0.315 0.527 | plausible |
+| +25 | 0.365 0.597 0.957 | HSL saturation 0.505 → **0.874** |
+| +100 | 0.900 0.925 0.990 | hue 216° → 223.8°, and the colour is gone |
+
+and at −50 over a five-step gradient of one hue, **four of the five steps came out pure black.**
+
+**Why**, and it is three faults in the one line `l += adj[Lum] * 0.5`:
+
+1. **Additive.** Every pixel of a hue moved by the same absolute amount, so the tonal
+   relationships *inside* that hue collapsed. That is what flattens a sky and it is what "not
+   natural" names.
+2. **On LINEAR light.** `ColorMixer` never encodes — nothing in the pipeline does until
+   `encodeInPlace` at the very end (R-ENGINE) — so `rgbToHsl` was reading linear values, where
+   mid-grey is 0.214. `l -= 0.5` is therefore *below zero*, clamped to black. That is −100, and
+   it is why −50 crushed most of a gradient.
+3. **Through HSL.** HSL's `l` and `s` are coupled — the real chroma is `s·(1 − |2l − 1|)` — so
+   moving `l` with `s` held changes the saturation on the way past. That is the 0.505 → 0.874
+   jump, and no amount of care avoids it in that space.
+
+**What replaces it (`ColorMixer::applyAdjust`, `ColorMixer::lumAdjust`).** Hue and Sat still
+travel through HSL, unchanged and skipped entirely when both are flat. Lum becomes a **gain**:
+`gain = 2^(y · kLumStops)`, `kLumStops = 1.5`, so ±100 is ±1.5 stops (×2.83 … ×0.354).
+
+That is Adobe's model and not a coincidence. The DNG spec's `ProfileHueSatMapData` and
+`ProfileLookTableData` — the tables Lightroom and Camera Raw apply — store a **hue shift**, a
+**saturation scaling factor** and a **value scaling factor** per grid point, applied in HSV. The
+last two are scales, not offsets. And there is an identity that makes the implementation trivial:
+**scaling V in HSV is exactly scaling the linear RGB triple by a constant** — `V = max(r,g,b)`,
+and hue and HSV saturation are both ratios of the channels, so a uniform scale moves V and leaves
+the other two alone. The right implementation of "Adobe's value scale" is a multiply.
+
+`lumAdjust(v, gain, &scale, &toNeutral)` resolves a requested gain into the two things that
+happen, for a pixel whose brightest linear channel is `v`:
+
+- **`scale`** — `shoulder(v·g) / shoulder(v)`, capped so the max channel lands no higher than
+  `max(1, v)`. `shoulder` is identity below `kShoulderKnee = 0.75` linear (≈ 0.89 sRGB) and
+  exponentially asymptotic to 1 above it, so it is C1 at the knee, can never reach 1, and has no
+  second corner. **`shoulder(v)` in the denominator, not `v`**, is what makes `gain == 1` exactly
+  identity — dividing by `v` would compress every highlight the moment the curve left zero by any
+  amount, a discontinuity at the setting a photographer passes through most often. The cap's
+  `max(1, v)` rather than `1` is what stops the mixer *darkening* a highlight that arrived
+  over-range from an earlier stage.
+- **`toNeutral`** — `1 − 1/residual` where `residual = (v·g)/landed`, non-zero only when the scale
+  alone could not deliver the gain. Applied as `c/v → (c/v)(1−d) + d`: one affine map on all three
+  ratios, so the ratios of the *differences* that define hue are unchanged and only the saturation
+  moves.
+
+**The pull is not decoration — without it the + side does not work.** A uniform scale cannot
+brighten a colour whose max channel is already at 1; it pins and stalls, and the first cut of this
+fix returned the same saturated blue for +25 through +100. In a bounded display space you cannot
+make a saturated colour brighter without making it paler, and adding light to a real colour does
+exactly that.
+
+**What it does now, same pixel:**
+
+| Lum | new result | hue | HSV sat |
+|---|---|---|---|
+| −100 | 0.175 0.318 0.532 | 216.0° | 0.671 |
+| −50 | 0.231 0.408 0.674 | 216.0° | 0.657 |
+| +25 | 0.384 0.595 0.936 | 217.1° | 0.590 |
+| +50 | 0.543 0.691 0.979 | 219.6° | 0.446 |
+| +100 | 0.763 0.833 0.999 | 222.3° | 0.236 |
+
+and the five-step gradient comes out as five distinct steps, all at 216.0°.
+
+**Two things stated rather than claimed away.**
+
+- **HSV saturation, not HSL.** HSL normalises by the lightness envelope, so its `s` moves under a
+  uniform scale even though the colour did not (0.647 → 0.490 on the darkening range). Quoting it
+  would look like a defect and be an artefact of the ruler. HSV's does not move: 0.647 → 0.657.
+  The residual 0.024 at −100 is the sRGB **toe**, the linear segment below 0.0031 where the
+  transfer function stops being a power law and which a deep darkening pushes the dimmest channel
+  into. In linear light the saturation is exact.
+- **The hue drift on the + side is the price of a physical roll-off.** The pull to neutral is a
+  linear-light blend — which is what adding light is, and what film and sensors do to a highlight
+  — and a per-channel transfer curve does not commute with a linear blend, so the hue *as read in
+  encoded sRGB* drifts: 217.1° at +25, 222.3° at +100. Doing the pull in encoded space instead
+  would pin the reading at 216° and desaturate unphysically. For scale: the old code drifted to
+  223.8° at +100 and arrived at white.
+
+**Reachable with no GUI**, and it needed no new code to be: `set mixer2=0,0.5;180,0.5;359,0.5`
+already worked, because `EditParamsIO` names the channel (R-MIXER-9, R-SVC-5). The panel needed no
+change either — the Lum tab is a plain curve editor over hue with no copy that states units or a
+model, so there was nothing there to correct.
+
+**`ColorMixer_lum_is_a_gain_that_keeps_the_colour`** (`image_tests`) covers six claims and every
+one of them fails on the old code: darkening keeps the hue and the HSV saturation and never
+reaches black; brightening is strictly monotone (the stall test), never leaves a channel over 1,
+and ends pale rather than white; a gradient survives; a flat curve is **bit-identical**;
+`gain == 1` is identity above the knee and for an over-range pixel; and the ±1 endpoints are
+exactly ±`kLumStops` stops. `ColorMixer_lum_curve_does_not_amplify_noise_in_a_grey` keeps the
+R-MIXER-1/2 contract and now asserts the lift against `lumAdjust` itself rather than a threshold
+tuned to it.
+
+**R-MIXER-4 is unaffected**: `GlComputeShared.h` accepts a job only when the mixer is identity, so
+no GPU path implements this stage and there is no CPU/GPU conformance question to answer.
+
+**And it is slightly cheaper**, which was not the goal but is worth recording so nobody
+re-litigates the `exp2`: measured on a 1600x1066 frame with a Lum-only curve, **11.25 ms -> 10.35
+ms**. The per-pixel `exp2` and the shoulder's `exp` cost less than the `hslToRgb` they replaced,
+because a Lum-only edit now skips the round trip entirely — `applyAdjust` only enters HSL when Hue
+or Sat is non-flat.
+
 ### DR-AISEG (removed) The Detect mask, and what is left of it (R-AISEG WITHDRAWN)
 
 **2026-09-03.** The whole feature is out of the tree: `analysis/{Segmenter,Detection,Contour}`,

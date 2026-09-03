@@ -8,7 +8,23 @@
  *  so adjustments vary smoothly around the colour wheel with no banding between
  *  discrete bands. A point op.
  *
- *  y maps to: Hue -> hue += y*180 deg; Sat -> s *= (1 + y); Lum -> l += y*0.5.
+ *  y maps to: Hue -> hue += y*180 deg; Sat -> s *= (1 + y); Lum -> a GAIN of 2^(y*1.5)
+ *  applied to the pixel itself (R-MIXER-10..13).
+ *
+ *  ...and the Lum channel is the odd one out on purpose. It was `l += y*0.5` in HSL until
+ *  2026-09-03, and that was three faults in one line: ADDITIVE, so every pixel of a hue moved
+ *  by the same absolute amount and the tonal relationships inside it collapsed; applied to
+ *  LINEAR light, where HSL lightness is not perceptual and mid-grey is 0.214, so `-0.5` was
+ *  below zero and clamped to BLACK; and through HSL, whose `l` and `s` are coupled, so the
+ *  saturation wandered on the way past. Measured, on a blue sky: -100 came out pure black, -50
+ *  crushed four of five steps of a gradient to black, +25 pushed saturation 0.505 -> 0.874, and
+ *  +100 was very nearly white.
+ *
+ *  What replaces it is Adobe's: the DNG spec's HueSatMap stores a hue shift, a saturation
+ *  SCALE and a value SCALE, applied in HSV. And scaling V in HSV is exactly scaling the linear
+ *  RGB triple by a constant — V is the max channel, hue and HSV saturation are ratios of the
+ *  channels — so the right implementation is a multiply, and hue and saturation are then
+ *  preserved by construction rather than by care.
  *
  *  ...each scaled by a CHROMA WEIGHT, and that is not a refinement — it is what keeps a
  *  per-hue tool from firing on a pixel that has no hue. `rgbToHsl` computes hue by dividing
@@ -75,6 +91,40 @@ namespace arstro
         /** Below half a pixel the blur cannot move anything, so the spread path is skipped and
          *  the plain per-pixel one runs — which is also the exact old behaviour. */
         static constexpr float kMinSpreadSigma = 0.5f;
+
+        /** Stops of gain at `y == 1` (R-MIXER-12). Stops rather than a percentage because a gain
+         *  composes multiplicatively and a photographer already reads brightness that way — the
+         *  same slider move does the same PERCEPTUAL thing to a shadow and to a highlight, which
+         *  is the property the old additive version could not have at any setting. */
+        static constexpr float kLumStops = 1.5f;
+
+        /** Where the highlight shoulder starts, in linear light (R-MIXER-13). 0.75 linear is
+         *  ~0.89 sRGB, so the gain is EXACT over the whole range a photograph actually lives in
+         *  and only the top tenth is rolled off. */
+        static constexpr float kShoulderKnee = 0.75f;
+
+        /** Resolve a requested `gain` for a pixel whose brightest linear channel is `v` into the
+         *  two things that actually happen to it (R-MIXER-13): a uniform `scale`, and — only
+         *  when the scale alone could not deliver the gain — a pull `toNeutral` toward the
+         *  pixel's own new brightness.
+         *
+         *  **Both preserve hue exactly**, and that is the point of splitting it this way. A
+         *  uniform scale obviously does. So does the pull: it maps every channel's ratio to the
+         *  max as `c/v -> (c/v)(1-d) + d`, an affine map applied identically to all three, so the
+         *  RATIOS OF THE DIFFERENCES that define hue come out unchanged and only the saturation
+         *  moves. A colour driven to the top therefore goes white through its own hue.
+         *
+         *  **The pull is not optional decoration; without it the + side does not work.** A pure
+         *  scale cannot brighten a colour whose max channel is already at 1 — it stalls, and a
+         *  saturated blue sky pushed to +100 comes back the same saturated blue. In a bounded
+         *  display space you cannot make a saturated colour brighter without making it paler,
+         *  which is also what happens when you add light to one.
+         *
+         *  `shoulder(v)` is in the denominator of the scale and not `v`, which is what makes
+         *  `gain == 1` exactly identity: dividing by `v` would compress every highlight the
+         *  moment the curve left zero by any amount — a discontinuity at the setting a
+         *  photographer passes through most often. */
+        static void lumAdjust(float v, float gain, float &scale, float &toNeutral);
 
         ColorMixer();
 

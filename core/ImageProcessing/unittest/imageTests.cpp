@@ -529,28 +529,201 @@ TEST(ColorMixer_lum_curve_does_not_amplify_noise_in_a_grey)
 
     const double before = spread(grey), after = spread(out);
     std::printf("      grey spread %.5f -> %.5f\n", before, after);
-    // The grey still moves as a whole — a constant curve is a constant offset — but it must not
-    // FAN OUT. 1.5x leaves room for the HSL round trip; the unweighted code multiplies it by ~40.
+    // The grey still moves as a whole — a constant curve is a constant gain — but it must not
+    // FAN OUT. 1.5x leaves room for the round trip; the unweighted code multiplies it by ~40.
     CHECK(after < before * 1.5);
     // ...and it is genuinely still grey, not tinted by whichever hue each pixel happened to read.
     CHECK(satOf(out) < 0.05);
 
-    // The other half of the contract: a pixel that HAS a hue still gets the full lift.
+    // The other half of the contract: a pixel that HAS a hue gets the lift UNDIMINISHED. Asserted
+    // against the model itself rather than against a number tuned to it — a strongly coloured
+    // pixel's weight is exactly 1, so the result must equal `lumAdjust` applied by hand, and
+    // "undiminished" becomes an equality instead of a threshold.
     const Image colour = pxHsl(0, (Pixel)0.8, (Pixel)0.4);    // at the curve's +1 peak
-    Pixel h0, s0, l0, h1, s1, l1;
-    color::rgbToHsl(colour.at(0, 0, 0), colour.at(0, 0, 1), colour.at(0, 0, 2), h0, s0, l0);
     const Image lifted = lift.apply(colour);
-    color::rgbToHsl(lifted.at(0, 0, 0), lifted.at(0, 0, 1), lifted.at(0, 0, 2), h1, s1, l1);
-    CHECK(l1 - l0 > 0.4);   // ~+0.5, undiminished by the weight
+    {
+        const float v = (float)std::max(colour.at(0, 0, 0),
+                                        std::max(colour.at(0, 0, 1), colour.at(0, 0, 2)));
+        float k = 1.f, d = 0.f;
+        ColorMixer::lumAdjust(v, std::exp2(1.0f * ColorMixer::kLumStops), k, d);
+        for (int c = 0; c < 3; ++c)
+        {
+            const float in = (float)colour.at(0, 0, c);
+            const float want = d > 0.f ? v * k * (in / v * (1.f - d) + d) : in * k;
+            CHECK_NEAR(lifted.at(0, 0, c), want, 1e-5);
+        }
+        CHECK(k > 1.3f && "and the lift is a real one, not a rounding error");
+    }
 
-    // And the weight is a ramp, not a switch: a pastel gets part of the lift, between the two.
+    // And the weight is a ramp, not a switch: a pastel gets PART of the lift, between the two.
+    // Measured as a luminance ratio, because the adjustment is a gain now (R-MIXER-10) and a
+    // difference of HSL lightness is not the quantity it moves.
+    auto lumaOf = [](const Image &im) {
+        return 0.2126 * im.at(0, 0, 0) + 0.7152 * im.at(0, 0, 1) + 0.0722 * im.at(0, 0, 2);
+    };
     const Image pastel = pxHsl(0, (Pixel)0.03, (Pixel)0.4);   // chroma 0.024: mid-ramp
-    Pixel ph, ps, pl0, qh, qs, pl1;
-    color::rgbToHsl(pastel.at(0, 0, 0), pastel.at(0, 0, 1), pastel.at(0, 0, 2), ph, ps, pl0);
-    const Image plifted = lift.apply(pastel);
-    color::rgbToHsl(plifted.at(0, 0, 0), plifted.at(0, 0, 1), plifted.at(0, 0, 2), qh, qs, pl1);
-    CHECK(pl1 - pl0 > 0.02);
-    CHECK(pl1 - pl0 < 0.45);
+    const double pastelRatio = lumaOf(lift.apply(pastel)) / lumaOf(pastel);
+    const double colourRatio = lumaOf(lifted) / lumaOf(colour);
+    std::printf("      lift as a luminance ratio: pastel %.3f, saturated %.3f\n",
+                pastelRatio, colourRatio);
+    CHECK(pastelRatio > 1.02);
+    CHECK(pastelRatio < colourRatio);
+}
+
+// ── R-MIXER-10..13: the Lum curve is a GAIN, and that is the whole of the 2026-09-03 fix ──
+//
+// Reported: "fix the lum curve, it is not natural." It was `l += y*0.5` on HSL lightness in
+// LINEAR light, and every assertion below fails on that code — most of them because the old one
+// produced pure black. The numbers in the comments are what it actually did, measured.
+TEST(ColorMixer_lum_is_a_gain_that_keeps_the_colour)
+{
+    // A blue sky, written display-referred because that is the direction a photo arrives from.
+    auto sky = [](double r, double g, double b) {
+        Image im(1, 1, 3, ColorSpace::LinearSRGB);
+        im.at(0, 0, 0) = color::srgbDecode((Pixel)r);
+        im.at(0, 0, 1) = color::srgbDecode((Pixel)g);
+        im.at(0, 0, 2) = color::srgbDecode((Pixel)b);
+        return im;
+    };
+    // Read in ENCODED sRGB, because that is what a photographer sees, and report HSV saturation
+    // beside HSL lightness. HSV and not HSL saturation on purpose: HSL normalises by the
+    // lightness envelope (`s = d/(mx+mn)` below mid, `d/(2-mx-mn)` above), so it MOVES under a
+    // uniform scale even though the colour did not — which is the same coupling that made the
+    // old additive code wander, and it is why Adobe's model is stated in HSV (R-MIXER-11).
+    auto encodedHsl = [](const Image &im, Pixel &h, Pixel &s, Pixel &l) {
+        const Pixel r = color::srgbEncode(im.at(0, 0, 0));
+        const Pixel g = color::srgbEncode(im.at(0, 0, 1));
+        const Pixel b = color::srgbEncode(im.at(0, 0, 2));
+        Pixel hslS;
+        color::rgbToHsl(r, g, b, h, hslS, l);
+        const Pixel mx = std::max(r, std::max(g, b)), mn = std::min(r, std::min(g, b));
+        s = mx > (Pixel)0 ? (mx - mn) / mx : (Pixel)0;    // HSV saturation
+    };
+    auto lumCurve = [](float y) {
+        ColorMixer m;
+        m.setCurve(ColorMixer::Lum, {{0.f, y}, {180.f, y}, {359.f, y}});
+        return m;
+    };
+
+    const Image in = sky(0.30, 0.52, 0.85);
+    Pixel h0, s0, l0;
+    encodedHsl(in, h0, s0, l0);
+
+    // ── 1. darkening keeps the colour, and keeps it EXACTLY ────────────────────────────────
+    // The old code turned this pixel pure black at -100 — sRGB 0.000 0.000 0.000, no hue, no
+    // saturation — because mid-grey is 0.214 in linear light and `l -= 0.5` is below zero.
+    for (float y : {-1.0f, -0.75f, -0.5f, -0.25f})
+    {
+        ColorMixer m = lumCurve(y);
+        const Image out = m.apply(in);
+        Pixel h1, s1, l1;
+        encodedHsl(out, h1, s1, l1);
+        std::printf("      lum %+.2f -> sRGB %.3f %.3f %.3f  hue %6.1f  sat %.3f\n", y,
+                    (double)color::srgbEncode(out.at(0, 0, 0)),
+                    (double)color::srgbEncode(out.at(0, 0, 1)),
+                    (double)color::srgbEncode(out.at(0, 0, 2)), (double)h1, (double)s1);
+        CHECK(l1 < l0 && "it got darker");
+        CHECK(l1 > 0.05 && "and it is a colour, not black");
+        // A uniform scale in linear light is very nearly a uniform scale in encoded sRGB too,
+        // because the transfer function is a power law over the range that matters — so hue
+        // comes out at the input's to the printed precision, and HSV saturation to within what
+        // the sRGB TOE costs. The toe is the linear segment below 0.0031, where the curve stops
+        // being a power law; a deep darkening pushes the dimmest channel into it, which is why
+        // the drift grows with the scale and tops out at 0.024 here at -100. It is a property of
+        // the encoding, not of the operation: in linear light the saturation is exact.
+        CHECK_NEAR(h1, h0, 0.5);
+        CHECK_NEAR(s1, s0, 0.03);
+    }
+
+    // ── 2. brightening does not stall, and does not clip a channel on its own ─────────────
+    // A uniform scale alone cannot brighten a colour whose max channel is at 1; it pins and
+    // stops. The pull to neutral is what carries it to white THROUGH ITS OWN HUE.
+    double lastL = (double)l0;
+    for (float y : {0.25f, 0.5f, 0.75f, 1.0f})
+    {
+        ColorMixer m = lumCurve(y);
+        const Image out = m.apply(in);
+        Pixel h1, s1, l1;
+        encodedHsl(out, h1, s1, l1);
+        std::printf("      lum %+.2f -> sRGB %.3f %.3f %.3f  hue %6.1f  sat %.3f\n", y,
+                    (double)color::srgbEncode(out.at(0, 0, 0)),
+                    (double)color::srgbEncode(out.at(0, 0, 1)),
+                    (double)color::srgbEncode(out.at(0, 0, 2)), (double)h1, (double)s1);
+        CHECK(l1 > lastL + 0.01 && "each step is brighter than the last — no stall");
+        lastL = (double)l1;
+        // Every channel stays in range, so nothing clips alone and the hue cannot swing toward
+        // whichever channel clipped last. The measured drift is the linear-light pull to
+        // neutral, and R-MIXER-13 states it: under 7 degrees at the very end of the slider.
+        for (int c = 0; c < 3; ++c) CHECK(out.at(0, 0, c) <= (Pixel)1.0001);
+        CHECK(std::fabs((double)h1 - (double)h0) < 7.0);
+    }
+    // ...and at the top it is a PALE version of the same colour, not white and not the same
+    // saturated blue it started as. The old code gave sRGB 0.900 0.925 0.990, i.e. white.
+    {
+        ColorMixer m = lumCurve(1.0f);
+        const Image out = m.apply(in);
+        Pixel h1, s1, l1;
+        encodedHsl(out, h1, s1, l1);
+        // Pale, but unmistakably blue: HSV saturation ~0.24 against the input's 0.65, and a
+        // hue still within a few degrees of it. The old code's answer here was sRGB
+        // 0.900 0.925 0.990 — saturation 0.09, which is white with a memory of blue.
+        std::printf("      at the top: hsv sat %.3f (input %.3f), hue %.1f\n",
+                    (double)s1, (double)s0, (double)h1);
+        CHECK(s1 > 0.15 && "still recognisably a colour, not white");
+        CHECK(s1 < s0 && "and paler than it was, because that is what adding light does");
+        CHECK(l1 > 0.75 && "and genuinely bright");
+    }
+
+    // ── 3. a gradient in one hue SURVIVES ────────────────────────────────────────────────
+    // This is the report, and it is what an additive offset cannot do: at lum -50 the old code
+    // returned pure black for four of these five steps. A gain preserves ratios, so five
+    // distinct steps go in and five distinct steps come out.
+    {
+        ColorMixer m = lumCurve(-0.5f);
+        double prev = -1.0;
+        for (double v : {0.25, 0.40, 0.55, 0.70, 0.85})
+        {
+            const Image out = m.apply(sky(v * 0.35, v * 0.61, v * 1.00));
+            Pixel h1, s1, l1;
+            encodedHsl(out, h1, s1, l1);
+            CHECK(l1 > 0.02 && "not crushed to black");
+            CHECK((double)l1 > prev + 0.02 && "and still distinct from the step below it");
+            prev = (double)l1;
+            CHECK_NEAR(h1, h0, 0.5);
+        }
+    }
+
+    // ── 4. a flat curve is bit-identical ─────────────────────────────────────────────────
+    // R-MIXER-14: an existing project with no Lum curve must render exactly as before, so the
+    // change is confined to the projects that were asking for the broken behaviour.
+    {
+        ColorMixer m = lumCurve(0.0f);
+        const Image out = m.apply(in);
+        for (int c = 0; c < 3; ++c) CHECK(out.at(0, 0, c) == in.at(0, 0, c));
+    }
+
+    // ── 5. `gain == 1` is identity even for a pixel above the shoulder knee ──────────────
+    // `shoulder(v)` is in the denominator for exactly this: dividing by `v` would compress
+    // every highlight the instant the curve left zero, which is a discontinuity at the setting
+    // a photographer passes through most often.
+    {
+        float k = 1.f, d = 0.f;
+        ColorMixer::lumAdjust(0.95f, 1.0f, k, d);
+        CHECK_NEAR(k, 1.0, 1e-6);
+        CHECK(d == 0.f);
+        // ...and a pixel that arrived OVER range is not dragged back down by the ceiling.
+        ColorMixer::lumAdjust(1.8f, 1.0f, k, d);
+        CHECK_NEAR(k, 1.0, 1e-6);
+    }
+
+    // ── 6. the range is what R-MIXER-12 says it is ───────────────────────────────────────
+    {
+        float k = 1.f, d = 0.f;
+        ColorMixer::lumAdjust(0.1f, std::exp2(ColorMixer::kLumStops), k, d);
+        CHECK_NEAR(k, std::pow(2.0, (double)ColorMixer::kLumStops), 1e-4);
+        ColorMixer::lumAdjust(0.1f, std::exp2(-ColorMixer::kLumStops), k, d);
+        CHECK_NEAR(k, std::pow(2.0, -(double)ColorMixer::kLumStops), 1e-4);
+    }
 }
 
 
