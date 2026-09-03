@@ -62,7 +62,8 @@ namespace arstro
             return v;
         }
 
-        // One mask packed as: geometry(11 + 2) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts)
+        // One mask packed as:
+        //   geometry(11 + 2) | localAdjust(12) | dabs(x:y:r:f;...) | path(pts) | region(pts) | ...
         //
         // The fourth group is APPENDED rather than folded into the first: a project written by
         // this build must still load in one that predates path masks (the old parser stops after
@@ -94,8 +95,18 @@ namespace arstro
                 o << d.x << ':' << d.y << ':' << d.radius << ':' << d.flow;
             }
             // Only when there IS one: an empty trailing group on every radial mask ever written
-            // is noise in a file people read and diff.
-            if (!m.path.empty()) o << '|' << mixerStr(m.path);
+            // is noise in a file people read and diff. A mask with regions but no path still
+            // writes the empty path group, because the region groups are found BY POSITION and
+            // dropping an empty one in the middle would shift every loop up by one.
+            if (!m.path.empty() || !m.regions.empty()) o << '|' << mixerStr(m.path);
+            // R-AISEG-21: one group per found loop, appended. A fifth group holding all of them
+            // would have needed a fourth separator nested inside `;` and `,`, and the file has
+            // no escaping — so the loop that contained a `;` would be two loops. Groups are the
+            // separator this format already has spare, and the trailing-group rule (an older
+            // parser stops when it runs out of groups it knows) covers a variable number of them
+            // for free, which is the same trick `path` itself is spent on.
+            for (const auto &loop : m.regions)
+                if (!loop.empty()) o << '|' << mixerStr(loop);
             return o.str();
         }
 
@@ -138,6 +149,11 @@ namespace arstro
                 }
             }
             if (parts.size() >= 4 && !parts[3].empty()) m.path = parseMixer(parts[3]);
+            // Everything after the path is a found region (R-AISEG-21). A build that predates
+            // them stops at the path and renders a Detect mask as no coverage — which is the
+            // answer R-AISEG-9 already chose for a mask type an old build does not understand.
+            for (std::size_t g = 4; g < parts.size(); ++g)
+                if (!parts[g].empty()) m.regions.push_back(parseMixer(parts[g]));
             return m;
         }
     }

@@ -68,6 +68,16 @@ namespace cosmo
             Delete,          // index = node (-1 = the current selection)
             MaskSet,         // index = mask, fields (feather / inverted / geometry / adjust.*)
             MaskDelete,      // index = mask
+            /** R-AISEG-20: run the detection for Detect mask `index`, optionally setting its
+             *  `subject` and `sensitivity` in the same breath — which is what a UI sends,
+             *  because a photographer who has just moved Sensitivity and pressed Detect means
+             *  both, and two commands would put a wasted detection between them.
+             *
+             *  A Command and not a service method, for the reason every other behaviour is one:
+             *  a script has to be able to run a detection, and a second front end has to reach
+             *  it the same way the first does (R-SVC-2). It returns immediately — the answer
+             *  arrives later as `detect.finished` and in `AppModel::detect`. */
+            MaskDetect,      // index = mask, fields: subject / sensitivity
             Undo,
             Redo,
             PresetApply,     // name

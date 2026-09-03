@@ -1139,6 +1139,22 @@ namespace
     }
 
     // Drive a load to completion the way any front end does: pump, don't block.
+    /** Pump until the running detection has been picked up (R-AISEG-20). Waits for `active` to
+     *  go false, which the service only does once it has COLLECTED the answer — so on return the
+     *  regions are already on the mask and there is no second thing to wait for. */
+    bool pumpUntilDetected(arstro::cosmo::CosmoService &svc, double &now, int maxMs = 20000)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxMs);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            svc.pump(now);
+            now += 16.0;
+            if (!svc.model().detect.active) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
+    }
+
     void pumpUntilIdle(arstro::cosmo::CosmoService &svc, int maxMs = 20000, double *nowOut = nullptr)
     {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(maxMs);
@@ -1168,6 +1184,8 @@ namespace
             "project close", "import /a.raf /b.raf", "select 3", "select next", "select prev",
             "select 3 add", "select 3 range",   // R-SVC-2: multi-select is IN the grammar now
             "set exposure=1.2 temp=7000", "bypass 4 on", "bypass 4 off", "group new \"Tokyo Night\"",
+            "mask set 0 feather=0.4", "mask delete 0",
+            "mask detect 0", "mask detect 0 subject=skin sensitivity=0.6",   // R-AISEG-20
             "group ungroup 2", "undo", "redo", "preset apply \"Portrait/Soft Skin\"",
             "preset save MyLook", "settings set cpuPercent=25 previewEdge=1600", "screen home",
             "state print", "state print --json",
@@ -1691,6 +1709,131 @@ namespace
     // library, and cosmo_core may do neither), the installed model's name reaches the model
     // dump so a front end can say which of two very different things produced a mask, and a
     // subject the model declines is answered by the built-in rather than by nothing.
+    /** A photo with skin in it: a warm ellipse on a green ground, big enough for the analysis
+     *  to have something to work with. `FakeDecoder`'s 12x8 grey rectangle cannot be detected in
+     *  and must not be — a test that "passes" by finding nothing proves nothing. */
+    struct SkinDecoder : arstro::cosmo::IImageDecoder
+    {
+        arstro::cosmo::DecodedImage decodeFile(const std::string &path) override
+        {
+            arstro::cosmo::DecodedImage d;
+            if (path.find("missing") != std::string::npos) return d;
+            d.width = 160; d.height = 120;
+            d.rgba.assign((std::size_t)d.width * d.height * 4, 255);
+            for (int y = 0; y < d.height; ++y)
+                for (int x = 0; x < d.width; ++x)
+                {
+                    const double nx = (x + 0.5) / d.width, ny = (y + 0.5) / d.height;
+                    const double dx = (nx - 0.5) / 0.22, dy = (ny - 0.5) / 0.30;
+                    const bool skin = dx * dx + dy * dy <= 1.0;
+                    const std::size_t i = ((std::size_t)y * d.width + x) * 4;
+                    d.rgba[i + 0] = skin ? 226 : 82;
+                    d.rgba[i + 1] = skin ? 178 : 118;
+                    d.rgba[i + 2] = skin ? 148 : 84;
+                    d.rgba[i + 3] = 255;
+                }
+            d.name = path;
+            return d;
+        }
+    };
+
+    // ── R-AISEG-19/20/21: the whole of what was reported, asserted with no display ─────────
+    //
+    // "When you choose detection in mask, show nothing — the user has to detect first (there
+    // will be a progress bar), and when the detection is done the output is a drawn mask around
+    // the detected object." Four claims, and each one is a separate failure if it is wrong:
+    // nothing before, an operation that reports itself, geometry after, and one undo to take it
+    // back. A GUI could show all four and still be built on a service that guarantees none.
+    void test_a_detect_mask_shows_nothing_until_it_is_detected()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_detect.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new SkinDecoder()); });
+
+        std::vector<std::string> events;
+        svc.subscribe([&](const Event &e) {
+            const std::string n = eventName(e.kind);
+            if (n.rfind("detect.", 0) == 0) events.push_back(formatEvent(e));
+        });
+
+        std::string err;
+        double clock = 0.0;
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc, 20000, &clock);
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+        assert(pumpUntilFrame(svc, clock) && "a preview lands before anything reads the pixels");
+
+        // ── 1. choosing Detect shows NOTHING ──────────────────────────────────────────────
+        // The mask is added with an adjustment big enough that any coverage at all would be
+        // unmissable, and it must still change not one pixel.
+        assert(svc.dispatchText("set mask=4,0,0,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
+        assert(svc.dispatchText("mask set 0 type=4 subject=skin adjust.exposure=2.0", err) && err.empty());
+        const arstro::MaskParams *m = &svc.session().curParams()->masks[0];
+        assert(m->type == arstro::MaskParams::Semantic);
+        assert(m->regions.empty() && "a fresh Detect mask has found nothing, because nobody looked");
+        assert(arstro::maskCoverage(*m, 0.5f, 0.5f) == 0.f && "so it covers nothing, anywhere");
+        assert(!svc.model().detect.active && "and no detection is running");
+
+        // ── 2. the detection is an operation, and it says so ──────────────────────────────
+        assert(svc.dispatchText("mask detect 0", err) && err.empty());
+        assert(svc.model().detect.active && "it starts immediately...");
+        assert(svc.model().detect.maskIndex == 0);
+        assert(svc.model().detect.subject == "skin");
+        assert(pumpUntilDetected(svc, clock) && "...and finishes");
+
+        // The event stream is the progress bar's source, and a front end that was not listening
+        // reads the same thing out of the model.
+        std::string started, finished;
+        int progress = 0;
+        for (const std::string &line : events)
+        {
+            if (line.find("detect.started") != std::string::npos) started = line;
+            else if (line.find("detect.progress") != std::string::npos) ++progress;
+            else if (line.find("detect.finished") != std::string::npos) finished = line;
+        }
+        for (const std::string &line : events) printf("       %s\n", line.c_str());
+        assert(!started.empty() && started.find("subject=skin") != std::string::npos);
+        assert(progress >= 2 && "a progress bar needs more than one number to move between");
+        assert(!finished.empty() && finished.find("by=built-in") != std::string::npos);
+        assert(svc.model().detect.handled && "somebody had a model for skin");
+
+        // ── 3. what came back is GEOMETRY, and it is the mask ─────────────────────────────
+        m = &svc.session().curParams()->masks[0];
+        printf("       %zu region(s), %d points in the first, %.1f%% of the frame\n",
+               m->regions.size(), m->regions.empty() ? 0 : (int)m->regions[0].size(),
+               svc.model().detect.coverage * 100.0);
+        assert(!m->regions.empty() && "the detection found the face");
+        assert(m->regions[0].size() >= 8u && "and it is a real outline, not three points");
+        assert(arstro::maskCoverage(*m, 0.5f, 0.5f) == 1.f && "the middle of the face is inside");
+        assert(arstro::maskCoverage(*m, 0.03f, 0.03f) == 0.f && "and the corner of the frame is not");
+        // The same loops the view will stroke on the photo (R-AISEG-18) — one source, so the
+        // line drawn can never disagree with the pixels under it.
+        assert(arstro::maskLoops(*m).size() == m->regions.size());
+
+        // ── 4. and it is ONE undoable step ────────────────────────────────────────────────
+        // A finding a photographer does not like has to be as easy to take back as any edit.
+        assert(svc.dispatchText("undo", err) && err.empty());
+        assert(svc.session().curParams()->masks.size() == 1u &&
+               "and it undoes the FINDING, not the mask — the two are separate steps even when "
+               "they land within the history's 450 ms coalescing window");
+        assert(svc.session().curParams()->masks[0].regions.empty() &&
+               "undo puts the mask back the way it was");
+        assert(svc.dispatchText("redo", err) && err.empty());
+        assert(!svc.session().curParams()->masks[0].regions.empty());
+
+        // ── and the refusals, each with a reason in the model (R-SVC-3) ───────────────────
+        assert(!svc.dispatchText("mask detect 7", err) && svc.model().lastError.find("no mask 7") != std::string::npos);
+        assert(svc.dispatchText("mask set 0 type=0", err) && err.empty());
+        assert(!svc.dispatchText("mask detect 0", err) &&
+               svc.model().lastError.find("not a Detect mask") != std::string::npos);
+
+        std::filesystem::remove(path);
+        printf("[PASS] a_detect_mask_shows_nothing_until_it_is_detected\n");
+    }
+
     void test_an_installed_segmenter_answers_and_declines()
     {
         using namespace arstro::cosmo;
@@ -1704,7 +1847,13 @@ namespace
                 // Person only — the shape of every permissively-licensed model there actually
                 // is (R-AISEG-16), and the reason declining has to work.
                 if (s != arstro::SemanticSubject::Person) { ++declined; return false; }
-                out.assign((std::size_t)img.width() * img.height(), (::Pixel)1);
+                // The left half of the frame, which is nothing the built-in would ever say and
+                // nothing the picture justifies: "the model answered" and "the built-in
+                // answered" must not be confusable.
+                out.assign((std::size_t)img.width() * img.height(), (::Pixel)0);
+                for (int y = 0; y < img.height(); ++y)
+                    for (int x = 0; x < img.width() / 2; ++x)
+                        out[(std::size_t)y * img.width() + x] = (::Pixel)1;
                 return true;
             }
             const char *name() const override { return "stripe-test-model"; }
@@ -1715,7 +1864,7 @@ namespace
         writeFakeProject(path, 1, false, false);
         ThreadBudget budget(50, 8);
         CosmoService svc(budget);
-        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new SkinDecoder()); });
 
         assert(svc.model().segmenter == "built-in" && "with nothing installed, the built-in answers");
         svc.setSegmenterFactory([&installed]() -> std::unique_ptr<arstro::ISegmenter> {
@@ -1734,21 +1883,39 @@ namespace
         assert(svc.dispatchText("project open " + path, err));
         pumpUntilIdle(svc, 20000, &clock);
         assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
-        assert(svc.dispatchText("set mask=0,0,0,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
-
-        // A subject the model handles: it is asked, and it answers.
-        assert(svc.dispatchText("mask set 0 subject=person adjust.exposure=1.0", err) && err.empty());
         assert(pumpUntilFrame(svc, clock));
-        assert(installed && installed->asked > 0 && "the installed model was asked");
-        const int askedForPerson = installed->asked;
+        assert(svc.dispatchText("set mask=4,0,0,0.5,0.5,0.3,0.3,0.5,0.35,0.5,0.65", err) && err.empty());
+
+        // A subject the model handles: it is asked, and its answer is what becomes the mask —
+        // the left half of the frame, which the built-in would never have said.
+        assert(svc.dispatchText("mask detect 0 subject=person", err) && err.empty());
+        assert(pumpUntilDetected(svc, clock));
+        assert(installed && installed->asked == 1 && "the installed model was asked");
+        assert(svc.model().detect.by == "stripe-test-model" &&
+               "and the photographer is told which one answered (R-AISEG-15)");
+        const arstro::MaskParams *m = &svc.session().curParams()->masks[0];
+        assert(!m->regions.empty());
+        assert(arstro::maskCoverage(*m, 0.25f, 0.5f) == 1.f && "the model's own left half...");
+        assert(arstro::maskCoverage(*m, 0.75f, 0.5f) == 0.f && "...and not the right");
 
         // A subject it does not: it declines, and the built-in answers rather than the mask
         // silently covering nothing. Declining is a normal answer, not an error.
-        assert(svc.dispatchText("mask set 0 subject=sky", err) && err.empty());
-        assert(pumpUntilFrame(svc, clock));
-        assert(installed->asked > askedForPerson && "it is asked for every subject...");
-        assert(installed->declined > 0 && "...and declines the ones it was not trained for");
+        assert(svc.dispatchText("mask detect 0 subject=skin", err) && err.empty());
+        assert(pumpUntilDetected(svc, clock));
+        assert(installed->asked == 2 && "it is asked for every subject...");
+        assert(installed->declined == 1 && "...and declines the ones it was not trained for");
+        assert(svc.model().detect.by == "built-in" && "so the built-in answered this one");
         assert(svc.model().lastError.empty() && "a decline is not an error");
+        m = &svc.session().curParams()->masks[0];
+        assert(arstro::maskCoverage(*m, 0.5f, 0.5f) == 1.f && "the built-in found the face...");
+        assert(arstro::maskCoverage(*m, 0.25f, 0.5f) == 0.f && "...where the model had said left half");
+
+        // R-AISEG-22: a WITHDRAWN subject with no model installed for it is `handled == false`,
+        // which is a different sentence from "found nothing" and a UI needs to say both.
+        assert(svc.dispatchText("mask detect 0 subject=sky", err) && err.empty());
+        assert(pumpUntilDetected(svc, clock));
+        assert(!svc.model().detect.handled && "nobody has a model for sky");
+        assert(svc.model().detect.regions == 0);
 
         std::filesystem::remove(path);
         printf("[PASS] an_installed_segmenter_answers_and_declines (asked %d, declined %d)\n",
@@ -1809,32 +1976,24 @@ namespace
         assert(back.front().params.masks[0].subject == (int)arstro::SemanticSubject::Water);
         assert(std::fabs(back.front().params.masks[0].sensitivity - 0.35f) < 1e-4f);
 
-        // R-AISEG-13: the boundary reaches a front end. It rides on the FRAME, not on the
-        // model — it is a product of one render and only true of that render, exactly like the
-        // histograms beside it — so what a headless caller can assert is the `frame.ready` line
-        // that reports it. That line is also the only place a script can see that a mask which
-        // changes no pixel yet was nonetheless found.
-        std::string lastFrameLine;
-        svc.subscribe([&](const Event &e) {
-            if (e.kind == Event::Kind::FrameReady) lastFrameLine = formatEvent(e);
-        });
-        assert(svc.dispatchText("mask set 0 subject=sky adjust.exposure=0.8", err) && err.empty());
-        // Pump until a frame reports the mask, not merely until A frame lands. A render already
-        // in flight from before the mask existed carries no outline and is a perfectly valid
-        // frame — waiting for "a frame" therefore passes or fails on timing, which is what this
-        // assertion did until it was watched failing and passing with only a printf between.
-        bool sawOutlines = false;
-        for (int i = 0; i < 40 && !sawOutlines; ++i)
+        // R-AISEG-21: the regions a detection found travel through the project file too, on the
+        // SAME mask blob, as trailing groups. A build that predates them stops at the path and
+        // reads the mask with none — which is the answer R-AISEG-9 already chose for this case.
         {
-            if (!pumpUntilFrame(svc, clock)) break;
-            sawOutlines = lastFrameLine.find("outlines=") != std::string::npos;
+            arstro::EditParams *pp = svc.session().curParams();
+            pp->masks[0].regions = {{arstro::CurvePoint{0.1f, 0.1f}, arstro::CurvePoint{0.4f, 0.1f},
+                                     arstro::CurvePoint{0.4f, 0.5f}}};
+            svc.session().submit();
+            const std::string save2 = "/tmp/cosmo_svc_semantic_regions.cmp";
+            assert(svc.dispatchText("project save " + save2, err) && err.empty());
+            std::vector<EditSession::WorkspaceEntry> back2;
+            assert(EditSession::readWorkspaceFile(save2, back2) && !back2.empty());
+            const auto &rm = back2.front().params.masks[0];
+            assert(rm.regions.size() == 1u && rm.regions[0].size() == 3u &&
+                   "a found region survives the round trip");
+            assert(std::fabs(rm.regions[0][2].y - 0.5f) < 1e-4f);
+            std::filesystem::remove(save2);
         }
-        // `outlines=<masks>/<loops>/<points>`. The fake photo is 12 px wide, so the classifier
-        // has nothing to find and the loop count is 0 — which is the point of asserting HERE on
-        // the plumbing and in `image_tests` on the geometry. What this proves is that a mask
-        // whose region is computed reports itself all the way out to a front end.
-        assert(sawOutlines && "a frame says the mask was outlined");
-        printf("       %s\n", lastFrameLine.c_str());
 
         std::filesystem::remove(path);
         std::filesystem::remove(save);
@@ -2424,6 +2583,7 @@ namespace
             {K::Delete, "delete 2"},
             {K::MaskSet, "mask set 0 feather=0.4"},
             {K::MaskDelete, "mask delete 0"},
+            {K::MaskDetect, "mask detect 0 sensitivity=0.6"},
             {K::Undo, "undo"},
             {K::Redo, "redo"},
             {K::PresetApply, "preset apply Name"},
@@ -2439,7 +2599,7 @@ namespace
             {K::Gesture, "gesture on"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 30;   // Kind::None is not a command
+        const int kKindCount = 31;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2938,6 +3098,7 @@ int main()
     test_a_path_mask_is_drawn_by_command_and_renders();
     test_mixer_spread_is_reachable_and_persists();
     test_a_semantic_mask_is_created_by_naming_its_subject();
+    test_a_detect_mask_shows_nothing_until_it_is_detected();
     test_an_installed_segmenter_answers_and_declines();
     test_a_load_decodes_cheaply_and_an_export_decodes_properly();
     test_a_gesture_renders_coarse_and_then_refines();

@@ -140,15 +140,21 @@ namespace
                     arstro::cosmo::DecodedImage d;
                     d.width = 96; d.height = 64;                 // 3:2, so aspect maths is testable
                     d.rgba.assign((size_t)96 * 64 * 4, 150);
+                    // A FACE on a green ground, and not the sky it used to be: the built-in
+                    // detector answers for Skin and only Skin now (R-AISEG-22), and a fixture
+                    // nothing can be found in would let a detection test pass by finding
+                    // nothing.
                     if (scene)
                         for (int y = 0; y < 64; ++y)
                             for (int x = 0; x < 96; ++x)
                             {
-                                const bool sky = y < 26;
+                                const double dx = ((x + 0.5) / 96.0 - 0.5) / 0.24;
+                                const double dy = ((y + 0.5) / 64.0 - 0.5) / 0.32;
+                                const bool skin = dx * dx + dy * dy <= 1.0;
                                 const size_t i = ((size_t)y * 96 + x) * 4;
-                                d.rgba[i] = sky ? 110 : 60;
-                                d.rgba[i + 1] = sky ? 160 : 140;
-                                d.rgba[i + 2] = sky ? 225 : 60;
+                                d.rgba[i] = skin ? 226 : 82;
+                                d.rgba[i + 1] = skin ? 178 : 118;
+                                d.rgba[i + 2] = skin ? 148 : 84;
                             }
                     d.name = path;
                     return d;
@@ -1314,11 +1320,11 @@ namespace
     // appearing.
     void aDetectMasksBoundaryIsDrawnOnThePhoto()
     {
-        std::printf("App: a Detect mask draws its boundary on the photo (R-AISEG-18)\n");
+        std::printf("App: a Detect mask draws its boundary on the photo (R-AISEG-18/19/21)\n");
         Rig rig(1440.0, 900.0);
-        // Sky over grass: a uniform grey is the right fixture for geometry and the wrong one
-        // for a classifier, which would correctly find nothing and prove nothing.
-        check(rig.loadFakePhoto(2, /*scene=*/true), "a photo with a sky in it is loaded");
+        // A face on a green ground: a uniform grey is the right fixture for geometry and the
+        // wrong one for a detector, which would correctly find nothing and prove nothing.
+        check(rig.loadFakePhoto(2, /*scene=*/true), "a photo with a face in it is loaded");
         rig.app.showEditor();
         rig.settle(600.0);
 
@@ -1346,10 +1352,32 @@ namespace
         rig.frames(3);
         check(rig.svc.model().params.masks.size() == 1u, "the chip added a mask");
 
-        // Pump one frame at a time until a render carries the outline, and keep the FIRST
-        // non-zero fade. The render is asynchronous, so "settle and then look" is the racy
-        // version of this — and worse, it hides R-G-1: settling for 400 ms is long enough for
-        // the fade to finish, so the assertion below would read 1.0 and pass a snap.
+        // R-AISEG-19, and it is the headline of the 2026-09-03 rework: adding a Detect mask
+        // shows NOTHING. It is asserted over a long settle rather than one frame, because "no
+        // outline yet" and "an outline that has not arrived yet" look identical for one frame
+        // and it was the second of those before the rework.
+        rig.settle(600.0);
+        check(ov->outlineFade() == 0.0, "adding a Detect mask outlines nothing — nobody has looked");
+
+        // Now run the detection, the way the panel's Detect button will (R-AISEG-20). The
+        // command is dispatched here rather than clicked because the button is the design half
+        // of this work; what this test owns is that the OVERLAY draws what the detection found.
+        std::string derr;
+        check(rig.svc.dispatchText("mask detect 0", derr) && derr.empty(), "the detection starts");
+        for (int i = 0; i < 800 && rig.svc.model().detect.active; ++i)
+        {
+            rig.frames(1);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        check(!rig.svc.model().detect.active, "and finishes");
+        std::printf("      found %d region(s), %.1f%% of the frame, by %s\n",
+                    rig.svc.model().detect.regions, rig.svc.model().detect.coverage * 100.0,
+                    rig.svc.model().detect.by.c_str());
+        check(!rig.svc.model().params.masks[0].regions.empty(), "having found the face");
+
+        // Pump one frame at a time and keep the FIRST non-zero fade. Settling and then looking
+        // is long enough for the fade to FINISH, so the assertion below would read 1.0 and pass
+        // a snap — the same trap R-G-1's compliance clause exists for.
         bool outlined = false;
         double first = 0.0;
         for (int i = 0; i < 400 && !outlined; ++i)
@@ -1358,7 +1386,7 @@ namespace
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             if (ov->outlineFade() > 0.0) { first = ov->outlineFade(); outlined = true; }
         }
-        check(outlined, "the render found the sky and the overlay has its boundary");
+        check(outlined, "the overlay has the boundary of what the detection found");
         if (!outlined) return;
 
         // R-G-1: it FADES. A still frame cannot tell this from a flip, so the assertion is that
@@ -1487,7 +1515,8 @@ namespace
         check(p.masks.size() == 1u, "the chip added a mask");
         if (p.masks.empty()) return;
         check(p.masks[0].type == arstro::MaskParams::Semantic, "of the semantic kind");
-        check(p.masks[0].subject == (int)arstro::SemanticSubject::Sky, "looking for the sky by default");
+        check(p.masks[0].subject == (int)arstro::SemanticSubject::Skin,
+              "looking for skin by default — the one subject there is (R-AISEG-22)");
 
         // The subject picker, clicked. Searched inside the PANEL: the first SegmentedControl in
         // the editor tree is the canvas's Before/Split/After pill, and clicking that would have

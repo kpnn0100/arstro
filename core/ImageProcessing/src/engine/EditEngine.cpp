@@ -720,9 +720,11 @@ namespace arstro
             if (mWantPreMixerHue)
                 mPreMixerHue = Histogram::computeHue(preMixer);  // hue entering the colour mixer
             mChainPost.apply(preMixer, processed);
-            // The segmenter is handed down rather than reached for: MaskStack owns no state and
-            // must keep owning none, or a mask could outlive the model that decided it.
-            applyMaskStack(processed, mMasks, mSegmenter.get(), &mMaskOutlines);  // local, framed, linear
+            // No segmenter, and no outlines out (R-AISEG-21): every mask's region — a Detect
+            // mask's included — is now in the parameters this was called with, so the render
+            // decides nothing about where a mask is and cannot disagree with what the panel and
+            // the on-photo overlay are drawing.
+            applyMaskStack(processed, mMasks);   // local, framed, linear
             color::encodeInPlace(processed);
             mLastHistogram = Histogram::compute(processed);
         }
@@ -762,6 +764,36 @@ namespace arstro
         // SourceLoader and renders on the second attempt.
         if (!ensurePreviewProxy()) return PreviewBuffer{};
         return renderInto(mSlots[mCurrent].proxy[mPreviewLevel], mSlots[mCurrent].params, mPreviewOut);
+    }
+
+    DetectionResult EditEngine::detectSubject(int slot, const EditParams &params,
+                                              SemanticSubject subject, float sensitivity,
+                                              const DetectionProgress &onProgress)
+    {
+        DetectionResult empty;
+        if (slot < 0) return empty;
+        selectImage(slot);
+        // Cold means the pixels were evicted (R-MEM-2). The caller re-decodes and asks again;
+        // saying so as "found nothing" would be a detection that silently answered about an
+        // image it never saw.
+        if (mCurrent < 0 || !ensurePreviewProxy()) return empty;
+
+        // FRAMING ONLY (R-AISEG-24). Crop and rotation are applied because the mask's
+        // coordinates are normalised to the framed image and a detection in any other frame
+        // would be in the wrong place. Nothing else is: not exposure, not white balance, not
+        // the curve. A classifier is a statement about the photograph, and if the adjustments
+        // came first then undoing an edit would move a mask that had nothing to do with it.
+        //
+        // Local Crop/Rotate rather than the engine's own members, because those are configured
+        // from whatever was last rendered and this runs between renders on the same thread.
+        Crop crop;
+        Rotate rotate;
+        crop.setRect(params.cropX, params.cropY, params.cropW, params.cropH);
+        rotate.setAngle(params.rotation);
+        rotate.setQuarterTurns(params.quarterTurns);
+        Image framed = rotate.apply(crop.apply(mSlots[mCurrent].proxy[mPreviewLevel]));
+
+        return detectSubjectRegions(framed, subject, sensitivity, mSegmenter.get(), onProgress);
     }
 
     void EditEngine::releaseWorkBuffers()

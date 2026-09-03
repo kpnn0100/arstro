@@ -27,6 +27,7 @@
 #include "../compute/ComputeBackend.h"
 #include "EditParams.h"
 #include "MaskStack.h"
+#include "../analysis/Detection.h"
 #include "../tone/Exposure.h"
 #include "../tone/Contrast.h"
 #include "../tone/ToneRegions.h"
@@ -210,14 +211,20 @@ namespace arstro
          *  mask is never a guess, the same reason `activeBackendName()` exists. */
         const char *segmenterName() const { return mSegmenter ? mSegmenter->name() : "built-in"; }
 
-        /** The boundary of every mask whose coverage the LAST render built as a plane, in
-         *  normalised framed-image coordinates (R-AISEG-13).
+        /** Detect `subject` in `slot`, and report WHERE, as loops of normalised framed-image
+         *  points (R-AISEG-19..24).
          *
-         *  Produced by the render rather than on request, and that is the point: the coverage
-         *  plane exists for one instant inside `applyMaskStack`, and answering "where is this
-         *  mask?" afterwards would mean segmenting the photo a second time. It is geometry, so
-         *  a view may hold it — unlike the plane it came from. */
-        const std::vector<MaskOutline> &maskOutlines() const { return mMaskOutlines; }
+         *  Once, when asked — not on every render. `params` supplies the crop and the rotation
+         *  and NOTHING else: the classifier reads the FRAMED but UNADJUSTED photo (R-AISEG-24),
+         *  because a finding about a photograph must not change when a slider does. The result
+         *  becomes the mask (`MaskParams::regions`), so nothing later re-decides it.
+         *
+         *  Runs on whichever thread calls it — the render worker, in cosmo — and reports each
+         *  stage through `onProgress` as it goes. Returns an empty, `handled == false` result
+         *  when the slot is cold or nobody has a model for the subject. */
+        DetectionResult detectSubject(int slot, const EditParams &params, SemanticSubject subject,
+                                      float sensitivity,
+                                      const DetectionProgress &onProgress = DetectionProgress());
 
         // ── basic tone ──
         void setExposure(float ev);       // -5..+5
@@ -401,7 +408,6 @@ namespace arstro
         std::vector<MaskParams> mMasks;
         std::unique_ptr<IComputeBackend> mAccel;  // optional accelerator (nullptr = CPU only); the CPU path is the reference
         std::unique_ptr<ISegmenter> mSegmenter;   // optional real model (nullptr = the built-in classifier)
-        std::vector<MaskOutline> mMaskOutlines;   // boundaries from the last render (R-AISEG-13)
         bool mPreferGpu = false;                  // user opt-in; only takes effect when mAccel->available()
         std::vector<uint8_t> mPreviewOut;
         std::vector<uint8_t> mFullOut;

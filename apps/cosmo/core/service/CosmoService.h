@@ -132,6 +132,10 @@ namespace cosmo
         /** R-PREVIEW-3: if a gesture has gone quiet and the frame on screen is coarse, ask
          *  for the next level up. Called once per `pump`; never blocks. */
         void maybeRefine(double nowMs);
+        /** R-AISEG-20: publish a running detection's progress into the model, and — once it has
+         *  an answer — write the regions it found onto the mask that asked (R-AISEG-21). Called
+         *  once per `pump`; polls, never waits. */
+        void pumpDetect();
 
         /** How long a gesture must be silent before the walk starts, ms. See maybeRefine
          *  for why it is this short. */

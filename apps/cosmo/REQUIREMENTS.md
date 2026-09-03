@@ -735,10 +735,16 @@ UI copy, not only here.
 - **R-AISEG-2 The subjects are Sky, Skin, Foliage, Water and Hair.** Chosen because each has a
   colour/position/structure signature a classical model can actually find, and because they are the
   five a photographer masks by hand most often. **Their reliability is not equal and the UI must not
-  pretend it is**: sky and foliage are strong, skin and water are good, and **hair is the weakest** —
-  it is found as *dark, not-very-saturated, highly textured*, which is also a description of a wool
-  coat. A subject that mis-fires is not a bug to be filed; it is a classifier being a classifier, and
-  the honest response is that the mask is editable and stackable like any other.
+  pretend it is**: sky and foliage are strong, skin and water are good, and **hair is the weakest**.
+  **AMENDED (R-AISEG-22), 2026-09-03 — withdrawn down to Skin.** Reported: *"there are feature for
+  skin detection, but it not good … remove all other detection, keep only skin first, update other
+  detection later."* Offering five subjects of unequal quality made the whole feature read as
+  unreliable, because a photographer meets whichever one they try first and judges the tool by it.
+  One subject that is good is worth more than five that are a lottery, and the four withdrawn ones
+  come back when each has been built and measured on its own terms. Their enum values stay
+  (R-AISEG-9: the number is what a project file stores), the built-in no longer answers for them,
+  and the UI no longer offers them.
+
 - **R-AISEG-3 The classifier reads display-referred values, not linear light.** Every published
   threshold for skin tone, for a blue sky, for foliage is stated in gamma-encoded terms, and so is
   human judgement about "how bright" and "how saturated" something is. The engine works in linear
@@ -761,9 +767,12 @@ UI copy, not only here.
   mask type would mean migrating everybody's projects. It is exercised by a fake segmenter in the
   tests, the way the decode seam is.
 - **R-AISEG-7 There is no on-photo overlay, and that is not an omission.** A semantic mask has no
-  geometry to drag: nothing to move, nothing to resize, no handle that would mean anything. The
-  panel owns it entirely — subject, sensitivity, invert, feather — and the photo shows the result.
-  (R-MASK-1's overlay stays exactly as it is for the four geometric types.)
+  geometry to drag: nothing to move, nothing to resize, no handle that would mean anything.
+  **AMENDED (R-AISEG-13, R-AISEG-21).** The first half of that stopped being true the moment the
+  mask started carrying its own found regions: there is no handle to drag, but there *is* a
+  boundary, and it is drawn (R-AISEG-18). What survives is the reason — the panel owns the
+  mask's settings, because none of them are positions.
+
 - **R-AISEG-8 Scriptable, like every other mask.** `mask set <i> type=4 subject=sky sensitivity=0.6`,
   with `subject` accepting the **name** as well as the number, through one parser in the engine
   (R-SVC-5) — a script that says `subject=sky` is readable and a script that says `subject=0` is
@@ -821,34 +830,36 @@ UI copy, not only here.
 
 - **R-AISEG-13 A mask whose region is COMPUTED shows its boundary, like a drawn one.**
   (**Added 2026-09-02.**) Reported: *"show boundary of mask like draw mask."* A path mask draws its
-  outline because it *is* an outline — the control points are the mask. A semantic mask has no
-  control points at all, so until now the only way to find out what it had selected was to give it
+  outline because it *is* an outline — the control points are the mask. A semantic mask had no
+  control points at all, so until this the only way to find out what it had selected was to give it
   an adjustment big enough to see. That is not a mask a photographer can judge; it is a guess they
   can develop.
-  So the render **traces the coverage's 0.5 contour** into closed loops and hands them to the view,
-  which strokes them exactly as it strokes a drawn outline (R-MASK-6). Three consequences, all of
-  them load-bearing:
+  **AMENDED (R-AISEG-21), 2026-09-03.** The boundary was originally traced out of the coverage
+  plane *during the render* and carried to the view on the frame, because the plane existed for one
+  instant and re-segmenting the photo to answer "where is this mask?" would have been absurd. Under
+  R-AISEG-21 the detection is no longer part of the render at all: the found regions ARE the mask,
+  stored as geometry in its parameters, so the view draws the boundary from the mask itself the way
+  it draws every other mask, and there is no second channel. What survives unchanged is the reason
+  the view is allowed to hold it:
   - **It is geometry, and that is why a view may hold it.** `AppModel` carries no pixels, and
     handing a front end a coverage plane would put pixels where the architecture says they do not
     go. A few hundred normalised points are not pixels — they are the same kind of thing every
     other mask's geometry already is, in the same 0..1 framed-image space, so the overlay maps them
     with the transform it already has and R-MASK-3's zoom/pan tracking comes free.
-  - **It is produced BY the render, not on request.** The coverage plane exists for one instant
-    inside the mask stack; answering "where is this mask?" afterwards would mean segmenting the
-    photo a second time. So the outline rides on the frame, beside the histograms, and is true of
-    exactly the render that produced it.
-  - **A mask that changes no pixel yet is still outlined.** A photographer who has just added a
-    Detect mask and touched no slider is looking at the photo to decide whether the region is
-    right. An outline that waited for an effect would be missing at the only moment it is wanted.
+  - **A mask that changes no pixel yet is still outlined.** A photographer who has just run a
+    detection and touched no slider is looking at the photo to decide whether the region is right.
+    An outline that waited for an effect would be missing at the only moment it is wanted.
 - **R-AISEG-18 The boundary is drawn on the photo, in the same language a drawn mask uses.**
   (**Added 2026-09-02.**) Same accent, same 1.5 px stroke, mapped through the overlay's own
   normalised-to-local transform so it tracks zoom and pan for free (R-MASK-3). It is the same thing
   to the photographer — the edge of the mask — and a second visual language for "where the mask is"
   would be a distinction without a difference.
-  - **Only for a mask the view cannot draw from its parameters.** The render traces every mask
-    whose coverage it builds as a plane, but a drawn path already draws its outline from its
-    control points — that outline *is* the mask — so drawing the feathered contour beside it would
-    be two lines saying the same thing slightly differently.
+  - **Only for a Detect mask.** (**AMENDED (R-AISEG-21):** it used to say "only for a mask the
+    view cannot draw from its parameters", which was the same set by a different route — the render
+    traced every planar mask and the view drew only the semantic ones. Now every mask draws from
+    its parameters and the rule is simply about which mask type it is.) A drawn path already draws
+    its outline from its control points — that outline *is* the mask — so drawing a second contour
+    beside it would be two lines saying the same thing slightly differently.
   - **The loops are stroked open, not closed.** A region that runs off the edge of the frame gives
     an open chain, and closing it would draw a straight line across the photo between two points
     that are only neighbours in the trace order.
@@ -857,12 +868,16 @@ UI copy, not only here.
     What eases is whether it is on screen.
 
 - **R-AISEG-14 The outline is drawn at a resolution chosen for drawing, not for precision.**
-  A coverage plane is smooth by construction, so tracing it at full preview resolution spends
-  thousands of points describing a curve a few hundred already describe — and every one of them is
-  transformed and stroked on every frame. The tracer walks a coarsened grid (short edge ≈ 320) and
-  drops loops shorter than six points, because a classifier's raw output has specks and a mask
-  outlined with confetti reads as broken even when the coverage underneath is right.
-
+  **AMENDED (R-AISEG-21), 2026-09-03 — the trade it was making no longer exists.** It was true when
+  the contour was retraced on every render and every point was transformed and stroked every frame:
+  a coarse grid (short edge 320) bought a picture nobody could tell from the fine one at a fraction
+  of the cost. A contour traced ONCE, stored, and read back is not on that budget. The trace now
+  runs at the analysis resolution and is thinned by a **shape-preserving simplification** rather
+  than by a coarse grid — Douglas-Peucker at 0.1% of the short edge — which is what "precise
+  segment" asks for and what a coarse grid cannot give at any point count. The one clause that
+  survives is the speck rule: a classifier's output has confetti, a mask outlined with confetti
+  reads as broken, and loops below a minimum area are dropped (now in R-AISEG-23's blob stage,
+  where the specks are actually removed rather than merely not drawn).
 - **R-AISEG-10 A fifth chip: Detect.** It sits beside Radial / Linear / Brush / Draw and names what
   the user does with it, as the other four do. Adding one creates a mask with no geometry and a
   subject, and the panel grows a block for it.
@@ -880,6 +895,108 @@ UI copy, not only here.
   and everything below them moves in step — rather than the rows being flipped visible and the Tone
   section jumping down a frame later. The clip is what makes it an accordion instead of a fade:
   children keep their real positions throughout, so nothing is ever drawn compressed or overlapping.
+
+
+### The 2026-09-03 rework — detection is an act, not a side effect of looking at the photo
+
+Reported: *"there are feature for skin detection, but it not good. When you choose detection in
+mask, show nothing — the user has to detect first (there will be a progress bar for this); when the
+detection is done, the output is a custom drawn mask around the detected object with a precise
+segment."* Everything below follows from taking that literally, and it is a better architecture
+than the one it replaces for reasons that have nothing to do with the UI.
+
+- **R-AISEG-19 A Detect mask covers nothing until a detection has been run.** (**Added
+  2026-09-03. AMENDS R-AISEG-1.**) Adding one creates a mask with an empty result: zero coverage,
+  no outline, no effect on any pixel. It becomes a region only when the photographer runs the
+  detection.
+  This is not a UI nicety, it is the honest shape of the operation. Segmentation is a **finding**,
+  not a parameter. A parameter is cheap, instantaneous and reversible by moving it back; a finding
+  costs real time, can be wrong, and is worth being told about. Computing it silently inside every
+  render made all three of those invisible, and it had two consequences nobody could see:
+  - the cost was hidden inside the frame time, so a Detect mask made every subsequent slider drag
+    slower and nothing said why;
+  - the mask **moved when the photo did**. The classifier read the fully adjusted pixels, so
+    pushing exposure up a stop re-decided which pixels were skin, and the mask a photographer had
+    accepted quietly became a different mask. R-AISEG-24 is the other half of fixing that.
+- **R-AISEG-20 The detection is a named operation that reports progress, and it never blocks.**
+  `mask detect <i>` is a `Command` (R-SVC-2), so a script and a front end reach it the same way.
+  It runs on the render worker, reports `detect.started`, a stream of `detect.progress` carrying a
+  **named stage** and a 0..1 fraction, and `detect.finished` with what it found; `AppModel::detect`
+  carries the same thing for a front end that was not listening. `pump()` polls it and never waits
+  (R-SVC-6).
+  The stage is named and not just a number, because the useful thing to show a photographer who is
+  waiting is *what is happening*, and because a detection that stalls has to be diagnosable from
+  the log alone. In the non-threaded build the whole thing runs inside the request and the fraction
+  goes 0 -> 1 in one step, which is how every other threaded thing in this engine degrades.
+- **R-AISEG-21 What the detection produces is GEOMETRY, and that geometry is the mask.**
+  (**Added 2026-09-03. AMENDS R-AISEG-1/13/14.**) The result is stored on the mask as closed loops
+  of points in normalised framed-image coordinates — the same 0..1 space, and the same
+  `CurvePoint`, that a hand-drawn path mask already uses. Coverage is those loops filled (even-odd,
+  so a loop inside a loop is a hole and sunglasses stay unselected), then feathered, exactly as a
+  path mask's is.
+  That single decision is what makes the rest of this work, and it pays five ways:
+  - **The output is a drawn mask**, which is what was asked for. Not "drawn *like*": the same
+    storage, the same fill, the same sampler, the same stroke on the photo.
+  - **It is stable.** A finding that has been accepted stays accepted. Nothing about later editing
+    re-runs the classifier, so no slider can move a boundary the photographer has already judged.
+  - **It costs nothing per render.** A Detect mask is now exactly as cheap as a Draw mask.
+  - **It persists.** A project reopens with the regions it was saved with, rather than
+    re-segmenting on load and possibly disagreeing with itself.
+  - **It deletes a mechanism.** The render no longer traces contours and the frame no longer
+    carries them: one way for a mask to have a boundary, not two.
+- **R-AISEG-22 The built-in detector is Skin, and only Skin.** (**Added 2026-09-03. AMENDS
+  R-AISEG-2.**) Sky, Foliage, Water and Hair are withdrawn from the built-in and from the UI. The
+  enum values remain, because R-AISEG-9 says the number is what a project file stores and a
+  withdrawn subject must not silently become a different one; `builtinHandles` answers false for
+  them, and an installed model may still declare any subject it likes (R-AISEG-15).
+  A project saved with a Sky mask therefore reopens as a Detect mask with no regions and no
+  effect — the same answer a build that predates the feature gives, which is the answer R-AISEG-9
+  already chose for this case.
+- **R-AISEG-23 The skin detector is a two-stage colour detector, after deepgaze.** (**Added
+  2026-09-03.**) The user named the reference: `github.com/mpatacchiola/deepgaze`. What was there
+  before was a single fixed hue/saturation/lightness band — one global guess about what skin looks
+  like — and it fails in the ordinary way every fixed threshold fails: it takes terracotta, wood
+  and sand, and it declines a face in shade or in tungsten light. deepgaze's answer is the right
+  one, and it is two detectors used in sequence:
+  1. **A range gate** (`RangeColorDetector`): HSV bounds that admit anything that could possibly be
+     skin. Deliberately generous — its job is not to be right, it is to be a *seed*.
+  2. **A histogram back-projection** (`BackProjectionColorDetector`): build a hue/saturation
+     histogram **from the pixels the gate admitted in this photo**, normalise it so its busiest
+     colour scores 1, then score every pixel by how well it matches. This is the whole idea. The
+     model is fitted to the skin actually in the frame, so a face under tungsten builds a
+     tungsten model instead of being half-refused by a rule written for daylight, and the
+     boundary lands where that face's own colour stops rather than where a global threshold does.
+     deepgaze seeds it from a hand-picked template patch; seeding it from the range gate is what
+     makes it automatic.
+     **What it does and does not buy, stated plainly, because the difference is the whole
+     honesty of the feature.** The projection is RELATIVE: colours near the dominant
+     skin-coloured region score high and everything else in the gate scores in proportion. So a
+     terracotta wall beside a larger face is scored down and usually thresholded away, where the
+     fixed band scored it exactly as high as the face — that is a real improvement and it is
+     what the tests assert. A wall *bigger* than the face becomes the dominant region and wins,
+     and no colour detector can do otherwise: "which of these two orange things is a person" is
+     the question a model answers (R-AISEG-15), not a histogram.
+  3. **The cleanup deepgaze does, because a likelihood map is not a region**: convolve with a disc,
+     threshold, morphological **opening** to remove specks, then **closing** to fill the pinholes a
+     specular highlight leaves in a nose or a forehead, then a blur. Opening alone (which is what
+     deepgaze does) leaves the pinholes, and a contour drawn around a lacy region is exactly the
+     "not good" that was reported.
+  4. **Blob analysis** (`BinaryMaskAnalyser`): keep connected components that are large enough to
+     be a subject and drop the rest. deepgaze keeps only the single largest; skin is a face *and*
+     two hands, so the rule here is "big enough relative to the largest, and not trivially small",
+     which keeps the hands and still drops the confetti.
+  Sensitivity remains the one knob (R-AISEG-5) and it moves the threshold in step 3 — one promise,
+  one implementation, an installed model's output entering at the same place (R-AISEG-15).
+- **R-AISEG-24 The detection reads the framed, UNADJUSTED photo.** (**Added 2026-09-03.**) Crop and
+  rotation are applied, because the mask's coordinates are normalised to the framed image and a
+  detection in any other frame would be in the wrong place. Nothing else is: not exposure, not
+  white balance, not the tone curve.
+  A classifier is a statement about *the photograph*, not about the current state of a slider. If
+  the adjustments were applied first, then the same photo would detect differently depending on
+  what had been done to it, undoing an edit would change a mask that had nothing to do with it, and
+  a mask made before a white-balance change would disagree with the same detection made after.
+  This was on the follow-up list before it was asked for; making detection an explicit act is what
+  made it easy, because there is now exactly one moment at which the pixels have to be chosen.
 
 
 ## R-ICON — Icons are traced, not approximated — ✅ IMPLEMENTED

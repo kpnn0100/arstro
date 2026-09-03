@@ -55,9 +55,11 @@ namespace cosmo_v2
          *  happened to have. Same rule as `CurvePanel::setCurves` — a gesture in flight
          *  outranks the model — and the same bug it was fixed for. */
         void updateMask(const arstro::MaskParams &m) { if (mDrag < 0) mMask = m; }
-        /** The boundary of a mask whose region was COMPUTED rather than described
-         *  (R-AISEG-18) — closed loops in the same normalised framed-image space every other
-         *  mask's geometry uses, produced by the render and delivered on the frame.
+        /** The boundary of a Detect mask — closed loops in the same normalised framed-image
+         *  space every other mask's geometry uses (R-AISEG-18).
+         *
+         *  It comes from the mask's own `regions` now (R-AISEG-21), not off a frame, so it is
+         *  there the instant the detection lands and stays there whatever the render is doing.
          *
          *  Pushed rather than pulled, and not eased: it is DATA, exactly as R-MASK-4 says a
          *  mask's geometry is. What eases is whether it is on screen at all. */

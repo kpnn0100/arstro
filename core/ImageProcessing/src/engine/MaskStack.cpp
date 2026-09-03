@@ -51,6 +51,30 @@ namespace arstro
         }
     }
 
+    std::vector<std::vector<std::pair<float, float>>> maskLoops(const MaskParams &m)
+    {
+        std::vector<std::vector<std::pair<float, float>>> loops;
+        if (m.type == MaskParams::Path)
+        {
+            auto poly = maskPathPolygon(m.path);
+            if (poly.size() >= 3) loops.push_back(std::move(poly));
+            return loops;
+        }
+        if (m.type != MaskParams::Semantic) return loops;
+        // A detection's loops are already dense polylines (R-AISEG-21), so they are walked at
+        // one point per stored point: `perSeg = 1`. Running the bezier sampler over them at the
+        // path default would emit twelve interpolated points between every pair of neighbours
+        // that are a pixel and a half apart — the same curve, twelve times the memory, and a
+        // fill that is twelve times slower for no visible difference.
+        loops.reserve(m.regions.size());
+        for (const auto &loop : m.regions)
+        {
+            auto poly = maskPathPolygon(loop, 1);
+            if (poly.size() >= 3) loops.push_back(std::move(poly));
+        }
+        return loops;
+    }
+
     float maskCoverage(const MaskParams &m, float nx, float ny)
     {
         float cov = 0.f;
@@ -74,18 +98,24 @@ namespace arstro
             break;
         }
         case MaskParams::Path:
+        case MaskParams::Semantic:
         {
-            // Hard-edged here — see the header. The polygon is rebuilt per call, which is why
+            // Hard-edged here — see the header. The polygons are rebuilt per call, which is why
             // no render uses this path: `buildMaskCoverage` flattens once for the whole plane.
-            const auto poly = maskPathPolygon(m.path);
-            if (poly.size() >= 3) cov = insidePolygon(poly, nx, ny) ? 1.f : 0.f;
+            //
+            // The two share a case since R-AISEG-21: a detection's result IS geometry, so
+            // "where is this mask?" stopped being a question about the picture and became the
+            // same question a drawn path answers. Before a detection has been run there are no
+            // loops and the answer is 0, which is the whole of R-AISEG-19.
+            //
+            // Even-odd ACROSS the loops, not per loop: that is what makes a loop inside a loop
+            // a hole rather than a second region drawn on top of the first.
+            bool in = false;
+            for (const auto &poly : maskLoops(m))
+                if (insidePolygon(poly, nx, ny)) in = !in;
+            cov = in ? 1.f : 0.f;
             break;
         }
-        case MaskParams::Semantic:
-            // 0, and see the header: this function is handed a point, and whether that point is
-            // sky is a question about the picture. Answering anything here would be a guess
-            // dressed as an answer.
-            break;
         case MaskParams::Brush:
         {
             for (const auto &dab : m.dabs)
@@ -107,14 +137,7 @@ namespace arstro
     {
         if (w <= 0 || h <= 0) { out.clear(); return; }
         out.assign((std::size_t)w * h, (Pixel)0);
-        if (m.type == MaskParams::Semantic)
-        {
-            // Reachable only by a caller that has no image — the overlay asking what a mask
-            // covers, say. Empty is the same answer `maskCoverage` gives, for the same reason.
-            if (m.inverted) std::fill(out.begin(), out.end(), (Pixel)1);
-            return;
-        }
-        if (m.type != MaskParams::Path)
+        if (m.type != MaskParams::Path && m.type != MaskParams::Semantic)
         {
             // Closed-form types: the plane is just the per-pixel answer, materialised. Nothing
             // in the render asks for this, but a caller that wants a plane for any mask should
@@ -130,33 +153,48 @@ namespace arstro
             return;
         }
 
-        const auto poly = maskPathPolygon(m.path);
-        if (poly.size() < 3)
+        // Path and Detect share every line below (R-AISEG-21): one is a boundary a person drew
+        // and the other is a boundary the detector found, and a fill has no way to tell them
+        // apart — nor any reason to want to.
+        const auto polys = maskLoops(m);
+        if (polys.empty())
         {
-            // No area. An INVERTED empty path covers everything, which is the consistent
-            // answer (`maskCoverage` says the same) even though it is a strange thing to ask.
+            // No area: an empty path, or — the ordinary case now — a Detect mask on which no
+            // detection has been run yet (R-AISEG-19). An INVERTED empty shape covers
+            // everything, which is the consistent answer (`maskCoverage` says the same) even
+            // though it is a strange thing to ask.
             if (m.inverted) std::fill(out.begin(), out.end(), (Pixel)1);
             return;
         }
+        std::size_t edgeCount = 0;
+        for (const auto &poly : polys) edgeCount += poly.size();
 
         // Fill the outline, one row at a time: gather the x where each edge crosses the row's
         // centre, sort them, and fill between alternate pairs. O(rows x edges), against the
         // O(pixels x edges) a per-pixel test would cost.
+        //
+        // The crossings of EVERY loop go into one list before the sort, which is what makes the
+        // alternate-pair fill even-odd across the whole mask: two disjoint blobs fill
+        // independently, and a loop inside a loop cancels to a hole.
         par::parallelFor(h, [&](int yy0, int yy1) {
             std::vector<float> xs;
-            xs.reserve(poly.size());
+            xs.reserve(edgeCount);
             for (int y = yy0; y < yy1; ++y)
             {
                 const float ny = (y + 0.5f) / h;
                 xs.clear();
-                const std::size_t n = poly.size();
-                for (std::size_t i = 0, j = n - 1; i < n; j = i++)
+                for (const auto &poly : polys)
                 {
-                    const float yi = poly[i].second, yj = poly[j].second;
-                    if ((yi > ny) != (yj > ny))
+                    const std::size_t n = poly.size();
+                    for (std::size_t i = 0, j = n - 1; i < n; j = i++)
                     {
-                        const float dy = (yj - yi) != 0.f ? (yj - yi) : 1e-8f;
-                        xs.push_back(poly[i].first + (poly[j].first - poly[i].first) * (ny - yi) / dy);
+                        const float yi = poly[i].second, yj = poly[j].second;
+                        if ((yi > ny) != (yj > ny))
+                        {
+                            const float dy = (yj - yi) != 0.f ? (yj - yi) : 1e-8f;
+                            xs.push_back(poly[i].first +
+                                         (poly[j].first - poly[i].first) * (ny - yi) / dy);
+                        }
                     }
                 }
                 if (xs.size() < 2) continue;
@@ -189,217 +227,6 @@ namespace arstro
             for (Pixel &v : out) v = (Pixel)1 - v;
     }
 
-    void buildMaskCoverage(const MaskParams &m, const Image &img, std::vector<Pixel> &out,
-                           ISegmenter *seg)
-    {
-        const int w = img.width(), h = img.height();
-        if (m.type != MaskParams::Semantic) { buildMaskCoverage(m, w, h, out); return; }
-        if (w <= 0 || h <= 0) { out.clear(); return; }
-
-        const SemanticSubject subject =
-            (m.subject >= 0 && m.subject < (int)SemanticSubject::Count) ? (SemanticSubject)m.subject
-                                                                       : SemanticSubject::Sky;
-        const float sensitivity = clampf(m.sensitivity, 0.f, 1.f);
-
-        // The seam first, the built-in second (R-AISEG-6). A model that declines is answering
-        // normally — it was not trained on this subject, or cannot take this image — so this is
-        // an `if`, not an error path. The size is re-checked because a foreign implementation
-        // returning the wrong number of values would otherwise be read out of bounds by the
-        // blend loop, and "the host's model was wrong" must not become "cosmo crashed".
-        bool answered = false;
-        if (seg) answered = seg->segment(img, subject, sensitivity, out) &&
-                            out.size() == (std::size_t)w * h;
-        if (!answered) segment::builtinCoverage(img, subject, sensitivity, out);
-
-        // Feather is the same idea it is for a path — soften the boundary — and it is applied
-        // the same way, on top of whatever decided the region. A classifier's edge is already
-        // soft (R-AISEG-4 sees to that), so 0 is a perfectly ordinary setting here.
-        const float feather = clampf(m.feather, 0.f, 1.f);
-        if (feather > 0.f)
-        {
-            const float sigma = feather * kPathFeatherFraction * (float)std::min(w, h);
-            if (sigma >= 0.5f) spatial::fastBlurPlane(out, out, w, h, sigma);
-        }
-        if (m.inverted)
-            for (Pixel &v : out) v = (Pixel)1 - v;
-    }
-
-    // ── Tracing a computed mask's boundary (marching squares) ────────────────────────────
-    //
-    // A mask whose region is DECIDED rather than described — a semantic mask, a feathered path —
-    // has no control points a view could draw. What it has is a coverage plane, and the honest
-    // outline of that plane is its 0.5 contour. Marching squares is the whole algorithm: classify
-    // each cell's four corners against the threshold, emit the one or two segments that separate
-    // inside from outside, interpolate where they cross, then stitch the segments into loops.
-    //
-    // The stitch is the part worth reading. Two neighbouring cells compute the crossing on their
-    // SHARED edge from the same two corner values, so the point comes out bit-identical on both
-    // sides; the endpoints are still quantised into the key rather than compared as floats,
-    // because "bit-identical in practice" is not a property to build a data structure on.
-    namespace
-    {
-        struct OutlinePoint { float x, y; };
-
-        /** The 16 marching-squares cases as pairs of EDGE indices — 0 top, 1 right, 2 bottom,
-         *  3 left. Unordered pairs: the stitcher walks chains by endpoint, so which way round a
-         *  segment was emitted never matters, and not pretending to track winding removes the
-         *  one place this algorithm is usually got wrong. Cases 5 and 10 are the ambiguous
-         *  saddles and are resolved from the cell's centre value, below. */
-        const int kCaseEdges[16][4] = {
-            {-1, -1, -1, -1},  // 0000
-            { 3,  0, -1, -1},  // 0001  a
-            { 0,  1, -1, -1},  // 0010  b
-            { 3,  1, -1, -1},  // 0011  a b
-            { 1,  2, -1, -1},  // 0100  c
-            {-1, -1, -1, -1},  // 0101  a c   -> saddle, filled in at runtime
-            { 0,  2, -1, -1},  // 0110  b c
-            { 3,  2, -1, -1},  // 0111  a b c
-            { 2,  3, -1, -1},  // 1000  d
-            { 2,  0, -1, -1},  // 1001  a d
-            {-1, -1, -1, -1},  // 1010  b d   -> saddle
-            { 2,  1, -1, -1},  // 1011  a b d
-            { 1,  3, -1, -1},  // 1100  c d
-            { 1,  0, -1, -1},  // 1101  a c d
-            { 0,  3, -1, -1},  // 1110  b c d
-            {-1, -1, -1, -1},  // 1111
-        };
-
-        inline float crossAt(float v0, float v1, float t)
-        {
-            const float d = v1 - v0;
-            if (d > -1e-12f && d < 1e-12f) return 0.5f;
-            const float u = (t - v0) / d;
-            return u < 0.f ? 0.f : (u > 1.f ? 1.f : u);
-        }
-    }
-
-    std::vector<std::vector<std::pair<float, float>>>
-    traceCoverageOutline(const std::vector<Pixel> &cov, int w, int h, float threshold,
-                         int maxEdge, int minLoopPoints)
-    {
-        std::vector<std::vector<std::pair<float, float>>> out;
-        if (w <= 1 || h <= 1 || cov.size() < (std::size_t)w * h) return out;
-        if (maxEdge < 8) maxEdge = 8;
-
-        // Walk a COARSER grid than the plane. The plane is smooth by construction, so the extra
-        // samples describe the same curve with more points — points a view then has to transform
-        // and stroke on every frame.
-        const int step = std::max(1, (std::min(w, h) + maxEdge - 1) / maxEdge);
-        auto at = [&](int x, int y) {
-            x = x < 0 ? 0 : (x >= w ? w - 1 : x);
-            y = y < 0 ? 0 : (y >= h ? h - 1 : y);
-            return (float)cov[(std::size_t)y * w + x];
-        };
-
-        std::vector<OutlinePoint> segs;   // pairs: [2i], [2i+1]
-        for (int y = 0; y + step < h; y += step)
-            for (int x = 0; x + step < w; x += step)
-            {
-                const float va = at(x, y), vb = at(x + step, y);
-                const float vc = at(x + step, y + step), vd = at(x, y + step);
-                int code = 0;
-                if (va > threshold) code |= 1;
-                if (vb > threshold) code |= 2;
-                if (vc > threshold) code |= 4;
-                if (vd > threshold) code |= 8;
-                if (code == 0 || code == 15) continue;
-
-                // Where the contour crosses each of the four edges, if it does.
-                const float fx = (float)x, fy = (float)y, fs = (float)step;
-                const OutlinePoint e[4] = {
-                    {fx + fs * crossAt(va, vb, threshold), fy},                    // top
-                    {fx + fs, fy + fs * crossAt(vb, vc, threshold)},               // right
-                    {fx + fs * crossAt(vd, vc, threshold), fy + fs},               // bottom
-                    {fx, fy + fs * crossAt(va, vd, threshold)}};                   // left
-
-                int pairs[4] = {-1, -1, -1, -1};
-                if (code == 5 || code == 10)
-                {
-                    // The saddle. Two opposite corners are inside and the cell alone cannot say
-                    // whether they are one region pinched in the middle or two that merely touch.
-                    // The centre value decides — which is the standard resolution and also the
-                    // only one that stays consistent with the neighbouring cells' answers.
-                    const float centre = (va + vb + vc + vd) * 0.25f;
-                    const bool joined = centre > threshold;
-                    if ((code == 5) == joined) { pairs[0] = 0; pairs[1] = 1; pairs[2] = 2; pairs[3] = 3; }
-                    else                       { pairs[0] = 3; pairs[1] = 0; pairs[2] = 1; pairs[3] = 2; }
-                }
-                else
-                {
-                    pairs[0] = kCaseEdges[code][0];
-                    pairs[1] = kCaseEdges[code][1];
-                }
-                for (int k = 0; k + 1 < 4; k += 2)
-                {
-                    if (pairs[k] < 0 || pairs[k + 1] < 0) continue;
-                    segs.push_back(e[pairs[k]]);
-                    segs.push_back(e[pairs[k + 1]]);
-                }
-            }
-        if (segs.empty()) return out;
-
-        // ── stitch ──
-        // Endpoints are quantised into the key rather than compared as floats. Neighbouring cells
-        // do produce bit-identical crossings today (same two corner values, same arithmetic), but
-        // that is a property of the code above, not of the algorithm, and a data structure should
-        // not depend on it.
-        const double kQ = 64.0;
-        auto key = [&](const OutlinePoint &p) {
-            return ((long long)std::llround(p.x * kQ) << 24) ^ (long long)std::llround(p.y * kQ);
-        };
-        std::unordered_multimap<long long, std::size_t> ends;   // key -> segment index
-        ends.reserve(segs.size());
-        for (std::size_t i = 0; i < segs.size(); i += 2)
-        {
-            ends.emplace(key(segs[i]), i);
-            ends.emplace(key(segs[i + 1]), i);
-        }
-        std::vector<bool> used(segs.size() / 2, false);
-
-        for (std::size_t s0 = 0; s0 < segs.size(); s0 += 2)
-        {
-            if (used[s0 / 2]) continue;
-            used[s0 / 2] = true;
-            std::vector<std::pair<float, float>> loop;
-            loop.push_back({segs[s0].x, segs[s0].y});
-            OutlinePoint tip = segs[s0 + 1];
-            loop.push_back({tip.x, tip.y});
-
-            // Walk forward until the chain closes or runs out. Bounded by the segment count, so a
-            // key collision cannot turn this into an infinite walk — which is the failure a
-            // hash-keyed stitcher has if it trusts its keys.
-            for (std::size_t guard = 0; guard < segs.size(); ++guard)
-            {
-                bool advanced = false;
-                auto range = ends.equal_range(key(tip));
-                for (auto it = range.first; it != range.second; ++it)
-                {
-                    const std::size_t i = it->second;
-                    if (used[i / 2]) continue;
-                    const OutlinePoint &a = segs[i], &b = segs[i + 1];
-                    const OutlinePoint next = (key(a) == key(tip)) ? b : a;
-                    used[i / 2] = true;
-                    tip = next;
-                    loop.push_back({tip.x, tip.y});
-                    advanced = true;
-                    break;
-                }
-                if (!advanced) break;
-            }
-
-            if ((int)loop.size() < minLoopPoints) continue;   // a speck, not a boundary
-            // Into normalised framed-image coordinates. A plane sample at index (x,y) is the
-            // CENTRE of that pixel, which is the same convention buildMaskCoverage fills it with.
-            for (auto &p : loop)
-            {
-                p.first = (p.first + 0.5f) / (float)w;
-                p.second = (p.second + 0.5f) / (float)h;
-            }
-            out.push_back(std::move(loop));
-        }
-        return out;
-    }
-
     static bool isIdentity(const LocalAdjust &a)
     {
         return a.exposure == 0 && a.contrast == 0 && a.highlights == 0 && a.shadows == 0 &&
@@ -407,48 +234,33 @@ namespace arstro
                a.saturation == 0 && a.texture == 0 && a.clarity == 0 && a.dehaze == 0;
     }
 
-    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks, ISegmenter *seg,
-                        std::vector<MaskOutline> *outlines)
+    void applyMaskStack(Image &img, const std::vector<MaskParams> &masks)
     {
         const int w = img.width(), h = img.height(), ch = img.channels();
         const int colorCh = ch >= 3 ? 3 : ch;
         if (w <= 0 || h <= 0) return;
-        if (outlines) outlines->clear();
 
         for (std::size_t mi = 0; mi < masks.size(); ++mi)
         {
             const MaskParams &m = masks[mi];
             const LocalAdjust &a = m.adjust;
-            // A mask whose region is COMPUTED is outlined even when it changes no pixel yet: a
-            // photographer who has just added a Detect mask is looking at the photo to decide
-            // whether the region is right, and an outline that only appeared once a slider had
-            // moved would be missing at exactly the moment it is wanted.
-            const bool planar = m.type == MaskParams::Path || m.type == MaskParams::Semantic;
-            const bool wantOutline = outlines != nullptr && planar;
-            if (isIdentity(a) && !wantOutline) continue;
-            // A path with fewer than three points has no area — nothing to fill and nothing to
-            // outline.
+            // A mask that changes no pixel is skipped outright. It used to be built anyway, so
+            // its boundary could be traced for the view; under R-AISEG-21 the boundary is in the
+            // mask's own parameters and the view reads it from there, so there is nothing left
+            // here for a mask with an identity adjust to contribute.
+            if (isIdentity(a)) continue;
+            // Fewer than three points has no area — a path nobody finished drawing, or a Detect
+            // mask nobody has run a detection on yet (R-AISEG-19).
             if (m.type == MaskParams::Path && m.path.size() < 3 && !m.inverted) continue;
+            if (m.type == MaskParams::Semantic && m.regions.empty() && !m.inverted) continue;
 
-            // The plane FIRST, before the adjusted copy. A mask that is only being outlined must
-            // not pay for a clone of the framed image (27 MB at preview size) to produce a
-            // picture nobody blends.
-            //
-            // A path's feather is a distance from its boundary and a semantic mask's region is a
-            // question about the pixels, so both are built once for the whole plane rather than
-            // evaluated per pixel (see the header). Every other type is closed-form and
-            // allocates nothing.
+            // A boundary's feather is a distance FROM that boundary, which no per-point
+            // function can give without measuring every segment for every pixel — so a Path and
+            // a Detect mask are filled once for the whole plane and blurred (see the header).
+            // Every other type is closed-form and allocates nothing.
             std::vector<Pixel> plane;
-            if (m.type == MaskParams::Path) buildMaskCoverage(m, w, h, plane);
-            else if (m.type == MaskParams::Semantic) buildMaskCoverage(m, img, plane, seg);
-            if (wantOutline && !plane.empty())
-            {
-                MaskOutline o;
-                o.maskIndex = (int)mi;
-                o.loops = traceCoverageOutline(plane, w, h);
-                outlines->push_back(std::move(o));
-            }
-            if (isIdentity(a)) continue;   // outlined, and there is nothing to blend
+            if (m.type == MaskParams::Path || m.type == MaskParams::Semantic)
+                buildMaskCoverage(m, w, h, plane);
 
             // Adjusted copy through the same processors the global pipeline uses.
             Image adj = img.clone();

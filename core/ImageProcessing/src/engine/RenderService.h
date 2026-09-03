@@ -70,12 +70,18 @@ namespace arstro
              *  crashing (which it used to) or being silent (which the fix would otherwise
              *  have made it). */
             unsigned long long nonFinite = 0;
-            /** Where the masks whose region is COMPUTED actually landed, in normalised
-             *  framed-image coordinates (R-AISEG-13). It rides on the frame for the same reason
-             *  the histograms do: it is a product of this render, it is only true of this
-             *  render, and the view that draws the frame is the view that draws it. Geometry,
-             *  not pixels — which is what makes it something a view is allowed to hold. */
-            std::vector<MaskOutline> maskOutlines;
+        };
+
+        /** A finished detection, and which mask asked for it (R-AISEG-20).
+         *
+         *  A separate result rather than a field on `Frame` — which is where a semantic mask's
+         *  boundary used to ride — because a detection is not a product of a render. It is asked
+         *  for once, it takes as long as it takes, and its answer outlives every frame after it
+         *  by becoming part of the mask (R-AISEG-21). */
+        struct Detection
+        {
+            int maskIndex = -1;
+            DetectionResult result;
         };
 
         RenderService();
@@ -154,6 +160,30 @@ namespace arstro
         /** True when a platform GPU accelerator exists and is usable (queried once at
          *  construction, so it is safe to read from the UI thread). */
         bool gpuAvailable() const;
+        /** Ask for a detection of `subject` over `slot`'s framed, unadjusted pixels, on behalf
+         *  of mask `maskIndex` (R-AISEG-20/24). Queued on the worker beside the renders, so it
+         *  waits for whatever is in front of it and nothing on the caller's thread blocks.
+         *
+         *  Exactly one detection is in flight at a time: a second request while one is running
+         *  is REFUSED (returns false) rather than queued or coalesced. Coalescing is right for
+         *  renders, where only the latest matters; a detection is an act the user asked for and
+         *  silently dropping one would leave a progress bar running for an answer that is never
+         *  coming.
+         *
+         *  Progress is `detectStage`/`detectFraction`, both safe to read from any thread; the
+         *  answer comes out of `tryAcquireDetect`. */
+        bool requestDetect(int slot, const EditParams &params, int maskIndex,
+                           SemanticSubject subject, float sensitivity);
+        /** True between the request and the answer being picked up. */
+        bool detectBusy() const { return mDetectBusy.load(); }
+        /** How far the running detection has got, 0..1, and the stage it is in — a stable
+         *  literal from `Detection.cpp` (`preparing`, `colour`, `regions`, `shapes`,
+         *  `outline`), never null. */
+        double detectFraction() const { return mDetectFraction.load(); }
+        const char *detectStage() const { return mDetectStage.load(); }
+        /** Pick up the finished detection, if there is one (moves it out). */
+        bool tryAcquireDetect(Detection &out);
+
         /** Request a preview render of (slot, params); coalesced to the latest request.
          *  `intent` decides whether resolution or latency wins — see RenderIntent. */
         void render(int slot, const EditParams &params, RenderIntent intent = RenderIntent::Final,
@@ -224,6 +254,16 @@ namespace arstro
         std::atomic<double> mMsPerMpx{0.0};
         double mInteractiveBudgetMs = 33.0;   // ~30 fps; the product decision, 2026-08-24
 
+        // R-AISEG-20. Atomics and not mutex-guarded fields because the whole point of them is
+        // to be read every frame by a UI that must not wait behind a render for the number that
+        // says how long it is waiting. `mDetectStage` holds a string LITERAL from Detection.cpp
+        // — static storage, so publishing the pointer publishes the string.
+        std::atomic<bool> mDetectBusy{false};
+        std::atomic<double> mDetectFraction{0.0};
+        std::atomic<const char *> mDetectStage{""};
+        Detection mDetectReady;
+        bool mDetectHaveResult = false;
+
 #ifdef ARSTRO_ENABLE_THREADS
         void workerLoop();
         // `slot` travels with the add so the worker can ask whether this image has a file
@@ -246,6 +286,13 @@ namespace arstro
         // still render fine, or the refinement would silently stay coarse (R-PREVIEW-3).
         RenderIntent mPendingIntent = RenderIntent::Final;
         int mPendingLevel = -1;          // >= 0 overrides the intent's choice
+
+        bool mPendingDetect = false;     // R-AISEG-20: one at a time, never coalesced
+        int mDetectSlot = -1;
+        int mDetectMask = -1;
+        SemanticSubject mDetectSubject = SemanticSubject::Skin;
+        float mDetectSensitivity = 0.5f;
+        EditParams mDetectParams;
 
         bool mPendingFull = false;       // blocking full-res request
         int mFullSlot = -1;

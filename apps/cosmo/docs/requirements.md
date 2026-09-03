@@ -3050,6 +3050,13 @@ weight, and keeps a step edge monotone. `EditParams_mixerSpread_persists_and_com
 from a saved project comes back at 25, not 0), and the NaN refusal.
 
 ### DR-AISEG-1..9 (core) A mask that finds its own subject (R-AISEG-1 … R-AISEG-9)
+
+> **Partly superseded by DR-AISEG-19..24 (2026-09-03).** The mask type, its fields, its place in
+> the stack and its project format are all as described. Two things below are no longer true: the
+> five subjects are down to **Skin alone** (R-AISEG-22, the other four are withdrawn and their
+> score functions deleted), and the coverage is no longer decided inside the render — it is decided
+> once by a detection and stored on the mask (R-AISEG-19/21). Read this for the shape and
+> DR-AISEG-19..24 for what runs.
 `MaskParams` gains `Semantic = 4` plus `int subject` and `float sensitivity`
 (`engine/EditParams.h`). It is a mask in every other respect — the same `LocalAdjust`, the same
 `inverted`/`feather`, the same place in the stack, the same history entry, the same project file.
@@ -3293,6 +3300,13 @@ other assertion in that test. Shots: `editor-mask-detect-opening` (mid-tween),
 app and "it fits on my monitor" is not a layout claim.
 
 ### DR-AISEG-13/14 (core) A computed mask reports its boundary (R-AISEG-13, R-AISEG-14)
+
+> **Superseded by DR-AISEG-19..24 (2026-09-03).** The claim survives — a computed mask shows its
+> boundary — but nothing in the mechanism does. The render no longer traces anything, `MaskOutline`
+> and `Frame::maskOutlines` are gone, `traceCoverageOutline` moved to `analysis/Contour.{h,cpp}`,
+> and the boundary is read out of the mask's own `regions`. The coarsened grid this entry argues
+> for is inverted: the trace now walks every cell and the result is thinned by Douglas-Peucker,
+> which preserves the shape a coarse grid blunts.
 `MaskOutline` (`engine/MaskStack.h`) is one mask's boundary: `maskIndex` plus closed loops of
 points in **normalised framed-image coordinates** — the same 0..1 space every other mask's geometry
 lives in. `traceCoverageOutline(plane, w, h, threshold, maxEdge, minLoopPoints)` produces it by
@@ -3417,6 +3431,12 @@ segmenter: MediaPipe Selfie Segmentation   (licence Apache-2.0)
 ```
 
 ### DR-AISEG-18 (design) The boundary on the photo (R-AISEG-18, R-G-1, R-MASK-3)
+
+> **Partly superseded by DR-AISEG-19..24 (2026-09-03).** Everything about the DRAWING is current —
+> the accent, the 1.5 px stroke, `normToLocal`, the open stroke, the fade. What changed is where the
+> loops come from: `App::render` passes `arstro::maskLoops(*sel)`, the mask's own geometry, not the
+> last frame's outlines. The `cosmo_ui_tests` case now asserts that adding a Detect mask outlines
+> **nothing** first, then runs `mask detect 0` and keeps the first non-zero fade.
 `MaskOverlay::setComputedOutline` takes the loops the render produced and `onPaint` strokes them in
 the overlay's accent at 1.5 px — the same treatment a drawn path gets, through the same
 `normToLocal`, so zoom and pan track without a line of new code (R-MASK-3).
@@ -3446,3 +3466,183 @@ for the fade to finish and would have passed a snap. Leaving the Mask tab fades 
 `Rig::loadFakePhoto` grew a `scene` option for this: a uniform grey is the right fixture for
 geometry and the wrong one for a classifier, which correctly finds nothing in it and proves nothing.
 Visible in `cosmo-editor-mask-detect-1600x1000.png` as the accent line along the horizon.
+
+### DR-AISEG-19..24 (core) Detection is an act, and what it finds is the mask (R-AISEG-19 … R-AISEG-24)
+
+**2026-09-03.** Reported: *"there are feature for skin detection, but it not good. When you choose
+detection in mask, show nothing — the user has to detect first (there will be a progress bar for
+this); when the detection is done, the output is a custom drawn mask around the detected object
+with a precise segment. Learn from `github.com/mpatacchiola/deepgaze`. Remove all other detection,
+keep only skin first."* Everything below follows from taking that literally, and it deletes more
+than it adds.
+
+**What was there before, and why it could not be fixed in place.** A Detect mask was segmented
+inside `applyMaskStack`, on every frame, from the fully adjusted pixels. Three consequences, none
+of them visible: the cost hid inside the frame time, so a Detect mask silently slowed every later
+slider drag; the mask MOVED when the photo did, because pushing exposure up a stop re-decided which
+pixels were skin and quietly replaced a mask the photographer had accepted; and there was no moment
+at which to report progress, because there was no operation — only a side effect of looking at the
+picture.
+
+#### The shape now
+
+`analysis/Detection.{h,cpp}` runs `preparing -> colour -> regions -> shapes -> outline` over the
+**framed but unadjusted** photo (R-AISEG-24; `EditEngine::detectSubject` applies a local `Crop` and
+`Rotate` to the slot's proxy and nothing else) and returns `DetectionResult` — loops in normalised
+framed-image coordinates, the fraction of the frame they cover, whether anybody had a model for the
+subject, and which detector answered.
+
+Those loops are then **stored on the mask**, as `MaskParams::regions`
+(`std::vector<std::vector<CurvePoint>>`, `engine/EditParams.h`), and are the mask (R-AISEG-21).
+`MaskStack::maskLoops` returns them for a `Semantic` mask exactly as it returns the flattened
+outline for a `Path` one, and one scanline fill serves both — even-odd **across** the loops, so a
+loop inside a loop is a hole. Five things fall out of that single decision:
+
+- **The output is a drawn mask**, which is what was asked for. `MaskDetect_with_regions_fills_
+  exactly_like_a_drawn_path` asserts it as identity, not as similarity: the same region as a
+  `Path` mask renders **bit-for-bit** the same pixels (worst difference `< 1e-9`).
+- **It is stable.** No slider can move a boundary the photographer has already judged.
+- **It costs nothing per render** — a Detect mask is now exactly as cheap as a Draw mask.
+- **It persists**, as trailing groups on the mask blob (`EditParamsIO`, one group per loop). Groups
+  are the separator this format already has spare, and the trailing-group rule covers a *variable*
+  number of them for free; a fifth group holding all the loops would have needed a fourth
+  separator nested inside `;` and `,`, and the format has no escaping, so a loop containing a `;`
+  would silently become two loops.
+- **It deletes a mechanism.** `applyMaskStack` no longer takes an `ISegmenter` or produces
+  `MaskOutline`s, `Frame::maskOutlines` is gone, and `App::render` reads the boundary out of
+  `maskLoops(*sel)` — one source, so the line on the photo cannot disagree with the pixels under
+  it. `traceCoverageOutline` moved from `engine/MaskStack.cpp` to `analysis/Contour.{h,cpp}`, where
+  it belongs: it is a statement about a plane of numbers and knows nothing about masks.
+
+#### The operation (R-AISEG-19/20)
+
+`mask detect <i> [subject=… sensitivity=…]` is a `Command`. It validates everything on the dispatch
+— no mask, wrong type, no image, a detection already running — so a front end that started a
+progress bar never learns two seconds later that there was nothing to detect. Subject and
+sensitivity may ride along, because a photographer who moves Sensitivity and presses Detect means
+both and two commands would put a wasted detection between them.
+
+It runs **on the render worker** (`RenderService::requestDetect` / `detectFraction` /
+`detectStage` / `tryAcquireDetect`), which is what keeps `pump()` free of it (R-SVC-6). Decisions
+worth carrying forward:
+
+- **One at a time, refused rather than queued or coalesced.** Coalescing is right for renders,
+  where only the latest matters; a detection is an act the user asked for, and silently dropping
+  one leaves a bar running for an answer that never comes. `mDetectBusy` is set on the REQUEST and
+  not on the worker, so there is no window in which two requests both look like the only one.
+- **Progress is atomics, not mutex-guarded fields.** The whole point of the number is to be read
+  every frame by a UI that must not wait behind a render for the value that says how long it is
+  waiting. `mDetectStage` holds a string literal from `Detection.cpp`, so publishing the pointer
+  publishes the string.
+- **`detectBusy` clears when the answer is COLLECTED, not when the worker finished it** — a bar
+  that vanished a frame before the regions appeared would read as the detection having failed.
+- **`detect.progress` is emitted on a STAGE change, not per pump.** The fraction goes into the
+  model every pump for the bar to ease toward; sixty identical journal lines for 100 ms of work is
+  not "a stream of progress".
+- **The result is its own history step.** `History::record` merges edits arriving within 450 ms so
+  a slider drag is one undoable thing — and a detection landing is not a continuation of whatever
+  the user did while it ran. Without the explicit `breakCoalesce`, adding the mask, choosing the
+  subject and the answer arriving all merged, so "I don't like what it found" undid the mask too.
+- In the non-threaded build it runs inside the request and the fraction goes 0 -> 1 in one step,
+  which is how every threaded thing in this engine degrades.
+
+#### The detector (R-AISEG-22/23)
+
+**Skin, and only Skin.** Sky, Foliage, Water and Hair are withdrawn from `builtinHandles` and their
+score functions are deleted; the enum values stay, because R-AISEG-9 says the number is what a
+project file stores. A project holding a Sky mask reopens as a Detect mask with no regions —
+`MaskSemantic_roundtrips_through_the_project_and_the_preset` asserts that the subject is read back
+rather than silently re-pointed. `MaskParams::subject` now defaults to `1` (Skin); the default is
+reached only by a mask created fresh, which used to be born looking for a subject nothing can
+answer for.
+
+`segment::builtinScore` is deepgaze's two-stage colour detector:
+
+1. **The range gate** (`RangeColorDetector`), deepgaze's published skin bounds converted out of
+   OpenCV's units into `kSkinHueMin/Max`, `kSkinSatMin/Max`, `kSkinValMin` — written as named
+   constants so a reader can check them against the reference. Plus Kovac's `R > G > B` ordering
+   test, two comparisons that keep a neutral or blue-grey in the hue band from seeding the model.
+   Soft band memberships throughout, or the histogram inherits a cliff wherever a pixel crossed.
+2. **A hue x saturation back-projection** (`BackProjectionColorDetector`), its histogram built from
+   the pixels the gate admitted **in this photograph**, weighted by the gate's own confidence,
+   smoothed 3x3 (wrapping in hue) and normalised so its busiest colour scores 1. Value is left out
+   deliberately: it is the axis lighting moves a subject along, and a model that learned "this face
+   is this bright" declines the same face in its own shadow. 36 x 32 bins rather than deepgaze's
+   180 x 256, because deepgaze seeds from a hand-picked template and this seeds from whatever the
+   gate admitted — a few thousand pixels spread over 46,080 bins is noise wearing a model's
+   clothes. The lookup is bilinear, so there is no bin edge to show up as a contour across a cheek.
+   The projection is then multiplied by the gate, which is the one departure from deepgaze (which
+   back-projects over the raw frame): the histogram may refine WITHIN what could be skin, never
+   add something the gate refused.
+
+**Too few seeds is an answer.** Below `kMinSeedFraction` (0.15% of the frame) it returns an empty
+plane rather than building a colour model out of stray pixels and then finding it everywhere.
+`Segmenter_declines_a_photo_with_no_skin_in_it`.
+
+**What the back-projection does and does not buy, stated where the code is.** It is RELATIVE: a
+terracotta patch beside a larger face is scored down in proportion and thresholded away, where the
+old fixed hue band scored the two **identically** —
+`Segmenter_backprojection_scores_a_wall_down_against_a_larger_face` asserts `wall < face * 0.5` on
+a fixture where both tones are inside deepgaze's gate. A patch *bigger* than the face wins, and no
+colour detector can do otherwise. It also makes the detector robust to lighting
+(`Segmenter_is_not_thrown_by_a_heavy_colour_cast`: the same face under a tungsten cast still comes
+back at >95% coverage).
+
+Then, still in `Detection.cpp` and shared with an installed model (R-AISEG-15 enters at exactly
+this point, so sensitivity means one thing):
+
+3. **`scoreToCoverage`, then morphology.** Binarise, **open** at `kOpenFraction` to erase specks,
+   then **close** at `kCloseFraction` to fill the pinholes a specular highlight leaves in a nose.
+   deepgaze does only the opening; a map that has been opened but not closed is lacy, and a contour
+   traced round it is a hundred little excursions into the middle of a cheek — which is exactly the
+   "not good" that was reported. Separable sliding min/max over a square rather than deepgaze's
+   ellipse: O(pixels) instead of O(pixels x radius^2), and at these radii the difference is smaller
+   than the blur that follows.
+4. **Blob analysis** (`BinaryMaskAnalyser`). deepgaze keeps only the single largest contour; skin
+   is a face AND two hands, so the rule here is two floors — at least `kMinBlobFraction` of the
+   frame and at least `kRelBlobFraction` (3%) of the largest blob. Either alone gets one case
+   wrong: the absolute floor keeps every scrap in a photo full of skin, the relative floor keeps a
+   speck in a photo whose largest blob is itself a speck.
+5. **Trace and simplify.** Blur first (`kPreTraceBlurFraction`) — the plane is binary, so its 0.5
+   contour would otherwise run along pixel edges as a staircase, and no amount of simplification
+   turns a staircase into a jawline. Then `traceCoverageOutline` at **every cell**, and
+   `simplifyLoop` (Douglas-Peucker, iterative, `kSimplifyTolerance` ~1.5 px at the 1024 px analysis
+   size). This is R-AISEG-14 inverted and it is deliberate: a coarse grid spends its budget
+   uniformly and blunts a jawline to buy detail on a straight run of forehead, while
+   simplification spends every point where the boundary actually turns. Measured: a 1024x768 disc
+   traces to 1645 points and simplifies to 33, with **every original point within the tolerance**
+   of the result — asserted directly, because "similar area" is not the same promise.
+
+**One bug found by writing the tests, and it was in the old code too.** A region running off the
+edge of the frame traced as an OPEN chain, whose enclosed area is ~0 and whose interior is empty —
+so it was dropped by the area filter and would have filled nothing. A portrait cropped at the
+shoulders is the ordinary case, not the corner case. `traceCoverageOutline` now treats everything
+outside the plane as below the threshold (`closeAtBorder`, the default), so such a region comes
+back as a loop closed along the frame edge with the area it actually covers; the old behaviour is
+still reachable and is what the "everything has no boundary" assertion now tests explicitly.
+
+#### Reaching it with no GUI
+
+```
+$ ./build/apps/cosmo/core/cosmo_core_tests
+[PASS] a_detect_mask_shows_nothing_until_it_is_detected
+       [evt] detect.started mask=0 subject=skin
+       [evt] detect.progress mask=0 stage=colour pct=20
+       [evt] detect.progress mask=0 stage=regions pct=45
+       [evt] detect.progress mask=0 stage=shapes pct=70
+       [evt] detect.progress mask=0 stage=outline pct=100
+       [evt] detect.finished mask=0 regions=1 coverage=21% by=built-in
+       1 region(s), 105 points in the first, 20.8% of the frame
+```
+
+The fixture's face is an ellipse of 0.22 x 0.30 of the frame — area `pi*r*r` = 20.7% — so 20.8% is
+the answer, not merely a plausible number. `AppModel::detect` carries the same fields for a front
+end that was not listening, and `formatModel` dumps `detectMask` / `detectRegions` /
+`detectHandled` in the stable form and `detectActive` / `detectPercent` only in the unstable one:
+how far a running detection has got is a property of when the dump was taken, not of the state the
+commands produced (the rule `budgetPeakDecode` is already excluded under).
+
+**Still to do, and it is the design half:** the Mask panel still shows a five-subject picker and has
+no Detect button and no progress bar. Until it lands, the detection is reachable only as
+`mask detect <i>`, and the Detect chip creates a mask that correctly shows nothing and cannot yet
+be told to look.

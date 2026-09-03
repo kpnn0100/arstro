@@ -15,6 +15,68 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-03 — "the skin detection is not good: show nothing until the user detects (with a
+progress bar), then a drawn mask with a precise segment; learn from deepgaze; keep only skin."
+CORE HALF DONE, DESIGN HALF NEXT.**
+
+- **[x] the core half — detection is an act, and what it finds is the mask.** R-AISEG-19..24,
+  DR-AISEG-19..24. `ctest` 17/17, `image_tests` 114/114. Six things worth carrying forward:
+  * **Segmentation is a FINDING, not a parameter, and that is the whole rework.** It used to run
+    inside `applyMaskStack` on every frame, off the fully adjusted pixels — so its cost hid in the
+    frame time, it had no moment at which to report progress, and *the mask moved when the photo
+    did*: a stop of exposure re-decided which pixels were skin and quietly replaced a mask the
+    photographer had accepted. Now it runs once, when asked, over the framed but UNADJUSTED photo.
+  * **Storing the result as geometry paid five ways and deleted a mechanism.**
+    `MaskParams::regions` holds closed loops of `CurvePoint` in the same space `path` uses, so a
+    Detect mask IS a drawn mask — asserted as *identity*, not similarity: the same region as a
+    `Path` mask renders bit-for-bit the same pixels. It is also stable, free per render, persisted,
+    and it let `MaskOutline`, `Frame::maskOutlines` and the render's segmenter argument all go.
+  * **deepgaze's actual idea is the back-projection, and its limit had to be written down.** A
+    histogram fitted to the gate's own admissions in THIS photo is relative: a terracotta patch
+    beside a larger face is scored down and thresholded away, where the old fixed hue band scored
+    the two identically. A patch *bigger* than the face wins, and no colour detector can do
+    otherwise. The first draft of R-AISEG-23 claimed it rejected the wall outright; writing the
+    test disproved it and the requirement was corrected before the code shipped.
+  * **A bug the tests found that was in the old code too**: a region running off the frame edge
+    traced as an OPEN chain — zero area, empty interior — so it was silently dropped. A portrait
+    cropped at the shoulders is the ordinary case. `traceCoverageOutline` now reads outside the
+    plane as below the threshold.
+  * **A detection must break history coalescing.** `History::record` merges edits within 450 ms so
+    a slider drag is one undoable step; a detection landing is not a continuation of what the user
+    did while it ran. Without the explicit `breakCoalesce`, "I don't like what it found" undid the
+    mask along with the finding.
+  * **The default subject had to move from 0 (Sky) to 1 (Skin).** Not a migration: the default is
+    only ever reached by a mask created fresh, which used to be born looking for a subject nothing
+    can answer for. A project that NAMES a withdrawn subject still reads it back.
+
+**► NEXT: the design half — the Mask panel's Detect block.** `arstro.cosmo.design.implement`. The
+core is done and reachable as `mask detect <i>`; the panel has not caught up and currently offers a
+five-subject picker for four subjects that no longer answer.
+
+- [ ] **Skin only.** Drop the `SegmentedControl` (a picker with one entry is not a choice) and say
+      what the detector is in the caption instead. `MaskPanel::mSubject` and `onSubjectChange` go.
+- [ ] **An empty state.** A Detect mask that has not been run says so — "No detection yet" — rather
+      than looking like a mask that found nothing.
+- [ ] **A Detect button, and a progress bar while it runs.** `AppModel::detect` already carries
+      `active` / `fraction` / `stage`; the bar eases toward the fraction (R-SVC-4: the service
+      knows it is at 45%, the view knows the bar travels there) and the stage name is the label.
+      The button is disabled while a detection is in flight.
+- [ ] **What it found, afterwards.** `regions` and `coverage` are in the model: "1 region, 21% of
+      the frame". `handled == false` needs its own sentence — "nothing here detects sky" is not the
+      same as "found nothing".
+- [ ] **Shots for every state**: empty, running (mid-bar), found, found-nothing, not-handled, at
+      1440x900 and 1024x640.
+
+Then, in order:
+
+1. **The touch shell has no Detect anything.**
+2. **A model that answers for sky / foliage / water**, which is what would bring the withdrawn
+   subjects back properly (R-AISEG-22). The seam and the manifest take one; what is missing is a
+   permissively-licensed model, not code (`docs/segmentation-models.md`).
+3. **A `mixerSpread` control in the Mixer panel** — still reachable only as `set mixerSpread=`.
+4. **Let the photographer edit what the detection found.** The regions are `CurvePoint` loops in
+   the same format a drawn path uses, so the drag machinery already exists; nothing wires it up.
+
 **► 2026-09-02 (later) — "for detection, use a MODEL, and show the mask's boundary like a drawn
 mask." IN PROGRESS.**
 
@@ -845,7 +907,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-09-03 · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on

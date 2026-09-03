@@ -84,6 +84,19 @@ namespace cosmo
         kvi(s, j, "exportTotal", m.exports.total);
         kvi(s, j, "exportFailures", m.exports.failures);
 
+        // R-AISEG-20. `detectFraction` and `detectStage` are omitted from the STABLE dump on
+        // purpose: they say how far a running detection has got, which is a property of when the
+        // dump was taken and not of the state the commands produced (the same rule
+        // `budgetPeakDecode` is excluded under). What it FOUND is state, and is always dumped.
+        kvi(s, j, "detectMask", m.detect.maskIndex);
+        kvi(s, j, "detectRegions", m.detect.regions);
+        kvb(s, j, "detectHandled", m.detect.handled);
+        if (!o.stable)
+        {
+            kvb(s, j, "detectActive", m.detect.active);
+            kvi(s, j, "detectPercent", (long long)(m.detect.fraction * 100.0 + 0.5));
+        }
+
         kvi(s, j, "settingsPreviewEdge", m.settings.previewEdge);
         kvi(s, j, "settingsThreads", m.settings.threads);
         kvb(s, j, "settingsUseGpu", m.settings.useGpu);

@@ -51,6 +51,14 @@ namespace cosmo
             FrameReady,       // a = slot, b = width, ms = render time, c = pyramid level
             ExportProgress,   // a = done, b = total, text = name
             ExportFinished,   // a = written, b = failures
+            /** R-AISEG-20: a detection, from the moment it is asked for to the moment it has an
+             *  answer. Three events and not one progress event with a 0 and a 1 in it, because
+             *  the three carry genuinely different fields — what was asked, how far it has got,
+             *  and what it found — and a consumer that only wants the last of them should not
+             *  have to filter the other two out of a stream it is matching on. */
+            DetectStarted,    // a = mask index, text = subject name
+            DetectProgress,   // a = mask index, ms = fraction*100, text = stage
+            DetectFinished,   // a = mask index, b = regions, ms = coverage*100, text = by
             CommandRejected   // text = the line, plus why
         };
 
