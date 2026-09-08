@@ -45,7 +45,8 @@ Arstro already layers its libraries by function. The suite adds one more shared 
 | UI | **Artboard** | platform-free 2D drawing + UI framework (HAL) | all apps (when UIs land) |
 | Media engine | **ImageProcessing** | non-destructive image/colour pipeline (`EditParams`) | Cosmo, **Interstellar** (per-frame colour) |
 | Media engine | **DigitalSignalProcessing** | synth + effects/reverb/EQ + rack (`SynthEngine`, `RackEngine`) | Pulsar, **Solaris** |
-| Media engine | *VideoProcessing* (new, thin) | temporal layer over ImageProcessing: frames, timeline sampling, blend/composite over time | **Interstellar** |
+| Media engine | *VideoProcessing* (thin) | temporal layer over ImageProcessing: frames, timeline sampling, blend/composite over time. (**AMENDED 2026-09-08:** this lands as `interstellar_core`'s evaluator + compositor, **not** a new shared library — there is no second consumer yet, and `ImageProcessing/src/video/VideoProcessor.h` is a 49-line stub with no time model. It is promoted to a library when something else needs it.) | **Interstellar** |
+| Expression | **Gene** (promoted) | the parse-once binding language that lets any parameter be a calculation over other parameters. Lives in `genesis_core` today; promoted to a shared library and aliased back (**added 2026-09-08**) | Genesis, **Interstellar** |
 | **Project / VCS / resource** | **Nebula** (new) | the shared **text project model**, **branch + auto-rebase**, **semantic merge**, **cross-app embedding**, **content-addressed resources** | Cosmo, Interstellar, Solaris |
 
 The key insight: colour is already shared (Cosmo and Interstellar both grade with
@@ -85,11 +86,23 @@ These are the same in all three apps (specified in [shared-core.md](shared-core.
 The story in §2, step by step, showing which mechanism does the work:
 
 1. **Shoot.** Footage + stills land in the shared **resource pool** (referenced by hash).
-2. **Grade the look in Cosmo.** The director grades representative frames to lock tone/mood.
-   The Cosmo project (`.cmp`) is a text project of graded stills — a **look**.
-3. **Start the edit in Interstellar.** A new Interstellar project **embeds the Cosmo project**
-   (branch `main`) as its colour look, and references the footage from the pool. Interstellar
-   applies that look to the moving footage per frame (same `ImageProcessing` engine).
+2. **Grade in Cosmo — the video sources themselves, beside the stills.** The director opens the
+   footage *and* the behind-the-scenes photographs in one Cosmo project, groups them, and grades
+   each source separately with Cosmo's grouping and stacking. A video source is graded on an
+   extracted **reference frame**, so Cosmo needs no concept of time. The Cosmo project (`.cmp`) is
+   the **rack**.
+3. **Start the edit in Interstellar.** A new Interstellar project **embeds that Cosmo project**
+   (branch `main`) as its `as=rack` — **live and writable**. Interstellar renders each frame with
+   the source's effective params from the rack (the same `ImageProcessing` engine), and a colour
+   edit made *in Interstellar* is an edit to the Cosmo project: no import, no export, no
+   re-synchronisation.
+
+   > **AMENDED 2026-09-08.** Step 2 used to say the director grades "representative frames" and
+   > step 3 that Interstellar embeds the result "as its colour look" — read-only, one-directional.
+   > The requirement is two-directional (*"all edits in interstellar can apply back to cosmo"*), so
+   > Interstellar now **hosts a real `CosmoService`** and the Cosmo project is the single colour
+   > authority for both apps. Interstellar's timeline carries **no colour at all**. See
+   > [../apps/interstellar/REQUIREMENTS.md](../apps/interstellar/REQUIREMENTS.md) `R-COSMO`.
 4. **Score in Solaris.** The composer builds the track in Solaris (a text project of tracks /
    clips / MIDI / rack params). Interstellar **embeds the Solaris project** (branch `main`) as
    the audio bed.
@@ -116,14 +129,19 @@ The story in §2, step by step, showing which mechanism does the work:
    ┌─────────────┴───┐  ┌───────┴────────┐    ┌───────┴────────┐
    │ Cosmo (photo)   │  │ Solaris (DAW)  │    │  Interstellar  │
    │ ImageProcessing │  │ DSP engine     │    │  (video edit)  │
-   └─────────┬───────┘  └───────┬────────┘    │ ImageProcessing│
-             │ embed look       │ embed audio │  + timeline    │
-             └──────────────────┴────────────►│                │
+   └─────────┬───────┘  └───────┬────────┘    │  timeline +    │
+             │ as=rack  ⇄       │ as=audio  ► │  automation +  │
+             │ (WRITABLE:       │ (read-only  │  bindings      │
+             │  colour lives    │  in v1)     │                │
+             │  ONLY here)      │             │ hosts a real   │
+             └──────────────────┴────────────►│ CosmoService   │
                                                └───────┬────────┘
                      Nebula: text projects · branch+auto-rebase · semantic merge · embeds
 ```
 
-- **Cosmo → Interstellar**: a graded look / still sequence becomes a colour layer or clip source.
+- **Cosmo ⇄ Interstellar**: the Cosmo project *is* Interstellar's colour authority, embedded live
+  and writable (`as=rack`). Interstellar cuts and animates; Cosmo grades; the `.cmp` is the one
+  place a source's colour exists.
 - **Solaris → Interstellar**: a song / stems become the audio bed of the timeline.
 - **Cosmo ↔ Solaris**: not directly embedded, but both feed Interstellar and share Nebula.
 - All three: same project semantics, same VCS, same resource pool.

@@ -1,0 +1,269 @@
+@startuml interstellar-architecture
+title Interstellar — Architecture (PLANNED — no code exists; R-tags in trailing comments)
+skinparam classAttributeIconSize 0
+hide empty members
+
+' ─────────────────────────────────────────────────────────────────────────────
+' Five layers. Top = platform edge. The unusual one is `cosmo_core`, which is
+' HOSTED as the colour authority (R-COSMO-3), not copied and not re-implemented.
+' ─────────────────────────────────────────────────────────────────────────────
+
+package "host (linux_main.cpp)  <<GTK/Cairo/FFmpeg>>" as host {
+  class GtkMain <<(F,#f88) entry>> {
+    + main()
+    - onDraw/onButton/onMotion/onScroll/onKey/onTick
+    - pollControl()            ' socket lines -> the SAME dispatch a click uses (R-SVC-8)
+  }
+  class FrameSourceFFmpeg <<IFrameSource, R-PLAY-1>> {
+    + open(path, SourceInfo &) : bool
+    + frameAt(frame, rgba, w, h) : bool
+    - one object PER WORKER THREAD; runs the OpenMP pin hook (D-12)
+  }
+  class FrameWriterFFmpeg <<IFrameWriter, R-RENDER-2>> {
+    + begin(path, OutputSpec) / write(rgba,w,h) / end()
+  }
+  class FrameWriterPngSeq <<IFrameWriter, R-RENDER-3>> {
+    + the only byte-comparable output — built FIRST
+  }
+  class AudioOut <<host, R-PLAY-6>> {
+    + start(mixdown) / seek(t) / measuredOffsetMs()
+  }
+  class PixelBudget <<namespace, host, R-NFR-5>>
+  class CairoTarget <<adapter>>
+}
+
+package "app  (namespace arstro::interstellar_v1)" as app {
+  class App {
+    - mScreen : Screen           ' Splash | Home | Loading | Editor
+    - mWorkspace : Workspace     ' Grade | Cut | Mix | Deliver   (R-UI-1)
+    + render(target, nowMs) / advance(nowMs)
+    + pointer/wheel/key
+    + showWorkspace(w)           ' a CROSS-FADE, never a reload (R-UI-1)
+  }
+  class EditCommands <<namespace>> {
+    + setAddress(addr, value) : Command    ' the ONE place a control becomes a Command
+  }
+  class Theme <<namespace, R-G-2>> {
+    + ALIASES cosmo_v2::palette / radius / font; compiles cosmo/Theme.cpp
+  }
+  class Monitor <<R-UI-2>> {
+    + setFrame(Frame &&)         ' ONE widget, every workspace, one picture
+  }
+  class TimelineView <<R-UI-3>> {
+    + cuts, transitions, markers, playhead, snapping — NO colour, NO lanes
+  }
+  class LaneStack <<R-UI-4>> {
+    + one row per automated address; links drawn as clips
+  }
+  class ObjectList <<R-UI-4>>
+  class BindingInspector <<R-UI-4>>
+  class ExpressionEditor <<R-UI-5>> {
+    + completion over ParamRegistry; inline validation; the live resolved value
+  }
+  class Transport <<R-PLAY-2>>
+  class RackTree <<R-RACK-1>>
+  class SourceBin <<R-UI-6>>
+  note bottom of RackTree
+    Grade's parameter panels are COSMO's widget classes,
+    linked and driven by Interstellar (R-UI-6):
+    ParamPanel · MixerPanel · CurvePanel · GradePanel
+    · XformPanel · HistogramWidget · SliderRow
+  end note
+}
+
+package "interstellar_core  (namespace arstro::interstellar)  <<UI-free>>" as core {
+  class InterstellarService <<THE application, R-SVC-1>> {
+    + dispatch(const Command &) : bool
+    + pump(double nowMs)
+    + model() : const AppModel &
+    + setEventSink(fn)
+    + takeFrame(Frame &) : bool     ' the SERVICE polls; exactly one owner (D-21)
+    - mRack : RackEmbed
+    - mBudget : ThreadBudget
+  }
+  class Command <<R-SVC-2>> {
+    + Kind kind
+    + text form GENERATED from the struct — one parser, one formatter (R-SVC-5)
+  }
+  class Event <<R-SVC-3/5>> {
+    + formatEvent() IS the log line
+    + rack.* = a re-published cosmo::Event
+  }
+  class AppModel <<R-SVC-3>> {
+    + revision : unsigned
+    + rack : cosmo::AppModel        ' BY VALUE — not mirrored (R-COSMO-4)
+    + tracks / clips / lanes / bindings / resolved
+    + playhead / frameSeq / level / dropped
+    + lastError
+    ' NO pixels, NO Artboard types, NO easing (R-SVC-4)
+  }
+  class AppModelCodec <<R-SVC-9>> {
+    + stable form: what proves two front ends agree
+  }
+  class ApiDoc <<R-SVC-10>> {
+    + generate() -> api.json / API.md, drift-tested
+  }
+  class Project <<R-FMT>> {
+    + nodes, stable ids, bind names
+    + load/save via nebula; parse->serialize is a FIXED POINT
+  }
+  class Timeline <<R-CUT>> {
+    + tracks / clips / transitions / markers
+    + add trim split move roll slip ripple
+    + activeClipsAt(frame)
+    ' a colour field here is a VALIDATION ERROR (R-CUT-2)
+  }
+  class ParamRegistry <<R-PARAM-3, GENERATED>> {
+    + resolve(address) : Entry{type,unit,min,max,default,flags,owner}
+    + owner: cosmo | interstellar   ' the ROUTER for every `set`
+    + all() : the whole address space (feeds ApiDoc + the UI)
+  }
+  class AutoClip <<R-AUTO-1>> {
+    + name, dur, interp
+    + points : (t, value, easing)[]
+    + value(localT) : double        ' analytic, never a resampled table
+  }
+  class AutoLink <<R-AUTO-2>> {
+    + clip, target address, at, dur
+    + from/to | scale/offset, mode, scope, fadeIn/fadeOut
+  }
+  class BindingGraph <<R-BIND>> {
+    + set(address, expr) : bool     ' refuses a CYCLE, naming it (R-BIND-4)
+    + topoOrder() ; dependencies DERIVED, never stored (R-G-3)
+  }
+  class Evaluator <<R-EVAL>> {
+    + resolve(project, t) : ResolvedValues
+    ' steps 1-4: time -> automation -> bindings -> rack composition
+    ' PURE and re-entrant; no cache survives a parameter change (R-NFR-1)
+  }
+  class Composite <<R-COMP>> {
+    + geometry, blend modes, transitions, the output raster
+  }
+  class FrameCache <<R-PLAY-3>> {
+    + key = (layer, source frame, RESOLVED-PARAM HASH, level)
+    + byte-capped LRU; resident bytes published (R-NFR-5)
+  }
+  class RackEmbed <<R-COSMO, the important seam>> {
+    + dispatchColour(address, value) : bool   ' -> cosmo::Command
+    + isPinned() : bool                        ' pinned = READ-ONLY (R-COSMO-5)
+    + rackModel() : const cosmo::AppModel &
+    - mCosmo : cosmo::CosmoService              ' constructed with OUR budget (R-COSMO-8)
+  }
+  class RenderJob <<R-RENDER-1>> {
+    + run(range, OutputSpec, IFrameWriter &)
+    + progress events; cancel/resume at a FRAME boundary; --lint
+  }
+  class Playback <<R-PLAY-4/5>> {
+    + play/pause/seek; bounded read-ahead (BY BYTES); drops frames and SAYS SO
+  }
+  class ThreadBudget <<R-NFR-3>> {
+    + ONE total, divided between rack decode, colour render, video decode, render job
+  }
+}
+
+package "cosmo_core  (namespace arstro::cosmo)  <<HOSTED — the colour authority>>" as cosmo {
+  class CosmoService <<R-COSMO-3>> {
+    + dispatch(cosmo::Command) / pump(nowMs) / model()
+  }
+  class EditSession {
+    + group tree, own params, composeParams, history, bypass, presets
+    + renderService() : RenderService &
+  }
+  note bottom of CosmoService
+    ONE cross-app prerequisite (R-COSMO-7): a VIDEO source appears
+    in Cosmo as an image node whose pixels are one extracted
+    reference frame, path "....MOV#t=4.250". Cosmo grows NO concept
+    of time. Landed by arstro.cosmo.core.implement, in Cosmo's commit.
+  end note
+}
+
+package "engines" as engines {
+  class EditEngine <<arstro, ImageProcessing>> {
+    + the fixed 17-stage pipeline; drops every stage at its default
+  }
+  class RenderService <<arstro>> {
+    + own worker thread; requests coalesce; pyramid levels vs a MEASURED budget
+    + SourceLoader seam -> fed by IFrameSource at a FRAME INDEX
+  }
+  class EditParams <<arstro>> {
+    + its own header already names "a future video editor"
+  }
+  class gene <<core/Gene, R-BIND-2>> {
+    + parse / fold / evaluate / collectMembers
+    + PROMOTED out of genesis_core; genesis ALIASES it
+    + extended: dotted paths of any depth + a time scope
+  }
+  class nebula <<core/Nebula, R-FMT/R-VCS>> {
+    + text model, canonical serializer, commit store
+    + semantic 3-way merge, auto-rebase, resource pool, embed resolver
+    + DOES NOT EXIST YET — shared with Solaris
+  }
+}
+
+package "Artboard  (namespace artboard)" as artboard {
+  class Segment
+  class IRenderTarget
+  class AnimatedProperty
+}
+
+' ── dependencies: every arrow points DOWN a layer (R-ARCH / arstro.rule §1) ──
+GtkMain --> App
+GtkMain --> InterstellarService
+GtkMain ..> FrameSourceFFmpeg
+GtkMain ..> FrameWriterFFmpeg
+GtkMain ..> FrameWriterPngSeq
+GtkMain ..> AudioOut
+GtkMain --> CairoTarget
+App --> EditCommands
+App --> Monitor
+App --> TimelineView
+App --> LaneStack
+App --> ObjectList
+App --> BindingInspector
+App --> ExpressionEditor
+App --> Transport
+App --> RackTree
+App --> SourceBin
+App --> Theme
+EditCommands --> Command
+App --> InterstellarService : dispatch(Command) / model()
+Monitor --> Segment
+TimelineView --> Segment
+LaneStack --> Segment
+InterstellarService --> Command
+InterstellarService --> Event
+InterstellarService --> AppModel
+InterstellarService --> Project
+InterstellarService --> Timeline
+InterstellarService --> ParamRegistry
+InterstellarService --> Evaluator
+InterstellarService --> Composite
+InterstellarService --> FrameCache
+InterstellarService --> RackEmbed
+InterstellarService --> RenderJob
+InterstellarService --> Playback
+InterstellarService --> ThreadBudget
+AppModelCodec --> AppModel
+ApiDoc --> Command
+ApiDoc --> Event
+ApiDoc --> AppModel
+ApiDoc --> ParamRegistry
+Evaluator --> AutoClip
+Evaluator --> AutoLink
+Evaluator --> BindingGraph
+Evaluator --> ParamRegistry
+Evaluator --> RackEmbed : effective params (step 4)
+BindingGraph --> gene
+Project --> nebula
+RackEmbed --> CosmoService
+CosmoService --> EditSession
+EditSession --> RenderService
+RenderService --> EditEngine
+EditEngine --> EditParams
+Composite --> EditParams
+RenderJob --> Evaluator
+RenderJob --> Composite
+Playback --> FrameCache
+Playback --> Evaluator
+
+@enduml

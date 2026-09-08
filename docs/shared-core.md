@@ -55,16 +55,22 @@ id = prj_7f3a               ; the project's own stable id
 #track id=trk_b  kind=video  order=1
 #track id=trk_m  kind=audio  order=2
 
-#clip id=clp_12  track=trk_a  order=0  in=0.000  out=4.200  src=res:9c1f… 
-  grade = exposure:0.3 contrast:-10 curve:0,0;0.5,0.6;1,1
+#clip id=clp_12  track=trk_a  order=0  in=0.000  out=4.200  src=rack:cn_41
   blend = normal
-#clip id=clp_13  track=trk_a  order=1  in=4.200  out=7.000  src=res:9c1f…
-  grade = exposure:0.1 temp:5200
+#clip id=clp_13  track=trk_a  order=1  in=4.200  out=7.000  src=rack:cn_58
   blend = over  opacity:0.8
 
-#embed id=emb_look  target=cosmo:prj_c0a1  branch=main  as=look
+#embed id=emb_rack  target=cosmo:prj_c0a1  branch=main  as=rack  writeBranch=main
 #embed id=emb_song  target=solaris:prj_50a1 branch=main  as=audio  track=trk_m
 ```
+
+> **AMENDED (Interstellar's project-in-project design, 2026-09-08).** This sample used to put a
+> `grade = …` field on each `#clip` and embed the Cosmo project `as=look`. Interstellar's design
+> moved colour **off** the timeline entirely: a clip references a node in the embedded Cosmo
+> project (`src=rack:<node>`) and carries no colour field, and the embed is `as=rack` — **live and
+> writable**, so a colour edit made in Interstellar is an edit to the Cosmo project. The shape of
+> the format is unchanged; only what Interstellar puts in it is. See
+> [../apps/interstellar/docs/project-format.md](../apps/interstellar/docs/project-format.md).
 
 **Merge-friendliness rules** (why this text merges well):
 
@@ -161,7 +167,14 @@ An **embed** node references *another project*, at a *branch*, playing a *role* 
 - `target = <app>:<projectId>` — the source project (resolved via the project registry / pool).
 - `branch = <name>` (or `<name>@<commit>` to pin) — **what it follows**.
 - `as = <role>` — how the host interprets it: Interstellar understands `as=audio` (a Solaris
-  song → the timeline's audio bed) and `as=look` (a Cosmo grade → a colour layer).
+  song → the timeline's audio bed) and `as=rack` (a Cosmo project → **the colour authority for
+  every source in the cut**).
+  (**AMENDED 2026-09-08:** this said `as=look`, "a Cosmo grade → a colour layer", which made the
+  Cosmo project a *read-only input*. Interstellar's requirement is that colour edits made in the
+  host **apply back**, so `as=rack` is **writable**: the host dispatches commands into a hosted
+  `CosmoService` and the embed carries a `writeBranch`. A pinned embed stays read-only — that is
+  what a pin means. `as=look` is retired and its name is not reused, so an older file naming it
+  resolves to nothing rather than to something subtly different.)
 - optional placement fields (`track=`, `in=`/`out=`, `offset=`) — where it sits in the host.
 
 **Propagation is the auto-rebase of §3 applied across the boundary.** The embed's `branch=main`
@@ -223,8 +236,15 @@ Nebula is generic; each app registers a **schema** (node types + fields) and **t
 | App | Node types (examples) | Media engine | Renders to |
 |-----|-----------------------|--------------|------------|
 | **Cosmo** | `group`, `image`, `grade`, `mask`, history `hnode` | ImageProcessing | still frames |
-| **Interstellar** | `track`, `clip`, `grade`, `transition`, `keyframe`, `embed` | ImageProcessing (per frame) + timeline | video master |
+| **Interstellar** | `track`, `clip`, `transition`, `autoclip`, `autolink`, `bind`, `marker`, `embed` | ImageProcessing (per frame, **through a hosted Cosmo service**) + timeline | video master |
 | **Solaris** | `track`, `clip`, `note`, `rack`, `effect`, `automation`, `bus` | DigitalSignalProcessing | audio mixdown / stems |
+
+(**AMENDED 2026-09-08:** Interstellar's row used to read `grade`, `transition`, `keyframe`. It has
+no `grade` node — colour lives in the embedded Cosmo project (`as=rack`), which is why `grade` is
+Cosmo's row and not Interstellar's — and no `keyframe` node: animation is a **named, reusable**
+`autoclip` plus an `autolink` that applies it to an addressed parameter, so one shape can drive
+several parameters at once. The type resolvers Interstellar registers are therefore: automation
+breakpoint lists union by time, and clip lists reconcile by `at`/`order`.)
 
 All three get the same **text format**, **living branches**, **semantic merge**, **embedding**,
 and **resource pool** for free from Nebula. The app-specific details are in

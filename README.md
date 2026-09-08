@@ -36,7 +36,7 @@ adapter, so it adapts to any screen or OS the same way a driver adapts to hardwa
 | [`apps/launcher`](apps/launcher/) | An Android-style touch shell for GNOME and KDE Plasma, drawn entirely with Artboard | **Building** — milestones code-complete, live-desktop verification pending |
 | [`apps/arstrobench`](apps/arstrobench/) | Benchmark that answers "can this computer run cosmo?" — times the image pipeline and the signal pipeline, scores each as `1/seconds`, and reports the chip, RAM and OS it measured | **Building** — Linux and Windows desktop |
 | [`apps/solaris`](apps/solaris/) | Digital audio workstation | **Spec only** — no code yet |
-| [`apps/interstellar`](apps/interstellar/) | Professional video editor (colour blending & edit) | **Spec only** — no code yet |
+| [`apps/interstellar`](apps/interstellar/) | Professional video editor: cuts and composites, and **hosts a live Cosmo project as its colour authority** — colour is graded in the rack, the timeline only cuts, and every parameter is addressable, automatable and bindable to a calculation | **Spec only** — no code yet; [fully specified](apps/interstellar/docs/) |
 
 [`examples/`](examples/) holds small demos — `scope`, `studio`, `synth`, `piano`, `ui_demo` —
 kept deliberately minimal as references for building an app on the stack.
