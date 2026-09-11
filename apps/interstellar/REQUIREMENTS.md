@@ -43,7 +43,7 @@ conformance rung **0**.
 
 ---
 
-## R-SCOPE — What Interstellar v1 is — 📋 SPECIFIED
+## R-SCOPE — What Interstellar v1 is — 🚧 IN PROGRESS (core, CLI and the UI shell built 2026-09-11)
 
 - **R-SCOPE-1** Interstellar v1 is a **non-linear video editor for colour and cut**: it hosts a live
   Cosmo project as its colour authority (R-COSMO), cuts and composites video and still sources on a
@@ -100,7 +100,7 @@ conformance rung **0**.
 
 ---
 
-## R-SVC — The core is a service; every front end is a view — 📋 SPECIFIED
+## R-SVC — The core is a service; every front end is a view — ✅ IMPLEMENTED (except R-SVC-8/9; R-SVC-10 partial)
 
 Interstellar starts where Cosmo arrived rather than where Cosmo started. Cosmo's `R-SVC` is a
 *migration* — its `App.cpp` still holds 105 direct session calls against 7 dispatches, admitted in
@@ -151,7 +151,7 @@ precondition of its first commit, not a project.
 
 ---
 
-## R-COSMO — The embedded Cosmo project: colour authority, project-in-project — 📋 SPECIFIED
+## R-COSMO — The embedded Cosmo project: colour authority, project-in-project — 🚧 IN PROGRESS (the seam and the routing built; the hosted CosmoService is P3)
 
 The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a consequence.
 
@@ -170,9 +170,19 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
   (**This amends the original brief's `as=look`, which made the Cosmo project a read-only input** —
   README §9.)
 - **R-COSMO-4 Cosmo's model is not re-implemented, re-declared or wrapped in a parallel type.**
-  Interstellar's `AppModel` carries the Cosmo `AppModel` *by value*, as a member, and projects from
-  it only what its own views need (a node list with bind names, R-PARAM-2). A field copied out of
-  Cosmo's model into a same-shaped Interstellar field is a violation of R-G-3.
+  (**AMENDED (implementation, 2026-09-11).** This said Interstellar's `AppModel` carries the Cosmo
+  `AppModel` **by value, as a member**, so that there could not be a second copy of one fact
+  (R-G-3). Carrying it turned out to force `cosmo_core` — and therefore GTK3, GdkPixbuf and LibRaw
+  — onto `service/AppModel.h`, which every file in the library and every test includes: the core
+  suite would have needed a display-capable host to LINK, for state no view reads.
+  **What replaces it:** the rack reaches the model through the `RackAccess` seam
+  (`core/RackAccess.h`), and the model carries a **projection** — `RackNodeModel`. R-G-3 is
+  satisfied a different way, and the distinction is the point: **these fields are a READ, not a
+  copy.** Nothing in them is writable, nothing is cached across a revision, and the authority is
+  still the one hosted `CosmoService`. The cost is that a view wanting a Cosmo field the projection
+  does not carry must ask for it to be added — the normal price of a projection, and cheaper than a
+  library-wide dependency. The seam also made the core suite provable in 0.03 s with a three-line
+  fake, which is what R-TEST-2's "lowest level that proves it" asks for.)
 - **R-COSMO-5 Where the write lands is explicit.** The embed node carries `writeBranch` (default:
   its own `branch`). Every colour command from Interstellar commits there. A **pinned** embed
   (`branch=main@<commit>`) is **read-only**, and a colour command against a pinned rack is rejected
@@ -219,7 +229,7 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
 
 ---
 
-## R-RACK — Sources, groups, and where colour is authored — 📋 SPECIFIED
+## R-RACK — Sources, groups, and where colour is authored — 🚧 IN PROGRESS (the seam built; the hosted service is P3)
 
 - **R-RACK-1 The rack is Cosmo's group tree, shown as Cosmo shows it.** Nested groups, images and
   video sources as leaves, per-group offset parameters that compose onto children, per-node bypass,
@@ -234,13 +244,26 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
   root and shares the decoded pixels.
 - **R-RACK-4 Every rack node is addressable by a bind name** (R-PARAM-2) and by its Cosmo node id.
   Names are the user's language; ids are everyone else's.
+- **R-RACK-6 A rack node's BIND NAME and GRADE WEIGHT are Interstellar's, and live in the
+  `.isp`.** (**Added 2026-09-11, forced by implementation.**) Two things the specification assumed
+  turned out to need somewhere to live, and the `.cmp` is not it — the rack owns colour, and only
+  colour (R-COSMO-2):
+  * **the bind name.** Cosmo names a node after its file or after what the user typed for a group,
+    so `"Tokyo Night"` and `"DSC01.MOV"` are both normal — and **neither is a legal address**
+    (R-PARAM-2). An expression needs `gr1`, so Interstellar derives a legal identifier from
+    Cosmo's own name and it is **stable once assigned**, because an expression spells it.
+  * **the grade weight** (`<name>.opacity`), which the user's own `bind gr1.opacity = …` example
+    addresses: the weight with which this node's own parameter offsets apply to its descendants — a
+    continuous `bypass`. Cosmo has no concept of it, and it is composited in step 4.
+  Both live on a `#rackobj` node, which is Interstellar's data ABOUT a rack node rather than colour
+  data belonging to it. It is the tenth node type and it is why there are ten rather than nine.
 - **R-RACK-5 An offline or failed source reads as missing, never as a stall.** Cosmo's
   `pending`/`failed` distinction carries through into Interstellar's model, and a clip whose source
   is offline renders as a marked placeholder frame — the project stays openable.
 
 ---
 
-## R-CUT — The timeline: cut, and only cut — 📋 SPECIFIED
+## R-CUT — The timeline: cut, and only cut — ✅ IMPLEMENTED
 
 - **R-CUT-1 Timeline node types are `track`, `clip` and `transition`.** A `track` has
   `kind = video | audio`, an `order` (z-order for video, top over bottom), a mute and a lock. A
@@ -271,7 +294,7 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
 
 ---
 
-## R-COMP — Compositing: geometry, opacity, blend — 📋 SPECIFIED
+## R-COMP — Compositing: geometry, opacity, blend — ✅ IMPLEMENTED
 
 - **R-COMP-1 A video track stack composites top over bottom**, each layer being an already-graded
   frame, so a composite is a composite of graded frames and never of raw ones.
@@ -293,7 +316,7 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
 
 ---
 
-## R-PARAM — The parameter address space — 📋 SPECIFIED
+## R-PARAM — The parameter address space — ✅ IMPLEMENTED
 
 The mechanism that makes automation and binding possible at all. It is the same problem Solaris
 calls out as *critical* (`SR-` A3: "a stable, serializable string path for every adjustable
@@ -349,7 +372,7 @@ parameter"), and Interstellar has more parameters than any other app in the suit
 
 ---
 
-## R-AUTO — Automation clips: the DAW mixer model — 📋 SPECIFIED
+## R-AUTO — Automation clips: the DAW mixer model — ✅ IMPLEMENTED
 
 The user's requirement, in their words: *"just like mixer in a DAW — when we want to animate a param
 of a filter of a group we create an automation clip for that; all params can create an automation
@@ -360,6 +383,13 @@ clip; multi param can use the same automation."*
   **own local time**, with values in its **own unit space** (0..1 by default). It is an object with
   a bind name, it lives in the project's automation pool, and it knows nothing about which
   parameters use it.
+- **R-AUTO-1a `auto new --points` is in NORMALISED time; the stored shape is in seconds.**
+  (**Added 2026-09-11.** Found by running `eval --explain` while writing the debug skill: a
+  `--points 0=0,1=1` shape sampled 0.25 at what looked like its midpoint, because the CLI scales
+  each point's `t` by the shape's `dur` while the `.isp` stores local seconds. Neither was wrong,
+  but nothing said so, and an undocumented normalisation is a value a user cannot account for.) The
+  command's `t` values are fractions of the shape's duration; the file's are seconds. Both must
+  round-trip.
 - **R-AUTO-2 A link is what applies a clip to a parameter, and a clip may have many links.** An
   `#autolink` node carries: the `autoclip`, the target **address**, a timeline placement (`at`,
   and an optional `dur` that time-scales the shape), a **value mapping** (`from`/`to`, or
@@ -400,7 +430,7 @@ clip; multi param can use the same automation."*
 
 ---
 
-## R-BIND — Bindings: a parameter driven by a calculation — 📋 SPECIFIED
+## R-BIND — Bindings: a parameter driven by a calculation — ✅ IMPLEMENTED
 
 The user's requirement: *"param can be bind to other param with calculation (like genesis) … so that
 I can bind `gr1.opacity` to `gr1.basic.exposure`."*
@@ -425,6 +455,14 @@ I can bind `gr1.opacity` to `gr1.basic.exposure`."*
     two-level members stay a special case, so Genesis is unaffected.
   - **a time scope.** `t` (timeline seconds), `frame`, `fps`, `dur` and `project.*` become built-in
     identifiers alongside `w`, `h`, `minSide`.
+  (**IMPLEMENTED 2026-09-11**, and the promotion needed a third extension nobody predicted: a path
+  **segment may start with a digit**, because Interstellar addresses a mask by index and a mixer
+  band by hue — `s1.mask.0.adjust.exposure`. And a **two-segment `Member` now falls through to the
+  path resolver**, so a consumer whose addresses are uniformly dotted registers one resolver rather
+  than two: `gr1.opacity` is as real an address as `gr1.basic.exposure`, and the first run of
+  `gene_tests` failed on exactly that. The pre-promotion parser did not merely lack deep paths — it
+  ACCEPTED them and silently returned `a.c` for `a.b.c`, which is the one failure worse than an
+  error.)
   Gene's `raw{}` C++ escape and its colour type are **not** exposed by Interstellar: there is no
   code generation here, and a colour-valued parameter is bound component-wise.
 - **R-BIND-3 The function set is Gene's**, unchanged, so one language does not become two:
@@ -456,7 +494,7 @@ I can bind `gr1.opacity` to `gr1.basic.exposure`."*
 
 ---
 
-## R-EVAL — The per-frame evaluation order — 📋 SPECIFIED
+## R-EVAL — The per-frame evaluation order — ✅ IMPLEMENTED
 
 This is the contract that makes R-AUTO and R-BIND composable rather than merely coexistent, and it
 is normative: two front ends, a scrub and a master render must all produce the same numbers.
@@ -538,7 +576,7 @@ is normative: two front ends, a scrub and a master render must all produce the s
 
 ---
 
-## R-FMT — The `.isp` project format — 📋 SPECIFIED
+## R-FMT — The `.isp` project format — ✅ IMPLEMENTED
 
 - **R-FMT-1** An Interstellar project is a **Nebula** text document, extension **`.isp`**, header
   `app = interstellar`, sharing the Nebula grammar with `.cmp` and `.slp`: stable ids, `key = value`
@@ -580,7 +618,7 @@ is normative: two front ends, a scrub and a master render must all produce the s
 
 ---
 
-## R-CLI — The shell front end — 📋 SPECIFIED
+## R-CLI — The shell front end — ✅ IMPLEMENTED
 
 - **R-CLI-1** `interstellar-cc` is the whole application without a window: it holds argv, stdout,
   the clock, the codecs and the filesystem, and **no behaviour** (Cosmo's `cli/main.cpp` header is
@@ -599,7 +637,7 @@ is normative: two front ends, a scrub and a master render must all produce the s
 
 ---
 
-## R-UI — The Artboard front end — 📋 SPECIFIED (P10)
+## R-UI — The Artboard front end — 🚧 IN PROGRESS (the shell, monitor, timeline, lanes and transport built 2026-09-11)
 
 Full brief: [`docs/ui-brief.md`](docs/ui-brief.md). The law is `arstro.design.rule`; these are the
 requirements that are *about Interstellar* rather than about every Arstro front end.
@@ -637,7 +675,7 @@ requirements that are *about Interstellar* rather than about every Arstro front 
 
 ---
 
-## R-TEST — Evidence — 📋 SPECIFIED
+## R-TEST — Evidence — ✅ IMPLEMENTED
 
 - **R-TEST-1** Every suite registers with the root `ctest`. A test that is not registered does not
   exist.

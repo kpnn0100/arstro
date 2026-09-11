@@ -165,6 +165,21 @@ expression already carries (R-G-3).
 #marker id=mk_1 name=chorus  at=48.000  color=#4F7EF7  note="chorus in"
 ```
 
+### 2.9a `#rackobj` — Interstellar's own data about a rack node (R-RACK-6)
+
+```
+#rackobj id=ro_1 name=gr1 node=cn_1 opacity=1.0
+```
+
+| field | meaning |
+|---|---|
+| `node` | the Cosmo node id this names |
+| `name` | the **bind name** — an expression spells this. Cosmo's own name may contain a space or a dot and is therefore not a legal address (R-PARAM-2) |
+| `opacity` | the **grade weight**: how strongly this node's own parameter offsets apply to its descendants — a continuous `bypass`, and what `bind gr1.opacity = …` addresses |
+
+It is Interstellar's data *about* a rack node, not colour data belonging to it, which is why it
+lives here and not in the `.cmp`.
+
 ### 2.9 `#settings` — project-scoped preferences that belong to the project, not the machine
 
 ```
@@ -354,6 +369,7 @@ clip roll <clipA>,<clipB> --by <dt>         ; clip slip <clip> --by <dt>
 transition add --between <clipA>,<clipB> --kind dissolve --dur 0.5
 
 auto new  <name> --dur <t> --points 0=0,1=1 [--ease easeInOut] [--interp bezier]
+          ; --points times are NORMALISED (fractions of --dur); the FILE stores seconds (R-AUTO-1a)
 auto point <autoclip> --at <t> --value <v> [--ease <e>]   ; auto point delete <autoclip> --at <t>
 auto link <autoclip> -> <address> --at <t> [--dur <t>] [--from <v> --to <v>]
           [--mode absolute|add|multiply] [--scope <clip>] [--fade-in <frames>]

@@ -11,7 +11,10 @@ file(GLOB_RECURSE GENESIS_CORE CONFIGURE_DEPENDS core/*.cpp)
 add_library(genesis_core STATIC ${GENESIS_CORE})
 target_include_directories(genesis_core PUBLIC core)
 find_package(Threads REQUIRED)   # the editor verifies on a worker thread
-target_link_libraries(genesis_core PUBLIC artboard_core Threads::Threads)
+# gene_core carries the Gene language, which used to be core/gene/Gene.cpp here. It moved to
+# core/Gene so Interstellar could use the SAME parser (interstellar R-BIND-2);
+# core/gene/Gene.h is now a four-line alias shim and `genesis::gene` still resolves.
+target_link_libraries(genesis_core PUBLIC artboard_core gene_core Threads::Threads)
 
 # The verifier compiles a generated component at runtime, so it needs to know where the
 # Artboard headers and the built core library are. Baked in here rather than guessed.

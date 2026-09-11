@@ -1,9 +1,14 @@
 # Interstellar — Software Architecture
 
-> **Planned, not as-built.** No code exists. Every `file:line` in this document is a *destination*,
-> and the module map below is the plan the first commits are judged against. When code lands, this
-> file describes what is there and [`requirements.md`](requirements.md) gains the matching `DR-`
-> entries.
+> **Partly as-built as of 2026-09-11.** `interstellar_core`, `interstellar-cc`, `gene_core` and the
+> UI shell exist; the hosted `CosmoService`, the FFmpeg seams, the control socket and Nebula do not.
+> The module map in §9 marks each row **[built]** or **[planned]**, and
+> [`requirements.md`](requirements.md) carries the `DR-` entries with live `file:line` anchors.
+>
+> **One amendment to §3.5, made while implementing it:** the rack reaches the core through the
+> `RackAccess` seam rather than by `AppModel` carrying `cosmo::AppModel` by value. Carrying it would
+> have put GTK3 on every file in the library and every test. The seam is narrower, the core suite
+> runs in 0.03 s against a three-line fake, and R-COSMO-4 is amended in place with the reason.
 
 ## 1. Architectural overview
 
@@ -319,8 +324,32 @@ Rules that are requirements, not implementation notes:
 Every planned file, its layer, and the requirement that justifies it. A file with no row is a file
 nothing justifies (`arstro.rule` §3.1).
 
+**[built]** rows exist and are covered by a `DR-` entry; **[planned]** rows do not exist yet. A
+doc that cannot tell you which is which is worse than no doc — four instructions in cosmo's own
+skills named tools that had never existed.
+
 | Path | Layer | Responsibility |
 |------|-------|----------------|
+| `core/Gene/*` | engine | **[built]** `gene::` promoted out of `genesis_core`, extended with dotted paths (any depth, digit-led segments allowed) and a time scope; `genesis` aliases it via a four-line shim (R-BIND-2) |
+| `apps/interstellar/core/Project.{h,cpp}` | core | **[built]** the `.isp`: ten node types, canonical text, the byte-exact fixed point, the colour-field refusal, the `nan` repair, bind names and renaming (R-FMT) |
+| `apps/interstellar/core/Timeline.{h,cpp}` | core | **[built]** the cut operations and the derived cut points (R-CUT) |
+| `apps/interstellar/core/ParamRegistry.{h,cpp}` | core | **[built]** the generated address space and the owner-based router for every `set` (R-PARAM) |
+| `apps/interstellar/core/Automation.{h,cpp}` | core | **[built]** shapes, links, the overlap refusal, lanes and the boundary lint (R-AUTO) |
+| `apps/interstellar/core/BindingGraph.{h,cpp}` | core | **[built]** compiled Gene expressions, derived deps, cycle refusal with rollback, topological order (R-BIND) |
+| `apps/interstellar/core/Evaluator.{h,cpp}` | core | **[built]** steps 1–4, pure; the grade-weight fold; the parameter hash (R-EVAL) |
+| `apps/interstellar/core/Composite.{h,cpp}` | core | **[built]** steps 6–8: inverse-mapped geometry, seven blend modes, the linear mix (R-COMP) |
+| `apps/interstellar/core/RackAccess.h` | core | **[built]** the rack seam — four methods, and the R-COSMO-4 amendment as built |
+| `apps/interstellar/core/service/*` | core | **[built]** `InterstellarService` (46 command kinds), `Command` + its generated codec and specs, `Event`, `AppModel`, `AppModelCodec`, the generated API document (R-SVC) |
+| `apps/interstellar/cli/main.cpp` | front end | **[built]** `interstellar-cc`: argv, stdout, a PPM writer, no behaviour (R-CLI) |
+| `apps/interstellar/Theme.h` | app | **[built]** aliases cosmo's token namespaces; adds `surface::` and `time::` (R-G-2) |
+| `apps/interstellar/App.{h,cpp}` | app | **[built]** the shell: four workspaces, the monitor outside the deck, the gesture→Command seam (R-UI-1) |
+| `apps/interstellar/widgets/*` | app | **[built]** `Monitor`, `TimelineView`, `LaneStack`, `Transport`, `WorkspaceBar` (R-UI-2/3/4) |
+| `apps/interstellar/tests/*` | tests | **[built]** `interstellar_core_tests` (29), `interstellar_ui_tests` (8), `interstellar_shots` with `--size`/`--script`/`--tree`/`--check` |
+| `apps/interstellar/core/RackEmbed.{h,cpp}` | core | **[planned, P3]** the hosted `cosmo::CosmoService` behind `RackAccess` |
+| `apps/interstellar/FrameSourceFFmpeg.*` / `FrameWriterFFmpeg.*` | host | **[planned, P2/P8]** the codec seams; `IFrameSource`/`IFrameWriter` are declared today and the CLI implements a PPM writer |
+| `apps/interstellar/linux_main.cpp` | host | **[planned, P10]** the GTK window, the control socket, the audio bed |
+| `core/Nebula/*` | engine | **[planned, P9]** the text project store, VCS, merge, embeds, resource pool |
+|  |  | *the rows below were the original plan and are superseded or deferred:* |
 | `apps/interstellar/linux_main.cpp` | host | GTK app, events, dialogs, fonts, the control socket, the FFmpeg source/writer construction, the budgeted decoder, the audio device (R-SCOPE-7, R-PLAY-1, R-RENDER-2) |
 | `apps/interstellar/FrameSourceFFmpeg.{h,cpp}` | host | `IFrameSource` over libav*: open, seek, decode to RGBA8, one object per worker (R-PLAY-1) |
 | `apps/interstellar/FrameWriterFFmpeg.{h,cpp}` | host | `IFrameWriter`: ProRes / H.264 / H.265 (R-RENDER-2) |

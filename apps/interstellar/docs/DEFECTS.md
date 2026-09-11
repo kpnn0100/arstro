@@ -3,11 +3,13 @@
 `D-<n>`, **sequential across the unit, never reused, nothing ever deleted.** A resolved entry moves
 whole to `## Closed` with its commit hash and the test that now guards it.
 
-**No defects. There is no code.**
+**No OPEN defects.** Five were found and fixed during the first implementation, all within the
+commit that introduced the code they were in; they are in `## Closed` because the lessons are the
+point, not the ids.
 
-This file exists from the first day for the same reason the as-built tier does: the conventions are
-cheap to establish and expensive to retrofit, and a unit without a defect list quietly loses the
-one record that stops a lesson being learned twice.
+The conventions were established on day one for the same reason the as-built tier was: they are
+cheap then and expensive to retrofit, and a unit without a defect list quietly loses the one record
+that stops a lesson being learned twice.
 
 ## The boundary that makes this list worth keeping
 
@@ -47,7 +49,73 @@ so that the two cannot drift:
 
 ## Closed
 
-*(none)*
+Five defects, all found and fixed inside the commit that introduced them (2026-09-11, `interstellar:
+build the core, the CLI and the UI shell`). They are recorded because **four of the five were found
+by running or looking at something rather than by reading the code**, which is the whole argument
+for the verification levels in `arstro.rule` §4.
+
+### D-1 — `auto new --points 0=0,1=1` was refused as "wants t=v,t=v"
+- **Area:** core / cli · **Status:** Fixed · **Severity:** S3 · **Found:** by running the first
+  command script.
+- **Cause:** `collectFlags` (`core/service/Command.cpp`) copied cosmo's rule of excluding a
+  following token that contains `=`, so `--points` became a bare flag and `0=0,1=1` was parsed as a
+  field named `0`.
+- **Judgement:** defect. The exclusion exists in cosmo because its flags never take a value
+  containing `=`; here one does, and bare `key=value` arguments only reach `set`, which does not go
+  through `collectFlags` at all.
+- **Fix:** the next token is the value unless it is another flag.
+- **Guarded by:** `test_command_text_roundtrips`, whose `auto new` line carries `--points 0=0,1=1`.
+
+### D-2 — `gene_tests` printed `[PASS]` for a test that was failing
+- **Area:** tests · **Status:** Fixed · **Severity:** S1 (a suite that cannot report red is not
+  evidence) · **Found:** by noticing an error line printed *above* eight `[PASS]` lines.
+- **Cause:** `CMAKE_BUILD_TYPE=Release` puts `-DNDEBUG` in the flags and `<cassert>` then defines
+  `assert` to `((void)0)`. This is **cosmo's D-43**, hit again in a new suite.
+- **Fix:** undefine `NDEBUG` before `<cassert>` in both new suites.
+- **What it then immediately caught:** a **dangling reference in the test's own fixture** —
+  `mapScope` captured a by-value parameter by reference. So the lesson is not only "Release breaks
+  asserts"; it is that a suite which cannot report red cannot report red **about itself**.
+- **Guarded by:** the `#undef NDEBUG` header block in `coreTests.cpp` and `geneTests.cpp`, with the
+  reason written above it.
+
+### D-3 — every automation link in the first 190 px was invisible
+- **Area:** ui · **Status:** Fixed · **Severity:** S2 (the automation was there and could not be
+  seen) · **Found:** **by rendering `mix-1440x900.png` and looking at it.**
+- **Cause:** `LaneStack` drew its labels in a 190 px gutter but started its time axis at x=0, so a
+  link at t=1.0 with a 60 px/s zoom occupied x=60…180 — entirely under the gutter — and the paint's
+  own `lr.x + lr.w > labelW` test then culled it.
+- **Judgement:** defect, and a `arstro.design.rule` gotcha-15 instance: the lanes and the timeline
+  held two copies of one fact (where time begins).
+- **Fix:** one `time::headerWidth()`, read by **both** deck views and by both directions of their
+  time↔x mapping. The timeline gained a track-header column as a consequence, which an NLE has
+  anyway.
+- **Guarded by:** `DR-UI-4`, and visibly by the `mix-*` shots.
+
+### D-4 — the transport's timecode was drawn underneath the scrubber
+- **Area:** ui · **Status:** Fixed · **Severity:** S4 · **Found:** **by looking at
+  `cut-1440x900.png`.**
+- **Cause:** `scrubberRect` used a hard-coded left gutter of 132 px; the mono timecode is ~50 px
+  wide from x=96, so it ended at ~146.
+- **Fix:** measure the real timecode in `onPaint` and derive the gutter from it. R5's rule —
+  measured, not assumed — applied to a *sibling's* box rather than to the text's own.
+- **Guarded by:** `DR-UI-5`.
+
+### D-5 — `eval --explain` printed an input that contradicted its own result
+- **Area:** core / evaluator · **Status:** Fixed · **Severity:** S2 · **Found:** **by running
+  `--explain` while writing the debug skill**, which is the tool that skill tells an agent to reach
+  for first.
+- **Reproduce (pre-fix):** a binding `1 + ac_push.value * 0.08` resolved to **1.08** while its
+  trace reported `ac_push.value = 0.0`.
+- **Cause:** `ac_push.value` was resolved by a special case inside the Gene scope, so the number the
+  expression used and the number the trace printed came from two different places.
+- **Judgement:** defect — and the worst kind for this app, because `--explain` exists precisely to
+  turn "a value the user cannot account for" into one they can. A lying trace is worse than no
+  trace.
+- **Fix:** seed every shape's output into the resolved map **before** the bindings run; the scope
+  and the trace then both read the map. One authority for one number (R-G-3).
+- **Guarded by:** `test_the_explain_trace_agrees_with_the_value_it_explains`, which asserts the
+  result is arithmetically consistent with the input the trace claims produced it — **checked to
+  fail on the pre-fix code.**
 
 ---
 

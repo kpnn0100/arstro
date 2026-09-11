@@ -1,13 +1,25 @@
-#include "Gene.h"
+#include "gene/Gene.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
 
-namespace genesis
+namespace arstro
 {
     namespace gene
     {
+        namespace
+        {
+            /** The dotted spelling of a path, for an error message and for a dependency key.
+             *  One helper, so an error and a dependency can never disagree about the name. */
+            std::string joinPath(const std::vector<std::string> &segs)
+            {
+                std::string s;
+                for (size_t i = 0; i < segs.size(); ++i) { if (i) s += '.'; s += segs[i]; }
+                return s;
+            }
+        }
+
         namespace
         {
             constexpr double kPi = 3.14159265358979323846;
@@ -234,7 +246,11 @@ namespace genesis
                         ws();
                         if (i < src.size() && src[i] == '.')
                         {
-                            if (p->kind != NodeKind::Ident)
+                            // A dot may follow a name OR an already-built dotted reference —
+                            // which is what makes a path of any depth parse at all. Requiring
+                            // an Ident here is what limited the language to two segments.
+                            if (p->kind != NodeKind::Ident && p->kind != NodeKind::Member &&
+                                p->kind != NodeKind::Path)
                             {
                                 fail("'.' may only follow a name");
                                 return nullptr;
@@ -242,12 +258,36 @@ namespace genesis
                             ++i;
                             std::string field;
                             ws();
-                            if (i >= src.size() || !isIdentStart(src[i])) { fail("expected a field name after '.'"); return nullptr; }
-                            while (i < src.size() && isIdentChar(src[i])) field += src[i++];
+                            // A segment may START WITH A DIGIT: Interstellar addresses a mask by
+                            // index and a mixer band by hue — `s1.mask.0.adjust.exposure`,
+                            // `s1.mixer.hue.30`. Only inside a path, never as a bare identifier,
+                            // so `2x` is still a syntax error rather than a name.
+                            if (i >= src.size() || !(isIdentStart(src[i]) || (src[i] >= '0' && src[i] <= '9')))
+                            { fail("expected a field name after '.'"); return nullptr; }
+                            while (i < src.size() && (isIdentChar(src[i]) || (src[i] >= '0' && src[i] <= '9')))
+                                field += src[i++];
+                            // Two segments stay a `Member` — that is what Genesis emits and
+                            // what its resolvers expect. A THIRD segment promotes the whole
+                            // thing to a `Path`, because the old code overwrote `field` here
+                            // and silently turned `a.b.c` into `a.c` (arstro R-BIND-2).
                             auto n = std::make_shared<Node>();
-                            n->kind = NodeKind::Member;
-                            n->name = p->name;
-                            n->field = field;
+                            if (p->kind == NodeKind::Member)
+                            {
+                                n->kind = NodeKind::Path;
+                                n->segments = {p->name, p->field, field};
+                            }
+                            else if (p->kind == NodeKind::Path)
+                            {
+                                n->kind = NodeKind::Path;
+                                n->segments = p->segments;
+                                n->segments.push_back(field);
+                            }
+                            else
+                            {
+                                n->kind = NodeKind::Member;
+                                n->name = p->name;
+                                n->field = field;
+                            }
                             p = n;
                             continue;
                         }
@@ -441,7 +481,20 @@ namespace genesis
                 case NodeKind::Member:
                 {
                     if (sc.lookupMember && sc.lookupMember(n->name, n->field, out)) return true;
+                    // A two-segment reference falls through to the PATH resolver when the member
+                    // one declines or is unset. Genesis sets `lookupMember` and never notices;
+                    // a consumer whose addresses are uniformly dotted (Interstellar: `gr1.opacity`
+                    // is as real an address as `gr1.basic.exposure`) would otherwise have to
+                    // register the same resolver twice and would silently fail on the two-segment
+                    // ones — which is exactly what happened the first time this suite ran.
+                    if (sc.lookupPath && sc.lookupPath({n->name, n->field}, out)) return true;
                     if (err && err->empty()) *err = "unknown field '" + n->name + "." + n->field + "'";
+                    return false;
+                }
+                case NodeKind::Path:
+                {
+                    if (sc.lookupPath && sc.lookupPath(n->segments, out)) return true;
+                    if (err && err->empty()) *err = "unknown path '" + joinPath(n->segments) + "'";
                     return false;
                 }
                 case NodeKind::Unary:
@@ -618,7 +671,8 @@ namespace genesis
             for (auto &a : root->args)
                 a = fold(a);
             if (root->kind == NodeKind::Number || root->kind == NodeKind::ColorLit ||
-                root->kind == NodeKind::Ident || root->kind == NodeKind::Member || root->kind == NodeKind::Raw)
+                root->kind == NodeKind::Ident || root->kind == NodeKind::Member ||
+                root->kind == NodeKind::Path || root->kind == NodeKind::Raw)
                 return root;
             for (const auto &a : root->args)
                 if (!isConstant(a))
@@ -647,6 +701,15 @@ namespace genesis
             const bool ok = evalNode(root, scope, out, error ? error : &local);
             if (ok && error) error->clear();
             return ok;
+        }
+
+        void collectPaths(const NodePtr &root, std::vector<std::string> &out)
+        {
+            if (!root) return;
+            if (root->kind == NodeKind::Member) out.push_back(root->name + "." + root->field);
+            else if (root->kind == NodeKind::Path) out.push_back(joinPath(root->segments));
+            for (const auto &a : root->args)
+                collectPaths(a, out);
         }
 
         void collectMembers(const NodePtr &root, std::vector<std::pair<std::string, std::string>> &out)
@@ -688,8 +751,13 @@ namespace genesis
 
         const std::vector<std::string> &builtinIdents()
         {
+            // `t` / `frame` / `fps` / `dur` are the TIME scope (arstro R-BIND-2). They are listed
+            // here for an editor's completion and validation, and are deliberately NOT resolved
+            // in `evaluate` — they reach `lookupIdent`, so the host supplies the clock and this
+            // library keeps no notion of time.
             static const std::vector<std::string> v = {"w",   "h",  "minSide", "maxSide", "aspect",
-                                                      "pi",  "tau", "e",       "PI",      "TAU"};
+                                                      "pi",  "tau", "e",       "PI",      "TAU",
+                                                      "t",   "frame", "fps",   "dur"};
             return v;
         }
 
@@ -811,6 +879,16 @@ namespace genesis
                     }
                     if (err->empty()) *err = "unknown name '" + n->name + "'";
                     return "";
+                }
+                case NodeKind::Path:
+                {
+                    if (!names.path)
+                    {
+                        if (err->empty())
+                            *err = "no C++ resolver for path '" + joinPath(n->segments) + "'";
+                        return "";
+                    }
+                    return names.path(n->segments);
                 }
                 case NodeKind::Member:
                 {

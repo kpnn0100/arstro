@@ -22,6 +22,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(ARSTRO_BUILD_COSMO "Build the cosmo photo editor GUI" ON)
+option(ARSTRO_BUILD_INTERSTELLAR "Build Interstellar (interstellar_core, interstellar-cc, GUI)" ON)
 option(ARSTRO_BUILD_GENESIS "Build Genesis (animation designer: genesis_core, genesis-cc, GUI)" ON)
 option(ARSTRO_BUILD_ANDROID_SHELL "Build the Android-theme touch shell (apps/launcher/android-shell)" ON)
 option(ARSTRO_BUILD_DSP "Build the Arstro DSP library + synth/kitchen-sink/piano-demo apps" ON)
@@ -34,6 +35,12 @@ enable_testing()  # aggregate the subprojects' unit tests so top-level `ctest` s
 # by the app. Each subproject also defines its own unit-test executable.
 add_subdirectory(core/Artboard)
 add_subdirectory(core/ImageProcessing)
+
+# gene_core: Gene, the shared binding language (an expression instead of a number for any
+# authored field). Promoted out of genesis_core so Interstellar could use the same parser
+# rather than grow a second one. Dependency-free, so it sits beside Artboard rather than
+# under it, and both genesis and interstellar link it.
+add_subdirectory(core/Gene)
 
 # arstro_dsp: the channel-aware DSP/synth library (ESP32DigitalSynth) — physical-
 # modeling piano (physical/PianoVoice), oscillators, effects. Also defines the
@@ -70,6 +77,13 @@ endif()
 # after the DSP library because its signal workload links arstro_dsp. Same GTK3 + Cairo
 # native backend as cosmo, so it builds on Linux and on Windows via MSYS2; the GUI
 # self-skips without pkg-config/GTK3 while its core + unit tests still build.
+# interstellar: the video editor. interstellar_core is UI-free and depends only on gene_core, so
+# it builds everywhere; the GUI is gated on cosmo_core inside the subtree — which is why this
+# comes AFTER apps/cosmo: `if(TARGET cosmo_core)` can only see a target already defined.
+if(ARSTRO_BUILD_INTERSTELLAR)
+  add_subdirectory(apps/interstellar)
+endif()
+
 if(ARSTRO_BUILD_ARSTROBENCH)
   if(ARSTRO_BUILD_DSP)
     add_subdirectory(apps/arstrobench)
