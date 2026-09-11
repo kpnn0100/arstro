@@ -4,6 +4,10 @@
 # Layering, strictly downward: interstellar_core (UI-free) -> the app (Artboard) -> the host.
 add_subdirectory(core)
 
+# interstellar_host: the codec seams (FFmpeg). Optional — without libav* the CLI still builds and
+# still writes the PPM sequence a golden test compares.
+add_subdirectory(host)
+
 # interstellar-cc: front end #1 over InterstellarService — the whole application without a
 # window (R-CLI-1). Its own directory so the GUI's source glob cannot swallow the CLI's main().
 add_subdirectory(cli)
@@ -27,6 +31,54 @@ if(TARGET cosmo_core)
   pkg_check_modules(INTERSTELLAR_CAIRO REQUIRED IMPORTED_TARGET cairo)
   pkg_check_modules(INTERSTELLAR_FREETYPE REQUIRED IMPORTED_TARGET freetype2)
 
+  # ── interstellar: the GUI ────────────────────────────────────────────────────────────────
+  # GTK3 for the window and the dialogs; Cairo for the Artboard adapter; FreeType + cairo-ft so
+  # the EMBEDDED faces are usable at all (ARTBOARD_CAIRO_FT switches CairoTarget's text path to
+  # "a registered face wins"). The typeface is cosmo's, compiled in, for the reason cosmo gives:
+  # the app's own type is not a thing that may differ between machines (R-FONT-1).
+  pkg_check_modules(INTERSTELLAR_GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
+
+  set(INTERSTELLAR_FONT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo/assets/fonts)
+  set(INTERSTELLAR_FONT_FILES
+      ${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-Regular.ttf
+      ${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-Medium.ttf
+      ${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-SemiBold.ttf
+      ${INTERSTELLAR_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf
+      ${INTERSTELLAR_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf)
+  set(INTERSTELLAR_FONT_LIST
+      "Roboto|${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-Regular.ttf"
+      "Roboto Medium|${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-Medium.ttf"
+      "Roboto SemiBold|${INTERSTELLAR_FONT_DIR}/Roboto/Roboto-SemiBold.ttf"
+      "JetBrains Mono|${INTERSTELLAR_FONT_DIR}/JetBrainsMono/JetBrainsMono-Regular.ttf"
+      "JetBrains Mono Medium|${INTERSTELLAR_FONT_DIR}/JetBrainsMono/JetBrainsMono-Medium.ttf")
+  set(INTERSTELLAR_EMBEDDED_FONTS ${CMAKE_CURRENT_BINARY_DIR}/EmbeddedFonts.generated.cpp)
+  add_custom_command(OUTPUT ${INTERSTELLAR_EMBEDDED_FONTS}
+    COMMAND ${CMAKE_COMMAND} "-DFONTS=${INTERSTELLAR_FONT_LIST}" -DOUT=${INTERSTELLAR_EMBEDDED_FONTS}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo/cmake/embed_fonts.cmake
+    DEPENDS ${INTERSTELLAR_FONT_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo/cmake/embed_fonts.cmake
+    VERBATIM
+    COMMENT "interstellar: embedding the typeface into the binary (R-FONT-1)")
+
+  add_executable(interstellar
+                 ${CMAKE_CURRENT_SOURCE_DIR}/linux_main.cpp
+                 ${INTERSTELLAR_UI_SOURCES}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo/EmbeddedFonts.cpp
+                 ${INTERSTELLAR_EMBEDDED_FONTS}
+                 ${CAIRO_ADAPTER})
+  target_include_directories(interstellar PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cosmo
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include)
+  target_compile_definitions(interstellar PRIVATE ARTBOARD_CAIRO_FT)
+  if(TARGET interstellar_host)
+    target_link_libraries(interstellar PRIVATE interstellar_host)
+  else()
+    target_link_libraries(interstellar PRIVATE interstellar_core)
+  endif()
+  target_link_libraries(interstellar PRIVATE artboard_core PkgConfig::INTERSTELLAR_GTK3
+                        PkgConfig::INTERSTELLAR_FREETYPE)
+
   # interstellar_shots — every named state to a PNG with no display. It has --size, --script and
   # --tree from the first commit: all three are cheap while a harness is new, and cosmo's absence
   # of them cost an agent a whole investigation each (see its skill's §6 "two real gaps").
@@ -36,6 +88,9 @@ if(TARGET cosmo_core)
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/Artboard/include)
+  if(TARGET interstellar_host)
+    target_link_libraries(interstellar_shots PRIVATE interstellar_host)
+  endif()
   target_link_libraries(interstellar_shots PRIVATE interstellar_core artboard_core
                         PkgConfig::INTERSTELLAR_CAIRO PkgConfig::INTERSTELLAR_FREETYPE)
 

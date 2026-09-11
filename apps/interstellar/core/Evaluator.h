@@ -79,6 +79,17 @@ namespace interstellar
             double localTime = 0;      // seconds into the clip's source
             long long sourceFrame = 0; // nearest-neighbour (R-CUT-6)
             double progress = 0;       // 0..1 through the clip
+            /** The transition weight this clip's opacity must be multiplied by, 1.0 when no
+             *  transition covers `t` (R-CUT-4a). The OUTGOING side of a dissolve is held past its
+             *  own out-point for the transition's duration and fades 1 -> 0 while the incoming
+             *  side fades 0 -> 1 — which is what "a dissolve across a cut" means, and without it
+             *  there is nothing to dissolve FROM: two adjacent clips leave the incoming one
+             *  fading up over black. */
+            double transitionWeight = 1.0;
+            /** True while this clip is only live because a transition is holding it past its
+             *  out-point. It reads frames past `out` (its "handles"), and freezes on the source's
+             *  last frame when there are none. */
+            bool heldByTransition = false;
         };
         std::vector<ActiveClip> activeAt(double t) const;
 

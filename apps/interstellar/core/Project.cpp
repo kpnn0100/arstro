@@ -366,6 +366,17 @@ namespace interstellar
         return rackObjs.back();
     }
 
+    std::string Project::mediaForSrc(const std::string &src) const
+    {
+        const std::string ref = src.rfind("rack:", 0) == 0 ? src.substr(5) : src;
+        if (const RackObj *r = rackObjForNode(ref)) return r->media;
+        // Also accept a BIND NAME, for a hand-edited file: the name is what a person writes and
+        // the node id is what the writer emits, and refusing the human spelling of a reference
+        // that plainly resolves would be pedantry rather than safety.
+        if (const RackObj *r = rackObj(ref)) return r->media;
+        return {};
+    }
+
     const Embed *Project::rackEmbed() const
     {
         for (const auto &e : embeds)
@@ -667,7 +678,9 @@ namespace interstellar
                     RackObj r;
                     r.id = f("id"); r.name = f("name", r.id); r.node = f("node");
                     r.opacity = num(f("opacity", "1.0"), 1.0, repaired);
-                    known({"id", "name", "node", "opacity"}, r.unknown);
+                    r.media = f("media");
+                    r.frame = num(f("frame", "0"), 0, repaired);
+                    known({"id", "name", "node", "opacity", "media", "frame"}, r.unknown);
                     if (r.id.empty() || r.node.empty()) return fail("#rackobj needs an id and a node");
                     rackObjs.push_back(r); ctx = Ctx::RackObj;
                 }
@@ -789,7 +802,9 @@ namespace interstellar
             for (const auto &r : rs)
             {
                 o << "#rackobj id=" << r.id << " name=" << r.name << " node=" << r.node
-                  << " opacity=" << canonicalNumber(r.opacity);
+                  << " opacity=" << canonicalNumber(r.opacity)
+                  << " media=" << quoteIfNeeded(r.media)
+                  << " frame=" << canonicalTime(r.frame);
                 un(r.unknown);
                 o << '\n';
             }

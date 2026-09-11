@@ -40,6 +40,7 @@ namespace interstellar
     {
         NodeId id, name, track;
         std::string src, srcName;      // srcName = the rack object's bind name, for display
+        std::string media;             // the source file, so a view can name what is offline
         double at = 0, in = 0, out = 0, speed = 1.0, opacity = 1.0;
         double duration = 0;
         bool srcOffline = false;       // reads as missing, never as a stall (R-RACK-5)
@@ -79,6 +80,7 @@ namespace interstellar
         std::string node;        // the Cosmo node id
         std::string bindName;    // Interstellar's (R-PARAM-2); Cosmo's own name may have spaces
         std::string cosmoName;
+        std::string media;       // the source file, so a view can list and relink what is offline
         int depth = 0;
         bool group = false, bypass = false, pending = false, failed = false;
         bool referenced = false; // a clip uses it. False is NOT an error (R-COSMO-10)
@@ -128,6 +130,12 @@ namespace interstellar
         int frameWidth = 0, frameHeight = 0, frameLayers = 0;
         unsigned frameSeq = 0;
         double frameMs = 0;        // MACHINE-DEPENDENT -> excluded from the stable dump
+        /** What the frame cache holds and how it is doing (R-NFR-5). All MACHINE-DEPENDENT — two
+         *  services given the same commands on a fast and a slow box are in the same STATE while
+         *  having cached a different number of frames — so all excluded from the stable dump. */
+        size_t cacheBytes = 0;
+        int cacheEntries = 0;
+        unsigned cacheHits = 0, cacheMisses = 0;
 
         RenderModel render;
         ProjectSettings settings;

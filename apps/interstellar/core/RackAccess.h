@@ -21,6 +21,7 @@
  *  quadruple, because the address space is per-scalar and Cosmo's codec is per-key.
  */
 #pragma once
+#include "engine/EditParams.h"
 #include <string>
 #include <vector>
 
@@ -59,6 +60,24 @@ namespace interstellar
         virtual bool isPinned() const = 0;
         /** Why it is pinned, for the refusal message. */
         virtual std::string pinCommit() const { return {}; }
+
+        /** The node's EFFECTIVE parameters — its own, composed up its ancestors — as a whole
+         *  `EditParams` (R-COSMO-1a).
+         *
+         *  Whole, rather than one scalar at a time, because step 5 of the frame pipeline is
+         *  `EditEngine` rendering a decoded frame with exactly this struct: reading it field by
+         *  field would mean rebuilding it in Interstellar, which is the second copy R-G-3 forbids.
+         *
+         *  **False means IDENTITY**, and that is a load-bearing answer rather than a failure: the
+         *  render path then hands the decoded pixels straight through instead of paying a
+         *  linear-light conversion to apply nothing. An unhosted rack returns false for every
+         *  node, which is why an ungraded cut renders at full speed today (R-RACK-7). */
+        virtual bool effectiveParams(const std::string &nodeId, arstro::EditParams &out) const
+        {
+            (void)nodeId;
+            (void)out;
+            return false;
+        }
     };
 }
 }

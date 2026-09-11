@@ -5,6 +5,11 @@
 > The module map in §9 marks each row **[built]** or **[planned]**, and
 > [`requirements.md`](requirements.md) carries the `DR-` entries with live `file:line` anchors.
 >
+> **The codec seams and the window are built as of 2026-09-12**, so the layer diagram below is
+> real rather than planned at the host row: FFmpeg fills `IFrameSource`/`IFrameWriter` and GTK3
+> owns the window. `interstellar_core` also links `arstro_image` now — which is portable and
+> codec-free, so the core is still displayless (R-COSMO-1a).
+>
 > **One amendment to §3.5, made while implementing it:** the rack reaches the core through the
 > `RackAccess` seam rather than by `AppModel` carrying `cosmo::AppModel` by value. Carrying it would
 > have put GTK3 on every file in the library and every test. The seam is narrower, the core suite
@@ -345,9 +350,12 @@ skills named tools that had never existed.
 | `apps/interstellar/App.{h,cpp}` | app | **[built]** the shell: four workspaces, the monitor outside the deck, the gesture→Command seam (R-UI-1) |
 | `apps/interstellar/widgets/*` | app | **[built]** `Monitor`, `TimelineView`, `LaneStack`, `Transport`, `WorkspaceBar` (R-UI-2/3/4) |
 | `apps/interstellar/tests/*` | tests | **[built]** `interstellar_core_tests` (29), `interstellar_ui_tests` (8), `interstellar_shots` with `--size`/`--script`/`--tree`/`--check` |
+| `apps/interstellar/core/FrameCache.{h,cpp}` | core | **[built]** byte-capped LRU keyed by `(media, frame, paramHash, level)`, with published counters (R-PLAY-3) |
+| `apps/interstellar/core/GradeEngine.{h,cpp}` | core | **[built]** step 5: decoded pixels + `EditParams` → graded pixels, with an identity short-circuit (R-COSMO-1a) |
+| `apps/interstellar/host/FrameSourceFFmpeg.{h,cpp}` | host | **[built]** `IFrameSource` over libav*, sequential with a seek threshold; a still is a one-frame stream (R-PLAY-1) |
+| `apps/interstellar/host/FrameWriterFFmpeg.{h,cpp}` | host | **[built]** H.264/MP4 and ProRes/MOV, chosen by extension (R-RENDER-2) |
+| `apps/interstellar/linux_main.cpp` | host | **[built]** the GTK3 window, the clock, the dialogs, the embedded typeface, the two codec seams (R-SCOPE-7). No control socket and no audio bed |
 | `apps/interstellar/core/RackEmbed.{h,cpp}` | core | **[planned, P3]** the hosted `cosmo::CosmoService` behind `RackAccess` |
-| `apps/interstellar/FrameSourceFFmpeg.*` / `FrameWriterFFmpeg.*` | host | **[planned, P2/P8]** the codec seams; `IFrameSource`/`IFrameWriter` are declared today and the CLI implements a PPM writer |
-| `apps/interstellar/linux_main.cpp` | host | **[planned, P10]** the GTK window, the control socket, the audio bed |
 | `core/Nebula/*` | engine | **[planned, P9]** the text project store, VCS, merge, embeds, resource pool |
 |  |  | *the rows below were the original plan and are superseded or deferred:* |
 | `apps/interstellar/linux_main.cpp` | host | GTK app, events, dialogs, fonts, the control socket, the FFmpeg source/writer construction, the budgeted decoder, the audio device (R-SCOPE-7, R-PLAY-1, R-RENDER-2) |

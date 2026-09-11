@@ -91,7 +91,8 @@ namespace interstellar
             s << "  node " << r.bindName << " id=" << r.node
               << (r.group ? " group" : " source") << " depth=" << r.depth
               << " weight=" << n3(r.gradeWeight) << (r.bypass ? " bypass" : "")
-              << (r.referenced ? " used" : " unused") << '\n';
+              << (r.referenced ? " used" : " unused") << (r.failed ? " offline" : "")
+              << (r.media.empty() ? "" : " media=" + r.media) << '\n';
         s << "tracks " << m.tracks.size() << '\n';
         for (const auto &t : m.tracks)
             s << "  track " << t.name << (t.audio ? " audio" : " video") << " order=" << t.order
@@ -125,7 +126,9 @@ namespace interstellar
         // frames. Excluded from the stable dump for exactly that reason (R-SVC-9).
         if (!o.stable)
             s << "frame " << m.frameWidth << 'x' << m.frameHeight << " layers " << m.frameLayers
-              << " seq " << m.frameSeq << " ms " << n3(m.frameMs) << '\n';
+              << " seq " << m.frameSeq << " ms " << n3(m.frameMs) << '\n'
+              << "cache bytes " << m.cacheBytes << " entries " << m.cacheEntries << " hits "
+              << m.cacheHits << " misses " << m.cacheMisses << '\n';
         s << "settings proxyEdge=" << m.settings.proxyEdge << " cpuPercent=" << m.settings.cpuPercent
           << " lintOnRender=" << (m.settings.lintOnRender ? 1 : 0) << '\n';
         if (!m.lastError.empty()) s << "lastError " << m.lastError << '\n';

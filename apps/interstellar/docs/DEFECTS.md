@@ -3,9 +3,10 @@
 `D-<n>`, **sequential across the unit, never reused, nothing ever deleted.** A resolved entry moves
 whole to `## Closed` with its commit hash and the test that now guards it.
 
-**No OPEN defects.** Five were found and fixed during the first implementation, all within the
-commit that introduced the code they were in; they are in `## Closed` because the lessons are the
-point, not the ids.
+**No OPEN defects.** Eight have been found and fixed, each within the commit that introduced the
+code it was in; they are in `## Closed` because the lessons are the point, not the ids. **Six of
+the eight were found by running or looking at something**, which keeps being the argument for the
+verification levels in `arstro.rule` §4 rather than for reading more carefully.
 
 The conventions were established on day one for the same reason the as-built tier was: they are
 cheap then and expensive to retrofit, and a unit without a defect list quietly loses the one record
@@ -49,10 +50,53 @@ so that the two cannot drift:
 
 ## Closed
 
-Five defects, all found and fixed inside the commit that introduced them (2026-09-11, `interstellar:
-build the core, the CLI and the UI shell`). They are recorded because **four of the five were found
-by running or looking at something rather than by reading the code**, which is the whole argument
-for the verification levels in `arstro.rule` §4.
+### D-8 — the project name in the top bar was the whole file path
+- **Area:** core / ui · **Status:** Fixed · **Severity:** S4 · **Found:** **by looking at the
+  first shot of a real project** (2026-09-12).
+- **Cause:** `project new` set `mProject.name = c.path`, so a project opened from
+  `/tmp/claude-1001/-home-namdln-…/real.isp` put all of that in the top bar, where it crowded the
+  workspace switcher and was truncated mid-path.
+- **Judgement:** defect. A project name is a label a person reads; a path is not one.
+- **Fix:** `baseName()` — the file name without its extension. `project open` also repairs a name
+  that still contains a separator, so a project saved by the old build reads correctly.
+
+### D-7 — `rack add` refused when no media could be decoded
+- **Area:** core · **Status:** Fixed · **Severity:** S3 · **Found:** by `ctest` — it broke
+  `interstellar_ui`, which has no decoder (2026-09-12).
+- **Cause:** the first version of `rack add` returned a rejection when nothing could be read, which
+  conflated **registering a source** with **being able to decode one**.
+- **Judgement:** defect, and a requirement clarification: a project is a text document that
+  REFERENCES media (R-FMT-3), so a front end with no codec — or a file that has moved — must still
+  get a source it can relink. The clip then reads offline, which is R-RACK-5's whole point.
+- **Fix:** register the sources, emit an Info saying they read as offline, and do not refuse. The
+  UI tests then seed with a plain `rack add` and need no decoder.
+- **Guarded by:** `test_an_unopenable_source_reads_as_offline_not_as_a_stall`, and by
+  `interstellar_ui` itself, which would not build a project otherwise.
+
+### D-6 — a dissolve faded the incoming clip up over black
+- **Area:** core / evaluator · **Status:** Fixed · **Severity:** S2 · **Found:** **by rendering
+  real video and looking at the dissolve** (2026-09-12).
+- **Reproduce (pre-fix):** two adjacent clips, `transition add --between shotA,shotB --kind
+  dissolve --dur 0.5`, then extract output frame 50. It showed the incoming clip at ~17% over
+  black — the picture went dark through the cut instead of crossfading.
+- **Cause:** `shotA` ends exactly at the cut (`at=0 out=2.0` → `end()==2.0`), so `activeAt(2.083)`
+  returned only `shotB`, and the compositor then scaled `shotB`'s opacity by the ease with nothing
+  underneath it. **There was nothing to dissolve FROM.**
+- **Judgement:** defect. "A dissolve across a cut" means holding the outgoing clip for the
+  transition's duration and reading its handles — which is what every NLE does and what the
+  requirement meant.
+- **Fix:** `Evaluator::activeAt` computes a `transitionWeight` per clip and keeps the outgoing side
+  live past its out-point (`heldByTransition`); the renderer multiplies and computes nothing. The
+  weight belongs with the active-clip set because "is it live" and "how much does it contribute"
+  are the same question — answering them in two places is what let the compositor fade a clip that
+  was not there. Requirement: **R-CUT-4a** (new).
+- **Guarded by:** `test_a_transition_holds_the_outgoing_clip_and_crossfades`, which asserts both
+  clips are live at the cut and that the two weights **sum to 1** mid-transition.
+
+---
+
+The first five, all found and fixed inside the commit that introduced them (2026-09-11,
+`interstellar: build the core, the CLI and the UI shell`).
 
 ### D-1 — `auto new --points 0=0,1=1` was refused as "wants t=v,t=v"
 - **Area:** core / cli · **Status:** Fixed · **Severity:** S3 · **Found:** by running the first

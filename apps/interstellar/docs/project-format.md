@@ -176,6 +176,8 @@ expression already carries (R-G-3).
 | `node` | the Cosmo node id this names |
 | `name` | the **bind name** — an expression spells this. Cosmo's own name may contain a space or a dot and is therefore not a legal address (R-PARAM-2) |
 | `opacity` | the **grade weight**: how strongly this node's own parameter offsets apply to its descendants — a continuous `bypass`, and what `bind gr1.opacity = …` addresses |
+| `media` | the **source file**. The timeline decodes frame N from it, and Interstellar stores it because Interstellar is what added the source — Cosmo exposes a slot's path only through the transitional `session()` accessor its own ledger is counting down |
+| `frame` | the reference-frame time a video source is graded on, in seconds (R-COSMO-7's selector) |
 
 It is Interstellar's data *about* a rack node, not colour data belonging to it, which is why it
 lives here and not in the `.cmp`.
@@ -362,7 +364,9 @@ eval <address> --at <t> [--explain]
 
 track add --kind video|audio [--name v1] [--order n]
 track set <track> <address>=<value>...
-clip add --track <track> --src rack:<node> --in <t> --out <t> --at <t> [--name clp_a]
+clip add --track <track> --src rack:<source> --in <t> --out <t> --at <t> [--name clp_a]
+          ; <source> may be a BIND NAME (`rack:a`) — node ids are assigned by the writer and are
+          ; not guessable. Stored canonically as `rack:<node>`; an unknown source is refused.
 clip trim <clip> --in <t> | --out <t>       ; clip split <clip> --at <t>
 clip move <clip> --at <t> [--track <track>] ; clip delete <clip> [--ripple]
 clip roll <clipA>,<clipB> --by <dt>         ; clip slip <clip> --by <dt>

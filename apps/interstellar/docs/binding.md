@@ -264,8 +264,9 @@ The normative order (R-EVAL-2). Every stage is a pure function of the stages abo
  │    geom.crop → fit → scale/rotate about anchor → translate, into the       │
  │    output raster                                                           │
  ├ 7  COMPOSITE ──────────────────────────────────────────────────────────────┤
- │    tracks bottom → top; per-clip blend + opacity; transitions resolved as  │
- │    a two-layer mix                                                         │
+ │    tracks bottom → top; per-clip blend + opacity; a transition contributes │
+ │    a WEIGHT per side, computed in step 1 with the active-clip set — the     │
+ │    outgoing clip is held past its out-point and the two weights sum to 1   │
  ├ 8  OUTPUT ─────────────────────────────────────────────────────────────────┤
  │    colour-space encode → frame cache / writer / monitor                    │
  └────────────────────────────────────────────────────────────────────────────┘
@@ -278,6 +279,10 @@ Three things the order settles, each of which would otherwise be a defect nobody
 - **Both before composition** — so a group's offsets are composed from values that are already
   final. Composing first and animating after would mean an automated group parameter reached its
   children through a value that had already been folded.
+- **The transition weight belongs with the active-clip set, not with the compositor** — because
+  whether the outgoing clip is live *at all* past its own out-point is the same question as how
+  much it contributes, and answering it in two places let the compositor fade a clip that was not
+  there (D-6: the incoming side faded up over black).
 - **Colour before geometry** — so a crop or a scale never changes the *colour* of a pixel by
   changing which pixels the colour stages saw. Cosmo's own pipeline puts geometry first for the
   opposite reason (its crop defines the framed image the histogram describes); the two are

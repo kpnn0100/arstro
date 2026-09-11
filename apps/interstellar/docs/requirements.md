@@ -168,6 +168,14 @@ does not exist.
   `Evaluator::paramHash` (`core/Evaluator.cpp:311`) mixes the source id, the effective rack
   parameters and the clip's own geometry/opacity — not the parameter struct, which would miss a
   change to a shape a link maps in.
+- **DR-EVAL-7 A transition holds the outgoing clip and crossfades (R-CUT-4a).**
+  `Evaluator::activeAt` computes a `transitionWeight` per clip and keeps the **outgoing** side live
+  past its own out-point for the transition's duration, reading its handles and freezing on the
+  source's last frame when there are none. The renderer multiplies by that weight and computes
+  nothing itself, so every consumer agrees about which clips are live. **This is D-6's fix**: two
+  adjacent clips left nothing to dissolve *from*, so the incoming clip faded up over black.
+  Guarded by `test_a_transition_holds_the_outgoing_clip_and_crossfades`, which asserts the two
+  weights **sum to 1** mid-transition.
 - **DR-EVAL-6 Source frames are nearest-neighbour (R-CUT-6).** `Evaluator::activeAt`
   (`core/Evaluator.cpp:108`) computes `floor(localTime * fps)` and the model says so, rather than
   implying an interpolation it does not do. Guarded by `test_active_clips_and_source_frames`.
@@ -184,6 +192,49 @@ does not exist.
 - **DR-COMP-3 `fit` is explicit (R-COMP-5).** `contain`/`cover`/`stretch`/`none` are a per-clip
   field, never an implicit rule.
 
+## DR-PLAY — decode, the cache and the scrub
+
+- **DR-PLAY-1 Real decode, in the host layer (R-PLAY-1).** `FrameSourceFFmpeg`
+  (`host/FrameSourceFFmpeg.cpp:1`) implements `IFrameSource` over libavformat/libavcodec/libswscale
+  and emits straight RGBA8. It is **sequential**: it keeps its decoder position and seeks only
+  backwards, or more than `kSeekThreshold` (24) frames forward — decoding forward a short distance
+  is nearly free while a seek costs a keyframe search plus the decode from it, so a scrub that
+  re-seeked per frame would be a seek storm. A **still image is a one-frame stream**, so stills
+  need no second code path. One object per media path, never shared between threads.
+- **DR-PLAY-2 An open decoder per media path.** `InterstellarService::sourceFor` keeps an
+  `OpenSource` per path and remembers a **failure** rather than retrying, so a missing file is not
+  reopened once per frame of a scrub.
+- **DR-PLAY-3 A byte-capped LRU frame cache (R-PLAY-3).** `FrameCache` (`core/FrameCache.cpp:1`),
+  keyed by `(media, sourceFrame, paramHash, level)`. Capped in **bytes** because a 4K frame is
+  33 MB and a 1280-proxy 3.5 MB, so "sixty frames" is not a size. `get` **copies** on a hit: the
+  caller composites afterwards and a reference would dangle at the next eviction. Counters
+  (`residentBytes`, `entries`, `hits`, `misses`, `evictions`) are published in the model, because
+  "the cache works" is a claim that needs a number (R-NFR-5). Guarded by
+  `test_the_frame_cache_serves_a_second_visit_and_not_a_stale_one`, which asserts a repeat visit
+  decodes **nothing** and that a parameter change decodes **again**.
+- **DR-PLAY-4 The proxy edge is the scrub's affordability.** `renderFrame(t, out, proxyEdge)`
+  grades every layer at that long edge; `proxyEdge <= 0` is full resolution, which is what an
+  export asks for. Measured: 96 frames of two-layer 1280×720 with a dissolve, decoded, composited
+  and H.264-encoded in **1.76 s** — about 55 fps, faster than real time.
+
+## DR-RENDER — the master
+
+- **DR-RENDER-1 A real encoder (R-RENDER-2).** `FrameWriterFFmpeg`
+  (`host/FrameWriterFFmpeg.cpp:1`) writes **H.264 in MP4/MKV** (`crf 18`, preset `medium`) and
+  **ProRes 422 in MOV**, chosen from the output **extension** rather than a flag — a `.mp4` that
+  silently held ProRes would be a worse surprise than an unsupported-extension error. The time base
+  is `av_d2q(1/fps)`, so 23.976 and 29.97 are exact rather than rounded: frames are the authority
+  (R-CUT-5) and a drifting time base would make the file disagree with the project about when a cut
+  happens.
+- **DR-RENDER-2 `end()` flushes, and that is not optional.** An encoder holds frames back
+  (B-frames, lookahead); a file closed without flushing is short by however many it held — a
+  truncated render that reads as a rendering bug.
+- **DR-RENDER-3 Odd dimensions are refused, not cropped.** Both codecs need even width and height;
+  silently changing the raster the user asked for is worse than saying so.
+- **DR-RENDER-4 The PPM sequence stays (R-RENDER-3).** The CLI's writer is chosen by extension:
+  `.mp4`/`.mov`/`.mkv` get a codec, anything else gets the PPM sequence — which is deliberate
+  rather than a fallback, because it is the only output a golden test can compare byte for byte.
+
 ## DR-COSMO — the rack
 
 - **DR-COSMO-1 The rack reaches the core through one seam.** `RackAccess`
@@ -199,6 +250,33 @@ does not exist.
   implementation and surfaced as `"the rack is pinned at <commit> — it is read-only"`. An
   Interstellar-owned rack parameter (the grade weight) stays writable, because it is not colour.
   Guarded by `test_a_pinned_rack_refuses_every_colour_write`.
+- **DR-COSMO-1a The seam hands over a whole `EditParams` (R-COSMO-1a).**
+  `RackAccess::effectiveParams(node, out)` returns the node's effective parameters whole, or
+  **false for identity** — and false is a load-bearing answer rather than a failure:
+  `GradeEngine::render` then hands the decoded bytes through untouched. `interstellar_core`
+  therefore links `arstro_image`, which is portable and codec-free, so the core stays free of GTK.
+- **DR-COSMO-1b Step 5 is `EditEngine`, used as a pure function.** `GradeEngine`
+  (`core/GradeEngine.cpp:1`) owns one engine and per frame does `clearImages` → `addImage` →
+  `applyParams` → `renderPreview`/`renderFull`. Nothing survives between frames because a video
+  frame is different pixels every time, and a slot per frame would leak one per frame.
+  **The identity short-circuit is the difference between usable and not**: the engine converts a
+  1080p frame to 24.8 MB of linear float on ingest, and at default parameters drops all 17 stages
+  and converts back — so an ungraded source (every source until P3) is never handed to it.
+  `isIdentity` compares through the parameter **codec** rather than field by field, because a
+  hand-written comparison is a second list of what `EditParams` contains and would go stale the
+  first time a field was added.
+- **DR-COSMO-5 A source is registered by `rack add`, before the rack is hosted (R-RACK-7).**
+  Each source gets a `#rackobj` with a stable node id, a bind name derived from the **file name**
+  (a filename is not a legal identifier), the media path and a reference-frame time.
+  `rack add` is **not refused when nothing could be decoded**: registering a source and being able
+  to decode one are different things, so a front end with no codec — or a file that has moved —
+  still gets a source it can relink, and the clip reads offline. (The first version did refuse, and
+  it broke the UI tests, which have no decoder and need none.)
+- **DR-COSMO-6 `--src` names a source by its BIND NAME and stores a node id.** Node ids are
+  assigned by the writer and are **not guessable** — the first `rack add` of two files produced
+  `cn_1` and `cn_3`, because naming a source consumes an id too. `clip add --src rack:a` resolves
+  the name, stores `rack:cn_1` canonically, and **refuses an unknown source, listing what the rack
+  has** (R-SVC-6). Guarded by `test_a_clip_src_may_name_a_source_by_its_bind_name`.
 - **DR-COSMO-4 A rack node's bind name is Interstellar's (R-RACK-6).** `Project::ensureRackObj`
   (`core/Project.cpp:344`) derives a legal identifier from Cosmo's own name — which may be a
   filename or contain spaces — and it is **stable once assigned**, because an expression spells it.
@@ -243,6 +321,29 @@ does not exist.
 - **DR-CLI-3 PPM only, deliberately (R-RENDER-3).** A dozen lines, no image library, and
   byte-comparable — the only output a golden test can assert on. Real codecs are the GUI host's
   FFmpeg job and do not exist yet.
+
+## DR-HOST — the window
+
+- **DR-HOST-1 A real GTK3 window (R-SCOPE-7).** `linux_main.cpp` owns the window, the clock, the
+  file dialogs, the fonts and the two codec seams, and holds **no behaviour**: every state change
+  is a `Command` and everything drawn comes from the `AppModel`. That is why
+  `interstellar_shots` builds the same `App` with no display.
+- **DR-HOST-2 The keyboard is the edit surface.** `space` play/pause · `←`/`→` one frame ·
+  `↑`/`↓` cut to cut · `S` split every clip under the playhead · `Del` delete the selection ·
+  `ctrl+I` import · `ctrl+O` open · `ctrl+S` save · `ctrl+E` export · `1`–`4` workspace ·
+  wheel scroll · `ctrl`+wheel zoom. Bare paths on the command line are imported and laid on the
+  timeline, so `interstellar a.mp4 b.mp4` is already a cut.
+- **DR-HOST-3 Playback derives the playhead from the wall clock**, not by counting frames, so a
+  slow frame costs a **dropped frame** rather than a slowed-down edit (R-NFR-4).
+- **DR-HOST-4 Repaint follows need.** A 16 ms tick that always redrew would re-render the whole
+  window in software Cairo sixty times a second at rest — the core a decode needs. R-G-1 forbids a
+  visible change in one frame, not a repaint at rest.
+- **DR-HOST-5 The typeface is compiled in (R-FONT-1).** Cosmo's embedded faces, registered
+  **before** the `App` is built so the first frame measures text in the app's own font — a layout
+  measured in a fallback face reports overflow that does not exist.
+- **DR-HOST-6 `[!]` Export blocks the window.** A render is not yet a background job
+  (`RenderJob::step` is unbuilt), so `ctrl+E` is synchronous and the window is unresponsive until
+  it finishes. It prints the path first so the user can see what it is doing.
 
 ## DR-UI — the front end
 

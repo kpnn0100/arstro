@@ -8,4 +8,10 @@
 # image library at all to produce the one output a golden test can compare byte-for-byte
 # (R-RENDER-3).
 add_executable(interstellar-cc ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
-target_link_libraries(interstellar-cc PRIVATE interstellar_core)
+if(TARGET interstellar_host)
+  # The real decoder and encoder. interstellar_host carries INTERSTELLAR_HAVE_FFMPEG publicly, so
+  # the CLI's #ifdefs follow the library rather than a second flag.
+  target_link_libraries(interstellar-cc PRIVATE interstellar_host)
+else()
+  target_link_libraries(interstellar-cc PRIVATE interstellar_core)
+endif()

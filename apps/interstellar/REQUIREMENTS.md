@@ -71,7 +71,7 @@ conformance rung **0**.
 
 ---
 
-## R-NFR — Non-functional requirements — 📋 SPECIFIED
+## R-NFR — Non-functional requirements — 🚧 IN PROGRESS
 
 - **R-NFR-1 An offline render is a pure function of (project, branch, range, output spec).** No
   wall-clock, no unseeded randomness, no dependency on how many times the caller pumped. Grain and
@@ -155,6 +155,14 @@ precondition of its first commit, not a project.
 
 The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a consequence.
 
+- **R-COSMO-1a The rack seam hands over a whole `EditParams`, not only scalars.** (**Added
+  2026-09-12.**) Step 5 of the frame pipeline is `EditEngine` rendering a decoded frame with the
+  source's effective parameters, and `EditEngine` takes an `EditParams` — so reading the rack one
+  scalar at a time would mean rebuilding that struct field by field in Interstellar, which is the
+  second copy R-G-3 forbids. `RackAccess::effectiveParams(node, out)` returns it whole, or false
+  for "identity", and **`interstellar_core` therefore links `arstro_image`** — which is portable
+  and codec-free, so the core stays free of GTK and the core suite stays displayless. Only
+  `cosmo_core` drags a toolkit, and it stays behind the seam in the app layer.
 - **R-COSMO-1 An Interstellar project embeds exactly one Cosmo project as its `rack`.** The embed
   is a Nebula `#embed … as=rack` node: `target=cosmo:<projectId>`, a `path` hint to the `.cmp`, a
   `branch`, and an optional pin. It is created either by importing an existing `.cmp`
@@ -257,6 +265,23 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
     continuous `bypass`. Cosmo has no concept of it, and it is composited in step 4.
   Both live on a `#rackobj` node, which is Interstellar's data ABOUT a rack node rather than colour
   data belonging to it. It is the tenth node type and it is why there are ten rather than nine.
+  (**AMENDED (real decode, 2026-09-12): `#rackobj` also carries `media` and `frame`.** The timeline
+  must decode frame N of a source, so it needs the source's PATH — and Cosmo exposes a slot's path
+  only through `EditSession::sourcePathForSlot`, reachable only via the `session()` accessor its own
+  ledger is counting down. Interstellar is the party that ADDED the source, so it already knows the
+  path; storing it here is both cheaper and the only option that does not grow that count. `frame`
+  is the reference-frame time a video source is graded on (R-COSMO-7's selector), carried in the
+  same place for the same reason. Neither is colour, so R-COSMO-2 is untouched.)
+- **R-RACK-7 `rack add <media...>` registers a source, and works before the rack is hosted.**
+  (**Added 2026-09-12.**) A source's identity in Interstellar is its `#rackobj`: a stable id, a
+  bind name, a media path and a reference-frame time. Its COLOUR is the hosted Cosmo project's, and
+  until that exists (P3) a source's colour is **identity** — the engine drops every stage at its
+  default, so an ungraded cut renders the decoded frame unchanged.
+  **This is a decoupling, not a shortcut, and the distinction matters:** the address space, the
+  timeline, the automation and the render path are all finished and all reach colour through the
+  same `RackAccess` seam, so landing P3 fills in the values without changing one address or one
+  test. What it must NOT become is a second place colour can live (R-COSMO-2) — `#rackobj` carries
+  no parameter but the grade weight, which Cosmo has no concept of.
 - **R-RACK-5 An offline or failed source reads as missing, never as a stall.** Cosmo's
   `pending`/`failed` distinction carries through into Interstellar's model, and a clip whose source
   is offline renders as a marked placeholder frame — the project stays openable.
@@ -280,6 +305,15 @@ The defining requirement. Everything in `R-RACK`, and most of `R-PARAM`, is a co
   opacity crossfade of the two composited layers) and `dip` (to a colour). **`grade-dissolve` is
   withdrawn**: easing one look into another is now an automation clip that spans the cut, which is
   strictly more general and does not need a second mechanism (README §9).
+- **R-CUT-4a A transition HOLDS the outgoing clip past its out-point.** (**Added 2026-09-12,
+  forced by D-6.**) Two adjacent clips leave nothing to dissolve *from*: the outgoing one ends
+  exactly at the cut, so scaling the incoming clip's opacity across the overlap fades it up over
+  **black** and the picture goes dark through every dissolve. So for a transition's duration the
+  outgoing clip stays live, reading frames past its own `out` — its *handles* — and freezing on the
+  source's last frame when there are none; its weight ramps 1 → 0 while the incoming side's ramps
+  0 → 1, and **the two always sum to 1**. Both numbers are computed with the active-clip set rather
+  than in the compositor, because "is this clip live" and "how much does it contribute" are the same
+  question, and answering them in two places is exactly what let a clip be faded that was not there.
 - **R-CUT-5 Time is frames, and frames are the authority.** The project has one `fps`; every time
   field is stored as a rational-safe frame index or a decimal second that is exactly representable
   at that fps, and the canonical serialization writes one form. A cut that lands between frames is
@@ -527,7 +561,7 @@ is normative: two front ends, a scrub and a master render must all produce the s
 
 ---
 
-## R-PLAY — Playback, proxies and the frame cache — 📋 SPECIFIED
+## R-PLAY — Playback, proxies and the frame cache — 🚧 IN PROGRESS (decode, cache and scrub built 2026-09-12; continuous playback and read-ahead are not)
 
 - **R-PLAY-1 A host-layer frame-source seam, and no codec in the core.** `IFrameSource` opens a
   media file and answers `frameAt(index)` with straight RGBA8 plus its true size and timebase; the
@@ -555,7 +589,7 @@ is normative: two front ends, a scrub and a master render must all produce the s
 
 ---
 
-## R-RENDER — Offline render, export and determinism — 📋 SPECIFIED
+## R-RENDER — Offline render, export and determinism — 🚧 IN PROGRESS (a real encoder built 2026-09-12; no committed golden, no resume)
 
 - **R-RENDER-1 `render` is the product, not a feature.** `render(project, branch, range, spec)`
   walks frames in order, evaluates R-EVAL-2 per frame, and hands each finished frame to a writer.

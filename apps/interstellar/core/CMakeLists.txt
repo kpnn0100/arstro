@@ -13,7 +13,11 @@ file(GLOB INTERSTELLAR_CORE_SOURCES CONFIGURE_DEPENDS
 
 add_library(interstellar_core STATIC ${INTERSTELLAR_CORE_SOURCES})
 target_include_directories(interstellar_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(interstellar_core PUBLIC gene_core)
+# arstro_image carries EditParams and EditEngine — step 5 of the frame pipeline (R-COSMO-1a).
+# It is portable and codec-free, so it does NOT put a toolkit on this library: only cosmo_core
+# drags GTK, and that stays behind the RackAccess seam in the app layer.
+target_link_libraries(interstellar_core PUBLIC gene_core arstro_image)
+target_include_directories(interstellar_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/src)
 
 # ── L2: the real service, headlessly. No display, no codec, no clicking — and it runs in
 # milliseconds, which is what the RackAccess seam bought.

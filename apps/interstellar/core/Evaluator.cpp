@@ -110,18 +110,44 @@ namespace interstellar
         std::vector<ActiveClip> out;
         for (const auto &c : mP.clips)
         {
-            if (t < c.at || t >= c.end()) continue;
             const Track *tr = mP.track(c.track);
             if (!tr || tr->audio) continue;
+
+            // A transition covering `t` decides two things: the weight each side contributes, and
+            // whether the OUTGOING side is live at all past its own out-point (R-CUT-4a).
+            double weight = 1.0;
+            bool held = false;
+            bool live = t >= c.at && t < c.end();
+            for (const auto &x : mP.transitions)
+            {
+                if (x.dur <= 0) continue;
+                const Clip *in = mP.clip(x.clipB);
+                if (!in) continue;
+                const double start = in->at, stop = in->at + x.dur;
+                if (t < start || t >= stop) continue;
+                const double f = applyEase(x.easing, (t - start) / x.dur);
+                if (c.id == x.clipB) weight *= f;                 // incoming: 0 -> 1
+                else if (c.id == x.clipA)
+                {
+                    weight *= 1.0 - f;                            // outgoing: 1 -> 0
+                    if (!live) { live = true; held = true; }       // held past its out-point
+                }
+            }
+            if (!live) continue;
+
             ActiveClip a;
             a.clip = &c;
             a.track = tr;
             // Clip-local time, then the source frame by NEAREST NEIGHBOUR — stated because
-            // R-CUT-6 forbids pretending it is interpolation.
+            // R-CUT-6 forbids pretending it is interpolation. A held clip keeps counting past
+            // `out` into its handles; the decoder clamps to the source's last frame when there
+            // are none, which freezes rather than going black.
             a.localTime = (t - c.at) * c.speed + c.in;
             a.sourceFrame = (long long)std::floor(a.localTime * mP.fps);
             const double dur = c.duration();
             a.progress = dur > 0 ? (t - c.at) / dur : 0.0;
+            a.transitionWeight = weight;
+            a.heldByTransition = held;
             out.push_back(a);
         }
         // Bottom track first: that is the composite order, and `order` is the z-order.

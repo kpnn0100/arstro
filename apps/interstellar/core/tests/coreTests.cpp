@@ -82,6 +82,61 @@ namespace
         }
     };
 
+    /** A frame source that ENCODES ITS FRAME INDEX IN THE PIXELS, so a test can assert that the
+     *  right source frame reached the right output frame — through speed changes, transitions and
+     *  the cache — with no codec, no media file and no tolerance.
+     *
+     *  This is the synthetic counterpart of the burned-in frame counters used to verify the real
+     *  FFmpeg path, and it is the cheaper of the two: it needs nothing installed. */
+    class CountingFrameSource : public IFrameSource
+    {
+    public:
+        static int decodes;          // how many frames were actually produced — the cache's proof
+        static long long lastAsked;
+
+        bool open(const std::string &path, Info &out) override
+        {
+            if (path.find("missing") != std::string::npos) return false;
+            mInfo.width = 8;
+            mInfo.height = 8;
+            mInfo.fps = 24.0;
+            mInfo.frames = 240;
+            out = mInfo;
+            return true;
+        }
+        bool frameAt(long long frame, Raster &out) override
+        {
+            ++decodes;
+            lastAsked = frame;
+            if (frame < 0) frame = 0;
+            if (frame >= mInfo.frames) frame = mInfo.frames - 1;
+            out.allocate(mInfo.width, mInfo.height, 255);
+            // The index in the red channel, so `frameIndexOf` can read it back out of a
+            // composited frame.
+            for (size_t i = 0; i < out.rgba.size(); i += 4)
+            {
+                out.rgba[i + 0] = (uint8_t)(frame & 0xFF);
+                out.rgba[i + 1] = 0;
+                out.rgba[i + 2] = 0;
+                out.rgba[i + 3] = 255;
+            }
+            return true;
+        }
+
+    private:
+        Info mInfo;
+    };
+    int CountingFrameSource::decodes = 0;
+    long long CountingFrameSource::lastAsked = -1;
+
+    /** The frame index a composited raster reports, read from its centre pixel. */
+    int frameIndexOf(const Raster &r)
+    {
+        if (r.empty()) return -1;
+        const size_t mid = ((size_t)(r.height / 2) * r.width + r.width / 2) * 4;
+        return mid + 3 < r.rgba.size() ? r.rgba[mid] : -1;
+    }
+
     struct Fixture
     {
         FakeRack rack;
@@ -91,6 +146,9 @@ namespace
         Fixture() : svc([&] {
             InterstellarService::Hooks h;
             h.rack = &rack;
+            h.makeFrameSource = []() -> std::unique_ptr<IFrameSource> {
+                return std::unique_ptr<IFrameSource>(new CountingFrameSource());
+            };
             return h;
         }())
         {
@@ -620,6 +678,149 @@ namespace
         std::printf("[PASS] a composited frame is the project raster; past the end reports empty\n");
     }
 
+    void test_the_right_source_frame_reaches_the_right_output_frame()
+    {
+        // The claim every other video claim rests on. A clip starting at t=2 with in=1.0 must, at
+        // t=3.0, show the source frame at local time 2.0 — frame 48 at 24 fps.
+        Fixture f;
+        f.must("project new /tmp/isp-src.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/counting.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:counting --in 1.0 --out 4.0 --at 2.0 --name clp_a");
+
+        Raster frame;
+        assert(f.svc.renderFrame(2.0, frame, -1));
+        assert(frameIndexOf(frame) == 24);          // local 1.0 -> frame 24
+        assert(f.svc.renderFrame(3.0, frame, -1));
+        assert(frameIndexOf(frame) == 48);          // local 2.0 -> frame 48
+        assert(f.svc.renderFrame(4.0, frame, -1));
+        assert(frameIndexOf(frame) == 72);
+        std::printf("[PASS] the right source frame reaches the right output frame\n");
+    }
+
+    void test_speed_selects_source_frames()
+    {
+        // R-CUT-6: speed SAMPLES, it does not interpolate — so 2x advances the source twice as
+        // fast and the test says which frame it expects rather than trusting a ratio.
+        Fixture f;
+        f.must("project new /tmp/isp-speed.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/counting.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:counting --in 0 --out 4.0 --at 0 --name clp_a");
+        f.must("set clp_a.speed=2");
+        Raster frame;
+        assert(f.svc.renderFrame(1.0, frame, -1));
+        assert(frameIndexOf(frame) == 48);          // 1 s in at 2x -> source second 2 -> frame 48
+        std::printf("[PASS] speed selects source frames by sampling\n");
+    }
+
+    void test_a_transition_holds_the_outgoing_clip_and_crossfades()
+    {
+        // D-6, found by rendering real video and LOOKING at the dissolve: the outgoing clip ended
+        // exactly at the cut, so there was nothing to dissolve FROM — the incoming clip faded up
+        // over black at 17% and the picture went dark. A dissolve has to hold the outgoing side
+        // past its own out-point (R-CUT-4a).
+        Fixture f;
+        f.must("project new /tmp/isp-tr.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/counting.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:counting --in 0 --out 2.0 --at 0 --name shotA");
+        f.must("clip add --track v0 --src rack:counting --in 4.0 --out 6.0 --at 2.0 --name shotB");
+        f.must("transition add --between shotA,shotB --kind dissolve --dur 0.5");
+
+        Evaluator ev(f.svc.project(), &f.rack, Automation(const_cast<Project &>(f.svc.project())),
+                     BindingGraph());
+        // At the cut, BOTH clips are live: the outgoing one is held past its out-point.
+        const auto cut = ev.activeAt(2.0);
+        assert(cut.size() == 2);
+        bool sawHeld = false;
+        for (const auto &a : cut)
+        {
+            if (a.clip->name == "shotA")
+            {
+                assert(a.heldByTransition);
+                assert(std::fabs(a.transitionWeight - 1.0) < 1e-6);   // full at the start
+                sawHeld = true;
+            }
+            else assert(std::fabs(a.transitionWeight - 0.0) < 1e-6);  // incoming starts at zero
+        }
+        assert(sawHeld);
+        // Half way through, the two weights sum to 1 — a crossfade, not a fade to black, which is
+        // exactly what the defect got wrong.
+        double sum = 0;
+        for (const auto &a : ev.activeAt(2.25)) sum += a.transitionWeight;
+        assert(std::fabs(sum - 1.0) < 1e-6);
+        // And past the transition only the incoming clip remains.
+        const auto after = ev.activeAt(2.6);
+        assert(after.size() == 1 && after[0].clip->name == "shotB");
+        std::printf("[PASS] a transition holds the outgoing clip and the weights crossfade\n");
+    }
+
+    void test_the_frame_cache_serves_a_second_visit_and_not_a_stale_one()
+    {
+        Fixture f;
+        f.must("project new /tmp/isp-cache.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/counting.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:counting --in 0 --out 4.0 --at 0 --name clp_a");
+
+        CountingFrameSource::decodes = 0;
+        Raster frame;
+        f.svc.renderFrame(1.0, frame, 256);
+        const int afterFirst = CountingFrameSource::decodes;
+        assert(afterFirst > 0);
+        f.svc.renderFrame(1.0, frame, 256);
+        // A second visit to the same time, with nothing changed, must decode NOTHING.
+        assert(CountingFrameSource::decodes == afterFirst);
+        assert(f.svc.frameCache().hits() > 0);
+
+        // And a parameter change must NOT serve the old frame. This is the staleness the key's
+        // parameter hash exists to prevent, and it is indistinguishable from a rendering bug.
+        f.must("set clp_a.geom.scale=1.5");
+        f.svc.renderFrame(1.0, frame, 256);
+        assert(CountingFrameSource::decodes > afterFirst);
+        std::printf("[PASS] the cache serves a repeat visit and refuses to serve a stale frame\n");
+    }
+
+    void test_an_unopenable_source_reads_as_offline_not_as_a_stall()
+    {
+        // R-RACK-5. And it must be a real answer from the decoder rather than a guess about
+        // whether a rack is attached.
+        Fixture f;
+        f.must("project new /tmp/isp-off.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/missing-clip.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:missing_clip --in 0 --out 2.0 --at 0 --name clp_a");
+        bool offline = false;
+        for (const auto &c : f.svc.model().clips)
+            if (c.name == "clp_a") offline = c.srcOffline;
+        assert(offline);
+        // The project still renders — a marked placeholder, not a refusal.
+        Raster frame;
+        assert(f.svc.renderFrame(1.0, frame, -1));
+        std::printf("[PASS] an unopenable source reads as offline and the project still renders\n");
+    }
+
+    void test_a_clip_src_may_name_a_source_by_its_bind_name()
+    {
+        // Node ids are assigned by the writer and are not guessable: the first `rack add` produced
+        // cn_1 and cn_3, because naming a source consumes an id too. A user knows the bind name.
+        Fixture f;
+        f.must("project new /tmp/isp-name.isp --fps 24 --res 64x64");
+        f.must("rack add /tmp/one.mov /tmp/two.mov");
+        f.must("track add --kind video --name v0");
+        f.must("clip add --track v0 --src rack:two --in 0 --out 1.0 --at 0 --name clp_a");
+        // Stored canonically as rack:<node>, so the project text is unambiguous.
+        const Clip *c = f.svc.project().clip("clp_a");
+        assert(c && c->src.rfind("rack:cn_", 0) == 0);
+        assert(!f.svc.project().mediaForSrc(c->src).empty());
+        // An unknown source is REFUSED, and the message lists what the rack has.
+        assert(!f.run("clip add --track v0 --src rack:three --in 0 --out 1 --at 2"));
+        assert(f.svc.model().lastError.find("no such source") != std::string::npos);
+        assert(f.svc.model().lastError.find("two") != std::string::npos);
+        std::printf("[PASS] --src takes a bind name, stores a node id, and refuses an unknown\n");
+    }
+
     void test_two_services_dump_the_same_state()
     {
         // R-SVC-9: identical commands must produce byte-identical STABLE text, whatever each
@@ -796,6 +997,12 @@ int main()
     test_active_clips_and_source_frames();
     test_blend_modes_and_geometry();
     test_a_composited_frame_has_the_project_raster();
+    test_the_right_source_frame_reaches_the_right_output_frame();
+    test_speed_selects_source_frames();
+    test_a_transition_holds_the_outgoing_clip_and_crossfades();
+    test_the_frame_cache_serves_a_second_visit_and_not_a_stale_one();
+    test_an_unopenable_source_reads_as_offline_not_as_a_stall();
+    test_a_clip_src_may_name_a_source_by_its_bind_name();
     test_two_services_dump_the_same_state();
     test_command_text_roundtrips();
     test_every_command_kind_has_a_grammar_and_a_hint();

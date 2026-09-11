@@ -9,6 +9,20 @@ namespace arstro
 {
 namespace interstellar
 {
+    namespace
+    {
+        /** A path's file name without its extension — what a person calls the thing. */
+        std::string baseName(const std::string &path)
+        {
+            std::string b = path;
+            const auto slash = b.find_last_of("/\\");
+            if (slash != std::string::npos) b = b.substr(slash + 1);
+            const auto dot = b.find_last_of('.');
+            if (dot != std::string::npos && dot > 0) b = b.substr(0, dot);
+            return b;
+        }
+    }
+
     InterstellarService::InterstellarService(Hooks hooks) : mHooks(std::move(hooks))
     {
         refreshModel();
@@ -166,6 +180,10 @@ namespace interstellar
             mProject.name.empty() ? void() : void();
             emit(Event::Kind::ParamChanged, kv.first, 0, 0, std::atof(kv.second.c_str()));
         }
+        // Any parameter change can change what a frame looks like, and the cache key's parameter
+        // hash only protects against a STALE READ — it does not free the bytes. Clearing is the
+        // honest coarse answer until a per-layer range invalidation earns its keep.
+        mCache.clear();
         mModel.dirty = true;
         refreshModel();
         return true;
@@ -182,7 +200,10 @@ namespace interstellar
             {
                 mProject = Project();
                 mProject.id = "prj_1";
-                mProject.name = c.path;
+                // The FILE NAME, not the path. A project name is a label a person reads in the
+                // top bar, and a full path there is both wrong and wide enough to crowd out the
+                // workspace switcher — found by looking at a shot.
+                mProject.name = baseName(c.path);
                 if (!c.field("fps").empty()) mProject.fps = std::atof(c.field("fps").c_str());
                 const std::string res = c.field("res");
                 if (!res.empty())
@@ -206,6 +227,8 @@ namespace interstellar
                 if (!p.load(c.path, err, &repaired)) return reject(err);
                 mProject = p;
                 mPath = c.path;
+                if (mProject.name.empty() || mProject.name.find('/') != std::string::npos)
+                    mProject.name = baseName(c.path);
                 if (repaired)
                     emit(Event::Kind::Info,
                          "repaired " + std::to_string(repaired) + " non-finite value(s)");
@@ -291,13 +314,64 @@ namespace interstellar
                 refreshModel();
                 return true;
             }
-            case Command::Kind::RackSelect:
             case Command::Kind::RackAdd:
+            {
+                // R-RACK-7: a source's identity here is its `#rackobj` — an id, a bind name, a
+                // media path and a reference-frame time. Its COLOUR is the hosted Cosmo
+                // project's, and until that exists the colour is identity. This is what lets a
+                // cut be made and rendered before P3 lands, without colour ever living here.
+                if (c.paths.empty()) return reject("rack add needs one or more media paths");
+                if (mHooks.rack && mHooks.rack->isPinned())
+                    return reject("the rack is pinned at " + mHooks.rack->pinCommit() +
+                                  " — it is read-only (R-COSMO-5)");
+                int added = 0;
+                for (const auto &path : c.paths)
+                {
+                    // A stable node id per source. With a hosted rack this is the Cosmo node id;
+                    // without one it is Interstellar's own, and the seam does not care which.
+                    const NodeId node = mProject.freshId("cn_");
+                    // The bind name is derived from the FILE NAME, because that is what a user
+                    // recognises — and it must be a legal identifier, which a filename is not
+                    // (R-PARAM-2).
+                    std::string base = path;
+                    const auto slash = base.find_last_of("/\\");
+                    if (slash != std::string::npos) base = base.substr(slash + 1);
+                    const auto dot = base.find_last_of('.');
+                    if (dot != std::string::npos && dot > 0) base = base.substr(0, dot);
+                    RackObj &ro = mProject.ensureRackObj(node, base);
+                    ro.media = path;
+                    // Ask the source what it is, now rather than at the first render, so an
+                    // unopenable path reads as offline immediately instead of as an empty frame.
+                    const IFrameSource::Info info = sourceInfo(path);
+                    if (info.width <= 0)
+                        emit(Event::Kind::Error, "cannot open " + path + " — it will read as offline");
+                    else
+                    {
+                        emit(Event::Kind::RackChanged,
+                             "added " + ro.name + " " + std::to_string(info.width) + "x" +
+                                 std::to_string(info.height) + " " + canonicalNumber(info.fps) +
+                                 "fps frames=" + std::to_string(info.frames));
+                        ++added;
+                    }
+                }
+                // Deliberately NOT refused when nothing could be read. Registering a source and
+                // being able to DECODE one are different things: a project is a text document
+                // that REFERENCES media (R-FMT-3), so a front end with no codec — or a file that
+                // has moved — still gets a source it can relink, and the clip reads as offline
+                // rather than as a stall (R-RACK-5). The first version of this refused, and it
+                // broke the UI tests, which have no decoder and no need of one.
+                if (added == 0)
+                    emit(Event::Kind::Info,
+                         "no media could be read; the source(s) are registered and read as offline");
+                refreshModel();
+                return true;
+            }
+            case Command::Kind::RackSelect:
             case Command::Kind::RackGroupNew:
             case Command::Kind::RackDuplicate:
             case Command::Kind::RackRename:
-                // These are Cosmo commands and land in the hosted service. Without a rack they
-                // are refused rather than quietly ignored (R-SVC-6).
+                // These need the hosted CosmoService's own command path (P3). Refused rather than
+                // quietly ignored (R-SVC-6).
                 if (!mHooks.rack) return reject("no rack is embedded — `rack import <file.cmp>` first");
                 if (mHooks.rack->isPinned())
                     return reject("the rack is pinned at " + mHooks.rack->pinCommit() +
@@ -340,8 +414,31 @@ namespace interstellar
             case Command::Kind::ClipAdd:
             {
                 if (c.field("track").empty()) return reject("clip add needs --track");
-                if (c.field("src").empty()) return reject("clip add needs --src rack:<node>");
-                const Clip *added = mTimeline.addClip(c.field("track"), c.field("src"),
+                if (c.field("src").empty()) return reject("clip add needs --src rack:<source>");
+                // `--src rack:a` may name a source by its BIND NAME, which is what a user knows —
+                // node ids are assigned by the writer and are not guessable (the first `rack add`
+                // produced cn_1 and cn_3, because naming a source consumes an id too). It is
+                // stored canonically as `rack:<node>` so the project text is unambiguous, and an
+                // unknown source is REFUSED here rather than reading as offline three commands
+                // later (R-SVC-6).
+                std::string src = c.field("src");
+                if (src.rfind("rack:", 0) == 0)
+                {
+                    const std::string ref = src.substr(5);
+                    const RackObj *ro = mProject.rackObjForNode(ref);
+                    if (!ro) ro = mProject.rackObj(ref);
+                    if (!ro)
+                    {
+                        std::string known;
+                        for (const auto &r : mProject.rackObjs)
+                            known += (known.empty() ? "" : ", ") + r.name;
+                        return reject("no such source: '" + ref + "'" +
+                                      (known.empty() ? " — the rack is empty; `rack add <media>` first"
+                                                     : " — the rack has: " + known));
+                    }
+                    src = "rack:" + ro->node;
+                }
+                const Clip *added = mTimeline.addClip(c.field("track"), src,
                                                       c.fieldNum("in", 0), c.fieldNum("out", 0),
                                                       c.fieldNum("at", 0), c.field("name"), err);
                 if (!added) return reject(err);
@@ -640,7 +737,7 @@ namespace interstellar
                 for (long long f = first; f < last; ++f)
                 {
                     Raster frame;
-                    renderFrame(mProject.secondsAt(f), frame);
+                    renderFrame(mProject.secondsAt(f), frame, -1);   // full resolution for a master
                     if (!writer->write(frame)) { mModel.render.failures++; break; }
                     if (++done % 24 == 0) emit(Event::Kind::RenderProgress, {}, done, mModel.render.total);
                     mModel.render.done = done;
@@ -659,7 +756,7 @@ namespace interstellar
                 auto writer = mHooks.makeFrameWriter(out);
                 if (!writer) return reject("cannot create a writer for " + out);
                 Raster frame;
-                renderFrame(c.field("at").empty() ? mModel.playhead : c.fieldNum("at", 0), frame);
+                renderFrame(c.field("at").empty() ? mModel.playhead : c.fieldNum("at", 0), frame, -1);
                 if (!writer->begin(out, mProject.width, mProject.height, mProject.fps, 1) ||
                     !writer->write(frame) || !writer->end())
                     return reject("cannot write " + out);
@@ -690,6 +787,34 @@ namespace interstellar
                 return true;
         }
         return reject("unhandled command");
+    }
+
+    InterstellarService::OpenSource *InterstellarService::sourceFor(const std::string &media)
+    {
+        if (media.empty() || !mHooks.makeFrameSource) return nullptr;
+        auto it = mSources.find(media);
+        if (it != mSources.end()) return it->second.failed ? nullptr : &it->second;
+
+        OpenSource os;
+        os.source = mHooks.makeFrameSource();
+        if (!os.source || !os.source->open(media, os.info))
+        {
+            // Remembered as FAILED rather than retried: a missing file would otherwise be
+            // reopened once per frame of a scrub.
+            os.failed = true;
+            os.source.reset();
+            mSources[media] = std::move(os);
+            return nullptr;
+        }
+        auto &slot = mSources[media];
+        slot = std::move(os);
+        return &slot;
+    }
+
+    IFrameSource::Info InterstellarService::sourceInfo(const std::string &media)
+    {
+        if (const OpenSource *os = sourceFor(media)) return os->info;
+        return {};
     }
 
     std::vector<LintFinding> InterstellarService::lint() const
@@ -736,7 +861,7 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::renderFrame(double t, Raster &out)
+    bool InterstellarService::renderFrame(double t, Raster &out, int proxyEdge)
     {
         Evaluator ev(mProject, mHooks.rack, mAutomation, mBindings);
         const ResolvedValues rv = ev.resolve(t);
@@ -745,6 +870,10 @@ namespace interstellar
         out.allocate(mProject.width, mProject.height, 0);
         if (active.empty()) return false;
 
+        // `proxyEdge <= 0` means full resolution — what an export wants. Otherwise every layer is
+        // graded at that long edge, which is what makes a scrub affordable (R-PLAY-2).
+        const int edge = proxyEdge > 0 ? proxyEdge : (proxyEdge == 0 ? mProject.settings.proxyEdge : -1);
+
         std::vector<Raster> sources(active.size());
         std::vector<Composite::Layer> layers;
         layers.reserve(active.size());
@@ -752,23 +881,56 @@ namespace interstellar
         for (size_t i = 0; i < active.size(); ++i)
         {
             const auto &a = active[i];
-            // Step 5 in the real pipeline is EditEngine rendering this clip's source frame with
-            // its rack node's effective params. Without a frame source this front end draws a
-            // flat field so the geometry and composite steps are still exercised and assertable.
-            if (mHooks.makeFrameSource)
-            {
-                auto src = mHooks.makeFrameSource();
-                IFrameSource::Info info;
-                std::string path = a.clip->src;
-                if (src && src->open(path, info)) src->frameAt(a.sourceFrame, sources[i]);
-            }
-            if (sources[i].empty()) sources[i].allocate(16, 16, 128);
+            const std::string media = mProject.mediaForSrc(a.clip->src);
+            const std::string node =
+                a.clip->src.rfind("rack:", 0) == 0 ? a.clip->src.substr(5) : a.clip->src;
 
+            // ── steps 4-5: the source's effective params, then the grade ────────────────────
+            // The params come from the RACK — whole, never rebuilt field by field (R-COSMO-1a).
+            // `false` means identity, and that is the fast path rather than a failure.
+            arstro::EditParams params;
+            const bool hasParams = mHooks.rack && mHooks.rack->effectiveParams(node, params);
+            const uint64_t phash = ev.paramHash(*a.clip, rv);
+
+            FrameCache::Key key;
+            key.source = media;
+            key.sourceFrame = a.sourceFrame;
+            key.paramHash = phash;
+            key.level = edge;
+
+            if (!media.empty() && mCache.get(key, sources[i]))
+            {
+                // A hit is a frame this pipeline already produced for these exact inputs.
+            }
+            else if (OpenSource *os = sourceFor(media))
+            {
+                Raster decoded;
+                if (os->source->frameAt(a.sourceFrame, decoded) && !decoded.empty())
+                {
+                    mGrade.render(decoded, params, hasParams, edge, sources[i]);
+                    mCache.put(key, sources[i]);
+                }
+            }
+
+            if (sources[i].empty())
+            {
+                // Offline reads as MISSING, never as a stall: a marked placeholder so the project
+                // stays openable and the clip says what is wrong (R-RACK-5).
+                sources[i].allocate(16, 16, 0);
+                for (size_t p = 0; p < sources[i].rgba.size(); p += 4)
+                {
+                    sources[i].rgba[p + 0] = 60;
+                    sources[i].rgba[p + 1] = 20;
+                    sources[i].rgba[p + 2] = 20;
+                    sources[i].rgba[p + 3] = 255;
+                }
+            }
+
+            // ── step 6: geometry, from the RESOLVED table, so an automated or bound crop,
+            //    scale or position is what actually gets drawn ────────────────────────────────
             Composite::Layer l;
             l.source = &sources[i];
             l.geom = a.clip->geom;
-            // Every geometric value comes from the RESOLVED table, so an automated or bound
-            // crop, scale or position is what actually gets drawn (R-EVAL-2 step 6).
             auto pick = [&](const char *suffix, double fallback) {
                 const std::string addr = a.clip->name + "." + suffix;
                 return rv.has(addr) ? rv.get(addr) : fallback;
@@ -787,27 +949,19 @@ namespace interstellar
                         (rv.has(a.track->name + ".opacity") ? rv.get(a.track->name + ".opacity")
                                                             : a.track->opacity);
 
-            // A transition is a two-layer mix, and it is resolved by scaling the incoming
-            // layer's opacity across the overlap — the same arithmetic `Composite::mix` does,
-            // applied per layer so it composes with the rest of the stack.
-            for (const auto &tr : mProject.transitions)
-            {
-                if (tr.clipB != a.clip->id) continue;
-                const Clip *ca = mProject.clip(tr.clipA);
-                if (!ca) continue;
-                const double start = a.clip->at;
-                if (t >= start && t < start + tr.dur && tr.dur > 0)
-                    l.opacity *= applyEase(tr.easing, (t - start) / tr.dur);
-            }
+            // ── step 7: the transition weight, computed ONCE in `activeAt` so the renderer and
+            //    every other consumer agree about which clips are live and how much each
+            //    contributes (R-CUT-4a). A dissolve is a LINEAR alpha ramp.
+            l.opacity *= a.transitionWeight;
             layers.push_back(l);
         }
 
         Composite::compose(layers, mProject.width, mProject.height, out);
         mFrameSeq++;
-        const_cast<AppModel &>(mModel).frameSeq = mFrameSeq;
-        const_cast<AppModel &>(mModel).frameWidth = out.width;
-        const_cast<AppModel &>(mModel).frameHeight = out.height;
-        const_cast<AppModel &>(mModel).frameLayers = (int)layers.size();
+        mModel.frameSeq = mFrameSeq;
+        mModel.frameWidth = out.width;
+        mModel.frameHeight = out.height;
+        mModel.frameLayers = (int)layers.size();
         return true;
     }
 
@@ -833,6 +987,12 @@ namespace interstellar
         m.frameWidth = mModel.frameWidth;
         m.frameHeight = mModel.frameHeight;
         m.frameLayers = mModel.frameLayers;
+        // "memory is bounded" and "the cache works" are claims this project has learned not to
+        // make without a number a front end can read back (R-NFR-5, R-CPU-4's lesson).
+        m.cacheBytes = mCache.residentBytes();
+        m.cacheEntries = (int)mCache.entries();
+        m.cacheHits = mCache.hits();
+        m.cacheMisses = mCache.misses();
 
         if (const Embed *e = mProject.rackEmbed())
         {
@@ -840,29 +1000,35 @@ namespace interstellar
             m.rackPinned = e->pinned();
             m.rackPinCommit = e->pinCommit();
         }
-        if (mHooks.rack)
+        // The rack list is built from the PROJECT's own `#rackobj` nodes, so sources are visible
+        // before a Cosmo project is hosted (R-RACK-7) — without this a view could not list what
+        // the user just added. A hosted rack then supplies the tree shape (depth, grouping,
+        // bypass) for the nodes it knows.
+        for (const auto &ro : mProject.rackObjs)
         {
-            for (const auto &n : mHooks.rack->nodes())
-            {
-                RackNodeModel r;
-                r.node = n.id;
-                r.cosmoName = n.cosmoName;
-                r.depth = n.depth;
-                r.group = n.group;
-                r.bypass = n.bypass;
-                r.pending = n.pending;
-                r.failed = n.failed;
-                if (const RackObj *ro = mProject.rackObjForNode(n.id))
-                {
-                    r.bindName = ro->name;
-                    r.gradeWeight = ro->opacity;
-                }
-                for (const auto &c : mProject.clips)
-                    if (c.src == "rack:" + n.id) r.referenced = true;
-                m.rack.push_back(r);
-            }
-            m.rackPinned = m.rackPinned || mHooks.rack->isPinned();
+            RackNodeModel r;
+            r.node = ro.node;
+            r.bindName = ro.name;
+            r.cosmoName = ro.name;
+            r.media = ro.media;
+            r.gradeWeight = ro.opacity;
+            for (const auto &c : mProject.clips)
+                if (c.src == "rack:" + ro.node) r.referenced = true;
+            auto it = mSources.find(ro.media);
+            r.failed = ro.media.empty() || (it != mSources.end() && it->second.failed);
+            if (mHooks.rack)
+                for (const auto &n : mHooks.rack->nodes())
+                    if (n.id == ro.node)
+                    {
+                        r.cosmoName = n.cosmoName;
+                        r.depth = n.depth;
+                        r.group = n.group;
+                        r.bypass = n.bypass;
+                        r.pending = n.pending;
+                    }
+            m.rack.push_back(r);
         }
+        if (mHooks.rack) m.rackPinned = m.rackPinned || mHooks.rack->isPinned();
 
         for (const auto &t : mProject.tracks)
             m.tracks.push_back({t.id, t.name, t.audio, t.order, t.mute, t.opacity});
@@ -882,8 +1048,16 @@ namespace interstellar
             if (c.src.rfind("rack:", 0) == 0)
             {
                 const std::string node = c.src.substr(5);
-                if (const RackObj *ro = mProject.rackObjForNode(node)) cm.srcName = ro->name;
-                cm.srcOffline = mHooks.rack == nullptr;
+                if (const RackObj *ro = mProject.rackObjForNode(node))
+                {
+                    cm.srcName = ro->name;
+                    cm.media = ro->media;
+                }
+                // OFFLINE is now a real answer from the decoder rather than a guess about whether
+                // a rack is attached: a clip whose media cannot be opened reads as missing, and
+                // one whose media is fine does not (R-RACK-5).
+                auto it = mSources.find(cm.media);
+                cm.srcOffline = cm.media.empty() || (it != mSources.end() && it->second.failed);
             }
             m.clips.push_back(cm);
         }

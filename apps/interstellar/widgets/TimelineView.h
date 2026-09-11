@@ -30,6 +30,9 @@ namespace interstellar_v1
         void setModel(const interstellar::AppModel &m);
         void setPlayhead(double t) { mPlayhead = t; }
         void setSelected(const std::string &clipName) { mSelected = clipName; }
+        /** Which clip is selected. Presentation, so it lives here rather than in the model
+         *  (R-SVC-4) — and published because the host needs it to build a delete command. */
+        const std::string &selected() const { return mSelected; }
 
         /** The zoom. `set` snaps (the first placement has nowhere to travel from); `zoomTo`
          *  eases, and every read below goes through the LIVE value. */

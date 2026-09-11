@@ -20,6 +20,9 @@
 #include "../../App.h"
 #include "../../../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include "../../core/service/InterstellarService.h"
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+#include "FrameSourceFFmpeg.h"
+#endif
 #include <cairo/cairo.h>
 #include <cstdio>
 #include <cstring>
@@ -95,11 +98,12 @@ namespace
     {
         const char *lines[] = {
             "project new /tmp/shots.isp --fps 24 --res 1920x1080",
+            "rack add /tmp/shots-a.mov /tmp/shots-b.mov",
             "track add --kind video --name v0",
             "track add --kind video --name v1",
-            "clip add --track v0 --src rack:cn_41 --in 12.4 --out 16.6 --at 0 --name clp_a",
-            "clip add --track v0 --src rack:cn_58 --in 88.0 --out 91.1 --at 4.2 --name clp_b",
-            "clip add --track v1 --src rack:cn_41 --in 30.0 --out 32.0 --at 1.0 --name clp_c",
+            "clip add --track v0 --src rack:shots_a --in 12.4 --out 16.6 --at 0 --name clp_a",
+            "clip add --track v0 --src rack:shots_b --in 88.0 --out 91.1 --at 4.2 --name clp_b",
+            "clip add --track v1 --src rack:shots_a --in 30.0 --out 32.0 --at 1.0 --name clp_c",
             "transition add --between clp_a,clp_b --kind dissolve --dur 0.5",
             "auto new ac_push --dur 2.0 --points 0=0,1=1 --ease easeInOut",
             "auto link ac_push -> clp_a.geom.scale --at 1.0 --dur 2.0 --from 1.0 --to 1.08",
@@ -170,9 +174,16 @@ int main(int argc, char **argv)
         const double h = o.w != 1440 || o.h != 900 ? o.h : shot.h;
 
         InterstellarService::Hooks hooks;
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+        // The real decoder, so a `--script` shot can be of REAL footage rather than of a
+        // placeholder — which is the only way to see what a user will actually see.
+        hooks.makeFrameSource = []() -> std::unique_ptr<IFrameSource> {
+            return std::unique_ptr<IFrameSource>(new arstro::interstellar_host::FrameSourceFFmpeg());
+        };
+#endif
         InterstellarService svc(hooks);
         const bool empty = name.rfind("empty", 0) == 0;
-        if (!empty) seed(svc);
+        if (!empty && o.script.empty()) seed(svc);
         if (!o.script.empty())
         {
             std::ifstream f(o.script);

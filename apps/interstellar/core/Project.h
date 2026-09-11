@@ -176,6 +176,14 @@ namespace interstellar
         NodeId id, name;
         std::string node;          // the Cosmo node id this names
         double opacity = 1.0;      // the grade weight — see above
+        /** The source file (R-RACK-6, amended 2026-09-12). The timeline decodes frame N from it,
+         *  and Interstellar stores it because Interstellar is what ADDED the source — Cosmo
+         *  exposes a slot's path only through the transitional `session()` accessor its own ledger
+         *  is counting down. Not colour, so R-COSMO-2 is untouched. */
+        std::string media;
+        /** Which frame of a video source is the one Cosmo grades — R-COSMO-7's selector, in
+         *  seconds. Changing it re-decodes the reference frame and changes no parameter. */
+        double frame = 0.0;
         UnknownFields unknown;
     };
 
@@ -235,6 +243,9 @@ namespace interstellar
         /** Give `cosmoNode` a bind name if it has none yet, deriving one from `hint`, and return
          *  it. Idempotent: the name is stable once assigned, because an expression spells it. */
         RackObj &ensureRackObj(const std::string &cosmoNode, const std::string &hint);
+        /** The media path a clip's `src` resolves to, or empty. `src` is `rack:<node>`; the path
+         *  lives on the `#rackobj` that names that node. */
+        std::string mediaForSrc(const std::string &src) const;
         const Embed *rackEmbed() const;         Embed *rackEmbed();
         /** Resolve a BIND NAME to a node id, over every node type. The name is the user's
          *  language and the id is everyone else's. */

@@ -30,11 +30,16 @@ namespace
 {
     void seed(InterstellarService &svc)
     {
+        // `rack add` first: a clip's `--src` names a SOURCE, and an invented node id is now
+        // refused rather than reading as offline three commands later. These tests have no
+        // decoder and do not need one — the sources register and read as offline, which is
+        // exactly the state a layout test should be able to draw.
         const char *lines[] = {
             "project new /tmp/ui.isp --fps 24 --res 1920x1080",
+            "rack add /tmp/ui-a.mov /tmp/ui-b.mov",
             "track add --kind video --name v0",
-            "clip add --track v0 --src rack:cn_41 --in 12.4 --out 16.6 --at 0 --name clp_a",
-            "clip add --track v0 --src rack:cn_58 --in 88.0 --out 91.1 --at 4.2 --name clp_b",
+            "clip add --track v0 --src rack:ui_a --in 12.4 --out 16.6 --at 0 --name clp_a",
+            "clip add --track v0 --src rack:ui_b --in 88.0 --out 91.1 --at 4.2 --name clp_b",
             "auto new ac_push --dur 2.0 --points 0=0,1=1 --ease easeInOut",
             "auto link ac_push -> clp_a.geom.scale --at 1.0 --dur 2.0 --from 1.0 --to 1.08",
             "auto link ac_push -> clp_a.opacity --at 1.0 --dur 2.0 --from 1.0 --to 0.4",

@@ -17,6 +17,10 @@
  */
 #include "service/AppModelCodec.h"
 #include "service/InterstellarService.h"
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+#include "FrameSourceFFmpeg.h"
+#include "FrameWriterFFmpeg.h"
+#endif
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -165,7 +169,21 @@ int main(int argc, char **argv)
     }
 
     InterstellarService::Hooks hooks;
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+    // The real decoder, one per media path — the service asks for a new one per distinct file
+    // because a decoder holds a position and is not thread-safe.
+    hooks.makeFrameSource = []() -> std::unique_ptr<IFrameSource> {
+        return std::unique_ptr<IFrameSource>(new arstro::interstellar_host::FrameSourceFFmpeg());
+    };
+#endif
     hooks.makeFrameWriter = [](const std::string &path) -> std::unique_ptr<IFrameWriter> {
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+        // The extension picks the writer. A `.mp4`/`.mov`/`.mkv` gets a real codec; anything else
+        // gets the PPM sequence, which is deliberate rather than a fallback — it is the only
+        // output a golden test can compare byte for byte (R-RENDER-3).
+        if (arstro::interstellar_host::FrameWriterFFmpeg::handles(path))
+            return std::unique_ptr<IFrameWriter>(new arstro::interstellar_host::FrameWriterFFmpeg());
+#endif
         return std::unique_ptr<IFrameWriter>(new PpmWriter(path));
     };
     InterstellarService svc(hooks);

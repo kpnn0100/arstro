@@ -16,6 +16,8 @@
 #include "../BindingGraph.h"
 #include "../Composite.h"
 #include "../Evaluator.h"
+#include "../FrameCache.h"
+#include "../GradeEngine.h"
 #include "../ParamRegistry.h"
 #include "../Project.h"
 #include "../RackAccess.h"
@@ -25,6 +27,7 @@
 #include "Command.h"
 #include "Event.h"
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,6 +43,9 @@ namespace interstellar
         struct Info { int width = 0, height = 0; double fps = 24.0; long long frames = 0; };
         virtual ~IFrameSource() = default;
         virtual bool open(const std::string &path, Info &out) = 0;
+        /** Straight RGBA8 for `frame`. Decoders are SEQUENTIAL: `frame` advancing by one is the
+         *  common case and a seek is the exception, so an implementation should keep its position
+         *  and only seek when asked to go backwards or a long way forward. */
         virtual bool frameAt(long long frame, Raster &out) = 0;
     };
 
@@ -61,6 +67,9 @@ namespace interstellar
         struct Hooks
         {
             /** One source object per media path. The core never opens a file itself. */
+            /** One source object PER MEDIA PATH — a decoder holds a position and is not
+             *  thread-safe, so the service keeps one open per distinct file rather than one
+             *  globally. The core never opens a file itself (R-SVC-7). */
             std::function<std::unique_ptr<IFrameSource>()> makeFrameSource;
             std::function<std::unique_ptr<IFrameWriter>(const std::string &)> makeFrameWriter;
             /** The rack: the hosted Cosmo project. Optional — without one, colour addresses
@@ -88,8 +97,19 @@ namespace interstellar
         std::vector<LintFinding> lint() const;
 
         /** Render one composited frame at `t` into `out`. The whole pipeline, in order
-         *  (binding.md §6). False when there is nothing to draw. */
-        bool renderFrame(double t, Raster &out);
+         *  (binding.md §6). False when there is nothing to draw.
+         *
+         *  `proxyEdge <= 0` renders at full resolution — what an export wants. Otherwise every
+         *  layer is graded at that long edge, which is what makes a scrub affordable. */
+        bool renderFrame(double t, Raster &out, int proxyEdge = -1);
+
+        /** What a source says about itself, once it has been opened. Empty size for a path that
+         *  could not be opened, which is what makes a clip read as OFFLINE rather than as a
+         *  stall (R-RACK-5). */
+        IFrameSource::Info sourceInfo(const std::string &media);
+
+        const FrameCache &frameCache() const { return mCache; }
+        void clearFrameCache() { mCache.clear(); }
 
         bool quitRequested() const { return mQuit; }
         const Project &project() const { return mProject; }
@@ -102,6 +122,16 @@ namespace interstellar
         bool applySet(const Command &c);
         bool setAddress(const std::string &address, const std::string &value, std::string &err);
 
+        /** An open decoder per media path, plus what it said about itself. A decoder holds a
+         *  position, so reopening one per frame would turn every scrub into a seek storm. */
+        struct OpenSource
+        {
+            std::unique_ptr<IFrameSource> source;
+            IFrameSource::Info info;
+            bool failed = false;
+        };
+        OpenSource *sourceFor(const std::string &media);
+
         Hooks mHooks;
         Project mProject;
         Timeline mTimeline{mProject};
@@ -112,6 +142,9 @@ namespace interstellar
         std::string mPath;
         bool mQuit = false;
         unsigned mFrameSeq = 0;
+        std::map<std::string, OpenSource> mSources;
+        FrameCache mCache;
+        GradeEngine mGrade;
     };
 }
 }
