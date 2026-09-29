@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <limits>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -1049,12 +1051,95 @@ TEST(EditEngine_gpu_backend_selection_and_fallback)
         CHECK(out == cpu);
     }
 
-    // The platform factory returns the GPU backend where built, else nullptr.
-#ifdef ARSTRO_GL_COMPUTE
+    // The platform factory returns the GPU backend(s) where built, else nullptr.
+#if defined(ARSTRO_GL_COMPUTE) || defined(ARSTRO_GLES_COMPUTE)
     CHECK(createComputeAccelerator() != nullptr);
 #else
     CHECK(createComputeAccelerator() == nullptr);
 #endif
+}
+
+// R-GPU-7: the backend is chosen at RUN time, among every one the build compiled. An
+// RK3588 builds desktop GL and GLES and its Mali driver runs only GLES; a compile-time
+// "GL wins" choice left it on the CPU. Machine-independent: mock candidates stand in for
+// a GL that cannot start and a GLES that can.
+namespace
+{
+    struct CountingBackend : MockBackend
+    {
+        const char *label = "Mock";
+        mutable int probes = 0;
+        const char *name() const override { return label; }
+        bool available() const override { ++probes; return avail; }
+    };
+}
+
+TEST(SelectingComputeBackend_runs_the_first_backend_the_driver_accepts)
+{
+    auto make = [](const char *label, bool avail, float sentinel, CountingBackend *&raw)
+    {
+        auto b = std::unique_ptr<CountingBackend>(new CountingBackend());
+        b->label = label; b->avail = avail; b->sentinel = sentinel; raw = b.get();
+        return std::unique_ptr<IComputeBackend>(std::move(b));
+    };
+    Image src(4, 3, 4);
+    EditParams p;
+
+    // Desktop GL cannot start (the libmali case); GLES can -> GLES does the work.
+    {
+        CountingBackend *gl = nullptr, *gles = nullptr;
+        std::vector<std::unique_ptr<IComputeBackend>> c;
+        c.push_back(make("OpenGL", false, 0.25f, gl));
+        c.push_back(make("OpenGL ES", true, 0.75f, gles));
+        SelectingComputeBackend sel(std::move(c));
+        CHECK(gl->probes == 0 && gles->probes == 0);   // lazy: construction probes nothing
+        CHECK(sel.available());
+        CHECK(std::string(sel.name()) == "OpenGL ES");
+        ComputeResult r;
+        CHECK(sel.process(src, p, r));
+        CHECK(gl->calls == 0 && gles->calls == 1);
+        CHECK(r.processed.data()[0] == 0.75f);
+        CHECK(sel.available() && sel.available());
+        CHECK(gl->probes == 1 && gles->probes == 1);   // resolved once, not per call
+    }
+    // Both available -> the first (preferred) one wins; the second is never probed.
+    {
+        CountingBackend *gl = nullptr, *gles = nullptr;
+        std::vector<std::unique_ptr<IComputeBackend>> c;
+        c.push_back(make("OpenGL", true, 0.25f, gl));
+        c.push_back(make("OpenGL ES", true, 0.75f, gles));
+        SelectingComputeBackend sel(std::move(c));
+        CHECK(std::string(sel.name()) == "OpenGL");
+        CHECK(gles->probes == 0);
+    }
+    // Nothing available -> unavailable, declines, and the engine stays byte-identical CPU.
+    {
+        CountingBackend *gl = nullptr, *gles = nullptr;
+        std::vector<std::unique_ptr<IComputeBackend>> c;
+        c.push_back(make("OpenGL", false, 0.25f, gl));
+        c.push_back(make("OpenGL ES", false, 0.75f, gles));
+        auto sel = std::unique_ptr<IComputeBackend>(new SelectingComputeBackend(std::move(c)));
+        ComputeResult r;
+        CHECK(!sel->available());
+        CHECK(!sel->process(src, p, r));
+        CHECK(gl->calls == 0 && gles->calls == 0);
+
+        auto bytes = variedRGBA8b(8, 8);
+        EditParams e; e.exposure = 0.3f;
+        EditEngine cpu; cpu.setComputeAccelerator(nullptr);
+        cpu.addImage(bytes.data(), 8, 8, 4); cpu.selectImage(0); cpu.setPreviewSize(4096);
+        cpu.setCurrentParams(e);
+        PreviewBuffer cb = cpu.renderFull();
+        const std::vector<uint8_t> cref(cb.rgba, cb.rgba + (size_t)cb.width * cb.height * 4);
+        EditEngine eng; eng.setComputeAccelerator(std::move(sel));
+        eng.addImage(bytes.data(), 8, 8, 4); eng.selectImage(0); eng.setPreviewSize(4096);
+        eng.setPreferGpu(true);
+        CHECK(!eng.gpuAvailable());
+        CHECK(std::string(eng.activeBackendName()) == "CPU");
+        eng.setCurrentParams(e);
+        PreviewBuffer eb = eng.renderFull();
+        CHECK(std::vector<uint8_t>(eb.rgba, eb.rgba + (size_t)eb.width * eb.height * 4) == cref);
+    }
 }
 
 // Real GPU backend (OpenGL 4.3 compute): on a host with a GL compute device
@@ -1078,7 +1163,8 @@ TEST(EditEngine_gl_backend_matches_cpu)
     EditEngine gpu;
     gpu.addImage(bytes.data(), 24, 18, 4); gpu.selectImage(0); gpu.setPreviewSize(4096);
     gpu.setPreferGpu(true);
-    if (!gpu.gpuAvailable()) { CHECK(true); return; }  // CPU-only host: nothing to verify
+    if (!gpu.gpuAvailable()) { std::printf("      skipped: no GPU backend available on this host\n"); CHECK(true); return; }
+    std::printf("      ran on: %s\n", gpu.activeBackendName());
 
     gpu.setCurrentParams(p);
     PreviewBuffer gb = gpu.renderFull();
@@ -1113,11 +1199,12 @@ TEST(EditEngine_gl_backend_matches_cpu)
     CHECK(g3b == c3ref);
 }
 
-// The OpenGL ES 3.1 backend (Android's GPU path), here exercised on desktop Mesa GLES.
+// The OpenGL ES 3.1 backend (Android's GPU path, and an ARM Linux board's — R-GPU-7),
+// exercised on whatever ES 3.1 device the host has (Mesa GLES, or Mali under libmali).
 // Same contract as EditEngine_gl_backend_matches_cpu: the ported subset (exposure/
 // contrast/white balance + sRGB encode) matches the CPU reference within tolerance, and
-// an edit outside the subset declines -> exact CPU output. Skips cleanly when the GLES
-// backend isn't built (desktop default) or no ES 3.1 device is present.
+// an edit outside the subset declines -> exact CPU output. Skips — and says so — when the
+// GLES backend isn't built or no ES 3.1 device is present.
 TEST(EditEngine_gles_backend_matches_cpu)
 {
 #ifdef ARSTRO_GLES_COMPUTE
@@ -1132,12 +1219,13 @@ TEST(EditEngine_gles_backend_matches_cpu)
     const std::vector<uint8_t> cref(cb.rgba, cb.rgba + (size_t)cb.width * cb.height * 4);
 
     // GLES-preferred engine (inject the GLES backend directly — the default factory
-    // prefers desktop GL when both are built).
+    // prefers desktop GL when the driver runs both).
     EditEngine gpu;
     gpu.setComputeAccelerator(createGlesComputeAccelerator());
     gpu.addImage(bytes.data(), 24, 18, 4); gpu.selectImage(0); gpu.setPreviewSize(4096);
     gpu.setPreferGpu(true);
-    if (!gpu.gpuAvailable()) { CHECK(true); return; }  // no ES 3.1 device: nothing to verify
+    if (!gpu.gpuAvailable()) { std::printf("      skipped: no ES 3.1 device\n"); CHECK(true); return; }
+    std::printf("      ran on: %s\n", gpu.activeBackendName());
 
     gpu.setCurrentParams(p);
     PreviewBuffer gb = gpu.renderFull();
@@ -1187,7 +1275,8 @@ TEST(RenderService_gpu_worker_matches_cpu)
 
     RenderService::Frame cpuF, gpuF;
     CHECK(renderSvc(false, cpuF));
-    if (!renderSvc(true, gpuF)) { CHECK(true); return; }  // no GPU backend -> skip
+    if (!renderSvc(true, gpuF)) { std::printf("      skipped: no GPU backend available on this host\n"); CHECK(true); return; }
+    std::printf("      ran on the render worker's GPU context\n");
     CHECK(cpuF.width == gpuF.width && cpuF.height == gpuF.height);
     CHECK(cpuF.rgba.size() == gpuF.rgba.size());
     int maxd = 0;

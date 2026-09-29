@@ -15,6 +15,26 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-29 — "this device need implement gpu hal to use gpu to edit image." DONE.**
+
+- **[x] R-GPU-7: the GPU backend is chosen at run time, and an RK3588's Mali-G610 edits on it.**
+  DR-GPU-7. `image_tests` 99/99, `ctest` green. Three things worth carrying forward:
+  * **The HAL existed; the board could not reach it.** `IComputeBackend` and a GLES backend were
+    both in the tree. The factory chose desktop GL at *compile* time because it was buildable, and
+    ARM's libmali exposes only OpenGL ES — `eglBindAPI(EGL_OPENGL_API)` fails with
+    `EGL_BAD_PARAMETER`. So `gpuAvailable=0`, and every GPU conformance test "passed" by skipping.
+    They now print `ran on: OpenGL ES` or `skipped`, so 0 failed can no longer mean never ran.
+  * **Headless needs GBM on libmali.** It has no surfaceless or device platform, and its default
+    display fails with no `DISPLAY`. `cosmo-cc` over SSH would have silently lost the GPU.
+  * **Available is not faster (D-60).** 11 MP exposure/contrast/WB: GPU ≈720 ms vs CPU ≈680 ms,
+    output byte-identical. The transfer costs more than three point ops. Do not advertise it as a
+    speed-up until D-60 is fixed.
+
+**► NEXT:** D-60 (keep the source resident on the GPU, read back RGBA8, histograms in the shader,
+then port more stages), after writing its speed target into R-GPU. D-61 is a small L2-testable fix
+worth doing first, because D-60's evidence needs an honest `backend=` line. Then the mixer
+follow-ups listed below.
+
 **► 2026-09-03 (later) — "the detection is completely wrong, remove that feature out of cosmo."
 DONE.**
 
@@ -972,7 +992,7 @@ the PNG — caught it, and only on the second shot, when click-outside failed to
 precisely the gap P0.1–P0.3 close permanently; the throwaway harness used here is described in
 the decisions log so the next session can rebuild it in one command if P0.2 is still pending.
 
-Last updated: 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
+Last updated: 2026-09-29 · R-GPU-7: the compute backend is picked at run time (desktop GL, then GLES), the GLES backend loads its entry points and finds a headless display over GBM, and an RK3588's Mali-G610 edits on its GPU — available and conformant, not yet faster (D-60) · 2026-09-03 · R-MIXER-10..14: the Lum curve is a GAIN (Adobe's value scale), not an offset on HSL lightness in linear light — which turned a blue sky black at -100 · R-AISEG WITHDRAWN — the Detect mask is out of the tree; type value 4 is retired so a project that stores it still loads and renders nothing · R-AISEG-25..28: the Detect block says what state it is in, a Detect button starts the run and a progress bar reports it · R-AISEG-19..24: a Detect mask covers nothing until the photographer runs the detection; the detection is a Command that reports progress on the render worker; what it finds is stored as geometry and IS the mask; the built-in detector is deepgaze's two-stage colour detector and answers for Skin alone · 2026-08-24 · D-45 attributed per stage and the SBC plan (T0-T5) written; nothing implemented yet · 2026-08-21 · U3.1 landed (the mixer no longer lights up noise) · T1 + T1a + T1b landed (the touch shell is on the service and renders with no device) · U2.1 + U2.2 + U2.2a + U2.4 landed (a cover is oriented like its photo; the photo
 dissolves instead of popping). Open from U2: **U2.3** (the phone stage dissolves too). New defect
 **D-36** — an out-of-range `set` crashes the render worker on a NaN that walks through ToneCurve's
 clamp; core-owned, filed with the fix. · Also merged in from the other machine: **D-40** (filed there as D-36 and renumbered on
@@ -1390,6 +1410,15 @@ and read a debug log that explains what the UI did.
 ---
 
 ## Decisions & deviations log (newest first)
+
+- **2026-09-29 — the GLES backend loads `gl*` through `eglGetProcAddress` and links only EGL.**
+  Linking `libGLESv2` next to `libGL` puts two definitions of every `gl*` symbol in one process,
+  and whichever loads first answers every call — on a libmali board, glvnd's libGL dispatching into
+  a context it never saw. The desktop backend already worked this way. The GBM device-node walk and
+  the `libgbm` `dlopen` live in the backend adapter under `ARSTRO_GLES_COMPUTE`, with the same
+  standing as the WGL backend's hidden window; they are not a second `configDir()`-style exception
+  in the platform-free engine. The option now defaults ON, so an existing build tree must be
+  reconfigured once with `-DARSTRO_IMG_GLES_COMPUTE=ON` — CMake keeps a cached `OFF`.
 
 - **2026-08-24 (later) — a user's core dump, and both halves of it were mine.** Dragging exposure
   segfaulted a render worker. Symbolising the reported offsets took one command and pointed straight

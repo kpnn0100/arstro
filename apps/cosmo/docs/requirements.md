@@ -769,6 +769,50 @@ Clarity → Vibrance → ColorMixer → ColorGrading → Dehaze → Sharpen → 
 RGBA) and, when built with `COSMO_HAVE_LIBRAW`, RAW formats (rw2/arw/cr2/cr3/nef/dng/orf/raf/pef/
 srw/rwl/raw) via LibRaw. `openPaths` prefers a RAW over a same-stem JPEG when both are selected.
 
+### DR-GPU-7 The GPU backend is chosen at run time, and a GLES-only ARM board uses its GPU (R-GPU-7, R-GPU-1, R-GPU-6)
+`createComputeAccelerator()` (`core/ImageProcessing/src/compute/ComputeBackend.cpp:49`) pushes every
+backend the build compiled — desktop GL (`:53`), then GL ES (`:56`) — and, when there is more than
+one, wraps them in `SelectingComputeBackend` (`ComputeBackend.h:73`). Its `chosen()`
+(`ComputeBackend.cpp:13`) resolves under `std::call_once` to the first candidate whose `available()`
+is true, on the first call to any member — never in the constructor, so an `EditEngine` still
+creates no GPU context until someone asks. With none available, `available()` is false and the
+engine renders on the CPU byte-identically.
+
+The GLES backend (`GlesComputeBackend.cpp`) links EGL only: `GlesFns` (`:40`) resolves every `gl*`
+entry point through `eglGetProcAddress`, falling back to `dlsym(RTLD_DEFAULT, …)` (`:51`) for an EGL
+without `EGL_KHR_get_all_proc_addresses` — which is how Android's directly linked `libGLESv3` is
+found. `glesDisplay()` (`:125`) finds one display per process: Mesa surfaceless, else
+`EGL_DEFAULT_DISPLAY`, else `gbmDisplay()` (`:92`), which `dlopen`s `libgbm.so.1` and walks
+`/dev/dri/renderD128…131`, `card0`, `card1`. `makeGlesContext()` (`:153`) makes the context
+surfaceless when the display offers `EGL_KHR_surfaceless_context`, else over a 1×1 pbuffer.
+`probeGlesCompute()` (`:195`) also requires the context to report ES ≥ 3.1. The option
+`ARSTRO_IMG_GLES_COMPUTE` defaults ON (`core/ImageProcessing/CMakeLists.txt:64`) except on Windows
+and Emscripten; an existing build tree keeps its cached `OFF` and needs
+`cmake build -DARSTRO_IMG_GLES_COMPUTE=ON` once.
+
+Measured on an RK3588 / Mali-G610 (libmali g13p0, Debian 12), 2026-09-29:
+
+```
+$ cosmo-cc backends                    # before
+gpuAvailable=0
+backend cpu=CPU gpu=CPU
+$ cosmo-cc backends                    # after — also with DISPLAY unset (GBM path)
+gpuAvailable=1
+backend cpu=CPU gpu=OpenGL ES
+defines=ARSTRO_ENABLE_THREADS,ARSTRO_GL_COMPUTE,ARSTRO_GLES_COMPUTE
+```
+
+The conformance tests now print where they ran — `EditEngine_gl_backend_matches_cpu`
+(`unittest/engineTests.cpp:1150`, through the default factory), `EditEngine_gles_backend_matches_cpu`
+(`:1208`) and `RenderService_gpu_worker_matches_cpu` (`:1257`) all report `ran on: OpenGL ES` on
+this board, with and without an X session; before, all three skipped silently. Selection is
+covered machine-independently by `SelectingComputeBackend_runs_the_first_backend_the_driver_accepts`
+(`:1077`). On a 4096×2731 exposure/contrast/white-balance edit, `lastRenderAccelerated()` is true
+and the RGBA8 output matches the CPU in all 44,744,704 bytes — but the GPU render takes ≈720 ms
+against ≈680 ms on eight CPU cores, because the float upload, the readback and the CPU-side
+histograms cost more than three point ops save. That is D-60; this entry claims availability and
+conformance, not speed.
+
 ---
 
 ## 13. Known gaps & deferred (from the source)

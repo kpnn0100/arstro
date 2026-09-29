@@ -51,24 +51,29 @@ if(ARSTRO_IMG_GL_COMPUTE)
   endif()
 endif()
 
-# ── GPU compute backend, OpenGL ES 3.1 (Android; also runs on desktop Mesa) — R-GPU ──
-# The Android sibling of the desktop GL backend. Default OFF (desktop uses GL). The
-# host unit-test build turns it ON as well (-DARSTRO_IMG_GLES_COMPUTE=ON) so the
-# GLES-vs-CPU test can exercise it against Mesa GLES; the factory prefers desktop GL when
-# both are built, and the test injects the GLES backend directly. EGL/GLESv2 are a
-# Linux/Android thing (Windows has no stock EGL), so this is skipped outright on WIN32.
-option(ARSTRO_IMG_GLES_COMPUTE "Build the OpenGL ES 3.1 compute GPU backend" OFF)
-if(ARSTRO_IMG_GLES_COMPUTE AND NOT WIN32)
+# ── GPU compute backend, OpenGL ES 3.1 (Android; ARM Linux; desktop Mesa) — R-GPU-6/7 ──
+# ON by default wherever EGL exists: an RK3588's Mali-G610 driver (libmali) exposes ONLY
+# OpenGL ES, so a Linux build with just the desktop-GL backend ran every edit on the CPU
+# with a GPU in the machine. Both backends are built side by side and the factory picks
+# the first one the driver actually runs (desktop GL, then GLES). The backend loads its
+# gl* entry points through eglGetProcAddress, so it links EGL ONLY — never libGLESv2,
+# whose gl* symbols would collide with libGL's in the same process. It needs the GLES3
+# headers at compile time (libgles-dev on Debian). libgbm, for the headless GBM display,
+# is dlopen'ed at run time and is not a build dependency. Windows has no stock EGL, and
+# the web build (Emscripten ships an EGL of its own) has no compute shaders.
+option(ARSTRO_IMG_GLES_COMPUTE "Build the OpenGL ES 3.1 compute GPU backend" ON)
+if(ARSTRO_IMG_GLES_COMPUTE AND NOT WIN32 AND NOT EMSCRIPTEN)
   find_library(ARSTRO_EGL_LIB EGL)
-  find_library(ARSTRO_GLES_LIB GLESv2)   # Mesa's libGLESv2 exports ES 3.1 entry points
-  if(ARSTRO_EGL_LIB AND ARSTRO_GLES_LIB)
+  find_path(ARSTRO_GLES_INCLUDE GLES3/gl31.h)
+  if(ARSTRO_EGL_LIB AND ARSTRO_GLES_INCLUDE)
     target_compile_definitions(arstro_image PUBLIC ARSTRO_GLES_COMPUTE)
-    target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${ARSTRO_GLES_LIB})
-    message(STATUS "arstro_image: GLES compute backend ENABLED (${ARSTRO_GLES_LIB})")
+    target_include_directories(arstro_image PRIVATE ${ARSTRO_GLES_INCLUDE})
+    target_link_libraries(arstro_image PUBLIC ${ARSTRO_EGL_LIB} ${CMAKE_DL_LIBS})
+    message(STATUS "arstro_image: GLES compute backend ENABLED (EGL ${ARSTRO_EGL_LIB})")
   else()
-    message(STATUS "arstro_image: GLES compute backend disabled (EGL/GLESv2 not found)")
+    message(STATUS "arstro_image: GLES compute backend disabled (EGL or GLES3/gl31.h not found)")
   endif()
-elseif(ARSTRO_IMG_GLES_COMPUTE)
+elseif(ARSTRO_IMG_GLES_COMPUTE AND WIN32)
   message(STATUS "arstro_image: GLES compute backend disabled (Windows has no EGL)")
 endif()
 

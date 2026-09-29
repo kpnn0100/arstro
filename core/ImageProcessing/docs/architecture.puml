@@ -276,7 +276,9 @@ package compute {
     + process(src, params, out) : bool
   }
   note bottom of GlesComputeBackend
-    OpenGL ES 3.1 compute / EGL pbuffer (Android)
+    OpenGL ES 3.1 compute (Android; ARM Linux e.g. Mali-G610) — R-GPU-6/7
+    display: surfaceless-MESA -> default -> GBM render node (libgbm dlopen'd)
+    entry points via eglGetProcAddress: links only EGL
     same algorithm as GlComputeBackend
   end note
   class GlComputeShared <<shared>> {
@@ -292,6 +294,17 @@ package compute {
   GlComputeBackend ..> GlComputeShared
   GlesComputeBackend ..> GlComputeShared
   IComputeBackend ..> ComputeResult
+  class SelectingComputeBackend {
+    + SelectingComputeBackend(vector<unique_ptr<IComputeBackend>>)
+    - chosen() : IComputeBackend*  ' first available(), resolved lazily, once
+  }
+  note bottom of SelectingComputeBackend
+    run-time choice: desktop GL, then GLES (R-GPU-7)
+    none available -> available()==false -> CPU
+  end note
+  SelectingComputeBackend ..|> IComputeBackend
+  SelectingComputeBackend o--> "1..*" IComputeBackend
+  createComputeAccelerator ..> SelectingComputeBackend
   createComputeAccelerator ..> GlComputeBackend
   createComputeAccelerator ..> GlesComputeBackend
 }

@@ -1426,7 +1426,7 @@ Reference: `apps/cosmo/panels/SettingsPanel.{h,cpp}`. Exposes engine/app setting
   opens seeded with what is actually in force. A missing, partial or corrupt file falls back to the
   defaults per field rather than failing to start.
 
-## R-GPU — GPU-accelerated image processing (abstract, opt-in) — ✅ IMPLEMENTED (abstraction + OpenGL/Linux backend; more stages + platforms deferred)
+## R-GPU — GPU-accelerated image processing (abstract, opt-in) — ✅ IMPLEMENTED (abstraction + OpenGL/Linux + OpenGL ES/Android + ARM-Linux backends; more stages + platforms deferred)
 
 The image engine can process on the GPU when a platform GPU backend is available and the user
 opts in, behind a **cross-platform abstraction** so concrete per-platform GPU implementations
@@ -1443,7 +1443,11 @@ accelerator is used only when its result matches it.
   `process(...)` which returns **false to decline** a job. A single factory
   `createComputeAccelerator()` returns the platform backend — the **OpenGL 4.3 compute backend**
   where built (`ARSTRO_GL_COMPUTE`), `nullptr` (CPU-only) otherwise, e.g. the web build. It is the
-  one per-platform extension point.
+  one per-platform extension point. (**AMENDED (R-GPU-7), 2026-09-29:** the factory no longer picks
+  one backend at *compile* time. On an RK3588 / Mali-G610 board both GL flavours were buildable, the
+  factory returned desktop GL because it was built, and the Mali driver exposes only OpenGL ES — so
+  `gpuAvailable=0` and every edit ran on the CPU with a GPU in the machine. It now returns the first
+  built backend that is *available at run time*, in preference order desktop GL → GL ES.)
 - **R-GPU-2 CPU is the reference & the fallback.** The existing CPU pipeline in `EditEngine` is the
   guaranteed fallback **and** the correctness reference: a GPU backend that accepts a job must match
   the CPU path **within a small tolerance** (a hardware backend is not bit-exact in float — the
@@ -1492,6 +1496,37 @@ accelerator is used only when its result matches it.
   arm64-v8a with the NDK.
   - **Deferred:** the remaining pipeline stages (moving encode + histograms fully onto the GPU too),
     and other APIs (Vulkan/Metal/D3D/WebGPU) — each an incremental add behind the same seam.
+  - (**AMENDED (R-GPU-7), 2026-09-29:** "selected by `#elif`" and "EGL/GLESv3 link" are no longer
+    true. The GLES backend is also built on desktop Linux by default and selected at run time; it
+    loads its GL entry points through `eglGetProcAddress` (falling back to the already-loaded
+    process image, which is how Android's directly linked `libGLESv3` is still found), so it links
+    only EGL and can share a process with `libGL` without two libraries defining `glGetString`.)
+- **R-GPU-7 An ARM Linux board with a GLES-only GPU edits on its GPU.** (**Added 2026-09-29.**
+  Trigger: "this device need implement gpu hal to use gpu to edit image" — an Orange Pi 5 class
+  RK3588 running Debian 12 with ARM's `libmali` Valhall g13p0 driver for its Mali-G610. Measured
+  before the change: `cosmo-cc backends` printed `gpuAvailable=0` / `backend cpu=CPU gpu=CPU`, and
+  the three GPU-vs-CPU conformance tests reported PASS only because each *skips* when no backend is
+  available — so the GPU path had never run on this machine and nothing said so.)
+  - **(a) Run-time selection.** `createComputeAccelerator()` builds every compiled backend and
+    resolves, lazily and once, to the first whose `available()` is true (desktop GL, then GL ES).
+    The probe stays lazy — constructing an `EditEngine` must not create a GPU context — and
+    `name()` reports the chosen backend, so `activeBackendName()` says "OpenGL ES" on this board.
+    With nothing available it behaves exactly as before: `gpuAvailable()` false, CPU byte-identical.
+  - **(b) A headless display on every Linux GLES driver.** The GLES context tries, in order, Mesa's
+    surfaceless platform, the default display (X11/Wayland when a session exists), and GBM over the
+    first DRM render node (`/dev/dri/renderD128…`, then `card0…`). `libmali` offers no surfaceless
+    or device platform, and its default display fails with no `DISPLAY` (`EGL_NOT_INITIALIZED`), so
+    without GBM `cosmo-cc` over SSH would silently lose the GPU. `libgbm` is `dlopen`ed, never
+    linked: a box without it loses only this fallback. The context is surfaceless when the display
+    offers `EGL_KHR_surfaceless_context`, else a 1×1 pbuffer, as before.
+  - **(c) The same conformance contract, and a way to see it ran.** Output within 2/255 of the CPU
+    reference; out-of-subset edits decline to byte-identical CPU. The conformance tests print which
+    backend they ran on or that they skipped, so "0 failed" on a GPU machine can no longer mean
+    "never ran". The selection logic is covered machine-independently with mock backends.
+  - **(d) Layering.** The device-node paths and the `dlopen` live only inside
+    `GlesComputeBackend.cpp` under `ARSTRO_GLES_COMPUTE` on Linux — a platform adapter, the same
+    standing as the WGL backend's hidden window — never in the platform-free engine. The web and
+    Windows builds compile none of it.
 
 ## R-HOME — Home screen & projects (item 4) — ✅ IMPLEMENTED
 

@@ -19,6 +19,47 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
+### D-61 — `cosmo-cc render` / `bench` print `backend=gpu` for renders that ran on the CPU
+- **Area:** core / cli · **Status:** **Confirmed** (by reading, and by D-60's measurement) · **Severity:** S3
+- **Found:** 2026-09-29, while verifying R-GPU-7 on an RK3588.
+- **Front end:** `cosmo-cc render`, `cosmo-cc bench` (text and `--json`).
+- **Reproduce:** `cosmo-cc render photo.jpg -o out.png --gpu --set saturation=40` prints
+  `backend=gpu`, although saturation is outside the ported subset and the backend declines to CPU.
+- **Expected:** the backend line states where the pixels were produced.
+- **Actual:** it prints `AppModel::gpuActive`, which is the *intent* (`useGpu && gpuAvailable`).
+  `EditEngine::lastRenderAccelerated()` (`EditEngine.h:193`) has the outcome, but nothing carries it
+  into `AppModel`, so no front end can read it.
+- **Judgement:** **defect** against R-SVC-3 (observable state goes into `AppModel`) — a benchmark that
+  cannot say which backend produced its number is not measuring what it labels.
+- **Recommended fix:** add `AppModel::lastRenderAccelerated` (excluded from the stable dump, like
+  `frameSeq`), fed from `RenderService::Frame`, and print it in `render`/`bench` beside the intent.
+- **Guard:** an L2 test: `set saturation=40` with a mock accepting backend → outcome false; plain
+  exposure → true.
+
+### D-60 — The GPU path is not faster than the CPU on an RK3588
+- **Area:** engine / compute · **Status:** **Confirmed** (measured) · **Severity:** S3
+- **Found:** 2026-09-29, right after R-GPU-7 made the Mali-G610 usable.
+- **Reproduce:** an `EditEngine` with a 4096×2731 RGBA8 image, `exposure=0.7 contrast=20
+  temp=5200`, `renderFull()` ×3 with `setPreferGpu(false)` then `(true)`:
+  ```
+  CPU 4096x2731 accel=0  687 / 688 / 673 ms
+  GPU 4096x2731 accel=1  899 / 785 / 723 ms
+  CPU 1024x768  accel=0   57 /  52 /  32 ms
+  GPU 1024x768  accel=1   67 /  51 /  50 ms
+  ```
+- **Expected:** opting into the GPU is at least not slower.
+- **Actual:** it is 5–50 % slower. Correctness is fine (0 differing bytes of 44.7 M).
+- **Cause (by inspection):** `GlesComputeBackend::process` re-uploads the whole linear float
+  source every render (`glBufferData`, ~179 MB at this size), reads back **two** float images
+  (linear + encoded), and then computes three histograms on the CPU. Three point ops are cheap on
+  eight A76/A55 cores; moving ~540 MB across the bus is not. The CPU path also skips identity stages
+  (R-PREVIEW-6), so it is doing little more work than the shader.
+- **Judgement:** **requirement gap** — R-GPU states conformance and fallback, never a speed target.
+- **Recommended fix:** keep the source resident on the GPU per slot (upload once at ingest), read
+  back RGBA8 instead of float, compute the histograms in the shader, and port more stages (tone
+  curve, vibrance/saturation) so the GPU does enough work to pay for the transfer. Write the speed
+  target as an R-GPU amendment first.
+
 ### D-59 — `set` accepts a key it does not understand, and reports success
 - **Area:** core / engine · **Status:** **Confirmed** (measured) · **Severity:** S2
 - **Found:** 2026-09-03, while auditing the agent-drivable surface for `arstro.rule`.

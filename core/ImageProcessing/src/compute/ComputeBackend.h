@@ -7,16 +7,18 @@
  *  accelerator is used only when the user opts in, it is available, and it accepts
  *  the job, and it MUST produce output matching the CPU path.
  *
- *  This header is platform-free (no OS/GPU includes). Concrete backends
- *  (Metal / Vulkan / Direct3D / WebGPU / OpenGL) are added per platform behind the
- *  single factory `createComputeAccelerator()` in a later change — today it returns
- *  nullptr, so the engine is CPU-only with zero behaviour change.
+ *  This header is platform-free (no OS/GPU includes). Concrete backends (OpenGL and
+ *  OpenGL ES today; Metal / Vulkan / Direct3D / WebGPU later) are registered per
+ *  platform behind the single factory `createComputeAccelerator()`, which picks among
+ *  them at run time.
  */
 #pragma once
 #include "../analysis/Histogram.h"
 #include "../base/Image.h"
 #include "../engine/EditParams.h"
 #include <memory>
+#include <mutex>
+#include <vector>
 
 namespace arstro
 {
@@ -60,13 +62,36 @@ namespace arstro
         virtual bool process(const Image &linearSource, const EditParams &params, ComputeResult &out) = 0;
     };
 
-    /** The single per-platform extension point. Returns the platform's GPU
-     *  accelerator, or nullptr when none is built. TODAY: always nullptr (CPU-only).
-     *  A concrete backend is registered here per platform later, e.g.:
-     *      #if   defined(__APPLE__)      return std::make_unique<MetalComputeBackend>();
-     *      #elif defined(_WIN32)         return std::make_unique<D3DComputeBackend>();
-     *      #elif defined(__linux__)      return std::make_unique<VulkanComputeBackend>();
-     *      #elif defined(__EMSCRIPTEN__) return std::make_unique<WebGpuComputeBackend>();
-     *  Until then the engine renders on the CPU reference path. */
+    /** Several built backends, one of which is chosen at RUN time: the first whose
+     *  available() is true, in the order given (R-GPU-7). Being able to COMPILE a backend
+     *  says nothing about whether the driver runs it — an RK3588 builds desktop GL and GLES,
+     *  and its Mali driver runs only GLES — so the choice cannot be an #if.
+     *
+     *  The choice is made lazily, on the first call to any member, and exactly once:
+     *  constructing an EditEngine must not create a GPU context. With nothing available it
+     *  reports available()==false and the engine stays on the CPU, byte-identical. */
+    class SelectingComputeBackend : public IComputeBackend
+    {
+    public:
+        explicit SelectingComputeBackend(std::vector<std::unique_ptr<IComputeBackend>> candidates);
+
+        const char *name() const override;
+        Kind kind() const override;
+        bool available() const override { return chosen() != nullptr; }
+        bool process(const Image &linearSource, const EditParams &params, ComputeResult &out) override;
+
+    private:
+        IComputeBackend *chosen() const;
+
+        std::vector<std::unique_ptr<IComputeBackend>> mCandidates;
+        mutable std::once_flag mOnce;
+        mutable IComputeBackend *mChosen = nullptr;
+    };
+
+    /** The single per-platform extension point. Returns the platform's GPU accelerator —
+     *  every backend this build compiled, behind a SelectingComputeBackend when there is
+     *  more than one — or nullptr when none is built (the web build), so the engine
+     *  renders on the CPU reference path. Other APIs (Metal / Vulkan / D3D / WebGPU) are
+     *  added here as further candidates. */
     std::unique_ptr<IComputeBackend> createComputeAccelerator();
 }
