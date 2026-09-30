@@ -1,0 +1,203 @@
+/*
+ * Cosmo by arstro — desktop.css: the desktop shell (js/desktop/shell.js, editor.js, topbar.js,
+ * leftrail.js, stage.js, breadcrumb.js, filmstrip.js, contextmenu.js, history.js).
+ *
+ * Every length is the native's logical px at 100 % (App.cpp / widgets/*.cpp, see each module's
+ * header); the whole shell is scaled by the root's transform. Colours are tokens (tokens.css,
+ * generated from Theme.h); the few literals are the native's own and cite their line.
+ *
+ * Motion: Segment hover (IconButton, PillButton, the TopBar's group name) is 120 ms
+ * EaseOutCubic = var(--ease-out); HoverFade (menus, rows, cells, crumbs, the seam) runs
+ * linearly and is drawn through smoothstep, which is exactly cubic-bezier(1/3, 0, 2/3, 1) over
+ * a full 0 -> 1 run = --ease-fade.
+ */
+.desk { --ease-fade: cubic-bezier(0.3333, 0, 0.6667, 1); overflow: hidden; background: var(--background);
+        /* The native draws every label with cairo_show_text (CairoTarget.cpp:221): no shaping,
+           so no kerning and no ligatures. */
+        font-kerning: none; font-variant-ligatures: none; }
+.desk-root { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: var(--background); }
+
+/* A label placed by its baseline (editor.js text()). */
+.desk .t { position: absolute; top: 0; left: 0; line-height: 0; white-space: pre; pointer-events: none; }
+.desk .fg { color: var(--foreground); }
+.desk .muted { color: var(--muted-foreground); }
+.desk .accent { color: var(--primary); }
+.desk .white { color: var(--white); }
+.desk .fg30 { color: color-mix(in srgb, var(--foreground) 30%, transparent); }
+
+/* ---------------------------------------------------------------- editor layout (App::layout) */
+.ed { position: absolute; inset: 0; overflow: hidden; background: var(--background); --rail-w: 196px; }
+.ed-top { position: absolute; left: 0; top: 0; width: 100%; height: 29.25px; z-index: 1; }
+.ed-top.raised { z-index: 45; }
+/* The body columns start at y 29.25. Placed by transform, not `top`: Chrome snaps a box's origin
+   to the whole px before it applies a transform, so a descendant positioned by transform (the
+   photo, the pill, the rings, the hairlines) would lose the .25 - under a translated parent
+   every descendant lands on the native's fractional position, antialiased as Cairo draws it. */
+.ed-rail { position: absolute; left: 0; top: 0; height: calc(100% - 29.25px); transform: translateY(29.25px); width: var(--rail-w);
+           overflow: hidden; background: var(--left-rail-bg); z-index: 2; }
+.ed.rail-gone .ed-rail { visibility: hidden; }
+.ed-center { position: absolute; left: 0; top: 0; height: calc(100% - 29.25px); width: max(0px, calc(100% - var(--rail-w) - 324px));
+              transform: translate(var(--rail-w), 29.25px); overflow: hidden; z-index: 3; }
+.ed-right { position: absolute; right: 0; top: 0; height: calc(100% - 29.25px); transform: translateY(29.25px); width: 324px; z-index: 4; }
+.ed-layer { position: absolute; inset: 0; pointer-events: none; }
+.ed-history { z-index: 20; }
+.ed-history.open { pointer-events: auto; }
+.ed-cmenu { z-index: 30; }
+.ed-cmenu.open { pointer-events: auto; }
+.ed-dialogs { z-index: 50; }
+.ed-dialogs > * { pointer-events: auto; }
+
+/* ---------------------------------------------------------------- TopBar (TopBar.cpp) */
+/* Hairlines are 1 px strokes CENTRED on their y (Shapes.cpp:8-20). Placed by transform, which
+   Chrome paints at the fractional offset (antialiased like Cairo) where `top` would snap. */
+.tb-line { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--border); transform: translateY(28.75px); }
+.tb-wm { position: absolute; left: 5.75px; top: 0; width: 54.8px; height: 29.25px; }
+.tb-file { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity var(--t-hover) var(--ease-out); }
+.tb-file.on { opacity: 1; }
+.tb-group { position: absolute; top: 5.625px; height: 18px; border-radius: var(--radius-control); opacity: 0; pointer-events: none;
+            transition: opacity var(--t-hover) var(--ease-out); }
+.tb-group.on { opacity: 1; pointer-events: auto; }
+.tb-group::before { content: ""; position: absolute; inset: 0; border-radius: var(--radius-control); background: rgba(var(--white-rgb), 0.07);
+                    opacity: 0; transition: opacity var(--t-hover) var(--ease-out); }
+.tb-group:hover::before { opacity: 1; }
+.tb-rail { position: absolute; right: 9.75px; top: 4.375px; width: 20.5px; height: 20.5px; border-radius: var(--radius-control);
+           color: var(--muted-foreground); transition: color var(--t-hover) var(--ease-out); }
+.tb-rail::before { content: ""; position: absolute; inset: 0; border-radius: var(--radius-control); background: rgba(var(--white-rgb), 0.05);
+                   opacity: 0; transition: opacity var(--t-hover) var(--ease-out); }
+.tb-rail:hover::before, .tb-rail:active::before { opacity: 1; }
+.tb-rail:hover { color: color-mix(in srgb, var(--muted-foreground) 60%, var(--white)); }
+.tb-rail.active { color: var(--primary); }
+.tb-rail.active:hover { color: color-mix(in srgb, var(--primary) 60%, var(--white)); }
+.tb-rail svg { position: absolute; left: 0; top: 0; }
+
+/* MenuStrip (MenuStrip.cpp) */
+.ms { position: absolute; height: 21px; }
+.ms-hi { position: absolute; top: 0; height: 21px; background: var(--primary); border-radius: var(--radius-control); opacity: 0; }
+.ms-tab { position: absolute; top: 0; height: 21px; }
+.ms-tab .t { color: var(--muted-foreground); transition: color var(--t-hover) var(--ease-fade); }
+.ms-tab:hover .t, .ms-tab.open .t { color: var(--white); }
+.ms-drop { position: absolute; top: 24px; height: 0; background: var(--popover); border-radius: var(--radius-control);
+           outline: 1px solid var(--border); outline-offset: -0.5px; overflow: hidden; visibility: hidden; }
+.ms-drop.on { visibility: visible; }
+.ms-item { position: absolute; left: 0; right: 0; height: 24px; }
+.ms-item::before { content: ""; position: absolute; left: 3px; right: 3px; top: 0; bottom: 0; border-radius: var(--radius-control);
+                   background: var(--hover-wash); opacity: 0; transition: opacity var(--t-hover) var(--ease-fade); }
+.ms-item:hover::before { opacity: var(--reveal, 1); }
+
+/* ---------------------------------------------------------------- LeftRail + PresetTree */
+.lr-line { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--border); transform: translateY(24.2px); }
+.lr-tree { position: absolute; left: 0; right: 0; bottom: 3.25px; overflow: hidden; }
+.lr-rows { position: absolute; left: 0; top: 0; right: 0; }
+.lr-row { position: absolute; left: 0; right: 0; top: 0; height: 20px;
+          transition: opacity var(--t-hover) var(--ease-out), transform var(--t-hover) var(--ease-out); }
+.lr-row::before, .lr-row::after { content: ""; position: absolute; inset: 0; opacity: 0; }
+.lr-row::before { background: rgba(var(--white-rgb), 0.06); transition: opacity var(--t-hover) var(--ease-fade); }
+.lr-row.hover::before { opacity: 1; }
+.lr-row::after { background: rgba(var(--primary-rgb), 0.10); }
+.lr-row.sel::after { opacity: 1; }
+.lr-row.sel-in::after { animation: lr-sel 140ms var(--ease-out); }
+@keyframes lr-sel { from { opacity: 0; } to { opacity: 1; } }
+.lr-row .t { color: var(--muted-foreground); z-index: 1; }
+.lr-row.folder .t { color: color-mix(in srgb, var(--foreground) 65%, transparent); }
+.lr-row.sel .t { color: var(--primary); }
+.lr-chev { position: absolute; top: 5.5px; width: 9px; height: 9px; color: var(--muted-foreground); z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .lr-row.sel-in::after { animation: none; } }
+
+/* ---------------------------------------------------------------- PhotoCanvas (PhotoCanvas.cpp) */
+.pc { position: absolute; left: 0; top: 0; width: 100%; height: calc(var(--H) - 138px); background: var(--canvas-bg); overflow: hidden; }
+.pc-img { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; -webkit-user-drag: none; }
+.pc-split { position: absolute; left: 0; top: 0; bottom: 0; width: 0; overflow: hidden; pointer-events: none; opacity: 0; }
+/* The seam: a rect (seam - sw/2, 0, sw, h), sw 1.5 -> 3 and white 0.55 -> 0.95 with hover - an SVG
+   rect, so its fractional edges are antialiased as the native's are. */
+.pc-seam { position: absolute; left: 0; top: 0; bottom: 0; width: 0; pointer-events: none; opacity: 0; }
+.pc-seam svg { position: absolute; left: 0; top: 0; width: 1px; height: 100%; overflow: visible; }
+.pc-seam rect { x: -0.75px; width: 1.5px; height: 100%; fill: rgba(var(--white-rgb), 0.55);
+                transition: x var(--t-hover) var(--ease-fade), width var(--t-hover) var(--ease-fade), fill var(--t-hover) var(--ease-fade); }
+.pc-seam.hover rect { x: -1.5px; width: 3px; fill: rgba(var(--white-rgb), 0.95); }
+.pc-layer { position: absolute; inset: 0; pointer-events: none; }
+/* The tray: Color{0x11,0x11,0x11,0.9} (PhotoCanvas.cpp:77) = segmentedBg @ 0.9, 1 px border, r6 -
+   the border is painted first, the highlight over it, as the native does. */
+.pc-pill { position: absolute; left: calc(50% - 82.125px); top: calc(100% - 38px); width: 164.25px; height: 25px;
+           background: color-mix(in srgb, var(--segmented-bg) 90%, transparent); border-radius: 6px; }
+.pc-pill::before { content: ""; position: absolute; inset: -0.5px; border: 1px solid var(--border); border-radius: 6.5px; pointer-events: none; }
+.pc-hi { position: absolute; left: 0; top: 0; overflow: visible; }
+.pc-hi path { fill: var(--primary); }
+.pc-seg { position: absolute; top: 0; height: 25px; }
+.pc-seg .t { color: var(--muted-foreground); transition: color var(--t-hover) var(--ease-out); }
+.pc-seg:hover .t { color: color-mix(in srgb, var(--muted-foreground) 45%, var(--white)); }
+.pc-seg.active .t { color: var(--white); font-family: var(--font-sans-medium) !important; }
+
+/* ---------------------------------------------------------------- Breadcrumb (Breadcrumb.cpp) */
+/* CenterStage rows (CenterStage.cpp:21-35): photo 0..H-138, crumbs 22.75, strip 86 - by transform
+   (see .ed-rail), from the logical window height --H. */
+.bc { position: absolute; left: 0; right: 0; top: 0; height: 22.75px; transform: translateY(calc(var(--H) - 138px)); background: var(--left-rail-bg); }
+.bc-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--border); }
+.bc-line { top: 0; }
+.bc-line.top { transform: translateY(-0.5px); }
+.bc-line.bottom { transform: translateY(22.25px); }
+.bc-row { position: absolute; inset: 0; }
+.bc-crumb { color: var(--muted-foreground); transition: color var(--t-hover) var(--ease-fade); }
+.bc-crumb.hover { color: var(--foreground); }
+.bc-last { color: color-mix(in srgb, var(--foreground) 80%, transparent); }
+.bc-chev { position: absolute; width: 9px; height: 9px; color: color-mix(in srgb, var(--muted-foreground) 40%, transparent); pointer-events: none; }
+
+/* ---------------------------------------------------------------- Filmstrip (Filmstrip.cpp) */
+.fs { position: absolute; left: 0; right: 0; top: 0; height: 86px; transform: translateY(calc(var(--H) - 115.25px));
+      background: var(--filmstrip-bg); overflow: hidden; }
+/* The strip's own top line is not clipped by the strip (Filmstrip::onPaint): a sibling above it. */
+.fs-line { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--border); transform: translateY(calc(var(--H) - 115.75px));
+           z-index: 1; pointer-events: none; }
+.fs-track { position: absolute; left: 0; top: 0; height: 100%; }
+.fs-cells { position: absolute; left: 0; top: 0; }
+.fs-cell { position: absolute; left: 0; top: 12px; height: 62px; transition: opacity var(--t-scroll) var(--ease-out); }
+.fs-body { position: absolute; inset: 0; overflow: hidden; }
+.fs-cell.group .fs-body, .fs-cell[data-kind="pending"] .fs-body { overflow: visible; }
+.fs-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+            transition: opacity var(--t-hover) var(--ease-out); pointer-events: none; -webkit-user-drag: none; }
+.fs-thumb.on { opacity: 1; }
+.fs-plate { position: absolute; inset: 0; background: var(--folder-chip-bg); border-radius: var(--radius-control); }
+.fs-spin, .fs-dash { position: absolute; left: 0; top: 0; overflow: visible; }
+.fs-spin-track { fill: none; stroke: rgba(var(--white-rgb), 0.10); stroke-width: 2; }
+.fs-spin-head { fill: none; stroke: rgba(var(--primary-rgb), 0.85); stroke-width: 2; stroke-linecap: butt; stroke-linejoin: miter;
+                animation: fs-spin 900ms linear infinite; }
+@keyframes fs-spin { to { transform: rotate(360deg); } }
+.fs-dash path { fill: none; stroke: rgba(var(--white-rgb), 0.0432); stroke-width: 1; stroke-linecap: butt; }   /* border @ 0.6 */
+.fs-count { color: color-mix(in srgb, var(--muted-foreground) 40%, transparent); }
+.fs-hov { position: absolute; inset: 0; border-radius: var(--radius-control); background: var(--hover-wash); opacity: 0;
+          transition: opacity var(--t-hover) var(--ease-fade); }
+.fs-cell.hover .fs-hov { opacity: 1; }
+.fs-cell.primary .fs-hov { opacity: 0; transition: none; }
+/* Color{0.02,0.02,0.02,0.52|0.72} = rgb(5,5,5) (Filmstrip.cpp:343-345) */
+.fs-by { position: absolute; inset: 0; border-radius: var(--radius-control); background: rgba(5, 5, 5, calc(0.52 * var(--by, 0))); }
+.fs-badge { position: absolute; left: 4px; top: 4px; width: 12px; height: 12px; border-radius: var(--radius-control);
+            background: rgba(5, 5, 5, calc(0.72 * var(--by, 0))); color: rgba(var(--white-rgb), calc(0.72 * var(--by, 0))); }
+.fs-badge svg { position: absolute; left: 2px; top: 2px; }
+.fs-out { position: absolute; left: -1.5px; top: -1.5px; right: -1.5px; bottom: -1.5px; border: 1px solid rgba(var(--white-rgb), 0.08); pointer-events: none; }
+.fs-cell.sel .fs-out { left: -3px; top: -3px; right: -3px; bottom: -3px; border-width: 2px; }
+.fs-cell.group .fs-out, .fs-cell.primary .fs-out { display: none; }
+.fs-ring { position: absolute; left: 0; top: 0; height: 70px; border: 2px solid var(--primary); pointer-events: none; opacity: 0; }
+.fs-ring.on { opacity: 1; }
+.fs-namebar { position: absolute; left: 0; top: 0; height: 12px; pointer-events: none; opacity: 0; overflow: visible; }
+.fs-namebar.on { opacity: 1; }
+.fs-load { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.fs-load-track { position: absolute; left: 0; top: 0; width: 100%; height: 2px; background: rgba(var(--white-rgb), 0.07); }
+.fs-load-fill { position: absolute; left: 0; top: 0; width: 0; height: 2px; background: rgba(var(--primary-rgb), 0.9); }
+.desk .fs-load-text { left: auto !important; right: 9.75px; color: rgba(var(--white-rgb), 0.5); }
+
+/* ---------------------------------------------------------------- ContextMenu (ContextMenu.cpp) */
+.cm-catch { position: absolute; inset: 0; }
+.cm { position: absolute; left: 0; top: 0; background: var(--popover); border-radius: var(--radius-control);
+      outline: 1px solid var(--border); outline-offset: -0.5px; visibility: hidden; }
+.cm-items { position: absolute; inset: 0; }
+.cm-item { position: absolute; left: 0; right: 0; height: 24px; }
+.cm-item::before { content: ""; position: absolute; left: 3px; right: 3px; top: 0; bottom: 0; border-radius: var(--radius-control);
+                   background: rgba(var(--white-rgb), 0.08); opacity: 0; transition: opacity var(--t-hover) var(--ease-fade); }
+.cm-item.hover::before { opacity: 1; }
+.desk .cm-header { opacity: 0; }
+.cm-field { position: absolute; left: 0; top: 0; display: none; background: var(--input-light); border-radius: var(--radius-control); }
+.cm-sel { position: absolute; background: var(--primary); border-radius: var(--radius-hairline); opacity: 0; }
+.desk .cm-ftext { color: var(--input-light-text); }
+.cm-caret { position: absolute; width: 1.6px; background: var(--primary); opacity: 0; }
+
+/* ---------------------------------------------------------------- HistoryView (HistoryView.cpp) */
+.hv { position: absolute; left: 0; top: 0; }

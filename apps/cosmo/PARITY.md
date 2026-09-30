@@ -34,6 +34,9 @@ column points at files in the now-removed app, kept for provenance.
 
 ## The web front end (R-NTWB) vs the GTK window
 
+**2026-09-30 (later): the web UI was rebuilt as the App's and PhoneApp's own shells (R-NTWB-5
+amended, R-NTWB-7) - rows W1-W12 are closed; what is still missing needs the core first (W14-W19).**
+
 Everything below is reachable from the browser *today* through the command grammar (the Info
 tab's event lines show it, `arstro-remote apps call cosmo command '{"line": ...}'` drives it) -
 what is missing is the **panel** that draws it. Each row is a design task
@@ -45,13 +48,19 @@ the same commands the window sends.
 | W1 | Basic/Detail sliders, WB pick, tone/colour/presence/effects/sharpen/NR/lens | RightColumn | same catalogue (EditControls.h) | **Done** | R-NTWB-4/5 |
 | W2 | Project tree, bypass, group, filmstrip, breadcrumb, histogram | LeftRail, Filmstrip, Breadcrumb, HistogramWidget | yes | **Done** | R-NTWB-5 |
 | W3 | Home, recents, open, import, save, export, settings | HomeScreen, dialogs | yes (a folder picker over `browse`) | **Done** | R-NTWB-5/6 |
-| W4 | Tone curve (master + RGB) | CurvePanel | - (`set curve=...` works) | Missing | R-NTWB-5 |
-| W5 | Colour mixer + hue remap | MixerPanel, HueCurveEditor | - (`set mixer0=...`) | Missing | R-NTWB-5 |
-| W6 | Colour grading wheels | GradePanel | - (`set grade0=...`) | Missing | R-NTWB-5 |
-| W7 | Masks panel + on-photo overlay | MaskPanel, MaskOverlay | - (`set mask=`, `mask set`) | Missing | R-NTWB-5 |
-| W8 | Crop overlay, rotate, quarter turns | CropOverlay | - (`set crop=`, `rotation=`) | Missing | R-NTWB-5 |
-| W9 | Presets tree (apply / save) | PresetTree, PresetDialog | - (`preset apply "..."`); needs a preset list in the model | Missing (core: list) | R-NTWB-3 |
-| W10 | History as a branching tree | HistoryView | step count + label only | Partial | R-NTWB-5 |
-| W11 | Zoom / pan / before-after split on the photo | PhotoCanvas | fit only | Missing | R-NTWB-5 |
-| W12 | Group rename, delete, context menu | ContextMenu | - (`group rename`, `delete`) | Missing | R-NTWB-5 |
+| W4 | Tone curve (master + RGB) | CurvePanel | `panels/curve.js` | **Done** | R-NTWB-5 |
+| W5 | Colour mixer + hue remap | MixerPanel, HueCurveEditor | `panels/mixer.js` | **Done** | R-NTWB-5 |
+| W6 | Colour grading (picker + sliders, as the window has it) | GradePanel | `panels/grade.js` | **Done** | R-NTWB-5 |
+| W7 | Masks panel + on-photo overlay | MaskPanel, MaskOverlay | `panels/mask.js`, `desktop/overlays.js` | **Done** (desktop; the phone has no on-photo drawing, like PhoneApp) | R-NTWB-5 |
+| W8 | Crop overlay, rotate, quarter turns | CropOverlay | `panels/xform.js`, `desktop/overlays.js` over the per-client `uncropped` frame | **Done** | R-NTWB-2/5 |
+| W9 | Presets tree (apply / save) | PresetTree, PresetDialog | `desktop/leftrail.js` from `presets`, `dialogs/preset.js` | **Done** (save with all categories - W15) | R-NTWB-3 |
+| W10 | History as a branching tree | HistoryView | `desktop/history.js` from `history`, `history jump` | **Done** | R-NTWB-3/5 |
+| W11 | Zoom / pan / before-after split on the photo | PhotoCanvas | `desktop/stage.js`, Before from the per-client `before` frame | **Done** (zoom scales the preview; a sharper render per zoom is W19) | R-NTWB-2/5 |
+| W12 | Group rename, delete, context menu | ContextMenu | `desktop/contextmenu.js` | **Done** | R-NTWB-5 |
 | W13 | RightColumn reads its sliders from EditControls.h (one catalogue) | own copy | - | Task NTWB-T3 | R-NTWB-4 |
+| W14 | The touch shell in a phone's browser | touch/PhoneApp | `touch/*` | **Done** | R-NTWB-5, R-TOUCH |
+| W15 | Preset save with chosen categories, preset import / export | PresetDialog + host dialogs | categories shown, all ticked | Missing (core: `preset save --cats`, `preset import/export`) | R-NTWB-5 |
+| W16 | Export of the ticked photos, same-as-source, prefix, subfolder, metadata toggles | ExportDialog | shown disabled with the reason | Missing (core: export options) | R-NTWB-5 |
+| W17 | Copy / paste settings | App clipboard + applyParamsToSlot | disabled | Missing (core: `paste`) | R-NTWB-5 |
+| W18 | An export that does not hold up the bridge | host thread | the service exports synchronously | Missing (core: incremental export, R-SVC-6) | R-SVC-6 |
+| W19 | A sharper render while zoomed in, per page | setPreviewZoom | the page scales the preview | Missing (core: a per-view region render) | R-NTWB-2 |

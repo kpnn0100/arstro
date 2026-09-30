@@ -2,107 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>cosmo.</title>
 <link rel="icon" href="icon.svg">
-<link rel="stylesheet" href="cosmo.css">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/desktop.css">
+<link rel="stylesheet" href="css/panels.css">
+<link rel="stylesheet" href="css/home.css">
+<link rel="stylesheet" href="css/dialogs.css">
+<link rel="stylesheet" href="css/touch.css">
 </head>
 <body>
 <!--
-  Cosmo by arstro — the web front end (R-NTWB-5). A THIRD view of CosmoService, next to the
-  GTK window and cosmo-cc: every change it makes is a command line of the one grammar
-  (R-SVC-5) sent over NTWB, everything it shows is the model, the events and the frames the
-  service publishes. It holds presentation only (R-SVC-4).
+  Cosmo by arstro — the web front end (R-NTWB-5/7). MVVM: the model is cosmo-cc on the board
+  (THE CosmoService of this Arstro Remote session, shared by every page of it); this page is ONE
+  view of it, with its own view-model (js/vm/editor.js) and a layout chosen for its own screen:
+  the desktop App's shell, or the touch PhoneApp's. It sends command lines and draws the model,
+  the events and the frames the service publishes - nothing else.
 -->
-<section class="screen" id="home">
-  <aside class="home-side">
-    <div class="wordmark">cosmo<span class="dot">.</span></div>
-    <button class="home-action" id="act-open"><svg viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>Open project</button>
-    <button class="home-action" id="act-import"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg>Import photos</button>
-    <button class="home-action" id="act-settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Settings</button>
-  </aside>
-  <main class="home-main">
-    <div class="wordmark home-hero">cosmo<span class="dot">.</span></div>
-    <h2>Recent Projects</h2>
-    <div class="cards" id="recents"></div>
-  </main>
-</section>
-
-<section class="screen" id="loading">
-  <div class="loading-box">
-    <div class="wordmark">cosmo<span class="dot">.</span></div>
-    <div class="bar"><i id="load-bar"></i></div>
-    <div class="status" id="load-status"></div>
-    <div class="count" id="load-count"></div>
-  </div>
-</section>
-
-<section class="screen" id="editor">
-  <header class="topbar">
-    <button class="btn ghost icon-btn" id="rail-toggle" title="Show / hide the tree"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <div class="wordmark" id="go-home" title="Home">cosmo<span class="dot">.</span></div>
-    <div class="title"><span id="project-name"></span><span class="dirty" id="dirty"></span></div>
-    <button class="btn ghost icon-btn" id="undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-    <button class="btn ghost icon-btn" id="redo" title="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
-    <button class="btn ghost hide-narrow" id="save">Save</button>
-    <button class="btn ghost icon-btn" id="settings" title="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
-  </header>
-  <div class="editor-body">
-    <nav class="rail" id="rail">
-      <div class="rail-inner">
-        <div class="section-h">Project<span class="grow"></span>
-          <button class="btn ghost icon-btn" id="new-group" title="Group the selection"><svg viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 11v6M9 14h6"/></svg></button>
-          <button class="btn ghost icon-btn" id="add-photos" title="Import photos"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-        </div>
-        <div class="tree" id="tree"></div>
-      </div>
-    </nav>
-    <div class="stage">
-      <div class="canvas" id="canvas">
-        <img id="img-a" alt=""><img id="img-b" alt="">
-        <div class="hint" id="canvas-hint">No photo selected</div>
-        <div class="badge" id="badge"></div>
-      </div>
-      <div class="breadcrumb" id="breadcrumb"></div>
-      <div class="filmstrip" id="filmstrip"><div class="ring" id="ring"></div></div>
-    </div>
-    <aside class="right">
-      <div class="histogram"><canvas id="hist"></canvas></div>
-      <div class="tabs" id="tabs">
-        <button data-page="adjust" class="on">Basic/Detail</button>
-        <button data-page="history">History</button>
-        <button data-page="info">Info</button>
-        <i class="bar-acc" id="tab-acc"></i>
-      </div>
-      <div class="pages">
-        <div class="page on" id="page-adjust"></div>
-        <div class="page" id="page-history">
-          <div class="section-h">History</div>
-          <dl class="kv" id="history-kv"></dl>
-          <div class="pad">
-            <button class="btn" id="undo2">Undo</button><button class="btn" id="redo2">Redo</button>
-          </div>
-        </div>
-        <div class="page" id="page-info">
-          <div class="section-h">Photo<span class="grow"></span><button class="btn ghost" id="read-meta">Read metadata</button></div>
-          <dl class="kv" id="meta-kv"></dl>
-          <div class="section-h">Machine</div>
-          <dl class="kv" id="machine-kv"></dl>
-          <div class="section-h">Events</div>
-          <div class="events" id="events"></div>
-        </div>
-      </div>
-      <div class="actionbar">
-        <button class="btn ghost" id="bypass">Bypass</button>
-        <span class="grow"></span>
-        <button class="btn primary" id="export">Export</button>
-      </div>
-    </aside>
-  </div>
-</section>
-
-<div class="toasts" id="toasts"></div>
+<div id="app"></div>
 <script src="/ntwb/ntwb.js"></script>
-<script src="cosmo.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

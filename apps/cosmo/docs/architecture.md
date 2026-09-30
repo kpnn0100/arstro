@@ -319,7 +319,11 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `apps/cosmo/cli/NtwbAdapter.{h,cpp}` | host | cosmo as an Arstro Remote app: NTWB `command` → `dispatch`, `AppModel` → state `model`, `Event` → NTWB events, frames → JPEG blobs; no behaviour of its own (R-NTWB-1/2) |
 | `apps/cosmo/CoverScale.h` | host | the box downscale of a project cover, shared by the GTK host's home cards and `cosmo-cc ntwb`'s `cover` (R-NTWB-2) |
 | `apps/cosmo/EditControls.h` | host | the Basic/Detail slider catalogue as data, with the unit conversions of `UnitConversions.h`, for a front end that is not the GTK window (R-NTWB-4) |
-| `apps/cosmo/web/*` | web front end | the browser UI served by Arstro Remote at `/apps/cosmo/`: a third view of the same service, in cosmo's design language (R-NTWB-5) |
+| `apps/cosmo/web/js/model/*`, `js/vm/editor.js`, `js/core/*` | web front end | MVVM in the page: the model's proxy (`session.js`, the params codec, the sampled conversions), the page's view-model (shared derived state, its own view state, every intent as a command line), signals / DOM / motion (R-NTWB-7) |
+| `apps/cosmo/web/js/desktop/*`, `js/panels/*`, `js/dialogs/*`, `js/ui/*` | web front end | the desktop App's shell, its RightColumn pages and its dialogs, ported widget by widget (R-NTWB-5) |
+| `apps/cosmo/web/js/touch/*` | web front end | the touch PhoneApp's shell for phone-sized pages (R-NTWB-5, R-TOUCH) |
+| `apps/cosmo/web/css/tokens.css` + `cli/webTokens.cpp` | web front end / tool | Theme.h's tokens as CSS custom properties, generated and drift-tested (R-NTWB-9) |
+| `apps/cosmo/tests/web/mvvm_test.mjs` | test | two pages of one session in a real browser: shells per screen, edits both ways, view state per page, presence (R-NTWB-7/8) |
 | `core/Ntwb/*` | library | the app side of NTWB for any Arstro app: `Json`, the protocol table (tested against the vendored `spec/api.json`), framing, the `ITransport` seam, `Client` (R-NTWB, NTWB-09) |
 
 **Front ends over the service (R-SVC-1):** the GTK window (`linux_main.cpp` + `App`), `cosmo-cc`

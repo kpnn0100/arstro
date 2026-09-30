@@ -242,3 +242,14 @@ target_include_directories(cosmo_widget_tests PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../core/ImageProcessing/src)
 target_link_libraries(cosmo_widget_tests PRIVATE artboard_core)
 add_test(NAME cosmo_widget COMMAND cosmo_widget_tests)
+
+# ── cosmo_web_tokens: the web UI's design tokens, generated from Theme.h (R-NTWB-9) ─────
+# The browser draws with the window's palette, radii and families only if it reads them from
+# the same functions: this prints them as CSS custom properties, web/css/tokens.css is the
+# committed output, and the test fails when Theme.h changed and nobody regenerated it:
+#   cmake-build/apps/cosmo/cosmo_web_tokens > apps/cosmo/web/css/tokens.css
+add_executable(cosmo_web_tokens ${CMAKE_CURRENT_SOURCE_DIR}/cli/webTokens.cpp)
+target_include_directories(cosmo_web_tokens PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(cosmo_web_tokens PRIVATE artboard_core)
+add_test(NAME cosmo_web_tokens_current
+  COMMAND sh -c "\"$<TARGET_FILE:cosmo_web_tokens>\" | diff -u \"${CMAKE_CURRENT_SOURCE_DIR}/web/css/tokens.css\" -")

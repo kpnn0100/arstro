@@ -1,0 +1,103 @@
+/* Cosmo by arstro — home.css: the launcher (widgets/HomeScreen.cpp, widgets/ProjectCard.cpp) and
+   the screen layers of screens.js / loading.js (App.cpp Home / Loading / Editor, R-NTWB-5).
+   Logical px at UI scale 100 %; colours are tokens, or custom properties home.js derives from
+   tokens exactly as the native derives them (lerpColor / brighten) - no literal but the one
+   the native hard-codes (#111111, ProjectCard.cpp:23). Strokes are SVG (Cairo straddles). */
+
+/* ------------------------------------------------------------------ screen layers */
+.scr-root { position: absolute; inset: 0; overflow: hidden; background: var(--background); }
+.scr-layer { position: absolute; inset: 0; }
+/* off: transparent AND inert (screens.js sets the attribute) - a child's own visibility /
+   pointer-events cannot bring it back, the way it could with visibility: hidden */
+.scr-layer.off { opacity: 0; pointer-events: none; }
+/* App.cpp:1359 / 1391: a background-coloured scrim 1 -> 0 over 220 ms EaseOutCubic */
+.scr-fade { position: absolute; inset: 0; background: var(--background); opacity: 0; pointer-events: none;
+            transition: opacity 220ms var(--ease-out); }
+.scr-fade.snap { transition: none; }
+.scr-fx { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 30; }
+.scr-fx.block { pointer-events: auto; }            /* Loading swallows all input (App.cpp:66) */
+.scr-splash { position: absolute; inset: 0; background: var(--background); pointer-events: none; z-index: 40; }
+.scr-splash canvas { position: absolute; }
+
+/* ------------------------------------------------------------------ home */
+.hm { position: absolute; inset: 0; overflow: hidden; background: var(--background); color: var(--foreground);
+      font-kerning: none; font-variant-ligatures: none; --hm-ease: cubic-bezier(0.3333, 0, 0.6667, 1); }
+.hm button { position: absolute; display: block; text-align: left; outline: none; }
+.hm-t { position: absolute; white-space: pre; pointer-events: none; }
+.hm-ic { position: absolute; line-height: 0; pointer-events: none; }
+.hm-box { position: absolute; overflow: visible; pointer-events: none; }
+.hm-box rect { fill: transparent; stroke: none; transition: fill var(--t-hover) var(--hm-ease), stroke var(--t-hover) var(--hm-ease); }
+.hm-chrome { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.hm-side { fill: var(--left-rail-bg); }
+.hm-hair { stroke: var(--border); stroke-width: 1; }
+.hm-muted { color: var(--muted-foreground); }
+
+.hm-wm { color: var(--foreground); }
+.hm-wm.hidden { visibility: hidden; }             /* the App flies its own copy (App.cpp:1368) */
+.hm-dot { color: var(--primary); }
+
+/* actions (HomeScreen.cpp:519-550) */
+.hm-act { color: var(--muted-foreground); transition: color var(--t-hover) var(--hm-ease); }
+.hm-act:hover { color: var(--hm-act-fg-h); }
+.hm-act0, .hm-act0:hover { color: var(--primary-foreground); }
+.hm-act0 rect { fill: var(--primary); }
+.hm-act0:hover rect { fill: var(--hm-act0-h); }
+.hm-act1 rect { fill: rgba(var(--primary-rgb), 0); stroke: var(--border); stroke-width: 1; }
+.hm-act1:hover rect { fill: var(--hm-act1-fill-h); stroke: var(--hm-act1-stroke-h); }
+.hm-act2:hover rect { fill: var(--hover-wash); }
+
+/* bottom links + version (HomeScreen.cpp:552-570) */
+.hm-bottom { position: absolute; left: 0; width: 300px; height: 137px; }
+.hm-link { color: var(--muted-foreground); transition: color var(--t-hover) var(--hm-ease); }
+.hm-link:hover { color: var(--hm-link-fg-h); }
+.hm-link:hover rect { fill: var(--hover-wash); }
+.hm-version { color: var(--muted-foreground); opacity: 0.4; }
+
+/* header (HomeScreen.cpp:572-582) */
+.hm-muted-ic { color: var(--muted-foreground); }
+.hm-title { color: var(--foreground); }
+.hm-count { color: var(--muted-foreground); opacity: 0.6; }
+.hm-search { position: absolute; }
+.hm-search-bg rect { fill: var(--input); stroke: var(--border); stroke-width: 1;
+                     transition: fill var(--t-hover) var(--hm-ease), stroke 140ms var(--ease-out); }
+.hm-search:hover .hm-search-bg rect { fill: var(--hm-search-fill-h); stroke: var(--hm-search-stroke-h); }
+.hm-search:focus-within .hm-search-bg rect { stroke: var(--ring); }
+.hm-search-in { position: absolute; inset: 0; width: 100%; height: 26px; box-sizing: border-box; margin: 0; border: 0; outline: 0;
+                background: transparent; color: var(--foreground); font-family: var(--font-sans); font-size: 11px; line-height: 11px;
+                padding: 7.24px 6px 7.76px 10px; caret-color: var(--primary); font-kerning: none; }
+.hm-search-in::placeholder { color: var(--muted-foreground); opacity: 1; }
+
+/* grid (HomeScreen.cpp:286-344, 592-622) */
+.hm-grid { position: absolute; overflow: hidden; }
+.hm-grid-content { position: absolute; left: 0; top: 0; width: 100%; height: 0; overflow: visible;
+                   transition: transform var(--t-scroll) var(--ease-out); }
+.hm-grid-content.snap, .hm-grid-content.snap .hm-card { transition: none !important; }
+.hm-card { position: absolute; left: 0; top: 0; padding: 0; transition: opacity 220ms var(--ease-out); }
+.hm-card.live { transition: transform var(--t-reflow) var(--ease-out), width var(--t-reflow) var(--ease-out),
+                height var(--t-reflow) var(--ease-out), opacity 220ms var(--ease-out); }
+.hm-card-body { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.hm-card-body rect { fill: var(--folder-chip-bg); stroke: var(--border); stroke-width: 1;
+                     transition: fill var(--t-hover) var(--hm-ease), stroke var(--t-hover) var(--hm-ease), stroke-width var(--t-hover) var(--hm-ease); }
+.hm-card:hover .hm-card-body rect { fill: var(--hm-card-fill-h); stroke: var(--hm-card-stroke-h); stroke-width: 1.5; }
+.hm-card-band { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; pointer-events: none;
+                background: #111111; /* ProjectCard.cpp:23 Color::hex(0x111111) */ }
+.hm-card-cover { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 240ms var(--ease-out); }
+.hm-card-cover.on { opacity: 1; }
+.hm-card-meta { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; pointer-events: none; }
+.hm-card-name { color: var(--foreground); }
+.hm-card-line { color: var(--muted-foreground); }
+.hm-card-date { color: var(--muted-foreground); opacity: 0.6; }
+
+.hm-new { position: absolute; left: 0; top: 0; color: var(--muted-foreground); transition: color var(--t-hover) var(--hm-ease); }
+.hm-new.live { transition: color var(--t-hover) var(--hm-ease), transform var(--t-reflow) var(--ease-out),
+               width var(--t-reflow) var(--ease-out), height var(--t-reflow) var(--ease-out); }
+.hm-new:hover { color: var(--hm-act-fg-h); }
+.hm-new-dash { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.hm-new-dash line { stroke: var(--hm-new-dash); stroke-width: 1; stroke-dasharray: 5 5;
+                    transition: stroke var(--t-hover) var(--hm-ease), stroke-width var(--t-hover) var(--hm-ease); }
+.hm-new:hover .hm-new-dash line { stroke: var(--hm-new-dash-h); stroke-width: 1.4; }
+
+.hm-empty { position: absolute; left: 0; top: 0; opacity: 0; pointer-events: none; transition: opacity var(--t-scroll) var(--ease-out); }
+.hm-empty.on { opacity: 1; }
+.hm-empty-ic { color: var(--muted-foreground); opacity: 0.4; }
+.hm-empty-text { color: var(--muted-foreground); opacity: 0.6; }

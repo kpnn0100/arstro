@@ -1,0 +1,52 @@
+/*
+ * Cosmo by arstro — panels.css: the desktop right column, its edit pages and the on-photo
+ * overlays (js/desktop/rightcol.js, js/desktop/overlays.js, js/panels/*, js/ui/{controls,slider,
+ * segmented,histogram}.js). Almost everything is drawn in SVG at the native's coordinates; this
+ * file only positions boxes, clips pages and runs the fades R-G-1 asks for.
+ */
+.cp-col { position: absolute; inset: 0; width: 324px; background: var(--card); overflow: hidden;
+          contain: layout paint; touch-action: none; }
+.cp-abs { position: absolute; left: 0; top: 0; }
+.cp-svg { display: block; position: absolute; left: 0; top: 0; pointer-events: none; }
+.cp-svg text { white-space: pre; }
+.cp-glyph { position: absolute; pointer-events: none; overflow: visible; }
+
+/* Pages: one visible at a time (the swap is covered by the card wash below); each clips its
+   content and scrolls it by a transform (ParamPanel's eased scroll - no scrollbar). */
+.cp-pages { overflow: hidden; }
+.cp-page { overflow: hidden; width: 324px; }
+.cp-page.hidden { visibility: hidden; pointer-events: none; }
+.cp-page-content { width: 324px; }
+.cp-wash { background: var(--card); opacity: 0; pointer-events: none; }
+.cp-wash.fading { transition: opacity var(--t-scroll) var(--ease-out); }
+
+/* Show / hide by fading, never a display flip (R-G-1). */
+.cp-fade { transition: opacity var(--t-scroll) var(--ease-out); }
+.cp-fade.off { opacity: 0; pointer-events: none; }
+.cp-slide { transition: transform var(--t-scroll) var(--ease-out); }
+
+.cp-scrim { pointer-events: none; visibility: hidden; }
+.cp-popups { width: 0; height: 0; overflow: visible; z-index: 5; }
+.cp-combo-pop { overflow: hidden; }
+
+.cp-slider-hit { outline: none; }
+.cp-slider-hit:focus-visible { outline: none; }
+
+/* The custom-ratio TextBox (Artboard TextBox): input fill, JetBrains Mono 10, padding 10, r2;
+   border `border` idle / `ring` focused (eased), hover pulls it toward primary. */
+.cp-textbox { height: 20px; margin: 0; padding: 0 10px; border: 0; border-radius: var(--radius-control);
+              background: var(--input); color: var(--foreground); caret-color: var(--primary);
+              font: 10px var(--font-mono), monospace; line-height: 20px; user-select: text; -webkit-user-select: text;
+              outline: 1px solid var(--border); outline-offset: -0.5px;
+              transition: outline-color var(--t-hover) var(--ease-out); }
+.cp-textbox:hover { outline-color: color-mix(in srgb, var(--border), var(--primary) 50%); }
+.cp-textbox:focus { outline-color: var(--ring); }
+
+/* On-photo overlays (mask, crop) live in the stage's layer. */
+.cp-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.cp-overlay > svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.cp-overlay .cp-hitlayer { position: absolute; inset: 0; pointer-events: none; }
+.cp-overlay .cp-hitlayer.on { pointer-events: auto; }
+.cp-reveal { position: absolute; inset: 0; background: var(--canvas-bg); overflow: hidden; pointer-events: none; }
+.cp-reveal img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; }
+.cp-ov-svg g.cp-maskg { transition: opacity var(--t-scroll) var(--ease-out); }

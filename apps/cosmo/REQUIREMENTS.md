@@ -2228,6 +2228,19 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
   shell geometry (TopBar, LeftRail, CenterStage + Breadcrumb + Filmstrip, RightColumn with
   histogram / tabs / ActionBar), Roboto and JetBrains Mono shipped beside the page (R-FONT-1), and
   R-G-1: every visible change eases. It stays usable at 360 px (one column, the rail a drawer).
+  (**AMENDED (the user: "the UI on cosmo web must be the same as the native app, right now the UI is
+  too different and got many bug in UI", then "why it look like i'm remoting a screen", 2026-09-30):**
+  "speaks the design language" was read as a look-alike, and the look-alike differed from the window
+  everywhere a hand-copied layout could. The requirement is now **the same cosmo**: on a desktop the
+  page IS the desktop App's shell - TopBar with every menu, LeftRail with the PresetTree,
+  PhotoCanvas with Before / Split / After, zoom and the WB pick, Breadcrumb, Filmstrip, the
+  RightColumn with all five pages (Basic/Detail, Mask, Mixer/Curve, Grade, Xform) and their on-photo
+  overlays, HistoryView, ContextMenu, Home, the open / return transitions and every dialog - at the
+  window's geometry, tokens, type ramp, motion and states, ported from the widgets' own constants;
+  on a phone it IS the touch PhoneApp's shell (R-TOUCH), with R-TOUCH-2/3/4 as written where the
+  native shell does not meet them yet. Each page picks the shell its own screen needs and crosses
+  between them with an eased cross-fade. What the window reads past the service is published by the
+  core first (R-NTWB-2/3), never re-derived in the page.)
 - **R-NTWB-6 Installing tells Arstro Remote.** (**AMENDED (NTWB 1.1 sessions, 2026-09-30):** the
   manifest says `single: false` - every Arstro Remote session is its own `cosmo-cc ntwb serve`, its
   own project and edit target, while the pages of ONE session share it. And `ntwb serve` is an
@@ -2239,3 +2252,28 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
   cosmo under Apps and launches it on demand. `cosmo-cc ntwb api` prints the API description,
   generated from the grammar, the event names and the catalogue; `docs/ntwb-api.json` is the
   committed copy and ctest fails when it drifts.
+- **R-NTWB-7 MVVM: the core is the model, every page is its own view.** *(Added 2026-09-30: "make it
+  like model view viewmodel architect with pi is the core; each client view is independent, so that
+  we can have multi client, each client can have their own UI suit the screen but one edit will
+  affect each other if using the same app session; it should behave like the web is the UI and
+  fetch data event from core app.")* The MODEL is the session's CosmoService on the board. Each page
+  holds its own VIEW-MODEL (`web/js/vm/editor.js`) and VIEW. **Shared** - exactly what the service
+  models, identical in every page of the session within one model push: the project, the photos and
+  their tree, the selection and edit target, every parameter, history, load, export, settings.
+  **Each page's own**, never sent: the shell (desktop / touch), which group the filmstrip shows, the
+  open tab and sections, Before / Split / After and the seam, zoom and pan, the rail / drawer / tray,
+  menus and dialogs, scroll positions, the WB pick mode, the desktop UI scale, and a drag in flight
+  (drawn at once from a local draft, sent as `set`; the model then catches up - a gesture in flight
+  outranks the model). A change arriving from another page eases in like any other visible change
+  (R-G-1). The page is never a picture of the window: the previous attempt (the App run headless, its
+  draw calls replayed in a canvas) was a remote screen - one layout and one menu state for every
+  client - and is withdrawn (PROGRESS decisions log).
+- **R-NTWB-8 Sessions and presence.** *(Added 2026-09-30.)* A page joins the Arstro Remote session its
+  URL names (`?session=`; none = `main`, `new` starts one - NTWB 1.1) and shows which session it is
+  and how many pages share it. Pages of one session share one model (R-NTWB-7); pages of two sessions
+  share nothing but the board's files.
+- **R-NTWB-9 The page's tokens are Theme.h's.** *(Added 2026-09-30.)* The colours, radii, families and
+  metrics the page uses are GENERATED from Theme.h (`cosmo_web_tokens` -> `web/css/tokens.css`,
+  committed, ctest `cosmo_web_tokens_current` fails on drift) - a stylesheet typed by hand is a second
+  palette, the forked-token failure of arstro.design.rule §2. The faces are the window's own files,
+  each registered under the family name the C++ draws with.

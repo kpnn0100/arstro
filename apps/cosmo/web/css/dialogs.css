@@ -1,0 +1,111 @@
+/* Cosmo by arstro — dialogs.css: the modal skeleton (ui/modal.js) and every desktop dialog
+   (SettingsDialog, ConfirmDialog, InfoDialog, PresetDialog, ExportDialog .cpp) + the web's file
+   picker (R-NTWB-5). Logical px at 100 %; tokens only - the scrim's black is the native's own
+   literal (SettingsDialog.cpp:238 Color{0,0,0,0.55}). SVG strokes straddle like Cairo's. */
+
+.dg-host { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.dg-fallback { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+.dg-fallback .dg-host { pointer-events: none; }
+
+/* ------------------------------------------------------------------ the modal skeleton */
+.md { position: absolute; inset: 0; pointer-events: auto; opacity: 0; color: var(--foreground);
+      font-kerning: none; font-variant-ligatures: none; --dg-ease: cubic-bezier(0.3333, 0, 0.6667, 1);
+      transition: opacity var(--md-close) var(--ease-out); }
+.md.on { opacity: 1; transition: opacity var(--md-open) var(--ease-out); }
+.md.closing { pointer-events: none; }
+.md-scrim { position: absolute; inset: 0; }
+.md-card { position: absolute; left: 0; top: 0; transform: translate(var(--md-x), calc(var(--md-y) + var(--md-rise)));
+           transition: transform var(--md-close) var(--ease-out); }
+.md.on .md-card { transform: translate(var(--md-x), var(--md-y)); transition: transform var(--md-open) var(--ease-out); }
+.md-card.drag, .md.on .md-card.drag { transition: none; }
+.md-fill-popover { background: var(--popover); }
+.md-fill-card { background: var(--card); }
+.md button { position: absolute; display: block; text-align: left; outline: none; padding: 0; }
+
+.dg-frame { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 5; }
+.dg-frame rect { fill: none; stroke: var(--border); stroke-width: 1; }
+.dg-t { position: absolute; white-space: pre; pointer-events: none; }
+.dg-fg { color: var(--foreground); }
+.dg-muted { color: var(--muted-foreground); }
+.dg-box { position: absolute; overflow: visible; pointer-events: none; }
+.dg-box rect { fill: transparent; stroke: none; transition: fill var(--t-hover) var(--dg-ease), stroke var(--t-hover) var(--dg-ease); }
+
+/* buttons (ConfirmDialog.cpp:170-190) */
+.dg-btn { color: var(--foreground); }
+.dg-primary .dg-btn-fill rect { fill: var(--primary); }
+.dg-destructive .dg-btn-fill rect { fill: var(--destructive); }
+.dg-plain .dg-btn-fill rect { fill: var(--secondary); stroke: var(--border); stroke-width: 1; }
+.dg-primary, .dg-destructive { color: var(--primary-foreground); }
+.dg-btn:hover .dg-wash rect { fill: var(--hover-wash); }
+.dg-btn.disabled { cursor: default; }
+.dg-btn.disabled .dg-wash rect { fill: transparent !important; }
+.dg-primary.disabled .dg-btn-fill rect { fill: var(--secondary); stroke: var(--border); stroke-width: 1; }
+.dg-primary.disabled { color: rgba(var(--white-rgb), 0.22); }
+
+/* settings chips (SettingsDialog.cpp:258-290) */
+.dg-chip .dg-btn-fill rect { fill: var(--secondary); stroke: var(--border); stroke-width: 1; }
+.dg-chip { color: var(--foreground); }
+.dg-chip.sel .dg-btn-fill rect { fill: var(--primary); stroke: none; }
+.dg-chip.sel { color: var(--primary-foreground); }
+.dg-chip.disabled { opacity: 0.4; }
+
+/* the light text field of the name prompt (spec §5.6) */
+.dg-light { position: absolute; box-sizing: border-box; margin: 0; border: 0; outline: 0; border-radius: var(--radius-control);
+            background: var(--input-light); color: var(--input-light-text); font-family: var(--font-sans); font-size: 12px;
+            line-height: 12px; padding: 7.9px 10px 8.1px; caret-color: var(--primary); font-kerning: none; }
+.dg-light::placeholder { color: var(--muted-foreground); opacity: 1; }
+
+/* the dark field + tree box of ExportDialog, shared by the picker */
+.dg-tree-box rect { fill: var(--background); stroke: var(--border); stroke-width: 1; }
+.dg-field-box rect { fill: var(--background); stroke: var(--border); stroke-width: 1; transition: stroke var(--t-hover) var(--dg-ease); }
+.dg-field-box.focus rect { stroke: rgba(var(--primary-rgb), 0.6); }
+.dg-field { position: absolute; box-sizing: border-box; margin: 0; border: 0; outline: 0; background: transparent;
+            color: var(--foreground); font-family: var(--font-mono); font-size: 11px; line-height: 11px;
+            padding: 7.54px 8px 7.46px; caret-color: var(--primary); font-kerning: none; }
+.dg-field::placeholder { color: rgba(var(--white-rgb), 0.25); opacity: 1; }
+
+/* ------------------------------------------------------------------ picker */
+.dg-path { color: rgba(var(--white-rgb), 0.42); }
+.dg-list { position: absolute; overflow-y: auto; overflow-x: hidden; }
+.dg-rows { position: relative; width: 100%; transition: opacity var(--t-scroll) var(--ease-out); }
+.dg-rows.fading { opacity: 0; }
+.dg-row { position: absolute; left: 0; width: 100%; height: 26px; color: var(--foreground); }
+.dg-row .dg-row-wash rect { transition: fill var(--t-hover) var(--dg-ease); }
+.dg-row:hover .dg-row-wash rect { fill: var(--hover-wash); }
+.dg-row.sel .dg-row-wash rect { fill: rgba(var(--primary-rgb), 0.14); }
+.dg-row-ic { position: absolute; line-height: 0; color: rgba(var(--white-rgb), 0.42); pointer-events: none; }
+.dg-row-size { color: rgba(var(--white-rgb), 0.25); }
+.dg-row .dg-check { position: absolute; }
+.dg-note { color: rgba(var(--white-rgb), 0.22); opacity: 0; transition: opacity var(--t-scroll) var(--ease-out); }
+.dg-note.on { opacity: 1; }
+
+/* checkbox (ExportDialog.cpp / PresetDialog.cpp): 0 empty, 1 tick, 2 dash */
+.dg-check { position: absolute; overflow: visible; pointer-events: none; }
+.dg-check-box { fill: var(--secondary); stroke: var(--border); stroke-width: 1; transition: fill var(--t-hover) var(--dg-ease), stroke var(--t-hover) var(--dg-ease); }
+.dg-check[data-state="1"] .dg-check-box, .dg-check[data-state="2"] .dg-check-box { fill: var(--primary); stroke: none; }
+.dg-check-tick, .dg-check-dash { stroke: var(--primary-foreground); opacity: 0; transition: opacity var(--t-hover) var(--dg-ease); }
+.dg-check[data-state="1"] .dg-check-tick { opacity: 1; }
+.dg-check[data-state="2"] .dg-check-dash { opacity: 1; }
+
+/* ------------------------------------------------------------------ info (InfoDialog.cpp) */
+.dg-info-x { color: var(--muted-foreground); transition: color var(--t-hover) var(--dg-ease); }
+.dg-info-x:hover { color: var(--dg-x-h); }
+.dg-info-x:hover .dg-wash rect { fill: var(--hover-wash); }
+.dg-info-xg { pointer-events: none; }
+.dg-info-body { position: absolute; overflow: hidden; }
+.dg-info-list { position: absolute; left: 0; top: 0; width: 100%; transition: transform var(--t-scroll) var(--ease-out); }
+.dg-info-thumb { position: absolute; right: 0; top: 0; width: 3px; border-radius: var(--radius-pill); background: rgba(var(--white-rgb), 0.18);
+                 opacity: 0; transition: opacity var(--t-scroll) var(--ease-out), transform var(--t-scroll) var(--ease-out); }
+.dg-info-thumb.on { opacity: 1; }
+
+/* ------------------------------------------------------------------ preset (PresetDialog.cpp) */
+.dg-prow { color: var(--muted-foreground); }
+.dg-prow.on { color: var(--foreground); }
+.dg-prow:hover .dg-wash rect { fill: var(--hover-wash); }
+.dg-prow.off { opacity: 0.55; }                 /* interaction::kDisabledFade: the core picks no categories yet */
+.dg-prow.off:hover .dg-wash rect { fill: transparent; }
+.dg-hair { position: absolute; overflow: visible; pointer-events: none; }
+.dg-hair line { stroke: var(--border); stroke-width: 1; }
+
+/* ------------------------------------------------------------------ export (ExportDialog.cpp, canvas-drawn) */
+.dg-export-cv { position: absolute; left: 0; top: 0; }

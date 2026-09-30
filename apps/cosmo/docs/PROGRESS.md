@@ -26,8 +26,17 @@ using the same app session". IN PROGRESS.**
   256-bin histograms; `ntwb serve` applies export options (browser exports were full-size PNG),
   saves settings, stamps recents; manifest `single: false` (NTWB 1.1 sessions). `cosmo_core_tests`
   green incl. three new L2 tests; D-63 filed (selecting marks the project unsaved).
-- **[~] The web UI rebuilt as MVVM (R-NTWB-5 amended, R-NTWB-7..9):** the desktop App's shell and the
-  touch PhoneApp's, one view-model per page - see the next commit.
+- **[x] The web UI rebuilt as MVVM (R-NTWB-5 amended, R-NTWB-7..9; DR-NTWB-5, 7-9).** The desktop
+  App's shell and the touch PhoneApp's, ported widget by widget from three porting specs of the native
+  C++, one view-model per page (`web/js/vm/editor.js`), tokens generated from Theme.h
+  (`cosmo_web_tokens`). Verified by `tests/web/mvvm_test.mjs` 11/11 against the board (desktop +
+  phone pages of one session: shells per screen, edits both ways, view state per page, presence; a
+  second session isolated) and by headless-Chrome screenshots against the native renders
+  (`cosmo_shots`, `cosmo_touch_shots`) at 1600x1000, 1280x800, 584x466, 393x852, 360x780, 852x393.
+  Open: PARITY W13, W15-W19 (each needs the core first), D-62 (JPEG orientation) shows in the web too.
+
+**► NEXT:** D-62 (orientation, core), then PARITY W15 (preset categories / import / export in the
+grammar) and W18 (an export that does not block the bridge), then NTWB-T3.
 - **Decision (2026-09-30): no stream of the window.** The previous session's uncommitted attempt ran
   the App headless and replayed its draw calls in a canvas (an Artboard `StreamTarget`). The user
   rejected it on sight ("why it look like i'm remoting a screen"): one layout, one window size, one

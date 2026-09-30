@@ -1,0 +1,80 @@
+/*
+ * Cosmo by arstro — base.css: what both shells (desktop, touch) share (R-NTWB-5, R-G-1).
+ *
+ * Colours, radii and families come from tokens.css, which is GENERATED from Theme.h - never
+ * type a hex here. The faces are the window's own (R-FONT-1): `cosmo-cc ntwb install` copies
+ * the vendored TTFs beside the page and each weight is registered under the SAME family name
+ * the C++ draws with ("Roboto Medium" is a family, not a weight - Artboard FR-22), so a rule
+ * that says font-family: var(--font-sans-medium) picks exactly the face the window picks.
+ */
+@font-face { font-family: "Roboto"; src: url("../fonts/Roboto-Regular.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "Roboto Medium"; src: url("../fonts/Roboto-Medium.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "Roboto SemiBold"; src: url("../fonts/Roboto-SemiBold.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "JetBrains Mono"; src: url("../fonts/JetBrainsMono-Regular.ttf") format("truetype"); font-display: block; }
+@font-face { font-family: "JetBrains Mono Medium"; src: url("../fonts/JetBrainsMono-Medium.ttf") format("truetype"); font-display: block; }
+
+:root {
+  /* Motion - cosmo's durations (arstro.cosmo.design.implement §1.6; each is a literal in the
+     widget named) and Artboard's easings as cubic-beziers. */
+  --t-hover: 120ms;         /* interaction::kHoverMs */
+  --t-menu: 160ms;          /* MenuStrip dropdown grow */
+  --t-scroll: 180ms;        /* eased scroll, tab page cross-fade, bypass scrim */
+  --t-highlight: 190ms;     /* menu highlight slide */
+  --t-rail: 200ms;          /* left-rail collapse, tab indicator, filmstrip ring */
+  --t-segment: 220ms;       /* segmented highlight; a value catching up to a source it does not control */
+  --t-reflow: 260ms;        /* UI-scale zoom, home-grid reflow, shell cross-fade */
+  --t-modal-open: 150ms;
+  --t-modal-close: 120ms;
+  --t-dissolve: 160ms;      /* photo cross-dissolve - Linear */
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);      /* EaseOutCubic */
+  --ease-in: cubic-bezier(0.55, 0.055, 0.675, 0.19);    /* EaseInCubic */
+  --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);  /* EaseInOutCubic */
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-hover: 0ms; --t-menu: 0ms; --t-scroll: 0ms; --t-highlight: 0ms; --t-rail: 0ms; --t-segment: 0ms;
+          --t-reflow: 0ms; --t-modal-open: 0ms; --t-modal-close: 0ms; --t-dissolve: 0ms; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--background); color: var(--foreground);
+             font-family: var(--font-sans), system-ui, sans-serif; font-size: 11px; line-height: 1.2;
+             -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+body { overscroll-behavior: none; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: default; }
+input, select, textarea { font: inherit; color: inherit; }
+img { display: block; }
+svg { display: block; }
+.mono { font-family: var(--font-mono), ui-monospace, monospace; }
+
+/* The two shells live side by side while one cross-fades into the other (R-NTWB-5: a page
+   whose window crosses the breakpoint changes layout eased, never in one frame). */
+#app { position: fixed; inset: 0; }
+.shell { position: absolute; inset: 0; opacity: 1; transition: opacity var(--t-reflow) var(--ease-out); }
+.shell.away { opacity: 0; pointer-events: none; }
+
+/* Lists reconciled by dom.keyed(): a row that arrives fades in, one that leaves fades out. */
+.enter { opacity: 0; }
+.leave { opacity: 0 !important; pointer-events: none; }
+
+/* A scroll container that shows its thumb only while there is something to scroll (R6). */
+.scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--white-rgb), 0.14) transparent; }
+.scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.scroll::-webkit-scrollbar-thumb { background: rgba(var(--white-rgb), 0.14); border-radius: var(--radius-pill); }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Toasts - a rejected command says why (lastError), in the words the service used. */
+.toasts { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; flex-direction: column;
+          align-items: center; gap: 6px; z-index: 100; pointer-events: none; }
+.toast { background: var(--popover); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius-control);
+         padding: 8px 12px; font-size: 12px; max-width: min(90vw, 520px);
+         opacity: 0; transform: translateY(6px); transition: opacity var(--t-scroll) var(--ease-out), transform var(--t-scroll) var(--ease-out); }
+.toast.on { opacity: 1; transform: none; }
+.toast.err { border-color: color-mix(in srgb, var(--destructive) 45%, transparent); }
+
+/* Connection / presence badge: which session this page shows and who else does (NTWB-12). */
+.presence { display: inline-flex; align-items: center; gap: 5px; color: var(--muted-foreground); font-size: 10px; white-space: nowrap; }
+.presence i { width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--muted-foreground);
+              transition: background-color var(--t-hover) var(--ease-out); }
+.presence.live i { background: var(--success); }

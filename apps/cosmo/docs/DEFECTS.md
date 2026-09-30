@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-64**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-65**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,26 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-64 — `cosmo_core_tests` writes its throwaway projects into the user's recent projects
+- **Area:** core / tests · **Status:** **Confirmed** (measured) · **Severity:** S3
+- **Found:** 2026-09-30, looking at the web Home screen on the RK3588 after a `ctest` run.
+- **Front end:** every one - the recents are the user's (`~/.config/cosmo_v2/recent.tsv`), shown by
+  the window's HomeScreen and the browser's alike.
+- **Reproduce:** run `cosmo_core_tests`, open Home: `cosmo_svc_preview`, `cosmo_svc_fidelity`,
+  `cosmo_mem_walk` ... (12 entries, paths under `/tmp`, photos under `/fake`) are at the top, and the
+  list's cap pushes the user's own projects out.
+- **Expected:** a test never changes the user's files; the service's `ProjectStore::remember` writes
+  into a scratch config dir during a test run (cosmo_shots already redirects `XDG_CONFIG_HOME`).
+- **Actual:** every L2 test that finishes a load goes through `CosmoService::pump` ->
+  `ProjectStore::remember`, which resolves the real `$XDG_CONFIG_HOME` / `$HOME`.
+- **Judgement:** **defect** in the harness (the skill asks the suite to keep resolving the real
+  config for `settings_roundtrip_and_survive_a_bad_file`, which backs the settings file up and
+  restores it; recents have no such backup).
+- **Recommended fix:** point `XDG_CONFIG_HOME` at a per-run temp dir in the suite's `main()` before
+  the first test and let the settings test back up / restore inside it - or back up and restore
+  `recent.tsv` around the run the way the settings test does.
+- **Guard:** the suite asserts `ProjectStore::recents()` of the real dir is unchanged after it ran.
 
 ### D-63 — Selecting a photo marks the project unsaved
 - **Area:** core / session · **Status:** **Confirmed** (measured) · **Severity:** S3

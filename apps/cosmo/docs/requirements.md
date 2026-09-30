@@ -3371,13 +3371,42 @@ nodes at the top level, the same loader, `mAppending` makes the finish save the 
 `EditControls.h`: 7 sections, 23 controls, matching `RightColumn.cpp`; `NtwbAdapter::controlsJson`
 samples each control's `toEngine` at 41 evenly spaced track positions (`stops: [[track, engine]]`).
 
-### DR-NTWB-5 The web UI (R-NTWB-5)
-`web/index.html`, `web/cosmo.css`, `web/cosmo.js`, `web/icon.svg`; loads `/ntwb/ntwb.js` from the
-host. Home (recents, open, import into a new project, settings), Loading (bar eased 400 ms, status,
-count), Editor (tree with bypass toggles, cross-faded preview, breadcrumb, filmstrip with a sliding
-ring, eased histogram, Basic/Detail sliders with `gesture on/off` around a drag and one `set` per
-animation frame as notifies, History, Info with metadata / machine / the event lines, export,
-settings, white-balance pick → `wb pick`). Keyboard: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / arrows.
+### DR-NTWB-5 The web UI: the App's shell and PhoneApp's, widget by widget (R-NTWB-5, R-NTWB-7)
+`web/` (plain ES modules + CSS, no build step; `index.html` loads `/ntwb/ntwb.js` and `js/main.js`).
+`js/main.js` connects, builds `CosmoSession` (the model's proxy) and the page's view-model, and
+mounts `js/desktop/shell.js` when `(min-width: 584px) and (min-height: 466px) and ((pointer: fine)
+or (min-width: 1024px))` matches - the desktop minimum is App's (584 x 466, `App.cpp:744-759`) - else
+`js/touch/shell.js`; a change of that answer cross-fades the two shells over 260 ms. Shells load as
+modules and a failing one is reported, not fatal.
+- **Desktop** (`js/desktop/*`, ported from the widgets' constants per the porting specs):
+  `shell.js` (the per-page UI-scale root, logical size `max(584, W/s) x max(466, H/s)`, eased; keys;
+  `gesture on/off` on every editor press), `screens.js` + `home.js` + `loading.js` (Home with the
+  recents grid, search and covers from `cover`; the splash; the open transition - intro 460 ms,
+  loading, reveal 520 ms, starfield, the flying wordmark and the card that grows from the clicked
+  recent - and the return), `editor.js` (TopBar 29.25 / LeftRail 196 eased, folding below 780 /
+  CenterStage / RightColumn 324), `topbar.js` (MenuStrip, every menu and item), `leftrail.js`
+  (PresetTree from `presets`), `stage.js` (fit, the 160 ms linear dissolve, Before / Split / After
+  from the per-client `before` blob with the split seam, zoom and pan, the WB pick, the overlay
+  seam), `breadcrumb.js`, `filmstrip.js` (the group's cells, sliding ring, multi-select, pending and
+  failed plates, eased scroll one cell per notch), `contextmenu.js`, `history.js` (HistoryView from
+  `history`, `history jump`), `rightcol.js` (HistogramWidget from the 256-bin meta, EditStackTabs,
+  the pinned ActionBar) and `overlays.js` (MaskOverlay and CropOverlay on the photo, the crop from the
+  per-client `uncropped` blob).
+- **Pages** (`js/panels/*`): Basic/Detail (SliderRow from `controls`, readouts in track units,
+  double-click reset to track 0, the green stacked reach from `ownParams`, the pipette), Mask,
+  Mixer/Curve, Grade, Xform; `geometry.js` ports CropGeometry, the curve sampler, the path flattener
+  and UnitConversions.
+- **Dialogs** (`js/dialogs/*`, `js/ui/modal.js`): Export, Settings (UI scale is the page's own; the
+  rest `settings set`), Confirm, Info (`metadata`), Preset, and `picker.js` - the board's file browser
+  over `browse` for open / save / import / export folder.
+- **Touch** (`js/touch/*`): PhoneApp's shell - home and loading, the top bar, the photo box that
+  shrinks as the tray rises (R-TOUCH-2), Before / Split / After, filmstrip, the tool bar, the tray
+  with its detents and section chips, the drawer, the more menu, landscape two-pane (R-TOUCH-3), the
+  fullscreen curve editor with a loupe (R-TOUCH-4), pinch / double-tap zoom; the thirteen native touch
+  defects the port found are fixed rather than copied.
+Every change leaves as one command line (`vm.setFields` -> `set`, drags as notifies between
+`gesture on|off`); every value arriving from the model eases (CSS transitions on `--t-*` / `--ease-*`,
+or `Tween` for drawn values); `prefers-reduced-motion` zeroes them.
 
 ### DR-NTWB-6 Install and the API description (R-NTWB-6)
 `cmdNtwbFiles` (`cli/main.cpp`): `ntwb api` prints `NtwbAdapter::apiDescription()` (methods with
@@ -3386,3 +3415,34 @@ UI and the fonts from `COSMO_SOURCE_DIR` and writes `ntwb.json` (exec = this bin
 and `api.json`; `ntwb uninstall` removes the directory. The manifest says `"single": false`
 (`cli/main.cpp:1666`): each Arstro Remote session is its own `ntwb serve` (NTWB 1.1). ctest `cosmo_ntwb_api_current` diffs
 `cosmo-cc ntwb api` against `docs/ntwb-api.json`.
+
+### DR-NTWB-7 The view-model: shared vs each page's own (R-NTWB-7)
+`js/model/session.js` (`CosmoSession`): signals for state `model` (with params parsed by
+`js/model/params.js` - the EditParamsIO codec, precision-7 numbers - and re-parsed only when their
+text changed), `controls`, the newest `preview` frame, thumbnails by node (asked once per decoded
+slot, dropped on `project.opening`), status and presence; `command` / `notify` / `call` / `on`.
+`js/vm/editor.js` (`createViewModel`): the shared, derived signals (`nodes`, `params`, `ownParams`,
+`history`, `load`, `settings`, `presets`, `metadata`, `hasEditTarget`, `source` ...), `view.*` - the
+page's own state (`layout, homeWanted, group, tab, compare, seam, zoom, railWanted, wbArmed, menu,
+contextMenu, dialog, maskIndex, uiScale`), drafts for a drag in flight, and the intents, each one
+command line. The screen a page shows is derived: `loading` and `home` when the session is there,
+else the editor unless this page chose Home (`goHome` is view state; opening a project is not).
+Group navigation is view state too (`view.group`, cells and breadcrumb derived from `nodes`' parent
+ids), so two pages can browse two groups of one project. `js/core/signal.js`: a computed with
+listeners recomputes when a dependency changes and notifies only if its value changed - without
+that, one model push re-ran every effect of the page (it reset zooms and rebuilt controls mid-drag).
+Proof: `tests/web/mvvm_test.mjs` (two pages of one session - desktop and phone shells, edits both
+ways, view state per page, presence 2; a third page in another session isolated and uncounted).
+
+### DR-NTWB-8 Sessions and presence (R-NTWB-8)
+`NTWB.connect()` joins the session named by `?session=` (none = `main`); `vm.presence` = {session,
+clients} follows `status.clients`. `cosmo-cc ntwb install` writes `"single": false`.
+
+### DR-NTWB-9 Tokens from Theme.h (R-NTWB-9)
+`cli/webTokens.cpp` -> target `cosmo_web_tokens` (links only `artboard_core`) prints every `palette::`,
+`radius::`, `font::` and `metrics::` token of Theme.h as CSS custom properties, with `--*-rgb`
+triples for the parametric ones (`whiteAlpha`, `primaryAlpha`, `successAlpha`); `web/css/tokens.css`
+is its committed output and ctest `cosmo_web_tokens_current` diffs the two. `web/css/base.css`
+registers the vendored faces under the C++'s family names ("Roboto Medium" is a family) and carries
+the motion durations with the widget each comes from.
+

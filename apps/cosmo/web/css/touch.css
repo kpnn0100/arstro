@@ -1,0 +1,379 @@
+/*
+ * Cosmo by arstro — touch.css: the touch (phone) shell, touch/PhoneApp.cpp in CSS (R-NTWB-5).
+ *
+ * Geometry is the native's in dp (1 dp = 1 CSS px); most of it is set by js/touch/*.js from the
+ * PhoneApp constants, this sheet carries colour, radii, states and motion. Colours are Theme.h
+ * tokens (tokens.css) plus the touch palette's own divergences, which PhoneApp.cpp:35-48 hard-codes
+ * (cited per line below): the brighter MUTED grey for arm's-length reading, its own green and red,
+ * the curve channel colours, ACCENT15. Motion uses the exact EaseOutCubic / EaseInCubic
+ * (Easing.cpp:104; screens_touch.md §0.3) and every duration collapses under reduced motion.
+ */
+.touch {
+  --t-muted: #8A8A8A;                     /* PhoneApp.cpp:41 MUTED (desktop #636363) */
+  --t-green: #4CB573;                     /* PhoneApp.cpp:43 GREEN - the stacked "final" reach */
+  --t-destruct: #E5484D;                  /* PhoneApp.cpp:44 DESTRUCT */
+  --t-chr: #E65252;                       /* PhoneApp.cpp:48 CHR / CHG / CHB */
+  --t-chg: #61CC6B;
+  --t-chb: #6B94F5;
+  --t-accent15: rgba(var(--primary-rgb), 0.15);          /* PhoneApp.cpp:47 ACCENT15 */
+  --t-handle: rgba(138, 138, 138, 0.4);                   /* PhoneApp.cpp:306 grab handle */
+  --t-scrim: rgba(0, 0, 0, 0.55);                         /* PhoneApp.cpp:748 sheet scrim */
+  --t-scrim-drawer: rgba(0, 0, 0, 0.5);                   /* PhoneApp.cpp:680 drawer scrim */
+  --t-pill: rgba(0, 0, 0, 0.7);                           /* PhoneApp.cpp:252 Before/After pill */
+  --t-temp-from: #4FA3E8;                 /* PhoneApp.cpp:77 Temperature track */
+  --t-temp-to: #E8A84F;
+  --t-tint-from: #4FB573;                 /* PhoneApp.cpp:78 Tint track */
+  --t-tint-to: #B54FA8;
+  --t-out: cubic-bezier(0.3333, 1, 0.6667, 1);            /* EaseOutCubic, exact */
+  --t-in: cubic-bezier(0.3333, 0, 0.6667, 0);             /* EaseInCubic, exact */
+  --t-120: 120ms; --t-140: 140ms; --t-150: 150ms; --t-180: 180ms; --t-200: 200ms;
+  --t-220: 220ms; --t-240: 240ms; --t-260: 260ms; --t-280: 280ms;
+  position: absolute; inset: 0; overflow: hidden;
+  background: var(--background); color: var(--foreground); font-family: var(--font-sans);
+  -webkit-touch-callout: none; touch-action: manipulation;
+}
+@media (prefers-reduced-motion: reduce) {
+  .touch { --t-120: 0ms; --t-140: 0ms; --t-150: 0ms; --t-180: 0ms; --t-200: 0ms; --t-220: 0ms;
+           --t-240: 0ms; --t-260: 0ms; --t-280: 0ms; }
+}
+
+/* ------------------------------------------------------------------ shared */
+.touch .tt { position: absolute; white-space: nowrap; pointer-events: none; }
+.touch .t-fg { color: var(--foreground); }
+.touch .t-muted { color: var(--t-muted); }
+.touch .t-hl { position: absolute; left: 0; right: 0; height: 1px; background: var(--border); pointer-events: none; }
+.touch .t-abs { position: absolute; }
+.touch .t-fade { transition: opacity var(--t-180) var(--t-out); }
+.touch .t-fade.off { opacity: 0; }
+.touch .t-ell { overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 40px); }
+.touch .t-wrap { white-space: normal; width: calc(100% - 40px); max-height: 36px; overflow: hidden; }
+.touch .hscroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; touch-action: pan-x; overscroll-behavior: contain; }
+.touch .vscroll { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; }
+.touch .hscroll::-webkit-scrollbar, .touch .vscroll::-webkit-scrollbar { display: none; }
+.touch .press { position: absolute; inset: 0; border-radius: 2px; background: rgba(var(--white-rgb), 0.30); pointer-events: none; }
+.touch input { user-select: text; -webkit-user-select: text; }
+.touch img { -webkit-user-drag: none; user-select: none; }
+
+.t-screens { position: absolute; inset: 0; }
+.t-screens > * { position: absolute; inset: 0; visibility: hidden; }
+.t-screens > .on { visibility: visible; }
+.t-fadeover { position: absolute; inset: 0; background: var(--background); opacity: 0; pointer-events: none; }
+.t-layer-modal { position: absolute; inset: 0; pointer-events: none; }
+.t-layer-modal > * { pointer-events: auto; }
+
+/* ------------------------------------------------------------------ Home (PhoneApp.cpp:1057-1158) */
+.t-home { background: var(--background); }
+.t-hcol { position: relative; min-height: 100%; padding-bottom: 16px; }
+.t-hhead { position: relative; height: 120px; }
+.t-mark { font-family: var(--font-sans-semibold); font-size: 36px; line-height: 36px; color: var(--foreground); }
+.t-mark .dot, .t-lmark .dot { color: var(--primary); }
+.t-hacts { position: relative; height: 192px; }
+.t-hact { position: absolute; left: 16px; right: 16px; height: 52px; border-radius: 2px; background: var(--background);
+          outline: 1px solid var(--border); outline-offset: -0.5px; color: var(--foreground); overflow: hidden; }
+.t-hact:nth-child(2) { top: 60px; }
+.t-hact:nth-child(3) { top: 120px; }
+.t-hact.accent { background: var(--primary); outline: 0; color: var(--white); }
+.t-hact-ic { position: absolute; left: 16px; top: 16px; }
+.t-hrt { position: relative; height: 30px; }
+.t-badge { position: absolute; left: 150px; top: 0; width: 22px; height: 18px; border-radius: 2px; background: var(--card);
+           outline: 1px solid var(--border); outline-offset: -0.5px; }
+.t-search { position: relative; margin: 0 16px 12px; height: 40px; border-radius: 2px; background: var(--input);
+            outline: 1px solid var(--border); outline-offset: -0.5px; transition: outline-color var(--t-150) var(--t-out); }
+.t-search.focus { outline-color: var(--primary); }
+.t-search-ic { position: absolute; left: 10px; top: 10px; color: var(--t-muted); }
+.t-sinput { position: absolute; left: 36px; top: 0; right: 8px; height: 40px; border: 0; outline: 0; padding: 0; margin: 0;
+            background: transparent; color: var(--foreground); font: 14px var(--font-sans); caret-color: var(--primary);
+            -webkit-appearance: none; appearance: none; }
+.t-sinput::placeholder { color: var(--t-muted); opacity: 1; }
+.t-sinput::-webkit-search-cancel-button { display: none; }
+.t-hnone { position: relative; height: 64px; transition: height var(--t-220) var(--t-out), opacity var(--t-180) var(--t-out); }
+.t-hnone.off { height: 0; opacity: 0; }
+.t-hcards { position: relative; }
+.t-pcard { position: relative; margin: 0 16px 8px; height: 80px; border-radius: 2px; background: var(--card);
+           outline: 1px solid var(--border); outline-offset: -0.5px; overflow: hidden;
+           transition: opacity var(--t-180) var(--t-out), height var(--t-220) var(--t-out), margin var(--t-220) var(--t-out); }
+.t-pcard.enter, .t-pcard.leave { opacity: 0; height: 0; margin-bottom: 0; }
+.t-pwell { position: absolute; left: 12px; top: 12px; width: 80px; height: 56px; border-radius: 1px; background: var(--input); overflow: hidden; }
+.t-pcover { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--t-240) var(--t-out); }
+.t-pcover.on { opacity: 1; }
+.t-pcard .t-ell { max-width: calc(100% - 116px); }
+.t-newcard { position: relative; margin: 0 16px 24px; height: 72px; border-radius: 2px; overflow: hidden;
+             outline: 1.5px solid var(--border); outline-offset: -0.75px; }
+.t-newcard-ic { position: absolute; left: calc(50% - 46px); top: 27px; color: var(--t-muted); }
+.t-hlink { position: relative; height: 44px; }
+.t-hl.link { left: 24px; right: 24px; top: 43.5px; }
+.t-hver { position: relative; height: 36px; }
+.t-hver .tt { opacity: 0.5; }
+
+/* Loading (PhoneApp.cpp:1160-1191) */
+.t-loading { background: var(--background); }
+.t-sky { position: absolute; inset: 0; }
+.t-sky canvas { display: block; }
+.t-lmid { position: absolute; left: 0; right: 0; top: calc(50% - 40px); height: 0; }
+.t-lmark { left: calc(50% - 4px); transform: translateX(-50%); font-family: var(--font-sans-semibold);
+           font-size: 32px; line-height: 32px; color: var(--foreground); }
+.t-lmark .dot { position: absolute; left: 100%; top: 0; }
+.t-lbar { position: absolute; left: calc(50% - 100px); top: 72px; width: 200px; height: 3px; border-radius: 1.5px;
+          background: var(--card); overflow: hidden; }
+.t-lbar i { display: block; width: 0; height: 100%; border-radius: 1.5px; background: var(--primary); }
+
+/* ------------------------------------------------------------------ Editor (PhoneApp.cpp:895-1054) */
+.t-editor { background: var(--background); }
+.t-stage { position: absolute; left: 0; right: 0; top: 48px; bottom: 0; background: var(--canvas-bg); }
+.t-top { position: absolute; left: 0; top: 0; right: 0; height: 48px; background: var(--background); }
+.t-hl.bar { top: 47.5px; }
+.t-ic { position: absolute; top: 14px; color: var(--foreground); pointer-events: none; transition: color var(--t-180) var(--t-out); }
+.t-ic.dim { color: var(--t-muted); }
+.t-hit { position: absolute; top: 0; height: 48px; overflow: hidden; }
+.t-title { color: var(--foreground); max-width: calc(100% - 280px); overflow: hidden; text-overflow: ellipsis;
+           transition: color var(--t-180) var(--t-out); }
+.t-title.grp { color: var(--primary); }
+
+.t-photo { position: absolute; overflow: hidden; touch-action: none; }
+.t-layer { position: absolute; inset: 0; transition: opacity var(--t-180) var(--t-out); }
+.t-shot, .t-before { position: absolute; display: block; pointer-events: none; max-width: none; }
+.t-before { opacity: 0; transition: opacity var(--t-180) var(--t-out); }
+.t-before:not([src]) { visibility: hidden; }
+.t-photo.cmp-before .t-before { opacity: 1; clip-path: none !important; }
+.t-photo.cmp-split .t-before { opacity: 1; }
+.t-seam { position: absolute; background: var(--primary); opacity: 0; pointer-events: none; transition: opacity var(--t-180) var(--t-out); }
+.t-photo.cmp-split .t-seam { opacity: 1; }
+.t-photo.empty .t-layer, .t-photo.empty .t-before, .t-photo.empty .t-seam { opacity: 0 !important; }
+
+.t-pill { position: absolute; width: 190px; height: 34px; border-radius: 17px; background: var(--t-pill);
+          outline: 1px solid var(--border); outline-offset: -0.5px; }
+.t-pill-hl { position: absolute; left: 2px; top: 3px; width: 59.33px; height: 28px; border-radius: 14px; background: var(--primary);
+             transition: transform var(--t-200) var(--t-out); }
+.t-pill .tt { color: var(--foreground); transition: color var(--t-200) var(--t-out); }
+.t-pill .tt.on { color: var(--white); }
+
+.t-crumb { position: absolute; height: 24px; background: var(--background); }
+.t-hl.top { top: -0.5px; }
+.t-hl.bot { top: 23.5px; }
+.t-crumbs { position: absolute; inset: 0; display: flex; padding-left: 8px; }
+.t-crumbs::after { content: ""; flex: 0 0 8px; }
+.t-crumb-i { position: relative; display: flex; flex: 0 0 auto; padding: 0 4px; transition: opacity var(--t-180) var(--t-out); }
+.t-crumb-i.enter, .t-crumb-i.leave { opacity: 0; }
+.t-crumb-t { display: block; white-space: nowrap; color: var(--t-muted); transition: color var(--t-180) var(--t-out); }
+.t-crumb-i.last .t-crumb-t { color: var(--foreground); }
+.t-crumb-sep { display: block; margin-left: 6px; width: 8px; color: var(--t-muted); overflow: hidden;
+               transition: opacity var(--t-180) var(--t-out), width var(--t-180) var(--t-out), margin var(--t-180) var(--t-out); }
+.t-crumb-i.last .t-crumb-sep { opacity: 0; width: 0; margin-left: 0; }
+
+.t-film { position: absolute; height: 72px; background: var(--background); }
+.t-cells { position: absolute; inset: 0; display: flex; gap: 6px; padding: 9px 0 0 8px; }
+.t-cells::after { content: ""; flex: 0 0 2px; }
+.t-cell { position: relative; flex: 0 0 72px; height: 54px; border-radius: 2px; background: var(--input);
+          transition: opacity var(--t-200) var(--t-out), transform var(--t-200) var(--t-out); }
+.t-cell.enter, .t-cell.leave { opacity: 0; transform: scale(0.9); }
+.t-cell.grp { background: transparent; outline: 1.5px solid var(--border); outline-offset: -0.75px; }
+.t-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 2px; opacity: 0;
+           transition: opacity var(--t-200) var(--t-out); }
+.t-thumb.on { opacity: 1; }
+.t-cell-f { position: absolute; left: 27px; top: 8px; color: var(--t-muted); }
+.t-cell-l { color: var(--t-muted); max-width: 68px; overflow: hidden; text-overflow: ellipsis; }
+.t-ring { position: absolute; inset: 0; border-radius: 2px; pointer-events: none; opacity: 0;
+          box-shadow: inset 0 0 0 1px var(--primary), 0 0 0 1px var(--primary); transition: opacity var(--t-200) var(--t-out); }
+.t-cell.sel .t-ring { opacity: 1; }
+
+/* ------------------------------------------------------------------ Tray (PhoneApp.cpp:271-675) */
+.t-tray { position: absolute; background: var(--card); border-radius: 10px; overflow: hidden; touch-action: none; isolation: isolate; }
+.t-editor.land .t-tray { border-radius: 0; }
+.t-editor.land .t-tray::before { content: ""; position: absolute; left: -0.5px; top: 0; bottom: 0; width: 1px; background: var(--border); z-index: 3; }
+.t-handle { position: absolute; left: calc(50% - 18px); top: 8px; width: 36px; height: 4px; border-radius: 2px; z-index: 2;
+            background: var(--t-handle); transition: opacity var(--t-200) var(--t-out); }
+.t-handle.off { opacity: 0; }
+.t-panel { position: absolute; left: 0; right: 0; top: 0; bottom: 56px; display: flex; flex-direction: column; overflow: hidden;
+           transition: opacity var(--t-200) var(--t-out); }
+.t-panel.off { opacity: 0; pointer-events: none; }
+.t-thead { position: relative; flex: 0 0 auto; }
+.t-chev { position: absolute; left: calc(100% - 40px); color: var(--t-muted); transition: opacity var(--t-200) var(--t-out); }
+.t-chev.off { opacity: 0; }
+.t-histband { position: relative; flex: 0 0 60px; }
+.t-hist { position: absolute; left: 12px; right: 12px; top: 6px; height: 48px; border-radius: 2px; background: var(--histogram-bg); overflow: hidden; }
+.t-hist canvas { display: block; }
+.t-body { position: relative; flex: 1 1 auto; min-height: 0; }
+.t-bodyin { position: relative; width: 100%; min-height: 1px; }
+.t-actions { position: relative; flex: 0 0 52px; }
+.t-abtn { position: absolute; top: 7px; border-radius: 2px; text-align: center; white-space: nowrap; }
+.t-abtn.save { background: var(--primary); color: var(--white); }
+.t-abtn.side { outline: 1px solid var(--border); outline-offset: -0.5px; color: var(--foreground); }
+.t-tools { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: var(--card); }
+.t-under { position: absolute; top: 0; width: 28px; height: 2px; border-radius: 1px; background: var(--primary);
+           transition: left var(--t-220) var(--t-out), opacity var(--t-200) var(--t-out); }
+.t-under.off { opacity: 0; }
+.t-tab { position: absolute; top: 0; width: 20%; height: 56px; color: var(--t-muted); overflow: hidden; transition: color var(--t-180) var(--t-out); }
+.t-tab.on { color: var(--primary); }
+.t-tab.on .t-tab-l { font-family: var(--font-sans-semibold); }
+.t-tab-ic { position: absolute; left: calc(50% - 10px); top: 8px; }
+
+/* slider row (PhoneApp.cpp:109-143): label 16 / slider x 128, w W-200, h 11.5 at 18.25 / value W-16 */
+.t-row { position: relative; width: 100%; height: 48px; touch-action: pan-y; }
+.t-rows { position: absolute; left: 0; right: 0; }
+.t-rowswrap { position: absolute; left: 0; right: 0; top: 0; height: 0; }
+.t-rowswrap > * { position: absolute; left: 0; right: 0; }
+.t-slider { position: absolute; left: 116px; top: 0; height: 48px; width: calc(max(10px, 100% - 200px) + 24px); touch-action: pan-y; }
+.t-track { position: absolute; left: 12px; right: 12px; top: 21.9875px; height: 4.025px; border-radius: 9999px; background: var(--input); }
+.t-fill { position: absolute; top: 0; height: 100%; border-radius: 9999px; background: var(--primary); }
+.t-reach { position: absolute; top: 0; height: 100%; border-radius: 9999px; background: var(--t-green); opacity: 0;
+           transition: opacity var(--t-180) var(--t-out); }
+.t-tick { position: absolute; top: calc(50% - 3.1625px); width: 1.6px; height: 6.325px; border-radius: 0.8px; background: var(--t-green);
+          opacity: 0; transition: opacity var(--t-180) var(--t-out); }
+.t-row.stacked .t-reach, .t-row.stacked .t-tick { opacity: 1; }
+.t-knob { position: absolute; top: -7.9875px; width: 20px; height: 20px; border-radius: 50%; background: var(--white);
+          box-shadow: 0 0 0 0.5px var(--white); }
+
+/* chips (Basic sections, PhoneApp.cpp:395-409) */
+.t-chips { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: flex; align-items: flex-start; gap: 6px; padding: 8px 0 0 12px; }
+.t-chips::after { content: ""; flex: 0 0 6px; }
+.t-chip { position: relative; flex: 0 0 auto; padding-left: 10px; padding-right: 10px; border-radius: 2px; background: var(--card);
+          outline: 1px solid var(--border); outline-offset: -0.5px; color: var(--t-muted); white-space: nowrap;
+          transition: background-color var(--t-180) var(--t-out), outline-color var(--t-180) var(--t-out), color var(--t-180) var(--t-out); }
+.t-chip.on { background: var(--t-accent15); outline-color: var(--primary); color: var(--primary); }
+
+/* segmented (PhoneApp.cpp:377-393) + toggle (:410-415) */
+.t-seg { position: absolute; left: 0; top: 0; width: 100%; border-radius: 2px; background: var(--input);
+         outline: 1px solid var(--border); outline-offset: -0.5px; }
+.t-seg-hl { position: absolute; top: 1px; bottom: 1px; border-radius: 2px; background: var(--primary);
+            transition: left var(--t-200) var(--t-out), background-color var(--t-200) var(--t-out); }
+.t-seg-i { position: absolute; top: 0; bottom: 0; color: var(--t-muted); border-radius: 2px;
+           transition: color var(--t-200) var(--t-out); }
+.t-seg-i.on { color: var(--white); }
+.t-toggle { position: absolute; width: 44px; height: 26px; border-radius: 13px; background: var(--input);
+            transition: background-color var(--t-150) var(--t-out); }
+.t-toggle::before { content: ""; position: absolute; left: -4px; right: -4px; top: -9px; bottom: -9px; }
+.t-toggle i { position: absolute; left: 3px; top: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--white);
+              transition: transform var(--t-150) var(--t-out); }
+.t-toggle.on { background: var(--primary); }
+.t-toggle.on i { transform: translateX(18px); }
+
+/* Mask body (PhoneApp.cpp:441-460) */
+.t-mbtn { position: absolute; top: 28px; height: 34px; border-radius: 2px; outline: 1px solid var(--border); outline-offset: -0.5px; }
+.t-mlist { position: absolute; left: 0; right: 0; height: 0; }
+.t-mrow { position: absolute; left: 12px; right: 12px; height: 36px; border-radius: 2px; color: var(--foreground); overflow: hidden;
+          transition: background-color var(--t-180) var(--t-out), color var(--t-180) var(--t-out), opacity var(--t-180) var(--t-out); }
+.t-mrow .tt { color: inherit; }
+.t-mrow.on { background: var(--t-accent15); color: var(--primary); }
+.t-mrow.enter, .t-mrow.leave { opacity: 0; }
+.t-mctl { position: absolute; left: 0; right: 0; height: 0; transition: top var(--t-200) var(--t-out); }
+.t-mctl > div { position: absolute; left: 0; right: 0; top: 0; height: 0; }
+
+/* Curve body */
+.t-reset { position: absolute; left: calc(100% - 64px); top: 77px; width: 48px; height: 23px; overflow: hidden; }
+.t-plot { position: absolute; touch-action: none; }
+.t-plot canvas { display: block; position: absolute; pointer-events: none; }
+
+/* Grade body */
+.t-remap { position: absolute; left: 0; right: 0; height: 192px; overflow: hidden;
+           transition: opacity var(--t-200) var(--t-out), height var(--t-200) var(--t-out); }
+.t-remap.off { opacity: 0; height: 0; pointer-events: none; }
+
+/* Xform body */
+.t-xbtn { position: absolute; border-radius: 2px; outline: 1px solid var(--border); outline-offset: -0.5px; color: var(--foreground); }
+.t-xbtn.dim { color: var(--t-muted); }
+.t-aspects { position: absolute; left: 16px; right: 16px; top: 130px; display: flex; flex-wrap: wrap; column-gap: 6px; row-gap: 8px; }
+.t-achip { position: relative; padding: 0 10px; border-radius: 2px; background: var(--card); outline: 1px solid var(--border); outline-offset: -0.5px;
+           color: var(--foreground); white-space: nowrap;
+           transition: background-color var(--t-180) var(--t-out), outline-color var(--t-180) var(--t-out), color var(--t-180) var(--t-out); }
+.t-achip.on { background: var(--t-accent15); outline-color: var(--primary); color: var(--primary); }
+
+/* ------------------------------------------------------------------ modal layer (PhoneApp.cpp:677-893, 1193-1319) */
+.t-modal { position: absolute; inset: 0; }
+.t-scrim { position: absolute; inset: 0; background: var(--t-scrim); opacity: 0; transition: opacity var(--t-140) var(--t-in); }
+.t-modal.open .t-scrim { opacity: 1; transition: opacity var(--t-180) var(--t-out); }
+.t-mpanel { position: absolute; }
+.t-sheet { left: 0; right: 0; bottom: 0; background: var(--popover); border-radius: 12px 12px 0 0; transform: translateY(100%);
+           transition: transform var(--t-140) var(--t-in); }
+.t-modal.open .t-sheet { transform: none; transition: transform var(--t-240) var(--t-out); }
+.t-slist { position: absolute; left: 0; right: 0; top: 24px; bottom: 0; }
+.t-slist-in { position: relative; }
+.t-srow { position: absolute; left: 0; right: 0; height: 48px; color: var(--foreground); overflow: hidden; }
+.t-srow.danger { color: var(--t-destruct); }
+.t-srow.dis .tt { opacity: 0.35; }
+.t-hl.srow { left: 20px; right: 20px; top: 47.5px; }
+.t-card { background: var(--card); border-radius: 4px; outline: 1px solid var(--border); outline-offset: -0.5px;
+          opacity: 0; transform: translateY(20px); transition: opacity var(--t-140) var(--t-in), transform var(--t-140) var(--t-in); }
+.t-modal.open .t-card { opacity: 1; transform: none; transition: opacity var(--t-180) var(--t-out), transform var(--t-240) var(--t-out); }
+.t-card.hist { top: 15%; height: 70%; transform: translateY(30px); }
+.t-cbtn { position: absolute; top: 98px; height: 36px; border-radius: 2px; outline: 1px solid var(--border); outline-offset: -0.5px;
+          color: var(--foreground); text-align: center; white-space: nowrap; }
+.t-cbtn.destructive { background: var(--t-destruct); outline: 0; color: var(--white); }
+.t-cbtn.primary { background: var(--primary); outline: 0; color: var(--white); }
+.t-ibtn { position: absolute; overflow: hidden; }
+.t-ibtn svg { position: absolute; color: var(--t-muted); }
+.t-drawer .t-ibtn svg, .t-full .t-ibtn svg { color: var(--foreground); }
+.t-hlist { position: absolute; left: 0; right: 0; top: 40px; bottom: 12px; }
+.t-hlist-in { position: relative; }
+.t-hnode { position: absolute; left: 0; right: 0; height: 32px; color: var(--foreground); }
+.t-hnode .tt { color: inherit; }
+.t-hnode.cur { color: var(--primary); }
+.t-hdot { position: absolute; top: 11px; width: 10px; height: 10px; border-radius: 50%; background: var(--input); }
+.t-hnode.cur .t-hdot { background: var(--primary); }
+.t-hconn { position: absolute; height: 1px; background: var(--border); transform-origin: 0 50%; }
+.t-field { position: absolute; border-radius: 2px; background: var(--input); outline: 1px solid var(--border); outline-offset: -0.5px;
+           transition: outline-color var(--t-150) var(--t-out); }
+.t-field:focus-within { outline-color: var(--primary); }
+.t-input { position: absolute; inset: 0; width: 100%; padding: 0 12px; border: 0; outline: 0; background: transparent;
+           color: var(--foreground); font: 14px var(--font-sans); caret-color: var(--primary); }
+.t-input::placeholder { color: var(--t-muted); opacity: 1; }
+
+.t-modal.drawer .t-scrim { background: var(--t-scrim-drawer); transition: opacity var(--t-240) var(--t-in); }
+.t-modal.drawer.open .t-scrim { transition: opacity var(--t-240) var(--t-out); }
+.t-drawer { left: 0; top: 0; bottom: 0; width: 300px; background: var(--card); box-shadow: 0.5px 0 0 0.5px var(--border);
+            transform: translateX(-100%); transition: transform var(--t-240) var(--t-in); }
+.t-modal.drawer.open .t-drawer { transform: none; transition: transform var(--t-240) var(--t-out); }
+.t-dlist { position: absolute; left: 0; right: 0; top: 48px; bottom: 0; }
+.t-drow { position: relative; height: 44px; overflow: hidden;
+          transition: opacity var(--t-180) var(--t-out), height var(--t-200) var(--t-out), background-color var(--t-180) var(--t-out); }
+.t-drow.enter, .t-drow.leave { opacity: 0; height: 0; }
+.t-dchev { position: absolute; left: 12px; top: 12px; color: var(--t-muted); }
+.t-hl.drow { top: 43.5px; }
+.t-drule { position: absolute; left: 0; top: 0; width: 2px; height: 100%; background: var(--primary); opacity: 0; transition: opacity var(--t-180) var(--t-out); }
+.t-dname { color: var(--foreground); transition: color var(--t-180) var(--t-out); }
+.t-drow.leaf.on { background: var(--t-accent15); }
+.t-drow.leaf.on .t-drule { opacity: 1; }
+.t-drow.leaf.on .t-dname { color: var(--primary); }
+
+.t-card.browser { left: 24px; right: 24px; top: 60px; bottom: 60px; overflow: hidden; }
+.t-blist { position: absolute; left: 0; right: 0; top: 66px; bottom: 0; }
+.t-blist.import { bottom: 56px; }
+.t-blist.new { bottom: 102px; }
+.t-brow { position: relative; height: 44px; color: var(--foreground); transition: background-color var(--t-180) var(--t-out); }
+.t-bic { position: absolute; left: 16px; top: 13px; color: var(--primary); }
+.t-brow.up .t-bic { color: var(--foreground); }
+.t-bsq { position: absolute; left: 16px; top: 8px; width: 28px; height: 28px; border-radius: 2px; background: var(--input); }
+.t-brow.project .t-bsq::after { content: ""; position: absolute; left: 11px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+.t-bname { color: inherit; max-width: calc(100% - 64px); overflow: hidden; text-overflow: ellipsis; transition: color var(--t-180) var(--t-out); }
+.t-brow.on { background: var(--t-accent15); color: var(--primary); }
+.t-hl.brow { top: 43.5px; }
+.t-bbtn { position: absolute; left: 16px; right: 16px; bottom: 10px; border-radius: 2px; background: var(--primary); color: var(--white);
+          text-align: center; overflow: hidden; white-space: nowrap; transition: background-color var(--t-180) var(--t-out), color var(--t-180) var(--t-out); }
+.t-bbtn.off { background: var(--input); color: var(--t-muted); }
+.t-field.bname { left: 16px; right: 16px; bottom: 56px; height: 36px; }
+.t-inline { position: absolute; left: 0; right: 0; bottom: 0; height: 92px; background: var(--card); box-shadow: 0 -0.5px 0 0.5px var(--border); }
+
+.t-modal.full .t-full { position: absolute; inset: 0; background: var(--canvas-bg); opacity: 0; transform: translateY(12px);
+                        transition: opacity var(--t-140) var(--t-in), transform var(--t-140) var(--t-in); }
+.t-modal.full.open .t-full { opacity: 1; transform: none; transition: opacity var(--t-180) var(--t-out), transform var(--t-240) var(--t-out); }
+.t-full-top { position: absolute; left: 0; right: 0; top: 0; height: 48px; background: var(--background); }
+.t-hl.bottom { top: 47.5px; }
+.t-fullplot { position: absolute; left: 16px; right: 16px; top: 106px; bottom: 72px; }
+.t-full-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: var(--background); }
+.t-full-bottom .t-hl { top: -0.5px; }
+.t-loupe { position: absolute; left: 0; top: 0; width: 88px; height: 88px; border-radius: 50%; pointer-events: none; opacity: 0;
+           transition: opacity var(--t-120) linear; }
+.t-loupe.on { opacity: 1; }
+.t-loupe canvas { display: block; }
+
+/* R-TOUCH-4: hit bands of >= 44 dp around controls the native draws smaller, as far as the
+   neighbours allow (adjacent targets stay >= 8 dp apart); the drawn geometry stays native. */
+.t-chip::before, .t-seg-i::before, .t-mbtn::before, .t-xbtn::before, .t-achip::before, .t-cbtn::before,
+.t-pill::before, .t-abtn::before { content: ""; position: absolute; left: 0; right: 0; }
+.t-chip::before { top: -8px; bottom: -8px; }          /* 28 -> 44 */
+.t-seg-i::before { top: -4px; bottom: -4px; }         /* 30 -> 38: the two pickers are 8 apart */
+.t-mbtn::before { top: -5px; bottom: -5px; }          /* 34 -> 44 */
+.t-xbtn::before { top: -6px; bottom: -6px; }          /* 32 -> 44 */
+.t-achip::before { top: -4px; bottom: -4px; }         /* 32 -> 40: aspect rows are 8 apart */
+.t-cbtn::before { top: -4px; bottom: -4px; }          /* 36 -> 44 */
+.t-abtn::before { top: -3px; bottom: -3px; }          /* 38 -> 44 */
+.t-pill::before { top: -5px; bottom: -5px; }          /* 34 -> 44 */

@@ -18,7 +18,7 @@ committed files, so a session on any machine can pick up exactly where the last 
 **You are the only skill that changes product code for a defect.** `arstro.cosmo.design.debug` never fixes anything: it reproduces, files and *recommends*, and the user then invokes this skill to land it. So when you pick a defect up, the diagnosis, the measurement, the cause with `file:line`, the recommended change and the test that should guard it are already written down in `docs/DEFECTS.md` — **read the entry before re-deriving any of it.** You are free to disagree with the recommendation, and should say so in the commit if you do, but a recommendation you silently ignore usually means the entry knows something you have not read yet.
 **You own:** `apps/cosmo/widgets/` · `apps/cosmo/App.{h,cpp}` (screen composition, layout, gesture
 routing) · `apps/cosmo/Theme.{h,cpp}` · `apps/cosmo/touch/` · `apps/cosmo/assets/` · the headless UI
-harness (`cosmo_shots`, `cosmo_ui_tests`).
+harness (`cosmo_shots`, `cosmo_ui_tests`) · **the web front end `apps/cosmo/web/`** (§1.9).
 
 **You do not own:** `apps/cosmo/core/`, `core/ImageProcessing/`, `ExportWriter`, `Log`, the load
 orchestration. Those are **`arstro.cosmo.core.implement`**. A task spanning both is two commits: core
@@ -204,6 +204,26 @@ its own **local palette copy** that diverges deliberately (`MUTED = 0x8a8a8a`, b
 reading). It reuses `cosmo_v2::font`, `sharedTheme().slider` and `cosmo_v2::icon::`. Do not "unify" the
 palettes — the divergence is the design. Do keep the two in step on *structure*: a new desktop panel
 that has no phone equivalent is a ledger task, not an oversight to leave silent.
+
+### 1.9 The web front end is the same cosmo, as a view (R-NTWB-5/7/9)
+
+`apps/cosmo/web/` is a third view of the service (next to the window and `cosmo-cc`), built MVVM:
+`js/vm/editor.js` is each page's view-model, `js/desktop/*` + `js/panels/*` port the App's shell and
+the RightColumn pages widget by widget, `js/touch/*` ports PhoneApp, `js/dialogs/*` the modals. The
+rules above bind it unchanged - a CSS transition with cosmo's duration and easing (`--t-*`,
+`--ease-*` in `css/base.css`) is `animateTo`; a canvas value goes through `Tween` (`js/core/motion.js`).
+Two things are specific to it:
+
+- **Tokens are generated, never typed:** `css/tokens.css` is `cosmo_web_tokens`'s output from
+  Theme.h; a new token means a new line in `cli/webTokens.cpp` and a regenerated file (ctest
+  `cosmo_web_tokens_current`). A widget change in the window that the web does not mirror is a
+  parity gap - write it into PARITY.md's web table, do not leave it silent.
+- **View state stays in the page, shared state is the model's:** a panel reads `vm.params`, sends
+  `vm.setFields` / a command line, and eases to values another page sent. Nothing that one page
+  does to ITS view (a tab, zoom, the crop overlay) may change the shared preview.
+
+Verify by looking at the page (a headless Chrome screenshot next to the `cosmo_shots` render of the
+same state, two sizes, desktop and phone) and run `tests/web/mvvm_test.mjs` against a board.
 
 ---
 
