@@ -2183,3 +2183,37 @@ the file cosmo already has open.
   understanding it: one of the two must know what a rational is and the other must not care. It
   reads the first 256 KB, tolerates a truncated or tagless file by reporting fewer rows, and never
   throws — a file that cannot be parsed produces the rows the caller already knew and nothing else.
+
+## R-NTWB — Cosmo in a browser: an app of Arstro Remote over NTWB — 🚧 IN PROGRESS
+
+*Added 2026-09-30.* "Arstro Remote is the front end, the core still sits on the Pi": a board
+running cosmo should be usable from any browser on the network, with cosmo's own UI - not a
+screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once in Arstro Remote
+(`server/arstro_remote/ntwb/spec.py` → `docs/ntwb/API.md`); cosmo is its first app.
+
+- **R-NTWB-1 A fourth front end, not a second cosmo.** `cosmo-cc ntwb serve` hosts THE service
+  (R-SVC-1) with no window and exposes it over NTWB. Every change arrives as one line of the command
+  grammar (R-SVC-2/5) - there is no second API - and everything a browser shows is `AppModel`
+  (state `model`), `Event`s (NTWB events named by `eventName()`, carrying the `formatEvent()` line)
+  and frames. The adapter holds no behaviour; front-end verbs (`state print`, `wait`, `ui dump`,
+  `quit`) are answered or refused explicitly, never silently accepted.
+- **R-NTWB-2 Pixels as blobs, and only pixels.** The preview leaves as a JPEG on the `preview`
+  stream (marked `coalesce`, so a slow browser skips to the newest frame) with its histogram in the
+  frame's meta; filmstrip thumbnails on `thumb`, on request, every one delivered. The codec lives in
+  the host (R-SVC-7).
+- **R-NTWB-3 What a second view needs is in the model.** The model dump carries the recent projects
+  (not in a stable dump: `lastOpened` is a clock), the load's status / stage / fraction and the
+  newest history label, so the browser draws home, loading and history from the model alone.
+- **R-NTWB-4 The slider catalogue is data.** Sections, labels, track ranges, fields and colour
+  ramps come from `EditControls.h`; each track→engine conversion (EV, mired temperature, tint,
+  radius) is sampled from the C++ functions the window uses and interpolated by the browser, which
+  never re-derives a formula. (RightColumn still keeps its own copy - ledger task NTWB-T3.)
+- **R-NTWB-5 The web UI speaks cosmo's design language.** `apps/cosmo/web/`: Theme.h tokens, the
+  shell geometry (TopBar, LeftRail, CenterStage + Breadcrumb + Filmstrip, RightColumn with
+  histogram / tabs / ActionBar), Roboto and JetBrains Mono shipped beside the page (R-FONT-1), and
+  R-G-1: every visible change eases. It stays usable at 360 px (one column, the rail a drawer).
+- **R-NTWB-6 Installing tells Arstro Remote.** `cosmo-cc ntwb install` writes the NTWB manifest,
+  the web UI and the API description to `$XDG_DATA_HOME/ntwb/apps/cosmo/`; Arstro Remote lists
+  cosmo under Apps and launches it on demand. `cosmo-cc ntwb api` prints the API description,
+  generated from the grammar, the event names and the catalogue; `docs/ntwb-api.json` is the
+  committed copy and ctest fails when it drifts.

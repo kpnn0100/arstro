@@ -1,0 +1,55 @@
+---
+name: arstro.ntwb.implement
+description: The app side of NTWB (native-to-web bridge) in the arstro repo - the C++ client library core/Ntwb and an Arstro app's NTWB adapter and web UI (Cosmo's `cosmo-cc ntwb`, apps/cosmo/web). Use to change core/Ntwb, re-vendor the protocol after it changed in Arstro Remote, give an app's web UI something new, or adapt another Arstro app (genesis, interstellar ...) so Arstro Remote lists it under Apps. Keeps protocol, API and documents consistent - the protocol's copy of record is Arstro Remote's spec.py. Invoke for "adapt <app> to Arstro Remote / NTWB", "the web UI of cosmo needs X", "update core/Ntwb", "/arstro.ntwb.implement".
+---
+
+# arstro.ntwb.implement (app side)
+
+> **Invoke `arstro.rule` first**, and the app's own implement skill (for Cosmo:
+> `arstro.cosmo.core.implement` for the adapter and model, `arstro.cosmo.design.implement` for the
+> web UI). This file adds only what NTWB needs.
+
+**The protocol is not defined here.** Its copy of record is Arstro Remote
+(`OrangePi5PlusController`): `server/arstro_remote/ntwb/spec.py`, rendered to `docs/ntwb/API.md` +
+`api.json`, explained in `docs/ntwb/NTWB.md`, with the full workflow in that repo's
+`arstro.ntwb.implement` skill. Here live two things that must agree with it:
+
+| here | agrees with the spec by | check |
+|---|---|---|
+| `core/Ntwb/spec/api.json` | being a **byte copy** of Arstro Remote's generated `docs/ntwb/api.json` | - (never hand-edit it) |
+| `core/Ntwb/src/Protocol.cpp` table, `Client` | matching the vendored copy field by field | `ntwb_tests` (`table_matches_the_vendored_spec`) |
+| an app's API description (Cosmo: `apps/cosmo/docs/ntwb-api.json`) | being generated from the app's code (`cosmo-cc ntwb api`) | ctest `cosmo_ntwb_api_current` |
+| the app's web UI | speaking only the app's API through `/ntwb/ntwb.js` | page smoke + `arstro-remote apps call` |
+
+## When the protocol changed in Arstro Remote
+
+1. Copy its `docs/ntwb/api.json` to `core/Ntwb/spec/api.json`.
+2. Build and run `ntwb_tests` - **it must fail** first (that proves the check sees the change).
+3. Change `Protocol.cpp` (tables) and `Client` (a new field's parameter) until it passes; bump
+   `kVersion` if the spec's version moved.
+4. Rebuild the apps that link `arstro_ntwb`; re-run their API ctest; reinstall them
+   (`cosmo-cc ntwb install`).
+
+## Adapting an Arstro app (the Cosmo pattern)
+
+- **The adapter is a front end** (arstro.rule §1): it maps NTWB onto the app's `Command` grammar
+  (one method, `command {line}`), its `AppModel` onto a `state`, its `Event`s onto NTWB events
+  named by `eventName()`, pixels onto blobs. It holds no behaviour. If the web needs something no
+  `Command`/model field expresses, that is a core task (new command / model field) in the app's
+  core skill, done first.
+- **Data, not copies**: anything a browser would re-derive (slider catalogue, unit conversions)
+  becomes data published by the adapter (Cosmo: `EditControls.h` + `controls`, conversions sampled
+  from the C++ functions).
+- **Host-layer only**: NTWB, sockets and codecs never enter `*_core` (layering, R-SVC-7).
+- **Install** writes `$XDG_DATA_HOME/ntwb/apps/<id>/` (`ntwb.json`, `api.json`, `web/`); **API
+  description** generated + committed + ctest-diffed.
+- **Verify**: `ntwb_tests`, the app's core tests, the API ctest; live through Arstro Remote:
+  `arstro-remote apps call <id> command '{"line": "..."}'`, `apps state <id> model`, then the page
+  (Arstro Remote's `server/tests/web/page_smoke.py ... "/apps/<id>/"`). Deploy Arstro Remote only
+  into its idle slot (`arstro-remote slots --idle`).
+
+## Commit order
+
+Arstro Remote first (it owns the spec), then this repo with the re-vendored copy - never the other
+way round, or this repo references a protocol that exists nowhere. In this repo, stage only your
+own paths: other sessions may have staged work in the same tree.

@@ -41,6 +41,9 @@ add_subdirectory(core/ImageProcessing)
 # rather than grow a second one. Dependency-free, so it sits beside Artboard rather than
 # under it, and both genesis and interstellar link it.
 add_subdirectory(core/Gene)
+# NTWB, the native-to-web bridge: how an Arstro app shows its UI in Arstro Remote's browser
+# front end (core/Ntwb/README.md). Dependency-free, so it is always built.
+add_subdirectory(core/Ntwb)
 
 # arstro_dsp: the channel-aware DSP/synth library (ESP32DigitalSynth) — physical-
 # modeling piano (physical/PianoVoice), oscillators, effects. Also defines the

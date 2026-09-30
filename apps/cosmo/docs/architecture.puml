@@ -414,5 +414,40 @@ EditEngine *--> ColorMixer : setSpread(mixerSpread/100)  ' R-MIXER-5
                               ' loads onnxruntime via its one exported C symbol
 ColorMixer ..> Spatial : fastBlurPlane
 
+' ── R-NTWB: cosmo as an Arstro Remote app ──
+package "core/Ntwb (NTWB 1.0.0, app side)" {
+  class NtwbClient <<ntwb::Client>> {
+    +connect(err) : bool
+    +poll(timeoutMs) : bool
+    +onCall / onNotify / onClientOpen
+    +reply() / event() / state() / blob() / log() / bye()
+  }
+  interface ITransport {
+    +send(bytes) : bool
+    +recv(buf, cap, timeoutMs) : long
+  }
+  class UnixSocketTransport
+  class MemoryTransport
+  class Protocol <<tables + validate + framing>>
+  class Json
+}
+class NtwbAdapter {
+  +start()
+  +tick(wallMs)
+  +apiDescription(hints) : Json
+  +controlsJson() : Json
+  +modelJson(model) : Json
+}
+class EditControls <<EditControls.h>>
+UnixSocketTransport ..|> ITransport
+MemoryTransport ..|> ITransport
+NtwbClient --> ITransport
+NtwbClient ..> Protocol : validates every message it sends
+NtwbAdapter --> CosmoService : Command in, AppModel + Event out (R-NTWB-1)
+NtwbAdapter --> NtwbClient
+NtwbAdapter ..> EditControls : the catalogue, sampled (R-NTWB-4)
+NtwbAdapter ..> AppModelCodec : state `model`
+NtwbAdapter ..> Frame : preview JPEG blobs (R-NTWB-2)
+
 @enduml
 

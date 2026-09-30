@@ -28,6 +28,7 @@
  *  control socket and cosmo_v2.log.
  */
 #include "ExportWriter.h"
+#include "NtwbAdapter.h"
 #include "OmpPin.h"
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
@@ -55,6 +56,7 @@
 #include <cerrno>
 #include <cstring>
 #endif
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -450,6 +452,10 @@ namespace
             {"bypass", "<node> on|off"},
             {"group new", "[\"name\"]"},
             {"group ungroup", "<node>"},
+            {"group rename", "[<node>] \"name\""},
+            {"delete", "[<node>]"},
+            {"mask set", "<i> <key>=<value> [key=value ...]"},
+            {"mask delete", "<i>"},
             {"undo", ""},
             {"redo", ""},
             {"preset apply", "\"<name>\""},
@@ -458,6 +464,10 @@ namespace
             {"settings set", "cpuPercent=N previewEdge=N threads=N useGpu=0|1"},
             {"screen", "home|editor"},
             {"state print", "[--json]"},
+            {"ui dump", "[--json] [--visible] [--depth N]"},
+            {"wb pick", "--x X --y Y   (0..1 of the photo)"},
+            {"metadata", "[<node>]"},
+            {"gesture", "on|off"},
             {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
@@ -484,6 +494,12 @@ namespace
              "                                  validate only; exit 1 with the first error located\n"
              "  bench <img> [--iters N]         per-stage ms, so a perf claim is measured\n"
              "  run [--script <f>] [-]          replay command lines from a file or stdin\n"
+             "  ntwb serve                      cosmo as an Arstro Remote app (NTWB): the service here,\n"
+             "                                  its UI in a browser; started BY Arstro Remote (R-NTWB)\n"
+             "  ntwb install [--data-dir D]     install the NTWB manifest + web UI so Arstro Remote lists\n"
+             "                                  cosmo under Apps (default D: $XDG_DATA_HOME/ntwb/apps)\n"
+             "  ntwb uninstall [--data-dir D]   remove it again\n"
+             "  ntwb api                        print the Cosmo API description (docs/ntwb-api.json)\n"
              "  attach <socket> [--script <f>]   drive a RUNNING cosmo --control window; its\n"
              "                                  events stream back (R-SVC-8). No session here:\n"
              "                                  the window that owns the service does the work\n"
@@ -1528,6 +1544,155 @@ static int cmdAttach(const Args &a, const Options &opt)
 #endif
 }
 
+// ── ntwb: cosmo as an Arstro Remote app (R-NTWB-1..6) ─────────────────────────────────
+//
+// `serve` is started BY Arstro Remote with NTWB_SOCKET / NTWB_TOKEN in the environment; the
+// adapter (NtwbAdapter.h) holds the translation, this function only owns the loop and the
+// codec, exactly like every other verb here. `install` writes what Arstro Remote reads to
+// list the app: <data>/ntwb/apps/cosmo/{ntwb.json, api.json, web/ ...}.
+
+#ifndef COSMO_SOURCE_DIR
+#define COSMO_SOURCE_DIR "."
+#endif
+
+/** RGBA8 -> JPEG through GdkPixbuf, the codec the host already links (R-SVC-7). JPEG has no
+ *  alpha, so the frame is packed to RGB first. */
+static bool encodeJpeg(const uint8_t *rgba, int w, int h, int quality, std::string &out)
+{
+    if (!rgba || w <= 0 || h <= 0) return false;
+    std::vector<guchar> rgb((size_t)w * h * 3);
+    for (size_t i = 0, n = (size_t)w * h; i < n; ++i)
+    {
+        rgb[i * 3] = rgba[i * 4];
+        rgb[i * 3 + 1] = rgba[i * 4 + 1];
+        rgb[i * 3 + 2] = rgba[i * 4 + 2];
+    }
+    GdkPixbuf *pb = gdk_pixbuf_new_from_data(rgb.data(), GDK_COLORSPACE_RGB, FALSE, 8, w, h, w * 3, nullptr, nullptr);
+    if (!pb) return false;
+    gchar *buf = nullptr;
+    gsize size = 0;
+    GError *err = nullptr;
+    const std::string q = std::to_string(quality);
+    const gboolean ok = gdk_pixbuf_save_to_buffer(pb, &buf, &size, "jpeg", &err, "quality", q.c_str(), (char *)nullptr);
+    g_object_unref(pb);
+    if (!ok)
+    {
+        if (err) g_error_free(err);
+        return false;
+    }
+    out.assign(buf, size);
+    g_free(buf);
+    return true;
+}
+
+static std::string ntwbDataDir(const Args &a)
+{
+    std::string d = a.value("data-dir");
+    if (!d.empty()) return d;
+    const char *x = std::getenv("XDG_DATA_HOME");
+    const char *home = std::getenv("HOME");
+    return (x && *x ? std::string(x) : std::string(home ? home : ".") + "/.local/share") + "/ntwb/apps";
+}
+
+static int cmdNtwbFiles(const Args &a)
+{
+    namespace fs = std::filesystem;
+    const std::string sub = a.positional.empty() ? "" : a.positional[0];
+    if (sub == "api")
+    {
+        std::cout << arstro::cosmo_v2::NtwbAdapter::apiDescription(grammarHints()).dumpPretty();
+        return kOk;
+    }
+    const fs::path appDir = fs::path(ntwbDataDir(a)) / "cosmo";
+    std::error_code ec;
+    if (sub == "uninstall")
+    {
+        fs::remove_all(appDir, ec);
+        if (ec) return fail("cannot remove " + appDir.string() + ": " + ec.message());
+        std::cout << "removed " << appDir.string() << "\n";
+        return kOk;
+    }
+    if (sub != "install") return usage(kUsage);
+
+    const fs::path src = fs::path(a.value("web-dir", std::string(COSMO_SOURCE_DIR) + "/web"));
+    const fs::path fonts = fs::path(COSMO_SOURCE_DIR) / "assets" / "fonts";
+    if (!fs::exists(src / "index.html")) return fail("no web UI at " + src.string() + " (--web-dir)");
+    const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+    if (ec) return fail("cannot find this executable: " + ec.message());
+
+    fs::remove_all(appDir / "web", ec);
+    fs::create_directories(appDir / "web" / "fonts", ec);
+    fs::copy(src, appDir / "web", fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+    if (ec) return fail("cannot copy the web UI: " + ec.message());
+    // The web UI draws with the same faces the window compiles in (R-FONT-1): Roboto and
+    // JetBrains Mono, OFL, shipped beside the page instead of fetched from anywhere.
+    for (const char *f : {"Roboto/Roboto-Regular.ttf", "Roboto/Roboto-Medium.ttf", "Roboto/Roboto-SemiBold.ttf",
+                          "Roboto/OFL.txt", "JetBrainsMono/JetBrainsMono-Regular.ttf", "JetBrainsMono/JetBrainsMono-Medium.ttf"})
+    {
+        const fs::path from = fonts / f;
+        const fs::path to = appDir / "web" / "fonts" / (std::string(f).find("OFL") != std::string::npos
+                                                            ? "OFL-Roboto.txt" : from.filename().string());
+        fs::copy_file(from, to, fs::copy_options::overwrite_existing, ec);
+        if (ec) return fail("cannot copy font " + from.string() + ": " + ec.message());
+    }
+    {
+        std::ofstream api(appDir / "api.json");
+        api << arstro::cosmo_v2::NtwbAdapter::apiDescription(grammarHints()).dumpPretty();
+    }
+    arstro::ntwb::Json m = arstro::ntwb::Json::object();
+    m.set("ntwb", arstro::ntwb::kVersion);
+    m.set("id", "cosmo");
+    m.set("name", "Cosmo");
+    m.set("version", "2");
+    m.set("description", "Photo editor: RAW development, grading, masks and export - the core runs on this machine");
+    m.set("icon", "web/icon.svg");
+    arstro::ntwb::Json exec = arstro::ntwb::Json::array();
+    exec.push(exe.string());
+    exec.push("ntwb");
+    exec.push("serve");
+    m.set("exec", exec);
+    m.set("web", "web");
+    m.set("api", "api.json");
+    arstro::ntwb::Json caps = arstro::ntwb::Json::array();
+    caps.push("blobs");
+    m.set("capabilities", caps);
+    {
+        std::ofstream mf(appDir / "ntwb.json");
+        mf << m.dumpPretty();
+        if (!mf) return fail("cannot write " + (appDir / "ntwb.json").string());
+    }
+    std::cout << "installed cosmo for Arstro Remote in " << appDir.string() << "\n"
+              << "  exec " << exe.string() << " ntwb serve\n"
+              << "  (Arstro Remote lists it under Apps; `arstro-remote apps list`)\n";
+    return kOk;
+}
+
+static int cmdNtwbServe(Host &h)
+{
+    arstro::ntwb::Client::Options o;
+    o.app = "cosmo";
+    o.version = "2";
+    o.capabilities = {"blobs"};
+    arstro::ntwb::Client client(o);
+    arstro::cosmo_v2::NtwbAdapter adapter(h.svc, client, encodeJpeg, grammarHints());
+    adapter.start();
+    std::string err;
+    if (!client.connect(err)) return fail(err);
+    // The service's clock is ours (R-SVC-6): read the bridge, pump, publish — at most ~8 ms
+    // asleep in the poll, so a slider drag is answered within a frame.
+    while (client.poll(8))
+    {
+        pumpOnce(h);
+        adapter.tick(wallMs());
+    }
+    std::cerr << "cosmo-cc ntwb: " << client.lastError() << "\n";
+    // An orderly end (the host said bye, or closed) is not a failure of this program.
+    return client.lastError().find("bye") != std::string::npos ||
+                   client.lastError().find("closed") != std::string::npos
+               ? kOk
+               : kFail;
+}
+
 int main(int argc, char **argv)
 {
     const Args a = parseArgs(argc, argv);
@@ -1546,6 +1711,8 @@ int main(int argc, char **argv)
     // attach drives somebody else's service, so it must come before the Host below: building
     // one here would start a render thread and a GPU context for a terminal.
     if (a.verb == "attach") return cmdAttach(a, opt);
+    // `ntwb api|install|uninstall` touch files only; `ntwb serve` needs the service below.
+    if (a.verb == "ntwb" && (a.positional.empty() || a.positional[0] != "serve")) return cmdNtwbFiles(a);
 
     if (a.verb == "info") return cmdInfo(a, opt);
     if (a.verb == "backends") return cmdBackends(a, opt);
@@ -1562,6 +1729,7 @@ int main(int argc, char **argv)
     if (a.verb == "export") return cmdExport(h, a);
     if (a.verb == "bench") return cmdBench(h, a);
     if (a.verb == "run") return cmdRun(h, a);
+    if (a.verb == "ntwb") return cmdNtwbServe(h);
 
     std::cerr << "cosmo-cc: unknown subcommand: " << a.verb << "\n";
     return usage(kUsage);

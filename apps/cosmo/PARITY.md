@@ -31,3 +31,27 @@ column points at files in the now-removed app, kept for provenance.
 - Items **1 and 2** were the user's explicit asks (R-MASK, R-ZOOM) and are done.
 - Items **3–6** are the remaining backlog; none is descoped yet — each needs an
   implement-or-descope decision.
+
+## The web front end (R-NTWB) vs the GTK window
+
+Everything below is reachable from the browser *today* through the command grammar (the Info
+tab's event lines show it, `arstro-remote apps call cosmo command '{"line": ...}'` drives it) -
+what is missing is the **panel** that draws it. Each row is a design task
+(`arstro.cosmo.design.implement`); none needs a core change, because R-NTWB-1 gives the browser
+the same commands the window sends.
+
+| # | Surface | Window | Web (2026-09-30) | Status | Req |
+|---|---------|--------|------------------|--------|-----|
+| W1 | Basic/Detail sliders, WB pick, tone/colour/presence/effects/sharpen/NR/lens | RightColumn | same catalogue (EditControls.h) | **Done** | R-NTWB-4/5 |
+| W2 | Project tree, bypass, group, filmstrip, breadcrumb, histogram | LeftRail, Filmstrip, Breadcrumb, HistogramWidget | yes | **Done** | R-NTWB-5 |
+| W3 | Home, recents, open, import, save, export, settings | HomeScreen, dialogs | yes (a folder picker over `browse`) | **Done** | R-NTWB-5/6 |
+| W4 | Tone curve (master + RGB) | CurvePanel | - (`set curve=...` works) | Missing | R-NTWB-5 |
+| W5 | Colour mixer + hue remap | MixerPanel, HueCurveEditor | - (`set mixer0=...`) | Missing | R-NTWB-5 |
+| W6 | Colour grading wheels | GradePanel | - (`set grade0=...`) | Missing | R-NTWB-5 |
+| W7 | Masks panel + on-photo overlay | MaskPanel, MaskOverlay | - (`set mask=`, `mask set`) | Missing | R-NTWB-5 |
+| W8 | Crop overlay, rotate, quarter turns | CropOverlay | - (`set crop=`, `rotation=`) | Missing | R-NTWB-5 |
+| W9 | Presets tree (apply / save) | PresetTree, PresetDialog | - (`preset apply "..."`); needs a preset list in the model | Missing (core: list) | R-NTWB-3 |
+| W10 | History as a branching tree | HistoryView | step count + label only | Partial | R-NTWB-5 |
+| W11 | Zoom / pan / before-after split on the photo | PhotoCanvas | fit only | Missing | R-NTWB-5 |
+| W12 | Group rename, delete, context menu | ContextMenu | - (`group rename`, `delete`) | Missing | R-NTWB-5 |
+| W13 | RightColumn reads its sliders from EditControls.h (one catalogue) | own copy | - | Task NTWB-T3 | R-NTWB-4 |

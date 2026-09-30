@@ -15,6 +15,31 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-30 — "the first app need to adapt is Cosmo … port the UI to web" (NTWB). DONE (v1).**
+
+- **[x] R-NTWB-1/2/3/4/6: cosmo is an Arstro Remote app.** `cosmo-cc ntwb serve|install|api`,
+  `cli/NtwbAdapter`, `core/Ntwb` (the C++ NTWB client: `ntwb_tests` 6/6, incl. the protocol table
+  against the vendored spec), `EditControls.h`, model additions, `docs/ntwb-api.json` + ctest
+  `cosmo_ntwb_api_current`. `cosmo_core_tests` all pass. Verified live on the RK3588 through
+  Arstro Remote slots A and B: `project new` / `import` / `set` / `undo` over `apps call`, the
+  preview (1600 px, ~160-190 ms) and both thumbnails in the browser, desktop and 390 px.
+- **[x] R-NTWB-5: the web UI covers Basic/Detail, tree, filmstrip, histogram, home, export,
+  settings, WB pick** - curves, mixer, grading, masks, crop, presets, zoom are PARITY.md W4-W12.
+  A real pointer drag in Chromium (DevTools `Input.dispatchMouseEvent`, 30 % of the Exposure track)
+  read back from the service as `exposure=3` - track 240 of +-400 is 3 EV through the sampled
+  conversion - as ONE history step (`gesture on`, per-frame `set` notifies, `gesture off`).
+- Two things worth carrying forward:
+  * **A second view found a core defect the first one hides: D-62.** JPEG EXIF orientation is
+    never applied, so a portrait photo edits sideways; the exporter copies the tag, so exports
+    look right in viewers and nobody noticed. Filed, not fixed here (it is a decode change).
+  * **The slider catalogue lived in a widget.** A second front end needed labels, ranges and the
+    mired temperature conversion; copying them to JS would have been a second, drifting truth, so
+    they became data (EditControls.h) with conversions sampled from the C++ functions.
+
+**► NEXT:** D-62 (orientation, core), then NTWB-T3 (RightColumn onto EditControls.h), then the web
+panels in PARITY.md order W4 → W9 (W9 needs a preset list in the model first). The GPU items
+below (D-61, D-60) are unchanged.
+
 **► 2026-09-29 — "this device need implement gpu hal to use gpu to edit image." DONE.**
 
 - **[x] R-GPU-7: the GPU backend is chosen at run time, and an RK3588's Mali-G610 edits on it.**

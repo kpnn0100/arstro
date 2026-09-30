@@ -3305,3 +3305,56 @@ Verified by looking, not by reading: `cosmo-editor-empty-1600x1000.png` cropped 
 COLOUR header for the dropper, and `cosmo-editor-mask-draw-1600x1000.png` scaled 14× at the mask row
 for the bin.
 
+
+## 21. Cosmo over NTWB (R-NTWB)
+
+### DR-NTWB-1 `cosmo-cc ntwb serve` — the service on the bridge (R-NTWB-1)
+`cmdNtwbServe` (`cli/main.cpp`) builds the usual Host (decoder factory, OpenMP pin, pixel caps,
+startup settings), connects `ntwb::Client` (`core/Ntwb`) to `$NTWB_SOCKET` with `$NTWB_TOKEN`, and
+loops `client.poll(8)` → `pumpOnce` → `adapter.tick(wallMs())` until the host says `bye` or the
+socket closes. `NtwbAdapter` (`cli/NtwbAdapter.{h,cpp}`) maps: call `command {line}` →
+`parseCommand` → `dispatch` (a rejection fails the call with `lastError`; `state print` returns the
+model; `wait`/`ui dump`/`quit` are refused with a reason); every `Event` → NTWB event
+`eventName(kind)` with `{line, text, a, b, c, ms}`; `AppModel` → state `model` (formatModel JSON
+with params) whenever `revision` changed, at most every 40 ms. Other methods: `model`, `controls`,
+`commands`, `thumbs`, `frame`, `browse` (a folder of the board: dirs, `.cmp` projects, images).
+Worked example (via Arstro Remote):
+```
+arstro-remote apps call cosmo command '{"line": "project new /tmp/t.cmp"}'
+arstro-remote apps call cosmo command '{"line": "import /photos/a.jpg /photos/b.jpg"}'
+arstro-remote apps state cosmo model
+```
+
+### DR-NTWB-2 Frames (R-NTWB-2)
+`NtwbAdapter::tick` takes the newest `RenderService::Frame` via `CosmoService::takeFrame`, encodes
+it with the injected `JpegEncoder` (`encodeJpeg` in `cli/main.cpp`: RGBA→RGB, GdkPixbuf, q 85) and
+sends blob `preview` with meta `{seq, slot, w, h, level, levelEdge, ms, hist}` (`hist`: r/g/b/lum,
+64 summed bins each) and `coalesce: true`; the newest preview is re-sent to a client on
+`client.open` and on `frame`. `thumbs` reads `session().thumbForSlot` (a marked reach past the
+service - thumbnails are pixels and have no service accessor yet) and sends one JPEG per decoded
+image to the caller, not coalesced.
+
+### DR-NTWB-3 Model additions (R-NTWB-3)
+`formatModel` (`core/service/AppModelCodec.cpp`) now also prints `loadStarted`, `loadStatus`,
+`loadStage`, `loadPermille`, `historyLabel`, `exportName`, `exportOutDir`, and - outside a stable
+dump - `recents` (`name, path, firstImagePath, photoCount, sizeBytes, lastOpened`). New keys only;
+no existing key moved or changed.
+
+### DR-NTWB-4 The catalogue (R-NTWB-4)
+`EditControls.h`: 7 sections, 23 controls, matching `RightColumn.cpp`; `NtwbAdapter::controlsJson`
+samples each control's `toEngine` at 41 evenly spaced track positions (`stops: [[track, engine]]`).
+
+### DR-NTWB-5 The web UI (R-NTWB-5)
+`web/index.html`, `web/cosmo.css`, `web/cosmo.js`, `web/icon.svg`; loads `/ntwb/ntwb.js` from the
+host. Home (recents, open, import into a new project, settings), Loading (bar eased 400 ms, status,
+count), Editor (tree with bypass toggles, cross-faded preview, breadcrumb, filmstrip with a sliding
+ring, eased histogram, Basic/Detail sliders with `gesture on/off` around a drag and one `set` per
+animation frame as notifies, History, Info with metadata / machine / the event lines, export,
+settings, white-balance pick → `wb pick`). Keyboard: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / arrows.
+
+### DR-NTWB-6 Install and the API description (R-NTWB-6)
+`cmdNtwbFiles` (`cli/main.cpp`): `ntwb api` prints `NtwbAdapter::apiDescription()` (methods with
+params, the 22 event names, state `model`, streams `preview`/`thumb`); `ntwb install` copies the web
+UI and the fonts from `COSMO_SOURCE_DIR` and writes `ntwb.json` (exec = this binary + `ntwb serve`)
+and `api.json`; `ntwb uninstall` removes the directory. ctest `cosmo_ntwb_api_current` diffs
+`cosmo-cc ntwb api` against `docs/ntwb-api.json`.

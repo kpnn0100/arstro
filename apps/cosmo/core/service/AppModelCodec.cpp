@@ -78,11 +78,22 @@ namespace cosmo
         kvi(s, j, "loadDone", m.load.done);
         kvi(s, j, "loadTotal", m.load.total);
         kvi(s, j, "loadWorkers", m.load.workers);
+        // R-NTWB-3: what a SECOND view needs to draw the load and the history without reaching
+        // into the service - the status line and the named phase the GUI's loader shows, and
+        // the label of the newest history step. Added at the end of their groups (a new key,
+        // never a renamed one, so existing readers of the dump are unaffected).
+        kvi(s, j, "loadStarted", m.load.started);
+        kv(s, j, "loadStatus", m.load.status);
+        kv(s, j, "loadStage", m.load.stage);
+        kvi(s, j, "loadPermille", (int)(m.load.fraction() * 1000.0 + 0.5));
+        kv(s, j, "historyLabel", m.history.lastLabel);
 
         kvb(s, j, "exportActive", m.exports.active);
         kvi(s, j, "exportDone", m.exports.done);
         kvi(s, j, "exportTotal", m.exports.total);
         kvi(s, j, "exportFailures", m.exports.failures);
+        kv(s, j, "exportName", m.exports.name);
+        kv(s, j, "exportOutDir", m.exports.outDir);
 
         kvi(s, j, "settingsPreviewEdge", m.settings.previewEdge);
         kvi(s, j, "settingsThreads", m.settings.threads);
@@ -154,6 +165,27 @@ namespace cosmo
             }
         }
         if (j) s << "  ]";
+
+        // R-NTWB-3: the home screen's recent projects, which a second view needs as much as the
+        // GUI's HomeScreen does. Not part of a stable dump: `lastOpened` is a clock and opening
+        // a project (from any front end) rewrites it, so two runs of the same commands disagree.
+        if (!o.stable)
+        {
+            if (j) s << ",\n  \"recents\": [\n";
+            else s << "recents=" << m.recents.size() << '\n';
+            for (size_t i = 0; i < m.recents.size(); ++i)
+            {
+                const RecentModel &r = m.recents[i];
+                if (j)
+                    s << "    {\"name\": \"" << jsonEscape(r.name) << "\", \"path\": \"" << jsonEscape(r.path)
+                      << "\", \"firstImagePath\": \"" << jsonEscape(r.firstImagePath) << "\", \"photoCount\": "
+                      << r.photoCount << ", \"sizeBytes\": " << r.sizeBytes << ", \"lastOpened\": " << r.lastOpened
+                      << "}" << (i + 1 < m.recents.size() ? "," : "") << '\n';
+                else
+                    s << "  recent photos=" << r.photoCount << " opened=" << r.lastOpened << " path=" << r.path << '\n';
+            }
+            if (j) s << "  ]";
+        }
 
         // R-INFO: the last answered `metadata` request. Stable — every field here is a property
         // of the FILE, so two front ends given the same command must print the same rows. Emitted

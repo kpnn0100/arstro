@@ -19,7 +19,9 @@ add_executable(cosmo-cc
   ${CMAKE_CURRENT_SOURCE_DIR}/../ExportWriter.cpp
   # R-CPU-2c / D-12: the OpenMP pin the CLI must not silently drop. Per-thread,
   # resolved with dlsym rather than linked, hence ${CMAKE_DL_LIBS} below.
-  ${CMAKE_CURRENT_SOURCE_DIR}/../OmpPin.cpp)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../OmpPin.cpp
+  # R-NTWB: `cosmo-cc ntwb` - cosmo as an app of Arstro Remote, its UI in a browser.
+  ${CMAKE_CURRENT_SOURCE_DIR}/NtwbAdapter.cpp)
 
 target_include_directories(cosmo-cc PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
@@ -28,7 +30,7 @@ target_include_directories(cosmo-cc PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/src)
 
 # arstro_image carries GL/EGL PUBLICly (R-GPU), so the GPU backend links itself.
-target_link_libraries(cosmo-cc PRIVATE cosmo_core arstro_image ${CMAKE_DL_LIBS})
+target_link_libraries(cosmo-cc PRIVATE cosmo_core arstro_image arstro_ntwb ${CMAKE_DL_LIBS})
 
 # ── GdkPixbuf (via GTK3) for the decoder + the export encoder ──
 # find_package(PkgConfig) has to run in THIS directory scope: its result
@@ -37,3 +39,12 @@ target_link_libraries(cosmo-cc PRIVATE cosmo_core arstro_image ${CMAKE_DL_LIBS})
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(COSMO_CC_GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
 target_link_libraries(cosmo-cc PRIVATE PkgConfig::COSMO_CC_GTK3)
+
+# `cosmo-cc ntwb install` copies the web UI and the fonts from the source tree (R-NTWB-5).
+target_compile_definitions(cosmo-cc PRIVATE COSMO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+# R-NTWB-6: the committed Cosmo API description is what `cosmo-cc ntwb api` generates - a method,
+# an event or a grammar hint added in code without regenerating it fails here.
+#   cmake-build/apps/cosmo/cli/cosmo-cc ntwb api > apps/cosmo/docs/ntwb-api.json
+add_test(NAME cosmo_ntwb_api_current
+  COMMAND sh -c "\"$<TARGET_FILE:cosmo-cc>\" ntwb api | diff -u \"${CMAKE_CURRENT_SOURCE_DIR}/../docs/ntwb-api.json\" -")

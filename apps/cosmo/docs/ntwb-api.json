@@ -1,0 +1,167 @@
+{
+  "ntwb": "1.0.0",
+  "app": "cosmo",
+  "methods": {
+    "command": {
+      "doc": "dispatch one command to the service; `state print` returns the model, `wait`/`ui dump`/`quit` are refused (front-end verbs)",
+      "params": {
+        "line": {
+          "type": "str",
+          "required": true,
+          "doc": "one line of the cosmo command grammar (R-SVC-5): project open <path.cmp> | project new <path.cmp> | project save [path.cmp] | project close | import <img> [img ...] | select <node> [add|range] | select next | select prev | set <key>=<value> [key=value ...] | bypass <node> on|off | group new [\"name\"] | group ungroup <node> | group rename [<node>] \"name\" | delete [<node>] | mask set <i> <key>=<value> [key=value ...] | mask delete <i> | undo | redo | preset apply \"<name>\" | preset save \"<name>\" | export --outdir <D> [--format jpg|png|tiff] [--quality N] [--long-edge N] | settings set cpuPercent=N previewEdge=N threads=N useGpu=0|1 | screen home|editor | state print [--json] | ui dump [--json] [--visible] [--depth N] | wait load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted) | wb pick --x X --y Y   (0..1 of the photo) | metadata [<node>] | gesture on|off | quit"
+        }
+      },
+      "result": "{revision} - or the model for `state print`; a rejection fails with lastError"
+    },
+    "model": {
+      "doc": "the whole AppModel as JSON, params included",
+      "params": {},
+      "result": "the model"
+    },
+    "controls": {
+      "doc": "the Basic/Detail slider catalogue; `stops` sample track -> engine units",
+      "params": {},
+      "result": "[{title, whiteBalancePicker, controls: [{label, field, min, max, stops, rampFrom?, rampTo?}]}]"
+    },
+    "commands": {
+      "doc": "the command grammar: every command name with its argument hint",
+      "params": {},
+      "result": "[{name, args}]"
+    },
+    "thumbs": {
+      "doc": "send filmstrip thumbnails to the caller on the `thumb` stream",
+      "params": {
+        "node": {
+          "type": "int",
+          "required": false,
+          "doc": "only this node (default: every decoded image)"
+        }
+      },
+      "result": "{sent}"
+    },
+    "frame": {
+      "doc": "send the newest preview to the caller on the `preview` stream",
+      "params": {},
+      "result": "{sent}"
+    },
+    "browse": {
+      "doc": "list a folder of the board: sub-folders, projects (.cmp) and images",
+      "params": {
+        "path": {
+          "type": "str",
+          "required": false,
+          "doc": "folder to list (default: the home folder)"
+        }
+      },
+      "result": "{path, parent, entries: [{name, path, kind: dir|project|image, size?}]}"
+    }
+  },
+  "events": {
+    "info": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "error": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "screen.changed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "project.opening": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "project.opened": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "project.closed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "project.saved": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "load.progress": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "entry.started": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "load.stage": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "entry.progress": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "entry.decoded": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "entry.failed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "load.finished": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "selection.changed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "params.changed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "history.changed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "settings.changed": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "frame.ready": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "export.progress": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "export.finished": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    },
+    "command.rejected": {
+      "doc": "the service's event (R-SVC-3); `line` is its formatEvent() text",
+      "data": "{line, text, a, b, c, ms}"
+    }
+  },
+  "state": {
+    "model": {
+      "doc": "the AppModel (formatModel JSON with params), pushed on every revision (at most 25/s)",
+      "data": "object"
+    }
+  },
+  "streams": {
+    "preview": {
+      "doc": "the rendered preview of the current image, on every new frame",
+      "mime": "image/jpeg",
+      "meta": "{seq, slot, w, h, level, levelEdge, ms, hist: {r, g, b, lum: 64 bins each}}"
+    },
+    "thumb": {
+      "doc": "a filmstrip thumbnail (answer to `thumbs`)",
+      "mime": "image/jpeg",
+      "meta": "{node, slot, w, h}"
+    }
+  }
+}

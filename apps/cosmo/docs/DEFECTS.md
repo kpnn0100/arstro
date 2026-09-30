@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-60**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-63**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,30 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-62 — A JPEG's EXIF orientation is ignored: a portrait photo edits (and previews) sideways
+- **Area:** core / decode · **Status:** **Confirmed** (measured) · **Severity:** S2
+- **Found:** 2026-09-30, while bringing up the NTWB web front end (R-NTWB) on an RK3588.
+- **Front end:** every one — the pixels are wrong below the service; the web preview showed it first
+  because it draws the frame exactly as rendered.
+- **Reproduce:** a Panasonic JPEG with EXIF `Orientation = 8` (`P1120349.JPG`, 4592×3448 stored):
+  `project new /tmp/t.cmp`, `import P1120349.JPG`, `export --outdir D --long-edge 600` → the
+  written file is **600×451** pixels (landscape) carrying the source's EXIF with `Orientation = 8`.
+  Viewers that honour the tag show it upright, so the export *looks* right — but every preview
+  frame (`frame.ready`, the GUI canvas, the NTWB `preview` stream, the filmstrip thumbnail) is the
+  stored landscape pixels, i.e. the photo lies on its side while being edited.
+- **Expected:** decode turns the pixels the way the file says (as R-THUMB's RAW path already does),
+  so preview, crop geometry, masks and export all agree with what the camera meant.
+- **Actual:** `NativeImageDecoder::applyFlip` exists and is right (guarded by
+  `a_thumbnail_is_turned_the_way_the_photo_is`), but its only caller is the RAW embedded-preview
+  path (`NativeImageDecoder.cpp:333`); the GdkPixbuf JPEG/PNG/TIFF path never reads the tag.
+- **Judgement:** **defect** — and it hides behind the exporter, which copies EXIF including the
+  tag, so a turned file rotates back in a viewer and nobody sees it until they look at the canvas.
+- **Recommended fix:** in the GdkPixbuf path read `gdk_pixbuf_get_option(pb, "orientation")` (or
+  `Exif.cpp`'s reader) and call `applyFlip` with the matching flip; then write `Orientation = 1`
+  (or drop the tag) on export so a turned file is not turned twice by viewers.
+- **Guard:** an L1 test with a 3×2 JPEG carrying `Orientation = 6` and `8`: decoded size 2×3, the
+  corner pixels where `applyFlip` puts them; plus the export reading back as upright with tag 1.
 
 ### D-61 — `cosmo-cc render` / `bench` print `backend=gpu` for renders that ran on the CPU
 - **Area:** core / cli · **Status:** **Confirmed** (by reading, and by D-60's measurement) · **Severity:** S3
