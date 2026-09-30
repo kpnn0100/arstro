@@ -1,6 +1,6 @@
 # core/Ntwb — the app side of NTWB for Arstro apps
 
-**NTWB (native-to-web bridge) 1.0.0** lets an Arstro app keep its core on the device and show its
+**NTWB (native-to-web bridge) 1.1.0** lets an Arstro app keep its core on the device and show its
 UI in a browser through **Arstro Remote**, which lists the app under *Apps*, launches it, serves its
 web UI and relays messages and binary streams. The protocol is defined once, in Arstro Remote
 (`server/arstro_remote/ntwb/spec.py`, rendered to `docs/ntwb/API.md` + `api.json`, explained in
@@ -28,6 +28,9 @@ web UI and relays messages and binary streams. The protocol is defined once, in 
   reports a refusal in `lastError()` instead of sending (NTWB-06).
 - **NR-4** A refused handshake, a host `bye`, a closed socket or a broken stream ends `poll()` with
   the reason in `lastError()`.
+- **NR-5** Sessions need no app code (NTWB 1.1): each session of an app is its own process, launched
+  with `NTWB_SESSION`; `session()` returns the id the host sent in `welcome` (`main`, `s2` ...).
+  The app is the MODEL of its session (NTWB-11) - publish state, never a picture of a window.
 
 ## Changing the protocol
 

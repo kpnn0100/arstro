@@ -1,5 +1,5 @@
 /*
- *  Arstro Ntwb — Protocol: NTWB 1.0.0 as C++ tables, validation and framing.
+ *  Arstro Ntwb — Protocol: NTWB 1.1.0 as C++ tables, validation and framing.
  *
  *  NTWB (native-to-web bridge) is defined ONCE, in Arstro Remote's
  *  server/arstro_remote/ntwb/spec.py, which generates docs/ntwb/api.json and API.md. This
@@ -22,7 +22,7 @@ namespace arstro
 {
 namespace ntwb
 {
-    constexpr const char *kVersion = "1.0.0";
+    constexpr const char *kVersion = "1.1.0";
     constexpr int kMajor = 1;
     constexpr uint8_t kFrameJson = 1;
     constexpr uint8_t kFrameBlob = 2;

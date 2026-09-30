@@ -1,5 +1,5 @@
 /*
- *  Arstro Ntwb — the NTWB 1.0.0 tables, validation and framing. See Protocol.h for why
+ *  Arstro Ntwb — the NTWB 1.1.0 tables, validation and framing. See Protocol.h for why
  *  this table is tested against the vendored spec/api.json rather than trusted.
  */
 #include "ntwb/Protocol.h"
@@ -17,8 +17,9 @@ namespace ntwb
             {"welcome", H2A, {{"ntwb", "version", true}, {"session", "id", true}, {"host", "obj", true},
                               {"clients", "list[str]", true}}},
             {"ready", H2C, {{"ntwb", "version", true}, {"client", "id", true}, {"app", "obj", true},
-                            {"state", "obj", true}}},
-            {"status", H2C, {{"state", "enum:starting|running|stopped|failed", true}, {"detail", "str", false}}},
+                            {"state", "obj", true}, {"session", "id", false}}},
+            {"status", H2C, {{"state", "enum:starting|running|stopped|failed", true}, {"detail", "str", false},
+                             {"session", "id", false}, {"clients", "int", false}}},
             {"client.open", H2A, {{"client", "id", true}, {"info", "obj", false}}},
             {"client.close", H2A, {{"client", "id", true}}},
             {"call", C2H | H2A, {{"id", "id", true}, {"method", "name", true}, {"params", "obj", false},
@@ -47,7 +48,7 @@ namespace ntwb
 
     const std::vector<std::string> &environment()
     {
-        static const std::vector<std::string> e = {"NTWB_SOCKET", "NTWB_TOKEN", "NTWB_APP_ID",
+        static const std::vector<std::string> e = {"NTWB_SOCKET", "NTWB_TOKEN", "NTWB_APP_ID", "NTWB_SESSION",
                                                    "NTWB_VERSION", "NTWB_HOST", "NTWB_DATA_DIR"};
         return e;
     }
