@@ -1468,7 +1468,7 @@ accelerator is used only when its result matches it.
   `core/ImageProcessing/src/compute/GlComputeBackend.cpp` implements `IComputeBackend` with an **OpenGL
   4.3 compute shader** over a **surfaceless EGL** context (headless — no window; the shader is
   compiled at runtime, so no offline SPIR-V/GLSL toolchain is needed). Built when `ARSTRO_GL_COMPUTE`
-  is defined and EGL/GL link (CMake auto-detects; `build.sh` passes it for the cosmo native build).
+  is defined and EGL/GL link (CMake auto-detects).
   - **Ported subset (this increment):** the per-pixel colour/tone point ops — **Exposure**,
     **Contrast**, **White Balance** (gains reused from `color::kelvinToRgbGain`) — plus the exact
     sRGB **encode**. `process()` runs on the GPU only when the edit is entirely within that subset

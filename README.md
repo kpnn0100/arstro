@@ -54,7 +54,7 @@ arstro/
 ├── apps/          the applications — cosmo, genesis, pulsar, launcher, arstrobench, solaris, interstellar
 ├── examples/      small demos built on the stack
 ├── docs/          suite vision and shared-core design
-└── build.sh       umbrella build entry point
+└── cmk            CLI over CMake: list targets, build or run one
 ```
 
 ## Build
@@ -74,19 +74,17 @@ cmake -S . -B build && cmake --build build -j
 ctest --test-dir build            # all libraries' and apps' tests
 ```
 
-Or per project via `build.sh`, which picks the Artboard adapter from the target and
-auto-detects the host:
+Or one target at a time via `./cmk`, a thin CLI over the same CMake build (configures
+on first use, reconfigures when a `CMakeLists.txt` changes):
 
 ```bash
-./build.sh --list
-./build.sh --target native-test                          # build + run every repo's tests
-./build.sh --project cosmo  --target linux-native-app    # GTK3 + Cairo desktop app
-./build.sh --project pulsar --target linux-native-app
-./build.sh --project scope  --target linux-web-server    # WASM + Canvas2D (needs emcc)
+./cmk list                        # every executable and library, with its source dir
+./cmk list cosmo                  # filter by substring or glob ('*_tests')
+./cmk build cosmo cosmo-cc        # build just those targets
+./cmk run interstellar -- clip.mp4  # build an executable, then run it with args
+./cmk test -R artboard            # build all, then ctest (extra args go to ctest)
+./cmk --debug build cosmo         # Debug build in build-debug/
 ```
-
-For the web target, `source ~/emsdk/emsdk_env.sh` first, then build and serve:
-`(cd examples/scope/web && python3 -m http.server 8000)`.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the app-creation workflow, build targets, and
 submodule upgrade steps.

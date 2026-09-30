@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""cmk — a thin CLI over the umbrella CMake build.
+
+Lists the targets CMake knows about and builds (or runs) one by name, so you
+never have to remember a binary's path or a subproject's build dir.
+
+  ./cmk list [PATTERN]          list targets (executables, libraries, utilities)
+  ./cmk build [TARGET...]       build the named targets (none = everything)
+  ./cmk run TARGET [-- ARGS]    build an executable, then run it with ARGS
+  ./cmk test [CTEST ARGS]       build everything, then run ctest
+  ./cmk configure [-DVAR=VAL]   (re)configure the build tree
+  ./cmk clean                   cmake --build --target clean
+
+Global options (before the command):
+  -B DIR       build directory (default: build, or build-debug with --debug)
+  --debug      Debug build type in its own tree
+  -j N         parallel jobs (default: all cores)
+
+Target listing comes from CMake's file API (codemodel-v2), so it is exact —
+types, artifact paths and source dirs — not scraped from `--target help`.
+"""
+import argparse
+import difflib
+import fnmatch
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+QUERY = Path(".cmake/api/v1/query/codemodel-v2")
+REPLY = Path(".cmake/api/v1/reply")
+
+TYPE_ORDER = ["EXECUTABLE", "STATIC_LIBRARY", "SHARED_LIBRARY", "MODULE_LIBRARY",
+              "OBJECT_LIBRARY", "INTERFACE_LIBRARY", "UTILITY"]
+TYPE_LABEL = {"EXECUTABLE": "executables", "STATIC_LIBRARY": "static libraries",
+              "SHARED_LIBRARY": "shared libraries", "MODULE_LIBRARY": "module libraries",
+              "OBJECT_LIBRARY": "object libraries", "INTERFACE_LIBRARY": "interface libraries",
+              "UTILITY": "utility targets"}
+
+
+def die(msg, code=1):
+    print(f"cmk: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def sh(cmd, **kw):
+    print("+ " + " ".join(str(c) for c in cmd), file=sys.stderr)
+    return subprocess.call([str(c) for c in cmd], **kw)
+
+
+# ---------------------------------------------------------------- configure --
+
+def configure(bdir, build_type, extra=()):
+    (bdir / QUERY).parent.mkdir(parents=True, exist_ok=True)
+    (bdir / QUERY).touch()
+    cmd = ["cmake", "-S", ROOT, "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *extra]
+    if not (bdir / "CMakeCache.txt").exists() and shutil.which("ninja"):
+        cmd[1:1] = ["-G", "Ninja"]
+    if sh(cmd) != 0:
+        die("configure failed")
+
+
+def reply_index(bdir):
+    idx = sorted((bdir / REPLY).glob("index-*.json"))
+    return idx[-1] if idx else None
+
+
+def stale(bdir, index):
+    """True if a CMakeLists.txt CMake read is newer than the last reply."""
+    stamp = index.stat().st_mtime
+    try:
+        model = load_codemodel(bdir, index)
+    except (OSError, ValueError, KeyError):
+        return True
+    src = Path(model["paths"]["source"])
+    for d in model["configurations"][0]["directories"]:
+        f = src / d["source"] / "CMakeLists.txt"
+        if f.exists() and f.stat().st_mtime > stamp:
+            return True
+    return False
+
+
+def ensure_configured(bdir, build_type):
+    index = reply_index(bdir)
+    if index is None or not (bdir / "CMakeCache.txt").exists() or stale(bdir, index):
+        configure(bdir, build_type)
+        index = reply_index(bdir)
+        if index is None:
+            die(f"CMake produced no file-API reply in {bdir}")
+    return index
+
+
+# ---------------------------------------------------------------- codemodel --
+
+def load_codemodel(bdir, index):
+    data = json.loads(index.read_text())
+    ref = next(r for r in data["reply"].values()
+               if isinstance(r, dict) and r.get("kind") == "codemodel")
+    return json.loads((bdir / REPLY / ref["jsonFile"]).read_text())
+
+
+def load_targets(bdir, build_type):
+    index = ensure_configured(bdir, build_type)
+    model = load_codemodel(bdir, index)
+    targets = {}
+    for t in model["configurations"][0]["targets"]:
+        tj = json.loads((bdir / REPLY / t["jsonFile"]).read_text())
+        arts = [a["path"] for a in tj.get("artifacts", [])]
+        targets[tj["name"]] = {
+            "type": tj["type"],
+            "source": tj["paths"]["source"],
+            "artifact": arts[0] if arts else None,
+        }
+    return targets
+
+
+def resolve(name, targets):
+    if name in targets:
+        return name
+    near = difflib.get_close_matches(name, targets, n=5, cutoff=0.5)
+    near += [t for t in targets if name in t and t not in near]
+    hint = ("\n  did you mean: " + ", ".join(near[:6])) if near else ""
+    die(f"no target '{name}'{hint}\n  (./cmk list shows them all)")
+
+
+# ---------------------------------------------------------------- commands ---
+
+def cmd_list(a, bdir):
+    targets = load_targets(bdir, a.build_type)
+    pat = a.pattern
+    if pat and not any(c in pat for c in "*?["):
+        pat = f"*{pat}*"
+    shown = {n: t for n, t in targets.items() if not pat or fnmatch.fnmatch(n, pat)}
+    if not shown:
+        die(f"no targets match '{a.pattern}'")
+    width = max(len(n) for n in shown)
+    for ty in TYPE_ORDER:
+        names = sorted(n for n, t in shown.items() if t["type"] == ty)
+        if not names or (ty == "UTILITY" and not a.all):
+            continue
+        print(f"\n{TYPE_LABEL[ty]} ({len(names)})")
+        for n in names:
+            print(f"  {n:<{width}}  {shown[n]['source']}")
+    hidden = sum(1 for t in shown.values() if t["type"] == "UTILITY")
+    if hidden and not a.all:
+        print(f"\n({hidden} utility targets hidden; ./cmk list --all shows them)")
+
+
+def build(bdir, names, jobs):
+    cmd = ["cmake", "--build", bdir, "-j", jobs]
+    for n in names:
+        cmd += ["--target", n]
+    return sh(cmd)
+
+
+def cmd_build(a, bdir):
+    targets = load_targets(bdir, a.build_type)
+    names = [resolve(n, targets) for n in a.targets]
+    sys.exit(build(bdir, names, a.jobs))
+
+
+def cmd_run(a, bdir):
+    targets = load_targets(bdir, a.build_type)
+    name = resolve(a.target, targets)
+    t = targets[name]
+    if t["type"] != "EXECUTABLE" or not t["artifact"]:
+        die(f"'{name}' is a {t['type'].lower()}, not an executable")
+    if build(bdir, [name], a.jobs) != 0:
+        die("build failed")
+    exe = bdir / t["artifact"]
+    args = a.args[1:] if a.args[:1] == ["--"] else a.args
+    sys.exit(sh([exe, *args]))
+
+
+def cmd_test(a, bdir):
+    ensure_configured(bdir, a.build_type)
+    if build(bdir, [], a.jobs) != 0:
+        die("build failed")
+    sys.exit(sh(["ctest", "--test-dir", bdir, "--output-on-failure", "-j", a.jobs, *a.ctest]))
+
+
+def cmd_configure(a, bdir):
+    configure(bdir, a.build_type, a.defs)
+
+
+def cmd_clean(a, bdir):
+    if not (bdir / "CMakeCache.txt").exists():
+        die(f"{bdir} is not configured")
+    sys.exit(sh(["cmake", "--build", bdir, "--target", "clean"]))
+
+
+def main():
+    p = argparse.ArgumentParser(prog="cmk", description=__doc__.split("\n")[0],
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                epilog="\n".join(__doc__.split("\n")[2:]))
+    p.add_argument("-B", dest="build_dir")
+    p.add_argument("--debug", action="store_true")
+    p.add_argument("-j", dest="jobs", default=str(os.cpu_count() or 4))
+    sub = p.add_subparsers(dest="cmd", metavar="COMMAND")
+
+    s = sub.add_parser("list", aliases=["ls"], help="list targets")
+    s.add_argument("pattern", nargs="?", help="substring or glob, e.g. cosmo or '*_tests'")
+    s.add_argument("-a", "--all", action="store_true", help="include utility targets")
+    s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("build", aliases=["b"], help="build targets (none = all)")
+    s.add_argument("targets", nargs="*")
+    s.set_defaults(fn=cmd_build)
+
+    s = sub.add_parser("run", aliases=["r"], help="build an executable and run it")
+    s.add_argument("target")
+    s.add_argument("args", nargs=argparse.REMAINDER)
+    s.set_defaults(fn=cmd_run)
+
+    s = sub.add_parser("test", aliases=["t"], help="build all, then ctest")
+    s.add_argument("ctest", nargs=argparse.REMAINDER, help="extra ctest args, e.g. -R artboard")
+    s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("configure", help="(re)configure the build tree")
+    s.add_argument("defs", nargs="*", help="-DVAR=VALUE passed to cmake")
+    s.set_defaults(fn=cmd_configure)
+
+    s = sub.add_parser("clean", help="clean the build tree")
+    s.set_defaults(fn=cmd_clean)
+
+    a = p.parse_args()
+    if not a.cmd:
+        p.print_help()
+        sys.exit(0)
+    if not shutil.which("cmake"):
+        die("cmake not found on PATH")
+    a.build_type = "Debug" if a.debug else "Release"
+    bdir = Path(a.build_dir or ("build-debug" if a.debug else "build"))
+    if not bdir.is_absolute():
+        bdir = ROOT / bdir
+    a.fn(a, bdir)
+
+
+if __name__ == "__main__":
+    main()

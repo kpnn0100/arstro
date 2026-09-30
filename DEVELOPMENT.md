@@ -15,7 +15,7 @@ This guide covers three common workflows in the umbrella repository:
 - `apps/`: the Arstro applications — `cosmo`, `genesis`, `pulsar`, `launcher`, `arstrobench`, and the
   spec-stage `solaris` and `interstellar`.
 - `examples/`: demo apps and platform glue, kept small on purpose.
-- `build.sh`: umbrella build entry point.
+- `cmk`: CLI over the umbrella CMake build — list targets, build or run one.
 
 ## 1. Create a new app
 
@@ -57,110 +57,36 @@ The platform entry point should only:
 - Create the appropriate Artboard render target.
 - Drive the app frame loop.
 
-### 1.3 Build script integration
+### 1.3 Build integration
 
-Add the new app to `build.sh` in the target case statements.
-
-For a web app:
-
-- Add a `PROJECT` case under `linux-web-server`.
-- Set `EXPORT`, `OUTNAME`, `APP_DIR`, and `APP_SRC`.
-- Add DSP sources and includes only if the app uses DSP.
-
-For a Linux app:
-
-- Add a `PROJECT` case under `linux-native-app`.
-- Compile `linux_main.cpp`, `<AppName>App.cpp`, and the native adapter source.
-- Link the required toolkit libraries through `pkg-config`.
+Give the app a `CMakeLists.txt` that defines its target(s), and `add_subdirectory` it from
+the umbrella `CMakeLists.txt` behind an `ARSTRO_BUILD_<APP>` option. Link `artboard_core`
+(and `arstro_dsp` / `arstro_image` only if used); find toolkit libraries through
+`pkg-config` and self-skip the GUI target when they are absent rather than failing the
+configure. Once added, the target shows up in `./cmk list` with no further wiring.
 
 ## 2. Build and run apps
 
-List available projects and targets:
+List every target CMake knows about, then build or run one by name:
 
 ```bash
-./build.sh --list
+./cmk list                 # executables + libraries (--all adds utility targets)
+./cmk list shots           # filter: substring or glob
+./cmk build cosmo          # build one target (several names, or none = all)
+./cmk run cosmo -- a.jpg   # build an executable, then run it; args after --
+./cmk test                 # build everything, then ctest --output-on-failure
+./cmk configure -DARSTRO_BUILD_COSMO=OFF   # pass cache options
+./cmk --debug run genesis  # Debug tree in build-debug/
 ```
 
-### 2.1 Web target
-
-The web target builds WebAssembly through Emscripten and the Canvas2D adapter.
-
-Load Emscripten into the current shell first:
-
-```bash
-source ~/emsdk/emsdk_env.sh
-```
-
-Build a web app:
-
-```bash
-./build.sh --project ui-demo --target linux-web-server
-```
-
-Serve the output directory:
-
-```bash
-cd examples/ui_demo/web
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000`.
-
-Notes:
-
-- `build.sh` now selects a Python 3.10+ interpreter for Emscripten automatically.
-- Web output is written to `examples/<app>/web/`.
-
-### 2.2 Linux native desktop target
-
-The Linux desktop target is currently implemented for `ui-demo` using GTK3 and Cairo.
-
-Build it with:
-
-```bash
-./build.sh --project ui-demo --target linux-native-app
-```
-
-Run the built application with:
-
-```bash
-./examples/ui_demo/build/ui_demo_linux
-```
-
-This target reuses the same `UiDemoApp` logic as the web build.
-
-### 2.3 Native smoke target
-
-Use `native-example` when you want a quick non-windowed validation run:
-
-```bash
-./build.sh --project ui-demo --target native-example
-```
-
-This compiles the app and runs a small executable check.
-
-### 2.4 Repository tests
-
-Run all repository tests known to the umbrella script with:
-
-```bash
-./build.sh --target native-test
-```
-
-You can also run Artboard tests directly:
-
-```bash
-cd Artboard
-cmake -S . -B build
-cmake --build build
-./build/artboard_tests
-```
+A misspelt target name gets close-match suggestions. `-B DIR` picks another build tree
+and `-j N` caps parallelism (default: all cores).
 
 ### 2.1 Cross-platform build with CMake (Linux, Windows, macOS)
 
 The umbrella `CMakeLists.txt` builds the **cosmo** photo editor and the library unit
 tests with plain CMake — the same GTK3 + Cairo native backend on every platform (no
-`build.sh` / bash needed). GTK3 pulls in Cairo and GdkPixbuf; LibRaw (RAW decode) is
+bash needed). GTK3 pulls in Cairo and GdkPixbuf; LibRaw (RAW decode) is
 optional and auto-detected via `pkg-config`.
 
 ```bash
@@ -185,8 +111,8 @@ Notes:
   which builds on the same GTK3 + Cairo stack as cosmo and needs no LibRaw or GdkPixbuf.
 - If `pkg-config` cannot find `gtk+-3.0`, ensure you are in the MinGW64 shell (not the
   plain MSYS shell) so `PKG_CONFIG_PATH` points at the MinGW packages.
-- The **web** (Emscripten/WASM) target still ships via `build.sh --target linux-web-server`;
-  CMake here covers the native desktop build.
+- There is no web (Emscripten/WASM) build any more; the retired `build.sh` was its only
+  driver. The `web_main.cpp` entry points remain for when it is ported to CMake.
 
 ## 3. Upgrade Artboard and DigitalSignalProcessing
 
@@ -248,13 +174,12 @@ Before calling an app complete, verify these points:
 
 - One shared app class drives both web and native builds.
 - Platform entry points only translate input and create render targets.
-- `build.sh` has explicit project support for each target you intend to ship.
-- The web target serves `web/index.html` and `web/app.js` from `examples/<app>/web/`.
+- The app's CMake target appears in `./cmk list` and builds with `./cmk build <target>`.
 - The Linux target links only the libraries it actually uses.
 - The umbrella repo commit includes the updated submodule pointer when Artboard or DSP changed.
 
 ## 5. Current known target coverage
 
-- `scope`: web build via DSP + Artboard.
-- `studio`: web build via DSP + Artboard.
-- `ui-demo`: web build, Linux GTK3+Cairo desktop build, and native smoke build.
+`./cmk list` is the authoritative list. `scope`, `studio`, `synth`, `ui-demo` and `pulsar`
+were built only by the retired `build.sh` (web and hand-rolled native builds) and have no
+CMake target yet.

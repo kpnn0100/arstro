@@ -46,3 +46,4 @@ apps/launcher/plasma.android/
 
 # Sanitizer build tree (ASan/UBSan), created by hand when chasing a crash
 build-asan/
+build-debug/
