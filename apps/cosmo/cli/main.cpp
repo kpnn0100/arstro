@@ -33,6 +33,7 @@
 #include "core/AppSettings.h"
 #include "core/ProjectStore.h"
 #include "PinnedDecoder.h"
+#include "CoverScale.h"
 #include "PixelBudget.h"
 #include "core/service/AppModelCodec.h"
 #include "core/service/CosmoService.h"
@@ -46,6 +47,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #ifndef _WIN32
@@ -468,6 +470,8 @@ namespace
             {"wb pick", "--x X --y Y   (0..1 of the photo)"},
             {"metadata", "[<node>]"},
             {"gesture", "on|off"},
+            {"history jump", "<step>   (a node of the history tree, as the model's `history` numbers it)"},
+            {"add", "<img> [img ...]   (into the open project; import replaces it)"},
             {"wait", "load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted)"},
             {"quit", ""}};
         return hints;
@@ -1656,6 +1660,10 @@ static int cmdNtwbFiles(const Args &a)
     arstro::ntwb::Json caps = arstro::ntwb::Json::array();
     caps.push("blobs");
     m.set("capabilities", caps);
+    // NTWB 1.1 sessions (R-NTWB-8): each Arstro Remote session is its own `ntwb serve` - its
+    // own project and edit target - so two people can edit two projects of one board, while
+    // the pages of ONE session share it.
+    m.set("single", false);
     {
         std::ofstream mf(appDir / "ntwb.json");
         mf << m.dumpPretty();
@@ -1674,8 +1682,50 @@ static int cmdNtwbServe(Host &h)
     o.version = "2";
     o.capabilities = {"blobs"};
     arstro::ntwb::Client client(o);
-    arstro::cosmo_v2::NtwbAdapter adapter(h.svc, client, encodeJpeg, grammarHints());
+    // An `export`'s --format / --quality / --long-edge are the WRITER's, which is the host's:
+    // `run` puts them in before it dispatches, and so must this front end - without it every
+    // export from a browser came out as full-size PNG (R-NTWB-1).
+    auto pre = [&h](const Command &c, std::string &err) {
+        if (c.kind == Command::Kind::Export && !applyExportOptions(h, c))
+        {
+            err = "export: unknown format " + c.field("format");
+            return false;
+        }
+        return true;
+    };
+    // The home screen's covers (R-NTWB-2): the host's decoder, alone off the pool, the fast
+    // thumbnail path RAW files carry, and the window's own downscale.
+    PinnedDecoder coverDecoder;
+    auto cover = [&coverDecoder](const std::string &path, int edge, std::string &jpeg, int &w, int &h2) {
+        const arstro::cosmo::DecodedImage img = arstro::cosmo_v2::downscaleCover(coverDecoder.decodeThumb(path, edge), edge);
+        if (!img.ok()) return false;
+        w = img.width;
+        h2 = img.height;
+        return encodeJpeg(img.rgba.data(), w, h2, 82, jpeg);
+    };
+    arstro::cosmo_v2::NtwbAdapter adapter(h.svc, client, encodeJpeg, grammarHints(), pre, cover);
     adapter.start();
+    // This front end is interactive, like the window, so it keeps what the window keeps: a
+    // setting changed in a browser is the user's setting (R-SETTINGS-4), and opening or saving
+    // a project stamps it in the recents with the time (the core has no clock, R-SVC-7).
+    // Unlike `run`, which must never edit the user's files.
+    h.svc.subscribe([&h](const arstro::cosmo::Event &e) {
+        using EK = arstro::cosmo::Event::Kind;
+        if (e.kind == EK::SettingsChanged) h.svc.model().settings.save();
+        if (e.kind == EK::ProjectOpened || e.kind == EK::ProjectSaved)
+        {
+            const std::string path = h.svc.model().projectPath;
+            if (path.empty()) return;
+            arstro::cosmo::RecentEntry r;
+            for (const auto &x : arstro::cosmo::ProjectStore::recents())
+                if (x.path == path) r = x;
+            r.path = path;
+            r.name = std::filesystem::path(path).stem().string();
+            r.photoCount = h.svc.model().imageCount;
+            r.lastOpened = (long long)std::time(nullptr);
+            arstro::cosmo::ProjectStore::remember(std::move(r));
+        }
+    });
     std::string err;
     if (!client.connect(err)) return fail(err);
     // The service's clock is ours (R-SVC-6): read the bridge, pump, publish — at most ~8 ms

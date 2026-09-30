@@ -9,6 +9,7 @@
 #include "../ThreadBudget.h"
 #include "../decode/NativeImageDecoder.h"
 #include "../service/AppModelCodec.h"
+#include "engine/EditParamsIO.h"
 #include "../service/CosmoService.h"
 #include "../PresetLibrary.h"
 #include "PinnedDecoder.h"   // host layer, compiled into this suite on purpose — see CMakeLists
@@ -1157,6 +1158,153 @@ namespace
         if (nowOut) *nowOut = now;
     }
 
+
+    // R-NTWB-3: what a SECOND view draws must be in the model - the history tree and a jump in
+    // it, the preset library, whether the project is saved, whether anything is the edit target
+    // - because a browser cannot ask EditSession the way the window's widgets do. Each of these
+    // was reachable only by reaching past the service (HistoryView -> jumpToHistory, PresetTree
+    // -> PresetLibrary::scan, the unsaved prompt -> isDirty), and `dirty` was in the model and
+    // never set.
+    void test_the_model_carries_what_a_second_view_draws()
+    {
+        using namespace arstro::cosmo;
+        namespace fs = std::filesystem;
+        const std::string path = "/tmp/cosmo_svc_second_view.cmp";
+        writeFakeProject(path, 2, false, false);
+        const std::string presets = "/tmp/cosmo_svc_second_view_presets";
+        fs::remove_all(presets);
+        fs::create_directories(presets);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        svc.session().setPresetDir(presets);           // the host's --presets, as cosmo-cc sets it
+        std::string err;
+        assert(svc.dispatchText("project open " + path, err));
+        double now = 0;
+        pumpUntilIdle(svc, 20000, &now);
+        assert(!svc.model().dirty && "a project that was just opened is saved");
+        assert(svc.dispatchText("select " + std::to_string(svc.model().nodes.front().node), err));
+        assert(svc.model().hasEditTarget);
+        // (Selecting already reads as unsaved: EditSession::submit sets the flag for every
+        // render, edit or not - D-63. The model reports the session's flag as it is.)
+
+        // Two edits far enough apart not to coalesce -> three history nodes: root, 1, 2.
+        assert(svc.dispatchText("set exposure=1", err));
+        svc.pump(now += 3000);
+        assert(svc.dispatchText("set contrast=40", err));
+        svc.pump(now += 3000);
+        const HistoryModel &h = svc.model().history;
+        assert(h.nodes >= 3 && (int)h.entries.size() == h.nodes && "the DAG itself, not just its size");
+        assert(h.entries[0].parent == -1 && "node 0 is the root");
+        assert(h.entries[h.current].label == h.lastLabel);
+        assert(svc.model().dirty && "an edit makes the project unsaved");
+
+        // A jump to the root puts the params back - the HistoryView's click, as a Command.
+        assert(svc.dispatchText("history jump 0", err) && err.empty());
+        assert(svc.model().history.current == 0);
+        assert(std::fabs(svc.model().params.exposure) < 1e-4f && std::fabs(svc.model().params.contrast) < 1e-4f);
+        assert(svc.dispatchText("history jump " + std::to_string(h.nodes - 1), err));
+        assert(std::fabs(svc.model().params.contrast - 40.f) < 1e-3f && "and forward again");
+        assert(!svc.dispatchText("history jump 99", err) && svc.model().lastError.find("no step 99") != std::string::npos);
+        assert(!svc.dispatchText("history jump x", err) && !err.empty() && "not a number is a parse error");
+
+        // The preset library, rescanned when a preset is saved.
+        assert(svc.model().presets.empty());
+        assert(svc.dispatchText("preset save \"Mine/Look\"", err) && err.empty());
+        bool found = false;
+        for (const PresetModel &pm : svc.model().presets)
+            if (pm.path == "Mine/Look" && pm.name == "Look" && pm.folder == "Mine") found = true;
+        assert(found && "preset save shows up in the model as preset apply's path");
+        assert(svc.dispatchText("preset apply \"Mine/Look\"", err) && err.empty());
+
+        assert(svc.dispatchText("project save", err));
+        assert(!svc.model().dirty && "saving clears it");
+
+        // ...and all of it reaches the JSON a browser reads.
+        ModelDumpOptions o;
+        o.json = true;
+        o.params = true;
+        const std::string j = formatModel(svc.model(), o);
+        for (const char *want : {"\"hasEditTarget\": true", "\"history\": [", "\"presets\": [", "\"path\": \"Mine/Look\"",
+                                 "\"loadEntryStage\""})
+            assert(j.find(want) != std::string::npos);
+        fs::remove_all(presets);
+        printf("[PASS] the_model_carries_what_a_second_view_draws\n");
+    }
+
+    // R-NTWB-3: `add` puts photos into the OPEN project - `import` replaces the workspace, and the
+    // window's File > Open... did this through openImage with no Command at all. The editor stays
+    // up (no project.opening, no screen change), the new photos arrive through the same loader,
+    // and the project file lists them afterwards.
+    void test_add_appends_to_the_open_project()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_add.cmp";
+        writeFakeProject(path, 2, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::vector<std::string> events;
+        svc.subscribe([&](const Event &e) { events.push_back(formatEvent(e)); });
+        std::string err;
+        assert(!svc.dispatchText("add /fake/new0.raf", err) && svc.model().lastError.find("open or create") != std::string::npos);
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        const int before = svc.model().imageCount;
+        events.clear();
+        assert(svc.dispatchText("add /fake/new0.raf /fake/new1.raf", err) && err.empty());
+        assert(svc.model().screen == Screen::Editor && "the editor stays up");
+        int pending = 0;
+        for (const NodeModel &n : svc.model().nodes) if (n.pending) ++pending;
+        assert(pending == 2 && "the new photos are pending cells at once (R-LOADUX-1)");
+        pumpUntilIdle(svc);
+        assert(svc.model().imageCount == before + 2 && "decoded into the same project");
+        bool opened = false, opening = false, finished = false;
+        for (const std::string &e : events)
+        {
+            if (e.find("project.opened") != std::string::npos) opened = true;
+            if (e.find("project.opening") != std::string::npos) opening = true;
+            if (e.find("add.finished") != std::string::npos) finished = true;
+        }
+        assert(!opened && !opening && finished && "an add opens nothing");
+        std::vector<EditSession::WorkspaceEntry> back;
+        assert(EditSession::readWorkspaceFile(path, back));
+        int images = 0;
+        for (const auto &e : back) if (!e.group) ++images;
+        assert(images == before + 2 && "and the project file lists them");
+        printf("[PASS] add_appends_to_the_open_project\n");
+    }
+
+    // R-NTWB-2: the pixels ONE view asks for - Before, and the photo uncropped while it crops -
+    // come from the service as queries, and asking changes nothing any other view sees.
+    void test_render_queries_for_one_view()
+    {
+        using namespace arstro::cosmo;
+        const std::string path = "/tmp/cosmo_svc_queries.cmp";
+        writeFakeProject(path, 1, false, false);
+        ThreadBudget budget(50, 8);
+        CosmoService svc(budget);
+        svc.setDecoderFactory([] { return std::unique_ptr<IImageDecoder>(new FakeDecoder()); });
+        std::string err;
+        arstro::RenderService::Frame f;
+        assert(!svc.renderBefore(f) && !svc.renderUncropped(f) && "no photo, no pixels");
+        assert(svc.dispatchText("project open " + path, err));
+        pumpUntilIdle(svc);
+        assert(svc.dispatchText("set crop=0,0,0.5,1 exposure=1", err));
+        const unsigned rev = svc.model().revision;
+        const std::string params = serializeParams(svc.model().params);
+        arstro::RenderService::Frame before, whole;
+        assert(svc.renderBefore(before) && before.width > 0);
+        assert(svc.renderUncropped(whole) && whole.width > 0);
+        // 12x8 source: cropped to its left half the Before (geometry follows the crop) is taller
+        // than wide; the uncropped render keeps the source's 3:2.
+        assert(before.height > before.width && "Before keeps the crop - it is geometry");
+        assert(whole.width > whole.height && "uncropped is the whole frame");
+        assert(svc.model().revision == rev && serializeParams(svc.model().params) == params &&
+               "a query changes no state anyone else sees");
+        printf("[PASS] render_queries_for_one_view\n");
+    }
+
     // R-SVC-5: the struct is the truth and the text is generated from it, so every command
     // must survive format(parse(text)) unchanged. Two hand-maintained representations would
     // drift, which is the failure this test exists to prevent.
@@ -1174,6 +1322,7 @@ namespace
             "state print", "state print --json",
             "gesture on", "gesture off",     // R-PREVIEW-1
             "wb pick --x 0.5 --y 0.5",       // R-WB-1
+            "history jump 4", "add /c.raf \"/d e.jpg\"",   // R-NTWB-3
             "quit"};
         for (const char *line : lines)
         {
@@ -2286,9 +2435,11 @@ namespace
             {K::Metadata, "metadata 2"},   // bare form (the selection) covered by the R-INFO test
             {K::WhiteBalancePick, "wb pick --x 0.5 --y 0.5"},
             {K::Gesture, "gesture on"},
+            {K::HistoryJump, "history jump 3"},
+            {K::Add, "add /b.raf"},
             {K::Quit, "quit"},
         };
-        const int kKindCount = 30;   // Kind::None is not a command
+        const int kKindCount = 32;   // Kind::None is not a command
         assert((int)(sizeof(cases) / sizeof(cases[0])) == kKindCount &&
                "a new Command::Kind needs a documented line here and a parser rule");
 
@@ -2776,6 +2927,9 @@ int main()
     test_project_load_peak_never_exceeds_its_pool();
     test_command_text_roundtrips();
     test_every_command_kind_has_a_grammar();
+    test_the_model_carries_what_a_second_view_draws();
+    test_add_appends_to_the_open_project();
+    test_render_queries_for_one_view();
     test_engine_memory_is_capped_and_a_cold_slot_is_re_decoded();
     test_a_cold_slot_is_re_decoded_through_the_service();
     test_walking_a_rack_that_fits_the_cap_never_re_decodes();

@@ -40,12 +40,13 @@ namespace cosmo_v2
 
         Json histogramJson(const HistogramData &h)
         {
-            // 64 bins per channel: a 94px-tall plot cannot show 256, and the frame meta travels
-            // at interactive rates. Summed, not sampled, so no peak is lost.
+            // All 256 bins and the frame's own max, because the window's HistogramWidget plots
+            // 256 normalised by log1p(maxCount) - the web view draws the same curve only if it
+            // gets the same numbers (R-NTWB-5). It used to sum them to 64, which read as a
+            // coarser, differently-scaled histogram next to the window's. ~4 KB per frame.
             auto bins = [](const std::array<uint32_t, HistogramData::kBins> &a) {
                 Json out = Json::array();
-                for (int i = 0; i < HistogramData::kBins; i += 4)
-                    out.push((long long)a[i] + a[i + 1] + a[i + 2] + a[i + 3]);
+                for (int i = 0; i < HistogramData::kBins; ++i) out.push((long long)a[i]);
                 return out;
             };
             Json j = Json::object();
@@ -53,13 +54,15 @@ namespace cosmo_v2
             j.set("g", bins(h.g));
             j.set("b", bins(h.b));
             j.set("lum", bins(h.lum));
+            j.set("max", (long long)h.maxCount);
             return j;
         }
     }
 
     NtwbAdapter::NtwbAdapter(cosmo::CosmoService &svc, ntwb::Client &client, JpegEncoder jpeg,
-                             std::map<std::string, std::string> grammarHints)
-        : mSvc(svc), mClient(client), mJpeg(std::move(jpeg)), mHints(std::move(grammarHints))
+                             std::map<std::string, std::string> grammarHints, PreDispatch pre, CoverDecoder cover)
+        : mSvc(svc), mClient(client), mJpeg(std::move(jpeg)), mHints(std::move(grammarHints)),
+          mPre(std::move(pre)), mCover(std::move(cover))
     {
     }
 
@@ -158,6 +161,7 @@ namespace cosmo_v2
         if (c.kind == K::Wait) throw ntwb::MethodError("wait is a front-end verb here - watch the events instead");
         if (c.kind == K::UiDump) throw ntwb::MethodError("ui dump needs the cosmo window (cosmo --control)");
         if (c.kind == K::Quit) throw ntwb::MethodError("stop the app from Arstro Remote (Apps) instead");
+        if (mPre && !mPre(c, err)) throw ntwb::MethodError(err.empty() ? "rejected by the host" : err);
         if (!mSvc.dispatch(c)) throw ntwb::MethodError(mSvc.model().lastError);
         Json r = Json::object();
         r.set("revision", (long long)mSvc.model().revision);
@@ -186,6 +190,89 @@ namespace cosmo_v2
             if (mClient.blob("thumb", "image/jpeg", (const uint8_t *)jpg.data(), jpg.size(), meta, client)) ++sent;
         }
         return sent;
+    }
+
+    bool NtwbAdapter::sendFrameTo(const char *stream, const RenderService::Frame &f, const std::string &client)
+    {
+        std::string jpg;
+        if (f.width <= 0 || f.rgba.empty() || !mJpeg(f.rgba.data(), f.width, f.height, kPreviewQuality, jpg)) return false;
+        Json meta = Json::object();
+        meta.set("slot", mSvc.model().currentSlot);
+        meta.set("w", f.width);
+        meta.set("h", f.height);
+        meta.set("ms", f.ms);
+        return mClient.blob(stream, "image/jpeg", (const uint8_t *)jpg.data(), jpg.size(), meta, client);
+    }
+
+    Json NtwbAdapter::before(const ntwb::Call &call)
+    {
+        // The session caches the geometry-only render per slot + geometry; the JPEG is cached
+        // here on the same key, so a view toggling Before <-> After costs one encode, not one
+        // per toggle.
+        const cosmo::AppModel &m = mSvc.model();
+        const EditParams &p = m.params;
+        const std::string key = std::to_string(m.currentSlot) + "|" + std::to_string(p.cropX) + "," + std::to_string(p.cropY) +
+                                "," + std::to_string(p.cropW) + "," + std::to_string(p.cropH) + "|" + std::to_string(p.rotation) +
+                                "|" + std::to_string(p.quarterTurns) + "|" + std::to_string(p.lensDistortion) + "," +
+                                std::to_string(p.lensCA) + "," + std::to_string(p.lensVignette);
+        Json r = Json::object();
+        if (key != mBeforeKey || mBeforeJpeg.empty())
+        {
+            RenderService::Frame f;
+            if (!mSvc.renderBefore(f)) throw ntwb::MethodError("no photo is on the stage");
+            std::string jpg;
+            if (!mJpeg(f.rgba.data(), f.width, f.height, kPreviewQuality, jpg)) throw ntwb::MethodError("could not encode the Before frame");
+            mBeforeKey = key;
+            mBeforeJpeg = std::move(jpg);
+            mBeforeW = f.width;
+            mBeforeH = f.height;
+        }
+        Json meta = Json::object();
+        meta.set("slot", m.currentSlot);
+        meta.set("w", mBeforeW);
+        meta.set("h", mBeforeH);
+        mClient.blob("before", "image/jpeg", (const uint8_t *)mBeforeJpeg.data(), mBeforeJpeg.size(), meta, call.client);
+        r.set("w", mBeforeW);
+        r.set("h", mBeforeH);
+        return r;
+    }
+
+    Json NtwbAdapter::uncropped(const ntwb::Call &call)
+    {
+        RenderService::Frame f;
+        if (!mSvc.renderUncropped(f)) throw ntwb::MethodError("no photo is on the stage");
+        if (!sendFrameTo("uncropped", f, call.client)) throw ntwb::MethodError("could not encode the uncropped frame");
+        Json r = Json::object();
+        r.set("w", f.width);
+        r.set("h", f.height);
+        return r;
+    }
+
+    Json NtwbAdapter::cover(const ntwb::Call &call)
+    {
+        const std::string path = call.params["path"].asString();
+        if (path.empty()) throw ntwb::MethodError("cover needs params.path (an image file)");
+        const int edge = std::clamp((int)call.params["edge"].asInt(kCoverEdge), 32, 2048);
+        if (!mCover) throw ntwb::MethodError("this host cannot decode covers");
+        const std::string key = std::to_string(edge) + "|" + path;
+        auto it = mCovers.find(key);
+        if (it == mCovers.end())
+        {
+            Cover c;
+            if (!mCover(path, edge, c.jpeg, c.w, c.h)) throw ntwb::MethodError("cannot read " + path);
+            if (mCovers.size() >= kCoverCache) mCovers.erase(mCovers.begin());
+            it = mCovers.emplace(key, std::move(c)).first;
+        }
+        Json meta = Json::object();
+        meta.set("path", path);
+        meta.set("w", it->second.w);
+        meta.set("h", it->second.h);
+        mClient.blob("cover", "image/jpeg", (const uint8_t *)it->second.jpeg.data(), it->second.jpeg.size(), meta,
+                     call.client);
+        Json r = Json::object();
+        r.set("w", it->second.w);
+        r.set("h", it->second.h);
+        return r;
     }
 
     Json NtwbAdapter::browse(const Json &params) const
@@ -271,6 +358,9 @@ namespace cosmo_v2
             return r;
         }
         if (m == "browse") return browse(call.params);
+        if (m == "before") return before(call);
+        if (m == "uncropped") return uncropped(call);
+        if (m == "cover") return cover(call);
         throw ntwb::MethodError("no method named " + m);
     }
 
@@ -361,6 +451,18 @@ namespace cosmo_v2
             methods.set("thumbs", method("send filmstrip thumbnails to the caller on the `thumb` stream", p, "{sent}"));
         }
         methods.set("frame", method("send the newest preview to the caller on the `preview` stream", Json::object(), "{sent}"));
+        methods.set("before", method("render the current photo with its geometry only (the Before of Before / Split) and "
+                                     "send it to the caller alone on the `before` stream", Json::object(), "{w, h}"));
+        methods.set("uncropped", method("render the current photo with every edit but its crop (what a view that crops "
+                                        "shows) and send it to the caller alone on the `uncropped` stream",
+                                        Json::object(), "{w, h}"));
+        {
+            Json p = Json::object();
+            p.set("path", P("str", true, "an image file of the board (a recent project's firstImagePath)"));
+            p.set("edge", P("int", false, "longest edge in pixels (default 480, 32..2048)"));
+            methods.set("cover", method("send a small JPEG of an image to the caller alone on the `cover` stream "
+                                        "(the home screen's project covers)", p, "{w, h}"));
+        }
         {
             Json p = Json::object();
             p.set("path", P("str", false, "folder to list (default: the home folder)"));
@@ -388,13 +490,24 @@ namespace cosmo_v2
             Json s = Json::object();
             s.set("doc", "the rendered preview of the current image, on every new frame");
             s.set("mime", "image/jpeg");
-            s.set("meta", "{seq, slot, w, h, level, levelEdge, ms, hist: {r, g, b, lum: 64 bins each}}");
+            s.set("meta", "{seq, slot, w, h, level, levelEdge, ms, hist: {r, g, b, lum: 256 bins each, max}}");
             streams.set("preview", s);
             Json t = Json::object();
             t.set("doc", "a filmstrip thumbnail (answer to `thumbs`)");
             t.set("mime", "image/jpeg");
             t.set("meta", "{node, slot, w, h}");
             streams.set("thumb", t);
+            auto one = [](const char *doc, const char *meta) {
+                Json x = Json::object();
+                x.set("doc", doc);
+                x.set("mime", "image/jpeg");
+                x.set("meta", meta);
+                return x;
+            };
+            streams.set("before", one("the Before render, to the client that asked (answer to `before`)", "{slot, w, h}"));
+            streams.set("uncropped", one("the uncropped render, to the client that asked (answer to `uncropped`)",
+                                         "{slot, w, h, ms}"));
+            streams.set("cover", one("a recent project's cover, to the client that asked (answer to `cover`)", "{path, w, h}"));
         }
         Json api = Json::object();
         api.set("ntwb", ntwb::kVersion);

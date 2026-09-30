@@ -2200,10 +2200,26 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
 - **R-NTWB-2 Pixels as blobs, and only pixels.** The preview leaves as a JPEG on the `preview`
   stream (marked `coalesce`, so a slow browser skips to the newest frame) with its histogram in the
   frame's meta; filmstrip thumbnails on `thumb`, on request, every one delivered. The codec lives in
-  the host (R-SVC-7).
+  the host (R-SVC-7). (**AMENDED (the MVVM web view, R-NTWB-7, 2026-09-30):** a view also gets the
+  pixels only IT needs, to it alone - `before` (the geometry-only Before render, for Before / Split),
+  `uncropped` (every edit but the crop, while it crops) and `cover` (a recent project's first photo,
+  for the home cards) - and asking changes nothing another view of the session sees. The window gets
+  the first two by changing its one shared preview (`renderBefore`, `setCropPreviewAmount`), which in
+  a session of several views would uncrop every page's photo because one page opened Xform. The
+  preview's histogram carries all 256 bins and the frame's maximum - the numbers HistogramWidget
+  plots - instead of 64 summed ones.)
 - **R-NTWB-3 What a second view needs is in the model.** The model dump carries the recent projects
   (not in a stable dump: `lastOpened` is a clock), the load's status / stage / fraction and the
   newest history label, so the browser draws home, loading and history from the model alone.
+  (**AMENDED (the MVVM web view, R-NTWB-7, 2026-09-30):** also the edit target's history DAG
+  (`history`: parent and label per step, index = step), the preset library (`presets`: path,
+  name, folder), the session's real `dirty` flag (it was in the model and never set), whether there
+  is an edit target (`hasEditTarget` - `ownParams` is sent only when it differs, so without the flag
+  "nothing selected" and "own == effective" look alike) and the in-flight decode stage. Each of these
+  the window's widgets read from EditSession directly. And two behaviours the window reached past the
+  service become Commands: **`history jump <step>`** (HistoryView's click, `jumpToHistory`) and
+  **`add <img>...`** (File > Open...: photos into the OPEN project, decoded by the same loader,
+  the editor staying up and the project saved when they land - `import` replaces the workspace).)
 - **R-NTWB-4 The slider catalogue is data.** Sections, labels, track ranges, fields and colour
   ramps come from `EditControls.h`; each track→engine conversion (EV, mired temperature, tint,
   radius) is sampled from the C++ functions the window uses and interpolated by the browser, which
@@ -2212,7 +2228,13 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
   shell geometry (TopBar, LeftRail, CenterStage + Breadcrumb + Filmstrip, RightColumn with
   histogram / tabs / ActionBar), Roboto and JetBrains Mono shipped beside the page (R-FONT-1), and
   R-G-1: every visible change eases. It stays usable at 360 px (one column, the rail a drawer).
-- **R-NTWB-6 Installing tells Arstro Remote.** `cosmo-cc ntwb install` writes the NTWB manifest,
+- **R-NTWB-6 Installing tells Arstro Remote.** (**AMENDED (NTWB 1.1 sessions, 2026-09-30):** the
+  manifest says `single: false` - every Arstro Remote session is its own `cosmo-cc ntwb serve`, its
+  own project and edit target, while the pages of ONE session share it. And `ntwb serve` is an
+  interactive front end like the window, so it keeps what the window keeps: a setting changed from a
+  browser is saved (R-SETTINGS-4), an opened or saved project is stamped in the recents with the
+  time, and an `export`'s format / quality / long edge are put into the host's writer as `run` does -
+  without that, every browser export came out as a full-size PNG.) `cosmo-cc ntwb install` writes the NTWB manifest,
   the web UI and the API description to `$XDG_DATA_HOME/ntwb/apps/cosmo/`; Arstro Remote lists
   cosmo under Apps and launches it on demand. `cosmo-cc ntwb api` prints the API description,
   generated from the grammar, the event names and the catalogue; `docs/ntwb-api.json` is the

@@ -99,6 +99,15 @@ namespace cosmo
             Metadata,           // index = node (-1 = current)
             WhiteBalancePick,   // fields: x, y (0..1)
             Gesture,         // flag = on
+            /** R-NTWB-3: step to any node of the edit target's history DAG - what the
+             *  HistoryView's click did through `EditSession::jumpToHistory`, which no Command
+             *  said (R-SVC-2: reaching past the service). `index` = the node, as `history` in
+             *  the model numbers them. */
+            HistoryJump,     // index = history node
+            /** R-NTWB-3: put more photos into the OPEN project, decoded like a load, without
+             *  resetting the workspace - `import` replaces it. What File > Open... did in the
+             *  window through `openImage`, synchronously and with no Command (R-SVC-2). */
+            Add,             // paths[]
             Quit
         };
 

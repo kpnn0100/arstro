@@ -3317,7 +3317,14 @@ socket closes. `NtwbAdapter` (`cli/NtwbAdapter.{h,cpp}`) maps: call `command {li
 model; `wait`/`ui dump`/`quit` are refused with a reason); every `Event` → NTWB event
 `eventName(kind)` with `{line, text, a, b, c, ms}`; `AppModel` → state `model` (formatModel JSON
 with params) whenever `revision` changed, at most every 40 ms. Other methods: `model`, `controls`,
-`commands`, `thumbs`, `frame`, `browse` (a folder of the board: dirs, `.cmp` projects, images).
+`commands`, `thumbs`, `frame`, `browse` (a folder of the board: dirs, `.cmp` projects, images),
+and - per client, the blob addressed to the caller only (R-NTWB-2) - `before`, `uncropped`, `cover`
+(`cli/NtwbAdapter.cpp:207-285`). The host hooks two things in (`cli/main.cpp:1688-1735`): a
+`PreDispatch` that puts an `export`'s `--format/--quality/--long-edge` into the host's writer
+(`applyExportOptions`, as `run` does; it used to be skipped, so browser exports were full-size PNG),
+and an event subscriber that saves the settings on `settings.changed` and stamps the project in the
+recents with the time on `project.opened` / `project.saved` - an interactive front end keeps what
+the window keeps, unlike `run`, which never writes the user's files.
 Worked example (via Arstro Remote):
 ```
 arstro-remote apps call cosmo command '{"line": "project new /tmp/t.cmp"}'
@@ -3329,16 +3336,36 @@ arstro-remote apps state cosmo model
 `NtwbAdapter::tick` takes the newest `RenderService::Frame` via `CosmoService::takeFrame`, encodes
 it with the injected `JpegEncoder` (`encodeJpeg` in `cli/main.cpp`: RGBA→RGB, GdkPixbuf, q 85) and
 sends blob `preview` with meta `{seq, slot, w, h, level, levelEdge, ms, hist}` (`hist`: r/g/b/lum,
-64 summed bins each) and `coalesce: true`; the newest preview is re-sent to a client on
+all 256 bins each plus `max` = the frame's `maxCount`, `cli/NtwbAdapter.cpp:41` - what
+HistogramWidget plots; it was 64 summed bins until the MVVM web view) and `coalesce: true`; the newest preview is re-sent to a client on
 `client.open` and on `frame`. `thumbs` reads `session().thumbForSlot` (a marked reach past the
 service - thumbnails are pixels and have no service accessor yet) and sends one JPEG per decoded
 image to the caller, not coalesced.
+**One view's pixels** (`before` / `uncropped` / `cover`, R-NTWB-2): `CosmoService::renderBefore`
+wraps `EditSession::renderBefore` (the geometry-only render, cached per slot + geometry by the session;
+the adapter also caches its JPEG on the same key) and `CosmoService::renderUncropped` renders
+`effectiveParams(currentSlot)` with the crop set to `0,0,1,1` through `RenderService::renderPreviewSync`
+(`core/service/CosmoService.cpp:277-294`) - queries, no state change, no event, verified by
+`render_queries_for_one_view` (revision and params unchanged). The blobs go to `call.client` only,
+meta `{slot, w, h[, ms]}`. `cover {path, edge = 480}`: the host's `PinnedDecoder::decodeThumb` (the
+fast RAW preview path), `downscaleCover` (`CoverScale.h`, now shared with the GTK host's home cards)
+and JPEG q 82; 48 covers are kept encoded.
 
 ### DR-NTWB-3 Model additions (R-NTWB-3)
 `formatModel` (`core/service/AppModelCodec.cpp`) now also prints `loadStarted`, `loadStatus`,
 `loadStage`, `loadPermille`, `historyLabel`, `exportName`, `exportOutDir`, and - outside a stable
 dump - `recents` (`name, path, firstImagePath, photoCount, sizeBytes, lastOpened`). New keys only;
-no existing key moved or changed.
+no existing key moved or changed. **Then** (the MVVM web view): `hasEditTarget`, `loadEntryStage`
+(outside a stable dump - it depends on timing), `history: [{parent, label}]` (the edit target's DAG,
+index = step; `refreshModel` copies `currentHistory()->nodes`) and `presets: [{path, name, folder}]`
+(`refreshPresets`, `CosmoService.cpp:258`: a depth-first walk of `PresetLibrary::scan(presetDir)`,
+redone only when the folder changed or after `preset save`), and `dirty` is the session's own
+`isDirty()` (`CosmoService.cpp:147`; it was never set). Commands `history jump <step>`
+(`CosmoService.cpp:1083`: bounds-checked, then `jumpToHistory`, `history.changed`) and `add <img>...`
+(`startAppendLoad`, `CosmoService.cpp:296`: no reset, no screen change, no `project.opening`; pending
+nodes at the top level, the same loader, `mAppending` makes the finish save the project and emit
+`info add.finished` instead of `project.opened`). Guards: `the_model_carries_what_a_second_view_draws`,
+`add_appends_to_the_open_project`, and the grammar tests (32 kinds).
 
 ### DR-NTWB-4 The catalogue (R-NTWB-4)
 `EditControls.h`: 7 sections, 23 controls, matching `RightColumn.cpp`; `NtwbAdapter::controlsJson`
@@ -3356,5 +3383,6 @@ settings, white-balance pick → `wb pick`). Keyboard: Ctrl+Z / Ctrl+Shift+Z / C
 `cmdNtwbFiles` (`cli/main.cpp`): `ntwb api` prints `NtwbAdapter::apiDescription()` (methods with
 params, the 22 event names, state `model`, streams `preview`/`thumb`); `ntwb install` copies the web
 UI and the fonts from `COSMO_SOURCE_DIR` and writes `ntwb.json` (exec = this binary + `ntwb serve`)
-and `api.json`; `ntwb uninstall` removes the directory. ctest `cosmo_ntwb_api_current` diffs
+and `api.json`; `ntwb uninstall` removes the directory. The manifest says `"single": false`
+(`cli/main.cpp:1666`): each Arstro Remote session is its own `ntwb serve` (NTWB 1.1). ctest `cosmo_ntwb_api_current` diffs
 `cosmo-cc ntwb api` against `docs/ntwb-api.json`.

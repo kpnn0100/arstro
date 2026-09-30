@@ -90,6 +90,18 @@ namespace cosmo
          *  front end see frames at all (D-21). */
         bool takeFrame(RenderService::Frame &out);
 
+        /** R-NTWB-2: pixels ONE view asks for that the shared preview is not - a query, not a
+         *  Command: no state changes, no event, no history. A second view that shows Before or
+         *  Split needs the geometry-only render the window's PhotoCanvas gets from
+         *  `EditSession::renderBefore`; one that crops needs the photo with every edit but its
+         *  crop, which the window gets by easing the SHARED preview toward the full frame
+         *  (`setCropPreviewAmount`) - fine for one window, wrong for a session of several
+         *  views, where one page cropping would uncrop everybody's photo (R-NTWB-7).
+         *  Synchronous (one render at preview size), so a front end asks on demand and caches;
+         *  false when no photo is current. The Before render is cached by the session. */
+        bool renderBefore(RenderService::Frame &out);
+        bool renderUncropped(RenderService::Frame &out);
+
         // ── transitional ──
         /** The GUI still renders from the session directly for everything the model does not
          *  carry yet. Every use is a line still to delete; the count is tracked in PROGRESS. */
@@ -144,6 +156,12 @@ namespace cosmo
         void refreshRecents();
         bool startProjectLoad(const std::string &path, std::vector<EditSession::WorkspaceEntry> entries,
                               bool saveOnFinish);
+        /** `add`: the load path without the reset - pending nodes appended at the top level,
+         *  decoded by the same loader, the project saved when they have landed. */
+        bool startAppendLoad(const std::vector<std::string> &paths);
+        /** The preset library in the model, rescanned only when the folder changed or a
+         *  preset was saved - it is a directory walk, and refreshModel runs per edit. */
+        void refreshPresets(bool force);
         bool applySetFields(const Command &c);
         /** R-WB-1: sample the photo where the user clicked, solve for the temperature and tint
          *  that make it neutral, and apply them through the ordinary params path. */
@@ -179,6 +197,9 @@ namespace cosmo
         std::vector<ProjectLoader::EntryProgress> mProgressScratch;
         std::string mLoadPath;
         bool mSaveOnFinish = false;
+        bool mAppending = false;       // the running load is an `add`, not a project open
+        std::string mPresetsScannedFor; // presetDir the model's list was scanned from
+        bool mPresetsStale = true;
         bool mQuit = false;
         RenderService::Frame mFrame;   // the newest acquired preview, awaiting takeFrame()
         bool mFrameWaiting = false;

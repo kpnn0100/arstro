@@ -8,7 +8,7 @@
         "line": {
           "type": "str",
           "required": true,
-          "doc": "one line of the cosmo command grammar (R-SVC-5): project open <path.cmp> | project new <path.cmp> | project save [path.cmp] | project close | import <img> [img ...] | select <node> [add|range] | select next | select prev | set <key>=<value> [key=value ...] | bypass <node> on|off | group new [\"name\"] | group ungroup <node> | group rename [<node>] \"name\" | delete [<node>] | mask set <i> <key>=<value> [key=value ...] | mask delete <i> | undo | redo | preset apply \"<name>\" | preset save \"<name>\" | export --outdir <D> [--format jpg|png|tiff] [--quality N] [--long-edge N] | settings set cpuPercent=N previewEdge=N threads=N useGpu=0|1 | screen home|editor | state print [--json] | ui dump [--json] [--visible] [--depth N] | wait load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted) | wb pick --x X --y Y   (0..1 of the photo) | metadata [<node>] | gesture on|off | quit"
+          "doc": "one line of the cosmo command grammar (R-SVC-5): project open <path.cmp> | project new <path.cmp> | project save [path.cmp] | project close | import <img> [img ...] | select <node> [add|range] | select next | select prev | set <key>=<value> [key=value ...] | bypass <node> on|off | group new [\"name\"] | group ungroup <node> | group rename [<node>] \"name\" | delete [<node>] | mask set <i> <key>=<value> [key=value ...] | mask delete <i> | undo | redo | preset apply \"<name>\" | preset save \"<name>\" | export --outdir <D> [--format jpg|png|tiff] [--quality N] [--long-edge N] | settings set cpuPercent=N previewEdge=N threads=N useGpu=0|1 | screen home|editor | state print [--json] | ui dump [--json] [--visible] [--depth N] | wait load.finished|export.finished|quit|<ms> [--timeout 120s]  (hyphens accepted) | wb pick --x X --y Y   (0..1 of the photo) | metadata [<node>] | gesture on|off | history jump <step>   (a node of the history tree, as the model's `history` numbers it) | add <img> [img ...]   (into the open project; import replaces it) | quit"
         }
       },
       "result": "{revision} - or the model for `state print`; a rejection fails with lastError"
@@ -43,6 +43,32 @@
       "doc": "send the newest preview to the caller on the `preview` stream",
       "params": {},
       "result": "{sent}"
+    },
+    "before": {
+      "doc": "render the current photo with its geometry only (the Before of Before / Split) and send it to the caller alone on the `before` stream",
+      "params": {},
+      "result": "{w, h}"
+    },
+    "uncropped": {
+      "doc": "render the current photo with every edit but its crop (what a view that crops shows) and send it to the caller alone on the `uncropped` stream",
+      "params": {},
+      "result": "{w, h}"
+    },
+    "cover": {
+      "doc": "send a small JPEG of an image to the caller alone on the `cover` stream (the home screen's project covers)",
+      "params": {
+        "path": {
+          "type": "str",
+          "required": true,
+          "doc": "an image file of the board (a recent project's firstImagePath)"
+        },
+        "edge": {
+          "type": "int",
+          "required": false,
+          "doc": "longest edge in pixels (default 480, 32..2048)"
+        }
+      },
+      "result": "{w, h}"
     },
     "browse": {
       "doc": "list a folder of the board: sub-folders, projects (.cmp) and images",
@@ -156,12 +182,27 @@
     "preview": {
       "doc": "the rendered preview of the current image, on every new frame",
       "mime": "image/jpeg",
-      "meta": "{seq, slot, w, h, level, levelEdge, ms, hist: {r, g, b, lum: 64 bins each}}"
+      "meta": "{seq, slot, w, h, level, levelEdge, ms, hist: {r, g, b, lum: 256 bins each, max}}"
     },
     "thumb": {
       "doc": "a filmstrip thumbnail (answer to `thumbs`)",
       "mime": "image/jpeg",
       "meta": "{node, slot, w, h}"
+    },
+    "before": {
+      "doc": "the Before render, to the client that asked (answer to `before`)",
+      "mime": "image/jpeg",
+      "meta": "{slot, w, h}"
+    },
+    "uncropped": {
+      "doc": "the uncropped render, to the client that asked (answer to `uncropped`)",
+      "mime": "image/jpeg",
+      "meta": "{slot, w, h, ms}"
+    },
+    "cover": {
+      "doc": "a recent project's cover, to the client that asked (answer to `cover`)",
+      "mime": "image/jpeg",
+      "meta": "{path, w, h}"
     }
   }
 }

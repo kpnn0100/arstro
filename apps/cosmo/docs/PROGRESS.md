@@ -15,6 +15,25 @@ file, and commit.
 
 ## NEXT
 
+**► 2026-09-30 (later) — "why it look like i'm remoting a screen … make it like model view viewmodel
+architect with pi is the core; each client view is independent … one edit will affect each other if
+using the same app session". IN PROGRESS.**
+
+- **[x] Core: what a second view draws is in the model (R-NTWB-2/3/6 amended).** `history` (the DAG)
+  + `history jump <step>`, `presets`, a real `dirty`, `hasEditTarget`, `loadEntryStage`; `add <img>...`
+  (photos into the open project, no reset); per-client pixels as queries - `CosmoService::renderBefore`
+  / `renderUncropped` - and the adapter's `before` / `uncropped` / `cover` blobs to the caller alone;
+  256-bin histograms; `ntwb serve` applies export options (browser exports were full-size PNG),
+  saves settings, stamps recents; manifest `single: false` (NTWB 1.1 sessions). `cosmo_core_tests`
+  green incl. three new L2 tests; D-63 filed (selecting marks the project unsaved).
+- **[~] The web UI rebuilt as MVVM (R-NTWB-5 amended, R-NTWB-7..9):** the desktop App's shell and the
+  touch PhoneApp's, one view-model per page - see the next commit.
+- **Decision (2026-09-30): no stream of the window.** The previous session's uncommitted attempt ran
+  the App headless and replayed its draw calls in a canvas (an Artboard `StreamTarget`). The user
+  rejected it on sight ("why it look like i'm remoting a screen"): one layout, one window size, one
+  menu state for every client. It was archived (~/.cache/arstro-wip on the board) and discarded with
+  the user's consent; do not rebuild it.
+
 **► 2026-09-30 — "the first app need to adapt is Cosmo … port the UI to web" (NTWB). DONE (v1).**
 
 - **[x] R-NTWB-1/2/3/4/6: cosmo is an Arstro Remote app.** `cosmo-cc ntwb serve|install|api`,

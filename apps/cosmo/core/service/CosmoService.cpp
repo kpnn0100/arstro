@@ -1,4 +1,5 @@
 #include "CosmoService.h"
+#include "../PresetLibrary.h"
 #include "engine/EditParamsIO.h"
 #include <cstdlib>
 #include <filesystem>
@@ -141,6 +142,9 @@ namespace cosmo
         else { m.ownParams = EditParams{}; m.hasEditTarget = false; }
         m.projectPath = mSession.workspacePath();
         if (!m.projectPath.empty()) m.projectName = stemOf(m.projectPath);
+        // R-NTWB-3: the session's own flag. `dirty` was in the model and never set, so every
+        // front end read "saved" - the window alone knew better, by asking the session.
+        m.dirty = mSession.isDirty();
 
         m.history.canUndo = mSession.canUndo();
         m.history.canRedo = mSession.canRedo();
@@ -150,8 +154,13 @@ namespace cosmo
             m.history.current = h->current;
             if (h->current >= 0 && h->current < (int)h->nodes.size())
                 m.history.lastLabel = h->nodes[h->current].label;
+            // R-NTWB-3: the DAG itself, so a second view draws what HistoryView draws.
+            m.history.entries.resize(h->nodes.size());
+            for (size_t i = 0; i < h->nodes.size(); ++i)
+                m.history.entries[i] = {h->nodes[i].parent, h->nodes[i].label};
         }
-        else { m.history.nodes = 0; m.history.current = -1; m.history.lastLabel.clear(); }
+        else { m.history.nodes = 0; m.history.current = -1; m.history.lastLabel.clear(); m.history.entries.clear(); }
+        refreshPresets(false);
 
         m.load.active = mLoader.active();
         if (m.load.active || mLoader.total() > 0)
@@ -242,6 +251,84 @@ namespace cosmo
              "load.started workers=" + std::to_string(mLoader.workers()) +
                  " engine=" + std::to_string(mBudget.engineThreads()) +
                  " budget=" + std::to_string(mBudget.total()) + " entries=" + std::to_string(n));
+        refreshModel();
+        return true;
+    }
+
+    void CosmoService::refreshPresets(bool force)
+    {
+        const std::string &dir = mSession.presetDir();
+        if (!force && !mPresetsStale && dir == mPresetsScannedFor) return;
+        mPresetsScannedFor = dir;
+        mPresetsStale = false;
+        mModel.presets.clear();
+        // Depth-first, folders before their presets - the order the PresetTree shows.
+        std::function<void(const std::vector<PresetNode> &, const std::string &)> walk =
+            [&](const std::vector<PresetNode> &level, const std::string &folder) {
+                for (const PresetNode &n : level)
+                {
+                    if (n.folder) walk(n.kids, n.relPath);
+                    else mModel.presets.push_back({n.relPath, n.name, folder});
+                }
+            };
+        if (!dir.empty()) walk(PresetLibrary::scan(dir), std::string());
+    }
+
+    bool CosmoService::renderBefore(RenderService::Frame &out)
+    {
+        const RenderService::Frame *b = mSession.renderBefore();
+        if (!b || b->width <= 0) return false;
+        out = *b;
+        return true;
+    }
+
+    bool CosmoService::renderUncropped(RenderService::Frame &out)
+    {
+        const int slot = mSession.currentSlot();
+        if (slot < 0) return false;
+        // Every edit the preview shows, with the crop opened to the whole frame - what the
+        // window's crop mode eases the shared preview to (R-CROP-7), rendered for one view.
+        EditParams p = mSession.effectiveParams(slot);
+        p.cropX = 0.f; p.cropY = 0.f; p.cropW = 1.f; p.cropH = 1.f;
+        return mSession.renderService().renderPreviewSync(slot, p, out) && out.width > 0;
+    }
+
+    bool CosmoService::startAppendLoad(const std::vector<std::string> &paths)
+    {
+        if (paths.empty()) return fail("add: no image paths");
+        if (mSession.workspacePath().empty()) return fail("add: open or create a project first");
+        if (mLoader.active()) return fail("add: a load is already running");
+        if (!mMakeDecoder) return fail("no decoder factory installed (host must call setDecoderFactory)");
+
+        std::vector<EditSession::WorkspaceEntry> entries;
+        for (const std::string &p : paths)
+        {
+            EditSession::WorkspaceEntry e;
+            e.imagePath = p;
+            e.name = baseOf(p);
+            entries.push_back(std::move(e));
+        }
+        mLoadPath = mSession.workspacePath();
+        mSaveOnFinish = true;         // the project file must list the new photos
+        mAppending = true;
+        // No screen change and no ProjectOpening: the editor stays up and the new photos
+        // arrive as pending cells, exactly as a project's do (R-LOADUX-1).
+        mModel.load.stage = "decoding";
+        mModel.load.started = 0;
+        mModel.load.done = 0;
+        mModel.load.total = (int)entries.size();
+        mEntryNames.clear();
+        mNodeOf.assign(entries.size(), 0);
+        for (size_t i = 0; i < entries.size(); ++i)
+        {
+            mEntryNames.push_back(entries[i].name);
+            mNodeOf[i] = mSession.addPendingImage(0, entries[i].name);
+        }
+        const size_t n = entries.size();
+        mLoader.start(std::move(entries), mBudget, mMakeDecoder, mWorkerInit);
+        emit(Event::Kind::LoadStage, mModel.load.stage);
+        emit(Event::Kind::Info, "add.started entries=" + std::to_string(n) +
+                                    " workers=" + std::to_string(mLoader.workers()));
         refreshModel();
         return true;
     }
@@ -450,6 +537,8 @@ namespace cosmo
             ProjectStore::remember(e);
             refreshRecents();
 
+            const bool appended = mAppending;
+            mAppending = false;
             mModel.screen = Screen::Editor;
             mModel.load.stage.clear();
             mModel.load.entryStage.clear();
@@ -460,9 +549,11 @@ namespace cosmo
             // one-behind snapshot the loop was reading.
             decoded = 0;
             for (const NodeModel &n : mModel.nodes) if (!n.group && n.slot >= 0) ++decoded;
-            emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
+            if (!appended) emit(Event::Kind::ScreenChanged, screenName(mModel.screen));
             emit(Event::Kind::LoadFinished, std::string(), decoded, total);
-            emit(Event::Kind::ProjectOpened, mLoadPath, 0, decoded);
+            // An `add` has not opened anything: the project was open before it and still is.
+            if (!appended) emit(Event::Kind::ProjectOpened, mLoadPath, 0, decoded);
+            else emit(Event::Kind::Info, "add.finished photos=" + std::to_string(decoded));
             emit(Event::Kind::Info,
                  "load.peak decode=" + std::to_string(mBudget.peakDecode()) +
                      " engine=" + std::to_string(mBudget.engineThreads()) +
@@ -989,6 +1080,20 @@ namespace cosmo
                 emit(Event::Kind::ParamsChanged, "mask index=" + std::to_string(c.index));
                 return true;
             }
+            case Command::Kind::HistoryJump:
+            {
+                const History *h = mSession.currentHistory();
+                if (!h || h->nodes.empty()) return fail("history jump: nothing selected to jump in");
+                if (c.index < 0 || c.index >= (int)h->nodes.size())
+                    return fail("history jump: no step " + std::to_string(c.index) + " (have " +
+                                std::to_string(h->nodes.size()) + ")");
+                if (!mSession.jumpToHistory(c.index)) return fail("history jump: could not apply step " + std::to_string(c.index));
+                refreshModel();
+                emit(Event::Kind::HistoryChanged, mModel.history.lastLabel, mModel.history.current,
+                     mModel.history.nodes);
+                return true;
+            }
+            case Command::Kind::Add: return startAppendLoad(c.paths);
             case Command::Kind::Undo:
                 if (!mSession.canUndo()) return fail("nothing to undo");
                 mSession.undo();
@@ -1011,6 +1116,8 @@ namespace cosmo
                 return true;
             case Command::Kind::PresetSave:
                 if (!mSession.savePreset(c.name)) return fail("could not save preset: " + c.name);
+                mPresetsStale = true;         // the library the model lists just grew...
+                refreshModel();               // ...and every view's PresetTree with it (R-NTWB-3)
                 emit(Event::Kind::Info, "preset.saved name=" + c.name);
                 return true;
 

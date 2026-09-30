@@ -88,7 +88,7 @@ namespace cosmo
             "undo", "redo", "preset apply",
             "preset save", "export",
             "settings set", "screen", "state print", "ui dump", "wait", "wb pick", "metadata",
-            "gesture", "quit"};
+            "gesture", "history jump", "add", "quit"};
         return names;
     }
 
@@ -131,6 +131,23 @@ namespace cosmo
             if (!need(2, "at least one image path")) return c;
             c.kind = Command::Kind::Import;
             c.paths.assign(t.begin() + 1, t.end());
+        }
+        else if (v == "add")
+        {
+            if (!need(2, "at least one image path")) return c;
+            c.kind = Command::Kind::Add;
+            c.paths.assign(t.begin() + 1, t.end());
+        }
+        else if (v == "history")
+        {
+            if (!need(3, "history jump <step>")) return c;
+            if (sub != "jump") { err = "history: expected jump"; return Command{}; }
+            char *end = nullptr;
+            const long n = std::strtol(t[2].c_str(), &end, 10);
+            // A step is a number or nothing: `history jump x` must not silently become step 0.
+            if (!end || *end || n < 0) { err = "history jump: expected a step number, got " + t[2]; return Command{}; }
+            c.kind = Command::Kind::HistoryJump;
+            c.index = (int)n;
         }
         else if (v == "select")
         {
@@ -353,6 +370,11 @@ namespace cosmo
                 o << "import";
                 for (const auto &p : c.paths) o << ' ' << q(p);
                 break;
+            case Command::Kind::Add:
+                o << "add";
+                for (const auto &p : c.paths) o << ' ' << q(p);
+                break;
+            case Command::Kind::HistoryJump: o << "history jump " << c.index; break;
             case Command::Kind::Select:
                 o << "select " << c.index;
                 if (!c.name.empty()) o << ' ' << c.name;

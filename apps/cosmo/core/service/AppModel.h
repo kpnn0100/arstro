@@ -120,6 +120,16 @@ namespace cosmo
         std::string outDir;
     };
 
+    /** One step of the edit target's history DAG (R-NTWB-3): its parent step (-1 for the root)
+     *  and what it changed. The index in `HistoryModel::entries` IS the node id that
+     *  `history jump <i>` takes, so a second view can draw the branching tree the HistoryView
+     *  draws and jump in it without reading `History` itself. */
+    struct HistoryEntryModel
+    {
+        int parent = -1;
+        std::string label;
+    };
+
     struct HistoryModel
     {
         int nodes = 0;          // size of the branching DAG for the edit target
@@ -127,6 +137,17 @@ namespace cosmo
         bool canUndo = false;
         bool canRedo = false;
         std::string lastLabel;  // History::describeChange of the newest step
+        std::vector<HistoryEntryModel> entries;   // the DAG itself, index = node id
+    };
+
+    /** One preset of the library (R-NTWB-3): `path` is what `preset apply "<path>"` takes (the
+     *  file's path under the preset folder, without `.apf`), `folder` its sub-folder ("" at the
+     *  top). The PresetTree draws its folders and rows from this list. */
+    struct PresetModel
+    {
+        std::string path;
+        std::string name;
+        std::string folder;
     };
 
     /** What the CPU budget resolved to, so it is inspectable rather than inferred — the
@@ -158,6 +179,7 @@ namespace cosmo
 
         std::vector<RecentModel> recents;
         std::vector<NodeModel> nodes;
+        std::vector<PresetModel> presets;   // the preset library, rescanned when it changes
 
         int selectedNode = -1;      // the node the user picked
         int currentSlot = -1;       // the image on the stage, -1 if none

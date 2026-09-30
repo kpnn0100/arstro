@@ -158,7 +158,8 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + subscribe(EventSink)
     + setDecoderFactory / setWorkerInit / setImageWriter
     + session() : EditSession &      ' transitional; S4 deletes every use
-    - refreshModel() / startProjectLoad()
+    + renderBefore(Frame&) / renderUncropped(Frame&)   ' one view's pixels, queries (R-NTWB-2)
+    - refreshModel() / startProjectLoad() / startAppendLoad() / refreshPresets()
   }
   class AppModel <<plain data, R-SVC-3>> {
     + revision : unsigned
@@ -167,6 +168,8 @@ package "cosmo_core  (namespace arstro::cosmo)  <<UI-free>>" as core {
     + selectedNode / currentSlot / editGroup : int
     + params : EditParams
     + history / load / exports / settings / budget
+    + history.entries : HistoryEntryModel[]   ' the DAG (R-NTWB-3)
+    + presets : PresetModel[]                 ' the library (R-NTWB-3)
     + frameSlot / frameWidth / frameSeq   ' metadata only — never pixels
   }
   class Command <<one way in, R-SVC-2>> {
@@ -434,6 +437,7 @@ package "core/Ntwb (NTWB 1.0.0, app side)" {
 class NtwbAdapter {
   +start()
   +tick(wallMs)
+  -before / uncropped / cover(call) : Json   ' to the caller only (R-NTWB-2)
   +apiDescription(hints) : Json
   +controlsJson() : Json
   +modelJson(model) : Json

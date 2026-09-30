@@ -317,6 +317,7 @@ restarting slot ids) before clearing session vectors, preserving the slot-id inv
 | `core/ImageProcessing/src/base/Spatial.{h,cpp}` | engine | shared neighbourhood helpers. `gaussianBlurPlane` is the exact kernel; `fastBlurPlane` (R-MIXER-7) is a three-box cascade whose cost does not grow with sigma, delegating to the exact one below sigma 4 — the radius is a fraction of the image, so an export's radius grows with its own size |
 | `core/Artboard/*` | framework | `Segment`, `IRenderTarget`, gestures, `AnimatedProperty`, controls |
 | `apps/cosmo/cli/NtwbAdapter.{h,cpp}` | host | cosmo as an Arstro Remote app: NTWB `command` → `dispatch`, `AppModel` → state `model`, `Event` → NTWB events, frames → JPEG blobs; no behaviour of its own (R-NTWB-1/2) |
+| `apps/cosmo/CoverScale.h` | host | the box downscale of a project cover, shared by the GTK host's home cards and `cosmo-cc ntwb`'s `cover` (R-NTWB-2) |
 | `apps/cosmo/EditControls.h` | host | the Basic/Detail slider catalogue as data, with the unit conversions of `UnitConversions.h`, for a front end that is not the GTK window (R-NTWB-4) |
 | `apps/cosmo/web/*` | web front end | the browser UI served by Arstro Remote at `/apps/cosmo/`: a third view of the same service, in cosmo's design language (R-NTWB-5) |
 | `core/Ntwb/*` | library | the app side of NTWB for any Arstro app: `Json`, the protocol table (tested against the vendored `spec/api.json`), framing, the `ITransport` seam, `Client` (R-NTWB, NTWB-09) |

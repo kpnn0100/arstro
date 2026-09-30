@@ -87,6 +87,13 @@ namespace cosmo
         kv(s, j, "loadStage", m.load.stage);
         kvi(s, j, "loadPermille", (int)(m.load.fraction() * 1000.0 + 0.5));
         kv(s, j, "historyLabel", m.history.lastLabel);
+        // R-NTWB-3: whether anything is the edit target. `ownParams` is emitted only when it
+        // differs, so without this flag a second view cannot tell "nothing selected" from
+        // "own == effective" - and freezes, or edits nothing, in the wrong case.
+        kvb(s, j, "hasEditTarget", m.hasEditTarget);
+        // ...and what the in-flight decodes are doing ("demosaicing"), which the loading line
+        // shows. A progress detail that depends on timing, so never part of a comparison.
+        if (!o.stable) kv(s, j, "loadEntryStage", m.load.entryStage);
 
         kvb(s, j, "exportActive", m.exports.active);
         kvi(s, j, "exportDone", m.exports.done);
@@ -163,6 +170,37 @@ namespace cosmo
                   << " kind=" << state << " slot=" << n.slot << " bypass=" << (n.bypass ? 1 : 0)
                   << " selected=" << (n.selected ? 1 : 0) << " name=" << n.name << '\n';
             }
+        }
+        if (j) s << "  ]";
+
+        // R-NTWB-3: the edit target's history DAG, index = node id (`history jump <i>`), so a
+        // second view draws the branching tree the HistoryView draws. Stable: the same commands
+        // build the same tree.
+        if (j) s << ",\n  \"history\": [\n";
+        else s << "history=" << m.history.entries.size() << '\n';
+        for (size_t i = 0; i < m.history.entries.size(); ++i)
+        {
+            const HistoryEntryModel &h = m.history.entries[i];
+            if (j)
+                s << "    {\"parent\": " << h.parent << ", \"label\": \"" << jsonEscape(h.label) << "\"}"
+                  << (i + 1 < m.history.entries.size() ? "," : "") << '\n';
+            else
+                s << "  step=" << i << " parent=" << h.parent << " label=" << h.label << '\n';
+        }
+        if (j) s << "  ]";
+
+        // R-NTWB-3: the preset library the PresetTree draws (`path` is what `preset apply`
+        // takes). Stable: it is the preset folder's contents, the same for every front end.
+        if (j) s << ",\n  \"presets\": [\n";
+        else s << "presets=" << m.presets.size() << '\n';
+        for (size_t i = 0; i < m.presets.size(); ++i)
+        {
+            const PresetModel &p = m.presets[i];
+            if (j)
+                s << "    {\"path\": \"" << jsonEscape(p.path) << "\", \"name\": \"" << jsonEscape(p.name)
+                  << "\", \"folder\": \"" << jsonEscape(p.folder) << "\"}" << (i + 1 < m.presets.size() ? "," : "") << '\n';
+            else
+                s << "  preset folder=" << p.folder << " path=" << p.path << '\n';
         }
         if (j) s << "  ]";
 

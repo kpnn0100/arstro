@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-63**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-64**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -18,6 +18,24 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 ---
 
 ## Open
+
+### D-63 — Selecting a photo marks the project unsaved
+- **Area:** core / session · **Status:** **Confirmed** (measured) · **Severity:** S3
+- **Found:** 2026-09-30, while putting the session's real `dirty` into the model (R-NTWB-3).
+- **Front end:** every one — the flag is the session's; a browser now shows it, the window's
+  unsaved-changes prompt already obeyed it.
+- **Reproduce:** `project open <p.cmp>` → `dirty = false`; `select <node>` → `dirty = true` with no
+  edit made (`the_model_carries_what_a_second_view_draws` asserts the clean state before the select
+  and notes this).
+- **Expected:** only a change that would be written to the project marks it unsaved (an edit, a
+  bypass, a group change, a reorder).
+- **Actual:** `EditSession::submitWith` (`core/EditSession.cpp:513-516`) sets `mDirty = true` for every
+  render it submits, and selecting, navigating and zooming all submit a render.
+- **Judgement:** **defect** — the unsaved prompt appears after merely looking at photos, which
+  teaches the user to click it away.
+- **Recommended fix:** set `mDirty` where a change is recorded (`recordHistory` when it actually adds
+  a step, `setBypassed`, the group mutators) and not in `submitWith`.
+- **Guard:** in the same L2 test, `select` then `dirty == false`; an edit then `dirty == true`.
 
 ### D-62 — A JPEG's EXIF orientation is ignored: a portrait photo edits (and previews) sideways
 - **Area:** core / decode · **Status:** **Confirmed** (measured) · **Severity:** S2
