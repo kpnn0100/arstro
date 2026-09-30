@@ -3423,16 +3423,19 @@ text changed), `controls`, the newest `preview` frame, thumbnails by node (asked
 slot, dropped on `project.opening`), status and presence; `command` / `notify` / `call` / `on`.
 `js/vm/editor.js` (`createViewModel`): the shared, derived signals (`nodes`, `params`, `ownParams`,
 `history`, `load`, `settings`, `presets`, `metadata`, `hasEditTarget`, `source` ...), `view.*` - the
-page's own state (`layout, homeWanted, group, tab, compare, seam, zoom, railWanted, wbArmed, menu,
-contextMenu, dialog, maskIndex, uiScale`), drafts for a drag in flight, and the intents, each one
-command line. The screen a page shows is derived: `loading` and `home` when the session is there,
-else the editor unless this page chose Home (`goHome` is view state; opening a project is not).
+page's own state (`layout, group, tab, compare, seam, zoom, railWanted, wbArmed, menu, contextMenu,
+dialog, maskIndex, uiScale`), drafts for a drag in flight, and the intents, each one command line.
+The screen a page shows is the SESSION's (`AppModel::screen`): `goHome` sends `screen home` and
+`backToEditor` `screen editor` (the project stays loaded, as in the window), so every page of the
+session follows and a page opened later starts where the session is (D-65: it was a per-page flag,
+and a page closed on Home reopened in the editor).
 Group navigation is view state too (`view.group`, cells and breadcrumb derived from `nodes`' parent
 ids), so two pages can browse two groups of one project. `js/core/signal.js`: a computed with
 listeners recomputes when a dependency changes and notifies only if its value changed - without
 that, one model push re-ran every effect of the page (it reset zooms and rebuilt controls mid-drag).
 Proof: `tests/web/mvvm_test.mjs` (two pages of one session - desktop and phone shells, edits both
-ways, view state per page, presence 2; a third page in another session isolated and uncounted).
+ways, view state per page, presence 2; going Home takes the session - a page opened after it starts
+on Home - and back to the editor likewise; a page in another session isolated and uncounted).
 
 ### DR-NTWB-8 Sessions and presence (R-NTWB-8)
 `NTWB.connect()` joins the session named by `?session=` (none = `main`); `vm.presence` = {session,

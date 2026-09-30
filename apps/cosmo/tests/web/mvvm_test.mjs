@@ -107,7 +107,11 @@ class Page {
     fs.mkdirSync(SHOTS, { recursive: true });
     fs.writeFileSync(path.join(SHOTS, file), Buffer.from(r.data, "base64"));
   }
-  close() { this.ws.close(); }
+  /** Close the PAGE (its tab and its WebSocket to the app), not just this DevTools connection. */
+  close() {
+    this.send("Page.close").catch(() => {});
+    setTimeout(() => this.ws.close(), 300);
+  }
 }
 
 // ------------------------------------------------------------------ the host (Arstro Remote)
@@ -170,6 +174,27 @@ async function main() {
     const pv = await phone.eval(vmState);
     check(pv && pv.tab !== "mask" && pv.compare === "after", `the desktop's tab and compare mode stay on the desktop (phone: ${pv && pv.tab}, ${pv && pv.compare})`);
 
+    // Leaving the project is done to the SESSION (the user, 2026-09-30: "i jump back to home page,
+    // and close session, when i open again, it should be in home page of cosmo but it jump
+    // directly to project edit screen"): after a page goes Home and is closed, a page opened on the
+    // session starts on Home, and the session's other pages are on Home too.
+    await desk.eval(`window.cosmo.vm.goHome()`);
+    const phoneHome = await until(() => phone.eval(vmState).then((v) => (v && v.screen === "home" ? v : null)), 5000);
+    check(!!phoneHome, "going Home on the desktop takes the session - the phone page - Home too");
+    desk.close();
+    await until(() => phone.eval(vmState).then((v) => (v && v.clients === 1 ? v : null)), 5000);   // it has left
+    const again = await Page.open(chrome, { width: 1600, height: 1000 });
+    await again.goto(`${BASE}/api/ping`);
+    await again.eval(`fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({token: ${JSON.stringify(TOKEN)}})}).then(r => r.ok)`);
+    await again.goto(`${BASE}/apps/cosmo/?session=${s1}`);
+    const reopened = await until(() => again.eval(vmState).then((v) => (v && v.layout && v.screen !== "connecting" ? v : null)), 30000);
+    check(reopened && reopened.screen === "home", `a page opened after going Home starts on Home (${reopened && reopened.screen})`);
+    // ...and opening the still-loaded project from Home is one command for the session, no reload.
+    await again.eval(`window.cosmo.vm.backToEditor()`);
+    const backEd = await until(() => phone.eval(vmState).then((v) => (v && v.screen === "editor" ? v : null)), 5000);
+    check(!!backEd, "back to the editor from Home takes the session back too");
+    const desk2 = again;
+
     // Another session is another model: the edit above is not there.
     const s2 = (await op("apps.launch", { app: "cosmo", session: "new" })).session;
     stop.push(s2);
@@ -182,12 +207,12 @@ async function main() {
     const o = await until(() => other.eval(vmState).then((v) => (v && v.screen === "editor" && v.nodes === 1 ? v : null)), 60000);
     check(o && o.session === s2 && o.clients === 1 && Math.abs(o.exposure) < 1e-3, "a page of another session has its own model and its own presence");
     other.close();
-    const dAfter = await until(() => desk.eval(vmState).then((v) => (v && v.clients === 2 ? v : null)), 3000);
+    const dAfter = await until(() => desk2.eval(vmState).then((v) => (v && v.clients === 2 ? v : null)), 3000);
     check(!!dAfter, "and it is not counted in the first session");
 
-    const errs = [...desk.errors, ...phone.errors];
+    const errs = [...desk.errors, ...desk2.errors, ...phone.errors];
     check(errs.length === 0, "no page errors" + (errs.length ? ": " + errs.slice(0, 3).join(" | ") : ""));
-    desk.close();
+    desk2.close();
     phone.close();
   } finally {
     for (const s of stop) { try { await op("apps.stop", { app: "cosmo", session: s }); } catch { /* already gone */ } }

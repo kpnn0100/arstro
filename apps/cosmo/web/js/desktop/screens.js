@@ -4,8 +4,8 @@
  * showHome / showEditor / requestHome, SplashScreen before the first model).
  *
  * The App owns its screen as view state and drives it from the service's events (App.cpp,
- * linux_main.cpp:582-685); so does this page. It watches `vm.screen` (the session's screen, or
- * Home when this client chose to look at Home - vm.goHome() is per client) and the load events,
+ * linux_main.cpp:582-685); so does this page. It watches `vm.screen` (the session's screen -
+ * vm.goHome() sends `screen home`, so every page of the session goes) and the load events,
  * and runs the phases itself:
  *
  *   first model          Home (or the editor) under a background scrim 1 -> 0, 220 ms (App.cpp:1359)
@@ -345,7 +345,7 @@ export function mountScreens(root, vm, ctx = {}, { mountEditor } = {}) {
   function openRecent(r, rect, card, coverUrl) {
     const p = vm.project.peek();
     if (p.path && p.path === r.path && !load().active) {
-      // this session already has it: open THIS page's editor on it (no reload for everyone)
+      // the session still has it loaded: back to the editor on it, for the session, no reload
       beginOpen({ name: r.name, from: rect, card, coverUrl, complete: true });
       vm.backToEditor();
       return;

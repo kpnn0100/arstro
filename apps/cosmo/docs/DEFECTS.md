@@ -4,7 +4,7 @@
 `.claude/skills/arstro.cosmo.core.debug/` and `.claude/skills/arstro.cosmo.design.debug/`; the entry
 format is defined in `arstro.cosmo.core.debug` §4 and is shared by both.
 
-- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-65**.
+- IDs are `D-<n>`, sequential across both areas, **never reused**. Next free id: **D-66**.
 - Status: `Open` · `Confirmed` · `Fixed` · `Not-a-defect` · `Unreproduced` · `Deferred`.
 - Severity: `S1` data loss / crash / hang · `S2` wrong output or an unusable surface · `S3` wrong
   behaviour with a workaround · `S4` cosmetic or diagnostic.
@@ -353,6 +353,22 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 - **Fix:** pending. P0.4 + P0.5.
 
 ## Closed
+
+### D-65 — A page closed on Home reopened in the editor (web)
+- **Area:** design / web view-model · **Status:** **Fixed** · **Severity:** S2
+- **Found:** 2026-09-30, by the user: "i jump back to home page, and close session, when i open again,
+  it should be in home page of cosmo but it jump directly to project edit screen".
+- **Front end:** the browser (R-NTWB-7).
+- **Reproduce:** a project open in a session; the wordmark (or File > Home, or the phone's back) with
+  a saved project -> Home; close the tab; open `/apps/cosmo/` again -> the editor.
+- **Cause:** `vm.goHome()` only set the page's own `view.homeWanted`; the session's `screen` stayed
+  `editor`, and a new page (flag false) showed the editor. Home had been classed as view state.
+- **Fix:** Home is the session's screen - `goHome` = `screen home`, `backToEditor` = `screen
+  editor`, the page's screen is `AppModel::screen` (`web/js/vm/editor.js`); R-NTWB-7 amended. Fixed in
+  the commit that files this entry.
+- **Guard:** `tests/web/mvvm_test.mjs`: "going Home on the desktop takes the session - the phone page -
+  Home too" and "a page opened after going Home starts on Home" - both failed before the fix (the
+  reopened page read `editor`), pass after.
 
 ### D-58 — The COLOUR section's divider runs under the eyedropper
 - **Area:** design / widgets · **Status:** **CLOSED** — fixed the day it was reported · **Severity:** S3

@@ -2258,8 +2258,13 @@ screen share. The bridge is **NTWB 1.0.0** (native-to-web bridge), defined once 
   affect each other if using the same app session; it should behave like the web is the UI and
   fetch data event from core app.")* The MODEL is the session's CosmoService on the board. Each page
   holds its own VIEW-MODEL (`web/js/vm/editor.js`) and VIEW. **Shared** - exactly what the service
-  models, identical in every page of the session within one model push: the project, the photos and
-  their tree, the selection and edit target, every parameter, history, load, export, settings.
+  models, identical in every page of the session within one model push: which screen the session is
+  on (Home or the editor), the project, the photos and their tree, the selection and edit target,
+  every parameter, history, load, export, settings. (**AMENDED (the user, 2026-09-30: "i jump back to
+  home page, and close session, when i open again, it should be in home page of cosmo but it jump
+  directly to project edit screen"):** going Home was a page's own choice, so the session never left
+  the editor and every page opened later landed there. Leaving a project is done to the session:
+  Home is `screen home`, back to a still-loaded project `screen editor` - D-65.)
   **Each page's own**, never sent: the shell (desktop / touch), which group the filmstrip shows, the
   open tab and sections, Before / Split / After and the seam, zoom and pan, the rail / drawer / tray,
   menus and dialogs, scroll positions, the WB pick mode, the desktop UI scale, and a drag in flight

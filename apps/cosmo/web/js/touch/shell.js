@@ -3,9 +3,9 @@
  *
  * `mount(el, vm, ctx)` builds the touch counterpart of the desktop App over the SAME view-model
  * API: one core (cosmo-cc on the board), this page's own view-model, this view (R-TOUCH-1). It
- * owns no model state: the screen is the model's (loadActive -> Loading, an open project ->
- * Editor, else Home; looking at Home while the session edits is this page's own choice,
- * vm.view.homeWanted), and every change leaves through a vm intent - the same command lines the
+ * owns no model state: the screen is the session's (Loading, the editor, Home - going Home is
+ * `screen home`, for every page of the session), and every change leaves through a vm intent -
+ * the same command lines the
  * desktop sends - so an edit on a phone shows on a desktop page of the session and back.
  *
  * Ports PhoneApp::setScreen / syncFromModel / render (touch/PhoneApp.cpp:1320-1470): screens

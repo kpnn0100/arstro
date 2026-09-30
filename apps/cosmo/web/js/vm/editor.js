@@ -5,7 +5,8 @@
  * board, shared by every client of the Arstro Remote session) and this page's views, and it
  * holds the two things MVVM separates:
  *
- *   SHARED - derived from the model, identical in every client of the session: the project,
+ *   SHARED - derived from the model, identical in every client of the session: which screen the
+ *   session is on (Home or the editor - leaving a project is done to the session), the project,
  *   the photos and their tree, the selection / edit target, every parameter, history, load,
  *   export, settings. A client never keeps its own copy of any of it; it asks the service to
  *   change it (a command line) and waits for the model to come back - to every client.
@@ -115,7 +116,6 @@ export function createViewModel(session, { toast } = {}) {
   // ------------------------------------------------------------------ OWN (this page only)
   const view = {
     layout: signal("desktop"),                 // set by main.js from the window
-    homeWanted: signal(false),                 // this client looks at Home while the session edits
     group: signal(ROOT),                       // which group the filmstrip / breadcrumb show
     tab: signal("basic"),
     compare: signal("after"),                  // before | split | after
@@ -136,15 +136,17 @@ export function createViewModel(session, { toast } = {}) {
   /** Drafts of a drag in flight: field -> value shown here before the model catches up. */
   const drafts = signal(new Map());
 
-  /** The screen THIS page shows. The session's screen decides loading / editor, but looking at
-   *  Home is a view choice: one client may browse recents while another keeps editing. */
+  /** The screen this page shows = the SESSION's screen (AppModel::screen). Going Home is done to
+   *  the session, not to one page: it was a per-page choice once, and then a page closed on Home
+   *  and reopened landed in the editor, because the session had never left it ("i jump back to home
+   *  page, and close session, when i open again, it should be in home page of cosmo" - R-NTWB-7). */
   const screen = computed(() => {
     const v = m.value;
     if (!v) return "connecting";
     // The session's screen, not `loadActive`: an `add` loads photos while the editor stays up.
     if (v.screen === "loading") return "loading";
     if (v.screen === "home" || !v.projectPath && !v.imageCount) return "home";
-    return view.homeWanted.value ? "home" : "editor";
+    return "editor";
   });
 
   // Navigation stays valid: a group that disappeared (ungrouped, deleted, new project) falls
@@ -240,14 +242,18 @@ export function createViewModel(session, { toast } = {}) {
     redo: () => cmdQuiet("redo"),
     historyJump: (i) => cmd(`history jump ${i}`),
     // project
-    newProject: (path) => { view.homeWanted.value = false; return cmd(`project new ${q(path)}`); },
-    openProject: (path) => { view.homeWanted.value = false; return cmd(`project open ${q(path)}`); },
+    newProject: (path) => cmd(`project new ${q(path)}`),
+    openProject: (path) => cmd(`project open ${q(path)}`),
     save: () => cmd("project save"),
     saveAs: (path) => cmd(`project save ${q(path)}`),
     closeProject: () => cmd("project close"),
-    goHome: () => { view.homeWanted.value = true; },
-    backToEditor: () => { view.homeWanted.value = false; },
-    importPhotos: (paths) => { view.homeWanted.value = false; return cmd(`import ${paths.map(q).join(" ")}`); },
+    /** Leave the editor for Home - the session's screen, so every page of it goes, and a page
+     *  opened later starts there. The project stays loaded (as in the window) until another is
+     *  opened or it is closed; `backToEditor` returns to it without a reload. Callers ask about
+     *  unsaved changes first (the window's requestHome). */
+    goHome: () => cmdQuiet("screen home"),
+    backToEditor: () => cmdQuiet("screen editor"),
+    importPhotos: (paths) => cmd(`import ${paths.map(q).join(" ")}`),
     addPhotos: (paths) => cmd(`add ${paths.map(q).join(" ")}`),
     // presets, export, settings, metadata, white balance, masks
     applyPreset: (path) => cmd(`preset apply "${path}"`),

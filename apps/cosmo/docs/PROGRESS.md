@@ -34,6 +34,11 @@ using the same app session". IN PROGRESS.**
   second session isolated) and by headless-Chrome screenshots against the native renders
   (`cosmo_shots`, `cosmo_touch_shots`) at 1600x1000, 1280x800, 584x466, 393x852, 360x780, 852x393.
   Open: PARITY W13, W15-W19 (each needs the core first), D-62 (JPEG orientation) shows in the web too.
+- **[x] D-65 (user report): a page closed on Home reopened in the editor.** Home is the session's
+  screen now (`screen home` / `screen editor`), R-NTWB-7 amended; `mvvm_test.mjs` 14/14.
+- **Decision (2026-09-30): which screen is up is shared, not per page.** The first cut let one page
+  browse Home while another edited; the user expects leaving a project to hold for the session
+  (and for a page opened later). Browsing a different GROUP is still per page.
 
 **► NEXT:** D-62 (orientation, core), then PARITY W15 (preset categories / import / export in the
 grammar) and W18 (an export that does not block the bridge), then NTWB-T3.
