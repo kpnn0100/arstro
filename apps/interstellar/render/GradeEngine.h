@@ -65,6 +65,10 @@ namespace render
         /** Free the engine and its scratch; the next non-identity render builds a new one. For a
          *  host that stops playing or exporting and does not want ~200 MB parked meanwhile. */
         void releaseScratch();
+        /** The engine's GPU opt-in (EditEngine::setPreferGpu): takes effect only where a backend
+         *  is available, and the CPU path stays the reference (R-RENDER-5 is held on CPU). */
+        void setPreferGpu(bool prefer);
+        bool gpuAvailable();
 
         /** True when `p` would change nothing. Compared through the parameter codec rather than
          *  field by field, for the same reason ParamHash is: a hand-written comparison is a second
@@ -75,6 +79,7 @@ namespace render
     private:
         void ensureEngine();
         std::unique_ptr<arstro::EditEngine> mEngine;
+        bool mPreferGpu = false;
     };
 }
 }

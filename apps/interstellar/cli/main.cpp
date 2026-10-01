@@ -84,6 +84,14 @@ namespace
         };
 #endif
         h.recentsPath = recentsPath();
+        // The same settings file and preset library the window uses, so `settings set` from a
+        // shell and the Engine Settings chips are one setting.
+        const char *xc = std::getenv("XDG_CONFIG_HOME"), *xd = std::getenv("XDG_DATA_HOME"), *home = std::getenv("HOME");
+        if (xc) h.settingsPath = std::string(xc) + "/interstellar/settings.txt";
+        else if (home) h.settingsPath = std::string(home) + "/.config/interstellar/settings.txt";
+        if (const char *x = std::getenv("INTERSTELLAR_PRESETS")) h.presetDir = x;
+        else if (xd) h.presetDir = std::string(xd) + "/interstellar/presets";
+        else if (home) h.presetDir = std::string(home) + "/.local/share/interstellar/presets";
         return h;
     }
 

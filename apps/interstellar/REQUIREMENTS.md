@@ -233,7 +233,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..6; gaps: drag-to-timeline, drag-to-regroup)
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..9; gaps: drag-to-timeline, drag-to-regroup)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the
@@ -255,6 +255,41 @@ reserves the rest so adopting it is not a migration.
   `PillButton`, `IconButton`, `ConfirmDialog`. A copied widget is a divergence with a delay fuse.
 - **R-UI-6 Every state is drawn and shot**, empty and loading included, at two window sizes, and
   mid-transition as well as at rest.
+
+- **R-UI-7 Cosmo's menu bar, in Interstellar's words** (added 2026-10-01, user request "file, edit,
+  setting, workspace like cosmo"). Cosmo's `MenuStrip` after the wordmark: **File** (Home, Open,
+  Save, Save As, Add Footage, Export Still, Render), **Edit** (Undo, Redo, Copy Grade, Paste Grade
+  to Selected / to All, Group, Ungroup, Duplicate as Variant — cosmo's Develop + History),
+  **Settings** (Engine Settings), **Workspace** (Grade / Cut / Deliver, Reset Workspace — the
+  view, never data), **Preset** (Save, Import, and Apply for every preset in the library). Cosmo's
+  accelerators: Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+C / Ctrl+V. Every
+  item is a command line or a host picker — the menus add no behaviour of their own (R-G-4).
+- **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
+  (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
+  the window minimum follows the target scale.
+
+---
+
+## R-EDIT — Cosmo's editing conveniences — ✅ IMPLEMENTED (DR-EDIT-1..3)
+
+- **R-EDIT-1 One undo history across the rack and the project.** A grade, a version override, a
+  cut, a version change — undone and redone in order. A slider drag is one step. A change to the
+  rack's node set (add, group, ungroup, duplicate, import) is not undoable and starts a fresh
+  history — exactly as in Cosmo, whose history is per node. Undo writes colour back THROUGH Cosmo.
+- **R-EDIT-2 Copy and paste a grade** between rack nodes (cosmo's Copy Settings / Paste to Selected
+  / Paste to All Images). Root timeline only — on a version a paste would be a second copy of
+  colour; there the addresses are the tool.
+- **R-EDIT-3 Presets are Cosmo's `.apf`**: save a node's grade to the library, import an `.apf`,
+  apply one to a source (Cosmo applies presets to an image, not a group).
+
+## R-SET — engine settings — ✅ IMPLEMENTED (DR-SET-1..3)
+
+- **R-SET-1 Cosmo's Engine Settings dialog, reused**: Screen scale, Preview quality, CPU threads,
+  CPU limit, GPU acceleration (cosmo's Input row is hidden — Interstellar has no touch shell). Each
+  chip is a `settings set` line; the service validates, applies and **persists** them.
+- **R-SET-2 One CPU limit for the whole app.** The share of cores is one budget: the hosted Cosmo's
+  decode pool and the engine threads Interstellar's own frame path runs on both come from it.
+- **R-SET-3 Preview quality caps the monitor**, never a render or an export, and never upscales.
 
 ---
 

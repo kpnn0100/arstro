@@ -17,11 +17,24 @@ namespace render
     GradeEngine::GradeEngine() { ensureEngine(); }
     GradeEngine::~GradeEngine() = default;
 
+    void GradeEngine::setPreferGpu(bool prefer)
+    {
+        mPreferGpu = prefer;
+        if (mEngine) mEngine->setPreferGpu(prefer);
+    }
+
+    bool GradeEngine::gpuAvailable()
+    {
+        ensureEngine();
+        return mEngine->gpuAvailable();
+    }
+
     void GradeEngine::ensureEngine()
     {
         if (mEngine) return;
         mEngine.reset(new arstro::EditEngine());
         mEngine->setWantIntermediateHistograms(false, false);
+        mEngine->setPreferGpu(mPreferGpu);   // releaseScratch drops the engine; the opt-in survives
     }
 
     void GradeEngine::releaseScratch() { mEngine.reset(); }

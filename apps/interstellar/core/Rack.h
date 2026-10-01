@@ -131,6 +131,19 @@ namespace interstellar
          *  group's node id. */
         bool groupNodes(const std::string &name, const std::vector<int> &nodes, int &groupOut, std::string &err);
         bool setBypass(int node, bool on, std::string &err);
+        /** Cosmo's `group ungroup`: the members move up, keeping their own grades. */
+        bool ungroup(int group, std::string &err);
+
+        // ── presets and settings ──
+        /** Cosmo's `preset apply` / `preset save` on one node (Select first). Apply works on a
+         *  SOURCE only — Cosmo applies a preset to its current image slot. */
+        bool presetApply(int node, const std::string &name, std::string &err);
+        bool presetSave(int node, const std::string &name, std::string &err);
+        /** Where Cosmo reads and writes `.apf` presets. Host configuration, set exactly the way
+         *  `cosmo-cc --presets` sets it (Cosmo has no Command for it). */
+        void setPresetDir(const std::string &dir);
+        /** Cosmo's engine settings (its preview edge, threads, GPU opt-in, CPU percent). */
+        void applySettings(const cosmo::AppSettings &s);
 
         // ── per-node params for RENDERING ──
         /** Cosmo's model exposes params for the SELECTED node only, and a frame needs every node's.

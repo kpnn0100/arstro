@@ -629,6 +629,111 @@
       "requirement": "R-AUD-2"
     },
     {
+      "verb": "undo",
+      "usage": "undo",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Step back one edit — a grade, an override, a cut, a version change — across the rack and the project alike.",
+      "requirement": "R-EDIT-1"
+    },
+    {
+      "verb": "redo",
+      "usage": "redo",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Step forward again after an undo.",
+      "requirement": "R-EDIT-1"
+    },
+    {
+      "verb": "grade copy",
+      "usage": "grade copy <node>",
+      "args": "<node>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Copy a rack node's grade (its own params, masks excluded) to the clipboard.",
+      "requirement": "R-EDIT-2"
+    },
+    {
+      "verb": "grade paste",
+      "usage": "grade paste [node…] [--all]",
+      "args": "[node…]",
+      "minArgs": 0,
+      "maxArgs": -1,
+      "flags": [
+        {
+          "name": "all",
+          "value": ""
+        }
+      ],
+      "summary": "Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: it writes through to Cosmo.",
+      "requirement": "R-EDIT-2"
+    },
+    {
+      "verb": "rack ungroup",
+      "usage": "rack ungroup <group>",
+      "args": "<group>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Dissolve a group; its members keep their own grades.",
+      "requirement": "R-RACK-4"
+    },
+    {
+      "verb": "settings set",
+      "usage": "settings set <key>=<value> …",
+      "args": "<key>=<value> …",
+      "minArgs": 1,
+      "maxArgs": -1,
+      "flags": [],
+      "summary": "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu (0|1), uiScale (%). Persisted; one CPU budget for the rack and the render path.",
+      "requirement": "R-SET-1"
+    },
+    {
+      "verb": "preset apply",
+      "usage": "preset apply <name> [--node <bind>]",
+      "args": "<name>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "node",
+          "value": "<bind>"
+        }
+      ],
+      "summary": "Apply a library preset to a rack source (the Grade target by default). Root timeline only.",
+      "requirement": "R-EDIT-3"
+    },
+    {
+      "verb": "preset save",
+      "usage": "preset save <name> [--node <bind>]",
+      "args": "<name>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "node",
+          "value": "<bind>"
+        }
+      ],
+      "summary": "Save a rack source's grade to the library as <name>.apf.",
+      "requirement": "R-EDIT-3"
+    },
+    {
+      "verb": "preset import",
+      "usage": "preset import <path.apf>",
+      "args": "<path.apf>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Copy an .apf (from Cosmo or anywhere) into the library.",
+      "requirement": "R-EDIT-3"
+    },
+    {
       "verb": "playhead",
       "usage": "playhead <t>|+<dt>|-<dt>|next-cut|prev-cut",
       "args": "<t>|+<dt>|-<dt>|next-cut|prev-cut",
@@ -983,6 +1088,34 @@
         "refused"
       ],
       "summary": "Counts from `lint`; details follow as info."
+    },
+    {
+      "name": "history.changed",
+      "fields": [
+        "did",
+        "label",
+        "canUndo",
+        "canRedo"
+      ],
+      "summary": "An edit was recorded, undone or redone (did = edit | undo | redo | cleared)."
+    },
+    {
+      "name": "settings.changed",
+      "fields": [
+        "cpuPercent",
+        "threads",
+        "previewEdge",
+        "useGpu",
+        "uiScale"
+      ],
+      "summary": "Engine settings after a change, all keys."
+    },
+    {
+      "name": "presets.changed",
+      "fields": [
+        "count"
+      ],
+      "summary": "The preset library was rescanned."
     }
   ],
   "model": [
@@ -1603,6 +1736,120 @@
       "type": "string",
       "stable": true,
       "doc": "Why it failed."
+    },
+    {
+      "path": "canUndo",
+      "type": "bool",
+      "stable": true,
+      "doc": "`undo` has something to undo (R-EDIT-1)."
+    },
+    {
+      "path": "canRedo",
+      "type": "bool",
+      "stable": true,
+      "doc": "`redo` has something to redo."
+    },
+    {
+      "path": "undoLabel",
+      "type": "string",
+      "stable": true,
+      "doc": "What `undo` would undo, e.g. `set a.basic.exposure`."
+    },
+    {
+      "path": "redoLabel",
+      "type": "string",
+      "stable": true,
+      "doc": "What `redo` would redo."
+    },
+    {
+      "path": "hasGradeClipboard",
+      "type": "bool",
+      "stable": true,
+      "doc": "`grade copy` has filled the clipboard (R-EDIT-2)."
+    },
+    {
+      "path": "gradeClipboardFrom",
+      "type": "string",
+      "stable": true,
+      "doc": "The bind name the clipboard grade came from."
+    },
+    {
+      "path": "settings",
+      "type": "group",
+      "stable": true,
+      "doc": "Engine settings (R-SET)."
+    },
+    {
+      "path": "settings.cpuPercent",
+      "type": "integer",
+      "stable": true,
+      "doc": "Share of the machine's cores the app may schedule — the rack's decode and the frame path alike."
+    },
+    {
+      "path": "settings.threads",
+      "type": "integer",
+      "stable": true,
+      "doc": "Engine worker threads; 0 = auto (from cpuPercent)."
+    },
+    {
+      "path": "settings.previewEdge",
+      "type": "integer",
+      "stable": true,
+      "doc": "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."
+    },
+    {
+      "path": "settings.useGpu",
+      "type": "bool",
+      "stable": true,
+      "doc": "GPU opt-in for the grade step (only where a backend exists)."
+    },
+    {
+      "path": "settings.uiScale",
+      "type": "integer",
+      "stable": true,
+      "doc": "Percent of the design size the window draws at."
+    },
+    {
+      "path": "settings.gpuAvailable",
+      "type": "bool",
+      "stable": false,
+      "doc": "A GPU backend exists on this machine."
+    },
+    {
+      "path": "settings.cores",
+      "type": "integer",
+      "stable": false,
+      "doc": "Cores on this machine."
+    },
+    {
+      "path": "settings.engineThreads",
+      "type": "integer",
+      "stable": false,
+      "doc": "Engine threads the budget resolves to now."
+    },
+    {
+      "path": "settings.decodeWorkers",
+      "type": "integer",
+      "stable": false,
+      "doc": "Decode workers the budget resolves to now."
+    },
+    {
+      "path": "presets",
+      "type": "array",
+      "stable": true,
+      "doc": "The preset library (Cosmo `.apf`), depth first (R-EDIT-3)."
+    },
+    {
+      "path": "presets[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "What `preset apply` spells, folders joined with `/`."
+    },
+    {
+      "path": "presets[].folder",
+      "type": "string",
+      "stable": true,
+      "doc": "Its folder, empty at the top."
     },
     {
       "path": "lastError",

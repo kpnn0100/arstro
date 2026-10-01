@@ -49,6 +49,9 @@ namespace interstellar
             FxAdd, FxDelete,
             // audio subset (R-AUD-2)
             AudioTrackAdd, AudioClipAdd,
+            // edit, settings, presets (R-EDIT, R-SET) — cosmo's File/Edit/Settings/Preset menus
+            Undo, Redo, GradeCopy, GradePaste, RackUngroup, SettingsSet, PresetApply, PresetSave,
+            PresetImport,
             // transport
             Playhead, Play, Pause,
             // delivery (R-RENDER)

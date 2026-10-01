@@ -198,6 +198,42 @@ namespace interstellar
         return true;
     }
 
+    bool Rack::ungroup(int group, std::string &err)
+    {
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::GroupUngroup;
+        c.index = group;
+        if (!dispatch(c, err)) return false;
+        mCosmo.pump(0.0);
+        ++mParamsRevision;
+        return true;
+    }
+
+    bool Rack::presetApply(int node, const std::string &name, std::string &err)
+    {
+        if (!select(node, err)) return false;
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::PresetApply;
+        c.name = name;
+        if (!dispatch(c, err)) return false;
+        mCosmo.pump(0.0);
+        cacheSelectedOwn();
+        return true;
+    }
+
+    bool Rack::presetSave(int node, const std::string &name, std::string &err)
+    {
+        if (!select(node, err)) return false;
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::PresetSave;
+        c.name = name;
+        return dispatch(c, err);
+    }
+
+    void Rack::setPresetDir(const std::string &dir) { mCosmo.session().setPresetDir(dir); }
+
+    void Rack::applySettings(const cosmo::AppSettings &s) { mCosmo.applySettings(s); }
+
     int Rack::indexOf(int node) const
     {
         const auto &ns = mCosmo.model().nodes;

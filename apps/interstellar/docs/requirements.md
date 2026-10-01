@@ -326,3 +326,74 @@ release, and — pumping one 16 ms frame at a time — that every tween's first 
 strictly between start and target. Known gaps (app/NOTES.md): no drag of a source onto the timeline,
 no regroup by drag, a reused cosmo slider still steps when the model pushes a new value for the same
 node.
+
+### DR-EDIT-1 One undo history across the rack and the project (R-EDIT-1)
+Around every undoable command (`undoable`, `core/service/ServiceEdit.cpp:82`) the service captures
+the `.isp` text and each bound rack node's own params and bypass (`captureState`, `:109`, read from
+the rack's cache of Cosmo's values); `recordEdit` (`:158`) pushes the pair, coalescing writes to the
+same addresses within 500 ms of wall clock (a slider drag). `undo`/`redo` (`:231`) restore a state:
+the project by re-parsing its text (keeping the OPEN timeline — that is presentation), the rack by
+writing params back THROUGH Cosmo with one `set` per node (`applyState`, `:129`) — masks excluded,
+since `set mask=` appends and Interstellar never edits masks. A change to the rack's node set
+(`structural`, `:103`) clears history, as Cosmo's per-node history would. Model: `canUndo`,
+`canRedo`, `undoLabel`, `redoLabel`; event `history.changed`. Guarded by `undo and redo span the
+rack and the project, and a drag is one step` — red with the rack restore disabled.
+
+### DR-EDIT-2 Copy and paste a grade; ungroup (R-EDIT-2, R-RACK-4)
+`grade copy <node>` copies the node's own params as the open version resolves them; `grade paste
+[node…] [--all]` (`:271`) writes them through to Cosmo on each target — root timeline only, refused
+on a version or a pin with the way forward. `rack ungroup <group>` (`:308`) is Cosmo's `group
+ungroup`; the group's `#rackobj` goes, its members keep their own grades. Guarded by `grade copy /
+paste, ungroup and presets work like Cosmo's Develop and Preset menus`.
+
+### DR-EDIT-3 Presets are Cosmo's library (R-EDIT-3)
+`preset save|apply <name> [--node <bind>]` are Cosmo's own `preset save` / `preset apply` on the
+node (apply refused on a group — Cosmo applies to an image); `preset import <path.apf>` copies into
+the library; the library is listed with Cosmo's `PresetLibrary::scan` (`rescanPresets`, `:478`) into
+`AppModel::presets`. The folder is the host's (`Host::presetDir`; the GUI and CLI default to
+`$XDG_DATA_HOME/interstellar/presets`, `INTERSTELLAR_PRESETS` overrides), set into Cosmo the way
+`cosmo-cc --presets` sets it.
+
+### DR-SET-1 Engine settings are commands, validated, applied and persisted (R-SET-1, R-SET-2)
+`settings set cpuPercent=… threads=… previewEdge=… useGpu=… uiScale=…` (`settingsCommand`, `:370`)
+validates every key (unknown keys refused with the nearest), then `applySettingsNow` (`:452`) sets
+the ONE `ThreadBudget` (percent, explicit threads, `apply()` → `par::setThreads` — the engine
+threads Interstellar's composite, grade and temporal ops run on), hands Cosmo the same values
+(`CosmoService::applySettings`), sets the grade step's GPU opt-in (`GradeEngine::setPreferGpu`), and
+writes the host's settings file, which the next service reads at construction. Model:
+`settings.{cpuPercent,threads,previewEdge,useGpu,uiScale}` plus measured `gpuAvailable`, `cores`,
+`engineThreads`, `decodeWorkers`. Guarded by `engine settings: one CPU budget, persisted, and preview
+quality caps the monitor`.
+
+### DR-SET-3 Preview quality caps the monitor only (R-SET-3)
+`renderFrame` clamps its edge to `settings.previewEdge` (`core/service/ServiceRender.cpp:303`);
+`renderTimelineFrame` — renders, export-still — is untouched; a cap never upscales. Measured in the
+same test: a 640×360 project at `previewEdge=256` → monitor 256×144, render 640×360; `0` → full.
+
+### DR-UI-7 Cosmo's menu bar and accelerators (R-UI-7)
+`EditTopBar` carries cosmo's `MenuStrip` after the wordmark; `App::buildMenus` (`app/App.cpp:144`)
+fills File · Edit · Settings · Workspace · Preset, every item a command line or a host picker
+(Save As, Import Preset, Export Still added to the GTK host); the Preset menu is rebuilt from
+`AppModel::presets` (`refreshPresetMenu`, `:190`, via cosmo's new `MenuStrip::setItems`).
+Accelerators in `App::editKey` (`:404`). Engine Settings opens COSMO's `SettingsDialog`
+(`openSettings`, `:126`) with its Input row hidden (cosmo's new `setInputRowShown`) — one instance
+for Home and Edit; Interstellar's own Reduce-motion dialog is retired (the OS setting governs, as in
+cosmo). Guarded by `interstellar_app_ui_tests` (menu clicks dispatch `project save`, `undo`,
+`grade paste --all`, `preset apply Film/Warm --node …`; Workspace switches the tab; the
+accelerators) and shots `edit_menu_file`, `edit_menu_file_mid`, `edit_menu_edit`,
+`edit_menu_preset`, `edit_settings`.
+
+### DR-UI-8 Screen scale zooms, and input maps through it (R-UI-8)
+`App::setUiScale` (`:103`) follows `settings.uiScale` from the model (whoever changed it), eases the
+DRAWN scale over 260 ms, re-derives the logical size and layout from it every frame while it moves,
+renders the tree through a scaling root transform, and divides pointer and wheel positions by it;
+the GTK host sizes the window minimum from `minPhysicalWidth/Height` and tells the dialog the
+largest scale the display can hold. Guarded by `a new screen scale ZOOMS (first moved frame strictly
+between 100% and 125%)`, `at 125% the layout is 1152 logical units wide`, `a click in pixels lands
+on the logical File title at 125%`, and shot `edit_scale_125`.
+
+### DR-UI-9 With nothing cut at the playhead, the monitor shows the Grade target's reference frame (R-RACK-3)
+`App::fetchFrame` asks the service for a frame whenever there is a Grade target, not only when a clip
+is under the playhead (`app/App.cpp:477`); the service answers with the target's reference frame,
+graded. Before this the monitor said "no clip at the playhead" and a chosen reference frame was
+never seen. Guarded by `with no clip at the playhead the monitor still asks for a frame`.

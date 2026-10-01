@@ -117,6 +117,28 @@ namespace interstellar
              {"track=<atrk>", "src=<file>", "at=<t>", "in=<t>", "out=<t>", "gain=<dB>", "fade=<s>"},
              "Place an audio file on an audio track.", "R-AUD-2"},
 
+            {K::Undo, "undo", "", 0, 0, {},
+             "Step back one edit — a grade, an override, a cut, a version change — across the rack and "
+             "the project alike.", "R-EDIT-1"},
+            {K::Redo, "redo", "", 0, 0, {}, "Step forward again after an undo.", "R-EDIT-1"},
+            {K::GradeCopy, "grade copy", "<node>", 1, 1, {},
+             "Copy a rack node's grade (its own params, masks excluded) to the clipboard.", "R-EDIT-2"},
+            {K::GradePaste, "grade paste", "[node…]", 0, -1, {"all"},
+             "Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: "
+             "it writes through to Cosmo.", "R-EDIT-2"},
+            {K::RackUngroup, "rack ungroup", "<group>", 1, 1, {},
+             "Dissolve a group; its members keep their own grades.", "R-RACK-4"},
+            {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
+             "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu "
+             "(0|1), uiScale (%). Persisted; one CPU budget for the rack and the render path.", "R-SET-1", true},
+            {K::PresetApply, "preset apply", "<name>", 1, 1, {"node=<bind>"},
+             "Apply a library preset to a rack source (the Grade target by default). Root timeline only.",
+             "R-EDIT-3"},
+            {K::PresetSave, "preset save", "<name>", 1, 1, {"node=<bind>"},
+             "Save a rack source's grade to the library as <name>.apf.", "R-EDIT-3"},
+            {K::PresetImport, "preset import", "<path.apf>", 1, 1, {},
+             "Copy an .apf (from Cosmo or anywhere) into the library.", "R-EDIT-3"},
+
             {K::Playhead, "playhead", "<t>|+<dt>|-<dt>|next-cut|prev-cut", 1, 1, {},
              "Move the playhead; snapped to a frame.", "R-TL-5"},
             {K::Play, "play", "", 0, 0, {}, "Start playback of the current timeline.", "R-UI-3"},

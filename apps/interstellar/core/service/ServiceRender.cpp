@@ -298,6 +298,9 @@ namespace interstellar
     bool InterstellarService::renderFrame(double t, int proxyEdge, Raster &out)
     {
         if (!mOpen) return false;
+        // Preview quality caps the monitor's render edge (R-SET-3) — a cap, never an upscale. A
+        // render and an export-still go through renderTimelineFrame at full size, untouched.
+        if (mSettings.previewEdge > 0) proxyEdge = proxyEdge > 0 ? std::min(proxyEdge, mSettings.previewEdge) : mSettings.previewEdge;
         bool any = false;
         if (!renderTimelineFrame(currentTimeline(), t, proxyEdge, out, &any)) return false;
         if (any) return true;

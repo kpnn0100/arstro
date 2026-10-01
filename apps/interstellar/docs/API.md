@@ -54,6 +54,15 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `fx delete <fx>` | Remove a temporal effect. | R-FX-2 |
 | `audio track add [--name <n>]` | Add an audio track (suite schema `#atrack kind=audio`). | R-AUD-2 |
 | `audio clip add [--track <atrk>] [--src <file>] [--at <t>] [--in <t>] [--out <t>] [--gain <dB>] [--fade <s>]` | Place an audio file on an audio track. | R-AUD-2 |
+| `undo` | Step back one edit — a grade, an override, a cut, a version change — across the rack and the project alike. | R-EDIT-1 |
+| `redo` | Step forward again after an undo. | R-EDIT-1 |
+| `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
+| `grade paste [node…] [--all]` | Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: it writes through to Cosmo. | R-EDIT-2 |
+| `rack ungroup <group>` | Dissolve a group; its members keep their own grades. | R-RACK-4 |
+| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
+| `preset apply <name> [--node <bind>]` | Apply a library preset to a rack source (the Grade target by default). Root timeline only. | R-EDIT-3 |
+| `preset save <name> [--node <bind>]` | Save a rack source's grade to the library as <name>.apf. | R-EDIT-3 |
+| `preset import <path.apf>` | Copy an .apf (from Cosmo or anywhere) into the library. | R-EDIT-3 |
 | `playhead <t>\|+<dt>\|-<dt>\|next-cut\|prev-cut` | Move the playhead; snapped to a frame. | R-TL-5 |
 | `play` | Start playback of the current timeline. | R-UI-3 |
 | `pause` | Stop playback. | R-UI-3 |
@@ -183,6 +192,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `render.finished` | `job`, `timeline`, `frames`, `out` | A render completed. |
 | `render.failed` | `job`, `timeline`, `why` | A render stopped with an error or was cancelled. |
 | `lint.report` | `offline`, `dangling`, `refused` | Counts from `lint`; details follow as info. |
+| `history.changed` | `did`, `label`, `canUndo`, `canRedo` | An edit was recorded, undone or redone (did = edit \| undo \| redo \| cleared). |
+| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale` | Engine settings after a change, all keys. |
+| `presets.changed` | `count` | The preset library was rescanned. |
 
 ## Model
 
@@ -293,4 +305,23 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].total` | integer |  | Frames in the range. |
 | `renders[].state` | string |  | queued \| running \| done \| failed \| cancelled. |
 | `renders[].error` | string |  | Why it failed. |
+| `canUndo` | bool |  | `undo` has something to undo (R-EDIT-1). |
+| `canRedo` | bool |  | `redo` has something to redo. |
+| `undoLabel` | string |  | What `undo` would undo, e.g. `set a.basic.exposure`. |
+| `redoLabel` | string |  | What `redo` would redo. |
+| `hasGradeClipboard` | bool |  | `grade copy` has filled the clipboard (R-EDIT-2). |
+| `gradeClipboardFrom` | string |  | The bind name the clipboard grade came from. |
+| `settings` | group |  | Engine settings (R-SET). |
+| `settings.cpuPercent` | integer |  | Share of the machine's cores the app may schedule — the rack's decode and the frame path alike. |
+| `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |
+| `settings.previewEdge` | integer |  | Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected. |
+| `settings.useGpu` | bool |  | GPU opt-in for the grade step (only where a backend exists). |
+| `settings.uiScale` | integer |  | Percent of the design size the window draws at. |
+| `settings.gpuAvailable` | bool | *machine* | A GPU backend exists on this machine. |
+| `settings.cores` | integer | *machine* | Cores on this machine. |
+| `settings.engineThreads` | integer | *machine* | Engine threads the budget resolves to now. |
+| `settings.decodeWorkers` | integer | *machine* | Decode workers the budget resolves to now. |
+| `presets` | array |  | The preset library (Cosmo `.apf`), depth first (R-EDIT-3). |
+| `presets[].name` | string |  | What `preset apply` spells, folders joined with `/`. |
+| `presets[].folder` | string |  | Its folder, empty at the top. |
 | `lastError` | string |  | The last refusal or failure, for a front end that was not listening. |

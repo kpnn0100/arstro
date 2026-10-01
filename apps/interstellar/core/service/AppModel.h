@@ -131,6 +131,28 @@ namespace interstellar
         std::string error;
     };
 
+    /** Engine settings, as Cosmo's Engine Settings dialog shows them (R-SET). Persisted by the
+     *  service in the host's settings file; one CPU budget serves the hosted Cosmo rack and
+     *  Interstellar's own render path. */
+    struct SettingsModel
+    {
+        int cpuPercent = 50;          // share of the machine's cores the app may schedule (R-SET-2)
+        int threads = 0;              // engine worker threads; 0 = auto (from cpuPercent)
+        int previewEdge = 1600;       // monitor/preview render long edge, px; a cap, never an upscale
+        bool useGpu = false;
+        int uiScale = 100;            // percent of the design size — the host draws through it
+        // ── measured, read-only ──
+        bool gpuAvailable = false;
+        int cores = 0, engineThreads = 0, decodeWorkers = 0;
+    };
+
+    /** One preset in the shared library (Cosmo's `.apf`), for the Preset menu. */
+    struct PresetModel
+    {
+        std::string name;             // what `preset apply <name>` spells ("Portrait/Soft")
+        std::string folder;
+    };
+
     struct AppModel
     {
         unsigned revision = 0;
@@ -176,6 +198,16 @@ namespace interstellar
 
         // ── Deliver ──
         std::vector<RenderJobModel> renders;
+
+        // ── Edit: one undo history across the rack and the project (R-EDIT-1) ──
+        bool canUndo = false, canRedo = false;
+        std::string undoLabel, redoLabel;   // "set a.basic.exposure", "clip move shotA"
+        bool hasGradeClipboard = false;     // `grade copy` has something to paste
+        std::string gradeClipboardFrom;     // the bind name it was copied from
+
+        // ── Settings + Preset ──
+        SettingsModel settings;
+        std::vector<PresetModel> presets;
 
         // ── failure, inspectable after the fact by a front end that was not listening ──
         std::string lastError;

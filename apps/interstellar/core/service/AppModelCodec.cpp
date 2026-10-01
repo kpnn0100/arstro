@@ -201,6 +201,29 @@ namespace interstellar
                              .set("state", r.state)
                              .set("error", r.error));
         j.set("renders", renders);
+        j.set("canUndo", m.canUndo);
+        j.set("canRedo", m.canRedo);
+        j.set("undoLabel", m.undoLabel);
+        j.set("redoLabel", m.redoLabel);
+        j.set("hasGradeClipboard", m.hasGradeClipboard);
+        j.set("gradeClipboardFrom", m.gradeClipboardFrom);
+        Json settings = Json::object();
+        settings.set("cpuPercent", m.settings.cpuPercent);
+        settings.set("threads", m.settings.threads);
+        settings.set("previewEdge", m.settings.previewEdge);
+        settings.set("useGpu", m.settings.useGpu);
+        settings.set("uiScale", m.settings.uiScale);
+        if (!st)
+        {
+            settings.set("gpuAvailable", m.settings.gpuAvailable);
+            settings.set("cores", m.settings.cores);
+            settings.set("engineThreads", m.settings.engineThreads);
+            settings.set("decodeWorkers", m.settings.decodeWorkers);
+        }
+        j.set("settings", settings);
+        Json presets = Json::array();
+        for (const auto &p : m.presets) presets.push(Json::object().set("name", p.name).set("folder", p.folder));
+        j.set("presets", presets);
         j.set("lastError", m.lastError);
         return j;
     }
@@ -344,6 +367,25 @@ namespace interstellar
             {"renders[].total", "integer", "Frames in the range."},
             {"renders[].state", "string", "queued | running | done | failed | cancelled."},
             {"renders[].error", "string", "Why it failed."},
+            {"canUndo", "bool", "`undo` has something to undo (R-EDIT-1)."},
+            {"canRedo", "bool", "`redo` has something to redo."},
+            {"undoLabel", "string", "What `undo` would undo, e.g. `set a.basic.exposure`."},
+            {"redoLabel", "string", "What `redo` would redo."},
+            {"hasGradeClipboard", "bool", "`grade copy` has filled the clipboard (R-EDIT-2)."},
+            {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
+            {"settings", "group", "Engine settings (R-SET)."},
+            {"settings.cpuPercent", "integer", "Share of the machine's cores the app may schedule — the rack's decode and the frame path alike."},
+            {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},
+            {"settings.previewEdge", "integer", "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."},
+            {"settings.useGpu", "bool", "GPU opt-in for the grade step (only where a backend exists)."},
+            {"settings.uiScale", "integer", "Percent of the design size the window draws at."},
+            {"settings.gpuAvailable", "bool", "A GPU backend exists on this machine.", true},
+            {"settings.cores", "integer", "Cores on this machine.", true},
+            {"settings.engineThreads", "integer", "Engine threads the budget resolves to now.", true},
+            {"settings.decodeWorkers", "integer", "Decode workers the budget resolves to now.", true},
+            {"presets", "array", "The preset library (Cosmo `.apf`), depth first (R-EDIT-3)."},
+            {"presets[].name", "string", "What `preset apply` spells, folders joined with `/`."},
+            {"presets[].folder", "string", "Its folder, empty at the top."},
             {"lastError", "string", "The last refusal or failure, for a front end that was not listening."},
         };
         return f;

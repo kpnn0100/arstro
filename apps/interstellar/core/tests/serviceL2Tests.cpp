@@ -123,6 +123,8 @@ namespace
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
             h.writeImage = [this](const std::string &p, const Raster &r, std::string &) { images[p] = r; return true; };
+            h.settingsPath = dir + "/settings.txt";
+            h.presetDir = dir + "/presets";
             auto s = std::make_unique<InterstellarService>(budget, h);
             s->subscribe([this](const Event &e) { events.push_back(formatEvent(e)); });
             return s;
@@ -437,6 +439,116 @@ int main()
         // The .isp did save; the .cmp on disk still holds every source it held.
         double e = 0;
         assert(cmpValue(f.path("mv.cmp"), 0, "exposure", e) && std::fabs(e - 0.3) < 1e-6);
+    });
+
+    test("undo and redo span the rack and the project, and a drag is one step (R-EDIT-1)", [] {
+        Fixture f("undo");
+        f.standard();
+        f.must("set a.basic.exposure=0.2");
+        f.must("set a.basic.exposure=0.3");     // within half a second: the same drag
+        f.must("set a.basic.exposure=0.4");
+        f.must("clip move shotB --at 2.5");
+        assert(f.svc->model().canUndo && f.svc->model().undoLabel.find("clip move") == 0);
+        f.must("undo");                          // the cut
+        assert(std::fabs(evalValue(f, "get shotB.at") - 2.0) < 1e-9);
+        f.must("undo");                          // the whole exposure drag, written back THROUGH Cosmo
+        assert(std::fabs(evalValue(f, "get a.basic.exposure")) < 1e-6);
+        f.must("project save");
+        double onDisk = 1;
+        assert(cmpValue(f.path("mv.cmp"), 0, "exposure", onDisk) && std::fabs(onDisk) < 1e-6);
+        f.must("redo");
+        assert(std::fabs(evalValue(f, "get a.basic.exposure") - 0.4) < 1e-6);
+        assert(f.svc->model().canRedo && f.svc->model().redoLabel.find("clip move") == 0);
+        // A version's override is a project edit, undone like one.
+        f.must("timeline new v2 --base main");
+        f.must("timeline open v2");
+        f.must("set a.basic.exposure=0.9");
+        f.must("undo");
+        assert(std::fabs(evalValue(f, "eval a.basic.exposure") - 0.4) < 1e-6);
+        // A change to the rack's node set starts history over — as in Cosmo.
+        f.must("rack group new Pair --nodes a,b");
+        assert(!f.svc->model().canUndo && !f.svc->model().canRedo);
+        std::string err;
+        assert(!f.run("undo", &err) && err.find("nothing to undo") != std::string::npos);
+    });
+
+    test("engine settings: one CPU budget, persisted, and preview quality caps the monitor (R-SET)", [] {
+        Fixture f("settings");
+        f.standard();
+        f.must("settings set cpuPercent=25 previewEdge=1000");
+        assert(f.budget.percent() == 25);
+        assert(f.svc->model().settings.cpuPercent == 25 && f.svc->model().settings.engineThreads == f.budget.engineThreads());
+        std::string err;
+        assert(!f.run("settings set cpuPrecent=50", &err) && err.find("cpuPercent") != std::string::npos);
+        assert(!f.run("settings set uiScale=33", &err) && err.find("uiScale is one of") != std::string::npos);
+        // Persisted: a new service on the same settings file comes up at 25 %.
+        f.svc = f.make();
+        assert(f.svc->model().settings.cpuPercent == 25 && f.budget.percent() == 25);
+        // Preview quality caps the MONITOR's render edge; a render is unaffected.
+        f.must("project new \"" + f.path("big.isp") + "\" --res 640x360");
+        f.must("rack add \"" + f.path("footage/a.mp4") + "\"");
+        f.must("track add --kind video");
+        f.must("clip add --track v0 --src a --in 0 --out 2 --at 0");
+        f.must("settings set previewEdge=256");
+        Raster mon, full;
+        assert(f.svc->renderFrame(1.0, 0, mon));
+        assert(f.svc->renderTimelineFrame(f.svc->model().currentTimeline, 1.0, 0, full));
+        assert(mon.width == 256 && mon.height == 144);
+        assert(full.width == 640 && full.height == 360);
+        f.must("settings set previewEdge=0");          // full
+        assert(f.svc->renderFrame(1.0, 0, mon) && mon.width == 640);
+    });
+
+    test("grade copy / paste, ungroup and presets work like Cosmo's Develop and Preset menus (R-EDIT-2, R-EDIT-3)", [] {
+        Fixture f("develop");
+        f.standard();
+        f.must("set a.basic.exposure=0.7 a.basic.contrast=15");
+        f.must("grade copy a");
+        assert(f.svc->model().hasGradeClipboard && f.svc->model().gradeClipboardFrom == "a");
+        f.must("grade paste b");
+        assert(std::fabs(evalValue(f, "get b.basic.exposure") - 0.7) < 1e-6);
+        assert(std::fabs(evalValue(f, "get b.basic.contrast") - 15) < 1e-6);
+        f.must("undo");                              // a paste is one undoable edit
+        assert(std::fabs(evalValue(f, "get b.basic.exposure")) < 1e-6);
+        // Presets: save a's grade, apply it to b, see it in the library listing.
+        f.must("preset save Warm --node a");
+        bool listed = false;
+        for (const auto &p : f.svc->model().presets) listed = listed || p.name == "Warm";
+        assert(listed);
+        f.must("preset apply Warm --node b");
+        assert(std::fabs(evalValue(f, "get b.basic.exposure") - 0.7) < 1e-6);
+        // Import copies an .apf into the library.
+        std::filesystem::copy_file(f.path("presets/Warm.apf"), f.path("Cool.apf"));
+        f.must("preset import \"" + f.path("Cool.apf") + "\"");
+        listed = false;
+        for (const auto &p : f.svc->model().presets) listed = listed || p.name == "Cool";
+        assert(listed);
+        // Ungroup: the group goes, its member keeps its own grade.
+        f.must("rack group new Pair --nodes a,b");
+        f.must("set pair.basic.exposure=0.2");
+        assert(std::fabs(evalValue(f, "eval a.basic.exposure") - 0.9) < 1e-6);
+        f.must("rack ungroup pair");
+        assert(std::fabs(evalValue(f, "eval a.basic.exposure") - 0.7) < 1e-6);
+        assert(f.svc->project().idForRef("pair").empty());
+        // On a version, a paste would be a second copy of colour — refused with the way forward.
+        f.must("timeline new v2 --base main");
+        f.must("timeline open v2");
+        std::string err;
+        assert(!f.run("grade paste b", &err) && err.find("version") != std::string::npos);
+    });
+
+    test("Save As into another folder keeps every source online", [] {
+        Fixture f("saveas");
+        f.standard();
+        f.must("project save");
+        std::filesystem::create_directories(f.path("elsewhere/deeper"));
+        f.must("project save \"" + f.path("elsewhere/deeper/copy.isp") + "\"");
+        f.svc = f.make();
+        f.must("project open \"" + f.path("elsewhere/deeper/copy.isp") + "\"");
+        for (const auto &r : f.svc->model().rack) assert(!r.failed);
+        Raster r;
+        bool any = false;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, r, &any) && any);
     });
 
     test("the same script on two services dumps the same stable state", [] {

@@ -55,6 +55,11 @@ namespace interstellar
             {EK::RenderFinished, "render.finished", {"job", "timeline", "frames", "out"}, "A render completed."},
             {EK::RenderFailed, "render.failed", {"job", "timeline", "why"}, "A render stopped with an error or was cancelled."},
             {EK::LintReport, "lint.report", {"offline", "dangling", "refused"}, "Counts from `lint`; details follow as info."},
+            {EK::HistoryChanged, "history.changed", {"did", "label", "canUndo", "canRedo"},
+             "An edit was recorded, undone or redone (did = edit | undo | redo | cleared)."},
+            {EK::SettingsChanged, "settings.changed", {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale"},
+             "Engine settings after a change, all keys."},
+            {EK::PresetsChanged, "presets.changed", {"count"}, "The preset library was rescanned."},
         };
         return specs;
     }

@@ -50,7 +50,10 @@ namespace interstellar
             RenderProgress,     // job, timeline, done, total
             RenderFinished,     // job, timeline, frames, out
             RenderFailed,       // job, timeline, why
-            LintReport          // offline, dangling, refused
+            LintReport,         // offline, dangling, refused
+            HistoryChanged,     // did, label, canUndo, canRedo
+            SettingsChanged,    // the key=value pairs that changed
+            PresetsChanged      // count
         };
 
         Kind kind = Kind::Info;

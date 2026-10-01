@@ -58,6 +58,11 @@ namespace interstellar
             std::function<bool(const std::string &path, const Raster &frame, std::string &err)> writeImage;
             /** The recents index; "" = none (tests). */
             std::string recentsPath;
+            /** Engine settings file (cpuPercent, threads, previewEdge, useGpu, uiScale); "" = not
+             *  persisted. */
+            std::string settingsPath;
+            /** The `.apf` preset library; "" = presets unavailable. */
+            std::string presetDir;
         };
 
         using EventSink = std::function<void(const Event &)>;
@@ -100,8 +105,12 @@ namespace interstellar
         struct Source;
         struct Job;
         struct PendingRack;
+        struct UndoState;
+        struct UndoEntry;
 
         void emit(const Event &e);
+        bool dispatchInner(const Command &c);
+        void fillEditModel();
         bool fail(const std::string &why);
         bool requireProject();
         void refreshModel();
@@ -162,6 +171,20 @@ namespace interstellar
         bool lint();
         bool wait(const Command &c);
 
+        // edit / settings / presets (ServiceEdit.cpp)
+        bool editCommand(const Command &c);
+        static bool undoable(Command::Kind k);
+        static bool structural(Command::Kind k);
+        void captureState(UndoState &out) const;
+        bool applyState(const UndoState &s, std::string &err);
+        void recordEdit(const Command &c, const UndoState &before);
+        void clearHistory();
+        bool settingsCommand(const Command &c);
+        void loadSettings();
+        void applySettingsNow();
+        bool saveSettings() const;
+        void rescanPresets();
+
         cosmo::ThreadBudget &mBudget;
         Host mHost;
         std::shared_ptr<FrameSelector> mFrames;
@@ -194,6 +217,14 @@ namespace interstellar
         std::map<std::string, std::unique_ptr<Source>> mSources;
         std::vector<std::unique_ptr<Job>> mJobs;
         int mNextJob = 1;
+
+        // edit history, clipboard, settings, presets
+        std::vector<UndoEntry> mUndo, mRedo;
+        EditParams mClipboard;
+        bool mHasClipboard = false;
+        std::string mClipboardFrom;
+        SettingsModel mSettings;
+        std::vector<PresetModel> mPresets;
     };
 }
 }

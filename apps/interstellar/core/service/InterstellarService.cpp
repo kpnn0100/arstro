@@ -97,6 +97,11 @@ namespace interstellar
             if (e.kind == cosmo::Event::Kind::Error)
                 emit(Event(EK::Info).with("text", "rack: " + cosmo::formatEvent(e)));
         });
+        if (!mHost.presetDir.empty()) mRack.setPresetDir(mHost.presetDir);
+        loadSettings();
+        mSettings.gpuAvailable = mGrade->gpuAvailable();
+        applySettingsNow();
+        rescanPresets();
         loadRecents();
         refreshModel();
     }
@@ -158,6 +163,23 @@ namespace interstellar
     bool InterstellarService::dispatch(const Command &c)
     {
         mOutput.clear();
+        // One history across the rack and the project (ServiceEdit.cpp): the state around an
+        // undoable command is captured, and a change to the rack's node set starts history over.
+        std::unique_ptr<UndoState> before;
+        if (mOpen && undoable(c.kind))
+        {
+            before.reset(new UndoState());
+            captureState(*before);
+        }
+        const bool ok = dispatchInner(c);
+        if (ok && structural(c.kind)) clearHistory();
+        else if (ok && before) recordEdit(c, *before);
+        refreshModel();
+        return ok;
+    }
+
+    bool InterstellarService::dispatchInner(const Command &c)
+    {
         bool ok = false;
         switch (c.kind)
         {
@@ -236,8 +258,14 @@ namespace interstellar
             case CK::Lint: ok = requireProject() && lint(); break;
             case CK::Wait: ok = wait(c); break;
             case CK::Quit: mQuit = true; ok = true; break;
+
+            case CK::Undo: case CK::Redo: case CK::SettingsSet: case CK::PresetImport:
+                ok = editCommand(c);
+                break;
+            case CK::GradeCopy: case CK::GradePaste: case CK::RackUngroup: case CK::PresetApply: case CK::PresetSave:
+                ok = requireProject() && editCommand(c);
+                break;
         }
-        refreshModel();
         return ok;
     }
 
@@ -364,6 +392,7 @@ namespace interstellar
             m.selectedClip.clear();
             m.duration = 0;
             m.renders.clear();
+            fillEditModel();
             return;
         }
         const Project &P = *mProject;
@@ -592,6 +621,20 @@ namespace interstellar
 
         m.renders.clear();
         for (const auto &j : mJobs) m.renders.push_back(j->model);
+        fillEditModel();
+    }
+
+    void InterstellarService::fillEditModel()
+    {
+        AppModel &m = mModel;
+        m.canUndo = !mUndo.empty();
+        m.canRedo = !mRedo.empty();
+        m.undoLabel = mUndo.empty() ? std::string() : mUndo.back().label;
+        m.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
+        m.hasGradeClipboard = mHasClipboard;
+        m.gradeClipboardFrom = mClipboardFrom;
+        m.settings = mSettings;
+        m.presets = mPresets;
     }
 
     // ──────────────────────────────────────────────────────────────────────────────────────────
@@ -750,6 +793,22 @@ namespace interstellar
             syncRackObjNodes();
         }
         const std::string target = path.empty() ? mIspPath : fs::absolute(path).lexically_normal().string();
+        if (target != mIspPath && fs::path(target).parent_path() != fs::path(mIspPath).parent_path())
+        {
+            // Save As into another folder: every reference is relative to the .isp, so each is
+            // re-expressed against the new folder — the rack, the media, the audio. Otherwise the
+            // copy opens with every source offline.
+            auto rebase = [&](std::string &ref) {
+                if (ref.empty()) return;
+                const std::string abs = resolvePath(ref);
+                const fs::path base = fs::path(target).parent_path();
+                const fs::path rel = fs::path(abs).lexically_relative(base);
+                ref = rel.empty() || rel.begin()->string() == ".." ? abs : rel.string();
+            };
+            if (mProject->hasRack) rebase(mProject->rack.path);
+            for (auto &ro : mProject->rackObjs) rebase(ro.media);
+            for (auto &a : mProject->audioClips) rebase(a.src);
+        }
         if (!mProject->save(target, err)) return fail("project save: " + err);
         mIspPath = target;
         mModel.dirty = false;

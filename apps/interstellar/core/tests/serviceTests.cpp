@@ -71,6 +71,7 @@ static AppModel populatedModel()
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";
     r.format = "h264"; r.state = "queued";
     m.renders.push_back(r);
+    m.presets.push_back({"Film/Warm fade", "Film"});
     return m;
 }
 

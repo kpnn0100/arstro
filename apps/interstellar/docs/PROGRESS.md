@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — all seven phases built (audio master sum outstanding); the GUI is integrated and verified headlessly over the real service.*
+*Last updated: 2026-10-01 — cosmo's menus, settings (CPU limit), undo/redo and presets; MKV playback (D-3) and the reference-frame reload (D-4) fixed.*
 
 ---
 
@@ -35,6 +35,8 @@ one integrator who moves, wires, tests and commits each stream:
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
 - [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
       renders the real app over the real service.
+- [x] Cosmo's File / Edit / Settings / Workspace / Preset menus, accelerators, Engine Settings with
+      the CPU limit, screen scale, undo/redo, copy/paste grade, presets (DR-EDIT-*, DR-SET-*, DR-UI-7..9).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,
@@ -63,6 +65,21 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-01 — Cosmo's menus and settings, reused rather than re-drawn (R-UI-7, R-SET).** The menu
+bar is cosmo's `MenuStrip`; Engine Settings is cosmo's `SettingsDialog`. Each needed one small,
+opt-in addition (`MenuStrip::setItems` + read-only geometry; `SettingsDialog::setInputRowShown` +
+`appearAmount`) and cosmo's two pure `AppSettings` scale helpers moved inline into the header so
+the app links no cosmo_core — cosmo's 41 shots are byte-identical before and after. The menus are
+named for this app (cosmo's Develop + History became **Edit**; **Workspace** holds the pages and a
+view reset that never touches data). Interstellar's own one-row settings dialog (Reduce motion) is
+retired: cosmo's dialog has no such row and cosmo honours the OS setting, so this app does too.
+
+**2026-10-01 — undo restores STATES, written back through Cosmo.** Aligning Interstellar's undo
+with Cosmo's own per-node, time-coalesced history would mean predicting Cosmo's coalescing; instead
+an edit records the `.isp` text and the affected nodes' params before and after, and undo writes the
+earlier params back as an ordinary `set` — Cosmo's history sees a forward edit, the `.cmp` stays the
+authority, and nothing here becomes a second copy of colour.
 
 **2026-10-01 — a reference frame is the Grade monitor's business, not a rack reload (D-4).** The
 first build re-opened the rack so Cosmo's slot would hold the chosen frame. Nothing Interstellar
