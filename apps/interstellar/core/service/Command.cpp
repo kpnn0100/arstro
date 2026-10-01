@@ -87,8 +87,8 @@ namespace interstellar
              {"track=<trk>", "src=<rackobj>", "in=<t>", "out=<t>", "at=<t>", "name=<n>"},
              "Place a span of a rack source on a track.", "R-TL-1"},
             {K::ClipTrim, "clip trim", "<clip>", 1, 1, {"in=<t>", "out=<t>"},
-             "Move a clip's head (--in) and/or tail (--out) edge to a TIMELINE time; the frames that "
-             "remain stay where they were.", "R-TL-3"},
+             "Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); "
+             "trimming the head keeps the remaining frames where they were on the timeline.", "R-TL-3"},
             {K::ClipSplit, "clip split", "<clip>", 1, 1, {"at=<t>"}, "Cut a clip in two at a timeline time.", "R-TL-3"},
             {K::ClipMove, "clip move", "<clip>", 1, 1, {"at=<t>", "track=<trk>"},
              "Move a clip in time and/or to another track.", "R-TL-3"},

@@ -142,6 +142,8 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build |
 | `apps/interstellar/host/VideoFrameDecoder` · `HostFrameSource` · `PngWriter` | host | **built** — Cosmo's decoder seam, the timeline's source (stills through Cosmo's own decoder, for R-RENDER-5), PNG out |
 | `apps/interstellar/cli/main.cpp` | front end | **built** — `interstellar-cc`, argv/stdout only (DR-SVC-3) |
-| `apps/interstellar/app/*` | app | **[in progress]** — Home · Edit · the three tabs, over `AppHooks` (R-UI) |
-| `apps/interstellar/linux_main.cpp` | host | **[planned]** GTK3 window binding the app's hooks to the service |
+| `apps/interstellar/app/*` | app | **built** — Home · Edit · the three tabs over `AppHooks`; cosmo's panels compiled in (R-UI, DR-UI-1..6; `app/NOTES.md`) |
+| `apps/interstellar/linux_main.cpp` | host | **built** — the GTK3 window: hooks bound to the service, pickers, frame tick (DR-UI-4) |
+| `apps/interstellar/host/Thumbnailer.{h,cpp}` | host | **built** — the app's optional `thumbnail` hook, cached |
+| `apps/interstellar/tests/liveShots.cpp` | test | **built** — the real app over the real service, headless (`interstellar_live`) |
 | audio master sum | core | **[planned]** P6 (R-AUD-5) |

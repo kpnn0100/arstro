@@ -234,8 +234,9 @@ state print [--json] [--stable] | api [--json] [--md] | lint | wait <cond> [--ti
 > and the first draft lacked: `rack select`, `clip select`, `clip speed`, `revert`, `timeline delete`,
 > `marker add`, `fx delete`, `render cancel`. **Removed** `timeline diff --against` and `eval --at`:
 > neither is implemented in v1 (values do not vary over time yet), and R-SVC-3 forbids accepting a
-> flag that does nothing. `clip trim --in/--out` are the clip's head and tail edges in TIMELINE time
-> (what a drag produces), not source points. `audio clip add` requires `--out`: the core reads no
+> flag that does nothing. `clip trim --in/--out` are SOURCE points — the clip's own `in`/`out`
+> fields, the spelling `set <clip>.in=` uses (the service converts each to the edge's timeline time
+> for the model's trim; a head trim keeps the remaining frames where they were). `audio clip add` requires `--out`: the core reads no
 > audio headers. A version's colour override is **scalar**: the format stores a number added to the
 > rack's value; a curve or wheel override on a version is refused, pointing at the base or at
 > `rack duplicate` (R-RACK-5).

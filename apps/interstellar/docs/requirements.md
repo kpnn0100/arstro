@@ -272,3 +272,48 @@ Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 current timeline; the model lists them as tracks/clips with `audio=true`. **Not built: the master
 sum** — R-AUD-5's "sums to a master so a cut can be watched and delivered with its bed" is P6, and
 a render today is picture only.
+
+
+### DR-UI-1 The accent is the one forked token, installed at runtime (R-UI-2, R-G-2)
+`app/Theme.h` aliases cosmo's palette, radius, font and metrics namespaces and `sharedTheme()`, and
+adds only named Interstellar surface tokens; `installInterstellarAccent()` sets cosmo's runtime
+accent slot (cosmo R-G-5) to `#CF5AED` first thing in `App::App` (`app/App.cpp:46`). Guarded by
+`interstellar_app_ui_tests`, which reads `palette::primary()` and a reused cosmo slider fill and gets
+exactly `#CF5AED`.
+
+### DR-UI-2 Home, Loading and Edit follow the model's screen, cross-faded (R-UI-1, R-UI-3)
+`App` (`app/App.h`) shows `AppModel::screen` and cross-fades between screens (260 ms); Edit is three
+tabs (Grade / Cut / Deliver, keys 1–3) over ONE monitor that lives outside the tab host — a test
+asserts the monitor does not move across a tab switch. The version switcher is chrome in the top bar
+(`EditTopBar`), with pin/freeze/rebase/new actions.
+
+### DR-UI-3 Cosmo's panels are reused as libraries (R-UI-5)
+`EditStackTabs`, `ParamPanel`, `SliderRow`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`,
+`HistogramWidget`, `Filmstrip`, `SegmentedControl`, `PillButton`, `IconButton`, `ConfirmDialog` are
+compiled from `apps/cosmo/widgets/*.cpp`. Cosmo's `RightColumn` is not (it is built on cosmo_core's
+service); `GradeInspector` replicates its wiring so each panel callback becomes
+`set <bind>.<filter>.<key>=<v>` in cosmo's keys and unit conversions.
+
+### DR-UI-4 The GUI dispatches text, and the host binds it to the service (R-G-4, R-SVC-1)
+The app reports intent only through `AppHooks::dispatch` (text lines in the service grammar; the
+exact line per control is tabled in `app/NOTES.md`); the GTK host (`linux_main.cpp`) binds
+`model`/`dispatch`/`renderFrame` to `InterstellarService` and the optional `thumbnail` hook to a
+host-side cache (`host/Thumbnailer`), pumps the service on every frame tick, and repaints only while
+`needsRedraw`. Guarded end to end by `interstellar_live` (real app, real service, real media).
+Verb check at integration: every verb the app emits parses in the grammar; `clip trim --in/--out`
+are source points on both sides (`clip trim takes SOURCE points`, L2).
+
+### DR-UI-5 Version overrides are visible and revertible in one click (R-VER-2, ui-brief §3)
+A rack row carries an eased OVR badge when the current version has a `#tlgrade` on it; a click sends
+`revert <bind>`. Timeline clips draw by provenance (inherited dimmed, overridden with the accent
+edge, dangling in destructive with its reason). Guarded by `clicking the OVR badge dispatched
+revert s_day02`.
+
+### DR-UI-6 Every state is drawn, shot and looked at, at two sizes (R-UI-6, arstro.design.rule)
+`interstellar_app_shots --check` renders 31 named states × {1440×900, 1024×640} (idle, hover, empty,
+loading, populated, mid-transition) and fails a uniform PNG; `interstellar_app_ui_tests` (137
+checks) asserts exact dispatched lines, layout containment at both sizes, clamped scrolling, image
+release, and — pumping one 16 ms frame at a time — that every tween's first moved frame lies
+strictly between start and target. Known gaps (app/NOTES.md): no drag of a source onto the timeline,
+no regroup by drag, a reused cosmo slider still steps when the model pushes a new value for the same
+node.

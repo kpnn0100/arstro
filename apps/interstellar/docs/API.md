@@ -40,7 +40,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `timeline delete <tl>` | Delete a timeline. Refused while another version is based on it. | R-VER-1 |
 | `track add [--kind <video\|audio>] [--name <n>]` | Add a track to the current timeline. | R-TL-1 |
 | `clip add [--track <trk>] [--src <rackobj>] [--in <t>] [--out <t>] [--at <t>] [--name <n>]` | Place a span of a rack source on a track. | R-TL-1 |
-| `clip trim <clip> [--in <t>] [--out <t>]` | Move a clip's head (--in) and/or tail (--out) edge to a TIMELINE time; the frames that remain stay where they were. | R-TL-3 |
+| `clip trim <clip> [--in <t>] [--out <t>]` | Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); trimming the head keeps the remaining frames where they were on the timeline. | R-TL-3 |
 | `clip split <clip> [--at <t>]` | Cut a clip in two at a timeline time. | R-TL-3 |
 | `clip move <clip> [--at <t>] [--track <trk>]` | Move a clip in time and/or to another track. | R-TL-3 |
 | `clip delete <clip> [--ripple]` | Remove a clip; --ripple closes the gap. | R-TL-3 |

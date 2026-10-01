@@ -1935,12 +1935,26 @@ namespace interstellar
             {
                 NodeId id;
                 if (!clipRef(c.arg(0), id)) return false;
-                if (!c.has("in") && !c.has("out")) return fail("clip trim: give --in <t> (head edge) and/or --out <t> (tail edge)");
-                double t = 0;
-                if (c.has("in") && (!time("in", t) || !arrange::trim(P, tl, id, arrange::Edge::Head, t, err)))
-                    return err.empty() ? false : fail("clip trim: " + err);
-                if (c.has("out") && (!time("out", t) || !arrange::trim(P, tl, id, arrange::Edge::Tail, t, err)))
-                    return err.empty() ? false : fail("clip trim: " + err);
+                if (!c.has("in") && !c.has("out")) return fail("clip trim: give --in <t> and/or --out <t> (source seconds)");
+                // --in / --out are SOURCE points — the clip's own `in`/`out` fields, the same
+                // spelling `set <clip>.in=` uses. The model's trim moves an edge to a TIMELINE time,
+                // so each is converted through the clip as this version resolves it.
+                auto trimTo = [&](const char *flag, arrange::Edge edge) {
+                    double src = 0;
+                    if (!parseDouble(c.flag(flag), src)) return fail(std::string("clip trim: --") + flag + " needs source seconds");
+                    ResolvedTimeline R;
+                    if (!resolved(tl, R, err)) return fail(err);
+                    const Clip *cl = nullptr;
+                    for (const auto &x : R.clips)
+                        if (x.id == id) cl = &x;
+                    if (!cl) return fail("clip trim: " + c.arg(0) + " is not in this timeline");
+                    const double speed = cl->speed != 0 ? std::fabs(cl->speed) : 1.0;
+                    const double t = snapToFrame(cl->at + (src - cl->in) / speed, fps);
+                    if (!arrange::trim(P, tl, id, edge, t, err)) return fail("clip trim: " + err);
+                    return true;
+                };
+                if (c.has("in") && !trimTo("in", arrange::Edge::Head)) return false;
+                if (c.has("out") && !trimTo("out", arrange::Edge::Tail)) return false;
                 return done("trimmed", id);
             }
             case CK::ClipSplit:

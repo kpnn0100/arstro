@@ -1,0 +1,937 @@
+/*
+ *  interstellar_v1 — interstellar_app_ui_tests: assertions over the ASSEMBLED front end.
+ *
+ *  The real App over a FakeService (tests/FakeService.h) whose `dispatch` records every line, with
+ *  real text metrics (Cairo + the embedded faces). Four kinds of assertion:
+ *
+ *   1. INTENT AS TEXT — a moved control dispatches the exact command line of project-format §8:
+ *      the exposure slider → `set s_day01.basic.exposure=…`, a clip drag → `clip move … --at <the
+ *      SNAPPED value>`, a version pick → `timeline open …`, and so on for every control.
+ *   2. MOTION — nothing changes in one frame. The clock is pumped ONE frame (16 ms) at a time and
+ *      the FIRST value that moved is kept: it must lie strictly between where it was and where it
+ *      is going. Settling first and then looking would let a 200 ms fade finish and pass a snap.
+ *   3. LAYOUT — at 1440x900 and 1024x640, every column inside the window and no two siblings
+ *      overlapping; the timeline's one time origin; text measured and ellipsized.
+ *   4. REACH — scrollable surfaces clamp at both ends and reach their last row.
+ *
+ *  Plain assert(), with NDEBUG undefined first: a Release build would otherwise compile every
+ *  check away and report green (cosmo D-43; R-TEST-1).
+ */
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+#include <cassert>
+
+#include "App.h"
+#include "EmbeddedFonts.h"
+#include "FakeService.h"
+#include "Rig.h"
+#include "widgets/TextFit.h"
+#include "../../../cosmo/widgets/SliderRow.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <functional>
+#include <string>
+#include <vector>
+
+using namespace arstro::interstellar_v1;
+using artboard::Point;
+using artboard::Rect;
+using artboard::Segment;
+using istest::centre;
+using istest::FakeService;
+using istest::Rig;
+using istest::world;
+using istest::worldRect;
+
+namespace
+{
+    int gChecks = 0;
+    std::string gErr;   // a sink for FakeService::dispatch's error out-param when a test drives the model directly
+
+    bool validUtf8(const std::string &s)
+    {
+        for (size_t i = 0; i < s.size();)
+        {
+            const unsigned char c = (unsigned char)s[i];
+            const int n = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+            if (n == 0 || i + n > s.size()) return false;
+            for (int k = 1; k < n; ++k) if (((unsigned char)s[i + k] & 0xC0) != 0x80) return false;
+            i += n;
+        }
+        return true;
+    }
+#define CHECK(cond, what)                                                                  \
+    do                                                                                     \
+    {                                                                                      \
+        const bool ok_ = (cond);                                                           \
+        ++gChecks;                                                                         \
+        std::printf("  [%s] %s\n", ok_ ? "ok" : "FAIL", what);                             \
+        assert(ok_ && what);                                                               \
+    } while (0)
+
+    const int kSizes[2][2] = {{1440, 900}, {1024, 640}};
+
+    bool hasLine(const FakeService &s, const std::string &exact)
+    {
+        for (const auto &l : s.lines) if (l == exact) return true;
+        return false;
+    }
+    std::string withPrefix(const FakeService &s, const std::string &prefix)
+    {
+        for (auto it = s.lines.rbegin(); it != s.lines.rend(); ++it)
+            if (it->compare(0, prefix.size(), prefix) == 0) return *it;
+        return std::string();
+    }
+    bool inside(const Rect &r, double W, double H, double eps = 0.5)
+    {
+        return r.x >= -eps && r.y >= -eps && r.right() <= W + eps && r.bottom() <= H + eps;
+    }
+    bool overlap(const Rect &a, const Rect &b, double eps = 0.5)
+    {
+        const double ix = std::min(a.right(), b.right()) - std::max(a.x, b.x);
+        const double iy = std::min(a.bottom(), b.bottom()) - std::max(a.y, b.y);
+        return ix > eps && iy > eps;
+    }
+    bool near(double a, double b, double eps = 1e-6) { return std::fabs(a - b) <= eps; }
+
+    /** Pump ONE frame at a time; return the first value that differs from `before`. */
+    double firstMoved(Rig &r, const std::function<double()> &get, double before, int maxFrames = 40)
+    {
+        for (int i = 0; i < maxFrames; ++i)
+        {
+            r.frame();
+            const double v = get();
+            if (std::fabs(v - before) > 1e-9) return v;
+        }
+        return before;
+    }
+    bool strictlyBetween(double v, double a, double b)
+    {
+        const double lo = std::min(a, b), hi = std::max(a, b);
+        return v > lo + 1e-9 && v < hi - 1e-9;
+    }
+    template <class T>
+    T *firstChild(Segment &s)
+    {
+        for (auto &c : s.children()) if (auto *p = dynamic_cast<T *>(c.get())) return p;
+        return nullptr;
+    }
+
+    // ── 0. the accent ─────────────────────────────────────────────────────────────────
+
+    void testAccent()
+    {
+        std::printf("accent\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        const artboard::Color p = palette::primary();
+        CHECK(near(p.r, 0xCF / 255.0, 1e-4) && near(p.g, 0x5A / 255.0, 1e-4) && near(p.b, 0xED / 255.0, 1e-4), "palette::primary() is #CF5AED after App()");
+        const artboard::Color fill = sharedTheme().slider.rangeFill.paint.fill;
+        CHECK(near(fill.r, p.r) && near(fill.g, p.g) && near(fill.b, p.b), "cosmo's shared slider fill follows the accent");
+        CHECK(near(sharedTheme().tab.activeIndicatorColor.b, p.b), "cosmo's tab indicator follows the accent");
+        CHECK(near(palette::ring().a, 0.5) && near(palette::ring().r, p.r), "ring() is the accent at 0.5");
+        // a reused cosmo widget DRAWS purple-pink: the Sharpening Amount slider (0..150, +40) has its
+        // fill running from the track's left end to 27% — sample inside it, clear of the thumb
+        std::vector<arstro::cosmo_v2::SliderRow *> rows;
+        for (auto &c : r.app->edit().gradeInspector()->basicDetail()->children())
+            if (auto *sr = dynamic_cast<arstro::cosmo_v2::SliderRow *>(c.get())) rows.push_back(sr);
+        artboard::Slider *sl = rows.size() > 15 ? firstChild<artboard::Slider>(*rows[15]) : nullptr;
+        CHECK(sl != nullptr, "found the Sharpening Amount slider inside cosmo's ParamPanel");
+        const Point a = world(*sl, sl->width.value() * 0.12, sl->height.value() * 0.5);
+        const uint32_t px = r.pixel((int)a.x, (int)std::floor(a.y));
+        const int R = (px >> 16) & 0xFF, G = (px >> 8) & 0xFF, B = px & 0xFF;
+        std::printf("      slider fill pixel at (%.0f,%.0f) = #%02X%02X%02X\n", a.x, a.y, R, G, B);
+        CHECK(R > 150 && B > 170 && G < 140, "the reused cosmo slider fill is purple-pink on screen");
+    }
+
+    // ── 1. intent as text ─────────────────────────────────────────────────────────────
+
+    void testGradeCommands()
+    {
+        std::printf("grade: cosmo's panels dispatch `set <bind>.<filter>.<key>=…`\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto gi = r.app->edit().gradeInspector();
+        auto *row = firstChild<arstro::cosmo_v2::SliderRow>(*gi->basicDetail());
+        auto *sl = firstChild<artboard::Slider>(*row);
+        const Point c = centre(*sl, sl->localBounds());
+        r.drag(c.x, c.y, c.x + 60.0, c.y);
+        const std::string ex = withPrefix(r.svc, "set s_day01.basic.exposure=");
+        std::printf("      %s\n", ex.c_str());
+        CHECK(!ex.empty(), "dragging Exposure dispatched set s_day01.basic.exposure=…");
+        const double ev = std::stod(ex.substr(ex.find('=') + 1));
+        CHECK(ev > 0.35 && ev <= 5.0, "…in ENGINE units (EV), converted with cosmo's toEv");
+
+        // Grade tab: the shadows hue slider → grade0=h,s,l
+        gi->tabs()->setSelectedIndex(GradeInspector::kTabGrade);
+        r.settle();
+        auto *grow = firstChild<arstro::cosmo_v2::SliderRow>(*gi->gradePanel());
+        auto *gsl = grow ? firstChild<artboard::Slider>(*grow) : nullptr;
+        CHECK(gsl != nullptr, "found GradePanel's first slider");
+        const Point g = centre(*gsl, gsl->localBounds());
+        r.drag(g.x, g.y, g.x - 40.0, g.y);
+        const std::string gl = withPrefix(r.svc, "set s_day01.grade.grade0=");
+        std::printf("      %s\n", gl.c_str());
+        CHECK(!gl.empty() && std::count(gl.begin(), gl.end(), ',') == 2, "the grade wheel dispatched set s_day01.grade.grade0=h,s,l");
+
+        // Mixer/Curve tab: drag a point of the tone curve → curve=x,y;…
+        gi->tabs()->setSelectedIndex(GradeInspector::kTabColor);
+        r.settle();
+        auto cp = gi->curve();
+        const Rect pb = cp->plotBox();
+        const Point q = world(*cp, pb.x + pb.w * 0.5, pb.y + pb.h * (1.0 - 0.56));
+        r.drag(q.x, q.y, q.x, q.y - 14.0);
+        const std::string cl = withPrefix(r.svc, "set s_day01.curve.curve=");
+        std::printf("      %s\n", cl.c_str());
+        CHECK(!cl.empty() && cl.find(';') != std::string::npos, "dragging the tone curve dispatched set s_day01.curve.curve=x,y;…");
+    }
+
+    void testRackCommands()
+    {
+        std::printf("rack tree, deck and frame selector\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto rt = r.app->edit().rackTree();
+        Point p = centre(*rt, rt->rowRect(5));
+        r.click(p.x - 40, p.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "rack select s_still01"), "clicking a rack row dispatched rack select s_still01");
+        p = centre(*rt, rt->bypassRect(1));
+        r.click(p.x, p.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "set s_day01.bypass=1"), "the bypass toggle dispatched set s_day01.bypass=1");
+        {
+            // ui-brief §3: "revert to base, one click away" — the OVR badge sends `revert <bind>`.
+            int ovr = -1;
+            for (size_t k = 0; k < r.svc.m.rack.size(); ++k)
+                if (r.svc.m.rack[k].overridden && ovr < 0) ovr = (int)k;
+            CHECK(ovr >= 0, "the fake model has an overridden rack node");
+            if (ovr >= 0)
+            {
+                const Rect br = rt->overrideBadgeRect(ovr);
+                CHECK(br.w > 0, "its OVR badge was painted");
+                const Point bp = centre(*rt, br);
+                r.click(bp.x, bp.y);
+                r.pump(32);
+                const std::string want = "revert " + r.svc.m.rack[(size_t)ovr].bindName;
+                const std::string what = "clicking the OVR badge dispatched " + want;
+                CHECK(hasLine(r.svc, want), what.c_str());
+            }
+        }
+        const Rect wr = rt->weightRect(2);
+        const Point w0 = world(*rt, wr.x + wr.w * 0.25, wr.y + wr.h * 0.5), w1 = world(*rt, wr.x + wr.w * 0.6, wr.y + wr.h * 0.5);
+        r.drag(w0.x, w0.y, w1.x, w1.y);
+        const std::string wl = withPrefix(r.svc, "set s_day02.weight=");
+        std::printf("      %s\n", wl.c_str());
+        CHECK(!wl.empty() && std::fabs(std::stod(wl.substr(wl.find('=') + 1)) - 0.6) < 0.06, "dragging the weight bar dispatched set s_day02.weight≈0.6");
+        bool added = false;
+        r.app->onPickFootage = [&] { added = true; };
+        p = centre(*rt, rt->addRect());
+        r.click(p.x, p.y);
+        CHECK(added, "the rack's + asks the host for footage");
+        r.app->footagePicked({"/f/a.mov", "/f/b c.mov"});
+        CHECK(hasLine(r.svc, "rack add /f/a.mov \"/f/b c.mov\""), "picked footage becomes rack add, quoting the path with a space");
+
+        // the deck: cosmo's Filmstrip selects in the rack
+        r.svc.lines.clear();
+        auto deck = r.app->edit().gradeDeck();
+        auto strip = deck->filmstrip();
+        const Point s2 = world(*strip, strip->cellXForTest(2) + 40.0, 40.0);
+        r.click(s2.x, s2.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "rack select s_day02"), "clicking a filmstrip cell dispatched rack select s_day02");
+        r.svc.lines.clear();
+        r.svc.dispatch("rack select s_day01", gErr);
+        r.settle();
+        const Rect tr = deck->frameTrackRect();
+        CHECK(deck->hasFrameStrip(), "the reference-frame selector is a strip of frames at 1440x900");
+        const Point f0 = world(*deck, tr.x + tr.w * 0.3, tr.y + tr.h * 0.5), f1 = world(*deck, tr.x + tr.w * 0.75, tr.y + tr.h * 0.5);
+        r.drag(f0.x, f0.y, f1.x, f1.y);
+        const std::string fl = withPrefix(r.svc, "rack frame s_day01 --at ");
+        std::printf("      %s\n", fl.c_str());
+        CHECK(!fl.empty(), "dragging the frame strip dispatched rack frame s_day01 --at <t> on release");
+        const double ft = std::stod(fl.substr(fl.rfind(' ') + 1));
+        CHECK(std::fabs(ft - 0.75 * deck->sourceDuration()) < 0.2 && near(std::fmod(ft * 24.0 + 1e-6, 1.0), 0.0, 1e-3), "…at 75% of the source, on a frame boundary");
+    }
+
+    void testVersionCommands()
+    {
+        std::printf("version switcher\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto vs = r.app->edit().topBar()->versions();
+            Point p = centre(*vs, vs->bodyRect());
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(vs->isOpen(), "clicking the chrome opens the dropdown");
+            p = centre(*vs, vs->versionRowRect(2));
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(hasLine(r.svc, "timeline open delivery"), "choosing a version dispatched timeline open delivery");
+            CHECK(!vs->isOpen(), "…and closed the dropdown");
+            p = centre(*vs, vs->prevRect());
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(hasLine(r.svc, "timeline open social30"), "the ‹ arrow steps to the previous version");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto vs = r.app->edit().topBar()->versions();
+            for (int a : {VersionSwitcher::Pin, VersionSwitcher::Freeze, VersionSwitcher::Rebase})
+            {
+                Point p = centre(*vs, vs->bodyRect());
+                r.click(p.x, p.y);
+                r.settle();
+                p = centre(*vs, vs->actionRect(a));
+                r.click(p.x, p.y);
+                r.settle();
+            }
+            CHECK(hasLine(r.svc, "timeline pin social30"), "Pin dispatched timeline pin social30");
+            CHECK(hasLine(r.svc, "timeline freeze social30"), "Freeze dispatched timeline freeze social30");
+            CHECK(hasLine(r.svc, "timeline rebase social30"), "Rebase dispatched timeline rebase social30");
+            Point p = centre(*vs, vs->bodyRect());
+            r.click(p.x, p.y);
+            r.settle();
+            p = centre(*vs, vs->actionRect(VersionSwitcher::NewVersion));
+            r.click(p.x, p.y);
+            r.pump(32);
+            CHECK(r.app->edit().namePrompt()->isOpen(), "New version… opens the name prompt");
+            r.typeText("Festival cut");
+            r.key(13);
+            r.pump(32);
+            CHECK(hasLine(r.svc, "timeline new Festival_cut --base social30"), "the prompt dispatched timeline new Festival_cut --base social30 (a legal bind name)");
+        }
+        {
+            // the root has no base: pin / freeze / rebase are disabled, a click does nothing
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.currentTimeline = "main"; });
+            r.settle();
+            auto vs = r.app->edit().topBar()->versions();
+            Point p = centre(*vs, vs->bodyRect());
+            r.click(p.x, p.y);
+            r.settle();
+            p = centre(*vs, vs->actionRect(VersionSwitcher::Rebase));
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(withPrefix(r.svc, "timeline rebase").empty(), "Rebase is disabled on a root version");
+        }
+    }
+
+    void testCutCommands()
+    {
+        std::printf("timeline\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        r.app->setTab(EditScreen::Cut);
+        r.settle();
+        auto tl = r.app->edit().timeline();
+        const double pps = tl->ppsLive();
+        const Rect c7 = tl->clipRect("c7");
+        CHECK(near(c7.x, tl->timeToX(9.0), 0.01), "a clip is drawn at timeToX(at) — one time origin");
+        CHECK(near(tl->rulerRect().x, shell::headerWidth()) && near(tl->lanesRect().x, shell::headerWidth()), "ruler and lanes share headerWidth()");
+
+        // drag c7 so its start lands 3 px past c3's end (10 s): it snaps, keeps its grab, and sends 10
+        const Point g0 = world(*tl, c7.x + c7.w * 0.6, c7.y + c7.h * 0.5);
+        r.press(g0.x, g0.y);
+        r.frame();
+        r.dragTo(g0.x + 12.0, g0.y);
+        r.frame();
+        const Rect mid = tl->clipRect("c7");
+        CHECK(std::fabs(mid.x - (c7.x + 12.0)) < 1.0, "a drag keeps the grab offset — the clip moved 12 px, it did not teleport");
+        const double target = (tl->timeToX(10.0) + 3.0 + c7.w * 0.6);
+        for (int k = 1; k <= 6; ++k) { r.dragTo(g0.x + (world(*tl, target, 0).x - g0.x) * k / 6.0, g0.y); r.frame(); }
+        CHECK(tl->dragging() && near(tl->dragValue(), 10.0, 1e-9), "mid-drag the start is SNAPPED to the neighbour's edge (10 s)");
+        r.frame();   // the frame that saw the snap STARTED the guide's fade; one more shows it moving
+        CHECK(strictlyBetween(tl->snapGuideAmount(), 0.0, 1.0), "…and the snap guide is fading in (eased, not popped)");
+        r.releaseAt(world(*tl, target, 0).x, g0.y);
+        r.frame();
+        CHECK(hasLine(r.svc, "clip move c7 --at 10"), "the drop dispatched the SNAPPED value: clip move c7 --at 10");
+        {
+            // the other two snap targets: a marker (pickup, 6 s) and the playhead (5.25 s)
+            for (double want : {6.0, 5.25})
+            {
+                r.settle();
+                const Rect cr = tl->clipRect("c7");
+                const Point s0 = world(*tl, cr.x + cr.w * 0.5, cr.y + cr.h * 0.5);
+                const double tx = tl->timeToX(want) + 4.0 + cr.w * 0.5;   // 4 px past it: inside the 8 px pull
+                r.drag(s0.x, s0.y, world(*tl, tx, 0).x, s0.y, 10);
+                char line[64];
+                std::snprintf(line, sizeof line, "clip move c7 --at %g", want);
+                char msg[96];
+                std::snprintf(msg, sizeof msg, "dropping 4 px off %s snaps: %s", want == 6.0 ? "the marker" : "the playhead", line);
+                CHECK(hasLine(r.svc, line), msg);
+            }
+            // put it back where the rest of this test expects it
+            r.svc.dispatch("clip move c7 --at 10", gErr);
+        }
+
+        // a vertical drag onto the other video track adds --track; an audio lane is refused
+        r.settle();
+        const Rect c7b = tl->clipRect("c7");
+        const Rect v1 = tl->laneRect("v1");
+        const Point h0 = world(*tl, c7b.x + 10.0, c7b.y + c7b.h * 0.5);
+        r.drag(h0.x, h0.y, h0.x, world(*tl, 0, v1.y + v1.h * 0.5).y);
+        const std::string tm = withPrefix(r.svc, "clip move c7 --at 10 --track");
+        std::printf("      %s\n", tm.c_str());
+        CHECK(tm == "clip move c7 --at 10 --track v1", "dropping on V1 dispatched clip move c7 --at 10 --track v1");
+        r.settle();
+        const Rect c7c = tl->clipRect("c7");
+        const Rect a2 = tl->laneRect("a2");
+        const Point k0 = world(*tl, c7c.x + 10.0, c7c.y + c7c.h * 0.5);
+        r.svc.lines.clear();
+        r.drag(k0.x, k0.y, k0.x, world(*tl, 0, a2.y + a2.h * 0.5).y);
+        CHECK(withPrefix(r.svc, "clip move c7").find("--track a") == std::string::npos, "a video clip cannot be dropped on an audio track");
+
+        // click selects; an edge drag trims; a ruler click moves the playhead
+        r.settle();
+        Point p = centre(*tl, tl->clipRect("c5"));
+        r.click(p.x, p.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "clip select c5"), "clicking a clip dispatched clip select c5");
+        r.settle();
+        const Rect c5 = tl->clipRect("c5");
+        const Point e0 = world(*tl, c5.right() - 2.0, c5.y + c5.h * 0.5);
+        r.drag(e0.x, e0.y, e0.x - 40.0, e0.y);
+        const std::string tr = withPrefix(r.svc, "clip trim c5 --out ");
+        std::printf("      %s\n", tr.c_str());
+        CHECK(!tr.empty() && std::stod(tr.substr(tr.rfind(' ') + 1)) < 6.5, "dragging the right edge dispatched clip trim c5 --out <earlier>");
+        r.settle();
+        p = world(*tl, tl->timeToX(3.0), shell::rulerH() * 0.5);
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "playhead 3"), "clicking the ruler at 3 s dispatched playhead 3");
+        (void)pps;
+
+        // the inspector's actions, and the keys
+        r.svc.dispatch("clip select c2", gErr);
+        r.svc.dispatch("playhead 5.25", gErr);
+        r.settle();
+        auto ci = r.app->edit().clipInspector();
+        p = centre(*ci->splitButton(), ci->splitButton()->localBounds());
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "clip split c2 --at 5.25"), "Split at playhead dispatched clip split c2 --at 5.25");
+        r.key(46);
+        CHECK(hasLine(r.svc, "clip delete c2"), "Delete dispatched clip delete c2");
+        r.settle();
+        CHECK(!ci->hasClip(), "…and the inspector says nothing is selected once the clip is gone");
+    }
+
+    void testTransportAndDeliver()
+    {
+        std::printf("transport, deliver\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto tp = r.app->edit().transport();
+        Point p = centre(*tp, tp->buttonRect(1));
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(hasLine(r.svc, "play"), "▶ dispatched play");
+        {
+            // (settled above) — replay the switch one frame at a time to see the glyph cross-fade
+            r.svc.m.playing = false; ++r.svc.m.revision; r.settle();
+            r.svc.m.playing = true; ++r.svc.m.revision;
+            const double fp = firstMoved(r, [&] { return tp->playAmount(); }, 0.0);
+            CHECK(strictlyBetween(fp, 0.0, 1.0), "the play/pause glyph CROSS-FADES (first frame between)");
+            r.svc.m.playing = true; r.settle();
+        }
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(hasLine(r.svc, "pause"), "the same button, now ‖, dispatched pause");
+        p = centre(*tp, tp->buttonRect(0));
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "playhead prev-cut"), "◀◀ dispatched playhead prev-cut");
+        const Rect sr = tp->scrubRect();
+        r.svc.lines.clear();
+        r.drag(world(*tp, sr.x + sr.w * 0.2, 20).x, world(*tp, 0, sr.h * 0.5).y, world(*tp, sr.x + sr.w * 0.5, 20).x, world(*tp, 0, sr.h * 0.5).y);
+        CHECK(!withPrefix(r.svc, "playhead ").empty() && r.svc.lines.size() >= 3, "scrubbing dispatched a run of playhead <t> lines");
+
+        r.app->setTab(EditScreen::Deliver);
+        r.settle();
+        r.svc.lines.clear();
+        auto os = r.app->edit().outputSpec();
+        p = centre(*os->renderButton(), os->renderButton()->localBounds());
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "render --timeline social30 --out /home/editor/Projects/night-ferry/renders/social30.mp4 --format h264"),
+              "Render dispatched render --timeline social30 --out …/social30.mp4 --format h264 — the timeline NAMED");
+        auto fmt = os->formatPicker();
+        auto *prores = dynamic_cast<arstro::cosmo_v2::PillButton *>(fmt->children()[1].get());
+        p = centre(*prores, prores->localBounds());
+        r.click(p.x, p.y);
+        r.pump(32);
+        p = centre(*os, os->timelineRowRect(2));
+        r.click(p.x, p.y);
+        r.pump(32);
+        p = centre(*os->renderButton(), os->renderButton()->localBounds());
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "render --timeline delivery --out /home/editor/Projects/night-ferry/renders/delivery.mov --format prores"),
+              "picking ProRes and the Delivery version re-derives the path: render --timeline delivery … --format prores");
+        r.settle();
+        CHECK(r.app->edit().renderQueue()->count() == 6, "the queue grew by the two renders the fake accepted");
+    }
+
+    void testHomeAndShell()
+    {
+        std::printf("home, open, close\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.home(); });
+            r.settle();
+            const Rect c = r.app->home().cardLive(0);
+            r.click(c.x + c.w * 0.5, c.y + c.h * 0.4);
+            CHECK(hasLine(r.svc, "project open /home/editor/Projects/harbour/drone.isp"), "clicking the newest card dispatched project open <its path>");
+            CHECK(r.app->loading().projectName() == "Harbour drone", "…and the loading screen names it");
+            bool asked = false;
+            r.app->onPickProjectToCreate = [&] { asked = true; };
+            const Rect a = r.app->home().actionRect(0);
+            r.click(a.x + 20, a.y + 10);
+            CHECK(asked, "New project asks the host for a path");
+            r.app->newProjectPicked("/tmp/My New Project.isp");
+            CHECK(hasLine(r.svc, "project new \"/tmp/My New Project.isp\""), "…which becomes project new \"/tmp/My New Project.isp\"");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto tb = r.app->edit().topBar();
+            Point p = centre(*tb, tb->wordmarkRect());
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(r.app->edit().confirm()->isOpen(), "the wordmark with unsaved edits asks first (cosmo's ConfirmDialog)");
+            CHECK(r.svc.lines.empty(), "…and nothing was dispatched yet");
+            r.app->edit().confirm()->confirmDefault();
+            r.settle();
+            CHECK(r.svc.lines.size() == 2 && r.svc.lines[0] == "project save" && r.svc.lines[1] == "project close", "Save dispatched project save, then project close");
+            CHECK(r.app->screen() == arstro::interstellar::Screen::Home, "the model's Home screen is now the one shown");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.dirty = false; });
+            r.settle();
+            auto tb = r.app->edit().topBar();
+            Point p = centre(*tb, tb->wordmarkRect());
+            r.click(p.x, p.y);
+            CHECK(hasLine(r.svc, "project close") && !r.app->edit().confirm()->isOpen(), "a clean project closes straight away");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            r.svc.refuseNext = true;
+            auto rt = r.app->edit().rackTree();
+            const Point p = centre(*rt, rt->bypassRect(1));
+            r.click(p.x, p.y);
+            const double first = firstMoved(r, [&] { return r.app->edit().toastAmount(); }, 0.0);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "a refused line is SAID: the toast eases in (first frame between 0 and 1)");
+        }
+    }
+
+    // ── 2. motion: the first frame that moved lies strictly between ──────────────────────
+
+    void testMotion()
+    {
+        std::printf("motion: one frame at a time, first non-zero\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto tabs = r.app->edit().topBar()->tabs();
+            const Point p = centre(*tabs, tabs->segmentRect(1));
+            r.click(p.x, p.y);
+            CHECK(r.app->tab() == EditScreen::Cut, "clicking Cut selects the Cut tab");
+            double hl = -1, fadeIn = -1, fadeOut = -1;
+            for (int i = 0; i < 30 && (hl < 0 || fadeIn < 0 || fadeOut < 0); ++i)
+            {
+                r.frame();
+                if (hl < 0 && r.app->edit().tabHighlight() > 1e-9) hl = r.app->edit().tabHighlight();
+                if (fadeIn < 0 && r.app->edit().tabFade(EditScreen::Cut) > 1e-9) fadeIn = r.app->edit().tabFade(EditScreen::Cut);
+                if (fadeOut < 0 && r.app->edit().tabFade(EditScreen::Grade) < 1.0 - 1e-9) fadeOut = r.app->edit().tabFade(EditScreen::Grade);
+            }
+            std::printf("      highlight %.3f  cut fade %.3f  grade fade %.3f\n", hl, fadeIn, fadeOut);
+            CHECK(strictlyBetween(hl, 0.0, 1.0), "the tab highlight TRAVELS (first frame between Grade and Cut)");
+            CHECK(strictlyBetween(fadeIn, 0.0, 1.0), "the Cut page fades in (first frame between 0 and 1)");
+            CHECK(strictlyBetween(fadeOut, 0.0, 1.0), "the Grade page fades out (first frame between 1 and 0)");
+            const Rect before = worldRect(*r.app->edit().monitor());
+            r.settle();
+            const Rect after = worldRect(*r.app->edit().monitor());
+            CHECK(near(before.x, after.x) && near(before.y, after.y) && near(before.w, after.w) && near(before.h, after.h), "the monitor did not move across the tab switch");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto vs = r.app->edit().topBar()->versions();
+            const Point p = centre(*vs, vs->bodyRect());
+            r.click(p.x, p.y);
+            const double first = firstMoved(r, [&] { return vs->openAmount(); }, 0.0);
+            std::printf("      dropdown open amount %.3f\n", first);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "the version dropdown OPENS eased (first frame between 0 and 1)");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            r.app->setTab(EditScreen::Cut);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const double before = tl->ppsLive();
+            const Point p = centre(*tl, tl->zoomInRect());
+            r.click(p.x, p.y);
+            const double target = tl->ppsTarget();
+            const double first = firstMoved(r, [&] { return tl->ppsLive(); }, before);
+            std::printf("      zoom %.2f -> first %.2f -> target %.2f px/s\n", before, first, target);
+            CHECK(target > before && strictlyBetween(first, before, target), "the timeline ZOOM eases (live px/s strictly between)");
+            // an agent moves a clip: it travels there
+            r.settle();
+            const double x0 = tl->clipRect("c5").x;
+            for (auto &c : r.svc.m.clips) if (c.id == "c5") c.at = 13.0;
+            ++r.svc.m.revision;
+            const double x1 = tl->timeToX(13.0);
+            const double fx = firstMoved(r, [&] { return tl->clipRect("c5").x; }, x0);
+            CHECK(strictlyBetween(fx, x0, x1), "a clip the model moved TRAVELS to its new place");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.home(); });
+            r.settle();
+            r.resize(1100, 900);
+            r.frame();
+            r.resize(1440, 900);   // the column count changes: 4 across at 1440, 2 at 1100... back
+            r.settle();
+            r.resize(1100, 900);
+            auto &home = r.app->home();
+            const Rect from = home.cardLive(2);
+            const Rect target = home.cardTarget(2);
+            CHECK(!(near(from.x, target.x) && near(from.y, target.y)), "a narrower window moves card 3 to a new slot");
+            const double fx = firstMoved(r, [&] { return home.cardLive(2).x; }, from.x);
+            std::printf("      card 3 x %.1f -> first %.1f -> target %.1f\n", from.x, fx, target.x);
+            CHECK(strictlyBetween(fx, from.x, target.x), "the home grid REFLOW eases (card live x strictly between)");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.home(); });
+            r.settle();
+            r.svc.edit();
+            const double first = firstMoved(r, [&] { return r.app->screenOpacity(arstro::interstellar::Screen::Edit); }, 0.0);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "Home → Edit CROSS-FADES (Edit's first opacity between 0 and 1)");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            std::string err;
+            r.svc.dispatch("set s_day01.basic.exposure=1.2", err);   // a grade lands: same time, new picture
+            r.frame();   // the frame that fetched the new picture starts the dissolve at 0
+            CHECK(r.app->edit().monitor()->dissolveAmount() < 1e-9, "the new picture starts fully under the old one");
+            const double d = firstMoved(r, [&] { return r.app->edit().monitor()->dissolveAmount(); }, 0.0);
+            std::printf("      dissolve first frame %.3f\n", d);
+            CHECK(strictlyBetween(d, 0.0, 1.0) && d < 0.2, "a new picture at the same time DISSOLVES (linear: ~16/160 on the first frame)");
+            auto tp = r.app->edit().transport();
+            r.settle();
+            const double t0 = tp->displayedTime();
+            r.svc.dispatch("playhead 10", err);
+            const double ft = firstMoved(r, [&] { return tp->displayedTime(); }, t0);
+            CHECK(strictlyBetween(ft, t0, 10.0), "a playhead jump from the model EASES the transport there");
+            auto rt = r.app->edit().rackTree();
+            r.settle();
+            const double w0 = rt->shownWeight(2);
+            r.svc.dispatch("set s_day02.weight=0.2", err);
+            const double fw = firstMoved(r, [&] { return rt->shownWeight(2); }, w0);
+            CHECK(strictlyBetween(fw, w0, 0.2), "a weight the model changed EASES on the rack row");
+        }
+        {
+            // state that ARRIVES from the model — a toggle, a version switch, a rebase, a finished
+            // render — is still a visible change, and still eases (design rule §1)
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto rt = r.app->edit().rackTree();
+            r.svc.dispatch("set s_day01.bypass=1", gErr);
+            const double fb = firstMoved(r, [&] { return rt->bypassAmount(1); }, 0.0);
+            CHECK(strictlyBetween(fb, 0.0, 1.0), "a bypass toggled in the model DIMS the rack row eased, not in one frame");
+
+            auto vs = r.app->edit().topBar()->versions();
+            r.svc.dispatch("timeline open delivery", gErr);
+            r.frame();   // the frame that saw the switch starts the chrome's cross-fade at 0
+            const double fs = firstMoved(r, [&] { return vs->swapAmount(); }, 0.0);
+            CHECK(strictlyBetween(fs, 0.0, 1.0), "a version switch CROSS-FADES the chrome's label");
+
+            r.app->setTab(EditScreen::Cut);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const Rect before = tl->clipRect("c6");
+            for (auto &c : r.svc.m.clips) if (c.id == "c6") c.provenance = arstro::interstellar::Provenance::Inherited;   // a rebase reconciled it
+            ++r.svc.m.revision;
+            r.frame();
+            const double fa = firstMoved(r, [&] { return tl->clipAlpha("c6"); }, 0.0);
+            CHECK(strictlyBetween(fa, 0.0, 1.0), "a clip whose provenance changed CROSS-FADES to its new look");
+            const Rect after = tl->clipRect("c6");
+            CHECK(near(before.x, after.x, 0.01) && near(before.w, after.w, 0.01), "…in place (the new look starts from the old one's geometry)");
+
+            for (auto &j : r.svc.m.renders) if (j.id == "r2") { j.done = j.total; j.state = "done"; }
+            ++r.svc.m.revision;
+            r.frame();
+            auto q = r.app->edit().renderQueue();
+            const double fd = firstMoved(r, [&] { return q->stateAmount("r2", 2); }, 0.0);
+            CHECK(strictlyBetween(fd, 0.0, 1.0), "a render that finishes cross-fades running → done");
+
+            const size_t n = r.svc.m.tracks.size();
+            r.svc.m.tracks.erase(r.svc.m.tracks.begin());   // the version switch drops V2: the lanes below slide up
+            ++r.svc.m.revision;
+            const Rect v1 = tl->laneRect("v1");
+            r.frame();
+            r.frame();
+            const Rect v1mid = tl->laneRect("v1");
+            r.settle();
+            const Rect v1end = tl->laneRect("v1");
+            CHECK(n == 4 && v1end.y < v1.y - 1.0, "dropping a track moves the lanes under it up");
+            CHECK(strictlyBetween(v1mid.y, v1.y, v1end.y), "…and they SLIDE there (mid-tween lane between old and new)");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.home(); });
+            r.settle();
+            const Rect s = r.app->home().settingsRect();
+            r.click(s.x + 10, s.y + 9);
+            const double first = firstMoved(r, [&] { return r.app->settings().appearAmount(); }, 0.0);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "the settings modal appears eased");
+        }
+    }
+
+    // ── 3. layout at two sizes ─────────────────────────────────────────────────────────
+
+    void testLayout()
+    {
+        std::printf("layout: contained, no sibling overlap, at both sizes\n");
+        for (const auto &sz : kSizes)
+        {
+            const double W = sz[0], H = sz[1];
+            Rig r(sz[0], sz[1], [](FakeService &s) { s.edit(); });
+            r.settle();
+            for (int tab = 0; tab < 3; ++tab)
+            {
+                r.app->setTab(tab);
+                r.settle();
+                auto &e = r.app->edit();
+                std::vector<Rect> parts = {worldRect(*e.topBar()), worldRect(*e.monitor()), worldRect(*e.transport())};
+                for (auto &c : e.page(tab)->children()) parts.push_back(worldRect(*c));
+                bool contained = true, separate = true;
+                for (size_t i = 0; i < parts.size(); ++i)
+                {
+                    contained = contained && inside(parts[i], W, H);
+                    for (size_t j = i + 1; j < parts.size(); ++j) separate = separate && !overlap(parts[i], parts[j]);
+                }
+                char msg[160];
+                std::snprintf(msg, sizeof msg, "%dx%d tab %d: top bar, monitor, transport and the tab's three columns are inside the window", sz[0], sz[1], tab);
+                CHECK(contained, msg);
+                std::snprintf(msg, sizeof msg, "%dx%d tab %d: no two of them overlap", sz[0], sz[1], tab);
+                CHECK(separate, msg);
+            }
+            auto tb = r.app->edit().topBar();
+            CHECK(tb->nameRect().right() <= tb->tabs()->x.value() + 0.5, "the project name stops before the tab switcher");
+            auto vs = tb->versions();
+            CHECK(worldRect(*vs).right() <= W - 9.75 - 20.5 + 0.5, "the version switcher stops before the save button");
+            CHECK(r.app->edit().monitor()->width.value() >= shell::minMonitorW() - 0.5, "the monitor keeps its floor");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.home(); });
+            r.settle();
+            auto &home = r.app->home();
+            const Rect vp = home.gridViewport();
+            bool ok = true;
+            for (int i = 0; i < home.cardCount(); ++i)
+            {
+                const Rect c = home.cardLive(i);
+                ok = ok && c.x >= vp.x - 0.5 && c.right() <= vp.right() + 0.5;
+                for (int j = i + 1; j < home.cardCount(); ++j) ok = ok && !overlap(c, home.cardLive(j));
+            }
+            CHECK(ok, "1024x640 home: every card inside the grid's width, none overlapping");
+            CHECK(home.wordmarkSize() <= 46.0 && home.wordmarkSize() >= 24.0, "the home wordmark is sized to fit the sidebar");
+        }
+    }
+
+    void testTextFit()
+    {
+        std::printf("text fits (measured)\n");
+        cairo_surface_t *s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 8, 8);
+        cairo_t *cr = cairo_create(s);
+        artboard::CairoTarget t(cr);
+        const std::string longName = "Lisbon interviews (selects, colour pass two, director's notes applied)";
+        for (double maxW : {40.0, 120.0, 233.0})
+        {
+            const std::string e = textfit::ellipsize(t, longName, maxW, 11.0, font::sansMedium());
+            char msg[96];
+            std::snprintf(msg, sizeof msg, "ellipsized to %.0f px measures within it (%.1f)", maxW, t.measureText(e, 11.0, font::sansMedium()));
+            CHECK(t.measureText(e, 11.0, font::sansMedium()) <= maxW + 0.01, msg);
+        }
+        const std::string dash = textfit::ellipsize(t, "Night Ferry \xE2\x80\x94 Day 3", 70.0, 12.0, font::sansMedium());
+        bool cutsOk = validUtf8(dash);
+        for (double w = 20.0; w < 140.0; w += 3.0) cutsOk = cutsOk && validUtf8(textfit::ellipsize(t, "Night Ferry \xE2\x80\x94 Day 3", w, 12.0, font::sansMedium()));
+        CHECK(cutsOk, "ellipsizing never cuts a multi-byte code point (every width 20..140 px)");
+        CHECK(textfit::ellipsize(t, "x", 0.0, 11.0, font::sans()).empty(), "no room → nothing drawn, rather than a glyph over a neighbour");
+        cairo_destroy(cr);
+        cairo_surface_destroy(s);
+    }
+
+    // ── the monitor releases what it replaces ───────────────────────────────────────────
+
+    /** A CairoTarget that counts image registrations, so a test can see ids being RELEASED. */
+    class CountingTarget : public artboard::CairoTarget
+    {
+    public:
+        int live = 0;
+        int registerImage(const uint8_t *rgba, int w, int h) override { ++live; return CairoTarget::registerImage(rgba, w, h); }
+        void releaseImage(int id) override { --live; CairoTarget::releaseImage(id); }
+    };
+
+    void testMonitorImages()
+    {
+        std::printf("monitor: one registered frame, the previous id released\n");
+        FakeService svc;
+        svc.edit();
+        App app(svc.hooks(), 1024, 640);
+        cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1024, 640);
+        cairo_t *cr = cairo_create(surf);
+        CountingTarget t;
+        t.setContext(cr);
+        double now = 1000.0;
+        auto pump = [&](int frames) { for (int i = 0; i < frames; ++i) { app.render(t, now); now += 16.0; } };
+        pump(45);
+        const int baseline = t.live;
+        const int fetched0 = svc.frames;
+        for (int k = 0; k < 12; ++k)
+        {
+            svc.dispatch("playhead " + std::to_string(1.0 + k * 0.25), gErr);
+            pump(2);
+        }
+        pump(45);
+        std::printf("      %d frames fetched, live image ids %d -> %d\n", svc.frames - fetched0, baseline, t.live);
+        CHECK(svc.frames - fetched0 >= 12, "each playhead step fetched a frame through renderFrame");
+        CHECK(t.live - baseline <= 0, "…and released the id it replaced: no image leaks per step");
+        svc.dispatch("set s_day01.basic.exposure=1.5", gErr);   // a dissolve holds two ids for 160 ms…
+        pump(3);
+        const int during = t.live;
+        pump(30);
+        CHECK(during - baseline <= 1 && t.live - baseline <= 0, "…a dissolve holds ONE extra id while it runs and lets it go after");
+        cairo_destroy(cr);
+        cairo_surface_destroy(surf);
+    }
+
+    // ── 4. reach: scroll clamps both ends and gets to the last row ───────────────────────
+
+    void testScroll()
+    {
+        std::printf("reach: scroll clamps both ends\n");
+        {
+            EasedScroll es;
+            es.setExtent(0, 100, 80);
+            CHECK(!es.scrollBy(40), "an unscrollable list reports false, so the wheel bubbles");
+            es.setExtent(0, 100, 300);
+            es.scrollBy(1000);
+            CHECK(near(es.target(), 200.0), "scrolling past the end clamps at content - viewport");
+            es.scrollBy(-5000);
+            CHECK(near(es.target(), 0.0), "…and at 0");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) {
+                s.edit();
+                for (int i = 0; i < 40; ++i)
+                {
+                    auto n = FakeService::node(100 + i, ("rox" + std::to_string(i)).c_str(), ("s_extra" + std::to_string(i)).c_str(),
+                                               ("Extra source " + std::to_string(i)).c_str(), -1, 0, false);
+                    n.video = true;
+                    s.m.rack.push_back(n);
+                }
+            });
+            r.settle();
+            auto rt = r.app->edit().rackTree();
+            CHECK(rt->scroll().scrollable(), "a 48-node rack outgrows the column at 1024x640");
+            const Point p = centre(*rt, rt->viewport());
+            r.app->wheel(p.x, p.y, -60.0);
+            r.settle();
+            const Rect last = rt->rowRect((int)r.svc.m.rack.size() - 1);
+            const Rect vp = rt->viewport();
+            CHECK(near(rt->scroll().value(), rt->scroll().maxScroll(), 0.5), "wheeling down lands exactly at the end (clamped)");
+            CHECK(last.bottom() <= vp.bottom() + 0.5 && last.y >= vp.y - 0.5, "…where the LAST row is fully reachable");
+            r.app->wheel(p.x, p.y, 200.0);
+            r.settle();
+            CHECK(near(rt->scroll().value(), 0.0, 0.5), "wheeling up clamps at the top");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) {
+                s.edit();
+                auto base = s.m.timelines[1];
+                for (int i = 0; i < 30; ++i)
+                {
+                    auto tl = base;
+                    tl.id = "v" + std::to_string(i);
+                    tl.name = "Variant " + std::to_string(i);
+                    s.m.timelines.push_back(tl);
+                }
+            });
+            r.settle();
+            auto vs = r.app->edit().topBar()->versions();
+            Point p = centre(*vs, vs->bodyRect());
+            r.click(p.x, p.y);
+            r.settle();
+            const Rect m = vs->menuRect();
+            const Point bottom = world(*vs, m.x, m.bottom());
+            CHECK(bottom.y <= 640.0 - 8.0 + 0.5, "33 versions: the dropdown is CAPPED inside the window (placed against the root)");
+            CHECK(vs->listScroll().scrollable(), "…and its list scrolls");
+            p = centre(*vs, vs->versionRowRect(1));
+            r.app->wheel(p.x, p.y, -100.0);
+            r.settle();
+            CHECK(near(vs->listScroll().value(), vs->listScroll().maxScroll(), 0.5) && vs->listScroll().maxScroll() > 0, "the wheel scrolls the list to its clamped end");
+            CHECK(vs->isOpen(), "…without closing the dropdown");
+            r.key(27);
+            r.settle();
+            CHECK(!vs->isOpen() && vs->openAmount() < 1e-3, "Escape closes it (eased to 0)");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) {
+                s.edit();
+                for (int i = 0; i < 30; ++i)
+                {
+                    auto j = s.m.renders[2];
+                    j.id = "rx" + std::to_string(i);
+                    s.m.renders.push_back(j);
+                }
+            });
+            r.settle();
+            r.app->setTab(EditScreen::Deliver);
+            r.settle();
+            auto q = r.app->edit().renderQueue();
+            CHECK(q->scroll().scrollable(), "34 renders outgrow the deck");
+            const Point p = centre(*q, Rect{0, 40, q->width.value(), 40});
+            r.app->wheel(p.x, p.y, -200.0);
+            r.settle();
+            CHECK(near(q->scroll().value(), q->scroll().maxScroll(), 0.5), "the render queue scrolls to its clamped end");
+            const Rect last = q->rowRect(q->count() - 1);
+            CHECK(last.bottom() <= q->height.value() + 0.5, "…and its last row is reachable");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.home(); });
+            r.settle();
+            auto &home = r.app->home();
+            CHECK(home.scroll().scrollable(), "six projects outgrow the home grid at 1024x640");
+            const Rect vp = home.gridViewport();
+            r.app->wheel(vp.x + vp.w * 0.5, vp.y + 40.0, -100.0);
+            r.settle();
+            CHECK(near(home.scroll().value(), home.scroll().maxScroll(), 0.5), "the home grid scrolls to its clamped end");
+            CHECK(home.newCardLive().bottom() <= vp.bottom() + 0.5, "…where the trailing New project card is reachable");
+            r.app->wheel(vp.x + vp.w * 0.5, vp.y + 40.0, 100.0);
+            r.settle();
+            CHECK(near(home.scroll().value(), 0.0, 0.5), "…and back to the top");
+        }
+    }
+}
+
+int main()
+{
+    std::setvbuf(stdout, nullptr, _IONBF, 0);   // a failing assert must not swallow the log above it
+    installInterstellarAccent();
+    arstro::cosmo_v2::registerEmbeddedFonts();
+    testAccent();
+    testGradeCommands();
+    testRackCommands();
+    testVersionCommands();
+    testCutCommands();
+    testTransportAndDeliver();
+    testHomeAndShell();
+    testMotion();
+    testLayout();
+    testTextFit();
+    testMonitorImages();
+    testScroll();
+    std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
+    return 0;
+}

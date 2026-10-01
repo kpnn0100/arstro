@@ -381,7 +381,7 @@
           "value": "<t>"
         }
       ],
-      "summary": "Move a clip's head (--in) and/or tail (--out) edge to a TIMELINE time; the frames that remain stay where they were.",
+      "summary": "Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); trimming the head keeps the remaining frames where they were on the timeline.",
       "requirement": "R-TL-3"
     },
     {

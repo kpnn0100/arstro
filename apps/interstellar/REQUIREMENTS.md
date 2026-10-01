@@ -33,7 +33,7 @@ in the section heading. Read before any code; conflict-check before accepting a 
 
 ---
 
-## R-SCOPE — what this is — 📋 SPECIFIED
+## R-SCOPE — what this is — ✅ IMPLEMENTED (Home + Edit{Grade, Cut, Deliver}; core UI-free)
 
 - **R-SCOPE-1** Interstellar is a **video colour tool with an editor attached**. Its subject is
   grouping and blending colour across the footage of a production; its timeline exists so a graded
@@ -233,7 +233,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — 📋 SPECIFIED
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..6; gaps: drag-to-timeline, drag-to-regroup)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the

@@ -296,6 +296,17 @@ int main()
         assert(has(f.out("get shotA.opacity"), "=1"));
     });
 
+    test("clip trim takes SOURCE points, and a head trim keeps the frames where they were (R-TL-3)", [] {
+        Fixture f("trim");
+        f.standard();
+        f.must("clip trim shotB --in 0.5");          // shotB: at 2, in 0 → in 0.5, at 2.5
+        assert(std::fabs(evalValue(f, "get shotB.in") - 0.5) < 1e-9);
+        assert(std::fabs(evalValue(f, "get shotB.at") - 2.5) < 1e-9);
+        f.must("clip trim shotA --out 1.5");         // shotA: in 0, out 2 → out 1.5
+        assert(std::fabs(evalValue(f, "get shotA.out") - 1.5) < 1e-9);
+        assert(std::fabs(evalValue(f, "get shotA.at")) < 1e-9);
+    });
+
     test("a render NAMES its timeline; without one it is refused (R-RENDER-1)", [] {
         Fixture f("rname");
         f.standard();

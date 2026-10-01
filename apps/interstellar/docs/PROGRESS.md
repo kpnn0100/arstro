@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — the service is whole: grade, versions, cut and render from a shell; API at rung 4. UI stream in flight.*
+*Last updated: 2026-10-01 — all seven phases built (audio master sum outstanding); the GUI is integrated and verified headlessly over the real service.*
 
 ---
 
@@ -26,16 +26,20 @@ one integrator who moves, wires, tests and commits each stream:
 | volume + temporal ops | `core/ImageProcessing/src/volume/` | `[x]` integrated — DR-VOL-1..3, DR-FX-2 |
 | render path (active set, composite, grade, cache) | `apps/interstellar/render/` | `[x]` integrated — DR-TL-4, DR-FX-3, DR-RENDER-2 |
 | `.isp` model + versions | `apps/interstellar/model/` | `[x]` integrated — DR-FMT-1, DR-VER-1 |
-| UI (Home, Edit: Grade/Cut/Deliver) | `apps/interstellar/app/` | `[~]` agent running |
+| UI (Home, Edit: Grade/Cut/Deliver) | `apps/interstellar/app/` | `[x]` integrated — DR-UI-1..6; GTK host `linux_main.cpp` |
 | service, grammar, codec, API doc, CLI | `apps/interstellar/core/service/`, `cli/` | `[x]` DR-SVC-1..3, DR-API-1, DR-VER-2/3, DR-RENDER-* |
 
 - [x] `InterstellarService`: Rack + model + render + volume behind `dispatch` / `pump` / `model()` /
       `renderFrame`; `set` routed by owner; pins as content-addressed `.cmp` snapshots.
 - [x] `interstellar-cc` on the grammar; `docs/api.json` + `docs/API.md` committed and drift-tested.
 - [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
-- [ ] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`) binding `AppHooks` to the
-      service: `model` → `svc.model()`, `dispatch` → `svc.dispatchText`, `renderFrame` → `svc.renderFrame`;
-      pump on the frame clock.
+- [x] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`); `interstellar_live`
+      renders the real app over the real service.
+- [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
+      cut → version → render. (Built and headlessly verified; not yet driven by a person.)
+- [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,
+      `RackNodeModel::mediaDuration`, a `lint` list in the model for Deliver's checks,
+      `ClipModel::danglingReason`; drag a source onto the timeline (`clip add`); drag to regroup.
 - [x] Rewrite `arstro.interstellar.implement` / `.debug` for this specification (every command they
       name exists; the debug skill's sample script was run as written).
 - [ ] P6: the audio master sum, muxed into a render (R-AUD-5).
@@ -54,7 +58,7 @@ one integrator who moves, wires, tests and commits each stream:
 | **P4** arrange + composite + render | `[x]` a named timeline renders to H.264/ProRes/PNG-seq; Interstellar still == Cosmo still |
 | **P5** Volume + temporal effects | `[x]` every timeline frame reads through the volume; `#fx` denoise/blend/freeze wired |
 | **P6** audio | `[~]` schema parsed and preserved; audio tracks/clips placed; **master sum not built** |
-| **P7** UI | `[~]` UI stream in flight (Home, Edit: Grade/Cut/Deliver over `AppHooks`) |
+| **P7** UI | `[x]` Home + Edit (Grade/Cut/Deliver) in cosmo's design, purple-pink; 62 shots, 137 UI checks; GTK host; live harness over the real service |
 
 ---
 

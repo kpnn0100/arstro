@@ -1,0 +1,119 @@
+/*
+ *  interstellar_v1 — App: Interstellar's front end, a platform-free Artboard Segment tree.
+ *
+ *  Draws ONLY from `AppHooks::model()` and reports intent ONLY as text command lines through
+ *  `AppHooks::dispatch` (project-format.md §8) — so the GUI can do nothing a script cannot (R-G-4),
+ *  and a second front end needs nothing from this one. What IS this class's own is presentation:
+ *  which tab is open, hover, scroll, every tween. The host (the integrator's GTK window) owns the
+ *  window, the clock and the native file dialogs; it forwards input here and asks for frames.
+ *
+ *  Screens follow `AppModel::screen` (Home / Loading / Edit) — the service derives it — and the
+ *  App CROSS-FADES between them (260 ms, the shell cross-fade), never cuts. The view re-reads the
+ *  model once per frame, guarded by `revision`, so a change reaches the screen whoever caused it.
+ *
+ *  Host seam (beyond AppHooks): `pointer` (kind 0 = down, 2 = up, anything else = move), `wheel`
+ *  (notches, + = up), `key`, `setSize`, `render(target, nowMs)`, `needsRedraw`. The three native
+ *  pickers are `onPickProjectToOpen` / `onPickProjectToCreate` / `onPickFootage`: the host shows its
+ *  dialog and answers with `openProjectPicked(path)` / `newProjectPicked(path)` /
+ *  `footagePicked(paths)`, which become `project open|new <path>` / `rack add <paths…>`.
+ *
+ *  `installInterstellarAccent()` is called FIRST in the constructor, before any widget exists:
+ *  several cosmo widgets read the accent once at construction (ConfirmDialog's accent, the
+ *  segmented pickers' highlight), and the contract for the slot is "before the first frame".
+ */
+#pragma once
+#include "Theme.h"
+#include "AppHooks.h"
+#include "widgets/HomeScreen.h"
+#include "widgets/LoadingView.h"
+#include "widgets/EditScreen.h"
+#include "widgets/SettingsDialog.h"
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace arstro
+{
+namespace interstellar_v1
+{
+    class App
+    {
+    public:
+        App(AppHooks hooks, double width, double height);
+
+        void setSize(double width, double height);
+        void render(artboard::IRenderTarget &target, double nowMs);
+        /** Conservative: true while anything could be moving (a fade, playback, a model change not
+         *  yet painted), and for a short window after any input. Never truncates a tween. */
+        bool needsRedraw(double nowMs) const;
+
+        void pointer(int kind, double x, double y, int button, double timeMs, bool alt = false, bool shift = false, bool ctrl = false);
+        void wheel(double x, double y, double notches, bool ctrl = false);
+        bool key(const artboard::KeyEvent &e);
+
+        /** Send one command line through the hooks. A refusal is SAID (the toast), never dropped. */
+        bool dispatch(const std::string &line);
+
+        // ── native pickers: the host shows its dialog, then answers ──
+        std::function<void()> onPickProjectToOpen, onPickProjectToCreate, onPickFootage;
+        void openProjectPicked(const std::string &path);
+        void newProjectPicked(const std::string &path);
+        void footagePicked(const std::vector<std::string> &paths);
+        /** Ask to go Home: `project close`, behind cosmo's ConfirmDialog when there are unsaved edits. */
+        void requestHome();
+
+        // ── presentation state ──
+        void setTab(int tab) { mEdit->setTab(tab); }
+        int tab() const { return mEdit->tab(); }
+        /** The screen being shown (the cross-fade's target) and each screen layer's LIVE opacity. */
+        interstellar::Screen screen() const { return mScreen; }
+        double screenOpacity(interstellar::Screen s) const;
+        void setHomeClock(long long nowUnix) { mHome->setNowUnix(nowUnix); }
+
+        static double minWidth() { return std::max(EditScreen::minWidth(), HomeScreen::kSidebarW + 2 * HomeScreen::kPad + HomeScreen::kMinCard); }
+        static double minHeight() { return std::max(EditScreen::minHeight(), 560.0); }
+        double width() const { return mW; }
+        double height() const { return mH; }
+
+        // ── the trees, for the host's debugging and for tests ──
+        HomeScreen &home() { return *mHome; }
+        LoadingView &loading() { return *mLoading; }
+        EditScreen &edit() { return *mEdit; }
+        SettingsDialog &settings() { return *mSettings; }
+        artboard::Segment *activeRoot();
+        const AppHooks &hooks() const { return mHooks; }
+
+    private:
+        void bindIfStale(double nowMs);
+        void fetchFrame(const interstellar::AppModel &m, bool force);
+        void layoutAll();
+        void noteActivity() { mLastActivityMs = mNowMs; }
+        bool textEditing() const;
+        static const interstellar::AppModel &emptyModel();
+
+        AppHooks mHooks;
+        double mW, mH;
+        double mNowMs = 0.0, mLastActivityMs = -1e9;
+        std::shared_ptr<HomeScreen> mHome;
+        std::shared_ptr<LoadingView> mLoading;
+        std::shared_ptr<EditScreen> mEdit;
+        std::shared_ptr<SettingsDialog> mSettings;
+        artboard::GestureRecognizer mRecognizer;
+
+        interstellar::Screen mScreen = interstellar::Screen::Home;
+        bool mScreenInit = false;
+        bool mBound = false;
+        unsigned mSeenRevision = 0, mPaintedRevision = 0, mPaintedFrameSeq = 0;
+        bool mPointerDown = false;
+
+        // frame fetch state
+        unsigned mFetchedSeq = ~0u;
+        int mFetchedEdge = 0;
+        double mFetchedAt = -1.0;
+        std::string mFetchedTimeline;
+        unsigned mFetchedRevision = ~0u;
+        interstellar::Raster mFrame;
+    };
+}
+}
