@@ -769,6 +769,7 @@ namespace interstellar
         mProject.reset(new Project());
         mIspPath.clear();
         mNodeOf.clear();
+        mStoredPath.clear();
         mPins.clear();
         mSources.clear();
         mJobs.clear();
@@ -939,9 +940,14 @@ namespace interstellar
         }
         // The .isp's reference frame wins over the one baked into the stored path (R-RACK-3).
         mFrames->clear();
+        mStoredPath.clear();
         for (size_t i = 0; i < entries.size(); ++i)
             if (!entries[i].group)
-                if (const RackObj *ro = P.rackObj(bound[i])) mFrames->set(entries[i].imagePath, ro->frame);
+                if (const RackObj *ro = P.rackObj(bound[i]))
+                {
+                    mFrames->set(entries[i].imagePath, ro->frame);
+                    mStoredPath[ro->id] = entries[i].imagePath;
+                }
         if (mPending) mPending->entryRackObj = bound;
     }
 
@@ -994,7 +1000,7 @@ namespace interstellar
         // Cosmo saves on every add (and `rack frame` saves to reload) — refuse before it can
         // delete an offline source (D-2).
         std::string blocked;
-        if ((c.kind == CK::RackAdd || c.kind == CK::RackDuplicate || c.kind == CK::RackFrame) && rackSaveBlocked(blocked))
+        if ((c.kind == CK::RackAdd || c.kind == CK::RackDuplicate) && rackSaveBlocked(blocked))
             return fail(std::string(specFor(c.kind)->verb) + ": " + blocked);
 
         switch (c.kind)
@@ -1036,6 +1042,7 @@ namespace interstellar
                     P.rackObjs.push_back(ro);   // before the next freshName, so names stay unique
                     made.push_back(ro.id);
                     mFrames->set(stored.back(), t);
+                    mStoredPath[ro.id] = stored.back();
                 }
                 mPending.reset(new PendingRack());
                 mPending->kind = PendingRack::Kind::Add;
@@ -1117,6 +1124,7 @@ namespace interstellar
                 if (P.nameIsTaken(ro.name)) return fail("rack duplicate: the name " + ro.name + " is taken");
                 P.rackObjs.push_back(ro);
                 mNodeOf[ro.id] = added[0];
+                mStoredPath[ro.id] = stored;
                 markDirty();
                 emit(Event(EK::RackChanged).with("what", "duplicated").with("node", ro.id));
                 return true;
@@ -1128,18 +1136,19 @@ namespace interstellar
                 if (!looksLikeVideo(ro->media)) return fail("rack frame: " + ro->name + " is a still — it has one frame");
                 double t = 0;
                 if (!parseDouble(c.flag("at"), t) || t < 0) return fail("rack frame: --at must be a time in seconds");
-                ro->frame = snapToFrame(t, mProject->fps);
+                // Land on a frame of the SOURCE (a 30p clip in a 24p project has 30p frames).
+                const Source *src = source(resolvePath(ro->media));
+                ro->frame = snapToFrame(t, src && src->ok && src->info.fps > 0 ? src->info.fps : mProject->fps);
+                // Nothing reloads. Every pixel Interstellar shows of a source — the Grade monitor,
+                // the filmstrip, a render — comes from its own frame source at this time; Cosmo's
+                // slot holds the frame decoded at load and only its own preview reads it. So the
+                // selector table learns the new frame (the next rack load decodes it) and no
+                // parameter, node or path moves (R-RACK-3). The first build of this saved and
+                // re-opened the whole rack — every source re-decoded on each choice.
+                const auto stored = mStoredPath.find(ro->id);
+                if (stored != mStoredPath.end()) mFrames->set(stored->second, ro->frame);
                 markDirty();
-                // The stored path is untouched; the selector table answers the new frame and the
-                // rack re-decodes. No parameter moves (R-RACK-3).
-                ColourTree entries;
-                if (!mRack.save(err)) return fail("rack frame: " + err);
-                syncRackObjNodes();
-                if (!colourTreeFromCmp(mRack.path(), entries, err)) return fail("rack frame: " + err);
-                mPending.reset(new PendingRack());
-                mPending->kind = PendingRack::Kind::Reload;
-                bindFromCmp(entries);
-                if (!mRack.beginOpen(mRack.path(), err)) { mPending.reset(); return fail("rack frame: " + err); }
+                bumpFrame();
                 emit(Event(EK::RackChanged).with("what", "reframed").with("node", ro->id));
                 return true;
             }

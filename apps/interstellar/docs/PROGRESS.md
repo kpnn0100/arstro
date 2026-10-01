@@ -64,6 +64,11 @@ one integrator who moves, wires, tests and commits each stream:
 
 ## Decisions log (newest first)
 
+**2026-10-01 — a reference frame is the Grade monitor's business, not a rack reload (D-4).** The
+first build re-opened the rack so Cosmo's slot would hold the chosen frame. Nothing Interstellar
+draws reads that slot — every source pixel comes from Interstellar's own frame source — so the
+reload bought only spinners. Cosmo's slot now catches up at the next load.
+
 **2026-10-01 — how a version's colour is stored, and what a pin is.** A derived timeline's colour
 edit becomes a `#tlgrade` **delta on the colour source's own value** — so "my look = the base's look
 + my changes", and a base regrade still arrives (the user's "rebase to get the latest colour of the

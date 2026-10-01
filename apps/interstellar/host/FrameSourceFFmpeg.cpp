@@ -64,16 +64,51 @@ namespace interstellar_host
         if (fps <= 0.0) fps = st->r_frame_rate.den ? av_q2d(st->r_frame_rate) : 0.0;
         if (fps <= 0.0) fps = 1.0;
         mInfo.fps = fps;
+        // Frame 0 is the stream's FIRST timestamp, not timestamp 0. A camera, OBS or a stream
+        // recorder writes streams that start at 3.5 s; measuring from 0 made every frame before
+        // the first timestamp decode as that first frame — MKV playback froze on one picture.
+        mStart = st->start_time != AV_NOPTS_VALUE ? st->start_time : 0;
         if (st->nb_frames > 0) mInfo.frames = st->nb_frames;
-        else if (st->duration > 0) mInfo.frames = (long long)(av_q2d(st->time_base) * st->duration * fps);
-        else if (mFmt->duration > 0)
-            mInfo.frames = (long long)((double)mFmt->duration / AV_TIME_BASE * fps);
-        else mInfo.frames = 1;
+        else
+        {
+            // No frame count in the header (MKV, WebM, transport streams). A declared duration is
+            // not trustworthy here — an MKV with a 3.5 s start declares 7.5 s for 4 s of video — so
+            // MEASURE it: the last packet's end, minus the first timestamp.
+            const int64_t end = probeEndPts();
+            if (end > mStart) mInfo.frames = (long long)std::llround((double)(end - mStart) * av_q2d(st->time_base) * fps);
+            else if (mFmt->duration > 0) mInfo.frames = (long long)std::llround((double)mFmt->duration / AV_TIME_BASE * fps);
+            else mInfo.frames = 1;
+        }
         if (mInfo.frames < 1) mInfo.frames = 1;
 
         if (mInfo.width <= 0 || mInfo.height <= 0) { closeAll(); return false; }
         out = mInfo;
         return true;
+    }
+
+    int64_t FrameSourceFFmpeg::probeEndPts()
+    {
+        // Land on the last keyframe, read every packet of our stream to EOF, keep the furthest
+        // end (pts + duration), then rewind to the start. One seek at open; nothing per frame.
+        AVStream *st = mFmt->streams[mStream];
+        int64_t end = AV_NOPTS_VALUE;
+        const int64_t far = mStart + (int64_t)(24.0 * 3600.0 / av_q2d(st->time_base));   // a day in
+        if (av_seek_frame(mFmt, mStream, far, AVSEEK_FLAG_BACKWARD) >= 0)
+        {
+            AVPacket *pkt = av_packet_alloc();
+            while (pkt && av_read_frame(mFmt, pkt) >= 0)
+            {
+                if (pkt->stream_index == mStream && pkt->pts != AV_NOPTS_VALUE)
+                {
+                    const int64_t e = pkt->pts + std::max<int64_t>(pkt->duration, 0);
+                    if (end == AV_NOPTS_VALUE || e > end) end = e;
+                }
+                av_packet_unref(pkt);
+            }
+            av_packet_free(&pkt);
+        }
+        av_seek_frame(mFmt, mStream, mStart, AVSEEK_FLAG_BACKWARD);
+        return end;
     }
 
     bool FrameSourceFFmpeg::seekTo(long long frame)
@@ -82,7 +117,7 @@ namespace interstellar_host
         // Seek in the stream's own time base, BACKWARD, so we land on a keyframe at or before the
         // target and can then decode forward to it. Seeking forward would land past the target.
         const double seconds = mInfo.fps > 0 ? (double)frame / mInfo.fps : 0.0;
-        const int64_t ts = (int64_t)(seconds / av_q2d(st->time_base));
+        const int64_t ts = mStart + (int64_t)(seconds / av_q2d(st->time_base));
         if (av_seek_frame(mFmt, mStream, ts, AVSEEK_FLAG_BACKWARD) < 0) return false;
         avcodec_flush_buffers(mDec);
         mEof = false;
@@ -93,12 +128,12 @@ namespace interstellar_host
     }
 
     /** The frame index of what the decoder currently holds, from its presentation timestamp. */
-    static long long indexOf(const AVFrame *f, const AVStream *st, double fps)
+    static long long indexOf(const AVFrame *f, const AVStream *st, double fps, int64_t start)
     {
         const int64_t pts = f->best_effort_timestamp != AV_NOPTS_VALUE ? f->best_effort_timestamp
                                                                        : f->pts;
         if (pts == AV_NOPTS_VALUE) return -1;
-        return (long long)std::llround(pts * av_q2d(st->time_base) * fps);
+        return (long long)std::llround((double)(pts - start) * av_q2d(st->time_base) * fps);
     }
 
     bool FrameSourceFFmpeg::decodeUntil(long long frame)
@@ -110,7 +145,7 @@ namespace interstellar_host
             int r = avcodec_receive_frame(mDec, mFrame);
             if (r == 0)
             {
-                const long long idx = indexOf(mFrame, st, mInfo.fps);
+                const long long idx = indexOf(mFrame, st, mInfo.fps, mStart);
                 mHeld = idx >= 0 ? idx : (mHeld < 0 ? 0 : mHeld + 1);
                 if (mHeld >= frame) return true;
                 continue;
@@ -129,7 +164,7 @@ namespace interstellar_host
                 for (;;)
                 {
                     if (avcodec_receive_frame(mDec, mFrame) != 0) { mEof = true; return mHeld >= 0; }
-                    const long long idx = indexOf(mFrame, st, mInfo.fps);
+                    const long long idx = indexOf(mFrame, st, mInfo.fps, mStart);
                     mHeld = idx >= 0 ? idx : mHeld + 1;
                     if (mHeld >= frame) return true;
                 }

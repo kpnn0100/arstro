@@ -1,6 +1,37 @@
 # Interstellar — Defect list
 
 `D-<n>`, sequential, **never reused**, nothing deleted. A resolved entry moves whole to `## Closed`
+
+### D-3 — An MKV whose first timestamp is not zero plays back frozen on one frame
+- **Area:** host / frame source · **Status:** Closed (fixed in the commit that adds
+  `interstellar_host`) · **Severity:** S2 · **Found:** 2026-10-01, user report "can not playback
+  mkv file".
+- **Reproduce:** `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=24:duration=4 -c:v libx264
+  -output_ts_offset 3.5 offset.mkv`, cut it onto a timeline, `export-still --at 0`, `--at 1`,
+  `--at 2` → all three PNGs hashed `803e44fe…` (one frame).
+- **Cause:** `FrameSourceFFmpeg` turned a timestamp into a frame index as `pts × timebase × fps`,
+  from timestamp 0 rather than the stream's `start_time`, and sought to `frame / fps` likewise; every
+  frame before the first timestamp (3.5 s × 24 = 84 of them) decoded as the first frame. The frame
+  count also came from the container's declared duration, which for such an MKV includes the offset
+  (180 frames for 96). Cameras, OBS and stream recorders write such files; mp4s with an edit list too.
+- **Fix:** frame 0 is the stream's first timestamp — `mStart`, subtracted in `indexOf` and added in
+  `seekTo` (`host/FrameSourceFFmpeg.cpp:70`, `:131`); a stream with no frame count is MEASURED
+  (`probeEndPts`, `:89`: last keyframe → last packet end) instead of trusting a declared duration.
+- **Guarded by:** `interstellar_host` — mp4, mov, mkv (H.264, HEVC 10-bit, VP9), 29.97, and two
+  offset files: every sequential frame differs from the last, five seeks land on the frame
+  sequential decoding produced. Red before the fix (offset.mkv: 180 frames), green after; the
+  offset file's 0 s and 2 s now hash equal to the plain encode's frames 0 and 48.
+
+### D-4 — Choosing a reference frame reloaded the whole rack
+- **Area:** service / rack · **Status:** Closed (same commit) · **Severity:** S3 · **Found:**
+  2026-10-01, user report "when I choose a ref frame it reloads again".
+- **Cause:** `rack frame` saved the `.cmp` and re-opened it so Cosmo's slot would decode the new
+  frame — every source re-decoded and showed its spinner, for pixels nothing in Interstellar reads
+  (the monitor, filmstrip and renders all decode the source themselves).
+- **Fix:** `rack frame` updates the `.isp` and the frame selector and reloads nothing; Cosmo's slot
+  picks the new frame up at the next rack load. Also lands on a frame of the SOURCE's rate.
+- **Guarded by:** `choosing a reference frame reloads nothing and the Grade monitor shows it`
+  (`interstellar_service_l2`) — confirmed red with the reload put back.
 with its commit hash and the test that now guards it.
 
 The numbering restarted at D-1 with this specification; the first build's D-1…D-8 are in git history
@@ -66,4 +97,3 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
-*(none)*

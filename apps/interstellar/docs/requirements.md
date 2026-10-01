@@ -148,11 +148,20 @@ variants of one file keep their order) and groups by order; an unclaimed entry b
 `#rackobj` with a legal bind name derived from Cosmo's name; an unclaimed `#rackobj` stays OFFLINE,
 never deleted. Guarded by `a reopened project binds every #rackobj to its Cosmo node again`.
 
-### DR-RACK-3a A new reference frame changes no parameter and no Cosmo node (R-RACK-3)
+### DR-RACK-3a A new reference frame changes no parameter, no Cosmo node — and reloads nothing (R-RACK-3)
 `FrameSelector` (`core/FrameSelector.h`) maps a path as Cosmo stores it (`clip.mp4#t=2.000`) to the
-`.isp`'s `#rackobj frame=`; the host's `VideoFrameDecoder` consults it. `rack frame <node> --at <t>`
-updates the `.isp`, saves the rack and reloads it — the stored path and every parameter are
-untouched. Cost: the reload re-decodes every source.
+`.isp`'s `#rackobj frame=`; the host's `VideoFrameDecoder` consults it whenever the rack loads.
+`rack frame <node> --at <t>` snaps to a frame of the SOURCE's rate, updates the `.isp` and the
+selector, and reloads nothing: every pixel Interstellar shows of a source (Grade monitor, filmstrip,
+renders) is decoded by its own frame source at that time, and Cosmo's slot takes the new frame at
+the next rack load (D-4). Guarded by `choosing a reference frame reloads nothing and the Grade
+monitor shows it`.
+
+### DR-HOST-1 Source frame N is frame N, in any container (R-VOL-1, R-TL-5)
+`FrameSourceFFmpeg` counts frames from the stream's FIRST timestamp, not from 0
+(`host/FrameSourceFFmpeg.cpp:70`, `:131`), and measures the length of a stream whose header carries
+no frame count (`probeEndPts`, `:89`). Guarded by `interstellar_host` over mp4, mov, mkv (H.264,
+HEVC 10-bit, VP9), 29.97 fps and two streams with a nonzero start (D-3).
 
 ### DR-RACK-7 An offline source reads as missing, and Cosmo is not allowed to delete it (R-RACK-7, D-2)
 A `#rackobj` the rack does not have, or whose Cosmo node failed to decode, is listed with

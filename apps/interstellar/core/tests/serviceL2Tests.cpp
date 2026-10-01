@@ -307,6 +307,22 @@ int main()
         assert(std::fabs(evalValue(f, "get shotA.at")) < 1e-9);
     });
 
+    test("choosing a reference frame reloads nothing and the Grade monitor shows it (R-RACK-3)", [] {
+        Fixture f("refframe");
+        f.standard();
+        f.must("rack select a");
+        std::string err;
+        assert(f.svc->dispatchText("rack frame a --at 1.5", err));
+        assert(!f.svc->busy());                       // no rack reload in flight
+        for (const auto &r : f.svc->model().rack) assert(!r.pending);
+        assert(std::fabs(f.svc->project().rackObj(f.svc->project().idForRef("a"))->frame - 1.5) < 1e-9);
+        // Past the cut, the monitor shows the Grade target's reference frame: FakeFrameSource's R
+        // channel is the source frame index, 1.5 s × 24 = 36.
+        Raster r;
+        assert(f.svc->renderFrame(10.0, 0, r));
+        assert(r.rgba[0] == 36);
+    });
+
     test("a render NAMES its timeline; without one it is refused (R-RENDER-1)", [] {
         Fixture f("rname");
         f.standard();

@@ -48,6 +48,7 @@ namespace interstellar_host
         /** Decode forward until the stream's position reaches `frame`. Returns false at EOF. */
         bool decodeUntil(long long frame);
         bool seekTo(long long frame);
+        int64_t probeEndPts();
         void convertCurrent(interstellar::Raster &out);
         void closeAll();
 
@@ -61,6 +62,7 @@ namespace interstellar_host
         /** The frame index the decoder is currently HOLDING, or -1 before the first decode. */
         long long mHeld = -1;
         bool mEof = false;
+        int64_t mStart = 0;   // the stream's first timestamp, in its time base: frame 0
         /** Beyond this many frames ahead, seeking beats decoding through. Small because a seek
          *  lands on a keyframe and then has to decode forward anyway. */
         static constexpr long long kSeekThreshold = 24;

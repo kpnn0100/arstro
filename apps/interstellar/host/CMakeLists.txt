@@ -22,3 +22,15 @@ if(INTERSTELLAR_AV_FOUND)
 else()
   message(STATUS "interstellar: video DISABLED (libav* not found) — stills only")
 endif()
+
+# The FFmpeg source against real containers, made by the ffmpeg binary (skipped without it).
+if(INTERSTELLAR_AV_FOUND)
+  add_executable(interstellar_host_tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/hostTests.cpp)
+  target_link_libraries(interstellar_host_tests PRIVATE interstellar_host)
+  find_program(INTERSTELLAR_FFMPEG_FOR_HOST ffmpeg)
+  if(INTERSTELLAR_FFMPEG_FOR_HOST)
+    add_test(NAME interstellar_host
+      COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/../tests/host_media.sh" "$<TARGET_FILE:interstellar_host_tests>"
+              "${INTERSTELLAR_FFMPEG_FOR_HOST}" "${CMAKE_CURRENT_BINARY_DIR}/host_media")
+  endif()
+endif()

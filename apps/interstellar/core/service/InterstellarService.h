@@ -181,6 +181,7 @@ namespace interstellar
 
         // rack binding: #rackobj id ↔ live Cosmo node id
         std::map<NodeId, int> mNodeOf;
+        std::map<NodeId, std::string> mStoredPath;   // #rackobj → the path Cosmo stores (selector key)
         std::map<std::string, std::pair<ColourTree, std::map<NodeId, int>>> mPins;
 
         // transport
