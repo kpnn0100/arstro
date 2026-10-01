@@ -25,7 +25,28 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
-*(none)*
+### D-1 — Cosmo, opened by itself, shows a video source as failed
+- **Area:** rack / cross-app · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-01, running
+  P1's gate.
+- **Reproduce:**
+  ```bash
+  interstellar-cc rack new look.cmp : rack add a.png "clip.mp4#t=2.0" : rack set 2 exposure=0.35 : rack save
+  cosmo-cc project look.cmp --print | grep clip
+  ```
+- **Expected:** R-RACK-2 — "open that `.cmp` in Cosmo and the edit is there."
+- **Actual:** `node=3 … kind=failed slot=-1 … name=clip.mp4#t=2.0`. The grade **is** in the file
+  (`exposure=0.35 temp=5200`) and round-trips; Cosmo cannot display the source's pixels.
+- **Cause:** the video-aware decoder is installed by Interstellar's host through
+  `CosmoService::setDecoderFactory`. Cosmo's own host installs `NativeImageDecoder`, which has no
+  video path.
+- **Judgement:** requirement gap, not a code defect in either app. R-RACK-3 promised Cosmo needs no
+  change *to grade* a video source inside Interstellar — true — but R-RACK-2 implicitly promised Cosmo
+  could *show* one on its own, which needs Cosmo's host to carry a video decoder too.
+- **Recommended fix:** move `VideoFrameDecoder` + `FrameSourceFFmpeg` to a shared host-layer library
+  both apps link, and have cosmo's host install it. **Owner: `arstro.cosmo.core.implement`**, in
+  Cosmo's own commit and requirements. **Do NOT** teach `cosmo_core` itself about video — the decoder
+  belongs at the host, which is the only layer allowed a codec.
+- **Requirement:** R-RACK-2 needs a sentence scoping it; amended when the fix lands.
 
 ## Closed
 

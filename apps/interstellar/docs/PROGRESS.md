@@ -12,7 +12,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — the second specification is written; the first build is removed.*
+*Last updated: 2026-10-01 — P1 passed its gate: a colour edit on a VIDEO source reached a real `.cmp`.*
 
 ---
 
@@ -55,7 +55,7 @@ the colour authority is a fake. It is also small: Cosmo's service surface is alr
 | phase | status |
 |---|---|
 | **P0** specification | `[x]` requirements, format, audio format, architecture, UI brief. First build removed |
-| **P1** the rack — colour reaching a real `.cmp` | `[ ]` ← **NEXT** |
+| **P1** the rack — colour reaching a real `.cmp` | `[x]` gate passed from a shell on a video source; read back by a second CosmoService. D-1 filed (Cosmo alone cannot show a video source) |
 | **P2** `.isp` + versions | `[ ]` |
 | **P3** service + API document | `[ ]` |
 | **P4** arrange + composite + render | `[ ]` |

@@ -80,10 +80,12 @@ endif()
 # after the DSP library because its signal workload links arstro_dsp. Same GTK3 + Cairo
 # native backend as cosmo, so it builds on Linux and on Windows via MSYS2; the GUI
 # self-skips without pkg-config/GTK3 while its core + unit tests still build.
-# interstellar: rebuilding against its second specification (apps/interstellar/REQUIREMENTS.md).
-# The first implementation was removed on 2026-10-01; the subtree has docs only until P1 lands, so
-# there is nothing to add_subdirectory yet. It comes AFTER apps/cosmo when it returns, because its
-# rack hosts a real CosmoService and `if(TARGET cosmo_core)` can only see a target already defined.
+# interstellar: a video colour tool with an editor attached. AFTER apps/cosmo, because its rack
+# hosts a real CosmoService and `if(TARGET cosmo_core)` can only see a target already defined.
+if(ARSTRO_BUILD_INTERSTELLAR)
+  add_subdirectory(apps/interstellar)
+endif()
+
 if(ARSTRO_BUILD_ARSTROBENCH)
   if(ARSTRO_BUILD_DSP)
     add_subdirectory(apps/arstrobench)
