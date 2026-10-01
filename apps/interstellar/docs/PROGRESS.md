@@ -12,41 +12,30 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — P1 passed its gate: a colour edit on a VIDEO source reached a real `.cmp`.*
+*Last updated: 2026-10-01 — the volume engine is in `arstro_image`; render, model and UI streams in flight.*
 
 ---
 
 ## NEXT
 
-**► P1 — the rack: a colour edit that reaches a real `.cmp`.**
+**► Integration of four parallel streams, then the service.** The second build is being made by four
+agents in disjoint directories (each builds standalone, none touches shared CMake, none commits) and
+one integrator who moves, wires, tests and commits each stream:
 
-This is first because it is what both previous builds skipped, and nothing else counts as done while
-the colour authority is a fake. It is also small: Cosmo's service surface is already the right shape.
-
-- [ ] **`Rack`: own a `cosmo::CosmoService`, implement `RackAccess` over it.** Its constructor is
-      `explicit CosmoService(ThreadBudget &)` — the budget arrives by reference already — and
-      `setDecoderFactory` / `setWorkerInit` / `setImageWriter` / `subscribe` / `applySettings` /
-      `dispatch` / `dispatchText` / `pump` / `model` / `takeFrame` cover everything else.
-      `effectiveParams(node)` maps onto `EditSession::effectiveParams(slot)`; a write maps onto a
-      `Select` + `Set` pair, exactly as `cosmo-cc` does, so the two paths are one path.
-- [ ] **A video source, with no change to Cosmo.** Install a decoder factory that returns one
-      extracted frame for a video path, through the FFmpeg source carried forward in `host/`.
-      Cosmo then treats it as an image slot (R-RACK-3).
-- [ ] **THE GATE, and it is one sequence:** `rack import japan18.cmp` → `set gr1.basic.exposure=0.2`
-      → `project save` → open the `.cmp` with `cosmo-cc` and **see the value there**. Paste it into
-      the commit. Until that output exists, P1 is not done.
-- [ ] **Then R-RENDER-5:** a still from Interstellar and the same frame from `cosmo-cc`, byte-identical.
-
-**The order after that, and why:**
-
-| phase | what | why here |
+| stream | directory | state |
 |---|---|---|
-| **P2** | `.isp` + versions: document, canonical text, base chains, deltas, resolution, rebase | the model everything else hangs on; pure logic, fastest to make correct |
-| **P3** | service + Command/Event/AppModel + **committed, drift-tested `api.json`** | R-API-1 is rung 4 and no app in the suite has it. Cheap now, expensive later |
-| **P4** | arrange + composite + the carried-forward codecs: render a named timeline | the first end-to-end picture |
-| **P5** | Volume + the three temporal effects | the engine change; needs P4 to have something to measure against |
-| **P6** | audio subset: track, clip, gain, fade, master sum | the format is already specified, so this is implementation only |
-| **P7** | UI: Home, then Edit/Grade, then Cut, then Deliver | last, as the suite's law requires — and Grade first within it, for the same reason P1 is first |
+| volume + temporal ops | `core/ImageProcessing/src/volume/` | `[x]` integrated — DR-VOL-1..3, DR-FX-2 |
+| render path (active set, composite, grade, cache) | `apps/interstellar/render/` | `[~]` built + tested standalone; being wired |
+| `.isp` model + versions | `apps/interstellar/model/` | `[~]` agent running |
+| UI (Home, Edit: Grade/Cut/Deliver) | `apps/interstellar/app/` | `[~]` agent running |
+| service, grammar, codec, API doc, CLI | `apps/interstellar/core/service/`, `cli/` | `[~]` integrator — tables + drift test written, service next |
+
+- [ ] `InterstellarService`: Rack + model + render + volume behind `dispatch(Command)` / `pump` /
+      `model()` / `renderFrame`; `set` routed by owner; pins as content-addressed `.cmp` snapshots.
+- [ ] `interstellar-cc` on the grammar; `docs/api.json` + `docs/API.md` committed and drift-tested.
+- [ ] GTK host wiring the UI's `AppHooks` to the service.
+- [ ] R-RENDER-5: an Interstellar still == the same frame from Cosmo, byte for byte.
+- [ ] Rewrite `arstro.interstellar.implement` / `.debug` for this specification.
 
 ---
 
@@ -59,13 +48,19 @@ the colour authority is a fake. It is also small: Cosmo's service surface is alr
 | **P2** `.isp` + versions | `[ ]` |
 | **P3** service + API document | `[ ]` |
 | **P4** arrange + composite + render | `[ ]` |
-| **P5** Volume + temporal effects | `[ ]` |
+| **P5** Volume + temporal effects | `[~]` engine built and integrated into `arstro_image` (DR-VOL-1..3, DR-FX-2); `#fx` wiring with the service |
 | **P6** audio | `[ ]` |
 | **P7** UI | `[ ]` |
 
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-01 — the volume landed as RGBA8, not linear float.** The architecture sketch had float
+pixels; the build uses straight RGBA8 frames because the temporal ops run on decoded source frames
+(R-VOL-5: ungraded) and the grade — which needs float — runs after them, per frame, in EditEngine.
+A float window would cost 4× the residency to hold values that are about to be quantised anyway.
+The view is a fixed 33-slot array of frame pointers, so it is a stack value that never allocates.
 
 **2026-10-01 — the second specification, and what it changes.**
 

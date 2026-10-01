@@ -1,8 +1,8 @@
 # Interstellar — Architecture
 
-> **Planned.** Nothing below exists yet; the module map marks every row, and
-> [`requirements.md`](requirements.md) gains the `DR-` entry with live `file:line` anchors as each
-> lands. The first specification's architecture is withdrawn (see [`../REQUIREMENTS.md`](../REQUIREMENTS.md)).
+> **Partly built.** The module map marks every row **[planned]** or **built**, and
+> [`requirements.md`](requirements.md) carries the `DR-` entry with live `file:line` anchors for each
+> built one. The first specification's architecture is withdrawn (see [`../REQUIREMENTS.md`](../REQUIREMENTS.md)).
 
 ## 1. Layers
 
@@ -55,22 +55,25 @@ that looked like a change to another app turns out to be a seam that already exi
 6 GB in linear float and a 4K one 24 GB, so a resident volume cannot exist (R-VOL-1).
 
 ```cpp
-struct VolumeView                 // plain data: no virtuals, no ownership
+struct VolumeView                 // plain data: no virtuals, no ownership       (src/volume/Volume.h:93)
 {
-    const Pixel *frame[kMaxWindow];   // pointers INTO the cache's own buffers
-    int   frames, width, height, channels;
-    long long t0;                      // source index of frame[0]
+    static constexpr int kMaxWindow = 33, kChannels = 4;   // RGBA8, always
+    const uint8_t *frame[kMaxWindow];  // pointers INTO the cache's own buffers
+    int   frames, width, height;
+    long long t0;                      // source index of frame[0]; negative in a clip-end padded view
     ptrdiff_t rowStride;
-    const Pixel *row(int dt, int y) const    // header-inline; folds into the loop
+    const uint8_t *row(int dt, int y) const    // header-inline; folds into the loop
     { return frame[dt] + (size_t)y * rowStride; }
 };
 
-class Volume                      // the lazy object
+class Volume                      // the lazy object                              (src/volume/Volume.h:111)
 {
 public:
-    virtual bool window(long long t0, long long t1, VolumeView &out) = 0;
-    virtual Extent extent() const = 0;
+    virtual VolumeExtent extent() const = 0;
+    virtual bool window(long long t0, long long t1, VolumeView &out) = 0;   // INCLUSIVE, strict
 };
+// CachedVolume(extent, Provider, capBytes) — residency is EXACTLY the current window; a departing
+// frame's buffer is recycled for the entering one; a window over the cap is REFUSED, never overshot.
 ```
 
 Four decisions, each with a reason that cost something to learn:
@@ -79,8 +82,8 @@ Four decisions, each with a reason that cost something to learn:
   innocent call — lazy evaluation's classic trap. The window makes the cost visible at the call
   site and bounds residency by the declared radius.
 - **An array of frame pointers, not one contiguous block.** A contiguous window means memcpy'ing
-  each frame in: 25 MB at 1080p, so a radius-2 window copies 125 MB per output frame — more than
-  the filter costs. The frames already exist in the cache; pointing at them is free, and the
+  each frame in: 8 MB of RGBA8 at 1080p, so a radius-2 window would copy 41 MB per output frame —
+  more than the filter costs (denoise r2 measures 1.35 ms at 1080p; the copy alone would be ~4 ms). The frames already exist in the cache; pointing at them is free, and the
   indirection vanishes once the row pointers are hoisted.
 - **Raw memory in the inner loop.** Resolved once per window, hoisted once per row. At 2.07 M
   pixels a frame, a per-pixel virtual is ~4 ms per stage per frame — fine for one photo, ~670 ms/s
@@ -121,8 +124,8 @@ Every planned file, its layer, and the requirement that justifies it. **[planned
 
 | path | layer | responsibility |
 |---|---|---|
-| `core/ImageProcessing/src/volume/Volume.{h,cpp}` | engine | **[planned]** the lazy volume + `VolumeView` (R-VOL) |
-| `core/ImageProcessing/src/volume/TemporalOps.{h,cpp}` | engine | **[planned]** denoise · blend · freeze (R-FX-2) |
+| `core/ImageProcessing/src/volume/Volume.{h,cpp}` | engine | **built** — the lazy volume, `VolumeView`, `CachedVolume` (R-VOL); notes + measurements in `core/ImageProcessing/docs/volume.md` |
+| `core/ImageProcessing/src/volume/TemporalOps.{h,cpp}` | engine | **built** — denoise · blend · freeze remap · `renderTemporal` (R-FX-2) |
 | `apps/interstellar/core/Project.{h,cpp}` | core | **[planned]** the `.isp` document, canonical text, the fixed point (R-FMT) |
 | `apps/interstellar/core/Versions.{h,cpp}` | core | **[planned]** base chains, deltas, resolution, rebase (R-VER) |
 | `apps/interstellar/core/Rack.{h,cpp}` | core | **[planned]** owns the hosted `CosmoService`; `RackAccess` over it (R-RACK) |

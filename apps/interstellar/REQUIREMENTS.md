@@ -128,7 +128,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-VOL — video is a volume — 📋 SPECIFIED
+## R-VOL — video is a volume — 🚧 IN PROGRESS (engine built: DR-VOL-1..3; not yet wired to clips)
 
 - **R-VOL-1 A clip's source is a VOLUME — (x, y, t) — and the volume is lazy.** It is an interface,
   not storage: frames materialise on demand behind it. A 10-second 1080p clip is 6 GB in linear

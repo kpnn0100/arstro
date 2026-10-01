@@ -82,3 +82,13 @@ enable_testing()
 add_executable(image_tests unittest/imageTests.cpp unittest/engineTests.cpp)
 target_link_libraries(image_tests PRIVATE arstro_image)
 add_test(NAME unit COMMAND image_tests)
+
+# R-VOL / R-FX-2: the lazy video volume and the temporal ops (src/volume/). Their own executable
+# rather than MiniTest cases, because the suite carries its own measurements and a guard that it
+# refuses to run with asserts compiled out.
+add_executable(volume_tests unittest/volumeTests.cpp)
+target_link_libraries(volume_tests PRIVATE arstro_image)
+add_test(NAME volume COMMAND volume_tests)
+# Not a test: prints ms per output frame for the ledger. Run it on a Release build.
+add_executable(volume_bench EXCLUDE_FROM_ALL unittest/volumeBench.cpp)
+target_link_libraries(volume_bench PRIVATE arstro_image)
