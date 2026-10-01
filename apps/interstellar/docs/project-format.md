@@ -1,453 +1,226 @@
-# Interstellar — the `.isp` project format and the parameter address space
+# Interstellar — the `.isp` project format
 
-Normative for **R-FMT**, **R-PARAM** and the text grammar the CLI, the socket, the journal and the
-`--script` files all share. If this document and the code disagree, one of them is a defect with an
-id — not untidiness (D-1's lesson).
+Normative for `R-FMT`, `R-VER`, `R-TL` and the command grammar. One fact per line; a `#type id=…`
+header opens a node; canonical formatting so "no change" is literally no diff; unknown keys
+preserved verbatim so a newer file opens in an older build without loss.
 
-Contents: [1. Shape](#1-the-shape-of-the-file) · [2. Node types](#2-node-types) ·
-[3. Canonical serialization](#3-canonical-serialization) · [4. Parameter addresses](#4-parameter-addresses)
-· [5. The registry](#5-the-parameter-registry) · [6. Time](#6-time) ·
-[7. Validation](#7-validation-what-is-rejected) · [8. The command grammar](#8-the-command-grammar)
-· [9. A worked example](#9-a-worked-example)
+**Colour is not in this file.** A clip names a rack node and the colour is that node's, in the
+`.cmp` the rack embed points at (R-RACK-1). The one colour-shaped thing here is a version's
+*override*, and an override is a delta, not a value (§3.3).
 
 ---
 
-## 1. The shape of the file
-
-One fact per line. A `#type ...` header opens a node; indented `key = value` lines are its fields;
-children reference parents by id. Nebula's rules apply
-([shared-core.md §2](../../../docs/shared-core.md#2-the-text-project-format)): stable ids, order as
-data, references not copies, canonical formatting, unknown keys preserved.
+## 1. Header
 
 ```
 arstro-project = 1
-app            = interstellar
-id             = prj_mv01
-name           = "Japan MV — cut A"
-fps            = 24
-width          = 3840
-height         = 2160
-par            = 1.0                  ; pixel aspect ratio
-colorspace     = rec709
-duration       = 184.500              ; seconds; derived, written for readers that want it
+app        = interstellar
+id         = prj_mv01
+name       = "Japan MV"
+fps        = 24
+width      = 3840
+height     = 2160
+par        = 1.0
+colorspace = rec709
+timebase   = seconds        ; see ../../../docs/audio-format.md §1
+sampleRate = 48000
+masterGain = 0.0
+current    = tl_1           ; which timeline the EDITOR last had open — presentation, not render
 ```
 
-Every node header carries `id=` (stable, never reused) and `name=` (the **bind name**, R-PARAM-2).
-The id is the merge anchor; the name is what an expression spells.
+`current` is deliberately *not* what a render uses: a delivery that depended on which tab was open
+is a delivery nobody can reproduce (R-RENDER-1).
 
 ---
 
-## 2. Node types
-
-Nine, and no more in v1. There is deliberately **no `grade`, no `keyframe` and no `lut` node** —
-colour is the rack's (R-COSMO-2) and animation is `autoclip` + `autolink` (R-AUTO-1).
-
-### 2.1 `#embed` — the rack, and the audio bed
+## 2. The rack — one per project
 
 ```
-#embed id=emb_rack  name=rack   target=cosmo:prj_look77   path="japan18.cmp"
-  as          = rack
-  branch      = main
-  writeBranch = main            ; where Interstellar's colour edits commit (R-COSMO-5)
-#embed id=emb_song  name=song   target=solaris:prj_song50  path="song50.slp"
-  as     = audio
-  branch = main@8f2c1ab         ; pinned → read-only (R-VCS-6)
-  track  = trk_a0
-  offset = 0.000
+#rack id=rk_1 path="japan18.cmp" branch=main writeBranch=main
 ```
 
-| field | type | notes |
-|---|---|---|
-| `as` | enum `rack \| audio` | exactly one `as=rack` per project (R-COSMO-1) |
-| `target` | `<app>:<projectId>` | resolved through the project registry / pool |
-| `path` | string | a hint for a human and for a relink; the id is the identity |
-| `branch` | `<name>` or `<name>@<commit>` | `@commit` = pinned = read-only |
-| `writeBranch` | `<name>` | `as=rack` only; default = `branch`; illegal on a pin |
-| `track`, `offset` | id, seconds | `as=audio` placement |
-
-**A rack node is referenced by clips as `rack:<cosmoNodeId>`**, with the Cosmo node's own bind name
-carried in the model for display and for expressions. Interstellar stores no copy of the Cosmo
-tree — it reads it from the embedded service (R-COSMO-4).
-
-### 2.2 `#track`
+The hosted Cosmo project. Exactly one per project: two would be two colour authorities.
 
 ```
-#track id=trk_v0 name=v0 kind=video order=0  mute=false lock=false
-  opacity = 1.0
-  blend   = normal
-#track id=trk_a0 name=a0 kind=audio order=10 mute=false gain=0.0
+#rackobj id=ro_1 name=gr1 node=cn_1 kind=group weight=1.0
+#rackobj id=ro_2 name=s_day01 node=cn_41 kind=source weight=1.0
+  media="footage/DSC01.MOV" frame=4.250
 ```
 
-`order` is z-order for video (higher composites over lower) and lane order for audio. Track-level
-`opacity`/`blend` compose onto the track's clips (R-COMP-4).
+Interstellar's own data *about* a Cosmo node — never colour:
 
-### 2.3 `#clip`
+| field | why it is here and not in the `.cmp` |
+|---|---|
+| `name` | the **bind name**. Cosmo names a node after its file or after what the user typed, so `"Tokyo Night"` and `"DSC01.MOV"` are both normal and neither is addressable |
+| `media` | the source file. The timeline decodes frame N from it, and Interstellar is the party that added it |
+| `frame` | which frame Cosmo grades (R-RACK-3) |
+| `weight` | the **grade weight**, a continuous `bypass`. Cosmo has no concept of it |
 
-```
-#clip id=clp_a name=clp_a track=trk_v0 order=0
-  src   = rack:cn_41            ; a node in the embedded Cosmo project (R-COSMO-2)
-  at    = 0.000                 ; timeline position of the clip's first frame
-  in    = 12.400                ; source in-point
-  out   = 16.600                ; source out-point (exclusive)
-  speed = 1.0
-  fit   = contain               ; contain | cover | stretch | none  (R-COMP-5)
-  opacity = 1.0
-  blend   = normal
-  geom.x = 0  geom.y = 0  geom.scale = 1.0  geom.rotation = 0
-  geom.anchor.x = 0.5  geom.anchor.y = 0.5
-  geom.crop.x = 0  geom.crop.y = 0  geom.crop.w = 1  geom.crop.h = 1
-```
+---
 
-`out - in` divided by `speed` gives the clip's timeline length; `at` plus that length gives its end.
-**No colour field of any name is accepted here** (R-CUT-2) — a `grade`, `curve`, `lut`, `exposure`
-or `EditParams` key is a validation *error*, not an ignored key, because ignoring it would silently
-discard an edit.
+## 3. Timelines — a timeline is a version
 
-### 2.4 `#transition`
+### 3.1 The node
 
 ```
-#transition id=tr_ab name=tr_ab track=trk_v0 between=clp_a,clp_b
-  kind   = dissolve      ; dissolve | dip
-  dur    = 0.500
-  easing = linear        ; a dissolve is a LINEAR alpha ramp — see design.md §6
-  color  = #000000       ; kind=dip only
-```
-
-### 2.5 `#autoclip` — the reusable shape (R-AUTO-1)
-
-```
-#autoclip id=ac_push name=ac_push  dur=2.000  interp=bezier
-  0.000 = 0.0  ease=easeInOut
-  0.750 = 0.9  ease=easeOutCubic
-  2.000 = 1.0  ease=linear
-```
-
-Breakpoints are `<localTime> = <value>` with an optional easing **to the next** point. `dur` is the
-shape's natural length; a link may time-scale it. Values are in the shape's own unit space (0..1 by
-convention, not by rule) — the link maps them (R-AUTO-2). `interp = linear | bezier | hold | step`.
-
-### 2.6 `#autolink` — applying a shape to an address (R-AUTO-2)
-
-```
-#autolink id=al_1 name=al_1  clip=ac_push  target=gr1.basic.exposure
-  at   = 4.000            ; timeline seconds, or clip-local when scope= is set
-  dur  = 2.000            ; time-scale of the shape; default = the shape's own dur
-  from = 0.0              ; value mapping: shape 0 → 0.0 EV
-  to   = 0.8              ;                shape 1 → 0.8 EV
-  mode = absolute         ; absolute | add | multiply
-  fadeIn  = 0             ; frames; ramps from the static value (R-AUTO-5)
-  fadeOut = 0
-#autolink id=al_2 name=al_2  clip=ac_push  target=clp_a.geom.scale
-  at=4.000 dur=2.000 from=1.0 to=1.08 mode=absolute scope=clp_a
-```
-
-Those two links are the requirement *"multi param can use the same automation"*: one shape,
-two addresses, two value ranges, one set of breakpoints to move.
-
-`scope=<clipId>` puts `at` in the clip's local time so the link travels with the cut (R-AUTO-7).
-`scale`/`offset` may be given instead of `from`/`to` for a pure affine mapping.
-
-### 2.7 `#bind` — a parameter driven by a calculation (R-BIND-1)
-
-```
-#bind id=bn_1 target=gr1.opacity            expr="clamp(gr1.basic.exposure / 2 + 0.5, 0, 1)"
-#bind id=bn_2 target=clp_b.geom.scale       expr="1 + ac_push.value * 0.08"
-#bind id=bn_3 target=gr2.basic.exposure     expr="gr1.basic.exposure - 0.4"
-```
-
-The expression is stored as text and compiled once (Gene, R-BIND-2). `expr` is the only field; the
-dependency list is derived, never stored — a stored dependency list is a second copy of a fact the
-expression already carries (R-G-3).
-
-### 2.8 `#marker`
-
-```
-#marker id=mk_1 name=chorus  at=48.000  color=#4F7EF7  note="chorus in"
-```
-
-### 2.9a `#rackobj` — Interstellar's own data about a rack node (R-RACK-6)
-
-```
-#rackobj id=ro_1 name=gr1 node=cn_1 opacity=1.0
+#timeline id=tl_1 name=main                                  order=0
+#timeline id=tl_2 name=social30 base=tl_1 colour=follow      order=1
+#timeline id=tl_3 name=delivery base=tl_1 colour=pin@8f2c1ab cut=frozen order=2
 ```
 
 | field | meaning |
 |---|---|
-| `node` | the Cosmo node id this names |
-| `name` | the **bind name** — an expression spells this. Cosmo's own name may contain a space or a dot and is therefore not a legal address (R-PARAM-2) |
-| `opacity` | the **grade weight**: how strongly this node's own parameter offsets apply to its descendants — a continuous `bypass`, and what `bind gr1.opacity = …` addresses |
-| `media` | the **source file**. The timeline decodes frame N from it, and Interstellar stores it because Interstellar is what added the source — Cosmo exposes a slot's path only through the transitional `session()` accessor its own ledger is counting down |
-| `frame` | the reference-frame time a video source is graded on, in seconds (R-COSMO-7's selector) |
+| `base` | the timeline this one is a version of. Absent = a root |
+| `colour` | `follow` (default) or `pin@<commit>` — freeze the base's grade for a delivery |
+| `cut` | `follow` (default) or `frozen` — stop inheriting the base's arrangement |
 
-It is Interstellar's data *about* a rack node, not colour data belonging to it, which is why it
-lives here and not in the `.cmp`.
+### 3.2 One inheritance model, for both halves
 
-### 2.9 `#settings` — project-scoped preferences that belong to the project, not the machine
+**A version is "my base, resolved live, with my deltas on top."** Colour and arrangement behave
+*identically*, which is the whole reason the model is learnable:
 
 ```
-#settings
-  proxyEdge      = 1280        ; playback proxy long edge
-  cpuPercent     = 50          ; the ONE budget (R-NFR-3)
-  cacheBytes     = 2147483648
-  lintOnRender   = true
+resolve(timeline) =
+    resolve(base)                    ← recursively, unless this one is pinned/frozen
+      minus every #tldrop
+      with  every #tlset applied
+      plus  every node declared here outright
 ```
 
-Machine-scoped preferences (window size, last directory, GPU opt-in) live in the config dir, not in
-the project — a project that moves between machines must not carry one machine's thread count.
+- **inherit live** — a regrade or a re-cut on the base reaches every open version immediately;
+- **override to diverge** — a `#tlset` or a `#tlgrade` always wins over the base;
+- **pin / freeze to stop** — a delivery stops inheriting, deliberately and visibly;
+- **rebase to reconcile or advance** — prune deltas whose target the base deleted, and move a pin
+  forward.
+
+> **AMENDED (writing this document, 2026-10-01).** `R-VER-2` first said *colour inherits live and
+> arrangement inherits by delta, replayed on demand*, with a rationale that a cut "must not change
+> under the editor's hands". Writing the resolution rules showed that to be two models where one
+> does: a delta resolved live against its base **is** inheritance, and calling the same mechanism by
+> two names bought nothing but a second set of rules to learn. The editorial worry it was protecting
+> against is real and is answered by `cut=frozen` — which is now the same lever as `colour=pin`,
+> rather than a different one. R-VER-2 is amended to match; this is the conflict rule working at the
+> moment it is supposed to (`arstro.rule` §2).
+
+### 3.3 The deltas
+
+```
+#tldrop   timeline=tl_2 node=clp_3                      ; the base's clip is not in this version
+#tlset    timeline=tl_2 node=clp_5 out=4.200 at=0.000   ; field overrides on an inherited node
+#tlgrade  timeline=tl_2 node=ro_2 exposure=0.4          ; a COLOUR override, per rack node
+```
+
+- `#tlset` carries only the fields it overrides — the rest keep inheriting, so a base edit to an
+  untouched field still arrives.
+- `#tlgrade` is the one colour-shaped node in the file, and it is **a delta applied to the rack's
+  value at render time**, never a stored parameter set. The rack remains the authority; this says
+  *"in this version, +0.4 on top of whatever the rack says"*.
+- A delta whose `node` no longer exists in the base is **dangling** — reported by `rebase`, never
+  silently dropped.
+
+### 3.4 Why versions are per-timeline, not per-project
+
+The first specification put Nebula branching around the whole project, which put the version
+boundary around the **colour authority** — so "rebase to get the base's latest colour" could not be
+expressed at all, because the base's colour was in a different repository state. One project, one
+rack, many cuts of it: the thing that varies between versions is the *arrangement and the
+deviations*, which is exactly what a timeline is.
 
 ---
 
-## 3. Canonical serialization
+## 4. Arrangement nodes
 
-Because a commit is content-hashed and a diff must be empty when nothing changed (R-FMT-4):
+```
+#track id=trk_1 name=v0 timeline=tl_1 kind=video order=0 opacity=1.0 blend=normal
+#clip  id=clp_1 name=shotA track=trk_1 order=0 src=ro_2
+  at=0.000 in=12.400 out=16.600 speed=1.0 fit=contain opacity=1.0 blend=normal
+  geom.x=0.0 geom.y=0.0 geom.scale=1.0 geom.rotation=0.0
+  geom.anchor.x=0.5 geom.anchor.y=0.5
+  geom.crop.x=0.0 geom.crop.y=0.0 geom.crop.w=1.0 geom.crop.h=1.0
+#transition id=tr_1 name=tr_ab track=trk_1 between=clp_1,clp_2 kind=dissolve dur=0.500
+#marker id=mk_1 name=chorus timeline=tl_1 at=48.000 note="chorus in"
+```
 
-1. **Node order** — by node type in the order of §2, then by id, lexicographically. `order=` fields
-   carry user-visible ordering, so file order never has to.
-2. **Field order** — the order declared in this document, then unknown keys, in the order they were
-   read.
-3. **Numbers** — the shortest decimal that reads back bit-identically; times to 3 decimal places;
-   an integral value keeps one `.0` where the field is a float. (Gene's `num()` already implements
-   exactly this rule for the same reason: the file is read by people and must still be exact.)
-4. **Strings** — double-quoted with `\"`, `\\`, `\n` escapes; quoted only when the value contains a
-   space, a quote, a `;` or a leading/trailing space.
-5. **Comments** — `;` to end of line, **preserved** against the node they follow.
-6. **Unknown keys** — preserved verbatim, in place, so a newer file survives an older build.
-7. **Parse → serialize is a fixed point.** The round-trip test is P1's gate and it is the cheapest
-   test in the project.
+`src` names a **`#rackobj`**, not a file: the colour and the pixels arrive together, from one place.
+
+**A colour field on a `#clip` is a validation ERROR**, not an ignored key — ignoring it would
+silently discard a user's edit. `grade`, `curve`, `mixer`, `lut`, `exposure`, `temp`, … all refused,
+naming the key.
+
+Audio nodes (`#atrack`, `#aclip`, `#note`, `#arack`, `#aeffect`, `#aauto`, `#asend`) are the suite
+schema: [`../../../docs/audio-format.md`](../../../docs/audio-format.md). They carry `timeline=` like any
+other arrangement node.
 
 ---
 
-## 4. Parameter addresses
-
-The grammar (R-PARAM-1):
+## 5. Effects
 
 ```
-address   := object [ "." filter ] "." param [ "." component ]
-object    := a bind name — a rack group, a rack source, a track, a clip, an autoclip,
-             a mask, or the reserved object `project`
-filter    := basic | detail | mixer | curve | grade | xform | mask.<i>      (rack objects)
-           | geom                                                          (clips, tracks)
-param     := a leaf name — Cosmo's own EditParamsIO key, or an Interstellar one
-component := x | y | w | h | r | g | b | a | <hue> | y@<x>
+#fx id=fx_1 node=ro_2 type=denoise radius=2 strength=0.6
+#fx id=fx_2 node=ro_2 type=blend   radius=1 shutter=180
+#fx id=fx_3 clip=clp_1 type=freeze at=2.000
 ```
 
-Object-level parameters have **no filter segment** — `gr1.opacity`, `clp_a.speed`, `v0.blend` —
-which is why the filter is optional in the grammar rather than a separate rule. That is the exact
-shape the user asked for: `gr1.opacity` and `gr1.basic.exposure` in one address space.
+A temporal effect attaches to a **rack node** (it belongs to the footage, like the grade) or to a
+**clip** (`freeze` is editorial). `radius` is the temporal footprint the engine unions to size its
+window (R-VOL-4) — it is declared data, not something the engine infers, because residency has to
+be computable before the first frame is read.
 
-### 4.1 Rack objects (a Cosmo group or source)
+---
 
-Filter names are **Cosmo's panels** and leaf names are **Cosmo's own keys** (R-PARAM-4) — the same
-spelling a `.cmp`, a `.apf` preset and a `cosmo-cc set` line use. The full list comes from
-`EditParamsIO`; the grouping is:
+## 6. Canonical serialization
 
-| filter | leaf parameters |
+Node order by type, then by id. Field order as declared here, then unknown keys in read order.
+Numbers: the shortest decimal that reads back bit-identically, times to three places. Strings quoted
+only when they contain a space, a quote, a `;` or an `=`. Comments (`;`) preserved against the node
+they follow. **Parse → serialize is a byte-exact fixed point**, which is the cheapest test in the
+project and the one that catches most format regressions.
+
+---
+
+## 7. Validation: what is refused
+
+| refused | why |
 |---|---|
-| `basic` | `exposure` `contrast` `highlights` `shadows` `whites` `blacks` `temp` `tint` `vibrance` `saturation` `texture` `clarity` `dehaze` |
-| `detail` | `sharpenAmount` `sharpenRadius` `sharpenMasking` `nrLuminance` `nrColor` `grainAmount` `grainSize` `lensDistortion` `lensCA` `lensVignette` |
-| `mixer` | `hue.<h>` `sat.<h>` `lum.<h>` (per-hue curve values) · `spread` |
-| `curve` | `master` `r` `g` `b` (whole curves) · `master.y@<x>` (a sampled component) · `log` |
-| `grade` | `shadows.hue/sat/lum` `midtones.hue/sat/lum` `highlights.hue/sat/lum` `balance` · `remap.src/range/dst/strength` `remap.enable` |
-| `xform` | `crop.x/y/w/h` `rotation` `quarterTurns` |
-| `mask.<i>` | `feather` `inverted` `type` · geometry (`cx cy rx ry` \| `x0 y0 x1 y1`) · `adjust.<leaf>` for every `LocalAdjust` field |
-| *(object level)* | `bypass` `opacity`¹ |
+| a colour field on a `#clip` | R-TL-2 — ignoring it discards a user's edit |
+| two `#rack` nodes | two colour authorities |
+| a colour command against a pinned version | a pin that yields is not a pin |
+| a `#timeline` whose `base` chain contains a cycle | named, both ends |
+| a `#clip` with `in >= out`, or `speed = 0` | a clip with no frames is not a clip |
+| a `src` naming no `#rackobj` | with the rack's bind names listed |
+| a `#transition` longer than either neighbour | it would consume a clip |
+| a non-finite number | **repaired** to the field default and counted, never refused — one stray `nan` must not make a project unopenable |
 
-¹ A rack node's `opacity` is Interstellar's, not Cosmo's: it is the weight with which that node's
-*own* parameter offsets are applied to its descendants — a continuous version of Cosmo's `bypass`,
-and the thing the user's `gr1.opacity` example is asking for. `bypass` stays as the boolean.
-See [design.md](design.md) §4.3 for why this is a rack-object parameter and not a clip parameter.
-
-### 4.2 Timeline objects
-
-| object | filter | parameters |
-|---|---|---|
-| `clip` | *(object level)* | `opacity` `speed` `at` `in` `out` `blend` `fit` `src` |
-| `clip` | `geom` | `x` `y` `scale` `rotation` `anchor.x` `anchor.y` `crop.x` `crop.y` `crop.w` `crop.h` |
-| `track` | *(object level)* | `opacity` `blend` `mute` `gain` |
-| `autoclip` | *(object level)* | `value` (read-only: the shape's output at *t*) · `dur` |
-| `project` | *(object level)* | `playhead` `fps` `width` `height` `duration` (read-only) |
-
-`at`, `in`, `out`, `src`, `blend`, `fit`, `mute`, `kind` and every bind name are **not
-automatable** — their change is structural rather than continuous (R-AUTO-6), and the registry says
-so, so no UI offers a lane that cannot exist.
-
----
-
-## 5. The parameter registry
-
-One generated table (R-PARAM-3). Each row:
-
-| column | meaning |
-|---|---|
-| `address pattern` | `<objectType>.<filter>.<param>` with `<i>`/`<h>`/`<x>` placeholders |
-| `type` | `float · int · bool · enum · curve · colour · point · ref` |
-| `unit` | `ev · % · px · deg · K · frames · s · none` — a unit a UI can label and a script can trust |
-| `min` / `max` / `default` | the same numbers the panel's slider uses |
-| `automatable` | may be an `autolink` target |
-| `bindable` | may be a `#bind` target |
-| `readonly` | derived; never a target |
-| `source` | `cosmo` or `interstellar` — which service owns the write |
-
-It is generated from the same tables the parser and the codec use, so it cannot describe a parameter
-the app does not have and cannot omit one it does. `interstellar-cc api --json` prints it; a test
-regenerates and diffs it (R-SVC-10).
-
-**Why generated is not a preference.** Cosmo's `--help` takes its command names from
-`commandNames()` and is always right, while the argument hints beside them are hand-maintained and
-missing for 8 of 30. With several hundred addresses, the hand-maintained half would be wrong within
-a week and an agent reading it would build scripts on parameters that do not exist.
-
----
-
-## 6. Time
-
-- **`fps` is the project's, and frames are the authority** (R-CUT-5). A time field is serialized as
-  decimal seconds rounded to the nearest frame boundary at 3 decimal places and re-derived as a
-  frame index on read; the pair `(seconds, fps)` must round-trip to the same integer frame.
-- **Clip-local time** is `(t - clip.at) * clip.speed + clip.in`, clamped to `[in, out)`.
-- **A source frame index** is `floor(localTime * sourceFps)` — nearest-neighbour sampling, stated
-  because R-CUT-6 forbids pretending it is interpolation.
-- **Automation time** is timeline seconds, or clip-local seconds under `scope=` (R-AUTO-7).
-- **`t` in an expression** is timeline seconds; `frame` is the integer frame index (R-BIND-2).
-
----
-
-## 7. Validation: what is rejected
-
-An unknown *key* is preserved (R-FMT-4). An unknown or wrong *fact* is rejected, naming it
-(R-SVC-6). The list is normative because every entry is a way a project could otherwise be silently
-wrong:
-
-| rejected | why |
-|---|---|
-| a colour field on a `#clip` | R-CUT-2 — ignoring it discards a user's edit |
-| two `#embed … as=rack` | R-COSMO-1 — two colour authorities |
-| a colour command against a **pinned** rack | R-COSMO-5 — a pin that yields is not a pin |
-| two `#autolink`s overlapping on one address | R-AUTO-4 — two producers for one value |
-| a `#bind` on an address that also has a link | R-BIND-5 — same |
-| a `#bind` cycle | R-BIND-4 — printed with both ends of the cycle |
-| an address that does not resolve | R-PARAM-5 — with the nearest candidates suggested |
-| a bind name that is duplicated, reserved, or malformed | R-PARAM-2 |
-| a `#clip` whose `in >= out`, or `speed = 0` | a clip with no frames is not a clip |
-| a `#transition` whose `dur` exceeds either neighbour | it would consume a clip |
-| a non-finite number anywhere | Cosmo's D-36: **repaired** to the default, with a count reported, never refused — one stray `nan` must not make a project unopenable |
-
-The two behaviours in that last row are deliberately different: a *structural* error refuses, a
-*numeric* corruption repairs and reports.
+The last row differs from the rest on purpose: a *structural* error refuses, a *numeric* corruption
+repairs and reports.
 
 ---
 
 ## 8. The command grammar
 
-Flat and line-oriented, because every consumer is a shell, a file or a socket. One parser, one
-formatter, generated from the `Command` struct (R-SVC-2). This is the grammar `interstellar-cc`
-accepts as arguments, `run --script` reads from a file, and `attach` sends over the socket.
+One parser, shared by the CLI, a script file and the journal. `interstellar-cc api` prints this from
+the same tables, so it cannot drift (R-API-1).
 
 ```
-project new <path.isp> --fps 24 --res 3840x2160 [--colorspace rec709]
-project open <path.isp> [--branch <name>]
-project save [<path.isp>]
-project close
+project new <path.isp> [--fps 24] [--res WxH]   | project open <p> | project save [p] | project close
+rack import <path.cmp> | rack add <media…> | rack group new "<name>" | rack duplicate <node>
+rack frame <node> --at <t> | rack rename <node> <name>
+set <address>=<value> …        ; routed by owner: a rack address writes THROUGH to Cosmo
+get <address> | eval <address> --at <t> [--explain]
 
-rack import <path.cmp> [--branch main] [--write-branch main]   ; create the as=rack embed
-rack new    [--name rack]                                      ; an empty Cosmo project
-rack pin    <commit> | rack unpin
-rack add    <media...>            ; add sources to the rack (video or still)
-rack group  new "<name>" | rack group ungroup <node> | rack rename <node> "<name>"
-rack duplicate <node>             ; a source VARIANT (R-RACK-3)
-rack frame  <node> --at <t>       ; which frame is this video source's grading reference
-rack select <node>
+timeline new <name> [--base <tl>] | timeline list | timeline open <tl>
+timeline pin <tl> [--commit <c>] | timeline unpin <tl> | timeline freeze <tl> | timeline thaw <tl>
+timeline rebase <tl> [--dry-run]            ; reconcile dangling deltas, advance a pin
+timeline diff <tl> [--against <tl>]         ; what this version changes
 
-set <address>=<value> [<address>=<value> ...]   ; routes to whichever service owns it (R-PARAM-3)
-get <address>
-eval <address> --at <t> [--explain]
+track add --kind video|audio [--name v0]
+clip add --track <t> --src <rackobj> --in <t> --out <t> --at <t> [--name n]
+clip trim|split|move|delete|roll|slip …     | transition add --between a,b --kind dissolve --dur 0.5
+fx add --node <ro>|--clip <c> --type denoise|blend|freeze [--radius 2] [--strength 0.6]
 
-track add --kind video|audio [--name v1] [--order n]
-track set <track> <address>=<value>...
-clip add --track <track> --src rack:<source> --in <t> --out <t> --at <t> [--name clp_a]
-          ; <source> may be a BIND NAME (`rack:a`) — node ids are assigned by the writer and are
-          ; not guessable. Stored canonically as `rack:<node>`; an unknown source is refused.
-clip trim <clip> --in <t> | --out <t>       ; clip split <clip> --at <t>
-clip move <clip> --at <t> [--track <track>] ; clip delete <clip> [--ripple]
-clip roll <clipA>,<clipB> --by <dt>         ; clip slip <clip> --by <dt>
-transition add --between <clipA>,<clipB> --kind dissolve --dur 0.5
-
-auto new  <name> --dur <t> --points 0=0,1=1 [--ease easeInOut] [--interp bezier]
-          ; --points times are NORMALISED (fractions of --dur); the FILE stores seconds (R-AUTO-1a)
-auto point <autoclip> --at <t> --value <v> [--ease <e>]   ; auto point delete <autoclip> --at <t>
-auto link <autoclip> -> <address> --at <t> [--dur <t>] [--from <v> --to <v>]
-          [--mode absolute|add|multiply] [--scope <clip>] [--fade-in <frames>]
-auto unlink <autolink>      ; auto lanes [<object>]      ; auto flatten <autolink>
-bind <address> = <expression>     ; bind list      ; bind delete <address>
-
-playhead <t> | playhead +<dt> | playhead next-cut | playhead prev-cut
-play | pause | stop
-render --out <path> [--range a:b] [--branch <name>] [--format prores|h264|png-seq] [--lint]
-export-still --out <path.png> [--at <t>]
-branch <name> --base main | rebase --status | merge <a.isp> <b.isp> --into <c.isp> --policy concatenate
-settings set proxyEdge=1280 cpuPercent=50
-state print [--json] [--stable]      ; ui dump [--json] [--root cut|grade|mix]
-wait <condition> --timeout 120s      ; expect <event-prefix>      ; api [--json]      ; quit
+audio track add --name bed | audio clip add --track <t> --src <file> --at <t> [--gain -3]
+playhead <t>|+<dt>|next-cut|prev-cut | play | pause
+render --timeline <tl> --out <path> [--range a:b] [--format h264|prores|png-seq]
+export-still --timeline <tl> --out <p.png> [--at <t>]
+state print [--json] [--stable] | api [--json] | lint | wait <cond> | quit
 ```
-
-Note what needs **no** command of its own: every scalar, curve, mixer band, grade wheel, mask field,
-geometry value and opacity is reachable through `set <address>=<value>`, because the registry names
-them all. That is the same economy Cosmo's `Command.h` header argues for, extended by the address
-space.
-
----
-
-## 9. A worked example
-
-The user's scenario, complete: two groups graded in Cosmo, a two-shot cut, one automation shape
-driving two parameters, and one binding.
-
-```
-arstro-project = 1
-app   = interstellar
-id    = prj_mv01
-name  = "Japan MV — cut A"
-fps   = 24   width = 3840   height = 2160   par = 1.0   colorspace = rec709
-
-#embed id=emb_rack name=rack target=cosmo:prj_look77 path="japan18.cmp"
-  as = rack   branch = main   writeBranch = main
-#embed id=emb_song name=song target=solaris:prj_song50 path="song50.slp"
-  as = audio  branch = main   track = trk_a0  offset = 0.000
-
-#track id=trk_v0 name=v0 kind=video order=0  opacity=1.0 blend=normal
-#track id=trk_v1 name=v1 kind=video order=1  opacity=1.0 blend=normal
-#track id=trk_a0 name=a0 kind=audio order=10 gain=0.0
-
-; ── the cut. Both clips reference RACK NODES; neither carries any colour. ──
-#clip id=clp_a name=clp_a track=trk_v0 order=0
-  src=rack:cn_41  at=0.000  in=12.400 out=16.600 speed=1.0 fit=contain
-  opacity=1.0 blend=normal
-  geom.scale=1.0 geom.crop.w=1 geom.crop.h=1
-#clip id=clp_b name=clp_b track=trk_v0 order=1
-  src=rack:cn_58  at=4.200  in=88.000 out=91.100 speed=1.0 fit=contain
-  opacity=1.0 blend=normal
-#transition id=tr_ab name=tr_ab track=trk_v0 between=clp_a,clp_b kind=dissolve dur=0.500 easing=linear
-
-; ── one shape … ──
-#autoclip id=ac_push name=ac_push dur=2.000 interp=bezier
-  0.000 = 0.0  ease=easeInOut
-  2.000 = 1.0  ease=linear
-
-; ── … driving two different parameters, in two different unit ranges (R-AUTO-2) ──
-#autolink id=al_ex name=al_ex clip=ac_push target=gr1.basic.exposure
-  at=2.000 dur=2.000 from=0.0 to=0.8 mode=absolute
-#autolink id=al_sc name=al_sc clip=ac_push target=clp_a.geom.scale
-  at=2.000 dur=2.000 from=1.0 to=1.08 mode=absolute scope=clp_a
-
-; ── and one binding: the group's own weight follows its own exposure (the user's example) ──
-#bind id=bn_op target=gr1.opacity expr="clamp(gr1.basic.exposure / 2 + 0.5, 0, 1)"
-
-#marker id=mk_1 name=chorus at=48.000 color=#4F7EF7 note="chorus in"
-
-#settings
-  proxyEdge = 1280   cpuPercent = 50   cacheBytes = 2147483648   lintOnRender = true
-```
-
-`gr1` and the rack nodes `cn_41` / `cn_58` are **not in this file**. They are in `japan18.cmp`, the
-Cosmo project the rack embed names, and they are edited — from Cosmo *or* from Interstellar —
-through the one Cosmo service that owns them (R-COSMO-3). That absence is the whole design.
