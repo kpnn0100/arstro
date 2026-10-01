@@ -1,348 +1,214 @@
 ---
 name: arstro.interstellar.implement
-description: Use to implement or resume ANY work in the Interstellar video editor — the InterstellarService layer (Command/Event/AppModel), the .isp project format, the timeline cut operations, the parameter address space and its generated registry, automation clips and links, expression bindings over Gene, the evaluator and the compositor, the hosted Cosmo rack that owns colour, the interstellar-cc CLI, AND the whole UI (App, widgets, Theme, the shot harness). Runs the V-model with both requirement tiers in sync, verifies headlessly by driving the real service and by rendering real frames to PNG, records progress in a committed ledger, and commits. Invoke for "add a command", "add a cut operation", "automate a new parameter", "the binding resolves wrong", "add a panel/widget", "the timeline zoom snaps", "continue interstellar", "/arstro.interstellar.implement". NOT for diagnosing a reported bug without fixing it — that is arstro.interstellar.debug.
+description: Use to implement or resume ANY work in Interstellar, the video colour tool that can cut — the hosted Cosmo rack (grouping and colour), timelines-as-versions (override, pin, freeze, rebase), the .isp model, the cut operations, the lazy video volume and temporal effects, the render path and render queue, the InterstellarService grammar/events/model and its GENERATED API document, the interstellar-cc CLI, the audio subset, AND the UI (Home, Edit: Grade/Cut/Deliver; purple-pink cosmo). Runs the V-model with both requirement tiers in sync, verifies headlessly by driving the real service through text command lines and by rendering real frames, keeps the committed API document in step, records progress in the committed ledger, and commits. Invoke for "add a command", "add an address", "versions do X wrong", "add a temporal effect", "render to Y", "add a panel", "continue interstellar", "/arstro.interstellar.implement". NOT for diagnosing a reported bug without fixing it — that is arstro.interstellar.debug.
 ---
 
 # arstro.interstellar.implement
 
-> **Invoke `arstro.rule` first, then `arstro.design.rule` when the task touches a pixel.** They
-> carry the core/front-end split, requirements-first and the conflict rule, the V-model doc-sync
-> loop, the agent-drivable surface, the ledger/defect/commit conventions, and the whole design law.
-> **Follow all three; where they overlap, this file's checklist is the one to satisfy** — except on
-> the architecture, requirement and agent-drivability laws, where `arstro.rule` wins, and on the
-> motion, token and overflow rules, where `arstro.design.rule` wins.
+> **Invoke `arstro.rule` first, then `arstro.design.rule` when the task touches a pixel.** They own
+> the core/front-end split, requirements-first, the V-model doc sync, the ledger/defect/commit
+> conventions and the design law. This file is Interstellar's map and checklist on top of them.
 
-The **resume-driven V-model workflow for everything in Interstellar.** All state lives in committed
-files, so a session on any machine can pick up exactly where the last one stopped.
-
-**One skill, both halves.** Cosmo splits core from design across two implement skills because it has
-~40 widgets and a 172 KB defect file; Interstellar is young enough that the split would cost more
-than it saves, and its two halves share the address space. **But the two-commit rule still holds: a
-task spanning core and UI is core first, then UI.**
+**Interstellar is a colour tool that can cut** (`REQUIREMENTS.md`, the second specification). Every
+decision below follows from that sentence. The first specification made the timeline the app and
+colour an embed; two builds shipped a cutting tool whose colour authority was a test fake, and were
+withdrawn. **If a change makes colour less real, it is the wrong change.**
 
 **You are the only skill that changes product code for a defect.** `arstro.interstellar.debug`
-never fixes anything: it reproduces, files and *recommends*. When you pick a defect up, the
-diagnosis, the measurement, the cause with `file:line`, the recommended change and the test that
-should guard it are already written in `docs/DEFECTS.md` — **read the entry before re-deriving any
-of it.** You may disagree, and should say so in the commit; a recommendation you silently ignore
-usually means the entry knows something you have not read.
-
-**You own:** everything under `apps/interstellar/`, plus `core/Gene/` (the shared binding language
-Interstellar promoted out of `genesis_core`).
-
-**You do not own:** `apps/cosmo/` — the rack's colour authority. A change Interstellar needs there
-(a video source, a plumbed-through memory cap) is `arstro.cosmo.core.implement`'s commit, in
-Cosmo's own requirements. Nor `core/Artboard` (that is `implement_artboard`, a submodule).
+reproduces, files and recommends; read its `docs/DEFECTS.md` entry before re-deriving anything.
 
 ---
 
-## 0. Orient — read these, in this order, every invocation
+## 0. Orient — read these, in this order, before touching code
 
-| # | File | Why |
-|---|---|---|
-| 1 | `apps/interstellar/docs/PROGRESS.md` | The ledger. **NEXT** says what to do. |
-| 2 | `apps/interstellar/docs/DEFECTS.md` | Open defects — yours may already be filed with a fix recommended. |
-| 3 | `apps/interstellar/REQUIREMENTS.md` | **Intent**, `R-<AREA>-<n>`, status in the heading. |
-| 4 | `apps/interstellar/docs/requirements.md` | **As-built**, `DR-<AREA>-<n>`, with `file:line`. |
-| 5 | `apps/interstellar/docs/binding.md` §6 | **The frame pipeline order. It is a contract.** Read it before touching anything that produces a value. |
-| 6 | `apps/interstellar/docs/project-format.md` §4–5 | The address space and the registry — what every `set` routes through. |
-| 7 | `apps/interstellar/docs/architecture.md` §9 | The module map: where a file goes and the R-tag that justifies it. |
-| 8 | `apps/interstellar/docs/design.md` | Why it is shaped this way, and the seven known risks. |
-| 9 | `apps/interstellar/docs/ui-brief.md` | Only when touching a widget. |
+1. `apps/interstellar/docs/PROGRESS.md` — **NEXT** is the task unless the user named another.
+2. `apps/interstellar/REQUIREMENTS.md` — intent (R-). `docs/requirements.md` — as built (DR-, with
+   `file:line` anchors). A behaviour without a DR entry does not ship.
+3. `apps/interstellar/docs/API.md` — **generated**; the command grammar, every event, every model
+   field, the whole address space with units and owners. This is what the code accepts today.
+4. `docs/project-format.md` (the `.isp`), `docs/architecture.md` (layers + module map),
+   `docs/ui-brief.md` (screens), `../../docs/audio-format.md` (the suite audio schema).
+5. `docs/DEFECTS.md` — D-1 (Cosmo alone cannot show a video source) and D-2 (Cosmo's save deletes an
+   offline source; mitigated) shape what you may do with the rack.
 
-Reconcile a stale ledger to reality first, and say so.
+### The code map
 
-### Where the code is
-
-```
-apps/interstellar/
-  core/                       interstellar_core — UI-FREE. No Artboard, no GTK, no codec.
-    Project.{h,cpp}             the .isp document: 10 node types, canonical text, the fixed point
-    Timeline.{h,cpp}            the cut operations — add/trim/split/move/roll/slip/ripple
-    ParamRegistry.{h,cpp}       THE ADDRESS SPACE. Generated. The router for every `set`.
-    Automation.{h,cpp}          AutoClip (shapes) + AutoLink (placement/mapping/mode) + the lint
-    BindingGraph.{h,cpp}        compiled Gene expressions, derived deps, cycle refusal, topo order
-    Evaluator.{h,cpp}           steps 1-4 of the frame pipeline. PURE.
-    Composite.{h,cpp}           steps 6-8: geometry, blend modes, transitions
-    RackAccess.h                the seam onto the hosted Cosmo project. A fake is 3 lines.
-    service/
-      InterstellarService.{h,cpp}  THE application: dispatch / pump / model / renderFrame
-      Command.{h,cpp}              the one way in + the generated codec + commandSpecs()
-      Event.{h,cpp}                the one way out; formatEvent() IS the log line
-      AppModel.h                   the whole observable state, plain data
-      AppModelCodec.{h,cpp}        formatModel(m, {stable,json,resolved}) — R-SVC-9's diff
-    tests/coreTests.cpp         28 L2 tests: the real service, headless, in milliseconds
-  cli/main.cpp                interstellar-cc — argv, stdout, a PPM writer, NO behaviour
-  Theme.h                     ALIASES cosmo's token namespaces. Never a copy.
-  App.{h,cpp}                 the shell: 4 workspaces, one monitor, the Command seam
-  widgets/                    Monitor · TimelineView · LaneStack · Transport · WorkspaceBar
-  tests/shots/renderShots.cpp interstellar_shots — every named state to a PNG, with --size/--script/--tree
-  tests/ui/uiTests.cpp        interstellar_ui_tests — assertions over the ASSEMBLED app
-core/Gene/                    gene_core — the shared binding language (promoted from genesis)
-```
-
-### The invariants — break one and something lies silently
-
-- **Colour never leaves the rack.** No `EditParams`, no curve, no LUT in the `.isp`. A clip
-  references a rack node; the colour is that node's (R-COSMO-2). `Project::fieldIsColour` REFUSES
-  a colour key on a clip rather than ignoring it — ignoring it would silently discard a user's
-  edit. **The test for a new field is: would a second front end need it to draw the same frame?**
-- **One authority per address** (R-EVAL-1): a binding, else an active link, else the static value.
-  The model **refuses** configurations where two apply, so the evaluator never has to choose. If
-  you find yourself writing a precedence rule, you are about to break this.
-- **The frame pipeline order is a contract** (`binding.md` §6): time → automation → bindings → rack
-  composition → colour → geometry → composite → output. Automation before bindings is what lets an
-  expression read an automated value; both before composition is what stops a group's offsets being
-  folded from a value that was going to change. **Any other order is a different picture**, so a
-  change here is a requirement amendment plus a re-baked golden set.
-- **`Evaluator::resolve` is PURE.** No global state, no cache surviving a parameter change, no
-  dependence on evaluation history. R-NFR-1 and every golden test rest on it.
-- **The frame-cache key hashes every resolved value that fed the layer**, not the parameter struct.
-  A key that missed a shape a link maps in would serve a stale frame, which is indistinguishable
-  from a rendering bug.
-- **Parse → serialize is a byte-exact fixed point** (R-FMT-4), and unknown keys are preserved in
-  place. `Project::roundTripsExactly` is the guard; it is the cheapest test in the project.
-- **A structural error REFUSES; a numeric corruption REPAIRS and reports.** A colour field on a
-  clip is refused; a stray `nan` is neutralised with a count (cosmo's D-36). Both behaviours are
-  requirements, and they are deliberately different.
-- **An unknown input is rejected NAMING it, with the nearest candidates** (R-SVC-6). Cosmo's D-59
-  — `set exposre=1.2` returning success — matters far more here: the address space is 153 names
-  deep in an empty project and a typo is weekly.
-- **A bind name is Interstellar's, not Cosmo's.** Cosmo names a node after its file or after what
-  the user typed ("Tokyo Night"), and neither is a legal address. `Project::ensureRackObj` derives
-  one and it is STABLE once assigned, because an expression spells it.
-- **A rename rewrites every reference atomically** — automation targets and expression text, on
-  whole identifiers only (renaming `gr1` must not touch `gr10` or `min`).
-- **`interstellar_core` links `gene_core` and nothing else.** No Artboard, no GTK, no codec, no
-  `getenv`. That is what keeps the core suite at 0.03 s and runnable with no display.
-- **`Theme.h` ALIASES cosmo's tokens and the build compiles `cosmo/Theme.cpp`.** A forked token
-  file is a divergence with a delay fuse — genesis proved it.
+| directory | library | depends on | what lives there |
+|---|---|---|---|
+| `core/ImageProcessing/src/volume/` | `arstro_image` | — | `Volume`, `VolumeView`, `CachedVolume`, `TemporalDenoise`, `FrameBlend`, `freezeRemap`, `renderTemporal` |
+| `apps/interstellar/model/` | `interstellar_model` | headers only | `Project` (.isp parse/serialize/validate), `Versions` (resolve, deltas, pin/freeze, rebase, diff), `arrange::` cut ops |
+| `apps/interstellar/render/` | `interstellar_render` | `arstro_image` | `activeAt`, `compose`/`Layer`, `GradeEngine`, `FrameCache`, `hashParams` — **knows no project** |
+| `apps/interstellar/core/` | `interstellar_core` | `cosmo_core`, model, render | `Rack` (hosted CosmoService), `Colour` (the one fold), `FrameSelector`, `ParamRegistry`, `service/` |
+| `apps/interstellar/core/service/` | (in core) | | `Command` (the grammar TABLE), `Event`, `Json`, `AppModel` (frozen UI contract), `AppModelCodec`, `ApiDoc`, `InterstellarService` + `ServiceRender.cpp` |
+| `apps/interstellar/host/` | `interstellar_host` | FFmpeg, GdkPixbuf | `VideoFrameDecoder` (Cosmo's decoder seam), `HostFrameSource` (stills via Cosmo's decoder), `FrameSourceFFmpeg`, `FrameWriterFFmpeg`, `PngWriter` |
+| `apps/interstellar/cli/` | `interstellar-cc` | host | argv/stdout only — every verb is the service grammar |
+| `apps/interstellar/app/` | `interstellar_app` | Artboard, cosmo widgets | the UI over `AppHooks` (see §6) |
 
 ---
 
-## 1. The loop (every invocation)
+## 1. The laws (each one cost a withdrawn build or a defect to learn)
 
-1. **Orient** (§0).
-2. **Scope ONE task**, mark it `[~]` in the ledger.
-3. **Requirements first** (§2) — no code until the requirement is written and conflict-checked.
-4. **Design docs next** (§3) — architecture / detailed_design / puml, *before* the code.
-5. **Implement** (§4), respecting the invariants.
-6. **Make it shell-reachable** (§5) — a `Command` in, an `AppModel` field or `Event` out.
-7. **Emit an `Event`** (§6) — which is how it gets logged, watched and asserted.
-8. **Verify** (§7). `0 failed`, at the level the task demands. **Look at a frame if it draws.**
-9. **Sync check** (§8).
-10. **Ledger + defects, then commit** (§9, §10).
-
----
-
-## 2. Requirements first — and the conflict rule
-
-Two tiers, both authoritative: `REQUIREMENTS.md` (`R-<AREA>-<n>`, intent, status in the heading)
-and `docs/requirements.md` (`DR-<AREA>-<n>`, as-built, `file:line` anchors, citing its R-tag).
-
-> - **Exists and agrees** → build it, then refresh its `DR-` entry.
-> - **Conflicts** → resolve it **in the document** first: amend the `R-` entry in place, marked
->   `**AMENDED (<what forced it>, <date>)**` with one line of why. Never ship code that contradicts
->   a written requirement, and never leave two requirements that disagree.
-> - **No requirement covers it** → **write it before any code**, then conflict-check it against
->   every requirement in the same area.
-
-**Two amendments already stand as house-style examples** — read them before writing your first:
-**R-COSMO-4** (carrying `cosmo::AppModel` by value would have put GTK3 on every file in the library
-and every test, so the rack reaches the model through the `RackAccess` seam instead) and the
-**`#rackobj` node** (bind names and the grade weight needed somewhere to live, and the `.cmp` is not
-it). Both were forced by *implementing* the specification, which is the normal way a requirement
-gets amended.
-
----
-
-## 3. Design docs before code
-
-- `docs/architecture.md` — a module is added/moved, a **seam** changes, or the threading story
-  changes. The **module map** must list every new file with its layer and its R-tag.
-- `docs/detailed_design.md` — a class is added or its real signatures/constants change.
-- `docs/architecture.puml` — **a class in code with no box is an unsynced design.**
-- `docs/project-format.md` — a node type, a field, or an **address** changes. This one is normative:
-  the validator and the generated API document are built from it.
-- `docs/binding.md` — anything about how a value is produced.
-- `docs/design.md` — only when a decision is *reversed*; then fix the sentence that stated the old
-  one rather than leaving it beside the new behaviour.
-- `docs/ui-brief.md` — when the UI changes.
+1. **Colour is Cosmo's.** The rack is a real `cosmo::CosmoService` driven only by `cosmo::Command`s
+   (`Rack`). Interstellar stores **no** `EditParams` as an authority. A colour write on a root
+   timeline is Cosmo's `Select` + `Set`, saved into the `.cmp`. Never add a colour field anywhere
+   else; a colour key on a `#clip` is a validation error by design (R-TL-2).
+2. **A derived timeline stores DELTAS, never copies** (R-G-3). Arrangement edits go through
+   `setField`/`setFields`/`dropNode`/`arrange::*`, which record `#tlset`/`#tldrop` on inherited
+   nodes. Colour on a derived timeline is a `#tlgrade` **scalar delta on the colour source's own
+   value** (nearest timeline wins per key). A curve/wheel/crop override on a version is refused,
+   pointing at the base or `rack duplicate` — keep it refused unless the format grows a non-scalar
+   delta (a spec change first).
+3. **One fold.** `foldRender`/`foldEditTarget` (`core/Colour.cpp`) is `EditSession::effectiveParams`
+   step for step. The live rack, a pin snapshot and a version's overrides all build a `ColourTree`
+   and fold it here. `test_render_params_equal_cosmos_own_for_every_node` holds it equal to Cosmo.
+4. **A pin is a byte copy of the `.cmp`** in `<stem>.pins/<commit>.cmp` + `<commit>.map`, read back
+   through Cosmo's static `EditSession::readWorkspaceFile`. Read-only by construction.
+5. **The grammar is a table.** A new command is a row in `commandSpecs()` (`core/service/Command.cpp`)
+   plus a case in `InterstellarService::dispatch`. Never accept a flag you do not honour (R-SVC-3) —
+   `eval --at` and `timeline diff --against` were removed for exactly that.
+6. **The API document is generated and committed** (R-API-1, rung 4). Any change to a command, an
+   event (`eventSpecs()`), a model field (`appModelFields()`) or an address (`paramDefs()`) must be
+   followed by regenerating `docs/api.json` and `docs/API.md` (§4) in the same commit, or
+   `interstellar_api_current` fails.
+7. **The render path is pure** (R-RENDER-2): a frame is a function of (project, timeline, t, size).
+   Caches key on everything that changes the pixels; the volume returns the same bytes for the same
+   t whatever the order (R-VOL-7). A render NAMES its timeline (R-RENDER-1) and yields per frame.
+8. **The core carries no codec and no OS path** (R-SCOPE-3). Decoders, writers and the recents path
+   are injected through `InterstellarService::Host`.
+9. **Don't let Cosmo save over an offline source** (D-2). Anything that makes Cosmo save — its `add`
+   saves on finish — must go through `rackSaveBlocked` first.
+10. **The UI dispatches TEXT** through `AppHooks::dispatch` → `dispatchText`. No privileged path.
 
 ---
 
-## 4. Implement — the recipes
+## 2. The loop (V-model, one task per commit)
 
-**Match the surrounding style: this codebase comments *why*, not *what*, and each file opens with a
-block comment stating its seam rule.**
-
-### 4.1 A new parameter (the commonest task)
-One entry in `ParamRegistry::build()` — object kind, filter, leaf name, type, unit, min/max/default,
-automatable, bindable, owner — and **that is the whole of it** for the address space: `set`, `eval`,
-completion, the lane list and the API document all read the registry. Then a case in
-`Evaluator::staticValue` and one in `InterstellarService::setAddress`. **If the parameter is
-Cosmo's, its leaf name must be `EditParamsIO`'s own key** (R-PARAM-4) — a preset, a `.cmp`, a
-`cosmo-cc set` line and an expression must all spell it identically.
-
-### 4.2 A new command
-A `Kind`, a parse case, a format case, a dispatch case, a `commandSpecs()` row **with its argument
-hint**, and a line in `test_command_text_roundtrips`. The spec row is not optional: cosmo's hints
-are hand-maintained and missing for 8 of 30, and this app's `--help` and API document are both
-generated from `commandSpecs()`.
-
-### 4.3 A new node type in the `.isp`
-A struct in `Project.h`, a parse branch, a serialize branch **in the canonical order**, a `Ctx`
-enum value, a lookup, the id-uniqueness scan, `freshId`/`rename` coverage, and a round-trip test
-including an unknown key. Miss one and the format round-trips lossily.
-
-### 4.4 A new widget
-`arstro.design.rule` §5 is the law. One class per file, filename == class name, a block comment
-saying what it is and why, `layout()` non-virtual and called every frame, callbacks as public
-`std::function`s named `onVerb`, a setter that never fires its own callback, **published geometry a
-test can aim at**, and a **live eased value exposed wherever a test must tell a tween from a snap**.
-Reuse `Theme`'s tokens; a bare number is the bug.
-
-### 4.5 Changing the frame pipeline
-Don't, unless the requirement says to. If it does: amend `binding.md` §6, amend the requirement,
-re-bake the goldens, and say in the commit which frames changed and why.
+1. **Requirement first.** Find the R- tag; if there is none, add it to `REQUIREMENTS.md` (conflict
+   check per `arstro.rule` §2) before code. A spec found wrong while building is **amended in place**
+   with an `AMENDED (date)` note, as R-VER-2 and project-format §8 were.
+2. **Lowest level that proves it** (R-TEST-2): model logic → `interstellar_model_tests`; grammar,
+   codec, registry → `interstellar_service_tests`; anything that touches the rack, versions or frames
+   → `interstellar_service_l2` (the REAL service, fake decoders only — never a fake rack).
+3. **Write the test, watch it fail, then fix** (R-TEST-3). Before claiming a test guards something,
+   break the code (a scratch mutant) and see it go red — e.g. "store the absolute value instead of
+   the delta", "ignore pins". Restore and say in the commit that you did.
+4. **Implement**, matching the surrounding code's density and idiom.
+5. **Docs in the same commit:** the DR entry with live `file:line` anchors, the module map row in
+   `architecture.md`, the R- status line, `PROGRESS.md` (NEXT, phases, a decision entry if you chose
+   something), regenerated API docs, a DEFECTS entry for anything found.
+6. **Verify (§4), commit, `git fetch` → rebase if behind → re-run ctest → push.** Never stage the
+   unrelated work other people leave in the tree (`apps/launcher/android-shell/*`, `Testing/`,
+   `core/ImageProcessing/lib/LibRaw`).
 
 ---
 
-## 5. The agent-drivable surface
+## 3. Recipes
 
-**Anything you implement must be reachable, inspectable and assertable from a shell with no
-display.** All of this exists today — checked, not asserted:
+### A new command
+Row in `commandSpecs()` (verb, positional hint, min/max, flags as `name` or `name=<hint>`, summary,
+R- tag) → case in `dispatch` → an `Event` row if it reports something new → L1 row-parses test is
+automatic → an L2 test through `dispatchText` → regenerate API docs.
+
+### A new address
+A `ParamDef` in `core/ParamRegistry.cpp` (owner, pattern, filter for colour, kind, ENGINE unit and
+range) → routing in `setAddress`/`getAddress` → the registry drift test checks every Cosmo key is
+addressable → regenerate API docs. Colour keys are Cosmo's `EditParamsIO` keys, unchanged.
+
+### A new model field the UI needs
+`core/service/AppModel.h` is a frozen contract with the UI: **add**, never rename/remove. Fill it in
+`refreshModel`, write it in `modelToJson`, document it in `appModelFields()` (the drift test fails
+otherwise), regenerate API docs.
+
+### A new temporal effect
+A `TemporalOp` in `src/volume/TemporalOps.*` with a declared footprint and a test that fails against
+a broken op (see `volumeTests.cpp`); an `#fx type=` in the model schema; wiring in
+`InterstellarService::sourceFrame`; the fx key into the `FrameCache` source string (the cache must
+key on it or a changed effect serves stale pixels).
+
+---
+
+## 4. Build, test, verify
 
 ```bash
-cmake -S . -B build && cmake --build build -j
-./build/apps/interstellar/core/interstellar_core_tests     # 28 L2 tests, 0.03 s
-./build/apps/interstellar/cli/interstellar-cc help         # the generated grammar
-./build/apps/interstellar/cli/interstellar-cc api --json   # the generated API document
-./build/apps/interstellar/cli/interstellar-cc run --script f.txt --watch
-./build/apps/interstellar/interstellar_ui_tests            # the assembled app
-./build/apps/interstellar/interstellar_shots --outdir /tmp/s --check [--size 1024x640] [--script f] [--tree]
-ctest --test-dir build                                     # 21 suites
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+INTERSTELLAR_TEST_DIR=$SCRATCH/ct ctest --test-dir build -R 'interstellar|volume'
+# the committed API document — regenerate after ANY grammar/event/model/address change:
+build/apps/interstellar/cli/interstellar-cc api --json > apps/interstellar/docs/api.json
+build/apps/interstellar/cli/interstellar-cc api --md   > apps/interstellar/docs/API.md
 ```
 
-| | how |
-|---|---|
-| **discover** | `interstellar-cc api --json` — commands, events and the whole address space |
-| **reach** | one `Command`, in the grammar of `project-format.md` §8 |
-| **observe** | an `AppModel` field, or an `Event` line from `--watch` |
-| **assert** | `state print --stable` diffed, or **`eval <address> --at <t>`** |
+Suites: `interstellar_model` · `interstellar_render` · `interstellar_core` (the rack, against a real
+`.cmp`) · `interstellar_service` (tables) · `interstellar_service_l2` (the real service) ·
+`interstellar_api_current` (drift) · `interstellar_still_equals_cosmo` (R-RENDER-5) · `volume`.
+A test binary prints `[PASS]` lines; a failed assert aborts — stdout is unbuffered in each suite so
+the line before the abort is visible.
 
-**`eval` is the unit of evidence for automation and bindings.** A resolved-value table asserted
-through it catches a mapping error, a mode error, an evaluation-order regression and a broken
-expression — with no display, no codec and no tolerance.
-
-**Two gaps, stated rather than papered over:** there is no control socket yet (R-SVC-8) and
-therefore no GUI/headless equivalence test (R-SVC-9) — `test_two_services_dump_the_same_state`
-covers the service half. And `render` writes PPM only; real codecs are the GUI host's FFmpeg job
-(R-RENDER-2), which does not exist. Do not write either into a doc as though it does.
-
----
-
-## 6. Observability — emit an `Event`
-
-`formatEvent()` output **is** the log line (R-SVC-5): the same text `--watch` streams, a journal
-records and an `expect` matches. So for new behaviour: add the `Event::Kind`, format it, emit it.
-**A rejected command emits `command.rejected` AND lands in `lastError`** — keep both, so a failure
-is inspectable by a front end that was not listening.
-
-**Line shapes are an interface.** Once this file, a `DR-` entry or an assertion quotes one, fields
-are appended at the end and never reordered.
-
-**Emit the numbers you claim.** A quantity a front end cannot read out of the model or the stream is
-not observable, whatever the requirement says — which is why every resolved address at the playhead
-is in `AppModel::resolved`.
-
----
-
-## 7. Verify — pick the lowest level that proves it
-
-- **L0 unit** — plain `assert()` in `coreTests.cpp`'s style. **Undefine `NDEBUG` first**: a Release
-  build otherwise turns every assertion into `((void)0)` and the suite prints `[PASS]` while
-  checking nothing (cosmo's D-43 — it bit `gene_tests` on its first run in this repo).
-- **L1 numeric** — `Composite::blendChannel` on known operands; `AutoClip::value` at known times;
-  the frame-time round trip.
-- **L2 the real service, headless — usually the right level.** Construct the service with a
-  `FakeRack`, dispatch a command script, assert on `model()`, on `formatModel(…, stable)`, or on the
-  collected `formatEvent()` lines. `coreTests.cpp` has the `FakeRack`/`Fixture`/`seedProject` trio
-  to copy.
-- **L3 the CLI** — the actual `interstellar-cc` invocation, run, output pasted into the commit.
-- **L4 randomized/concurrent** — for anything touching a pool or a lock. Nothing does yet; the
-  first thing that does needs a stall deadline and a sanitizer run.
-- **L5 look at it** — for anything that draws: `interstellar_shots`, and **read the PNG**. At two
-  window sizes, **mid-transition and at rest**.
-
-**The new behaviour needs a test that fails without the fix — check that, do not assume it.**
-
-**And for anything animated, compliance is established by comparing two frames half a tween apart,
-never by reading the code.** Pump ONE frame at a time and keep the **first non-zero** value: the
-frame that *starts* a tween legitimately reads 0, and settling first lets a 260 ms fade finish so
-the assertion reads 1.0 and passes a snap. `uiTests.cpp` does exactly this three times.
-
----
-
-## 8. Sync check — if any of these lags, you are not done
-
-- [ ] `REQUIREMENTS.md` — the `R-` entry exists, conflict-checked, heading status current.
-- [ ] `docs/requirements.md` — the `DR-` entry matches as-built, cites its R-tag, anchors live.
-- [ ] `docs/architecture.md` — module-map row; any seam change.
-- [ ] `docs/detailed_design.md` — real signatures, real constants.
-- [ ] `docs/architecture.puml` — no class without a box.
-- [ ] `docs/project-format.md` — any node, field or address change; §8 for a new command.
-- [ ] `docs/binding.md` — anything about how a value is produced.
-- [ ] `docs/design.md` — no sentence left standing that the change reversed.
-- [ ] `docs/ui-brief.md` — if the UI changed.
-- [ ] A new `Command`/`Event` — `commandSpecs()` row with its hint, the round-trip test line, and
-      the header's grammar comment.
-- [ ] `interstellar_shots` has a shot for every new state; `interstellar_ui_tests` asserts the new
-      layout.
-- [ ] `ctest` reports `0 failed`.
-
----
-
-## 9. Ledger + defects
-
-`apps/interstellar/docs/PROGRESS.md`, **in the same commit as the work**: tick `[x]` (or `[!]` with
-exactly what is unverified and why), rewrite **NEXT**, update the last-updated note, and add
-anything that departed from the plan to the **Decisions log** so no other session re-litigates it.
-`apps/interstellar/docs/DEFECTS.md`: close what you fixed with its commit hash and its guarding
-test; file what you found.
-
----
-
-## 10. Commit
-
-One focused commit per completed task, on `main`, including the doc and ledger updates.
-
+### End to end from a shell (do this for any change a user would see)
+```bash
+cd $SCRATCH && export INTERSTELLAR_RECENTS=$SCRATCH/recents HOME=$SCRATCH
+ffmpeg -loglevel error -f lavfi -i testsrc2=size=640x360:rate=24:duration=4 -pix_fmt yuv420p a.mp4
+CC=$REPO/build/apps/interstellar/cli/interstellar-cc
+$CC --watch project new mv.isp --res 640x360 : rack add a.mp4 : set a.basic.exposure=0.5 \
+  : track add --kind video : clip add --track v0 --src a --in 0 --out 2 --at 0 --name shotA \
+  : timeline new social30 --base main : timeline open social30 : set a.basic.exposure=0.8 \
+  : eval a.basic.exposure --explain : project save \
+  : render --timeline social30 --out out.mp4 : export-still --timeline main --out s.png --at 1
 ```
-interstellar: <lowercase sentence naming the user-visible effect> (R-AREA-n, DR-AREA-n)
+Then **look at the pixels** (Read the PNG) — a render that "succeeded" with a black frame is a bug.
+`state print --json --stable` is the diffable state; `lint` lists offline media, dangling deltas,
+refused nodes.
 
-<Symptom, then cause, then fix, then how it was proven.> Paste the interstellar-cc
-command and its output, or the test line, that proves it.
-
-Co-Authored-By: <the model writing it> <noreply@anthropic.com>
-```
-
-`core/Artboard` is a **submodule**: a change there is `implement_artboard`'s, and it is two commits
-— the submodule fully pushed *before* the umbrella records its pointer. **Then pull, re-test, and
-push** — `arstro.rule` §7 has the order and why it is not negotiable.
+### R-RENDER-5 by hand
+`apps/interstellar/tests/still_equals_cosmo.sh <interstellar-cc> <cosmo-cc> <ffmpeg> <dir>` — prints
+both RGBA hashes; they must match.
 
 ---
 
-## 11. Definition of done
+## 5. Gotchas found the hard way (keep this list growing)
 
-- [ ] Requirement read first, written or amended, conflict-checked — **before** the code.
-- [ ] Both tiers updated; ids stable, never renumbered, never reused.
-- [ ] **Colour did not leak out of the rack**, and no `EditParams` is stored outside it.
-- [ ] The address space, if it grew, grew **in the registry**, and `api --json` shows it.
-- [ ] The evaluation order is unchanged, or amended deliberately with re-baked goldens.
-- [ ] Behaviour landed in the service, not in a view; nothing new reaches past `dispatch`.
-- [ ] An `Event` covers it and **its line was actually observed**, not just written.
-- [ ] Reachable with no GUI, and the exact command is written down.
-- [ ] `ctest` `0 failed`; the new test fails without the fix.
-- [ ] **If it draws: you looked at the PNG**, at two sizes, mid-transition and at rest — and
-      nothing changes in one frame.
-- [ ] Ledger ticked, **NEXT** rewritten, defects updated. Committed, pulled, re-tested, pushed.
+- **`cosmo::NodeModel::parent` is the parent's NODE ID**, not an index (cosmo's AppModel.h comment is
+  wrong). Convert with `Rack::indexOf`. Walking it as an index hung the suite.
+- **Cosmo's `import` REPLACES the workspace; `add` appends.** `Rack::addSources`/`beginAdd` use `add`.
+- **Cosmo saves on `add`**, and its save **drops images without a slot** (D-66) — §1 law 9.
+- **The rack load is asynchronous and decodes on a pool.** Pump against the WALL CLOCK with a 1 ms
+  sleep (`Rack::pumpUntilLoaded`, `InterstellarService::pumpUntilIdle`); a spin over simulated time
+  finishes before a worker opens the first file and reports an empty rack.
+- **Binding `.cmp` entries to `#rackobj`:** entry i == live node i (Cosmo saves depth-first and loads
+  in file order); `node=cn_<i>` is rewritten on every save by `syncRackObjNodes`, counting only groups
+  and resident images (Cosmo skips the rest).
+- **EditParams are floats.** A delta computed in double carries noise (`0.8 − 0.5 =
+  0.30000000000000004`); round to `%.7g` before storing or every save is a spurious diff.
+- **`canonicalNumber` is the model's** (always a decimal point: `0.0`, `24.0`). One spelling for the
+  `.isp`, the log, the dump and the API document.
+- **Timeline names are bind names** — `social30`, not `social-30s`.
+- **Clip geometry is in FRAME units** in the `.isp`; the service converts to output pixels so a proxy
+  and a full render place a clip identically.
+- **A clip's source frame uses the SOURCE's rate**, not the project's (a 30p clip in a 24p project).
+- **Tests: `#ifdef NDEBUG / #undef NDEBUG / #endif` before `<cassert>`** — a Release build otherwise
+  disables every assertion and the suite "passes" (cosmo D-43).
+- **`pkill -f <name>` matches your own shell** when the name is in the command line; use `pkill -x`.
+
+---
+
+## 6. The UI (`apps/interstellar/app/`)
+
+Design law: `arstro.design.rule`; values: cosmo's (`arstro.cosmo.design.implement`). Interstellar
+**aliases** cosmo's token namespaces and forks ONE token: the accent `#CF5AED`, installed at startup
+with `arstro::cosmo_v2::palette::setAccent` (cosmo R-G-5) so every reused cosmo widget renders in
+purple-pink. Cosmo's panels (`ParamPanel`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`,
+`HistogramWidget`, `EditStackTabs`, …) are compiled from `apps/cosmo/widgets/`, never copied.
+
+The app sees the service only through `AppHooks` (`model`, `dispatch(text)`, `renderFrame`). Its
+harness and its own notes (shot list, the command line each control dispatches, contract requests)
+are in `apps/interstellar/app/NOTES.md` — read it before changing a widget, and keep it current.
+Verify by rendering shots at two sizes, mid-transition as well as at rest, and **looking at them**.
+
+---
+
+## 7. Definition of done
+
+- The R- tag exists and its status line is honest; the DR entry exists with live anchors.
+- A test at the lowest sufficient level fails without the change (checked) and passes with it.
+- `docs/api.json` + `docs/API.md` regenerated if the grammar, events, model or addresses changed.
+- `ctest` green; for anything visible, the PNG was looked at.
+- Ledger updated; defects filed for anything found; one commit; fetched, re-tested, pushed.

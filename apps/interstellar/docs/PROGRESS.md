@@ -4,8 +4,7 @@
 A session reads **NEXT**, does one task, updates this file, and commits — in the same commit.
 
 - Rules: `.claude/skills/arstro.rule` · `.claude/skills/arstro.design.rule`
-- Skill: `.claude/skills/arstro.interstellar.implement` *(to be rewritten for this specification —
-  the one on disk describes the withdrawn first build)*
+- Skills: `.claude/skills/arstro.interstellar.implement` · `.claude/skills/arstro.interstellar.debug`
 - Intent: [`../REQUIREMENTS.md`](../REQUIREMENTS.md) · As-built: [`requirements.md`](requirements.md)
   · Format: [`project-format.md`](project-format.md) · Audio: [`../../../docs/audio-format.md`](../../../docs/audio-format.md)
   · Architecture: [`architecture.md`](architecture.md) · UI: [`ui-brief.md`](ui-brief.md)
@@ -37,7 +36,8 @@ one integrator who moves, wires, tests and commits each stream:
 - [ ] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`) binding `AppHooks` to the
       service: `model` → `svc.model()`, `dispatch` → `svc.dispatchText`, `renderFrame` → `svc.renderFrame`;
       pump on the frame clock.
-- [ ] Rewrite `arstro.interstellar.implement` / `.debug` for this specification.
+- [x] Rewrite `arstro.interstellar.implement` / `.debug` for this specification (every command they
+      name exists; the debug skill's sample script was run as written).
 - [ ] P6: the audio master sum, muxed into a render (R-AUD-5).
 - [ ] D-2 belongs to Cosmo (D-66); until it lands Interstellar refuses saves with an offline source.
 
