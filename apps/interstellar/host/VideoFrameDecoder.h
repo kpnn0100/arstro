@@ -17,6 +17,7 @@
  */
 #pragma once
 #include "core/decode/ImageDecoder.h"
+#include "FrameSelector.h"
 #include <memory>
 #include <string>
 
@@ -34,7 +35,8 @@ namespace interstellar_host
     class VideoFrameDecoder : public cosmo::IImageDecoder
     {
     public:
-        VideoFrameDecoder();
+        /** `selector`, when given, overrides the frame baked into a stored path (R-RACK-3). */
+        explicit VideoFrameDecoder(std::shared_ptr<const interstellar::FrameSelector> selector = nullptr);
         ~VideoFrameDecoder() override;
 
         cosmo::DecodedImage decodeFile(const std::string &path) override;
@@ -42,6 +44,7 @@ namespace interstellar_host
 
     private:
         std::unique_ptr<cosmo::IImageDecoder> mStills;   // Cosmo's own, for everything else
+        std::shared_ptr<const interstellar::FrameSelector> mSelector;
     };
 }
 }

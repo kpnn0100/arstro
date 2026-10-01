@@ -22,6 +22,7 @@
  *     own D-11 with a new name, and this app will eventually have four consumers of that budget.
  */
 #pragma once
+#include "Colour.h"
 #include "core/service/CosmoService.h"
 #include "core/ThreadBudget.h"
 #include "engine/EditParams.h"
@@ -68,10 +69,26 @@ namespace interstellar
         // ── the project (a `.cmp`) ──
         bool openProject(const std::string &path, std::string &err);
         bool newProject(const std::string &path, std::string &err);
-        bool addSources(const std::vector<std::string> &paths, std::string &err);
+        /** APPEND sources to the open project (Cosmo's `add`, never `import` — `import` replaces the
+         *  workspace, which a second `rack add` must not do). `added`, when given, receives the new
+         *  nodes' ids in the order the paths were given. */
+        bool addSources(const std::vector<std::string> &paths, std::string &err, std::vector<int> *added = nullptr);
+        /** Save, then open the same `.cmp` again — every source re-decodes. What `rack frame` costs:
+         *  the node keeps its path, the host decoder answers it with the new frame, and no parameter
+         *  moves (R-RACK-3). */
+        bool reopen(std::string &err);
         bool save(std::string &err);
         const std::string &path() const { return mPath; }
         bool isOpen() const { return !mPath.empty(); }
+
+        // ── the same, without blocking: what a window uses, so a decode never freezes a frame (R2) ──
+        bool beginOpen(const std::string &path, std::string &err);
+        bool beginAdd(const std::vector<std::string> &paths, std::string &err);
+        /** A begun open/add is still decoding. Drive `pump` until false, then `finishLoad`. */
+        bool loading() const;
+        /** After an open: read every node's params. After an add: read the new nodes' and return
+         *  their ids in `added`. */
+        void finishLoad(std::vector<int> *added = nullptr);
 
         /** Drain Cosmo's work. Never blocks; the caller drives the clock. */
         void pump(double nowMs);
@@ -98,20 +115,53 @@ namespace interstellar
         bool setParam(int node, const std::string &key, const std::string &value, std::string &err);
         /** The node's OWN value for `key` — what it contributes, before its ancestors. */
         bool getParam(int node, const std::string &key, double &out) const;
-        /** The node's EFFECTIVE parameters: its own composed up its ancestors, which is what a
-         *  frame renders with. Whole, never field by field — rebuilding the struct outside Cosmo
-         *  would be the second copy of one fact that R-G-3 forbids. */
+        /** The node's EFFECTIVE parameters as COSMO computes them (Select, then its model's `params`).
+         *  The oracle `renderParams` is tested against; it moves Cosmo's selection, so a render path
+         *  uses `renderParams` instead. */
         bool effectiveParams(int node, EditParams &out) const;
         /** Select a node, so a following read sees it. Public because a front end genuinely wants
          *  to move the selection, not only to read. */
         bool select(int node, std::string &err);
         int selectedNode() const;
+        /** Several keys on one node in ONE `set` — one history step, as a preset apply is. */
+        bool setParams(int node, const std::vector<std::pair<std::string, std::string>> &fields, std::string &err);
+
+        // ── structure, every one a cosmo::Command ──
+        /** Select `nodes` (first plain, the rest `add`) and `group new` them. `groupOut` = the new
+         *  group's node id. */
+        bool groupNodes(const std::string &name, const std::vector<int> &nodes, int &groupOut, std::string &err);
+        bool setBypass(int node, bool on, std::string &err);
+
+        // ── per-node params for RENDERING ──
+        /** Cosmo's model exposes params for the SELECTED node only, and a frame needs every node's.
+         *  So the rack keeps each node's OWN params as a read-through cache — filled by selecting each
+         *  node once after a load (`refreshParams`) and refreshed for a node on every write made through
+         *  this class — and folds them with Cosmo's own `composeParams`, exactly as
+         *  `EditSession::effectiveParams(slot)` does: a bypassed leaf contributes nothing, a bypassed
+         *  ancestor is skipped. The cache is not a second authority — every value in it was read from
+         *  Cosmo, and a test holds `renderParams` equal to Cosmo's own `params` for every node. */
+        void refreshParams();
+        bool ownParams(int node, EditParams &out) const;
+        bool renderParams(int node, EditParams &out) const;
+        /** The live tree with every node's cached own params, `parent` as a tree INDEX — what the
+         *  service folds versions over. False if a resident node's params were never read. */
+        bool colourTree(ColourTree &out) const;
+        /** Index of a Cosmo node id in `model().nodes` (and in `colourTree`), or -1. */
+        int indexOf(int node) const;
+        /** Bumped whenever any cached param or the tree changes — a frame cache keys on it. */
+        unsigned paramsRevision() const { return mParamsRevision; }
 
         const cosmo::AppModel &model() const { return mCosmo.model(); }
         const std::string &lastError() const { return mCosmo.model().lastError; }
 
     private:
         bool dispatch(const cosmo::Command &c, std::string &err);
+        void cacheSelectedOwn();
+
+        std::vector<std::pair<int, EditParams>> mOwn;   // node id → own params, read from Cosmo
+        std::vector<int> mBeforeAdd;                     // node ids before a begun add
+        bool mAdding = false;
+        unsigned mParamsRevision = 1;
 
         cosmo::CosmoService mCosmo;
         std::string mPath;

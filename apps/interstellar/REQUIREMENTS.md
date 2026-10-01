@@ -49,7 +49,7 @@ in the section heading. Read before any code; conflict-check before accepting a 
 
 ---
 
-## R-RACK — grouping and colour: the centre of the app — 📋 SPECIFIED
+## R-RACK — grouping and colour: the centre of the app — ✅ IMPLEMENTED (DR-RACK-1..7; limits D-1, D-2)
 
 **This is the requirement the first version failed. It is first, and nothing else is accepted as
 done while its authority is a fake.**
@@ -77,7 +77,7 @@ done while its authority is a fake.**
 
 ---
 
-## R-VER — a timeline is a version — 📋 SPECIFIED
+## R-VER — a timeline is a version — ✅ IMPLEMENTED (DR-VER-1..3, DR-FMT-1)
 
 The headline of this specification, and the reason it is not the first one.
 
@@ -111,7 +111,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-TL — the timeline — 📋 SPECIFIED
+## R-TL — the timeline — ✅ IMPLEMENTED in the service (DR-VER-1, DR-TL-4); the Cut tab is R-UI
 
 - **R-TL-1 Node types: `track`, `clip`, `transition`, `marker`.** A track is `video | audio`. A clip
   references a **rack node** and carries its source range, timeline position, speed, geometry,
@@ -128,7 +128,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-VOL — video is a volume — 🚧 IN PROGRESS (engine built: DR-VOL-1..3; not yet wired to clips)
+## R-VOL — video is a volume — ✅ IMPLEMENTED (DR-VOL-1..3; every timeline frame is read through it, DR-RENDER-2a)
 
 - **R-VOL-1 A clip's source is a VOLUME — (x, y, t) — and the volume is lazy.** It is an interface,
   not storage: frames materialise on demand behind it. A 10-second 1080p clip is 6 GB in linear
@@ -156,7 +156,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-FX — basic video effects — 📋 SPECIFIED
+## R-FX — basic video effects — ✅ IMPLEMENTED (DR-FX-2, DR-FX-3, DR-RENDER-2)
 
 - **R-FX-1 The seventeen Cosmo stages apply per frame**, unchanged, because they are radius 0.
   Exposure, contrast, tone regions, curve, white balance, vibrance, mixer, grade, dehaze, grain,
@@ -173,7 +173,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-AUD — the audio project format — 📋 SPECIFIED
+## R-AUD — the audio project format — 🚧 IN PROGRESS (schema + placement: DR-AUD-1; the master sum is not built)
 
 Designed now, for Solaris to adopt whole. Interstellar implements the subset it needs; the schema
 reserves the rest so adopting it is not a migration.
@@ -196,7 +196,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-RENDER — delivery — 📋 SPECIFIED
+## R-RENDER — delivery — ✅ IMPLEMENTED for picture (DR-RENDER-1, -2a, -5); audio not muxed
 
 - **R-RENDER-1 A render names its TIMELINE.** `render --timeline social-30s --out …`. There is no
   implicit "current" timeline in a render, because a delivery that depended on which tab was open
@@ -212,7 +212,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-SVC / R-API — the service and its document — 📋 SPECIFIED
+## R-SVC / R-API — the service and its document — ✅ IMPLEMENTED (DR-SVC-1..3, DR-API-1) — rung 4
 
 - **R-SVC-1** `InterstellarService`: `dispatch(Command)` / `pump(nowMs)` / `model()` / an `Event`
   sink. The GUI has no privileged path.
@@ -258,7 +258,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-TEST — evidence — 📋 SPECIFIED
+## R-TEST — evidence — 🚧 IN PROGRESS (round trip, colour round trip, version table and Cosmo-equality are live; a golden timeline frame is not)
 
 - **R-TEST-1** Every suite registers with the root `ctest`. A suite that cannot report red is not
   evidence — both suites undefine `NDEBUG` before `<cassert>` (cosmo's D-43, which bit this repo

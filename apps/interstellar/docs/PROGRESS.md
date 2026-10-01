@@ -12,7 +12,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — the volume engine is in `arstro_image`; render, model and UI streams in flight.*
+*Last updated: 2026-10-01 — the service is whole: grade, versions, cut and render from a shell; API at rung 4. UI stream in flight.*
 
 ---
 
@@ -26,16 +26,20 @@ one integrator who moves, wires, tests and commits each stream:
 |---|---|---|
 | volume + temporal ops | `core/ImageProcessing/src/volume/` | `[x]` integrated — DR-VOL-1..3, DR-FX-2 |
 | render path (active set, composite, grade, cache) | `apps/interstellar/render/` | `[x]` integrated — DR-TL-4, DR-FX-3, DR-RENDER-2 |
-| `.isp` model + versions | `apps/interstellar/model/` | `[~]` agent running |
+| `.isp` model + versions | `apps/interstellar/model/` | `[x]` integrated — DR-FMT-1, DR-VER-1 |
 | UI (Home, Edit: Grade/Cut/Deliver) | `apps/interstellar/app/` | `[~]` agent running |
-| service, grammar, codec, API doc, CLI | `apps/interstellar/core/service/`, `cli/` | `[~]` integrator — tables + drift test written, service next |
+| service, grammar, codec, API doc, CLI | `apps/interstellar/core/service/`, `cli/` | `[x]` DR-SVC-1..3, DR-API-1, DR-VER-2/3, DR-RENDER-* |
 
-- [ ] `InterstellarService`: Rack + model + render + volume behind `dispatch(Command)` / `pump` /
-      `model()` / `renderFrame`; `set` routed by owner; pins as content-addressed `.cmp` snapshots.
-- [ ] `interstellar-cc` on the grammar; `docs/api.json` + `docs/API.md` committed and drift-tested.
-- [ ] GTK host wiring the UI's `AppHooks` to the service.
-- [ ] R-RENDER-5: an Interstellar still == the same frame from Cosmo, byte for byte.
+- [x] `InterstellarService`: Rack + model + render + volume behind `dispatch` / `pump` / `model()` /
+      `renderFrame`; `set` routed by owner; pins as content-addressed `.cmp` snapshots.
+- [x] `interstellar-cc` on the grammar; `docs/api.json` + `docs/API.md` committed and drift-tested.
+- [x] R-RENDER-5: an Interstellar still == the same frame from Cosmo (`interstellar_still_equals_cosmo`).
+- [ ] **Integrate the UI stream** and write the GTK host (`linux_main.cpp`) binding `AppHooks` to the
+      service: `model` → `svc.model()`, `dispatch` → `svc.dispatchText`, `renderFrame` → `svc.renderFrame`;
+      pump on the frame clock.
 - [ ] Rewrite `arstro.interstellar.implement` / `.debug` for this specification.
+- [ ] P6: the audio master sum, muxed into a render (R-AUD-5).
+- [ ] D-2 belongs to Cosmo (D-66); until it lands Interstellar refuses saves with an offline source.
 
 ---
 
@@ -45,16 +49,35 @@ one integrator who moves, wires, tests and commits each stream:
 |---|---|
 | **P0** specification | `[x]` requirements, format, audio format, architecture, UI brief. First build removed |
 | **P1** the rack — colour reaching a real `.cmp` | `[x]` gate passed from a shell on a video source; read back by a second CosmoService. D-1 filed (Cosmo alone cannot show a video source) |
-| **P2** `.isp` + versions | `[ ]` |
-| **P3** service + API document | `[ ]` |
-| **P4** arrange + composite + render | `[~]` render path built and integrated (DR-TL-4, DR-FX-3, DR-RENDER-2); arrangement with the model stream |
-| **P5** Volume + temporal effects | `[~]` engine built and integrated into `arstro_image` (DR-VOL-1..3, DR-FX-2); `#fx` wiring with the service |
-| **P6** audio | `[ ]` |
-| **P7** UI | `[ ]` |
+| **P2** `.isp` + versions | `[x]` model stream integrated: 431 checks; DR-FMT-1, DR-VER-1 |
+| **P3** service + API document | `[x]` rung 4 — `docs/api.json` + `docs/API.md` committed and drift-tested; 14 L2 tests on the real service |
+| **P4** arrange + composite + render | `[x]` a named timeline renders to H.264/ProRes/PNG-seq; Interstellar still == Cosmo still |
+| **P5** Volume + temporal effects | `[x]` every timeline frame reads through the volume; `#fx` denoise/blend/freeze wired |
+| **P6** audio | `[~]` schema parsed and preserved; audio tracks/clips placed; **master sum not built** |
+| **P7** UI | `[~]` UI stream in flight (Home, Edit: Grade/Cut/Deliver over `AppHooks`) |
 
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-01 — how a version's colour is stored, and what a pin is.** A derived timeline's colour
+edit becomes a `#tlgrade` **delta on the colour source's own value** — so "my look = the base's look
++ my changes", and a base regrade still arrives (the user's "rebase to get the latest colour of the
+base branch" is simply liveness; `rebase` is for dangling deltas and for advancing a pin). The
+format stores numbers, so a curve/wheel override on a version is refused, pointing at the base or
+`rack duplicate` — a second look is a second rack node (R-RACK-5), not a per-version curve. A **pin**
+is a byte copy of the `.cmp`, content-addressed, read back through Cosmo's own static reader: a
+frozen historical copy the user asked for, read-only by construction, never a second authority.
+
+**2026-10-01 — the grammar removed two flags it could not honour.** `eval --at` and
+`timeline diff --against` were specified but are not implementable in v1 (values do not vary over
+time yet; the model's diff is against the base). R-SVC-3 forbids accepting a flag that does nothing,
+so they were removed and §8 amended rather than accepted and ignored.
+
+**2026-10-01 — Cosmo deletes offline images on save (Cosmo D-66), so Interstellar refuses to make it
+save while a source is offline (D-2).** Found by binding the rack; measured with a cosmo-cc script.
+It is Cosmo's to fix; the mitigation is a refusal that names the offline sources, never a silent
+partial save.
 
 **2026-10-01 — the render path is its own library and knows no project.** `interstellar_render`
 takes plain structs (`ClipSpan`, `Layer`, `Raster`, `EditParams`) and nothing else, so a render is a

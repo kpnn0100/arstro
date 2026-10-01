@@ -121,28 +121,27 @@ tab host: one widget, one frame, every tab — a frame that differs between tabs
 
 ## 6. Module map
 
-Every planned file, its layer, and the requirement that justifies it. **[planned]** until it lands.
+Every module, its layer, and the requirement that justifies it.
 
-| path | layer | responsibility |
+| path | layer | state |
 |---|---|---|
-| `core/ImageProcessing/src/volume/Volume.{h,cpp}` | engine | **built** — the lazy volume, `VolumeView`, `CachedVolume` (R-VOL); notes + measurements in `core/ImageProcessing/docs/volume.md` |
-| `core/ImageProcessing/src/volume/TemporalOps.{h,cpp}` | engine | **built** — denoise · blend · freeze remap · `renderTemporal` (R-FX-2) |
-| `apps/interstellar/core/Project.{h,cpp}` | core | **[planned]** the `.isp` document, canonical text, the fixed point (R-FMT) |
-| `apps/interstellar/core/Versions.{h,cpp}` | core | **[planned]** base chains, deltas, resolution, rebase (R-VER) |
-| `apps/interstellar/core/Rack.{h,cpp}` | core | **[planned]** owns the hosted `CosmoService`; `RackAccess` over it (R-RACK) |
-| `apps/interstellar/core/Arrange.{h,cpp}` | core | **[planned]** the cut operations (R-TL-3) |
-| `apps/interstellar/core/Evaluate.{h,cpp}` | core | **[planned]** resolved values per frame, pure (R-VOL-7) |
+| `core/ImageProcessing/src/volume/Volume.{h,cpp}` | engine | **built** — the lazy volume, `VolumeView`, `CachedVolume` (R-VOL, DR-VOL-1..3); notes in `core/ImageProcessing/docs/volume.md` |
+| `core/ImageProcessing/src/volume/TemporalOps.{h,cpp}` | engine | **built** — denoise · blend · freeze remap · `renderTemporal` (R-FX-2, DR-FX-2) |
+| `apps/interstellar/model/Project.{h,cpp}` + `Schema.h` | model | **built** — the `.isp`, canonical text, the fixed point, validation (R-FMT, DR-FMT-1) |
+| `apps/interstellar/model/Versions.{h,cpp}` | model | **built** — resolution, deltas, grade deltas, pin/freeze, rebase, diff (R-VER, DR-VER-1) |
+| `apps/interstellar/model/Arrange.{h,cpp}` | model | **built** — the cut operations, derived-aware (R-TL-3) |
+| `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, transitions held (R-TL-4, DR-TL-4) |
 | `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3) |
-| `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, frame-exact, transitions held (R-TL-4, DR-TL-4) |
-| `apps/interstellar/render/GradeEngine.{h,cpp}` | render | **built** — EditEngine per frame (R-FX-1, DR-RENDER-2) |
-| `apps/interstellar/render/ParamHash.{h,cpp}` | render | **built** — the cache key for a grade |
-| `apps/interstellar/core/Audio.{h,cpp}` | core | **[planned]** the audio schema subset + master sum (R-AUD) |
-| `apps/interstellar/render/FrameCache.{h,cpp}` | render | **built** — byte-capped LRU of graded frames (the volume holds its own window) |
-| `apps/interstellar/core/ParamRegistry.{h,cpp}` | core | **[planned]** the generated address space + owner routing |
-| `apps/interstellar/core/service/*` | core | **[planned]** Service · Command · Event · AppModel · Codec · ApiDoc (R-SVC, R-API) |
-| `apps/interstellar/host/FrameSourceFFmpeg.{h,cpp}` | host | **carried forward** from the first build — concept-independent plumbing, tested |
-| `apps/interstellar/host/FrameWriterFFmpeg.{h,cpp}` | host | **carried forward** — H.264/ProRes, chosen by extension |
-| `apps/interstellar/Theme.h` | app | **[planned]** aliases cosmo; forks ONE token (R-UI-2) |
-| `apps/interstellar/App.{h,cpp}` + `widgets/*` | app | **[planned]** Home · Edit · the three tabs (R-UI) |
-| `apps/interstellar/cli/main.cpp` | front end | **[planned]** `interstellar-cc` — argv, stdout, no behaviour |
-| `apps/interstellar/linux_main.cpp` | host | **[planned]** GTK3 window |
+| `apps/interstellar/render/GradeEngine.{h,cpp}` · `ParamHash` · `FrameCache` | render | **built** — EditEngine per frame, cached on the param hash (DR-RENDER-2) |
+| `apps/interstellar/core/Rack.{h,cpp}` | core | **built** — the hosted `CosmoService`, async load, read-through own-params cache (R-RACK, DR-RACK-1..5) |
+| `apps/interstellar/core/Colour.{h,cpp}` | core | **built** — the ONE fold, pin snapshots through Cosmo's reader, deltas (DR-RACK-4, DR-VER-2/3) |
+| `apps/interstellar/core/FrameSelector.h` | core | **built** — the reference frame a stored video path decodes to (DR-RACK-3a) |
+| `apps/interstellar/core/ParamRegistry.{h,cpp}` | core | **built** — the address space, owners, units (R-API-1) |
+| `apps/interstellar/core/service/Command·Event·Json·AppModelCodec·ApiDoc` | core | **built** — the grammar table, the log line, the model dump, the generated document (DR-SVC-2, DR-API-1) |
+| `apps/interstellar/core/service/InterstellarService.{h,cpp}` + `ServiceRender.cpp` | core | **built** — routing, binding, versions, arrangement, the frame path, the render queue (DR-SVC-1, DR-RENDER-*) |
+| `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build |
+| `apps/interstellar/host/VideoFrameDecoder` · `HostFrameSource` · `PngWriter` | host | **built** — Cosmo's decoder seam, the timeline's source (stills through Cosmo's own decoder, for R-RENDER-5), PNG out |
+| `apps/interstellar/cli/main.cpp` | front end | **built** — `interstellar-cc`, argv/stdout only (DR-SVC-3) |
+| `apps/interstellar/app/*` | app | **[in progress]** — Home · Edit · the three tabs, over `AppHooks` (R-UI) |
+| `apps/interstellar/linux_main.cpp` | host | **[planned]** GTK3 window binding the app's hooks to the service |
+| audio master sum | core | **[planned]** P6 (R-AUD-5) |

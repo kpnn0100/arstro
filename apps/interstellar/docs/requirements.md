@@ -10,15 +10,15 @@ is the second build's.
 
 ## Conformance
 
-Rung **0** of `arstro.rule` §5 — spec only. The ladder, and what each rung will add here:
+Rung **4** of `arstro.rule` §5. The ladder:
 
 | rung | means | lands with |
 |---|---|---|
-| 0 | spec only | ← **here** |
-| 1 | core split out; `Command`/`Event`/model with one text codec | P3 |
-| 2 | registered with the root `ctest`; L2 headless service tests | P2 |
-| 3 | a real CLI that is the whole app without a window | P3 |
-| 4 | **generated API document, committed, drift-tested** | P3 — and **no app in the suite has this** |
+| 0 | spec only | done |
+| 1 | core split out; `Command`/`Event`/model with one text codec | done — DR-SVC-1..3 |
+| 2 | registered with the root `ctest`; L2 headless service tests | done — `interstellar_service_l2` |
+| 3 | a real CLI that is the whole app without a window | done — `interstellar-cc`, DR-SVC-3 |
+| 4 | **generated API document, committed, drift-tested** | ← **here** — DR-API-1; the first app in the suite to reach it |
 | 5 | control socket + the GUI/headless equivalence test | post-P7 |
 
 ## Entries
@@ -34,10 +34,13 @@ authority is worth a link dependency, and avoiding one is what let colour be a f
 Guarded by `test_a_colour_edit_reaches_a_real_cmp`, which reads the saved file back with code that
 shares **nothing** with the writer, and by `test_a_second_service_sees_the_edit_the_first_one_made`,
 which opens the saved file in a second `CosmoService` and reads `exposure 0.450, temp 5200` back.
-From a shell, on a **video** source:
+Through the service (`a colour edit on a root timeline writes THROUGH`, in `interstellar_service_l2`)
+the same holds for an ADDRESS: `set a.basic.exposure=0.35 a.basic.temp=5600` on a root timeline →
+the `.cmp`'s `#image` carries both, read back by a parser that shares no code with the writer, and
+by a second service. From a shell:
 ```
-interstellar-cc rack open look.cmp : rack set 3 exposure=0.35 : rack set 3 temp=5200 : rack save
-→ the .cmp's third #image carries   exposure=0.35   temp=5200
+interstellar-cc project new mv.isp : rack add footage/a.mp4 : set a.basic.exposure=0.5 : project save
+grep -A3 '^#image' mv.cmp   →   exposure=0.5
 ```
 
 ### DR-RACK-3 A video source is graded on an extracted frame, with no change to Cosmo (R-RACK-3)
@@ -48,11 +51,18 @@ holds an ordinary image slot. `rack add a.png b.png clip.mp4#t=2.0` → `3 image
 **Limit, filed as D-1:** Cosmo opened *by itself* has no such decoder and shows the video node as
 `kind=failed` — its grade is preserved in the file, its pixels are not displayable there.
 
-### DR-RACK-4 Grouping stacks through Cosmo's own composeParams (R-RACK-4)
-`Rack::effectiveParams` returns `AppModel::params` (Cosmo's `effectiveEditParams`) after a
-`Select`; `getParam` reads `ownParams` back through Cosmo's own serializer rather than a field
-switch. Guarded by `test_a_group_offset_stacks_onto_its_members`: a group's +0.5 EV appears in its
-member's effective params while the member's own value stays 0.
+### DR-RACK-4 Grouping stacks through Cosmo's own composeParams — one fold for every colour source (R-RACK-4)
+Cosmo's model exposes params for the SELECTED node only, and a frame needs every node's. So `Rack`
+keeps each node's OWN params as a read-through cache, filled by selecting each node once after a
+load and refreshed by every write made through it, and **one** fold — `foldRender`
+(`core/Colour.cpp:23`), `EditSession::effectiveParams(slot)` step for step: a bypassed node
+contributes nothing of its own, every non-bypassed ancestor stacks through Cosmo's `composeParams` —
+serves the live rack, a pin snapshot and a version's overrides alike. Guarded by
+`test_render_params_equal_cosmos_own_for_every_node`, which holds the fold equal to Cosmo's own
+`params` for every node, group bypass included, and `test_a_group_offset_stacks_onto_its_members`.
+Found while writing it: `cosmo::NodeModel::parent` is the parent's NODE ID, not an index as
+cosmo's `AppModel.h` comment says — walking it as an index hung the suite; `Rack::colourTree`
+converts it.
 
 ### DR-RACK-5 The load is pumped against the wall clock (R-RACK-1)
 `Rack::pumpUntilLoaded` (`core/Rack.cpp`) sleeps 1 ms per 16 ms tick against a wall-clock deadline
@@ -127,3 +137,138 @@ never returns 0, so 0 means an ungraded source frame (R-VOL-5). Measured, 1080p,
 grade: **33–35 ms** at 24 threads (145 ms on one), 12 ms at a 1280 proxy. Most of a full-res frame
 is page faults from glibc returning each 33 MB float buffer to the OS; pinning the malloc
 thresholds in the host takes it to 23.4 ms (recommended to the host, not yet done).
+
+
+### DR-RACK-6 Rack identity is Interstellar's, and survives a reopen (R-RACK-6)
+Each `.cmp` entry binds to a `#rackobj` (`InterstellarService::bindFromCmp`,
+`core/service/InterstellarService.cpp:865`) by `node=cn_<i>` — the entry's index in the file Cosmo
+last wrote, kept current by `syncRackObjNodes` (`:948`) on every save — validated by media for
+sources. If the `.cmp` changed in Cosmo meanwhile, sources re-bind by media (by occurrence, so two
+variants of one file keep their order) and groups by order; an unclaimed entry becomes a new
+`#rackobj` with a legal bind name derived from Cosmo's name; an unclaimed `#rackobj` stays OFFLINE,
+never deleted. Guarded by `a reopened project binds every #rackobj to its Cosmo node again`.
+
+### DR-RACK-3a A new reference frame changes no parameter and no Cosmo node (R-RACK-3)
+`FrameSelector` (`core/FrameSelector.h`) maps a path as Cosmo stores it (`clip.mp4#t=2.000`) to the
+`.isp`'s `#rackobj frame=`; the host's `VideoFrameDecoder` consults it. `rack frame <node> --at <t>`
+updates the `.isp`, saves the rack and reloads it — the stored path and every parameter are
+untouched. Cost: the reload re-decodes every source.
+
+### DR-RACK-7 An offline source reads as missing, and Cosmo is not allowed to delete it (R-RACK-7, D-2)
+A `#rackobj` the rack does not have, or whose Cosmo node failed to decode, is listed with
+`failed=true` and its clips `offline`; the project opens, renders (skipping it) and lints (`offline
+<bind> <media>`). Because Cosmo's save deletes a failed node with its grade (D-2, Cosmo D-66), every
+command that would make Cosmo save — `project save` (which still saves the `.isp`), `rack add`,
+`rack duplicate`, `rack frame`, `timeline pin`, `timeline rebase` — is refused while one is offline,
+naming it (`rackSaveBlocked`, `:965`). Guarded by `offline media leaves the project openable` and
+`a save is refused while a source is offline`.
+
+### DR-FMT-1 The `.isp` is a byte-exact fixed point, with unknown keys and nodes preserved (R-FMT)
+`Project::parse` / `serialize` (`model/Project.cpp:709`, `:1406`) — typed nodes for everything
+Interstellar implements, `RawNode` for the audio forms and any node type it does not (kept verbatim,
+listed by `unrenderable()`); field tables in `model/Schema.h` shared by parse, serialize, `#tlset`
+application and `setField`. `roundTripsExactly` is strict. A colour key on a `#clip` is refused
+naming the key (R-TL-2); a structural error refuses; a non-finite number is repaired and counted
+(a `nan` `in`/`out`/`speed` becomes a one-frame clip, not a refusal). Guarded by
+`interstellar_model_tests` (431 checks, 19 groups: `roundTripEveryNode`, `messyInputCanonicalises`,
+`colourOnClipRefused`, `nanRepairedAndCounted`, `structuralRefusals`, …; clean under ASan/UBSan).
+Timeline names follow the bind-name rules, so `social-30s` (R-RENDER-1's example) is not legal —
+`social30` is.
+
+### DR-VER-1 A version is its base resolved live, plus its deltas (R-VER-1, R-VER-2, R-G-3)
+`resolve` (`model/Versions.cpp:325`) walks the base chain unless the cut is frozen, applying
+`#tldrop` / `#tlset` and adding local nodes; every edit is derived-aware, so editing an inherited
+clip records a `#tlset` and never copies it (`derivedEditRecordsDeltaNotCopy`, confirmed to fail
+against a copy-on-edit mutant). Arrangement ops (`model/Arrange.cpp`: trim, split, roll, …) go
+through the same path; splitting an inherited clip records `#tlset out` on the original and a local
+right half (`splitInheritedClip`).
+
+### DR-VER-2 A version's colour is an OVERRIDE: a scalar delta on the colour source (R-VER-2)
+On a derived timeline, `set <bind>.<filter>.<key>=v` (`setAddress`, `:1335`) stores
+`#tlgrade key=(v − source own value)`, rounded to float precision; `gradeDeltas` resolves nearest
+timeline first per key, and `gradeFor` (`:1256`) applies the deltas to each node's OWN params before
+the fold, so a group override stacks onto its members. A base regrade therefore still arrives under
+the override; `revert <address>` drops it. A curve, wheel or crop override is **refused**, pointing
+at the base or `rack duplicate` (R-RACK-5): the format stores numbers. Guarded by `a version's colour
+is an OVERRIDE` (0.5 → override 0.8; base to 0.6 → version 0.9; revert → 0.6; `.cmp` untouched) and
+`a non-scalar override … is refused`. Both mutants (absolute value instead of delta; pins ignored)
+fail the suite.
+
+### DR-VER-3 A pin is a content-addressed byte copy of the `.cmp` (R-VER-3, R-VER-4)
+`timeline pin` (`takePin`, `:1229`) saves the rack, hashes the `.cmp` bytes (FNV-1a, 12 hex) and
+copies them to `<stem>.pins/<commit>.cmp`, with a `<commit>.map` of which `#rackobj` is which entry;
+the base chain's overrides are copied into the pinned version's own, because the pinned walk stops
+there. A pinned version's colour source is that snapshot, read through Cosmo's static
+`readWorkspaceFile` and the same fold (`colourTreeFor`, `:1181`); a colour `set` on it is refused
+naming the commit. `timeline rebase` reports and prunes dangling deltas (the model's `rebase`,
+`model/Versions.cpp:1043`) and advances a pin to a fresh snapshot. A pin saves the rack first, so
+pinning is refused while a source is offline (D-2). Guarded by `a pin freezes the base's colour`.
+
+### DR-SVC-1 One service, one way in, one way out (R-SVC-1, R-SVC-2, R-G-4)
+`InterstellarService` (`core/service/InterstellarService.h`) — `dispatch(Command)`,
+`dispatchText(line)` (`:134`), `pump(nowMs)`, `model()`, `renderFrame(t, proxyEdge)` and an `Event`
+sink; `formatEvent()` is the log line. The core holds no codec and no OS path: the host injects the
+rack decoder, the timeline frame source, the encoder, the PNG writer and the recents path. A rack
+open or add runs asynchronously (`Rack::beginOpen`/`beginAdd`, finished in `pump`) so a window never
+blocks on a decode; a CLI pumps until `busy()` is false. Guarded by the 14 `interstellar_service_l2`
+tests, all of which drive the service through text lines, and by `the same script on two services
+dumps the same stable state`.
+
+### DR-SVC-2 The grammar is a table, and an unknown input is refused with candidates (R-SVC-2, R-SVC-3)
+`commandSpecs()` (`core/service/Command.cpp:29`) is the parser's input (`parseCommand`, `:240`),
+the formatter's, `api`'s and the committed document's. An unknown verb or flag is refused naming the
+nearest candidates; a switch given a value, a missing positional, and a flag the command does not
+take are refused with the usage line; an unknown address, filter or key is refused by the router
+with the nearest names. `format → parse` is a fixed point for every row. Guarded by
+`interstellar_service_tests` (13) and `an unknown address, key or filter is refused`.
+
+### DR-SVC-3 `interstellar-cc` is the whole app without a window (R-SVC-1, R-API-2)
+`cli/main.cpp` holds argv, stdout, the clock and the codecs and no behaviour: every line goes
+through `dispatchText`, then `pumpUntilIdle`, then `output()` to stdout; refusals to stderr with exit
+3; `--watch` streams events; `--script` runs a file; `:` chains commands. Verified end to end on
+real media (FFmpeg-generated 640×360 clips): new project → rack add (two videos, a still) → grade →
+track → clips → versions → pin → rebase → transition → render H.264 (96 frames) and a PNG sequence
+→ export-still; the mid-dissolve frame shows both clips at 50 %, the outgoing one held.
+
+### DR-API-1 The API document is generated, committed and drift-tested — rung 4 (R-API-1)
+`apiJson` / `apiMarkdown` (`core/service/ApiDoc.cpp`) print four tables and no hand prose: commands
+(`commandSpecs`), events (`eventSpecs`), model fields (`appModelFields`) and the address space with
+owners, kinds, engine units, ranges and neutrals (`paramDefs`, `core/ParamRegistry.cpp`).
+`docs/api.json` and `docs/API.md` are committed; `ctest -R interstellar_api_current` regenerates and
+diffs both (confirmed red on a stale doc). Two drift guards back the tables themselves: every key
+`modelToJson` writes is documented and every documented key is written; every key Cosmo's
+`serializeParams` writes is an address under exactly one filter.
+
+### DR-RENDER-1 A render names its timeline, and runs a frame per pump (R-RENDER-1, R-RENDER-4)
+`render --timeline <tl> --out <p>` (`renderCommand`, `core/service/ServiceRender.cpp:331`) refuses
+without `--timeline`, naming R-RENDER-1; the queue row carries the timeline's id and name. Format
+from `--format` or the extension (`.mp4` h264, `.mov` prores, else a PNG sequence). `pumpJobs`
+(`:397`) renders ONE frame per pump, so a window stays live and `render cancel` lands on the next
+frame. Limit: a frame is ~35–60 ms of grade + decode at 1080p, so a window renders at that rate
+while a job runs. **Audio is not yet muxed** (P6).
+
+### DR-RENDER-2a The frame path is pure (R-RENDER-2, R-VOL-5, R-VOL-7)
+`renderTimelineFrame` (`:163`): resolve → `activeAt` → per clip, the source frame at the SOURCE's own
+rate from its lazy volume (a still is frame 0; a clip's `freeze` remaps t; the first temporal `#fx`
+on its rack node runs through `renderTemporal`) → the version's grade (`gradeFor`) through
+`GradeEngine`, cached on (media + fx, frame, param hash, proxy) → the grade weight as a per-pixel mix
+→ a `Layer` with the clip's geometry in FRAME units (so proxy and full place it identically) →
+`compose`. Guarded by `a render is a pure function: same timeline, same bytes, any order` (two full
+renders byte-identical; a frame identical after reading another source in between) and `the grade
+reaches the pixels, and weight 0 is the ungraded frame`. When nothing is cut at t, `renderFrame`
+shows the Grade target's reference frame graded, so grading works before the first cut.
+
+### DR-RENDER-5 An Interstellar still equals Cosmo's export of the same frame (R-RENDER-5)
+`tests/still_equals_cosmo.sh`, registered as `interstellar_still_equals_cosmo`: a photo graded in
+Interstellar (exposure, contrast, temperature, vibrance, a tone curve, a grade wheel), cut onto a
+timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc export` of the same
+`.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
+Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
+
+### DR-AUD-1 The suite audio schema parses and round-trips; Interstellar places clips (R-AUD-2, R-AUD-4)
+`#atrack` / `#aclip` are typed (`model/Project.h`); `#note`, `#arack`, `#aeffect`, `#aauto`,
+`#asend` are kept as `RawNode` and preserved byte-exact. `audio track add` and `audio clip add`
+(`--track --src --at --out [--in --gain --fade]`, references never embedded) create local nodes in the
+current timeline; the model lists them as tracks/clips with `audio=true`. **Not built: the master
+sum** — R-AUD-5's "sums to a master so a cut can be watched and delivered with its bed" is P6, and
+a render today is picture only.

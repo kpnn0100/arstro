@@ -247,6 +247,78 @@ namespace
         assert(!err.empty());
         std::printf("[PASS] a refused edit says why: \"%s\"\n", err.c_str());
     }
+
+    void test_render_params_equal_cosmos_own_for_every_node()
+    {
+        // The rack's read-through cache folds own params with composeParams. If that fold differed
+        // from Cosmo's by one rule — bypass on a leaf, bypass on an ancestor, temp's offset — every
+        // frame would render a grade Cosmo never showed. So Cosmo's own `params` is the oracle.
+        Fixture f;
+        const std::string cmp = writeFakeCmp(scratch());
+        std::string err;
+        assert(f.rack.openProject(cmp, err));
+        int group = -1;
+        std::vector<int> members;
+        for (const auto &n : f.rack.nodes())
+        {
+            if (n.group) group = n.id;
+            else members.push_back(n.id);
+        }
+        assert(group >= 0 && members.size() == 2);
+        assert(f.rack.setParams(group, {{"exposure", "0.3"}, {"temp", "5600"}, {"curve", "0,0;0.5,0.6;1,1"}}, err));
+        assert(f.rack.setParam(members[0], "exposure", "-0.1", err));
+        assert(f.rack.setParam(members[1], "contrast", "12", err));
+
+        auto agree = [&](const char *when) {
+            for (const auto &n : f.rack.nodes())
+            {
+                if (n.group) continue;
+                EditParams mine, cosmos;
+                assert(f.rack.renderParams(n.id, mine));
+                assert(f.rack.effectiveParams(n.id, cosmos));
+                if (serializeParams(mine) != serializeParams(cosmos))
+                {
+                    std::fprintf(stderr, "%s: node %d\nmine:\n%s\ncosmo:\n%s\n", when, n.id,
+                                 serializeParams(mine).c_str(), serializeParams(cosmos).c_str());
+                    assert(false);
+                }
+            }
+        };
+        agree("graded");
+        assert(f.rack.setBypass(group, true, err));
+        agree("group bypassed");
+        assert(f.rack.setBypass(group, false, err));
+        assert(f.rack.setBypass(members[0], true, err));
+        // A bypassed leaf: Cosmo's model shows the leaf's own params to EDIT, but renders without
+        // them — so the oracle here is the fold rule itself, not the edit-target view.
+        EditParams leaf;
+        assert(f.rack.renderParams(members[0], leaf));
+        assert(std::fabs(leaf.exposure - 0.3) < 1e-6);   // the group's offset only
+        std::printf("[PASS] renderParams == Cosmo's own params for every node, bypass included\n");
+    }
+
+    void test_a_second_add_appends_rather_than_replacing()
+    {
+        Fixture f;
+        const std::string dir = scratch();
+        const std::string cmp = dir + "/append.cmp";
+        std::filesystem::remove(cmp);
+        std::string err;
+        assert(f.rack.newProject(cmp, err));
+        std::vector<int> first, second;
+        assert(f.rack.addSources({dir + "/a.jpg", dir + "/b.jpg"}, err, &first));
+        assert(f.rack.addSources({dir + "/c.jpg"}, err, &second));
+        assert(first.size() == 2 && second.size() == 1);
+        assert(f.rack.imageCount() == 3);
+        int group = -1;
+        assert(f.rack.groupNodes("Pair", first, group, err));
+        assert(group >= 0);
+        int under = 0;
+        for (const auto &n : f.rack.nodes())
+            if (!n.group && n.parent >= 0) ++under;
+        assert(under == 2);
+        std::printf("[PASS] a second add appends (3 images) and grouping takes the named nodes\n");
+    }
 }
 
 int main()
@@ -256,6 +328,8 @@ int main()
     test_a_second_service_sees_the_edit_the_first_one_made();
     test_a_group_offset_stacks_onto_its_members();
     test_a_refused_edit_says_why();
+    test_render_params_equal_cosmos_own_for_every_node();
+    test_a_second_add_appends_rather_than_replacing();
     std::printf("\nall interstellar core tests passed\n");
     return 0;
 }

@@ -9,41 +9,22 @@ namespace arstro
 {
 namespace interstellar_host
 {
+    // The selector helpers live in the core (FrameSelector.h) — the service binds `.cmp` paths with
+    // them and must not need a codec to do it. These names stay for the host's existing callers.
     void splitFrameSelector(const std::string &spec, std::string &path, double &seconds)
     {
-        seconds = 0.0;
-        const auto hash = spec.rfind("#t=");
-        if (hash == std::string::npos) { path = spec; return; }
-        path = spec.substr(0, hash);
-        seconds = std::atof(spec.c_str() + hash + 3);
-        if (!std::isfinite(seconds) || seconds < 0) seconds = 0.0;
+        interstellar::splitFrameSelector(spec, path, seconds);
     }
-
     std::string joinFrameSelector(const std::string &path, double seconds)
     {
-        if (seconds <= 0.0) return path;
-        char buf[32];
-        std::snprintf(buf, sizeof buf, "#t=%.3f", seconds);
-        return path + buf;
+        return interstellar::joinFrameSelector(path, seconds);
     }
+    bool looksLikeVideo(const std::string &path) { return interstellar::looksLikeVideo(path); }
 
-    bool looksLikeVideo(const std::string &path)
+    VideoFrameDecoder::VideoFrameDecoder(std::shared_ptr<const interstellar::FrameSelector> selector)
+        : mStills(new cosmo::NativeImageDecoder()), mSelector(std::move(selector))
     {
-        std::string file = path;
-        const auto hash = file.rfind("#t=");
-        if (hash != std::string::npos) file = file.substr(0, hash);
-        const auto dot = file.find_last_of('.');
-        if (dot == std::string::npos) return false;
-        std::string e = file.substr(dot + 1);
-        for (char &c : e) c = (char)std::tolower((unsigned char)c);
-        static const char *kVideo[] = {"mp4", "mov", "mkv", "m4v", "avi", "mxf", "webm", "mts",
-                                       "m2ts", "wmv", "flv", "r3d", "braw"};
-        for (const char *v : kVideo)
-            if (e == v) return true;
-        return false;
     }
-
-    VideoFrameDecoder::VideoFrameDecoder() : mStills(new cosmo::NativeImageDecoder()) {}
     VideoFrameDecoder::~VideoFrameDecoder() = default;
 
     cosmo::DecodedImage VideoFrameDecoder::decodeFile(const std::string &path)
@@ -58,6 +39,9 @@ namespace interstellar_host
         std::string file;
         double seconds = 0;
         splitFrameSelector(path, file, seconds);
+        // The .isp's `#rackobj frame=` wins over the selector baked into the stored path: choosing a
+        // new reference frame changes neither a parameter nor the Cosmo node (R-RACK-3).
+        if (mSelector) seconds = mSelector->frameFor(path, seconds);
 
         FrameSourceFFmpeg src;
         interstellar::IFrameSource::Info info;

@@ -198,29 +198,44 @@ repairs and reports.
 
 ## 8. The command grammar
 
-One parser, shared by the CLI, a script file and the journal. `interstellar-cc api` prints this from
-the same tables, so it cannot drift (R-API-1).
+One parser, shared by the CLI, a script file, the GUI's text dispatch and the journal. **The
+authoritative list is generated**: [`API.md`](API.md) (and [`api.json`](api.json)) are printed by
+`interstellar-cc api` from the same table the parser reads (`core/service/Command.cpp`), committed,
+and drift-tested — so this section is a summary and the generated document wins.
 
 ```
 project new <path.isp> [--fps 24] [--res WxH]   | project open <p> | project save [p] | project close
-rack import <path.cmp> | rack add <media…> | rack group new "<name>" | rack duplicate <node>
-rack frame <node> --at <t> | rack rename <node> <name>
-set <address>=<value> …        ; routed by owner: a rack address writes THROUGH to Cosmo
-get <address> | eval <address> --at <t> [--explain]
+rack import <path.cmp> | rack add <media…> | rack group new <name> --nodes a,b | rack duplicate <node>
+rack frame <node> --at <t> | rack rename <node> <name> | rack select <node>
+set <address>=<value> …        ; routed by owner: a rack address writes THROUGH to Cosmo on a root
+                               ; timeline and becomes the version's #tlgrade on a derived one
+get <address> | eval <address> [--timeline <tl>] [--explain] | revert <address> [--timeline <tl>]
 
-timeline new <name> [--base <tl>] | timeline list | timeline open <tl>
+timeline new <name> [--base <tl>] | timeline list | timeline open <tl> | timeline delete <tl>
 timeline pin <tl> [--commit <c>] | timeline unpin <tl> | timeline freeze <tl> | timeline thaw <tl>
 timeline rebase <tl> [--dry-run]            ; reconcile dangling deltas, advance a pin
-timeline diff <tl> [--against <tl>]         ; what this version changes
+timeline diff <tl>                          ; what this version changes against its base
 
 track add --kind video|audio [--name v0]
 clip add --track <t> --src <rackobj> --in <t> --out <t> --at <t> [--name n]
-clip trim|split|move|delete|roll|slip …     | transition add --between a,b --kind dissolve --dur 0.5
-fx add --node <ro>|--clip <c> --type denoise|blend|freeze [--radius 2] [--strength 0.6]
+clip trim <c> [--in <t>] [--out <t>] | clip split <c> --at <t> | clip move <c> --at <t> [--track <t>]
+clip delete <c> [--ripple] | clip roll <c> --at <t> | clip slip <c> --by <dt> | clip speed <c> <s>
+clip select [c] | transition add --between a,b [--kind dissolve|dip] [--dur 0.5] | marker add <n> --at <t>
+fx add --node <ro>|--clip <c> --type denoise|blend|freeze [--radius 2] [--strength 0.6] | fx delete <fx>
 
-audio track add --name bed | audio clip add --track <t> --src <file> --at <t> [--gain -3]
-playhead <t>|+<dt>|next-cut|prev-cut | play | pause
-render --timeline <tl> --out <path> [--range a:b] [--format h264|prores|png-seq]
+audio track add [--name bed] | audio clip add --track <t> --src <file> --at <t> --out <t> [--gain -3]
+playhead <t>|+<dt>|-<dt>|next-cut|prev-cut | play | pause
+render --timeline <tl> --out <path> [--range a:b] [--format h264|prores|png-seq] | render cancel <job>
 export-still --timeline <tl> --out <p.png> [--at <t>]
-state print [--json] [--stable] | api [--json] | lint | wait <cond> | quit
+state print [--json] [--stable] | api [--json] [--md] | lint | wait <cond> [--timeout 120s] | quit
 ```
+
+> **AMENDED (building the service, 2026-10-01).** Added what the UI and the version model needed
+> and the first draft lacked: `rack select`, `clip select`, `clip speed`, `revert`, `timeline delete`,
+> `marker add`, `fx delete`, `render cancel`. **Removed** `timeline diff --against` and `eval --at`:
+> neither is implemented in v1 (values do not vary over time yet), and R-SVC-3 forbids accepting a
+> flag that does nothing. `clip trim --in/--out` are the clip's head and tail edges in TIMELINE time
+> (what a drag produces), not source points. `audio clip add` requires `--out`: the core reads no
+> audio headers. A version's colour override is **scalar**: the format stores a number added to the
+> rack's value; a curve or wheel override on a version is refused, pointing at the base or at
+> `rack duplicate` (R-RACK-5).

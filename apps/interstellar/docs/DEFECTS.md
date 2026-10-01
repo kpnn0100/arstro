@@ -3,9 +3,9 @@
 `D-<n>`, sequential, **never reused**, nothing deleted. A resolved entry moves whole to `## Closed`
 with its commit hash and the test that now guards it.
 
-**No defects — there is no code.** The numbering restarts at D-1 with this specification; the first
-build's D-1…D-8 are in git history at `69b91eb` and are not carried forward as ids, because an id
-that pointed at deleted code would be worse than no id.
+The numbering restarted at D-1 with this specification; the first build's D-1…D-8 are in git history
+at `69b91eb` and are not carried forward as ids, because an id that pointed at deleted code would be
+worse than no id.
 
 **What IS carried forward is the lessons**, promoted into requirements so they cannot be relearned:
 
@@ -24,6 +24,22 @@ Severity · Found · Reproduce (pasteable) · Expected · Actual · Evidence (a 
 argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix · Guarded by.**
 
 ## Open
+
+### D-2 — Cosmo's save deletes an offline source and its grade (Cosmo D-66), and D-1 makes every video offline in Cosmo
+- **Area:** rack / cross-app · **Status:** Open — **mitigated** here, root cause in Cosmo ·
+  **Severity:** S1 · **Found:** 2026-10-01, binding the rack's `.cmp` entries to `#rackobj`.
+- **Reproduce:** `apps/cosmo/docs/DEFECTS.md` D-66 (a pasteable cosmo-cc script).
+- **Actual:** Cosmo's `saveWorkspaceAs` skips every image without a slot, so an offline source — and
+  its params and history — is deleted from the `.cmp` on the next save. Cosmo's `add` saves on finish,
+  and Interstellar's `project save`, `rack frame`, `rack duplicate`, `timeline pin` and `rebase` all
+  make Cosmo save.
+- **Compounding:** with D-1 (Cosmo alone cannot decode a video), opening an Interstellar rack in Cosmo
+  and saving it there deletes **every video source's grade**. R-RACK-2's "open it in Cosmo" path is
+  therefore read-only in practice until either is fixed.
+- **Mitigation (this build):** `InterstellarService::rackSaveBlocked` refuses each command that would
+  make Cosmo save while any rack node is offline, naming the offline sources and this defect. The
+  `.isp` still saves. Guarded by `a save is refused while a source is offline` (`interstellar_service_l2`).
+- **Recommended fix:** Cosmo D-66 (keep and re-write failed entries). Then D-1's shared host decoder.
 
 ### D-1 — Cosmo, opened by itself, shows a video source as failed
 - **Area:** rack / cross-app · **Status:** Open · **Severity:** S3 · **Found:** 2026-10-01, running

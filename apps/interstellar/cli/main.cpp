@@ -1,22 +1,31 @@
 /*
- *  interstellar-cc — Interstellar with no window.
+ *  interstellar-cc — Interstellar with no window (R-SVC-1, R-API-2).
  *
- *  Seam rule: THIS FILE HOLDS NO BEHAVIOUR. It owns argv, stdout, the clock and the codecs — the
- *  things the core is forbidden to touch — and nothing else.
+ *  Seam rule: THIS FILE HOLDS NO BEHAVIOUR. It owns argv, stdout, the clock, the codecs and the
+ *  OS paths — the things the core is forbidden to touch — and nothing else. Every verb is the
+ *  service's grammar (`docs/API.md`), parsed by the same parser the GUI's text dispatch uses, so
+ *  anything a script can do here a window can do, and the reverse.
  *
- *  At P1 it drives the RACK only, because the rack is all that exists: that is deliberate rather
- *  than partial. The gate this phase has to pass is a colour edit reaching a real `.cmp`, and this
- *  is the surface that proves it from a shell, with the output pasted into the commit.
+ *      interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project save
+ *      interstellar-cc --script cut.txt
+ *      interstellar-cc api --json            # the document an agent reads first
+ *
+ *  After each command it pumps until the service is idle (a rack decode, a render), so a script
+ *  line never races the one before it — and prints what the command produced on stdout. Refusals
+ *  go to stderr with exit code 3; `--watch` streams every event to stderr.
  */
-#include "Rack.h"
+#include "InterstellarService.h"
 #include "core/ThreadBudget.h"
 #ifdef INTERSTELLAR_HAVE_FFMPEG
+#include "FrameWriterFFmpeg.h"
+#include "HostFrameSource.h"
+#include "PngWriter.h"
 #include "VideoFrameDecoder.h"
 #endif
 #include "core/decode/NativeImageDecoder.h"
-#include "engine/EditParamsIO.h"
 #include <cstdio>
-#include <cstring>
+#include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,141 +40,123 @@ namespace
     void usage()
     {
         std::printf(
-            "interstellar-cc — the rack, from a shell (P1)\n\n"
-            "  rack open <file.cmp>              open the colour project\n"
-            "  rack new  <file.cmp>              create one\n"
-            "  rack add  <media...>              add sources (video or still)\n"
-            "  rack list                         the tree, with node ids\n"
-            "  rack set  <node> <key>=<value>    grade a node — writes THROUGH to the .cmp\n"
-            "  rack get  <node> <key>            its own value\n"
-            "  rack eff  <node>                  its EFFECTIVE params (own, stacked up its parents)\n"
-            "  rack save                         save the .cmp\n\n"
-            "Several verbs may be chained in one invocation, which is how the P1 gate is run:\n"
-            "  interstellar-cc rack open r.cmp : rack set 1 exposure=0.2 : rack save\n\n"
-            "Keys are COSMO's own (exposure, contrast, temp, mixerSpread, …), so a preset, a .cmp,\n"
-            "a `cosmo-cc set` line and this command all spell a parameter identically.\n");
+            "interstellar-cc — Interstellar from a shell\n\n"
+            "  interstellar-cc [--watch] <command> [: <command> …]\n"
+            "  interstellar-cc [--watch] --script <file>      one command per line, `#` comments\n"
+            "  interstellar-cc api [--json | --md]            every command, event, model field, address\n\n"
+            "Commands are the service's grammar — `interstellar-cc api --md` prints all of them.\n"
+            "Examples:\n"
+            "  project new mv.isp --fps 24 --res 1920x1080\n"
+            "  rack add footage/a.mov \"footage/b.mov#t=2.0\"\n"
+            "  set s_a.basic.exposure=0.35 s_a.basic.temp=5600\n"
+            "  timeline new social30 --base main : timeline open social30\n"
+            "  render --timeline social30 --out social.mp4\n");
     }
 
-    /** The host's decoder: video-aware where FFmpeg is present, Cosmo's own otherwise. This is the
-     *  seam that lets a video source be graded with no change to Cosmo (R-RACK-3). */
-    Rack::DecoderFactory makeDecoderFactory()
+    std::string quote(const std::string &s)
     {
-        return [] {
-#ifdef INTERSTELLAR_HAVE_FFMPEG
-            return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder());
-#else
-            return std::unique_ptr<cosmo::IImageDecoder>(new cosmo::NativeImageDecoder());
-#endif
-        };
+        return s.find_first_of(" \t\"") == std::string::npos || s.empty() ? s : "\"" + s + "\"";
     }
 
-    int runVerb(Rack &rack, const std::vector<std::string> &a)
+    std::string recentsPath()
+    {
+        if (const char *x = std::getenv("INTERSTELLAR_RECENTS")) return x;
+        if (const char *x = std::getenv("XDG_DATA_HOME")) return std::string(x) + "/interstellar/recents";
+        if (const char *h = std::getenv("HOME")) return std::string(h) + "/.local/share/interstellar/recents";
+        return std::string();
+    }
+
+    InterstellarService::Host makeHost()
+    {
+        InterstellarService::Host h;
+#ifdef INTERSTELLAR_HAVE_FFMPEG
+        h.rackDecoder = [](std::shared_ptr<const FrameSelector> sel) {
+            return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder(std::move(sel)));
+        };
+        h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
+        h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
+        h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
+            return interstellar_host::writePng(p, r, err);
+        };
+#else
+        h.rackDecoder = [](std::shared_ptr<const FrameSelector>) {
+            return std::unique_ptr<cosmo::IImageDecoder>(new cosmo::NativeImageDecoder());
+        };
+#endif
+        h.recentsPath = recentsPath();
+        return h;
+    }
+
+    int run(InterstellarService &svc, const std::string &line)
     {
         std::string err;
-        auto refuse = [&](const std::string &why) {
-            std::fprintf(stderr, "refused: %s\n", why.c_str());
+        if (!svc.dispatchText(line, err))
+        {
+            std::fprintf(stderr, "refused: %s\n", err.c_str());
             return kRefused;
-        };
-        if (a.empty() || a[0] != "rack") { usage(); return kUsage; }
-        if (a.size() < 2) { usage(); return kUsage; }
-        const std::string &verb = a[1];
-
-        if (verb == "open" || verb == "new")
-        {
-            if (a.size() < 3) return refuse(verb + " needs a .cmp path");
-            const bool ok = verb == "open" ? rack.openProject(a[2], err) : rack.newProject(a[2], err);
-            if (!ok) return refuse(err);
-            std::printf("%s %s (%d image%s)\n", verb == "open" ? "opened" : "created", a[2].c_str(),
-                        rack.imageCount(), rack.imageCount() == 1 ? "" : "s");
-            return kOk;
         }
-        if (verb == "add")
+        if (!svc.pumpUntilIdle())
         {
-            if (a.size() < 3) return refuse("add needs one or more media paths");
-            std::vector<std::string> paths(a.begin() + 2, a.end());
-            if (!rack.addSources(paths, err)) return refuse(err);
-            std::printf("added %zu source%s (%d image%s in the rack)\n", paths.size(),
-                        paths.size() == 1 ? "" : "s", rack.imageCount(),
-                        rack.imageCount() == 1 ? "" : "s");
-            return kOk;
+            std::fprintf(stderr, "timed out waiting for: %s\n", line.c_str());
+            return kRefused;
         }
-        if (verb == "list")
-        {
-            for (const auto &n : rack.nodes())
-                std::printf("%*s%-4d %-7s %s%s%s\n", n.depth * 2, "", n.id,
-                            n.group ? "group" : "source", n.cosmoName.c_str(),
-                            n.bypass ? "  [bypassed]" : "", n.failed ? "  [offline]" : "");
-            return kOk;
-        }
-        if (verb == "set")
-        {
-            if (a.size() < 4) return refuse("set needs <node> <key>=<value>");
-            const std::string &kv = a[3];
-            const auto eq = kv.find('=');
-            if (eq == std::string::npos) return refuse("not an assignment: '" + kv + "'");
-            if (!rack.setParam(std::atoi(a[2].c_str()), kv.substr(0, eq), kv.substr(eq + 1), err))
-                return refuse(err);
-            std::printf("node %s %s\n", a[2].c_str(), kv.c_str());
-            return kOk;
-        }
-        if (verb == "get")
-        {
-            if (a.size() < 4) return refuse("get needs <node> <key>");
-            double v = 0;
-            if (!rack.getParam(std::atoi(a[2].c_str()), a[3], v))
-                return refuse("no such node or key: " + a[2] + " " + a[3]);
-            std::printf("%.6g\n", v);
-            return kOk;
-        }
-        if (verb == "eff")
-        {
-            if (a.size() < 3) return refuse("eff needs <node>");
-            EditParams p;
-            if (!rack.effectiveParams(std::atoi(a[2].c_str()), p))
-                return refuse("no such node: " + a[2]);
-            std::fputs(serializeParams(p).c_str(), stdout);
-            return kOk;
-        }
-        if (verb == "save")
-        {
-            if (!rack.save(err)) return refuse(err);
-            std::printf("saved %s\n", rack.path().c_str());
-            return kOk;
-        }
-        return refuse("unknown rack verb: " + verb);
+        if (!svc.output().empty()) std::fputs(svc.output().c_str(), stdout);
+        return kOk;
     }
 }
 
 int main(int argc, char **argv)
 {
+    // Line-buffered, so stdout (what a command produced) and stderr (events, refusals) interleave
+    // in the order they happened.
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
     std::vector<std::string> args(argv + 1, argv + argc);
-    if (args.empty() || args[0] == "help" || args[0] == "--help") { usage(); return args.empty() ? kUsage : kOk; }
+    if (args.empty() || args[0] == "help" || args[0] == "--help" || args[0] == "-h")
+    {
+        usage();
+        return args.empty() ? kUsage : kOk;
+    }
+    bool watch = false;
+    std::string script;
+    while (!args.empty() && args[0].rfind("--", 0) == 0)
+    {
+        if (args[0] == "--watch") { watch = true; args.erase(args.begin()); }
+        else if (args[0] == "--script" && args.size() > 1) { script = args[1]; args.erase(args.begin(), args.begin() + 2); }
+        else break;
+    }
 
     cosmo::ThreadBudget budget(50);
-    Rack rack(budget);
-    rack.setDecoderFactory(makeDecoderFactory());
-    // The event stream IS the log, so a shell run shows exactly what a window would have shown.
-    rack.subscribe([](const cosmo::Event &e) {
-        std::fprintf(stderr, "[rack] %s\n", cosmo::formatEvent(e).c_str());
+    InterstellarService svc(budget, makeHost());
+    // The event stream IS the log: a shell run with --watch shows exactly what a window would.
+    svc.subscribe([watch](const Event &e) {
+        if (watch || e.kind == Event::Kind::Error) std::fprintf(stderr, "%s\n", formatEvent(e).c_str());
     });
 
-    // `:` separates chained verbs, so one invocation can be a whole scenario — which is what the
-    // P1 gate is, and a gate that needs three shell lines is a gate nobody re-runs.
-    std::vector<std::string> verb;
-    int rc = kOk;
+    std::vector<std::string> lines;
+    if (!script.empty())
+    {
+        std::ifstream f(script);
+        if (!f) { std::fprintf(stderr, "cannot read %s\n", script.c_str()); return kUsage; }
+        std::string l;
+        while (std::getline(f, l)) lines.push_back(l);
+    }
+    // `:` separates chained commands, so one invocation can be a whole scenario.
+    std::string cur;
     for (size_t i = 0; i <= args.size(); ++i)
     {
         if (i == args.size() || args[i] == ":")
         {
-            if (!verb.empty())
-            {
-                const int r = runVerb(rack, verb);
-                if (r != kOk) return r;
-                verb.clear();
-            }
+            if (!cur.empty()) lines.push_back(cur);
+            cur.clear();
             continue;
         }
-        verb.push_back(args[i]);
+        cur += (cur.empty() ? "" : " ") + quote(args[i]);
     }
-    return rc;
+    for (const auto &l : lines)
+    {
+        const int rc = run(svc, l);
+        if (rc != kOk) return rc;
+        if (svc.quitRequested()) break;
+    }
+    return kOk;
 }

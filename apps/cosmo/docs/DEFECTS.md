@@ -19,6 +19,37 @@ and reachability gaps, which is why `PROGRESS.md`'s NEXT is the P0 harness.
 
 ## Open
 
+### D-66 — Saving a project deletes every image whose decode failed, with its grade
+- **Area:** core / persistence · **Status:** **Confirmed** (measured) · **Severity:** S1 — silent,
+  permanent loss of a user's edit · **Found:** 2026-10-01, by Interstellar's integrator while binding
+  its rack (`apps/interstellar/docs/DEFECTS.md` D-2).
+- **Reproduce:**
+  ```bash
+  cd "$(mktemp -d)" && export HOME=$PWD && cp <any>.png a.png && cp <any>.png b.png
+  printf 'project new %s/p.cmp\nadd %s/a.png %s/b.png\nwait load.finished --timeout 30s\nselect 2\nset exposure=0.7\nproject save\n' $PWD $PWD $PWD > s1.txt
+  cosmo-cc run --script s1.txt; grep -c '^#image' p.cmp        # 2
+  mv b.png b_moved.png                                         # the file goes offline
+  printf 'project open %s/p.cmp\nwait load.finished --timeout 30s\nproject save\n' $PWD > s2.txt
+  cosmo-cc run --script s2.txt; grep -c '^#image' p.cmp        # 1 — b.png and exposure=0.7 are gone
+  ```
+- **Expected:** an offline photo "reads as missing, not as a stall" (R-LOADUX-2) — and is KEPT, with
+  its params and history, so relinking the file restores the edit.
+- **Actual:** `before: 2 images; exposure lines: 2` → `after reopen+save with b.png offline: 1 images;
+  exposure=0.7 lines: 0`. The node, its path, its params and its history are deleted from the file.
+- **Cause:** `EditSession::saveWorkspaceAs`'s walk (`core/EditSession.cpp:733`) writes an `#image`
+  only `if (g.slot >= 0 …)`; a failed (or still-pending) node has no slot, so it is skipped. Its path
+  and params live only in the slot arrays, which a failed decode never fills.
+- **Requirement:** R-LOADUX-2 (offline reads as missing) and, through Interstellar, R-RACK-2/R-RACK-7.
+- **Why it is S1 and not S3:** `add` and `import` save on finish (`mSaveOnFinish`), so it is not only
+  an explicit save that triggers it — adding a photo to a project with one offline file deletes that
+  file's edit. And every Interstellar VIDEO source reads as failed in Cosmo alone (Interstellar D-1),
+  so opening an Interstellar rack in Cosmo and saving it deletes every video's grade.
+- **Recommended fix:** keep each loaded `WorkspaceEntry` for a node whose decode failed (path, params,
+  history, bypass) and write it back verbatim in the walk; a relink then restores it. Guard with a
+  core test: open a `.cmp` with one unreadable path, save, assert the `#image` and its params remain.
+- **Mitigation outside Cosmo:** Interstellar refuses every command that would make Cosmo save while
+  the rack has an offline source (`InterstellarService::rackSaveBlocked`).
+
 ### D-64 — `cosmo_core_tests` writes its throwaway projects into the user's recent projects
 - **Area:** core / tests · **Status:** **Confirmed** (measured) · **Severity:** S3
 - **Found:** 2026-09-30, looking at the web Home screen on the RK3588 after a `ctest` run.
