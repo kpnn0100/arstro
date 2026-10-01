@@ -17,8 +17,9 @@
 │          Commands; draws from AppModel. Reuses COSMO's panel widgets.           │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │ core     arstro::interstellar      UI-free, codec-free                          │
-│          InterstellarService · Project · Rack · Versions · Arrange · Evaluate   │
-│          · Composite · ParamRegistry · FrameCache                               │
+│          InterstellarService · Rack · ParamRegistry · Command/Event/Codec/Api   │
+│   model  Project · Versions · Arrange          (no Cosmo, no pixels)            │
+│  render  ActiveSet · Composite · GradeEngine · FrameCache  (no project model)   │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │ rack     arstro::cosmo             a REAL hosted CosmoService — THE colour      │
 │          authority. Driven by cosmo::Command; read through cosmo::AppModel.     │
@@ -131,9 +132,12 @@ Every planned file, its layer, and the requirement that justifies it. **[planned
 | `apps/interstellar/core/Rack.{h,cpp}` | core | **[planned]** owns the hosted `CosmoService`; `RackAccess` over it (R-RACK) |
 | `apps/interstellar/core/Arrange.{h,cpp}` | core | **[planned]** the cut operations (R-TL-3) |
 | `apps/interstellar/core/Evaluate.{h,cpp}` | core | **[planned]** resolved values per frame, pure (R-VOL-7) |
-| `apps/interstellar/core/Composite.{h,cpp}` | core | **[planned]** geometry · blend · transitions (R-FX-3) |
+| `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3) |
+| `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, frame-exact, transitions held (R-TL-4, DR-TL-4) |
+| `apps/interstellar/render/GradeEngine.{h,cpp}` | render | **built** — EditEngine per frame (R-FX-1, DR-RENDER-2) |
+| `apps/interstellar/render/ParamHash.{h,cpp}` | render | **built** — the cache key for a grade |
 | `apps/interstellar/core/Audio.{h,cpp}` | core | **[planned]** the audio schema subset + master sum (R-AUD) |
-| `apps/interstellar/core/FrameCache.{h,cpp}` | core | **[planned]** byte-capped LRU, the volume's residency layer |
+| `apps/interstellar/render/FrameCache.{h,cpp}` | render | **built** — byte-capped LRU of graded frames (the volume holds its own window) |
 | `apps/interstellar/core/ParamRegistry.{h,cpp}` | core | **[planned]** the generated address space + owner routing |
 | `apps/interstellar/core/service/*` | core | **[planned]** Service · Command · Event · AppModel · Codec · ApiDoc (R-SVC, R-API) |
 | `apps/interstellar/host/FrameSourceFFmpeg.{h,cpp}` | host | **carried forward** from the first build — concept-independent plumbing, tested |

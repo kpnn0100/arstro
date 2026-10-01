@@ -25,7 +25,7 @@ one integrator who moves, wires, tests and commits each stream:
 | stream | directory | state |
 |---|---|---|
 | volume + temporal ops | `core/ImageProcessing/src/volume/` | `[x]` integrated — DR-VOL-1..3, DR-FX-2 |
-| render path (active set, composite, grade, cache) | `apps/interstellar/render/` | `[~]` built + tested standalone; being wired |
+| render path (active set, composite, grade, cache) | `apps/interstellar/render/` | `[x]` integrated — DR-TL-4, DR-FX-3, DR-RENDER-2 |
 | `.isp` model + versions | `apps/interstellar/model/` | `[~]` agent running |
 | UI (Home, Edit: Grade/Cut/Deliver) | `apps/interstellar/app/` | `[~]` agent running |
 | service, grammar, codec, API doc, CLI | `apps/interstellar/core/service/`, `cli/` | `[~]` integrator — tables + drift test written, service next |
@@ -47,7 +47,7 @@ one integrator who moves, wires, tests and commits each stream:
 | **P1** the rack — colour reaching a real `.cmp` | `[x]` gate passed from a shell on a video source; read back by a second CosmoService. D-1 filed (Cosmo alone cannot show a video source) |
 | **P2** `.isp` + versions | `[ ]` |
 | **P3** service + API document | `[ ]` |
-| **P4** arrange + composite + render | `[ ]` |
+| **P4** arrange + composite + render | `[~]` render path built and integrated (DR-TL-4, DR-FX-3, DR-RENDER-2); arrangement with the model stream |
 | **P5** Volume + temporal effects | `[~]` engine built and integrated into `arstro_image` (DR-VOL-1..3, DR-FX-2); `#fx` wiring with the service |
 | **P6** audio | `[ ]` |
 | **P7** UI | `[ ]` |
@@ -55,6 +55,13 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-01 — the render path is its own library and knows no project.** `interstellar_render`
+takes plain structs (`ClipSpan`, `Layer`, `Raster`, `EditParams`) and nothing else, so a render is a
+pure function of what it was handed (R-RENDER-2) by construction: it cannot quietly read a project
+field it was never given. The model and the service translate into it. A dissolve needs a flag the
+first contract lacked (`dissolveWithPrevious`) — weights summing to 1 are not enough if the layers
+are stacked rather than mixed against one base.
 
 **2026-10-01 — the volume landed as RGBA8, not linear float.** The architecture sketch had float
 pixels; the build uses straight RGBA8 frames because the temporal ops run on decoded source frames

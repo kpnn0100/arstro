@@ -4,6 +4,7 @@
 # authority, and an Interstellar that cannot grade is not a degraded Interstellar — it is the thing
 # two previous builds shipped by mistake.
 if(TARGET cosmo_core)
+  add_subdirectory(render)   # first: the core's service links it; it depends on no project model
   add_subdirectory(core)
   add_subdirectory(host)
   add_subdirectory(cli)

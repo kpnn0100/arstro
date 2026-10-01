@@ -96,3 +96,34 @@ measures 54.0 on the same probe, so the probe can fail); blend equals the analyt
 was confirmed to fail against a deliberately broken op (cache off; denoise returning the centre;
 denoise ungated). **Not yet wired to clips** — the `#fx` node and the render pipeline land with the
 service (P3).
+
+### DR-TL-4 A transition holds the outgoing clip, and the pair mixes against one base (R-TL-4, R-TL-5)
+`render::activeAt(clips, transitions, t, fps)` (`render/ActiveSet.cpp:37`) returns the clips live at
+`t`, bottom track first, each with its source frame `floor(localTime·fps + 1e-6)` — the epsilon
+because a bare floor reads frame k−1 at t = k/fps (checked for k < 5000 at 24 and 29.97 fps). Through
+a transition the OUTGOING clip is **held past its out-point** (`held = true`) with weights 1→0 / 0→1
+that sum to 1, and the incoming entry carries `dissolveWithPrevious`, which `render::compose`
+(`render/Composite.cpp:417`) honours by mixing the pair against the SAME base —
+`base + (A−base)·wA + (B−base)·wB` — because stacking them gives `A(1−f)² + Bf`, a 75 % dip at the
+midpoint: the very darkening R-TL-4 forbids. Guarded by
+`activeAt: a transition holds the outgoing clip` (confirmed to fail with the hold removed) and
+`a dissolve group mixes against one base: constant brightness` (`render/tests/renderTests.cpp`).
+
+### DR-FX-3 Geometry and composite per clip (R-FX-3)
+`render::Layer` (`render/Composite.h:63`) carries crop, `Fit` (Contain | Cover | Stretch | None),
+scale, rotation, anchor, translation, opacity and `Blend` (Normal, Multiply, Screen, Overlay, Add,
+Subtract, Difference). `placeLayer` computes the inverse affine once per layer, scans only its
+bounding box, solves each row's covered span, samples bilinear in 8-bit fixed point clamped to the
+crop, and runs rows in parallel; serial and parallel output are byte-identical. Measured
+(`interstellar_render_bench`): two layers into 1080p, one rotated and Screen-blended,
+**0.85 ms** at 24 threads (7.9 ms on one). Limits: no edge anti-aliasing; >2× downscale aliases.
+
+### DR-RENDER-2 The grade step is EditEngine, unchanged, and a frame cache keys on the params (R-RENDER-2, R-FX-1)
+`render::GradeEngine::render` (`render/GradeEngine.cpp:36`) runs Cosmo's own `EditEngine` via
+`renderImage` — byte-identical to the clear/add/render slot sequence at full and proxy size, which a
+test checks on every run — and passes an identity grade through untouched. `render::FrameCache` is a
+byte-capped, thread-safe LRU keyed on (media, source frame, `hashParams`, proxy level); `hashParams`
+never returns 0, so 0 means an ungraded source frame (R-VOL-5). Measured, 1080p, a non-identity
+grade: **33–35 ms** at 24 threads (145 ms on one), 12 ms at a 1280 proxy. Most of a full-res frame
+is page faults from glibc returning each 33 MB float buffer to the OS; pinning the malloc
+thresholds in the host takes it to 23.4 ms (recommended to the host, not yet done).
