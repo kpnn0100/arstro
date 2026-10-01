@@ -23,9 +23,11 @@
 #include "VideoFrameDecoder.h"
 #include "../../core/Artboard/src/adapter/native/CairoTarget.h"
 #include "anim/Motion.h"
+#include "core/AppSettings.h"
 #include "core/ThreadBudget.h"
 #include <gtk/gtk.h>
 #include <malloc.h>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
@@ -42,12 +44,23 @@ namespace
 {
     constexpr int kW = 1440, kH = 900;
 
+    std::string dataDir()
+    {
+        if (const char *x = std::getenv("XDG_DATA_HOME")) return std::string(x) + "/interstellar";
+        if (const char *h = std::getenv("HOME")) return std::string(h) + "/.local/share/interstellar";
+        return std::string();
+    }
+    std::string configDir()
+    {
+        if (const char *x = std::getenv("XDG_CONFIG_HOME")) return std::string(x) + "/interstellar";
+        if (const char *h = std::getenv("HOME")) return std::string(h) + "/.config/interstellar";
+        return std::string();
+    }
     std::string recentsPath()
     {
         if (const char *x = std::getenv("INTERSTELLAR_RECENTS")) return x;
-        if (const char *x = std::getenv("XDG_DATA_HOME")) return std::string(x) + "/interstellar/recents";
-        if (const char *h = std::getenv("HOME")) return std::string(h) + "/.local/share/interstellar/recents";
-        return std::string();
+        const std::string d = dataDir();
+        return d.empty() ? d : d + "/recents";
     }
 
     InterstellarService::Host makeServiceHost()
@@ -62,6 +75,11 @@ namespace
             return interstellar_host::writePng(p, r, err);
         };
         h.recentsPath = recentsPath();
+        // Engine settings (CPU limit, threads, preview quality, GPU, screen scale) and the preset
+        // library live where the desktop keeps an app's config and data.
+        if (!configDir().empty()) h.settingsPath = configDir() + "/settings.txt";
+        if (const char *x = std::getenv("INTERSTELLAR_PRESETS")) h.presetDir = x;
+        else if (!dataDir().empty()) h.presetDir = dataDir() + "/presets";
         return h;
     }
 
@@ -76,6 +94,7 @@ namespace
         GtkWidget *window = nullptr;
         GtkWidget *area = nullptr;
         gint64 startUs = 0;
+        int minW = 0, minH = 0;   // the size request last given to the drawing area
     };
 
     double nowMs(const Host &a) { return a.startUs == 0 ? 0.0 : (g_get_monotonic_time() - a.startUs) / 1000.0; }
@@ -134,6 +153,64 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    void pickSaveAs(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new("Save project as", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, "_Save", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        const std::string cur = a->svc.model().projectPath;
+        const auto slash = cur.find_last_of('/');
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), cur.empty() ? "Untitled.isp" : cur.substr(slash + 1).c_str());
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path)
+            {
+                std::string p = path;
+                if (p.size() < 4 || p.compare(p.size() - 4, 4, ".isp") != 0) p += ".isp";
+                a->app->saveAsPicked(p);
+                g_free(path);
+            }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    void pickPresetToImport(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new("Import preset", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, "_Import", GTK_RESPONSE_ACCEPT, nullptr);
+        addFilter(d, "Presets (.apf)", {"*.apf"});
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path) { a->app->presetImportPicked(path); g_free(path); }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    void pickStillToExport(Host *a)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new("Export still", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, "_Export", GTK_RESPONSE_ACCEPT, nullptr);
+        gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "still.png");
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path)
+            {
+                std::string p = path;
+                if (p.size() < 4 || p.compare(p.size() - 4, 4, ".png") != 0) p += ".png";
+                a->app->stillExportPicked(p);
+                g_free(path);
+            }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     void pickFootage(Host *a)
     {
         GtkWidget *d = gtk_file_chooser_dialog_new("Add footage", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_OPEN,
@@ -174,6 +251,15 @@ namespace
         // jobs advance here every tick (R-SVC-1).
         a->svc.pump(now);
         a->app->setHomeClock((long long)std::time(nullptr));
+        // The window minimum follows the TARGET screen scale (cosmo R-SCALE): a scale the window
+        // is too small for grows the window rather than cropping the shell.
+        const int minW = (int)std::ceil(a->app->minPhysicalWidth()), minH = (int)std::ceil(a->app->minPhysicalHeight());
+        if (minW != a->minW || minH != a->minH)
+        {
+            a->minW = minW;
+            a->minH = minH;
+            gtk_widget_set_size_request(a->area, minW, minH);
+        }
         if (a->app->needsRedraw(now)) gtk_widget_queue_draw(a->area);
         return G_SOURCE_CONTINUE;
     }
@@ -265,10 +351,6 @@ namespace
                 handled = a->app->key(ke);
             }
         }
-        // Ctrl+S saves from anywhere in Edit — the same command the save button dispatches.
-        if (!handled && ke.ctrl && (e->keyval == GDK_KEY_s || e->keyval == GDK_KEY_S) &&
-            a->svc.model().screen == Screen::Edit)
-            handled = a->app->dispatch("project save");
         gtk_widget_queue_draw(a->area);
         return handled ? TRUE : FALSE;
     }
@@ -303,6 +385,19 @@ int main(int argc, char **argv)
     a->app->onPickProjectToOpen = [a] { pickProjectToOpen(a); };
     a->app->onPickProjectToCreate = [a] { pickProjectToCreate(a); };
     a->app->onPickFootage = [a] { pickFootage(a); };
+    a->app->onPickSaveAs = [a] { pickSaveAs(a); };
+    a->app->onPickPresetToImport = [a] { pickPresetToImport(a); };
+    a->app->onPickStillToExport = [a] { pickStillToExport(a); };
+    // The largest screen scale this display can give a window for (cosmo R-SCALE-3): larger ones
+    // are drawn disabled in the settings dialog.
+    {
+        GdkRectangle wa{0, 0, 0, 0};
+        if (GdkMonitor *mon = gdk_display_get_primary_monitor(gdk_display_get_default())) gdk_monitor_get_workarea(mon, &wa);
+        int maxScale = 100;
+        for (int sc : arstro::cosmo::AppSettings::uiScales())
+            if (wa.width <= 0 || (App::minWidth() * sc / 100.0 <= wa.width && App::minHeight() * sc / 100.0 <= wa.height)) maxScale = sc;
+        a->app->setMaxUiScale(maxScale);
+    }
 
     a->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(a->window), "Interstellar");
@@ -310,7 +405,9 @@ int main(int argc, char **argv)
     g_signal_connect(a->window, "destroy", G_CALLBACK(gtk_main_quit), nullptr);
 
     a->area = gtk_drawing_area_new();
-    gtk_widget_set_size_request(a->area, (int)App::minWidth(), (int)App::minHeight());
+    a->minW = (int)std::ceil(a->app->minPhysicalWidth());
+    a->minH = (int)std::ceil(a->app->minPhysicalHeight());
+    gtk_widget_set_size_request(a->area, a->minW, a->minH);
     gtk_widget_set_can_focus(a->area, TRUE);
     gtk_widget_add_events(a->area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK |
                                        GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);

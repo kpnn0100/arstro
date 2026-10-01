@@ -65,6 +65,8 @@ namespace interstellar_v1
 
         /** Zoom by `factor` keeping the time under local x `anchorX` where it is. Intent only. */
         void zoomBy(double factor, double anchorX);
+        /** Workspace › Reset: zoom to fit with time 0 at the left edge. Intent only — it eases. */
+        void resetView();
 
         // geometry a test aims at (local coords, live values)
         artboard::Rect rulerRect() const;

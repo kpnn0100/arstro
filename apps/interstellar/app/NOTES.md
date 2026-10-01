@@ -42,6 +42,29 @@ PUBLIC defines match the rest of the final binary.
   service side (it had read them as timeline edges; the service was fixed, not this app).
 - Remaining contract requests are open follow-ups in `docs/PROGRESS.md`.
 
+## Menus, settings and screen scale (added by the integrator, 2026-10-01)
+
+- **Menu bar** — cosmo's `MenuStrip` in `EditTopBar`, after the wordmark; filled by
+  `App::buildMenus`:
+
+  | menu | item → command / picker |
+  |---|---|
+  | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
+  | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
+  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`) |
+  | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
+  | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
+
+  Accelerators (`App::editKey`): Ctrl+Z `undo`, Ctrl+Shift+Z / Ctrl+Y `redo`, Ctrl+S save,
+  Ctrl+Shift+S Save As, Ctrl+O Open, Ctrl+C / Ctrl+V copy/paste the Grade target's grade (Grade tab).
+- **Settings** — cosmo's `SettingsDialog` replaces this app's former one-row dialog (Reduce motion
+  is the OS setting now, as in cosmo). Its Input row is hidden.
+- **Screen scale** — `App` follows `settings.uiScale`, eased; `minPhysicalWidth/Height` for the host.
+- **Monitor** — with nothing cut at the playhead and a Grade target, the monitor asks for a frame
+  (the service answers with the target's reference frame, graded).
+- New shots: `edit_menu_file`, `edit_menu_file_mid`, `edit_menu_edit`, `edit_menu_preset`,
+  `edit_settings`, `edit_scale_125` — looked at; UI checks now 151.
+
 ## Integrating (the GTK host)
 
 ```cpp

@@ -18,6 +18,7 @@
 #include "TabSwitcher.h"
 #include "VersionSwitcher.h"
 #include "../../../cosmo/widgets/IconButton.h"
+#include "../../../cosmo/widgets/MenuStrip.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -37,6 +38,9 @@ namespace interstellar_v1
 
         std::shared_ptr<TabSwitcher> tabs() { return mTabs; }
         std::shared_ptr<VersionSwitcher> versions() { return mVersions; }
+        /** Cosmo's menu bar (File · Edit · Settings · Workspace · Preset), after the wordmark as in
+         *  cosmo's TopBar. The App fills it. */
+        std::shared_ptr<cosmo_v2::MenuStrip> menus() { return mMenus; }
         artboard::Rect wordmarkRect() const { return artboard::Rect{0, 0, mWordmarkW + 2 * 9.75, height.value()}; }
         /** The box the project name was drawn into (its right edge stops before the tabs). */
         artboard::Rect nameRect() const;
@@ -54,6 +58,7 @@ namespace interstellar_v1
         std::shared_ptr<TabSwitcher> mTabs;
         std::shared_ptr<VersionSwitcher> mVersions;
         std::shared_ptr<cosmo_v2::IconButton> mSave;
+        std::shared_ptr<cosmo_v2::MenuStrip> mMenus;
         std::string mProjectName;
         bool mDirty = false;
         /** The wordmark's measured width from the LAST paint (measurement is only valid during a

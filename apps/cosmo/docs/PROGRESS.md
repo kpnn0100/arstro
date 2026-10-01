@@ -1469,6 +1469,14 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+**2026-10-01 — three widgets gained opt-in surface for a sibling app; cosmo's pixels unchanged.**
+Interstellar reuses `MenuStrip` and `SettingsDialog`. Added: `MenuStrip::setItems(menu, items)` (a
+menu whose contents follow data) and read-only `menuCount`/`menu`/`titleRect`/`itemRect` (what a
+test aims at); `SettingsDialog::setInputRowShown(bool)` (default shown) and `appearAmount()`.
+`AppSettings::uiScales()` / `clampUiScale()` moved inline into `AppSettings.h` (pure functions) so
+the dialog links without cosmo_core. Verified: all 41 `cosmo_shots` byte-identical before/after;
+cosmo's suites green.
+
 **2026-10-01 — R-G-5: the accent became a runtime token, for Interstellar.** Interstellar reuses
 cosmo's panel widgets with a purple-pink accent; the literal accent made every reused panel draw blue.
 One slot, `palette::setAccent`, default blue, never called by cosmo. **Cosmo's pixels did not move:**

@@ -39,7 +39,7 @@ reproduces, files and recommends; read its `docs/DEFECTS.md` entry before re-der
 | `apps/interstellar/model/` | `interstellar_model` | headers only | `Project` (.isp parse/serialize/validate), `Versions` (resolve, deltas, pin/freeze, rebase, diff), `arrange::` cut ops |
 | `apps/interstellar/render/` | `interstellar_render` | `arstro_image` | `activeAt`, `compose`/`Layer`, `GradeEngine`, `FrameCache`, `hashParams` — **knows no project** |
 | `apps/interstellar/core/` | `interstellar_core` | `cosmo_core`, model, render | `Rack` (hosted CosmoService), `Colour` (the one fold), `FrameSelector`, `ParamRegistry`, `service/` |
-| `apps/interstellar/core/service/` | (in core) | | `Command` (the grammar TABLE), `Event`, `Json`, `AppModel` (frozen UI contract), `AppModelCodec`, `ApiDoc`, `InterstellarService` + `ServiceRender.cpp` |
+| `apps/interstellar/core/service/` | (in core) | | `Command` (the grammar TABLE), `Event`, `Json`, `AppModel` (frozen UI contract), `AppModelCodec`, `ApiDoc`, `InterstellarService` + `ServiceRender.cpp` + `ServiceEdit.cpp` (undo, clipboard, presets, settings) |
 | `apps/interstellar/host/` | `interstellar_host` | FFmpeg, GdkPixbuf | `VideoFrameDecoder` (Cosmo's decoder seam), `HostFrameSource` (stills via Cosmo's decoder), `FrameSourceFFmpeg`, `FrameWriterFFmpeg`, `PngWriter` |
 | `apps/interstellar/cli/` | `interstellar-cc` | host | argv/stdout only — every verb is the service grammar |
 | `apps/interstellar/app/` | `interstellar_app` | Artboard, cosmo widgets | the UI over `AppHooks` (see §6) |
@@ -187,6 +187,13 @@ both RGBA hashes; they must match.
 - **Tests: `#ifdef NDEBUG / #undef NDEBUG / #endif` before `<cassert>`** — a Release build otherwise
   disables every assertion and the suite "passes" (cosmo D-43).
 - **`pkill -f <name>` matches your own shell** when the name is in the command line; use `pkill -x`.
+- **Frame 0 is the stream's first timestamp** (`FrameSourceFFmpeg::mStart`), and a stream with no
+  frame count is MEASURED — cameras/OBS write MKVs starting at 3.5 s; counting from 0 froze playback
+  (D-3). `interstellar_host` covers the containers; add a file there for any new one.
+- **The menus and Engine Settings are COSMO's widgets** (`MenuStrip`, `SettingsDialog`). Change them
+  only opt-in, and prove cosmo's pixels unchanged (`cosmo_shots` before/after, byte compare).
+- **Undo restores states** (`ServiceEdit.cpp`): add a command to `undoable()` if it edits the
+  project or a node's params, to `structural()` if it changes the rack's node set.
 
 ---
 

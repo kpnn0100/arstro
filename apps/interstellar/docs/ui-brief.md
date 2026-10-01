@@ -59,6 +59,9 @@ says what a cut is.
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**Cosmo's menu bar sits after the wordmark** — File · Edit · Settings · Workspace · Preset (R-UI-7);
+Engine Settings is cosmo's own dialog; the whole shell draws through cosmo's screen scale (R-UI-8).
+
 **The version switcher (`‹ main ▾ ›`) is chrome**, beside the project name — because which version
 you are editing is as present a fact as which project you are in (R-UI-4). A pinned or frozen
 version shows a lock glyph and the commit, since that is the state people forget they are in.

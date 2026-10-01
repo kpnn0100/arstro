@@ -915,6 +915,106 @@ namespace
     }
 }
 
+namespace
+{
+    // ── 8. cosmo's menus, accelerators, settings and screen scale ──────────────────────────
+
+    void ctrlKey(Rig &r, int code, bool shift = false)
+    {
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        e.ctrl = true;
+        e.shift = shift;
+        r.app->key(e);
+    }
+
+    /** Open menu `title` and click its item whose label starts with `item`. */
+    bool clickMenuItem(Rig &r, const std::string &title, const std::string &item)
+    {
+        auto ms = r.app->edit().topBar()->menus();
+        for (int i = 0; i < ms->menuCount(); ++i)
+        {
+            if (ms->menu(i).title != title) continue;
+            const Point t = centre(*ms, ms->titleRect(i));
+            r.click(t.x, t.y);
+            r.pump(250);
+            for (int k = 0; k < (int)ms->menu(i).items.size(); ++k)
+                if (ms->menu(i).items[(size_t)k].label.rfind(item, 0) == 0)
+                {
+                    const Point p = centre(*ms, ms->itemRect(i, k));
+                    r.click(p.x, p.y);
+                    r.pump(64);
+                    return true;
+                }
+        }
+        return false;
+    }
+
+    void testMenusSettingsScale()
+    {
+        std::printf("menus, accelerators, settings and screen scale (cosmo's)\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.presets = {{"Film/Warm", "Film"}, {"Soft", ""}}; ++s.m.revision; });
+            r.settle();
+            auto ms = r.app->edit().topBar()->menus();
+            std::string titles;
+            for (int i = 0; i < ms->menuCount(); ++i) titles += (i ? " " : "") + ms->menu(i).title;
+            CHECK(titles == "File Edit Settings Workspace Preset", "the top bar carries cosmo's menu strip: File Edit Settings Workspace Preset");
+            CHECK(clickMenuItem(r, "File", "Save ") && hasLine(r.svc, "project save"), "File > Save dispatched project save");
+            CHECK(clickMenuItem(r, "Edit", "Undo") && hasLine(r.svc, "undo"), "Edit > Undo dispatched undo");
+            CHECK(clickMenuItem(r, "Edit", "Paste Grade to All") && hasLine(r.svc, "grade paste --all"), "Edit > Paste Grade to All dispatched grade paste --all");
+            const std::string sel = r.svc.m.rack[(size_t)r.svc.m.selectedRack].bindName;
+            const std::string apply = "preset apply Film/Warm --node " + sel;
+            CHECK(clickMenuItem(r, "Preset", "Apply  Film/Warm") && hasLine(r.svc, apply), "the Preset menu lists the library: Apply Film/Warm dispatched preset apply");
+            CHECK(clickMenuItem(r, "Workspace", "Cut") && r.app->tab() == EditScreen::Cut, "Workspace > Cut switched the tab");
+            CHECK(clickMenuItem(r, "Settings", "Engine Settings") && r.app->settings().isOpen(), "Settings > Engine Settings opened cosmo's settings dialog");
+        }
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            ctrlKey(r, 'Z');
+            ctrlKey(r, 'Z', true);
+            ctrlKey(r, 'Y');
+            ctrlKey(r, 'S');
+            CHECK(hasLine(r.svc, "undo") && std::count(r.svc.lines.begin(), r.svc.lines.end(), std::string("redo")) == 2 &&
+                      hasLine(r.svc, "project save"),
+                  "Ctrl+Z undo, Ctrl+Shift+Z and Ctrl+Y redo, Ctrl+S save — cosmo's accelerators");
+            const std::string sel = r.svc.m.rack[(size_t)r.svc.m.selectedRack].bindName;
+            ctrlKey(r, 'C');
+            ctrlKey(r, 'V');
+            CHECK(hasLine(r.svc, "grade copy " + sel) && hasLine(r.svc, "grade paste " + sel), "Ctrl+C / Ctrl+V copy and paste the Grade target's grade");
+        }
+        {
+            // Screen scale follows the service's setting, EASED, with input mapped through it.
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            CHECK(std::fabs(r.app->width() - 1440.0) < 1e-6, "at 100% the logical width is the window's");
+            r.svc.m.settings.uiScale = 125;
+            ++r.svc.m.revision;
+            const double first = firstMoved(r, [&] { return r.app->drawnUiScale(); }, 1.0);
+            CHECK(strictlyBetween(first, 1.0, 1.25), "a new screen scale ZOOMS (first moved frame strictly between 100% and 125%)");
+            r.settle();
+            CHECK(std::fabs(r.app->width() - 1440.0 / 1.25) < 1e-6, "at 125% the layout is 1152 logical units wide");
+            auto ms = r.app->edit().topBar()->menus();
+            const Point t = centre(*ms, ms->titleRect(0));   // logical
+            r.click(t.x * 1.25, t.y * 1.25);                 // the host speaks pixels
+            r.pump(250);
+            CHECK(ms->openIndex() == 0, "a click in pixels lands on the logical File title at 125%");
+        }
+        {
+            // Nothing cut at the playhead + a Grade target: the monitor asks for the reference frame.
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.playhead = 15.4; s.m.clips.erase(s.m.clips.begin() + 4); });
+            r.settle();
+            const int before = r.svc.frames;
+            r.svc.m.playhead = 15.5;
+            ++r.svc.m.revision;
+            r.pump(64);
+            CHECK(r.svc.frames > before, "with no clip at the playhead the monitor still asks for a frame (the Grade target's reference)");
+        }
+    }
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);   // a failing assert must not swallow the log above it
@@ -932,6 +1032,7 @@ int main()
     testTextFit();
     testMonitorImages();
     testScroll();
+    testMenusSettingsScale();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

@@ -41,7 +41,7 @@ namespace interstellar_v1
     }
 
     App::App(AppHooks hooks, double width, double height)
-        : mHooks(std::move(hooks)), mW(width), mH(height)
+        : mHooks(std::move(hooks)), mW(width), mH(height), mPhysW(width), mPhysH(height)
     {
         installInterstellarAccent();   // FIRST: before any widget reads the accent
 
@@ -49,7 +49,7 @@ namespace interstellar_v1
         mHome->thumbnail = mHooks.thumbnail;
         mHome->onNewProject = [this] { if (onPickProjectToCreate) onPickProjectToCreate(); };
         mHome->onOpenProject = [this] { if (onPickProjectToOpen) onPickProjectToOpen(); };
-        mHome->onSettings = [this] { mSettings->show(); };
+        mHome->onSettings = [this] { openSettings(); };
         mHome->onOpenRecent = [this](int i) {
             const auto &m = mHooks.model ? mHooks.model() : emptyModel();
             std::vector<interstellar::RecentModel> rec = m.recents;
@@ -64,14 +64,22 @@ namespace interstellar_v1
         mEdit->onAddFootage = [this] { if (onPickFootage) onPickFootage(); };
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
-        mSettings = std::make_shared<SettingsDialog>();
+        // Engine Settings: COSMO's dialog, one instance for Home and Edit (cosmo R-SETTINGS-5).
+        // Each chip is a `settings set` line — the service owns and persists the values; the
+        // Input row is hidden because Interstellar has no touch shell.
+        mSettings = std::make_shared<cosmo_v2::SettingsDialog>(palette::primary());
+        mSettings->setInputRowShown(false);
+        mSettings->onUiScale = [this](int v) { dispatch("settings set uiScale=" + std::to_string(v)); };
+        mSettings->onPreviewEdge = [this](int v) { dispatch("settings set previewEdge=" + std::to_string(v)); };
+        mSettings->onThreads = [this](int v) { dispatch("settings set threads=" + std::to_string(v)); };
+        mSettings->onCpuPercent = [this](int v) { dispatch("settings set cpuPercent=" + std::to_string(v)); };
+        mSettings->onUseGpu = [this](bool on) { dispatch(std::string("settings set useGpu=") + (on ? "1" : "0")); };
+        buildMenus();
 
         mRecognizer.setSink([this](const Gesture &g) {
+            if (mSettings->isOpen()) { mSettings->onGesture(g); return; }   // a modal owns input
             if (mScreen == Screen::Home)
-            {
-                if (mSettings->isOpen()) mSettings->onGesture(g);
-                else mHome->onGesture(g);
-            }
+                mHome->onGesture(g);
             else if (mScreen == Screen::Edit)
                 mEdit->onGesture(g);
             // Screen::Loading swallows input: the transition is not interactive
@@ -81,10 +89,130 @@ namespace interstellar_v1
 
     void App::setSize(double width, double height)
     {
-        mW = std::max(1.0, width);
-        mH = std::max(1.0, height);
+        mPhysW = std::max(1.0, width);
+        mPhysH = std::max(1.0, height);
         noteActivity();
+        applyLogicalSize();
+    }
+
+    // ── screen scale: cosmo's R-SCALE, as cosmo's App does it ───────────────────────────
+    // The DRAWN scale eases (260 ms, the shell zoom); while it moves, the logical box and the
+    // whole layout are re-derived from it every frame — deriving them once would zoom the
+    // transform and leave the panels at the old size, which is worse than a snap.
+
+    void App::setUiScale(int percent, bool animate)
+    {
+        if (percent == mUiScale && mScaleBound) return;
+        mUiScale = percent;
+        if (animate) mScaleAnim.animateTo(percent / 100.0, 260.0, Easing::EaseOutCubic, mNowMs);
+        else mScaleAnim.set(percent / 100.0);
+        applyLogicalSize();
+    }
+
+    void App::applyLogicalSize()
+    {
+        const double sc = std::max(0.25, mScaleAnim.value());
+        mW = std::max(1.0, mPhysW / sc);
+        mH = std::max(1.0, mPhysH / sc);
         layoutAll();
+    }
+
+    Transform App::rootTransform() const
+    {
+        const double sc = mScaleAnim.value();
+        return Transform::scaling(sc, sc);
+    }
+
+    void App::openSettings()
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const auto &st = m.settings;
+        mSettings->show(st.uiScale, mMaxUiScale, st.previewEdge, st.threads, st.cpuPercent, st.useGpu, st.gpuAvailable, false);
+        noteActivity();
+    }
+
+    std::string App::selectedBind() const
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (m.selectedRack < 0 || m.selectedRack >= (int)m.rack.size()) return std::string();
+        return m.rack[(size_t)m.selectedRack].bindName;
+    }
+
+    // ── the menu bar: cosmo's File / Develop / History / Settings / Preset, Interstellar's words ──
+    // Every item is a command line or a host picker — the menus add no behaviour of their own.
+
+    void App::buildMenus()
+    {
+        auto ms = mEdit->topBar()->menus();
+        auto ask = [this](const std::string &title, const std::string &message, const std::string &cta,
+                          std::function<void(const std::string &)> then) {
+            mEdit->namePrompt()->show(title, message, "", cta, std::move(then));
+        };
+        ms->addMenu({"File", {
+            {"Home",                         [this] { requestHome(); }},
+            {"Open...      (Ctrl+O)",        [this] { if (onPickProjectToOpen) onPickProjectToOpen(); }},
+            {"Save         (Ctrl+S)",        [this] { dispatch("project save"); }},
+            {"Save As...   (Ctrl+Shift+S)",  [this] { if (onPickSaveAs) onPickSaveAs(); }},
+            {"Add Footage...",               [this] { if (onPickFootage) onPickFootage(); }},
+            {"Export Still...",              [this] { if (onPickStillToExport) onPickStillToExport(); }},
+            {"Render...",                    [this] { mEdit->setTab(EditScreen::Deliver); }},
+        }});
+        ms->addMenu({"Edit", {
+            {"Undo         (Ctrl+Z)",        [this] { dispatch("undo"); }},
+            {"Redo         (Ctrl+Y)",        [this] { dispatch("redo"); }},
+            {"Copy Grade   (Ctrl+C)",        [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade copy " + cmd::quote(b)); }},
+            {"Paste Grade to Selected (Ctrl+V)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade paste " + cmd::quote(b)); }},
+            {"Paste Grade to All Sources",   [this] { dispatch("grade paste --all"); }},
+            {"Group Selected...",            [this, ask] {
+                 const auto b = selectedBind();
+                 if (b.empty()) return;
+                 ask("New group", "A group's grade stacks onto everything in it.", "Group", [this, b](const std::string &typed) {
+                     const std::string name = cmd::bindName(typed);
+                     if (!name.empty()) dispatch("rack group new " + cmd::quote(name) + " --nodes " + cmd::quote(b));
+                 });
+             }},
+            {"Ungroup",                      [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }},
+            {"Duplicate as Variant",         [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
+        }});
+        ms->addMenu({"Settings", {
+            {"Engine Settings...",           [this] { openSettings(); }},
+        }});
+        ms->addMenu({"Workspace", {
+            {"Grade        (1)",             [this] { mEdit->setTab(EditScreen::Grade); }},
+            {"Cut          (2)",             [this] { mEdit->setTab(EditScreen::Cut); }},
+            {"Deliver      (3)",             [this] { mEdit->setTab(EditScreen::Deliver); }},
+            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); }},
+        }});
+        ms->addMenu({"Preset", {}});
+        refreshPresetMenu(mHooks.model ? mHooks.model() : emptyModel());
+    }
+
+    void App::refreshPresetMenu(const interstellar::AppModel &m)
+    {
+        std::vector<std::string> names;
+        for (const auto &p : m.presets) names.push_back(p.name);
+        if (names == mPresetNames && !mPresetNames.empty()) return;
+        mPresetNames = names;
+        auto ask = [this](std::function<void(const std::string &)> then) {
+            mEdit->namePrompt()->show("Save preset", "The selected source's grade, saved to the library as an .apf.", "", "Save",
+                                      std::move(then));
+        };
+        std::vector<cosmo_v2::MenuStrip::Item> items = {
+            {"Save Preset...",   [this, ask] {
+                 const auto b = selectedBind();
+                 if (b.empty()) return;
+                 ask([this, b](const std::string &name) {
+                     if (!name.empty()) dispatch("preset save " + cmd::quote(name) + " --node " + cmd::quote(b));
+                 });
+             }},
+            {"Import Preset...", [this] { if (onPickPresetToImport) onPickPresetToImport(); }},
+        };
+        for (const auto &n : names)
+            items.push_back({"Apply  " + n, [this, n] {
+                const auto b = selectedBind();
+                if (!b.empty()) dispatch("preset apply " + cmd::quote(n) + " --node " + cmd::quote(b));
+            }});
+        mEdit->topBar()->menus()->setItems(4, std::move(items));
     }
 
     void App::layoutAll()
@@ -151,6 +279,24 @@ namespace interstellar_v1
         dispatch(line);
     }
 
+    void App::saveAsPicked(const std::string &path)
+    {
+        if (!path.empty()) dispatch("project save " + cmd::quote(path));
+    }
+
+    void App::presetImportPicked(const std::string &path)
+    {
+        if (!path.empty()) dispatch("preset import " + cmd::quote(path));
+    }
+
+    void App::stillExportPicked(const std::string &path)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (path.empty() || m.currentTimeline.empty()) return;
+        dispatch("export-still --timeline " + cmd::quote(m.currentTimeline) + " --out " + cmd::quote(path) + " --at " +
+                 cmd::seconds(m.playhead, m.fps > 0 ? m.fps : 24.0));
+    }
+
     void App::requestHome()
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
@@ -182,7 +328,8 @@ namespace interstellar_v1
         if (k == RawPointer::Kind::Down) mPointerDown = true;
         RawPointer rp{};
         rp.kind = k;
-        rp.pos = Point{x, y};
+        const double sc = std::max(0.25, mScaleAnim.value());
+        rp.pos = Point{x / sc, y / sc};   // the host speaks pixels; the tree is laid out in logical units
         rp.button = button == 2 ? PointerButton::Right : PointerButton::Left;
         rp.timeMs = timeMs;
         rp.alt = alt; rp.shift = shift; rp.ctrl = ctrl;
@@ -195,7 +342,8 @@ namespace interstellar_v1
         noteActivity();
         RawPointer rp{};
         rp.kind = RawPointer::Kind::Scroll;
-        rp.pos = Point{x, y};
+        const double sc = std::max(0.25, mScaleAnim.value());
+        rp.pos = Point{x / sc, y / sc};
         rp.timeMs = mNowMs;
         rp.ctrl = ctrl;
         rp.scroll = Point{0.0, -notches * shell::wheelNotchPx()};   // + notches = wheel up = toward the start
@@ -206,9 +354,9 @@ namespace interstellar_v1
     {
         noteActivity();
         if (mScreen == Screen::Loading) return true;
+        if (mSettings->isOpen()) return true;   // the modal owns the keyboard (its chips are pointer-only, as in cosmo)
         if (mScreen == Screen::Home)
         {
-            if (mSettings->isOpen()) return mSettings->handleKey(e);
             mHome->dispatchKey(e);
             return true;   // the launcher owns the keyboard
         }
@@ -223,6 +371,7 @@ namespace interstellar_v1
         }
         if (textEditing()) return mEdit->dispatchKey(e);
         if (e.type != KeyEvent::Type::Down) return false;
+        if (e.ctrl && editKey(e)) return true;
 
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         const double fps = m.fps > 0 ? m.fps : 24.0;
@@ -250,6 +399,32 @@ namespace interstellar_v1
         }
     }
 
+    /** Cosmo's accelerators: Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) / Ctrl+S / Ctrl+Shift+S / Ctrl+O, and
+     *  Ctrl+C / Ctrl+V for a grade on the Grade tab (cosmo's Copy Settings / Paste to Selected). */
+    bool App::editKey(const KeyEvent &e)
+    {
+        switch (e.keyCode)
+        {
+        case 'Z': dispatch(e.shift ? "redo" : "undo"); return true;
+        case 'Y': dispatch("redo"); return true;
+        case 'S':
+            if (e.shift) { if (onPickSaveAs) onPickSaveAs(); }
+            else dispatch("project save");
+            return true;
+        case 'O': if (onPickProjectToOpen) onPickProjectToOpen(); return true;
+        case 'C':
+        case 'V':
+        {
+            if (mEdit->tab() != EditScreen::Grade) return false;
+            const auto b = selectedBind();
+            if (b.empty()) return false;
+            dispatch(std::string(e.keyCode == 'C' ? "grade copy " : "grade paste ") + cmd::quote(b));
+            return true;
+        }
+        default: return false;
+        }
+    }
+
     void App::bindIfStale(double nowMs)
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
@@ -261,6 +436,14 @@ namespace interstellar_v1
         mBound = true;
         mSeenRevision = m.revision;
         noteActivity();
+        // The screen scale follows the service's setting — whoever changed it (cosmo's R-SCALE:
+        // `settings set uiScale=125` from a script resizes the window the same as the chip).
+        if (m.settings.uiScale > 0 && (m.settings.uiScale != mUiScale || !mScaleBound))
+        {
+            setUiScale(m.settings.uiScale, mScaleBound);   // first placement sets; later ones ease
+            mScaleBound = true;
+        }
+        refreshPresetMenu(m);
         // Home's recents are unknown until the service has published once (revision 0):
         // that is the loading state, drawn as skeleton cards.
         mHome->setLoading(m.revision == 0);
@@ -289,7 +472,9 @@ namespace interstellar_v1
             const double dur = c.duration > 0 ? c.duration : (c.out - c.in) / std::max(1e-6, c.speed);
             if (m.playhead >= c.at - 1e-9 && m.playhead < c.at + dur) { clipHere = true; break; }
         }
-        if (!clipHere) { mon->setState(Monitor::State::Empty); return; }
+        // Nothing cut here: the service shows the Grade target's reference frame, graded — so
+        // choosing a frame or grading before the first cut is visible. Empty only without one.
+        if (!clipHere && !m.hasGradeTarget) { mon->setState(Monitor::State::Empty); return; }
 
         const bool changed = force || m.frameSeq != mFetchedSeq || edge != mFetchedEdge || m.currentTimeline != mFetchedTimeline ||
                              std::fabs(m.playhead - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision;
@@ -346,15 +531,18 @@ namespace interstellar_v1
             for (Screen s : {Screen::Home, Screen::Loading, Screen::Edit})
                 if (s == want || rootOf(s)->opacity.value() > 0.0)
                     rootOf(s)->opacity.animateTo(s == want ? 1.0 : 0.0, motion::kScreenFadeMs, Easing::EaseInOutCubic, nowMs);
-            if (want != Screen::Home) mSettings->close();
             mScreen = want;
             noteActivity();
         }
         mRecognizer.advance(nowMs);
+        const bool zooming = mScaleAnim.isAnimating();
+        mScaleAnim.update(nowMs);
+        if (zooming) { applyLogicalSize(); noteActivity(); }
+        const Transform rt = rootTransform();
 
-        drawRoundedRect(target, Rect{0, 0, mW, mH}, 0.0, Paint::filled(palette::background()));
+        drawRoundedRect(target, Rect{0, 0, mPhysW, mPhysH}, 0.0, Paint::filled(palette::background()));
         target.save();
-        target.setTransform(Transform::identity());
+        target.setTransform(rt);
         // draw order: the outgoing layer under the incoming one; Edit is laid out every frame
         // (cosmo's convention) so geometry follows any animated property mid-tween
         for (Screen s : {Screen::Home, Screen::Loading, Screen::Edit})
@@ -370,16 +558,13 @@ namespace interstellar_v1
         {
             Segment *r = rootOf(s);
             if (r->opacity.value() <= Segment::kOpacityEpsilon) continue;
-            r->render(target, Transform::identity());
-            r->renderOverlay(target, Transform::identity());
+            r->render(target, rt);
+            r->renderOverlay(target, rt);
         }
-        // Settings floats over Home; advanced unconditionally so its close can finish (design rule §1)
+        // Settings floats over whichever screen opened it; advanced unconditionally so its close
+        // can finish (design rule §1) — it draws nothing when shut.
         mSettings->advance(nowMs);
-        if (mHome->opacity.value() > Segment::kOpacityEpsilon)
-        {
-            mSettings->render(target, Transform::identity());
-            mSettings->renderOverlay(target, Transform::identity());
-        }
+        mSettings->renderOverlay(target, rt);
         target.restore();
         mPaintedRevision = m.revision;
         mPaintedFrameSeq = m.frameSeq;

@@ -37,6 +37,10 @@ namespace cosmo_v2
 
         MenuStrip();
         void addMenu(Menu m);
+        /** Replace one menu's items — a menu whose contents follow data (Interstellar's Preset
+         *  menu lists the library). Closes the strip if that menu is the open one, so a dropdown
+         *  never shows rows that changed under the pointer. */
+        void setItems(int menu, std::vector<Item> items);
 
         int openIndex() const { return mOpen; }
         void close();
@@ -44,6 +48,11 @@ namespace cosmo_v2
         bool pointInActiveArea(const artboard::Point &local) const;
         /** Total width of all titles laid end to end (for TopBar layout). */
         double contentWidth() const;
+        /** Read-only geometry and contents, in local coordinates — what a test aims a click at. */
+        int menuCount() const { return (int)mMenus.size(); }
+        const Menu &menu(int i) const { return mMenus[(size_t)i]; }
+        artboard::Rect titleRect(int i) const;
+        artboard::Rect itemRect(int menu, int item) const;
 
         std::function<void(int)> onOpenChanged;  // index, or -1 = none open
 

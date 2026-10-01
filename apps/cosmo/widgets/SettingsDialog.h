@@ -52,6 +52,11 @@ namespace cosmo_v2
         void show(int uiScale, int maxScale, int previewEdge, int threads, int cpuPercent,
                   bool useGpu, bool gpuAvailable, bool touchUi);
         bool isOpen() const { return mOpen && !mClosing; }
+        /** A host with no touch shell (Interstellar) hides the Input row; the card sizes to the
+         *  rows it shows. Default: shown — cosmo's dialog is unchanged (R-SETTINGS). */
+        void setInputRowShown(bool shown) { mShowInput = shown; }
+        /** The LIVE eased appearance (0 shut … 1 open) — what a test reads to tell a fade from a cut. */
+        double appearAmount() const { return mAppear.value(); }
         /** Public (unlike the rest of the Segment overrides) because the HOME screen
          *  drives this dialog directly: Home is not part of the editor tree that would
          *  otherwise advance it (R-SETTINGS-5) -- the same reason HomeScreen::advance is
@@ -117,6 +122,8 @@ namespace cosmo_v2
         bool mUseGpu = false;     // GPU acceleration on/off (R-GPU)
         bool mGpuAvailable = false;  // a platform GPU backend exists (else the row is disabled)
         bool mTouchUi = false;       // draw the touch shell instead of this one (R-TOUCH-6)
+        bool mShowInput = true;      // the Input row; a host without a touch shell hides it
+        bool rowShown(int row) const { return row != kRowTouch || mShowInput; }
         HoverFade mHover;         // per-chip / Done hover cross-fade (R-G-3)
     };
 }

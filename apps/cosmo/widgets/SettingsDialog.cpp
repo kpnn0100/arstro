@@ -99,6 +99,7 @@ namespace cosmo_v2
         if (doneRect().contains(p)) { done = true; return; }
         for (int r = 0; r < kRows; ++r)
         {
+            if (!rowShown(r)) continue;
             std::vector<Rect> chips; chipRects(r, chips);
             for (int i = 0; i < (int)chips.size(); ++i)
                 if (chips[i].contains(p)) { row = r; chip = i; return; }
@@ -110,7 +111,8 @@ namespace cosmo_v2
         // Summed from the rows rather than kRows * kBlockH: a wrapped row is taller, and a card
         // sized for the unwrapped height would clip its own Done button.
         double rows = 0.0;
-        for (int r = 0; r < kRows; ++r) rows += rowBlockH(r) + kRowGap;
+        for (int r = 0; r < kRows; ++r)
+            if (rowShown(r)) rows += rowBlockH(r) + kRowGap;
         const double h = kPad + kHeaderH + rows + kFooterH + kPad;
         const double x = (width.value() - kCardW) * 0.5;
         const double y = (height.value() - h) * 0.5;
@@ -177,7 +179,8 @@ namespace cosmo_v2
     double SettingsDialog::blockTop(const Rect &c, int row) const
     {
         double y = c.y + kPad + kHeaderH;
-        for (int r = 0; r < row; ++r) y += rowBlockH(r) + kRowGap;
+        for (int r = 0; r < row; ++r)
+            if (rowShown(r)) y += rowBlockH(r) + kRowGap;
         return y;
     }
 
@@ -199,6 +202,7 @@ namespace cosmo_v2
         std::vector<Rect> chips;
         for (int row = 0; row < kRows; ++row)
         {
+            if (!rowShown(row)) continue;
             chipRects(row, chips);
             for (int i = 0; i < (int)chips.size(); ++i)
                 if (chips[i].contains(p))
@@ -248,6 +252,7 @@ namespace cosmo_v2
                                         "CPU limit", "GPU acceleration", "Input"};
         for (int row = 0; row < kRows; ++row)
         {
+            if (!rowShown(row)) continue;
             const double ly = blockTop(c, row);
             t.setFill(fade(palette::mutedForeground(), a));
             std::string rowLbl = rowLabels[row];

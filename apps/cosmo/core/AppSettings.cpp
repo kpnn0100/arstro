@@ -22,23 +22,9 @@ namespace cosmo
     // Not every scale fits every screen any more — 200% cannot be honoured on a 768 px-tall
     // display — so the settings row DISABLES the ones the display cannot give a window for,
     // rather than the list pretending they are universal (R-SCALE-3).
-    const std::vector<int> &AppSettings::uiScales()
-    {
-        static const std::vector<int> v{75, 90, 100, 125, 150, 175, 200};
-        return v;
-    }
-
-    int AppSettings::clampUiScale(int percent)
-    {
-        const auto &all = uiScales();
-        int best = 100, bestD = 1 << 30;
-        for (int s : all)
-        {
-            const int d = s > percent ? s - percent : percent - s;
-            if (d < bestD) { bestD = d; best = s; }
-        }
-        return best;
-    }
+    // uiScales() and clampUiScale() are inline in AppSettings.h: pure functions, and the
+    // SettingsDialog widget (reused by Interstellar's front end, which links no cosmo_core)
+    // reads them.
 
     int AppSettings::workersFor(int percent, int cap)
     {

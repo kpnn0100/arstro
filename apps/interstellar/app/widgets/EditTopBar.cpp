@@ -15,6 +15,8 @@ namespace interstellar_v1
         constexpr double kWordPx = 13.0;
         constexpr double kNamePx = 12.0;
         constexpr double kGroupGap = 19.5;       // u(6) between the bar's groups
+        constexpr double kMenuH = 21.0;          // cosmo's TopBar kMenuHeight
+        constexpr double kMenuGap = 13.0;        // mr-1 + gap-3, as cosmo's TopBar places its strip
         const char *kWord = "interstellar";
     }
 
@@ -34,6 +36,12 @@ namespace interstellar_v1
         mSave->height.set(20.5);
         mSave->onClick = [this] { if (onSave) onSave(); };
         addChild(mSave);
+        mMenus = std::make_shared<cosmo_v2::MenuStrip>();
+        mMenus->height.set(kMenuH);
+        // An open dropdown overlaps the pages below; raise the bar so the dropdown wins
+        // hit-testing as well as the draw (cosmo's App does the same for its TopBar).
+        mMenus->onOpenChanged = [this](int open) { if (open >= 0) raise(); };
+        addChild(mMenus);
     }
 
     void EditTopBar::bind(const interstellar::AppModel &m)
@@ -47,6 +55,11 @@ namespace interstellar_v1
     void EditTopBar::layout()
     {
         const double w = width.value(), h = height.value();
+        // Cosmo's order: wordmark, then the menu strip; the project name after it.
+        mMenus->x.set(kPad + mWordmarkW + kMenuGap);
+        mMenus->y.set((h - kMenuH) * 0.5);
+        mMenus->width.set(mMenus->contentWidth());
+        const double menusRight = mMenus->x.value() + mMenus->width.value();
         // The tab switcher is centred on the window; the version switcher follows it.
         const double tabsW = mTabs->preferredWidth();
         constexpr double kVerMin = 180.0, kVerMax = 296.0;   // the chrome's floor and its comfortable width
@@ -55,7 +68,8 @@ namespace interstellar_v1
         const double maxRight = saveX - kGroupGap;
         // Never let the version switcher run into the save button at a narrow width: slide the
         // pair left first (the project name gives way, not the controls).
-        if (tabsX + tabsW + 13.0 + kVerMin > maxRight) tabsX = std::max(kPad + mWordmarkW + kGroupGap + 80.0, maxRight - kVerMin - 13.0 - tabsW);
+        if (tabsX + tabsW + 13.0 + kVerMin > maxRight) tabsX = std::max(menusRight + kGroupGap, maxRight - kVerMin - 13.0 - tabsW);
+        tabsX = std::max(tabsX, menusRight + kGroupGap);   // the menus never sit under the tabs
         // ...and let the chrome take the room it has up to the save button, so a pinned version's
         // name and commit both fit before anything is ellipsized (R5)
         const double verW = std::clamp(maxRight - (tabsX + tabsW + 13.0), kVerMin, kVerMax);
@@ -71,7 +85,7 @@ namespace interstellar_v1
 
     Rect EditTopBar::nameRect() const
     {
-        const double x = kPad + mWordmarkW + kGroupGap;
+        const double x = mMenus->x.value() + mMenus->width.value() + kGroupGap;
         return Rect{x, 0, std::max(0.0, mTabs->x.value() - kGroupGap - x), height.value()};
     }
 

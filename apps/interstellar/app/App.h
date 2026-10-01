@@ -27,7 +27,7 @@
 #include "widgets/HomeScreen.h"
 #include "widgets/LoadingView.h"
 #include "widgets/EditScreen.h"
-#include "widgets/SettingsDialog.h"
+#include "../../cosmo/widgets/SettingsDialog.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -57,9 +57,14 @@ namespace interstellar_v1
 
         // ── native pickers: the host shows its dialog, then answers ──
         std::function<void()> onPickProjectToOpen, onPickProjectToCreate, onPickFootage;
+        /** File › Save As…, Preset › Import Preset…, File › Export Still… (cosmo's File/Preset). */
+        std::function<void()> onPickSaveAs, onPickPresetToImport, onPickStillToExport;
         void openProjectPicked(const std::string &path);
         void newProjectPicked(const std::string &path);
         void footagePicked(const std::vector<std::string> &paths);
+        void saveAsPicked(const std::string &path);          // → project save <path>
+        void presetImportPicked(const std::string &path);    // → preset import <path>
+        void stillExportPicked(const std::string &path);     // → export-still of the open timeline at the playhead
         /** Ask to go Home: `project close`, behind cosmo's ConfirmDialog when there are unsaved edits. */
         void requestHome();
 
@@ -71,8 +76,23 @@ namespace interstellar_v1
         double screenOpacity(interstellar::Screen s) const;
         void setHomeClock(long long nowUnix) { mHome->setNowUnix(nowUnix); }
 
+        /** The LOGICAL minimum — the design size the layout needs. */
         static double minWidth() { return std::max(EditScreen::minWidth(), HomeScreen::kSidebarW + 2 * HomeScreen::kPad + HomeScreen::kMinCard); }
         static double minHeight() { return std::max(EditScreen::minHeight(), 560.0); }
+        /** The window minimum at the TARGET screen scale — what the host asks the window for. */
+        double minPhysicalWidth() const { return minWidth() * mUiScale / 100.0; }
+        double minPhysicalHeight() const { return minHeight() * mUiScale / 100.0; }
+
+        // ── screen scale (cosmo R-SCALE): followed from `settings.uiScale`, EASED ──
+        int uiScale() const { return mUiScale; }
+        /** The scale being drawn now; differs from uiScale() only mid-tween. */
+        double drawnUiScale() const { return mScaleAnim.value(); }
+        /** The largest scale this display can give a window for (the host measures it); the
+         *  settings dialog draws larger ones disabled. */
+        void setMaxUiScale(int percent) { mMaxUiScale = percent; }
+
+        /** Engine Settings… — cosmo's own dialog, one instance for Home and Edit. */
+        void openSettings();
         double width() const { return mW; }
         double height() const { return mH; }
 
@@ -80,12 +100,19 @@ namespace interstellar_v1
         HomeScreen &home() { return *mHome; }
         LoadingView &loading() { return *mLoading; }
         EditScreen &edit() { return *mEdit; }
-        SettingsDialog &settings() { return *mSettings; }
+        cosmo_v2::SettingsDialog &settings() { return *mSettings; }
         artboard::Segment *activeRoot();
         const AppHooks &hooks() const { return mHooks; }
 
     private:
         void bindIfStale(double nowMs);
+        void buildMenus();
+        void refreshPresetMenu(const interstellar::AppModel &m);
+        void setUiScale(int percent, bool animate);
+        void applyLogicalSize();
+        artboard::Transform rootTransform() const;
+        std::string selectedBind() const;
+        bool editKey(const artboard::KeyEvent &e);
         void fetchFrame(const interstellar::AppModel &m, bool force);
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
@@ -98,7 +125,12 @@ namespace interstellar_v1
         std::shared_ptr<HomeScreen> mHome;
         std::shared_ptr<LoadingView> mLoading;
         std::shared_ptr<EditScreen> mEdit;
-        std::shared_ptr<SettingsDialog> mSettings;
+        std::shared_ptr<cosmo_v2::SettingsDialog> mSettings;
+        double mPhysW = 0.0, mPhysH = 0.0;             // the host's size; mW/mH are logical
+        int mUiScale = 100, mMaxUiScale = 10000;
+        bool mScaleBound = false;
+        artboard::AnimatedProperty mScaleAnim{1.0};
+        std::vector<std::string> mPresetNames;          // what the Preset menu lists now
         artboard::GestureRecognizer mRecognizer;
 
         interstellar::Screen mScreen = interstellar::Screen::Home;

@@ -50,10 +50,23 @@ namespace cosmo
         bool touchUi = false;
 
         /** Legal UI scales, in the order the settings row offers them. */
-        static const std::vector<int> &uiScales();
+        static const std::vector<int> &uiScales()
+        {
+            static const std::vector<int> v{75, 90, 100, 125, 150, 175, 200};
+            return v;
+        }
         /** `percent` snapped to the nearest offered scale — a hand-edited 83 becomes 90
          *  rather than a size nothing was ever laid out or rendered at. */
-        static int clampUiScale(int percent);
+        static int clampUiScale(int percent)
+        {
+            int best = 100, bestD = 1 << 30;
+            for (int sc : uiScales())
+            {
+                const int d = sc > percent ? sc - percent : percent - sc;
+                if (d < bestD) { bestD = d; best = sc; }
+            }
+            return best;
+        }
 
         /** Worker count for `percent` of this machine's logical cores (R-CPU-1).
          *

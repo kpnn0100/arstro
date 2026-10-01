@@ -124,6 +124,20 @@ namespace
         }});
         // Edit — Grade
         v.push_back({"grade_populated", edit, [](Rig &r) { r.settle(); }});
+        // cosmo's menu strip, settings dialog and screen scale
+        auto openMenu = [](Rig &r, int i, double ms) {
+            auto strip = r.app->edit().topBar()->menus();
+            const Point t = centre(*strip, strip->titleRect(i));
+            r.click(t.x, t.y);
+            r.pump(ms);
+        };
+        v.push_back({"edit_menu_file", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 0, 400); }});
+        v.push_back({"edit_menu_file_mid", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 0, 64); }});
+        v.push_back({"edit_menu_edit", edit, [openMenu](Rig &r) { r.settle(); openMenu(r, 1, 400); }});
+        v.push_back({"edit_menu_preset", [](FakeService &s) { s.edit(); s.m.presets = {{"Film/Warm fade", "Film"}, {"Film/Bleach", "Film"}, {"Soft skin", ""}}; ++s.m.revision; },
+                     [openMenu](Rig &r) { r.settle(); openMenu(r, 4, 400); }});
+        v.push_back({"edit_settings", edit, [](Rig &r) { r.settle(); r.app->openSettings(); r.settle(); }});
+        v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();
             auto rt = r.app->edit().rackTree();

@@ -35,6 +35,21 @@ namespace cosmo_v2
         return x;
     }
 
+    Rect MenuStrip::titleRect(int i) const { return Rect{titleX(i), 0.0, titleW(i), height.value()}; }
+
+    Rect MenuStrip::itemRect(int menu, int item) const
+    {
+        const Rect d = dropdownRect(menu);
+        return Rect{d.x, d.y + 4.0 + item * kItemH, d.w, kItemH};   // itemAt's own arithmetic, inverted
+    }
+
+    void MenuStrip::setItems(int menu, std::vector<Item> items)
+    {
+        if (menu < 0 || menu >= (int)mMenus.size()) return;
+        if (mOpen == menu) close();
+        mMenus[(size_t)menu].items = std::move(items);
+    }
+
     double MenuStrip::contentWidth() const
     {
         double w = 0.0;

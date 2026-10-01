@@ -207,6 +207,15 @@ namespace interstellar_v1
         mPpsTarget = next;
     }
 
+    void Timeline::resetView()
+    {
+        if (!mPpsInit) return;
+        mAnchorX = shell::headerWidth();   // time 0 stays pinned to the left edge as the zoom eases
+        mAnchorTime = 0.0;
+        mAnchored = true;
+        mPpsTarget = fitPps();
+    }
+
     // ── snapping ─────────────────────────────────────────────────────────────────────────
 
     double Timeline::snap(double start, double dur, const std::string &self, bool twoEdges, bool &snapped, double &snapT) const
