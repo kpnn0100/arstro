@@ -3230,6 +3230,16 @@ nothing into a mask that does something wrong.
 carrying `type=4`, the two extra numbers and a region group loads, keeps its type, keeps its local
 adjustment, changes not one pixel through `applyMaskStack`, and reports zero coverage.
 
+### DR-G-5 The accent is one runtime slot (R-G-5)
+`palette::accentSlot()` (`Theme.h`) is a function-local static inside an `inline` function — one
+object program-wide by the ODR — defaulting to `0x4F7EF7`. `primary()`, `ring()` (alpha 0.5) and
+`primaryAlpha(a)` all read it; `setAccent(c)` writes it. `sharedTheme()` (`Theme.cpp`) records the
+accent it was built with and rebuilds in place when `primary()` no longer matches, so a sibling app's
+setter takes effect whichever is called first. Guarded by `test_accent_is_a_runtime_token` in
+`cosmo_widget_tests` (7 checks), checked to FAIL on the old `static const` theme at exactly the
+cached-theme assertion. Cosmo's own pixels: all 41 `cosmo_shots` states byte-identical before and
+after the change.
+
 ### DR-G-4 A section header is a row, and the rule is its flexible member (R-G-4)
 Reported: *"there is a separate line at colour section that overlap the color picker icon, make it
 a row with fixed width text and icon but the line between is dynamic."*

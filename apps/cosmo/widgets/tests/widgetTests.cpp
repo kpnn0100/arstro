@@ -1544,9 +1544,39 @@ void sectionHeaderRuleStopsBeforeItsTrailingControl()
     check(ruleEndOf(x, kSectionActionSize + 4.0, kSectionActionSize) < 0.0,
           "R-G-4: a row with no room left simply has no rule");
 }
+
+// R-G-5: the accent is a runtime token. A sibling app (Interstellar) reuses these widgets as libraries
+// and must be able to give them its own accent WITHOUT forking one. The default must stay cosmo's blue,
+// and every accent-derived token — including the cached sharedTheme, which used to be a `static const`
+// frozen at first call — must follow setAccent.
+static void test_accent_is_a_runtime_token()
+{
+    using namespace arstro::cosmo_v2;
+    const artboard::Color blue = artboard::Color::hex(0x4F7EF7);
+    const artboard::Color pink = artboard::Color::hex(0xCF5AED);
+    auto same = [](const artboard::Color &a, const artboard::Color &b) {
+        return std::fabs(a.r - b.r) < 1e-6 && std::fabs(a.g - b.g) < 1e-6 && std::fabs(a.b - b.b) < 1e-6;
+    };
+    check(same(palette::primary(), blue), "R-G-5: the default accent is still cosmo's blue");
+    check(same(sharedTheme().tab.activeIndicatorColor, blue), "R-G-5: sharedTheme starts blue");
+
+    palette::setAccent(pink);
+    check(same(palette::primary(), pink), "R-G-5: primary() follows setAccent");
+    check(same(palette::ring(), pink) && std::fabs(palette::ring().a - 0.5) < 1e-6,
+          "R-G-5: ring() follows setAccent and keeps its 0.5 alpha");
+    check(same(palette::primaryAlpha(0.22), pink) && std::fabs(palette::primaryAlpha(0.22).a - 0.22) < 1e-6,
+          "R-G-5: primaryAlpha() follows setAccent and keeps the requested alpha");
+    check(same(sharedTheme().tab.activeIndicatorColor, pink),
+          "R-G-5: the CACHED sharedTheme rebuilds when the accent moves");
+
+    palette::setAccent(blue);   // leave the suite exactly as found
+    check(same(sharedTheme().tab.activeIndicatorColor, blue), "R-G-5: and rebuilds back");
+}
+
 int main()
 {
     arstro::cosmo::testMainInit();   // D-10: a failing assert must exit, not hang
+    test_accent_is_a_runtime_token();
     std::printf("cosmo widget hit-test suite (anchor pick radius = %.0f px)\n\n",
                 arstro::cosmo_v2::metrics::anchorHitRadius());
 

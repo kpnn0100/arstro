@@ -69,7 +69,18 @@ namespace cosmo_v2
 
     const Theme &sharedTheme()
     {
-        static const Theme th = makeCosmoV2Theme();
+        // Rebuilt if the accent has moved since it was built (R-G-5), so a sibling app's
+        // `palette::setAccent` takes effect whether it ran before or after the first call here.
+        // The reference returned stays valid — it is the same object, re-filled — and the check is
+        // three float compares per call.
+        static Theme th = makeCosmoV2Theme();
+        static Color builtWith = palette::primary();
+        const Color now = palette::primary();
+        if (now.r != builtWith.r || now.g != builtWith.g || now.b != builtWith.b)
+        {
+            th = makeCosmoV2Theme();
+            builtWith = now;
+        }
         return th;
     }
 }

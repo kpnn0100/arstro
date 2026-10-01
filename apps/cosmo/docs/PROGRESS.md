@@ -1469,6 +1469,14 @@ and read a debug log that explains what the UI did.
 
 ## Decisions & deviations log (newest first)
 
+**2026-10-01 — R-G-5: the accent became a runtime token, for Interstellar.** Interstellar reuses
+cosmo's panel widgets with a purple-pink accent; the literal accent made every reused panel draw blue.
+One slot, `palette::setAccent`, default blue, never called by cosmo. **Cosmo's pixels did not move:**
+41/41 `cosmo_shots` states byte-identical before vs after. `sharedTheme()` stopped being a frozen
+`static const`, because a setter whose effect depends on call order is a setter that will be called in
+the wrong order. Done from the Interstellar session as a minimal, behaviour-preserving change in its own
+commit, with this requirement — the alternative was forking 23 widget files.
+
 - **2026-09-29 — the GLES backend loads `gl*` through `eglGetProcAddress` and links only EGL.**
   Linking `libGLESv2` next to `libGL` puts two definitions of every `gl*` symbol in one process,
   and whichever loads first answers every call — on a libmali board, glvnd's libGL dispatching into

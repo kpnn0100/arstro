@@ -53,6 +53,18 @@ architecture, per-class detailed design, design rationale, and a PlantUML model 
   from the `o` the moment the typeface changed. Two of the sites already measured; the requirement
   now says what the accurate ones do.)
 
+- **R-G-5 The accent is a runtime token, with blue as its default.** (**Added 2026-10-01, for
+  Interstellar.**) A sibling app reuses cosmo's widgets as libraries — Interstellar's Grade tab IS
+  cosmo's `ParamPanel` / `MixerPanel` / `CurvePanel` / `GradePanel` / `XformPanel` — and its accent is
+  purple-pink. Before this, `palette::primary()`, `ring()` and `primaryAlpha()` returned a literal, so
+  every reused panel drew cosmo's blue inside the other app, and the only fixes were to fork 23 widget
+  files (a divergence with a delay fuse, `arstro.design.rule` §2) or to leave them the wrong colour.
+  So the accent is ONE slot read by all three tokens and by `sharedTheme()`, set once at startup with
+  `palette::setAccent`. **Cosmo never calls it**, so cosmo's own pixels do not change — established by
+  rendering all 41 named `cosmo_shots` states before and after and comparing the bytes (41 identical),
+  not by reading the diff. `sharedTheme()` used to be a `static const` frozen at first call, which would
+  have made the setter silently order-dependent; it now rebuilds when the accent has moved.
+
 ## R-EDITSTACK — Right-column edit stack
 
 - **R-EDITSTACK-1 Tabs.** Five merged tabs: **Basic/Detail** (all tone/colour/presence/effects +

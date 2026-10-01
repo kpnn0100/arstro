@@ -48,7 +48,30 @@ namespace cosmo_v2
         inline artboard::Color foreground() { return artboard::Color::hex(0xDBDBDB); }
         inline artboard::Color card() { return artboard::Color::hex(0x1C1C1C); }
         inline artboard::Color popover() { return artboard::Color::hex(0x222222); }
-        inline artboard::Color primary() { return artboard::Color::hex(0x4F7EF7); }       // the single accent
+        /** THE accent, as a RUNTIME token with cosmo's blue as its default (R-G-5).
+         *
+         *  A runtime value rather than a literal so a sibling app that REUSES cosmo's widgets as
+         *  libraries — Interstellar, whose accent is purple-pink — can carry its own accent without
+         *  forking a single widget. Twenty-three widget files reach the accent through `primary()`,
+         *  `ring()` and `primaryAlpha()`; all three derive from this one slot, so one call at startup
+         *  re-themes every one of them. Cosmo itself never calls `setAccent`, so its pixels do not
+         *  change — verified by rendering all 41 named shots before and after and diffing the bytes.
+         *
+         *  A function-local static inside an `inline` function is ONE object program-wide (the ODR
+         *  guarantees it), which is what makes this safe across translation units, and it is why the
+         *  token stays a function rather than becoming a mutable global — a namespace-scope `Color`
+         *  would bring back the static-init-order hazard the token contract exists to avoid. */
+        inline artboard::Color &accentSlot()
+        {
+            static artboard::Color c = artboard::Color::hex(0x4F7EF7);
+            return c;
+        }
+        /** Call ONCE, at startup, before the first frame. `sharedTheme()` rebuilds itself if the accent
+         *  has moved since it was built, so the order relative to it does not matter; a widget that
+         *  copied an accent into a member at construction would still hold the old one, which is why
+         *  "before the first frame" is the contract. */
+        inline void setAccent(const artboard::Color &c) { accentSlot() = c; }
+        inline artboard::Color primary() { return accentSlot(); }                          // the single accent
         inline artboard::Color primaryForeground() { return artboard::Color::hex(0xFFFFFF); }
         inline artboard::Color secondary() { return artboard::Color::hex(0x252525); }
         inline artboard::Color secondaryForeground() { return artboard::Color::hex(0xAAAAAA); }
@@ -69,7 +92,12 @@ namespace cosmo_v2
         inline artboard::Color inputLight() { return artboard::Color::hex(0xF4F4F5); }      // near-white field bg
         inline artboard::Color inputLightText() { return artboard::Color::hex(0x18181B); }  // near-black field text
         inline artboard::Color switchBackground() { return artboard::Color::hex(0x444444); }
-        inline artboard::Color ring() { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, 0.5}; }
+        inline artboard::Color ring()
+        {
+            artboard::Color c = accentSlot();   // derived from the accent, so it follows setAccent (R-G-5)
+            c.a = 0.5;
+            return c;
+        }
 
         // Literal per-widget surface colors used directly in the Figma source
         // (bracket values, not theme.css tokens) -- kept here so every widget
@@ -83,7 +111,12 @@ namespace cosmo_v2
         inline artboard::Color curvePlotBg() { return artboard::Color::hex(0x0D0D0D); }
         inline artboard::Color white() { return artboard::Color::rgba(255, 255, 255); }
         inline artboard::Color whiteAlpha(double a) { return artboard::Color{1.0, 1.0, 1.0, a}; }
-        inline artboard::Color primaryAlpha(double a) { return artboard::Color{0x4F / 255.0, 0x7E / 255.0, 0xF7 / 255.0, a}; }
+        inline artboard::Color primaryAlpha(double a)
+        {
+            artboard::Color c = accentSlot();   // derived from the accent, so it follows setAccent (R-G-5)
+            c.a = a;
+            return c;
+        }
 
         // Canonical hover feedback (consistency lock, R-G-1): self-drawn rows/cells/
         // items wash the hovered region with hoverWash(hoverAmount); child-Segment
