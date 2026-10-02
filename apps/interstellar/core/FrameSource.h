@@ -36,6 +36,17 @@ namespace interstellar
         virtual bool frameAt(long long frame, Raster &out) = 0;
     };
 
+    /** How to encode a render (R-RENDER-6). The service validates it against the codec before a job
+     *  is queued; the host's writer honours it or refuses, naming why — never a silent substitute. */
+    struct EncodeSpec
+    {
+        std::string codec = "h264";     // h264 | h265 | prores | dnxhr
+        std::string profile;            // prores: proxy|lt|standard|hq|4444 · dnxhr: lb|sq|hq|hqx|444
+        int quality = 18;               // constant quality (CRF) for h264/h265: 0 best … 51
+        std::string speed = "medium";   // the x264/x265 preset
+        int bitDepth = 8;               // h265: 8 | 10 · prores 10 · dnxhr per profile · h264 8
+    };
+
     class IFrameWriter
     {
     public:
@@ -43,7 +54,7 @@ namespace interstellar
         /** `frames` is how many will be written, so a sequence writer decides its naming BEFORE
          *  the first one rather than discovering it after — the first build numbered every frame
          *  but the first, which a golden comparison cannot use. */
-        virtual bool begin(const std::string &path, int w, int h, double fps, long long frames) = 0;
+        virtual bool begin(const std::string &path, int w, int h, double fps, long long frames, const EncodeSpec &spec) = 0;
         virtual bool write(const Raster &frame) = 0;
         virtual bool end() = 0;
     };

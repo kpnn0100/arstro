@@ -24,6 +24,19 @@ if(TARGET interstellar_app AND TARGET interstellar_host)
   target_link_libraries(interstellar PRIVATE interstellar_app interstellar_host PkgConfig::INTERSTELLAR_GTK3)
 endif()
 
+# Every codec and profile Deliver offers, through the real encoders, read back with ffprobe —
+# and the colour of an H.264 render against the still (R-RENDER-6, D-9).
+if(TARGET interstellar-cc AND TARGET interstellar_host)
+  find_program(INTERSTELLAR_FFMPEG_FOR_CODECS ffmpeg)
+  find_program(INTERSTELLAR_FFPROBE_FOR_CODECS ffprobe)
+  if(INTERSTELLAR_FFMPEG_FOR_CODECS AND INTERSTELLAR_FFPROBE_FOR_CODECS)
+    add_test(NAME interstellar_render_codecs
+      COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tests/render_codecs.sh" "$<TARGET_FILE:interstellar-cc>"
+              "${INTERSTELLAR_FFMPEG_FOR_CODECS}" "${INTERSTELLAR_FFPROBE_FOR_CODECS}"
+              "${CMAKE_CURRENT_BINARY_DIR}/render_codecs")
+  endif()
+endif()
+
 # The real app bound to the real service, rendered headlessly — the GTK host's wiring, tested.
 if(TARGET interstellar_app AND TARGET interstellar_host)
   add_executable(interstellar_live_shots ${CMAKE_CURRENT_SOURCE_DIR}/tests/liveShots.cpp)

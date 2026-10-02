@@ -149,8 +149,13 @@ namespace interstellar
             {K::Pause, "pause", "", 0, 0, {}, "Stop playback.", "R-UI-3"},
 
             {K::Render, "render", "", 0, 0,
-             {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|prores|png-seq>"},
-             "Queue a render of a NAMED timeline. There is no implicit current timeline.", "R-RENDER-1"},
+             {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|h265|prores|dnxhr|png-seq>",
+              "profile=<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>", "res=<WxH>", "fps=<n|num/den>",
+              "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>"},
+             "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: "
+             "codec and profile, size (never above the project, same aspect), frame rate (the timeline is "
+             "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A "
+             "flag the codec cannot honour is refused.", "R-RENDER-6"},
             {K::RenderCancel, "render cancel", "<job>", 1, 1, {}, "Cancel a queued or running render.", "R-RENDER-4"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},

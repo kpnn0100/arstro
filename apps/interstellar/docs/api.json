@@ -779,7 +779,7 @@
     },
     {
       "verb": "render",
-      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|prores|png-seq>]",
+      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>]",
       "args": "",
       "minArgs": 0,
       "maxArgs": 0,
@@ -798,11 +798,35 @@
         },
         {
           "name": "format",
-          "value": "<h264|prores|png-seq>"
+          "value": "<h264|h265|prores|dnxhr|png-seq>"
+        },
+        {
+          "name": "profile",
+          "value": "<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>"
+        },
+        {
+          "name": "res",
+          "value": "<WxH>"
+        },
+        {
+          "name": "fps",
+          "value": "<n|num/den>"
+        },
+        {
+          "name": "quality",
+          "value": "<0..51>"
+        },
+        {
+          "name": "speed",
+          "value": "<ultrafast…veryslow>"
+        },
+        {
+          "name": "bits",
+          "value": "<8|10>"
         }
       ],
-      "summary": "Queue a render of a NAMED timeline. There is no implicit current timeline.",
-      "requirement": "R-RENDER-1"
+      "summary": "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused.",
+      "requirement": "R-RENDER-6"
     },
     {
       "verb": "render cancel",
@@ -1768,7 +1792,7 @@
       "path": "renders[].format",
       "type": "string",
       "stable": true,
-      "doc": "h264 | prores | png-seq."
+      "doc": "h264 | h265 | prores | dnxhr | png-seq."
     },
     {
       "path": "renders[].done",
@@ -1793,6 +1817,30 @@
       "type": "string",
       "stable": true,
       "doc": "Why it failed."
+    },
+    {
+      "path": "renders[].width",
+      "type": "integer",
+      "stable": true,
+      "doc": "Output frame width (R-RENDER-6)."
+    },
+    {
+      "path": "renders[].height",
+      "type": "integer",
+      "stable": true,
+      "doc": "Output frame height."
+    },
+    {
+      "path": "renders[].fps",
+      "type": "number",
+      "stable": true,
+      "doc": "Output rate the timeline is sampled at."
+    },
+    {
+      "path": "renders[].spec",
+      "type": "string",
+      "stable": true,
+      "doc": "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."
     },
     {
       "path": "canUndo",

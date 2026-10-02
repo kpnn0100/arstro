@@ -171,8 +171,17 @@ namespace interstellar_v1
             drawRoundedRect(t, chip, radius::hairline(), Paint::filledStroked(fade(palette::secondary(), a), fade(palette::border(), a), 1.0));
             t.setFill(fade(palette::mutedForeground(), a));
             t.drawText(fmt, chip.x + 4.0, textfit::baseline(l1, 8.0), 8.0, font::mono());
+            // line two: the whole spec in words (R-RENDER-6), then the path in what is left
+            double px = x;
+            if (!j.spec.empty())
+            {
+                const std::string sp = textfit::ellipsize(t, j.spec, (textRight - x) * 0.62, 9.0, font::sans());
+                t.setFill(fade(palette::foreground(), 0.75 * a));
+                t.drawText(sp, x, textfit::baseline(l2, 9.0), 9.0, font::sans());
+                px = x + t.measureText(sp, 9.0, font::sans()) + 8.0;
+            }
             t.setFill(fade(palette::mutedForeground(), a));
-            t.drawText(textfit::ellipsize(t, j.outPath, textRight - x, 9.0, font::mono()), x, textfit::baseline(l2, 9.0), 9.0, font::mono());
+            t.drawText(textfit::ellipsize(t, j.outPath, std::max(0.0, textRight - px), 9.0, font::mono()), px, textfit::baseline(l2, 9.0), 9.0, font::mono());
 
             // the bar: its colour slides from the accent to success as the job finishes
             const double frac = shownFraction(j.id);

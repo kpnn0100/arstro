@@ -48,8 +48,9 @@ one integrator who moves, wires, tests and commits each stream:
 - [x] Variants: shared file, own object, offered wherever a source is, selected once made; D-8 fixed
       (DR-RACK-9).
 - [x] Monitor zoom like cosmo: Ctrl + wheel about the pointer, eased, pan, fit (DR-UI-13).
-- [ ] The 2026-10-02 request, rest: the full output spec in
-      Deliver (R-RENDER-6), cutting like an editor — drag a source to the timeline and every R-TL-3
+- [x] Deliver's whole output spec: H.264/H.265/ProRes/DNxHR/PNG, profiles, quality, speed, depth,
+      size, exact rates, range; D-9 (BT.601, untagged) fixed (DR-RENDER-6).
+- [ ] The 2026-10-02 request, rest: cutting like an editor — drag a source to the timeline and every R-TL-3
       operation in the Cut tab, clip copy/paste (R-UI-14, R-TL-6).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
@@ -79,6 +80,12 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-02 — a render never upscales or reframes (R-RENDER-6).** Sizes are fractions of the
+project, so the render path's long-edge proxy produces them exactly and a pixel is never invented;
+a deliverable larger than the project, or in another aspect, needs an upscaler or a reframe, which
+v1 does not have — refused, naming why, rather than quietly stretched. NTSC rates are sent as
+fractions because "23.976" is not 24000/1001 and a drifting time base moves cuts.
 
 **2026-10-02 — a variant starts at the top of the rack (R-RACK-5, D-8).** Placing it beside its
 original, inside the original's group, would keep the group's look — but Cosmo cannot move a node

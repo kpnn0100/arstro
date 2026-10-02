@@ -203,7 +203,11 @@ namespace interstellar
                              .set("done", r.done)
                              .set("total", r.total)
                              .set("state", r.state)
-                             .set("error", r.error));
+                             .set("error", r.error)
+                             .set("width", r.width)
+                             .set("height", r.height)
+                             .set("fps", r.fps)
+                             .set("spec", r.spec));
         j.set("renders", renders);
         j.set("canUndo", m.canUndo);
         j.set("canRedo", m.canRedo);
@@ -370,11 +374,15 @@ namespace interstellar
             {"renders[].timeline", "string", "The timeline rendered — always named (R-RENDER-1)."},
             {"renders[].timelineName", "string", "Its name."},
             {"renders[].outPath", "string", "Output path (file name only when stable)."},
-            {"renders[].format", "string", "h264 | prores | png-seq."},
+            {"renders[].format", "string", "h264 | h265 | prores | dnxhr | png-seq."},
             {"renders[].done", "integer", "Frames written."},
             {"renders[].total", "integer", "Frames in the range."},
             {"renders[].state", "string", "queued | running | done | failed | cancelled."},
             {"renders[].error", "string", "Why it failed."},
+            {"renders[].width", "integer", "Output frame width (R-RENDER-6)."},
+            {"renders[].height", "integer", "Output frame height."},
+            {"renders[].fps", "number", "Output rate the timeline is sampled at."},
+            {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
             {"canUndo", "bool", "`undo` has something to undo (R-EDIT-1)."},
             {"canRedo", "bool", "`redo` has something to redo."},
             {"undoLabel", "string", "What `undo` would undo, e.g. `set a.basic.exposure`."},

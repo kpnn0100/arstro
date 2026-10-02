@@ -98,11 +98,19 @@ namespace
         uint8_t mG = 0;
     };
 
+    /** What the last render asked its writer for (R-RENDER-6). */
+    struct WriterBegin { std::string path; int w = 0, h = 0; double fps = 0; long long frames = 0; EncodeSpec spec; };
+    WriterBegin gBegin;
+
     struct CaptureWriter : public IFrameWriter
     {
         std::vector<Raster> *sink;
         explicit CaptureWriter(std::vector<Raster> *s) : sink(s) {}
-        bool begin(const std::string &, int, int, double, long long) override { return true; }
+        bool begin(const std::string &p, int w, int h, double fps, long long n, const EncodeSpec &spec) override
+        {
+            gBegin = WriterBegin{p, w, h, fps, n, spec};
+            return true;
+        }
         bool write(const Raster &f) override { sink->push_back(f); return true; }
         bool end() override { return true; }
     };
@@ -339,7 +347,8 @@ int main()
         f.standard();
         std::string err;
         assert(!f.run("render --out x.mp4", &err) && has(err, "R-RENDER-1"));
-        f.must("render --timeline main --out \"" + f.path("out.mp4") + "\"");
+        // 48x27 is odd: a video codec needs an even frame, so the render asks for 46x26 (same aspect)
+        f.must("render --timeline main --res 46x26 --out \"" + f.path("out.mp4") + "\"");
         assert(f.written.size() == 96);   // 4 s at 24 fps
         assert(f.svc->model().renders.size() == 1 && f.svc->model().renders[0].state == "done");
         assert(f.svc->model().renders[0].timelineName == "main");
@@ -354,10 +363,10 @@ int main()
         assert(f.svc->renderTimelineFrame("tl_1", 3.5, 0, z));   // a different source in between
         assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, y));
         assert(x.rgba == y.rgba && x.width == 48 && x.height == 27);
-        f.must("render --timeline main --out \"" + f.path("one.mp4") + "\"");
+        f.must("render --timeline main --res 46x26 --out \"" + f.path("one.mp4") + "\"");
         const auto first = f.written;
         f.written.clear();
-        f.must("render --timeline main --out \"" + f.path("two.mp4") + "\"");
+        f.must("render --timeline main --res 46x26 --out \"" + f.path("two.mp4") + "\"");
         assert(first.size() == f.written.size());
         for (size_t i = 0; i < first.size(); ++i) assert(first[i].rgba == f.written[i].rgba);
     });
@@ -707,6 +716,52 @@ int main()
         // the flag that was never honoured is gone (D-8): refused, not ignored
         std::string err;
         assert(!f.run("rack add \"" + f.path("footage/still.png") + "\" --group gr1", &err) && has(err, "group"));
+    });
+
+    test("a render carries its whole output spec and refuses what the codec cannot honour (R-RENDER-6)", [] {
+        Fixture f("rspec");
+        f.standard();
+        std::string err;
+        auto refused = [&](const std::string &flags, const std::string &why) {
+            const bool r = !f.run("render --timeline main " + flags, &err) && has(err, why);
+            if (!r) std::fprintf(stderr, "  expected a refusal naming '%s' for: %s\n  got: %s\n", why.c_str(), flags.c_str(), err.c_str());
+            return r;
+        };
+        // every flag checked against the codec, before anything is queued
+        assert(refused("--out x.mp4", "even dimensions"));
+        assert(refused("--format prores --res 46x26 --out x.mp4", ".mov"));
+        assert(refused("--format h264 --res 46x26 --out x.mov --profile hq", "--profile applies to ProRes and DNxHR"));
+        assert(refused("--format prores --res 46x26 --out x.mov --quality 20", "quality is its --profile"));
+        assert(refused("--format prores --res 46x26 --out x.mov --profile ultra", "proxy, lt, standard, hq or 4444"));
+        assert(refused("--format h264 --res 46x26 --out x.mp4 --bits 10", "H.265 offers 10-bit"));
+        assert(refused("--format dnxhr --res 46x26 --out x.mov --profile hq --bits 10", "hqx and 444 are 10-bit"));
+        assert(refused("--format h265 --res 46x26 --out x.mp4 --quality 60", "0 (best)"));
+        assert(refused("--format h265 --res 46x26 --out x.mp4 --speed warp", "ultrafast"));
+        assert(refused("--res 96x54 --out x.mp4", "never upscales"));
+        assert(refused("--res 24x24 --out x.mp4", "aspect"));
+        assert(refused("--fps 0 --res 46x26 --out x.mp4", "--fps"));
+        assert(refused("--format png-seq --out frames --quality 10", "lossless"));
+        assert(f.svc->model().renders.empty());
+        // a whole spec reaches the writer, and the queue row says all of it
+        f.must("render --timeline main --format h265 --bits 10 --quality 22 --speed slow --res 24x14 --fps 12 --out \"" + f.path("o.mkv") + "\"");
+        assert(gBegin.spec.codec == "h265" && gBegin.spec.bitDepth == 10 && gBegin.spec.quality == 22 && gBegin.spec.speed == "slow");
+        assert(gBegin.w == 24 && gBegin.h == 14 && std::fabs(gBegin.fps - 12.0) < 1e-9);
+        assert(f.written.size() == 48);                                   // 4 s sampled at 12 fps
+        assert(f.written[0].width == 24 && f.written[0].height == 14);    // rendered AT the output size
+        const auto &r = f.svc->model().renders.back();
+        std::printf("    queue row: %s\n", r.spec.c_str());
+        assert(r.width == 24 && r.height == 14 && std::fabs(r.fps - 12.0) < 1e-9);
+        assert(has(r.spec, "H.265 10-bit") && has(r.spec, "q22") && has(r.spec, "slow") && has(r.spec, "24\xC3\x97" "14") && has(r.spec, "12 fps"));
+        // sampled at the output rate: frame k of a 12 fps render IS the timeline at k/12 s
+        Raster at1;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 24, at1) && at1.rgba == f.written[12].rgba);
+        // intermediates: profile and depth from the profile
+        f.must("render --timeline main --format dnxhr --profile hqx --res 46x26 --out \"" + f.path("o.mov") + "\"");
+        assert(gBegin.spec.codec == "dnxhr" && gBegin.spec.profile == "hqx" && gBegin.spec.bitDepth == 10);
+        f.must("render --timeline main --format prores --res 46x26 --out \"" + f.path("p.mov") + "\"");
+        assert(gBegin.spec.profile == "standard" && gBegin.spec.bitDepth == 10 && has(f.svc->model().renders.back().spec, "ProRes 422 10-bit"));
+        f.must("render --timeline main --res 46x26 --fps 24000/1001 --out \"" + f.path("ntsc.mp4") + "\"");
+        assert(std::fabs(gBegin.fps - 24000.0 / 1001.0) < 1e-12 && has(f.svc->model().renders.back().spec, "23.976 fps"));
     });
 
     test("the same script on two services dumps the same stable state", [] {

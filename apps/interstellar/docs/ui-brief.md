@@ -99,7 +99,9 @@ the base has deleted under a dangling delta draws in `destructive` with the reas
 
 ### Deliver
 Render queue, output spec, and the lint report. **The timeline being rendered is named explicitly
-in the queue row**, never implied by the open tab (R-RENDER-1).
+in the queue row**, never implied by the open tab (R-RENDER-1). The output spec is the whole of R-RENDER-6 — codec and
+profile or quality/speed/depth, size, rate, range — with the rows a codec lacks collapsed, and the
+queue row says the spec in words.
 
 ## 4. States
 

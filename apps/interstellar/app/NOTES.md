@@ -140,6 +140,18 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   (the preview cap in Engine Settings still bounds it). Presentation only — nothing dispatched.
 - Shots added: `grade_monitor_zoom`, `grade_monitor_zoom_mid`. UI checks: 225.
 
+## Deliver's whole output spec (2026-10-02, R-RENDER-6)
+
+- OutputSpec: TIMELINE · FORMAT (codec H.264/H.265/ProRes/DNxHR/PNG, then Profile, or Quality
+  Draft/Good/High/Master = CRF 28/23/18/12 + Speed Fast/Medium/Slow, + H.265 Depth) · SIZE & RATE
+  (Full/½/¼, a rate stepper: Project, 23.976 = 24000/1001, 24, 25, 29.97, 30, 50, 59.94, 60) · RANGE
+  (Whole/In–Out, marks at the playhead) · an audio sentence · OUTPUT (path, Render, a two-line
+  summary). Codec-dependent rows collapse eased (opacity = amount²). The column scrolls.
+- The line: `render --timeline <tl> --out <p> --format <f> [--profile p] [--quality n] [--speed s]
+  [--bits 10] [--res WxH] [--fps n|a/b] [--range a:b]` — defaults are left out.
+- Queue rows print `renders[].spec` on line two before the path.
+- Shots added: `deliver_spec_h265`, `deliver_spec_codec_mid`. UI checks: 230.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -228,7 +240,7 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | ruler click/drag, empty-lane click | `playhead <t>` |
 | inspector Split / Delete; keys `S`, `Delete`/`Backspace` (Cut tab) | `clip split <clip> --at <playhead>`, `clip delete <clip>` |
 | keys Space / ← → | `play`·`pause`; `playhead <t ∓ 1 frame>` (keys `1 2 3` switch tabs — presentation) |
-| Render | `render --timeline <tl> --out <path> --format h264|prores|png-seq` |
+| Render | `render --timeline <tl> --out <path> --format h264|h265|prores|dnxhr|png-seq [--profile …] [--quality n] [--speed s] [--bits 10] [--res WxH] [--fps n|a/b] [--range a:b]` |
 
 Numbers are `precision(7)` (EditParamsIO's); times are quantised to the project's frame grid;
 arguments containing whitespace or quotes are double-quoted with `\"` escapes.

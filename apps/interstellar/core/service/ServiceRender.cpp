@@ -18,7 +18,11 @@
 #include "volume/TemporalOps.h"
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <set>
 #include <filesystem>
 #include <map>
 
@@ -533,15 +537,97 @@ namespace interstellar
         const std::string out = c.flag("out");
         if (out.empty()) return fail("render: --out <path> is required");
         std::string format = c.flag("format");
-        const std::string ext = fs::path(out).extension().string();
+        std::string ext = fs::path(out).extension().string();
+        for (char &ch : ext) ch = (char)std::tolower((unsigned char)ch);
         if (format.empty()) format = ext == ".mov" ? "prores" : ext == ".mp4" || ext == ".mkv" ? "h264" : "png-seq";
-        if (format != "h264" && format != "prores" && format != "png-seq")
-            return fail("render: --format is h264, prores or png-seq, got " + format);
+        if (format != "h264" && format != "h265" && format != "prores" && format != "dnxhr" && format != "png-seq")
+            return fail("render: --format is h264, h265, prores, dnxhr or png-seq, got " + format);
+
+        // ── the output spec (R-RENDER-6): every flag checked against the codec BEFORE queueing ──
+        const bool lossy = format == "h264" || format == "h265";
+        const bool inter = format == "prores" || format == "dnxhr";
+        EncodeSpec spec;
+        spec.codec = format;
+        if (inter && ext != ".mov") return fail("render: " + format + " is written into .mov, not " + (ext.empty() ? "a folder" : ext));
+        if (lossy && ext != ".mp4" && ext != ".mkv" && ext != ".mov")
+            return fail("render: " + format + " is written into .mp4, .mkv or .mov, not " + (ext.empty() ? "a folder" : ext));
+        if (c.has("profile"))
+        {
+            const std::string pf = c.flag("profile");
+            static const std::set<std::string> proresP{"proxy", "lt", "standard", "hq", "4444"}, dnxP{"lb", "sq", "hq", "hqx", "444"};
+            if (format == "prores" ? !proresP.count(pf) : format == "dnxhr" ? !dnxP.count(pf) : true)
+                return fail(inter ? "render: --profile for " + format + " is " + (format == "prores" ? "proxy, lt, standard, hq or 4444" : "lb, sq, hq, hqx or 444") + ", got " + pf
+                                  : "render: --profile applies to ProRes and DNxHR — " + format + " is chosen by --quality");
+            spec.profile = pf;
+        }
+        else if (inter) spec.profile = format == "prores" ? "standard" : "hq";
+        if (c.has("quality"))
+        {
+            if (!lossy) return fail("render: --quality applies to H.264 and H.265 — " + (inter ? format + "'s quality is its --profile" : std::string("a PNG sequence is lossless")));
+            char *end = nullptr;
+            const long q = std::strtol(c.flag("quality").c_str(), &end, 10);
+            if (!end || *end || q < 0 || q > 51) return fail("render: --quality is 0 (best) … 51, got " + c.flag("quality"));
+            spec.quality = (int)q;
+        }
+        if (c.has("speed"))
+        {
+            static const std::set<std::string> speeds{"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"};
+            if (!lossy) return fail("render: --speed applies to H.264 and H.265");
+            if (!speeds.count(c.flag("speed"))) return fail("render: --speed is ultrafast … veryslow, got " + c.flag("speed"));
+            spec.speed = c.flag("speed");
+        }
+        spec.bitDepth = format == "prores" ? 10 : format == "dnxhr" ? (spec.profile == "hqx" || spec.profile == "444" ? 10 : 8) : 8;
+        if (c.has("bits"))
+        {
+            const std::string b = c.flag("bits");
+            if (b != "8" && b != "10") return fail("render: --bits is 8 or 10, got " + b);
+            const int bits = b == "10" ? 10 : 8;
+            if (format == "h265") spec.bitDepth = bits;
+            else if (bits != spec.bitDepth)
+                return fail("render: " + format + (format == "dnxhr" ? " " + spec.profile : std::string()) + " is " + std::to_string(spec.bitDepth) +
+                            "-bit" + (format == "h264" ? " here — H.265 offers 10-bit" : format == "dnxhr" ? " — the profile decides (hqx and 444 are 10-bit)" : ""));
+        }
+
+        // size: never above the project, and its aspect (a reframe is not in v1)
+        const int PW = mProject->width, PH = mProject->height;
+        int W = PW, H = PH, proxyEdge = 0;
+        if (c.has("res"))
+        {
+            int rw = 0, rh = 0;
+            if (std::sscanf(c.flag("res").c_str(), "%dx%d", &rw, &rh) != 2 || rw <= 0 || rh <= 0) return fail("render: --res is WxH, got " + c.flag("res"));
+            if (rw > PW || rh > PH)
+                return fail("render: --res " + c.flag("res") + " is larger than the project (" + std::to_string(PW) + "x" + std::to_string(PH) + ") — a render never upscales");
+            int ow = 0, oh = 0;
+            outputSize(PW, PH, std::max(rw, rh), ow, oh);
+            if (std::abs(ow - rw) > 1 || std::abs(oh - rh) > 1)
+                return fail("render: --res " + c.flag("res") + " changes the project's aspect (" + std::to_string(ow) + "x" + std::to_string(oh) + " keeps it) — a reframe is not in v1");
+            W = ow;
+            H = oh;
+            proxyEdge = std::max(rw, rh) >= std::max(PW, PH) ? 0 : std::max(rw, rh);
+        }
+        if (format != "png-seq" && ((W % 2) || (H % 2)))
+            return fail("render: " + format + " needs even dimensions, " + std::to_string(W) + "x" + std::to_string(H) + " is not");
+        double fps = mProject->fps;
+        if (c.has("fps"))
+        {
+            // a rate, or an exact fraction — 24000/1001 is 23.976 exactly, which "23.976" is not
+            const std::string f = c.flag("fps");
+            const auto slash = f.find('/');
+            char *end = nullptr, *end2 = nullptr;
+            fps = std::strtod(f.substr(0, slash).c_str(), &end);
+            bool ok = end && !*end;
+            if (slash != std::string::npos)
+            {
+                const double den = std::strtod(f.substr(slash + 1).c_str(), &end2);
+                ok = ok && end2 && !*end2 && den > 0.0;
+                if (ok) fps /= den;
+            }
+            if (!ok || !(fps > 0.0) || fps > 240.0) return fail("render: --fps is a rate in (0, 240] or num/den, got " + f);
+        }
         for (const auto &u : mProject->unrenderable())
             if (u.find(tl) != std::string::npos)
                 return fail("render: " + u + " — refused rather than rendered without it");
 
-        const double fps = mProject->fps;
         const double dur = timelineDuration(tl);
         double a = 0, b = dur;
         if (c.has("range"))
@@ -558,6 +644,11 @@ namespace interstellar
         job->count = std::max<long long>(0, (long long)std::llround(b * fps) - job->first);
         if (job->count <= 0) return fail("render: timeline " + c.flag("timeline") + " is empty — nothing to render");
         job->png = format == "png-seq";
+        job->spec = spec;
+        job->width = W;
+        job->height = H;
+        job->proxyEdge = proxyEdge;
+        job->fps = fps;
         if (!job->png)
         {
             if (!mHost.frameWriter) return fail("render: no encoder installed (the host must provide one)");
@@ -571,6 +662,24 @@ namespace interstellar
         job->model.outPath = fs::absolute(out).string();
         job->model.format = format;
         job->model.total = (int)job->count;
+        job->model.width = W;
+        job->model.height = H;
+        job->model.fps = fps;
+        {
+            // the spec in words, for the queue row — what was asked, all of it
+            const std::string name = format == "h264" ? "H.264" : format == "h265" ? "H.265" : format == "prores" ? "ProRes" : format == "dnxhr" ? "DNxHR" : "PNG sequence";
+            std::string w = name;
+            if (inter) { std::string pf = spec.profile; for (char &ch : pf) ch = (char)std::toupper((unsigned char)ch); w += " " + (pf == "STANDARD" ? std::string("422") : pf); }
+            if (format == "h265" || inter) w += " " + std::to_string(spec.bitDepth) + "-bit";
+            if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + spec.speed;
+            char rate[32];
+            std::snprintf(rate, sizeof rate, "%.3f", fps);
+            std::string r = rate;
+            while (!r.empty() && r.back() == '0') r.pop_back();
+            if (!r.empty() && r.back() == '.') r.pop_back();
+            w += " \xC2\xB7 " + std::to_string(W) + "\xC3\x97" + std::to_string(H) + " \xC2\xB7 " + r + " fps";
+            job->model.spec = w;
+        }
         job->model.state = "queued";
         emit(Event(EK::RenderQueued).with("job", job->model.id).with("timeline", job->model.timelineName).with("out", job->model.outPath));
         mJobs.push_back(std::move(job));
@@ -601,7 +710,7 @@ namespace interstellar
                     fs::create_directories(j.model.outPath, ec);
                     if (ec) { failJob("cannot create " + j.model.outPath); return; }
                 }
-                else if (!j.writer || !j.writer->begin(j.model.outPath, mProject->width, mProject->height, mProject->fps, j.count))
+                else if (!j.writer || !j.writer->begin(j.model.outPath, j.width, j.height, j.fps, j.count, j.spec))
                 {
                     failJob("the encoder refused " + j.model.outPath);
                     return;
@@ -609,8 +718,9 @@ namespace interstellar
                 j.begun = true;
             }
             Raster frame;
-            const double t = (double)(j.first + j.next) / mProject->fps;
-            if (!renderTimelineFrame(j.model.timeline, t, 0, frame)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
+            // the timeline is SAMPLED at the output rate (R-RENDER-6) — still a pure function of t
+            const double t = (double)(j.first + j.next) / j.fps;
+            if (!renderTimelineFrame(j.model.timeline, t, j.proxyEdge, frame)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             if (j.png)
             {
                 char name[32];

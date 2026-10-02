@@ -66,6 +66,20 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-9 — Renders were converted to YUV with BT.601 coefficients and left untagged
+- **Area:** render / host · **Status:** Closed (same commit) · **Severity:** S2 (wrong colour in a
+  colour tool) · **Found:** 2026-10-02, reading `FrameWriterFFmpeg` for the user's "detail options
+  for render".
+- **Reproduce:** render a saturated flat field (`color=c=0xD83A1E`) to H.264, then decode it the way
+  an HD player does (BT.709): the centre pixel reads (229,71,25) against the still's (216,59,30).
+- **Expected:** R-RACK-2 / R-RENDER-5 — the colour Cosmo made is the colour delivered.
+- **Cause:** `sws_getCachedContext` without `sws_setColorspaceDetails` converts with swscale's
+  default BT.601 matrix, and the encoder context set no `color_primaries`/`trc`/`colorspace`, so the
+  file did not say which matrix it used; HD players assume BT.709.
+- **Fix:** BT.709 coefficients, full-range RGB in, video-range YUV out, and the stream tagged
+  BT.709 (`host/FrameWriterFFmpeg.cpp`). Guarded by `interstellar_render_codecs` — the H.264 render
+  decodes to the still's colour within 4; with the matrix removed it is 13 levels off.
+
 ### D-8 — `rack add --group <node>` is accepted and silently ignored
 - **Area:** service · **Status:** Closed (flag removed) · **Severity:** S3 · **Found:** 2026-10-02,
   reading `rack duplicate` for the user's "duplicate source" request.

@@ -206,11 +206,11 @@ namespace istest
             RenderJobModel j;
             m.renders.clear();
             j = RenderJobModel{}; j.id = "r1"; j.timeline = "delivery"; j.timelineName = "Delivery 30s"; j.outPath = "/home/editor/Projects/night-ferry/renders/delivery.mov";
-            j.format = "prores"; j.done = 372; j.total = 372; j.state = "done"; m.renders.push_back(j);
+            j.format = "prores"; j.spec = "ProRes HQ 10-bit \xC2\xB7 3840\xC3\x97" "2160 \xC2\xB7 24 fps"; j.done = 372; j.total = 372; j.state = "done"; m.renders.push_back(j);
             j = RenderJobModel{}; j.id = "r2"; j.timeline = "social30"; j.timelineName = "Social 30s"; j.outPath = "/home/editor/Projects/night-ferry/renders/social30.mp4";
-            j.format = "h264"; j.done = 148; j.total = 372; j.state = "running"; m.renders.push_back(j);
+            j.format = "h264"; j.spec = "H.264 \xC2\xB7 q18 \xC2\xB7 medium \xC2\xB7 1920\xC3\x97" "1080 \xC2\xB7 30 fps"; j.done = 148; j.total = 372; j.state = "running"; m.renders.push_back(j);
             j = RenderJobModel{}; j.id = "r3"; j.timeline = "main"; j.timelineName = "main"; j.outPath = "/home/editor/Projects/night-ferry/renders/main-png/";
-            j.format = "png-seq"; j.done = 0; j.total = 372; j.state = "queued"; m.renders.push_back(j);
+            j.format = "png-seq"; j.spec = "PNG sequence \xC2\xB7 3840\xC3\x97" "2160 \xC2\xB7 24 fps"; j.done = 0; j.total = 372; j.state = "queued"; m.renders.push_back(j);
             j = RenderJobModel{}; j.id = "r4"; j.timeline = "main"; j.timelineName = "main"; j.outPath = "/media/usb-stick/night-ferry/main.mov";
             j.format = "prores"; j.done = 61; j.total = 372; j.state = "failed"; j.error = "encoder: no space left on device"; m.renders.push_back(j);
         }
@@ -348,6 +348,8 @@ namespace istest
                 }
                 for (const auto &tl : m.timelines) if (tl.id == j.timeline) j.timelineName = tl.name;
                 j.total = 372; j.state = "queued";
+                j.spec = j.format == "prores" ? "ProRes 422 10-bit \xC2\xB7 3840\xC3\x97" "2160 \xC2\xB7 24 fps"
+                                              : "H.264 \xC2\xB7 q18 \xC2\xB7 medium \xC2\xB7 3840\xC3\x97" "2160 \xC2\xB7 24 fps";
                 m.renders.push_back(j);
             }
             else

@@ -216,7 +216,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-RENDER — delivery — 🚧 IN PROGRESS (DR-RENDER-1, -2a, -5; R-RENDER-6 in progress); audio not muxed
+## R-RENDER — delivery — ✅ IMPLEMENTED for picture (DR-RENDER-1, -2a, -5, -6); audio not muxed
 
 - **R-RENDER-1 A render names its TIMELINE.** `render --timeline social-30s --out …`. There is no
   implicit "current" timeline in a render, because a delivery that depended on which tab was open
@@ -233,13 +233,15 @@ reserves the rest so adopting it is not a migration.
 - **R-RENDER-6 Deliver states the whole output spec** (added 2026-10-02, user request "Deliver needs
   detail options for render"). Every choice is a flag of `render`, shown in Deliver and named in the
   queue row: **codec** (H.264, H.265, ProRes Proxy/LT/422/HQ/4444, DNxHR LB/SQ/HQ/HQX/444, PNG
-  sequence), **resolution** (the project's, or a standard frame — UHD, 1080, 720 — or a scale),
-  **frame rate** (the project's, or a standard rate; the timeline is SAMPLED at the output rate, so
-  a render stays a pure function, R-RENDER-2), **quality** (a constant-quality level for H.264/H.265;
+  sequence), **resolution** (the project's, or a fraction of it — never larger, never another
+  aspect: a render does not upscale or reframe in v1), **frame rate** (the project's, or a standard
+  rate, the NTSC ones as exact fractions; the timeline is SAMPLED at the output rate, so a render
+  stays a pure function, R-RENDER-2), **quality** (a constant-quality level for H.264/H.265;
   the profile is the quality for ProRes/DNxHR), **encoder speed**, **bit depth** where the codec
   offers a choice (H.265 8/10), and **range** (the whole timeline, or an in/out set from the
   playhead). A combination the encoder cannot make is refused, naming why, before anything is
   queued. Audio is not muxed (R-AUD-5) and Deliver says so rather than leaving it to be discovered.
+  Every video file is BT.709, video range, and tagged so (D-9).
 
 ---
 

@@ -129,8 +129,11 @@ namespace interstellar
         NodeId id;
         NodeId timeline;              // ALWAYS named — a render never implies "current" (R-RENDER-1)
         std::string timelineName;
-        std::string outPath, format;  // h264 | prores | png-seq
+        std::string outPath, format;  // h264 | h265 | prores | dnxhr | png-seq
         int done = 0, total = 0;
+        int width = 0, height = 0;    // the output frame (R-RENDER-6)
+        double fps = 0;               // the output rate the timeline is sampled at
+        std::string spec;             // the whole spec in words: "H.265 10-bit · q18 · medium · 1920×1080 · 25 fps"
         std::string state;            // queued | running | done | failed | cancelled
         std::string error;
     };

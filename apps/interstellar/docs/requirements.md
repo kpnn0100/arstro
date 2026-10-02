@@ -570,3 +570,26 @@ scales with the TARGET zoom (one request per level, a 7680 bucket added); the se
 cap still bounds it (R-SET-3). Guarded by `testMonitorZoom` (`the zoom EASES`, `…the picture point
 under the pointer stays under it`, `a drag pans…`, `…clamped`, `…eases back`); mutants (zoom set
 instead of eased; anchor ignored) went red. Shots `grade_monitor_zoom`, `grade_monitor_zoom_mid`.
+
+### DR-RENDER-6 The whole output spec, checked before queueing, honoured by the real encoders (R-RENDER-6, R-RENDER-3)
+`render` takes `--format h264|h265|prores|dnxhr|png-seq` with `--profile`, `--quality` (CRF),
+`--speed`, `--bits`, `--res WxH`, `--fps n|num/den`, `--range a:b`. Every flag is checked against
+the codec before a job exists (`core/service/ServiceRender.cpp:546`): a profile only for
+ProRes/DNxHR, quality and speed only for H.264/H.265, depth fixed except H.265 8/10 (DNxHR's from
+its profile), the container must carry the codec, a size never above the project nor off its aspect
+(no upscale, no reframe), even dimensions for video. The job carries an `EncodeSpec`
+(`core/FrameSource.h`, passed to `IFrameWriter::begin`), renders AT the output size through the
+render path's long edge, and SAMPLES the timeline at the output rate (`:721`) — a pure function of
+t still. `renders[]` gains `width`, `height`, `fps` and `spec`, the whole spec in words, which the
+queue row prints. `FrameWriterFFmpeg` maps it (`host/FrameWriterFFmpeg.cpp:76`): libx264, libx265
+(8/10-bit, `hvc1`-tagged in MP4/MOV), `prores_ks` Proxy…4444, `dnxhd` DNxHR LB…444 — and writes
+BT.709 at video range, tagged (`:104`, D-9). Deliver (`app/widgets/OutputSpec.cpp`) builds the line
+(`renderLine`, `:146`) from codec, the rows that codec has (`rowWanted`, `:243` — collapsing eased,
+opacity leading), Full/½/¼, a rate stepper with exact NTSC fractions, Whole/In–Out with marks at the
+playhead, an audio sentence and a two-line summary; the column scrolls (`layout`, `:258`).
+Guarded by L2 `a render carries its whole output spec and refuses what the codec cannot honour`
+(13 refusals; the writer's spec; frames sampled at the output rate — red when sampled at the
+project's), `interstellar_render_codecs` (every codec/profile through real FFmpeg, read back with
+ffprobe; an H.264 render decodes to the still's colour within 4 — red at 13 levels with the BT.601
+matrix), UI `testTransportAndDeliver` (the whole line, a row EASES open — red when set, the column
+scrolls at 1024x640); shots `deliver_spec_h265`, `deliver_spec_codec_mid`, `deliver_populated`.

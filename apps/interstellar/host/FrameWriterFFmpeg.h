@@ -3,13 +3,18 @@
  *
  *  Host layer, for the same reason the source is: the core carries no codec.
  *
- *  **Two targets, and the choice is not a preference.** H.264 in MP4 is what a person can watch,
- *  and ProRes 422 in MOV is what an edit round-trips through without a generation loss. A third
- *  exists and is not a codec at all: the CLI's PPM sequence, which is the only output a golden
- *  test can compare byte for byte (R-RENDER-3) — so it stays, and this class does not replace it.
+ *  **What a delivery asks for (R-RENDER-6).** H.264 and H.265 (8- or 10-bit) in MP4/MKV/MOV are what
+ *  a person watches and uploads — constant quality (CRF) and an encoder speed; ProRes (Proxy … 4444,
+ *  `prores_ks`) and DNxHR (LB … 444) in MOV are what an edit or a finishing house round-trips
+ *  through, their quality being their profile. The PNG sequence is not a codec: the service writes
+ *  it, and it stays the only output a golden test can compare byte for byte (R-RENDER-3).
  *
- *  The container is chosen from the output extension rather than a flag, because a `.mp4` that
- *  silently contained ProRes would be a worse surprise than an unsupported-extension error.
+ *  The codec comes from the spec, and the container must agree with it: a `.mp4` holding ProRes is
+ *  refused, naming the containers that would do, rather than written as a surprise.
+ *
+ *  Colour (D-9): the RGB→YUV conversion is BT.709 at video (limited) range and the stream is TAGGED
+ *  BT.709, so a player does not guess — untagged BT.601 conversion shifted every hue slightly in an
+ *  app whose subject is colour.
  */
 #pragma once
 #include "FrameSource.h"
@@ -34,7 +39,7 @@ namespace interstellar_host
         FrameWriterFFmpeg(const FrameWriterFFmpeg &) = delete;
         FrameWriterFFmpeg &operator=(const FrameWriterFFmpeg &) = delete;
 
-        bool begin(const std::string &path, int w, int h, double fps, long long frames) override;
+        bool begin(const std::string &path, int w, int h, double fps, long long frames, const interstellar::EncodeSpec &spec) override;
         bool write(const interstellar::Raster &frame) override;
         bool end() override;
 

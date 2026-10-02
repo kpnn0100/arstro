@@ -50,13 +50,13 @@ namespace interstellar_host
         mNext = 0;
     }
 
-    bool FrameWriterFFmpeg::begin(const std::string &path, int w, int h, double fps, long long)
+    bool FrameWriterFFmpeg::begin(const std::string &path, int w, int h, double fps, long long, const interstellar::EncodeSpec &spec)
     {
         closeAll();
         mError.clear();
         if (w <= 0 || h <= 0) { mError = "the output raster is empty"; return false; }
-        // Both encoders need even dimensions (4:2:0 chroma for H.264, and ProRes is happier with
-        // them). Refusing is better than silently cropping a frame the user asked for.
+        // Every encoder here wants even dimensions (4:2:0 / 4:2:2 chroma). Refusing is better than
+        // silently cropping a frame the user asked for.
         if ((w % 2) || (h % 2))
         {
             mError = "the output raster must have even dimensions for a video codec (" +
@@ -64,22 +64,28 @@ namespace interstellar_host
             return false;
         }
 
+        // The codec comes from the spec; the container must be one that carries it.
         const std::string ext = lowerExt(path);
-        // The container picks the codec, from the extension — a `.mp4` that silently held ProRes
-        // would be a worse surprise than an error.
-        const bool prores = ext == "mov";
-        const AVCodecID id = prores ? AV_CODEC_ID_PRORES : AV_CODEC_ID_H264;
+        const bool intermediate = spec.codec == "prores" || spec.codec == "dnxhr";
+        const bool okContainer = intermediate ? ext == "mov" : (ext == "mp4" || ext == "mkv" || ext == "mov");
+        if (!okContainer)
+        {
+            mError = spec.codec + " is written into " + (intermediate ? ".mov" : ".mp4, .mkv or .mov") + ", not ." + ext;
+            return false;
+        }
+        const char *encName = spec.codec == "h264" ? "libx264" : spec.codec == "h265" ? "libx265"
+                            : spec.codec == "prores" ? "prores_ks" : spec.codec == "dnxhr" ? "dnxhd" : nullptr;
+        if (!encName) { mError = "no encoder for codec " + spec.codec; return false; }
 
         if (avformat_alloc_output_context2(&mFmt, nullptr, nullptr, path.c_str()) < 0 || !mFmt)
         { mError = "cannot infer a container for " + path; return false; }
 
-        const AVCodec *codec = avcodec_find_encoder(id);
+        const AVCodec *codec = avcodec_find_encoder_by_name(encName);
         if (!codec)
         {
             // Named honestly: this build of FFmpeg simply does not have it, and telling the user
-            // which encoder is missing is what lets them pick another extension.
-            mError = std::string("this FFmpeg build has no ") + (prores ? "ProRes" : "H.264") +
-                     " encoder";
+            // which encoder is missing is what lets them pick another.
+            mError = std::string("this FFmpeg build has no ") + encName + " encoder";
             closeAll();
             return false;
         }
@@ -90,26 +96,50 @@ namespace interstellar_host
 
         mEnc->width = w;
         mEnc->height = h;
-        mEnc->pix_fmt = prores ? AV_PIX_FMT_YUV422P10 : AV_PIX_FMT_YUV420P;
+        const std::string &pf = spec.profile;
+        if (spec.codec == "h264") mEnc->pix_fmt = AV_PIX_FMT_YUV420P;
+        else if (spec.codec == "h265") mEnc->pix_fmt = spec.bitDepth == 10 ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P;
+        else if (spec.codec == "prores") mEnc->pix_fmt = pf == "4444" ? AV_PIX_FMT_YUV444P10LE : AV_PIX_FMT_YUV422P10LE;
+        else mEnc->pix_fmt = pf == "444" ? AV_PIX_FMT_YUV444P10LE : pf == "hqx" ? AV_PIX_FMT_YUV422P10LE : AV_PIX_FMT_YUV422P;
+        // D-9: BT.709, video range, and SAID in the stream
+        mEnc->color_primaries = AVCOL_PRI_BT709;
+        mEnc->color_trc = AVCOL_TRC_BT709;
+        mEnc->colorspace = AVCOL_SPC_BT709;
+        mEnc->color_range = AVCOL_RANGE_MPEG;
         // A rational time base derived from fps, so 23.976 and 29.97 are exact rather than
-        // rounded — frames are the authority (R-CUT-5) and a drifting time base would make the
+        // rounded — frames are the authority (R-TL-5) and a drifting time base would make the
         // output disagree with the project about when a cut happens.
         AVRational tb = av_d2q(1.0 / (fps > 0 ? fps : 24.0), 1000000);
         mEnc->time_base = tb;
         mEnc->framerate = av_inv_q(tb);
         mStream->time_base = tb;
         mEnc->thread_count = 0;
-        if (!prores)
+        if (spec.codec == "h264" || spec.codec == "h265")
         {
-            av_opt_set(mEnc->priv_data, "preset", "medium", 0);
-            av_opt_set(mEnc->priv_data, "crf", "18", 0);
+            av_opt_set(mEnc->priv_data, "preset", spec.speed.c_str(), 0);
+            av_opt_set(mEnc->priv_data, "crf", std::to_string(spec.quality).c_str(), 0);
+            if (spec.codec == "h265")
+            {
+                av_opt_set(mEnc->priv_data, "x265-params", "log-level=error", 0);
+                if (ext != "mkv") mStream->codecpar->codec_tag = MKTAG('h', 'v', 'c', '1');   // QuickTime plays hvc1
+            }
         }
+        else if (spec.codec == "prores")
+        {
+            const char *p = pf == "proxy" ? "0" : pf == "lt" ? "1" : pf == "hq" ? "3" : pf == "4444" ? "4" : "2";
+            av_opt_set(mEnc->priv_data, "profile", p, 0);
+            av_opt_set(mEnc->priv_data, "vendor", "apl0", 0);
+        }
+        else
+            av_opt_set(mEnc->priv_data, "profile", ("dnxhr_" + (pf.empty() ? std::string("hq") : pf)).c_str(), 0);
         if (mFmt->oformat->flags & AVFMT_GLOBALHEADER) mEnc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
         if (avcodec_open2(mEnc, codec, nullptr) < 0)
         { mError = "the encoder refused these settings"; closeAll(); return false; }
+        const uint32_t tag = mStream->codecpar->codec_tag;
         if (avcodec_parameters_from_context(mStream->codecpar, mEnc) < 0)
         { mError = "cannot describe the stream"; closeAll(); return false; }
+        if (tag) mStream->codecpar->codec_tag = tag;   // the parameters copy resets it
         if (avio_open(&mFmt->pb, path.c_str(), AVIO_FLAG_WRITE) < 0)
         { mError = "cannot write " + path; closeAll(); return false; }
         if (avformat_write_header(mFmt, nullptr) < 0)
@@ -150,10 +180,17 @@ namespace interstellar_host
         if (frame.width != mEnc->width || frame.height != mEnc->height)
         { mError = "a frame arrived at the wrong size"; return false; }
 
+        SwsContext *prev = mSws;
         mSws = sws_getCachedContext(mSws, frame.width, frame.height, AV_PIX_FMT_RGBA, mEnc->width,
                                     mEnc->height, mEnc->pix_fmt, SWS_BILINEAR, nullptr, nullptr,
                                     nullptr);
         if (!mSws) { mError = "cannot build the colour converter"; return false; }
+        if (mSws != prev)
+        {
+            // D-9: full-range RGB in, BT.709 video-range YUV out — what the stream is tagged as
+            const int *coeffs = sws_getCoefficients(SWS_CS_ITU709);
+            sws_setColorspaceDetails(mSws, coeffs, 1, coeffs, 0, 0, 1 << 16, 1 << 16);
+        }
         if (av_frame_make_writable(mFrame) < 0) { mError = "the frame is not writable"; return false; }
 
         const uint8_t *src[4] = {frame.rgba.data(), nullptr, nullptr, nullptr};

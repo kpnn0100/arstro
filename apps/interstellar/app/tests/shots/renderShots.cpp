@@ -247,6 +247,32 @@ namespace
         };
         v.push_back({"grade_monitor_zoom", edit, [zoomAt](Rig &r) { r.settle(); zoomAt(r); r.settle(); }});
         v.push_back({"grade_monitor_zoom_mid", edit, [zoomAt](Rig &r) { r.settle(); zoomAt(r); r.pump(64); }});
+        // Deliver's whole spec (R-RENDER-6): H.265 with its rows, and mid-way from ProRes to H.265
+        auto clickSegShot = [](Rig &r, std::shared_ptr<arstro::cosmo_v2::SegmentedControl> sc, int i) {
+            auto *b = dynamic_cast<arstro::cosmo_v2::PillButton *>(sc->children()[(size_t)i].get());
+            const Point q = centre(*b, b->localBounds());
+            r.click(q.x, q.y);
+        };
+        v.push_back({"deliver_spec_h265", edit, [clickSegShot](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            auto os = r.app->edit().outputSpec();
+            clickSegShot(r, os->formatPicker(), 1);
+            r.settle();
+            clickSegShot(r, os->depthPicker(), 1);
+            clickSegShot(r, os->sizePicker(), 1);
+            clickSegShot(r, os->rangePicker(), 1);
+            r.settle();
+        }});
+        v.push_back({"deliver_spec_codec_mid", edit, [clickSegShot](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            auto os = r.app->edit().outputSpec();
+            clickSegShot(r, os->formatPicker(), 2);
+            r.settle();
+            clickSegShot(r, os->formatPicker(), 1);
+            r.pump(80);
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

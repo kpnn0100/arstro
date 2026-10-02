@@ -90,6 +90,10 @@ namespace interstellar
         RenderJobModel model;
         long long first = 0, count = 0, next = 0;
         bool png = false;
+        EncodeSpec spec;              // what the writer is asked for (R-RENDER-6)
+        int width = 0, height = 0;    // the output frame
+        int proxyEdge = 0;            // the render path's long edge for it (0 = the project's size)
+        double fps = 24.0;            // the output rate
         bool begun = false;
         std::unique_ptr<IFrameWriter> writer;
     };

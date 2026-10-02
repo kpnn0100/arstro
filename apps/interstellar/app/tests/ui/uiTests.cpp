@@ -465,7 +465,7 @@ namespace
         CHECK(hasLine(r.svc, "render --timeline social30 --out /home/editor/Projects/night-ferry/renders/social30.mp4 --format h264"),
               "Render dispatched render --timeline social30 --out …/social30.mp4 --format h264 — the timeline NAMED");
         auto fmt = os->formatPicker();
-        auto *prores = dynamic_cast<arstro::cosmo_v2::PillButton *>(fmt->children()[1].get());
+        auto *prores = dynamic_cast<arstro::cosmo_v2::PillButton *>(fmt->children()[2].get());   // H.264 · H.265 · ProRes · DNxHR · PNG
         p = centre(*prores, prores->localBounds());
         r.click(p.x, p.y);
         r.pump(32);
@@ -478,6 +478,62 @@ namespace
               "picking ProRes and the Delivery version re-derives the path: render --timeline delivery … --format prores");
         r.settle();
         CHECK(r.app->edit().renderQueue()->count() == 6, "the queue grew by the two renders the fake accepted");
+
+        // R-RENDER-6: the whole spec. ProRes shows its profile row and hides H.264's quality/speed.
+        CHECK(os->rowAmount(OutputSpec::ProresProfile) > 0.999 && os->rowAmount(OutputSpec::Quality) < 0.001,
+              "ProRes: its PROFILE row is shown, the H.264/H.265 quality row is collapsed");
+        auto clickSeg = [&](std::shared_ptr<arstro::cosmo_v2::SegmentedControl> sc, int i) {
+            auto *b = dynamic_cast<arstro::cosmo_v2::PillButton *>(sc->children()[(size_t)i].get());
+            const Point q = centre(*b, b->localBounds());
+            r.click(q.x, q.y);
+            r.pump(32);
+        };
+        clickSeg(fmt, 1);   // H.265: quality, speed and depth rows open — eased, not popped
+        const double qa = firstMoved(r, [&] { return os->rowAmount(OutputSpec::Quality); }, 0.0);
+        CHECK(strictlyBetween(qa, 0.0, 1.0), "switching codec, a row EASES open (first frame between)");
+        r.settle();
+        clickSeg(os->qualityPicker(), 3);   // Master = CRF 12
+        clickSeg(os->speedPicker(), 2);     // Slow
+        clickSeg(os->depthPicker(), 1);     // 10-bit
+        clickSeg(os->sizePicker(), 1);      // half: 3840x2160 → 1920x1080
+        const Point up = centre(*os, os->rateStepRect(1));
+        r.click(up.x, up.y);                // Project → 23.976, the exact fraction
+        r.pump(32);
+        clickSeg(os->rangePicker(), 1);     // In–Out, from the playhead
+        r.settle();
+        r.svc.dispatch("playhead 2.0", gErr);
+        r.settle();
+        p = centre(*os->setInButton(), os->setInButton()->localBounds());
+        r.click(p.x, p.y);
+        r.svc.dispatch("playhead 6.5", gErr);
+        r.settle();
+        p = centre(*os->setOutButton(), os->setOutButton()->localBounds());
+        r.click(p.x, p.y);
+        r.pump(32);
+        r.svc.lines.clear();
+        p = centre(*os->renderButton(), os->renderButton()->localBounds());
+        r.click(p.x, p.y);
+        const std::string rl = withPrefix(r.svc, "render ");
+        std::printf("      %s\n      %s\n", rl.c_str(), os->summary().c_str());
+        CHECK(rl.find("--format h265") != std::string::npos && rl.find("--quality 12") != std::string::npos &&
+                  rl.find("--speed slow") != std::string::npos && rl.find("--bits 10") != std::string::npos &&
+                  rl.find("--res 1920x1080") != std::string::npos && rl.find("--fps 24000/1001") != std::string::npos &&
+                  rl.find("--range 2:6.5") != std::string::npos,
+              "Render sends the whole spec: --format h265 --quality 12 --speed slow --bits 10 --res 1920x1080 --fps 24000/1001 --range 2:6.5");
+        {
+            // R6 at the small size: the column outgrows the window, scrolls, and Render is reachable
+            Rig s(1024, 640, [](FakeService &f) { f.edit(); });
+            s.app->setTab(EditScreen::Deliver);
+            s.settle();
+            auto o = s.app->edit().outputSpec();
+            CHECK(o->columnScroll().scrollable(), "1024x640: the Deliver column scrolls");
+            const Point mid = centre(*o, Rect{0, o->height.value() * 0.8, o->width.value(), 10.0});
+            s.app->wheel(mid.x, mid.y, -40.0);
+            s.settle();
+            auto rb = o->renderButton();
+            CHECK(rb->visible && rb->y.value() + rb->height.value() <= o->height.value() + 0.5 && rb->y.value() >= 0.0,
+                  "…and wheeling down brings Render fully into view");
+        }
     }
 
     void testHomeAndShell()
