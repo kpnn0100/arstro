@@ -273,6 +273,52 @@ namespace
             clickSegShot(r, os->formatPicker(), 1);
             r.pump(80);
         }});
+        // cutting like an editor (R-UI-14): a source dragged over V2, a roll, a slip, the clip menu
+        v.push_back({"cut_drop_source", edit, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            auto bin = r.app->edit().sourceBin();
+            const Point f = centre(*bin, bin->rowRect(1));
+            const Rect v2 = tl->laneRect("v2");
+            const Point to = world(*tl, tl->timeToX(12.5), v2.y + v2.h * 0.5);
+            r.press(f.x, f.y);
+            r.frame();
+            for (int k = 1; k <= 8; ++k) { r.dragTo(f.x + (to.x - f.x) * k / 8.0, f.y + (to.y - f.y) * k / 8.0); r.frame(); }
+            r.pump(250);
+        }});
+        auto altDrag = [](Rig &r, Point p, double dx) {
+            r.app->pointer(1, p.x, p.y, 0, r.now, true);
+            r.app->pointer(0, p.x, p.y, 0, r.now, true);
+            r.frame();
+            for (int k = 1; k <= 6; ++k) { r.app->pointer(1, p.x + dx * k / 6.0, p.y, 0, r.now, true); r.frame(); }
+            r.pump(120);
+        };
+        v.push_back({"cut_roll_mid", edit, [altDrag](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const Rect c1 = tl->clipRect("c1");
+            altDrag(r, world(*tl, c1.right() - 1.0, c1.y + c1.h * 0.5), 40.0);
+        }});
+        v.push_back({"cut_slip_mid", edit, [altDrag](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const Rect c5 = tl->clipRect("c5");
+            altDrag(r, world(*tl, c5.x + c5.w * 0.5, c5.y + c5.h * 0.5), 48.0);
+        }});
+        v.push_back({"cut_clip_menu", edit, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const Rect c3 = tl->clipRect("c3");
+            const Point p = world(*tl, c3.x + c3.w * 0.5, c3.y + c3.h * 0.5);
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.settle();
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

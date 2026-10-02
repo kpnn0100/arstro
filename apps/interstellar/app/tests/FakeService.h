@@ -271,6 +271,20 @@ namespace istest
                 ++m.frameSeq;
             }
             else if (a[0] == "rack" && a.size() >= 3 && a[1] == "group" && a[2] == "new") groupSelection();
+            else if (a[0] == "track" && a.size() >= 2 && a[1] == "add")
+            {
+                TrackModel tk;
+                bool audio = false;
+                for (size_t k = 2; k + 1 < a.size(); k += 2) if (a[k] == "--kind") audio = a[k + 1] == "audio";
+                int n = 1;
+                for (const auto &x : m.tracks) n += x.audio == audio;
+                tk.id = std::string(audio ? "a" : "v") + std::to_string(n + 10);   // fresh, as the service's would be
+                tk.name = std::string(audio ? "A" : "V") + std::to_string(n);
+                tk.audio = audio;
+                tk.order = n;
+                m.tracks.push_back(tk);
+            }
+            else if (a[0] == "clip" && a.size() >= 3 && a[1] == "copy") { m.hasClipClipboard = true; m.clipClipboardFrom = a[2]; }
             else if (a[0] == "rack" && a.size() >= 3 && a[1] == "duplicate")
             {
                 // the service's behaviour: same file, own name, at the top of the rack, selected

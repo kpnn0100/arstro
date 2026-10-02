@@ -26,6 +26,15 @@
  *     (`clip select <clip>`); a click on the ruler or an empty lane moves the playhead
  *     (`playhead <t>`), and a ruler drag scrubs. If the service refuses a drop, the clip eases
  *     back to where the model says it is.
+ *   * ALT changes what a drag is (R-UI-14), and the clip says so while it is held: Alt-drag the
+ *     cut between two TOUCHING clips ROLLS it (`clip roll <left> --at <t>` — both clips move their
+ *     shared edge live); Alt-drag a clip's body SLIPS its source range under a fixed position
+ *     (`clip slip <clip> --by <dt>`, the new in-point shown on the clip).
+ *   * A SOURCE dragged from the bin (the bin owns the gesture; EditScreen forwards it here as
+ *     `dropHover` / `dropAt` / `dropCancel`) shows a ghost clip, eased in, snapped like a move, on
+ *     the video lane under the pointer — or on a "new video track" when there is none; over an
+ *     audio lane the ghost says it cannot land. Right-clicks report up (`onClipContext`,
+ *     `onLaneContext`) for the screen's menu.
  *
  *  States: empty → "drag a source here", tracks greyed and the source bin lit (SourceBin); the
  *  tracks scroll vertically when they outgrow the deck, time scrolls horizontally, both clamped.
@@ -85,6 +94,22 @@ namespace interstellar_v1
 
         /** Returns whether the line was accepted — a refused drop eases back. */
         std::function<bool(const std::string &line)> onCommand;
+        /** Right-click on clip `id` / on an empty lane (`trackId` "" = below the tracks) at `t`, WORLD point. */
+        std::function<void(const std::string &id, artboard::Point world)> onClipContext;
+        std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
+
+        // ── a source dragged in from the bin (R-UI-14) ──
+        /** The pointer, carrying source `label` (about `dur` s long), is at WORLD point `at`. */
+        void dropHover(const std::string &label, double dur, artboard::Point at);
+        /** Released at WORLD `at`: true with where it lands — `track` "" = a new video track. */
+        bool dropAt(artboard::Point at, std::string &track, double &t);
+        void dropCancel();
+        double dropAmount() const { return mDropAmt.value(); }
+        /** Where the ghost would land now: its time and track ("" = new; "!" = cannot, an audio lane). */
+        double dropTime() const { return mDropT; }
+        const std::string &dropTrack() const { return mDropTrack; }
+        /** What the current modifier-drag is, in words ("roll", "slip +0.50 s"); empty otherwise. */
+        std::string dragHint() const;
 
         void advance(double nowMs) override;
 
@@ -94,7 +119,7 @@ namespace interstellar_v1
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        enum class DragKind { None, Move, TrimIn, TrimOut, Scrub };
+        enum class DragKind { None, Move, TrimIn, TrimOut, Scrub, Roll, Slip };
         struct Drag
         {
             DragKind kind = DragKind::None;
@@ -103,6 +128,9 @@ namespace interstellar_v1
             double value = 0.0;         // snapped start / edge
             double origAt = 0.0, origDur = 0.0, origIn = 0.0, origOut = 0.0, speed = 1.0;
             int origLane = 0, lane = 0;
+            std::string other;          // roll: the clip on the right of the cut
+            double otherAt = 0.0, otherDur = 0.0;
+            double pressT = 0.0;        // slip: the time under the pointer at the press
             bool snapped = false;
             double snapTime = 0.0;
             long long lastFrame = -1;
@@ -172,6 +200,13 @@ namespace interstellar_v1
         artboard::AnimatedProperty mGuideAmt{0.0};
         double mGuideTime = 0.0;
         cosmo_v2::HoverFade mHover, mSel, mUi;   // clip hover, clip selection, zoom buttons
+        // the drop ghost
+        bool mDropWanted = false, mDropApplied = false;
+        artboard::AnimatedProperty mDropAmt{0.0};
+        std::string mDropLabel, mDropTrack;
+        double mDropT = 0.0, mDropDur = 0.0, mDropLane = 0.0;
+        bool mDropNewTrack = false, mDropBad = false;
+        void dropLocate(artboard::Point local);
         std::vector<std::string> mClipOrder;     // stable small ids for the HoverFades
         int clipSlot(const std::string &id) const;
     };

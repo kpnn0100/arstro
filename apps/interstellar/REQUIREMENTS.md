@@ -127,7 +127,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-TL — the timeline — ✅ IMPLEMENTED in the service (DR-VER-1, DR-TL-4); the Cut tab is R-UI
+## R-TL — the timeline — ✅ IMPLEMENTED (DR-VER-1, DR-TL-4, DR-TL-6); every op reachable in the Cut tab (DR-UI-14)
 
 - **R-TL-1 Node types: `track`, `clip`, `transition`, `marker`.** A track is `video | audio`. A clip
   references a **rack node** and carries its source range, timeline position, speed, geometry,
@@ -266,7 +266,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — 🚧 IN PROGRESS (DR-UI-1..12, DR-UI-3c, DR-UI-11a/b; R-UI-13, R-UI-14 in progress; gap: drag-to-regroup)
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..14, DR-UI-3c, DR-UI-11a/b; gap: drag-to-regroup, needs a Cosmo move — D-8)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the

@@ -40,7 +40,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `timeline diff <tl>` | What this version changes relative to its base. | R-VER-2 |
 | `timeline delete <tl>` | Delete a timeline. Refused while another version is based on it. | R-VER-1 |
 | `track add [--kind <video\|audio>] [--name <n>]` | Add a track to the current timeline. | R-TL-1 |
-| `clip add [--track <trk>] [--src <rackobj>] [--in <t>] [--out <t>] [--at <t>] [--name <n>]` | Place a span of a rack source on a track. | R-TL-1 |
+| `clip add [--track <trk>] [--src <rackobj>] [--in <t>] [--out <t>] [--at <t>] [--name <n>]` | Place a span of a rack source on a track. Without --out, the rest of the source from --in (a still: 5 s) — what a drag from the source bin drops. | R-TL-1 |
 | `clip trim <clip> [--in <t>] [--out <t>]` | Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); trimming the head keeps the remaining frames where they were on the timeline. | R-TL-3 |
 | `clip split <clip> [--at <t>]` | Cut a clip in two at a timeline time. | R-TL-3 |
 | `clip move <clip> [--at <t>] [--track <trk>]` | Move a clip in time and/or to another track. | R-TL-3 |
@@ -49,6 +49,8 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `clip slip <clip> [--by <dt>]` | Shift a clip's source range without moving it on the timeline. | R-TL-3 |
 | `clip speed <clip> <speed>` | Set a clip's playback speed. | R-TL-3 |
 | `clip select [clip]` | Select a clip (none clears). | R-UI-3 |
+| `clip copy <clip>` | Keep a clip — its source range, speed, geometry, opacity and blend — to paste. | R-TL-6 |
+| `clip paste [--at <t>] [--track <trk>]` | Place a new clip from the copied one (default: at the playhead, on its track). | R-TL-6 |
 | `transition add [--between <a,b>] [--kind <dissolve\|dip>] [--dur <s>]` | Dissolve between two adjacent clips; the outgoing clip is HELD through it. | R-TL-4 |
 | `marker add <name> [--at <t>] [--note <text>]` | Drop a named marker on the current timeline. | R-TL-1 |
 | `fx add [--node <rackobj>] [--clip <clip>] [--type <denoise\|blend\|freeze>] [--radius <n>] [--strength <0..1>] [--shutter <deg>] [--at <t>]` | Attach a temporal effect to a rack node (footage) or a clip (editorial). | R-FX-2 |
@@ -321,6 +323,8 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `redoLabel` | string |  | What `redo` would redo. |
 | `hasGradeClipboard` | bool |  | `grade copy` has filled the clipboard (R-EDIT-2). |
 | `gradeClipboardFrom` | string |  | The bind name the clipboard grade came from. |
+| `hasClipClipboard` | bool |  | `clip copy` has filled the clip clipboard (R-TL-6). |
+| `clipClipboardFrom` | string |  | The name of the clip it was copied from. |
 | `settings` | group |  | Engine settings (R-SET). |
 | `settings.cpuPercent` | integer |  | Share of the machine's cores the app may schedule — the rack's decode and the frame path alike. |
 | `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |

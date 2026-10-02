@@ -95,7 +95,9 @@ click away.
 ### Cut
 Source bin, the **timeline**, and a clip inspector. Cuts only: no colour, no curves. A clip
 inherited from the base draws plainly; one this version **overrode** carries the accent edge; one
-the base has deleted under a dangling delta draws in `destructive` with the reason.
+the base has deleted under a dangling delta draws in `destructive` with the reason. Every cut operation is reachable here (R-UI-14):
+drag a source from the bin onto a lane, Alt-drag to roll a cut or slip a clip, Shift+Delete to
+ripple, M for a marker, Ctrl+C/X/V for clips, and a right-click menu on clips and empty lanes.
 
 ### Deliver
 Render queue, output spec, and the lint report. **The timeline being rendered is named explicitly

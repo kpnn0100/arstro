@@ -764,6 +764,44 @@ int main()
         assert(std::fabs(gBegin.fps - 24000.0 / 1001.0) < 1e-12 && has(f.svc->model().renders.back().spec, "23.976 fps"));
     });
 
+    test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
+        Fixture f("clippaste");
+        f.standard();
+        std::string err;
+        assert(!f.run("clip paste", &err) && has(err, "nothing copied"));
+        // a drop: no --out = the rest of the source (FakeFrameSource: 96 frames at 24 = 4 s)
+        f.must("clip add --track v0 --src a --in 1 --at 6 --name dropped");
+        auto clipNamed = [&](const std::string &n) -> const ClipModel * {
+            for (const auto &c : f.svc->model().clips) if (c.name == n) return &c;
+            return nullptr;
+        };
+        const ClipModel *d = clipNamed("dropped");
+        assert(d && std::fabs(d->in - 1.0) < 1e-9 && std::fabs(d->out - 4.0) < 1e-9);
+        f.must("clip add --track v0 --src still --in 0 --at 12 --name held");
+        assert(clipNamed("held") && std::fabs(clipNamed("held")->out - 5.0) < 1e-9);   // a still holds 5 s
+        // copy carries what the clip carries; paste lands at the playhead on the copied track
+        f.must("set shotA.speed=2.0");
+        f.must("set shotA.opacity=0.5");
+        f.must("set shotA.geom.scale=1.25");
+        f.must("clip copy shotA");
+        assert(f.svc->model().hasClipClipboard && f.svc->model().clipClipboardFrom == "shotA");
+        f.must("clip delete shotA");                       // cut, then paste: the original is gone
+        f.must("playhead 8.0");
+        const size_t before = f.svc->model().clips.size();
+        f.must("clip paste");
+        assert(f.svc->model().clips.size() == before + 1);
+        const ClipModel *p = nullptr;
+        for (const auto &c : f.svc->model().clips) if (std::fabs(c.at - 8.0) < 1e-9) p = &c;
+        assert(p && p->srcName == "a" && std::fabs(p->speed - 2.0) < 1e-9 && std::fabs(p->opacity - 0.5) < 1e-9);
+        assert(f.svc->model().selectedClip == p->id);       // the pasted clip is the selection
+        assert(f.out("get " + p->name + ".geom.scale").find("1.25") != std::string::npos);
+        f.must("clip paste --at 20");                      // again, elsewhere
+        f.must("undo");                                    // one paste, one step
+        bool at20 = false;
+        for (const auto &c : f.svc->model().clips) at20 = at20 || std::fabs(c.at - 20.0) < 1e-9;
+        assert(!at20);
+    });
+
     test("the same script on two services dumps the same stable state", [] {
         Fixture a("equiv_a"), b("equiv_b");
         for (Fixture *f : {&a, &b})

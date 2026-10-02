@@ -40,6 +40,7 @@ namespace arstro
 namespace interstellar
 {
     class Project;
+    struct Clip;
     struct ResolvedTimeline;
     namespace render { class GradeEngine; class FrameCache; }
 
@@ -252,6 +253,9 @@ namespace interstellar
         EditParams mClipboard;
         bool mHasClipboard = false;
         std::string mClipboardFrom;
+        // `clip copy` (R-TL-6): the clip as the current version resolved it when copied
+        bool mHasClipClipboard = false;
+        std::shared_ptr<Clip> mClipClipboard;   // a pointer: the header carries no Project.h
         SettingsModel mSettings;
         std::vector<PresetModel> mPresets;
     };

@@ -322,7 +322,34 @@ namespace interstellar_v1
                 mDrag.speed = an.data.speed > 0 ? an.data.speed : 1.0;
                 mDrag.origLane = mDrag.lane = laneOfTrack(an.data.track);
                 const double pt = xToTime(local.x);
-                if (edge < 0) { mDrag.kind = DragKind::TrimIn; mDrag.grab = an.data.at - pt; mDrag.value = an.data.at; }
+                // Alt on an edge shared with a touching neighbour: ROLL that cut (R-UI-14)
+                std::string left = id, right;
+                if (g.alt && edge != 0)
+                {
+                    const double cut = edge > 0 ? an.data.at + mDrag.origDur : an.data.at;
+                    for (const auto &kv : mAnims)
+                    {
+                        const ClipAnim &o = kv.second;
+                        if (o.gone || o.data.id == id || o.data.track != an.data.track) continue;
+                        if (edge > 0 && std::fabs(o.data.at - cut) < 0.5 / mFps) right = o.data.id;
+                        if (edge < 0 && std::fabs(o.data.at + clipDur(o.data) - cut) < 0.5 / mFps) { left = o.data.id; right = id; }
+                    }
+                }
+                if (!right.empty() && liveAnim(left) && liveAnim(right))
+                {
+                    const ClipAnim &l = *liveAnim(left), &rr = *liveAnim(right);
+                    mDrag.kind = DragKind::Roll;
+                    mDrag.clip = left;
+                    mDrag.origAt = l.data.at;
+                    mDrag.origDur = clipDur(l.data);
+                    mDrag.other = right;
+                    mDrag.otherAt = rr.data.at;
+                    mDrag.otherDur = clipDur(rr.data);
+                    mDrag.grab = rr.data.at - pt;
+                    mDrag.value = rr.data.at;
+                }
+                else if (g.alt && edge == 0) { mDrag.kind = DragKind::Slip; mDrag.pressT = pt; mDrag.value = 0.0; }
+                else if (edge < 0) { mDrag.kind = DragKind::TrimIn; mDrag.grab = an.data.at - pt; mDrag.value = an.data.at; }
                 else if (edge > 0) { mDrag.kind = DragKind::TrimOut; mDrag.grab = an.data.at + mDrag.origDur - pt; mDrag.value = an.data.at + mDrag.origDur; }
                 else { mDrag.kind = DragKind::Move; mDrag.grab = an.data.at - pt; mDrag.value = an.data.at; }
             }
@@ -371,6 +398,27 @@ namespace interstellar_v1
                 mDrag.value = e;
                 an.dur.set(e - mDrag.origAt); an.durT = an.durL = e - mDrag.origAt;
             }
+            else if (mDrag.kind == DragKind::Roll)
+            {
+                // the shared edge moves: the left clip's end and the right clip's start, together
+                double c = snap(pt + mDrag.grab, 0.0, mDrag.clip, false, mDrag.snapped, mDrag.snapTime);
+                c = std::clamp(c, mDrag.origAt + frame, mDrag.otherAt + mDrag.otherDur - frame);
+                mDrag.value = c;
+                an.dur.set(c - mDrag.origAt); an.durT = an.durL = c - mDrag.origAt;
+                if (ClipAnim *o = liveAnim(mDrag.other))
+                {
+                    const double end = mDrag.otherAt + mDrag.otherDur;
+                    o->at.set(c); o->atT = o->atL = c;
+                    o->dur.set(end - c); o->durT = o->durL = end - c;
+                }
+            }
+            else if (mDrag.kind == DragKind::Slip)
+            {
+                // dragging right shows EARLIER material: the source slides under a fixed clip
+                double by = -(pt - mDrag.pressT) * mDrag.speed;
+                by = std::max(by, -mDrag.origIn);                 // never before the source's start
+                mDrag.value = std::round(by * mFps) / mFps;      // on the frame grid
+            }
             mGuideWanted = mDrag.snapped;
             if (mDrag.snapped) mGuideTime = mDrag.snapTime;
             return true;
@@ -402,6 +450,12 @@ namespace interstellar_v1
                 const double newOut = d.origIn + (d.value - d.origAt) * d.speed;
                 if (!emit("clip trim " + cmd::quote(d.clip) + " --out " + cmd::seconds(newOut, mFps))) resetToModel(d.clip);
             }
+            else if (d.kind == DragKind::Roll && std::fabs(d.value - d.otherAt) > 1e-9)
+            {
+                if (!emit("clip roll " + cmd::quote(d.clip) + " --at " + cmd::seconds(d.value, mFps))) { resetToModel(d.clip); resetToModel(d.other); }
+            }
+            else if (d.kind == DragKind::Slip && std::fabs(d.value) > 1e-9)
+                emit("clip slip " + cmd::quote(d.clip) + " --by " + cmd::num(d.value));
             return true;
         }
         case Gesture::Type::Click:
@@ -423,6 +477,20 @@ namespace interstellar_v1
             }
             return true;
         }
+        case Gesture::Type::RightClick:
+        {
+            int edge = 0;
+            const std::string id = clipAt(local, edge);
+            const Point w = worldTransform().apply(local);
+            if (!id.empty()) { if (onClipContext) onClipContext(id, w); return true; }
+            if (lanesRect().contains(local) || (local.x < shell::headerWidth() && local.y > shell::rulerH()))
+            {
+                const int lane = laneAtY(local.y);
+                const std::string trk = lane >= 0 && lane < (int)mTracks.size() ? mTracks[(size_t)lane].id : std::string();
+                if (onLaneContext) onLaneContext(trk, std::clamp(xToTime(local.x), 0.0, std::max(0.0, mDuration + 60.0)), w);
+            }
+            return true;
+        }
         case Gesture::Type::Scroll:
         {
             if (g.ctrl)
@@ -441,6 +509,78 @@ namespace interstellar_v1
             break;
         }
         return Segment::handleGesture(g, local);
+    }
+
+    // ── a source dragged in from the bin (R-UI-14) ───────────────────────────────────────
+
+    void Timeline::dropLocate(Point local)
+    {
+        const double t0 = std::max(0.0, xToTime(local.x));   // the pointer is the clip's head
+        bool snapped = false;
+        double st = 0.0;
+        mDropT = std::max(0.0, snap(std::max(0.0, t0), mDropDur, std::string(), true, snapped, st));
+        mGuideWanted = snapped;
+        if (snapped) mGuideTime = st;
+        int videoLanes = 0;
+        for (const auto &tk : mTracks) videoLanes += !tk.audio;
+        const int lane = laneAtY(local.y);
+        mDropNewTrack = false;
+        mDropBad = false;
+        if (lane >= 0 && lane < (int)mTracks.size())
+        {
+            mDropLane = lane;
+            mDropTrack = mTracks[(size_t)lane].id;
+            if (mTracks[(size_t)lane].audio) { mDropBad = true; mDropTrack = "!"; }
+        }
+        else if (videoLanes == 0)
+        {
+            mDropLane = 0;                // the first slot, labelled as the track it will make
+            mDropTrack.clear();
+            mDropNewTrack = true;
+        }
+        else
+        {
+            mDropLane = (double)mTracks.size();   // below the tracks: a new video track there
+            mDropTrack.clear();
+            mDropNewTrack = true;
+        }
+    }
+
+    void Timeline::dropHover(const std::string &label, double dur, Point at)
+    {
+        const Point local = worldTransform().inverse().apply(at);
+        mDropLabel = label;
+        mDropDur = dur > 0 ? dur : 5.0;
+        mDropWanted = lanesRect().contains(local);
+        if (mDropWanted) dropLocate(local);
+        else mGuideWanted = false;
+    }
+
+    bool Timeline::dropAt(Point at, std::string &track, double &t)
+    {
+        const Point local = worldTransform().inverse().apply(at);
+        const bool inside = lanesRect().contains(local);
+        if (inside) dropLocate(local);
+        mDropWanted = false;
+        mGuideWanted = false;
+        if (!inside || mDropBad) return false;
+        track = mDropTrack;
+        t = mDropT;
+        return true;
+    }
+
+    void Timeline::dropCancel() { mDropWanted = false; mGuideWanted = false; }
+
+    std::string Timeline::dragHint() const
+    {
+        if (mDrag.kind == DragKind::Roll) return "roll";
+        if (mDrag.kind == DragKind::Slip)
+        {
+            char b[32];
+            std::snprintf(b, sizeof b, "slip %+.2f s", mDrag.value);
+            return b;
+        }
+        return std::string();
     }
 
     // ── time ─────────────────────────────────────────────────────────────────────────────
@@ -562,6 +702,12 @@ namespace interstellar_v1
             mGuideApplied = mGuideWanted;
         }
         mGuideAmt.update(nowMs);
+        if (mDropWanted != mDropApplied)
+        {
+            mDropAmt.animateTo(mDropWanted ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+            mDropApplied = mDropWanted;
+        }
+        mDropAmt.update(nowMs);
         if (!isHovered()) { mHover.clear(); mUi.clear(); }
         mHover.advance(nowMs);
         mUi.advance(nowMs);
@@ -671,6 +817,36 @@ namespace interstellar_v1
             }
             if (sel > 0.001)
                 drawRoundedRect(t, Rect{r.x - 1.0, r.y - 1.0, r.w + 2.0, r.h + 2.0}, radius::control(), Paint::stroked(palette::primaryAlpha(sel * a), 1.5));
+            // a modifier-drag says what it is while it is held (R-UI-14)
+            if (dragged && (mDrag.kind == DragKind::Roll || mDrag.kind == DragKind::Slip))
+            {
+                std::string hint = dragHint();
+                if (mDrag.kind == DragKind::Slip) hint += " \xC2\xB7 in " + cmd::timecode(std::max(0.0, mDrag.origIn + mDrag.value), mFps);
+                const double tw = t.measureText(hint, 9.0, font::mono()) + 10.0;
+                const double hx = mDrag.kind == DragKind::Roll ? timeToX(mDrag.value) - tw * 0.5 : r.x + std::max(0.0, (r.w - tw) * 0.5);
+                const Rect chip{hx, r.y - 16.0 < lr.y ? r.bottom() + 2.0 : r.y - 16.0, tw, 14.0};
+                drawRoundedRect(t, chip, radius::control(), Paint::filledStroked(palette::popover(), palette::primaryAlpha(0.8), 1.0));
+                t.setFill(palette::foreground());
+                t.drawText(hint, chip.x + 5.0, textfit::baseline(chip.y + chip.h * 0.5, 9.0), 9.0, font::mono());
+                if (mDrag.kind == DragKind::Roll)
+                    glyph::line(t, timeToX(mDrag.value), r.y - 2.0, timeToX(mDrag.value), r.bottom() + 2.0, palette::primary(), 2.0);
+            }
+        }
+        // the drop ghost: where a source from the bin would land (R-UI-14)
+        if (const double da = mDropAmt.value(); da > 0.001)
+        {
+            const Rect gr{timeToX(mDropT), laneTop(mDropLane) + kClipInsetY, std::max(8.0, mDropDur * pps), th - 2 * kClipInsetY};
+            const Color edge = mDropBad ? palette::destructive() : palette::primary();
+            drawRoundedRect(t, gr, radius::control(), Paint::filledStroked(fade(edge, 0.16 * da), fade(edge, 0.9 * da), 1.0));
+            const std::string what = mDropBad ? "a video source goes on a video track" : mDropNewTrack ? mDropLabel + " \xC2\xB7 new video track" : mDropLabel;
+            const double room = gr.w - 12.0;
+            if (room > 8.0)
+            {
+                t.setFill(fade(mDropBad ? palette::destructive() : palette::foreground(), da));
+                t.drawText(textfit::ellipsize(t, what, room, 10.0, font::sansMedium()), gr.x + 6.0, gr.y + 11.5, 10.0, font::sansMedium());
+                t.setFill(fade(palette::mutedForeground(), da));
+                t.drawText(cmd::timecode(mDropT, mFps), gr.x + 6.0, gr.y + 22.5, 8.5, font::mono());
+            }
         }
         // transitions: a bowtie over the cut, on the incoming clip's lane
         for (const auto &tr : mTransitions)

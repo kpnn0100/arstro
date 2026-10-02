@@ -68,7 +68,31 @@ namespace interstellar_v1
             mHover.setHovered(rowAt(local) >= 0 ? 10 + rowAt(local) : -1);
             return true;
         case Gesture::Type::Down:
+        {
+            const int i = rowAt(local);
+            mDragRow = i >= 0 && !mSources[(size_t)i].failed ? i : -1;   // an offline source has no frames to place
+            mDragMoved = false;
             return true;
+        }
+        case Gesture::Type::DragStart:
+        case Gesture::Type::Drag:
+            if (mDragRow >= 0 && mDragRow < (int)mSources.size())
+            {
+                mDragMoved = true;
+                if (onDragSource) onDragSource(mSources[(size_t)mDragRow], worldTransform().apply(local), DragPhase::Move);
+            }
+            return true;
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+        {
+            const int i = mDragRow;
+            const bool moved = mDragMoved;
+            mDragRow = -1;
+            mDragMoved = false;
+            if (moved && i >= 0 && i < (int)mSources.size() && onDragSource)
+                onDragSource(mSources[(size_t)i], worldTransform().apply(local), DragPhase::Drop);
+            return true;
+        }
         case Gesture::Type::RightClick:
         {
             const int i = rowAt(local);

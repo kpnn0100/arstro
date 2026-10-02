@@ -89,7 +89,8 @@ namespace interstellar
              "Add a track to the current timeline.", "R-TL-1"},
             {K::ClipAdd, "clip add", "", 0, 0,
              {"track=<trk>", "src=<rackobj>", "in=<t>", "out=<t>", "at=<t>", "name=<n>"},
-             "Place a span of a rack source on a track.", "R-TL-1"},
+             "Place a span of a rack source on a track. Without --out, the rest of the source from --in "
+             "(a still: 5 s) — what a drag from the source bin drops.", "R-TL-1"},
             {K::ClipTrim, "clip trim", "<clip>", 1, 1, {"in=<t>", "out=<t>"},
              "Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); "
              "trimming the head keeps the remaining frames where they were on the timeline.", "R-TL-3"},
@@ -104,6 +105,10 @@ namespace interstellar
              "Shift a clip's source range without moving it on the timeline.", "R-TL-3"},
             {K::ClipSpeed, "clip speed", "<clip> <speed>", 2, 2, {}, "Set a clip's playback speed.", "R-TL-3"},
             {K::ClipSelect, "clip select", "[clip]", 0, 1, {}, "Select a clip (none clears).", "R-UI-3"},
+            {K::ClipCopy, "clip copy", "<clip>", 1, 1, {},
+             "Keep a clip — its source range, speed, geometry, opacity and blend — to paste.", "R-TL-6"},
+            {K::ClipPaste, "clip paste", "", 0, 0, {"at=<t>", "track=<trk>"},
+             "Place a new clip from the copied one (default: at the playhead, on its track).", "R-TL-6"},
             {K::TransitionAdd, "transition add", "", 0, 0, {"between=<a,b>", "kind=<dissolve|dip>", "dur=<s>"},
              "Dissolve between two adjacent clips; the outgoing clip is HELD through it.", "R-TL-4"},
             {K::MarkerAdd, "marker add", "<name>", 1, 1, {"at=<t>", "note=<text>"},

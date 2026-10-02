@@ -44,7 +44,7 @@ namespace interstellar
             TimelineThaw, TimelineRebase, TimelineDiff, TimelineDelete,
             // arrangement (R-TL)
             TrackAdd, ClipAdd, ClipTrim, ClipSplit, ClipMove, ClipDelete, ClipRoll, ClipSlip,
-            ClipSpeed, ClipSelect, TransitionAdd, MarkerAdd,
+            ClipSpeed, ClipSelect, TransitionAdd, MarkerAdd, ClipCopy, ClipPaste,
             // temporal effects (R-FX-2)
             FxAdd, FxDelete,
             // audio subset (R-AUD-2)

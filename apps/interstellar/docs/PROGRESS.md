@@ -50,8 +50,28 @@ one integrator who moves, wires, tests and commits each stream:
 - [x] Monitor zoom like cosmo: Ctrl + wheel about the pointer, eased, pan, fit (DR-UI-13).
 - [x] Deliver's whole output spec: H.264/H.265/ProRes/DNxHR/PNG, profiles, quality, speed, depth,
       size, exact rates, range; D-9 (BT.601, untagged) fixed (DR-RENDER-6).
-- [ ] The 2026-10-02 request, rest: cutting like an editor — drag a source to the timeline and every R-TL-3
-      operation in the Cut tab, clip copy/paste (R-UI-14, R-TL-6).
+- [x] Cutting like an editor: drop a source on the timeline, roll, slip, ripple delete, markers,
+      clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
+- [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
+      editing") — ranked, each a future R- line, none started:
+      1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
+         sum muxed into renders (R-AUD-5 today: placed, not heard).
+      2. **Interchange**: EDL / FCPXML / AAF / OTIO import and export, so a cut travels to and from
+         other suites.
+      3. **Three-point editing**: a source viewer with its own In/Out, insert vs overwrite, J/K/L
+         shuttle, I/O marks on the timeline, match frame.
+      4. **Colour science**: scopes (waveform, parade, vectorscope), colour management (ACES/OCIO,
+         camera log input transforms), HDR (PQ/HLG) delivery, LUT import/export.
+      5. **Keyframes**: geometry, opacity and effect parameters over time; speed ramps and reverse.
+      6. **Timeline power**: multi-select and group move, linked audio/video, track lock/target/sync
+         lock, slide edits, nested sequences, multicam, subclips, a snapping toggle.
+      7. **Media management**: proxy generation and online/offline switching, relink UI, source
+         timecode/reel metadata, RAW camera formats, frame-rate conform.
+      8. **Titles and generators**: text, solids, bars and tone.
+      9. **Delivery extras**: render presets, burn-ins, alpha output, upscale/reframe, a persistent
+         queue, captions (R-SCOPE-4 excludes subtitles in v1).
+      10. **Safety and output**: autosave and crash recovery, a second-display / video-output monitor,
+          customisable shortcuts; a Cosmo `Move` command for drag-to-regroup (D-8).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,

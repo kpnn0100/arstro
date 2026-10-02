@@ -90,6 +90,7 @@ namespace interstellar
             case CK::ClipDelete: case CK::ClipRoll: case CK::ClipSlip: case CK::ClipSpeed:
             case CK::TransitionAdd: case CK::MarkerAdd: case CK::FxAdd: case CK::FxDelete:
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
+            case CK::ClipPaste:
                 return true;
             default: return false;
         }

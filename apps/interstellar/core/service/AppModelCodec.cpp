@@ -215,6 +215,8 @@ namespace interstellar
         j.set("redoLabel", m.redoLabel);
         j.set("hasGradeClipboard", m.hasGradeClipboard);
         j.set("gradeClipboardFrom", m.gradeClipboardFrom);
+        j.set("hasClipClipboard", m.hasClipClipboard);
+        j.set("clipClipboardFrom", m.clipClipboardFrom);
         Json settings = Json::object();
         settings.set("cpuPercent", m.settings.cpuPercent);
         settings.set("threads", m.settings.threads);
@@ -389,6 +391,8 @@ namespace interstellar
             {"redoLabel", "string", "What `redo` would redo."},
             {"hasGradeClipboard", "bool", "`grade copy` has filled the clipboard (R-EDIT-2)."},
             {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
+            {"hasClipClipboard", "bool", "`clip copy` has filled the clip clipboard (R-TL-6)."},
+            {"clipClipboardFrom", "string", "The name of the clip it was copied from."},
             {"settings", "group", "Engine settings (R-SET)."},
             {"settings.cpuPercent", "integer", "Share of the machine's cores the app may schedule — the rack's decode and the frame path alike."},
             {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},

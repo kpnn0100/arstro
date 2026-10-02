@@ -152,6 +152,19 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Queue rows print `renders[].spec` on line two before the path.
 - Shots added: `deliver_spec_h265`, `deliver_spec_codec_mid`. UI checks: 230.
 
+## Cutting like an editor (2026-10-02, R-UI-14 / R-TL-6)
+
+- Drag a source row out of the source bin onto a lane: an eased ghost (snapped; "new video track"
+  over an empty timeline; refused over audio) → `clip add --track <trk> --src <bind> --in 0 --at <t>`
+  (preceded by `track add --kind video` when needed).
+- Alt-drag a cut between touching clips = roll; Alt-drag a body = slip; the clip shows a chip
+  ("roll", "slip −0.83 s · in …") while held.
+- Keys on Cut: Shift+Delete ripple delete, M marker at the playhead, Ctrl+C/X/V clip copy/cut/paste.
+- Right-click a clip: Split at Playhead, Copy, Cut, Paste, Delete, Ripple Delete, Add Dissolve to
+  Next, Speed 50/100/200 %, Show Source in Grade. Right-click an empty lane: Paste Here, Add Marker
+  Here, Add Video/Audio Track.
+- Shots added: `cut_drop_source`, `cut_roll_mid`, `cut_slip_mid`, `cut_clip_menu`. UI checks: 253.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -237,6 +250,11 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | timeline clip click | `clip select <clip>` |
 | timeline clip drag | `clip move <clip> --at <snapped t> [--track <trk>]` |
 | timeline edge drag | `clip trim <clip> --in <t>` / `--out <t>` (source time) |
+| Alt-drag a cut between touching clips / Alt-drag a body | `clip roll <left> --at <t>` / `clip slip <clip> --by <dt>` |
+| drag a source from the bin onto a lane | `clip add --track <trk> --src <bind> --in 0 --at <t>` (first `track add --kind video` on an empty timeline) |
+| Shift+Delete · M · Ctrl+C / Ctrl+X / Ctrl+V (Cut tab) | `clip delete <clip> --ripple` · `marker add m<n> --at <playhead>` · `clip copy <clip>` / + `clip delete <clip>` / `clip paste` |
+| clip menu: Add Dissolve to Next · Speed N% | `transition add --between <a>,<b> --dur 0.5` · `clip speed <clip> <s>` |
+| lane menu: Paste Here · Add Marker Here · Add Video/Audio Track | `clip paste --at <t> [--track <trk>]` · `marker add m<n> --at <t>` · `track add --kind video|audio` |
 | ruler click/drag, empty-lane click | `playhead <t>` |
 | inspector Split / Delete; keys `S`, `Delete`/`Backspace` (Cut tab) | `clip split <clip> --at <playhead>`, `clip delete <clip>` |
 | keys Space / ← → | `play`·`pause`; `playhead <t ∓ 1 frame>` (keys `1 2 3` switch tabs — presentation) |

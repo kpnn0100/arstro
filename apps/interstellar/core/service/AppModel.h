@@ -211,6 +211,8 @@ namespace interstellar
         std::string undoLabel, redoLabel;   // "set a.basic.exposure", "clip move shotA"
         bool hasGradeClipboard = false;     // `grade copy` has something to paste
         std::string gradeClipboardFrom;     // the bind name it was copied from
+        bool hasClipClipboard = false;      // `clip copy` has something to paste (R-TL-6)
+        std::string clipClipboardFrom;      // the clip it was copied from
 
         // ── Settings + Preset ──
         SettingsModel settings;

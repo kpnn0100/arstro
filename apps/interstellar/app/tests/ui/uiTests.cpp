@@ -1323,6 +1323,156 @@ namespace
         r.frame();
     }
 
+    /** R-UI-14: the Cut tab reaches every cut operation — drop a source, roll, slip, ripple delete,
+     *  markers, copy/cut/paste, the clip and lane menus. */
+    void testCutEditing()
+    {
+        std::printf("cutting like an editor\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.app->setTab(EditScreen::Cut);
+        r.settle();
+        auto tl = r.app->edit().timeline();
+        auto bin = r.app->edit().sourceBin();
+        // drag a source from the bin onto V2 — the ghost eases in, snapped, then `clip add` on release
+        const Rect v2 = tl->laneRect("v2");
+        const Point from = centre(*bin, bin->rowRect(1));
+        const Point to = world(*tl, tl->timeToX(13.0), v2.y + v2.h * 0.5);
+        r.svc.lines.clear();
+        r.press(from.x, from.y);
+        r.frame();
+        for (int k = 1; k <= 7; ++k) { r.dragTo(from.x + (to.x - from.x) * k / 8.0, from.y + (to.y - from.y) * k / 8.0); r.frame(); }
+        CHECK(tl->dropAmount() < 1e-9, "no ghost while the pointer is still over the bin");
+        r.dragTo(to.x, to.y);   // into the lanes
+        const double ghostFirst = firstMoved(r, [&] { return tl->dropAmount(); }, 0.0);
+        CHECK(bin->draggingSource() && tl->dropTrack() == "v2", "dragging a source over V2 targets V2");
+        std::printf("      ghost first frame %.3f\n", ghostFirst);
+        CHECK(strictlyBetween(ghostFirst, 0.0, 1.0), "the drop ghost EASES in over the lanes (first frame between)");
+        r.releaseAt(to.x, to.y);
+        r.frame();
+        const std::string add = withPrefix(r.svc, "clip add ");
+        std::printf("      %s\n", add.c_str());
+        CHECK(add.rfind("clip add --track v2 --src s_day02 --in 0 --at ", 0) == 0 && std::fabs(std::stod(add.substr(add.rfind(' ') + 1)) - 13.0) < 0.2,
+              "release dispatched clip add --track v2 --src s_day02 --in 0 --at ≈13 (the rest of the source, the service's default)");
+        r.settle();
+        CHECK(tl->dropAmount() < 1e-9, "…and the ghost leaves");
+        // over an audio lane: a video source cannot land there
+        const Rect a1 = tl->laneRect("a1");
+        r.svc.lines.clear();
+        r.press(from.x, from.y);
+        r.frame();
+        const Point ta = world(*tl, tl->timeToX(3.0), a1.y + a1.h * 0.5);
+        for (int k = 1; k <= 6; ++k) { r.dragTo(from.x + (ta.x - from.x) * k / 6.0, from.y + (ta.y - from.y) * k / 6.0); r.frame(); }
+        CHECK(tl->dropTrack() == "!", "over an audio lane the ghost says it cannot land");
+        r.releaseAt(ta.x, ta.y);
+        r.frame();
+        CHECK(withPrefix(r.svc, "clip add").empty(), "…and nothing is added");
+        r.settle();
+
+        {
+            // an EMPTY timeline: the drop makes the video track, then the clip
+            Rig e(1440, 900, [](FakeService &f) { f.edit(); f.m.clips.clear(); f.m.transitions.clear(); f.m.tracks.clear(); f.m.selectedClip.clear(); });
+            e.app->setTab(EditScreen::Cut);
+            e.settle();
+            auto etl = e.app->edit().timeline();
+            auto ebin = e.app->edit().sourceBin();
+            const Point ef = centre(*ebin, ebin->rowRect(0));
+            const Rect lr = etl->lanesRect();
+            const Point et = world(*etl, etl->timeToX(1.0), lr.y + 20.0);
+            e.svc.lines.clear();
+            e.press(ef.x, ef.y);
+            e.frame();
+            for (int k = 1; k <= 6; ++k) { e.dragTo(ef.x + (et.x - ef.x) * k / 6.0, ef.y + (et.y - ef.y) * k / 6.0); e.frame(); }
+            CHECK(etl->dropTrack().empty(), "over an empty timeline the ghost offers a new video track");
+            e.releaseAt(et.x, et.y);
+            e.frame();
+            CHECK(e.svc.lines.size() >= 2 && e.svc.lines[e.svc.lines.size() - 2] == "track add --kind video" &&
+                      e.svc.lines.back().rfind("clip add --track v11 --src s_day01 --in 0 --at ", 0) == 0,
+                  "release made the video track, then added the clip on it");
+        }
+
+        // Alt-drag the c1|c2 cut: ROLL
+        const Rect c1 = tl->clipRect("c1");
+        const Point cut = world(*tl, c1.right() - 1.0, c1.y + c1.h * 0.5);
+        r.svc.lines.clear();
+        r.app->pointer(1, cut.x, cut.y, 0, r.now, true);
+        r.app->pointer(0, cut.x, cut.y, 0, r.now, true);
+        r.frame();
+        for (int k = 1; k <= 5; ++k) { r.app->pointer(1, cut.x + 6.0 * k, cut.y, 0, r.now, true); r.frame(); }
+        CHECK(tl->dragHint() == "roll", "Alt on a cut between touching clips is a ROLL, and says so");
+        CHECK(tl->clipRect("c2").x > c1.right() + 10.0, "…both clips move their shared edge live");
+        r.app->pointer(2, cut.x + 30.0, cut.y, 0, r.now, true);
+        r.frame();
+        CHECK(!withPrefix(r.svc, "clip roll c1 --at ").empty(), "release dispatched clip roll c1 --at <t>");
+        r.settle();
+        // Alt-drag a body: SLIP
+        const Rect c5 = tl->clipRect("c5");
+        const Point body = world(*tl, c5.x + c5.w * 0.5, c5.y + c5.h * 0.5);
+        r.svc.lines.clear();
+        r.app->pointer(1, body.x, body.y, 0, r.now, true);
+        r.app->pointer(0, body.x, body.y, 0, r.now, true);
+        r.frame();
+        for (int k = 1; k <= 5; ++k) { r.app->pointer(1, body.x + 8.0 * k, body.y, 0, r.now, true); r.frame(); }
+        CHECK(tl->dragHint().rfind("slip -", 0) == 0, "Alt on a clip's body is a SLIP (right = earlier material), and says so");
+        CHECK(std::fabs(tl->clipRect("c5").x - c5.x) < 0.5, "…the clip itself does not move");
+        r.app->pointer(2, body.x + 40.0, body.y, 0, r.now, true);
+        r.frame();
+        CHECK(!withPrefix(r.svc, "clip slip c5 --by -").empty(), "release dispatched clip slip c5 --by <negative dt>");
+        r.settle();
+
+        // keys: Shift+Delete ripples, M marks the playhead, Ctrl+C/X/V copy, cut, paste
+        r.svc.lines.clear();
+        {
+            artboard::KeyEvent e;
+            e.type = artboard::KeyEvent::Type::Down;
+            e.keyCode = 46;
+            e.shift = true;
+            r.app->key(e);
+        }
+        CHECK(hasLine(r.svc, "clip delete c2 --ripple"), "Shift+Delete dispatched clip delete c2 --ripple");
+        r.svc.lines.clear();
+        r.key('M');
+        CHECK(!withPrefix(r.svc, "marker add m1 --at ").empty(), "M dropped marker m1 at the playhead");
+        r.svc.lines.clear();
+        ctrlKey(r, 'C');
+        CHECK(hasLine(r.svc, "clip copy c2"), "Ctrl+C on the Cut tab copies the selected CLIP");
+        r.svc.lines.clear();
+        ctrlKey(r, 'X');
+        CHECK(hasLine(r.svc, "clip copy c2") && hasLine(r.svc, "clip delete c2"), "Ctrl+X copies then deletes");
+        r.svc.lines.clear();
+        ctrlKey(r, 'V');
+        CHECK(hasLine(r.svc, "clip paste"), "Ctrl+V pastes at the playhead");
+
+        // right-click a clip: the cut menu
+        const Rect c3 = tl->clipRect("c3");
+        const Point p3 = world(*tl, c3.x + c3.w * 0.5, c3.y + c3.h * 0.5);
+        r.app->pointer(1, p3.x, p3.y, 0, r.now);
+        r.app->pointer(0, p3.x, p3.y, 2, r.now);
+        r.app->pointer(2, p3.x, p3.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        std::printf("      %s\n", labels.c_str());
+        CHECK(cm->isOpen() && labels.find("Ripple Delete") != std::string::npos && labels.find("Copy") != std::string::npos &&
+                  labels.find("Speed 200%") != std::string::npos && labels.find("Show Source in Grade") != std::string::npos,
+              "right-clicking a clip offers the cut operations (ripple delete, copy, speed, show source…)");
+        int rip = -1;
+        for (int i = 0; i < cm->itemCount(); ++i) if (cm->item(i).label.rfind("Ripple Delete", 0) == 0) rip = i;
+        r.svc.lines.clear();
+        if (rip >= 0) { const Point ip = centre(*cm, cm->itemRect(rip)); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(hasLine(r.svc, "clip delete c3 --ripple"), "…its Ripple Delete dispatched clip delete c3 --ripple");
+        // right-click empty lane space: tracks, marker, paste
+        const Point empty = world(*tl, tl->timeToX(15.0), tl->laneRect("v2").y + 8.0);
+        r.app->pointer(1, empty.x, empty.y, 0, r.now);
+        r.app->pointer(0, empty.x, empty.y, 2, r.now);
+        r.app->pointer(2, empty.x, empty.y, 2, r.now + 40.0);
+        r.pump(250);
+        labels.clear();
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(cm->isOpen() && labels.find("Add Video Track") != std::string::npos && labels.find("Paste Here") != std::string::npos,
+              "right-clicking an empty lane offers Paste Here and new tracks");
+    }
+
     /** R-UI-13: Ctrl + wheel zooms the monitor about the pointer, eased; drag pans; double-click fits. */
     void testMonitorZoom()
     {
@@ -1470,6 +1620,7 @@ int main()
     testGroupBrowsing();
     testVariants();
     testMonitorZoom();
+    testCutEditing();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

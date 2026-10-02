@@ -119,6 +119,10 @@ namespace interstellar_v1
         bool editKey(const artboard::KeyEvent &e);
         void openRackContext(int rackIndex, artboard::Point at);
         void openCaptureMenu(artboard::Rect at);
+        void dropSource(const std::string &src, const std::string &track, double at);
+        void openClipContext(const std::string &clipId, artboard::Point at);
+        void openLaneContext(const std::string &trackId, double t, artboard::Point at);
+        std::string freshMarkerName() const;
         std::string captureBind() const;
         std::string mCaptureBind;                       // what the open capture menu captures ("" = the timeline)
         std::string mRenameTarget;                      // the bind name the context menu is renaming

@@ -97,6 +97,11 @@ namespace interstellar_v1
         /** Right-click on a rack node — rack tree row or filmstrip cell — at a point in this
          *  screen's coordinates. The App fills the menu. */
         std::function<void(int rackIndex, artboard::Point at)> onRackContext;
+        /** A source dropped on the timeline (R-UI-14): `track` "" = make a video track for it. */
+        std::function<void(const std::string &srcBind, const std::string &track, double at)> onDropSource;
+        /** Right-clicks in the Cut timeline, for the app's menus. */
+        std::function<void(const std::string &clipId, artboard::Point world)> onClipContext;
+        std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
         /** The capture button (transport or, in Grade, the monitor caption) at a WORLD rect. */
         std::function<void(artboard::Rect)> onCapture;
         /** The transport's live eased presence (0 in Grade … 1) — what a test reads. */

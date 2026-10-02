@@ -5,6 +5,7 @@
 #include "ParamHash.h"
 #include "ParamRegistry.h"
 #include "Project.h"
+#include "Schema.h"
 #include "Versions.h"
 #include "engine/EditParamsIO.h"
 #include <algorithm>
@@ -251,7 +252,7 @@ namespace interstellar
             case CK::TrackAdd: case CK::ClipAdd: case CK::ClipTrim: case CK::ClipSplit: case CK::ClipMove:
             case CK::ClipDelete: case CK::ClipRoll: case CK::ClipSlip: case CK::ClipSpeed: case CK::ClipSelect:
             case CK::TransitionAdd: case CK::MarkerAdd: case CK::FxAdd: case CK::FxDelete:
-            case CK::AudioTrackAdd: case CK::AudioClipAdd:
+            case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::ClipCopy: case CK::ClipPaste:
                 ok = requireProject() && arrangeCommand(c);
                 break;
 
@@ -703,6 +704,8 @@ namespace interstellar
         m.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
         m.hasGradeClipboard = mHasClipboard;
         m.gradeClipboardFrom = mClipboardFrom;
+        m.hasClipClipboard = mHasClipClipboard;
+        m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
         m.presets = mPresets;
     }
@@ -2143,9 +2146,24 @@ namespace interstellar
             case CK::ClipAdd:
             {
                 double in = 0, out = 0, at = 0;
-                if (!time("in", in) || !time("out", out) || !time("at", at)) return false;
+                if (!time("in", in) || !time("at", at)) return false;
                 const NodeId track = P.idForRef(c.flag("track"));
                 if (!P.track(track)) return fail("clip add: no track named " + c.flag("track"));
+                if (c.has("out")) { if (!time("out", out)) return false; }
+                else
+                {
+                    // the rest of the source — what a drop from the source bin means (R-UI-14)
+                    const RackObj *ro = P.rackObj(P.idForRef(c.flag("src")));
+                    if (!ro || ro->kind == "group") return fail("clip add: " + c.flag("src") + " is not a rack source");
+                    if (!looksLikeVideo(ro->media)) out = in + 5.0;   // a still: an editor's default hold
+                    else
+                    {
+                        auto *s = source(*mSync, resolvePath(ro->media));
+                        if (!s || !s->ok || s->info.frames <= 0) return fail("clip add: " + ro->name + " cannot be opened to know its length — give --out");
+                        out = snapToFrame((double)s->info.frames / (s->info.fps > 0 ? s->info.fps : fps), fps);
+                    }
+                    if (!(out > in)) return fail("clip add: --in is at or past the end of " + ro->name);
+                }
                 NodeId id;
                 if (!arrange::addClip(P, tl, track, P.idForRef(c.flag("src")), in, out, at, c.flag("name"), id, err))
                     return fail("clip add: " + err);
@@ -2238,6 +2256,48 @@ namespace interstellar
                 if (!parseDouble(c.arg(1), s) || s <= 0 || s > 8) return fail("clip speed: a speed in (0, 8], got `" + c.arg(1) + "`");
                 if (!setField(P, tl, id, "speed", c.arg(1), err)) return fail("clip speed: " + err);
                 return done("speed", id);
+            }
+            case CK::ClipCopy:
+            {
+                NodeId id;
+                if (!clipRef(c.arg(0), id)) return false;
+                ResolvedTimeline R;
+                if (!resolved(tl, R, err)) return fail(err);
+                for (const auto &x : R.clips)
+                    if (x.id == id)
+                    {
+                        mClipClipboard = std::make_shared<Clip>(x);   // as THIS version sees it, overrides included
+                        mHasClipClipboard = true;
+                        emit(Event(EK::SelectionChanged).with("rack", "").with("clip", id));
+                        return true;
+                    }
+                return fail("clip copy: " + c.arg(0) + " is not in this timeline");
+            }
+            case CK::ClipPaste:
+            {
+                if (!mHasClipClipboard) return fail("clip paste: nothing copied — `clip copy <clip>` first");
+                double at = snapToFrame(mModel.playhead, fps);
+                if (c.has("at") && !time("at", at)) return false;
+                const Clip &cb = *mClipClipboard;
+                NodeId track = cb.track;
+                if (c.has("track") && !P.track(track = P.idForRef(c.flag("track")))) return fail("clip paste: no track named " + c.flag("track"));
+                NodeId id;
+                if (!arrange::addClip(P, tl, track, cb.src, cb.in, cb.out, at, "", id, err))
+                    return fail("clip paste: " + err);
+                // everything else the clip carries, through the schema — so a field added to a clip
+                // later is pasted too, without this list knowing it
+                Fields kv;
+                const Clip fresh;
+                static const std::set<std::string> placement{"id", "name", "track", "timeline", "order", "src", "at", "in", "out", "from"};
+                for (const auto &f : schema::fields<Clip>())
+                {
+                    if (!f.editable || placement.count(f.key)) continue;
+                    if (f.text && f.text(cb) != f.text(fresh)) kv.emplace_back(f.key, f.text(cb));
+                    else if (f.num && f.num(cb) != f.num(fresh)) kv.emplace_back(f.key, canonicalNumber(f.num(cb)));
+                }
+                if (!kv.empty() && !setFields(P, tl, id, kv, err)) return fail("clip paste: " + err);
+                mSelectedClip = id;
+                return done("pasted", id);
             }
             case CK::ClipSelect:
             {

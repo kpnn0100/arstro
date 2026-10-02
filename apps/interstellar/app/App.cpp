@@ -2,6 +2,7 @@
 #include "widgets/CommandLine.h"
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 namespace arstro
 {
@@ -66,6 +67,10 @@ namespace interstellar_v1
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
+        // the Cut tab, like an editor (R-UI-14)
+        mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
+        mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
+        mEdit->onLaneContext = [this](const std::string &trk, double t, Point w) { openLaneContext(trk, t, w); };
         // the ref-frame slider previews in the monitor while dragged, nothing committed (R-RACK-3)
         mEdit->gradeDeck()->onPreview = [this](const std::string &bind, double t) {
             mPreviewBind = t < 0 ? std::string() : bind;
@@ -369,6 +374,101 @@ namespace interstellar_v1
         noteActivity();
     }
 
+    // ── the Cut tab, like an editor (R-UI-14) ──
+
+    namespace
+    {
+        double clipLen(const interstellar::ClipModel &c) { return c.duration > 0 ? c.duration : (c.out - c.in) / std::max(1e-6, c.speed); }
+    }
+
+    /** A source dropped from the bin: `clip add` there — the rest of the source, the service's
+     *  default. With no video track to land on, one is made first (two lines, two undo steps). */
+    void App::dropSource(const std::string &src, const std::string &track, double at)
+    {
+        const auto &m0 = mHooks.model ? mHooks.model() : emptyModel();
+        const double fps = m0.fps > 0 ? m0.fps : 24.0;
+        std::string trk = track;
+        if (trk.empty())
+        {
+            std::set<std::string> before;
+            for (const auto &tk : m0.tracks) before.insert(tk.id);
+            if (!dispatch("track add --kind video")) return;
+            const auto &m1 = mHooks.model ? mHooks.model() : emptyModel();
+            for (const auto &tk : m1.tracks)
+                if (!tk.audio && !before.count(tk.id)) trk = tk.id;
+            if (trk.empty()) return;
+        }
+        dispatch("clip add --track " + cmd::quote(trk) + " --src " + cmd::quote(src) + " --in 0 --at " + cmd::seconds(at, fps));
+    }
+
+    /** A fresh marker name: m1, m2 … the first one no marker has. */
+    std::string App::freshMarkerName() const
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::set<std::string> taken;
+        for (const auto &mk : m.markers) taken.insert(mk.name);
+        for (int k = 1;; ++k)
+        {
+            const std::string n = "m" + std::to_string(k);
+            if (!taken.count(n)) return n;
+        }
+    }
+
+    /** Right-click on a clip: every cut operation that applies to it, each a command line. */
+    void App::openClipContext(const std::string &id, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const interstellar::ClipModel *c = nullptr;
+        for (const auto &x : m.clips) if (x.id == id) c = &x;
+        if (!c) return;
+        if (m.selectedClip != id) dispatch("clip select " + cmd::quote(id));
+        const double fps = m.fps > 0 ? m.fps : 24.0;
+        const std::string q = cmd::quote(id);
+        const auto clip = *c;   // the menu outlives this model snapshot
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (m.playhead > clip.at + 1e-9 && m.playhead < clip.at + clipLen(clip) - 1e-9)
+            items.push_back({"Split at Playhead  (S)", [this, q, t = m.playhead, fps] { dispatch("clip split " + q + " --at " + cmd::seconds(t, fps)); }});
+        items.push_back({"Copy  (Ctrl+C)", [this, q] { dispatch("clip copy " + q); }});
+        items.push_back({"Cut  (Ctrl+X)", [this, q] { if (dispatch("clip copy " + q)) dispatch("clip delete " + q); }});
+        if (m.hasClipClipboard) items.push_back({"Paste at Playhead  (Ctrl+V)", [this] { dispatch("clip paste"); }});
+        items.push_back({"Delete  (Del)", [this, q] { dispatch("clip delete " + q); }});
+        items.push_back({"Ripple Delete  (Shift+Del)", [this, q] { dispatch("clip delete " + q + " --ripple"); }});
+        if (!clip.audio)
+        {
+            // a dissolve into the next clip that TOUCHES this one on its track (R-TL-4 holds the outgoing one)
+            for (const auto &x : m.clips)
+                if (x.track == clip.track && x.id != clip.id && std::fabs(x.at - (clip.at + clipLen(clip))) < 0.5 / fps)
+                {
+                    items.push_back({"Add Dissolve to Next", [this, q, b = cmd::quote(x.id)] { dispatch("transition add --between " + q + "," + b + " --dur 0.5"); }});
+                    break;
+                }
+            for (double sp : {0.5, 1.0, 2.0})
+                if (std::fabs(clip.speed - sp) > 1e-9)
+                    items.push_back({"Speed " + std::to_string((int)std::lround(sp * 100)) + "%", [this, q, sp] { dispatch("clip speed " + q + " " + cmd::num(sp)); }});
+            if (!clip.srcName.empty())
+                items.push_back({"Show Source in Grade", [this, s = clip.srcName] { dispatch("rack select " + cmd::quote(s)); mEdit->setTab(EditScreen::Grade); }});
+        }
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    /** Right-click on an empty lane: tracks, a paste or a marker at that time. */
+    void App::openLaneContext(const std::string &track, double t, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const double fps = m.fps > 0 ? m.fps : 24.0;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (m.hasClipClipboard)
+            items.push_back({"Paste Here", [this, track, t, fps] {
+                dispatch("clip paste --at " + cmd::seconds(t, fps) + (track.empty() ? std::string() : " --track " + cmd::quote(track)));
+            }});
+        items.push_back({"Add Marker Here  (M at the playhead)", [this, t, fps] { dispatch("marker add " + freshMarkerName() + " --at " + cmd::seconds(t, fps)); }});
+        items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
+        items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
     void App::requestHome()
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
@@ -459,7 +559,19 @@ namespace interstellar_v1
         case kKeyRight: dispatch("playhead " + cmd::seconds(m.playhead + 1.0 / fps, fps)); return true;
         case kKeyDelete:
         case kKeyBackspace:
-            if (mEdit->tab() == EditScreen::Cut && !m.selectedClip.empty()) { dispatch("clip delete " + cmd::quote(m.selectedClip)); return true; }
+            // Shift: RIPPLE — the gap closes (R-UI-14)
+            if (mEdit->tab() == EditScreen::Cut && !m.selectedClip.empty())
+            {
+                dispatch("clip delete " + cmd::quote(m.selectedClip) + (e.shift ? " --ripple" : ""));
+                return true;
+            }
+            return false;
+        case 'M':
+            if (mEdit->tab() == EditScreen::Cut && m.duration > 0.0)
+            {
+                dispatch("marker add " + freshMarkerName() + " --at " + cmd::seconds(m.playhead, fps));
+                return true;
+            }
             return false;
         case 'S':
             if (mEdit->tab() == EditScreen::Cut && !m.selectedClip.empty())
@@ -502,8 +614,19 @@ namespace interstellar_v1
         }
         case 'C':
         case 'V':
+        case 'X':
         {
-            if (mEdit->tab() != EditScreen::Grade) return false;
+            if (mEdit->tab() == EditScreen::Cut)
+            {
+                // a CLIP on the Cut tab (R-TL-6): copy / cut / paste at the playhead
+                const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                if (e.keyCode == 'V') { if (!m.hasClipClipboard) return false; dispatch("clip paste"); return true; }
+                if (m.selectedClip.empty()) return false;
+                const std::string q = cmd::quote(m.selectedClip);
+                if (dispatch("clip copy " + q) && e.keyCode == 'X') dispatch("clip delete " + q);
+                return true;
+            }
+            if (e.keyCode == 'X' || mEdit->tab() != EditScreen::Grade) return false;
             const auto b = selectedBind();
             if (b.empty()) return false;
             dispatch(std::string(e.keyCode == 'C' ? "grade copy " : "grade paste ") + cmd::quote(b));

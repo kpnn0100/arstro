@@ -56,6 +56,21 @@ namespace interstellar_v1
         mBin->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
         mTimeline = std::make_shared<Timeline>();
         mTimeline->onCommand = [this](const std::string &l) { return emit(l); };
+        mTimeline->onClipContext = [this](const std::string &id, Point w) { if (onClipContext) onClipContext(id, w); };
+        mTimeline->onLaneContext = [this](const std::string &trk, double t, Point w) { if (onLaneContext) onLaneContext(trk, t, w); };
+        // a source dragged out of the bin is the timeline's to place (R-UI-14)
+        mBin->onDragSource = [this](const interstellar::RackNodeModel &n, Point w, SourceBin::DragPhase ph) {
+            const std::string label = n.cosmoName.empty() ? n.bindName : n.cosmoName;
+            const double dur = n.mediaDuration > 0 ? n.mediaDuration : (n.video ? 0.0 : 5.0);
+            if (ph == SourceBin::DragPhase::Move) mTimeline->dropHover(label, dur, w);
+            else if (ph == SourceBin::DragPhase::Cancel) mTimeline->dropCancel();
+            else
+            {
+                std::string trk;
+                double at = 0;
+                if (mTimeline->dropAt(w, trk, at) && onDropSource) onDropSource(n.bindName, trk, at);
+            }
+        };
         mClipInspector = std::make_shared<ClipInspector>();
         mClipInspector->onCommand = fwd;
         mPages[Cut]->addChild(mBin);

@@ -376,7 +376,7 @@
           "value": "<n>"
         }
       ],
-      "summary": "Place a span of a rack source on a track.",
+      "summary": "Place a span of a rack source on a track. Without --out, the rest of the source from --in (a still: 5 s) — what a drag from the source bin drops.",
       "requirement": "R-TL-1"
     },
     {
@@ -496,6 +496,35 @@
       "flags": [],
       "summary": "Select a clip (none clears).",
       "requirement": "R-UI-3"
+    },
+    {
+      "verb": "clip copy",
+      "usage": "clip copy <clip>",
+      "args": "<clip>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Keep a clip — its source range, speed, geometry, opacity and blend — to paste.",
+      "requirement": "R-TL-6"
+    },
+    {
+      "verb": "clip paste",
+      "usage": "clip paste [--at <t>] [--track <trk>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "track",
+          "value": "<trk>"
+        }
+      ],
+      "summary": "Place a new clip from the copied one (default: at the playhead, on its track).",
+      "requirement": "R-TL-6"
     },
     {
       "verb": "transition add",
@@ -1877,6 +1906,18 @@
       "type": "string",
       "stable": true,
       "doc": "The bind name the clipboard grade came from."
+    },
+    {
+      "path": "hasClipClipboard",
+      "type": "bool",
+      "stable": true,
+      "doc": "`clip copy` has filled the clip clipboard (R-TL-6)."
+    },
+    {
+      "path": "clipClipboardFrom",
+      "type": "string",
+      "stable": true,
+      "doc": "The name of the clip it was copied from."
     },
     {
       "path": "settings",

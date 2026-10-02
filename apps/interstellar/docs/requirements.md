@@ -593,3 +593,33 @@ project's), `interstellar_render_codecs` (every codec/profile through real FFmpe
 ffprobe; an H.264 render decodes to the still's colour within 4 — red at 13 levels with the BT.601
 matrix), UI `testTransportAndDeliver` (the whole line, a row EASES open — red when set, the column
 scrolls at 1024x640); shots `deliver_spec_h265`, `deliver_spec_codec_mid`, `deliver_populated`.
+
+### DR-TL-6 Copy and paste a clip; a drop places the rest of the source (R-TL-6, R-TL-1)
+`clip copy <clip>` keeps the clip as the CURRENT version resolves it (overrides included)
+(`core/service/InterstellarService.cpp:2260`); `clip paste [--at] [--track]` adds a clip from it at the
+playhead on its track by default and then sets every other EDITABLE field the schema lists —
+speed, fit, opacity, blend, geometry, numbers through `canonicalNumber` — so a field added to a clip
+later is pasted without this code knowing it (`:2276`); the paste is the selection and one undo
+step. `clip add` without `--out` places the rest of the source from `--in` — the source's measured
+length, a still 5 s (`:2155`). `hasClipClipboard` / `clipClipboardFrom` in the model (add-only).
+Guarded by L2 `a clip is copied and pasted whole; a drop places the rest of the source` (red while
+numeric fields were not pasted).
+
+### DR-UI-14 The Cut tab reaches every cut operation (R-UI-14)
+**Drop.** `SourceBin` owns a drag that starts on a source row and reports it (`onDragSource`
+move/drop); `EditScreen` forwards it to `Timeline::dropHover` / `dropAt`
+(`app/widgets/Timeline.cpp:516` `dropLocate`): a ghost clip, eased in, snapped like a move, on the
+video lane under the pointer, a "new video track" when there is none, refusing an audio lane. The
+app turns a drop into `clip add --track <trk> --src <bind> --in 0 --at <t>`, first
+`track add --kind video` when it must (`app/App.cpp:386`). **Roll / slip.** Alt on the edge two
+touching clips share rolls it (`:341`; both clips' shared edge moves live; `clip roll`), Alt on a
+body slips it (`:415`; right = earlier material, the new in-point shown; `clip slip`); the clip says
+what the drag is while it is held. **Keys** (`app/App.cpp:569` and the Ctrl block): Shift+Delete
+ripple-deletes, M drops `m<n>` at the playhead, Ctrl+C / Ctrl+X / Ctrl+V copy, cut, paste a clip on
+the Cut tab (a grade on the Grade tab, as before). **Menus** (`:480` reports right-clicks): a clip
+offers Split at Playhead, Copy, Cut, Paste, Delete, Ripple Delete, Add Dissolve to Next (a touching
+neighbour), Speed 50/100/200 %, Show Source in Grade (`app/App.cpp:418`); an empty lane offers
+Paste Here, Add Marker Here, Add Video/Audio Track (`:456`). Guarded by `testCutEditing` (drop on
+V2, refusal over audio, an empty timeline making its track, roll, slip, the keys, both menus);
+mutants (Alt ignored for roll; the ghost set, not eased) went red. Shots `cut_drop_source`,
+`cut_roll_mid`, `cut_slip_mid`, `cut_clip_menu` (both sizes, looked at).
