@@ -56,6 +56,71 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
+### D-5 — MKV preview is "really bad": scrubbing and the reference strip freeze the window
+- **Area:** render / host / ui · **Status:** Confirmed (measured) · **Severity:** S2 · **Found:**
+  2026-10-02, user report ("seeking frame take forever"; `[matroska,webm] File is broken, keyframes
+  not correctly marked!`).
+- **Reproduce:** an OBS-like stream — one keyframe every 10 s:
+  ```bash
+  ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=60:duration=60 -c:v libx264 -preset veryfast \
+    -g 600 -keyint_min 600 -sc_threshold 0 -bf 2 -pix_fmt yuv420p obs.mkv
+  cmake --build build --target interstellar_source_bench
+  build/apps/interstellar/host/interstellar_source_bench obs.mkv
+  ```
+- **Actual:** `scrub 8 seeks 1043.9 ms (worst 194.2 ms)`, `4 thumbnails 470.8 ms (117.7 ms each,
+  fresh source each)` at 1080p; 4K is ~4× that. Every one of those runs ON THE UI THREAD: the
+  monitor's `renderFrame` decodes synchronously per scrub step, and the Grade deck asks the
+  `thumbnail` hook for ~13 reference-strip stills + one per filmstrip cell in a single frame, each a
+  FRESH `HostFrameSource` (open + seek + decode from the previous keyframe).
+- **Cause:** (1) `InterstellarService::renderFrame` (`core/service/ServiceRender.cpp`) renders on
+  the caller's thread; (2) `interstellar_host::Thumbnailer::get` (`host/Thumbnailer.cpp`) decodes
+  synchronously with a new decoder per call; (3) a seek in a long-GOP stream decodes every frame
+  from the keyframe before the target, and `FrameSourceFFmpeg` seeks for any jump > 24 frames even
+  inside the current GOP, where decoding forward is cheaper.
+- **The FFmpeg message** is the Matroska demuxer saying the frame a seek landed on is not flagged as
+  a keyframe — the file's cues or keyframe flags are off (common in captures). Decoding stays
+  correct (checked: the frame at 30 s of an intra-refresh MKV matches `ffmpeg -ss 30`); the message
+  is noise on stderr, not the slowness.
+- **Requirement:** R2 of `arstro.design.rule` (a visible response this frame; heavy work off the UI
+  thread), R-VOL.
+- **Recommended fix:** preview frames rendered on a worker (plan on the UI thread, decode + grade +
+  compose on the worker, latest request wins, the monitor keeps the last frame until the next is
+  ready); thumbnails decoded on a host worker with one persistent decoder per file and a signal
+  the app re-asks on; seek only when the target is beyond ~1.5 s ahead; quiet FFmpeg's demuxer log.
+  Guard: an L2 test that the async monitor returns immediately and delivers the frame after a pump.
+
+### D-6 — The loading screen stalls just before the project appears
+- **Area:** ui / host · **Status:** Confirmed (measured) · **Severity:** S3 · **Found:** 2026-10-02,
+  user report ("when almost loaded, the loading indicator lags").
+- **Reproduce:** a 7-source project of the D-5 stream; `interstellar_live_shots --project p.isp
+  --outdir shots --time 1`.
+- **Actual:** `frames 65, total 1341 ms; monitor frames 1 in 19 ms; thumbnails 19 in 950 ms;
+  slowest: 973.1 ms edit @224ms` — the FIRST Edit frame takes 973 ms, mid cross-fade from Loading,
+  because the Grade deck decodes 19 thumbnails synchronously in it. The service side is not it:
+  `interstellar_open_bench` shows the slowest pump at 0.6 ms (rack.loaded).
+- **Cause:** D-5 (2) — synchronous thumbnails on the UI thread.
+- **Recommended fix:** D-5's asynchronous thumbnails; the cells fade their picture in when it lands.
+
+### D-7 — A GROUP's grade-weight bar does nothing
+- **Area:** rack / render / ui · **Status:** Confirmed (measured) · **Severity:** S3 · **Found:**
+  2026-10-02, from the user's question "what is the slider inside an item in the rack for?"
+- **Reproduce:** `project new gw.isp --res 320x180 : rack add w.mp4 : rack group new G --nodes w :
+  set g.basic.exposure=1.5 : … : export-still --at 1` with `g.weight` 1 then 0 → both stills hash
+  `9971a468…`; `w.weight=0` → `080bff89…`.
+- **Cause:** the frame path applies only the clip SOURCE's weight (`mixWeight` of `ro->weight` in
+  `ServiceRender.cpp`); a group's weight is stored, shown as a bar, and never read.
+- **Requirement:** R-RACK-4 says "a node carries a continuous grade weight".
+- **Recommended fix:** a group's weight fades its OWN contribution to its members — apply it in the
+  fold (the source's pixels mix ungraded→graded with the product of weights up its chain is
+  simplest and matches "a continuous bypass"). And label the bar: it is unexplained in the UI.
+
+### Requirement gap — no multi-selection, no right-click menu on rack items (user request, 2026-10-02)
+Cosmo selects a range with Shift-click and toggles with Ctrl-click, then groups the selection, and
+offers a right-click menu on a photo (Add, Group Selection, Ungroup, Enable/Disable Filter, Rename,
+Information, Delete). Interstellar's rack is single-select with no context menu. Recommended: R-RACK-8
+(selection, Shift = range / Ctrl = toggle, in the rack tree and the filmstrip; Group Selection) and
+R-UI-9 (cosmo's ContextMenu on rack rows and filmstrip cells).
+
 ### D-2 — Cosmo's save deletes an offline source and its grade (Cosmo D-66), and D-1 makes every video offline in Cosmo
 - **Area:** rack / cross-app · **Status:** Open — **mitigated** here, root cause in Cosmo ·
   **Severity:** S1 · **Found:** 2026-10-01, binding the rack's `.cmp` entries to `#rackobj`.
