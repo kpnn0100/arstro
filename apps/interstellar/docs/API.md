@@ -70,6 +70,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|prores\|png-seq>]` | Queue a render of a NAMED timeline. There is no implicit current timeline. | R-RENDER-1 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
+| `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
 | `state print [--json] [--stable]` | Print the AppModel; --stable omits machine-dependent fields. | R-API-2 |
 | `api [--json] [--md]` | Print this document. | R-API-1 |
 | `lint` | Report offline media, dangling deltas and refused fields. | R-RACK-7 |
@@ -236,6 +237,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].usedBy` | integer |  | Clips referencing it in the current timeline. |
 | `rack[].overridden` | bool |  | The current version carries a colour override on it. |
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
+| `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
 | `hasGradeTarget` | bool |  | gradeParams/gradeOwnParams are meaningful. |
 | `gradeParams` | object |  | The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys. |

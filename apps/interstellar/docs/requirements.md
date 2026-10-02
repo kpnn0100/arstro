@@ -450,3 +450,18 @@ cosmo's context menu`, `its Group item dispatched rack group new`, `hovering the
 cross-fades in its caption` and shots `grade_context_menu`, `grade_multiselect`,
 `grade_weight_caption` (both sizes, looked at). Cosmo's `ContextMenu` gained read-only
 `itemCount`/`item`/`itemRect`; cosmo's 41 shots byte-identical.
+
+### DR-RACK-3b Any frame of a source, graded — for Grade's monitor and the reference-frame slider (R-RACK-3, R-UI-3)
+`renderSourceFrame(bind, t, edge)` (`core/service/ServiceRender.cpp:430`) plans one rack source at
+source time `t` (`t < 0` = its reference frame) graded as the open version resolves it, fitted to the
+source's own shape (`planSourceFrame`, `:323`), and presents it like the monitor (asynchronous under
+`asyncPreview`). `AppModel::rack[].mediaDuration` carries a source's length once opened — selecting
+a video opens it (no decode), so the slider can span the whole source without a load opening every
+file. Guarded by `a source previews at any time, the monitor captures at full size, the length reaches
+the model`.
+
+### DR-UI-11a Capture what the monitor shows, at full size (R-UI-11)
+`captureFrame(bind)` (`:439`) renders, synchronously and at full resolution, the source's reference
+frame when `bind` names one (Grade) or the current timeline at the playhead (else the Grade target's
+reference frame); `capture --out <p.png> [--source <bind>]` saves it; the GTK host's Copy Frame puts
+the same pixels on the system clipboard. Same test.

@@ -843,6 +843,25 @@
       "requirement": "R-RENDER-5"
     },
     {
+      "verb": "capture",
+      "usage": "capture [--out <p.png>] [--source <bind>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "out",
+          "value": "<p.png>"
+        },
+        {
+          "name": "source",
+          "value": "<bind>"
+        }
+      ],
+      "summary": "Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead.",
+      "requirement": "R-UI-11"
+    },
+    {
       "verb": "state print",
       "usage": "state print [--json] [--stable]",
       "args": "",
@@ -1335,6 +1354,12 @@
       "type": "bool",
       "stable": true,
       "doc": "In the selection that Group Selection groups (R-RACK-8)."
+    },
+    {
+      "path": "rack[].mediaDuration",
+      "type": "number",
+      "stable": true,
+      "doc": "Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened."
     },
     {
       "path": "selectedRack",

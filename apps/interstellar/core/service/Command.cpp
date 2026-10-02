@@ -155,6 +155,9 @@ namespace interstellar
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},
 
+            {K::Capture, "capture", "", 0, 0, {"out=<p.png>", "source=<bind>"},
+             "Save what the monitor shows, at full resolution: --source names a rack source (its "
+             "reference frame, graded — Grade); without it, the current timeline at the playhead.", "R-UI-11"},
             {K::StatePrint, "state print", "", 0, 0, {"json", "stable"},
              "Print the AppModel; --stable omits machine-dependent fields.", "R-API-2"},
             {K::Api, "api", "", 0, 0, {"json", "md"}, "Print this document.", "R-API-1"},

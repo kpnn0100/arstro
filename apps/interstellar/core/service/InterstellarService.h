@@ -96,6 +96,15 @@ namespace interstellar
          *  is live at `t` and a rack node is selected, its reference frame graded — so Grade is
          *  usable before anything is cut. */
         bool renderFrame(double t, int proxyEdge, Raster &out);
+        /** One rack source (bind name or id) graded as the open version resolves it, at source time
+         *  `t` (`t < 0` = its reference frame), fitted to `proxyEdge` — Grade's monitor and the
+         *  reference-frame slider's live preview (R-UI-3, R-RACK-3). Asynchronous like renderFrame
+         *  under `asyncPreview`. */
+        bool renderSourceFrame(const std::string &bind, double t, int proxyEdge, Raster &out);
+        /** What the monitor shows, at FULL resolution, now (R-UI-11): `bind` names a source (its
+         *  reference frame, Grade), "" = the current timeline at the playhead. For the host's
+         *  clipboard copy; `capture --out` saves the same pixels. */
+        bool captureFrame(const std::string &bind, Raster &out);
         /** A NAMED timeline at `t` — what render and export-still use (R-RENDER-1). */
         bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
@@ -177,6 +186,8 @@ namespace interstellar
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
+        bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
+        bool present(FramePlan &&plan, Raster &out);
         bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out);
         void previewLoop();
         bool gradeForBypassing(const NodeId &timeline, const NodeId &rackObj, const std::set<NodeId> &groupsOff,

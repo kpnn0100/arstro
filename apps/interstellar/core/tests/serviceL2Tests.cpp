@@ -642,6 +642,35 @@ int main()
         assert(ss.str().find("still.png") == std::string::npos);   // gone from Cosmo's project too
     });
 
+    test("a source previews at any time, the monitor captures at full size, the length reaches the model (R-RACK-3, R-UI-3, R-UI-11)", [] {
+        Fixture f("capture");
+        f.standard();
+        f.must("set a.basic.exposure=0.5");
+        f.must("rack select a");
+        for (const auto &r : f.svc->model().rack)
+            if (r.bindName == "a") assert(std::fabs(r.mediaDuration - 4.0) < 1e-9);   // 96 frames / 24
+        // The slider's live preview: a source at ANY time, graded — FakeFrameSource's R is the frame.
+        Raster p0, p1;
+        assert(f.svc->renderSourceFrame("a", 1.5, 0, p0) && p0.width == 48);
+        assert(f.svc->renderSourceFrame("a", 2.5, 0, p1));
+        Raster u0;
+        f.must("set a.weight=0");                          // ungraded, to read the frame index
+        assert(f.svc->renderSourceFrame("a", 1.5, 0, u0) && u0.rgba[0] == 36);
+        f.must("set a.weight=1");
+        assert(p0.rgba != p1.rgba);
+        // capture: Grade's frame (the source's reference frame) and the cut at the playhead.
+        f.must("rack frame a --at 2.0");
+        Raster cap, ref;
+        assert(f.svc->captureFrame("a", cap) && f.svc->renderSourceFrame("a", -1.0, 0, ref) && cap.rgba == ref.rgba);
+        f.must("playhead 3.0");
+        Raster capCut, cut;
+        assert(f.svc->captureFrame("", capCut) && f.svc->renderTimelineFrame("tl_1", 3.0, 0, cut) && capCut.rgba == cut.rgba);
+        f.must("capture --source a --out \"" + f.path("grade.png") + "\"");
+        assert(f.images.count(f.path("grade.png")) && f.images[f.path("grade.png")].rgba == cap.rgba);
+        std::string err;
+        assert(!f.run("capture --source nobody --out x.png", &err));
+    });
+
     test("the same script on two services dumps the same stable state", [] {
         Fixture a("equiv_a"), b("equiv_b");
         for (Fixture *f : {&a, &b})

@@ -260,6 +260,20 @@ namespace interstellar
                 break;
             case CK::Render: case CK::RenderCancel: ok = requireProject() && renderCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
+            case CK::Capture:
+            {
+                if (!requireProject()) break;
+                if (!c.has("out")) { ok = fail("capture: --out <p.png> is required"); break; }
+                if (!mHost.writeImage) { ok = fail("capture: no PNG writer installed"); break; }
+                Raster r;
+                std::string err;
+                if (!captureFrame(c.flag("source"), r)) { ok = false; break; }
+                if (!mHost.writeImage(c.flag("out"), r, err)) { ok = fail("capture: " + err); break; }
+                mOutput = c.flag("out") + "\n";
+                emit(Event(EK::RenderFinished).with("job", "capture").with("timeline", c.flag("source")).with("frames", 1).with("out", c.flag("out")));
+                ok = true;
+                break;
+            }
 
             case CK::StatePrint:
             {
@@ -467,6 +481,12 @@ namespace interstellar
                 r.video = looksLikeVideo(ro->media);
                 r.group = ro->kind == "group";
                 r.usedBy = usedBy.count(ro->id) ? usedBy[ro->id] : 0;
+                // The source's length, once something has opened it (select does; a load does not
+                // open every file — that would be a stall per video at the end of a load).
+                const auto src = mSync->sources.find(resolvePath(ro->media));
+                if (src != mSync->sources.end() && src->second->ok)
+                    r.mediaDuration = src->second->info.frames <= 1 ? 0.0
+                                      : (double)src->second->info.frames / (src->second->info.fps > 0 ? src->second->info.fps : 24.0);
                 r.overridden = overridden.count(ro->id) > 0;
             }
             return r;
@@ -1318,6 +1338,9 @@ namespace interstellar
                     mAnchor = id;
                 }
                 if (target && !mRack.select(node, err)) return fail("rack select: " + err);
+                // Open the source (no decode) so its length reaches the model — the reference-frame
+                // slider spans the WHOLE source (R-RACK-3).
+                if (target && !ro->media.empty() && looksLikeVideo(ro->media)) source(*mSync, resolvePath(ro->media));
                 std::string names;
                 for (const auto &s2 : mSelection)
                     if (const RackObj *r = P.rackObj(s2)) names += (names.empty() ? "" : ",") + r->name;

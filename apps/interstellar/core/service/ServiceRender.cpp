@@ -320,29 +320,41 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::planReferenceFrame(int proxyEdge, FramePlan &plan)
+    bool InterstellarService::planSourceFrame(const NodeId &roId, double t, int proxyEdge, FramePlan &plan)
     {
-        // Nothing cut at t: the Grade target's reference frame, graded — so grading works before a
-        // single clip exists, and choosing a reference frame is visible (DR-UI-9).
+        // One rack source, graded as the open version resolves it, full frame: what Grade's monitor
+        // shows (R-UI-3) and what the reference-frame slider previews (R-RACK-3). `t < 0` = the
+        // source's chosen reference frame.
         plan = FramePlan{};
-        if (!mModel.hasGradeTarget || mModel.selectedRack < 0) return false;
-        const NodeId roId = mModel.rack[(size_t)mModel.selectedRack].rackObj;
         const RackObj *ro = mProject->rackObj(roId);
         if (!ro || ro->media.empty()) return false;
         PlanLayer L;
         L.media = resolvePath(ro->media);
         Source *s = source(*mSync, L.media);
         if (!s || !s->ok) return false;
-        L.frame = s->info.frames <= 1 ? 0 : (long long)std::llround(ro->frame * (s->info.fps > 0 ? s->info.fps : 24.0));
+        const double fps = s->info.fps > 0 ? s->info.fps : 24.0;
+        const double at = t < 0 ? ro->frame : t;
+        L.frame = s->info.frames <= 1 ? 0 : std::clamp<long long>((long long)std::llround(at * fps), 0, s->info.frames - 1);
         std::string e;
         if (!gradeFor(currentTimeline(), roId, L.params, e)) return false;
         L.identity = render::GradeEngine::isIdentity(L.params);
-        L.edge = proxyEdge;
-        outputSize(mProject->width, mProject->height, proxyEdge, plan.width, plan.height);
+        L.weight = std::clamp(ro->weight, 0.0, 1.0);
+        L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
+        // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
+        // is graded as itself.
+        outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
         plan.layers.push_back(L);
-        plan.key = "ref|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
+        plan.key = "src|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
         planKeyAppend(plan.key, plan.layers.back());
         return true;
+    }
+
+    bool InterstellarService::planReferenceFrame(int proxyEdge, FramePlan &plan)
+    {
+        // Nothing cut at t: the Grade target's reference frame, graded (DR-UI-9).
+        plan = FramePlan{};
+        if (!mModel.hasGradeTarget || mModel.selectedRack < 0) return false;
+        return planSourceFrame(mModel.rack[(size_t)mModel.selectedRack].rackObj, -1.0, proxyEdge, plan);
     }
 
     bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out)
@@ -412,6 +424,40 @@ namespace interstellar
             FramePlan ref;
             if (planReferenceFrame(proxyEdge, ref)) plan = std::move(ref);
         }
+        return present(std::move(plan), out);
+    }
+
+    bool InterstellarService::renderSourceFrame(const std::string &bind, double t, int proxyEdge, Raster &out)
+    {
+        if (!mOpen) return false;
+        if (mSettings.previewEdge > 0) proxyEdge = proxyEdge > 0 ? std::min(proxyEdge, mSettings.previewEdge) : mSettings.previewEdge;
+        FramePlan plan;
+        if (!planSourceFrame(mProject->idForRef(bind), t, proxyEdge, plan)) return false;
+        return present(std::move(plan), out);
+    }
+
+    bool InterstellarService::captureFrame(const std::string &bind, Raster &out)
+    {
+        // What the monitor shows, at FULL resolution, synchronously (R-UI-11): a source's reference
+        // frame when one is named (Grade), else the current timeline at the playhead — or the Grade
+        // target's reference frame when nothing is cut there.
+        if (!mOpen) return false;
+        FramePlan plan;
+        if (!bind.empty())
+        {
+            if (!planSourceFrame(mProject->idForRef(bind), -1.0, 0, plan)) return fail("capture: " + bind + " has no frame to capture");
+        }
+        else
+        {
+            bool any = false;
+            if (!planFrame(currentTimeline(), mModel.playhead, 0, plan, &any)) return false;
+            if (!any && !planReferenceFrame(0, plan)) return fail("capture: nothing at the playhead and no Grade target");
+        }
+        return executePlan(*mSync, plan, out);
+    }
+
+    bool InterstellarService::present(FramePlan &&plan, Raster &out)
+    {
         if (!mHost.asyncPreview) return executePlan(*mSync, plan, out);
 
         // The monitor on a worker (D-5): hand over the plan, answer at once with the newest

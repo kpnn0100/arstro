@@ -65,6 +65,10 @@ done while its authority is a fake.**
   node whose pixels are one extracted frame; the frame is selectable and changing it alters no
   parameter. **Cosmo grows no concept of time** — the extraction happens on Interstellar's side of
   Cosmo's own decoder seam, so Cosmo needs no change at all.
+  (**AMENDED 2026-10-02, user request:** the frame is chosen with a **fast-seek slider over the whole
+  source** — dragging previews the graded frame live in the monitor without committing, releasing
+  commits it — plus **frame steps** (one frame back / forward) for the exact frame. The preview
+  is "for choosing the correct frame"; the thumbnail strip stays as the slider's track.)
 - **R-RACK-4 Grouping is the blending mechanism.** A group's offsets stack onto every descendant;
   nesting is the user's way of saying "these shots share a look". A node carries a continuous
   **grade weight** (0..1) — a scalable `bypass` — which is Interstellar's, not Cosmo's.
@@ -251,6 +255,11 @@ reserves the rest so adopting it is not a migration.
   panels), **Cut** (timeline + version switcher), **Deliver** (render queue + output spec). The
   monitor never leaves and never reloads on a tab change — a frame that looks different in two tabs
   is a defect.
+  (**AMENDED 2026-10-02, user request "in Grade, remove the play/time bar — it is not necessary in
+  grading":** Grade has **no transport**; its monitor shows the **Grade target's reference frame,
+  graded** — the frame being graded, as in Cosmo — and takes the transport's room. Cut and Deliver
+  show the current timeline at the playhead with the transport. The monitor is still one widget that
+  never moves or reloads its layout; what changed is that Grade's subject is a source, not the cut.)
 - **R-UI-4 The version switcher is chrome, not a panel.** Which version you are editing is as
   present as which project you are in, and switching it is one click from anywhere in Edit.
 - **R-UI-5 Cosmo's widgets are reused as libraries**: `SliderRow`, `ParamPanel`, `MixerPanel`,
@@ -272,6 +281,15 @@ reserves the rest so adopting it is not a migration.
   (inline, cosmo's morph), Duplicate as Variant, Copy Grade, Paste Grade (to Selection), Remove from
   Rack. Right-clicking outside the selection selects that node first; inside it, the selection
   stays — cosmo's rule. The grade-weight bar names itself on hover ("weight 80%").
+- **R-UI-11 Capture the frame** (added 2026-10-02, user request). A capture button beside the
+  transport's "next" button opens a menu — **Copy Frame** (the system clipboard) and **Save Frame…**
+  (a PNG) — of the frame the monitor shows, at full resolution. Grade has no transport (R-UI-3), so
+  there the same button sits on the monitor's caption: the request asked for it "on the playback
+  bar" and also for that bar to leave Grade; this keeps both. The save is a command (`capture`).
+- **R-UI-12 Browse groups like Cosmo** (added 2026-10-02, user request "grouping feels weird"). Grouped
+  items go INSIDE their group: the rack tree collapses a group (a chevron opens and closes it,
+  eased); the SOURCES strip shows the OPEN group's contents; double-clicking a group (chip or row)
+  opens it; Cosmo's breadcrumb above the strip names the path and a click on a name goes back up.
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.
