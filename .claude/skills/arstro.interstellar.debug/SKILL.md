@@ -93,7 +93,10 @@ Read the R- tag. Common verdicts:
 - Anything that **loses a user's edit, silently** is S1, whatever else it is.
 
 If the requirement is silent or contradicts itself, that is a **requirement gap**: file it as such
-and recommend the R- amendment; do not decide product behaviour in a defect entry.
+and recommend the R- amendment; do not decide product behaviour in a defect entry. **Every report is
+checked against the requirements, item by item**: quote the R- line each finding is judged against
+(or write "no R- line: requirement gap"), so the implement skill's mandatory requirement check (its
+§2.1) starts from your table rather than from scratch.
 
 ---
 

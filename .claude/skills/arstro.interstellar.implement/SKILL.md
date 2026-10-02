@@ -83,9 +83,21 @@ reproduces, files and recommends; read its `docs/DEFECTS.md` entry before re-der
 
 ## 2. The loop (V-model, one task per commit)
 
-1. **Requirement first.** Find the R- tag; if there is none, add it to `REQUIREMENTS.md` (conflict
-   check per `arstro.rule` §2) before code. A spec found wrong while building is **amended in place**
-   with an `AMENDED (date)` note, as R-VER-2 and project-format §8 were.
+1. **Requirement check — MANDATORY, before any code, for EVERY item of a request.** Write it down
+   (in your reply and in the commit) as a table: *request item → R- tag(s) it touches → verdict*:
+   - **covered** — an existing R- line already asks for it: cite it, build to it;
+   - **new** — nothing asks for it: ADD the R- line to `REQUIREMENTS.md` (dated, "user request");
+   - **changes** — it contradicts an existing R- line (e.g. "remove the play bar from Grade" against
+     R-UI-3, "the monitor never changes between tabs"): AMEND that line in place with an
+     `AMENDED (date)` note saying what the user asked and why the old rule gave way;
+   - **conflicts with another item of the same request** (e.g. "a capture button on the play bar"
+     plus "remove the play bar from Grade"): say so in one sentence, pick the reading that honours
+     both, write the resolution into the requirement, and tell the user.
+
+   The intent tier changes in the SAME commit as the code, never after. A behaviour that ships with
+   no R- line, or contradicting one, is a defect in the commit (`arstro.rule` §2's conflict rule,
+   applied every time rather than when remembered). End every task by re-reading the R- lines you
+   touched against what you built; a mismatch is fixed before the commit, not filed after.
 2. **Lowest level that proves it** (R-TEST-2): model logic → `interstellar_model_tests`; grammar,
    codec, registry → `interstellar_service_tests`; anything that touches the rack, versions or frames
    → `interstellar_service_l2` (the REAL service, fake decoders only — never a fake rack).
@@ -214,6 +226,8 @@ Verify by rendering shots at two sizes, mid-transition as well as at rest, and *
 
 ## 7. Definition of done
 
+- The requirement check (§2.1) is in the reply and the commit: every request item mapped to an R-
+  line that was cited, added or amended, and the built behaviour re-read against it.
 - The R- tag exists and its status line is honest; the DR entry exists with live anchors.
 - A test at the lowest sufficient level fails without the change (checked) and passes with it.
 - `docs/api.json` + `docs/API.md` regenerated if the grammar, events, model or addresses changed.
