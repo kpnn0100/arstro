@@ -29,6 +29,11 @@ namespace interstellar_host
     bool FrameSourceFFmpeg::open(const std::string &path, Info &out)
     {
         closeAll();
+        // FFmpeg's own stderr chatter — "[matroska] File is broken, keyframes not correctly marked!"
+        // on every seek into a capture whose cues miss the keyframes — is noise to a user: every
+        // failure here is reported through a return code instead (D-5).
+        static const bool quiet = [] { av_log_set_level(AV_LOG_FATAL); return true; }();
+        (void)quiet;
         if (avformat_open_input(&mFmt, path.c_str(), nullptr, nullptr) < 0) return false;
         if (avformat_find_stream_info(mFmt, nullptr) < 0) { closeAll(); return false; }
 
@@ -201,7 +206,10 @@ namespace interstellar_host
 
         // Backwards, or far enough forward that a seek beats decoding through. Decoding forward a
         // short distance is nearly free; seeking costs a keyframe search plus the decode from it.
-        const bool needSeek = frame < mHeld || mHeld < 0 || frame - mHeld > kSeekThreshold || mEof;
+        // Forward within ~1.5 s: decode on. A seek lands on the keyframe BEFORE the target, which in
+        // a capture's long GOP (OBS: 10 s) is usually behind where the decoder already is (D-5).
+        const long long forwardLimit = std::max<long long>(kSeekThreshold, (long long)std::llround(mInfo.fps * 1.5));
+        const bool needSeek = frame < mHeld || mHeld < 0 || frame - mHeld > forwardLimit || mEof;
         if (needSeek && !seekTo(frame))
         {
             // A stream that cannot seek (a pipe, a broken index) is still usable forwards.

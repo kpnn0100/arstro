@@ -6,8 +6,14 @@
 #include "InterstellarService.h"
 #include "FrameCache.h"
 #include "GradeEngine.h"
+#include "Composite.h"
 #include "volume/Volume.h"
+#include <atomic>
+#include <condition_variable>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -23,6 +29,59 @@ namespace interstellar
         std::unique_ptr<CachedVolume> volume;
         bool ok = false;
         std::string why;
+    };
+
+    /** One clip's part of a frame, decided on the UI thread and decoded on any thread: everything a
+     *  worker needs is copied in, so it never touches the project (D-5). */
+    struct PlanLayer
+    {
+        std::string media;              // resolved path
+        long long frame = 0;            // source frame
+        std::string fxType;             // "" | denoise | blend — the first temporal effect (v1)
+        int fxRadius = 0;
+        double fxStrength = 0.5;
+        std::string fxKey;              // part of the cache key
+        EditParams params;              // the grade (version overrides and group fold applied)
+        bool identity = true;
+        // D-7: a group with weight < 1 fades its OWN contribution: the pixels mix between the
+        // grade with those groups bypassed (`paramsGroupsOff`) and with them on, by their product.
+        bool groupMix = false;
+        EditParams paramsGroupsOff;
+        double groupWeight = 1.0;
+        double weight = 1.0;            // the source's own weight: ungraded → graded
+        int edge = 0;                   // grade at this long edge (0 = source size)
+        render::Layer layer;            // geometry, fit, opacity, blend, dissolve; src filled at execute
+    };
+
+    struct InterstellarService::FramePlan
+    {
+        int width = 0, height = 0;
+        std::vector<PlanLayer> layers;
+        std::string key;                // identity of the pixels this plan produces
+    };
+
+    /** Decoders and a grade engine for ONE thread: the UI thread's (renders, stills) or the
+     *  preview worker's. FrameCache is shared — it is thread-safe. */
+    struct InterstellarService::RenderCtx
+    {
+        std::map<std::string, std::unique_ptr<Source>> sources;
+        std::unique_ptr<render::GradeEngine> grade{new render::GradeEngine()};
+    };
+
+    /** The monitor's worker: the latest plan wins, the last finished frame stays on screen. */
+    struct InterstellarService::PreviewWorker
+    {
+        std::thread thread;
+        std::mutex mu;
+        std::condition_variable cv;
+        std::unique_ptr<FramePlan> pending;
+        std::string busyKey, doneKey;
+        Raster done;
+        bool stop = false;
+        bool resetSources = false;      // a new project: drop the worker's decoders before the next job
+        std::atomic<unsigned> doneSeq{0};
+        unsigned seenSeq = 0;
+        RenderCtx ctx;
     };
 
     /** A queued render of a NAMED timeline (R-RENDER-1), advanced a frame per pump (R-RENDER-4). */

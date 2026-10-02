@@ -1,6 +1,7 @@
 #include "Thumbnailer.h"
 #include "HostFrameSource.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace arstro
@@ -35,24 +36,105 @@ namespace interstellar_host
         }
     }
 
+    Thumbnailer::Thumbnailer(Mode mode) : mMode(mode)
+    {
+        if (mMode == Mode::Async) mThread = std::thread([this] { worker(); });
+    }
+
+    Thumbnailer::~Thumbnailer()
+    {
+        {
+            std::lock_guard<std::mutex> l(mMu);
+            mStop = true;
+        }
+        mCv.notify_all();
+        if (mThread.joinable()) mThread.join();
+    }
+
+    void Thumbnailer::clear()
+    {
+        std::lock_guard<std::mutex> l(mMu);
+        mCache.clear();
+    }
+
+    bool Thumbnailer::decode(const Key &k, interstellar::Raster &out)
+    {
+        const std::string &path = std::get<0>(k);
+        auto it = mSources.find(path);
+        if (it == mSources.end())
+        {
+            if (mSources.size() >= 6) mSources.erase(mSources.begin());   // a bound on open decoders
+            it = mSources.emplace(path, std::unique_ptr<interstellar::IFrameSource>(new HostFrameSource())).first;
+            interstellar::IFrameSource::Info info;
+            if (!it->second->open(path, info) || !info.valid()) { mSources.erase(it); return false; }
+            mInfo[path] = info;
+        }
+        const interstellar::IFrameSource::Info &info = mInfo[path];
+        const double t = std::get<1>(k) / 1000.0;
+        const long long frame = info.frames <= 1 ? 0 : (long long)std::llround(t * (info.fps > 0 ? info.fps : 24.0));
+        interstellar::Raster full;
+        if (!it->second->frameAt(std::clamp<long long>(frame, 0, std::max<long long>(0, info.frames - 1)), full)) return false;
+        boxDownscale(full, std::get<2>(k), out);
+        return !out.empty();
+    }
+
     bool Thumbnailer::get(const std::string &mediaPath, double t, int edge, interstellar::Raster &out)
     {
-        const auto key = std::make_tuple(mediaPath, (long long)std::llround(t * 1000.0), edge);
-        const auto it = mCache.find(key);
-        if (it != mCache.end()) { out = it->second; return !out.empty(); }
-        interstellar::Raster full, small;
-        HostFrameSource src;
-        interstellar::IFrameSource::Info info;
-        bool ok = src.open(mediaPath, info) && info.valid();
-        if (ok)
+        const Key key(mediaPath, (long long)std::llround(t * 1000.0), edge);
+        if (mMode == Mode::Sync)
         {
-            const long long frame = info.frames <= 1 ? 0 : (long long)std::llround(t * (info.fps > 0 ? info.fps : 24.0));
-            ok = src.frameAt(std::clamp<long long>(frame, 0, std::max<long long>(0, info.frames - 1)), full);
+            auto c = mCache.find(key);
+            if (c == mCache.end())
+            {
+                interstellar::Raster r;
+                decode(key, r);
+                c = mCache.emplace(key, std::move(r)).first;
+            }
+            out = c->second;
+            return !out.empty();
         }
-        if (ok) boxDownscale(full, edge, small);
-        mCache[key] = small;   // a miss is cached too: a missing file is not re-probed every frame
-        out = small;
-        return ok && !small.empty();
+        std::lock_guard<std::mutex> l(mMu);
+        const auto c = mCache.find(key);
+        if (c != mCache.end()) { out = c->second; return !out.empty(); }
+        if (mQueued.insert(key).second)
+        {
+            mQueue.push_back(key);
+            mCv.notify_one();
+        }
+        return false;
+    }
+
+    void Thumbnailer::worker()
+    {
+        for (;;)
+        {
+            Key k;
+            {
+                std::unique_lock<std::mutex> l(mMu);
+                mBusy = false;
+                if (mQueue.empty()) mIdleCv.notify_all();
+                mCv.wait(l, [this] { return mStop || !mQueue.empty(); });
+                if (mStop) return;
+                k = mQueue.front();
+                mQueue.pop_front();
+                mBusy = true;
+            }
+            interstellar::Raster r;
+            decode(k, r);   // off the lock: the UI thread keeps answering from the cache
+            {
+                std::lock_guard<std::mutex> l(mMu);
+                mCache[k] = std::move(r);
+                mQueued.erase(k);
+            }
+            mEpoch.fetch_add(1);
+        }
+    }
+
+    bool Thumbnailer::waitIdle(int ms)
+    {
+        if (mMode == Mode::Sync) return true;
+        std::unique_lock<std::mutex> l(mMu);
+        return mIdleCv.wait_for(l, std::chrono::milliseconds(ms), [this] { return mQueue.empty() && !mBusy; });
     }
 }
 }

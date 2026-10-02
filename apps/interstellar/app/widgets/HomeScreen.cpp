@@ -76,8 +76,13 @@ namespace interstellar_v1
             {
                 c.coverKey = r.coverPath;
                 interstellar::Raster ras;
-                if (!r.coverPath.empty() && thumbnail && thumbnail(r.coverPath, 0.0, (int)kCoverEdge, ras) && !ras.empty()) c.cover.set(ras);
+                if (!r.coverPath.empty() && thumbnail && thumbnail(r.coverPath, 0.0, (int)kCoverEdge, ras) && !ras.empty())
+                {
+                    c.cover.set(ras);
+                    if (c.coverRetry) { c.coverAlpha.set(0.0); c.coverFade = true; }   // late: fade in
+                }
                 else c.cover = ImageSlot{};
+                c.coverRetry = false;
             }
             next.push_back(std::move(c));
         }
@@ -159,6 +164,11 @@ namespace interstellar_v1
             mLoadingApplied = mLoading;
         }
         mSkeleton.update(nowMs);
+        for (auto &c : mCards)
+        {
+            if (c.coverFade) { c.coverAlpha.animateTo(1.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs); c.coverFade = false; }
+            c.coverAlpha.update(nowMs);
+        }
         for (auto &c : mCards)
         {
             if (c.fadeIn) { c.alpha.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); c.fadeIn = false; }
@@ -360,7 +370,7 @@ namespace interstellar_v1
                 drawRoundedRect(t, cover, 0.0, Paint::filled(fade(surface::thumbPlaceholder(), real)));
                 if (c.cover.has())
                 {
-                    t.pushLayer(real);
+                    t.pushLayer(real * c.coverAlpha.value());
                     c.cover.drawCover(t, cover);
                     t.popLayer();
                 }

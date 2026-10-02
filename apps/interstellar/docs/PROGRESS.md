@@ -66,6 +66,17 @@ one integrator who moves, wires, tests and commits each stream:
 
 ## Decisions log (newest first)
 
+**2026-10-02 — the monitor and the thumbnails moved off the UI thread (D-5, D-6).** Decoding a
+capture's long GOP costs 100–200 ms per seek at 1080p, and no tuning of a decoder makes that a
+frame's worth. So the work moved: the UI thread plans (cheap), a worker decodes (expensive), the
+latest request wins and the monitor keeps its last frame meanwhile; thumbnails likewise, with a
+persistent decoder per file. A non-reference-frame skip was tried for seeks and dropped: it saved
+~9 % and broke frame exactness in `interstellar_host`.
+
+**2026-10-02 — a group's weight is a continuous bypass of the GROUP (D-7).** Implemented as a pixel
+mix between Cosmo's two exact answers (group bypassed / group on), not by scaling parameters toward
+neutral — which would have been a colour computation Cosmo never makes.
+
 **2026-10-01 — Cosmo's menus and settings, reused rather than re-drawn (R-UI-7, R-SET).** The menu
 bar is cosmo's `MenuStrip`; Engine Settings is cosmo's `SettingsDialog`. Each needed one small,
 opt-in addition (`MenuStrip::setItems` + read-only geometry; `SettingsDialog::setInputRowShown` +

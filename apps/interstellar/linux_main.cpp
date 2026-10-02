@@ -75,6 +75,7 @@ namespace
             return interstellar_host::writePng(p, r, err);
         };
         h.recentsPath = recentsPath();
+        h.asyncPreview = true;   // the monitor renders on a worker; scrubbing never blocks the window (D-5)
         // Engine settings (CPU limit, threads, preview quality, GPU, screen scale) and the preset
         // library live where the desktop keeps an app's config and data.
         if (!configDir().empty()) h.settingsPath = configDir() + "/settings.txt";
@@ -381,6 +382,8 @@ int main(int argc, char **argv)
     hooks.thumbnail = [a](const std::string &media, double t, int edge, Raster &out) {
         return a->thumbs.get(resolveMedia(*a, media), t, edge, out);
     };
+    // Stills decode on the Thumbnailer's worker; the app re-asks when this moves (D-5, D-6).
+    hooks.thumbnailEpoch = [a]() { return a->thumbs.epoch(); };
     a->app = std::make_unique<App>(hooks, (double)kW, (double)kH);
     a->app->onPickProjectToOpen = [a] { pickProjectToOpen(a); };
     a->app->onPickProjectToCreate = [a] { pickProjectToCreate(a); };

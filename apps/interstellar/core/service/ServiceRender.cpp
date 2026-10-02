@@ -77,10 +77,10 @@ namespace interstellar
         }
     }
 
-    InterstellarService::Source *InterstellarService::source(const std::string &media)
+    InterstellarService::Source *InterstellarService::source(RenderCtx &ctx, const std::string &media)
     {
-        auto it = mSources.find(media);
-        if (it != mSources.end()) return it->second.get();
+        auto it = ctx.sources.find(media);
+        if (it != ctx.sources.end()) return it->second.get();
         auto s = std::make_unique<Source>();
         if (!mHost.frameSource) s->why = "no frame source installed (the host must provide one)";
         else
@@ -113,37 +113,32 @@ namespace interstellar
             }
         }
         Source *out = s.get();
-        mSources[media] = std::move(s);
+        ctx.sources[media] = std::move(s);
         return out;
     }
 
-    bool InterstellarService::sourceFrame(const std::string &media, long long frame, const std::vector<int> &fxIdx,
-                                          Raster &out)
+    bool InterstellarService::decodeLayer(RenderCtx &ctx, const PlanLayer &l, Raster &out)
     {
-        Source *s = source(media);
+        Source *s = source(ctx, l.media);
         if (!s || !s->ok) return false;
         const long long last = std::max<long long>(0, s->volume->extent().frames - 1);
-        frame = std::clamp<long long>(frame, 0, last);
-
+        const long long frame = std::clamp<long long>(l.frame, 0, last);
         // v1 renders the FIRST temporal effect on a source; lint reports any after it.
-        const Fx *fx = nullptr;
-        for (int i : fxIdx)
-            if (!fx) fx = &mProject->effects[(size_t)i];
-        if (fx && fx->radius > 0 && s->volume->extent().frames > 1)
+        if (!l.fxType.empty() && l.fxRadius > 0 && s->volume->extent().frames > 1)
         {
             FrameRGBA f;
             bool ok = false;
-            if (fx->type == "denoise")
+            if (l.fxType == "denoise")
             {
                 TemporalDenoise op;
-                op.setRadius(fx->radius);
-                op.setStrength((float)fx->strength);
+                op.setRadius(l.fxRadius);
+                op.setStrength((float)l.fxStrength);
                 ok = renderTemporal(*s->volume, op, frame, f);
             }
             else
             {
                 FrameBlend op;
-                op.setRadius(fx->radius);
+                op.setRadius(l.fxRadius);
                 ok = renderTemporal(*s->volume, op, frame, f);
             }
             if (!ok) return false;
@@ -160,17 +155,49 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::renderTimelineFrame(const NodeId &tl, double t, int proxyEdge, Raster &out, bool *anyClip)
+    bool InterstellarService::gradeForBypassing(const NodeId &tl, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
+                                                EditParams &out, std::string &err)
+    {
+        ColourTree tree;
+        std::map<NodeId, int> idx;
+        std::string source;
+        if (!colourTreeFor(tl, tree, idx, source, err)) return false;
+        const auto it = idx.find(rackObj);
+        if (it == idx.end()) { err = "rack node " + rackObj + " is not in the " + source; return false; }
+        for (const auto &kv : idx)
+        {
+            applyDeltas(tree[(size_t)kv.second].own, gradeDeltas(*mProject, tl, kv.first));
+            if (groupsOff.count(kv.first)) tree[(size_t)kv.second].bypass = true;   // Cosmo's bypass, exactly
+        }
+        out = foldRender(tree, it->second);
+        return true;
+    }
+
+    namespace
+    {
+        void planKeyAppend(std::string &k, const PlanLayer &l)
+        {
+            char buf[256];
+            std::snprintf(buf, sizeof buf, "|%lld|%016llx|%016llx|%.4f|%.4f|%d|%.3f,%.3f,%.4f,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,%.4f|%d|%.4f|%d|%d",
+                          l.frame, (unsigned long long)render::hashParams(l.params),
+                          (unsigned long long)(l.groupMix ? render::hashParams(l.paramsGroupsOff) : 0), l.groupWeight, l.weight,
+                          l.edge, l.layer.geom.x, l.layer.geom.y, l.layer.geom.scale, l.layer.geom.rotation, l.layer.geom.anchorX,
+                          l.layer.geom.anchorY, l.layer.geom.cropX, l.layer.geom.cropY, l.layer.geom.cropW, l.layer.geom.cropH,
+                          (int)l.layer.fit, l.layer.opacity, (int)l.layer.blend, l.layer.dissolveWithPrevious ? 1 : 0);
+            k += l.media + l.fxKey + buf;
+        }
+    }
+
+    bool InterstellarService::planFrame(const NodeId &tl, double t, int proxyEdge, FramePlan &plan, bool *anyClip)
     {
         if (anyClip) *anyClip = false;
+        plan = FramePlan{};
         if (!mOpen) return false;
         const Project &P = *mProject;
         ResolvedTimeline R;
         std::string err;
         if (!resolved(tl, R, err)) return fail("render: " + err);
-
-        int ow = 0, oh = 0;
-        outputSize(P.width, P.height, proxyEdge, ow, oh);
+        outputSize(P.width, P.height, proxyEdge, plan.width, plan.height);
 
         std::map<NodeId, const Track *> tracks;
         for (const auto &x : R.tracks) tracks[x.id] = &x;
@@ -204,95 +231,171 @@ namespace interstellar
         }
         const auto active = render::activeAt(spans, trs, t, P.fps);
 
-        // Graded frames must outlive the compose call: one slot per active clip.
-        std::vector<Raster> graded(active.size());
-        std::vector<render::Layer> layers;
-        std::map<NodeId, EditParams> grades;
-        for (size_t i = 0; i < active.size(); ++i)
+        // The colour tree once per frame, for the group weights (D-7).
+        ColourTree tree;
+        std::map<NodeId, int> idx;
+        std::string colourSource;
+        const bool haveTree = colourTreeFor(tl, tree, idx, colourSource, err);
+        std::map<int, NodeId> roOfIndex;
+        for (const auto &kv : idx) roOfIndex[kv.second] = kv.first;
+
+        for (const auto &a : active)
         {
-            const render::Active &a = active[i];
             const Clip *c = clips[a.id];
             const RackObj *ro = c ? P.rackObj(c->src) : nullptr;
             if (!c || !ro || ro->media.empty()) continue;   // offline: drawn as missing by the UI
-            const std::string media = resolvePath(ro->media);
-            Source *s = source(media);
+            PlanLayer L;
+            L.media = resolvePath(ro->media);
+            Source *s = source(*mSync, L.media);   // info only — nothing decodes on this thread
             if (!s || !s->ok) continue;
-
             // Source frame from the clip's SOURCE time at the SOURCE's own rate (a 30p clip in a 24p
             // project steps at 30p); a still is frame 0 forever (R-VOL-6).
             const double srcFps = s->info.fps > 0 ? s->info.fps : P.fps;
-            long long frame = s->info.frames <= 1 ? 0 : (long long)std::floor(a.localTime * srcFps + 1e-6);
-            std::vector<int> fxIdx;
-            std::string fxKey;
-            for (size_t k = 0; k < P.effects.size(); ++k)
+            L.frame = s->info.frames <= 1 ? 0 : (long long)std::floor(a.localTime * srcFps + 1e-6);
+            for (const auto &fx : P.effects)
             {
-                const Fx &fx = P.effects[k];
                 if (fx.type == "freeze" && fx.clip == c->id)
-                    frame = freezeRemap(frame, (long long)std::floor((c->in + fx.at * c->speed) * srcFps + 1e-6));
-                else if (fx.type != "freeze" && fx.node == ro->id)
+                    L.frame = freezeRemap(L.frame, (long long)std::floor((c->in + fx.at * c->speed) * srcFps + 1e-6));
+                else if (fx.type != "freeze" && fx.node == ro->id && L.fxType.empty())
                 {
-                    fxIdx.push_back((int)k);
-                    if (fxKey.empty())
-                        fxKey = "|" + fx.type + ":" + std::to_string(fx.radius) + ":" + canonicalNumber(fx.strength);
+                    L.fxType = fx.type;
+                    L.fxRadius = fx.radius;
+                    L.fxStrength = fx.strength;
+                    L.fxKey = "|" + fx.type + ":" + std::to_string(fx.radius) + ":" + canonicalNumber(fx.strength);
                 }
             }
-
-            if (!grades.count(ro->id))
+            std::string e;
+            if (!gradeFor(tl, ro->id, L.params, e)) L.params = EditParams{};   // an unbound node renders ungraded
+            L.identity = render::GradeEngine::isIdentity(L.params);
+            // D-7: ancestor groups whose weight is below 1 fade their own contribution.
+            std::set<NodeId> partial;
+            double gw = 1.0;
+            if (haveTree && idx.count(ro->id))
             {
-                EditParams p;
-                std::string e;
-                if (!gradeFor(tl, ro->id, p, e)) p = EditParams{};   // an unbound node renders ungraded
-                grades[ro->id] = p;
+                int guard = (int)tree.size();
+                for (int p = tree[(size_t)idx[ro->id]].parent; p >= 0 && guard-- > 0; p = tree[(size_t)p].parent)
+                {
+                    const auto g = roOfIndex.find(p);
+                    if (g == roOfIndex.end()) continue;
+                    const RackObj *gro = P.rackObj(g->second);
+                    if (gro && gro->weight < 1.0 && !tree[(size_t)p].bypass)
+                    {
+                        partial.insert(gro->id);
+                        gw *= std::clamp(gro->weight, 0.0, 1.0);
+                    }
+                }
             }
-            const EditParams &p = grades[ro->id];
-            const bool identity = render::GradeEngine::isIdentity(p);
-            const double weight = std::clamp(ro->weight, 0.0, 1.0);
-            // A partial weight mixes ungraded and graded pixels, which needs both at one size —
-            // so it grades at source size and lets the composite scale.
-            const int edge = weight < 1.0 && weight > 0.0 ? 0 : proxyEdge;
+            if (!partial.empty() && gradeForBypassing(tl, ro->id, partial, L.paramsGroupsOff, e))
+            {
+                L.groupMix = true;
+                L.groupWeight = gw;
+            }
+            L.weight = std::clamp(ro->weight, 0.0, 1.0);
+            // A partial mix needs the frames it mixes at one size — grade at source size and let
+            // the composite scale.
+            L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
+
+            const Track *tr = tracks[c->track];
+            // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
+            // identically; the composite works in output pixels.
+            L.layer.geom.x = c->geom.x * plan.width;
+            L.layer.geom.y = c->geom.y * plan.height;
+            L.layer.geom.scale = c->geom.scale;
+            L.layer.geom.rotation = c->geom.rotation;
+            L.layer.geom.anchorX = c->geom.anchorX;
+            L.layer.geom.anchorY = c->geom.anchorY;
+            L.layer.geom.cropX = c->geom.cropX;
+            L.layer.geom.cropY = c->geom.cropY;
+            L.layer.geom.cropW = c->geom.cropW;
+            L.layer.geom.cropH = c->geom.cropH;
+            L.layer.fit = fitOf(c->fit);
+            L.layer.opacity = std::clamp(c->opacity * (tr ? tr->opacity : 1.0) * a.weight, 0.0, 1.0);
+            L.layer.blend = blendOf(c->blend);
+            L.layer.dissolveWithPrevious = a.dissolveWithPrevious;
+            plan.layers.push_back(std::move(L));
+        }
+        if (anyClip) *anyClip = !plan.layers.empty();
+        plan.key = std::to_string(plan.width) + "x" + std::to_string(plan.height);
+        for (const auto &l : plan.layers) planKeyAppend(plan.key, l);
+        return true;
+    }
+
+    bool InterstellarService::planReferenceFrame(int proxyEdge, FramePlan &plan)
+    {
+        // Nothing cut at t: the Grade target's reference frame, graded — so grading works before a
+        // single clip exists, and choosing a reference frame is visible (DR-UI-9).
+        plan = FramePlan{};
+        if (!mModel.hasGradeTarget || mModel.selectedRack < 0) return false;
+        const NodeId roId = mModel.rack[(size_t)mModel.selectedRack].rackObj;
+        const RackObj *ro = mProject->rackObj(roId);
+        if (!ro || ro->media.empty()) return false;
+        PlanLayer L;
+        L.media = resolvePath(ro->media);
+        Source *s = source(*mSync, L.media);
+        if (!s || !s->ok) return false;
+        L.frame = s->info.frames <= 1 ? 0 : (long long)std::llround(ro->frame * (s->info.fps > 0 ? s->info.fps : 24.0));
+        std::string e;
+        if (!gradeFor(currentTimeline(), roId, L.params, e)) return false;
+        L.identity = render::GradeEngine::isIdentity(L.params);
+        L.edge = proxyEdge;
+        outputSize(mProject->width, mProject->height, proxyEdge, plan.width, plan.height);
+        plan.layers.push_back(L);
+        plan.key = "ref|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
+        planKeyAppend(plan.key, plan.layers.back());
+        return true;
+    }
+
+    bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out)
+    {
+        // Graded frames must outlive the compose call: one slot per layer.
+        std::vector<Raster> graded(plan.layers.size());
+        std::vector<render::Layer> layers;
+        for (size_t i = 0; i < plan.layers.size(); ++i)
+        {
+            const PlanLayer &l = plan.layers[i];
+            const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
             render::FrameCache::Key key;
-            key.source = media + fxKey;
-            key.sourceFrame = frame;
-            key.paramHash = (identity || weight <= 0.0) ? render::FrameCache::kUngraded : render::hashParams(p);
-            key.level = edge;
-            if (weight > 0.0 && weight < 1.0) key.source += "|w" + canonicalNumber(weight);
+            key.source = l.media + l.fxKey;
+            key.sourceFrame = l.frame;
+            key.paramHash = ungradedOnly ? render::FrameCache::kUngraded : render::hashParams(l.params);
+            key.level = l.edge;
+            if (l.weight > 0.0 && l.weight < 1.0) key.source += "|w" + canonicalNumber(l.weight);
+            if (l.groupMix && !ungradedOnly)
+                key.source += "|g" + canonicalNumber(l.groupWeight) + ":" + std::to_string(render::hashParams(l.paramsGroupsOff));
             if (!mCache->get(key, graded[i]))
             {
                 Raster ungraded;
-                if (!sourceFrame(media, frame, fxIdx, ungraded)) continue;
+                if (!decodeLayer(ctx, l, ungraded)) continue;
                 if (key.paramHash == render::FrameCache::kUngraded) graded[i] = std::move(ungraded);
                 else
                 {
-                    if (!mGrade->render(ungraded, p, true, edge, graded[i])) continue;
-                    mixWeight(ungraded, graded[i], weight);
+                    if (!ctx.grade->render(ungraded, l.params, !l.identity, l.edge, graded[i])) continue;
+                    if (l.groupMix)
+                    {
+                        // The groups' own contribution, faded: off ↔ on by the product of their weights.
+                        Raster off;
+                        if (ctx.grade->render(ungraded, l.paramsGroupsOff, !render::GradeEngine::isIdentity(l.paramsGroupsOff), l.edge, off))
+                        {
+                            mixWeight(off, graded[i], l.groupWeight);
+                        }
+                    }
+                    mixWeight(ungraded, graded[i], l.weight);
                 }
                 mCache->put(key, graded[i]);
             }
-
-            const Track *tr = tracks[c->track];
-            render::Layer L;
+            render::Layer L = l.layer;
             L.src = &graded[i];
-            // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
-            // identically; the composite works in output pixels.
-            L.geom.x = c->geom.x * ow;
-            L.geom.y = c->geom.y * oh;
-            L.geom.scale = c->geom.scale;
-            L.geom.rotation = c->geom.rotation;
-            L.geom.anchorX = c->geom.anchorX;
-            L.geom.anchorY = c->geom.anchorY;
-            L.geom.cropX = c->geom.cropX;
-            L.geom.cropY = c->geom.cropY;
-            L.geom.cropW = c->geom.cropW;
-            L.geom.cropH = c->geom.cropH;
-            L.fit = fitOf(c->fit);
-            L.opacity = std::clamp(c->opacity * (tr ? tr->opacity : 1.0) * a.weight, 0.0, 1.0);
-            L.blend = blendOf(c->blend);
-            L.dissolveWithPrevious = a.dissolveWithPrevious;
             layers.push_back(L);
         }
-        if (anyClip) *anyClip = !layers.empty();
-        render::compose(layers, ow, oh, out);
+        render::compose(layers, plan.width, plan.height, out);
         return true;
+    }
+
+    bool InterstellarService::renderTimelineFrame(const NodeId &tl, double t, int proxyEdge, Raster &out, bool *anyClip)
+    {
+        FramePlan plan;
+        if (!planFrame(tl, t, proxyEdge, plan, anyClip)) return false;
+        return executePlan(*mSync, plan, out);
     }
 
     bool InterstellarService::renderFrame(double t, int proxyEdge, Raster &out)
@@ -301,32 +404,63 @@ namespace interstellar
         // Preview quality caps the monitor's render edge (R-SET-3) — a cap, never an upscale. A
         // render and an export-still go through renderTimelineFrame at full size, untouched.
         if (mSettings.previewEdge > 0) proxyEdge = proxyEdge > 0 ? std::min(proxyEdge, mSettings.previewEdge) : mSettings.previewEdge;
+        FramePlan plan;
         bool any = false;
-        if (!renderTimelineFrame(currentTimeline(), t, proxyEdge, out, &any)) return false;
-        if (any) return true;
-        // Nothing is cut at t: show the Grade target's reference frame, graded, so grading works
-        // before a single clip exists.
-        if (!mModel.hasGradeTarget || mModel.selectedRack < 0) return true;
-        const NodeId roId = mModel.rack[(size_t)mModel.selectedRack].rackObj;
-        const RackObj *ro = mProject->rackObj(roId);
-        if (!ro || ro->media.empty()) return true;
-        const std::string media = resolvePath(ro->media);
-        Source *s = source(media);
-        if (!s || !s->ok) return true;
-        const long long frame = s->info.frames <= 1 ? 0 : (long long)std::llround(ro->frame * (s->info.fps > 0 ? s->info.fps : 24.0));
-        Raster raw;
-        if (!sourceFrame(media, frame, {}, raw)) return true;
-        EditParams p;
-        std::string e;
-        if (!gradeFor(currentTimeline(), roId, p, e)) return true;
-        Raster g;
-        if (!mGrade->render(raw, p, !render::GradeEngine::isIdentity(p), proxyEdge, g)) return true;
-        int ow = 0, oh = 0;
-        outputSize(mProject->width, mProject->height, proxyEdge, ow, oh);
-        render::Layer L;
-        L.src = &g;
-        render::compose({L}, ow, oh, out);
+        if (!planFrame(currentTimeline(), t, proxyEdge, plan, &any)) return false;
+        if (!any)
+        {
+            FramePlan ref;
+            if (planReferenceFrame(proxyEdge, ref)) plan = std::move(ref);
+        }
+        if (!mHost.asyncPreview) return executePlan(*mSync, plan, out);
+
+        // The monitor on a worker (D-5): hand over the plan, answer at once with the newest
+        // finished frame. When the requested frame lands, pump() raises frameSeq and the view
+        // asks again — and gets it.
+        PreviewWorker &w = *mPreview;
+        std::lock_guard<std::mutex> l(w.mu);
+        if (w.doneKey == plan.key && !w.done.empty()) { out = w.done; return true; }
+        if (w.busyKey != plan.key && (!w.pending || w.pending->key != plan.key))
+        {
+            w.pending.reset(new FramePlan(std::move(plan)));
+            w.cv.notify_one();
+        }
+        if (w.done.empty()) return false;   // nothing finished yet: the view shows its loading state
+        out = w.done;
         return true;
+    }
+
+    void InterstellarService::previewLoop()
+    {
+        PreviewWorker &w = *mPreview;
+        for (;;)
+        {
+            std::unique_ptr<FramePlan> plan;
+            {
+                std::unique_lock<std::mutex> l(w.mu);
+                w.cv.wait(l, [&] { return w.stop || w.pending; });
+                if (w.stop) return;
+                plan = std::move(w.pending);
+                w.busyKey = plan->key;
+                if (w.resetSources)
+                {
+                    w.ctx.sources.clear();   // the worker's own decoders, cleared on the worker's thread
+                    w.resetSources = false;
+                }
+            }
+            Raster frame;
+            const bool ok = executePlan(w.ctx, *plan, frame);
+            {
+                std::lock_guard<std::mutex> l(w.mu);
+                w.busyKey.clear();
+                if (ok)
+                {
+                    w.done = std::move(frame);
+                    w.doneKey = plan->key;
+                }
+            }
+            w.doneSeq.fetch_add(1);
+        }
     }
 
     // ── delivery ────────────────────────────────────────────────────────────────────────────────
@@ -452,7 +586,7 @@ namespace interstellar
             {
                 if (j.writer && !j.writer->end()) { failJob("the encoder failed to finish"); return; }
                 j.model.state = "done";
-                mGrade->releaseScratch();
+                mSync->grade->releaseScratch();
                 emit(Event(EK::RenderFinished).with("job", j.model.id).with("timeline", j.model.timelineName)
                          .with("frames", (long long)j.count).with("out", j.model.outPath));
             }

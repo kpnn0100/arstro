@@ -506,6 +506,7 @@ namespace interstellar_v1
         if (mHome->opacity.isAnimating() || mLoading->opacity.isAnimating() || mEdit->opacity.isAnimating()) return true;
         for (const auto &r : m.renders) if (r.state == "running") return true;
         for (const auto &n : m.rack) if (n.pending) return true;   // spinner cells turn
+        if (mHooks.thumbnailEpoch && mHooks.thumbnailEpoch() != mThumbEpoch) return true;   // a still landed
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
@@ -514,6 +515,21 @@ namespace interstellar_v1
         mNowMs = nowMs;
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         bindIfStale(nowMs);
+        // Stills the host decodes off the UI thread arrive later than they were asked for: when
+        // its epoch moves, the views re-ask for what they are missing (D-5, D-6).
+        if (mHooks.thumbnailEpoch)
+        {
+            const unsigned ep = mHooks.thumbnailEpoch();
+            if (ep != mThumbEpoch)
+            {
+                mThumbEpoch = ep;
+                mHome->thumbnailsArrived();
+                mHome->bind(m);
+                mEdit->gradeDeck()->thumbnailsArrived();
+                mEdit->gradeDeck()->bind(m);
+                noteActivity();
+            }
+        }
 
         // screen cross-fade: the model says which screen; the view travels there
         const Screen want = m.screen;

@@ -37,6 +37,10 @@ namespace interstellar_v1
         /** OPTIONAL (contract extension): a still of `mediaPath` at `t` seconds, about `edge` px on
          *  its long side. Empty = placeholders. */
         std::function<bool(const std::string &mediaPath, double t, int edge, interstellar::Raster &out)> thumbnail;
+        /** OPTIONAL: a counter the host raises whenever a still it could not give at once has
+         *  landed. A host that decodes thumbnails off the UI thread returns false from `thumbnail`
+         *  until then; the app re-asks for what it is missing when this moves (D-5, D-6). */
+        std::function<unsigned()> thumbnailEpoch;
     };
 }
 }

@@ -31,6 +31,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,10 @@ namespace interstellar
             std::string settingsPath;
             /** The `.apf` preset library; "" = presets unavailable. */
             std::string presetDir;
+            /** Render the MONITOR on a worker thread: `renderFrame` returns at once with the last
+             *  finished frame and the requested one lands later (frameSeq rises). A window wants
+             *  this (D-5); a test or a script wants the default, synchronous answer. */
+            bool asyncPreview = false;
         };
 
         using EventSink = std::function<void(const Event &)>;
@@ -107,9 +112,13 @@ namespace interstellar
         struct PendingRack;
         struct UndoState;
         struct UndoEntry;
+        struct FramePlan;
+        struct RenderCtx;
+        struct PreviewWorker;
 
         void emit(const Event &e);
         bool dispatchInner(const Command &c);
+        void resetPreview();
         void fillEditModel();
         bool fail(const std::string &why);
         bool requireProject();
@@ -164,8 +173,14 @@ namespace interstellar
         bool renderCommand(const Command &c);
         bool exportStill(const Command &c);
         void pumpJobs();
-        Source *source(const std::string &media);
-        bool sourceFrame(const std::string &media, long long frame, const std::vector<int> &fxNodes, Raster &out);
+        Source *source(RenderCtx &ctx, const std::string &media);
+        bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out);
+        bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
+        bool planReferenceFrame(int proxyEdge, FramePlan &out);
+        bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out);
+        void previewLoop();
+        bool gradeForBypassing(const NodeId &timeline, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
+                               EditParams &out, std::string &err);
         double timelineDuration(const NodeId &timeline) const;
 
         bool lint();
@@ -212,9 +227,10 @@ namespace interstellar
         double mPlayFromT = 0, mPlayFromMs = 0;
 
         // render path
-        std::unique_ptr<render::GradeEngine> mGrade;
         std::unique_ptr<render::FrameCache> mCache;
-        std::map<std::string, std::unique_ptr<Source>> mSources;
+        std::unique_ptr<RenderCtx> mSync;            // the UI thread's decoders + grade engine
+        render::GradeEngine *mGrade = nullptr;       // == mSync->grade (settings reach it)
+        std::unique_ptr<PreviewWorker> mPreview;     // last member: stopped first
         std::vector<std::unique_ptr<Job>> mJobs;
         int mNextJob = 1;
 

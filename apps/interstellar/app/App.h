@@ -131,6 +131,7 @@ namespace interstellar_v1
         bool mScaleBound = false;
         artboard::AnimatedProperty mScaleAnim{1.0};
         std::vector<std::string> mPresetNames;          // what the Preset menu lists now
+        unsigned mThumbEpoch = 0;                       // the host's thumbnail epoch last seen
         artboard::GestureRecognizer mRecognizer;
 
         interstellar::Screen mScreen = interstellar::Screen::Home;

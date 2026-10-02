@@ -84,8 +84,14 @@ namespace interstellar
 
     InterstellarService::InterstellarService(cosmo::ThreadBudget &budget, Host host)
         : mBudget(budget), mHost(std::move(host)), mFrames(std::make_shared<FrameSelector>()), mRack(budget),
-          mProject(new Project()), mGrade(new render::GradeEngine()), mCache(new render::FrameCache())
+          mProject(new Project()), mCache(new render::FrameCache()), mSync(new RenderCtx())
     {
+        mGrade = mSync->grade.get();
+        if (mHost.asyncPreview)
+        {
+            mPreview.reset(new PreviewWorker());
+            mPreview->thread = std::thread([this] { previewLoop(); });
+        }
         if (mHost.rackDecoder)
         {
             auto make = mHost.rackDecoder;
@@ -106,7 +112,18 @@ namespace interstellar
         refreshModel();
     }
 
-    InterstellarService::~InterstellarService() = default;
+    InterstellarService::~InterstellarService()
+    {
+        if (mPreview)
+        {
+            {
+                std::lock_guard<std::mutex> l(mPreview->mu);
+                mPreview->stop = true;
+            }
+            mPreview->cv.notify_all();
+            if (mPreview->thread.joinable()) mPreview->thread.join();
+        }
+    }
 
     const Project &InterstellarService::project() const { return *mProject; }
 
@@ -273,6 +290,16 @@ namespace interstellar
     {
         if (nowMs > mNowMs) mNowMs = nowMs;
         mRack.pump(mNowMs);
+        if (mPreview)
+        {
+            const unsigned seq = mPreview->doneSeq.load();
+            if (seq != mPreview->seenSeq)
+            {
+                mPreview->seenSeq = seq;
+                bumpFrame();       // the requested monitor frame has landed: the view asks again
+                refreshModel();
+            }
+        }
         if (mPending && !mRack.loading()) finishRackLoad();
 
         if (mPlaying && mOpen)
@@ -294,6 +321,18 @@ namespace interstellar
             }
         }
         pumpJobs();
+    }
+
+    void InterstellarService::resetPreview()
+    {
+        // A different project: the worker's decoders point at the old media, and the last frame
+        // belongs to the old project. Dropped under the lock; the worker re-opens what it needs.
+        if (!mPreview) return;
+        std::lock_guard<std::mutex> l(mPreview->mu);
+        mPreview->pending.reset();
+        mPreview->done = Raster{};
+        mPreview->doneKey.clear();
+        mPreview->resetSources = true;
     }
 
     bool InterstellarService::busy() const
@@ -681,7 +720,8 @@ namespace interstellar
         mOpen = true;
         mNodeOf.clear();
         mPins.clear();
-        mSources.clear();
+        mSync->sources.clear();
+        resetPreview();
         mModel.playhead = 0;
         if (!projectSave(std::string())) return false;
         touchRecent(mIspPath);
@@ -703,7 +743,8 @@ namespace interstellar
         mOpen = true;
         mNodeOf.clear();
         mPins.clear();
-        mSources.clear();
+        mSync->sources.clear();
+        resetPreview();
         mCache->clear();
         mModel.playhead = 0;
         mModel.dirty = false;
@@ -830,10 +871,11 @@ namespace interstellar
         mNodeOf.clear();
         mStoredPath.clear();
         mPins.clear();
-        mSources.clear();
+        mSync->sources.clear();
+        resetPreview();
         mJobs.clear();
         mCache->clear();
-        mGrade->releaseScratch();
+        mSync->grade->releaseScratch();
         mSelectedClip.clear();
         mModel.playhead = 0;
         mFrames->clear();
@@ -1196,7 +1238,7 @@ namespace interstellar
                 double t = 0;
                 if (!parseDouble(c.flag("at"), t) || t < 0) return fail("rack frame: --at must be a time in seconds");
                 // Land on a frame of the SOURCE (a 30p clip in a 24p project has 30p frames).
-                const Source *src = source(resolvePath(ro->media));
+                const Source *src = source(*mSync, resolvePath(ro->media));
                 ro->frame = snapToFrame(t, src && src->ok && src->info.fps > 0 ? src->info.fps : mProject->fps);
                 // Nothing reloads. Every pixel Interstellar shows of a source — the Grade monitor,
                 // the filmstrip, a render — comes from its own frame source at this time; Cosmo's

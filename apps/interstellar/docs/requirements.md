@@ -397,3 +397,29 @@ on the logical File title at 125%`, and shot `edit_scale_125`.
 is under the playhead (`app/App.cpp:477`); the service answers with the target's reference frame,
 graded. Before this the monitor said "no clip at the playhead" and a chosen reference frame was
 never seen. Guarded by `with no clip at the playhead the monitor still asks for a frame`.
+
+
+### DR-RENDER-6 The monitor renders off the UI thread (D-5, arstro.design.rule R2)
+With `Host::asyncPreview` (the GTK host sets it), `renderFrame` (`core/service/ServiceRender.cpp:401`)
+plans on the calling thread — resolve, grades, source frames, geometry, copied into a `FramePlan`
+(`planFrame`, `:191`) — and hands the plan to one worker that decodes, grades and composites it
+(`previewLoop`, `:433`, over `executePlan`, `:348`) with its own decoders and grade engine; the
+frame cache is shared. The latest plan wins; the call returns the newest finished frame at once
+(false only before the first); `pump` raises `frameSeq` when a frame lands, and the view asks again.
+A plan's key covers every input to the pixels, so an unchanged request is never re-rendered.
+Renders and export-still plan and execute synchronously, unchanged. Guarded by `the async monitor
+answers at once and delivers the synchronous pixels`.
+
+### DR-HOST-2 Thumbnails decode off the UI thread, one decoder per file (D-5, D-6)
+`interstellar_host::Thumbnailer` (`host/Thumbnailer.cpp:81`) answers from its cache or queues the
+request and returns false; its worker (`:107`) decodes with a persistent `HostFrameSource` per file
+(at most six open), box-filters, and raises `epoch()`. The app's optional `AppHooks::thumbnailEpoch`
+makes the Grade deck and Home re-ask for what they are missing (`app/App.cpp:520`); late strip
+frames and covers fade in. `FrameSourceFFmpeg` decodes forward to targets within ~1.5 s rather than
+seeking back to a keyframe (`host/FrameSourceFFmpeg.cpp:211`).
+
+### DR-RACK-4b A group's weight fades its own contribution (R-RACK-4, D-7)
+For each source on screen, ancestor groups with weight < 1 are collected; the frame is graded with
+them bypassed (Cosmo's bypass rule — `gradeForBypassing`, `core/service/ServiceRender.cpp:158`)
+and with them on, mixed by the product of their weights, then mixed with the ungraded frame by the
+source's own weight. Weight 0 ≡ the group bypassed, byte for byte.

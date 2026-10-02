@@ -67,6 +67,7 @@ int main(int argc, char **argv)
     sh.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
     sh.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
     sh.writeImage = [](const std::string &p, const Raster &r, std::string &err) { return interstellar_host::writePng(p, r, err); };
+    sh.asyncPreview = true;   // exactly as the GTK host binds it
     InterstellarService svc(budget, sh);
     interstellar_host::Thumbnailer thumbs;
 
@@ -94,6 +95,7 @@ int main(int argc, char **argv)
         ++thumbCalls;
         return ok;
     };
+    hooks.thumbnailEpoch = [&]() { return thumbs.epoch(); };
     App app(hooks, w, h);
 
     cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
@@ -154,6 +156,9 @@ int main(int argc, char **argv)
     settle(800.0);
     assert(svc.model().screen == Screen::Edit);
     assert(!svc.model().rack.empty());
+    // Let the asynchronous stills and the monitor's worker land before the shots.
+    for (int i = 0; i < 200 && !thumbs.waitIdle(10); ++i) settle(16.0);
+    settle(400.0);
     if (timing)
     {
         std::vector<std::pair<double, std::string>> top = slow;

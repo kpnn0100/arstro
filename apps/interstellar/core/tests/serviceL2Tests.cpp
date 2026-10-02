@@ -24,6 +24,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <chrono>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -116,9 +118,12 @@ namespace
             svc = make();
         }
 
+        bool async = false;   // the GTK host's asyncPreview
+
         std::unique_ptr<InterstellarService> make()
         {
             InterstellarService::Host h;
+            h.asyncPreview = async;
             h.rackDecoder = [](std::shared_ptr<const FrameSelector>) { return std::unique_ptr<cosmo::IImageDecoder>(new FakeDecoder()); };
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
@@ -549,6 +554,53 @@ int main()
         Raster r;
         bool any = false;
         assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, r, &any) && any);
+    });
+
+    test("the async monitor answers at once and delivers the synchronous pixels (D-5)", [] {
+        Fixture f("asyncmon");
+        f.standard();
+        f.must("set a.basic.exposure=0.4");
+        f.must("project save");
+        Raster sync;
+        assert(f.svc->renderFrame(1.0, 0, sync));          // the synchronous answer, for reference
+        f.async = true;
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        Raster r;
+        const unsigned seq0 = f.svc->model().frameSeq;
+        assert(!f.svc->renderFrame(1.0, 0, r));            // nothing finished yet: returns at once
+        for (int i = 0; i < 400 && f.svc->model().frameSeq == seq0; ++i)
+        {
+            f.svc->pump(1e6 + i * 16.0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        assert(f.svc->model().frameSeq != seq0);           // the landing raised frameSeq
+        assert(f.svc->renderFrame(1.0, 0, r));
+        assert(r.rgba == sync.rgba);                       // same plan, same pixels, any thread
+        // A new request while a frame is shown: the old frame answers until the new one lands.
+        Raster stale;
+        assert(f.svc->renderFrame(3.0, 0, stale) && stale.rgba == sync.rgba);
+    });
+
+    test("a group's weight fades the group's own contribution (D-7, R-RACK-4)", [] {
+        Fixture f("groupweight");
+        f.standard();
+        f.must("set a.basic.exposure=0.3");
+        f.must("rack group new G --nodes a");
+        f.must("set g.basic.exposure=1.2");
+        Raster on, off, half, zero;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, on));
+        f.must("set g.bypass=1");
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, off));
+        f.must("set g.bypass=0");
+        f.must("set g.weight=0");
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, zero));
+        assert(zero.rgba == off.rgba);                     // weight 0 ≡ Cosmo's bypass of the group
+        assert(zero.rgba != on.rgba);
+        f.must("set g.weight=0.5");
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, half));
+        const size_t px = (size_t)(13 * 48 + 24) * 4 + 1;  // G channel, mid frame
+        assert(half.rgba[px] > std::min(off.rgba[px], on.rgba[px]) && half.rgba[px] < std::max(off.rgba[px], on.rgba[px]));
     });
 
     test("the same script on two services dumps the same stable state", [] {

@@ -51,6 +51,8 @@ namespace interstellar_v1
         HomeScreen();
 
         void bind(const interstellar::AppModel &m);
+        /** The host has new stills: the next bind re-asks for covers it could not have before. */
+        void thumbnailsArrived() { for (auto &c : mCards) if (!c.cover.has()) { c.coverKey.clear(); c.coverRetry = true; } }
         void setLoading(bool on) { mLoading = on; }
         void setNowUnix(long long now) { mNowUnix = now; }
         void layout();
@@ -90,6 +92,8 @@ namespace interstellar_v1
             bool placed = false;
             ImageSlot cover;
             std::string coverKey;
+            artboard::AnimatedProperty coverAlpha{1.0};
+            bool coverRetry = false, coverFade = false;   // a cover that lands late fades in (R1)
             artboard::AnimatedProperty alpha{1.0};
             bool fadeIn = false;   // a card that joined after the first bind: fades in at its slot
             artboard::Rect live() const { return artboard::Rect{ax.value(), ay.value(), aw.value(), ah.value()}; }

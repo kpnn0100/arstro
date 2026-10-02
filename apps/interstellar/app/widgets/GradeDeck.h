@@ -43,6 +43,9 @@ namespace interstellar_v1
         GradeDeck();
 
         void bind(const interstellar::AppModel &m);
+        /** The host has new stills: the next bind re-asks for the cells and strip frames it is
+         *  missing, and the late ones fade in. */
+        void thumbnailsArrived() { mStructureKey.clear(); mFramesRetry = true; }
         void layout();
 
         std::shared_ptr<cosmo_v2::Filmstrip> filmstrip() { return mStrip; }
@@ -80,6 +83,9 @@ namespace interstellar_v1
         std::string mReason, mSelMedia, mSelName;
         // the frame strip's thumbnails, keyed by (media, cell count, length)
         std::vector<ImageSlot> mFrames;
+        std::vector<std::unique_ptr<artboard::AnimatedProperty>> mFrameAlpha;   // per strip frame
+        std::vector<bool> mFrameFade;
+        bool mFramesRetry = false;
         std::string mFramesKey, mFramesMedia;
         bool mStripFadePending = false;
         artboard::AnimatedProperty mStripFade{1.0};   // a different source's frames fade in

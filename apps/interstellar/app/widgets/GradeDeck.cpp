@@ -148,16 +148,30 @@ namespace interstellar_v1
         const double cellW = r.h * 16.0 / 9.0;
         const int n = std::max(1, (int)std::floor(r.w / std::max(8.0, cellW)));
         const std::string key = mSelMedia + "|" + std::to_string(n) + "|" + cmd::num(mSourceDur);
-        if (key == mFramesKey) return;
-        mFramesKey = key;
-        if (!mFramesMedia.empty() && mFramesMedia != mSelMedia) mStripFadePending = true;   // a content change, not a resize
-        mFramesMedia = mSelMedia;
-        mFrames.assign(n, ImageSlot{});
+        const bool retry = mFramesRetry && key == mFramesKey && (int)mFrames.size() == n;
+        mFramesRetry = false;
+        if (key == mFramesKey && !retry) return;
+        if (!retry)
+        {
+            mFramesKey = key;
+            if (!mFramesMedia.empty() && mFramesMedia != mSelMedia) mStripFadePending = true;   // a content change, not a resize
+            mFramesMedia = mSelMedia;
+            mFrames.assign(n, ImageSlot{});
+            mFrameAlpha.clear();
+            for (int i = 0; i < n; ++i) mFrameAlpha.emplace_back(new AnimatedProperty(1.0));
+            mFrameFade.assign(n, false);
+        }
         if (!thumbnail) return;
         for (int i = 0; i < n; ++i)
         {
+            if (mFrames[i].has()) continue;
             interstellar::Raster ras;
-            if (thumbnail(mSelMedia, (i + 0.5) / n * mSourceDur, kFrameEdge, ras) && !ras.empty()) mFrames[i].set(ras);
+            if (thumbnail(mSelMedia, (i + 0.5) / n * mSourceDur, kFrameEdge, ras) && !ras.empty())
+            {
+                mFrames[i].set(ras);
+                // A frame the host had to decode lands later than its neighbours: it fades in.
+                if (retry) { mFrameAlpha[i]->set(0.0); mFrameFade[i] = true; }
+            }
         }
     }
 
@@ -214,6 +228,15 @@ namespace interstellar_v1
 
     void GradeDeck::advance(double nowMs)
     {
+        for (size_t i = 0; i < mFrameAlpha.size(); ++i)
+        {
+            if (i < mFrameFade.size() && mFrameFade[i])
+            {
+                mFrameAlpha[i]->animateTo(1.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
+                mFrameFade[i] = false;
+            }
+            mFrameAlpha[i]->update(nowMs);
+        }
         if (!mSelectorInit)
         {
             mSelectorAmt.set(mSelectorWanted ? 1.0 : 0.0);
@@ -323,7 +346,8 @@ namespace interstellar_v1
                     const Rect cell{tr.x + tr.w * i / n, tr.y, tr.w / n - 1.0, tr.h};
                     if (mFrames[i].has())
                     {
-                        t.pushLayer(sa * mStripFade.value() * (0.55 + 0.25 * hv));
+                        const double fa = i < (int)mFrameAlpha.size() ? mFrameAlpha[(size_t)i]->value() : 1.0;
+                        t.pushLayer(sa * mStripFade.value() * (0.55 + 0.25 * hv) * fa);
                         mFrames[i].drawCover(t, cell);
                         t.popLayer();
                     }

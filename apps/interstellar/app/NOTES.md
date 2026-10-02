@@ -65,6 +65,13 @@ PUBLIC defines match the rest of the final binary.
 - New shots: `edit_menu_file`, `edit_menu_file_mid`, `edit_menu_edit`, `edit_menu_preset`,
   `edit_settings`, `edit_scale_125` — looked at; UI checks now 151.
 
+## Thumbnails are asynchronous (2026-10-02, D-5/D-6)
+
+`AppHooks::thumbnailEpoch` (optional): the host raises it when a still it could not give at once has
+landed; `App::render` then calls `HomeScreen::thumbnailsArrived` / `GradeDeck::thumbnailsArrived` and
+re-binds, so missing covers, cells and strip frames are asked for again. Late strip frames and covers
+fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail replaces the plate).
+
 ## Integrating (the GTK host)
 
 ```cpp
