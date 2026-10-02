@@ -1159,6 +1159,59 @@ namespace
         r.pump(64);
         CHECK(e.toastIsError(), "a failed copy is SAID, as a refusal");
     }
+
+    /** R-RACK-3 (amended): the reference frame is a fast-seek slider over the whole source that
+     *  PREVIEWS in the monitor while dragged and commits on release; ‹ › step one source frame. */
+    void testRefFrameSlider()
+    {
+        std::printf("the reference-frame slider: seek, preview, step\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto deck = r.app->edit().gradeDeck();
+        auto mon = r.app->edit().monitor();
+        CHECK(near(deck->sourceDuration(), 12.0) && near(deck->sourceFps(), 24.0),
+              "the slider spans the WHOLE source (rack[].mediaDuration), at the source's own rate");
+        const Rect tr = deck->frameTrackRect();
+        const Point f0 = world(*deck, tr.x + tr.w * 0.25, tr.y + tr.h * 0.5), f1 = world(*deck, tr.x + tr.w * 0.75, tr.y + tr.h * 0.5);
+        r.svc.lines.clear();
+        r.press(f0.x, f0.y);
+        r.frame();
+        for (int k = 1; k <= 6; ++k) { r.dragTo(f0.x + (f1.x - f0.x) * k / 6.0, f0.y); r.frame(); }
+        r.frame();
+        CHECK(deck->previewing(), "mid-drag the slider is previewing");
+        CHECK(withPrefix(r.svc, "rack frame").empty(), "…and nothing is committed while dragging");
+        const auto last = r.svc.sourceCalls.empty() ? std::make_pair(std::string(), -1.0) : r.svc.sourceCalls.back();
+        std::printf("      preview asked %s @ %.4f; caption %s\n", last.first.c_str(), last.second, mon->caption().c_str());
+        CHECK(last.first == "s_day01" && std::fabs(last.second - 9.0) < 0.05, "the monitor asked renderSource for the source AT the dragged time (75% of 12 s)");
+        CHECK(mon->caption().find("seek ") != std::string::npos, "…and its caption says it is seeking, not the committed ref");
+        r.releaseAt(f1.x, f1.y);
+        r.frame();
+        const std::string fl = withPrefix(r.svc, "rack frame s_day01 --at ");
+        std::printf("      %s\n", fl.c_str());
+        CHECK(!fl.empty() && std::fabs(std::stod(fl.substr(fl.rfind(' ') + 1)) - 9.0) < 0.05, "release commits rack frame s_day01 --at 9");
+        CHECK(!deck->previewing(), "…and the preview ends");
+        r.settle();
+        CHECK(r.svc.sourceCalls.back().second < 0 && mon->caption().find("ref 00:00:09:00") != std::string::npos,
+              "at rest the monitor shows the committed reference frame again");
+        // ‹ › one source frame, committed at once — the exact frame
+        r.svc.lines.clear();
+        Point sp = centre(*deck, deck->stepRect(1));
+        r.click(sp.x, sp.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "rack frame s_day01 --at 9.041667"), "› steps one frame forward at 24 fps and commits it");
+        r.svc.lines.clear();
+        r.svc.dispatch("rack select s_day02", gErr);   // a 50 fps source, ref at 1.0 s
+        r.settle();
+        r.svc.lines.clear();
+        sp = centre(*deck, deck->stepRect(-1));
+        r.click(sp.x, sp.y);
+        r.pump(32);
+        CHECK(hasLine(r.svc, "rack frame s_day02 --at 0.98"), "‹ steps one frame back at the SOURCE's 50 fps, not the project's 24");
+        // the marker catches up to a committed step, eased
+        const double s0 = deck->shownFrame();
+        const double fm = firstMoved(r, [&] { return deck->shownFrame(); }, s0);
+        CHECK(strictlyBetween(fm, 0.98, s0), "the marker EASES to the stepped frame");
+    }
 }
 
 int main()
@@ -1181,6 +1234,7 @@ int main()
     testMenusSettingsScale();
     testSelectionAndContext();
     testCaptureAndGradeMonitor();
+    testRefFrameSlider();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

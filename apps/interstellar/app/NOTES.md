@@ -102,6 +102,15 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   (`EditScreen::showNotice`); a failed one is a refusal.
 - Shots added: `grade_capture_menu`, `cut_capture_menu`, `grade_frame_copied`. UI checks: 183.
 
+## The reference-frame slider (2026-10-02, R-RACK-3 amended)
+
+- The strip spans the WHOLE source (`rack[].mediaDuration`, the cut's extent until the service has
+  opened it) and snaps to the source's own rate (`rack[].mediaFps`). Dragging is direct manipulation
+  and calls `GradeDeck::onPreview(bind, t)` per frame crossed — the app keeps it as presentation state
+  and the Grade monitor shows the source at `t` (`seek <tc>` in the caption). Release dispatches
+  `rack frame` and ends the preview. ‹ › step one frame and commit.
+- Shots added: `grade_ref_seek_drag`, `grade_ref_step_hover`. UI checks: 194.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -172,7 +181,8 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | rack row, filmstrip cell, source-bin row | `rack select <bind>` |
 | rack bypass toggle | `set <bind>.bypass=1` / `=0` |
 | rack weight bar (drag, 0.01 steps) | `set <bind>.weight=<0..1>` |
-| reference-frame strip (on release) | `rack frame <bind> --at <t>` (frame-quantised) |
+| reference-frame slider (drag previews in the monitor through `renderSource`; on release) | `rack frame <bind> --at <t>` (on the source's own frame grid, `rack[].mediaFps`) |
+| reference-frame ‹ / › (one source frame) | `rack frame <bind> --at <frame ∓ 1/mediaFps>` |
 | Basic/Detail sliders | `set <bind>.basic.<exposure·contrast·highlights·shadows·whites·blacks·temp·tint·vibrance·saturation·texture·clarity·dehaze·grainAmount·grainSize>=<v>` and `set <bind>.detail.<sharpenAmount·sharpenRadius·sharpenMasking·nrLuminance·nrColor·lensDistortion·lensCA·lensVignette>=<v>` — engine units via cosmo's `toEv`, `toKelvin`, `toTint`, `toRadiusPx` |
 | Mixer curves | `set <bind>.mixer.mixer0|1|2=<x,y;…>` |
 | Tone curve | `set <bind>.curve.curve|curveR|curveG|curveB=<x,y;…>` |

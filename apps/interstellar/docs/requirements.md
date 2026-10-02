@@ -495,3 +495,20 @@ elsewhere. A successful copy says so in the toast chip without the refusal's red
 Cut copies the timeline`, `the monitor's capture button FADES in on Grade`, `…the answer dispatches
 capture --out <path> --source <the Grade target>`, `a failed copy is SAID`) and shots
 `grade_capture_menu`, `cut_capture_menu`, `grade_frame_copied` (both sizes, looked at).
+
+### DR-RACK-3c The reference frame is a fast-seek slider that previews, plus frame steps (R-RACK-3, amended)
+`GradeDeck`'s frame strip is the track of a slider over the WHOLE source — `rack[].mediaDuration`
+once the service has opened it (`app/widgets/GradeDeck.cpp:121`), the cut's extent before — with
+cosmo's white knob on the accent marker. Every position snaps to the source's OWN frame grid
+(`rack[].mediaFps`, `snapToFrame`, `:201`). Dragging calls `onPreview(bind, t)` per frame crossed
+(`:207`); the app stores it as presentation state (`app/App.cpp:70`) and the Grade monitor asks
+`renderSource(bind, t)` for it, captioned `seek <tc>` — nothing is dispatched. Release sends
+`rack frame <bind> --at <t>` and ends the preview, so the monitor returns to the (now committed)
+reference frame. ‹ › beside the timecode step one source frame and commit at once (`step`, `:214`);
+the marker eases to the model's new frame (220 ms). Guarded by `testRefFrameSlider` (`the slider
+spans the WHOLE source`, `…nothing is committed while dragging`, `the monitor asked renderSource for
+the source AT the dragged time`, `release commits rack frame s_day01 --at 9`, `› steps one frame
+forward at 24 fps`, `‹ steps one frame back at the SOURCE's 50 fps`, `the marker EASES to the stepped
+frame`); mutants (no preview while dragging; stepping at the project's rate) went red. Shots
+`grade_ref_seek_drag`, `grade_ref_step_hover` (both sizes, looked at); the live harness over the real
+service shows `of 00:00:04:00` for a 4 s source.

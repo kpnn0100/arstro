@@ -66,6 +66,12 @@ namespace interstellar_v1
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
+        // the ref-frame slider previews in the monitor while dragged, nothing committed (R-RACK-3)
+        mEdit->gradeDeck()->onPreview = [this](const std::string &bind, double t) {
+            mPreviewBind = t < 0 ? std::string() : bind;
+            mPreviewAt = t;
+            noteActivity();
+        };
         mEdit->contextMenu()->onRename = [this](const std::string &typed) {
             const std::string name = cmd::bindName(typed);
             if (!name.empty() && !mRenameTarget.empty() && name != mRenameTarget)

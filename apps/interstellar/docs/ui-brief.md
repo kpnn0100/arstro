@@ -79,7 +79,8 @@ right — `ParamPanel`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`, 
 linked, not reimplemented. The deck is a **filmstrip of rack sources**.
 
 New here, and only this: a **frame selector** under a video source's cell (which frame Cosmo
-grades), a **used-by count** (zero is not an error — reference stills are legitimate), and a
+grades — a fast-seek slider over the whole source whose track is a strip of its frames; dragging
+previews the frame, graded, in the monitor, release commits, ‹ › step one frame), a **used-by count** (zero is not an error — reference stills are legitimate), and a
 **version-override badge** on any node this version has a `#tlgrade` on, with "revert to base" one
 click away.
 

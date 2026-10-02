@@ -41,8 +41,9 @@ one integrator who moves, wires, tests and commits each stream:
       Selection, cosmo's right-click menu on rack items, the weight bar's caption (DR-RACK-8, DR-UI-10).
 - [x] Grade without a transport (its monitor shows the Grade target at its reference frame); the
       capture button with Copy Frame / Save Frame… (DR-UI-3c, DR-UI-11a/b).
-- [ ] The reference-frame slider (fast seek + frame steps, DR-RACK-3b's UI) and browsing groups like
-      cosmo (R-UI-12) — the rest of the 2026-10-02 request.
+- [x] The reference-frame slider: fast seek over the whole source with a live graded preview, frame
+      steps at the source's rate (DR-RACK-3c).
+- [ ] Browsing groups like cosmo (R-UI-12) — the rest of the 2026-10-02 request.
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,

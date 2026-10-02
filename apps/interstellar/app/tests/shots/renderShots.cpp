@@ -185,6 +185,24 @@ namespace
             r.click(ip.x, ip.y);
             r.pump(400);
         }});
+        // the reference-frame slider (R-RACK-3 amended): mid-drag it previews in the monitor
+        v.push_back({"grade_ref_seek_drag", edit, [](Rig &r) {
+            r.settle();
+            auto deck = r.app->edit().gradeDeck();
+            const Rect tr = deck->frameTrackRect();
+            const Point a = world(*deck, tr.x + tr.w * 0.21, tr.y + tr.h * 0.5), b = world(*deck, tr.x + tr.w * 0.62, tr.y + tr.h * 0.5);
+            r.press(a.x, a.y);
+            r.frame();
+            for (int k = 1; k <= 6; ++k) { r.dragTo(a.x + (b.x - a.x) * k / 6.0, a.y); r.frame(); }
+            r.pump(200);
+        }});
+        v.push_back({"grade_ref_step_hover", edit, [](Rig &r) {
+            r.settle();
+            auto deck = r.app->edit().gradeDeck();
+            const Point p = centre(*deck, deck->stepRect(1));
+            r.move(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

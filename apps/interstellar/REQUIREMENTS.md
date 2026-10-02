@@ -49,7 +49,7 @@ in the section heading. Read before any code; conflict-check before accepting a 
 
 ---
 
-## R-RACK — grouping and colour: the centre of the app — ✅ IMPLEMENTED (DR-RACK-1..7; limits D-1, D-2)
+## R-RACK — grouping and colour: the centre of the app — ✅ IMPLEMENTED (DR-RACK-1..8, DR-RACK-3b/3c; limits D-1, D-2)
 
 **This is the requirement the first version failed. It is first, and nothing else is accepted as
 done while its authority is a fake.**

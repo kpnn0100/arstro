@@ -118,10 +118,12 @@ namespace interstellar_v1
             {
                 mSelVideo = true;
                 mSelMedia = n.media;
-                double dur = 0.0;
-                for (const auto &c : m.clips) if (c.src == n.rackObj) dur = std::max(dur, c.out);
+                mSrcFps = n.mediaFps > 0 ? n.mediaFps : mFps;
+                // the WHOLE source once the service has opened it; until then, what the cut uses
+                double dur = n.mediaDuration;
+                if (dur <= 0.0) for (const auto &c : m.clips) if (c.src == n.rackObj) dur = std::max(dur, c.out);
                 if (dur <= 0.0) dur = std::max(m.duration, n.frame + 1.0);
-                mSourceDur = std::max(1.0, dur);
+                mSourceDur = std::max(1.0 / mSrcFps, dur);
                 if (!mDragging) mFrameTarget = n.frame;   // a gesture in flight outranks the model
             }
         }
@@ -148,7 +150,7 @@ namespace interstellar_v1
             const double h = std::min(kMaxStripH, height.value() - top - kBandLineH - 8.0);
             return Rect{kPadX, top + kBandLineH, std::max(0.0, width.value() - 2 * kPadX), h};
         }
-        const double x0 = kPadX + 150.0;   // after the label + timecode, measured generously
+        const double x0 = kPadX + 205.0;   // after the label, ‹ timecode ›, measured generously
         return Rect{x0, top, std::max(0.0, width.value() - kPadX - x0), std::max(0.0, std::min(kBandLineH, height.value() - top))};
     }
 
@@ -194,20 +196,57 @@ namespace interstellar_v1
         }
     }
 
+    /** A source time on the source's own frame grid, inside the source (the last frame starts one
+     *  frame before the end). */
+    double GradeDeck::snapToFrame(double t) const
+    {
+        const double last = std::max(0.0, std::floor(mSourceDur * mSrcFps - 1e-6) / mSrcFps);
+        return std::clamp(std::round(t * mSrcFps) / mSrcFps, 0.0, last);
+    }
+
+    void GradeDeck::preview(double t)
+    {
+        if (mSelected < 0 || mSelected >= (int)mRack.size()) return;
+        if (std::fabs(t - mFrameLast) > 1e-9 || t < 0) { if (onPreview) onPreview(mRack[mSelected].bindName, t); }
+    }
+
+    /** ‹ › — one frame at the source's own rate, committed at once: the exact frame. */
+    void GradeDeck::step(int dir)
+    {
+        if (!mSelVideo || mSelected < 0 || mSelected >= (int)mRack.size()) return;
+        const double from = mRack[mSelected].frame;
+        const double to = snapToFrame(from + dir / mSrcFps);
+        if (std::fabs(to - snapToFrame(from)) < 1e-9) return;   // already at that end
+        emit("rack frame " + cmd::quote(mRack[mSelected].bindName) + " --at " + cmd::seconds(to, mSrcFps));
+    }
+
     bool GradeDeck::handleGesture(const Gesture &g, const Point &local)
     {
         const Rect tr = frameTrackRect();
         auto timeAt = [&](double x) { return tr.w > 0 ? std::clamp((x - tr.x) / tr.w, 0.0, 1.0) * mSourceDur : 0.0; };
+        auto stepAt = [&](const Point &p) {
+            if (!mSelVideo || mSelectorAmt.value() < 0.5) return 0;
+            return mStepRect[0].contains(p) ? -1 : (mStepRect[1].contains(p) ? 1 : 0);
+        };
         switch (g.type)
         {
         case Gesture::Type::Move:
+        {
             mTrackHovered = mSelVideo && tr.contains(local);
+            const int sd = stepAt(local);
+            mStepHover.setHovered(sd < 0 ? 0 : (sd > 0 ? 1 : -1));
             return true;
+        }
+        case Gesture::Type::Click:
+            if (const int sd = stepAt(local)) { step(sd); return true; }
+            break;
         case Gesture::Type::Down:
             if (mSelVideo && tr.contains(local))
             {
                 mDragging = true;
-                mFrameTarget = std::round(timeAt(local.x) * mFps) / mFps;
+                const double t = snapToFrame(timeAt(local.x));
+                preview(t);
+                mFrameTarget = t;
                 mShownFrame.set(mFrameTarget);   // direct manipulation: under the pointer
                 mFrameLast = mFrameTarget;
             }
@@ -216,7 +255,9 @@ namespace interstellar_v1
         case Gesture::Type::Drag:
             if (mDragging)
             {
-                mFrameTarget = std::round(timeAt(local.x) * mFps) / mFps;   // land on a frame
+                const double t = snapToFrame(timeAt(local.x));   // land on a frame of the source
+                preview(t);                                       // the monitor shows it, graded
+                mFrameTarget = t;
                 mShownFrame.set(mFrameTarget);
                 mFrameLast = mFrameTarget;
             }
@@ -227,7 +268,10 @@ namespace interstellar_v1
             {
                 mDragging = false;
                 if (mSelected >= 0 && mSelected < (int)mRack.size())
-                    emit("rack frame " + cmd::quote(mRack[mSelected].bindName) + " --at " + cmd::seconds(mFrameTarget, mFps));
+                {
+                    emit("rack frame " + cmd::quote(mRack[mSelected].bindName) + " --at " + cmd::seconds(mFrameTarget, mSrcFps));
+                    if (onPreview) onPreview(mRack[mSelected].bindName, -1.0);   // the commit is what shows now
+                }
             }
             return true;
         case Gesture::Type::Scroll:
@@ -283,6 +327,8 @@ namespace interstellar_v1
             mTrackHoverApplied = mTrackHovered;
         }
         mTrackHover.update(nowMs);
+        if (!isHovered()) mStepHover.clear();
+        mStepHover.advance(nowMs);
         refreshFrames();
         if (mStripFadePending)
         {
@@ -333,22 +379,37 @@ namespace interstellar_v1
         const bool strip = hasFrameStrip();
         if (sa > 0.001)
         {
-            // label line: REF FRAME  00:00:02:12 · <source> ……… length
+            // label line: REF FRAME  ‹ 00:00:02:12 › · <source> ……… length
             t.setFill(fade(palette::mutedForeground(), sa));
             t.drawText("REF FRAME", kPadX, textfit::baseline(lineCy, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
-            const double lx = kPadX + t.measureText("REF FRAME", 9.0, font::sansSemiBold(), 0.13 * 9.0) + 8.0;
-            const std::string tc = cmd::timecode(mShownFrame.value(), mFps);
+            const double lx = kPadX + t.measureText("REF FRAME", 9.0, font::sansSemiBold(), 0.13 * 9.0) + 6.5;
+            // ‹ › step one source frame (R-RACK-3): 16 px targets around the mono timecode
+            constexpr double kStep = 16.0;
+            const std::string tc = cmd::timecode(mShownFrame.value(), mSrcFps);
+            const double tcW = t.measureText(tc, 10.0, font::mono());
+            mStepRect[0] = Rect{lx, lineCy - kStep * 0.5, kStep, kStep};
+            mStepRect[1] = Rect{lx + kStep + 3.0 + tcW + 3.0, lineCy - kStep * 0.5, kStep, kStep};
+            for (int k = 0; k < 2; ++k)
+            {
+                const double hvk = mStepHover.amount(k);
+                if (hvk > 0.001) drawRoundedRect(t, mStepRect[k], radius::control(), Paint::filled(fade(palette::hoverWash(hvk), sa)));
+                const Color gc = fade(lerpColor(palette::mutedForeground(), palette::foreground(), hvk), sa);
+                const Rect gr{mStepRect[k].x + 3.0, mStepRect[k].y + 3.0, kStep - 6.0, kStep - 6.0};
+                if (k == 0) glyph::chevronLeft(t, gr, gc); else glyph::chevronRightSmall(t, gr, gc);
+            }
             t.setFill(fade(palette::foreground(), sa));
-            t.drawText(tc, lx, textfit::baseline(lineCy, 10.0), 10.0, font::mono());
-            const double nx = lx + t.measureText(tc, 10.0, font::mono()) + 10.0;
-            const std::string len = "of " + cmd::timecode(mSourceDur, mFps);
+            t.drawText(tc, lx + kStep + 3.0, textfit::baseline(lineCy, 10.0), 10.0, font::mono());
+            const double nx = mStepRect[1].right() + 8.0;
+            const std::string len = "of " + cmd::timecode(mSourceDur, mSrcFps);
             const double lenW = t.measureText(len, 9.0, font::mono());
             if (strip)
             {
                 t.setFill(fade(palette::mutedForeground(), 0.8 * sa));
                 t.drawText(len, w - kPadX - lenW, textfit::baseline(lineCy, 9.0), 9.0, font::mono());
                 t.setFill(fade(palette::mutedForeground(), sa));
-                t.drawText(textfit::ellipsize(t, mSelName + " \xC2\xB7 drag to choose the frame it is graded on", w - kPadX - lenW - 12.0 - nx, 10.0, font::sans()),
+                t.drawText(textfit::ellipsize(t, mSelName + (mDragging ? " \xC2\xB7 previewing in the monitor \xE2\x80\x94 release to grade on this frame"
+                                                                    : " \xC2\xB7 drag to seek, \xE2\x80\xB9 \xE2\x80\xBA for the exact frame"),
+                                              w - kPadX - lenW - 12.0 - nx, 10.0, font::sans()),
                            nx, textfit::baseline(lineCy, 10.0), 10.0, font::sans());
             }
             const double hv = mTrackHover.value();
@@ -375,9 +436,13 @@ namespace interstellar_v1
                 }
                 t.restore();
                 drawRoundedRect(t, tr, radius::control(), Paint::stroked(fade(lerpColor(palette::border(), palette::whiteAlpha(0.2), hv), sa), 1.0));
-                // the marker: the reference frame, in the accent
+                // the slider's thumb: the reference frame, in the accent — a line through the strip
+                // and cosmo's white slider knob on it, growing a little under the pointer
                 drawRoundedRect(t, Rect{x - 1.0, tr.y - 3.0, 2.0, tr.h + 6.0}, radius::hairline(), Paint::filled(fade(palette::primary(), sa)));
                 drawRoundedRect(t, Rect{x - 5.0, tr.y - 5.0, 10.0, 6.0}, radius::hairline(), Paint::filled(fade(palette::primary(), sa)));
+                const double knob = 5.0 + 1.0 * std::max(hv, mDragging ? 1.0 : 0.0);
+                drawCircle(t, x, tr.y + tr.h * 0.5, knob + 1.5, Paint::filled(fade(palette::primary(), sa)));
+                drawCircle(t, x, tr.y + tr.h * 0.5, knob, Paint::filled(fade(palette::white(), sa)));
             }
             else
             {

@@ -146,7 +146,7 @@ namespace istest
             auto n = node(2, "ro2", "s_day01", "A001_C003 harbour wide", 0, 1, false);
             n.video = true; n.media = "/footage/A001_C003.mov"; n.frame = 2.5; n.usedBy = 2; n.mediaDuration = 12.0; n.mediaFps = 24.0; m.rack.push_back(n);
             n = node(3, "ro3", "s_day02", "A001_C007 deck mid", 0, 1, false);
-            n.video = true; n.media = "/footage/A001_C007.mov"; n.frame = 1.0; n.usedBy = 1; n.overridden = true; n.weight = 0.8; n.mediaDuration = 8.0; n.mediaFps = 25.0; m.rack.push_back(n);
+            n.video = true; n.media = "/footage/A001_C007.mov"; n.frame = 1.0; n.usedBy = 1; n.overridden = true; n.weight = 0.8; n.mediaDuration = 8.0; n.mediaFps = 50.0; m.rack.push_back(n);
             m.rack.push_back(node(4, "ro4", "gr2", "Night interiors", -1, 0, true));
             n = node(5, "ro5", "s_nite01", "B002_C011 cabin close", 3, 1, false);
             n.video = true; n.media = "/footage/B002_C011.mov"; n.usedBy = 1; n.bypass = true; m.rack.push_back(n);
@@ -265,6 +265,11 @@ namespace istest
             if (a[0] == "rack" && a.size() >= 3 && a[1] == "select")
             {
                 for (int i = 0; i < (int)m.rack.size(); ++i) if (m.rack[i].bindName == a[2]) selectRack(i);
+                ++m.frameSeq;
+            }
+            else if (a[0] == "rack" && a.size() >= 5 && a[1] == "frame" && a[3] == "--at")
+            {
+                for (auto &n : m.rack) if (n.bindName == a[2]) n.frame = std::stod(a[4]);
                 ++m.frameSeq;
             }
             else if (a[0] == "playhead" && a.size() >= 2)
