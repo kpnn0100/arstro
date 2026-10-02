@@ -512,3 +512,32 @@ forward at 24 fps`, `‹ steps one frame back at the SOURCE's 50 fps`, `the mark
 frame`); mutants (no preview while dragging; stepping at the project's rate) went red. Shots
 `grade_ref_seek_drag`, `grade_ref_step_hover` (both sizes, looked at); the live harness over the real
 service shows `of 00:00:04:00` for a 4 s source.
+
+### DR-UI-12 Browse groups like Cosmo: members inside a shut group, one level in the strip, a breadcrumb back up (R-UI-12)
+**Tree.** `RackTree` shows a row only while every ancestor group is open (`rowVisible`,
+`app/widgets/RackTree.cpp:61`); the visible rows are re-keyed through `AnimatedRows`
+(`syncRows`, `:85`), so a shut group's members fade out as ghosts and the rows below travel up — and
+back on opening. Groups start shut; when the Grade target moves to a node a shut group hides, its
+ancestors open once (`:40`), so after `rack group new` (which selects the new group) the members
+are INSIDE it. The chevron before the folder toggles open/shut (`:233`) and turns with an eased
+per-row amount; a double-click on a group row (`:208`) opens it in the tree and the strip. Every row
+reserves the chevron's 12 px column so names align at every depth.
+**Strip.** `GradeDeck` shows one level: the top, or the open group's direct members
+(`rebuildCells`, `app/widgets/GradeDeck.cpp:109`); cell ↔ rack index is mapped for selection,
+context menu and the offline chip. Cosmo's `Filmstrip::onActivate` (a double-click on a folder
+chip, `:45`) drills in and opens the group in the tree too (`EditScreen`, `onNavigate`); the strip
+follows the Grade target to its level when it moves (`:90`). A level change fades the old cells out
+(120 ms), swaps them, and fades the new ones in (180 ms) sliding 18 px from the side they came from
+(`:390`). Cosmo's `Breadcrumb` sits in the SOURCES header — `All sources › <group…> [› the selected
+source]`, cosmo's path — and a crumb click goes up; two instances cross-fade on a path change.
+Cosmo's `Breadcrumb` gained an opt-in `setMeasuredText` (real metrics instead of the width
+estimate); cosmo leaves it off and its 41 shots are byte-identical before and after.
+Open/shut and the level are presentation state: browsing dispatches nothing. Guarded by
+`testGroupBrowsing` (`the new group is SHUT in the tree: its member is inside it`, `the strip shows
+the group's chip, not its member`, `double-clicking the folder chip drills the strip into it`,
+`…and opens it in the tree`, `the chevron TURNS open`, `the strip FADES out before it swaps`,
+`clicking "All sources" asks for the top level`, `double-clicking a group row opens it in the strip
+and the tree`, `browsing dispatched nothing`) and `testRackCommands`'s `its chevron opens the group —
+presentation, no command`; mutants (groups never shut; an instant level swap) went red. Shots
+`grade_populated`, `grade_groups_top`, `grade_groups_swap_mid`, `grade_groups_grouped`,
+`grade_groups_open_gr2` (both sizes, looked at).

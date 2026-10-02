@@ -25,39 +25,111 @@ namespace interstellar_v1
         mStrip = std::make_shared<cosmo_v2::Filmstrip>();
         // Cosmo's filmstrip selection: Shift-click a range, Ctrl-click to toggle.
         mStrip->onSelect = [this](int cell, bool shift, bool ctrl) {
-            if (cell < 0 || cell >= (int)mRack.size()) return;
-            const std::string b = cmd::quote(mRack[cell].bindName);
+            const int i = rackIndexOfCell(cell);
+            if (i < 0 || i >= (int)mRack.size()) return;
+            const std::string b = cmd::quote(mRack[(size_t)i].bindName);
             if (shift) emit("rack select " + b + " --range");
             else if (ctrl) emit("rack select " + b + " --add");
             else
             {
                 int selectedCount = 0;
                 for (const auto &r : mRack) selectedCount += r.selected;
-                if (cell != mSelected || selectedCount > 1) emit("rack select " + b);
+                if (i != mSelected || selectedCount > 1) emit("rack select " + b);
             }
         };
         mStrip->onContext = [this](int cell, double x, double y) {
-            if (cell >= 0 && cell < (int)mRack.size() && onContext)
-                onContext(cell, Point{x, y});   // cosmo's filmstrip reports the gesture's world point
+            const int i = rackIndexOfCell(cell);
+            if (i >= 0 && onContext) onContext(i, Point{x, y});   // cosmo's filmstrip reports the gesture's world point
+        };
+        // cosmo's drill-in: double-click a folder chip
+        mStrip->onActivate = [this](int cell) {
+            const int i = rackIndexOfCell(cell);
+            if (i < 0 || !mRack[(size_t)i].group) return;
+            openGroup(mRack[(size_t)i].rackObj);
+            if (onNavigate) onNavigate(mRack[(size_t)i].rackObj);
         };
         addChild(mStrip);
+        for (int k = 0; k < 2; ++k)
+        {
+            mCrumb[k] = std::make_shared<cosmo_v2::Breadcrumb>();
+            mCrumb[k]->setMeasuredText(true);   // real metrics: the estimate leaves wide gaps (design rule R5)
+            mCrumb[k]->onCrumbClick = [this, k](int idx) {
+                if (idx >= 0 && idx < (int)mCrumbChain[k].size()) openGroup(mCrumbChain[k][(size_t)idx]);
+            };
+            mCrumb[k]->opacity.set(k == 0 ? 1.0 : 0.0);
+            addChild(mCrumb[k]);
+        }
+    }
+
+    void GradeDeck::openGroup(const std::string &rackObj)
+    {
+        if (!rackObj.empty())
+        {
+            bool isGroup = false;
+            for (const auto &n : mRack) isGroup = isGroup || (n.group && n.rackObj == rackObj);
+            if (!isGroup) return;
+        }
+        mLevelWanted = rackObj;   // the fade-out → swap → fade-in runs in advance
+    }
+
+    int GradeDeck::cellOfRack(int rackIndex) const
+    {
+        for (int c = 0; c < (int)mCellRack.size(); ++c)
+            if (mCellRack[(size_t)c] == rackIndex) return c;
+        return -1;
     }
 
     void GradeDeck::bind(const interstellar::AppModel &m)
     {
         mRack = m.rack;
         mFps = m.fps > 0 ? m.fps : 24.0;
-        // Rebuild the cells (and their thumbnails) only when the rack's SHAPE or media changed —
+        mSelected = m.selectedRack;
+        // The Grade target moved to a node another level holds: the strip follows it there (once
+        // per move, so the user can still browse away from the selection).
+        const std::string selKey = mSelected >= 0 && mSelected < (int)m.rack.size() ? m.rack[(size_t)mSelected].rackObj : std::string();
+        if (selKey != mSelKeyLast)
+        {
+            mSelKeyLast = selKey;
+            if (mSelected >= 0 && mSelected < (int)m.rack.size())
+            {
+                const int p = m.rack[(size_t)mSelected].parent;
+                mLevelWanted = p >= 0 && p < (int)m.rack.size() ? m.rack[(size_t)p].rackObj : std::string();
+            }
+        }
+        bool wantedThere = mLevelWanted.empty();
+        for (const auto &n : m.rack) wantedThere = wantedThere || (n.group && n.rackObj == mLevelWanted);
+        if (!wantedThere) mLevelWanted.clear();   // the group went away (ungrouped): back to the top
+        if (!mLevelInit) { mLevel = mLevelWanted; mLevelInit = true; }
+        rebuildCells();
+
+        // the selected source's reference frame
+        bindFrame(m);
+    }
+
+    void GradeDeck::rebuildCells()
+    {
+        mLevelIdx = -1;
+        for (int i = 0; i < (int)mRack.size(); ++i)
+            if (mRack[(size_t)i].group && mRack[(size_t)i].rackObj == mLevel) mLevelIdx = i;
+        if (mLevelIdx < 0) mLevel.clear();
+        mCellRack.clear();
+        for (int i = 0; i < (int)mRack.size(); ++i)
+            if (mRack[(size_t)i].parent == mLevelIdx) mCellRack.push_back(i);
+        // Rebuild the cells (and their thumbnails) only when the level's SHAPE or media changed —
         // the strip's thumb pool is indexed by slot and must be refilled in lockstep.
-        std::string key;
-        for (const auto &n : m.rack) key += n.rackObj + "|" + n.media + "|" + cmd::num(n.frame) + "|" + (n.pending ? "p" : "") + (n.failed ? "f" : "") + ";";
+        std::string key = mLevel + "#";
+        for (int i : mCellRack)
+        {
+            const auto &n = mRack[(size_t)i];
+            key += n.rackObj + "|" + n.media + "|" + cmd::num(n.frame) + "|" + (n.pending ? "p" : "") + (n.failed ? "f" : "") + ";";
+        }
         const bool rebuild = key != mStructureKey;
         if (rebuild) mStrip->clearThumbs();
         std::vector<cosmo_v2::Filmstrip::Cell> cells;
         int slot = 0;
-        for (int i = 0; i < (int)m.rack.size(); ++i)
+        for (int i : mCellRack)
         {
-            const auto &n = m.rack[i];
+            const auto &n = mRack[(size_t)i];
             cosmo_v2::Filmstrip::Cell c;
             c.group = n.group;
             c.node = n.node;
@@ -66,7 +138,7 @@ namespace interstellar_v1
             c.loading = n.pending;
             if (n.group)
             {
-                for (const auto &k : m.rack) if (k.parent == i) ++c.count;
+                for (const auto &k : mRack) if (k.parent == i) ++c.count;
             }
             else if (!n.pending)   // a decoding cell has no thumb, so cosmo's spinner shows through
             {
@@ -88,22 +160,33 @@ namespace interstellar_v1
         }
         mStructureKey = key;
         mStrip->setCells(cells);
-        mSelected = m.selectedRack;
-        if (mSelected >= 0 && mSelected < (int)cells.size())
-        {
-        {
-            std::vector<int> sel;
-            for (int k = 0; k < (int)mRack.size(); ++k)
-                if (mRack[(size_t)k].selected) sel.push_back(k);
-            if (std::find(sel.begin(), sel.end(), mSelected) == sel.end()) sel.push_back(mSelected);
-            mStrip->setSelection(sel, mSelected);
-        }
-            mStrip->scrollCellIntoView(mSelected);
-        }
-        else
-            mStrip->setSelection({}, -1);
+        // the selection, in this level's cells (cosmo rings every selected cell)
+        std::vector<int> sel;
+        for (int c = 0; c < (int)mCellRack.size(); ++c)
+            if (mRack[(size_t)mCellRack[(size_t)c]].selected || mCellRack[(size_t)c] == mSelected) sel.push_back(c);
+        const int primary = cellOfRack(mSelected);
+        mStrip->setSelection(sel, primary);
+        if (primary >= 0) mStrip->scrollCellIntoView(primary);
 
-        // the selected source's reference frame
+        // the path: the top, each group down to the shown one, and — cosmo's mock — the selected
+        // source when it is in this level
+        std::vector<std::string> path{"All sources"}, chain{std::string()};
+        std::vector<int> up;
+        for (int p = mLevelIdx; p >= 0 && p < (int)mRack.size(); p = mRack[(size_t)p].parent) up.push_back(p);
+        for (auto it = up.rbegin(); it != up.rend(); ++it)
+        {
+            const auto &g = mRack[(size_t)*it];
+            path.push_back(g.cosmoName.empty() ? g.bindName : g.cosmoName);
+            chain.push_back(g.rackObj);
+        }
+        if (primary >= 0 && !mRack[(size_t)mSelected].group)
+            path.push_back(mRack[(size_t)mSelected].cosmoName.empty() ? mRack[(size_t)mSelected].bindName : mRack[(size_t)mSelected].cosmoName);
+        mCrumbPath = path;
+        mCrumbChainNext = chain;
+    }
+
+    void GradeDeck::bindFrame(const interstellar::AppModel &m)
+    {
         mSelVideo = false;
         mReason.clear();
         mSelMedia.clear();
@@ -134,10 +217,23 @@ namespace interstellar_v1
 
     void GradeDeck::layout()
     {
-        mStrip->x.set(0.0);
+        // a level change: the strip slides a little from the side it came from while it fades
+        const double lf = mLevelFade.value();
+        mStrip->x.set(18.0 * (1.0 - lf) * (mLevelSwapping ? -mLevelDir : mLevelDir));
         mStrip->y.set(kHeaderH);
         mStrip->width.set(width.value());
         mStrip->height.set(cosmo_v2::Filmstrip::kHeight);
+        mStrip->opacity.set(lf);
+        // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was
+        const double bx = std::min(mHeaderRight, width.value());
+        for (auto &c : mCrumb)
+        {
+            c->x.set(bx);
+            c->y.set((kHeaderH - cosmo_v2::Breadcrumb::kHeight) * 0.5);
+            c->width.set(std::max(0.0, width.value() - kPadX - bx));
+            c->height.set(cosmo_v2::Breadcrumb::kHeight);
+            c->visible = c->opacity.value() > 0.001;   // the faded-out one takes no clicks
+        }
     }
 
     bool GradeDeck::hasFrameStrip() const { return height.value() - bandTop() - kBandLineH - 8.0 >= kMinStripH; }
@@ -291,6 +387,47 @@ namespace interstellar_v1
 
     void GradeDeck::advance(double nowMs)
     {
+        // the level: fade the old cells out, swap, fade the new ones in (never a one-frame swap)
+        if (!mLevelSwapping && mLevelWanted != mLevel && !mLevelFade.isAnimating())
+        {
+            int dw = -1, dl = -1;   // depth of each level, to know which way the strip slides
+            for (const auto &n : mRack)
+            {
+                if (n.group && n.rackObj == mLevelWanted) dw = n.depth;
+                if (n.group && n.rackObj == mLevel) dl = n.depth;
+            }
+            mLevelDir = dw > dl ? 1.0 : -1.0;
+            mLevelSwapping = true;
+            mLevelFade.animateTo(0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        if (mLevelSwapping && !mLevelFade.isAnimating() && mLevelFade.value() <= 0.001)
+        {
+            mLevel = mLevelWanted;
+            rebuildCells();
+            mLevelSwapping = false;
+            mLevelFade.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+        }
+        mLevelFade.update(nowMs);
+        // the breadcrumb: the new path cross-fades over the old one (two cosmo instances)
+        if (!mCrumbInit)
+        {
+            mCrumb[mCrumbFront]->setPath(mCrumbPath);
+            mCrumbChain[mCrumbFront] = mCrumbChainNext;
+            mCrumbPathShown = mCrumbPath;
+            mCrumbInit = true;
+        }
+        else if (mCrumbPath != mCrumbPathShown)
+        {
+            const int back = 1 - mCrumbFront;
+            mCrumb[back]->setPath(mCrumbPath);
+            mCrumbChain[back] = mCrumbChainNext;
+            mCrumb[back]->opacity.set(0.0);
+            mCrumb[back]->opacity.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mCrumb[mCrumbFront]->opacity.animateTo(0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mCrumb[back]->raise();
+            mCrumbFront = back;
+            mCrumbPathShown = mCrumbPath;
+        }
         for (size_t i = 0; i < mFrameAlpha.size(); ++i)
         {
             if (i < mFrameFade.size() && mFrameFade[i])
@@ -357,12 +494,8 @@ namespace interstellar_v1
         const std::string count = std::to_string(sources);
         t.setFill(fade(palette::mutedForeground(), 0.7));
         t.drawText(count, kPadX + lw + 6.0, textfit::baseline(hy, 9.0), 9.0, font::mono());
-        const double rx = kPadX + lw + 6.0 + t.measureText(count, 9.0, font::mono()) + 6.5;
-        if (w - kPadX > rx)
-        {
-            t.setStroke(palette::border(), 1.0);
-            t.beginPath(); t.moveTo(rx, hy); t.lineTo(w - kPadX, hy); t.strokePath();
-        }
+        // the breadcrumb (a child) takes the header's remaining width, where a rule would run
+        mHeaderRight = kPadX + lw + 6.0 + t.measureText(count, 9.0, font::mono()) + 6.5;
         if (mRack.empty())
         {
             const std::string s = "Sources appear here as footage joins the rack.";
@@ -469,16 +602,17 @@ namespace interstellar_v1
         // OFFLINE chips over the cells of missing sources (cosmo's strip has no word for it)
         t.save();
         t.clipRect(0, kHeaderH, width.value(), cosmo_v2::Filmstrip::kHeight);
-        for (int i = 0; i < (int)mRack.size(); ++i)
+        for (int c = 0; c < (int)mCellRack.size(); ++c)
         {
-            if (!mRack[i].failed) continue;
-            const double x = mStrip->cellXForTest(i);
+            if (!mRack[(size_t)mCellRack[(size_t)c]].failed) continue;
+            const double x = mStrip->x.value() + mStrip->cellXForTest(c);
             const double cellY = kHeaderH + (cosmo_v2::Filmstrip::kHeight - 62.0) * 0.5;
             const std::string s = "OFFLINE";
             const double tw = t.measureText(s, 7.5, font::sansSemiBold());
             const Rect chip{x + (86.0 - tw - 8.0) * 0.5, cellY + 20.0, tw + 8.0, 13.0};
-            drawRoundedRect(t, chip, radius::hairline(), Paint::filledStroked(surface::scrim(0.8), palette::destructive(), 1.0));
-            t.setFill(palette::destructive());
+            const double lf = mLevelFade.value();   // the chip travels and fades with its cell
+            drawRoundedRect(t, chip, radius::hairline(), Paint::filledStroked(fade(surface::scrim(0.8), lf), fade(palette::destructive(), lf), 1.0));
+            t.setFill(fade(palette::destructive(), lf));
             t.drawText(s, chip.x + 4.0, textfit::baseline(chip.y + chip.h * 0.5, 7.5), 7.5, font::sansSemiBold());
         }
         t.restore();

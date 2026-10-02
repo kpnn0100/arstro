@@ -16,6 +16,9 @@
  */
 #pragma once
 #include "AppHooks.h"
+#include <functional>
+#include <map>
+#include <set>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -267,6 +270,7 @@ namespace istest
                 for (int i = 0; i < (int)m.rack.size(); ++i) if (m.rack[i].bindName == a[2]) selectRack(i);
                 ++m.frameSeq;
             }
+            else if (a[0] == "rack" && a.size() >= 3 && a[1] == "group" && a[2] == "new") groupSelection();
             else if (a[0] == "rack" && a.size() >= 5 && a[1] == "frame" && a[3] == "--at")
             {
                 for (auto &n : m.rack) if (n.bindName == a[2]) n.frame = std::stod(a[4]);
@@ -368,6 +372,52 @@ namespace istest
                     p[2] = (uint8_t)std::clamp(bb * light * 255.0, 0.0, 255.0);
                     p[3] = 255;
                 }
+        }
+
+        /** `rack group new`: the selection (else the Grade target) moves into a new group placed where
+         *  its first member was, and the group becomes the selection — the service's behaviour. */
+        void groupSelection()
+        {
+            const auto old = m.rack;
+            std::vector<std::string> order;
+            std::map<std::string, std::string> parentOf;
+            std::set<std::string> members;
+            for (int i = 0; i < (int)old.size(); ++i)
+            {
+                parentOf[old[i].rackObj] = old[i].parent >= 0 ? old[(size_t)old[i].parent].rackObj : std::string();
+                if (old[i].selected || i == m.selectedRack) members.insert(old[i].rackObj);
+            }
+            if (members.empty()) return;
+            RackNodeModel g;
+            g.group = true;
+            g.node = 900 + (int)old.size();
+            g.rackObj = "ro_g" + std::to_string(g.node);
+            g.bindName = "group" + std::to_string(g.node);
+            g.cosmoName = "Group";
+            bool placed = false;
+            for (const auto &n : old)
+            {
+                if (!placed && members.count(n.rackObj)) { order.push_back(g.rackObj); parentOf[g.rackObj] = parentOf[n.rackObj]; placed = true; }
+                order.push_back(n.rackObj);
+            }
+            for (const auto &k : members) parentOf[k] = g.rackObj;
+            std::map<std::string, RackNodeModel> byKey;
+            for (const auto &n : old) byKey[n.rackObj] = n;
+            byKey[g.rackObj] = g;
+            m.rack.clear();
+            std::function<void(const std::string &, int, int)> flatten = [&](const std::string &parentKey, int parentIdx, int depth) {
+                for (const auto &k : order)
+                    if (parentOf[k] == parentKey)
+                    {
+                        RackNodeModel n = byKey[k];
+                        n.parent = parentIdx; n.depth = depth; n.selected = false;
+                        m.rack.push_back(n);
+                        flatten(k, (int)m.rack.size() - 1, depth + 1);
+                    }
+            };
+            flatten(std::string(), -1, 0);
+            for (int i = 0; i < (int)m.rack.size(); ++i) if (m.rack[(size_t)i].rackObj == g.rackObj) selectRack(i);
+            ++m.frameSeq;
         }
 
         bool renderFrame(double t, int edge, Raster &out)

@@ -194,7 +194,12 @@ namespace
         Rig r(1440, 900, [](FakeService &s) { s.edit(); });
         r.settle();
         auto rt = r.app->edit().rackTree();
-        Point p = centre(*rt, rt->rowRect(5));
+        CHECK(!rt->rowVisible(5) && rt->rowVisible(1), "a shut group hides its members; the Grade target's group was opened for it");
+        Point p = centre(*rt, rt->chevronRect(3));   // gr2 holds s_still01
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(rt->isOpen(3) && rt->rowVisible(5) && r.svc.lines.empty(), "its chevron opens the group — presentation, no command");
+        p = centre(*rt, rt->rowRect(5));
         r.click(p.x - 40, p.y);
         r.pump(32);
         CHECK(hasLine(r.svc, "rack select s_still01"), "clicking a rack row dispatched rack select s_still01");
@@ -238,7 +243,10 @@ namespace
         r.svc.lines.clear();
         auto deck = r.app->edit().gradeDeck();
         auto strip = deck->filmstrip();
-        const Point s2 = world(*strip, strip->cellXForTest(2) + 40.0, 40.0);
+        r.svc.dispatch("rack select s_day01", gErr);   // the strip follows the target into gr1
+        r.settle();
+        r.svc.lines.clear();
+        const Point s2 = world(*strip, strip->cellXForTest(deck->cellOfRack(2)) + 40.0, 40.0);
         r.click(s2.x, s2.y);
         r.pump(32);
         CHECK(hasLine(r.svc, "rack select s_day02"), "clicking a filmstrip cell dispatched rack select s_day02");
@@ -1041,6 +1049,8 @@ namespace
         Rig r(1440, 900, [](FakeService &s) { s.edit(); });
         r.settle();
         auto rt = r.app->edit().rackTree();
+        rt->setOpen("ro4", true);   // gr2's members
+        r.settle();
         const Point p5 = centre(*rt, rt->rowRect(5));
         clickMod(r, p5.x - 40, p5.y, true, false);
         CHECK(hasLine(r.svc, "rack select " + r.svc.m.rack[5].bindName + " --range"), "Shift-click on a rack row dispatched rack select … --range");
@@ -1075,6 +1085,9 @@ namespace
         r.svc.lines.clear();
         ctrlKey(r, 'G');
         CHECK(hasLine(r.svc, "rack group new"), "Ctrl+G dispatched rack group new");
+        r.svc.edit();   // the fake grouped for real: back to the standard rack
+        ++r.svc.m.revision;
+        r.settle();
         // The weight bar names itself on hover.
         const Rect wr = rt->weightRect(2);
         const Point wp = world(*rt, wr.x + wr.w * 0.5, wr.y + wr.h * 0.5);
@@ -1212,6 +1225,84 @@ namespace
         const double fm = firstMoved(r, [&] { return deck->shownFrame(); }, s0);
         CHECK(strictlyBetween(fm, 0.98, s0), "the marker EASES to the stepped frame");
     }
+
+    /** Two clicks a frame apart: the recognizer's double-click. */
+    void dblClick(Rig &r, double x, double y)
+    {
+        r.app->pointer(1, x, y, 0, r.now);
+        r.app->pointer(0, x, y, 0, r.now);
+        r.app->pointer(2, x, y, 0, r.now + 40.0);
+        r.frame();
+        r.app->pointer(0, x, y, 0, r.now);
+        r.app->pointer(2, x, y, 0, r.now + 40.0);
+        r.frame();
+    }
+
+    /** R-UI-12: groups like cosmo — grouping puts the items INSIDE a shut group; the tree's chevron
+     *  opens it (eased); the strip shows one level, a double-click drills in, the breadcrumb goes up. */
+    void testGroupBrowsing()
+    {
+        std::printf("browsing groups like cosmo\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto rt = r.app->edit().rackTree();
+        auto deck = r.app->edit().gradeDeck();
+        auto strip = deck->filmstrip();
+        CHECK(deck->shownLevel() == "ro1" && strip->cellCount() == 2, "the strip shows the Grade target's group: Day exteriors' two sources");
+        auto path = deck->crumbPath();
+        std::string joined;
+        for (const auto &c : path) joined += c + " > ";
+        std::printf("      path: %s\n", joined.c_str());
+        CHECK(path.size() == 3 && path[0] == "All sources" && path[1] == "Day exteriors" && path[2] == "A001_C003 harbour wide",
+              "cosmo's breadcrumb: All sources > Day exteriors > the selected source");
+        // a crumb goes back up: the strip fades out, swaps, fades in
+        auto bc = deck->breadcrumb();
+        Point cp = world(*bc, 9.75 + 20.0, arstro::cosmo_v2::Breadcrumb::kHeight * 0.5);
+        r.click(cp.x, cp.y);
+        CHECK(deck->wantedLevel().empty(), "clicking \"All sources\" asks for the top level");
+        const double lf = firstMoved(r, [&] { return deck->levelAmount(); }, 1.0);
+        CHECK(strictlyBetween(lf, 0.0, 1.0), "the strip FADES out before it swaps (first frame between)");
+        r.settle();
+        CHECK(deck->shownLevel().empty() && strip->cellCount() == 3, "…and shows the top: two group chips and the loose source");
+        CHECK(r.svc.lines.empty(), "browsing dispatched nothing (presentation)");
+        // grouping puts the item INSIDE a shut group (the user's "the item come inside the group")
+        r.svc.dispatch("rack select s_drone01", gErr);
+        r.settle();
+        r.svc.lines.clear();
+        ctrlKey(r, 'G');
+        r.settle();
+        int g = -1, drone = -1;
+        for (int i = 0; i < (int)r.svc.m.rack.size(); ++i)
+        {
+            if (r.svc.m.rack[(size_t)i].bindName.rfind("group", 0) == 0) g = i;
+            if (r.svc.m.rack[(size_t)i].bindName == "s_drone01") drone = i;
+        }
+        CHECK(hasLine(r.svc, "rack group new") && g >= 0 && drone >= 0, "Ctrl+G grouped the selection");
+        CHECK(rt->rowVisible(g) && !rt->isOpen(g) && !rt->rowVisible(drone), "the new group is SHUT in the tree: its member is inside it");
+        CHECK(deck->cellOfRack(g) >= 0 && deck->cellOfRack(drone) < 0, "the strip shows the group's chip, not its member");
+        // double-click the chip: drill in, and the tree opens the same group, its chevron turning
+        const Point gc = world(*strip, strip->cellXForTest(deck->cellOfRack(g)) + 40.0, 40.0);
+        dblClick(r, gc.x, gc.y);
+        CHECK(deck->wantedLevel() == r.svc.m.rack[(size_t)g].rackObj, "double-clicking the folder chip drills the strip into it");
+        CHECK(rt->isOpen(g), "…and opens it in the tree");
+        const double oa = firstMoved(r, [&] { return rt->openAmount(g); }, 0.0);
+        CHECK(strictlyBetween(oa, 0.0, 1.0), "the chevron TURNS open (first frame between)");
+        r.settle();
+        CHECK(deck->shownLevel() == r.svc.m.rack[(size_t)g].rackObj && deck->cellOfRack(drone) == 0 && rt->rowVisible(drone),
+              "inside: the strip holds the member, the tree shows it");
+        path = deck->crumbPath();
+        CHECK(path.size() == 2 && path[1] == "Group", "the breadcrumb names the open group");
+        // the chevron shuts it again; the member's row leaves as a fading ghost
+        Point chev = centre(*rt, rt->chevronRect(g));
+        r.click(chev.x, chev.y);
+        r.frame();
+        CHECK(!rt->isOpen(g) && !rt->rowVisible(drone), "the chevron shuts the group");
+        // double-click a group ROW in the tree: the strip opens it
+        r.svc.lines.clear();
+        const Point g1 = centre(*rt, rt->rowRect(0));
+        dblClick(r, g1.x - 40.0, g1.y);
+        CHECK(deck->wantedLevel() == "ro1" && rt->isOpen(0), "double-clicking a group row opens it in the strip and the tree");
+    }
 }
 
 int main()
@@ -1235,6 +1326,7 @@ int main()
     testSelectionAndContext();
     testCaptureAndGradeMonitor();
     testRefFrameSlider();
+    testGroupBrowsing();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

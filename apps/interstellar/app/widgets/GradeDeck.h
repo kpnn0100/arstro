@@ -9,6 +9,14 @@
  *  chip over its cell, because cosmo's strip has no word for missing media and a dark plate alone
  *  would read as "still loading".
  *
+ *  The strip shows ONE LEVEL of the tree at a time, cosmo's way (R-UI-12): the top, or the open
+ *  group's direct members — a group is a folder chip with its count, and double-clicking it drills
+ *  in. Cosmo's own `Breadcrumb` in the header names the path ("All sources › Day exteriors", plus the
+ *  selected source as cosmo does) and a click on a crumb goes back up. A level change is eased:
+ *  the strip fades out, swaps its cells, and fades in sliding from the side it came from; the
+ *  breadcrumb cross-fades between two instances. When the Grade target moves to a node another
+ *  level holds, the strip follows it there. Which level is shown is presentation, never a command.
+ *
  *  Under it, the frame selector — "which frame Cosmo grades" a video source on (R-RACK-3, amended
  *  2026-10-02). It is a fast-seek SLIDER over the WHOLE source (`rack[].mediaDuration`), whose track
  *  is a strip of frames (thumbnails through the optional hook, plates without it) and whose thumb is
@@ -26,6 +34,7 @@
 #include "ImageSlot.h"
 #include "../../../cosmo/widgets/Filmstrip.h"
 #include "../../../cosmo/widgets/HoverFade.h"
+#include "../../../cosmo/widgets/Breadcrumb.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -52,6 +61,20 @@ namespace interstellar_v1
         void layout();
 
         std::shared_ptr<cosmo_v2::Filmstrip> filmstrip() { return mStrip; }
+        /** Drill the strip into group `rackObj` ("" = the top). Records intent; advance eases it. */
+        void openGroup(const std::string &rackObj);
+        /** The level being shown (its group's #rackobj id, "" = top) and the one asked for. */
+        const std::string &shownLevel() const { return mLevel; }
+        const std::string &wantedLevel() const { return mLevelWanted; }
+        double levelAmount() const { return mLevelFade.value(); }
+        /** Strip cell ↔ rack index at the shown level (-1 when not there). */
+        int rackIndexOfCell(int cell) const { return cell >= 0 && cell < (int)mCellRack.size() ? mCellRack[(size_t)cell] : -1; }
+        int cellOfRack(int rackIndex) const;
+        /** The breadcrumb now in front, and the path it was given. */
+        std::shared_ptr<cosmo_v2::Breadcrumb> breadcrumb() { return mCrumb[mCrumbFront]; }
+        const std::vector<std::string> &crumbPath() const { return mCrumbPath; }
+        /** The strip drilled into a group by itself (a double-click): the tree opens it too. */
+        std::function<void(const std::string &rackObj)> onNavigate;
         /** The scrub surface: the frame strip, or the slim track when there is no room for one. */
         artboard::Rect frameTrackRect() const;
         bool hasFrameStrip() const;
@@ -85,6 +108,22 @@ namespace interstellar_v1
         double bandTop() const { return kHeaderH + cosmo_v2::Filmstrip::kHeight + 4.0; }
         void emit(const std::string &line) { if (onCommand) onCommand(line); }
         void refreshFrames();
+        void rebuildCells();                          // the shown level's cells, selection and path
+        void bindFrame(const interstellar::AppModel &m);   // the selected source's reference frame
+
+        std::string mLevel, mLevelWanted;             // group #rackobj ids; "" = the top
+        int mLevelIdx = -1;                           // the shown group's rack index this bind
+        std::vector<int> mCellRack;                   // cell → rack index
+        bool mLevelInit = false, mLevelSwapping = false;
+        double mLevelDir = 1.0;                       // +1 drilled in (slides from the right), -1 up
+        artboard::AnimatedProperty mLevelFade{1.0};
+        std::string mSelKeyLast;                      // the Grade target the strip last followed
+        std::shared_ptr<cosmo_v2::Breadcrumb> mCrumb[2];
+        std::vector<std::string> mCrumbChain[2];      // each crumb's level ids: [0] = "" (the top)
+        int mCrumbFront = 0;
+        std::vector<std::string> mCrumbPath, mCrumbPathShown, mCrumbChainNext;
+        bool mCrumbInit = false;
+        mutable double mHeaderRight = 84.0;           // where "SOURCES n" ends — measured in paint
 
         std::shared_ptr<cosmo_v2::Filmstrip> mStrip;
         std::vector<interstellar::RackNodeModel> mRack;

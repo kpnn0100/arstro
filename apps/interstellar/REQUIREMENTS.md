@@ -240,7 +240,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — 🚧 IN PROGRESS (DR-UI-1..11b, DR-UI-3c; R-UI-12 next; gaps: drag-to-timeline, drag-to-regroup)
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..12, DR-UI-3c, DR-UI-11a/b; gaps: drag-to-timeline, drag-to-regroup)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the

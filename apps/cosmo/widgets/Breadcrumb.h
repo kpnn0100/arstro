@@ -26,6 +26,10 @@ namespace cosmo_v2
         Breadcrumb();
 
         void setPath(std::vector<std::string> crumbs);
+        /** Opt-in (an embedder's choice; cosmo leaves it off): lay the crumbs out from the render
+         *  target's real text metrics, measured in paint and cached for hit-testing, instead of the
+         *  width estimate — whose font-independent guess leaves wide gaps in a real face. */
+        void setMeasuredText(bool on) { mMeasured = on; }
         std::function<void(int)> onCrumbClick;  // index into the crumbs passed to setPath (never the last)
 
         void advance(double nowMs) override;  // drives the crumb-hover fade
@@ -42,6 +46,8 @@ namespace cosmo_v2
 
         std::vector<std::string> mCrumbs;
         HoverFade mHover;  // per-crumb hover cross-fade (R-G-3)
+        bool mMeasured = false;
+        mutable std::vector<double> mMeasuredW;  // per crumb, from the last paint (mMeasured only)
     };
 }
 }

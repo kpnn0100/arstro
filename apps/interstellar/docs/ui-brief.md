@@ -78,6 +78,11 @@ The tab that must feel exactly like cosmo, because it *is* cosmo: a **rack tree*
 right — `ParamPanel`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`, `HistogramWidget` —
 linked, not reimplemented. The deck is a **filmstrip of rack sources**.
 
+**Groups browse like cosmo** (R-UI-12): in the tree a group is shut until opened (a chevron, eased),
+so grouping puts its members inside it; the filmstrip shows one level — the top or the open group —
+a double-click on a folder chip drills in, and cosmo's breadcrumb in the SOURCES header
+(`All sources › Day exteriors › A001_C003…`) goes back up.
+
 New here, and only this: a **frame selector** under a video source's cell (which frame Cosmo
 grades — a fast-seek slider over the whole source whose track is a strip of its frames; dragging
 previews the frame, graded, in the monitor, release commits, ‹ › step one frame), a **used-by count** (zero is not an error — reference stills are legitimate), and a

@@ -43,6 +43,9 @@ namespace interstellar_v1
         mGradeDeck = std::make_shared<GradeDeck>();
         mGradeDeck->onCommand = fwd;
         mGradeDeck->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
+        // browsing groups (R-UI-12): the tree and the strip open the same group, either way round
+        mRack->onOpenGroup = [this](const std::string &ro) { mGradeDeck->openGroup(ro); };
+        mGradeDeck->onNavigate = [this](const std::string &ro) { mRack->setOpen(ro, true); };
         mPages[Grade]->addChild(mRack);
         mPages[Grade]->addChild(mGradeInspector);
         mPages[Grade]->addChild(mGradeDeck);

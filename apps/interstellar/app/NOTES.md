@@ -111,6 +111,20 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   `rack frame` and ends the preview. ‹ › step one frame and commit.
 - Shots added: `grade_ref_seek_drag`, `grade_ref_step_hover`. UI checks: 194.
 
+## Browsing groups like cosmo (2026-10-02, R-UI-12)
+
+- Rack tree: groups start SHUT; a chevron before the folder opens/shuts one (eased turn; members fade
+  in/out through AnimatedRows and the rows below travel). When the Grade target moves inside a shut
+  group its ancestors open once. Double-click a group row: open it in the tree and the strip.
+- SOURCES strip: one level at a time (the top, or the open group's members). Double-click a folder
+  chip (cosmo's `Filmstrip::onActivate`) to drill in; cosmo's `Breadcrumb` in the header
+  (`All sources › <group…> [› selected source]`, real text metrics via the opt-in
+  `setMeasuredText`) goes back up. The strip follows the Grade target to its level. A level change
+  fades out → swaps → fades in, sliding from the side it came from.
+- Open/shut and the level are presentation state — nothing is dispatched.
+- Shots added: `grade_groups_top`, `grade_groups_swap_mid`, `grade_groups_grouped`,
+  `grade_groups_open_gr2`. UI checks: 212.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -179,6 +193,7 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | save button | `project save` |
 | rack `+` / empty "Add footage…" (via host picker) | `rack add <path> <path>…` |
 | rack row, filmstrip cell, source-bin row | `rack select <bind>` |
+| rack group chevron, double-click a group row or folder chip, breadcrumb crumb | — (presentation: open/shut, the strip's level) |
 | rack bypass toggle | `set <bind>.bypass=1` / `=0` |
 | rack weight bar (drag, 0.01 steps) | `set <bind>.weight=<0..1>` |
 | reference-frame slider (drag previews in the monitor through `renderSource`; on release) | `rack frame <bind> --at <t>` (on the source's own frame grid, `rack[].mediaFps`) |

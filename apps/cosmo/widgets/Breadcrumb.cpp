@@ -19,9 +19,10 @@ namespace cosmo_v2
     {
         std::vector<Span> spans;
         double x = kPadX;
+        const bool measured = mMeasured && mMeasuredW.size() == mCrumbs.size();
         for (size_t i = 0; i < mCrumbs.size(); ++i)
         {
-            const double w = estimateTextWidth(mCrumbs[i], kFontPx);
+            const double w = measured ? mMeasuredW[i] : estimateTextWidth(mCrumbs[i], kFontPx);
             spans.push_back({x, w});
             x += w + kGap;
             if (i + 1 < mCrumbs.size()) x += 9.0 + kGap;  // chevron (9px) + its own gap
@@ -61,6 +62,11 @@ namespace cosmo_v2
         t.beginPath(); t.moveTo(0, 0); t.lineTo(w, 0); t.setStroke(palette::border(), 1.0); t.strokePath();
         t.beginPath(); t.moveTo(0, h); t.lineTo(w, h); t.setStroke(palette::border(), 1.0); t.strokePath();
 
+        if (mMeasured)
+        {
+            mMeasuredW.resize(mCrumbs.size());
+            for (size_t i = 0; i < mCrumbs.size(); ++i) mMeasuredW[i] = t.measureText(mCrumbs[i], kFontPx, font::sans());
+        }
         const auto spans = computeSpans();
         const double baseline = h * 0.5 + kFontPx * 0.35;
         for (size_t i = 0; i < mCrumbs.size(); ++i)

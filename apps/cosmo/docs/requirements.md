@@ -438,6 +438,9 @@ group (drill in) via `onActivate`, right-click opens a context menu anywhere in 
 ### DR-BREADCRUMB-1 Breadcrumb
 Shows the current group path (plus the edited image's filename). Every crumb but the last is
 muted and clickable; `onCrumbClick(index)` navigates to that group. Per-crumb hover cross-fades.
+Crumb widths come from `estimateTextWidth`; an embedder may opt in to real metrics with
+`setMeasuredText(true)` (measured in paint, cached for hit-testing — Interstellar does, DR-UI-12).
+Cosmo leaves it off; its shots are byte-identical either side of the addition (2026-10-02).
 
 ---
 

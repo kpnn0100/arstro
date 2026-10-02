@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-01 — cosmo's menus, settings (CPU limit), undo/redo and presets; MKV playback (D-3) and the reference-frame reload (D-4) fixed.*
+*Last updated: 2026-10-02 — Grade without a transport, the capture button, the reference-frame slider, browsing groups like cosmo.*
 
 ---
 
@@ -43,7 +43,8 @@ one integrator who moves, wires, tests and commits each stream:
       capture button with Copy Frame / Save Frame… (DR-UI-3c, DR-UI-11a/b).
 - [x] The reference-frame slider: fast seek over the whole source with a live graded preview, frame
       steps at the source's rate (DR-RACK-3c).
-- [ ] Browsing groups like cosmo (R-UI-12) — the rest of the 2026-10-02 request.
+- [x] Browsing groups like cosmo: shut groups in the tree, one level in the strip, double-click to
+      drill in, cosmo's breadcrumb back up (DR-UI-12).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,
@@ -72,6 +73,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-02 — groups start shut, and the selection opens what hides it (R-UI-12).** "When I group,
+the items come inside the group" reads as the asked-for behaviour, so a group is shut until opened.
+A tree that hid the Grade target would be a trap, so moving the target inside a shut group opens its
+ancestors — once per move, so the user can still shut the group around it. Open/shut and the strip's
+level are presentation, not project state: no command, nothing saved, as cosmo's own navigation.
+The breadcrumb is cosmo's widget with one opt-in (`setMeasuredText`): its width estimate left wide
+gaps in Roboto; cosmo keeps the estimate and its pixels are unchanged.
 
 **2026-10-02 — "remove the play bar from Grade" and "a capture button next to next on the play bar"
 (R-UI-3 amended, R-UI-11).** The two asks collide in Grade. Resolved by putting the capture button on

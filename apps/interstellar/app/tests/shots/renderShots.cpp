@@ -203,10 +203,28 @@ namespace
             r.move(p.x, p.y);
             r.settle();
         }});
+        // browsing groups like cosmo (R-UI-12): the top level, mid level-swap, after grouping, gr2 open
+        v.push_back({"grade_groups_top", edit, [](Rig &r) { r.settle(); r.app->edit().gradeDeck()->openGroup(""); r.settle(); }});
+        v.push_back({"grade_groups_swap_mid", edit, [](Rig &r) { r.settle(); r.app->edit().gradeDeck()->openGroup(""); r.pump(96); }});
+        v.push_back({"grade_groups_grouped", edit, [](Rig &r) {
+            r.settle();
+            std::string err;
+            r.svc.dispatch("rack select s_drone01", err);
+            r.svc.dispatch("rack group new", err);
+            r.settle();
+        }});
+        v.push_back({"grade_groups_open_gr2", edit, [](Rig &r) {
+            r.settle();
+            r.app->edit().rackTree()->setOpen("ro4", true);
+            r.app->edit().gradeDeck()->openGroup("ro4");
+            r.settle();
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();
             auto rt = r.app->edit().rackTree();
+            rt->setOpen("ro4", true);   // gr2 open, so its members show their states
+            r.settle();
             const Point p = centre(*rt, rt->rowRect(4));
             r.move(p.x - 40, p.y);
             r.pump(200);
