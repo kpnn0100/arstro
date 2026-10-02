@@ -79,9 +79,9 @@
     },
     {
       "verb": "rack group new",
-      "usage": "rack group new <name> [--nodes <a,b,…>]",
-      "args": "<name>",
-      "minArgs": 1,
+      "usage": "rack group new [name] [--nodes <a,b,…>]",
+      "args": "[name]",
+      "minArgs": 0,
       "maxArgs": 1,
       "flags": [
         {
@@ -89,7 +89,7 @@
           "value": "<a,b,…>"
         }
       ],
-      "summary": "Group rack nodes; a group's grade stacks onto every descendant.",
+      "summary": "Group rack nodes — the named ones, else the selection; a group's grade stacks onto every descendant. No name: one is made up, as Cosmo does.",
       "requirement": "R-RACK-4"
     },
     {
@@ -134,13 +134,32 @@
     },
     {
       "verb": "rack select",
-      "usage": "rack select <node>",
+      "usage": "rack select <node> [--add] [--range]",
+      "args": "<node>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "add",
+          "value": ""
+        },
+        {
+          "name": "range",
+          "value": ""
+        }
+      ],
+      "summary": "Make a rack node the Grade target and the selection. --add toggles it into the selection (Ctrl-click); --range selects from the last clicked node to it (Shift-click).",
+      "requirement": "R-RACK-8"
+    },
+    {
+      "verb": "rack remove",
+      "usage": "rack remove <node>",
       "args": "<node>",
       "minArgs": 1,
       "maxArgs": 1,
       "flags": [],
-      "summary": "Make a rack node the Grade tab's edit target.",
-      "requirement": "R-UI-3"
+      "summary": "Take a source out of the rack (Cosmo's delete). Refused while a clip uses it.",
+      "requirement": "R-RACK-8"
     },
     {
       "verb": "set",
@@ -1310,6 +1329,12 @@
       "type": "bool",
       "stable": true,
       "doc": "The current version carries a colour override on it."
+    },
+    {
+      "path": "rack[].selected",
+      "type": "bool",
+      "stable": true,
+      "doc": "In the selection that Group Selection groups (R-RACK-8)."
     },
     {
       "path": "selectedRack",

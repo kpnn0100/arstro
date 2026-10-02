@@ -603,6 +603,45 @@ int main()
         assert(half.rgba[px] > std::min(off.rgba[px], on.rgba[px]) && half.rgba[px] < std::max(off.rgba[px], on.rgba[px]));
     });
 
+    test("Shift selects a range, Ctrl toggles, Group Selection groups it — like Cosmo (R-RACK-8)", [] {
+        Fixture f("select");
+        f.standard();                                   // a, b, still
+        auto sel = [&] {
+            std::string out;
+            for (const auto &r : f.svc->model().rack)
+                if (r.selected) out += r.bindName + " ";
+            return out;
+        };
+        f.must("rack select a");
+        f.must("rack select still --range");
+        assert(sel() == "a b still ");
+        f.must("rack select b --add");                  // Ctrl-click takes b out
+        assert(sel() == "a still ");
+        f.must("rack select b --add");                  // …and back in
+        assert(sel() == "a still b " || sel() == "a b still ");
+        f.must("rack group new");                       // no name, no --nodes: the selection
+        int grouped = 0;
+        for (const auto &r : f.svc->model().rack)
+            if (!r.group && r.parent >= 0) ++grouped;
+        assert(grouped == 3);
+        assert(!f.svc->project().idForRef("group").empty());
+    });
+
+    test("a source leaves the rack only when no clip uses it (R-RACK-8)", [] {
+        Fixture f("remove");
+        f.standard();
+        std::string err;
+        assert(!f.run("rack remove a", &err) && err.find("shotA") != std::string::npos);
+        f.must("rack remove still");
+        assert(f.svc->project().idForRef("still").empty());
+        for (const auto &r : f.svc->model().rack) assert(r.bindName != "still");
+        f.must("project save");
+        std::ifstream cmp(f.path("mv.cmp"));
+        std::stringstream ss;
+        ss << cmp.rdbuf();
+        assert(ss.str().find("still.png") == std::string::npos);   // gone from Cosmo's project too
+    });
+
     test("the same script on two services dumps the same stable state", [] {
         Fixture a("equiv_a"), b("equiv_b");
         for (Fixture *f : {&a, &b})

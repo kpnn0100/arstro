@@ -43,16 +43,20 @@ namespace interstellar
             {K::RackAdd, "rack add", "<media…>", 1, -1, {"group=<node>"},
              "Add photos or videos to the rack. A video is graded on a reference frame "
              "(`clip.mp4#t=2.0` picks it).", "R-RACK-3"},
-            {K::RackGroupNew, "rack group new", "<name>", 1, 1, {"nodes=<a,b,…>"},
-             "Group rack nodes; a group's grade stacks onto every descendant.", "R-RACK-4"},
+            {K::RackGroupNew, "rack group new", "[name]", 0, 1, {"nodes=<a,b,…>"},
+             "Group rack nodes — the named ones, else the selection; a group's grade stacks onto every "
+             "descendant. No name: one is made up, as Cosmo does.", "R-RACK-4"},
             {K::RackDuplicate, "rack duplicate", "<node>", 1, 1, {"name=<bind>"},
              "Duplicate a rack node as a variant: same media, its own grade.", "R-RACK-5"},
             {K::RackFrame, "rack frame", "<node>", 1, 1, {"at=<t>"},
              "Choose which frame of a video source Cosmo grades. Changes no parameter.", "R-RACK-3"},
             {K::RackRename, "rack rename", "<node> <bind>", 2, 2, {},
              "Change a rack node's bind name (what an address spells).", "R-RACK-6"},
-            {K::RackSelect, "rack select", "<node>", 1, 1, {},
-             "Make a rack node the Grade tab's edit target.", "R-UI-3"},
+            {K::RackSelect, "rack select", "<node>", 1, 1, {"add", "range"},
+             "Make a rack node the Grade target and the selection. --add toggles it into the selection "
+             "(Ctrl-click); --range selects from the last clicked node to it (Shift-click).", "R-RACK-8"},
+            {K::RackRemove, "rack remove", "<node>", 1, 1, {},
+             "Take a source out of the rack (Cosmo's delete). Refused while a clip uses it.", "R-RACK-8"},
 
             {K::Set, "set", "<address>=<value> …", 1, -1, {},
              "Write addresses. A rack address writes THROUGH to Cosmo on a root timeline and "

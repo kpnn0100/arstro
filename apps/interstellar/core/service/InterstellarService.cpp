@@ -207,7 +207,7 @@ namespace interstellar
             case CK::ProjectClose: projectClose(); ok = true; break;
 
             case CK::RackImport: case CK::RackAdd: case CK::RackGroupNew: case CK::RackDuplicate:
-            case CK::RackFrame: case CK::RackRename: case CK::RackSelect:
+            case CK::RackFrame: case CK::RackRename: case CK::RackSelect: case CK::RackRemove:
                 ok = requireProject() && rackCommand(c);
                 break;
 
@@ -501,6 +501,10 @@ namespace interstellar
                 m.rack.push_back(r);
             }
 
+        mSelection.erase(std::remove_if(mSelection.begin(), mSelection.end(), [&](const NodeId &id) { return !P.rackObj(id); }),
+                         mSelection.end());
+        for (auto &r : m.rack)
+            r.selected = !r.rackObj.empty() && std::find(mSelection.begin(), mSelection.end(), r.rackObj) != mSelection.end();
         m.selectedRack = -1;
         if (mRack.isOpen() && mRack.selectedNode() >= 0)
             for (size_t i = 0; i < m.rack.size(); ++i)
@@ -870,6 +874,8 @@ namespace interstellar
         mIspPath.clear();
         mNodeOf.clear();
         mStoredPath.clear();
+        mSelection.clear();
+        mAnchor.clear();
         mPins.clear();
         mSync->sources.clear();
         resetPreview();
@@ -1164,9 +1170,15 @@ namespace interstellar
             case CK::RackGroupNew:
             {
                 std::string why;
-                std::string bind = c.arg(0);
+                const std::string typed = c.arg(0);
+                const std::string bind = typed.empty() ? std::string("group") : typed;
                 std::vector<int> members;
                 std::string list = c.flag("nodes");
+                // No --nodes: the selection (Shift/Ctrl-clicked), else the Grade target — Cosmo's
+                // "Group Selection".
+                if (list.empty())
+                    for (const auto &id : mSelection)
+                        if (const RackObj *r = P.rackObj(id)) list += (list.empty() ? "" : ",") + r->name;
                 if (list.empty() && mRack.selectedNode() >= 0) list = rackObjOfCosmo(mRack.selectedNode());
                 std::stringstream ss(list);
                 std::string one;
@@ -1180,13 +1192,16 @@ namespace interstellar
                 }
                 if (members.empty()) return fail("rack group new: name the members with --nodes a,b");
                 int group = -1;
-                if (!mRack.groupNodes(c.arg(0), members, group, err)) return fail("rack group new: " + err);
+                if (!mRack.groupNodes(typed.empty() ? std::string("Group") : typed, members, group, err))
+                    return fail("rack group new: " + err);
                 RackObj ro;
                 ro.id = P.freshId("ro_");
                 ro.name = bindNameFor(bind);
                 ro.kind = "group";
                 P.rackObjs.push_back(ro);
                 mNodeOf[ro.id] = group;
+                mSelection = {ro.id};
+                mAnchor = ro.id;
                 markDirty();
                 bumpFrame();
                 emit(Event(EK::RackChanged).with("what", "grouped").with("node", ro.id));
@@ -1269,9 +1284,68 @@ namespace interstellar
                 if (!rackObjRef(c.arg(0), ro)) return false;
                 const int node = cosmoNodeOf(ro->id);
                 if (node < 0) return fail("rack select: " + ro->name + " is offline");
-                if (!mRack.select(node, err)) return fail("rack select: " + err);
-                emit(Event(EK::SelectionChanged).with("rack", ro->name).with("clip", mSelectedClip));
+                const NodeId id = ro->id;
+                bool target = true;
+                if (c.has("range") && !mAnchor.empty())
+                {
+                    // Shift-click: every row from the anchor to here, in the order the tree shows.
+                    int a = -1, b = -1;
+                    for (size_t i = 0; i < mModel.rack.size(); ++i)
+                    {
+                        if (mModel.rack[i].rackObj == mAnchor) a = (int)i;
+                        if (mModel.rack[i].rackObj == id) b = (int)i;
+                    }
+                    if (a < 0 || b < 0) mSelection = {id};
+                    else
+                    {
+                        mSelection.clear();
+                        for (int i = std::min(a, b); i <= std::max(a, b); ++i)
+                            if (!mModel.rack[(size_t)i].rackObj.empty() && !mModel.rack[(size_t)i].failed)
+                                mSelection.push_back(mModel.rack[(size_t)i].rackObj);
+                    }
+                }
+                else if (c.has("add"))
+                {
+                    // Ctrl-click: toggle. Taking a node OUT leaves the Grade target where it was.
+                    const auto it = std::find(mSelection.begin(), mSelection.end(), id);
+                    if (it != mSelection.end()) { mSelection.erase(it); target = false; }
+                    else mSelection.push_back(id);
+                    mAnchor = id;
+                }
+                else
+                {
+                    mSelection = {id};
+                    mAnchor = id;
+                }
+                if (target && !mRack.select(node, err)) return fail("rack select: " + err);
+                std::string names;
+                for (const auto &s2 : mSelection)
+                    if (const RackObj *r = P.rackObj(s2)) names += (names.empty() ? "" : ",") + r->name;
+                emit(Event(EK::SelectionChanged).with("rack", names).with("clip", mSelectedClip));
                 bumpFrame();
+                return true;
+            }
+            case CK::RackRemove:
+            {
+                RackObj *ro = nullptr;
+                if (!rackObjRef(c.arg(0), ro)) return false;
+                if (ro->kind == "group") return fail("rack remove: " + ro->name + " is a group — `rack ungroup` it");
+                std::vector<std::string> users;
+                for (const auto &cl : P.clips)
+                    if (cl.src == ro->id) users.push_back(cl.name);
+                if (!users.empty()) return fail("rack remove: " + ro->name + " is used by " + joinNames(users) + " — delete those clips first");
+                const NodeId id = ro->id;
+                const int node = cosmoNodeOf(id);
+                if (node >= 0 && !mRack.removeNode(node, err)) return fail("rack remove: " + err);
+                mNodeOf.erase(id);
+                mStoredPath.erase(id);
+                mSelection.erase(std::remove(mSelection.begin(), mSelection.end(), id), mSelection.end());
+                P.grades.erase(std::remove_if(P.grades.begin(), P.grades.end(), [&](const TlGrade &g) { return g.node == id; }), P.grades.end());
+                P.effects.erase(std::remove_if(P.effects.begin(), P.effects.end(), [&](const Fx &f) { return f.node == id; }), P.effects.end());
+                P.rackObjs.erase(std::remove_if(P.rackObjs.begin(), P.rackObjs.end(), [&](const RackObj &r) { return r.id == id; }), P.rackObjs.end());
+                markDirty();
+                bumpFrame();
+                emit(Event(EK::RackChanged).with("what", "removed").with("node", id));
                 return true;
             }
             default: return fail("not a rack command");

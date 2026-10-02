@@ -423,3 +423,30 @@ For each source on screen, ancestor groups with weight < 1 are collected; the fr
 them bypassed (Cosmo's bypass rule — `gradeForBypassing`, `core/service/ServiceRender.cpp:158`)
 and with them on, mixed by the product of their weights, then mixed with the ungraded frame by the
 source's own weight. Weight 0 ≡ the group bypassed, byte for byte.
+
+
+### DR-RACK-8 Selection, Group Selection and remove (R-RACK-8)
+`rack select <node> [--add|--range]` keeps the service's selection (`mSelection`, `#rackobj` ids)
+beside the Grade target: plain = one, `--add` toggles (removing a node leaves the target where it
+was), `--range` takes every row between the last plain/added click and this one in tree order
+(`InterstellarService::rackCommand`, `case CK::RackSelect`). `AppModel::rack[].selected` carries it;
+`rack group new` with no `--nodes` groups the selection (no name: one is made up, as Cosmo does);
+`rack remove <node>` is Cosmo's `delete`, refused while any clip uses the source, and takes its
+`#tlgrade`/`#fx` with it (Cosmo unlinks nodes, so other bindings keep their ids). The rack tree and
+the filmstrip send `--range` on Shift-click and `--add` on Ctrl-click; Ctrl+G is Group Selection.
+Guarded by `Shift selects a range, Ctrl toggles, Group Selection groups it` and `a source leaves the
+rack only when no clip uses it` (L2), and the app's `Shift-click … --range` / `Ctrl-click … --add` /
+`Ctrl+G` checks.
+
+### DR-UI-10 Cosmo's context menu on rack rows and filmstrip cells; the weight bar names itself (R-UI-9)
+`EditScreen` carries cosmo's `ContextMenu`; a right-click on a rack row (`RackTree`) or a filmstrip
+cell (`GradeDeck`, via cosmo `Filmstrip::onContext`) calls `App::openRackContext`
+(`app/App.cpp`), which applies cosmo's selection rule and opens Add Footage · Group (Selection) ·
+Ungroup · Enable/Disable Filter · Rename (cosmo's inline morph → `rack rename`) · Duplicate as
+Variant · Copy Grade · Paste Grade (to Selection) · Remove from Rack — each a command line. The
+weight bar's caption ("weight 80%") cross-fades over the bind name on hover. Selected rows carry an
+eased wash; the filmstrip rings every selected cell. Guarded by `right-click on a rack row opened
+cosmo's context menu`, `its Group item dispatched rack group new`, `hovering the weight bar
+cross-fades in its caption` and shots `grade_context_menu`, `grade_multiselect`,
+`grade_weight_caption` (both sizes, looked at). Cosmo's `ContextMenu` gained read-only
+`itemCount`/`item`/`itemRect`; cosmo's 41 shots byte-identical.

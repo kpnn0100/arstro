@@ -131,6 +131,8 @@ namespace interstellar
          *  group's node id. */
         bool groupNodes(const std::string &name, const std::vector<int> &nodes, int &groupOut, std::string &err);
         bool setBypass(int node, bool on, std::string &err);
+        /** Cosmo's `delete` of one node. Node ids stay stable (Cosmo unlinks, never renumbers). */
+        bool removeNode(int node, std::string &err);
         /** Cosmo's `group ungroup`: the members move up, keeping their own grades. */
         bool ungroup(int group, std::string &err);
 

@@ -19,11 +19,12 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `project close` | Close the project and return Home. | R-UI-1 |
 | `rack import <path.cmp>` | Point the rack at an existing Cosmo project — its groups and grades are the rack. | R-RACK-1 |
 | `rack add <media…> [--group <node>]` | Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it). | R-RACK-3 |
-| `rack group new <name> [--nodes <a,b,…>]` | Group rack nodes; a group's grade stacks onto every descendant. | R-RACK-4 |
+| `rack group new [name] [--nodes <a,b,…>]` | Group rack nodes — the named ones, else the selection; a group's grade stacks onto every descendant. No name: one is made up, as Cosmo does. | R-RACK-4 |
 | `rack duplicate <node> [--name <bind>]` | Duplicate a rack node as a variant: same media, its own grade. | R-RACK-5 |
 | `rack frame <node> [--at <t>]` | Choose which frame of a video source Cosmo grades. Changes no parameter. | R-RACK-3 |
 | `rack rename <node> <bind>` | Change a rack node's bind name (what an address spells). | R-RACK-6 |
-| `rack select <node>` | Make a rack node the Grade tab's edit target. | R-UI-3 |
+| `rack select <node> [--add] [--range]` | Make a rack node the Grade target and the selection. --add toggles it into the selection (Ctrl-click); --range selects from the last clicked node to it (Shift-click). | R-RACK-8 |
+| `rack remove <node>` | Take a source out of the rack (Cosmo's delete). Refused while a clip uses it. | R-RACK-8 |
 | `set <address>=<value> …` | Write addresses. A rack address writes THROUGH to Cosmo on a root timeline and becomes this version's override on a derived one. | R-RACK-2 |
 | `get <address>` | Print an address's stored value. | R-API-2 |
 | `eval <address> [--timeline <tl>] [--explain]` | Print an address's RESOLVED value in a timeline; --explain names every layer. | R-API-2 |
@@ -234,6 +235,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].video` | bool |  | A video source. |
 | `rack[].usedBy` | integer |  | Clips referencing it in the current timeline. |
 | `rack[].overridden` | bool |  | The current version carries a colour override on it. |
+| `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
 | `hasGradeTarget` | bool |  | gradeParams/gradeOwnParams are meaningful. |
 | `gradeParams` | object |  | The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys. |

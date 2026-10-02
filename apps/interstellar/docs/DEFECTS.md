@@ -25,13 +25,6 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Open
 
-### Requirement gap — no multi-selection, no right-click menu on rack items (user request, 2026-10-02)
-Cosmo selects a range with Shift-click and toggles with Ctrl-click, then groups the selection, and
-offers a right-click menu on a photo (Add, Group Selection, Ungroup, Enable/Disable Filter, Rename,
-Information, Delete). Interstellar's rack is single-select with no context menu. Recommended: R-RACK-8
-(selection, Shift = range / Ctrl = toggle, in the rack tree and the filmstrip; Group Selection) and
-R-UI-9 (cosmo's ContextMenu on rack rows and filmstrip cells).
-
 ### D-2 — Cosmo's save deletes an offline source and its grade (Cosmo D-66), and D-1 makes every video offline in Cosmo
 - **Area:** rack / cross-app · **Status:** Open — **mitigated** here, root cause in Cosmo ·
   **Severity:** S1 · **Found:** 2026-10-01, binding the rack's `.cmp` entries to `#rackobj`.
@@ -72,6 +65,14 @@ R-UI-9 (cosmo's ContextMenu on rack rows and filmstrip cells).
 - **Requirement:** R-RACK-2 needs a sentence scoping it; amended when the fix lands.
 
 ## Closed
+
+### Requirement gap (closed) — no multi-selection, no right-click menu on rack items (user request, 2026-10-02)
+Cosmo selects a range with Shift-click and toggles with Ctrl-click, then groups the selection, and
+offers a right-click menu on a photo (Add, Group Selection, Ungroup, Enable/Disable Filter, Rename,
+Information, Delete). Interstellar's rack is single-select with no context menu. Recommended: R-RACK-8
+(selection, Shift = range / Ctrl = toggle, in the rack tree and the filmstrip; Group Selection) and
+R-UI-9 (cosmo's ContextMenu on rack rows and filmstrip cells).
+Closed by R-RACK-8 and R-UI-9 (DR-RACK-8, DR-UI-10).
 
 ### D-3 — An MKV whose first timestamp is not zero plays back frozen on one frame
 - **Area:** host / frame source · **Status:** Closed (fixed in the commit that adds

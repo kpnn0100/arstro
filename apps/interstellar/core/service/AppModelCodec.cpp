@@ -106,7 +106,8 @@ namespace interstellar
                           .set("frame", r.frame)
                           .set("video", r.video)
                           .set("usedBy", r.usedBy)
-                          .set("overridden", r.overridden));
+                          .set("overridden", r.overridden)
+                          .set("selected", r.selected));
         j.set("rack", rack);
         j.set("selectedRack", m.selectedRack);
         j.set("hasGradeTarget", m.hasGradeTarget);
@@ -296,6 +297,7 @@ namespace interstellar
             {"rack[].video", "bool", "A video source."},
             {"rack[].usedBy", "integer", "Clips referencing it in the current timeline."},
             {"rack[].overridden", "bool", "The current version carries a colour override on it."},
+            {"rack[].selected", "bool", "In the selection that Group Selection groups (R-RACK-8)."},
             {"selectedRack", "integer", "Index into rack of the Grade target; -1 = none."},
             {"hasGradeTarget", "bool", "gradeParams/gradeOwnParams are meaningful."},
             {"gradeParams", "object", "The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys."},

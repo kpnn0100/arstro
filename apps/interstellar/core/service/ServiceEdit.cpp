@@ -100,7 +100,7 @@ namespace interstellar
         switch (k)
         {
             case CK::ProjectNew: case CK::ProjectOpen: case CK::ProjectClose: case CK::RackImport:
-            case CK::RackAdd: case CK::RackGroupNew: case CK::RackUngroup: case CK::RackDuplicate:
+            case CK::RackAdd: case CK::RackGroupNew: case CK::RackUngroup: case CK::RackDuplicate: case CK::RackRemove:
                 return true;
             default: return false;
         }

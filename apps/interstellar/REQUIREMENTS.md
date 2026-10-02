@@ -73,6 +73,9 @@ done while its authority is a fake.**
 - **R-RACK-6 Rack identity is Interstellar's.** A bind name (`gr1`, `s_day01`) — legal, unique,
   stable once assigned — plus the media path and reference-frame time. Cosmo names a node after its
   file or after what the user typed, and neither is addressable.
+- **R-RACK-8 Select like Cosmo** (added 2026-10-02, user request): Shift-click selects a range,
+  Ctrl-click toggles, in the rack tree and the filmstrip; **Group Selection** (Ctrl+G, the Edit menu,
+  the right-click menu) groups it; a source no clip uses can be removed from the rack.
 - **R-RACK-7 An offline source reads as missing, never as a stall**, and the project stays openable.
 
 ---
@@ -264,6 +267,11 @@ reserves the rest so adopting it is not a migration.
   view, never data), **Preset** (Save, Import, and Apply for every preset in the library). Cosmo's
   accelerators: Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, Ctrl+S, Ctrl+Shift+S, Ctrl+O, Ctrl+C / Ctrl+V. Every
   item is a command line or a host picker — the menus add no behaviour of their own (R-G-4).
+- **R-UI-9 Cosmo's right-click menu on rack items** (added 2026-10-02, user request) — rack rows and
+  filmstrip cells: Add Footage, Group / Group Selection, Ungroup, Enable/Disable Filter, Rename
+  (inline, cosmo's morph), Duplicate as Variant, Copy Grade, Paste Grade (to Selection), Remove from
+  Rack. Right-clicking outside the selection selects that node first; inside it, the selection
+  stays — cosmo's rule. The grade-weight bar names itself on hover ("weight 80%").
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.

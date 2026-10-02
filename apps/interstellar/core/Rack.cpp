@@ -198,6 +198,19 @@ namespace interstellar
         return true;
     }
 
+    bool Rack::removeNode(int node, std::string &err)
+    {
+        cosmo::Command c;
+        c.kind = cosmo::Command::Kind::Delete;
+        c.index = node;
+        if (!dispatch(c, err)) return false;
+        mCosmo.pump(0.0);
+        mOwn.erase(std::remove_if(mOwn.begin(), mOwn.end(), [&](const std::pair<int, EditParams> &o) { return o.first == node; }),
+                   mOwn.end());
+        ++mParamsRevision;
+        return true;
+    }
+
     bool Rack::ungroup(int group, std::string &err)
     {
         cosmo::Command c;

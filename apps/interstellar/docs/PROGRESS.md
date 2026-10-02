@@ -37,6 +37,8 @@ one integrator who moves, wires, tests and commits each stream:
       renders the real app over the real service.
 - [x] Cosmo's File / Edit / Settings / Workspace / Preset menus, accelerators, Engine Settings with
       the CPU limit, screen scale, undo/redo, copy/paste grade, presets (DR-EDIT-*, DR-SET-*, DR-UI-7..9).
+- [x] D-5/D-6/D-7 fixed (async monitor + thumbnails, group weight); Shift/Ctrl selection, Group
+      Selection, cosmo's right-click menu on rack items, the weight bar's caption (DR-RACK-8, DR-UI-10).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,

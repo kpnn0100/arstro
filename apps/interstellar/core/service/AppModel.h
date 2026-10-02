@@ -62,6 +62,7 @@ namespace interstellar
         bool video = false;
         int usedBy = 0;               // clips referencing it in the CURRENT timeline. 0 is not an error
         bool overridden = false;      // the current timeline has a #tlgrade on this node (R-VER)
+        bool selected = false;        // in the selection (Shift = range, Ctrl = toggle — R-RACK-8)
     };
 
     /** One timeline — a VERSION (R-VER). Ordered so a base precedes everything derived from it. */
