@@ -55,6 +55,9 @@ namespace interstellar_v1
         int selected() const { return mSelected; }
 
         std::function<void(const std::string &line)> onCommand;
+        /** Right-click on row `rackIndex` at a WORLD point: the screen opens cosmo's context menu
+         *  there (R-UI-9). */
+        std::function<void(int rackIndex, artboard::Point local)> onContext;
         std::function<void()> onAddFootage;
 
         void advance(double nowMs) override;
@@ -81,8 +84,8 @@ namespace interstellar_v1
          *  swapping glyphs and colours in one frame. */
         struct RowState
         {
-            artboard::AnimatedProperty bypass{0.0}, pending{0.0}, failed{0.0}, ovr{0.0};
-            bool want[4] = {false, false, false, false}, applied[4] = {false, false, false, false}, init = false;
+            artboard::AnimatedProperty bypass{0.0}, pending{0.0}, failed{0.0}, ovr{0.0}, selected{0.0};
+            bool want[5] = {false, false, false, false, false}, applied[5] = {false, false, false, false, false}, init = false;
         };
         std::map<std::string, RowState> mStates;   // keyed by rackObj
         const RowState *stateFor(const interstellar::RackNodeModel &n) const;
@@ -97,6 +100,13 @@ namespace interstellar_v1
         }
     private:
         int mDragRow = -1;
+        /** The weight bar names itself on hover — "weight 75%" cross-fades over the clip count, so
+         *  the control explains what it does (the user asked what it was). */
+        cosmo_v2::HoverFade mWeightTip;
+    public:
+        /** The LIVE eased amount of row `rackIndex`'s weight caption (0..1). */
+        double weightTipAmount(int rackIndex) const { return mWeightTip.amount(rackIndex); }
+    private:
         double mPhaseMs = 0.0;
         /** Where each row's OVR badge was last painted (rack index → local rect). A click on it is
          *  "revert to base" — `revert <bind>` (ui-brief §3, one click away). Written by the const

@@ -72,6 +72,19 @@ landed; `App::render` then calls `HomeScreen::thumbnailsArrived` / `GradeDeck::t
 re-binds, so missing covers, cells and strip frames are asked for again. Late strip frames and covers
 fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail replaces the plate).
 
+## Selection and the right-click menu (2026-10-02, R-RACK-8 / R-UI-9)
+
+- Rack tree and filmstrip: Shift-click → `rack select <b> --range`, Ctrl-click → `rack select <b>
+  --add`, plain click → `rack select <b>`; selected rows carry an eased wash, the filmstrip rings them.
+- Right-click (rack row or filmstrip cell) → `App::openRackContext` → cosmo's `ContextMenu`:
+  Add Footage… · Group (Selection) → `rack group new` · Ungroup → `rack ungroup <b>` · Enable/Disable
+  Filter → `set <b>.bypass=0|1` · Rename… (cosmo's inline rename) → `rack rename <b> <new>` ·
+  Duplicate as Variant · Copy Grade → `grade copy <b>` · Paste Grade (to Selection) → `grade paste
+  <selected…>` · Remove from Rack → `rack remove <b>` (only for an unused source).
+- Ctrl+G → `rack group new`; Edit › Group Selection is the same.
+- The weight bar names itself on hover: "weight 80%" cross-fades over the bind name.
+- Shots added: `grade_multiselect`, `grade_context_menu`, `grade_weight_caption`. UI checks: 158.
+
 ## Integrating (the GTK host)
 
 ```cpp

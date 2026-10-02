@@ -25,6 +25,7 @@
  *  and the NamePrompt ("New version…"), last in child order so they draw and hit-test on top.
  */
 #pragma once
+#include "../../../cosmo/widgets/ContextMenu.h"
 #include "../Theme.h"
 #include "../AppHooks.h"
 #include "EditTopBar.h"
@@ -88,6 +89,11 @@ namespace interstellar_v1
         std::shared_ptr<OutputSpec> outputSpec() { return mOutput; }
         std::shared_ptr<RenderQueue> renderQueue() { return mQueue; }
         std::shared_ptr<NamePrompt> namePrompt() { return mNamePrompt; }
+        /** Cosmo's right-click menu, over everything in Edit (R-UI-9). */
+        std::shared_ptr<cosmo_v2::ContextMenu> contextMenu() { return mContextMenu; }
+        /** Right-click on a rack node — rack tree row or filmstrip cell — at a point in this
+         *  screen's coordinates. The App fills the menu. */
+        std::function<void(int rackIndex, artboard::Point at)> onRackContext;
         std::shared_ptr<cosmo_v2::ConfirmDialog> confirm() { return mConfirm; }
 
         /** Every widget's intent funnels here, as a text line; the App dispatches it. */
@@ -118,6 +124,7 @@ namespace interstellar_v1
         std::shared_ptr<OutputSpec> mOutput;
         std::shared_ptr<RenderQueue> mQueue;
         std::shared_ptr<NamePrompt> mNamePrompt;
+        std::shared_ptr<cosmo_v2::ContextMenu> mContextMenu;
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
         int mTab = Grade;
         std::string mCurrentTimeline;

@@ -35,10 +35,12 @@ namespace interstellar_v1
         mRack = std::make_shared<RackTree>();
         mRack->onCommand = fwd;
         mRack->onAddFootage = [this] { if (onAddFootage) onAddFootage(); };
+        mRack->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
         mGradeInspector = std::make_shared<GradeInspector>();
         mGradeInspector->onCommand = fwd;
         mGradeDeck = std::make_shared<GradeDeck>();
         mGradeDeck->onCommand = fwd;
+        mGradeDeck->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
         mPages[Grade]->addChild(mRack);
         mPages[Grade]->addChild(mGradeInspector);
         mPages[Grade]->addChild(mGradeDeck);
@@ -71,6 +73,9 @@ namespace interstellar_v1
         addChild(mTopBar);
 
         // modals, on top of everything
+        // cosmo's right-click menu: above the pages and the chrome, below the modals
+        mContextMenu = std::make_shared<cosmo_v2::ContextMenu>();
+        addChild(mContextMenu);
         mNamePrompt = std::make_shared<NamePrompt>();
         addChild(mNamePrompt);
         mConfirm = std::make_shared<cosmo_v2::ConfirmDialog>(palette::primary());
@@ -125,6 +130,7 @@ namespace interstellar_v1
         const double lw = shell::leftW(), rw = shell::rightW();
         const double colH = std::max(0.0, deckY - top);
 
+        mContextMenu->x.set(0); mContextMenu->y.set(0); mContextMenu->width.set(W); mContextMenu->height.set(H);
         mTopBar->x.set(0); mTopBar->y.set(0); mTopBar->width.set(W); mTopBar->height.set(top);
         mTopBar->setRootSize(W, H);
         mTopBar->layout();

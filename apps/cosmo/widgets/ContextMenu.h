@@ -26,6 +26,10 @@ namespace cosmo_v2
         void open(std::vector<Item> items, double x, double y);
         void close() { mOpen = false; mRenaming = false; }
         bool isOpen() const { return mOpen; }
+        /** Read-only contents and geometry (local coordinates) — what a test aims a click at. */
+        int itemCount() const { return (int)mItems.size(); }
+        const Item &item(int i) const { return mItems[(size_t)i]; }
+        artboard::Rect itemRect(int i) const;
 
         // Rename mode (DR-TREE-5): morph an open menu into an inline rename field, or
         // open one directly (top-bar name click). `onRename` fires with the typed name

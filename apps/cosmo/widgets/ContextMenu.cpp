@@ -98,6 +98,12 @@ namespace cosmo_v2
         return Rect{r.x + kFieldMx, top, r.w - 2 * kFieldMx, kFieldH * grow};
     }
 
+    Rect ContextMenu::itemRect(int i) const
+    {
+        const Rect r = menuRect();
+        return Rect{r.x, r.y + kPadY + i * kItemH, r.w, kItemH};   // itemAt's arithmetic, inverted
+    }
+
     int ContextMenu::itemAt(const Point &local) const
     {
         const Rect r = menuRect();

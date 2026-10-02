@@ -23,9 +23,22 @@ namespace interstellar_v1
     {
         clipToBounds = true;
         mStrip = std::make_shared<cosmo_v2::Filmstrip>();
-        mStrip->onSelect = [this](int cell, bool, bool) {
-            if (cell >= 0 && cell < (int)mRack.size() && cell != mSelected)
-                emit("rack select " + cmd::quote(mRack[cell].bindName));
+        // Cosmo's filmstrip selection: Shift-click a range, Ctrl-click to toggle.
+        mStrip->onSelect = [this](int cell, bool shift, bool ctrl) {
+            if (cell < 0 || cell >= (int)mRack.size()) return;
+            const std::string b = cmd::quote(mRack[cell].bindName);
+            if (shift) emit("rack select " + b + " --range");
+            else if (ctrl) emit("rack select " + b + " --add");
+            else
+            {
+                int selectedCount = 0;
+                for (const auto &r : mRack) selectedCount += r.selected;
+                if (cell != mSelected || selectedCount > 1) emit("rack select " + b);
+            }
+        };
+        mStrip->onContext = [this](int cell, double x, double y) {
+            if (cell >= 0 && cell < (int)mRack.size() && onContext)
+                onContext(cell, Point{x, y});   // cosmo's filmstrip reports the gesture's world point
         };
         addChild(mStrip);
     }
@@ -78,7 +91,13 @@ namespace interstellar_v1
         mSelected = m.selectedRack;
         if (mSelected >= 0 && mSelected < (int)cells.size())
         {
-            mStrip->setSelection({mSelected}, mSelected);
+        {
+            std::vector<int> sel;
+            for (int k = 0; k < (int)mRack.size(); ++k)
+                if (mRack[(size_t)k].selected) sel.push_back(k);
+            if (std::find(sel.begin(), sel.end(), mSelected) == sel.end()) sel.push_back(mSelected);
+            mStrip->setSelection(sel, mSelected);
+        }
             mStrip->scrollCellIntoView(mSelected);
         }
         else

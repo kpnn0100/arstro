@@ -1015,6 +1015,67 @@ namespace
     }
 }
 
+namespace
+{
+    // ── 9. cosmo's selection and right-click menu on rack items (R-RACK-8, R-UI-9) ───────────
+
+    void clickMod(Rig &r, double x, double y, bool shift, bool ctrl)
+    {
+        r.app->pointer(1, x, y, 0, r.now);
+        r.app->pointer(0, x, y, 0, r.now, false, shift, ctrl);
+        r.app->pointer(2, x, y, 0, r.now + 40.0, false, shift, ctrl);
+        r.pump(32);
+    }
+
+    void testSelectionAndContext()
+    {
+        std::printf("selection and the right-click menu (cosmo's)\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto rt = r.app->edit().rackTree();
+        const Point p5 = centre(*rt, rt->rowRect(5));
+        clickMod(r, p5.x - 40, p5.y, true, false);
+        CHECK(hasLine(r.svc, "rack select " + r.svc.m.rack[5].bindName + " --range"), "Shift-click on a rack row dispatched rack select … --range");
+        const Point p4 = centre(*rt, rt->rowRect(4));
+        clickMod(r, p4.x - 40, p4.y, false, true);
+        CHECK(hasLine(r.svc, "rack select " + r.svc.m.rack[4].bindName + " --add"), "Ctrl-click dispatched rack select … --add");
+        // Right-click: cosmo's context menu opens at the row; Group dispatches rack group new.
+        const Point p1 = centre(*rt, rt->rowRect(1));
+        r.app->pointer(1, p1.x - 40, p1.y, 0, r.now);
+        r.app->pointer(0, p1.x - 40, p1.y, 2, r.now);
+        r.app->pointer(2, p1.x - 40, p1.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        CHECK(cm->isOpen(), "right-click on a rack row opened cosmo's context menu");
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        std::printf("      %s\n", labels.c_str());
+        CHECK(labels.find("Group") != std::string::npos && labels.find("Rename") != std::string::npos &&
+                  labels.find("Copy Grade") != std::string::npos && labels.find("Filter") != std::string::npos,
+              "it offers Group, a filter toggle, Rename, Copy Grade (cosmo's items, Interstellar's words)");
+        int g = -1;
+        for (int i = 0; i < cm->itemCount(); ++i)
+            if (cm->item(i).label.rfind("Group", 0) == 0) g = i;
+        if (g >= 0)
+        {
+            const Point gp = centre(*cm, cm->itemRect(g));
+            r.click(gp.x, gp.y);
+            r.pump(64);
+        }
+        CHECK(hasLine(r.svc, "rack group new"), "its Group item dispatched rack group new (the selection)");
+        // Ctrl+G is Group Selection.
+        r.svc.lines.clear();
+        ctrlKey(r, 'G');
+        CHECK(hasLine(r.svc, "rack group new"), "Ctrl+G dispatched rack group new");
+        // The weight bar names itself on hover.
+        const Rect wr = rt->weightRect(2);
+        const Point wp = world(*rt, wr.x + wr.w * 0.5, wr.y + wr.h * 0.5);
+        r.move(wp.x, wp.y);
+        const double first = firstMoved(r, [&] { return rt->weightTipAmount(2); }, 0.0);
+        CHECK(strictlyBetween(first, 0.0, 1.0), "hovering the weight bar cross-fades in its caption (\"weight N%\")");
+    }
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IONBF, 0);   // a failing assert must not swallow the log above it
@@ -1033,6 +1094,7 @@ int main()
     testMonitorImages();
     testScroll();
     testMenusSettingsScale();
+    testSelectionAndContext();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

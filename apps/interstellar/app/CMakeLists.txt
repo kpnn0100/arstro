@@ -90,6 +90,7 @@ set(IS_COSMO_SOURCES
     ${IS_COSMO_DIR}/widgets/IconButton.cpp
     ${IS_COSMO_DIR}/widgets/ConfirmDialog.cpp
     ${IS_COSMO_DIR}/widgets/MenuStrip.cpp
+    ${IS_COSMO_DIR}/widgets/ContextMenu.cpp
     ${IS_COSMO_DIR}/widgets/SettingsDialog.cpp
     ${IS_COSMO_DIR}/widgets/Icons.cpp
     ${IS_COSMO_DIR}/widgets/WidgetLog.cpp)

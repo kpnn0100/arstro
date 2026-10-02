@@ -58,6 +58,8 @@ namespace interstellar_v1
         double sourceDuration() const { return mSourceDur; }
 
         std::function<void(const std::string &line)> onCommand;
+        /** Right-click on filmstrip cell `rackIndex` at a WORLD point. */
+        std::function<void(int rackIndex, artboard::Point local)> onContext;
         std::function<bool(const std::string &, double, int, interstellar::Raster &)> thumbnail;
 
         void advance(double nowMs) override;

@@ -64,6 +64,13 @@ namespace interstellar_v1
         mEdit->onAddFootage = [this] { if (onPickFootage) onPickFootage(); };
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
+        mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
+        mEdit->contextMenu()->onRename = [this](const std::string &typed) {
+            const std::string name = cmd::bindName(typed);
+            if (!name.empty() && !mRenameTarget.empty() && name != mRenameTarget)
+                dispatch("rack rename " + cmd::quote(mRenameTarget) + " " + cmd::quote(name));
+            mRenameTarget.clear();
+        };
         // Engine Settings: COSMO's dialog, one instance for Home and Edit (cosmo R-SETTINGS-5).
         // Each chip is a `settings set` line — the service owns and persists the values; the
         // Input row is hidden because Interstellar has no touch shell.
@@ -138,16 +145,48 @@ namespace interstellar_v1
         return m.rack[(size_t)m.selectedRack].bindName;
     }
 
+    /** Cosmo's right-click menu on a rack node (cosmo's openEditContext, Interstellar's items).
+     *  Right-clicking OUTSIDE the selection selects that node first; inside it, the selection stays,
+     *  so "Group Selection" groups all of it — cosmo's rule. */
+    void App::openRackContext(int i, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (i < 0 || i >= (int)m.rack.size()) return;
+        const auto n = m.rack[(size_t)i];
+        if (n.bindName.empty()) return;
+        const std::string b = cmd::quote(n.bindName);
+        if (!n.selected) dispatch("rack select " + b);
+        const auto &m2 = mHooks.model ? mHooks.model() : emptyModel();   // after the select
+        std::string selection;
+        int selected = 0;
+        for (const auto &r : m2.rack)
+            if (r.selected && !r.bindName.empty()) { selection += " " + cmd::quote(r.bindName); ++selected; }
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        items.push_back({"Add Footage...", [this] { if (onPickFootage) onPickFootage(); }});
+        items.push_back({selected > 1 ? "Group Selection  (Ctrl+G)" : "Group  (Ctrl+G)", [this] { dispatch("rack group new"); }});
+        if (n.group) items.push_back({"Ungroup", [this, b] { dispatch("rack ungroup " + b); }});
+        if (!n.failed)
+            items.push_back({n.bypass ? "Enable Filter" : "Disable Filter",
+                             [this, name = n.bindName, on = !n.bypass] { dispatch("set " + name + ".bypass=" + (on ? "1" : "0")); }});
+        items.push_back({"Rename...", [this, name = n.bindName] {
+            mRenameTarget = name;
+            mEdit->contextMenu()->enterRenameMode(name);
+        }});
+        if (!n.group && !n.failed) items.push_back({"Duplicate as Variant", [this, b] { dispatch("rack duplicate " + b); }});
+        if (!n.failed) items.push_back({"Copy Grade", [this, b] { dispatch("grade copy " + b); }});
+        if (m2.hasGradeClipboard)
+            items.push_back({selected > 1 ? "Paste Grade to Selection" : "Paste Grade", [this, selection] { dispatch("grade paste" + selection); }});
+        if (!n.group && n.usedBy == 0) items.push_back({"Remove from Rack", [this, b] { dispatch("rack remove " + b); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
     // ── the menu bar: cosmo's File / Develop / History / Settings / Preset, Interstellar's words ──
     // Every item is a command line or a host picker — the menus add no behaviour of their own.
 
     void App::buildMenus()
     {
         auto ms = mEdit->topBar()->menus();
-        auto ask = [this](const std::string &title, const std::string &message, const std::string &cta,
-                          std::function<void(const std::string &)> then) {
-            mEdit->namePrompt()->show(title, message, "", cta, std::move(then));
-        };
         ms->addMenu({"File", {
             {"Home",                         [this] { requestHome(); }},
             {"Open...      (Ctrl+O)",        [this] { if (onPickProjectToOpen) onPickProjectToOpen(); }},
@@ -163,14 +202,7 @@ namespace interstellar_v1
             {"Copy Grade   (Ctrl+C)",        [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade copy " + cmd::quote(b)); }},
             {"Paste Grade to Selected (Ctrl+V)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade paste " + cmd::quote(b)); }},
             {"Paste Grade to All Sources",   [this] { dispatch("grade paste --all"); }},
-            {"Group Selected...",            [this, ask] {
-                 const auto b = selectedBind();
-                 if (b.empty()) return;
-                 ask("New group", "A group's grade stacks onto everything in it.", "Group", [this, b](const std::string &typed) {
-                     const std::string name = cmd::bindName(typed);
-                     if (!name.empty()) dispatch("rack group new " + cmd::quote(name) + " --nodes " + cmd::quote(b));
-                 });
-             }},
+            {"Group Selection  (Ctrl+G)",    [this] { dispatch("rack group new"); }},
             {"Ungroup",                      [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }},
             {"Duplicate as Variant",         [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
         }});
@@ -362,6 +394,11 @@ namespace interstellar_v1
         }
         // Edit: a modal owns the keyboard while it is up
         if (mEdit->confirm()->isOpen()) return mEdit->confirm()->handleKey(e) || true;
+        if (mEdit->contextMenu()->isOpen())   // the menu owns the keyboard (its rename field types)
+        {
+            mEdit->contextMenu()->dispatchKey(e);
+            return true;
+        }
         if (mEdit->namePrompt()->isOpen()) return mEdit->namePrompt()->handleKey(e);
         auto versions = mEdit->topBar()->versions();
         if (versions->isOpen())
@@ -412,6 +449,7 @@ namespace interstellar_v1
             else dispatch("project save");
             return true;
         case 'O': if (onPickProjectToOpen) onPickProjectToOpen(); return true;
+        case 'G': dispatch("rack group new"); return true;   // Group Selection
         case 'C':
         case 'V':
         {

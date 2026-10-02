@@ -137,6 +137,26 @@ namespace
         v.push_back({"edit_menu_preset", [](FakeService &s) { s.edit(); s.m.presets = {{"Film/Warm fade", "Film"}, {"Film/Bleach", "Film"}, {"Soft skin", ""}}; ++s.m.revision; },
                      [openMenu](Rig &r) { r.settle(); openMenu(r, 4, 400); }});
         v.push_back({"edit_settings", edit, [](Rig &r) { r.settle(); r.app->openSettings(); r.settle(); }});
+        // cosmo's selection + right-click menu on rack items; the weight bar's caption
+        v.push_back({"grade_multiselect", [](FakeService &s) { s.edit(); for (int k : {1, 2, 3}) s.m.rack[(size_t)k].selected = true; ++s.m.revision; },
+                     [](Rig &r) { r.settle(); }});
+        v.push_back({"grade_context_menu", edit, [](Rig &r) {
+            r.settle();
+            auto rt = r.app->edit().rackTree();
+            const Point p = centre(*rt, rt->rowRect(1));
+            r.app->pointer(1, p.x - 40, p.y, 0, r.now);
+            r.app->pointer(0, p.x - 40, p.y, 2, r.now);
+            r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
+            r.settle();
+        }});
+        v.push_back({"grade_weight_caption", edit, [](Rig &r) {
+            r.settle();
+            auto rt = r.app->edit().rackTree();
+            const Rect wr = rt->weightRect(2);
+            const Point p = world(*rt, wr.x + wr.w * 0.5, wr.y + wr.h * 0.5);
+            r.move(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

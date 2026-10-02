@@ -44,6 +44,7 @@ namespace interstellar_v1
             if (mDragRow < 0) w.target = n.weight;   // a gesture in flight outranks the model
             auto &st = mStates[key];
             st.want[0] = n.bypass; st.want[1] = n.pending; st.want[2] = n.failed; st.want[3] = n.overridden;
+            st.want[4] = n.selected;
         }
         mSel.setHovered(mSelected);
     }
@@ -111,6 +112,13 @@ namespace interstellar_v1
             if (mRack.empty() && emptyChip(viewport()).contains(local)) { mHover.setHovered(1); return true; }
             const int i = rowAt(local);
             mHover.setHovered(i >= 0 ? 10 + i : -1);
+            mWeightTip.setHovered(i >= 0 && !mRack[i].failed && weightRect(i).contains(local) ? i : -1);
+            return true;
+        }
+        case Gesture::Type::RightClick:
+        {
+            const int i = rowAt(local);
+            if (i >= 0 && onContext) onContext(i, worldTransform().apply(local));
             return true;
         }
         case Gesture::Type::Down:
@@ -175,7 +183,15 @@ namespace interstellar_v1
                 emit("revert " + cmd::quote(n.bindName));   // drop this version's overrides on the node
                 return true;
             }
-            if (i != mSelected) emit("rack select " + cmd::quote(n.bindName));
+            // Cosmo's selection: Shift-click a range, Ctrl-click to toggle, a plain click selects one.
+            if (g.shift) emit("rack select " + cmd::quote(n.bindName) + " --range");
+            else if (g.ctrl) emit("rack select " + cmd::quote(n.bindName) + " --add");
+            else
+            {
+                int selectedCount = 0;
+                for (const auto &r : mRack) selectedCount += r.selected;
+                if (i != mSelected || selectedCount > 1) emit("rack select " + cmd::quote(n.bindName));
+            }
             return true;
         }
         default:
@@ -204,8 +220,8 @@ namespace interstellar_v1
         for (auto &kv : mStates)
         {
             RowState &st = kv.second;
-            artboard::AnimatedProperty *props[4] = {&st.bypass, &st.pending, &st.failed, &st.ovr};
-            for (int k = 0; k < 4; ++k)
+            artboard::AnimatedProperty *props[5] = {&st.bypass, &st.pending, &st.failed, &st.ovr, &st.selected};
+            for (int k = 0; k < 5; ++k)
             {
                 if (!st.init) props[k]->set(st.want[k] ? 1.0 : 0.0);
                 else if (st.want[k] != st.applied[k])
@@ -215,7 +231,8 @@ namespace interstellar_v1
             }
             st.init = true;
         }
-        if (!isHovered()) mHover.clear();
+        if (!isHovered()) { mHover.clear(); mWeightTip.clear(); }
+        mWeightTip.advance(nowMs);
         mHover.advance(nowMs);
         mSel.advance(nowMs, motion::kSelectMs);
         Segment::advance(nowMs);
@@ -287,6 +304,9 @@ namespace interstellar_v1
             if (hv > 0.001) drawRoundedRect(t, Rect{0, top, w - 1.0, kRowH}, 0.0, Paint::filled(palette::hoverWash(hv * a)));
 
             const RowState *st = stateFor(n);
+            // In the selection (not the Grade target): a lighter wash, eased like every state.
+            const double ms = st ? st->selected.value() * (1.0 - sel) : 0.0;
+            if (ms > 0.001) drawRoundedRect(t, Rect{0, top, w - 1.0, kRowH}, 0.0, Paint::filled(palette::primaryAlpha(0.08 * ms * a)));
             const double by = st ? st->bypass.value() : (n.bypass ? 1.0 : 0.0);
             const double pe = st ? st->pending.value() : (n.pending ? 1.0 : 0.0);
             const double fa = st ? st->failed.value() : (n.failed ? 1.0 : 0.0);
@@ -343,6 +363,10 @@ namespace interstellar_v1
             if (fa < 0.999)
             {
                 const double la = content * (1.0 - fa);
+                const Rect wr = weightAt(w, top);
+                const double wv = i >= 0 ? shownWeight(i) : n.weight;
+                // Hovering (or dragging) the bar names it: "weight 75%" cross-fades over the count.
+                const double tip = i >= 0 ? std::max(mWeightTip.amount(i), i == mDragRow ? 1.0 : 0.0) : 0.0;
                 const std::string uses = n.group ? std::string() : usesLabel(n.usedBy);
                 if (!uses.empty())
                 {
@@ -350,8 +374,6 @@ namespace interstellar_v1
                     t.setFill(fade(palette::mutedForeground(), la));
                     t.drawText(uses, usesRight - uw, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
                 }
-                const Rect wr = weightAt(w, top);
-                const double wv = i >= 0 ? shownWeight(i) : n.weight;
                 drawRoundedRect(t, Rect{wr.x, l2 - 1.5, wr.w, 3.0}, radius::pill(), Paint::filled(fade(palette::secondary(), la)));
                 if (wv * wr.w >= 3.0)
                     drawRoundedRect(t, Rect{wr.x, l2 - 1.5, wv * wr.w, 3.0}, radius::pill(), Paint::filled(fade(palette::primary(), la)));
@@ -363,8 +385,16 @@ namespace interstellar_v1
                 }
                 if (pe < 0.999)
                 {
-                    t.setFill(fade(palette::mutedForeground(), la * (1.0 - pe)));
+                    // Hovering the bar names it: "grade weight 80%" cross-fades over the bind name,
+                    // where there is room for it (the user asked what the slider was).
+                    t.setFill(fade(palette::mutedForeground(), la * (1.0 - pe) * (1.0 - tip)));
                     t.drawText(textfit::ellipsize(t, n.bindName, room, kMetaPx, font::mono()), x0 + 18.0, textfit::baseline(l2, kMetaPx), kMetaPx, font::mono());
+                    if (tip > 0.001)
+                    {
+                        const std::string wl = "weight " + std::to_string((int)std::lround(wv * 100.0)) + "%";
+                        t.setFill(fade(palette::foreground(), la * (1.0 - pe) * tip));
+                        t.drawText(textfit::ellipsize(t, wl, room, kMetaPx, font::sans()), x0 + 18.0, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
+                    }
                 }
             }
 

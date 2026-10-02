@@ -113,6 +113,8 @@ namespace interstellar_v1
         artboard::Transform rootTransform() const;
         std::string selectedBind() const;
         bool editKey(const artboard::KeyEvent &e);
+        void openRackContext(int rackIndex, artboard::Point at);
+        std::string mRenameTarget;                      // the bind name the context menu is renaming
         void fetchFrame(const interstellar::AppModel &m, bool force);
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
