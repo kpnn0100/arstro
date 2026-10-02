@@ -69,6 +69,9 @@ namespace interstellar_v1
         double tabHighlight() const { return mTopBar->tabs()->highlightPos(); }
 
         void showRefusal(const std::string &message);
+        /** The same chip, saying an action FINISHED (a ✓, no red) — "frame copied" (R-UI-11). */
+        void showNotice(const std::string &message);
+        bool toastIsError() const { return mToastError; }
         double toastAmount() const { return mToastAmt.value(); }
 
         static double minWidth() { return shell::leftW() + shell::rightW() + shell::minMonitorW(); }
@@ -94,6 +97,10 @@ namespace interstellar_v1
         /** Right-click on a rack node — rack tree row or filmstrip cell — at a point in this
          *  screen's coordinates. The App fills the menu. */
         std::function<void(int rackIndex, artboard::Point at)> onRackContext;
+        /** The capture button (transport or, in Grade, the monitor caption) at a WORLD rect. */
+        std::function<void(artboard::Rect)> onCapture;
+        /** The transport's live eased presence (0 in Grade … 1) — what a test reads. */
+        double transportAmount() const { return mTransportAmt.value(); }
         std::shared_ptr<cosmo_v2::ConfirmDialog> confirm() { return mConfirm; }
 
         /** Every widget's intent funnels here, as a text line; the App dispatches it. */
@@ -130,10 +137,16 @@ namespace interstellar_v1
         std::string mCurrentTimeline;
 
         std::string mToast;
+        bool mToastError = true;
         bool mToastPending = false;
         double mToastShownAt = -1.0, mNowMs = 0.0;
         bool mToastClosing = false;
         artboard::AnimatedProperty mToastAmt{0.0};
+        /** 1 in Cut and Deliver, 0 in Grade: the transport fades out and the monitor takes its room
+         *  as one eased value (R-UI-3, amended). Intent from setTab, the tween from advance. */
+        artboard::AnimatedProperty mTransportAmt{0.0};
+        bool mTransportInit = false;
+        double mTransportTarget = 0.0, mTransportApplied = 0.0;
     };
 }
 }

@@ -41,6 +41,15 @@ namespace interstellar_v1
          *  landed. A host that decodes thumbnails off the UI thread returns false from `thumbnail`
          *  until then; the app re-asks for what it is missing when this moves (D-5, D-6). */
         std::function<unsigned()> thumbnailEpoch;
+        /** OPTIONAL: one rack source graded alone at `t` seconds (t < 0 = its reference frame) —
+         *  what the Grade monitor shows, since Grade has no transport and no playhead (R-UI-3,
+         *  amended) and the ref-frame slider previews before it commits (R-RACK-3). Empty = the
+         *  Grade monitor falls back to `renderFrame` at the playhead. */
+        std::function<bool(const std::string &bind, double t, int proxyEdge, interstellar::Raster &out)> renderSource;
+        /** OPTIONAL: put what the monitor shows, at full resolution, on the system clipboard
+         *  (R-UI-11 "Copy Frame"); `bind` empty = the timeline at the playhead. Empty = the menu
+         *  offers only "Save Frame…". */
+        std::function<bool(const std::string &bind, std::string &err)> copyFrame;
     };
 }
 }

@@ -96,6 +96,12 @@ int main(int argc, char **argv)
         return ok;
     };
     hooks.thumbnailEpoch = [&]() { return thumbs.epoch(); };
+    int sourceFrames = 0;
+    hooks.renderSource = [&](const std::string &bind, double t, int edge, Raster &out) {
+        const bool ok = svc.renderSourceFrame(bind, t, edge, out);
+        if (ok && !out.empty()) ++sourceFrames;
+        return ok;
+    };
     App app(hooks, w, h);
 
     cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
@@ -173,6 +179,8 @@ int main(int argc, char **argv)
     assert(app.dispatch("playhead 1.0"));
     settle(800.0);
     shot("grade");
+    // Grade's monitor is the Grade target alone (R-UI-3, amended) — through renderSource
+    if (svc.model().hasGradeTarget) std::printf("grade monitor frames through renderSource: %d\n", sourceFrames);
     app.setTab(1);
     settle(800.0);
     shot("cut");

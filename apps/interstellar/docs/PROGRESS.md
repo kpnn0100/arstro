@@ -39,10 +39,14 @@ one integrator who moves, wires, tests and commits each stream:
       the CPU limit, screen scale, undo/redo, copy/paste grade, presets (DR-EDIT-*, DR-SET-*, DR-UI-7..9).
 - [x] D-5/D-6/D-7 fixed (async monitor + thumbnails, group weight); Shift/Ctrl selection, Group
       Selection, cosmo's right-click menu on rack items, the weight bar's caption (DR-RACK-8, DR-UI-10).
+- [x] Grade without a transport (its monitor shows the Grade target at its reference frame); the
+      capture button with Copy Frame / Save Frame… (DR-UI-3c, DR-UI-11a/b).
+- [ ] The reference-frame slider (fast seek + frame steps, DR-RACK-3b's UI) and browsing groups like
+      cosmo (R-UI-12) — the rest of the 2026-10-02 request.
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,
-      `RackNodeModel::mediaDuration`, a `lint` list in the model for Deliver's checks,
+      a `lint` list in the model for Deliver's checks,
       `ClipModel::danglingReason`; drag a source onto the timeline (`clip add`); drag to regroup.
 - [x] Rewrite `arstro.interstellar.implement` / `.debug` for this specification (every command they
       name exists; the debug skill's sample script was run as written).
@@ -67,6 +71,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-02 — "remove the play bar from Grade" and "a capture button next to next on the play bar"
+(R-UI-3 amended, R-UI-11).** The two asks collide in Grade. Resolved by putting the capture button on
+the transport (Cut, Deliver) AND on Grade's monitor caption, so both hold. Grade's monitor stopped
+showing the cut at the playhead — without a transport there is no playhead to move — and shows the
+Grade target alone at its reference frame, which is what cosmo shows and what the grade is judged on.
+Copy Frame is a host hook rather than a command because a clipboard is a desktop's, not the core's
+(R-SCOPE-3); Save Frame… is the `capture` command, so a script can do it.
 
 **2026-10-02 — the monitor and the thumbnails moved off the UI thread (D-5, D-6).** Decoding a
 capture's long GOP costs 100–200 ms per seek at 1080p, and no tuning of a decoder makes that a

@@ -53,11 +53,17 @@ says what a cut is.
 │  (per tab)      │   outside the tab host: ONE widget,     │   (per tab)       │
 │                 │   one frame, every tab                  │                   │
 │                 ├────────────────────────────────────────┤                   │
-│                 │  transport  ◀◀ ▶ ▶▶  00:00:04:07        │                   │
+│                 │  transport  ◀◀ ▶ ▶▶ ⌷  00:00:04:07     │                   │
 ├─────────────────┴────────────────────────────────────────┴───────────────────┤
 │  deck (per tab: filmstrip · timeline · render queue)                         │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**The transport is Cut's and Deliver's** (R-UI-3, amended 2026-10-02): in Grade it eases away and
+the monitor takes its room, showing the **Grade target alone at its reference frame** — the frame
+being graded, as in cosmo — captioned `<bind> · ref <timecode>`. The transport's fourth button
+(⌷, a camera, beside ▶▶) **captures the frame** — Copy Frame / Save Frame… (R-UI-11); in Grade the
+same button sits left of the monitor caption.
 
 **Cosmo's menu bar sits after the wordmark** — File · Edit · Settings · Workspace · Preset (R-UI-7);
 Engine Settings is cosmo's own dialog; the whole shell draws through cosmo's screen scale (R-UI-8).

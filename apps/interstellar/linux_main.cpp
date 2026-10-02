@@ -29,6 +29,7 @@
 #include <malloc.h>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <memory>
@@ -191,12 +192,14 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
-    void pickStillToExport(Host *a)
+    /** A save dialog for a .png; `answer` gets the path with the extension made sure. */
+    void pickPngToSave(Host *a, const char *title, const char *button, const char *name,
+                       void (App::*answer)(const std::string &))
     {
-        GtkWidget *d = gtk_file_chooser_dialog_new("Export still", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
-                                                   "_Cancel", GTK_RESPONSE_CANCEL, "_Export", GTK_RESPONSE_ACCEPT, nullptr);
+        GtkWidget *d = gtk_file_chooser_dialog_new(title, GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SAVE,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, button, GTK_RESPONSE_ACCEPT, nullptr);
         gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
-        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), "still.png");
+        gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), name);
         if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
         {
             char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
@@ -204,12 +207,37 @@ namespace
             {
                 std::string p = path;
                 if (p.size() < 4 || p.compare(p.size() - 4, 4, ".png") != 0) p += ".png";
-                a->app->stillExportPicked(p);
+                ((*a->app).*answer)(p);
                 g_free(path);
             }
         }
         gtk_widget_destroy(d);
         gtk_widget_queue_draw(a->area);
+    }
+
+    void pickStillToExport(Host *a) { pickPngToSave(a, "Export still", "_Export", "still.png", &App::stillExportPicked); }
+    void pickFrameToSave(Host *a) { pickPngToSave(a, "Save frame", "_Save", "frame.png", &App::frameSavePicked); }
+
+    /** Copy Frame (R-UI-11): what the monitor shows, at full resolution, onto the CLIPBOARD
+     *  selection as an image — any image editor or chat pastes it. The clipboard keeps its own
+     *  reference to the pixbuf, so the bytes outlive this call. */
+    bool copyFrame(Host *a, const std::string &bind, std::string &err)
+    {
+        Raster r;
+        if (!a->svc.captureFrame(bind, r) || r.empty())
+        {
+            err = bind.empty() ? "Nothing to copy: no frame under the playhead" : "Could not render " + bind + " to copy";
+            return false;
+        }
+        GdkPixbuf *pix = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, r.width, r.height);
+        if (!pix) { err = "Out of memory copying the frame"; return false; }
+        const int stride = gdk_pixbuf_get_rowstride(pix);
+        guchar *dst = gdk_pixbuf_get_pixels(pix);
+        for (int y = 0; y < r.height; ++y)
+            std::memcpy(dst + (size_t)y * stride, r.rgba.data() + (size_t)y * r.width * 4, (size_t)r.width * 4);
+        gtk_clipboard_set_image(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), pix);
+        g_object_unref(pix);
+        return true;
     }
 
     void pickFootage(Host *a)
@@ -384,6 +412,11 @@ int main(int argc, char **argv)
     };
     // Stills decode on the Thumbnailer's worker; the app re-asks when this moves (D-5, D-6).
     hooks.thumbnailEpoch = [a]() { return a->thumbs.epoch(); };
+    // Grade's monitor and the ref-frame slider's preview: one source, graded (R-UI-3, R-RACK-3).
+    hooks.renderSource = [a](const std::string &bind, double t, int edge, Raster &out) {
+        return a->svc.renderSourceFrame(bind, t, edge, out);
+    };
+    hooks.copyFrame = [a](const std::string &bind, std::string &err) { return copyFrame(a, bind, err); };
     a->app = std::make_unique<App>(hooks, (double)kW, (double)kH);
     a->app->onPickProjectToOpen = [a] { pickProjectToOpen(a); };
     a->app->onPickProjectToCreate = [a] { pickProjectToCreate(a); };
@@ -391,6 +424,7 @@ int main(int argc, char **argv)
     a->app->onPickSaveAs = [a] { pickSaveAs(a); };
     a->app->onPickPresetToImport = [a] { pickPresetToImport(a); };
     a->app->onPickStillToExport = [a] { pickStillToExport(a); };
+    a->app->onPickFrameToSave = [a] { pickFrameToSave(a); };
     // The largest screen scale this display can give a window for (cosmo R-SCALE-3): larger ones
     // are drawn disabled in the settings dialog.
     {

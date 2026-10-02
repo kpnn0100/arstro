@@ -14,6 +14,7 @@ namespace interstellar_v1
     namespace
     {
         constexpr double kBtn = 26.0;
+        constexpr int kButtons = 4;           // prev-cut, play/pause, next-cut, capture (R-UI-11)
         constexpr double kPad = 9.75;
         constexpr double kTcW = 88.0;        // "00:00:04:07" at 11 px mono, with air
         constexpr double kDurW = 76.0;
@@ -44,7 +45,7 @@ namespace interstellar_v1
 
     Rect Transport::scrubRect() const
     {
-        const double x0 = kPad + 3 * (kBtn + 2.0) + 6.0 + kTcW + 6.0;
+        const double x0 = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0;
         const double x1 = width.value() - kPad - kDurW - 6.0;
         return Rect{x0, 0, std::max(0.0, x1 - x0), height.value()};
     }
@@ -84,8 +85,8 @@ namespace interstellar_v1
         case Gesture::Type::Move:
         {
             int id = -1;
-            for (int i = 0; i < 3; ++i) if (buttonRect(i).contains(local)) id = i;
-            if (id < 0 && scrubRect().contains(local)) id = 3;
+            for (int i = 0; i < kButtons; ++i) if (buttonRect(i).contains(local)) id = i;
+            if (id < 0 && scrubRect().contains(local)) id = kButtons;
             mHover.setHovered(id);
             return true;
         }
@@ -109,6 +110,13 @@ namespace interstellar_v1
             if (buttonRect(0).contains(local)) { emit("playhead prev-cut"); return true; }
             if (buttonRect(1).contains(local)) { emit(mPlaying ? "pause" : "play"); return true; }
             if (buttonRect(2).contains(local)) { emit("playhead next-cut"); return true; }
+            if (buttonRect(3).contains(local))
+            {
+                const Rect r = buttonRect(3);
+                const Point o = worldTransform().apply(Point{r.x, r.y});
+                if (onCapture) onCapture(Rect{o.x, o.y, r.w, r.h});
+                return true;
+            }
             return true;
         default:
             break;
@@ -151,7 +159,7 @@ namespace interstellar_v1
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, 0); t.lineTo(w, 0); t.strokePath();
 
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < kButtons; ++i)
         {
             const Rect r = buttonRect(i);
             const double hv = mHover.amount(i);
@@ -160,6 +168,7 @@ namespace interstellar_v1
             const Rect gb{r.x + 7.0, r.y + 7.0, r.w - 14.0, r.h - 14.0};
             if (i == 0) glyph::skip(t, gb, c, -1);
             else if (i == 2) glyph::skip(t, gb, c, +1);
+            else if (i == 3) glyph::camera(t, gb, c);
             else
             {
                 // the play/pause glyph cross-fades rather than swapping
@@ -171,7 +180,7 @@ namespace interstellar_v1
 
         const double cy = h * 0.5;
         const std::string tc = cmd::timecode(mShown.value(), mFps);
-        const double tcX = kPad + 3 * (kBtn + 2.0) + 6.0;
+        const double tcX = kPad + kButtons * (kBtn + 2.0) + 6.0;
         t.setFill(palette::foreground());
         t.drawText(tc, tcX, textfit::baseline(cy, kTcPx), kTcPx, font::mono());
 

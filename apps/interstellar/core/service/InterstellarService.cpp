@@ -485,8 +485,10 @@ namespace interstellar
                 // open every file — that would be a stall per video at the end of a load).
                 const auto src = mSync->sources.find(resolvePath(ro->media));
                 if (src != mSync->sources.end() && src->second->ok)
-                    r.mediaDuration = src->second->info.frames <= 1 ? 0.0
-                                      : (double)src->second->info.frames / (src->second->info.fps > 0 ? src->second->info.fps : 24.0);
+                {
+                    r.mediaFps = src->second->info.fps > 0 ? src->second->info.fps : 24.0;
+                    r.mediaDuration = src->second->info.frames <= 1 ? 0.0 : (double)src->second->info.frames / r.mediaFps;
+                }
                 r.overridden = overridden.count(ro->id) > 0;
             }
             return r;

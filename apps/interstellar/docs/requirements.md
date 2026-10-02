@@ -465,3 +465,33 @@ the model`.
 frame when `bind` names one (Grade) or the current timeline at the playhead (else the Grade target's
 reference frame); `capture --out <p.png> [--source <bind>]` saves it; the GTK host's Copy Frame puts
 the same pixels on the system clipboard. Same test.
+
+### DR-UI-3c Grade has no transport; its monitor shows the Grade target alone (R-UI-3, amended)
+`EditScreen` eases one value, `mTransportAmt` (1 in Cut/Deliver, 0 in Grade): `setTab` records the
+intent (`app/widgets/EditScreen.cpp:109`), `advance` starts the 180 ms tween (`:213`), and `layout`
+gives the monitor `colH − transportH × amount` and fades/culls the transport from the same live value
+(`:146`). In Grade `App::fetchFrame` routes to `App::fetchSource` (`app/App.cpp:588`), which asks the
+optional hook `AppHooks::renderSource(bind, t, edge)` — the GTK host binds it to
+`renderSourceFrame` (DR-RACK-3b) — for the selected source at its reference frame (`t < 0`), or at the
+ref-frame slider's preview time; the caption reads `<bind> · ref <timecode at the source's fps>`
+(`rack[].mediaFps`, add-only). A group or no target falls back to the timeline at the playhead.
+Guarded by `Grade at rest: no transport`, `the Grade monitor asked renderSource for the target at its
+reference frame`, `the transport EASES in leaving Grade`, `…and the monitor's height follows the live
+amount`, the layout test's per-tab `Grade has no transport`; mutants (transport snapped; Grade routed
+to the timeline) went red. Shots `grade_populated`, `tab_grade_to_cut_mid` (both sizes, looked at).
+
+### DR-UI-11b The capture button and its menu (R-UI-11)
+The transport's fourth button, beside ▶▶ (`app/widgets/Transport.cpp:17`), and — Grade having no
+transport — an 18 px button left of the monitor caption that fades in with Grade (`Monitor`,
+`setCaptureShown`) both raise `EditScreen::onCapture(worldRect)`. `App::openCaptureMenu`
+(`app/App.cpp:351`) opens cosmo's `ContextMenu` under the button: **Copy Frame** (only when the host
+binds the optional `AppHooks::copyFrame`; the GTK host renders `captureFrame` at full size into a
+`GdkPixbuf` on the CLIPBOARD selection, `linux_main.cpp:224`) and **Save Frame…** (the host's .png
+dialog → `App::frameSavePicked` → `capture --out <p> [--source <Grade target>]`, `:333`). What is
+captured is what the monitor shows: the Grade target alone in Grade, the timeline at the playhead
+elsewhere. A successful copy says so in the toast chip without the refusal's red
+(`EditScreen::showNotice`); a failed one is a refusal. Guarded by `testCaptureAndGradeMonitor`
+(`the capture button sits next to ▶▶`, `clicking it opens Copy Frame / Save Frame…`, `Copy Frame in
+Cut copies the timeline`, `the monitor's capture button FADES in on Grade`, `…the answer dispatches
+capture --out <path> --source <the Grade target>`, `a failed copy is SAID`) and shots
+`grade_capture_menu`, `cut_capture_menu`, `grade_frame_copied` (both sizes, looked at).

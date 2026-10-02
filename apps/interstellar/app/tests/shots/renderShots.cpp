@@ -157,6 +157,34 @@ namespace
             r.move(p.x, p.y);
             r.settle();
         }});
+        // the capture button (R-UI-11) and Grade without a transport (R-UI-3, amended)
+        v.push_back({"grade_capture_menu", edit, [](Rig &r) {
+            r.settle();
+            auto mon = r.app->edit().monitor();
+            const Point p = centre(*mon, mon->captureRect());
+            r.click(p.x, p.y);
+            r.settle();
+        }});
+        v.push_back({"cut_capture_menu", edit, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tp = r.app->edit().transport();
+            const Point p = centre(*tp, tp->buttonRect(3));
+            r.move(p.x, p.y);
+            r.click(p.x, p.y);
+            r.settle();
+        }});
+        v.push_back({"grade_frame_copied", edit, [](Rig &r) {
+            r.settle();
+            auto mon = r.app->edit().monitor();
+            const Point p = centre(*mon, mon->captureRect());
+            r.click(p.x, p.y);
+            r.pump(250);
+            auto cm = r.app->edit().contextMenu();
+            const Point ip = centre(*cm, cm->itemRect(0));
+            r.click(ip.x, ip.y);
+            r.pump(400);
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

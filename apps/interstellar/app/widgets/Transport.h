@@ -36,11 +36,14 @@ namespace interstellar_v1
         double displayedTime() const { return mShown.value(); }
         double playAmount() const { return mPlayAmt.value(); }   // 0 = play glyph, 1 = pause glyph
         bool scrubbing() const { return mScrubbing; }
-        artboard::Rect buttonRect(int i) const;   // 0 prev-cut, 1 play/pause, 2 next-cut
+        artboard::Rect buttonRect(int i) const;   // 0 prev-cut, 1 play/pause, 2 next-cut, 3 capture
         artboard::Rect scrubRect() const;         // the track's hit band
         double timeToX(double t) const;
 
         std::function<void(const std::string &line)> onCommand;
+        /** The capture button beside "next" (R-UI-11): the screen opens Copy / Save under it. The
+         *  rect is in WORLD coordinates. */
+        std::function<void(artboard::Rect)> onCapture;
 
         void advance(double nowMs) override;
 

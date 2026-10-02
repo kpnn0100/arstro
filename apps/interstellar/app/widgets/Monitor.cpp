@@ -63,8 +63,31 @@ namespace interstellar_v1
         return Rect{kInset + (W - fw) * 0.5, kInset + (H - fh) * 0.5, fw, fh};
     }
 
+    bool Monitor::hitTestSelf(const Point &p) const { return mCaptureRect.w > 0 && mCaptureRect.contains(p); }
+
+    bool Monitor::handleGesture(const Gesture &g, const Point &local)
+    {
+        if (g.type == Gesture::Type::Move) { mCaptureHover.setHovered(mCaptureRect.contains(local) ? 0 : -1); return true; }
+        if (g.type == Gesture::Type::Click && mCaptureRect.contains(local))
+        {
+            const Point o = worldTransform().apply(Point{mCaptureRect.x, mCaptureRect.y});
+            if (onCapture) onCapture(Rect{o.x, o.y, mCaptureRect.w, mCaptureRect.h});
+            return true;
+        }
+        return Segment::handleGesture(g, local);
+    }
+
     void Monitor::advance(double nowMs)
     {
+        if (!mCaptureInit) { mCaptureAmt.set(mCaptureWanted ? 1.0 : 0.0); mCaptureApplied = mCaptureWanted; mCaptureInit = true; }
+        if (mCaptureWanted != mCaptureApplied)
+        {
+            mCaptureAmt.animateTo(mCaptureWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mCaptureApplied = mCaptureWanted;
+        }
+        mCaptureAmt.update(nowMs);
+        if (!isHovered()) mCaptureHover.clear();
+        mCaptureHover.advance(nowMs);
         mPhaseMs = nowMs;
         if (!mStateInit)
         {
@@ -180,9 +203,10 @@ namespace interstellar_v1
             t.setFill(palette::foreground());
             t.drawText(mTimecode, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::mono());
         }
+        double capLeft = w - kInset - 6.0;
         if (!mCaption.empty())
         {
-            const std::string cap = textfit::ellipsize(t, mCaption, std::max(0.0, w * 0.5 - 24.0), kChipPx, font::sans());
+            const std::string cap = textfit::ellipsize(t, mCaption, std::max(0.0, w * 0.5 - 48.0), kChipPx, font::sans());
             const double tw = t.measureText(cap, kChipPx, font::sans());
             if (!cap.empty())
             {
@@ -190,7 +214,19 @@ namespace interstellar_v1
                 drawRoundedRect(t, chip, radius::control(), Paint::filled(surface::scrim(0.72)));
                 t.setFill(palette::mutedForeground());
                 t.drawText(cap, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::sans());
+                capLeft = chip.x - 4.0;
             }
+        }
+        // The capture button, left of the caption (Grade — R-UI-11). Fades with its intent.
+        const double ca = mCaptureAmt.value();
+        mCaptureRect = Rect{0, 0, 0, 0};
+        if (ca > 0.001)
+        {
+            const Rect b{capLeft - 18.0, kInset + 6.0, 18.0, 18.0};
+            const double hv = mCaptureHover.amount(0);
+            drawRoundedRect(t, b, radius::control(), Paint::filled(lerpColor(surface::scrim(0.72), palette::whiteAlpha(0.18), hv * 0.6)));
+            glyph::camera(t, Rect{b.x + 3.5, b.y + 3.5, b.w - 7.0, b.h - 7.0}, fade(lerpColor(palette::mutedForeground(), palette::white(), hv), ca));
+            if (ca > 0.5) mCaptureRect = b;
         }
     }
 }

@@ -65,6 +65,7 @@ namespace interstellar_v1
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
+        mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
         mEdit->contextMenu()->onRename = [this](const std::string &typed) {
             const std::string name = cmd::bindName(typed);
             if (!name.empty() && !mRenameTarget.empty() && name != mRenameTarget)
@@ -329,6 +330,39 @@ namespace interstellar_v1
                  cmd::seconds(m.playhead, m.fps > 0 ? m.fps : 24.0));
     }
 
+    void App::frameSavePicked(const std::string &path)
+    {
+        if (path.empty()) return;
+        dispatch("capture --out " + cmd::quote(path) + (mCaptureBind.empty() ? std::string() : " --source " + cmd::quote(mCaptureBind)));
+    }
+
+    /** What the capture button captures: the Grade target alone in Grade (what its monitor shows),
+     *  the timeline at the playhead elsewhere — "" (R-UI-11). */
+    std::string App::captureBind() const
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (mEdit->tab() != EditScreen::Grade || m.selectedRack < 0 || m.selectedRack >= (int)m.rack.size()) return std::string();
+        const auto &n = m.rack[(size_t)m.selectedRack];
+        return n.group || n.failed ? std::string() : n.bindName;
+    }
+
+    /** The capture button's menu (R-UI-11): cosmo's ContextMenu under the button — Copy Frame puts
+     *  the full-resolution frame on the clipboard through the host, Save Frame… asks for a path. */
+    void App::openCaptureMenu(Rect at)
+    {
+        mCaptureBind = captureBind();
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (mHooks.copyFrame)
+            items.push_back({"Copy Frame", [this] {
+                std::string err;
+                if (!mHooks.copyFrame(mCaptureBind, err)) mEdit->showRefusal(err.empty() ? "Could not copy the frame" : err);
+                else mEdit->showNotice("Frame copied to the clipboard");
+            }});
+        items.push_back({"Save Frame...", [this] { if (onPickFrameToSave) onPickFrameToSave(); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+        noteActivity();
+    }
+
     void App::requestHome()
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
@@ -496,6 +530,19 @@ namespace interstellar_v1
         auto mon = mEdit->monitor();
         const int edge = mon->wantedProxyEdge();
         mon->setProxyEdge(edge);
+        // Grade has no transport and no playhead (R-UI-3, amended): the monitor shows the Grade
+        // target ALONE, graded, at its reference frame — or at the ref-frame slider's time while it
+        // is dragged (R-RACK-3). A group or no target falls through to the timeline at the playhead.
+        if (mEdit->tab() == EditScreen::Grade && mHooks.renderSource && m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size())
+        {
+            const auto &n = m.rack[(size_t)m.selectedRack];
+            if (!n.group && !n.failed && !n.bindName.empty())
+            {
+                fetchSource(m, n, edge, force);
+                return;
+            }
+        }
+        mFetchedBind.clear();
         mon->setTimecode(cmd::timecode(m.playhead, m.fps));
         std::string cap;
         for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) cap = tl.name.empty() ? tl.id : tl.name;
@@ -515,7 +562,7 @@ namespace interstellar_v1
         if (!clipHere && !m.hasGradeTarget) { mon->setState(Monitor::State::Empty); return; }
 
         const bool changed = force || m.frameSeq != mFetchedSeq || edge != mFetchedEdge || m.currentTimeline != mFetchedTimeline ||
-                             std::fabs(m.playhead - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision;
+                             std::fabs(m.playhead - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision || mFetchedSource;
         if (!changed) return;
         const bool samePlace = std::fabs(m.playhead - mFetchedAt) <= 1e-9;
         const bool scrubbing = mEdit->transport()->scrubbing() || mEdit->timeline()->dragging();
@@ -524,6 +571,7 @@ namespace interstellar_v1
         mFetchedAt = m.playhead;
         mFetchedTimeline = m.currentTimeline;
         mFetchedRevision = m.revision;
+        mFetchedSource = false;
         if (!mHooks.renderFrame || !mHooks.renderFrame(m.playhead, edge, mFrame) || mFrame.empty())
         {
             mon->setState(Monitor::State::Loading);   // a clip is there; its pixels are not (yet)
@@ -532,6 +580,43 @@ namespace interstellar_v1
         // a new picture at the SAME time is a content change (a grade, a version) and dissolves;
         // a new time is the video moving, which is its own animation (gotcha 10)
         mon->setFrame(mFrame, samePlace && !m.playing && !scrubbing);
+        mon->setState(Monitor::State::Frame);
+        mEdit->gradeInspector()->setHistogram(histogramOf(mFrame));
+    }
+
+    /** The Grade monitor: one source, graded, at its reference frame or the slider's preview. */
+    void App::fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force)
+    {
+        auto mon = mEdit->monitor();
+        const bool previewing = mPreviewAt >= 0.0 && mPreviewBind == n.bindName;
+        const double at = previewing ? mPreviewAt : n.frame;
+        const double fps = n.mediaFps > 0 ? n.mediaFps : m.fps;
+        mon->setTimecode(cmd::timecode(at, fps));
+        std::string cap = n.bindName;
+        if (n.video) cap += std::string("  \xC2\xB7  ") + (previewing ? "seek " : "ref ") + cmd::timecode(at, fps);
+        if (m.sourceWidth > 0 && m.sourceHeight > 0)
+            cap += "  \xC2\xB7  " + std::to_string(m.sourceWidth) + "\xC3\x97" + std::to_string(m.sourceHeight);
+        mon->setCaption(cap);
+
+        const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge ||
+                             n.bindName != mFetchedBind || std::fabs(at - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision;
+        if (!changed) return;
+        const bool samePlace = n.bindName == mFetchedBind && std::fabs(at - mFetchedAt) <= 1e-9;
+        mFetchedSource = true;
+        mFetchedSeq = m.frameSeq;
+        mFetchedEdge = edge;
+        mFetchedAt = at;
+        mFetchedBind = n.bindName;
+        mFetchedRevision = m.revision;
+        // previewing asks for the time itself; at rest, t < 0 = "its reference frame" (the service's
+        // own value, so a commit and the model never race)
+        if (!mHooks.renderSource(n.bindName, previewing ? at : -1.0, edge, mFrame) || mFrame.empty())
+        {
+            if (!samePlace || mon->state() != Monitor::State::Frame) mon->setState(Monitor::State::Loading);
+            return;
+        }
+        // a grade change on the same frame dissolves; a seek is the picture moving (gotcha 10)
+        mon->setFrame(mFrame, samePlace && !previewing);
         mon->setState(Monitor::State::Frame);
         mEdit->gradeInspector()->setHistogram(histogramOf(mFrame));
     }

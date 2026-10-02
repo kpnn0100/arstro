@@ -422,6 +422,7 @@ namespace
     {
         std::printf("transport, deliver\n");
         Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.app->setTab(1);   // the transport is Cut's and Deliver's; Grade has none (R-UI-3, amended)
         r.settle();
         auto tp = r.app->edit().transport();
         Point p = centre(*tp, tp->buttonRect(1));
@@ -550,7 +551,8 @@ namespace
             const Rect before = worldRect(*r.app->edit().monitor());
             r.settle();
             const Rect after = worldRect(*r.app->edit().monitor());
-            CHECK(near(before.x, after.x) && near(before.y, after.y) && near(before.w, after.w) && near(before.h, after.h), "the monitor did not move across the tab switch");
+            CHECK(near(before.x, after.x) && near(before.y, after.y) && near(before.w, after.w), "the monitor did not move across the tab switch");
+            CHECK(after.h < before.h - 1.0, "…only its height eased, giving the transport room in Cut (R-UI-3, amended)");
         }
         {
             Rig r(1024, 640, [](FakeService &s) { s.edit(); });
@@ -702,7 +704,9 @@ namespace
                 r.app->setTab(tab);
                 r.settle();
                 auto &e = r.app->edit();
-                std::vector<Rect> parts = {worldRect(*e.topBar()), worldRect(*e.monitor()), worldRect(*e.transport())};
+                std::vector<Rect> parts = {worldRect(*e.topBar()), worldRect(*e.monitor())};
+                if (e.transport()->visible) parts.push_back(worldRect(*e.transport()));   // culled in Grade
+                CHECK((tab == 0) != e.transport()->visible, tab == 0 ? "Grade has no transport (culled at rest)" : "Cut and Deliver keep the transport");
                 for (auto &c : e.page(tab)->children()) parts.push_back(worldRect(*c));
                 bool contained = true, separate = true;
                 for (size_t i = 0; i < parts.size(); ++i)
@@ -779,6 +783,7 @@ namespace
         FakeService svc;
         svc.edit();
         App app(svc.hooks(), 1024, 640);
+        app.setTab(1);   // the playhead drives the monitor in Cut; Grade shows the ref frame (R-UI-3)
         cairo_surface_t *surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1024, 640);
         cairo_t *cr = cairo_create(surf);
         CountingTarget t;
@@ -1006,6 +1011,9 @@ namespace
             // Nothing cut at the playhead + a Grade target: the monitor asks for the reference frame.
             Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.playhead = 15.4; s.m.clips.erase(s.m.clips.begin() + 4); });
             r.settle();
+            CHECK(!r.svc.sourceCalls.empty(), "in Grade the monitor shows the target itself, playhead or not (R-UI-3)");
+            r.app->setTab(1);
+            r.settle();
             const int before = r.svc.frames;
             r.svc.m.playhead = 15.5;
             ++r.svc.m.revision;
@@ -1074,6 +1082,83 @@ namespace
         const double first = firstMoved(r, [&] { return rt->weightTipAmount(2); }, 0.0);
         CHECK(strictlyBetween(first, 0.0, 1.0), "hovering the weight bar cross-fades in its caption (\"weight N%\")");
     }
+
+    /** R-UI-3 (amended), R-UI-11: Grade drops the transport and its monitor shows the Grade target
+     *  alone at its reference frame; the capture button (monitor caption in Grade, beside ▶▶ on the
+     *  transport) opens Copy Frame / Save Frame…. */
+    void testCaptureAndGradeMonitor()
+    {
+        std::printf("grade without a transport, the capture button\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto &e = r.app->edit();
+        auto mon = e.monitor();
+        CHECK(e.transportAmount() < 1e-9 && !e.transport()->visible, "Grade at rest: no transport");
+        const double gradeMonH = mon->height.value();
+        // the monitor shows the Grade target ALONE, at its reference frame (t < 0 = "its own")
+        bool asked = false;
+        for (const auto &c : r.svc.sourceCalls) asked = asked || (c.first == "s_day01" && c.second < 0);
+        CHECK(asked, "the Grade monitor asked renderSource for the target at its reference frame");
+        std::printf("      caption: %s\n", mon->caption().c_str());
+        CHECK(mon->caption().find("s_day01") != std::string::npos && mon->caption().find("ref 00:00:02:12") != std::string::npos,
+              "its caption names the source and the reference frame's timecode (2.5 s at the source's 24 fps)");
+        // Grade → Cut: the transport eases in and the monitor gives up its room through the LIVE value
+        r.app->setTab(1);
+        const double fa = firstMoved(r, [&] { return e.transportAmount(); }, 0.0);
+        CHECK(strictlyBetween(fa, 0.0, 1.0), "the transport EASES in leaving Grade (first frame between)");
+        r.frame();   // the app lays out before it advances: geometry reads the amount one frame on
+        CHECK(strictlyBetween(mon->height.value(), gradeMonH - shell::transportH(), gradeMonH),
+              "…and the monitor's height follows the live amount, not the target");
+        r.settle();
+        CHECK(std::fabs(mon->height.value() - (gradeMonH - shell::transportH())) < 0.5 && e.transport()->visible,
+              "Cut at rest: the transport is back under a shorter monitor");
+        CHECK(mon->captureAmount() < 1e-9, "the monitor's own capture button is Grade's only");
+
+        // the transport's capture button, beside ▶▶ → the menu; Copy Frame copies the TIMELINE ("")
+        auto tp = e.transport();
+        const Rect b2 = tp->buttonRect(2), b3 = tp->buttonRect(3);
+        CHECK(b3.x > b2.right() - 0.5 && std::fabs(b3.y - b2.y) < 0.5, "the capture button sits next to ▶▶ (next cut)");
+        Point p = centre(*tp, b3);
+        r.click(p.x, p.y);
+        r.pump(250);
+        auto cm = e.contextMenu();
+        CHECK(cm->isOpen() && cm->itemCount() == 2 && cm->item(0).label == "Copy Frame" && cm->item(1).label == "Save Frame...",
+              "clicking it opens Copy Frame / Save Frame…");
+        Point ip = centre(*cm, cm->itemRect(0));
+        r.click(ip.x, ip.y);
+        r.pump(64);
+        CHECK(r.svc.copies.size() == 1 && r.svc.copies[0].empty(), "Copy Frame in Cut copies the timeline at the playhead");
+        CHECK(e.toastAmount() > 0.0 && !e.toastIsError(), "…and says so, without the refusal's red");
+
+        // back in Grade: the caption's capture button fades in; Save Frame… names the source
+        r.app->setTab(0);
+        const double fc = firstMoved(r, [&] { return mon->captureAmount(); }, 0.0);
+        CHECK(strictlyBetween(fc, 0.0, 1.0), "the monitor's capture button FADES in on Grade");
+        r.settle();
+        bool picked = false;
+        r.app->onPickFrameToSave = [&] { picked = true; };
+        const Rect cr = mon->captureRect();
+        CHECK(cr.w > 0 && cr.h > 0, "Grade at rest: the capture button is on the monitor caption");
+        p = centre(*mon, cr);
+        r.click(p.x, p.y);
+        r.pump(250);
+        CHECK(cm->isOpen(), "the caption's capture button opens the same menu");
+        ip = centre(*cm, cm->itemRect(1));
+        r.click(ip.x, ip.y);
+        r.pump(64);
+        CHECK(picked, "Save Frame… asks the host for a path");
+        r.app->frameSavePicked("/shots/frame one.png");
+        CHECK(hasLine(r.svc, "capture --out \"/shots/frame one.png\" --source s_day01"),
+              "…and the answer dispatches capture --out <path> --source <the Grade target>");
+        // Copy fails → the refusal, in red
+        r.svc.copyFails = true;
+        r.click(p.x, p.y);
+        r.pump(250);
+        ip = centre(*cm, cm->itemRect(0));
+        r.click(ip.x, ip.y);
+        r.pump(64);
+        CHECK(e.toastIsError(), "a failed copy is SAID, as a refusal");
+    }
 }
 
 int main()
@@ -1095,6 +1180,7 @@ int main()
     testScroll();
     testMenusSettingsScale();
     testSelectionAndContext();
+    testCaptureAndGradeMonitor();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

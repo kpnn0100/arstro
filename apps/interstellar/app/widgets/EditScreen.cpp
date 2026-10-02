@@ -21,8 +21,10 @@ namespace interstellar_v1
         // the monitor + transport: siblings of the pages, never inside one (R-UI-3)
         mMonitor = std::make_shared<Monitor>();
         addChild(mMonitor);
+        mMonitor->onCapture = [this](Rect r) { if (onCapture) onCapture(r); };
         mTransport = std::make_shared<Transport>();
         mTransport->onCommand = [this](const std::string &l) { emit(l); };
+        mTransport->onCapture = [this](Rect r) { if (onCapture) onCapture(r); };
         addChild(mTransport);
 
         for (int i = 0; i < 3; ++i)
@@ -103,6 +105,8 @@ namespace interstellar_v1
         for (int i = 0; i < 3; ++i) mPages[i]->setShown(i == tab);
         mTopBar->tabs()->setSelected(tab);
         mTopBar->versions()->close();
+        mTransportTarget = tab == Grade ? 0.0 : 1.0;   // the tween starts in advance (a setter has no clock)
+        mMonitor->setCaptureShown(tab == Grade);
     }
 
     void EditScreen::bind(const interstellar::AppModel &m, bool interacting, double nowMs)
@@ -137,9 +141,14 @@ namespace interstellar_v1
 
         // the flexible column last, from what the fixed ones left (design rule §4.6)
         const double monW = std::max(0.0, W - lw - rw);
-        const double monH = std::max(0.0, colH - shell::transportH());
+        // Grade has no transport (R-UI-3, amended): the monitor takes its room, through the live
+        // eased amount so the seam never tears.
+        const double ta = mTransportAmt.value();
+        const double monH = std::max(0.0, colH - shell::transportH() * ta);
         mMonitor->x.set(lw); mMonitor->y.set(top); mMonitor->width.set(monW); mMonitor->height.set(monH);
         mTransport->x.set(lw); mTransport->y.set(top + monH); mTransport->width.set(monW); mTransport->height.set(shell::transportH());
+        mTransport->opacity.set(ta);
+        mTransport->visible = ta > 0.001;   // culled: hidden widgets take no input
 
         for (int i = 0; i < 3; ++i)
         {
@@ -169,6 +178,14 @@ namespace interstellar_v1
     void EditScreen::showRefusal(const std::string &message)
     {
         mToast = message;
+        mToastError = true;
+        mToastPending = true;
+    }
+
+    void EditScreen::showNotice(const std::string &message)
+    {
+        mToast = message;
+        mToastError = false;
         mToastPending = true;
     }
 
@@ -188,6 +205,14 @@ namespace interstellar_v1
             mToastClosing = true;
         }
         mToastAmt.update(nowMs);
+        const double tt = mTab == Grade ? 0.0 : 1.0;
+        if (!mTransportInit) { mTransportAmt.set(tt); mTransportTarget = mTransportApplied = tt; mTransportInit = true; mMonitor->setCaptureShown(mTab == Grade); }
+        else if (mTransportApplied != mTransportTarget)
+        {
+            mTransportApplied = mTransportTarget;
+            mTransportAmt.animateTo(mTransportTarget, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+        }
+        mTransportAmt.update(nowMs);
         Segment::advance(nowMs);
     }
 
@@ -200,16 +225,18 @@ namespace interstellar_v1
     {
         const double a = mToastAmt.value();
         if (a <= 0.001 || mToast.empty()) return;
-        // the refused/error state, said in words over the monitor, never silently dropped
+        // the refused/error state, said in words over the monitor, never silently dropped — or,
+        // without the red, a notice that an action finished
         const Rect mon{mMonitor->x.value(), mMonitor->y.value(), mMonitor->width.value(), mMonitor->height.value()};
         const std::string msg = textfit::ellipsize(t, mToast, std::max(0.0, mon.w - 80.0), 11.0, font::sans());
         const double tw = t.measureText(msg, 11.0, font::sans());
         const Rect chip{mon.x + (mon.w - tw - 40.0) * 0.5, mon.bottom() - 44.0 + 6.0 * (1.0 - a), tw + 40.0, 28.0};
         Color bg = palette::popover(); bg.a *= a;
-        Color bd = palette::destructive(); bd.a *= 0.8 * a;
+        Color bd = mToastError ? palette::destructive() : palette::border(); bd.a *= (mToastError ? 0.8 : 1.0) * a;
         drawRoundedRect(t, chip, radius::control(), Paint::filledStroked(bg, bd, 1.0));
-        Color ic = palette::destructive(); ic.a *= a;
-        glyph::warn(t, Rect{chip.x + 12.0, chip.y + 8.5, 11.0, 11.0}, ic);
+        Color ic = mToastError ? palette::destructive() : palette::success(); ic.a *= a;
+        if (mToastError) glyph::warn(t, Rect{chip.x + 12.0, chip.y + 8.5, 11.0, 11.0}, ic);
+        else glyph::check(t, Rect{chip.x + 12.0, chip.y + 8.5, 11.0, 11.0}, ic);
         Color fc = palette::foreground(); fc.a *= a;
         t.setFill(fc);
         t.drawText(msg, chip.x + 30.0, textfit::baseline(chip.y + chip.h * 0.5, 11.0), 11.0, font::sans());

@@ -648,7 +648,7 @@ int main()
         f.must("set a.basic.exposure=0.5");
         f.must("rack select a");
         for (const auto &r : f.svc->model().rack)
-            if (r.bindName == "a") assert(std::fabs(r.mediaDuration - 4.0) < 1e-9);   // 96 frames / 24
+            if (r.bindName == "a") { assert(std::fabs(r.mediaDuration - 4.0) < 1e-9); assert(std::fabs(r.mediaFps - 24.0) < 1e-9); }   // 96 frames / 24
         // The slider's live preview: a source at ANY time, graded — FakeFrameSource's R is the frame.
         Raster p0, p1;
         assert(f.svc->renderSourceFrame("a", 1.5, 0, p0) && p0.width == 48);

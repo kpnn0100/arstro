@@ -65,6 +65,10 @@ namespace interstellar_v1
         void saveAsPicked(const std::string &path);          // → project save <path>
         void presetImportPicked(const std::string &path);    // → preset import <path>
         void stillExportPicked(const std::string &path);     // → export-still of the open timeline at the playhead
+        /** The capture button's "Save Frame…" (R-UI-11): the host asks for a .png and answers here,
+         *  which becomes `capture --out <path> [--source <bind>]`. */
+        std::function<void()> onPickFrameToSave;
+        void frameSavePicked(const std::string &path);
         /** Ask to go Home: `project close`, behind cosmo's ConfirmDialog when there are unsaved edits. */
         void requestHome();
 
@@ -114,8 +118,12 @@ namespace interstellar_v1
         std::string selectedBind() const;
         bool editKey(const artboard::KeyEvent &e);
         void openRackContext(int rackIndex, artboard::Point at);
+        void openCaptureMenu(artboard::Rect at);
+        std::string captureBind() const;
+        std::string mCaptureBind;                       // what the open capture menu captures ("" = the timeline)
         std::string mRenameTarget;                      // the bind name the context menu is renaming
         void fetchFrame(const interstellar::AppModel &m, bool force);
+        void fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force);
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
         bool textEditing() const;
@@ -148,6 +156,12 @@ namespace interstellar_v1
         double mFetchedAt = -1.0;
         std::string mFetchedTimeline;
         unsigned mFetchedRevision = ~0u;
+        bool mFetchedSource = false;                    // the monitor shows one source (Grade), not the timeline
+        std::string mFetchedBind;
+        // the ref-frame slider's live preview (R-RACK-3): the source and the time it is dragged to;
+        // mPreviewAt < 0 = not previewing (the monitor shows the committed reference frame)
+        std::string mPreviewBind;
+        double mPreviewAt = -1.0;
         interstellar::Raster mFrame;
     };
 }

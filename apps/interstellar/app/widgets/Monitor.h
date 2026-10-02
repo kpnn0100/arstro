@@ -21,6 +21,8 @@
 #pragma once
 #include "../Theme.h"
 #include "../../core/Raster.h"
+#include "../../../cosmo/widgets/HoverFade.h"
+#include <functional>
 #include <string>
 
 namespace arstro
@@ -40,7 +42,15 @@ namespace interstellar_v1
         State state() const { return mState; }
         void setTimecode(const std::string &tc) { mTimecode = tc; }
         void setCaption(const std::string &c) { mCaption = c; }
+        const std::string &caption() const { return mCaption; }
         void setProxyEdge(int edge) { mProxyEdge = edge; }
+        /** Grade has no transport (R-UI-3), so the capture button sits on the caption there
+         *  (R-UI-11). Intent only — it fades. */
+        void setCaptureShown(bool on) { mCaptureWanted = on; }
+        double captureAmount() const { return mCaptureAmt.value(); }
+        /** Where the caption's capture button was last painted (local); empty when hidden. */
+        artboard::Rect captureRect() const { return mCaptureRect; }
+        std::function<void(artboard::Rect world)> onCapture;
 
         /** The long-edge proxy size this monitor would ask for, from its drawn size. */
         int wantedProxyEdge() const;
@@ -57,6 +67,8 @@ namespace interstellar_v1
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        bool hitTestSelf(const artboard::Point &p) const override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
 
     private:
         void syncImages(artboard::IRenderTarget &t) const;
@@ -77,6 +89,10 @@ namespace interstellar_v1
         bool mDissolveWanted = false;
         artboard::AnimatedProperty mDissolve{1.0};   // 1 = current fully shown
         double mPhaseMs = 0.0;                       // the decoding spinner's clock
+        bool mCaptureWanted = false, mCaptureApplied = false, mCaptureInit = false;
+        artboard::AnimatedProperty mCaptureAmt{0.0};
+        cosmo_v2::HoverFade mCaptureHover;
+        mutable artboard::Rect mCaptureRect{0, 0, 0, 0};
     };
 }
 }

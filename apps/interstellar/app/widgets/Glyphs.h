@@ -126,6 +126,45 @@ namespace glyph
         t.strokePath();
     }
 
+    /** A camera body with a lens — "capture this frame" (R-UI-11). */
+    inline void camera(IRenderTarget &t, const Rect &b, const Color &c, double sw = 1.2)
+    {
+        const double x = b.x, y = b.y + b.h * 0.22, w = b.w, h = b.h * 0.66;
+        t.setStroke(c, sw);
+        t.beginPath();
+        t.moveTo(x + w * 0.08, y + h * 0.18);
+        t.lineTo(x + w * 0.30, y + h * 0.18);
+        t.lineTo(x + w * 0.38, y);
+        t.lineTo(x + w * 0.62, y);
+        t.lineTo(x + w * 0.70, y + h * 0.18);
+        t.lineTo(x + w * 0.92, y + h * 0.18);
+        t.lineTo(x + w * 0.92, y + h);
+        t.lineTo(x + w * 0.08, y + h);
+        t.closePath();
+        t.strokePath();
+        // the lens: a circle as four cubics (k = 0.5523 — the standard quarter-circle handle)
+        const double cx = x + w * 0.5, cy = y + h * 0.58, r = std::min(w, h) * 0.24, k = 0.5523 * r;
+        t.beginPath();
+        t.moveTo(cx + r, cy);
+        t.cubicTo(cx + r, cy + k, cx + k, cy + r, cx, cy + r);
+        t.cubicTo(cx - k, cy + r, cx - r, cy + k, cx - r, cy);
+        t.cubicTo(cx - r, cy - k, cx - k, cy - r, cx, cy - r);
+        t.cubicTo(cx + k, cy - r, cx + r, cy - k, cx + r, cy);
+        t.closePath();
+        t.strokePath();
+    }
+
+    /** ✓ — a finished, successful action (the notice chip). */
+    inline void check(IRenderTarget &t, const Rect &b, const Color &c, double sw = 1.3)
+    {
+        t.setStroke(c, sw);
+        t.beginPath();
+        t.moveTo(b.x + b.w * 0.12, b.y + b.h * 0.55);
+        t.lineTo(b.x + b.w * 0.40, b.y + b.h * 0.82);
+        t.lineTo(b.x + b.w * 0.90, b.y + b.h * 0.22);
+        t.strokePath();
+    }
+
     inline void plus(IRenderTarget &t, const Rect &b, const Color &c, double sw = 1.3)
     {
         const double cx = b.x + b.w * 0.5, cy = b.y + b.h * 0.5, r = b.w * 0.36;

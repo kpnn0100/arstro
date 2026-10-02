@@ -85,6 +85,23 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - The weight bar names itself on hover: "weight 80%" cross-fades over the bind name.
 - Shots added: `grade_multiselect`, `grade_context_menu`, `grade_weight_caption`. UI checks: 158.
 
+## Grade has no transport; the capture button (2026-10-02, R-UI-3 amended / R-UI-11)
+
+- Grade's monitor shows the Grade target ALONE, graded, at its reference frame — through the optional
+  hook `AppHooks::renderSource(bind, t, edge, out)` (`t < 0` = its own reference frame; the host binds
+  it to `InterstellarService::renderSourceFrame`). Without the hook, or with a group/no target, the
+  monitor falls back to the timeline at the playhead. The caption reads `<bind> · ref <timecode>` at
+  the source's own rate (`rack[].mediaFps`).
+- The transport eases out on Grade and in on Cut/Deliver (`EditScreen::transportAmount()`, one
+  180 ms value); the monitor's height is laid out from the same live value.
+- Capture: the transport's 4th button (beside ▶▶) and, in Grade, an 18 px button left of the monitor
+  caption (fades with Grade) open cosmo's `ContextMenu`: **Copy Frame** (only if the host binds the
+  optional `AppHooks::copyFrame(bind, err)`; GTK puts a `GdkPixbuf` on the CLIPBOARD selection) and
+  **Save Frame…** (`App::onPickFrameToSave` → host dialog → `App::frameSavePicked(path)` →
+  `capture --out <path> [--source <Grade target>]`). A good copy says so in the toast chip with a ✓
+  (`EditScreen::showNotice`); a failed one is a refusal.
+- Shots added: `grade_capture_menu`, `cut_capture_menu`, `grade_frame_copied`. UI checks: 183.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -164,6 +181,7 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | version chrome ‹ / › / a row | `timeline open <tl>` |
 | version actions | `timeline new <name> --base <current>` (via NamePrompt), `timeline pin|unpin <tl>`, `timeline freeze|thaw <tl>`, `timeline rebase <tl>` (Pin/Freeze/Rebase disabled on a root) |
 | transport | `play`, `pause`, `playhead prev-cut`, `playhead next-cut`, scrub: `playhead <t>` per frame crossed |
+| capture button (transport, or Grade's monitor caption) → Save Frame… (via host picker) | `capture --out <path.png> [--source <Grade target>]`; Copy Frame goes through the `copyFrame` hook, not a line |
 | timeline clip click | `clip select <clip>` |
 | timeline clip drag | `clip move <clip> --at <snapped t> [--track <trk>]` |
 | timeline edge drag | `clip trim <clip> --in <t>` / `--out <t>` (source time) |
@@ -262,7 +280,9 @@ arguments containing whitespace or quotes are double-quoted with `\"` escapes.
 | `cut_zoom_mid` | mid-zoom px/s; labels ride the visible part of clips (fixed after first look: clips starting off-screen had lost their names) |
 | `cut_empty` | "drag a source here", lanes greyed, source bin lit with the accent outline |
 | `deliver_populated`, `deliver_empty` | checks list; timeline radio picker (editing tag), dangling note, cosmo SegmentedControl in purple-pink, path, Render; queue rows **name their timeline**, done/running/queued/failed; "nothing queued" |
-| `tab_grade_to_cut_mid` | highlight between Grade and Cut, both pages half-faded, monitor unchanged |
+| `tab_grade_to_cut_mid` | highlight between Grade and Cut, both pages half-faded; the transport half slid in and faded, the monitor half-way to its Cut height, the caption's capture glyph half-faded |
+| `grade_capture_menu`, `cut_capture_menu` | Copy Frame / Save Frame… under the caption's camera (Grade, no transport, monitor full height) and under the transport's camera beside ▶▶ (Cut) |
+| `grade_frame_copied` | "Frame copied to the clipboard" chip with a green ✓ and a neutral border — not the refusal's red |
 
 ## Test output
 

@@ -238,6 +238,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].overridden` | bool |  | The current version carries a colour override on it. |
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
+| `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
 | `hasGradeTarget` | bool |  | gradeParams/gradeOwnParams are meaningful. |
 | `gradeParams` | object |  | The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys. |
