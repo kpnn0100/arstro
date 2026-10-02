@@ -555,3 +555,18 @@ right-click (`app/widgets/SourceBin.cpp:72`). The variant starts at the rack's t
 "move into a group" (D-8). Guarded by L2 `a variant shares its file, is its own object, and is
 selected once made` (the file's open count does not move when the variant renders; red with the
 selection step removed) and UI `testVariants`; shots `grade_variant`, `cut_variant_menu`.
+
+### DR-UI-13 The monitor zooms like Cosmo, eased and anchored (R-UI-13)
+`Monitor` (`app/widgets/Monitor.cpp:68` `centreFor`, `:93` `zoomAbout`, `:130` the wheel, `:207` the
+tween) keeps a target zoom (1×–8×) and an eased live zoom (220 ms). Ctrl + wheel calls
+`zoomAbout(1.15^notches, pointer)` (cosmo's notch), which records the picture point under the
+pointer; the view centre is RE-DERIVED every frame from the live zoom about that anchor
+(`centreFor`) and clamped so the picture covers the frame, so the point stays under the pointer
+through the tween. A plain wheel bubbles (cosmo does nothing there). While zoomed a drag pans
+(direct manipulation; the anchor lets go); a double-click — or Workspace › Reset Workspace — eases
+back to fit about the view's centre. The picture is drawn at `imageRect()` clipped to the 1× frame;
+a mono chip names the magnification, its alpha derived from the live zoom. `wantedProxyEdge()`
+scales with the TARGET zoom (one request per level, a 7680 bucket added); the service's preview
+cap still bounds it (R-SET-3). Guarded by `testMonitorZoom` (`the zoom EASES`, `…the picture point
+under the pointer stays under it`, `a drag pans…`, `…clamped`, `…eases back`); mutants (zoom set
+instead of eased; anchor ignored) went red. Shots `grade_monitor_zoom`, `grade_monitor_zoom_mid`.

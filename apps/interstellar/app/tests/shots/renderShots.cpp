@@ -238,6 +238,15 @@ namespace
             r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
             r.settle();
         }});
+        // the monitor zoom (R-UI-13): Ctrl + wheel about a point off-centre, at rest and mid-tween
+        auto zoomAt = [](Rig &r) {
+            auto mon = r.app->edit().monitor();
+            const Rect fr = mon->frameRect();
+            const Point p = world(*mon, fr.x + fr.w * 0.62, fr.y + fr.h * 0.42);
+            r.app->wheel(p.x, p.y, 8.0, true);
+        };
+        v.push_back({"grade_monitor_zoom", edit, [zoomAt](Rig &r) { r.settle(); zoomAt(r); r.settle(); }});
+        v.push_back({"grade_monitor_zoom_mid", edit, [zoomAt](Rig &r) { r.settle(); zoomAt(r); r.pump(64); }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

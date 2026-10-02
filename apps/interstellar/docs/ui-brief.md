@@ -65,6 +65,9 @@ being graded, as in cosmo — captioned `<bind> · ref <timecode>`. The transpor
 (⌷, a camera, beside ▶▶) **captures the frame** — Copy Frame / Save Frame… (R-UI-11); in Grade the
 same button sits left of the monitor caption.
 
+**Ctrl + wheel zooms the monitor** about the pointer, as cosmo's photo stage does (R-UI-13): eased,
+drag to pan, double-click to fit, a chip naming the magnification.
+
 **Cosmo's menu bar sits after the wordmark** — File · Edit · Settings · Workspace · Preset (R-UI-7);
 Engine Settings is cosmo's own dialog; the whole shell draws through cosmo's screen scale (R-UI-8).
 

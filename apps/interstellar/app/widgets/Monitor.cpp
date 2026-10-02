@@ -45,12 +45,14 @@ namespace interstellar_v1
 
     int Monitor::wantedProxyEdge() const
     {
-        const double edge = std::max(width.value(), height.value());
+        // the TARGET zoom, so a zoom asks once for the level it is going to, not every frame
+        const double edge = std::max(width.value(), height.value()) * std::max(1.0, mZoomTarget);
         if (edge <= 640.0) return 640;
         if (edge <= 960.0) return 960;
         if (edge <= 1280.0) return 1280;
         if (edge <= 1920.0) return 1920;
-        return 3840;
+        if (edge <= 3840.0) return 3840;
+        return 7680;
     }
 
     Rect Monitor::frameRect() const
@@ -63,16 +65,107 @@ namespace interstellar_v1
         return Rect{kInset + (W - fw) * 0.5, kInset + (H - fh) * 0.5, fw, fh};
     }
 
-    bool Monitor::hitTestSelf(const Point &p) const { return mCaptureRect.w > 0 && mCaptureRect.contains(p); }
+    Point Monitor::centreFor(double z) const
+    {
+        const Rect fr = frameRect();
+        Point c = mCentre;
+        if (mAnchored && fr.w > 0 && fr.h > 0)
+        {
+            // keep picture point mAnchorU under mAnchorAt at THIS zoom
+            c.x = (fr.x + fr.w * 0.5 - mAnchorAt.x) / (fr.w * z) + mAnchorU.x;
+            c.y = (fr.y + fr.h * 0.5 - mAnchorAt.y) / (fr.h * z) + mAnchorU.y;
+        }
+        // the picture always covers the frame: the centre stays half a view from each edge
+        const double half = 0.5 / std::max(1.0, z);
+        c.x = std::clamp(c.x, half, 1.0 - half);
+        c.y = std::clamp(c.y, half, 1.0 - half);
+        return c;
+    }
+
+    Rect Monitor::imageRect() const
+    {
+        const Rect fr = frameRect();
+        const double z = std::max(1.0, mZoom.value());
+        const Point c = centreFor(z);
+        return Rect{fr.x + fr.w * 0.5 - c.x * fr.w * z, fr.y + fr.h * 0.5 - c.y * fr.h * z, fr.w * z, fr.h * z};
+    }
+
+    void Monitor::zoomAbout(double factor, Point at)
+    {
+        const Rect ir = imageRect();
+        if (ir.w <= 0 || ir.h <= 0) return;
+        // the picture point under the pointer NOW (the live picture is what the user aims at)
+        mAnchorU = Point{std::clamp((at.x - ir.x) / ir.w, 0.0, 1.0), std::clamp((at.y - ir.y) / ir.h, 0.0, 1.0)};
+        mAnchorAt = at;
+        mAnchored = true;
+        mZoomTarget = std::clamp(mZoomTarget * factor, 1.0, kMaxZoom);
+    }
+
+    void Monitor::resetZoom()
+    {
+        const Rect fr = frameRect();
+        const Point c = centreFor(std::max(1.0, mZoom.value()));
+        mAnchorAt = Point{fr.x + fr.w * 0.5, fr.y + fr.h * 0.5};   // zoom out about the view's centre
+        mAnchorU = c;
+        mAnchored = true;
+        mZoomTarget = 1.0;
+    }
+
+    bool Monitor::hitTestSelf(const Point &p) const { return localBounds().contains(p); }   // the wheel lands here
 
     bool Monitor::handleGesture(const Gesture &g, const Point &local)
     {
-        if (g.type == Gesture::Type::Move) { mCaptureHover.setHovered(mCaptureRect.contains(local) ? 0 : -1); return true; }
-        if (g.type == Gesture::Type::Click && mCaptureRect.contains(local))
+        switch (g.type)
         {
-            const Point o = worldTransform().apply(Point{mCaptureRect.x, mCaptureRect.y});
-            if (onCapture) onCapture(Rect{o.x, o.y, mCaptureRect.w, mCaptureRect.h});
+        case Gesture::Type::Move:
+            mCaptureHover.setHovered(mCaptureRect.contains(local) ? 0 : -1);
             return true;
+        case Gesture::Type::Click:
+            if (mCaptureRect.contains(local))
+            {
+                const Point o = worldTransform().apply(Point{mCaptureRect.x, mCaptureRect.y});
+                if (onCapture) onCapture(Rect{o.x, o.y, mCaptureRect.w, mCaptureRect.h});
+            }
+            return true;
+        case Gesture::Type::Scroll:
+            // cosmo's R-ZOOM-1: Ctrl + wheel zooms about the pointer; a plain wheel does nothing here
+            if (!g.ctrl) return false;
+            zoomAbout(std::pow(kZoomNotch, -g.delta.y / shell::wheelNotchPx()), local);
+            return true;
+        case Gesture::Type::DoubleClick:
+            if (frameRect().contains(local) && !mCaptureRect.contains(local)) resetZoom();
+            return true;
+        case Gesture::Type::Down:
+            if (mZoomTarget > 1.0 + 1e-9 && frameRect().contains(local) && !mCaptureRect.contains(local))
+            {
+                // a pan takes the view from where it is drawn now; the anchor lets go
+                mCentre = centreFor(std::max(1.0, mZoom.value()));
+                mAnchored = false;
+                mPanning = true;
+                mPanLast = local;
+            }
+            return true;
+        case Gesture::Type::DragStart:
+        case Gesture::Type::Drag:
+            if (mPanning)
+            {
+                // direct manipulation: the picture follows the pointer exactly
+                const Rect ir = imageRect();
+                if (ir.w > 0 && ir.h > 0)
+                {
+                    mCentre.x -= (local.x - mPanLast.x) / ir.w;
+                    mCentre.y -= (local.y - mPanLast.y) / ir.h;
+                    mCentre = centreFor(std::max(1.0, mZoom.value()));   // clamped
+                }
+                mPanLast = local;
+            }
+            return true;
+        case Gesture::Type::Up:
+        case Gesture::Type::Drop:
+            mPanning = false;
+            return true;
+        default:
+            break;
         }
         return Segment::handleGesture(g, local);
     }
@@ -109,6 +202,12 @@ namespace interstellar_v1
             mDissolveWanted = false;
         }
         mDissolve.update(nowMs);
+        if (mZoomTarget != mZoomLast)
+        {
+            mZoom.animateTo(mZoomTarget, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
+            mZoomLast = mZoomTarget;
+        }
+        mZoom.update(nowMs);
         Segment::advance(nowMs);
     }
 
@@ -158,17 +257,22 @@ namespace interstellar_v1
             drawRoundedRect(t, fr, 0.0, Paint::filled(Color::hex(0x050505)));
             if (frameA > 0.001 && mCurId)
             {
+                // zoomed: the picture overhangs the frame, which clips it (R-UI-13)
+                const Rect ir = imageRect();
+                t.save();
+                t.clipRect(fr.x, fr.y, fr.w, fr.h);
                 t.pushLayer(frameA);
                 if (mPrevId && mDissolve.value() < 1.0)
                 {
-                    t.drawImage(mPrevId, fr);
+                    t.drawImage(mPrevId, ir);
                     t.pushLayer(mDissolve.value());
-                    t.drawImage(mCurId, fr);
+                    t.drawImage(mCurId, ir);
                     t.popLayer();
                 }
                 else
-                    t.drawImage(mCurId, fr);
+                    t.drawImage(mCurId, ir);
                 t.popLayer();
+                t.restore();
             }
         }
 
@@ -216,6 +320,19 @@ namespace interstellar_v1
                 t.drawText(cap, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::sans());
                 capLeft = chip.x - 4.0;
             }
+        }
+        // The magnification, while zoomed — it fades with the LIVE zoom, so it leaves as the view
+        // eases back to fit (R-UI-13)
+        const double zl = mZoom.value();
+        const double za = std::clamp((zl - 1.0) * 5.0, 0.0, 1.0);
+        if (za > 0.001 && fr.w > 0)
+        {
+            const std::string z = std::to_string((int)std::lround(zl * 100.0)) + "%";
+            const double tw = t.measureText(z, kChipPx, font::mono());
+            const Rect chip{fr.right() - 8.0 - tw - 12.0, fr.bottom() - 8.0 - 18.0, tw + 12.0, 18.0};
+            drawRoundedRect(t, chip, radius::control(), Paint::filled(fade(surface::scrim(0.72), za)));
+            t.setFill(fade(palette::foreground(), za));
+            t.drawText(z, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::mono());
         }
         // The capture button, left of the caption (Grade — R-UI-11). Fades with its intent.
         const double ca = mCaptureAmt.value();

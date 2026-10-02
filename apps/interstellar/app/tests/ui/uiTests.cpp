@@ -1267,6 +1267,62 @@ namespace
         r.frame();
     }
 
+    /** R-UI-13: Ctrl + wheel zooms the monitor about the pointer, eased; drag pans; double-click fits. */
+    void testMonitorZoom()
+    {
+        std::printf("monitor zoom: Ctrl + wheel like cosmo\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto mon = r.app->edit().monitor();
+        const Rect fr = mon->frameRect();
+        const int edge0 = mon->wantedProxyEdge();
+        // a point off-centre: the picture point under it must stay under it
+        const Point at{fr.x + fr.w * 0.7, fr.y + fr.h * 0.3};
+        const Rect ir0 = mon->imageRect();
+        const double u = (at.x - ir0.x) / ir0.w, v = (at.y - ir0.y) / ir0.h;
+        const Point wp = world(*mon, at.x, at.y);
+        r.app->wheel(wp.x, wp.y, 0.0);   // a plain wheel: nothing
+        r.app->wheel(wp.x, wp.y, 3.0, false);
+        r.pump(64);
+        CHECK(near(mon->zoomTarget(), 1.0), "a plain wheel over the monitor does nothing (cosmo)");
+        r.app->wheel(wp.x, wp.y, 3.0, true);
+        CHECK(std::fabs(mon->zoomTarget() - std::pow(1.15, 3.0)) < 1e-6, "Ctrl + wheel up three notches asks for 1.15^3");
+        const double fz = firstMoved(r, [&] { return mon->zoomLive(); }, 1.0);
+        CHECK(strictlyBetween(fz, 1.0, mon->zoomTarget()), "the zoom EASES (first frame between 1x and the target)");
+        const Rect irMid = mon->imageRect();
+        CHECK(std::fabs(irMid.x + u * irMid.w - at.x) < 0.5 && std::fabs(irMid.y + v * irMid.h - at.y) < 0.5,
+              "…and mid-tween the picture point under the pointer stays under it (anchored to the live zoom)");
+        r.settle();
+        CHECK(mon->wantedProxyEdge() > edge0, "zoomed, the monitor asks for a larger proxy");
+        // pan: the picture follows the pointer exactly, and stays covering the frame
+        const Rect ir1 = mon->imageRect();
+        const Point c0 = world(*mon, fr.x + fr.w * 0.5, fr.y + fr.h * 0.5);
+        r.press(c0.x, c0.y);
+        r.frame();
+        r.dragTo(c0.x - 30.0, c0.y - 20.0);
+        r.frame();
+        r.dragTo(c0.x - 40.0, c0.y - 25.0);
+        r.frame();
+        const Rect ir2 = mon->imageRect();
+        CHECK(mon->panning() && std::fabs((ir2.x - ir1.x) + 40.0) < 0.5 && std::fabs((ir2.y - ir1.y) + 25.0) < 0.5,
+              "a drag pans the zoomed picture under the pointer (direct manipulation)");
+        r.dragTo(c0.x - 4000.0, c0.y - 4000.0);
+        r.frame();
+        const Rect ir3 = mon->imageRect();
+        CHECK(ir3.right() >= fr.right() - 0.5 && ir3.bottom() >= fr.bottom() - 0.5, "…clamped: the picture always covers the frame");
+        r.releaseAt(c0.x - 4000.0, c0.y - 4000.0);
+        r.frame();
+        // double-click: back to fit, eased
+        dblClick(r, c0.x, c0.y);
+        CHECK(near(mon->zoomTarget(), 1.0), "a double-click asks for fit");
+        const double fb = firstMoved(r, [&] { return mon->zoomLive(); }, mon->zoomLive());
+        CHECK(fb > 1.0 + 1e-6, "…and eases back (not a snap)");
+        r.settle();
+        const Rect irEnd = mon->imageRect();
+        CHECK(near(irEnd.x, fr.x, 0.5) && near(irEnd.w, fr.w, 0.5), "at rest the picture fits the frame again");
+    }
+
+
     /** R-UI-12: groups like cosmo — grouping puts the items INSIDE a shut group; the tree's chevron
      *  opens it (eased); the strip shows one level, a double-click drills in, the breadcrumb goes up. */
     void testGroupBrowsing()
@@ -1357,6 +1413,7 @@ int main()
     testRefFrameSlider();
     testGroupBrowsing();
     testVariants();
+    testMonitorZoom();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

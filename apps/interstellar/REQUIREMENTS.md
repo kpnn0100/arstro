@@ -319,8 +319,9 @@ reserves the rest so adopting it is not a migration.
   (wheel up = in), 1×–8×; drag pans while zoomed, clamped so the picture covers the monitor;
   double-click (or Workspace › Reset Workspace) returns to fit. The zoom EASES (cosmo's R-ZOOM-5,
   which cosmo itself has not built), a chip names the magnification while zoomed, and the monitor
-  asks for a frame sharp enough for the magnification (up to the source's own size). Plain wheel
-  over the monitor does nothing, as in Cosmo; Ctrl + wheel over the timeline keeps zooming time.
+  asks for a frame sharp enough for the magnification — within Engine Settings' preview cap, which
+  still bounds the monitor (R-SET-3; raise Preview quality for full detail). Plain wheel over the
+  monitor does nothing, as in Cosmo; Ctrl + wheel over the timeline keeps zooming time.
 - **R-UI-14 Cut like an editor** (added 2026-10-02, user request "drag and drop source to timeline
   and all edit features"). Every R-TL-3 operation is reachable in the Cut tab, each a command line:
   **drag a source** from the source bin onto a lane (`clip add` — the whole source, snapped like a

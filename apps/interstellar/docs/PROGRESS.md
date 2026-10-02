@@ -47,7 +47,8 @@ one integrator who moves, wires, tests and commits each stream:
       drill in, cosmo's breadcrumb back up (DR-UI-12).
 - [x] Variants: shared file, own object, offered wherever a source is, selected once made; D-8 fixed
       (DR-RACK-9).
-- [ ] The 2026-10-02 request, rest: monitor zoom like cosmo (R-UI-13), the full output spec in
+- [x] Monitor zoom like cosmo: Ctrl + wheel about the pointer, eased, pan, fit (DR-UI-13).
+- [ ] The 2026-10-02 request, rest: the full output spec in
       Deliver (R-RENDER-6), cutting like an editor — drag a source to the timeline and every R-TL-3
       operation in the Cut tab, clip copy/paste (R-UI-14, R-TL-6).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →

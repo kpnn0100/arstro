@@ -132,6 +132,14 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - `rack[].sharesMedia` > 0 → a muted SHARED badge on the rack row (eased); "shared · N clips" in the
   source bin. Shots added: `grade_variant`, `cut_variant_menu`.
 
+## Monitor zoom (2026-10-02, R-UI-13)
+
+- Ctrl + wheel over the monitor zooms about the pointer (cosmo's 1.15× notch, 1×–8×), eased 220 ms
+  and anchored to the live zoom; drag pans while zoomed; double-click or Workspace › Reset
+  Workspace fits again. A "306%" chip while zoomed. The proxy asked for grows with the target zoom
+  (the preview cap in Engine Settings still bounds it). Presentation only — nothing dispatched.
+- Shots added: `grade_monitor_zoom`, `grade_monitor_zoom_mid`. UI checks: 225.
+
 ## Integrating (the GTK host)
 
 ```cpp

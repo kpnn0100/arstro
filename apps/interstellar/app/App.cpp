@@ -220,7 +220,7 @@ namespace interstellar_v1
             {"Grade        (1)",             [this] { mEdit->setTab(EditScreen::Grade); }},
             {"Cut          (2)",             [this] { mEdit->setTab(EditScreen::Cut); }},
             {"Deliver      (3)",             [this] { mEdit->setTab(EditScreen::Deliver); }},
-            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); }},
+            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }},
         }});
         ms->addMenu({"Preset", {}});
         refreshPresetMenu(mHooks.model ? mHooks.model() : emptyModel());

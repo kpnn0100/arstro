@@ -17,6 +17,14 @@
  *  of playback or of a scrub are NOT content changes (gotcha 10: a motion is not a dissolve), so
  *  while playing or scrubbing the new frame replaces the old directly — the video is its own
  *  animation. The three states (frame / "decoding" / "no clip at the playhead") cross-fade.
+ *
+ *  Zoom (R-UI-13, cosmo's R-ZOOM): Ctrl + wheel zooms about the pointer, 1×–8×, in cosmo's 1.15×
+ *  notches — EASED (220 ms), and anchored: the picture point under the pointer when the notch
+ *  landed stays under it, because the view centre is RE-DERIVED every frame from the live zoom
+ *  rather than set once (the timeline's rule). While zoomed, a drag pans (direct manipulation),
+ *  clamped so the picture always covers the frame; a double-click eases back to fit. A chip names
+ *  the magnification, fading with the live zoom. The proxy the monitor asks for grows with the
+ *  target zoom (the service's preview cap still bounds it, R-SET-3).
  */
 #pragma once
 #include "../Theme.h"
@@ -52,10 +60,22 @@ namespace interstellar_v1
         artboard::Rect captureRect() const { return mCaptureRect; }
         std::function<void(artboard::Rect world)> onCapture;
 
-        /** The long-edge proxy size this monitor would ask for, from its drawn size. */
+        /** The long-edge proxy size this monitor would ask for, from its drawn size and its zoom. */
         int wantedProxyEdge() const;
-        /** Where the frame is letterboxed inside the monitor (local coords). */
+        /** Where the frame is letterboxed inside the monitor at 1× (local coords). */
         artboard::Rect frameRect() const;
+        /** Where the picture is drawn NOW — the live zoom and pan applied (local; may overhang
+         *  frameRect, which clips it). */
+        artboard::Rect imageRect() const;
+        /** Zoom by `factor` keeping the picture point under local `at` there. Intent only. */
+        void zoomAbout(double factor, artboard::Point at);
+        /** Back to fit (double-click, Workspace › Reset Workspace). Intent only — it eases. */
+        void resetZoom();
+        double zoomLive() const { return mZoom.value(); }
+        double zoomTarget() const { return mZoomTarget; }
+        bool panning() const { return mPanning; }
+        static constexpr double kMaxZoom = 8.0;
+        static constexpr double kZoomNotch = 1.15;   // cosmo's
         /** The LIVE eased amount of each state's layer (0..1). */
         double stateAmount(State s) const { return mStateAmt[(int)s].value(); }
         double dissolveAmount() const { return mDissolve.value(); }
@@ -93,6 +113,15 @@ namespace interstellar_v1
         artboard::AnimatedProperty mCaptureAmt{0.0};
         cosmo_v2::HoverFade mCaptureHover;
         mutable artboard::Rect mCaptureRect{0, 0, 0, 0};
+        // zoom + pan: the centre is the picture point (0..1) at the frame's centre
+        artboard::Point centreFor(double zoom) const;
+        double mZoomTarget = 1.0, mZoomLast = 1.0;
+        artboard::AnimatedProperty mZoom{1.0};
+        bool mAnchored = false;                       // the centre follows the live zoom about an anchor
+        artboard::Point mAnchorAt{0, 0}, mAnchorU{0.5, 0.5};
+        artboard::Point mCentre{0.5, 0.5};
+        bool mPanning = false;
+        artboard::Point mPanLast{0, 0};
     };
 }
 }
