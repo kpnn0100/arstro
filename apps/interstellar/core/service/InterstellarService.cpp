@@ -469,6 +469,10 @@ namespace interstellar
         for (const auto &g : P.grades)
             if (g.timeline == cur && !g.deltas.empty()) overridden.insert(g.node);
 
+        // How many sources use each file: a variant shares its original's (R-RACK-5).
+        std::map<std::string, int> filesUsed;
+        for (const auto &ro : P.rackObjs)
+            if (ro.kind != "group" && !ro.media.empty()) filesUsed[resolvePath(ro.media)]++;
         auto rackModelFor = [&](const RackObj *ro) {
             RackNodeModel r;
             if (ro)
@@ -490,6 +494,7 @@ namespace interstellar
                     r.mediaDuration = src->second->info.frames <= 1 ? 0.0 : (double)src->second->info.frames / r.mediaFps;
                 }
                 r.overridden = overridden.count(ro->id) > 0;
+                if (!r.group && !ro->media.empty()) r.sharesMedia = filesUsed[resolvePath(ro->media)] - 1;
             }
             return r;
         };
@@ -1263,7 +1268,13 @@ namespace interstellar
                 P.rackObjs.push_back(ro);
                 mNodeOf[ro.id] = added[0];
                 mStoredPath[ro.id] = stored;
+                // The new variant is the selection and the Grade target, so it is in view (the
+                // strip and the tree follow the target) and the next edit lands on IT.
+                mSelection = {ro.id};
+                mAnchor = ro.id;
+                if (!mRack.select(added[0], err)) return fail("rack duplicate: " + err);
                 markDirty();
+                bumpFrame();
                 emit(Event(EK::RackChanged).with("what", "duplicated").with("node", ro.id));
                 return true;
             }

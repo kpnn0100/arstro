@@ -53,6 +53,7 @@ namespace interstellar_v1
             auto &st = mStates[key];
             st.want[0] = n.bypass; st.want[1] = n.pending; st.want[2] = n.failed; st.want[3] = n.overridden;
             st.want[4] = n.selected;
+            st.want[6] = !n.group && n.sharesMedia > 0;
         }
         mSel.setHovered(mSelected);
         mBound = true;
@@ -289,7 +290,7 @@ namespace interstellar_v1
         for (auto &kv : mStates)
         {
             RowState &st = kv.second;
-            artboard::AnimatedProperty *props[RowState::kN] = {&st.bypass, &st.pending, &st.failed, &st.ovr, &st.selected, &st.open};
+            artboard::AnimatedProperty *props[RowState::kN] = {&st.bypass, &st.pending, &st.failed, &st.ovr, &st.selected, &st.open, &st.shared};
             for (int k = 0; k < RowState::kN; ++k)
             {
                 if (!st.init) props[k]->set(st.want[k] ? 1.0 : 0.0);
@@ -427,6 +428,17 @@ namespace interstellar_v1
                 t.setFill(fade(palette::primary(), content * ov));
                 t.drawText("OVR", badge.x + 4.0, textfit::baseline(l1, 7.5), 7.5, font::sansSemiBold());
                 right -= (bw + 5.0) * ov;
+            }
+            // a variant and its original share one file (R-RACK-5): a muted SHARED badge, eased
+            const double shd = st ? st->shared.value() : (n.sharesMedia > 0 ? 1.0 : 0.0);
+            if (shd > 0.001)
+            {
+                const double bw = t.measureText("SHARED", 7.5, font::sansSemiBold()) + 8.0;
+                const Rect badge{right - bw, l1 - 6.5, bw, 13.0};
+                drawRoundedRect(t, badge, radius::hairline(), Paint::stroked(fade(palette::border(), 2.0 * content * shd), 1.0));
+                t.setFill(fade(palette::mutedForeground(), content * shd));
+                t.drawText("SHARED", badge.x + 4.0, textfit::baseline(l1, 7.5), 7.5, font::sansSemiBold());
+                right -= (bw + 5.0) * shd;
             }
             const std::string label = n.cosmoName.empty() ? n.bindName : n.cosmoName;
             const char *fam = n.group ? font::sansMedium() : font::sans();

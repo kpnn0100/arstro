@@ -23,11 +23,13 @@ namespace interstellar_v1
     void SourceBin::bind(const interstellar::AppModel &m)
     {
         mSources.clear();
+        mRackIndex.clear();
         std::vector<std::pair<std::string, interstellar::RackNodeModel>> items;
-        for (const auto &n : m.rack)
-            if (!n.group)
+        for (int k = 0; k < (int)m.rack.size(); ++k)
+            if (const auto &n = m.rack[(size_t)k]; !n.group)
             {
                 mSources.push_back(n);
+                mRackIndex.push_back(k);
                 items.emplace_back(n.rackObj.empty() ? n.bindName : n.rackObj, n);
             }
         mRows.sync(items, kRowH);
@@ -67,6 +69,12 @@ namespace interstellar_v1
             return true;
         case Gesture::Type::Down:
             return true;
+        case Gesture::Type::RightClick:
+        {
+            const int i = rowAt(local);
+            if (i >= 0 && i < (int)mRackIndex.size() && onContext) onContext(mRackIndex[(size_t)i], worldTransform().apply(local));
+            return true;
+        }
         case Gesture::Type::Scroll:
             return mScroll.scrollBy(g.delta.y);
         case Gesture::Type::Click:
@@ -159,7 +167,8 @@ namespace interstellar_v1
             else if (n.video) glyph::film(t, gb, gc);
             else cosmo_v2::icon::image(t, gb, gc);
             const double x = kPadX + 18.0;
-            const std::string uses = n.usedBy == 0 ? "unused" : (n.usedBy == 1 ? "1 clip" : std::to_string(n.usedBy) + " clips");
+            const std::string uses = std::string(n.sharesMedia > 0 ? "shared \xC2\xB7 " : "") +
+                                     (n.usedBy == 0 ? "unused" : (n.usedBy == 1 ? "1 clip" : std::to_string(n.usedBy) + " clips"));
             const double uw = t.measureText(uses, 9.0, font::sans());
             const std::string nm = textfit::ellipsize(t, n.cosmoName.empty() ? n.bindName : n.cosmoName, w - kPadX - x, 11.0, font::sans());
             t.setFill(fade(n.failed ? palette::destructive() : palette::foreground(), a));

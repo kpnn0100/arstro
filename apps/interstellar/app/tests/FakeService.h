@@ -271,6 +271,22 @@ namespace istest
                 ++m.frameSeq;
             }
             else if (a[0] == "rack" && a.size() >= 3 && a[1] == "group" && a[2] == "new") groupSelection();
+            else if (a[0] == "rack" && a.size() >= 3 && a[1] == "duplicate")
+            {
+                // the service's behaviour: same file, own name, at the top of the rack, selected
+                for (int i = 0; i < (int)m.rack.size(); ++i)
+                    if (m.rack[(size_t)i].bindName == a[2] && !m.rack[(size_t)i].group)
+                    {
+                        RackNodeModel v = m.rack[(size_t)i];
+                        v.bindName += "_v"; v.cosmoName += " (variant)"; v.rackObj += "_v"; v.node += 100;
+                        v.parent = -1; v.depth = 0; v.usedBy = 0; v.overridden = false; v.selected = false;
+                        m.rack[(size_t)i].sharesMedia = 1; v.sharesMedia = 1;
+                        m.rack.push_back(v);
+                        selectRack((int)m.rack.size() - 1);
+                        break;
+                    }
+                ++m.frameSeq;
+            }
             else if (a[0] == "rack" && a.size() >= 5 && a[1] == "frame" && a[3] == "--at")
             {
                 for (auto &n : m.rack) if (n.bindName == a[2]) n.frame = std::stod(a[4]);

@@ -108,8 +108,8 @@ namespace interstellar_v1
          *  swapping glyphs and colours in one frame. */
         struct RowState
         {
-            artboard::AnimatedProperty bypass{0.0}, pending{0.0}, failed{0.0}, ovr{0.0}, selected{0.0}, open{0.0};
-            static constexpr int kN = 6;
+            artboard::AnimatedProperty bypass{0.0}, pending{0.0}, failed{0.0}, ovr{0.0}, selected{0.0}, open{0.0}, shared{0.0};
+            static constexpr int kN = 7;
             bool want[kN] = {}, applied[kN] = {}, init = false;
         };
         std::map<std::string, RowState> mStates;   // keyed by rackObj

@@ -66,6 +66,20 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-8 — `rack add --group <node>` is accepted and silently ignored
+- **Area:** service · **Status:** Closed (flag removed) · **Severity:** S3 · **Found:** 2026-10-02,
+  reading `rack duplicate` for the user's "duplicate source" request.
+- **Reproduce:** `project new g.isp --res 320x180 : rack add a.mp4 : rack group new look --nodes a :
+  rack add b.mp4 --group look : state print --json` → `b` has `parent: -1` (the top), not `look`.
+- **Expected:** R-SVC-3 / implement-skill law 5 — "never accept a flag you do not honour".
+- **Cause:** the grammar row declared `group=<node>` (`core/service/Command.cpp`, `rack add`) and the
+  handler never read it; Cosmo has no command that moves a node into an existing group (it can only
+  make a NEW group from a selection, `EditSession::createGroupFromSelection`).
+- **Fix:** the flag is removed, so the line is refused naming it. Placing a node into an existing
+  group — for `rack add`, a duplicated variant and drag-to-regroup — needs a Cosmo `Move` command
+  first; recorded as a gap (R-UI "drag-to-regroup"). Guarded by the L2 variant test's
+  `rack add … --group` refusal.
+
 ### Requirement gap (closed) — no multi-selection, no right-click menu on rack items (user request, 2026-10-02)
 Cosmo selects a range with Shift-click and toggles with Ctrl-click, then groups the selection, and
 offers a right-click menu on a photo (Add, Group Selection, Ungroup, Enable/Disable Filter, Rename,

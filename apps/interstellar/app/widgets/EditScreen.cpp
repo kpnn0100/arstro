@@ -53,6 +53,7 @@ namespace interstellar_v1
         mBin = std::make_shared<SourceBin>();
         mBin->onCommand = fwd;
         mBin->onAddFootage = [this] { if (onAddFootage) onAddFootage(); };
+        mBin->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
         mTimeline = std::make_shared<Timeline>();
         mTimeline->onCommand = [this](const std::string &l) { return emit(l); };
         mClipInspector = std::make_shared<ClipInspector>();

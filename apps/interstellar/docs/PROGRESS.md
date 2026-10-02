@@ -45,6 +45,11 @@ one integrator who moves, wires, tests and commits each stream:
       steps at the source's rate (DR-RACK-3c).
 - [x] Browsing groups like cosmo: shut groups in the tree, one level in the strip, double-click to
       drill in, cosmo's breadcrumb back up (DR-UI-12).
+- [x] Variants: shared file, own object, offered wherever a source is, selected once made; D-8 fixed
+      (DR-RACK-9).
+- [ ] The 2026-10-02 request, rest: monitor zoom like cosmo (R-UI-13), the full output spec in
+      Deliver (R-RENDER-6), cutting like an editor — drag a source to the timeline and every R-TL-3
+      operation in the Cut tab, clip copy/paste (R-UI-14, R-TL-6).
 - [ ] **Run the window by hand** on a desktop and walk the brief: new project → add footage → grade →
       cut → version → render. (Built and headlessly verified; not yet driven by a person.)
 - [ ] UI follow-ups from the app's contract requests: determinate load progress in the model,
@@ -73,6 +78,12 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-02 — a variant starts at the top of the rack (R-RACK-5, D-8).** Placing it beside its
+original, inside the original's group, would keep the group's look — but Cosmo cannot move a node
+into an existing group, and the `rack add --group` flag that pretended to was removed. The variant
+is selected instead, so it is in view, and the user groups it like any node. A Cosmo `Move` command
+is the prerequisite for in-place duplicates and drag-to-regroup alike.
 
 **2026-10-02 — groups start shut, and the selection opens what hides it (R-UI-12).** "When I group,
 the items come inside the group" reads as the asked-for behaviour, so a group is shut until opened.

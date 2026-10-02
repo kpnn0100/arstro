@@ -64,16 +64,11 @@
     },
     {
       "verb": "rack add",
-      "usage": "rack add <media…> [--group <node>]",
+      "usage": "rack add <media…>",
       "args": "<media…>",
       "minArgs": 1,
       "maxArgs": -1,
-      "flags": [
-        {
-          "name": "group",
-          "value": "<node>"
-        }
-      ],
+      "flags": [],
       "summary": "Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it).",
       "requirement": "R-RACK-3"
     },
@@ -1366,6 +1361,12 @@
       "type": "number",
       "stable": true,
       "doc": "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."
+    },
+    {
+      "path": "rack[].sharesMedia",
+      "type": "integer",
+      "stable": true,
+      "doc": "How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group."
     },
     {
       "path": "selectedRack",

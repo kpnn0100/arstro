@@ -109,7 +109,8 @@ namespace interstellar
                           .set("overridden", r.overridden)
                           .set("selected", r.selected)
                           .set("mediaDuration", r.mediaDuration)
-                          .set("mediaFps", r.mediaFps));
+                          .set("mediaFps", r.mediaFps)
+                          .set("sharesMedia", r.sharesMedia));
         j.set("rack", rack);
         j.set("selectedRack", m.selectedRack);
         j.set("hasGradeTarget", m.hasGradeTarget);
@@ -302,6 +303,7 @@ namespace interstellar
             {"rack[].selected", "bool", "In the selection that Group Selection groups (R-RACK-8)."},
             {"rack[].mediaDuration", "number", "Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened."},
             {"rack[].mediaFps", "number", "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."},
+            {"rack[].sharesMedia", "integer", "How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group."},
             {"selectedRack", "integer", "Index into rack of the Grade target; -1 = none."},
             {"hasGradeTarget", "bool", "gradeParams/gradeOwnParams are meaningful."},
             {"gradeParams", "object", "The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys."},

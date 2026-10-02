@@ -40,7 +40,7 @@ namespace interstellar
 
             {K::RackImport, "rack import", "<path.cmp>", 1, 1, {},
              "Point the rack at an existing Cosmo project — its groups and grades are the rack.", "R-RACK-1"},
-            {K::RackAdd, "rack add", "<media…>", 1, -1, {"group=<node>"},
+            {K::RackAdd, "rack add", "<media…>", 1, -1, {},
              "Add photos or videos to the rack. A video is graded on a reference frame "
              "(`clip.mp4#t=2.0` picks it).", "R-RACK-3"},
             {K::RackGroupNew, "rack group new", "[name]", 0, 1, {"nodes=<a,b,…>"},

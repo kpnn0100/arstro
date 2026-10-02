@@ -179,7 +179,7 @@ namespace interstellar_v1
             mRenameTarget = name;
             mEdit->contextMenu()->enterRenameMode(name);
         }});
-        if (!n.group && !n.failed) items.push_back({"Duplicate as Variant", [this, b] { dispatch("rack duplicate " + b); }});
+        if (!n.group && !n.failed) items.push_back({"Duplicate as Variant  (Ctrl+D)", [this, b] { dispatch("rack duplicate " + b); }});
         if (!n.failed) items.push_back({"Copy Grade", [this, b] { dispatch("grade copy " + b); }});
         if (m2.hasGradeClipboard)
             items.push_back({selected > 1 ? "Paste Grade to Selection" : "Paste Grade", [this, selection] { dispatch("grade paste" + selection); }});
@@ -211,7 +211,7 @@ namespace interstellar_v1
             {"Paste Grade to All Sources",   [this] { dispatch("grade paste --all"); }},
             {"Group Selection  (Ctrl+G)",    [this] { dispatch("rack group new"); }},
             {"Ungroup",                      [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }},
-            {"Duplicate as Variant",         [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
+            {"Duplicate as Variant (Ctrl+D)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
         }});
         ms->addMenu({"Settings", {
             {"Engine Settings...",           [this] { openSettings(); }},
@@ -490,6 +490,16 @@ namespace interstellar_v1
             return true;
         case 'O': if (onPickProjectToOpen) onPickProjectToOpen(); return true;
         case 'G': dispatch("rack group new"); return true;   // Group Selection
+        case 'D':
+        {
+            // Duplicate as Variant (R-RACK-5): the Grade target, when it is a source
+            const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+            if (m.selectedRack < 0 || m.selectedRack >= (int)m.rack.size()) return false;
+            const auto &n = m.rack[(size_t)m.selectedRack];
+            if (n.group || n.failed || n.bindName.empty()) return false;
+            dispatch("rack duplicate " + cmd::quote(n.bindName));
+            return true;
+        }
         case 'C':
         case 'V':
         {

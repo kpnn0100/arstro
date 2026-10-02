@@ -65,6 +65,7 @@ namespace interstellar
         bool selected = false;        // in the selection (Shift = range, Ctrl = toggle — R-RACK-8)
         double mediaDuration = 0;     // seconds of source; 0 = a still, or not yet opened (R-RACK-3)
         double mediaFps = 0;          // the source's own frame rate once opened — a ref-frame step is 1/mediaFps (R-RACK-3)
+        int sharesMedia = 0;          // OTHER sources on the same file (a variant and its original, R-RACK-5)
     };
 
     /** One timeline — a VERSION (R-VER). Ordered so a base precedes everything derived from it. */

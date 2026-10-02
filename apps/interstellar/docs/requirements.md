@@ -541,3 +541,17 @@ and the tree`, `browsing dispatched nothing`) and `testRackCommands`'s `its chev
 presentation, no command`; mutants (groups never shut; an instant level swap) went red. Shots
 `grade_populated`, `grade_groups_top`, `grade_groups_swap_mid`, `grade_groups_grouped`,
 `grade_groups_open_gr2` (both sizes, looked at).
+
+### DR-RACK-9 A variant shares its file, is its own object, and is offered wherever a source is (R-RACK-5, amended)
+`rack duplicate <src>` adds a Cosmo node on the SAME stored path (nothing is copied), copies the
+source's own grade in one Cosmo set, binds a new `#rackobj` (`<name>_v`), and now makes it the
+selection and Grade target (`core/service/InterstellarService.cpp:1271`) so the tree and strip
+follow it into view. The cut opens a file once whatever number of variants use it (the render
+contexts key their decoders by resolved path). `rack[].sharesMedia` (`:472`, add-only) counts the
+OTHER sources on the file; the rack row shows a muted SHARED badge, eased like OVR
+(`app/widgets/RackTree.cpp:432`), the source bin says "shared · N clips". Offered by Ctrl+D
+(`app/App.cpp:493`), Edit › Duplicate as Variant, the rack/strip menu and — new — the source bin's
+right-click (`app/widgets/SourceBin.cpp:72`). The variant starts at the rack's top: Cosmo has no
+"move into a group" (D-8). Guarded by L2 `a variant shares its file, is its own object, and is
+selected once made` (the file's open count does not move when the variant renders; red with the
+selection step removed) and UI `testVariants`; shots `grade_variant`, `cut_variant_menu`.

@@ -18,7 +18,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `project save [path.isp]` | Save the .isp and the rack's .cmp. A path saves the .isp there. | R-RACK-2 |
 | `project close` | Close the project and return Home. | R-UI-1 |
 | `rack import <path.cmp>` | Point the rack at an existing Cosmo project — its groups and grades are the rack. | R-RACK-1 |
-| `rack add <media…> [--group <node>]` | Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it). | R-RACK-3 |
+| `rack add <media…>` | Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it). | R-RACK-3 |
 | `rack group new [name] [--nodes <a,b,…>]` | Group rack nodes — the named ones, else the selection; a group's grade stacks onto every descendant. No name: one is made up, as Cosmo does. | R-RACK-4 |
 | `rack duplicate <node> [--name <bind>]` | Duplicate a rack node as a variant: same media, its own grade. | R-RACK-5 |
 | `rack frame <node> [--at <t>]` | Choose which frame of a video source Cosmo grades. Changes no parameter. | R-RACK-3 |
@@ -239,6 +239,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
+| `rack[].sharesMedia` | integer |  | How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group. |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
 | `hasGradeTarget` | bool |  | gradeParams/gradeOwnParams are meaningful. |
 | `gradeParams` | object |  | The target's EFFECTIVE params in the current version: stacked reach + overrides. Keys are EditParamsIO keys. |

@@ -62,6 +62,9 @@ namespace
         }
     };
 
+    /** How many times each file was opened for the timeline — a variant must not open its own. */
+    std::map<std::string, int> gOpens;
+
     /** The TIMELINE's frames: 48x27, 24 fps, 96 frames; R = frame index, G = a per-file constant,
      *  so a test can read back which source frame of which file landed where. */
     class FakeFrameSource : public IFrameSource
@@ -70,6 +73,7 @@ namespace
         bool open(const std::string &path, Info &out) override
         {
             if (path.find("missing") != std::string::npos || !fs::exists(path)) return false;
+            gOpens[fs::path(path).filename().string()]++;
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
             out.width = 48;
             out.height = 27;
@@ -669,6 +673,40 @@ int main()
         assert(f.images.count(f.path("grade.png")) && f.images[f.path("grade.png")].rgba == cap.rgba);
         std::string err;
         assert(!f.run("capture --source nobody --out x.png", &err));
+    });
+
+    test("a variant shares its file, is its own object, and is selected once made (R-RACK-5)", [] {
+        Fixture f("variant");
+        f.standard();
+        f.must("set a.basic.exposure=0.5");
+        Raster before;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, before));   // a.mp4 is open for the cut now
+        const int opens = gOpens["a.mp4"];
+        f.must("rack duplicate a");
+        const auto &m = f.svc->model();
+        int ia = -1, iv = -1, ib = -1;
+        for (int i = 0; i < (int)m.rack.size(); ++i)
+        {
+            if (m.rack[(size_t)i].bindName == "a") ia = i;
+            if (m.rack[(size_t)i].bindName == "a_v") iv = i;
+            if (m.rack[(size_t)i].bindName == "b") ib = i;
+        }
+        assert(ia >= 0 && iv >= 0 && ib >= 0);
+        assert(m.selectedRack == iv && m.rack[(size_t)iv].selected);           // selected once made
+        assert(m.rack[(size_t)iv].media == m.rack[(size_t)ia].media);           // the SAME file
+        assert(m.rack[(size_t)ia].sharesMedia == 1 && m.rack[(size_t)iv].sharesMedia == 1 && m.rack[(size_t)ib].sharesMedia == 0);
+        assert(std::fabs(evalValue(f, "eval a_v.basic.exposure") - 0.5) < 1e-6);   // starts with the original's grade
+        // its own object: a different grade, its own clip, its own pixels — on the same decoder
+        f.must("set a_v.basic.exposure=-1");
+        assert(std::fabs(evalValue(f, "eval a.basic.exposure") - 0.5) < 1e-6);
+        f.must("clip add --track v0 --src a_v --in 0 --out 1 --at 4 --name shotV");
+        Raster orig, var;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, orig) && f.svc->renderTimelineFrame("tl_1", 4.0, 0, var));
+        assert(orig.rgba == before.rgba && orig.rgba != var.rgba);
+        assert(gOpens["a.mp4"] == opens);                                       // no second decoder for the variant
+        // the flag that was never honoured is gone (D-8): refused, not ignored
+        std::string err;
+        assert(!f.run("rack add \"" + f.path("footage/still.png") + "\" --group gr1", &err) && has(err, "group"));
     });
 
     test("the same script on two services dumps the same stable state", [] {

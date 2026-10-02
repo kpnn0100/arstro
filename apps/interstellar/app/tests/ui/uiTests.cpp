@@ -1226,6 +1226,35 @@ namespace
         CHECK(strictlyBetween(fm, 0.98, s0), "the marker EASES to the stepped frame");
     }
 
+    /** R-RACK-5 (amended): a variant is offered wherever a source is — Ctrl+D, the source bin's menu. */
+    void testVariants()
+    {
+        std::printf("variants: Ctrl+D and the source bin's menu\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        r.svc.lines.clear();
+        ctrlKey(r, 'D');
+        CHECK(hasLine(r.svc, "rack duplicate s_day01"), "Ctrl+D duplicates the Grade target as a variant");
+        r.svc.lines.clear();
+        r.svc.dispatch("rack select gr1", gErr);
+        r.settle();
+        r.svc.lines.clear();
+        ctrlKey(r, 'D');
+        CHECK(r.svc.lines.empty(), "…and does nothing on a group (a group is not a source)");
+        r.app->setTab(1);
+        r.settle();
+        auto bin = r.app->edit().sourceBin();
+        const Point p = centre(*bin, bin->rowRect(1));
+        r.app->pointer(1, p.x, p.y, 0, r.now);
+        r.app->pointer(0, p.x, p.y, 2, r.now);
+        r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        bool dup = false;
+        for (int i = 0; i < cm->itemCount(); ++i) dup = dup || cm->item(i).label.rfind("Duplicate as Variant", 0) == 0;
+        CHECK(cm->isOpen() && dup, "right-clicking a source-bin row opens the rack's menu, Duplicate as Variant in it");
+    }
+
     /** Two clicks a frame apart: the recognizer's double-click. */
     void dblClick(Rig &r, double x, double y)
     {
@@ -1327,6 +1356,7 @@ int main()
     testCaptureAndGradeMonitor();
     testRefFrameSlider();
     testGroupBrowsing();
+    testVariants();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

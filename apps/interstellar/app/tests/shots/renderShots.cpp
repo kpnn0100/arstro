@@ -219,6 +219,25 @@ namespace
             r.app->edit().gradeDeck()->openGroup("ro4");
             r.settle();
         }});
+        // a variant (R-RACK-5): same file, its own row, "shared" on both
+        v.push_back({"grade_variant", edit, [](Rig &r) {
+            r.settle();
+            std::string err;
+            r.svc.dispatch("rack duplicate s_day01", err);
+            r.settle();
+        }});
+        v.push_back({"cut_variant_menu", edit, [](Rig &r) {
+            std::string err;
+            r.svc.dispatch("rack duplicate s_day01", err);
+            r.app->setTab(1);
+            r.settle();
+            auto bin = r.app->edit().sourceBin();
+            const Point p = centre(*bin, bin->rowRect(0));
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.settle();
+        }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

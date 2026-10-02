@@ -74,6 +74,15 @@ done while its authority is a fake.**
   **grade weight** (0..1) — a scalable `bypass` — which is Interstellar's, not Cosmo's.
 - **R-RACK-5 A variant is a duplicated rack node**, not a per-clip override. One shot needing two
   looks is two nodes on one file. A per-clip grade would put colour in two places (R-G-3).
+  (**AMENDED 2026-10-02, user request "duplicate source — same source but a different blending,
+  taking no space, treated as its own object":** a variant references the **same file** — nothing
+  is copied — and the cut decodes that file through **one** decoder and cache however many variants
+  use it (Cosmo keeps one reference still per node, its own). It is its own object everywhere: its
+  own bind name, grade, weight, bypass and group, its own clips, its own row in the rack, the strip
+  and the source bin. It is offered wherever a source is — the rack, the strip and the source bin's
+  right-click menus, Edit › Duplicate as Variant, Ctrl+D — and is selected once made, so it is in
+  view. A row says **shared file** when another node uses the same file. It starts at the top of
+  the rack: Cosmo has no "move into a group" yet (D-8), so it is grouped like any node.)
 - **R-RACK-6 Rack identity is Interstellar's.** A bind name (`gr1`, `s_day01`) — legal, unique,
   stable once assigned — plus the media path and reference-frame time. Cosmo names a node after its
   file or after what the user typed, and neither is addressable.
@@ -132,6 +141,10 @@ The headline of this specification, and the reason it is not the first one.
   the first version shipped that and the picture went dark through every cut (D-6, carried forward
   as a requirement rather than relearned).
 - **R-TL-5 Frames are the authority**; a cut that lands between frames is a bug.
+- **R-TL-6 A clip can be copied and pasted** (added 2026-10-02, user request "all edit features"):
+  `clip copy <clip>` keeps the clip's source range, speed, geometry, opacity and blend in the
+  service; `clip paste [--at <t>] [--track <trk>]` places a new clip from it (default: the playhead,
+  the copied clip's track) — so cut-then-paste works after the original is gone.
 
 ---
 
@@ -203,7 +216,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-RENDER — delivery — ✅ IMPLEMENTED for picture (DR-RENDER-1, -2a, -5); audio not muxed
+## R-RENDER — delivery — 🚧 IN PROGRESS (DR-RENDER-1, -2a, -5; R-RENDER-6 in progress); audio not muxed
 
 - **R-RENDER-1 A render names its TIMELINE.** `render --timeline social-30s --out …`. There is no
   implicit "current" timeline in a render, because a delivery that depended on which tab was open
@@ -212,10 +225,21 @@ reserves the rest so adopting it is not a migration.
   wall-clock, no unseeded randomness; grain seeded from (source, frame).
 - **R-RENDER-3 Real codecs at the host**: H.264/MP4 and ProRes/MOV, plus a **PNG/PPM sequence**,
   which is kept deliberately because it is the only output a golden test can compare byte for byte.
+  (**AMENDED 2026-10-02:** plus **H.265/HEVC** in MP4/MKV and **DNxHR** in MOV — R-RENDER-6.)
 - **R-RENDER-4 A render runs a frame at a time and yields**, so it is cancellable and does not block
   a window.
 - **R-RENDER-5 A still exported from Interstellar and the same frame exported from Cosmo are
   byte-identical.** The cheapest possible proof that R-RACK-2 actually holds.
+- **R-RENDER-6 Deliver states the whole output spec** (added 2026-10-02, user request "Deliver needs
+  detail options for render"). Every choice is a flag of `render`, shown in Deliver and named in the
+  queue row: **codec** (H.264, H.265, ProRes Proxy/LT/422/HQ/4444, DNxHR LB/SQ/HQ/HQX/444, PNG
+  sequence), **resolution** (the project's, or a standard frame — UHD, 1080, 720 — or a scale),
+  **frame rate** (the project's, or a standard rate; the timeline is SAMPLED at the output rate, so
+  a render stays a pure function, R-RENDER-2), **quality** (a constant-quality level for H.264/H.265;
+  the profile is the quality for ProRes/DNxHR), **encoder speed**, **bit depth** where the codec
+  offers a choice (H.265 8/10), and **range** (the whole timeline, or an in/out set from the
+  playhead). A combination the encoder cannot make is refused, naming why, before anything is
+  queued. Audio is not muxed (R-AUD-5) and Deliver says so rather than leaving it to be discovered.
 
 ---
 
@@ -240,7 +264,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..12, DR-UI-3c, DR-UI-11a/b; gaps: drag-to-timeline, drag-to-regroup)
+## R-UI — the two screens — 🚧 IN PROGRESS (DR-UI-1..12, DR-UI-3c, DR-UI-11a/b; R-UI-13, R-UI-14 in progress; gap: drag-to-regroup)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the
@@ -290,6 +314,22 @@ reserves the rest so adopting it is not a migration.
   items go INSIDE their group: the rack tree collapses a group (a chevron opens and closes it,
   eased); the SOURCES strip shows the OPEN group's contents; double-clicking a group (chip or row)
   opens it; Cosmo's breadcrumb above the strip names the path and a click on a name goes back up.
+- **R-UI-13 Zoom the monitor like Cosmo** (added 2026-10-02, user request "zoom in using Ctrl +
+  scroll like cosmo"). Cosmo's R-ZOOM, on the monitor: Ctrl + wheel zooms about the pointer
+  (wheel up = in), 1×–8×; drag pans while zoomed, clamped so the picture covers the monitor;
+  double-click (or Workspace › Reset Workspace) returns to fit. The zoom EASES (cosmo's R-ZOOM-5,
+  which cosmo itself has not built), a chip names the magnification while zoomed, and the monitor
+  asks for a frame sharp enough for the magnification (up to the source's own size). Plain wheel
+  over the monitor does nothing, as in Cosmo; Ctrl + wheel over the timeline keeps zooming time.
+- **R-UI-14 Cut like an editor** (added 2026-10-02, user request "drag and drop source to timeline
+  and all edit features"). Every R-TL-3 operation is reachable in the Cut tab, each a command line:
+  **drag a source** from the source bin onto a lane (`clip add` — the whole source, snapped like a
+  move; onto an empty timeline it first adds a video track); move and trim (as built); **roll**
+  (Alt-drag the cut between two touching clips); **slip** (Alt-drag a clip's body); split at the
+  playhead (S); delete and **ripple delete** (Delete / Shift+Delete); **speed**; a **dissolve** into
+  the next touching clip; a **marker** at the playhead (M); **add a track**; **copy / cut / paste**
+  a clip (Ctrl+C / Ctrl+X / Ctrl+V, R-TL-6). A right-click on a clip offers all of them. A
+  modifier-drag says what it will do while it is held.
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.

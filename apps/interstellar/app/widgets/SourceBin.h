@@ -10,8 +10,9 @@
  *  the timeline's empty sentence ("drag a source here") points at it (ui-brief §4). Its own empty
  *  state is the rack's sentence, "no footage yet — add some", with the add affordance.
  *
- *  A click selects the source in the rack (`rack select <bind>`), the same act as everywhere else.
- *  Dragging a source onto the timeline (`clip add …`) is a known gap — see NOTES.md.
+ *  A click selects the source in the rack (`rack select <bind>`), the same act as everywhere else; a
+ *  right-click opens the rack's own menu (Duplicate as Variant among it — R-RACK-5). A row whose
+ *  file another source also uses says "shared" before its clip count.
  */
 #pragma once
 #include "../Theme.h"
@@ -43,6 +44,8 @@ namespace interstellar_v1
 
         std::function<void(const std::string &line)> onCommand;
         std::function<void()> onAddFootage;
+        /** Right-click on the row of rack node `rackIndex`, at a WORLD point (the rack's menu). */
+        std::function<void(int rackIndex, artboard::Point world)> onContext;
 
         void advance(double nowMs) override;
 
@@ -56,6 +59,7 @@ namespace interstellar_v1
         int rowAt(const artboard::Point &p) const;
 
         std::vector<interstellar::RackNodeModel> mSources;
+        std::vector<int> mRackIndex;                     // listed source → index into the model's rack
         AnimatedRows<interstellar::RackNodeModel> mRows;
         EasedScroll mScroll;
         cosmo_v2::HoverFade mHover, mSel;

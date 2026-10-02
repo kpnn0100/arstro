@@ -125,6 +125,13 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Shots added: `grade_groups_top`, `grade_groups_swap_mid`, `grade_groups_grouped`,
   `grade_groups_open_gr2`. UI checks: 212.
 
+## Variants (2026-10-02, R-RACK-5 amended)
+
+- `rack duplicate <src>` from Ctrl+D, Edit › Duplicate as Variant, the rack/strip menu and the source
+  bin's right-click (the bin now opens the rack's menu). The service selects the new variant.
+- `rack[].sharesMedia` > 0 → a muted SHARED badge on the rack row (eased); "shared · N clips" in the
+  source bin. Shots added: `grade_variant`, `cut_variant_menu`.
+
 ## Integrating (the GTK host)
 
 ```cpp
