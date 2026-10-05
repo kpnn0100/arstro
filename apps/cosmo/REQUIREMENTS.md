@@ -1488,9 +1488,12 @@ accelerator is used only when its result matches it.
     and per channel, log and linear domain — the CPU's own tables uploaded), **Texture** and
     **Clarity** (the exact separable Gaussian), **Vibrance/Saturation**, the **Colour Mixer** with its
     spread (the box cascade) and **Colour Grading** (wheels, balance, hue remap) — matched to the CPU
-    within 1/255 per stage (`EditEngine_gl_pipeline_matches_cpu_per_stage`). Still declining to the
-    CPU: geometry, lens, noise reduction, dehaze, sharpening, grain, masks. The GLES backend keeps
-    the original subset.) `process()` runs on the GPU only when the edit is entirely within that subset
+    within 1/255 per stage (`EditEngine_gl_pipeline_matches_cpu_per_stage`) — and, the same day, the
+    rest: the **free rotation**, the **lens** (distortion, CA, vignette), **noise reduction** (colour
+    and luminance), **dehaze** (a GPU reduction for the atmospheric light), **sharpening** (with
+    masking) and **grain** (the CPU's own hash); the crop and quarter turns run as the CPU's own
+    copies before the upload and **masks** as the CPU's own MaskStack on the read-back image. No
+    edit declines any more. The GLES backend keeps the original subset.) `process()` runs on the GPU only when the edit is entirely within that subset
     (every other stage at its default); anything else (tone curve, mixer, grade, tone regions,
     vibrance/saturation, dehaze, grain, sharpen, noise reduction, lens, geometry, masks) **declines
     → CPU**, so all edits stay correct. The histogram taps are computed on the CPU from the GPU

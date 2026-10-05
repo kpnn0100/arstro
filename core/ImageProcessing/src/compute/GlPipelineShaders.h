@@ -432,6 +432,283 @@ void main() {
 )GLSL");
     }
 
+    // ── GPU-B: the spatial and geometric stages ─────────────────────────────────────────────
+
+    // Image::sampleBilinear on the source buffer, for channel c (clamped to the valid range)
+    inline const char *bilinear()
+    {
+        return R"GLSL(
+float sampleB(float fx, float fy, int c) {
+    fx = clamp(fx, 0.0, float(uW - 1));
+    fy = clamp(fy, 0.0, float(uH - 1));
+    int x0 = int(fx), y0 = int(fy);
+    int x1 = x0 < uW - 1 ? x0 + 1 : x0, y1 = y0 < uH - 1 ? y0 + 1 : y0;
+    float tx = fx - float(x0), ty = fy - float(y0);
+    float p00 = src[(y0 * uW + x0) * uCh + c], p10 = src[(y0 * uW + x1) * uCh + c];
+    float p01 = src[(y1 * uW + x0) * uCh + c], p11 = src[(y1 * uW + x1) * uCh + c];
+    float top = p00 + (p10 - p00) * tx, bot = p01 + (p11 - p01) * tx;
+    return top + (bot - top) * ty;
+}
+)GLSL";
+    }
+
+    // Rotate's free angle (after the quarter turns, done on the CPU): the same inverse map
+    inline std::string rotate()
+    {
+        return imagePass((std::string(bilinear()) + R"GLSL(
+uniform float uCos;
+uniform float uSin;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    int x = int(i) % uW, y = int(i) / uW;
+    float cx = float(uW) * 0.5, cy = float(uH) * 0.5;
+    float dx = float(x) + 0.5 - cx, dy = float(y) + 0.5 - cy;
+    float sx = uCos * dx + uSin * dy + cx - 0.5;
+    float sy = -uSin * dx + uCos * dy + cy - 0.5;
+    uint b = i * uint(uCh);
+    bool outside = sx < 0.0 || sy < 0.0 || sx > float(uW - 1) || sy > float(uH - 1);
+    for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = outside ? 0.0 : sampleB(sx, sy, c);
+}
+)GLSL").c_str());
+    }
+
+    // LensCorrection: radial distortion, chromatic aberration (opposed R/B scales), vignette
+    inline std::string lens()
+    {
+        return imagePass((std::string(bilinear()) + R"GLSL(
+uniform float uKDist;
+uniform float uKCA;
+uniform float uVig;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    int x = int(i) % uW, y = int(i) / uW;
+    float cx = float(uW - 1) * 0.5, cy = float(uH - 1) * 0.5;
+    float maxR = sqrt(cx * cx + cy * cy);
+    float invMaxR = maxR > 0.0 ? 1.0 / maxR : 0.0;
+    float dx = float(x) - cx, dy = float(y) - cy;
+    float r = sqrt(dx * dx + dy * dy) * invMaxR;
+    float f = 1.0 + uKDist * r * r;
+    float fr = f * (1.0 - uKCA * r), fb = f * (1.0 + uKCA * r);
+    int cc = uCh >= 3 ? 3 : uCh;
+    uint b = i * uint(uCh);
+    float o[4];
+    if (cc >= 3) {
+        o[0] = sampleB(cx + dx * fr, cy + dy * fr, 0);
+        o[1] = sampleB(cx + dx * f, cy + dy * f, 1);
+        o[2] = sampleB(cx + dx * fb, cy + dy * fb, 2);
+    } else o[0] = sampleB(cx + dx * f, cy + dy * f, 0);
+    for (int c = cc; c < uCh; ++c) o[c] = sampleB(cx + dx * f, cy + dy * f, c);
+    if (uVig != 0.0) { float m = 1.0 + uVig * r * r; for (int c = 0; c < cc; ++c) o[c] *= m; }
+    for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = o[c];
+}
+)GLSL").c_str());
+    }
+
+    // NoiseReduction, colour: the three chroma planes (channel minus luminance) into one buffer
+    inline std::string nrChroma()
+    {
+        return std::string(header()) + R"GLSL(
+layout(std430, binding = 0) readonly buffer Src { float src[]; };
+layout(std430, binding = 8) writeonly buffer M { float mplane[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint n = uint(uW * uH);
+    if (i >= n) return;
+    uint b = i * uint(uCh);
+    float L = lumOf(src[b], src[b + 1u], src[b + 2u]);
+    for (int c = 0; c < 3; ++c) mplane[uint(c) * n + i] = src[b + uint(c)] - L;
+}
+)GLSL";
+    }
+
+    inline std::string nrChromaApply()
+    {
+        return imagePass(R"GLSL(
+layout(std430, binding = 9) readonly buffer MB { float mblur[]; };
+uniform float uAmt;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint n = uint(uW * uH);
+    if (i >= n) return;
+    uint b = i * uint(uCh);
+    float L = lumOf(src[b], src[b + 1u], src[b + 2u]);
+    for (int c = 0; c < uCh; ++c) {
+        if (c < 3) { float ch = src[b + uint(c)] - L; dst[b + uint(c)] = L + ch + (mblur[uint(c) * n + i] - ch) * uAmt; }
+        else dst[b + uint(c)] = src[b + uint(c)];
+    }
+}
+)GLSL");
+    }
+
+    // NoiseReduction, luminance: the bilateral on the encoded luminance (radius ≤ 4), as a ratio
+    inline std::string nrLum()
+    {
+        return imagePass(R"GLSL(
+layout(std430, binding = 2) readonly buffer L { float lplane[]; };
+layout(std430, binding = 4) readonly buffer P { float pplane[]; };
+uniform int uRad;
+uniform float uInvS2;
+uniform float uInvR2;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    int x = int(i) % uW, y = int(i) / uW;
+    float center = pplane[i];
+    float acc = 0.0, wsum = 0.0;
+    for (int dy = -uRad; dy <= uRad; ++dy) {
+        int yy = clamp(y + dy, 0, uH - 1);
+        for (int dx = -uRad; dx <= uRad; ++dx) {
+            int xx = clamp(x + dx, 0, uW - 1);
+            float pv = pplane[yy * uW + xx];
+            float dr = pv - center;
+            float ws = exp(-float(dx * dx + dy * dy) * uInvS2 - dr * dr * uInvR2);
+            acc += pv * ws; wsum += ws;
+        }
+    }
+    float newP = wsum > 0.0 ? acc / wsum : center;
+    float newL = srgbD(clamp(newP, 0.0, 1.0));
+    float L2 = lplane[i];
+    float ratio = newL / (L2 > 1e-4 ? L2 : 1e-4);
+    uint b = i * uint(uCh);
+    int cc = uCh >= 3 ? 3 : uCh;
+    for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = c < cc ? src[b + uint(c)] * ratio : src[b + uint(c)];
+}
+)GLSL");
+    }
+
+    // Dehaze's atmospheric light: each group's max of the darkest channel (the CPU finishes the max)
+    inline std::string dehazeReduce()
+    {
+        return std::string(header()) + R"GLSL(
+layout(std430, binding = 0) readonly buffer Src { float src[]; };
+layout(std430, binding = 10) writeonly buffer Part { float part[]; };
+shared float best[256];
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint l = gl_LocalInvocationID.x;
+    float v = -1e30;
+    if (i < uint(uW * uH)) {
+        uint b = i * uint(uCh);
+        int cc = uCh >= 3 ? 3 : uCh;
+        float mn = src[b];
+        for (int c = 1; c < cc; ++c) mn = min(mn, src[b + uint(c)]);
+        v = mn;
+    }
+    best[l] = v;
+    barrier();
+    for (uint s = 128u; s > 0u; s >>= 1u) { if (l < s) best[l] = max(best[l], best[l + s]); barrier(); }
+    if (l == 0u) part[gl_WorkGroupID.x] = best[0];
+}
+)GLSL";
+    }
+
+    inline std::string dehaze()
+    {
+        return imagePass(R"GLSL(
+uniform float uA;
+uniform float uAmount;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    uint b = i * uint(uCh);
+    int cc = uCh >= 3 ? 3 : uCh;
+    if (uAmount > 0.0) {
+        float omega = 0.95 * uAmount;
+        float mn = src[b];
+        for (int c = 1; c < cc; ++c) mn = min(mn, src[b + uint(c)]);
+        float t = max(0.1, 1.0 - omega * (mn / uA));
+        for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = c < cc ? (src[b + uint(c)] - uA) / t + uA : src[b + uint(c)];
+    } else {
+        float k = -uAmount * 0.6;
+        for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = c < cc ? src[b + uint(c)] + (uA - src[b + uint(c)]) * k : src[b + uint(c)];
+    }
+}
+)GLSL");
+    }
+
+    // Sharpen: |P − blur(P)| into a plane (the masking's edge strength)
+    inline std::string sharpenDetail()
+    {
+        return std::string(header()) + R"GLSL(
+layout(std430, binding = 4) readonly buffer P { float pplane[]; };
+layout(std430, binding = 5) readonly buffer PB { float pblur[]; };
+layout(std430, binding = 6) writeonly buffer D { float dplane[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    dplane[i] = abs(pplane[i] - pblur[i]);
+}
+)GLSL";
+    }
+
+    inline std::string sharpen()
+    {
+        return imagePass(R"GLSL(
+layout(std430, binding = 2) readonly buffer L { float lplane[]; };
+layout(std430, binding = 4) readonly buffer P { float pplane[]; };
+layout(std430, binding = 5) readonly buffer PB { float pblur[]; };
+layout(std430, binding = 6) readonly buffer DB { float dblur[]; };
+uniform float uAmount;
+uniform float uMasking;
+float smoothstep01(float lo, float hi, float x) {
+    if (hi <= lo) return x >= hi ? 1.0 : 0.0;
+    float t = clamp((x - lo) / (hi - lo), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    float mask = 1.0;
+    if (uMasking > 0.0) mask = (1.0 - uMasking) + uMasking * smoothstep01(0.0, uMasking * 0.12 + 1e-4, dblur[i]);
+    float newP = clamp(pplane[i] + uAmount * (pplane[i] - pblur[i]) * mask, 0.0, 1.0);
+    float L = lplane[i];
+    float ratio = srgbD(newP) / (L > 1e-4 ? L : 1e-4);
+    uint b = i * uint(uCh);
+    int cc = uCh >= 3 ? 3 : uCh;
+    for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = c < cc ? src[b + uint(c)] * ratio : src[b + uint(c)];
+}
+)GLSL");
+    }
+
+    // Grain: the CPU's own hashed value noise, two octaves, gated to the midtones
+    inline std::string grain()
+    {
+        return imagePass(R"GLSL(
+uniform float uCell;
+uniform float uStrength;
+uniform uint uSeed;
+float cellNoise(int ix, int iy, uint seed) {
+    uint h = uint(ix) * 374761393u + uint(iy) * 668265263u + seed * 362437u;
+    h = (h ^ (h >> 13u)) * 1274126177u;
+    return (float(h & 0xffffu) / 65535.0) * 2.0 - 1.0;
+}
+float fadeq(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
+float valueNoise(float fx, float fy, uint seed) {
+    int x0 = int(floor(fx)), y0 = int(floor(fy));
+    float tx = fadeq(fx - float(x0)), ty = fadeq(fy - float(y0));
+    float n00 = cellNoise(x0, y0, seed), n10 = cellNoise(x0 + 1, y0, seed);
+    float n01 = cellNoise(x0, y0 + 1, seed), n11 = cellNoise(x0 + 1, y0 + 1, seed);
+    float a = n00 + (n10 - n00) * tx, b = n01 + (n11 - n01) * tx;
+    return a + (b - a) * ty;
+}
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(uW * uH)) return;
+    int x = int(i) % uW, y = int(i) / uW;
+    float fx = float(x) / uCell, fy = float(y) / uCell;
+    float n = valueNoise(fx, fy, uSeed) * 0.65 + valueNoise(fx * 2.3 + 11.3, fy * 2.3 + 7.7, uSeed * 9176u + 1u) * 0.35;
+    uint b = i * uint(uCh);
+    int cc = uCh >= 3 ? 3 : uCh;
+    float L = cc >= 3 ? lumOf(src[b], src[b + 1u], src[b + 2u]) : src[b];
+    float midW = 4.0 * L * (1.0 - L);
+    float delta = n * uStrength * (midW < 0.0 ? 0.0 : midW);
+    for (int c = 0; c < uCh; ++c) dst[b + uint(c)] = c < cc ? src[b + uint(c)] + delta : src[b + uint(c)];
+}
+)GLSL");
+    }
+
     inline std::string encode()
     {
         return imagePass(R"GLSL(

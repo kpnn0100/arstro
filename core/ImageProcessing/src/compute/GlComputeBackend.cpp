@@ -9,6 +9,9 @@
 #include "GlPipelineShaders.h"
 #include "../color/ColorMixer.h"
 #include "../tone/ToneCurve.h"
+#include "../transform/Crop.h"
+#include "../transform/Rotate.h"
+#include "../engine/MaskStack.h"
 #include <algorithm>
 #include <map>
 
@@ -53,6 +56,7 @@ namespace
         PFNGLUNIFORM3FPROC Uniform3f = nullptr;
         PFNGLUNIFORM4FPROC Uniform4f = nullptr;
         PFNGLUNIFORM3IPROC Uniform3i = nullptr;
+        PFNGLUNIFORM1UIPROC Uniform1ui = nullptr;
 
         bool load()
         {
@@ -84,6 +88,7 @@ namespace
             LOADGL(Uniform3f, PFNGLUNIFORM3FPROC, "glUniform3f")
             LOADGL(Uniform4f, PFNGLUNIFORM4FPROC, "glUniform4f")
             LOADGL(Uniform3i, PFNGLUNIFORM3IPROC, "glUniform3i")
+            LOADGL(Uniform1ui, PFNGLUNIFORM1UIPROC, "glUniform1ui")
 #undef LOADGL
             return true;
         }
@@ -160,8 +165,17 @@ namespace
         {
             if (!glcompute::pipelineSupports(p)) return false;   // outside the ported stages -> CPU
             if (!ensureReady()) return false;    // lazy context on this (worker) thread
-            const int w = src.width(), h = src.height(), ch = src.channels();
-            if (w <= 0 || h <= 0 || ch < 1 || ch > 4) return false;
+            if (src.width() <= 0 || src.height() <= 0 || src.channels() < 1 || src.channels() > 4) return false;
+            // The crop and the quarter turns are exact copies of pixels: Cosmo's own stages do them
+            // here, before the upload, so they are the CPU's by construction. The free angle is a
+            // resample and runs on the GPU below.
+            const bool cropId = p.cropX == 0 && p.cropY == 0 && p.cropW == 1 && p.cropH == 1;
+            const Image *in = &src;
+            Image cropped, turned;
+            if (!cropId) { mCropStage.setRect(p.cropX, p.cropY, p.cropW, p.cropH); mCropStage.process(*in, cropped); in = &cropped; }
+            if ((p.quarterTurns & 3) != 0) { mRotateStage.setAngle(0); mRotateStage.setQuarterTurns(p.quarterTurns); mRotateStage.process(*in, turned); in = &turned; }
+            const int w = in->width(), h = in->height(), ch = in->channels();
+            if (w <= 0 || h <= 0) return false;
             const size_t n = (size_t)w * h;
             const GLsizeiptr imgBytes = (GLsizeiptr)(n * ch * sizeof(float)), planeBytes = (GLsizeiptr)(n * sizeof(float));
 
@@ -174,7 +188,7 @@ namespace
             mMixerStage.setCurve(ColorMixer::Lum, p.mixer[2]);
             mMixerStage.setSpread(p.mixerSpread / 100.f);
 
-            alloc(mImg[0], imgBytes, src.data());
+            alloc(mImg[0], imgBytes, in->data());
             alloc(mImg[1], imgBytes, nullptr);
             int cur = 0;
             auto imagePass = [&](const char *name, const std::string &srcGlsl) -> GLuint {
@@ -188,6 +202,62 @@ namespace
             };
             auto run = [&](GLuint prog) { (void)prog; dispatch(n); cur = 1 - cur; };
 
+            // Rotate's free angle (the same inverse map and bilinear sample)
+            if (std::fabs((double)p.rotation * 3.14159265358979323846 / 180.0) >= 1e-9)
+            {
+                const GLuint pr = imagePass("rotate", glpipe::rotate());
+                if (!pr) return false;
+                const double a = (double)p.rotation * 3.14159265358979323846 / 180.0;
+                g.Uniform1f(loc(pr, "uCos"), (float)std::cos(a));
+                g.Uniform1f(loc(pr, "uSin"), (float)std::sin(a));
+                run(pr);
+            }
+            // LensCorrection
+            if (p.lensDistortion != 0.f || p.lensCA != 0.f || p.lensVignette != 0.f)
+            {
+                const GLuint pr = imagePass("lens", glpipe::lens());
+                if (!pr) return false;
+                g.Uniform1f(loc(pr, "uKDist"), p.lensDistortion / 100.f * 0.4f);
+                g.Uniform1f(loc(pr, "uKCA"), p.lensCA / 100.f * 0.03f);
+                g.Uniform1f(loc(pr, "uVig"), p.lensVignette / 100.f);
+                run(pr);
+            }
+            // NoiseReduction: colour (blurred chroma planes), then luminance (the bilateral)
+            const float nrColor = p.nrColor / 100.f, nrLum = p.nrLuminance / 100.f;
+            if (nrColor > 0.f && ch >= 3)
+            {
+                alloc(mM, planeBytes * 3, nullptr);
+                alloc(mMB, planeBytes * 3, nullptr);
+                const GLuint pc = program("nr_chroma", glpipe::nrChroma());
+                if (!pc) return false;
+                g.UseProgram(pc);
+                common(pc, w, h, ch);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mImg[cur]);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, mM);
+                dispatch(n);
+                for (int c = 0; c < 3; ++c)
+                    if (!gaussian(mM, (int)(c * n), mMB, (int)(c * n), 1.0f + nrColor * 4.0f, w, h)) return false;
+                const GLuint pr = imagePass("nr_chroma_apply", glpipe::nrChromaApply());
+                if (!pr) return false;
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, mMB);
+                g.Uniform1f(loc(pr, "uAmt"), nrColor);
+                run(pr);
+            }
+            if (nrLum > 0.f)
+            {
+                if (!lumPlanes(w, h, ch, cur, planeBytes, n)) return false;
+                const GLuint pr = imagePass("nr_lum", glpipe::nrLum());
+                if (!pr) return false;
+                const float sigmaS = 0.8f + nrLum * 2.2f;
+                int rad = (int)std::ceil(sigmaS * 2.f); if (rad < 1) rad = 1; if (rad > 4) rad = 4;
+                const float sigmaR = 0.02f + nrLum * 0.13f;
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, mL);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, mP);
+                g.Uniform1i(loc(pr, "uRad"), rad);
+                g.Uniform1f(loc(pr, "uInvS2"), 1.f / (2.f * sigmaS * sigmaS));
+                g.Uniform1f(loc(pr, "uInvR2"), 1.f / (2.f * sigmaR * sigmaR));
+                run(pr);
+            }
             // Exposure · Contrast · ToneRegions · WhiteBalance
             {
                 const GLuint pr = imagePass("point_pre", glpipe::pointPre());
@@ -301,14 +371,86 @@ namespace
                 g.Uniform4f(loc(pr, "uRemapP"), p.remapSrc, p.remapRange, p.remapDst, p.remapStrength);
                 run(pr);
             }
-            // the encode, and the final image back
+            // Dehaze: the atmospheric light (a GPU reduction the CPU finishes), then the transform
+            if (p.dehaze != 0.f)
+            {
+                const GLuint groups = (GLuint)((n + 255) / 256);
+                alloc(mPart, (GLsizeiptr)(groups * sizeof(float)), nullptr);
+                const GLuint pre = program("dehaze_reduce", glpipe::dehazeReduce());
+                if (!pre) return false;
+                g.UseProgram(pre);
+                common(pre, w, h, ch);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mImg[cur]);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, mPart);
+                dispatch(n);
+                float A = 0.1f;   // Dehaze's floor
+                g.BindBuffer(GL_SHADER_STORAGE_BUFFER, mPart);
+                if (const float *pp = (const float *)g.MapBufferRange(GL_SHADER_STORAGE_BUFFER, 0, (GLsizeiptr)(groups * sizeof(float)), GL_MAP_READ_BIT))
+                {
+                    for (GLuint k = 0; k < groups; ++k) A = std::max(A, pp[k]);
+                    g.UnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+                }
+                else return false;
+                const GLuint pr = imagePass("dehaze", glpipe::dehaze());
+                if (!pr) return false;
+                g.Uniform1f(loc(pr, "uA"), A);
+                g.Uniform1f(loc(pr, "uAmount"), p.dehaze / 100.f);
+                run(pr);
+            }
+            // Sharpen: the high-pass of the encoded luminance, gated by its blurred edge strength
+            if (p.sharpenAmount != 0.f)
+            {
+                if (!lumPlanes(w, h, ch, cur, planeBytes, n)) return false;
+                alloc(mPB, planeBytes, nullptr);
+                alloc(mD, planeBytes, nullptr);
+                alloc(mDB, planeBytes, nullptr);
+                if (!gaussianOrCopy(mP, mPB, p.sharpenRadius, w, h)) return false;
+                const GLuint pd = program("sharpen_detail", glpipe::sharpenDetail());
+                if (!pd) return false;
+                g.UseProgram(pd);
+                common(pd, w, h, ch);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, mP);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, mPB);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, mD);
+                dispatch(n);
+                if (!gaussianOrCopy(mD, mDB, p.sharpenRadius, w, h)) return false;
+                const GLuint pr = imagePass("sharpen", glpipe::sharpen());
+                if (!pr) return false;
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, mL);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, mP);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, mPB);
+                g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, mDB);
+                g.Uniform1f(loc(pr, "uAmount"), p.sharpenAmount / 100.f);
+                g.Uniform1f(loc(pr, "uMasking"), p.sharpenMasking / 100.f);
+                run(pr);
+            }
+            // Grain (EditEngine never reseeds it: the stage's default seed, 1)
+            if (p.grainAmount > 0.f)
+            {
+                const GLuint pr = imagePass("grain", glpipe::grain());
+                if (!pr) return false;
+                g.Uniform1f(loc(pr, "uCell"), 1.f + p.grainSize / 100.f * 3.f);
+                g.Uniform1f(loc(pr, "uStrength"), p.grainAmount / 100.f * 0.15f);
+                g.Uniform1ui(loc(pr, "uSeed"), 1u);
+                run(pr);
+            }
+            Image enc;
+            if (!p.masks.empty())
+            {
+                // masks: Cosmo's own MaskStack on the linear result, then its encode — the CPU's last two steps
+                enc = readImage(mImg[cur], w, h, ch, ColorSpace::LinearSRGB);
+                if (enc.empty()) return false;
+                applyMaskStack(enc, p.masks);
+                color::encodeInPlace(enc);
+            }
+            else
             {
                 const GLuint pr = imagePass("encode", glpipe::encode());
                 if (!pr) return false;
                 run(pr);
+                enc = readImage(mImg[cur], w, h, ch, ColorSpace::EncodedSRGB);
+                if (enc.empty()) return false;
             }
-            Image enc = readImage(mImg[cur], w, h, ch, ColorSpace::EncodedSRGB);
-            if (enc.empty()) return false;
             out.finalHist = Histogram::compute(enc);
             out.processed = std::move(enc);
             return true;
@@ -366,6 +508,33 @@ namespace
             std::memcpy(img.data(), mp, (size_t)bytes);
             g.UnmapBuffer(GL_SHADER_STORAGE_BUFFER);
             return img;
+        }
+        /** The luminance plane and its sRGB encode of the current image (Texture, Clarity, NR, Sharpen). */
+        bool lumPlanes(int w, int h, int ch, int cur, GLsizeiptr planeBytes, size_t n)
+        {
+            alloc(mL, planeBytes, nullptr);
+            alloc(mP, planeBytes, nullptr);
+            const GLuint pl = program("lum", glpipe::lum());
+            if (!pl) return false;
+            g.UseProgram(pl);
+            common(pl, w, h, ch);
+            g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mImg[cur]);
+            g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, mL);
+            g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, mP);
+            dispatch(n);
+            return true;
+        }
+        /** gaussianBlurPlane's own rule for sigma <= 0: a copy. */
+        bool gaussianOrCopy(GLuint in, GLuint out, float sigma, int w, int h)
+        {
+            if (sigma > 0.f) return gaussian(in, 0, out, 0, sigma, w, h);
+            const GLuint pr = program("box_h", glpipe::boxH());
+            if (!pr) return false;
+            g.UseProgram(pr); common(pr, w, h, 1);
+            g.Uniform1i(loc(pr, "uR"), 0); g.Uniform1i(loc(pr, "uInOff"), 0); g.Uniform1i(loc(pr, "uOutOff"), 0);
+            g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, in); g.BindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, out);
+            dispatch((size_t)w * h);
+            return true;
         }
         /** spatial::gaussianBlurPlane, exactly: the same kernel (radius ceil(3σ), normalised), clamped
          *  edges, horizontal then vertical. */
@@ -464,7 +633,9 @@ namespace
         EGLDisplay mDpy = EGL_NO_DISPLAY;
         EGLContext mCtx = EGL_NO_CONTEXT;
         std::map<std::string, GLuint> mProgs;
-        GLuint mImg[2] = {0, 0}, mL = 0, mP = 0, mT = 0, mPB = 0, mT2 = 0, mT3 = 0, mK = 0, mLut = 0, mM = 0, mMB = 0;
+        GLuint mImg[2] = {0, 0}, mL = 0, mP = 0, mT = 0, mPB = 0, mT2 = 0, mT3 = 0, mK = 0, mLut = 0, mM = 0, mMB = 0, mD = 0, mDB = 0, mPart = 0;
+        Crop mCropStage;
+        Rotate mRotateStage;
         ToneCurve mCurveStage;
         ColorMixer mMixerStage;
         bool mWantPreCurve = true, mWantPreMixer = true;

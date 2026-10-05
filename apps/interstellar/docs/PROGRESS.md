@@ -66,9 +66,8 @@ one integrator who moves, wires, tests and commits each stream:
       3. [x] Collapsible effect sections in the effect panel (R-FX-5 amended).
       4. [x] Keyframe limits: shapes animate (DR-ANIM-3); multi-curve graph, box-select, copy/paste
              keys, resizable lane (DR-ANIM-4).
-      5. [~] The grade on the GPU (R-GPU-1): Cosmo's GL backend made a multi-pass pipeline — every
-             per-pixel stage, Texture, Clarity, the mixer — DONE (DR-GPU-1, cosmo DR-GPU-8); the
-             spatial/geometric stages (NR, dehaze, sharpen, grain, lens, crop/rotate, masks) next.
+      5. [x] The grade on the GPU (R-GPU-1): Cosmo's GL backend is a multi-pass pipeline porting every
+             stage (DR-GPU-1, cosmo DR-GPU-8).
       6. [ ] 16-bit delivery path (R-COLOR-1).
       7. [ ] Input/working/output transforms, HDR, LUTs in and out (R-COLOR-2..6).
       8. [ ] Audio: mix, playback, waveforms, meters, in renders (R-AUD-5 amended, R-AUD-6..9).

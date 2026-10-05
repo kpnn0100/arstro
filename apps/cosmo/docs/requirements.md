@@ -850,8 +850,20 @@ on the AMD radeonsi here at 1080p: exposure+contrast+clarity+saturation 311 → 
 regions+texture+vibrance+curves 117 → 50 ms; mixer with spread + wheels + remap 212 → 56 ms; max
 difference 1/255. Guarded by `EditEngine_gl_pipeline_matches_cpu_per_stage`
 (`unittest/engineTests.cpp:1207`: eleven cases, each run on the GPU and within 2/255 — red with
-Clarity's midtone gate dropped, max diff 22) and `EditEngine_gl_backend_matches_cpu` (its "declines"
-cases moved to stages still unported: sharpening and the lens).
+Clarity's midtone gate dropped, max diff 22) and `EditEngine_gl_backend_matches_cpu`.
+**The rest, the same day:** `rotate` and `lens` (the CPU's inverse maps over an `Image::sampleBilinear`
+port), `nr_chroma`/`nr_chroma_apply` (three chroma planes, their exact Gaussian) and `nr_lum` (the
+bilateral, radius ≤ 4), `dehaze_reduce` (each work group's max of the darkest channel; the CPU
+finishes the max with Dehaze's 0.1 floor) and `dehaze`, `sharpen_detail`/`sharpen` (two exact
+Gaussians, the masking gate), `grain` (the CPU's hashed value noise, seed 1 — EditEngine never
+reseeds it). The crop and the quarter turns are Cosmo's own `Crop`/`Rotate` stages run before the
+upload — exact copies by construction — and masks are Cosmo's own `applyMaskStack` + encode on the
+read-back linear image. `pipelineSupports` now accepts every edit (kept so a stage added to the CPU
+later declines until ported). Measured: noise reduction + sharpening + dehaze + lens + grain +
+rotation at 1080p, 762 → 94 ms. The per-stage test grows to 22 cases — crop, quarter turn, rotation,
+lens, NR colour and luminance, dehaze ±, sharpening with masking, grain, a radial mask, all together
+— each on the GPU within 1/255 (red with grain's seed changed: max diff 92); `gl_backend_matches_cpu`'s
+former "declines" cases (sharpening, the lens) now assert the GPU took them and matched.
 ### DR-BYPASS-1 Model
 `EditSession::GNode` carries `bypass`. `isBypassed(node)` / `setBypassed(node,on)` /
 `toggleBypass(node)` read and write it; `editTargetNode()` / `editTargetBypassed()` answer for

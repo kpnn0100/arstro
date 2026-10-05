@@ -1207,11 +1207,13 @@ int main()
         std::printf("    GPU vs CPU, max difference %d/255\n", maxd);
         assert(maxd <= 2);
         assert(f.svc->model().settings.useGpu && f.svc->model().settings.gpuInUse);   // it did run there
-        // a stage the GPU has not ported declines to the CPU — said, not hidden
+        // the spatial stages too (sharpening, noise reduction, dehaze): still on the GPU
         f.must("set a.detail.sharpenAmount=40");
+        f.must("set a.detail.nrLuminance=30");
+        f.must("set a.basic.dehaze=20");
         assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, gpu));
         f.must("playhead 0");
-        assert(!f.svc->model().settings.gpuInUse);
+        assert(f.svc->model().settings.gpuInUse);
         f.must("set a.detail.sharpenAmount=0");
         f.must("settings set useGpu=0");
         f.must("set a.basic.contrast=5");    // a grade not cached yet, on the CPU

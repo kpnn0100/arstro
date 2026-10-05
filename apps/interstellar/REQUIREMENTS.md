@@ -511,7 +511,7 @@ reserves the rest so adopting it is not a migration.
   stages — clarity, sharpening, noise reduction, grain, lens — cannot live in a LUT and are left
   out, said in the file's header).
 
-## R-GPU — the grade on the GPU — 🚧 IN PROGRESS (added 2026-10-05; DR-GPU-1: every per-pixel stage, Texture, Clarity and the mixer on the GPU; geometry, lens, NR, dehaze, sharpening, grain and masks still CPU)
+## R-GPU — the grade on the GPU — ✅ IMPLEMENTED (added 2026-10-05; DR-GPU-1: every Cosmo stage on the GPU, masks finished on the CPU)
 
 - **R-GPU-1 With Use GPU on, the grade runs on Cosmo's GPU backend** (OpenGL compute) for previews,
   playback, the preview cache and renders, falling back to the CPU when the backend declines a job;

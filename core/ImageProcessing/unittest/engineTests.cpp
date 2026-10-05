@@ -1174,7 +1174,7 @@ TEST(EditEngine_gl_backend_matches_cpu)
     for (size_t i = 0; i < g.size(); ++i) { int d = (int)g[i] - (int)cref[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
     CHECK(maxd <= 2);  // GPU vs CPU float, after sRGB encode + round to 8-bit
 
-    // An edit OUTSIDE the ported stages (sharpening — not ported yet) must decline -> exact CPU output.
+    // Sharpening — ported with the rest (cosmo DR-GPU-8): on the GPU, within 2/255.
     EditParams q = p; q.sharpenAmount = 40.f;
     EditEngine cpu2; cpu2.setComputeAccelerator(nullptr);
     cpu2.addImage(bytes.data(), 24, 18, 4); cpu2.selectImage(0); cpu2.setPreviewSize(4096);
@@ -1184,9 +1184,10 @@ TEST(EditEngine_gl_backend_matches_cpu)
     gpu.setCurrentParams(q);
     PreviewBuffer g2 = gpu.renderFull();
     const std::vector<uint8_t> g2b(g2.rgba, g2.rgba + (size_t)g2.width * g2.height * 4);
-    CHECK(g2b == c2ref);
+    CHECK(gpu.lastRenderAccelerated() && g2b.size() == c2ref.size());
+    { int m2 = 0; for (size_t i = 0; i < g2b.size(); ++i) m2 = std::max(m2, std::abs((int)g2b[i] - (int)c2ref[i])); CHECK(m2 <= 2); }
 
-    // A lens correction is also outside the ported stages -> decline -> exact CPU.
+    // A lens correction — ported too: on the GPU, within 2/255.
     EditParams r = p; r.lensVignette = -30.f;
     EditEngine cpu3; cpu3.setComputeAccelerator(nullptr);
     cpu3.addImage(bytes.data(), 24, 18, 4); cpu3.selectImage(0); cpu3.setPreviewSize(4096);
@@ -1196,7 +1197,8 @@ TEST(EditEngine_gl_backend_matches_cpu)
     gpu.setCurrentParams(r);
     PreviewBuffer g3 = gpu.renderFull();
     const std::vector<uint8_t> g3b(g3.rgba, g3.rgba + (size_t)g3.width * g3.height * 4);
-    CHECK(g3b == c3ref);
+    CHECK(gpu.lastRenderAccelerated() && g3b.size() == c3ref.size());
+    { int m3 = 0; for (size_t i = 0; i < g3b.size(); ++i) m3 = std::max(m3, std::abs((int)g3b[i] - (int)c3ref[i])); CHECK(m3 <= 2); }
 }
 
 // The multi-pass desktop pipeline (Interstellar R-GPU-1, cosmo R-GPU-5 amended): every stage it
@@ -1239,8 +1241,22 @@ TEST(EditEngine_gl_pipeline_matches_cpu_per_stage)
     { EditParams p; p.mixer[1] = {{0, 0.6f}, {180, -0.5f}}; p.mixerSpread = 100; cases.push_back({"mixer with spread", p}); }
     { EditParams p; p.grade[0] = {210, 40, -15}; p.grade[1] = {90, 20, 5}; p.grade[2] = {35, 30, 10}; p.balance = -30; cases.push_back({"wheels + balance", p}); }
     { EditParams p; p.remapEnable = true; p.remapSrc = 120; p.remapRange = 60; p.remapDst = 30; p.remapStrength = 0.9f; p.saturation = 30; cases.push_back({"hue remap", p}); }
+    // GPU-B: the spatial and geometric stages, and masks
+    { EditParams p; p.cropX = 0.1f; p.cropY = 0.05f; p.cropW = 0.7f; p.cropH = 0.8f; p.exposure = 0.3f; cases.push_back({"crop", p}); }
+    { EditParams p; p.quarterTurns = 1; p.contrast = 15; cases.push_back({"quarter turn", p}); }
+    { EditParams p; p.rotation = 7.5f; cases.push_back({"rotation", p}); }
+    { EditParams p; p.lensDistortion = -40; p.lensCA = 60; p.lensVignette = -35; cases.push_back({"lens", p}); }
+    { EditParams p; p.nrColor = 60; cases.push_back({"noise reduction (colour)", p}); }
+    { EditParams p; p.nrLuminance = 70; cases.push_back({"noise reduction (luminance)", p}); }
+    { EditParams p; p.dehaze = 45; cases.push_back({"dehaze", p}); }
+    { EditParams p; p.dehaze = -40; cases.push_back({"dehaze (negative)", p}); }
+    { EditParams p; p.sharpenAmount = 80; p.sharpenRadius = 1.5f; p.sharpenMasking = 50; cases.push_back({"sharpen with masking", p}); }
+    { EditParams p; p.grainAmount = 60; p.grainSize = 40; cases.push_back({"grain", p}); }
+    { EditParams p; MaskParams m; m.type = MaskParams::Radial; m.adjust.exposure = 0.8f; m.adjust.saturation = 30; p.masks.push_back(m); p.contrast = 10; cases.push_back({"a radial mask", p}); }
     { EditParams p; p.exposure = 0.5f; p.contrast = 25; p.highlights = -30; p.temp = 5600; p.clarity = 30; p.texture = 20; p.vibrance = 20;
-      p.mixer[0] = {{60, 0.2f}}; p.grade[1] = {200, 25, 0}; p.curve = {{0, 0}, {0.5f, 0.55f}, {1, 1}}; cases.push_back({"all together", p}); }
+      p.mixer[0] = {{60, 0.2f}}; p.grade[1] = {200, 25, 0}; p.curve = {{0, 0}, {0.5f, 0.55f}, {1, 1}};
+      p.rotation = -3.f; p.lensVignette = -20; p.nrLuminance = 30; p.nrColor = 20; p.dehaze = 15; p.sharpenAmount = 40; p.grainAmount = 20;
+      cases.push_back({"all together", p}); }
     for (const auto &c : cases)
     {
         bool cpuGpu = false, gpuGpu = false;

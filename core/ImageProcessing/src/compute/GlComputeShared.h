@@ -61,18 +61,14 @@ void main() {
 )GLSL";
     }
 
-    // The MULTI-PASS desktop pipeline's ported stages (GlPipelineShaders.h): every per-pixel
-    // stage, Texture, Clarity and the colour mixer (spread included). The geometry, the lens, noise
-    // reduction, dehaze, sharpening, grain and masks are not ported yet: an edit using any of them
-    // declines to the CPU reference.
+    // The MULTI-PASS desktop pipeline (GlPipelineShaders.h) ports every stage: the crop and the
+    // quarter turns run as the CPU's own copies before the upload, masks as the CPU's own MaskStack
+    // on the read-back linear image; everything else is a GPU pass. Kept as a function so a stage
+    // added to the CPU later declines here until it is ported.
     inline bool pipelineSupports(const EditParams &p)
     {
-        const bool effectsId = p.dehaze == 0 && p.grainAmount == 0;
-        const bool detailId = p.sharpenAmount == 0 && p.nrLuminance == 0 && p.nrColor == 0;
-        const bool lensId = p.lensDistortion == 0 && p.lensCA == 0 && p.lensVignette == 0;
-        const bool geomId = p.rotation == 0 && p.quarterTurns == 0 &&
-                            p.cropX == 0 && p.cropY == 0 && p.cropW == 1 && p.cropH == 1;
-        return effectsId && detailId && lensId && geomId && p.masks.empty();
+        (void)p;
+        return true;
     }
 
     // True only when the edit is entirely within the GPU-ported subset: exposure /
