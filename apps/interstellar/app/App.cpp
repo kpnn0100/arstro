@@ -86,7 +86,9 @@ namespace interstellar_v1
         mSettings->onUseGpu = [this](bool on) { dispatch(std::string("settings set useGpu=") + (on ? "1" : "0")); };
         // Interstellar's own row, after cosmo's (opt-in: cosmo's dialog has none). R-PLAY-3
         mSettings->setExtraRows({{"Hardware video", "H.264 / H.265 on the video unit", {"Off", "On"}, 0,
-                                  [this](int i) { dispatch(std::string("settings set hardwareVideo=") + (i ? "1" : "0")); }}});
+                                  [this](int i) { dispatch(std::string("settings set hardwareVideo=") + (i ? "1" : "0")); }},
+                                 {"Preview cache", "graded frames, built when idle", {"Off", "On"}, 1,   // R-PLAY-1
+                                  [this](int i) { dispatch(std::string("settings set previewCache=") + (i ? "1" : "0")); }}});
         buildMenus();
 
         mRecognizer.setSink([this](const Gesture &g) {
@@ -141,6 +143,7 @@ namespace interstellar_v1
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         const auto &st = m.settings;
         mSettings->setExtraSelected(0, st.hardwareVideo ? 1 : 0);
+        mSettings->setExtraSelected(1, st.previewCache ? 1 : 0);
         mSettings->show(st.uiScale, mMaxUiScale, st.previewEdge, st.threads, st.cpuPercent, st.useGpu, st.gpuAvailable, false);
         noteActivity();
     }
@@ -734,7 +737,8 @@ namespace interstellar_v1
         for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) cap = tl.name.empty() ? tl.id : tl.name;
         if (m.width > 0 && m.height > 0) cap += (cap.empty() ? "" : "  \xC2\xB7  ") + std::to_string(m.width) + "\xC3\x97" + std::to_string(m.height);
         // playing: the size the read-ahead keeps up at (R-PLAY-2) — the paused frame is sharp again
-        if (m.playing && m.playbackEdge > 0) cap += "  \xC2\xB7  \xE2\x96\xB6 " + std::to_string(m.playbackEdge) + " px";
+        if (m.playing && m.playbackEdge > 0)
+            cap += "  \xC2\xB7  \xE2\x96\xB6 " + (m.playbackFromCache ? std::string("cached") : std::to_string(m.playbackEdge) + " px");
         mon->setCaption(cap);
 
         // is there a picture to show? (a clip under the playhead in the resolved timeline)

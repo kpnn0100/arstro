@@ -21,6 +21,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -65,6 +66,13 @@ namespace
     /** How many times each file was opened for the timeline — a variant must not open its own. */
     std::map<std::string, int> gOpens;
 
+    /** R-PLAY-1: "video files" the capture writer finished under a `.cache/` directory, readable back
+     *  through the fake source — lossless, so a cached frame can be compared with a graded one. The
+     *  file itself is touched on disk, as a real writer would leave it. */
+    std::mutex gMemMu;
+    std::map<std::string, std::vector<Raster>> gMemFiles;
+    int gCacheSegmentsWritten = 0;
+
     /** The TIMELINE's frames: 48x27, 24 fps, 96 frames; R = frame index, G = a per-file constant,
      *  so a test can read back which source frame of which file landed where. */
     class FakeFrameSource : public IFrameSource
@@ -72,6 +80,19 @@ namespace
     public:
         bool open(const std::string &path, Info &out) override
         {
+            {
+                std::lock_guard<std::mutex> l(gMemMu);
+                const auto m = gMemFiles.find(path);
+                if (m != gMemFiles.end())
+                {
+                    mMem = m->second;
+                    out.width = mMem.front().width;
+                    out.height = mMem.front().height;
+                    out.fps = 24;
+                    out.frames = (long long)mMem.size();
+                    return true;
+                }
+            }
             if (path.find("missing") != std::string::npos || !fs::exists(path)) return false;
             gOpens[fs::path(path).filename().string()]++;
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
@@ -84,6 +105,12 @@ namespace
         }
         bool frameAt(long long f, Raster &out) override
         {
+            if (!mMem.empty())
+            {
+                if (f < 0 || f >= (long long)mMem.size()) return false;
+                out = mMem[(size_t)f];
+                return true;
+            }
             out.allocate(48, 27);
             for (size_t i = 0; i < out.rgba.size(); i += 4)
             {
@@ -105,6 +132,7 @@ namespace
     private:
         uint8_t mG = 0;
         bool mEdge = false;
+        std::vector<Raster> mMem;
     };
 
     /** What the last render asked its writer for (R-RENDER-6). */
@@ -118,14 +146,35 @@ namespace
         explicit CaptureWriter(std::vector<Raster> *s) : sink(s) {}
         bool begin(const std::string &p, int w, int h, double fps, long long n, const EncodeSpec &spec) override
         {
+            mPath = p;
+            mCacheFile = p.find(".cache/") != std::string::npos;
+            mFrames.clear();
+            if (mCacheFile) { mCacheSpec = spec; mCacheW = w; mCacheH = h; return true; }   // not a render: gBegin is the render's
             gBegin = WriterBegin{p, w, h, fps, n, spec};
             mNote = spec.hardware && gNoHardware ? "hardware video unavailable (test) \xe2\x80\x94 encoded in software" : "";
             return true;
         }
-        bool write(const Raster &f) override { sink->push_back(f); return true; }
-        bool end() override { return true; }
+        bool write(const Raster &f) override
+        {
+            if (mCacheFile) { mFrames.push_back(f); return f.width == mCacheW && f.height == mCacheH; }
+            sink->push_back(f);
+            return true;
+        }
+        bool end() override
+        {
+            if (!mCacheFile) return true;
+            std::ofstream(mPath).put('\0');
+            std::lock_guard<std::mutex> l(gMemMu);
+            gMemFiles[mPath] = std::move(mFrames);
+            ++gCacheSegmentsWritten;
+            return true;
+        }
         std::string note() const override { return mNote; }
-        std::string mNote;
+        std::string mNote, mPath;
+        bool mCacheFile = false;
+        EncodeSpec mCacheSpec;
+        int mCacheW = 0, mCacheH = 0;
+        std::vector<Raster> mFrames;
     };
 
     struct Fixture
@@ -933,6 +982,101 @@ int main()
         assert(st.shown > 0 && st.lagFrames / st.shown < 2.0);   // never far behind the playhead
         f.must("pause");
         assert(f.svc->playbackStats().edge == 0);                  // paused: graded at the full preview size
+    });
+
+    test("the preview cache holds the graded frames, rebuilds only what an edit changed, and playback reads it (R-PLAY-1)", [] {
+        Fixture f("pcache");
+        f.standard();                                             // shotA 0–2 s, shotB 2–4 s: four 1-s segments
+        f.must("set a.basic.exposure=0.3");
+        gCacheSegmentsWritten = 0;
+        f.must("cache build");
+        f.must("wait cache.done");
+        const AppModel &m = f.svc->model();
+        std::printf("    cached %d of %d frames in %d segments\n", m.previewCacheFrames, m.previewCacheTotal, gCacheSegmentsWritten);
+        assert(m.previewCacheTotal == 96 && m.previewCacheFrames == 96 && gCacheSegmentsWritten == 4);
+        assert(m.previewCacheSegments == std::vector<int>({1, 1, 1, 1}));
+        assert(fs::exists(f.path("mv.cache/tl_1/index")));
+        // a cached frame IS the graded frame (the fake file is lossless): frame 30 = segment 1, index 6
+        {
+            std::lock_guard<std::mutex> l(gMemMu);
+            const std::vector<Raster> *seg1 = nullptr;
+            for (const auto &kv : gMemFiles) if (has(kv.first, "mv.cache/tl_1/seg_1_")) seg1 = &kv.second;
+            assert(seg1 && seg1->size() == 24);
+            Raster direct;
+            assert(f.svc->renderTimelineFrame("tl_1", 30 / 24.0, f.svc->cacheEdge(), direct));
+            // 48×27 is stored 48×28 — encoders want even sizes; the reader crops the repeated row off
+            const Raster &c6 = (*seg1)[6];
+            assert(c6.width == 48 && c6.height == 28 && direct.width == 48 && direct.height == 27);
+            assert(std::equal(direct.rgba.begin(), direct.rgba.end(), c6.rgba.begin()));
+        }
+        // nothing changed: building again writes nothing
+        gCacheSegmentsWritten = 0;
+        f.must("cache build");
+        f.must("wait cache.done");
+        assert(gCacheSegmentsWritten == 0 && f.svc->model().previewCacheFrames == 96);
+        // an edit to shotB's source invalidates exactly shotB's two seconds
+        f.must("set b.basic.exposure=0.5");
+        f.must("cache build");
+        f.must("wait cache.done");
+        std::printf("    after an edit to shotB: %d segments rebuilt\n", gCacheSegmentsWritten);
+        assert(gCacheSegmentsWritten == 2 && f.svc->model().previewCacheFrames == 96);
+        // the index outlives the service: a new session finds every frame current and builds nothing
+        f.must("project save");
+        gCacheSegmentsWritten = 0;
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        f.must("cache build");
+        f.must("wait cache.done");
+        assert(gCacheSegmentsWritten == 0 && f.svc->model().previewCacheFrames == 96);
+        // the setting is persisted and refused anything but 0|1
+        std::string err;
+        assert(!f.run("settings set previewCache=2", &err) && has(err, "previewCache is 0 or 1"));
+        f.must("cache clear");
+        assert(!fs::exists(f.path("mv.cache/tl_1/index")));
+    });
+
+    test("playback decodes cached frames instead of grading them, and they are the frames (R-PLAY-1)", [] {
+        Fixture f("pcacheplay");
+        f.async = true;
+        f.svc = f.make();
+        f.standard();
+        f.must("set a.basic.exposure=0.3");
+        f.must("cache build");
+        f.must("wait cache.done");
+        assert(f.svc->model().previewCacheFrames == 96);
+        const auto t0 = std::chrono::steady_clock::now();
+        auto nowMs = [&] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() + 100000.0; };
+        f.svc->pump(nowMs());
+        std::string err;
+        assert(f.svc->dispatchText("play", err));
+        Raster r;
+        double last = -1;
+        int checked = 0;
+        while (nowMs() < 100000.0 + 1500.0 && f.svc->model().playing)
+        {
+            f.svc->pump(nowMs());
+            const double t = f.svc->model().playhead;
+            if (t != last)
+            {
+                last = t;
+                const auto before = f.svc->playbackStats();
+                assert(f.svc->renderFrame(t, 48, r) || r.empty());
+                const auto after = f.svc->playbackStats();
+                if (after.fromCache > before.fromCache && after.hits > before.hits && checked < 5)
+                {
+                    // the frame due, from the cache: the timeline at t graded at the cache edge
+                    Raster direct;
+                    assert(f.svc->renderTimelineFrame("tl_1", t, f.svc->cacheEdge(), direct));
+                    assert(direct.rgba == r.rgba);
+                    ++checked;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const auto st = f.svc->playbackStats();
+        std::printf("    played: %lld shown, %lld from the cache\n", st.shown, st.fromCache);
+        assert(checked > 0 && st.fromCache > 0 && st.fromCache * 10 >= st.shown * 8);   // nearly every frame shown was decoded, not graded
+        f.must("pause");
     });
 
     test("the same script on two services dumps the same stable state", [] {

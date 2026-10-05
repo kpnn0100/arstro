@@ -51,7 +51,7 @@ PUBLIC defines match the rest of the final binary.
   |---|---|
   | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
   | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
-  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own row after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1` |
+  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
   | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
   | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
 
@@ -192,6 +192,11 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - While playing, the service grades ahead on a small pool and steps the playing size down (960 →
   640) when it falls behind; the monitor caption adds "▶ 640 px". Pause → the full preview size.
   Nothing to do in the app beyond the caption: `renderFrame` answers from the ring.
+- R-PLAY-1/3 (same day): the graded preview cache builds itself while the window is idle; the Cut
+  ruler carries a 2-px bar per second — green cached, grey stale, accent building — each amount eased
+  (`Timeline::cacheAmount` is the live value a test reads); the caption reads "▶ cached" when the
+  frame came from it. Engine Settings gains two rows through cosmo's opt-in `setExtraRows`: Hardware
+  video and Preview cache. Shot added: `cut_cache_bar`; live: `live_cut_cached`. UI checks: 282.
 
 ## Integrating (the GTK host)
 

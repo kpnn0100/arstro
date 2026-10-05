@@ -65,7 +65,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
 | `grade paste [node…] [--all]` | Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: it writes through to Cosmo. | R-EDIT-2 |
 | `rack ungroup <group>` | Dissolve a group; its members keep their own grades. | R-RACK-4 |
-| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%), hardwareVideo (0\|1: H.264/H.265 on the GPU's video unit). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
+| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%), hardwareVideo (0\|1: H.264/H.265 on the GPU's video unit), previewCache (0\|1: build the graded preview cache when idle). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
 | `preset apply <name> [--node <bind>]` | Apply a library preset to a rack source (the Grade target by default). Root timeline only. | R-EDIT-3 |
 | `preset save <name> [--node <bind>]` | Save a rack source's grade to the library as <name>.apf. | R-EDIT-3 |
 | `preset import <path.apf>` | Copy an .apf (from Cosmo or anywhere) into the library. | R-EDIT-3 |
@@ -74,12 +74,14 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `pause` | Stop playback. | R-UI-3 |
 | `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused. | R-RENDER-6 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
+| `cache build` | Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`. | R-PLAY-1 |
+| `cache clear` | Delete the current timeline's preview cache. | R-PLAY-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
 | `state print [--json] [--stable]` | Print the AppModel; --stable omits machine-dependent fields. | R-API-2 |
 | `api [--json] [--md]` | Print this document. | R-API-1 |
 | `lint` | Report offline media, dangling deltas and refused fields. | R-RACK-7 |
-| `wait <rack.loaded\|render.done\|frame.ready> [--timeout <dur>]` | Block (pumping) until a condition holds. | R-API-2 |
+| `wait <rack.loaded\|render.done\|frame.ready\|cache.done> [--timeout <dur>]` | Block (pumping) until a condition holds. | R-API-2 |
 | `quit` | End a script or session. | R-API-2 |
 
 ## Addresses
@@ -212,8 +214,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `render.failed` | `job`, `timeline`, `why` | A render stopped with an error or was cancelled. |
 | `lint.report` | `offline`, `dangling`, `refused` | Counts from `lint`; details follow as info. |
 | `history.changed` | `did`, `label`, `canUndo`, `canRedo` | An edit was recorded, undone or redone (did = edit \| undo \| redo \| cleared). |
-| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo` | Engine settings after a change, all keys. |
+| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo`, `previewCache` | Engine settings after a change, all keys. |
 | `presets.changed` | `count` | The preset library was rescanned. |
+| `cache.changed` | `timeline`, `frames`, `total`, `building` | The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1). |
 
 ## Model
 
@@ -341,6 +344,12 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `gradeClipboardFrom` | string |  | The bind name the clipboard grade came from. |
 | `playbackEdge` | integer |  | The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2). |
 | `playbackRate` | number |  | Frames the read-ahead finished per second over the last half second; 0 = not playing. |
+| `playbackFromCache` | bool | *machine* | The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1). |
+| `previewCacheFrames` | integer | *machine* | Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1). |
+| `previewCacheTotal` | integer | *machine* | Frames in the current timeline. |
+| `previewCacheBuilding` | bool | *machine* | A segment is being built now. |
+| `previewCacheSegmentSeconds` | number | *machine* | Seconds one previewCacheSegments entry covers. |
+| `previewCacheSegments` | array | *machine* | Per segment of the current timeline: 0 not cached · 1 cached and current · 2 stale · 3 building — the timeline's cache bar. |
 | `effects` | array |  | Every plugin of every rack node's image-processing stack, by node then order (R-FX-5). |
 | `effects[].id` | string |  | The plugin's id, `ef_<n>` — stable for its life, the root of its addresses. |
 | `effects[].node` | string |  | The #rackobj whose stack it is in. |
@@ -369,8 +378,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.cpuPercent` | integer |  | Share of the machine's cores the app may schedule — the rack's decode and the frame path alike. |
 | `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |
 | `settings.previewEdge` | integer |  | Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected. |
+| `settings.previewCache` | bool |  | A window builds the graded preview cache of the current timeline when idle (R-PLAY-1). |
 | `settings.useGpu` | bool |  | GPU opt-in for the grade step (only where a backend exists). |
-| `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders; falls back to software, said (R-PLAY-3). |
+| `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3). |
 | `settings.uiScale` | integer |  | Percent of the design size the window draws at. |
 | `settings.gpuAvailable` | bool | *machine* | A GPU backend exists on this machine. |
 | `settings.cores` | integer | *machine* | Cores on this machine. |

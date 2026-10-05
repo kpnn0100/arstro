@@ -218,6 +218,17 @@ namespace interstellar
         j.set("gradeClipboardFrom", m.gradeClipboardFrom);
         j.set("playbackEdge", m.playbackEdge);
         j.set("playbackRate", m.playbackRate);
+        if (!st)
+        {
+            j.set("playbackFromCache", m.playbackFromCache);
+            j.set("previewCacheFrames", m.previewCacheFrames);
+            j.set("previewCacheTotal", m.previewCacheTotal);
+            j.set("previewCacheBuilding", m.previewCacheBuilding);
+            j.set("previewCacheSegmentSeconds", m.previewCacheSegmentSeconds);
+            Json segs = Json::array();
+            for (int s : m.previewCacheSegments) segs.push(Json::integer(s));
+            j.set("previewCacheSegments", segs);
+        }
         {
             Json fx = Json::array();
             for (const auto &e : m.effects)
@@ -243,6 +254,7 @@ namespace interstellar
         settings.set("previewEdge", m.settings.previewEdge);
         settings.set("useGpu", m.settings.useGpu);
         settings.set("hardwareVideo", m.settings.hardwareVideo);
+        settings.set("previewCache", m.settings.previewCache);
         settings.set("uiScale", m.settings.uiScale);
         if (!st)
         {
@@ -415,6 +427,12 @@ namespace interstellar
             {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
             {"playbackEdge", "integer", "The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2)."},
             {"playbackRate", "number", "Frames the read-ahead finished per second over the last half second; 0 = not playing."},
+            {"playbackFromCache", "bool", "The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1).", true},
+            {"previewCacheFrames", "integer", "Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1).", true},
+            {"previewCacheTotal", "integer", "Frames in the current timeline.", true},
+            {"previewCacheBuilding", "bool", "A segment is being built now.", true},
+            {"previewCacheSegmentSeconds", "number", "Seconds one previewCacheSegments entry covers.", true},
+            {"previewCacheSegments", "array", "Per segment of the current timeline: 0 not cached · 1 cached and current · 2 stale · 3 building — the timeline's cache bar.", true},
             {"effects", "array", "Every plugin of every rack node's image-processing stack, by node then order (R-FX-5)."},
             {"effects[].id", "string", "The plugin's id, `ef_<n>` — stable for its life, the root of its addresses."},
             {"effects[].node", "string", "The #rackobj whose stack it is in."},
@@ -443,8 +461,9 @@ namespace interstellar
             {"settings.cpuPercent", "integer", "Share of the machine's cores the app may schedule — the rack's decode and the frame path alike."},
             {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},
             {"settings.previewEdge", "integer", "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."},
+            {"settings.previewCache", "bool", "A window builds the graded preview cache of the current timeline when idle (R-PLAY-1)."},
             {"settings.useGpu", "bool", "GPU opt-in for the grade step (only where a backend exists)."},
-            {"settings.hardwareVideo", "bool", "H.264/H.265 encode on the GPU's video unit (VA-API) for renders; falls back to software, said (R-PLAY-3)."},
+            {"settings.hardwareVideo", "bool", "H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3)."},
             {"settings.uiScale", "integer", "Percent of the design size the window draws at."},
             {"settings.gpuAvailable", "bool", "A GPU backend exists on this machine.", true},
             {"settings.cores", "integer", "Cores on this machine.", true},

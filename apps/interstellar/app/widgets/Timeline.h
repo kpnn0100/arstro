@@ -66,6 +66,8 @@ namespace interstellar_v1
 
         // ── the one time origin ──
         double timeToX(double t) const;
+        /** The LIVE eased "cached" amount of preview-cache segment `seg` (R-PLAY-1) — for a test. */
+        double cacheAmount(size_t seg) const { return seg < mCacheSegs.size() ? mCacheSegs[seg].cached.value() : 0.0; }
         double xToTime(double x) const;
         double ppsLive() const { return mPps.value(); }
         double ppsTarget() const { return mPpsTarget; }
@@ -152,6 +154,15 @@ namespace interstellar_v1
             double laneT = 0, laneL = 0, alphaT = 1, alphaL = 1;
             bool placed = false, gone = false;
         };
+        /** R-PLAY-1: one second of the preview cache bar along the ruler's top — cached (success),
+         *  stale (a quiet grey: an edit changed it), building (the accent) — each amount eased, so a
+         *  segment finishing fades in rather than flipping. Never shrunk: a segment past a shortened
+         *  timeline eases out like any other. */
+        struct CacheSegAnim
+        {
+            artboard::AnimatedProperty cached{0.0}, stale{0.0}, building{0.0};
+            double cachedT = 0, staleT = 0, buildingT = 0, cachedL = 0, staleL = 0, buildingL = 0;
+        };
         /** Clips are keyed by id AND look (provenance, offline): a restyle — a rebase turning a
          *  dangling clip back into an inherited one, a version switch — is then a cross-fade between
          *  the old look and the new, with the new one starting from the old one's live geometry. */
@@ -178,6 +189,8 @@ namespace interstellar_v1
         std::map<std::string, TrackAnim> mTrackAnims;      // keyed by track id
         bool mEmptyWanted = true, mEmptyApplied = true, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{1.0};
+        std::vector<CacheSegAnim> mCacheSegs;
+        double mCacheSegSeconds = 1.0;
         std::string mSelectedClip;
         double mDuration = 0.0, mFps = 24.0, mPlayhead = 0.0;
         bool mPlaying = false;

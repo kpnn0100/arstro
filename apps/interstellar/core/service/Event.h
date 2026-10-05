@@ -53,7 +53,8 @@ namespace interstellar
             LintReport,         // offline, dangling, refused
             HistoryChanged,     // did, label, canUndo, canRedo
             SettingsChanged,    // the key=value pairs that changed
-            PresetsChanged      // count
+            PresetsChanged,     // count
+            CacheChanged        // timeline, frames, total, building
         };
 
         Kind kind = Kind::Info;

@@ -773,7 +773,7 @@
       "minArgs": 1,
       "maxArgs": -1,
       "flags": [],
-      "summary": "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu (0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit). Persisted; one CPU budget for the rack and the render path.",
+      "summary": "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu (0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit), previewCache (0|1: build the graded preview cache when idle). Persisted; one CPU budget for the rack and the render path.",
       "requirement": "R-SET-1"
     },
     {
@@ -912,6 +912,26 @@
       "requirement": "R-RENDER-4"
     },
     {
+      "verb": "cache build",
+      "usage": "cache build",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`.",
+      "requirement": "R-PLAY-1"
+    },
+    {
+      "verb": "cache clear",
+      "usage": "cache clear",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Delete the current timeline's preview cache.",
+      "requirement": "R-PLAY-1"
+    },
+    {
       "verb": "export-still",
       "usage": "export-still [--timeline <tl>] [--out <p.png>] [--at <t>]",
       "args": "",
@@ -1003,8 +1023,8 @@
     },
     {
       "verb": "wait",
-      "usage": "wait <rack.loaded|render.done|frame.ready> [--timeout <dur>]",
-      "args": "<rack.loaded|render.done|frame.ready>",
+      "usage": "wait <rack.loaded|render.done|frame.ready|cache.done> [--timeout <dur>]",
+      "args": "<rack.loaded|render.done|frame.ready|cache.done>",
       "minArgs": 1,
       "maxArgs": 1,
       "flags": [
@@ -1237,7 +1257,8 @@
         "previewEdge",
         "useGpu",
         "uiScale",
-        "hardwareVideo"
+        "hardwareVideo",
+        "previewCache"
       ],
       "summary": "Engine settings after a change, all keys."
     },
@@ -1247,6 +1268,16 @@
         "count"
       ],
       "summary": "The preset library was rescanned."
+    },
+    {
+      "name": "cache.changed",
+      "fields": [
+        "timeline",
+        "frames",
+        "total",
+        "building"
+      ],
+      "summary": "The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1)."
     }
   ],
   "model": [
@@ -1971,6 +2002,42 @@
       "doc": "Frames the read-ahead finished per second over the last half second; 0 = not playing."
     },
     {
+      "path": "playbackFromCache",
+      "type": "bool",
+      "stable": false,
+      "doc": "The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1)."
+    },
+    {
+      "path": "previewCacheFrames",
+      "type": "integer",
+      "stable": false,
+      "doc": "Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1)."
+    },
+    {
+      "path": "previewCacheTotal",
+      "type": "integer",
+      "stable": false,
+      "doc": "Frames in the current timeline."
+    },
+    {
+      "path": "previewCacheBuilding",
+      "type": "bool",
+      "stable": false,
+      "doc": "A segment is being built now."
+    },
+    {
+      "path": "previewCacheSegmentSeconds",
+      "type": "number",
+      "stable": false,
+      "doc": "Seconds one previewCacheSegments entry covers."
+    },
+    {
+      "path": "previewCacheSegments",
+      "type": "array",
+      "stable": false,
+      "doc": "Per segment of the current timeline: 0 not cached · 1 cached and current · 2 stale · 3 building — the timeline's cache bar."
+    },
+    {
       "path": "effects",
       "type": "array",
       "stable": true,
@@ -2139,6 +2206,12 @@
       "doc": "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."
     },
     {
+      "path": "settings.previewCache",
+      "type": "bool",
+      "stable": true,
+      "doc": "A window builds the graded preview cache of the current timeline when idle (R-PLAY-1)."
+    },
+    {
       "path": "settings.useGpu",
       "type": "bool",
       "stable": true,
@@ -2148,7 +2221,7 @@
       "path": "settings.hardwareVideo",
       "type": "bool",
       "stable": true,
-      "doc": "H.264/H.265 encode on the GPU's video unit (VA-API) for renders; falls back to software, said (R-PLAY-3)."
+      "doc": "H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3)."
     },
     {
       "path": "settings.uiScale",

@@ -235,7 +235,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster"; R-PLAY-2 DONE, DR-PLAY-2; R-PLAY-3 DONE for renders, DR-PLAY-3)
+## R-PLAY — smooth preview — ✅ IMPLEMENTED (added 2026-10-05, user request "playback directly is a disaster"; DR-PLAY-1..3)
 
 - **R-PLAY-1 A preview cache of GRADED frames** — (**AMENDED 2026-10-05, the same day, after
   measuring:** the request suggested pre-encoded H.264 *proxies* of the sources. Measured on this
@@ -440,8 +440,9 @@ reserves the rest so adopting it is not a migration.
 - **R-SET-2 One CPU limit for the whole app.** The share of cores is one budget: the hosted Cosmo's
   decode pool and the engine threads Interstellar's own frame path runs on both come from it.
 - **R-SET-3 Preview quality caps the monitor**, never a render or an export, and never upscales.
-- **R-SET-4 Hardware video** (added 2026-10-05) — R-PLAY-3's switch, persisted like the others; a row
-  Interstellar adds after cosmo's (cosmo's own dialog is unchanged). DR-PLAY-3.
+- **R-SET-4 Hardware video and Preview cache** (added 2026-10-05) — R-PLAY-3's and R-PLAY-1's switches,
+  persisted like the others; rows Interstellar adds after cosmo's (cosmo's own dialog is unchanged).
+  DR-PLAY-1, DR-PLAY-3.
 
 ---
 

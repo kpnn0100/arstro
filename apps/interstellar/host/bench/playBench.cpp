@@ -9,6 +9,7 @@
  *  source bypassed) to split decode + composite from grading.
  */
 #include "FrameSourceFFmpeg.h"
+#include "FrameWriterFFmpeg.h"
 #include "HostFrameSource.h"
 #include "InterstellarService.h"
 #include "VideoFrameDecoder.h"
@@ -36,6 +37,7 @@ int main(int argc, char **argv)
         return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder(std::move(sel)));
     };
     h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
+    h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
     if (std::getenv("BENCH_PLAY")) h.asyncPreview = true;
     InterstellarService svc(budget, h);
     std::string err;
@@ -62,15 +64,25 @@ int main(int argc, char **argv)
     };
     if (std::getenv("BENCH_PLAY"))
     {
+        // R-PLAY-1: BENCH_CACHE=1 builds the graded preview cache first, then plays from it
+        if (std::getenv("BENCH_CACHE"))
+        {
+            const auto c0 = Clock::now();
+            if (!svc.dispatchText("cache build", err) || !svc.dispatchText("wait cache.done --timeout 600s", err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
+            std::printf("cache: %d of %d frames in %.1f s\n", svc.model().previewCacheFrames, svc.model().previewCacheTotal,
+                        std::chrono::duration<double>(Clock::now() - c0).count());
+        }
         // R-PLAY-2: play for `seconds` against the wall clock, the monitor asking every 8 ms
         const auto t0 = Clock::now();
-        auto nowMs = [&] { return std::chrono::duration<double, std::milli>(Clock::now() - t0).count() + 1000.0; };
+        // `wait` pumps simulated time: start this clock after wherever the service's has got to
+        const double base = 1e9;
+        auto nowMs = [&] { return std::chrono::duration<double, std::milli>(Clock::now() - t0).count() + base; };
         svc.pump(nowMs());
-        svc.dispatchText("play", err);
+        if (!svc.dispatchText("play", err)) { std::fprintf(stderr, "%s\n", err.c_str()); return 1; }
         Raster r;
         double lastT = -1;
         int shown = 0;
-        while (nowMs() - 1000.0 < seconds * 1000.0 && svc.model().playing)
+        while (nowMs() - base < seconds * 1000.0 && svc.model().playing)
         {
             svc.pump(nowMs());
             if (svc.model().playhead != lastT)
@@ -82,8 +94,8 @@ int main(int argc, char **argv)
             std::this_thread::sleep_for(std::chrono::milliseconds(4));
         }
         const auto st = svc.playbackStats();
-        std::printf("playing %.1f s: %d frames due, %lld exact, %lld shown, mean lag %.2f frames, edge %d, pool %.1f fps\n", seconds, shown,
-                    st.hits, st.shown, st.shown ? st.lagFrames / st.shown : 0.0, st.edge, st.rate);
+        std::printf("playing %.1f s: %d frames due, %lld exact, %lld shown (%lld from the cache), mean lag %.2f frames, edge %d, pool %.1f fps\n",
+                    seconds, shown, st.hits, st.shown, st.fromCache, st.shown ? st.lagFrames / st.shown : 0.0, st.edge, st.rate);
         svc.dispatchText("pause", err);
         return 0;
     }

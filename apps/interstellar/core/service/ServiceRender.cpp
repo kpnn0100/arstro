@@ -367,7 +367,7 @@ namespace interstellar
         return planSourceFrame(mModel.rack[(size_t)mModel.selectedRack].rackObj, -1.0, proxyEdge, plan);
     }
 
-    bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out)
+    bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember)
     {
         // Graded frames must outlive the compose call: one slot per layer.
         std::vector<Raster> graded(plan.layers.size());
@@ -384,7 +384,7 @@ namespace interstellar
             if (l.weight > 0.0 && l.weight < 1.0) key.source += "|w" + canonicalNumber(l.weight);
             if (l.groupMix && !ungradedOnly)
                 key.source += "|g" + canonicalNumber(l.groupWeight) + ":" + std::to_string(render::hashParams(l.paramsGroupsOff));
-            if (!mCache->get(key, graded[i]))
+            if (!remember || !mCache->get(key, graded[i]))
             {
                 Raster ungraded;
                 if (!decodeLayer(ctx, l, ungraded)) continue;
@@ -416,7 +416,7 @@ namespace interstellar
                     const double scale = l.srcWidth > 0 ? (double)graded[i].width / l.srcWidth : 1.0;
                     for (const auto &e : l.effects) render::applyEffect(e, scale, graded[i]);
                 }
-                mCache->put(key, graded[i]);
+                if (remember) mCache->put(key, graded[i]);
             }
             render::Layer L = l.layer;
             L.src = &graded[i];
@@ -469,7 +469,11 @@ namespace interstellar
             std::lock_guard<std::mutex> l(mAhead->mu);
             while (!mAhead->queue.empty() && mAhead->queue.front().t < now - 1e-6) mAhead->queue.pop_front();
             for (auto it = mAhead->done.begin(); it != mAhead->done.end();)
-                it = it->second.first < now - 2.0 / fps ? mAhead->done.erase(it) : std::next(it);
+            {
+                if (it->second.first >= now - 2.0 / fps) { ++it; continue; }
+                mAhead->doneFromCache.erase(it->first);
+                it = mAhead->done.erase(it);
+            }
         }
         // plan each frame once per (edge, project state): planning reads the rack and is not free
         if (edge != mAheadPlannedEdge || mModel.revision != mAheadPlannedRevision)
@@ -491,6 +495,10 @@ namespace interstellar
             if (!planFrame(tl, t, edge, it.plan, &any) || !any) continue;
             it.key = it.plan.key;
             it.t = t;
+            // R-PLAY-1: this frame in the preview cache, unchanged since it was cached → decode, don't grade
+            FramePlan atCache;
+            if (mPCache && planFrame(tl, t, cacheEdge(), atCache, nullptr))
+                cacheLookup(f, atCache, it.cacheFile, it.cacheIndex, it.cacheW, it.cacheH);
             fresh.push_back(std::move(it));
         }
         {
@@ -535,18 +543,48 @@ namespace interstellar
                 if (p.resetSources[worker])
                 {
                     p.ctxs[worker]->sources.clear();   // this worker's own decoders, on its own thread
+                    p.cacheSrcs[worker].clear();
                     p.resetSources[worker] = 0;
                 }
             }
             Raster frame;
             const auto t0 = std::chrono::steady_clock::now();
-            const bool ok = executePlan(*p.ctxs[worker], it.plan, frame);
+            bool cached = false;
+            if (!it.cacheFile.empty())
+            {
+                // R-PLAY-1: decode the graded frame from its segment (this worker's own decoder for it)
+                auto &srcs = p.cacheSrcs[worker];
+                auto s = srcs.find(it.cacheFile);
+                if (s == srcs.end())
+                {
+                    if (srcs.size() >= 8) srcs.clear();
+                    std::unique_ptr<IFrameSource> src = mHost.frameSource ? mHost.frameSource() : nullptr;
+                    IFrameSource::Info info;
+                    if (src && !src->open(it.cacheFile, info)) src.reset();
+                    s = srcs.emplace(it.cacheFile, std::move(src)).first;
+                }
+                Raster dec;
+                if (s->second && s->second->frameAt(it.cacheIndex, dec) && dec.width >= it.cacheW && dec.height >= it.cacheH)
+                {
+                    if (dec.width == it.cacheW && dec.height == it.cacheH) frame = std::move(dec);
+                    else
+                    {
+                        frame.allocate(it.cacheW, it.cacheH);   // the encoder's even padding, cropped off
+                        for (int y = 0; y < it.cacheH; ++y)
+                            std::copy_n(&dec.rgba[(size_t)y * dec.width * 4], (size_t)it.cacheW * 4, &frame.rgba[(size_t)y * it.cacheW * 4]);
+                    }
+                    cached = true;
+                }
+            }
+            const bool ok = cached || executePlan(*p.ctxs[worker], it.plan, frame);
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
             {
                 std::lock_guard<std::mutex> l(p.mu);
                 p.workMs = p.workMs <= 0 ? ms : p.workMs * 0.8 + ms * 0.2;
                 p.busy.erase(it.key);
                 if (ok) p.done[it.key] = {it.t, std::move(frame)};
+                if (ok && cached) p.doneFromCache.insert(it.key);
+                else p.doneFromCache.erase(it.key);
             }
             p.finished.fetch_add(1);
         }
@@ -608,14 +646,25 @@ namespace interstellar
             std::lock_guard<std::mutex> l(mAhead->mu);
             const double fps = mProject->fps > 0 ? mProject->fps : 24.0;
             const auto hit = mAhead->done.find(plan.key);
-            if (hit != mAhead->done.end()) { out = hit->second.second; ++mAheadHits; ++mAheadShown; return true; }
+            if (hit != mAhead->done.end())
+            {
+                out = hit->second.second;
+                ++mAheadHits;
+                ++mAheadShown;
+                mLastFromCache = mAhead->doneFromCache.count(plan.key) > 0;
+                mCacheShown += mLastFromCache;
+                return true;
+            }
             ++mAheadMisses;
             const std::pair<double, Raster> *best = nullptr;
+            const std::string *bestKey = nullptr;
             for (const auto &kv : mAhead->done)
-                if (kv.second.first <= mModel.playhead + 1e-6 && (!best || kv.second.first > best->first)) best = &kv.second;
+                if (kv.second.first <= mModel.playhead + 1e-6 && (!best || kv.second.first > best->first)) { best = &kv.second; bestKey = &kv.first; }
             if (best)
             {
                 out = best->second;
+                mLastFromCache = mAhead->doneFromCache.count(*bestKey) > 0;
+                mCacheShown += mLastFromCache;
                 ++mAheadShown;
                 mAheadLag += (mModel.playhead - best->first) * fps;
                 return true;

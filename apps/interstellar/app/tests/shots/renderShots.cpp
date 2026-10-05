@@ -276,6 +276,12 @@ namespace
             clickSegShot(r, os->formatPicker(), 1);
             r.pump(80);
         }});
+        // the preview cache bar (R-PLAY-1): cached seconds, one building, two stale after an edit
+        v.push_back({"cut_cache_bar", [](FakeService &s) {
+            s.edit();
+            s.m.previewCacheSegmentSeconds = 1.0;
+            s.m.previewCacheSegments = {1, 1, 1, 1, 1, 1, 1, 1, 3, 0, 0, 0, 2, 2, 1, 1, 1, 0, 0, 0};
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
         // cutting like an editor (R-UI-14): a source dragged over V2, a roll, a slip, the clip menu
         v.push_back({"cut_drop_source", edit, [](Rig &r) {
             r.app->setTab(1);

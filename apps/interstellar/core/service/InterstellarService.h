@@ -116,8 +116,11 @@ namespace interstellar
             double rate = 0;                  // frames the pool finished per second
             long long shown = 0;              // frames handed to the monitor while playing
             double lagFrames = 0;             // how far behind the playhead the shown picture was, summed
+            long long fromCache = 0;          // shown frames decoded from the preview cache (R-PLAY-1)
         };
-        PlaybackStats playbackStats() const { return {mAheadHits, mAheadMisses, mPlayEdge, mPlayRate, mAheadShown, mAheadLag}; }
+        /** R-PLAY-1: the long edge the preview cache is built at — playback's best size, under Preview quality. */
+        int cacheEdge() const;
+        PlaybackStats playbackStats() const { return {mAheadHits, mAheadMisses, mPlayEdge, mPlayRate, mAheadShown, mAheadLag, mCacheShown}; }
         /** A NAMED timeline at `t` — what render and export-still use (R-RENDER-1). */
         bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
@@ -138,6 +141,7 @@ namespace interstellar
         struct RenderCtx;
         struct PreviewWorker;
         struct AheadPool;
+        struct PreviewCache;
 
         void emit(const Event &e);
         bool dispatchInner(const Command &c);
@@ -206,12 +210,19 @@ namespace interstellar
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
         bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
         bool present(FramePlan &&plan, Raster &out);
-        bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out);
+        bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember = true);
         void previewLoop();
         // R-PLAY-2: while playing, grade the frames after the playhead in parallel
         void aheadLoop(size_t worker);
         void scheduleAhead();
         int playEdge(int requested) const;
+        // R-PLAY-1: the graded preview cache (ServiceCache.cpp)
+        bool cacheCommand(const Command &c);
+        void pumpPreviewCache();
+        void cacheLoop();
+        void stopCache();
+        bool cacheLookup(long long frame, const FramePlan &atCacheEdge, std::string &file, long long &index, int &w, int &h) const;
+        void fillCacheModel(AppModel &m) const;
         bool gradeForBypassing(const NodeId &timeline, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
                                EditParams &out, std::string &err);
         double timelineDuration(const NodeId &timeline) const;
@@ -267,6 +278,12 @@ namespace interstellar
         render::GradeEngine *mGrade = nullptr;       // == mSync->grade (settings reach it)
         std::unique_ptr<PreviewWorker> mPreview;     // last member: stopped first
         std::unique_ptr<AheadPool> mAhead;           // stopped in the destructor, before mPreview
+        std::unique_ptr<PreviewCache> mPCache;       // made when first wanted; stopped first in the destructor
+        unsigned mEpoch = 0;                         // rises on every command and rack load: the cache re-checks
+        double mLastCommandMs = -1e9;                // the cache builds when the user has stopped for a moment
+        bool mCacheForced = false;                   // `cache build`: now, whatever the idle rule says
+        long long mCacheShown = 0;
+        bool mLastFromCache = false;                 // the last frame shown while playing came from the cache
         int mPlayEdge = 0;                           // the long edge playback grades at now (0 = not playing)
         int mLastMonitorEdge = 0;                    // the edge the monitor last asked for
         bool mPreroll = false;                       // Play pressed: the clock waits for the first frames

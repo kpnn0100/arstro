@@ -96,7 +96,16 @@ namespace interstellar
      *  reads. A frame is a pure function of its plan (R-RENDER-2), so a ring frame IS the frame. */
     struct InterstellarService::AheadPool
     {
-        struct Item { std::string key; double t = 0; FramePlan plan; };
+        struct Item
+        {
+            std::string key;
+            double t = 0;
+            FramePlan plan;
+            // R-PLAY-1: the frame is in the preview cache unchanged — decode it from there instead
+            std::string cacheFile;
+            long long cacheIndex = -1;
+            int cacheW = 0, cacheH = 0;
+        };
         std::vector<std::thread> threads;
         std::vector<std::unique_ptr<RenderCtx>> ctxs;
         std::vector<char> resetSources;
@@ -105,9 +114,68 @@ namespace interstellar
         std::deque<Item> queue;
         std::set<std::string> busy;
         std::map<std::string, std::pair<double, Raster>> done;   // key → (t, frame)
+        std::set<std::string> doneFromCache;                      // ring keys decoded from the preview cache
+        std::vector<std::map<std::string, std::unique_ptr<IFrameSource>>> cacheSrcs;   // per worker: open segments
         bool stop = false;
         std::atomic<long long> finished{0};
         double workMs = 0;              // a frame's work, smoothed — how far ahead to aim
+    };
+
+    /** R-PLAY-1: the graded preview cache of the current timeline — one-second H.264 segments of the
+     *  frames the monitor shows, at the cache edge, every frame remembered by the hash of its PLAN, so
+     *  an edit invalidates exactly the frames whose pixels it changes. The UI thread plans and checks
+     *  (planning reads the project); one builder thread grades and encodes. A render never reads it. */
+    struct InterstellarService::PreviewCache
+    {
+        struct Seg
+        {
+            std::string file;                 // a name inside `dir`
+            std::vector<uint64_t> keys;       // per frame of the segment: the hash of its plan at `edge`
+            int width = 0, height = 0;        // the frame (the file may be one pixel larger: encoders want even)
+        };
+        enum State { kNone = 0, kCached = 1, kStale = 2, kBuilding = 3 };
+        NodeId timeline;
+        std::string dir;                      // <stem>.cache/<timeline id>
+        int edge = 0, perSeg = 24;
+        double fps = 24.0;
+        std::map<long long, Seg> segs;        // the index: segments on disk
+        std::vector<int> state;               // per segment, for the timeline's cache bar
+        unsigned checkedEpoch = ~0u;          // the project state the pass below checks against
+        long long passStart = 0, passDone = 0;
+        bool passComplete = false;
+        std::deque<long long> todo;           // segments found missing or stale, nearest the playhead first
+        unsigned gen = 0;                     // a rebuilt segment is a NEW file: a reader may hold the old one
+        std::string failed;                   // the writer refused: stop until a setting or the project changes
+        bool loaded = false;
+        // the builder thread
+        struct Job
+        {
+            long long seg = 0;
+            std::string dir, file;
+            std::vector<FramePlan> plans;
+            std::vector<uint64_t> keys;
+            int width = 0, height = 0;
+            double fps = 24.0;
+            bool hardware = false;
+        };
+        struct Result
+        {
+            long long seg = 0;
+            std::string dir, file;
+            std::vector<uint64_t> keys;
+            int width = 0, height = 0;
+            bool ok = false, dropped = false;
+            std::string why, note;
+        };
+        std::thread thread;
+        std::mutex mu;
+        std::condition_variable cv;
+        std::unique_ptr<Job> job;             // handed over, not yet taken
+        bool working = false;                 // the builder has a job in hand
+        std::deque<Result> results;
+        bool stop = false;
+        std::atomic<bool> yield{false};       // drop the segment in hand: the user is working
+        RenderCtx ctx;
     };
 
     /** A queued render of a NAMED timeline (R-RENDER-1), advanced a frame per pump (R-RENDER-4). */

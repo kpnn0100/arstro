@@ -183,6 +183,14 @@ own parameters, in source pixels / degrees / 0..1 as the catalog says — valida
 not the format, so a plugin this build does not know keeps every parameter it carried and is simply
 not run. `node=` must name a `#rackobj`.
 
+### 5.2 Beside the project: the preview cache (R-PLAY-1)
+
+`<stem>.cache/<timeline id>/` holds the graded preview cache: `seg_<n>_<gen>.mp4` (one second of
+the timeline each, H.264) and `index` (a header with the cache edge, rate and frames per segment,
+then one line per segment: its number, file, size and the hash of every frame's plan). It is NOT
+part of the project: never read by a render, rebuilt from the project whenever it disagrees, safe to
+delete (`cache clear`) and to leave out of version control.
+
 ---
 
 ## 6. Canonical serialization

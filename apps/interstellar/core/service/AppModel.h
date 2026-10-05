@@ -176,6 +176,7 @@ namespace interstellar
         bool useGpu = false;
         int uiScale = 100;            // percent of the design size — the host draws through it
         bool hardwareVideo = false;   // R-PLAY-3: H.264/H.265 encode on the GPU's video unit (VA-API) where present
+        bool previewCache = true;     // R-PLAY-1: a window builds the graded preview cache when idle
         // ── measured, read-only ──
         bool gpuAvailable = false;
         int cores = 0, engineThreads = 0, decodeWorkers = 0;
@@ -242,6 +243,12 @@ namespace interstellar
         // ── playback (R-PLAY-2) ──
         int playbackEdge = 0;                      // the long edge playback grades at now; 0 = not playing (full preview)
         double playbackRate = 0;                   // frames the read-ahead finished per second, last half second
+        bool playbackFromCache = false;            // the frame on the monitor came from the preview cache (R-PLAY-1)
+        // ── the graded preview cache of the current timeline (R-PLAY-1). MACHINE-DEPENDENT. ──
+        int previewCacheFrames = 0, previewCacheTotal = 0;   // frames cached AND current, of the timeline's
+        bool previewCacheBuilding = false;
+        double previewCacheSegmentSeconds = 1.0;   // what one entry below covers
+        std::vector<int> previewCacheSegments;     // per segment: 0 none · 1 cached · 2 stale · 3 building
 
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order

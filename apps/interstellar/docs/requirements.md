@@ -687,6 +687,39 @@ overlay) and `interstellar_host` (a 10-bit HEVC source reports 10, the rest 8). 
 `grade_populated` (histogram), `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
 `grade_clip_warning` (both sizes, looked at).
 
+### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
+`core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
+`cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`
+of one second each plus an `index` naming, per frame, the FNV-1a hash of its PLAN key (`:45`) — the
+key the read-ahead ring already trusts: sources, frames, grades, effects, geometry, size. The UI
+thread checks (`pumpPreviewCache`, `:179`): it plans each segment's frames, nearest the playhead
+first, within 6 ms a pump (`:307`), and compares hashes; a segment whose hashes differ is queued and
+handed — re-planned at that moment — to ONE builder thread (`cacheLoop`, `:111`) that grades with its
+own decoders and engine (not touching the frame cache) and encodes through the host's writer, H.264
+q20, on the video unit when Hardware video is on (R-PLAY-3); odd sizes are padded to even and cropped
+back by the reader (`:60`). A rebuilt segment is a NEW generation file (`:353`); the old one is
+removed after the index points past it (`:209`), so a playback worker holding it reads a whole file.
+It builds when the user has stopped (`:294`: a window, Preview cache on, no command for 1.5 s, not
+playing, no render, the rack loaded — a loading rack would cache frames under the wrong plans) and
+drops the segment in hand when they start again; `cache build` builds now in any host and keeps the
+service busy until done (`wait cache.done`); `cache clear` deletes it (`:417`). Playback reads it:
+`scheduleAhead` plans each frame at the cache edge too and, when its hash is the segment's, the
+read-ahead worker DECODES it (`ServiceRender.cpp:498`, `:555`) instead of grading; a paused frame, a
+render and an export are always graded. The model publishes `previewCacheFrames/Total/Building`,
+per-second `previewCacheSegments` and `playbackFromCache`; the ruler draws a 2-px bar per second —
+cached, stale, building — each amount eased (`app/widgets/Timeline.cpp:972`); the caption says
+"▶ cached"; Engine Settings has the switch (`app/App.cpp:90`). Measured (`interstellar_play_bench`,
+4K, exposure + contrast + clarity, a 13-job build running on the machine): graded live, 9 of 121 due
+frames exact at 640 px; from the cache, 142 of 143 exact, all decoded, lag 0 frames, at 1280 px.
+Building that 8-s timeline took 48 s (4 fps); a second session reuses it in 0.3 s; an edit rebuilt
+only its segments. Guarded by L2 `the preview cache holds the graded frames…` (96/96 frames in 4
+segments; a cached frame equals the graded frame; nothing rebuilt when nothing changed; an edit to
+shotB's source rebuilds exactly its 2 segments — red with the hash compare removed; a new session
+rebuilds nothing; `cache clear`) and `playback decodes cached frames…` (≥ 80 % of shown frames from
+the cache and equal to the graded frame — red with the lookup removed), the UI test (a finished
+second fades in on the ruler; the settings row dispatches) and `interstellar_live` (the real app,
+left idle, fills the cache by itself).
+
 ### DR-PLAY-2 Playback reads ahead, at a size it keeps up with; a preview prescales large sources (R-PLAY-2)
 `AheadPool` (`core/service/ServiceInternal.h`): 2–4 workers (cores ÷ 6), each with its OWN decoders
 and grade engine. While playing, `scheduleAhead` (`core/service/ServiceRender.cpp`) plans — on the UI

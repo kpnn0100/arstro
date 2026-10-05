@@ -55,7 +55,8 @@ one integrator who moves, wires, tests and commits each stream:
 - [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
       and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: read-ahead — DONE (DR-PLAY-2);
-      hardware video — DONE (DR-PLAY-3); the graded preview cache (R-PLAY-1) next.
+      hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes and the
+      graph editor (R-ANIM) next.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -104,6 +105,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — the preview cache is checked per frame by plan hash, built when idle, one segment at a
+time.** A render cache keyed by "clip + grade" would miss half of what changes a frame (a group's
+weight, an effect, a version's override, a trim); the plan key already names all of it — the
+read-ahead ring trusts it — so the cache hashes it per frame and an edit invalidates exactly what it
+changed. One-second segments keep a rebuild small and a seek cheap. Building waits for the user to
+stop for 1.5 s and drops its segment the moment they start: a cache that makes grading feel slower
+would defeat the point of having one. Only playback reads it; a paused frame stays exactly graded.
 
 **2026-10-05 — hardware video is VA-API through FFmpeg, and never a reason to fail.** The video unit
 is reached through the FFmpeg we already link (`h264_vaapi`/`hevc_vaapi`), not a vendor SDK, so it

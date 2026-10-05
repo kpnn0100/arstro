@@ -101,6 +101,7 @@ namespace interstellar
                 mAhead->ctxs.emplace_back(new RenderCtx());
                 mAhead->resetSources.push_back(0);
             }
+            mAhead->cacheSrcs.resize(k);
             for (size_t i = 0; i < k; ++i) mAhead->threads.emplace_back([this, i] { aheadLoop(i); });
         }
         if (mHost.rackDecoder)
@@ -125,6 +126,7 @@ namespace interstellar
 
     InterstellarService::~InterstellarService()
     {
+        stopCache();   // the builder grades through mCache and the host: first
         if (mAhead)
         {
             {
@@ -209,6 +211,9 @@ namespace interstellar
             captureState(*before);
         }
         const bool ok = dispatchInner(c);
+        // the preview cache re-checks its frames after anything, and waits for the user to stop
+        if (ok) ++mEpoch;
+        if (c.kind != CK::CacheBuild && c.kind != CK::CacheClear && c.kind != CK::Wait && c.kind != CK::StatePrint) mLastCommandMs = mNowMs;
         if (ok && structural(c.kind)) clearHistory();
         else if (ok && before) recordEdit(c, *before);
         refreshModel();
@@ -283,6 +288,7 @@ namespace interstellar
                 ok = requireProject() && playheadCommand(c);
                 break;
             case CK::Render: case CK::RenderCancel: ok = requireProject() && renderCommand(c); break;
+            case CK::CacheBuild: case CK::CacheClear: ok = requireProject() && cacheCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::Capture:
             {
@@ -338,7 +344,7 @@ namespace interstellar
                 refreshModel();
             }
         }
-        if (mPending && !mRack.loading()) finishRackLoad();
+        if (mPending && !mRack.loading()) { finishRackLoad(); ++mEpoch; }
 
         if (mPlaying && mOpen) scheduleAhead();
         if (mPlaying && mOpen && mPreroll)
@@ -379,6 +385,7 @@ namespace interstellar
             }
         }
         pumpJobs();
+        pumpPreviewCache();
     }
 
     void InterstellarService::resetPreview()
@@ -390,8 +397,10 @@ namespace interstellar
             std::lock_guard<std::mutex> l(mAhead->mu);
             mAhead->queue.clear();
             mAhead->done.clear();
+            mAhead->doneFromCache.clear();
             for (auto &r : mAhead->resetSources) r = 1;
         }
+        if (mPCache) mPCache->loaded = false;   // another project: its own index
         if (!mPreview) return;
         std::lock_guard<std::mutex> l(mPreview->mu);
         mPreview->pending.reset();
@@ -402,7 +411,7 @@ namespace interstellar
 
     bool InterstellarService::busy() const
     {
-        if (mPending) return true;
+        if (mPending || mCacheForced) return true;
         for (const auto &j : mJobs)
             if (j->model.state == "queued" || j->model.state == "running") return true;
         return false;
@@ -416,7 +425,7 @@ namespace interstellar
             if (std::chrono::steady_clock::now() >= deadline) return false;
             pump(mNowMs + 16.0);
             // Real time, because the rack decodes on a pool (Rack::pumpUntilLoaded's lesson).
-            if (mPending) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (mPending || mCacheForced) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         return true;
     }
@@ -757,6 +766,7 @@ namespace interstellar
         m.gradeClipboardFrom = mClipboardFrom;
         m.playbackEdge = mPlaying ? mPlayEdge : 0;
         m.playbackRate = mPlaying ? mPlayRate : 0.0;
+        fillCacheModel(m);
         // ── the plugin stacks (R-FX-5) ──
         m.effects.clear();
         if (mProject && mOpen)
@@ -2866,8 +2876,8 @@ namespace interstellar
     bool InterstellarService::wait(const Command &c)
     {
         const std::string cond = c.arg(0);
-        if (cond != "rack.loaded" && cond != "render.done" && cond != "frame.ready")
-            return fail("wait: rack.loaded, render.done or frame.ready, got `" + cond + "`");
+        if (cond != "rack.loaded" && cond != "render.done" && cond != "frame.ready" && cond != "cache.done")
+            return fail("wait: rack.loaded, render.done, frame.ready or cache.done, got `" + cond + "`");
         int ms = 120000;
         if (c.has("timeout"))
         {
@@ -2878,6 +2888,7 @@ namespace interstellar
         }
         auto holds = [&] {
             if (cond == "rack.loaded") return !mPending;
+            if (cond == "cache.done") return !mCacheForced;
             if (cond == "render.done")
             {
                 for (const auto &j : mJobs)

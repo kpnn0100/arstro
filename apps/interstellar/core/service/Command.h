@@ -58,6 +58,8 @@ namespace interstellar
             Playhead, Play, Pause,
             // delivery (R-RENDER)
             Render, RenderCancel, ExportStill,
+            // the graded preview cache (R-PLAY-1)
+            CacheBuild, CacheClear,
             // introspection
             StatePrint, Api, Lint, Wait, Quit
         };

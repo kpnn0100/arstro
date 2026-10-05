@@ -145,7 +145,8 @@ namespace interstellar
              "Dissolve a group; its members keep their own grades.", "R-RACK-4"},
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
              "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu "
-             "(0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit). Persisted; one CPU budget for the rack and "
+             "(0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit), previewCache (0|1: build the graded "
+             "preview cache when idle). Persisted; one CPU budget for the rack and "
              "the render path.", "R-SET-1", true},
             {K::PresetApply, "preset apply", "<name>", 1, 1, {"node=<bind>"},
              "Apply a library preset to a rack source (the Grade target by default). Root timeline only.",
@@ -169,6 +170,11 @@ namespace interstellar
              "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A "
              "flag the codec cannot honour is refused.", "R-RENDER-6"},
             {K::RenderCancel, "render cancel", "<job>", 1, 1, {}, "Cancel a queued or running render.", "R-RENDER-4"},
+            {K::CacheBuild, "cache build", "", 0, 0, {},
+             "Build the current timeline's graded preview cache now (a window also builds it when idle): "
+             "one-second H.264 segments at the playing size, every frame checked by its plan, so only what "
+             "an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`.", "R-PLAY-1"},
+            {K::CacheClear, "cache clear", "", 0, 0, {}, "Delete the current timeline's preview cache.", "R-PLAY-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},
 
@@ -179,7 +185,7 @@ namespace interstellar
              "Print the AppModel; --stable omits machine-dependent fields.", "R-API-2"},
             {K::Api, "api", "", 0, 0, {"json", "md"}, "Print this document.", "R-API-1"},
             {K::Lint, "lint", "", 0, 0, {}, "Report offline media, dangling deltas and refused fields.", "R-RACK-7"},
-            {K::Wait, "wait", "<rack.loaded|render.done|frame.ready>", 1, 1, {"timeout=<dur>"},
+            {K::Wait, "wait", "<rack.loaded|render.done|frame.ready|cache.done>", 1, 1, {"timeout=<dur>"},
              "Block (pumping) until a condition holds.", "R-API-2"},
             {K::Quit, "quit", "", 0, 0, {}, "End a script or session.", "R-API-2"},
         };

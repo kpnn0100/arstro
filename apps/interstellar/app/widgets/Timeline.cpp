@@ -52,6 +52,15 @@ namespace interstellar_v1
         mSelectedClip = m.selectedClip;
         mTransitions = m.transitions;
         mMarkers = m.markers;
+        mCacheSegSeconds = m.previewCacheSegmentSeconds > 0 ? m.previewCacheSegmentSeconds : 1.0;
+        if (mCacheSegs.size() < m.previewCacheSegments.size()) mCacheSegs.resize(m.previewCacheSegments.size());
+        for (size_t n = 0; n < mCacheSegs.size(); ++n)
+        {
+            const int st = n < m.previewCacheSegments.size() ? m.previewCacheSegments[n] : 0;
+            mCacheSegs[n].cachedT = st == 1 ? 1.0 : 0.0;
+            mCacheSegs[n].staleT = st == 2 ? 1.0 : 0.0;
+            mCacheSegs[n].buildingT = st == 3 ? 1.0 : 0.0;
+        }
 
         // display order: video tracks top-down by descending order (V2 over V1), then audio
         std::vector<interstellar::TrackModel> v, a;
@@ -621,6 +630,20 @@ namespace interstellar_v1
         }
         mVScroll.setExtent(shell::rulerH(), std::max(0.0, height.value() - shell::rulerH()), (double)mTracks.size() * shell::trackH());
         mVScroll.advance(nowMs);
+        for (auto &cs : mCacheSegs)
+        {
+            const std::pair<artboard::AnimatedProperty *, std::pair<double *, double *>> amts[] = {
+                {&cs.cached, {&cs.cachedT, &cs.cachedL}}, {&cs.stale, {&cs.staleT, &cs.staleL}}, {&cs.building, {&cs.buildingT, &cs.buildingL}}};
+            for (const auto &a : amts)
+            {
+                if (*a.second.first != *a.second.second)
+                {
+                    a.first->animateTo(*a.second.first, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                    *a.second.second = *a.second.first;
+                }
+                a.first->update(nowMs);
+            }
+        }
 
         for (auto it = mAnims.begin(); it != mAnims.end();)
         {
@@ -945,6 +968,17 @@ namespace interstellar_v1
                 t.setFill(palette::mutedForeground());
                 t.drawText(tickLabel(tm, step, mFps), x + 3.0, 10.5, 8.5, font::mono());
             }
+        }
+        // the preview cache (R-PLAY-1): a 2-px bar along the ruler's top, per second of the timeline
+        for (size_t n = 0; n < mCacheSegs.size(); ++n)
+        {
+            const CacheSegAnim &cs = mCacheSegs[n];
+            const double x0 = timeToX(n * mCacheSegSeconds), x1 = timeToX((n + 1) * mCacheSegSeconds);
+            if (x1 < rr.x || x0 > rr.right()) continue;
+            const Rect bar{x0, 0.0, std::max(0.0, x1 - x0 - 1.0), 2.0};   // a 1-px gap shows the seconds
+            if (cs.stale.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::whiteAlpha(0.22 * cs.stale.value())));
+            if (cs.cached.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::successAlpha(0.9 * cs.cached.value())));
+            if (cs.building.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::primaryAlpha(0.9 * cs.building.value())));
         }
         for (const auto &mk : mMarkers)
         {

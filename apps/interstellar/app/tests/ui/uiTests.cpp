@@ -1046,11 +1046,28 @@ namespace
             CHECK(clickMenuItem(r, "Workspace", "Cut") && r.app->tab() == EditScreen::Cut, "Workspace > Cut switched the tab");
             CHECK(clickMenuItem(r, "Settings", "Engine Settings") && r.app->settings().isOpen(), "Settings > Engine Settings opened cosmo's settings dialog");
             r.settle();
-            CHECK(r.app->settings().extraRowCount() == 1, "Interstellar adds one row of its own to cosmo's dialog: Hardware video (R-PLAY-3)");
+            CHECK(r.app->settings().extraRowCount() == 2, "Interstellar adds two rows of its own to cosmo's dialog: Hardware video (R-PLAY-3), Preview cache (R-PLAY-1)");
             const Rect on = r.app->settings().extraChipRect(0, 1);
             CHECK(on.w > 0, "the Hardware video row has an On chip");
             r.click(on.x + on.w * 0.5, on.y + on.h * 0.5);
             CHECK(hasLine(r.svc, "settings set hardwareVideo=1"), "Hardware video > On dispatched settings set hardwareVideo=1");
+            const Rect off = r.app->settings().extraChipRect(1, 0);
+            r.click(off.x + off.w * 0.5, off.y + off.h * 0.5);
+            CHECK(hasLine(r.svc, "settings set previewCache=0"), "Preview cache > Off dispatched settings set previewCache=0");
+        }
+        {
+            // R-PLAY-1: a segment of the cache bar that finishes FADES in — never flips in one frame
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.previewCacheSegments = {0, 0, 0, 0}; });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            CHECK(tl->cacheAmount(1) == 0.0, "an uncached second draws no bar");
+            r.svc.m.previewCacheSegments[1] = 1;
+            ++r.svc.m.revision;
+            const double first = firstMoved(r, [&] { return tl->cacheAmount(1); }, 0.0);
+            CHECK(strictlyBetween(first, 0.0, 1.0), "a second that finished caching fades in on the ruler (live value mid-tween)");
+            r.settle();
+            CHECK(std::fabs(tl->cacheAmount(1) - 1.0) < 1e-6 && tl->cacheAmount(0) == 0.0, "only that second is drawn cached");
         }
         {
             Rig r(1440, 900, [](FakeService &s) { s.edit(); });

@@ -184,6 +184,22 @@ int main(int argc, char **argv)
     app.setTab(1);
     settle(800.0);
     shot("cut");
+    // R-PLAY-1: left alone, the window builds the preview cache by itself — the app must not keep
+    // the service "busy" — and the ruler's bar shows it
+    {
+        const auto w0 = std::chrono::steady_clock::now();
+        while (std::chrono::steady_clock::now() - w0 < std::chrono::seconds(120) &&
+               (svc.model().previewCacheTotal == 0 || svc.model().previewCacheFrames < svc.model().previewCacheTotal))
+        {
+            frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        settle(400.0);
+        std::printf("preview cache: %d of %d frames, built while idle in %.1f s\n", svc.model().previewCacheFrames, svc.model().previewCacheTotal,
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - w0).count());
+        assert(svc.model().previewCacheTotal > 0 && svc.model().previewCacheFrames == svc.model().previewCacheTotal);
+        shot("cut_cached");
+    }
     app.setTab(2);
     settle(800.0);
     shot("deliver");
