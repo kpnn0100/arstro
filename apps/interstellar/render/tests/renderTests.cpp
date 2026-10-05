@@ -372,6 +372,138 @@ namespace
         std::printf("[PASS] sampling (axis, rotated, 180 deg) matches a reference bilinear within 1/255\n");
     }
 
+    // ── the deep path (R-COLOR-1) ─────────────────────────────────────────────────────────────
+
+    void test_deep_compose_places_layers_on_the_same_pixels()
+    {
+        // The 16-bit composite runs the same plan, spans and taps as the 8-bit one: fed the same
+        // picture widened, it must cover exactly the same pixels and agree within a code value —
+        // for every sampling kind, a blend mode over a backdrop, partial opacity and a dissolve.
+        Raster base, over;
+        base.allocate(37, 23, 255);
+        over.allocate(29, 31, 255);
+        for (size_t i = 0; i < base.rgba.size(); ++i)
+            if (i % 4 != 3) base.rgba[i] = (uint8_t)((i * 2654435761u) >> 11);
+        for (size_t i = 0; i < over.rgba.size(); ++i)
+            over.rgba[i] = i % 4 == 3 ? (uint8_t)(128 + (i * 7) % 128) : (uint8_t)((i * 40503u) >> 5);
+        Raster baseD, overD;
+        toDeep(base, baseD);
+        toDeep(over, overD);
+        const int W = 64, H = 48;
+        struct Case { double rot, scale, x; Blend blend; double op; bool dissolve; };
+        const Case cases[] = {{0, 1.0, 0, Blend::Normal, 1.0, false},    // Copy (Fit::None below)
+                              {0, 1.3, 3.37, Blend::Multiply, 0.6, false},  // Axis
+                              {23, 1.1, -2.2, Blend::Screen, 1.0, false},   // General
+                              {180, 0.9, 1.5, Blend::Difference, 0.8, false},
+                              {0, 1.0, 0, Blend::Normal, 0.4, true}};      // a dissolve pair
+        for (const Case &c : cases)
+        {
+            auto stack = [&](const Raster *b, const Raster *o) {
+                Layer lb = layerOf(b, Fit::Cover);
+                Layer lo = layerOf(o, c.scale == 1.0 && c.rot == 0 ? Fit::None : Fit::Contain);
+                lo.geom.rotation = c.rot;
+                lo.geom.scale = c.scale;
+                lo.geom.x = c.x;
+                lo.blend = c.blend;
+                lo.opacity = c.op;
+                lo.dissolveWithPrevious = c.dissolve;
+                if (c.dissolve) lb.opacity = 1.0 - c.op;
+                return std::vector<Layer>{lb, lo};
+            };
+            Raster out8, out16, back;
+            compose(stack(&base, &over), W, H, out8);
+            compose(stack(&baseD, &overD), W, H, out16);
+            assert(!out8.deep() && out16.deep() && out16.width == W && out16.height == H);
+            toShallow(out16, back);
+            int worst = 0;
+            for (int i = 0; i < W * H; ++i)
+            {
+                assert((out8.rgba[(size_t)i * 4 + 3] == 0) == (out16.rgba16[(size_t)i * 4 + 3] == 0));   // the same coverage
+                for (int k = 0; k < 4; ++k) worst = std::max(worst, std::abs(out8.rgba[(size_t)i * 4 + k] - back.rgba[(size_t)i * 4 + k]));
+            }
+            assert(worst <= 1);
+        }
+        // a deep layer beside an 8-bit one: the composite is deep and the 8-bit one is widened
+        Raster mixed;
+        compose({layerOf(&base, Fit::Cover), layerOf(&overD, Fit::Contain)}, W, H, mixed);
+        assert(mixed.deep());
+        std::printf("[PASS] deep composite: the same coverage as 8-bit and within one code value, every sampling kind, blend and dissolve\n");
+    }
+
+    Raster deepRamp(int w, int h, int from, int step)
+    {
+        Raster r;
+        r.allocate16(w, h, 65535);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+            {
+                uint16_t *p = &r.rgba16[((size_t)y * w + x) * 4];
+                p[0] = p[1] = p[2] = (uint16_t)(from + x * step);
+            }
+        return r;
+    }
+
+    int distinct(const Raster &r, int row)
+    {
+        std::vector<int> v;
+        for (int x = 0; x < r.width; ++x)
+            v.push_back(r.deep() ? r.rgba16[((size_t)row * r.width + x) * 4] : r.rgba[((size_t)row * r.width + x) * 4] * 257);
+        std::sort(v.begin(), v.end());
+        return (int)(std::unique(v.begin(), v.end()) - v.begin());
+    }
+
+    void test_deep_keeps_what_8_bits_cannot()
+    {
+        // 256 steps of 3/65535 span three 8-bit codes. Graded, effected and composited deep, the
+        // ramp keeps its steps; the same picture at 8 bits has a handful.
+        const Raster ramp = deepRamp(256, 4, 30000, 3);
+        Raster ramp8;
+        toShallow(ramp, ramp8);
+        assert(distinct(ramp, 0) == 256 && distinct(ramp8, 0) <= 4);
+
+        GradeEngine g;
+        arstro::EditParams p;
+        p.exposure = 1.0f;
+        p.contrast = 20.f;
+        Raster graded, graded8;
+        assert(g.render(ramp, p, true, 0, graded) && graded.deep() && graded.width == 256);
+        assert(g.render(ramp8, p, true, 0, graded8) && !graded8.deep());
+        assert(distinct(graded, 0) >= 200);
+        assert(distinct(graded8, 0) <= 6);
+        // the deep grade is the 8-bit grade, unquantised: same picture within a code value
+        Raster g8;
+        assert(g.render(ramp8, p, true, 0, g8));
+        Raster wide;
+        toDeep(ramp8, wide);
+        Raster gw, gwBack;
+        assert(g.render(wide, p, true, 0, gw));
+        toShallow(gw, gwBack);
+        for (size_t i = 0; i < g8.rgba.size(); ++i) assert(std::abs(g8.rgba[i] - gwBack.rgba[i]) <= 1);
+        // identity passes the deep bytes straight through
+        Raster same;
+        assert(g.render(ramp, arstro::EditParams{}, true, 0, same) && same.rgba16 == ramp.rgba16);
+
+        // an effect at 16 bits keeps the steps too, and agrees with its 8-bit self
+        EffectRun blur;
+        blur.type = "blur.box";
+        blur.p = {{"radius", 1.0}};
+        Raster b = graded;
+        assert(applyEffect(blur, 1.0, b) && b.deep());
+        assert(distinct(b, 0) >= 200);
+        Raster b8 = g8, bw = gw, bwBack;
+        applyEffect(blur, 1.0, b8);
+        applyEffect(blur, 1.0, bw);
+        toShallow(bw, bwBack);
+        for (size_t i = 0; i < b8.rgba.size(); ++i) assert(std::abs(b8.rgba[i] - bwBack.rgba[i]) <= 1);
+
+        // and composited at 2x (the Axis sampler) the output row has the steps between them as well
+        Raster out;
+        compose({layerOf(&graded, Fit::Stretch)}, 512, 8, out);
+        assert(out.deep() && distinct(out, 0) >= 400);
+        std::printf("[PASS] deep: a ramp finer than 8 bits survives grade, effect and composite (%d levels vs %d at 8-bit)\n",
+                    distinct(graded, 0), distinct(graded8, 0));
+    }
+
     void test_hostile_geometry_stays_in_bounds()
     {
         // Raw-pointer inner loops earn a hostile sweep: off-screen, sub-pixel, huge, extreme crops,
@@ -913,6 +1045,8 @@ int main()
     test_grade_exposure_raises_the_mean();
     test_grade_matches_the_slot_sequence_byte_for_byte();
     test_param_hash();
+    test_deep_compose_places_layers_on_the_same_pixels();
+    test_deep_keeps_what_8_bits_cannot();
     std::printf("interstellar_render: all tests passed\n");
     return 0;
 }

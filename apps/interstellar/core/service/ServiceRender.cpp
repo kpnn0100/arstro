@@ -75,6 +75,17 @@ namespace interstellar
         void mixWeight(const Raster &ungraded, Raster &graded, double w)
         {
             if (w >= 1.0 || ungraded.width != graded.width || ungraded.height != graded.height) return;
+            if (graded.deep() || ungraded.deep())
+            {
+                // R-COLOR-1: the deep frame mixes at 16 bits, the weight unquantised
+                if (!graded.deep() || !ungraded.deep()) return;
+                const double k = std::clamp(w, 0.0, 1.0);
+                uint16_t *g = graded.rgba16.data();
+                const uint16_t *u = ungraded.rgba16.data();
+                const size_t n = std::min(graded.rgba16.size(), ungraded.rgba16.size());
+                for (size_t i = 0; i < n; ++i) g[i] = (uint16_t)std::lround(u[i] + (g[i] - (double)u[i]) * k);
+                return;
+            }
             const int k = (int)std::lround(std::clamp(w, 0.0, 1.0) * 256.0);
             uint8_t *g = graded.rgba.data();
             const uint8_t *u = ungraded.rgba.data();
@@ -123,12 +134,17 @@ namespace interstellar
         return out;
     }
 
-    bool InterstellarService::decodeLayer(RenderCtx &ctx, const PlanLayer &l, Raster &out)
+    bool InterstellarService::decodeLayer(RenderCtx &ctx, const PlanLayer &l, Raster &out, bool deep)
     {
         Source *s = source(ctx, l.media);
         if (!s || !s->ok) return false;
         const long long last = std::max<long long>(0, s->volume->extent().frames - 1);
         const long long frame = std::clamp<long long>(l.frame, 0, last);
+        // R-COLOR-1: a deep render decodes past the 8-bit volume, straight from the decoder at 16
+        // bits. A temporal effect needs the volume's window, so that layer stays 8-bit and is
+        // widened by the composite (stated in DR-COLOR-1).
+        if (deep && (l.fxType.empty() || l.fxRadius <= 0 || s->volume->extent().frames <= 1))
+            return s->src->frameAtDeep(frame, out) && !out.empty();
         // v1 renders the FIRST temporal effect on a source; lint reports any after it.
         if (!l.fxType.empty() && l.fxRadius > 0 && s->volume->extent().frames > 1)
         {
@@ -371,8 +387,10 @@ namespace interstellar
         return planSourceFrame(mModel.rack[(size_t)mModel.selectedRack].rackObj, -1.0, proxyEdge, plan);
     }
 
-    bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember)
+    bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember, bool deep)
     {
+        // R-COLOR-1: a deep frame touches no cache (they hold what the monitor shows, at 8 bits)
+        if (deep) remember = false;
         // R-GPU-1: this thread's engine follows the setting (each thread owns its engine and its
         // GL context; the GPU path declines to the CPU for any stage it has not ported)
         ctx.grade->setPreferGpu(mGpuWanted.load(std::memory_order_relaxed));
@@ -397,10 +415,11 @@ namespace interstellar
             if (!remember || !mCache->get(key, graded[i]))
             {
                 Raster ungraded;
-                if (!decodeLayer(ctx, l, ungraded)) continue;
+                if (!decodeLayer(ctx, l, ungraded, deep)) continue;
                 // a PREVIEW of a large source: shrink it (linear-light box) before the grade turns every
-                // pixel into float — the 4K-at-640 cost (R-PLAY-2); a full-size render never takes this
-                if (l.edge > 0)
+                // pixel into float — the 4K-at-640 cost (R-PLAY-2); a full-size render never takes this,
+                // and nor does a deep one (the grade's own downscale sizes it, in float)
+                if (l.edge > 0 && !ungraded.deep())
                 {
                     Raster small;
                     if (render::prescale(ungraded, l.edge, small)) ungraded = std::move(small);
@@ -436,11 +455,11 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::renderTimelineFrame(const NodeId &tl, double t, int proxyEdge, Raster &out, bool *anyClip)
+    bool InterstellarService::renderTimelineFrame(const NodeId &tl, double t, int proxyEdge, Raster &out, bool *anyClip, bool deep)
     {
         FramePlan plan;
         if (!planFrame(tl, t, proxyEdge, plan, anyClip)) return false;
-        return executePlan(*mSync, plan, out);
+        return executePlan(*mSync, plan, out, true, deep);
     }
 
     int InterstellarService::playEdge(int requested) const
@@ -954,7 +973,10 @@ namespace interstellar
             Raster frame;
             // the timeline is SAMPLED at the output rate (R-RENDER-6) — still a pure function of t
             const double t = (double)(j.first + j.next) / j.fps;
-            if (!renderTimelineFrame(j.model.timeline, t, j.proxyEdge, frame)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
+            // R-COLOR-1: a codec that keeps more than 8 bits gets a picture that has them — decoded,
+            // graded, composited and handed to the encoder at 16 bits per component
+            const bool deep = !j.png && j.spec.bitDepth > 8;
+            if (!renderTimelineFrame(j.model.timeline, t, j.proxyEdge, frame, nullptr, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             if (j.png)
             {
                 char name[32];

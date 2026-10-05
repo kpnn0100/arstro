@@ -131,7 +131,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/model/Versions.{h,cpp}` | model | **built** — resolution, deltas, grade deltas, pin/freeze, rebase, diff (R-VER, DR-VER-1) |
 | `apps/interstellar/model/Arrange.{h,cpp}` | model | **built** — the cut operations, derived-aware (R-TL-3) |
 | `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, transitions held (R-TL-4, DR-TL-4) |
-| `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3) |
+| `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3); 8- or 16-bit, one templated loop (DR-COLOR-1) |
 | `apps/interstellar/render/Effects.{h,cpp}` | render | **built** — the plugin catalog and the Blur kinds (Gaussian, Box, Directional, Zoom, Spin), in source pixels scaled to the proxy (R-FX-5/6, DR-FX-5/6) |
 | `apps/interstellar/render/GradeEngine.{h,cpp}` · `ParamHash` · `FrameCache` | render | **built** — EditEngine per frame, cached on the param hash (DR-RENDER-2) |
 | `apps/interstellar/core/Rack.{h,cpp}` | core | **built** — the hosted `CosmoService`, async load, read-through own-params cache (R-RACK, DR-RACK-1..5) |
@@ -144,7 +144,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/service/ServiceAnim.cpp` | core | **built** — addresses → curves and clocks, `key add|remove|set|clear`, `set` keying, curves on the render path, pins' curve snapshots (R-ANIM, DR-ANIM-1) |
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
-| `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build; the writer now takes an `EncodeSpec` — H.264, H.265 8/10-bit, ProRes Proxy…4444, DNxHR LB…444, BT.709 tagged (DR-RENDER-6, D-9) |
+| `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build; the writer now takes an `EncodeSpec` — H.264, H.265 8/10-bit, ProRes Proxy…4444, DNxHR LB…444, BT.709 tagged (DR-RENDER-6, D-9); a deep frame decodes and encodes as RGBA64 (DR-COLOR-1) |
 | `apps/interstellar/host/VideoFrameDecoder` · `HostFrameSource` · `PngWriter` | host | **built** — Cosmo's decoder seam, the timeline's source (stills through Cosmo's own decoder, for R-RENDER-5), PNG out |
 | `apps/interstellar/cli/main.cpp` | front end | **built** — `interstellar-cc`, argv/stdout only (DR-SVC-3) |
 | `apps/interstellar/app/*` | app | **built** — Home · Edit · the three tabs over `AppHooks`; cosmo's panels, `MenuStrip` and `SettingsDialog` compiled in; screen scale (R-UI, DR-UI-1..9; `app/NOTES.md`) |

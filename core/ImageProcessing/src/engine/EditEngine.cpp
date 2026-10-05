@@ -676,6 +676,33 @@ namespace arstro
         return !s.proxy[want].empty();
     }
 
+    Image EditEngine::fromEncodedWords(const uint16_t *rgba, int w, int h, int channels)
+    {
+        // 65536 possible inputs: a table of 256 KB, built once, beats a pow per component.
+        static const std::vector<Pixel> kSrgbToLinear16 = [] {
+            std::vector<Pixel> t(65536);
+            for (int i = 0; i < 65536; ++i) t[(size_t)i] = color::srgbDecode((Pixel)i / (Pixel)65535);
+            return t;
+        }();
+        Image img(w, h, channels, ColorSpace::LinearSRGB);
+        Pixel *d = img.data();
+        const int rowN = w * channels;
+        const int colorCh = channels >= 3 ? 3 : channels;
+        par::parallelFor(h, [&](int y0, int y1) {
+            for (int y = y0; y < y1; ++y)
+            {
+                const uint16_t *s = rgba + (size_t)y * rowN;
+                Pixel *o = d + (size_t)y * rowN;
+                for (int x = 0; x < rowN; x += channels)
+                {
+                    for (int c = 0; c < colorCh; ++c) o[x + c] = kSrgbToLinear16[s[x + c]];
+                    for (int c = colorCh; c < channels; ++c) o[x + c] = (Pixel)s[x + c] / (Pixel)65535;  // alpha
+                }
+            }
+        });
+        return img;
+    }
+
     PreviewBuffer EditEngine::renderInto(const Image &linearSource, const EditParams &params, std::vector<uint8_t> &outBytes)
     {
         // The working buffers are members (see EditEngine.h): a fresh Image per render

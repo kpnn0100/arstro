@@ -9,7 +9,7 @@
  *    2. rowSpan: for each row of the box, the run of pixels whose centre maps inside the crop
  *       rectangle, solved from the two linear inequalities and then checked at its ends. The inner
  *       loop therefore never asks "am I inside?".
- *    3. runLayer<Blend, Dissolve, Kind>: the inner loop, one instantiation per combination, over
+ *    3. runLayer<T, Blend, Dissolve, Kind>: the inner loop, one instantiation per combination, over
  *       row bands in parallel. Rows are independent and the band split is deterministic, so a
  *       serial and a parallel composite are byte-identical (R-RENDER-2) — a test holds it to that.
  *
@@ -22,6 +22,10 @@
  *
  *  Arithmetic is integer: source coordinates in 32.32 fixed point, bilinear weights in 8 bits,
  *  alpha in 16 bits (so the two weights of a dissolve still sum to 1 to within 1/65535, not 1/255).
+ *
+ *  A DEEP composite (R-COLOR-1) runs the same plan, spans and taps — runLayer is templated on the
+ *  pixel type — so a 16-bit frame places every layer on exactly the pixels an 8-bit one does; only
+ *  the per-pixel mix differs: 16-bit samples, blended in double through `blendChannel`.
  */
 #include "Composite.h"
 #include "base/Parallel.h"
@@ -29,6 +33,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
+#include <type_traits>
 
 namespace arstro
 {
@@ -71,6 +77,7 @@ namespace render
         struct Plan
         {
             const uint8_t *src = nullptr;
+            const uint16_t *src16 = nullptr;    // the deep payload, when the layer is deep
             int sw = 0, sh = 0;
             // Crop rectangle in continuous source pixels: coverage is "centre maps inside this".
             double cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0;
@@ -87,6 +94,7 @@ namespace render
             std::vector<int> colA, colB;
             std::vector<uint8_t> colW;
             int opQ = kOpaque;                  // opacity in 16 bits
+            double op = 1.0;                    // the same, unquantised, for the deep mix
         };
 
         inline bool finite(double v) { return std::isfinite(v); }
@@ -95,7 +103,7 @@ namespace render
         {
             if (!l.src || l.src->empty() || W <= 0 || H <= 0) return false;
             const Raster &s = *l.src;
-            if (s.rgba.size() < (size_t)s.width * s.height * 4) return false;
+            if ((s.deep() ? s.rgba16.size() : s.rgba.size()) < (size_t)s.width * s.height * 4) return false;
             const Geom &g = l.geom;
             const double fields[] = {g.x, g.y, g.scale, g.rotation, g.anchorX, g.anchorY,
                                      g.cropX, g.cropY, g.cropW, g.cropH, l.opacity};
@@ -104,6 +112,7 @@ namespace render
 
             const double op = std::min(1.0, std::max(0.0, l.opacity));
             p.opQ = (int)std::lround(op * kOpaque);
+            p.op = op;
             if (p.opQ <= 0) return false;
 
             // The crop is normalised on the graded frame. A zero-area crop draws nothing: the first
@@ -142,6 +151,7 @@ namespace render
             if (c == 0) sn = sn > 0 ? 1.0 : -1.0;
 
             p.src = s.rgba.data();
+            p.src16 = s.deep() ? s.rgba16.data() : nullptr;
             p.sw = s.width;
             p.sh = s.height;
             p.cx0 = cx * s.width;
@@ -301,13 +311,53 @@ namespace render
             d[3] = clamp8(d[3] + roundDiv65535(a * (255 - ab)));
         }
 
-        template <Blend M, bool Dissolve, Kind K>
+        inline uint16_t clamp16(long long v) { return (uint16_t)(v < 0 ? 0 : (v > 65535 ? 65535 : v)); }
+
+        /** The deep twin of `pixel` (R-COLOR-1): 16-bit samples, the same rule in double. */
+        template <Blend M, bool Dissolve>
+        inline void pixelDeep(long long s0, long long s1, long long s2, long long s3, uint16_t *d, const uint16_t *bp, double op)
+        {
+            const double a = (double)s3 / 65535.0 * op;
+            if (!(a > 0.0)) return;
+            if (M == Blend::Normal && !Dissolve && a >= 1.0)
+            {
+                d[0] = (uint16_t)s0; d[1] = (uint16_t)s1; d[2] = (uint16_t)s2; d[3] = 65535;
+                return;
+            }
+            const double ab = bp[3] / 65535.0;
+            const long long sc[3] = {s0, s1, s2};
+            for (int c = 0; c < 3; ++c)
+            {
+                const double b = bp[c] / 65535.0, o = (double)sc[c] / 65535.0;
+                const double m = M == Blend::Normal ? o : o * (1.0 - ab) + blendChannel(M, b, o) * ab;
+                d[c] = clamp16(d[c] + std::llround((m - b) * a * 65535.0));
+            }
+            d[3] = clamp16(d[3] + std::llround(a * (65535 - bp[3])));
+        }
+
+        template <class T> inline const T *srcOf(const Plan &p);
+        template <> inline const uint8_t *srcOf<uint8_t>(const Plan &p) { return p.src; }
+        template <> inline const uint16_t *srcOf<uint16_t>(const Plan &p) { return p.src16; }
+        template <class T> inline T *pixelsOf(Raster &r);
+        template <> inline uint8_t *pixelsOf<uint8_t>(Raster &r) { return r.rgba.data(); }
+        template <> inline uint16_t *pixelsOf<uint16_t>(Raster &r) { return r.rgba16.data(); }
+
+        template <class T, Blend M, bool Dissolve>
+        inline void put(const long long *sm, T *d, const T *b, const Plan &p)
+        {
+            if constexpr (sizeof(T) == 1) pixel<M, Dissolve>((int)sm[0], (int)sm[1], (int)sm[2], (int)sm[3], d, b, p.opQ);
+            else pixelDeep<M, Dissolve>(sm[0], sm[1], sm[2], sm[3], d, b, p.op);
+        }
+
+        template <class T, Blend M, bool Dissolve, Kind K>
         void runLayer(const Plan &p, const Raster *base, Raster &out)
         {
+            // 8-bit sums fit an int (255 * 65536); 16-bit ones need 64 bits (65535 * 65536)
+            using Acc = typename std::conditional<sizeof(T) == 1, int, long long>::type;
             const int W = out.width;
-            uint8_t *dst = out.rgba.data();
-            const uint8_t *bse = base ? base->rgba.data() : nullptr;
-            const uint8_t *src = p.src;
+            T *dst = pixelsOf<T>(out);
+            const T *bse = base ? pixelsOf<T>(*const_cast<Raster *>(base)) : nullptr;
+            const T *src = srcOf<T>(p);
             const int sw = p.sw;
             par::parallelFor(p.by1 - p.by0, [&](int r0, int r1) {
                 for (int r = r0; r < r1; ++r)
@@ -315,13 +365,16 @@ namespace render
                     const int Y = p.by0 + r;
                     int x0, x1;
                     if (!rowSpan(p, Y, x0, x1)) continue;
-                    uint8_t *d = dst + ((size_t)Y * W + x0) * 4;
-                    const uint8_t *b = Dissolve ? bse + ((size_t)Y * W + x0) * 4 : d;
+                    T *d = dst + ((size_t)Y * W + x0) * 4;
+                    const T *b = Dissolve ? bse + ((size_t)Y * W + x0) * 4 : d;
                     if (K == Kind::Copy)
                     {
-                        const uint8_t *s = src + ((size_t)(Y + p.offY) * sw + (x0 + p.offX)) * 4;
+                        const T *s = src + ((size_t)(Y + p.offY) * sw + (x0 + p.offX)) * 4;
                         for (int X = x0; X < x1; ++X, s += 4, d += 4, b += 4)
-                            pixel<M, Dissolve>(s[0], s[1], s[2], s[3], d, b, p.opQ);
+                        {
+                            const long long sm[4] = {s[0], s[1], s[2], s[3]};
+                            put<T, M, Dissolve>(sm, d, b, p);
+                        }
                         continue;
                     }
                     if (K == Kind::Axis)
@@ -329,21 +382,21 @@ namespace render
                         // The y taps are the row's; the x taps come from the per-layer table.
                         int iy, wy;
                         tap(std::llround((p.a11 * Y + p.b1 - 0.5) * kFix), iy, wy);
-                        const uint8_t *ra = src + (size_t)std::min(p.sy1, std::max(p.sy0, iy)) * sw * 4;
-                        const uint8_t *rb = src + (size_t)std::min(p.sy1, std::max(p.sy0, iy + 1)) * sw * 4;
+                        const T *ra = src + (size_t)std::min(p.sy1, std::max(p.sy0, iy)) * sw * 4;
+                        const T *rb = src + (size_t)std::min(p.sy1, std::max(p.sy0, iy + 1)) * sw * 4;
                         const int *ca = p.colA.data() + (x0 - p.bx0), *cb = p.colB.data() + (x0 - p.bx0);
                         const uint8_t *cw = p.colW.data() + (x0 - p.bx0);
-                        const int wy1 = wy, wy0 = 256 - wy;
+                        const Acc wy1 = wy, wy0 = 256 - wy;
                         for (int X = x0; X < x1; ++X, ++ca, ++cb, ++cw, d += 4, b += 4)
                         {
-                            const uint8_t *p00 = ra + *ca, *p10 = ra + *cb, *p01 = rb + *ca, *p11 = rb + *cb;
-                            const int wx1 = *cw, wx0 = 256 - wx1;
-                            int sm[4];
+                            const T *p00 = ra + *ca, *p10 = ra + *cb, *p01 = rb + *ca, *p11 = rb + *cb;
+                            const Acc wx1 = *cw, wx0 = 256 - wx1;
+                            long long sm[4];
                             // Separable, and exactly equal to the four-weight form in integers.
                             for (int c = 0; c < 4; ++c)
                                 sm[c] = ((p00[c] * wx0 + p10[c] * wx1) * wy0 + (p01[c] * wx0 + p11[c] * wx1) * wy1 +
                                          32768) >> 16;
-                            pixel<M, Dissolve>(sm[0], sm[1], sm[2], sm[3], d, b, p.opQ);
+                            put<T, M, Dissolve>(sm, d, b, p);
                         }
                         continue;
                     }
@@ -362,53 +415,62 @@ namespace render
                         const int xb = std::min(sx1, std::max(sx0, ix + 1)) * 4;
                         const int ya = std::min(sy1, std::max(sy0, iy));
                         const int yb = std::min(sy1, std::max(sy0, iy + 1));
-                        const uint8_t *ra = src + (size_t)ya * sw * 4, *rb = src + (size_t)yb * sw * 4;
-                        const uint8_t *p00 = ra + xa, *p10 = ra + xb, *p01 = rb + xa, *p11 = rb + xb;
-                        const int w00 = (256 - wx) * (256 - wy), w10 = wx * (256 - wy);
-                        const int w01 = (256 - wx) * wy, w11 = wx * wy;
-                        int sm[4];
+                        const T *ra = src + (size_t)ya * sw * 4, *rb = src + (size_t)yb * sw * 4;
+                        const T *p00 = ra + xa, *p10 = ra + xb, *p01 = rb + xa, *p11 = rb + xb;
+                        const Acc w00 = (256 - wx) * (256 - wy), w10 = wx * (256 - wy);
+                        const Acc w01 = (256 - wx) * wy, w11 = wx * wy;
+                        long long sm[4];
                         for (int c = 0; c < 4; ++c)
                             sm[c] = (p00[c] * w00 + p10[c] * w10 + p01[c] * w01 + p11[c] * w11 + 32768) >> 16;
-                        pixel<M, Dissolve>(sm[0], sm[1], sm[2], sm[3], d, b, p.opQ);
+                        put<T, M, Dissolve>(sm, d, b, p);
                     }
                 }
             });
         }
 
-        template <Blend M, bool Dissolve>
+        template <class T, Blend M, bool Dissolve>
         void runKind(const Plan &p, const Raster *base, Raster &out)
         {
             switch (p.kind)
             {
-                case Kind::Copy: runLayer<M, Dissolve, Kind::Copy>(p, base, out); break;
-                case Kind::Axis: runLayer<M, Dissolve, Kind::Axis>(p, base, out); break;
-                case Kind::General: runLayer<M, Dissolve, Kind::General>(p, base, out); break;
+                case Kind::Copy: runLayer<T, M, Dissolve, Kind::Copy>(p, base, out); break;
+                case Kind::Axis: runLayer<T, M, Dissolve, Kind::Axis>(p, base, out); break;
+                case Kind::General: runLayer<T, M, Dissolve, Kind::General>(p, base, out); break;
             }
         }
 
-        template <Blend M>
+        template <class T, Blend M>
         void runMode(const Plan &p, const Raster *base, Raster &out)
         {
-            if (base) runKind<M, true>(p, base, out);
-            else runKind<M, false>(p, nullptr, out);
+            if (base) runKind<T, M, true>(p, base, out);
+            else runKind<T, M, false>(p, nullptr, out);
+        }
+
+        template <class T>
+        void runBlend(const Layer &l, const Plan &p, const Raster *base, Raster &out)
+        {
+            switch (l.blend)
+            {
+                case Blend::Normal: runMode<T, Blend::Normal>(p, base, out); break;
+                case Blend::Multiply: runMode<T, Blend::Multiply>(p, base, out); break;
+                case Blend::Screen: runMode<T, Blend::Screen>(p, base, out); break;
+                case Blend::Overlay: runMode<T, Blend::Overlay>(p, base, out); break;
+                case Blend::Add: runMode<T, Blend::Add>(p, base, out); break;
+                case Blend::Subtract: runMode<T, Blend::Subtract>(p, base, out); break;
+                case Blend::Difference: runMode<T, Blend::Difference>(p, base, out); break;
+            }
         }
 
         void placeLayerAgainst(const Layer &l, const Raster *base, Raster &out)
         {
-            if (out.empty() || out.rgba.size() < (size_t)out.width * out.height * 4) return;
-            if (base && (base->width != out.width || base->height != out.height)) base = nullptr;
+            const size_t need = (size_t)out.width * out.height * 4;
+            if (out.empty() || (out.deep() ? out.rgba16.size() : out.rgba.size()) < need) return;
+            if (base && (base->width != out.width || base->height != out.height || base->deep() != out.deep())) base = nullptr;
+            if (!l.src || l.src->deep() != out.deep()) return;   // compose matches the depths; a stray mix draws nothing
             Plan p;
             if (!makePlan(l, out.width, out.height, p)) return;
-            switch (l.blend)
-            {
-                case Blend::Normal: runMode<Blend::Normal>(p, base, out); break;
-                case Blend::Multiply: runMode<Blend::Multiply>(p, base, out); break;
-                case Blend::Screen: runMode<Blend::Screen>(p, base, out); break;
-                case Blend::Overlay: runMode<Blend::Overlay>(p, base, out); break;
-                case Blend::Add: runMode<Blend::Add>(p, base, out); break;
-                case Blend::Subtract: runMode<Blend::Subtract>(p, base, out); break;
-                case Blend::Difference: runMode<Blend::Difference>(p, base, out); break;
-            }
+            if (out.deep()) runBlend<uint16_t>(l, p, base, out);
+            else runBlend<uint8_t>(l, p, base, out);
         }
     }
 
@@ -416,22 +478,42 @@ namespace render
 
     void compose(const std::vector<Layer> &bottomToTop, int width, int height, Raster &out)
     {
-        out.allocate(width, height, 0);
+        // R-COLOR-1: one deep layer makes the composite deep, and any 8-bit layer beside it is
+        // widened (v * 257) so every layer mixes at 16 bits
+        bool deep = false;
+        for (const auto &l : bottomToTop) deep = deep || (l.src && l.src->deep());
+        std::vector<Raster> widened;
+        std::vector<Layer> deepLayers;
+        if (deep)
+        {
+            widened.reserve(bottomToTop.size());   // no reallocation: the layers point into it
+            deepLayers = bottomToTop;
+            for (auto &l : deepLayers)
+                if (l.src && !l.src->deep() && !l.src->empty())
+                {
+                    widened.emplace_back();
+                    toDeep(*l.src, widened.back());
+                    l.src = &widened.back();
+                }
+            out.allocate16(width, height, 0);
+        }
+        else out.allocate(width, height, 0);
         if (out.empty()) return;
+        const std::vector<Layer> &layers = deep ? deepLayers : bottomToTop;
         // A dissolve group mixes every member against the composite as it stood BEFORE the group,
         // so the snapshot is taken once, at the group's first layer, and only during a transition —
         // the cost is one frame copy for the frames that need it and nothing for the rest.
         Raster snapshot;
         bool haveSnapshot = false;
-        const size_t n = bottomToTop.size();
+        const size_t n = layers.size();
         for (size_t i = 0; i < n; ++i)
         {
-            const Layer &l = bottomToTop[i];
+            const Layer &l = layers[i];
             const bool member = l.dissolveWithPrevious && i > 0 && haveSnapshot;
             if (!member)
             {
                 haveSnapshot = false;
-                if (i + 1 < n && bottomToTop[i + 1].dissolveWithPrevious)
+                if (i + 1 < n && layers[i + 1].dissolveWithPrevious)
                 {
                     snapshot = out;
                     haveSnapshot = true;

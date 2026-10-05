@@ -41,7 +41,14 @@ namespace interstellar_host
         out.width = mStill.width;
         out.height = mStill.height;
         out.rgba.assign(mStill.rgba.begin(), mStill.rgba.end());
+        out.rgba16.clear();
         return true;
+    }
+
+    bool HostFrameSource::frameAtDeep(long long frame, interstellar::Raster &out)
+    {
+        if (mVideo) return mVideo->frameAtDeep(frame, out);
+        return IFrameSource::frameAtDeep(frame, out);
     }
 }
 }

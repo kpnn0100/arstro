@@ -837,6 +837,36 @@ sharpening, dehaze, lens, grain, rotation) 762 → 94 ms. Guarded by L2 `with Us
 grades afresh on the GPU — `gpuInUse` — within 2/255 of the CPU, the spatial stages included; off
 again is CPU) and cosmo's `EditEngine_gl_pipeline_matches_cpu_per_stage` (22 cases).
 
+### DR-COLOR-1 A render to a 10-bit codec runs at 16 bits, decode to encode (R-COLOR-1)
+`Raster` carries an optional deep payload, `rgba16`, the same layout at 16 bits full range (v8 × 257
+is the same value; `core/Raster.h:35`, widen/narrow at `:48`). Only a render job whose codec keeps
+more than 8 bits asks for it (`core/service/ServiceRender.cpp:978` — ProRes, DNxHR HQX/444, H.265
+10-bit), and the deep frame never leaves that render: it reads and writes no cache (`:392`), the
+monitor and the preview cache stay 8-bit. Each stage:
+decode — `IFrameSource::frameAtDeep` (`core/FrameSource.h:41`; the default widens `frameAt`), which
+FFmpeg's source fills as RGBA64 from libswscale (`host/FrameSourceFFmpeg.cpp:186`), past the 8-bit
+volume (`ServiceRender.cpp:143`; a layer with a temporal effect needs the volume's window, so it stays
+8-bit and is widened by the composite); no preview prescale (`:421`);
+grade — the same `renderImage` call, fed by Cosmo's new `EditEngine::fromEncodedWords` and read back
+from `EditEngine::lastProcessed`, the float picture its RGBA8 bytes are quantised from (`core/
+ImageProcessing/src/engine/EditEngine.h:178`, `:186`; `render/GradeEngine.cpp:81`); the grade weight
+mixes at 16 bits (`ServiceRender.cpp:80`); effects — the same kernels templated on the pixel type
+(`render/Effects.cpp:240`); composite — `runLayer` templated on the pixel type (`render/Composite.cpp:
+353`), so a deep frame places every layer on exactly the pixels an 8-bit one does, mixed in double
+(`:318`); one deep layer makes the composite deep and widens the rest (`:479`); encode — RGBA64 into
+libswscale (`host/FrameWriterFFmpeg.cpp:246`).
+Measured end to end through `interstellar-cc` on a true 10-bit 1080p ramp (104 levels on a row, 20-px
+steps), graded (exposure 0.6, contrast 20): ProRes out has 149 levels with 20-px steps; H.264 (8-bit)
+has 28 with 149-px steps. 24 frames took 2.9 s to ProRes, 1.6 s to H.264 (the codecs differ too).
+Guarded by: render `deep composite…` (the same coverage as 8-bit, within a code value, every sampling
+kind, blend and dissolve) and `deep: a ramp finer than 8 bits survives grade, effect and composite`
+(256 levels vs 4); L2 `a 10-bit delivery carries more than 8 bits…` (47 levels vs 4, through the real
+service and its fake 16-bit source); host `10-bit ProRes round trip` (the real writer and decoder:
+35 levels / 10-px steps against 18 / 32 from an 8-bit frame); image `Engine_deep_ingest_and_processed_
+readout`. Mutants run red: the grade packing from the 8-bit bytes, the composite rounding to 8 bits,
+the effects taking an 8-bit round trip, the job never asking for deep, the decode going through the
+8-bit volume, the writer narrowing before the encoder.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

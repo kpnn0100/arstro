@@ -20,6 +20,8 @@
  *   * Spin — the average along an arc of `angle` degrees about a centre.
  *  The line and ray kinds sample bilinearly, rows run in parallel. Alpha is carried, never blurred
  *  into a different shape (it is the frame's, and frames here are opaque).
+ *
+ *  A deep raster (R-COLOR-1) runs the same kernels at 16 bits per component.
  */
 #pragma once
 #include "Raster.h"

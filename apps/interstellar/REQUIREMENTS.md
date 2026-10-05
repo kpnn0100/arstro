@@ -492,11 +492,13 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-COLOR — colour science — ⏳ NOT STARTED (added 2026-10-05, user request "implement all the features you suggest")
+## R-COLOR — colour science — 🔶 IN PROGRESS (added 2026-10-05, user request "implement all the features you suggest")
 
 - **R-COLOR-1 Deliveries keep more than 8 bits.** A render decodes, grades, composites and encodes
   at 16 bits per channel, so a 10-bit ProRes, DNxHR or H.265 carries 10 bits of picture; the monitor
-  and the preview cache may stay 8-bit.
+  and the preview cache may stay 8-bit. — ✅ (DR-COLOR-1). Stays 8-bit, said: a layer with a
+  temporal effect (its frames come from the 8-bit volume; widened before the composite), a PNG
+  sequence and a still export (8-bit PNG), an 8-bit codec (H.264, H.265 8-bit, DNxHR LB/SQ/HQ).
 - **R-COLOR-2 Input transforms per source**: a source says what it is — Rec.709, sRGB, linear, ARRI
   LogC3/LogC4, Sony S-Log3 (S-Gamut3.Cine), Panasonic V-Log, Canon Log 3, RED Log3G10 (RWG),
   Blackmagic Film Gen 5 — and is converted to the working space before Cosmo grades it.

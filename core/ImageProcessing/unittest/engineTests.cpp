@@ -377,6 +377,38 @@ TEST(Engine_renderImage_reuse)
     CHECK(std::abs((int)pb2.rgba[0] - 128) <= 2);
 }
 
+// ── the deep seam (Interstellar R-COLOR-1): 16-bit in, the float result out ──
+TEST(Engine_deep_ingest_and_processed_readout)
+{
+    // v8 * 257 is the same value at 16 bits, so the two ingests agree exactly
+    auto bytes = variedRGBA8(40, 30);
+    std::vector<uint16_t> words(bytes.size());
+    for (size_t i = 0; i < bytes.size(); ++i) words[i] = (uint16_t)(bytes[i] * 257);
+    const Image a = EditEngine::fromEncodedBytes(bytes.data(), 40, 30, 4);
+    const Image b = EditEngine::fromEncodedWords(words.data(), 40, 30, 4);
+    CHECK(a.width() == b.width() && a.height() == b.height());
+    double worst = 0;
+    for (size_t i = 0; i < (size_t)40 * 30 * 4; ++i) worst = std::max(worst, (double)std::fabs(a.data()[i] - b.data()[i]));
+    CHECK(worst == 0.0);
+
+    // a value between two 8-bit codes decodes between their linear values — the bits are kept
+    const uint16_t mid[4] = {(uint16_t)(100 * 257 + 128), 0, 0, 65535};
+    const uint16_t lo[4] = {(uint16_t)(100 * 257), 0, 0, 65535}, hi[4] = {(uint16_t)(101 * 257), 0, 0, 65535};
+    const Pixel m = EditEngine::fromEncodedWords(mid, 1, 1, 4).data()[0];
+    CHECK(m > EditEngine::fromEncodedWords(lo, 1, 1, 4).data()[0] && m < EditEngine::fromEncodedWords(hi, 1, 1, 4).data()[0]);
+
+    // lastProcessed is the picture the RGBA8 output was quantised from
+    EditEngine eng;
+    EditParams p; p.exposure = 0.7f; p.contrast = 15.f;
+    const PreviewBuffer pb = eng.renderImage(a, p, 40);
+    const Image &f = eng.lastProcessed();
+    CHECK(f.width() == pb.width && f.height() == pb.height && f.channels() == 4);
+    int off = 0;
+    for (size_t i = 0; i < (size_t)pb.width * pb.height * 4; ++i)
+        off = std::max(off, std::abs((int)pb.rgba[i] - (int)(clamp01(f.data()[i]) * 255 + 0.5f)));
+    CHECK(off == 0);
+}
+
 // ── hardware acceleration: parallel output == serial output ──
 TEST(Parallel_matches_serial)
 {

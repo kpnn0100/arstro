@@ -3,7 +3,8 @@
  *
  *      per layer   geom.crop -> fit -> scale -> rotate about the anchor -> translate
  *      composite   bottom track to top, per-layer blend mode and opacity
- *      output      one straight-alpha RGBA8 Raster at the project size
+ *      output      one straight-alpha RGBA8 Raster at the project size — or RGBA16 when any
+ *                  layer is deep (R-COLOR-1), the 8-bit layers widened beside it
  *
  *  Layers arrive already GRADED, so a composite is a composite of graded frames and never of raw
  *  ones. That ordering is why a clip's `geom.crop` (a reframe of the graded result, here) and a
@@ -86,7 +87,8 @@ namespace render
      *  anchor, translation, opacity and blend. */
     void placeLayer(const Layer &l, Raster &out);
 
-    /** Bottom to top. `out` is allocated to `width` x `height` and cleared to transparent black. */
+    /** Bottom to top. `out` is allocated to `width` x `height` and cleared to transparent black —
+     *  deep (16-bit) when any layer is, with every layer placed on the same pixels either way. */
     void compose(const std::vector<Layer> &bottomToTop, int width, int height, Raster &out);
 }
 }

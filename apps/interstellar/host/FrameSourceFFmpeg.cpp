@@ -18,6 +18,7 @@ namespace interstellar_host
     void FrameSourceFFmpeg::closeAll()
     {
         if (mSws) { sws_freeContext(mSws); mSws = nullptr; }
+        if (mSws16) { sws_freeContext(mSws16); mSws16 = nullptr; }
         if (mFrame) { av_frame_free(&mFrame); mFrame = nullptr; }
         if (mPkt) { av_packet_free(&mPkt); mPkt = nullptr; }
         if (mDec) { avcodec_free_context(&mDec); mDec = nullptr; }
@@ -182,21 +183,37 @@ namespace interstellar_host
         }
     }
 
-    void FrameSourceFFmpeg::convertCurrent(interstellar::Raster &out)
+    void FrameSourceFFmpeg::convertCurrent(interstellar::Raster &out, bool deep)
     {
         // Straight (non-premultiplied) RGBA8, matching `Raster` and `RenderService::Frame`, so a
-        // frame goes decoder -> grade -> composite -> writer with no conversion in between.
-        mSws = sws_getCachedContext(mSws, mFrame->width, mFrame->height,
-                                    (AVPixelFormat)mFrame->format, mInfo.width, mInfo.height,
-                                    AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr, nullptr, nullptr);
-        if (!mSws) return;
-        out.allocate(mInfo.width, mInfo.height, 255);
-        uint8_t *dst[4] = {out.rgba.data(), nullptr, nullptr, nullptr};
-        int stride[4] = {mInfo.width * 4, 0, 0, 0};
-        sws_scale(mSws, mFrame->data, mFrame->linesize, 0, mFrame->height, dst, stride);
+        // frame goes decoder -> grade -> composite -> writer with no conversion in between. Deep
+        // (R-COLOR-1): RGBA64 in native byte order, which is `Raster::rgba16`'s layout.
+        SwsContext *&sws = deep ? mSws16 : mSws;
+        sws = sws_getCachedContext(sws, mFrame->width, mFrame->height,
+                                   (AVPixelFormat)mFrame->format, mInfo.width, mInfo.height,
+                                   deep ? AV_PIX_FMT_RGBA64 : AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr, nullptr, nullptr);
+        if (!sws) { out = interstellar::Raster{}; return; }
+        uint8_t *dst[4] = {nullptr, nullptr, nullptr, nullptr};
+        int stride[4] = {0, 0, 0, 0};
+        if (deep)
+        {
+            out.allocate16(mInfo.width, mInfo.height, 65535);
+            dst[0] = reinterpret_cast<uint8_t *>(out.rgba16.data());
+            stride[0] = mInfo.width * 8;
+        }
+        else
+        {
+            out.allocate(mInfo.width, mInfo.height, 255);
+            dst[0] = out.rgba.data();
+            stride[0] = mInfo.width * 4;
+        }
+        sws_scale(sws, mFrame->data, mFrame->linesize, 0, mFrame->height, dst, stride);
     }
 
-    bool FrameSourceFFmpeg::frameAt(long long frame, interstellar::Raster &out)
+    bool FrameSourceFFmpeg::frameAt(long long frame, interstellar::Raster &out) { return frameAtImpl(frame, out, false); }
+    bool FrameSourceFFmpeg::frameAtDeep(long long frame, interstellar::Raster &out) { return frameAtImpl(frame, out, true); }
+
+    bool FrameSourceFFmpeg::frameAtImpl(long long frame, interstellar::Raster &out, bool deep)
     {
         if (!mFmt || !mDec) return false;
         // A still image is a one-frame stream, and a clip may run past the end of its source;
@@ -205,7 +222,7 @@ namespace interstellar_host
         if (mInfo.frames > 0 && frame >= mInfo.frames) frame = mInfo.frames - 1;
 
         // Already holding it: the common case during a playback or an export.
-        if (mHeld == frame) { convertCurrent(out); return !out.empty(); }
+        if (mHeld == frame) { convertCurrent(out, deep); return !out.empty(); }
 
         // Backwards, or far enough forward that a seek beats decoding through. Decoding forward a
         // short distance is nearly free; seeking costs a keyframe search plus the decode from it.
@@ -219,7 +236,7 @@ namespace interstellar_host
             if (frame < mHeld) return false;
         }
         if (!decodeUntil(frame)) return false;
-        convertCurrent(out);
+        convertCurrent(out, deep);
         return !out.empty();
     }
 }

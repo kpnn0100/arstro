@@ -24,7 +24,7 @@ namespace interstellar
             int width = 0, height = 0;
             double fps = 24.0;
             long long frames = 0;
-            int bitDepth = 8;           // bits per component the source carries (the frames arrive as 8-bit RGBA)
+            int bitDepth = 8;           // bits per component the source carries (frameAt is 8-bit; frameAtDeep keeps them)
             bool valid() const { return width > 0 && height > 0; }
         };
 
@@ -35,6 +35,15 @@ namespace interstellar
          *  seeks only backwards or a long way forward. A still image is a one-frame stream, which
          *  is why the timeline needs no second code path for stills. */
         virtual bool frameAt(long long frame, Raster &out) = 0;
+        /** The same frame at 16 bits per component (a deep Raster, R-COLOR-1) — what a render to a
+         *  deep codec decodes, so a 10-bit source keeps its 10 bits. The default widens frameAt
+         *  (v * 257): right for an 8-bit source, and for a decoder that has nothing better. */
+        virtual bool frameAtDeep(long long frame, Raster &out)
+        {
+            if (!frameAt(frame, out)) return false;
+            toDeep(out, out);
+            return true;
+        }
     };
 
     /** How to encode a render (R-RENDER-6). The service validates it against the codec before a job

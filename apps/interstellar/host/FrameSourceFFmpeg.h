@@ -43,13 +43,16 @@ namespace interstellar_host
 
         bool open(const std::string &path, Info &out) override;
         bool frameAt(long long frame, interstellar::Raster &out) override;
+        /** RGBA64 straight from libswscale: a 10-bit source keeps its 10 bits (R-COLOR-1). */
+        bool frameAtDeep(long long frame, interstellar::Raster &out) override;
 
     private:
         /** Decode forward until the stream's position reaches `frame`. Returns false at EOF. */
         bool decodeUntil(long long frame);
         bool seekTo(long long frame);
         int64_t probeEndPts();
-        void convertCurrent(interstellar::Raster &out);
+        bool frameAtImpl(long long frame, interstellar::Raster &out, bool deep);
+        void convertCurrent(interstellar::Raster &out, bool deep);
         void closeAll();
 
         AVFormatContext *mFmt = nullptr;
@@ -57,6 +60,7 @@ namespace interstellar_host
         AVFrame *mFrame = nullptr;
         AVPacket *mPkt = nullptr;
         SwsContext *mSws = nullptr;
+        SwsContext *mSws16 = nullptr;   // the deep conversion (RGBA64), kept apart so neither rebuilds
         int mStream = -1;
         Info mInfo;
         /** The frame index the decoder is currently HOLDING, or -1 before the first decode. */

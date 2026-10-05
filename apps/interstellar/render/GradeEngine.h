@@ -61,6 +61,8 @@ namespace render
          *  declines to render (it never has), `out` is the ungraded input rather than nothing, and
          *  the call still returns true — a master must not drop a frame. */
         bool render(const Raster &in, const arstro::EditParams &p, bool hasParams, int longEdge, Raster &out);
+        // A DEEP `in` (R-COLOR-1) is graded deep: 16-bit in, the engine's float result packed to
+        // 16-bit out — never through its RGBA8 bytes. Identity copies, as above.
 
         /** Free the engine and its scratch; the next non-identity render builds a new one. For a
          *  host that stops playing or exporting and does not want ~200 MB parked meanwhile. */
@@ -81,6 +83,7 @@ namespace render
 
     private:
         void ensureEngine();
+        bool renderDeep(const Raster &in, const arstro::EditParams &p, bool hasParams, int longEdge, Raster &out);
         bool mLastAccelerated = false;
         std::unique_ptr<arstro::EditEngine> mEngine;
         bool mPreferGpu = false;

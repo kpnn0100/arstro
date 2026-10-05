@@ -21,6 +21,8 @@ namespace interstellar_host
         ~HostFrameSource() override;
         bool open(const std::string &path, Info &out) override;
         bool frameAt(long long frame, interstellar::Raster &out) override;
+        /** A video's own deep decode (R-COLOR-1); a still is widened from its 8-bit pixels. */
+        bool frameAtDeep(long long frame, interstellar::Raster &out) override;
 
     private:
         std::unique_ptr<interstellar::IFrameSource> mVideo;

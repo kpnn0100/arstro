@@ -125,7 +125,7 @@ namespace interstellar
         int cacheEdge() const;
         PlaybackStats playbackStats() const { return {mAheadHits, mAheadMisses, mPlayEdge, mPlayRate, mAheadShown, mAheadLag, mCacheShown}; }
         /** A NAMED timeline at `t` — what render and export-still use (R-RENDER-1). */
-        bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr);
+        bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr, bool deep = false);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
          *  the version's overrides, the group fold. */
         bool gradeFor(const NodeId &timeline, const NodeId &rackObj, EditParams &out, std::string &err, double srcT = -1.0);
@@ -208,12 +208,12 @@ namespace interstellar
         bool exportStill(const Command &c);
         void pumpJobs();
         Source *source(RenderCtx &ctx, const std::string &media);
-        bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out);
+        bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
         bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
         bool present(FramePlan &&plan, Raster &out);
-        bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember = true);
+        bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember = true, bool deep = false);
         void previewLoop();
         // R-PLAY-2: while playing, grade the frames after the playhead in parallel
         void aheadLoop(size_t worker);

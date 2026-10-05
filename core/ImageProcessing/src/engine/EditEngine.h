@@ -172,10 +172,18 @@ namespace arstro
         void setCurrentParams(const EditParams &p);             // replace current slot's params
         /** Decode straight RGBA8/RGB8 (gamma sRGB) bytes into a linear-light Image. */
         static Image fromEncodedBytes(const uint8_t *rgba, int width, int height, int channels);
+        /** The same at 16 bits per component (full range, 0 … 65535): a deep frame for a delivery
+         *  that keeps more than 8 bits (Interstellar R-COLOR-1). v8 * 257 decodes to exactly what
+         *  fromEncodedBytes gives v8. */
+        static Image fromEncodedWords(const uint16_t *rgba, int width, int height, int channels);
         /** Render ANY linear image with a param set (downscaled to maxEdge if larger).
          *  This is the seam a video editor reuses: decode a frame -> Image -> renderImage.
          *  Returns engine-owned RGBA8, valid until the next render on this engine. */
         PreviewBuffer renderImage(const Image &linearSrc, const EditParams &p, int maxEdge);
+        /** The last render's gamma-encoded float picture, BEFORE it was quantised to the RGBA8
+         *  output (CPU or GPU, the same image the bytes were made from) — valid until the next
+         *  render. A deep caller reads its pixels from here instead of the 8-bit buffer. */
+        const Image &lastProcessed() const { return mWorkProcessed; }
 
         // ── compute backend (GPU acceleration seam; the CPU pipeline is the reference + fallback, R-GPU) ──
         /** Opt into the GPU accelerator when one is available; else render on the CPU. */

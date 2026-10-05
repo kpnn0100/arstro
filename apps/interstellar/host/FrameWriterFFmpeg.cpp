@@ -243,7 +243,8 @@ namespace interstellar_host
 
         AVFrame *target = mSwFrame ? mSwFrame : mFrame;   // hardware: convert into the software frame first
         SwsContext *prev = mSws;
-        mSws = sws_getCachedContext(mSws, frame.width, frame.height, AV_PIX_FMT_RGBA, mEnc->width,
+        // a deep frame (R-COLOR-1) goes in as RGBA64, so a 10-bit encode gets 10 bits of picture
+        mSws = sws_getCachedContext(mSws, frame.width, frame.height, frame.deep() ? AV_PIX_FMT_RGBA64 : AV_PIX_FMT_RGBA, mEnc->width,
                                     mEnc->height, (AVPixelFormat)target->format, SWS_BILINEAR, nullptr, nullptr,
                                     nullptr);
         if (!mSws) { mError = "cannot build the colour converter"; return false; }
@@ -255,8 +256,8 @@ namespace interstellar_host
         }
         if (av_frame_make_writable(target) < 0) { mError = "the frame is not writable"; return false; }
 
-        const uint8_t *src[4] = {frame.rgba.data(), nullptr, nullptr, nullptr};
-        int stride[4] = {frame.width * 4, 0, 0, 0};
+        const uint8_t *src[4] = {frame.deep() ? reinterpret_cast<const uint8_t *>(frame.rgba16.data()) : frame.rgba.data(), nullptr, nullptr, nullptr};
+        int stride[4] = {frame.width * (frame.deep() ? 8 : 4), 0, 0, 0};
         sws_scale(mSws, src, stride, 0, frame.height, target->data, target->linesize);
         if (mSwFrame)
         {

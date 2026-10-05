@@ -21,6 +21,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <set>
 #include <mutex>
 #include <memory>
 #include <sstream>
@@ -97,14 +98,35 @@ namespace
             gOpens[fs::path(path).filename().string()]++;
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
             mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
+            mRamp = path.find("ramp") != std::string::npos;   // R-COLOR-1: a ramp finer than 8 bits
             out.width = 48;
             out.height = 27;
             out.fps = 24;
             out.frames = 96;
             return true;
         }
+        /** The ramp at 16 bits: 48 steps of 12/65535 — about two 8-bit codes from end to end. */
+        bool frameAtDeep(long long f, Raster &out) override
+        {
+            if (!mRamp) return IFrameSource::frameAtDeep(f, out);
+            out.allocate16(48, 27, 65535);
+            for (int y = 0; y < 27; ++y)
+                for (int x = 0; x < 48; ++x)
+                {
+                    uint16_t *p = &out.rgba16[((size_t)y * 48 + x) * 4];
+                    p[0] = p[1] = p[2] = (uint16_t)(30000 + x * 12);
+                }
+            return true;
+        }
         bool frameAt(long long f, Raster &out) override
         {
+            if (mRamp)
+            {
+                Raster deep;
+                frameAtDeep(f, deep);
+                toShallow(deep, out);
+                return true;
+            }
             if (!mMem.empty())
             {
                 if (f < 0 || f >= (long long)mMem.size()) return false;
@@ -131,7 +153,7 @@ namespace
 
     private:
         uint8_t mG = 0;
-        bool mEdge = false;
+        bool mEdge = false, mRamp = false;
         std::vector<Raster> mMem;
     };
 
@@ -188,7 +210,7 @@ namespace
 
         explicit Fixture(const std::string &name) : dir(scratch(name))
         {
-            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4"}) std::ofstream(dir + "/footage/" + f) << "x";
+            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4", "ramp.mp4"}) std::ofstream(dir + "/footage/" + f) << "x";
             svc = make();
         }
 
@@ -815,8 +837,12 @@ int main()
         assert(r.width == 24 && r.height == 14 && std::fabs(r.fps - 12.0) < 1e-9);
         assert(has(r.spec, "H.265 10-bit") && has(r.spec, "q22") && has(r.spec, "slow") && has(r.spec, "24\xC3\x97" "14") && has(r.spec, "12 fps"));
         // sampled at the output rate: frame k of a 12 fps render IS the timeline at k/12 s
-        Raster at1;
-        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 24, at1) && at1.rgba == f.written[12].rgba);
+        Raster at1, w12;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 24, at1));
+        assert(f.written[12].deep());                                     // a 10-bit render is a deep one (R-COLOR-1)…
+        toShallow(f.written[12], w12);                                    // …the same picture within a code value
+        assert(w12.rgba.size() == at1.rgba.size());
+        for (size_t i = 0; i < at1.rgba.size(); ++i) assert(std::abs(at1.rgba[i] - w12.rgba[i]) <= 1);
         // intermediates: profile and depth from the profile
         f.must("render --timeline main --format dnxhr --profile hqx --res 46x26 --out \"" + f.path("o.mov") + "\"");
         assert(gBegin.spec.codec == "dnxhr" && gBegin.spec.profile == "hqx" && gBegin.spec.bitDepth == 10);
@@ -841,6 +867,43 @@ int main()
         assert(f.svc->model().renders.back().state == "done" && has(f.svc->model().renders.back().spec, "encoded in software"));
         f.svc = f.make();                                                 // persisted
         assert(f.svc->model().settings.hardwareVideo);
+    });
+
+    test("a 10-bit delivery carries more than 8 bits: decoded, graded, composited and encoded deep (R-COLOR-1)", [] {
+        Fixture f("deep");
+        // 48x26 (codecs want even sizes) from a 48x27 source: the composite resamples, at full size
+        f.must("project new \"" + f.path("mv.isp") + "\" --fps 24 --res 48x26");
+        f.must("rack add \"" + f.path("footage/ramp.mp4") + "\"");
+        f.must("track add --kind video");
+        f.must("clip add --track v0 --src ramp --in 0 --out 1 --at 0 --name shot");
+        f.must("set ramp.basic.exposure=0.8");
+        f.must("set ramp.basic.contrast=15");
+        f.must("set shot.opacity=0.9");               // the composite mixes, not copies
+        auto levels = [](const Raster &r) {
+            std::set<int> v;
+            for (int x = 0; x < r.width; ++x)
+                v.insert(r.deep() ? r.rgba16[((size_t)13 * r.width + x) * 4] : r.rgba[((size_t)13 * r.width + x) * 4] * 257);
+            return (int)v.size();
+        };
+        // ProRes is 10-bit: every frame reaches the encoder at 16 bits, and the ramp's steps survive
+        f.must("render --timeline main --format prores --out \"" + f.path("p.mov") + "\"");
+        assert(f.svc->model().renders.back().state == "done" && f.written.size() == 24);
+        assert(f.written[0].deep() && f.written[0].width == 48 && f.written[0].height == 26);
+        const int deepLevels = levels(f.written[0]);
+        // H.264 here is 8-bit: the same timeline, a handful of codes
+        f.written.clear();
+        f.must("render --timeline main --format h264 --out \"" + f.path("h.mp4") + "\"");
+        assert(!f.written[0].deep());
+        const int shallowLevels = levels(f.written[0]);
+        std::printf("    row levels: %d at 16-bit vs %d at 8-bit\n", deepLevels, shallowLevels);
+        assert(deepLevels >= 40 && shallowLevels <= 6);
+        // the two are the same picture, the deep one unrounded
+        f.written.clear();
+        f.must("render --timeline main --format h265 --bits 10 --out \"" + f.path("h.mkv") + "\"");
+        Raster back, eight;
+        toShallow(f.written[0], back);
+        assert(f.svc->renderTimelineFrame(f.svc->model().timelines[0].id, 0.0, 0, eight) && !eight.deep());
+        for (size_t i = 0; i < eight.rgba.size(); ++i) assert(std::abs(eight.rgba[i] - back.rgba[i]) <= 1);
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
