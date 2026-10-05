@@ -77,6 +77,16 @@ static AppModel populatedModel()
         e.params.push_back(EffectParamModel{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0});
         m.effects.push_back(e);
         m.effectTypes.push_back({"blur.gaussian", "Gaussian Blur", "Blur"});
+        AnimModel an;
+        an.id = "an_1";
+        an.node = "ro_1";
+        an.nodeBind = "a";
+        an.owner = "rack";
+        an.key = "basic.exposure";
+        an.address = "a.basic.exposure";
+        an.clock = "source";
+        an.keys.push_back(KeyframeModel{});
+        m.anims.push_back(an);
     }
     m.presets.push_back({"Film/Warm fade", "Film"});
     return m;

@@ -687,6 +687,45 @@ overlay) and `interstellar_host` (a 10-bit HEVC source reports 10, the rest 8). 
 `grade_populated` (histogram), `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
 `grade_clip_warning` (both sizes, looked at).
 
+### DR-ANIM-1 Curves: `#anim` + `#key`, After Effects' bezier, on the footage's clock (R-ANIM-1, -2, -3, -5)
+The format (`model/Project.h`, `Schema.h`; project-format §5.3): `#anim id node key` names one
+parameter of one #rackobj, #effect or #clip by id; `#key anim t v [in out speedIn inflIn speedOut
+inflOut]` are its keyframes, written right under it in time order, a side's speed and influence only
+when that side is a bezier. Validation refuses a curve naming nothing, two curves for one parameter,
+two keys at one time, an influence outside (0, 100]. The evaluator (`model/Anim.h:57`, `:83`) is
+After Effects' model: per side linear | bezier | hold, a bezier side's speed (units/s) and influence
+(% of the segment) placing the cubic's control points; two linear sides are an exact lerp; a hold
+keeps the value; presets Linear, Ease, Ease In, Ease Out, Hold (`:93`). Header-only, so the graph
+editor will draw the very function the render path evaluates.
+`core/service/ServiceAnim.cpp`: `animTarget` (`:102`) maps an address to its curve and CLOCK — a rack
+node's continuous colour key or an effect's mix/parameter run in SOURCE time, "now" being the
+source's reference frame (`sourceNow`, `:88`); a clip's opacity and geometry run on the clip's own
+footage clock (in + offset × speed), so a move, a head trim or a split keeps every key on its frame.
+`key add|remove|set|clear` (`animCommand`, `:313`) — times to the millisecond, values tidied to
+float precision, a speed or influence making its side a bezier, the last key's removal and `key
+clear` leaving the value as the parameter's own (`writeStatic`). R-ANIM-3: `set` on an animated
+parameter keys it at now (`setAnimated`, `:289`; hooked first in `setAddress`,
+`InterstellarService.cpp:1723`). R-ANIM-5: curves are the root's (`curveEditable`, `:211`) — a version
+cannot key the rack or an effect, nor a clip it inherits; its `set` is a `#tlgrade` delta against the
+curve's value at now (`:1782`) and renders on top of it. The render path: `gradeFor` /
+`gradeForBypassing` replace each tree node's own value with its curve at the layer's source time
+before the deltas and the fold (`applyColourCurves`, `:477`; `ServiceRender.cpp:173`, `:276`),
+`effectChain` evaluates effect curves, `planFrame` the clip's (`ServiceRender.cpp:310`), so plan keys
+— and the frame cache, the ring, the preview cache — follow the animation; Grade's panels show the
+curves at the reference frame. Pins freeze curves: the commit hashes the .cmp AND the rack's curve
+text (`InterstellarService.cpp:1584`), written to `<commit>.anim`, read by `pinCurvesFor` (`:526`).
+Curves follow their nodes: dropped with the node (`pruneAnims`, `:444`, after every command), copied
+by `rack duplicate` (colour and effect curves), `clip split` and `clip copy`/`paste` (`copyAnims`,
+`:455`). Model `anims[]` (`fillAnimModel`, `:562`), event `keys.changed`, undoable. Guarded by model
+tests (byte-exact round trip; four refusals; the evaluator: lerp, symmetric ease, the leaving slope
+IS the speed — 19.999 for 20, ease-in, hold, influence) and L2 `keyframes: …` (a 0→1 curve renders
+exactly the still-0.5 frame at source time 1, and so does another clip of the source elsewhere;
+`set` adds a key at the reference frame; a version adds +0.1 and cannot key; a pinned version does
+not move when the base's curve does; effect and clip curves; a split keeps both halves animated;
+`key clear` renders the same frame; undo; save and reload). Mutants red: curves ignored on the rack,
+pins reading live curves, `set` never keying, clip curves not rendered. By hand: exposure −2 → 1.5
+eased and scale 1 → 1.6, three stills look right.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

@@ -162,7 +162,7 @@ namespace interstellar
     }
 
     bool InterstellarService::gradeForBypassing(const NodeId &tl, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
-                                                EditParams &out, std::string &err)
+                                                EditParams &out, std::string &err, double srcT)
     {
         ColourTree tree;
         std::map<NodeId, int> idx;
@@ -170,6 +170,7 @@ namespace interstellar
         if (!colourTreeFor(tl, tree, idx, source, err)) return false;
         const auto it = idx.find(rackObj);
         if (it == idx.end()) { err = "rack node " + rackObj + " is not in the " + source; return false; }
+        if (srcT >= 0) applyColourCurves(tl, tree, idx, srcT);
         for (const auto &kv : idx)
         {
             applyDeltas(tree[(size_t)kv.second].own, gradeDeltas(*mProject, tl, kv.first));
@@ -271,7 +272,9 @@ namespace interstellar
                 }
             }
             std::string e;
-            if (!gradeFor(tl, ro->id, L.params, e)) L.params = EditParams{};   // an unbound node renders ungraded
+            // R-ANIM: the rack's and the effects' curves at this SOURCE time; the clip's on its own footage clock
+            const double srcT = std::max(0.0, a.localTime);
+            if (!gradeFor(tl, ro->id, L.params, e, srcT)) L.params = EditParams{};   // an unbound node renders ungraded
             L.identity = render::GradeEngine::isIdentity(L.params);
             // D-7: ancestor groups whose weight is below 1 fade their own contribution.
             std::set<NodeId> partial;
@@ -291,7 +294,7 @@ namespace interstellar
                     }
                 }
             }
-            if (!partial.empty() && gradeForBypassing(tl, ro->id, partial, L.paramsGroupsOff, e))
+            if (!partial.empty() && gradeForBypassing(tl, ro->id, partial, L.paramsGroupsOff, e, srcT))
             {
                 L.groupMix = true;
                 L.groupWeight = gw;
@@ -300,24 +303,25 @@ namespace interstellar
             // A partial mix needs the frames it mixes at one size — grade at source size and let
             // the composite scale.
             L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
-            effectChain(ro->id, L.effects, L.effectsKey);
+            effectChain(ro->id, L.effects, L.effectsKey, srcT);
             L.srcWidth = s->info.width;
 
             const Track *tr = tracks[c->track];
+            auto cv = [&](const char *k, double v) { return curveAt(c->id, k, srcT, v); };
             // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
             // identically; the composite works in output pixels.
-            L.layer.geom.x = c->geom.x * plan.width;
-            L.layer.geom.y = c->geom.y * plan.height;
-            L.layer.geom.scale = c->geom.scale;
-            L.layer.geom.rotation = c->geom.rotation;
-            L.layer.geom.anchorX = c->geom.anchorX;
-            L.layer.geom.anchorY = c->geom.anchorY;
-            L.layer.geom.cropX = c->geom.cropX;
-            L.layer.geom.cropY = c->geom.cropY;
-            L.layer.geom.cropW = c->geom.cropW;
-            L.layer.geom.cropH = c->geom.cropH;
+            L.layer.geom.x = cv("geom.x", c->geom.x) * plan.width;
+            L.layer.geom.y = cv("geom.y", c->geom.y) * plan.height;
+            L.layer.geom.scale = cv("geom.scale", c->geom.scale);
+            L.layer.geom.rotation = cv("geom.rotation", c->geom.rotation);
+            L.layer.geom.anchorX = cv("geom.anchor.x", c->geom.anchorX);
+            L.layer.geom.anchorY = cv("geom.anchor.y", c->geom.anchorY);
+            L.layer.geom.cropX = cv("geom.crop.x", c->geom.cropX);
+            L.layer.geom.cropY = cv("geom.crop.y", c->geom.cropY);
+            L.layer.geom.cropW = cv("geom.crop.w", c->geom.cropW);
+            L.layer.geom.cropH = cv("geom.crop.h", c->geom.cropH);
             L.layer.fit = fitOf(c->fit);
-            L.layer.opacity = std::clamp(c->opacity * (tr ? tr->opacity : 1.0) * a.weight, 0.0, 1.0);
+            L.layer.opacity = std::clamp(cv("opacity", c->opacity) * (tr ? tr->opacity : 1.0) * a.weight, 0.0, 1.0);
             L.layer.blend = blendOf(c->blend);
             L.layer.dissolveWithPrevious = a.dissolveWithPrevious;
             plan.layers.push_back(std::move(L));
@@ -344,11 +348,11 @@ namespace interstellar
         const double at = t < 0 ? ro->frame : t;
         L.frame = s->info.frames <= 1 ? 0 : std::clamp<long long>((long long)std::llround(at * fps), 0, s->info.frames - 1);
         std::string e;
-        if (!gradeFor(currentTimeline(), roId, L.params, e)) return false;
+        if (!gradeFor(currentTimeline(), roId, L.params, e, at)) return false;
         L.identity = render::GradeEngine::isIdentity(L.params);
         L.weight = std::clamp(ro->weight, 0.0, 1.0);
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
-        effectChain(roId, L.effects, L.effectsKey);
+        effectChain(roId, L.effects, L.effectsKey, at);
         L.srcWidth = s->info.width;
         // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
         // is graded as itself.

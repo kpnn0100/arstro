@@ -20,6 +20,7 @@
  *  The core carries no codec and no OS paths (R-SCOPE-3): the host injects every one through `Host`.
  */
 #pragma once
+#include "Anim.h"
 #include "AppModel.h"
 #include "Colour.h"
 #include "Command.h"
@@ -125,7 +126,7 @@ namespace interstellar
         bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
          *  the version's overrides, the group fold. */
-        bool gradeFor(const NodeId &timeline, const NodeId &rackObj, EditParams &out, std::string &err);
+        bool gradeFor(const NodeId &timeline, const NodeId &rackObj, EditParams &out, std::string &err, double srcT = -1.0);
 
         Rack &rack() { return mRack; }
         const Project &project() const;
@@ -194,7 +195,7 @@ namespace interstellar
         bool effectCommand(const Command &c);
         /** The plugins a source's pixels pass through after Cosmo (R-FX-5): its own enabled effects
          *  in order, then each ancestor group's, inner first — and a cache-key string of all of it. */
-        void effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key) const;
+        void effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT = -1.0) const;
         bool resolved(const NodeId &timeline, ResolvedTimeline &out, std::string &err) const;
         NodeId currentTimeline() const;
         NodeId timelineRef(const std::string &s) const;
@@ -216,6 +217,40 @@ namespace interstellar
         void aheadLoop(size_t worker);
         void scheduleAhead();
         int playEdge(int requested) const;
+        // R-ANIM: keyframes (ServiceAnim.cpp)
+        struct AnimTarget
+        {
+            NodeId node;
+            std::string key, cosmoKey, address, owner;   // owner: rack | effect | clip
+            bool clipClock = false, inherited = false;
+            double now = 0, lo = -1e300, hi = 1e300, staticValue = 0;
+        };
+        struct PinCurve
+        {
+            NodeId node;
+            std::string key;
+            std::vector<anim::Key> keys;
+        };
+        using PinCurves = std::vector<PinCurve>;
+        double sourceNow(const NodeId &roId) const;
+        bool animTarget(const std::string &address, AnimTarget &out, std::string &why);
+        double staticValue(const AnimTarget &t);
+        double animatedValue(const AnimTarget &t);
+        NodeId rootOf(const NodeId &tl) const;
+        bool curveEditable(const AnimTarget &t);
+        bool upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape);
+        bool writeStatic(const AnimTarget &t, double v);
+        bool setAnimated(const std::string &address, const std::string &value, bool &handled);
+        bool animCommand(const Command &c);
+        void pruneAnims();
+        void copyAnims(const NodeId &from, const NodeId &to, double shift);
+        void applyColourCurves(const NodeId &tl, ColourTree &tree, const std::map<NodeId, int> &idx, double srcT);
+        double curveAt(const NodeId &node, const std::string &key, double t, double fallback) const;
+        std::string colourCurveText() const;
+        const PinCurves *pinCurvesFor(const NodeId &tl);
+        void fillAnimModel(AppModel &m);
+        std::map<std::string, PinCurves> mPinCurves;
+        std::vector<std::pair<std::string, std::vector<anim::Key>>> mClipClipboardAnims;   // the copied clip's curves
         // R-PLAY-1: the graded preview cache (ServiceCache.cpp)
         bool cacheCommand(const Command &c);
         void pumpPreviewCache();
@@ -224,7 +259,7 @@ namespace interstellar
         bool cacheLookup(long long frame, const FramePlan &atCacheEdge, std::string &file, long long &index, int &w, int &h) const;
         void fillCacheModel(AppModel &m) const;
         bool gradeForBypassing(const NodeId &timeline, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
-                               EditParams &out, std::string &err);
+                               EditParams &out, std::string &err, double srcT = -1.0);
         double timelineDuration(const NodeId &timeline) const;
 
         bool lint();

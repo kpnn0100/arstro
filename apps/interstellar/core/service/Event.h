@@ -54,7 +54,8 @@ namespace interstellar
             HistoryChanged,     // did, label, canUndo, canRedo
             SettingsChanged,    // the key=value pairs that changed
             PresetsChanged,     // count
-            CacheChanged        // timeline, frames, total, building
+            CacheChanged,       // timeline, frames, total, building
+            KeysChanged         // address, keys
         };
 
         Kind kind = Kind::Info;

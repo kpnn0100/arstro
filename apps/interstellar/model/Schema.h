@@ -338,6 +338,37 @@ namespace schema
         return f;
     }
 
+    template <> inline const char *typeName<Anim>() { return "anim"; }
+    template <> inline const std::vector<Field<Anim>> &fields<Anim>()
+    {
+        static const std::vector<Field<Anim>> f = {
+            text<Anim>("id", &Anim::id, 0, false),
+            ref<Anim>("node", &Anim::node, 0, false),
+            text<Anim>("key", &Anim::key, 0, false),
+        };
+        return f;
+    }
+
+    template <> inline const char *typeName<AnimKey>() { return "key"; }
+    template <> inline const std::vector<Field<AnimKey>> &fields<AnimKey>()
+    {
+        // a side's speed and influence are written only when that side is a bezier
+        auto bezIn = [](const AnimKey &k, const Project &) { return k.in == "bezier"; };
+        auto bezOut = [](const AnimKey &k, const Project &) { return k.out == "bezier"; };
+        static const std::vector<Field<AnimKey>> f = {
+            ref<AnimKey>("anim", &AnimKey::anim, 0, false),
+            time<AnimKey>("t", &AnimKey::t, 0.0, 0, false),
+            number<AnimKey>("v", &AnimKey::v, 0.0, 0, false),
+            text<AnimKey>("in", &AnimKey::in, 0, false, [](const AnimKey &k, const Project &) { return k.in != "linear"; }),
+            text<AnimKey>("out", &AnimKey::out, 0, false, [](const AnimKey &k, const Project &) { return k.out != "linear"; }),
+            number<AnimKey>("speedIn", &AnimKey::speedIn, 0.0, 0, false, bezIn),
+            number<AnimKey>("inflIn", &AnimKey::inflIn, 33.333, 0, false, bezIn),
+            number<AnimKey>("speedOut", &AnimKey::speedOut, 0.0, 0, false, bezOut),
+            number<AnimKey>("inflOut", &AnimKey::inflOut, 33.333, 0, false, bezOut),
+        };
+        return f;
+    }
+
     template <> inline const char *typeName<Fx>() { return "fx"; }
     template <> inline const std::vector<Field<Fx>> &fields<Fx>()
     {

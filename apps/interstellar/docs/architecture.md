@@ -140,6 +140,8 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/ParamRegistry.{h,cpp}` | core | **built** — the address space, owners, units (R-API-1) |
 | `apps/interstellar/core/service/Command·Event·Json·AppModelCodec·ApiDoc` | core | **built** — the grammar table, the log line, the model dump, the generated document (DR-SVC-2, DR-API-1) |
 | `apps/interstellar/core/service/InterstellarService.{h,cpp}` + `ServiceRender.cpp` | core | **built** — routing, binding, versions, arrangement, the frame path, the render queue (DR-SVC-1, DR-RENDER-*) |
+| `apps/interstellar/model/Anim.h` | model | **built** — the keyframe evaluator, After Effects' bezier model; header-only, shared with the UI (R-ANIM-2, DR-ANIM-1) |
+| `apps/interstellar/core/service/ServiceAnim.cpp` | core | **built** — addresses → curves and clocks, `key add|remove|set|clear`, `set` keying, curves on the render path, pins' curve snapshots (R-ANIM, DR-ANIM-1) |
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
 | `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build; the writer now takes an `EncodeSpec` — H.264, H.265 8/10-bit, ProRes Proxy…4444, DNxHR LB…444, BT.709 tagged (DR-RENDER-6, D-9) |

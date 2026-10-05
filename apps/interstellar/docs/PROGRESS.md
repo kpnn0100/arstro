@@ -55,8 +55,8 @@ one integrator who moves, wires, tests and commits each stream:
 - [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
       and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: read-ahead — DONE (DR-PLAY-2);
-      hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes and the
-      graph editor (R-ANIM) next.
+      hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes: curves,
+      the grammar and the render path — DONE (DR-ANIM-1); the diamonds and the graph editor next.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -105,6 +105,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — curves: the root's, on the footage's clock, frozen by pins.** A rack node's curve
+runs in SOURCE time so every clip of that footage animates alike and Grade's reference-frame slider
+walks it; a clip's runs on the clip's own footage clock (Premiere's and Resolve's choice), so moving,
+trimming or splitting a clip never slides a key off its frame. A curve is not a scalar, so law 2
+keeps it on the root timeline: a version inherits it live and adds its `#tlgrade` delta on top. A
+pin is "colour frozen", so it snapshots the rack's curves beside the `.cmp` and its commit hashes
+both — otherwise a pinned delivery would quietly re-animate when the base changed a key.
 
 **2026-10-05 — the preview cache is checked per frame by plan hash, built when idle, one segment at a
 time.** A render cache keyed by "clip + grade" would miss half of what changes a frame (a group's

@@ -127,6 +127,13 @@ futureKey      = "kept verbatim"
 #effect id=ef_1 node=ro_2 type=blur.gaussian order=0 enabled=true mix=0.8 radius=12.0
 #effect id=ef_2 node=ro_2 type=blur.directional order=1 enabled=false mix=1.0 length=40.0 angle=30.0
 
+#anim id=an_1 node=ro_2 key=basic.exposure
+#key anim=an_1 t=0.000 v=0.0 out=bezier speedOut=0.0 inflOut=33.333
+#key anim=an_1 t=2.000 v=1.0 in=bezier out=hold speedIn=0.0 inflIn=50.0
+#anim id=an_2 node=clp_1 key=opacity
+#key anim=an_2 t=0.000 v=0.0
+#key anim=an_2 t=1.000 v=1.0
+
 #bind id=bn_1 target=gr1.exposure expr="sin(t) * 0.2"
 )ISP";
 
@@ -226,6 +233,40 @@ fps = 24
               p.effect("ef_1")->unknown[0].second == "12.0");
         CHECK(p.effect("ef_2")->unknown.size() == 2 && p.effect("ef_2")->unknown[1].first == "angle");
         CHECK(p.kindOf("ef_1") == NodeKind::Effect);
+        // R-ANIM-1: curves by node id and key, their keys sorted by time, each side's shape kept
+        CHECK(p.anims.size() == 2 && p.animKeys.size() == 4 && p.kindOf("an_1") == NodeKind::Anim);
+        CHECK(p.animOf("ro_2", "basic.exposure") && p.animOf("ro_2", "basic.exposure")->id == "an_1" && !p.animOf("ro_2", "basic.contrast"));
+        {
+            const auto ks = p.keysOf("an_1");
+            CHECK(ks.size() == 2 && ks[0].out == anim::Side::Bezier && ks[1].in == anim::Side::Bezier && ks[1].out == anim::Side::Hold);
+            CHECK(near(ks[1].inflIn, 50.0) && near(ks[0].inflOut, 33.333));
+        }
+        for (const char *broken : {"#anim id=an_2 node=clp_7 key=opacity",                   // names nothing
+                                   "#anim id=an_2 node=ro_2 key=basic.exposure",             // a second curve for one parameter
+                                   "#key anim=an_2 t=1.000 v=1.0\n#key anim=an_2 t=1.000 v=0.5"})   // two values at one time
+        {
+            Project q;
+            std::string e2, bad = kEvery;
+            const std::string what = std::string(broken);
+            if (what.rfind("#anim", 0) == 0) bad.replace(bad.find("#anim id=an_2 node=clp_1 key=opacity"), 36, what);
+            else bad.replace(bad.find("#key anim=an_2 t=1.000 v=1.0"), 28, what);
+            CHECK(!q.parse(bad, e2));
+            std::printf("    refused: %s\n", e2.c_str());
+        }
+        {
+            Project q;
+            std::string e2, bad = kEvery;
+            bad.replace(bad.find("inflIn=50.0"), 11, "inflIn=150.0");
+            CHECK(!q.parse(bad, e2) && e2.find("influence") != std::string::npos);
+        }
+        {
+            // a node's curves go with it
+            Project q;
+            std::string e2;
+            CHECK(q.parse(kEvery, e2));
+            q.dropAnimsOf("clp_1");
+            CHECK(q.anims.size() == 1 && q.animKeys.size() == 2 && !q.anim("an_2"));
+        }
         {
             Project q;
             std::string e2;
@@ -856,6 +897,42 @@ fps = 24
         CHECK(!q.load("/nonexistent/dir/x.isp", err) && err.find("cannot read") != std::string::npos);
     }
 
+    /** R-ANIM-2: the evaluator — After Effects' model, in numbers. */
+    void animCurves()
+    {
+        using anim::Key;
+        using anim::Side;
+        auto k = [](double t, double v) { Key x; x.t = t; x.v = v; return x; };
+        std::vector<Key> lin{k(0, 0), k(2, 10)};
+        CHECK(near(anim::eval(lin, -1), 0) && near(anim::eval(lin, 1), 5) && near(anim::eval(lin, 3), 10));   // clamped ends, a lerp between
+        // ease both sides (speed 0, 33 %): symmetric, so the middle is the middle; slow at the ends
+        std::vector<Key> ease = lin;
+        CHECK(anim::preset(ease[0], "ease") && anim::preset(ease[1], "ease"));
+        CHECK(std::fabs(anim::eval(ease, 1.0) - 5.0) < 1e-6);
+        CHECK(anim::eval(ease, 0.2) < 1.0 && anim::eval(ease, 1.8) > 9.0);   // linear would be 1.0 and 9.0
+        // the speed IS the slope as the curve leaves the key
+        std::vector<Key> fast = lin;
+        fast[0].out = Side::Bezier;
+        fast[0].speedOut = 20.0;     // 4× the segment's own slope
+        fast[0].inflOut = 33.333;
+        const double h = 1e-4, slope = (anim::eval(fast, h) - anim::eval(fast, 0)) / h;
+        std::printf("    leaving slope %.3f for speedOut 20\n", slope);
+        CHECK(std::fabs(slope - 20.0) < 0.2);
+        // ease-in: only the arrival slows; hold: flat until the next key
+        std::vector<Key> in = lin;
+        CHECK(anim::preset(in[1], "ease-in") && in[1].in == Side::Bezier && in[0].out == Side::Linear && in[1].out == Side::Linear);
+        CHECK(anim::eval(in, 1.9) > 9.0 - 1e-9 && anim::eval(in, 0.2) < 1.0 + 0.25);
+        std::vector<Key> hold = lin;
+        CHECK(anim::preset(hold[0], "hold"));
+        CHECK(near(anim::eval(hold, 1.999), 0.0) && near(anim::eval(hold, 2.0), 10.0));
+        // more influence pulls the ease further into the segment
+        std::vector<Key> wide = ease;
+        wide[0].inflOut = wide[1].inflIn = 90.0;
+        CHECK(anim::eval(wide, 0.4) < anim::eval(ease, 0.4));
+        CHECK(!anim::preset(hold[0], "bounce"));
+        std::printf("[PASS] keyframe curves evaluate like After Effects' (R-ANIM-2)\n");
+    }
+
     void freshIdNeverReuses()
     {
         Project p = load(kBase);
@@ -873,6 +950,7 @@ fps = 24
 int main()
 {
     roundTripEveryNode();
+    animCurves();
     messyInputCanonicalises();
     colourOnClipRefused();
     nanRepairedAndCounted();

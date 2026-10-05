@@ -210,13 +210,15 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request)
+## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request; R-ANIM-1, -2, -5 and `set` keying (-3) built: DR-ANIM-1; the diamond (-3) and the graph editor (-4) next)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
   own unique id against the NODE's id (rename-safe) and the key. A rack node's and an effect's
-  curves run in SOURCE time — the footage's own clock, shared by every clip of it; a clip's run in
-  CLIP time, so moving a clip moves its animation.
+  curves run in SOURCE time — the footage's own clock, shared by every clip of it; a clip's run on
+  the CLIP's own footage clock (its in-point plus the offset times its speed, as Premiere and Resolve
+  key a clip), so moving a clip moves its animation and trimming or splitting it leaves every key on
+  the frame it was set on.
 - **R-ANIM-2 Interpolation is a spline you can shape**: each keyframe is linear, bezier or hold;
   a bezier keyframe has an incoming and an outgoing SPEED (units per second) and INFLUENCE (% of
   the segment) — After Effects' model, so "ease in 33 %" means what an editor expects. Presets:

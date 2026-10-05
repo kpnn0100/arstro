@@ -984,6 +984,111 @@ int main()
         assert(f.svc->playbackStats().edge == 0);                  // paused: graded at the full preview size
     });
 
+    test("keyframes: colour, effects and clips animate on their clocks; set keys; versions add, pins freeze (R-ANIM)", [] {
+        Fixture f("anim");
+        f.standard();                                             // shotA = a.mp4 0–2 s at 0; shotB = b.mp4 at 2
+        auto frame = [&](const std::string &tl, double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(tl, t, 0, r));
+            return r;
+        };
+        auto fileHas = [&](const std::string &needle) {
+            std::ifstream in(f.path("mv.isp"));
+            std::stringstream ss;
+            ss << in.rdbuf();
+            return has(ss.str(), needle);
+        };
+        // the reference: exposure 0.5 held still, at timeline 1.0 = source time 1.0 of a
+        f.must("set a.basic.exposure=0.5");
+        const Raster still05 = frame("tl_1", 1.0);
+        f.must("set a.basic.exposure=0");
+        const Raster still0 = frame("tl_1", 1.0);
+        assert(still05.rgba != still0.rgba);
+        // R-ANIM-1/2: a linear curve 0 → 1 over source 0–2 s is 0.5 at source time 1
+        f.must("key add a.basic.exposure --at 0 --value 0");
+        std::printf("    %s", f.out("key add a.basic.exposure --at 2 --value 1").c_str());
+        assert(frame("tl_1", 1.0).rgba == still05.rgba);
+        // SOURCE time: a second clip of a, placed elsewhere, sees the same value at the same source frame
+        f.must("clip add --track v0 --src a --in 1 --out 1.5 --at 6 --name again");
+        assert(frame("tl_1", 6.0).rgba == still05.rgba);
+        assert(f.svc->model().anims.size() == 1 && f.svc->model().anims[0].keys.size() == 2 && f.svc->model().anims[0].clock == "source");
+        // R-ANIM-3: a set on an animated key writes a key where Grade stands (the reference frame)
+        f.must("set a.frame=1.5");
+        f.must("set a.basic.exposure=0.8");
+        const AnimModel *am = &f.svc->model().anims[0];
+        assert(am->keys.size() == 3 && std::fabs(am->keys[1].t - 1.5) < 1e-9 && std::fabs(am->keys[1].v - 0.8) < 1e-6);
+        assert(has(f.out("get a.basic.exposure"), "=0.8"));
+        assert(has(f.out("eval a.basic.exposure --explain"), "animated   3 keys"));
+        // shaping: a speed makes that side a bezier, written to the file only when it is one
+        f.must("key set a.basic.exposure --at 0 --speed-out 2");
+        f.must("project save");
+        assert(fileHas("#anim id=an_1 node=ro_1 key=basic.exposure") && fileHas("out=bezier speedOut=2.0 inflOut=33.333"));
+        assert(frame("tl_1", 0.5).rgba != still0.rgba);
+        std::string err;
+        assert(!f.run("key set a.basic.exposure --at 0 --influence-out 0", &err) && has(err, "percent"));
+        assert(!f.run("key add a.basic.exposure --at 1 --value 9", &err) && has(err, ".."));      // out of range
+        assert(!f.run("key add shotA.at", &err) && has(err, "not its placement"));
+        assert(!f.run("key remove a.basic.exposure --at 0.7", &err) && has(err, "no key at"));
+        // R-ANIM-5: a version inherits the curve live, adds a scalar delta, and cannot key it
+        f.must("timeline new v2 --base main");
+        f.must("timeline open v2");
+        assert(!f.run("key add a.basic.exposure --at 1", &err) && has(err, "R-ANIM-5"));
+        f.must("set a.basic.exposure=0.9");                    // curve says 0.8 at the reference frame → +0.1
+        f.must("project save");
+        assert(fileHas("#tlgrade timeline=tl_2 node=ro_1 exposure=0.1"));
+        f.must("timeline open main");
+        // a pin freezes the curve: the base changes its curve, the pinned version does not move
+        f.must("timeline new p1 --base main");
+        f.must("timeline pin p1");
+        const NodeId p1 = "tl_3";                              // main, v2, p1
+        const Raster pinnedBefore = frame(p1, 1.0), mainBefore = frame("tl_1", 1.0);
+        assert(pinnedBefore.rgba == mainBefore.rgba);
+        f.must("key set a.basic.exposure --at 1.5 --value 0.2");   // shapes source time 1.0
+        assert(frame("tl_1", 1.0).rgba != mainBefore.rgba);
+        assert(frame(p1, 1.0).rgba == pinnedBefore.rgba);
+        // an effect's parameter, in the source's time
+        f.must("effect add a --type blur.gaussian");
+        f.must("key add ef_1.radius --at 0 --value 0");
+        f.must("key add ef_1.radius --at 2 --value 20");
+        f.must("set a.frame=1");
+        assert(has(f.out("get ef_1.radius"), "=10"));
+        // a clip's opacity, on the clip's own footage clock: in=0, so source time = timeline time
+        f.must("key add shotA.opacity --at 0 --value 0");
+        f.must("key add shotA.opacity --at 2 --value 1");
+        f.must("playhead 1.0");
+        assert(has(f.out("get shotA.opacity"), "=0.5"));
+        // the render draws it: clearing the curve leaves 0.5 still, and the frame is the same
+        const Raster animated = frame("tl_1", 1.0);
+        f.must("key clear shotA.opacity");
+        assert(has(f.out("get shotA.opacity"), "=0.5") && frame("tl_1", 1.0).rgba == animated.rgba);
+        f.must("undo");                                         // the curve back
+        assert(has(f.out("get shotA.opacity"), "=0.5"));
+        // a split leaves both halves animated on the same frames
+        f.must("clip split shotA --at 1");
+        int opacityCurves = 0;
+        for (const auto &a : f.svc->model().anims) opacityCurves += a.key == "opacity";
+        assert(opacityCurves == 2);
+        f.must("playhead 1.5");
+        bool rightAt075 = false;
+        for (const auto &c : f.svc->model().clips)
+            if (c.at > 0.9 && c.at < 1.1 && c.track == "trk_1") rightAt075 = has(f.out("get " + (c.name.empty() ? c.id : c.name) + ".opacity"), "=0.75");
+        assert(rightAt075);
+        // the last key removed: the curve goes, its value stays
+        f.must("key remove ef_1.radius --at 0");
+        f.must("key remove ef_1.radius --at 2");
+        assert(has(f.out("get ef_1.radius"), "=20"));
+        // undo brings a removed key back; a deleted clip takes its curve with it; it all saves and loads
+        f.must("undo");                                         // one key back (20)…
+        f.must("undo");                                         // …and the other: 0 → 20 again, 10 at source time 1
+        assert(has(f.out("get ef_1.radius"), "=10"));
+        f.must("clip delete again");
+        f.must("project save");
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(!f.svc->model().anims.empty());
+        std::printf("    %zu curves reloaded\n", f.svc->model().anims.size());
+    });
+
     test("the preview cache holds the graded frames, rebuilds only what an edit changed, and playback reads it (R-PLAY-1)", [] {
         Fixture f("pcache");
         f.standard();                                             // shotA 0–2 s, shotB 2–4 s: four 1-s segments

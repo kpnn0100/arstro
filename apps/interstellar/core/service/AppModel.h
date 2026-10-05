@@ -89,6 +89,32 @@ namespace interstellar
         std::vector<EffectParamModel> params;
     };
 
+    /** One keyframe (R-ANIM-2): a time on its curve's clock, a value, and each side's shape. */
+    struct KeyframeModel
+    {
+        double t = 0, v = 0;
+        std::string in = "linear", out = "linear";   // linear | bezier | hold
+        double speedIn = 0, speedOut = 0;            // units per second
+        double inflIn = 33.333, inflOut = 33.333;    // percent of the segment
+    };
+
+    /** One animated parameter (R-ANIM-1). The UI evaluates `keys` with model/Anim.h — the same
+     *  function the render path runs. */
+    struct AnimModel
+    {
+        NodeId id;                    // `an_<n>`
+        NodeId node;                  // the #rackobj, #effect or #clip it animates
+        std::string nodeBind;         // that node's name (an effect: its id)
+        std::string owner;            // rack | effect | clip
+        std::string key;              // "basic.exposure", "radius", "opacity", "geom.x"
+        std::string address;          // nodeBind + "." + key
+        std::string clock;            // source (the footage's time) | clip (the clip's own footage time)
+        double now = 0;               // the current time on that clock (Grade's reference frame; the playhead in the clip)
+        double value = 0;             // the curve's value now
+        double min = 0, max = 0;      // the parameter's range, for the graph's value axis
+        std::vector<KeyframeModel> keys;
+    };
+
     /** A plugin the catalog offers ("Add effect"). */
     struct EffectTypeModel
     {
@@ -253,6 +279,8 @@ namespace interstellar
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
+        // ── keyframes (R-ANIM) ──
+        std::vector<AnimModel> anims;              // every curve of the project
         bool hasClipClipboard = false;      // `clip copy` has something to paste (R-TL-6)
         std::string clipClipboardFrom;      // the clip it was copied from
 

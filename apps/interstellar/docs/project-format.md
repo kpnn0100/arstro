@@ -183,6 +183,26 @@ own parameters, in source pixels / degrees / 0..1 as the catalog says — valida
 not the format, so a plugin this build does not know keeps every parameter it carried and is simply
 not run. `node=` must name a `#rackobj`.
 
+### 5.3 Curves: `#anim` and `#key` (R-ANIM)
+
+```
+#anim id=an_1 node=ro_2 key=basic.exposure
+#key anim=an_1 t=0.000 v=-2.0 out=bezier speedOut=0.0 inflOut=33.333
+#key anim=an_1 t=3.000 v=1.5 in=bezier speedIn=0.0 inflIn=33.333
+#anim id=an_2 node=clp_1 key=geom.scale
+#key anim=an_2 t=0.000 v=1.0
+#key anim=an_2 t=4.000 v=1.6
+```
+
+`#anim` animates ONE parameter (`key`, as an address spells it after the node) of one `#rackobj`,
+`#effect` or `#clip` (`node`, by id). Its `#key`s follow it in time order: `t` on the curve's clock
+(a rack node's or an effect's: the SOURCE's time; a clip's: its own footage time, in + offset ×
+speed), `v` in the address's units, and per side `in`/`out` = `linear` (default, not written) |
+`bezier` | `hold` (out only), with `speedIn`/`inflIn`, `speedOut`/`inflOut` written only for a
+bezier side (units per second; % of the segment, 0 < x ≤ 100). One curve per parameter, one key per
+time; a curve naming nothing is refused. Curves are the root timeline's — versions inherit them and
+add `#tlgrade` deltas — and a pin snapshots the rack's into `<stem>.pins/<commit>.anim`.
+
 ### 5.2 Beside the project: the preview cache (R-PLAY-1)
 
 `<stem>.cache/<timeline id>/` holds the graded preview cache: `seg_<n>_<gen>.mp4` (one second of

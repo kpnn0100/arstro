@@ -175,6 +175,21 @@ namespace interstellar
              "one-second H.264 segments at the playing size, every frame checked by its plan, so only what "
              "an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`.", "R-PLAY-1"},
             {K::CacheClear, "cache clear", "", 0, 0, {}, "Delete the current timeline's preview cache.", "R-PLAY-1"},
+            {K::KeyAdd, "key add", "<address>", 1, 1, {"at=<t>", "value=<v>", "ease=<linear|ease|ease-in|ease-out|hold>"},
+             "Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's "
+             "parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to "
+             "now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter "
+             "shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5).", "R-ANIM-1"},
+            {K::KeyRemove, "key remove", "<address>", 1, 1, {"at=<t>"},
+             "Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays.", "R-ANIM-1"},
+            {K::KeySet, "key set", "<address>", 1, 1,
+             {"at=<t>", "to=<t>", "value=<v>", "in=<linear|bezier|hold>", "out=<linear|bezier|hold>", "speed-in=<units/s>",
+              "influence-in=<%>", "speed-out=<units/s>", "influence-out=<%>", "ease=<linear|ease|ease-in|ease-out|hold>"},
+             "Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per "
+             "second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a "
+             "bezier. --ease applies a preset.", "R-ANIM-2"},
+            {K::KeyClear, "key clear", "<address>", 1, 1, {},
+             "Remove a parameter's curve; the value it had now stays as the parameter's own.", "R-ANIM-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},
 

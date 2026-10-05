@@ -213,6 +213,7 @@ namespace interstellar
         const bool ok = dispatchInner(c);
         // the preview cache re-checks its frames after anything, and waits for the user to stop
         if (ok) ++mEpoch;
+        if (ok && mOpen) pruneAnims();   // a node that went takes its curves (R-ANIM-1)
         if (c.kind != CK::CacheBuild && c.kind != CK::CacheClear && c.kind != CK::Wait && c.kind != CK::StatePrint) mLastCommandMs = mNowMs;
         if (ok && structural(c.kind)) clearHistory();
         else if (ok && before) recordEdit(c, *before);
@@ -289,6 +290,7 @@ namespace interstellar
                 break;
             case CK::Render: case CK::RenderCancel: ok = requireProject() && renderCommand(c); break;
             case CK::CacheBuild: case CK::CacheClear: ok = requireProject() && cacheCommand(c); break;
+            case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: ok = requireProject() && animCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::Capture:
             {
@@ -609,6 +611,7 @@ namespace interstellar
             const NodeId ro = m.rack[(size_t)m.selectedRack].rackObj;
             if (colourTreeFor(cur, tree, idx, source, e2) && idx.count(ro))
             {
+                applyColourCurves(cur, tree, idx, sourceNow(ro));   // the panels show the curves where Grade stands (R-ANIM-3)
                 for (auto &kv : idx) applyDeltas(tree[(size_t)kv.second].own, gradeDeltas(P, cur, kv.first));
                 m.gradeOwnParams = tree[(size_t)idx[ro]].own;
                 m.gradeParams = foldEditTarget(tree, idx[ro]);
@@ -766,6 +769,7 @@ namespace interstellar
         m.gradeClipboardFrom = mClipboardFrom;
         m.playbackEdge = mPlaying ? mPlayEdge : 0;
         m.playbackRate = mPlaying ? mPlayRate : 0.0;
+        fillAnimModel(m);
         fillCacheModel(m);
         // ── the plugin stacks (R-FX-5) ──
         m.effects.clear();
@@ -1378,11 +1382,14 @@ namespace interstellar
                         if (fx.node == copyOfSrc.id) copies.push_back(fx);
                     for (auto &fx : copies)
                     {
+                        const NodeId was = fx.id;
                         fx.id = P.freshId("ef_");
                         fx.node = ro.id;
                         fx.notes = Notes{};
                         P.imageEffects.push_back(fx);
+                        copyAnims(was, fx.id, 0.0);   // and its curves (R-ANIM-1)
                     }
+                    copyAnims(copyOfSrc.id, ro.id, 0.0);
                 }
                 // The new variant is the selection and the Grade target, so it is in view (the
                 // strip and the tree follow the target) and the next edit lands on IT.
@@ -1573,7 +1580,8 @@ namespace interstellar
         syncRackObjNodes();
         std::string bytes;
         if (!readFile(mRack.path(), bytes)) { err = "cannot read " + mRack.path(); return false; }
-        commit = hex12(render::fnv1a64(bytes));
+        const std::string curves = colourCurveText();   // a pin freezes the rack's curves too (R-ANIM-5, R-VER-3)
+        commit = hex12(render::fnv1a64(curves.empty() ? bytes : bytes + "\n#curves\n" + curves));
         std::error_code ec;
         fs::create_directories(pinsDir(), ec);
         const std::string base = pinsDir() + "/" + commit;
@@ -1583,6 +1591,12 @@ namespace interstellar
             f << bytes;
             if (!f) { err = "cannot write the pin snapshot " + base + ".cmp"; return false; }
         }
+        if (!curves.empty() && !fs::exists(base + ".anim"))
+        {
+            std::ofstream f(base + ".anim");
+            f << curves;
+            if (!f) { err = "cannot write the pin's curves " + base + ".anim"; return false; }
+        }
         // Which #rackobj is which snapshot entry — Interstellar's data, never colour.
         std::ofstream m(base + ".map", std::ios::trunc);
         for (const auto &ro : mProject->rackObjs)
@@ -1591,7 +1605,7 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::gradeFor(const NodeId &tl, const NodeId &rackObj, EditParams &out, std::string &err)
+    bool InterstellarService::gradeFor(const NodeId &tl, const NodeId &rackObj, EditParams &out, std::string &err, double srcT)
     {
         ColourTree tree;
         std::map<NodeId, int> idx;
@@ -1599,6 +1613,8 @@ namespace interstellar
         if (!colourTreeFor(tl, tree, idx, source, err)) return false;
         const auto it = idx.find(rackObj);
         if (it == idx.end()) { err = "rack node " + rackObj + " is not in the " + source; return false; }
+        // R-ANIM: each node's own value at this source time, then the version's deltas on top
+        if (srcT >= 0) applyColourCurves(tl, tree, idx, srcT);
         // Overrides go on each node's OWN params, so a group override stacks onto its members.
         for (const auto &kv : idx) applyDeltas(tree[(size_t)kv.second].own, gradeDeltas(*mProject, tl, kv.first));
         out = foldRender(tree, it->second);
@@ -1701,6 +1717,13 @@ namespace interstellar
             return fail("no node named `" + a.name + "`" + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
         }
 
+        {
+            // R-ANIM-3: a parameter with a curve is keyed at the current time, not set
+            bool handled = false;
+            if (!setAnimated(address, value, handled)) return false;
+            if (handled) return true;
+        }
+
         if (kind == NodeKind::RackObj)
         {
             RackObj *ro = P.rackObj(id);
@@ -1755,6 +1778,8 @@ namespace interstellar
                 if (it == idx.end()) return fail(ro->name + " is not in the " + source);
                 double baseValue = 0;
                 paramScalar(tree[(size_t)it->second].own, key, baseValue);
+                // an animated key: the delta is against the curve where Grade stands (R-ANIM-5)
+                if (!pinCurvesFor(tl)) baseValue = curveAt(ro->id, filter + "." + key, sourceNow(ro->id), baseValue);
                 // EditParams are floats: a delta finer than float precision is noise, and noise in
                 // a committed file is a diff nobody made (0.8 - 0.5 = 0.30000000000000004).
                 double delta = v - baseValue;
@@ -1935,6 +1960,7 @@ namespace interstellar
                 if (v.empty() && pd) v = canonicalNumber(pd->def);
                 if (v.empty()) return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "`");
             }
+            if (P.animOf(e->id, a.rest)) v = canonicalNumber(curveAt(e->id, a.rest, sourceNow(e->node), 0.0));   // R-ANIM: now
             mOutput = e->id + "." + a.rest + "=" + v + "\n";
             return true;
         }
@@ -1966,6 +1992,7 @@ namespace interstellar
             if (!colourTreeFor(tl, tree, idx, source, err)) return fail(err);
             const auto it = idx.find(ro->id);
             if (it == idx.end()) return fail(ro->name + " is not in the " + source + " (offline?)");
+            applyColourCurves(tl, tree, idx, sourceNow(ro->id));   // an animated key reads where Grade stands
             std::string sourceOwn;
             paramText(tree[(size_t)it->second].own, key, sourceOwn);
             const auto deltas = gradeDeltas(P, tl, ro->id);
@@ -1983,6 +2010,8 @@ namespace interstellar
                 const Timeline *t = P.timeline(tl);
                 out << "  timeline   " << (t ? t->name : tl) << '\n';
                 out << "  source     " << source << "  own " << sourceOwn << '\n';
+                if (const Anim *an = P.animOf(ro->id, filter + "." + key))
+                    out << "  animated   " << P.keysOf(an->id).size() << " keys; at source time " << canonicalNumber(sourceNow(ro->id)) << '\n';
                 if (hasDelta)
                 {
                     NodeId from;
@@ -2020,7 +2049,13 @@ namespace interstellar
             bool found = false;
             if (kind == NodeKind::Clip)
                 for (const auto &c : R.clips)
-                    if (c.id == id) { value = clipField(c, a.rest); found = true; }
+                    if (c.id == id)
+                    {
+                        value = clipField(c, a.rest);
+                        found = true;
+                        if (P.animOf(id, a.rest))   // R-ANIM: the curve at the playhead, on the clip's own clock
+                            value = canonicalNumber(curveAt(id, a.rest, std::clamp(c.in + (mModel.playhead - c.at) * c.speed, c.in, c.out), 0.0));
+                    }
             if (kind == NodeKind::Track)
                 for (const auto &t : R.tracks)
                     if (t.id == id) { value = trackField(t, a.rest); found = true; }
@@ -2275,7 +2310,7 @@ namespace interstellar
     // arrangement
     // ──────────────────────────────────────────────────────────────────────────────────────────
 
-    void InterstellarService::effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key) const
+    void InterstellarService::effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT) const
     {
         out.clear();
         key.clear();
@@ -2308,13 +2343,14 @@ namespace interstellar
                 if (!def) continue;   // a plugin this build does not know: kept in the file, not run
                 render::EffectRun r;
                 r.type = e->type;
-                r.mix = std::clamp(e->mix, 0.0, 1.0);
+                r.mix = std::clamp(srcT >= 0 ? curveAt(e->id, "mix", srcT, e->mix) : e->mix, 0.0, 1.0);
                 key += "|" + e->type + "@" + canonicalNumber(r.mix);
                 for (const auto &d : def->params)
                 {
                     double v = d.def;
                     for (const auto &kv : e->unknown)
                         if (kv.first == d.key) parseDouble(kv.second, v);
+                    if (srcT >= 0) v = std::clamp(curveAt(e->id, d.key, srcT, v), d.min, d.max);   // R-ANIM: at this source time
                     r.p[d.key] = v;
                     key += ":" + canonicalNumber(v);
                 }
@@ -2506,6 +2542,7 @@ namespace interstellar
                 double t = 0;
                 if (!clipRef(c.arg(0), id) || !time("at", t)) return false;
                 if (!arrange::split(P, tl, id, t, right, err)) return fail("clip split: " + err);
+                copyAnims(id, right, 0.0);   // both halves keep the animation, on the same footage frames (R-ANIM-1)
                 return done("split", right);
             }
             case CK::ClipMove:
@@ -2572,6 +2609,9 @@ namespace interstellar
                     if (x.id == id)
                     {
                         mClipClipboard = std::make_shared<Clip>(x);   // as THIS version sees it, overrides included
+                        mClipClipboardAnims.clear();
+                        for (const auto &an : P.anims)
+                            if (an.node == id) mClipClipboardAnims.emplace_back(an.key, P.keysOf(an.id));
                         mHasClipClipboard = true;
                         emit(Event(EK::SelectionChanged).with("rack", "").with("clip", id));
                         return true;
@@ -2589,6 +2629,23 @@ namespace interstellar
                 NodeId id;
                 if (!arrange::addClip(P, tl, track, cb.src, cb.in, cb.out, at, "", id, err))
                     return fail("clip paste: " + err);
+                for (const auto &ca : mClipClipboardAnims)   // its curves come with it (R-ANIM-1)
+                {
+                    Anim n;
+                    n.id = P.freshId("an_");
+                    n.node = id;
+                    n.key = ca.first;
+                    P.anims.push_back(n);
+                    for (const auto &kk : ca.second)
+                    {
+                        AnimKey ak;
+                        ak.anim = n.id;
+                        ak.t = kk.t; ak.v = kk.v;
+                        ak.in = anim::sideName(kk.in); ak.out = anim::sideName(kk.out);
+                        ak.speedIn = kk.speedIn; ak.speedOut = kk.speedOut; ak.inflIn = kk.inflIn; ak.inflOut = kk.inflOut;
+                        P.animKeys.push_back(ak);
+                    }
+                }
                 // everything else the clip carries, through the schema — so a field added to a clip
                 // later is pasted too, without this list knowing it
                 Fields kv;

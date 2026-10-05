@@ -32,6 +32,7 @@
  *  operations are in `Arrange.h`. This file is only the document.
  */
 #pragma once
+#include "Anim.h"
 #include "../core/service/AppModel.h"
 #include <map>
 #include <string>
@@ -258,6 +259,30 @@ namespace interstellar
         Notes notes;
     };
 
+    /** R-ANIM-1: a curve — one animated parameter. `node` is the #rackobj, #effect or #clip it
+     *  animates (by id, so a rename never orphans it); `key` is the parameter as an address spells it
+     *  after the node ("basic.exposure", "radius", "opacity"). A rack node's and an effect's curve
+     *  runs in SOURCE time, a clip's in CLIP time. Its keyframes are the #key nodes naming it. */
+    struct Anim
+    {
+        NodeId id, node;
+        std::string key;
+        Fields unknown;
+        Notes notes;
+    };
+
+    /** One keyframe of a curve (R-ANIM-2): its time on the curve's clock, its value in the
+     *  address's units, and each side's interpolation — speed in units per second, influence in %. */
+    struct AnimKey
+    {
+        NodeId anim;
+        double t = 0, v = 0;
+        std::string in = "linear", out = "linear";   // linear | bezier | hold
+        double speedIn = 0, inflIn = 33.333, speedOut = 0, inflOut = 33.333;
+        Fields unknown;
+        Notes notes;
+    };
+
     // ── parsed, preserved, refused at render ──────────────────────────────────────────────────
 
     struct RawChild
@@ -281,7 +306,7 @@ namespace interstellar
     };
 
     /** What an id names. */
-    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Raw };
+    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Anim, Raw };
     const char *nodeKindName(NodeKind k);
 
     class Project
@@ -321,6 +346,8 @@ namespace interstellar
         std::vector<AClip> audioClips;
         std::vector<Fx> effects;
         std::vector<Effect> imageEffects;            // R-FX-5: the rack's plugin stacks
+        std::vector<Anim> anims;                     // R-ANIM-1: the curves
+        std::vector<AnimKey> animKeys;               // their keyframes
         std::vector<RawNode> raw;
 
         // ── text I/O ──
@@ -356,6 +383,15 @@ namespace interstellar
         AClip *audioClip(const NodeId &);           const AClip *audioClip(const NodeId &) const;
         Fx *fx(const NodeId &);                     const Fx *fx(const NodeId &) const;
         Effect *effect(const NodeId &);             const Effect *effect(const NodeId &) const;
+        Anim *anim(const NodeId &);                 const Anim *anim(const NodeId &) const;
+        /** The curve animating `key` of `node`, or null (R-ANIM-1). */
+        const Anim *animOf(const NodeId &node, const std::string &key) const;
+        /** A curve's keyframes, sorted by time, as the evaluator takes them (model/Anim.h). */
+        std::vector<anim::Key> keysOf(const NodeId &animId) const;
+        /** Drop every curve of `node` and their keyframes (the node is gone). */
+        void dropAnimsOf(const NodeId &node);
+        /** Drop one curve and its keyframes. */
+        void dropAnim(const NodeId &animId);
         RawNode *rawNode(const NodeId &);           const RawNode *rawNode(const NodeId &) const;
         TlSet *tlset(const NodeId &tl, const NodeId &node);
         const TlSet *tlset(const NodeId &tl, const NodeId &node) const;

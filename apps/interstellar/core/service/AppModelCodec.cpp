@@ -218,6 +218,20 @@ namespace interstellar
         j.set("gradeClipboardFrom", m.gradeClipboardFrom);
         j.set("playbackEdge", m.playbackEdge);
         j.set("playbackRate", m.playbackRate);
+        {
+            Json anims = Json::array();
+            for (const auto &a : m.anims)
+            {
+                Json ks = Json::array();
+                for (const auto &k : a.keys)
+                    ks.push(Json::object().set("t", k.t).set("v", k.v).set("in", k.in).set("out", k.out)
+                                .set("speedIn", k.speedIn).set("inflIn", k.inflIn).set("speedOut", k.speedOut).set("inflOut", k.inflOut));
+                anims.push(Json::object().set("id", a.id).set("node", a.node).set("nodeBind", a.nodeBind).set("owner", a.owner)
+                               .set("key", a.key).set("address", a.address).set("clock", a.clock).set("now", a.now).set("value", a.value)
+                               .set("min", a.min).set("max", a.max).set("keys", ks));
+            }
+            j.set("anims", anims);
+        }
         if (!st)
         {
             j.set("playbackFromCache", m.playbackFromCache);
@@ -427,6 +441,27 @@ namespace interstellar
             {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
             {"playbackEdge", "integer", "The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2)."},
             {"playbackRate", "number", "Frames the read-ahead finished per second over the last half second; 0 = not playing."},
+            {"anims", "array", "Every animated parameter — its curve (R-ANIM-1)."},
+            {"anims[].id", "string", "The curve's id, `an_<n>`."},
+            {"anims[].node", "string", "The #rackobj, #effect or #clip it animates."},
+            {"anims[].nodeBind", "string", "That node's name (an effect: its id)."},
+            {"anims[].owner", "string", "rack | effect | clip."},
+            {"anims[].key", "string", "The parameter, as an address spells it after the node."},
+            {"anims[].address", "string", "The whole address: what `key add|remove|set|clear` and `set` take."},
+            {"anims[].clock", "string", "source (the footage's own time — rack and effects) | clip (the clip's own footage time)."},
+            {"anims[].now", "number", "The current time on that clock: the source's reference frame; the playhead inside the clip."},
+            {"anims[].value", "number", "The curve's value now."},
+            {"anims[].min", "number", "The parameter's lowest value, for the graph."},
+            {"anims[].max", "number", "Its highest."},
+            {"anims[].keys", "array", "Its keyframes, by time (R-ANIM-2)."},
+            {"anims[].keys[].t", "number", "Time on the curve's clock, s."},
+            {"anims[].keys[].v", "number", "Value, in the address's units."},
+            {"anims[].keys[].in", "string", "Incoming side: linear | bezier | hold."},
+            {"anims[].keys[].out", "string", "Outgoing side: linear | bezier | hold (hold keeps the value to the next key)."},
+            {"anims[].keys[].speedIn", "number", "Incoming speed of a bezier side, units per second."},
+            {"anims[].keys[].inflIn", "number", "Incoming influence, % of the segment."},
+            {"anims[].keys[].speedOut", "number", "Outgoing speed, units per second."},
+            {"anims[].keys[].inflOut", "number", "Outgoing influence, % of the segment."},
             {"playbackFromCache", "bool", "The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1).", true},
             {"previewCacheFrames", "integer", "Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1).", true},
             {"previewCacheTotal", "integer", "Frames in the current timeline.", true},

@@ -76,6 +76,10 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
 | `cache build` | Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`. | R-PLAY-1 |
 | `cache clear` | Delete the current timeline's preview cache. | R-PLAY-1 |
+| `key add <address> [--at <t>] [--value <v>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5). | R-ANIM-1 |
+| `key remove <address> [--at <t>]` | Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays. | R-ANIM-1 |
+| `key set <address> [--at <t>] [--to <t>] [--value <v>] [--in <linear\|bezier\|hold>] [--out <linear\|bezier\|hold>] [--speed-in <units/s>] [--influence-in <%>] [--speed-out <units/s>] [--influence-out <%>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a bezier. --ease applies a preset. | R-ANIM-2 |
+| `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
 | `state print [--json] [--stable]` | Print the AppModel; --stable omits machine-dependent fields. | R-API-2 |
@@ -217,6 +221,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo`, `previewCache` | Engine settings after a change, all keys. |
 | `presets.changed` | `count` | The preset library was rescanned. |
 | `cache.changed` | `timeline`, `frames`, `total`, `building` | The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1). |
+| `keys.changed` | `address`, `keys` | A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM). |
 
 ## Model
 
@@ -344,6 +349,27 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `gradeClipboardFrom` | string |  | The bind name the clipboard grade came from. |
 | `playbackEdge` | integer |  | The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2). |
 | `playbackRate` | number |  | Frames the read-ahead finished per second over the last half second; 0 = not playing. |
+| `anims` | array |  | Every animated parameter — its curve (R-ANIM-1). |
+| `anims[].id` | string |  | The curve's id, `an_<n>`. |
+| `anims[].node` | string |  | The #rackobj, #effect or #clip it animates. |
+| `anims[].nodeBind` | string |  | That node's name (an effect: its id). |
+| `anims[].owner` | string |  | rack \| effect \| clip. |
+| `anims[].key` | string |  | The parameter, as an address spells it after the node. |
+| `anims[].address` | string |  | The whole address: what `key add\|remove\|set\|clear` and `set` take. |
+| `anims[].clock` | string |  | source (the footage's own time — rack and effects) \| clip (the clip's own footage time). |
+| `anims[].now` | number |  | The current time on that clock: the source's reference frame; the playhead inside the clip. |
+| `anims[].value` | number |  | The curve's value now. |
+| `anims[].min` | number |  | The parameter's lowest value, for the graph. |
+| `anims[].max` | number |  | Its highest. |
+| `anims[].keys` | array |  | Its keyframes, by time (R-ANIM-2). |
+| `anims[].keys[].t` | number |  | Time on the curve's clock, s. |
+| `anims[].keys[].v` | number |  | Value, in the address's units. |
+| `anims[].keys[].in` | string |  | Incoming side: linear \| bezier \| hold. |
+| `anims[].keys[].out` | string |  | Outgoing side: linear \| bezier \| hold (hold keeps the value to the next key). |
+| `anims[].keys[].speedIn` | number |  | Incoming speed of a bezier side, units per second. |
+| `anims[].keys[].inflIn` | number |  | Incoming influence, % of the segment. |
+| `anims[].keys[].speedOut` | number |  | Outgoing speed, units per second. |
+| `anims[].keys[].inflOut` | number |  | Outgoing influence, % of the segment. |
 | `playbackFromCache` | bool | *machine* | The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1). |
 | `previewCacheFrames` | integer | *machine* | Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1). |
 | `previewCacheTotal` | integer | *machine* | Frames in the current timeline. |

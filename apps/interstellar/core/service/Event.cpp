@@ -62,6 +62,7 @@ namespace interstellar
             {EK::PresetsChanged, "presets.changed", {"count"}, "The preset library was rescanned."},
             {EK::CacheChanged, "cache.changed", {"timeline", "frames", "total", "building"},
              "The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1)."},
+            {EK::KeysChanged, "keys.changed", {"address", "keys"}, "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM)."},
         };
         return specs;
     }

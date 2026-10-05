@@ -932,6 +932,105 @@
       "requirement": "R-PLAY-1"
     },
     {
+      "verb": "key add",
+      "usage": "key add <address> [--at <t>] [--value <v>] [--ease <linear|ease|ease-in|ease-out|hold>]",
+      "args": "<address>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "value",
+          "value": "<v>"
+        },
+        {
+          "name": "ease",
+          "value": "<linear|ease|ease-in|ease-out|hold>"
+        }
+      ],
+      "summary": "Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5).",
+      "requirement": "R-ANIM-1"
+    },
+    {
+      "verb": "key remove",
+      "usage": "key remove <address> [--at <t>]",
+      "args": "<address>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        }
+      ],
+      "summary": "Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays.",
+      "requirement": "R-ANIM-1"
+    },
+    {
+      "verb": "key set",
+      "usage": "key set <address> [--at <t>] [--to <t>] [--value <v>] [--in <linear|bezier|hold>] [--out <linear|bezier|hold>] [--speed-in <units/s>] [--influence-in <%>] [--speed-out <units/s>] [--influence-out <%>] [--ease <linear|ease|ease-in|ease-out|hold>]",
+      "args": "<address>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "to",
+          "value": "<t>"
+        },
+        {
+          "name": "value",
+          "value": "<v>"
+        },
+        {
+          "name": "in",
+          "value": "<linear|bezier|hold>"
+        },
+        {
+          "name": "out",
+          "value": "<linear|bezier|hold>"
+        },
+        {
+          "name": "speed-in",
+          "value": "<units/s>"
+        },
+        {
+          "name": "influence-in",
+          "value": "<%>"
+        },
+        {
+          "name": "speed-out",
+          "value": "<units/s>"
+        },
+        {
+          "name": "influence-out",
+          "value": "<%>"
+        },
+        {
+          "name": "ease",
+          "value": "<linear|ease|ease-in|ease-out|hold>"
+        }
+      ],
+      "summary": "Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a bezier. --ease applies a preset.",
+      "requirement": "R-ANIM-2"
+    },
+    {
+      "verb": "key clear",
+      "usage": "key clear <address>",
+      "args": "<address>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Remove a parameter's curve; the value it had now stays as the parameter's own.",
+      "requirement": "R-ANIM-1"
+    },
+    {
       "verb": "export-still",
       "usage": "export-still [--timeline <tl>] [--out <p.png>] [--at <t>]",
       "args": "",
@@ -1278,6 +1377,14 @@
         "building"
       ],
       "summary": "The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1)."
+    },
+    {
+      "name": "keys.changed",
+      "fields": [
+        "address",
+        "keys"
+      ],
+      "summary": "A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM)."
     }
   ],
   "model": [
@@ -2000,6 +2107,132 @@
       "type": "number",
       "stable": true,
       "doc": "Frames the read-ahead finished per second over the last half second; 0 = not playing."
+    },
+    {
+      "path": "anims",
+      "type": "array",
+      "stable": true,
+      "doc": "Every animated parameter — its curve (R-ANIM-1)."
+    },
+    {
+      "path": "anims[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "The curve's id, `an_<n>`."
+    },
+    {
+      "path": "anims[].node",
+      "type": "string",
+      "stable": true,
+      "doc": "The #rackobj, #effect or #clip it animates."
+    },
+    {
+      "path": "anims[].nodeBind",
+      "type": "string",
+      "stable": true,
+      "doc": "That node's name (an effect: its id)."
+    },
+    {
+      "path": "anims[].owner",
+      "type": "string",
+      "stable": true,
+      "doc": "rack | effect | clip."
+    },
+    {
+      "path": "anims[].key",
+      "type": "string",
+      "stable": true,
+      "doc": "The parameter, as an address spells it after the node."
+    },
+    {
+      "path": "anims[].address",
+      "type": "string",
+      "stable": true,
+      "doc": "The whole address: what `key add|remove|set|clear` and `set` take."
+    },
+    {
+      "path": "anims[].clock",
+      "type": "string",
+      "stable": true,
+      "doc": "source (the footage's own time — rack and effects) | clip (the clip's own footage time)."
+    },
+    {
+      "path": "anims[].now",
+      "type": "number",
+      "stable": true,
+      "doc": "The current time on that clock: the source's reference frame; the playhead inside the clip."
+    },
+    {
+      "path": "anims[].value",
+      "type": "number",
+      "stable": true,
+      "doc": "The curve's value now."
+    },
+    {
+      "path": "anims[].min",
+      "type": "number",
+      "stable": true,
+      "doc": "The parameter's lowest value, for the graph."
+    },
+    {
+      "path": "anims[].max",
+      "type": "number",
+      "stable": true,
+      "doc": "Its highest."
+    },
+    {
+      "path": "anims[].keys",
+      "type": "array",
+      "stable": true,
+      "doc": "Its keyframes, by time (R-ANIM-2)."
+    },
+    {
+      "path": "anims[].keys[].t",
+      "type": "number",
+      "stable": true,
+      "doc": "Time on the curve's clock, s."
+    },
+    {
+      "path": "anims[].keys[].v",
+      "type": "number",
+      "stable": true,
+      "doc": "Value, in the address's units."
+    },
+    {
+      "path": "anims[].keys[].in",
+      "type": "string",
+      "stable": true,
+      "doc": "Incoming side: linear | bezier | hold."
+    },
+    {
+      "path": "anims[].keys[].out",
+      "type": "string",
+      "stable": true,
+      "doc": "Outgoing side: linear | bezier | hold (hold keeps the value to the next key)."
+    },
+    {
+      "path": "anims[].keys[].speedIn",
+      "type": "number",
+      "stable": true,
+      "doc": "Incoming speed of a bezier side, units per second."
+    },
+    {
+      "path": "anims[].keys[].inflIn",
+      "type": "number",
+      "stable": true,
+      "doc": "Incoming influence, % of the segment."
+    },
+    {
+      "path": "anims[].keys[].speedOut",
+      "type": "number",
+      "stable": true,
+      "doc": "Outgoing speed, units per second."
+    },
+    {
+      "path": "anims[].keys[].inflOut",
+      "type": "number",
+      "stable": true,
+      "doc": "Outgoing influence, % of the segment."
     },
     {
       "path": "playbackFromCache",
