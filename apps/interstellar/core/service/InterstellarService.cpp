@@ -668,6 +668,10 @@ namespace interstellar
                 for (const auto &d : P.drops) tm.overrides += d.timeline == t->id;
                 for (const auto &s : P.sets) tm.overrides += s.timeline == t->id;
                 for (const auto &g : P.grades) tm.overrides += g.timeline == t->id;
+                {
+                    render::AudioPlan ap;
+                    tm.hasSound = mHost.audioSource && planAudio(t->id, ap) && !ap.empty();
+                }
                 m.timelines.push_back(tm);
                 if (m.timelines.size() <= P.timelines.size()) walk(t->id, depth + 1);
             }
@@ -1943,9 +1947,10 @@ namespace interstellar
             return true;
         }
 
-        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::AClip)
+        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::AClip || kind == NodeKind::ATrack)
         {
-            const ParamOwner owner = kind == NodeKind::Clip ? ParamOwner::Clip : kind == NodeKind::Track ? ParamOwner::Track : ParamOwner::AudioClip;
+            const ParamOwner owner = kind == NodeKind::Clip ? ParamOwner::Clip : kind == NodeKind::Track ? ParamOwner::Track
+                                   : kind == NodeKind::ATrack ? ParamOwner::AudioTrack : ParamOwner::AudioClip;
             const ParamDef *d = ownerField(owner, a.rest);
             if (!d)
             {
@@ -2117,12 +2122,23 @@ namespace interstellar
             mOutput = out.str();
             return true;
         }
-        if (kind == NodeKind::Clip || kind == NodeKind::Track)
+        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::ATrack)
         {
             ResolvedTimeline R;
             if (!resolved(tl, R, err)) return fail(err);
             std::string value;
             bool found = false;
+            if (kind == NodeKind::ATrack)
+                for (const auto &t : R.audioTracks)
+                    if (t.id == id)
+                    {
+                        found = true;
+                        if (a.rest == "gain") value = canonicalNumber(t.gain);
+                        else if (a.rest == "pan") value = canonicalNumber(t.pan);
+                        else if (a.rest == "mute") value = t.mute ? "1" : "0";
+                        else if (a.rest == "solo") value = t.solo ? "1" : "0";
+                        else if (a.rest == "name") value = t.name;
+                    }
             if (kind == NodeKind::Clip)
                 for (const auto &c : R.clips)
                     if (c.id == id)
@@ -2858,15 +2874,26 @@ namespace interstellar
             case CK::AudioClipAdd:
             {
                 const NodeId track = P.idForRef(c.flag("track"));
-                if (!P.audioTrack(track)) return fail("audio clip add: no audio track named " + c.flag("track"));
-                const std::string src = c.flag("src");
-                if (src.empty()) return fail("audio clip add: --src names the audio file");
+                const Track *vt = P.track(track);
+                if (!P.audioTrack(track) && !(vt && vt->audio())) return fail("audio clip add: no audio track named " + c.flag("track"));
+                std::string src = c.flag("src");
+                if (src.empty()) return fail("audio clip add: --src names the audio file (or a rack source, for its sound)");
+                // a rack source's own sound — a camera file's dialogue under its picture
+                if (const RackObj *ro = P.rackObj(P.idForRef(src)); ro && !ro->media.empty() && !fs::exists(src)) src = resolvePath(ro->media);
                 if (!fs::exists(src)) return fail("audio clip add: no such file: " + src);
                 double at = 0, in = 0, out = 0, gain = 0, fade = 0;
                 if (!time("at", at)) return false;
                 if (!time("in", in, false)) return false;
-                if (!c.has("out")) return fail("audio clip add: --out (source seconds) is required — the core reads no audio headers");
-                if (!time("out", out)) return false;
+                if (c.has("out")) { if (!time("out", out)) return false; }
+                else
+                {
+                    // the file's own length, read through the host's decoder (R-AUD-5 amended)
+                    std::unique_ptr<IAudioSource> probe = mHost.audioSource ? mHost.audioSource() : nullptr;
+                    IAudioSource::Info info;
+                    if (!probe || !probe->open(src, P.sampleRate > 0 ? P.sampleRate : 48000, info))
+                        return fail("audio clip add: " + src + " has no sound this build can read — give --out (source seconds) to place it anyway");
+                    out = info.duration;
+                }
                 if (out <= in) return fail("audio clip add: --out must be after --in");
                 if (c.has("gain") && !parseDouble(c.flag("gain"), gain)) return fail("audio clip add: --gain needs dB");
                 if (c.has("fade") && (!parseDouble(c.flag("fade"), fade) || fade < 0)) return fail("audio clip add: --fade needs seconds");

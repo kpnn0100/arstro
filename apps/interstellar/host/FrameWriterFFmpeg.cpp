@@ -5,6 +5,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libswscale/swscale.h>
 }
@@ -45,6 +46,11 @@ namespace interstellar_host
         if (mHwDevice) av_buffer_unref(&mHwDevice);
         if (mPkt) { av_packet_free(&mPkt); mPkt = nullptr; }
         if (mEnc) { avcodec_free_context(&mEnc); mEnc = nullptr; }
+        if (mAFrame) av_frame_free(&mAFrame);
+        if (mAEnc) avcodec_free_context(&mAEnc);
+        mAStream = nullptr;
+        mAudioFifo.clear();
+        mAudioNext = 0;
         if (mFmt)
         {
             if (mFmt->pb) avio_closep(&mFmt->pb);
@@ -210,6 +216,31 @@ namespace interstellar_host
         if (mFmt->oformat->flags & AVFMT_GLOBALHEADER) mEnc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
         if (avcodec_open2(mEnc, codec, nullptr) < 0) { mError = "the encoder refused these settings"; return false; }
+
+        if (spec.audioRate > 0)
+        {
+            // R-AUD-9: the master beside the picture — AAC for the delivery codecs, 24-bit PCM for the
+            // intermediates an editor or a mixer takes in
+            const bool pcm = spec.codec == "prores" || spec.codec == "dnxhr";
+            const AVCodec *ac = avcodec_find_encoder_by_name(pcm ? "pcm_s24le" : "aac");
+            if (!ac) { mError = std::string("this FFmpeg build has no ") + (pcm ? "pcm_s24le" : "aac") + " encoder"; return false; }
+            mAStream = avformat_new_stream(mFmt, nullptr);
+            mAEnc = avcodec_alloc_context3(ac);
+            if (!mAStream || !mAEnc) { mError = "cannot allocate the audio encoder"; return false; }
+            mAEnc->sample_rate = spec.audioRate;
+            mAEnc->channel_layout = AV_CH_LAYOUT_STEREO;
+            mAEnc->channels = 2;
+            mAEnc->sample_fmt = pcm ? AV_SAMPLE_FMT_S32 : AV_SAMPLE_FMT_FLTP;
+            if (!pcm) mAEnc->bit_rate = 320000;
+            mAEnc->time_base = AVRational{1, spec.audioRate};
+            mAStream->time_base = mAEnc->time_base;
+            if (mFmt->oformat->flags & AVFMT_GLOBALHEADER) mAEnc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            if (avcodec_open2(mAEnc, ac, nullptr) < 0) { mError = "the audio encoder refused these settings"; return false; }
+            if (avcodec_parameters_from_context(mAStream->codecpar, mAEnc) < 0) { mError = "cannot describe the audio stream"; return false; }
+            mAudioFrameSize = mAEnc->frame_size > 0 ? mAEnc->frame_size : 1024;
+            mAFrame = av_frame_alloc();
+            if (!mAFrame) { mError = "cannot allocate an audio frame"; return false; }
+        }
         const uint32_t tag = mStream->codecpar->codec_tag;
         if (avcodec_parameters_from_context(mStream->codecpar, mEnc) < 0) { mError = "cannot describe the stream"; return false; }
         if (tag) mStream->codecpar->codec_tag = tag;   // the parameters copy resets it
@@ -316,9 +347,77 @@ namespace interstellar_host
         return drain(false);
     }
 
+    bool FrameWriterFFmpeg::sendAudioFrame(int frames)
+    {
+        av_frame_unref(mAFrame);
+        mAFrame->nb_samples = frames;
+        mAFrame->format = mAEnc->sample_fmt;
+        mAFrame->channel_layout = mAEnc->channel_layout;
+        mAFrame->channels = 2;
+        mAFrame->sample_rate = mAEnc->sample_rate;
+        if (av_frame_get_buffer(mAFrame, 0) < 0) { mError = "cannot allocate audio frame storage"; return false; }
+        const float *s = mAudioFifo.data();
+        if (mAEnc->sample_fmt == AV_SAMPLE_FMT_FLTP)
+        {
+            float *l = reinterpret_cast<float *>(mAFrame->data[0]), *r = reinterpret_cast<float *>(mAFrame->data[1]);
+            for (int i = 0; i < frames; ++i) { l[i] = s[i * 2]; r[i] = s[i * 2 + 1]; }
+        }
+        else
+        {
+            // 24-bit PCM rides in the high bits of S32; full scale clips, as any converter does
+            int32_t *d = reinterpret_cast<int32_t *>(mAFrame->data[0]);
+            for (int i = 0; i < frames * 2; ++i)
+                d[i] = (int32_t)std::lround(std::clamp((double)s[i], -1.0, 1.0 - 1.0 / 8388608.0) * 2147483648.0);
+        }
+        mAFrame->pts = mAudioNext;
+        mAudioNext += frames;
+        mAudioFifo.erase(mAudioFifo.begin(), mAudioFifo.begin() + (size_t)frames * 2);
+        if (avcodec_send_frame(mAEnc, mAFrame) < 0) { mError = "the audio encoder rejected a frame"; return false; }
+        return drainAudio(false);
+    }
+
+    bool FrameWriterFFmpeg::drainAudio(bool flush)
+    {
+        for (;;)
+        {
+            const int r = avcodec_receive_packet(mAEnc, mPkt);
+            if (r == AVERROR(EAGAIN) || r == AVERROR_EOF) return true;
+            if (r < 0) { mError = "the audio encoder failed"; return false; }
+            av_packet_rescale_ts(mPkt, mAEnc->time_base, mAStream->time_base);
+            mPkt->stream_index = mAStream->index;
+            const int w = av_interleaved_write_frame(mFmt, mPkt);
+            av_packet_unref(mPkt);
+            if (w < 0) { mError = "cannot write an audio packet"; return false; }
+            (void)flush;
+        }
+    }
+
+    bool FrameWriterFFmpeg::writeAudio(const float *stereo, int frames)
+    {
+        if (!mOpen) return false;
+        if (!mAEnc || frames <= 0) return true;   // begun without sound
+        mAudioFifo.insert(mAudioFifo.end(), stereo, stereo + (size_t)frames * 2);
+        while ((int)(mAudioFifo.size() / 2) >= mAudioFrameSize)
+            if (!sendAudioFrame(mAudioFrameSize)) return false;
+        return true;
+    }
+
     bool FrameWriterFFmpeg::end()
     {
         if (!mOpen) return false;
+        if (mAEnc)
+        {
+            // the tail: a short last frame where the encoder allows one, else padded with silence
+            const int rest = (int)(mAudioFifo.size() / 2);
+            if (rest > 0)
+            {
+                if (!(mAEnc->codec->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME) && !(mAEnc->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE))
+                    mAudioFifo.resize((size_t)mAudioFrameSize * 2, 0.0f);
+                sendAudioFrame((int)(mAudioFifo.size() / 2));
+            }
+            avcodec_send_frame(mAEnc, nullptr);
+            drainAudio(true);
+        }
         // Flush: an encoder holds frames back (B-frames, lookahead), and a file closed without
         // this is short by however many it was holding — a truncated render that looks like a
         // rendering bug.

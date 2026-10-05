@@ -955,6 +955,11 @@ namespace interstellar
         }
         spec.output = output;
         spec.peak = peak;
+        // R-AUD-9: every video render carries the master when the timeline has sound to carry
+        {
+            render::AudioPlan ap;
+            if (format != "png-seq" && mHost.audioSource && planAudio(tl, ap) && !ap.empty()) spec.audioRate = ap.rate;
+        }
 
         // size: never above the project, and its aspect (a reframe is not in v1)
         const int PW = mProject->width, PH = mProject->height;
@@ -1041,6 +1046,8 @@ namespace interstellar
             if (inter) { std::string pf = spec.profile; for (char &ch : pf) ch = (char)std::toupper((unsigned char)ch); w += " " + (pf == "STANDARD" ? std::string("422") : pf); }
             if (format == "h265" || inter) w += " " + std::to_string(spec.bitDepth) + "-bit";
             if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + (spec.hardware ? std::string("hardware") : spec.speed);
+            if (spec.audioRate > 0)
+                w += std::string(" \xC2\xB7 ") + (inter ? "PCM 24-bit " : "AAC ") + std::to_string(spec.audioRate / 1000) + " kHz";
             if (output != "rec709")
                 w += std::string(" \xC2\xB7 ") + render::colour::label(render::colour::outputs(), output) +
                      (output == "pq" ? " " + std::to_string((long long)std::llround(peak)) + " cd/m\xC2\xB2" : std::string());
@@ -1116,6 +1123,19 @@ namespace interstellar
             {
                 failJob("the encoder refused frame " + std::to_string(j.next));
                 return;
+            }
+            if (!j.png && j.spec.audioRate > 0)
+            {
+                // exactly the samples [k·rate/fps, (k+1)·rate/fps) of output frame k — sample-accurate,
+                // and the rounding never drifts because both ends come from the frame number
+                render::AudioPlan ap;
+                planAudio(j.model.timeline, ap);
+                ap.rate = j.spec.audioRate;
+                const long long k = j.first + j.next;
+                const long long s0 = std::llround((double)k * ap.rate / j.fps), s1 = std::llround((double)(k + 1) * ap.rate / j.fps);
+                std::vector<float> pcm((size_t)std::max<long long>(0, s1 - s0) * 2);
+                render::mixAudio(ap, [&](const std::string &m) { return audioSourceFor(*mSync, m, ap.rate); }, s0, (int)(s1 - s0), pcm.data());
+                if (!j.writer->writeAudio(pcm.data(), (int)(s1 - s0))) { failJob("the encoder refused the sound of frame " + std::to_string(j.next)); return; }
             }
             ++j.next;
             j.model.done = (int)j.next;

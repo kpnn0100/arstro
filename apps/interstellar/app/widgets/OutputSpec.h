@@ -19,7 +19,8 @@
  *             stepper over the project's rate and the standard ones, the NTSC rates as exact
  *             fractions (24000/1001, not 23.976).
  *   RANGE     Whole · In–Out, with Set In / Set Out at the playhead.
- *   AUDIO     a sentence: v1 does not mix audio (R-AUD-5) — said, not left to be discovered.
+ *   AUDIO     a sentence: the sound the render will carry — the master as AAC or 24-bit PCM, or that
+ *             the timeline is silent, or that a PNG sequence carries none (R-AUD-9).
  *   OUTPUT    the path (follows the default until edited) and Render; a summary line under it
  *             says what will be written: size, rate, range, frames.
  *
@@ -85,6 +86,8 @@ namespace interstellar_v1
         const EasedScroll &columnScroll() const { return mColScroll; }
         /** What the line will write, in words: "960×540 · 25 fps · whole timeline · 372 frames". */
         std::string summary() const;
+        /** The AUDIO line: what sound this render will carry (R-AUD-9). */
+        std::string audioSentence() const;
 
         std::function<void(const std::string &line)> onCommand;
 

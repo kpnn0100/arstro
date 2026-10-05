@@ -201,6 +201,7 @@ namespace istest
             tl.id = "main"; tl.name = "main"; tl.depth = 0; tl.overrides = 0;
             m.timelines.push_back(tl);
             tl = TimelineModel{}; tl.id = "social30"; tl.name = "Social 30s"; tl.base = "main"; tl.depth = 1; tl.overrides = 6; tl.danglingDeltas = 1;
+            tl.hasSound = true;   // its audio lanes sound (R-AUD-9)
             m.timelines.push_back(tl);
             tl = TimelineModel{}; tl.id = "delivery"; tl.name = "Delivery 30s"; tl.base = "social30"; tl.depth = 2; tl.colourPinned = true;
             tl.pinCommit = "a41c9e2d71"; tl.cutFrozen = true; tl.overrides = 3; tl.danglingDeltas = 2;

@@ -59,6 +59,8 @@ namespace interstellar
         std::string output = "rec709";  // R-COLOR-4: what the pixels are — tags the stream (primaries,
                                         // transfer, matrix) and, for pq/hlg, its HDR signalling
         double peak = 1000.0;           // pq: the mastering display's peak, cd/m²
+        int audioRate = 0;              // R-AUD-9: 0 = no sound; else the master, stereo, at this rate —
+                                        // AAC beside H.264/H.265, 24-bit PCM beside ProRes/DNxHR
     };
 
     class IFrameWriter
@@ -70,6 +72,9 @@ namespace interstellar
          *  but the first, which a golden comparison cannot use. */
         virtual bool begin(const std::string &path, int w, int h, double fps, long long frames, const EncodeSpec &spec) = 0;
         virtual bool write(const Raster &frame) = 0;
+        /** R-AUD-9: the master's samples for the frames written so far — interleaved stereo float,
+         *  in order, as many as the render's clock says (a writer begun without audio ignores them). */
+        virtual bool writeAudio(const float *stereo, int frames) { (void)stereo; (void)frames; return true; }
         virtual bool end() = 0;
         /** What the writer did differently from what was asked, in words ("" = nothing) — e.g. a
          *  hardware encode that fell back to software because no device was there (R-PLAY-3). */

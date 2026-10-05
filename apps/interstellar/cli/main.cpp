@@ -17,6 +17,7 @@
 #include "InterstellarService.h"
 #include "core/ThreadBudget.h"
 #ifdef INTERSTELLAR_HAVE_FFMPEG
+#include "AudioSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
 #include "HostFrameSource.h"
 #include "PngWriter.h"
@@ -74,6 +75,7 @@ namespace
             return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder(std::move(sel)));
         };
         h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
+        h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
         h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
         h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
             return interstellar_host::writePng(p, r, err);

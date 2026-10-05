@@ -71,7 +71,8 @@ one integrator who moves, wires, tests and commits each stream:
       6. [x] 16-bit delivery path (R-COLOR-1) — DR-COLOR-1.
       7. [x] Input/working/output transforms and HDR (R-COLOR-2..4) — DR-COLOR-2, DR-COLOR-3; D-11.
       7b. [x] LUTs in and out (R-COLOR-5, R-COLOR-6) — DR-COLOR-4; D-12.
-      8. [ ] Audio: mix, playback, waveforms, meters, in renders (R-AUD-5 amended, R-AUD-6..9).
+      8. [x] Audio: the mix, muxed into every video render (R-AUD-5 amended, R-AUD-9) — DR-AUD-2.
+      8b. [ ] Audio: playback on the audio clock and scrub grains, waveforms, meters (R-AUD-6..8).
       9. [ ] Interchange: EDL, FCPXML, OTIO, timecode and reels; AAF stated (R-XCH-1..5).
       10. [ ] Editing: three-point, J/K/L, speed ramps, nested sequences, multicam (R-EDT-1..5).
       11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).

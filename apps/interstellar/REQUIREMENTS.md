@@ -291,7 +291,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-AUD — the audio project format — 🚧 IN PROGRESS (schema + placement: DR-AUD-1; the master sum is not built)
+## R-AUD — the audio project format — 🔶 IN PROGRESS (schema + placement: DR-AUD-1; the mix in renders: DR-AUD-2; playback, waveforms, meters next)
 
 Designed now, for Solaris to adopt whole. Interstellar implements the subset it needs; the schema
 reserves the rest so adopting it is not a migration.
@@ -323,11 +323,15 @@ reserves the rest so adopting it is not a migration.
 - **R-AUD-8 Meters** (added 2026-10-05): the master's peak and RMS per channel while playing, with a
   held peak and a clip indicator.
 - **R-AUD-9 Renders carry the mix** (added 2026-10-05): every video render muxes the master (AAC for
-  H.264/H.265, 24-bit PCM for ProRes/DNxHR), sample-accurate to the picture.
+  H.264/H.265, 24-bit PCM for ProRes/DNxHR), sample-accurate to the picture. — ✅ (DR-AUD-2). Said:
+  a timeline with nothing sounding renders picture only; a PNG sequence carries no sound (no `.wav`
+  beside it yet); varispeed sound follows the clip's speed in pitch, as tape does; buses, sends and
+  instruments of the suite schema sum straight to the master; a mono file sounds at its own level in
+  both channels.
 
 ---
 
-## R-RENDER — delivery — ✅ IMPLEMENTED for picture (DR-RENDER-1, -2a, -5, -6); audio not muxed
+## R-RENDER — delivery — ✅ IMPLEMENTED (DR-RENDER-1, -2a, -5, -6; the mix muxed: DR-AUD-2)
 
 - **R-RENDER-1 A render names its TIMELINE.** `render --timeline social-30s --out …`. There is no
   implicit "current" timeline in a render, because a delivery that depended on which tab was open

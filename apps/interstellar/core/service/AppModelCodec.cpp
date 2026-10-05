@@ -136,7 +136,8 @@ namespace interstellar
                          .set("pinCommit", t.pinCommit)
                          .set("cutFrozen", t.cutFrozen)
                          .set("danglingDeltas", t.danglingDeltas)
-                         .set("overrides", t.overrides));
+                         .set("overrides", t.overrides)
+                         .set("hasSound", t.hasSound));
         j.set("timelines", tls);
         j.set("currentTimeline", m.currentTimeline);
 
@@ -388,6 +389,7 @@ namespace interstellar
             {"timelines[].cutFrozen", "bool", "Arrangement frozen."},
             {"timelines[].danglingDeltas", "integer", "Deltas whose target the base deleted — `rebase` reports them."},
             {"timelines[].overrides", "integer", "How far this version has diverged: #tlset + #tlgrade + #tldrop count."},
+            {"timelines[].hasSound", "boolean", "Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9)."},
             {"currentTimeline", "string", "The editor's current timeline id. Never what a render uses."},
             {"tracks", "array", "The resolved current timeline's tracks."},
             {"tracks[].id", "string", "Track id."},

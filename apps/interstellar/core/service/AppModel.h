@@ -145,6 +145,7 @@ namespace interstellar
         bool cutFrozen = false;
         int danglingDeltas = 0;       // deltas whose target the base deleted — `rebase` reports them
         int overrides = 0;            // #tlset + #tlgrade count — "how far this version has diverged"
+        bool hasSound = false;        // something on it sounds: a video render will carry the mix (R-AUD-9)
     };
 
     /** Where a node in the RESOLVED current timeline came from. Drawn differently, because "this

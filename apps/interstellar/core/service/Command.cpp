@@ -133,7 +133,8 @@ namespace interstellar
              "Add an audio track (suite schema `#atrack kind=audio`).", "R-AUD-2"},
             {K::AudioClipAdd, "audio clip add", "", 0, 0,
              {"track=<atrk>", "src=<file>", "at=<t>", "in=<t>", "out=<t>", "gain=<dB>", "fade=<s>"},
-             "Place an audio file on an audio track.", "R-AUD-2"},
+             "Place a sound on an audio track: a file, or a rack source's own sound (`--src <bind>`). "
+             "Without --out it runs to the end of the file's sound.", "R-AUD-2"},
 
             {K::Undo, "undo", "", 0, 0, {},
              "Step back one edit — a grade, an override, a cut, a version change — across the rack and "

@@ -132,6 +132,9 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/model/Arrange.{h,cpp}` | model | **built** — the cut operations, derived-aware (R-TL-3) |
 | `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, transitions held (R-TL-4, DR-TL-4) |
 | `apps/interstellar/render/ColourTransform.{h,cpp}` | render | **built** — camera curves, gamuts, working spaces (Rec.709, ACEScct), output transforms incl. PQ/HLG (R-COLOR-2..4, DR-COLOR-2/3) |
+| `apps/interstellar/render/AudioMix.{h,cpp}` | render | **built** — the master sum: placement, gain, fades, balance, varispeed; pure and sample-accurate (R-AUD-5 amended, R-AUD-9, DR-AUD-2) |
+| `apps/interstellar/core/AudioSource.h` | core | **built** — the audio decode seam (stereo float at the mix rate) |
+| `apps/interstellar/host/AudioSourceFFmpeg` | host | **built** — decode, resample, fold to stereo (mono at unity), seek with pre-roll (DR-AUD-2) |
 | `apps/interstellar/render/Lut.{h,cpp}` | render | **built** — `.cube` read (1D/3D), tetrahedral apply, write (R-COLOR-5/6, DR-COLOR-4) |
 | `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3); 8- or 16-bit, one templated loop (DR-COLOR-1) |
 | `apps/interstellar/render/Effects.{h,cpp}` | render | **built** — the plugin catalog and the Blur kinds (Gaussian, Box, Directional, Zoom, Spin), in source pixels scaled to the proxy (R-FX-5/6, DR-FX-5/6) |

@@ -27,6 +27,7 @@
 #include "Event.h"
 #include "FrameSelector.h"
 #include "Effects.h"
+#include "AudioSource.h"
 #include "FrameSource.h"
 #include "Rack.h"
 #include "Raster.h"
@@ -46,7 +47,8 @@ namespace interstellar
     struct Clip;
     struct AnimKey;
     struct ResolvedTimeline;
-    namespace render { class GradeEngine; class FrameCache; }
+    namespace render {
+        struct AudioPlan; class GradeEngine; class FrameCache; }
 
     class InterstellarService
     {
@@ -58,6 +60,9 @@ namespace interstellar
             std::function<std::unique_ptr<cosmo::IImageDecoder>(std::shared_ptr<const FrameSelector>)> rackDecoder;
             /** A source for the TIMELINE: video frames, or a still as a one-frame source (R-VOL-6). */
             std::function<std::unique_ptr<IFrameSource>()> frameSource;
+            /** A decoder for a file's SOUND, read at the mix rate as stereo (R-AUD-5 amended); unset
+             *  = the timeline is silent (renders carry no audio, playback is picture only). */
+            std::function<std::unique_ptr<IAudioSource>()> audioSource;
             /** An encoder for `path`, chosen by its extension (h264 .mp4, prores .mov). */
             std::function<std::unique_ptr<IFrameWriter>()> frameWriter;
             /** A PNG writer, for stills and png sequences. */
@@ -211,6 +216,9 @@ namespace interstellar
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
+        // R-AUD-5 (amended), R-AUD-9 — ServiceAudio.cpp
+        bool planAudio(const NodeId &timeline, render::AudioPlan &out);
+        IAudioSource *audioSourceFor(RenderCtx &ctx, const std::string &media, int rate);
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
         bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
         bool present(FramePlan &&plan, Raster &out);

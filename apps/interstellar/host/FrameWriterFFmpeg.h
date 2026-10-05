@@ -25,6 +25,7 @@
 #pragma once
 #include "FrameSource.h"
 #include <string>
+#include <vector>
 
 struct AVFormatContext;
 struct AVCodecContext;
@@ -49,6 +50,7 @@ namespace interstellar_host
 
         bool begin(const std::string &path, int w, int h, double fps, long long frames, const interstellar::EncodeSpec &spec) override;
         bool write(const interstellar::Raster &frame) override;
+        bool writeAudio(const float *stereo, int frames) override;
         bool end() override;
 
         /** True when this class can write `path`, judged by its extension. The CLI asks first so
@@ -62,6 +64,8 @@ namespace interstellar_host
 
     private:
         bool drain(bool flush);
+        bool drainAudio(bool flush);
+        bool sendAudioFrame(int frames);   // `frames` from the front of mAudioFifo
         void closeAll();
 
         AVFormatContext *mFmt = nullptr;
@@ -78,6 +82,13 @@ namespace interstellar_host
         // R-PLAY-3: VA-API — the device, its surface pool, and the software frame converted into first
         AVBufferRef *mHwDevice = nullptr, *mHwFrames = nullptr;
         AVFrame *mSwFrame = nullptr;
+        // R-AUD-9: the master — its encoder, its stream, the samples not yet a whole encoder frame
+        AVCodecContext *mAEnc = nullptr;
+        AVStream *mAStream = nullptr;
+        AVFrame *mAFrame = nullptr;
+        std::vector<float> mAudioFifo;
+        long long mAudioNext = 0;
+        int mAudioFrameSize = 1024;
         bool openEncoder(const AVCodec *codec, const interstellar::EncodeSpec &spec, int w, int h, const std::string &ext);
     };
 }

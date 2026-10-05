@@ -21,4 +21,8 @@ if "$FFMPEG" -hide_banner -encoders 2>/dev/null | grep -q libvpx-vp9; then
   "$FFMPEG" -loglevel error -f lavfi -i "$src" -c:v libvpx-vp9 -deadline realtime vp9.mkv
   set -- "$@" vp9.mkv
 fi
+# R-AUD-5 (amended): a mono 1 kHz tone at 44.1 kHz, and a stereo AAC with 440 Hz left, 880 Hz right
+"$FFMPEG" -loglevel error -f lavfi -i "sine=frequency=1000:sample_rate=44100:duration=2" -c:a pcm_s16le tone_mono.wav
+"$FFMPEG" -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=2" -f lavfi -i "sine=frequency=880:sample_rate=48000:duration=2" \
+  -filter_complex "[0:a][1:a]amerge=inputs=2[a]" -map "[a]" -c:a aac -b:a 256k tone_stereo.m4a
 "$TEST" "$@"

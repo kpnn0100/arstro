@@ -115,6 +115,12 @@ namespace interstellar
             {O::Fx, "<fx>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Freeze: the source time held."},
 
             // ── audio clip (suite schema, docs/audio-format.md) ──
+            // ── suite-schema audio track (R-AUD-5 amended: its mix) ──
+            {O::AudioTrack, "<atrack>.gain", "", "gain", PK::Scalar, "dB", -60, 12, 0, "Track gain."},
+            {O::AudioTrack, "<atrack>.pan", "", "pan", PK::Scalar, "-1..1", -1, 1, 0, "Balance: -1 left, +1 right; centre is unity."},
+            {O::AudioTrack, "<atrack>.mute", "", "mute", PK::Bool, "", 0, 1, 0, "Mute."},
+            {O::AudioTrack, "<atrack>.solo", "", "solo", PK::Bool, "", 0, 1, 0, "Solo: while any track is soloed only soloed tracks sound."},
+            {O::AudioTrack, "<atrack>.name", "", "name", PK::Text, "", 0, 0, 0, "Track name."},
             {O::AudioClip, "<aclip>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Timeline position."},
             {O::AudioClip, "<aclip>.in", "", "in", PK::Scalar, "s", 0, 0, 0, "Source in-point."},
             {O::AudioClip, "<aclip>.out", "", "out", PK::Scalar, "s", 0, 0, 0, "Source out-point."},
@@ -165,6 +171,7 @@ namespace interstellar
             case O::Fx: return "fx";
             case O::Effect: return "effect";
             case O::AudioClip: return "aclip";
+            case O::AudioTrack: return "atrack";
             case O::Project: return "project";
         }
         return "?";

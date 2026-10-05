@@ -2182,6 +2182,32 @@ namespace
         CHECK(same, "the plugin list above is pixel-identical whether the panel below is scrolled or not (D-12)");
     }
 
+    /** R-AUD-9: Deliver says what sound the render will carry, for the timeline and codec chosen. */
+    void testDeliverSound()
+    {
+        std::printf("deliver: the sound a render carries\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        auto clickSeg = [&](std::shared_ptr<arstro::cosmo_v2::SegmentedControl> sc, int i) {
+            auto *b = dynamic_cast<arstro::cosmo_v2::PillButton *>(sc->children()[(size_t)i].get());
+            const Point c = centre(*b, b->localBounds());
+            r.click(c.x, c.y);
+            r.settle();
+        };
+        clickSeg(os->formatPicker(), 0);
+        CHECK(os->audioSentence() == "Sound: the master mix, AAC 48 kHz stereo", "H.264 of a timeline with sound: the master, AAC");
+        clickSeg(os->formatPicker(), 2);
+        CHECK(os->audioSentence().find("24-bit PCM") != std::string::npos, "ProRes: 24-bit PCM");
+        clickSeg(os->formatPicker(), 4);
+        CHECK(os->audioSentence().find("PNG sequence carries no sound") != std::string::npos, "a PNG sequence says it carries none");
+        r.svc.m.timelines[1].hasSound = false;
+        ++r.svc.m.revision;
+        clickSeg(os->formatPicker(), 0);
+        CHECK(os->audioSentence().find("No sound on this timeline") != std::string::npos, "a silent timeline: picture only, said");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2277,6 +2303,7 @@ int main()
     testScopes();
     testColourManagement();
     testLuts();
+    testDeliverSound();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

@@ -1,7 +1,9 @@
 # The Arstro audio project format
 
 > **Status: specified, partially implemented.** Interstellar implements the sample-clip subset
-> (§4); Solaris will implement the rest. **This document is the contract between them**, which is
+> (§4) and MIXES it — clip gain and fades, track gain, pan, mute and solo summed to a stereo master
+> that its renders carry (Interstellar R-AUD-9, DR-AUD-2); buses and sends sum straight to the master
+> there. Solaris will implement the rest. **This document is the contract between them**, which is
 > why it lives at suite level rather than inside either app — a format two apps read is not one
 > app's property.
 

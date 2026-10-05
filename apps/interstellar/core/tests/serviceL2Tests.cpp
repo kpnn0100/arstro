@@ -160,6 +160,34 @@ namespace
         std::vector<Raster> mMem;
     };
 
+    /** R-AUD-5 (amended): every file's sound is a constant — a.mp4 0.1, b.mp4 0.2, music.wav 0.3 —
+     *  for 4 s, so a sum, a gain, a mute or a solo reads straight off the samples. A still is silent. */
+    class FakeAudioSource : public IAudioSource
+    {
+    public:
+        bool open(const std::string &path, int rate, Info &out) override
+        {
+            if (path.find("still") != std::string::npos || !fs::exists(path)) return false;
+            mRate = rate;
+            mLevel = path.find("music") != std::string::npos ? 0.3f : path.find("b.mp4") != std::string::npos ? 0.2f : 0.1f;
+            out.rate = rate;
+            out.duration = 4.0;
+            return true;
+        }
+        bool read(long long start, int frames, float *st) override
+        {
+            for (int k = 0; k < frames; ++k)
+            {
+                const long long f = start + k;
+                st[k * 2] = st[k * 2 + 1] = f >= 0 && f < 4LL * mRate ? mLevel : 0.0f;
+            }
+            return true;
+        }
+        int mRate = 48000;
+        float mLevel = 0.1f;
+    };
+    std::vector<float> gAudio;   // what the last render wrote as sound
+
     /** What the last render asked its writer for (R-RENDER-6). */
     struct WriterBegin { std::string path; int w = 0, h = 0; double fps = 0; long long frames = 0; EncodeSpec spec; };
     WriterBegin gBegin;
@@ -176,6 +204,7 @@ namespace
             mFrames.clear();
             if (mCacheFile) { mCacheSpec = spec; mCacheW = w; mCacheH = h; return true; }   // not a render: gBegin is the render's
             gBegin = WriterBegin{p, w, h, fps, n, spec};
+            gAudio.clear();
             mNote = spec.hardware && gNoHardware ? "hardware video unavailable (test) \xe2\x80\x94 encoded in software" : "";
             return true;
         }
@@ -192,6 +221,11 @@ namespace
             std::lock_guard<std::mutex> l(gMemMu);
             gMemFiles[mPath] = std::move(mFrames);
             ++gCacheSegmentsWritten;
+            return true;
+        }
+        bool writeAudio(const float *st, int frames) override
+        {
+            if (!mCacheFile) gAudio.insert(gAudio.end(), st, st + (size_t)frames * 2);
             return true;
         }
         std::string note() const override { return mNote; }
@@ -213,7 +247,7 @@ namespace
 
         explicit Fixture(const std::string &name) : dir(scratch(name))
         {
-            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4", "ramp.mp4"}) std::ofstream(dir + "/footage/" + f) << "x";
+            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4", "ramp.mp4", "music.wav"}) std::ofstream(dir + "/footage/" + f) << "x";
             svc = make();
         }
 
@@ -226,6 +260,7 @@ namespace
             h.rackDecoder = [](std::shared_ptr<const FrameSelector>) { return std::unique_ptr<cosmo::IImageDecoder>(new FakeDecoder()); };
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
+            h.audioSource = [] { return std::unique_ptr<IAudioSource>(new FakeAudioSource()); };
             h.writeImage = [this](const std::string &p, const Raster &r, std::string &) { images[p] = r; return true; };
             h.settingsPath = dir + "/settings.txt";
             h.presetDir = dir + "/presets";
@@ -1052,6 +1087,55 @@ int main()
         for (size_t i = 0; i < graded.rgba.size(); ++i) if (i % 4 != 3) worst = std::max(worst, std::abs(viaLut.rgba[i] - graded.rgba[i]));
         std::printf("    the baked LUT on the plain frame vs the grade: worst %d code values\n", worst);
         assert(worst <= 3);
+    });
+
+    test("a render carries the mix: sources' sound and files, gain, fades, mute and solo, sample-accurate (R-AUD-5 amended, R-AUD-9)", [] {
+        Fixture f("mix");
+        f.standard();                                   // shotA 0–2 s, shotB 2–4 s
+        std::string err;
+        f.must("track add --kind audio");               // a0: the camera's sound under the picture
+        f.must("audio clip add --track a0 --src a --in 0 --out 2 --at 0");
+        f.must("audio clip add --track a0 --src b --in 0 --out 2 --at 2");
+        f.must("audio track add --name music");
+        f.must("audio clip add --track music --src \"" + f.path("footage/music.wav") + "\" --at 1 --gain -6.0206 --fade 0.5");
+        assert(has(f.out("get music.gain"), "music.gain=0.0"));
+        // no --out: the file's own length (the fake's 4 s) — so the timeline now runs to 5 s
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("m.mp4") + "\"");
+        assert(gBegin.spec.audioRate == 48000 && has(f.svc->model().renders.back().spec, "AAC 48 kHz"));
+        assert(f.written.size() == 120);                                  // 5 s at 24 fps
+        assert(gAudio.size() == 120 * 2000 * 2);                          // exactly 2000 frames of sound per picture frame
+        auto at = [&](double t) { return gAudio[(size_t)std::llround(t * 48000) * 2]; };
+        auto near = [](float a, double b) { return std::fabs(a - b) < 1e-4; };
+        assert(near(at(0.5), 0.1));                                       // a alone
+        assert(near(at(1.25), 0.1 + 0.3 * 0.5 * 0.5));                   // + music at -6 dB, half way through its fade-in
+        assert(near(at(1.75), 0.1 + 0.15));                               // fade done
+        assert(near(at(2.5), 0.2 + 0.15));                                // the cut: b's sound under b's picture
+        assert(near(at(4.75), 0.15 * 0.5));                               // music alone, half way through its fade-out
+        // the cut is sample-accurate: the last frame of a, the first of b
+        assert(near(gAudio[(size_t)(96000 - 1) * 2], 0.25) && near(gAudio[(size_t)96000 * 2], 0.35));
+        // mute the dialogue lane; then solo the music
+        f.must("set a0.mute=1");
+        f.must("render --timeline main --format prores --res 46x26 --out \"" + f.path("m.mov") + "\"");
+        assert(has(f.svc->model().renders.back().spec, "PCM 24-bit 48 kHz"));
+        assert(near(at(0.5), 0.0) && near(at(2.5), 0.15));
+        f.must("set a0.mute=0");
+        f.must("set music.solo=1");
+        assert(has(f.out("get music.solo"), "music.solo=1"));
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("s.mp4") + "\"");
+        assert(near(at(0.5), 0.0) && near(at(2.5), 0.15));               // the solo silences every other lane
+        f.must("set music.solo=0 music.pan=1");
+        f.must("render --timeline main --format h264 --res 46x26 --range 3:4 --out \"" + f.path("p.mp4") + "\"");
+        assert(gAudio.size() == 24 * 2000 * 2);                           // a range: its own samples, from 3 s
+        assert(near(gAudio[0], 0.2) && near(gAudio[1], 0.2 + 0.15));     // panned right: the left keeps only b (the clip's own -6 dB stays)
+        // at 29.97 a frame owns 1601.6 samples: each frame's span comes from its own number, so the
+        // total is exact and nothing drifts
+        f.must("render --timeline main --format h264 --res 46x26 --fps 30000/1001 --range 0:1 --out \"" + f.path("n.mp4") + "\"");
+        assert(f.svc->model().renders.back().total == 30 && gAudio.size() == (size_t)std::llround(30 * 48000.0 * 1001.0 / 30000.0) * 2);
+        // a PNG sequence carries no sound; a silent timeline makes a silent render
+        f.must("render --timeline main --format png-seq --range 0:0.5 --out \"" + f.path("frames") + "\"");
+        assert(!has(f.svc->model().renders.back().spec, "AAC"));
+        assert(!f.run("audio clip add --track music --src \"" + f.path("footage/still.png") + "\" --at 0", &err) && has(err, "no sound"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

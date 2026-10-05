@@ -9,6 +9,7 @@
 #include "Composite.h"
 #include "ColourTransform.h"
 #include "Lut.h"
+#include "AudioMix.h"
 #include "volume/Volume.h"
 #include <atomic>
 #include <condition_variable>
@@ -85,6 +86,8 @@ namespace interstellar
     {
         std::map<std::string, std::unique_ptr<Source>> sources;
         std::unique_ptr<render::GradeEngine> grade{new render::GradeEngine()};
+        // R-AUD-5 (amended): this thread's audio decoders, by file and mix rate; null = no sound in it
+        std::map<std::string, std::unique_ptr<IAudioSource>> audio;
     };
 
     /** The monitor's worker: the latest plan wins, the last finished frame stays on screen. */

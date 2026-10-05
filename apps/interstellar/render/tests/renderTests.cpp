@@ -14,6 +14,8 @@
 #include <cassert>
 
 #include "ActiveSet.h"
+#include "AudioMix.h"
+#include "AudioSource.h"
 #include "ColourTransform.h"
 #include "Composite.h"
 #include "Effects.h"
@@ -685,6 +687,78 @@ namespace
         std::printf("[PASS] cube: identity, write/read round trip, tetrahedral exact on the lattice (%.5f between), greys stay grey, 1D, refusals name the line\n", worst);
     }
 
+    // ── the master sum (R-AUD-5 amended, R-AUD-9) ────────────────────────────────────────────
+
+    /** A file of known sound: frame f is (f + 1) / 1e6 on the left, its negative on the right — so
+     *  every sample says which frame of the file it came from. 2 s at the open rate. */
+    class RampSource : public IAudioSource
+    {
+    public:
+        bool open(const std::string &, int rate, Info &out) override { mRate = rate; out.rate = rate; out.duration = 2.0; return true; }
+        bool read(long long start, int frames, float *st) override
+        {
+            for (int k = 0; k < frames; ++k)
+            {
+                const long long f = start + k;
+                const float v = f < 0 || f >= 2 * mRate ? 0.0f : (float)(f + 1) / 1e6f;
+                st[k * 2] = v;
+                st[k * 2 + 1] = -v;
+            }
+            return true;
+        }
+        int mRate = 48000;
+    };
+
+    void test_mix_is_sample_accurate_and_pure()
+    {
+        RampSource src;
+        IAudioSource::Info info;
+        src.open("r", 48000, info);
+        auto sourceFor = [&](const std::string &) -> IAudioSource * { return &src; };
+        render::AudioPlan plan;
+        plan.rate = 48000;
+        render::AudioItem it;
+        it.media = "r";
+        it.at = 0.5;           // timeline frame 24000
+        it.in = 0.25;          // file frame 12000
+        it.out = 1.25;
+        plan.items.push_back(it);
+        std::vector<float> out(2 * 48000);
+        mixAudio(plan, sourceFor, 0, 48000, out.data());
+        // the first frame of the clip is timeline frame 24000 and it carries file frame 12000
+        assert(out[2 * 23999] == 0.0f && std::fabs(out[2 * 24000] - 12001e-6f) < 1e-9f && std::fabs(out[2 * 24000 + 1] + 12001e-6f) < 1e-9f);
+        assert(std::fabs(out[2 * 47999] - (12000 + 23999 + 1) * 1e-6f) < 1e-7f);
+        // the same span read in odd chunks is the same samples (pure)
+        std::vector<float> chunked(2 * 48000);
+        for (long long a = 0; a < 48000;)
+        {
+            const int n = (int)std::min<long long>(48000 - a, 777);
+            mixAudio(plan, sourceFor, a, n, chunked.data() + a * 2);
+            a += n;
+        }
+        assert(chunked == out);
+        // gain, master, pan, fades
+        plan.items[0].gainDb = -6.0206;   // ×0.5
+        plan.masterDb = -6.0206;          // ×0.5
+        plan.items[0].pan = 1.0;          // hard right: the left is silent, the right untouched
+        plan.items[0].fadeIn = 0.25;      // 12000 frames
+        mixAudio(plan, sourceFor, 24000, 24000, out.data());
+        const float raw = (12000 + 12000 + 1) * 1e-6f;   // file frame 24000, a quarter-second into the clip
+        assert(std::fabs(out[2 * 12000]) < 1e-9f);                                // left: panned away
+        assert(std::fabs(out[2 * 12000 + 1] + raw * 0.25f) < 2e-7f);              // right: ×0.5×0.5, the fade done
+        assert(std::fabs(out[2 * 6000 + 1] + (12000 + 6000 + 1) * 1e-6f * 0.25f * 0.5f) < 2e-7f);   // half way through the fade
+        // varispeed: at 2× the clip lasts half as long and steps two file frames per frame
+        render::AudioPlan fast;
+        fast.rate = 48000;
+        render::AudioItem f2 = it;
+        f2.speed = 2.0;
+        fast.items.push_back(f2);
+        mixAudio(fast, sourceFor, 24000, 24010, out.data());
+        assert(std::fabs(out[2 * 1] - (12000 + 2 + 1) * 1e-6f) < 1e-7f);
+        assert(std::fabs(f2.end() - 1.0) < 1e-12 && out[2 * 24005] == 0.0f);   // ends at 1.0 s = frame 48000
+        std::printf("[PASS] mix: sample-accurate placement, chunk-independent, gain/master/pan/fade, varispeed\n");
+    }
+
     void test_hostile_geometry_stays_in_bounds()
     {
         // Raw-pointer inner loops earn a hostile sweep: off-screen, sub-pixel, huge, extreme crops,
@@ -1231,6 +1305,7 @@ int main()
     test_camera_curves_put_grey_where_the_vendors_say();
     test_colour_identities_round_trips_and_hdr_levels();
     test_cube_reads_applies_and_round_trips();
+    test_mix_is_sample_accurate_and_pure();
     std::printf("interstellar_render: all tests passed\n");
     return 0;
 }

@@ -60,7 +60,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `fx add [--node <rackobj>] [--clip <clip>] [--type <denoise\|blend\|freeze>] [--radius <n>] [--strength <0..1>] [--shutter <deg>] [--at <t>]` | Attach a temporal effect to a rack node (footage) or a clip (editorial). | R-FX-2 |
 | `fx delete <fx>` | Remove a temporal effect. | R-FX-2 |
 | `audio track add [--name <n>]` | Add an audio track (suite schema `#atrack kind=audio`). | R-AUD-2 |
-| `audio clip add [--track <atrk>] [--src <file>] [--at <t>] [--in <t>] [--out <t>] [--gain <dB>] [--fade <s>]` | Place an audio file on an audio track. | R-AUD-2 |
+| `audio clip add [--track <atrk>] [--src <file>] [--at <t>] [--in <t>] [--out <t>] [--gain <dB>] [--fade <s>]` | Place a sound on an audio track: a file, or a rack source's own sound (`--src <bind>`). Without --out it runs to the end of the file's sound. | R-AUD-2 |
 | `undo` | Step back one edit — a grade, an override, a cut, a version change — across the rack and the project alike. | R-EDIT-1 |
 | `redo` | Step forward again after an undo. | R-EDIT-1 |
 | `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
@@ -175,6 +175,11 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<fx>.strength` | fx | scalar | 0..1 | 0.0..1.0 | 0.5 | Denoise strength. |
 | `<fx>.shutter` | fx | scalar | ° | 0.0..360.0 | 180.0 | Frame-blend shutter angle. |
 | `<fx>.at` | fx | scalar | s |  | 0.0 | Freeze: the source time held. |
+| `<atrack>.gain` | atrack | scalar | dB | -60.0..12.0 | 0.0 | Track gain. |
+| `<atrack>.pan` | atrack | scalar | -1..1 | -1.0..1.0 | 0.0 | Balance: -1 left, +1 right; centre is unity. |
+| `<atrack>.mute` | atrack | bool |  |  | 0.0 | Mute. |
+| `<atrack>.solo` | atrack | bool |  |  | 0.0 | Solo: while any track is soloed only soloed tracks sound. |
+| `<atrack>.name` | atrack | text |  |  |  | Track name. |
 | `<aclip>.at` | aclip | scalar | s |  | 0.0 | Timeline position. |
 | `<aclip>.in` | aclip | scalar | s |  | 0.0 | Source in-point. |
 | `<aclip>.out` | aclip | scalar | s |  | 0.0 | Source out-point. |
@@ -291,6 +296,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `timelines[].cutFrozen` | bool |  | Arrangement frozen. |
 | `timelines[].danglingDeltas` | integer |  | Deltas whose target the base deleted — `rebase` reports them. |
 | `timelines[].overrides` | integer |  | How far this version has diverged: #tlset + #tlgrade + #tldrop count. |
+| `timelines[].hasSound` | boolean |  | Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9). |
 | `currentTimeline` | string |  | The editor's current timeline id. Never what a render uses. |
 | `tracks` | array |  | The resolved current timeline's tracks. |
 | `tracks[].id` | string |  | Track id. |

@@ -186,6 +186,16 @@ namespace interstellar_v1
         return line;
     }
 
+    std::string OutputSpec::audioSentence() const
+    {
+        bool sound = false;
+        for (const auto &tl : mTimelines) if (tl.id == mTimeline) sound = tl.hasSound;
+        const std::string f = format();
+        if (!sound) return "No sound on this timeline: the render is picture only";
+        if (f == "png-seq") return "A PNG sequence carries no sound: render a video for the mix";
+        return std::string("Sound: the master mix, ") + (f == "prores" || f == "dnxhr" ? "24-bit PCM" : "AAC") + " 48 kHz stereo";
+    }
+
     std::string OutputSpec::summary() const
     {
         int w = 0, h = 0;
@@ -543,11 +553,11 @@ namespace interstellar_v1
         label("Range", mRangeY, 1.0);
         if (mRows[InOut].amt.value() > 0.001) label("Marks", mRowY[InOut], mRows[InOut].amt.value());
         {
-            // audio: said, not discovered (R-AUD-5)
+            // the sound this render will carry: said, not discovered (R-AUD-9)
             const double cy = mAudioY + kLineH * 0.5;
             glyph::speaker(t, Rect{kPadX, cy - 5.0, 10.0, 10.0}, fade(palette::mutedForeground(), 0.7), 1.0);
             t.setFill(palette::mutedForeground());
-            t.drawText(textfit::ellipsize(t, "No audio: v1 places audio, it does not mix it", w - 2 * kPadX - 16.0, 9.5, font::sans()),
+            t.drawText(textfit::ellipsize(t, audioSentence(), w - 2 * kPadX - 16.0, 9.5, font::sans()),
                        kPadX + 16.0, textfit::baseline(cy, 9.5), 9.5, font::sans());
         }
 

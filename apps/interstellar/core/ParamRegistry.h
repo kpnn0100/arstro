@@ -27,7 +27,7 @@ namespace arstro
 {
 namespace interstellar
 {
-    enum class ParamOwner { Cosmo, RackObj, Clip, Track, Fx, AudioClip, Project, Effect };
+    enum class ParamOwner { Cosmo, RackObj, Clip, Track, Fx, AudioClip, Project, Effect, AudioTrack };
 
     enum class ParamKind
     {

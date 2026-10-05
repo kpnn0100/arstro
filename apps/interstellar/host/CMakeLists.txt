@@ -4,11 +4,12 @@
 # Optional: without libav* the app still builds and still handles stills, which is what keeps the
 # core suite runnable on a machine with no FFmpeg.
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(INTERSTELLAR_AV IMPORTED_TARGET libavformat libavcodec libavutil libswscale)
+pkg_check_modules(INTERSTELLAR_AV IMPORTED_TARGET libavformat libavcodec libavutil libswscale libswresample)
 pkg_check_modules(INTERSTELLAR_PIXBUF REQUIRED IMPORTED_TARGET gdk-pixbuf-2.0)
 
 if(INTERSTELLAR_AV_FOUND)
   add_library(interstellar_host STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/AudioSourceFFmpeg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FrameSourceFFmpeg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FrameWriterFFmpeg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VideoFrameDecoder.cpp

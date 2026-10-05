@@ -718,7 +718,7 @@
           "value": "<s>"
         }
       ],
-      "summary": "Place an audio file on an audio track.",
+      "summary": "Place a sound on an audio track: a file, or a rack source's own sound (`--src <bind>`). Without --out it runs to the end of the file's sound.",
       "requirement": "R-AUD-2"
     },
     {
@@ -1812,6 +1812,12 @@
       "type": "integer",
       "stable": true,
       "doc": "How far this version has diverged: #tlset + #tlgrade + #tldrop count."
+    },
+    {
+      "path": "timelines[].hasSound",
+      "type": "boolean",
+      "stable": true,
+      "doc": "Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9)."
     },
     {
       "path": "currentTimeline",
@@ -3456,6 +3462,55 @@
       "range": "",
       "neutral": 0.0,
       "doc": "Freeze: the source time held."
+    },
+    {
+      "address": "<atrack>.gain",
+      "owner": "atrack",
+      "key": "gain",
+      "kind": "scalar",
+      "unit": "dB",
+      "range": "-60.0..12.0",
+      "neutral": 0.0,
+      "doc": "Track gain."
+    },
+    {
+      "address": "<atrack>.pan",
+      "owner": "atrack",
+      "key": "pan",
+      "kind": "scalar",
+      "unit": "-1..1",
+      "range": "-1.0..1.0",
+      "neutral": 0.0,
+      "doc": "Balance: -1 left, +1 right; centre is unity."
+    },
+    {
+      "address": "<atrack>.mute",
+      "owner": "atrack",
+      "key": "mute",
+      "kind": "bool",
+      "unit": "",
+      "range": "",
+      "neutral": 0.0,
+      "doc": "Mute."
+    },
+    {
+      "address": "<atrack>.solo",
+      "owner": "atrack",
+      "key": "solo",
+      "kind": "bool",
+      "unit": "",
+      "range": "",
+      "neutral": 0.0,
+      "doc": "Solo: while any track is soloed only soloed tracks sound."
+    },
+    {
+      "address": "<atrack>.name",
+      "owner": "atrack",
+      "key": "name",
+      "kind": "text",
+      "unit": "",
+      "range": "",
+      "doc": "Track name."
     },
     {
       "address": "<aclip>.at",

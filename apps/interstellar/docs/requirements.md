@@ -274,6 +274,35 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-AUD-2 The master mix, in every video render (R-AUD-5 amended, R-AUD-9)
+The core names a decode seam, `IAudioSource` (`core/AudioSource.h`): any file read as interleaved
+stereo float at the mix rate, frame-addressed. FFmpeg fills it (`host/AudioSourceFFmpeg.cpp`): the
+best audio stream decoded, resampled and folded to stereo — a mono file at unity in both ears
+(`:59`, libswresample's own mono fold is −3 dB and ignores its option, so the matrix is set) — kept
+from the last read on, positioned by decoded timestamps, a seek landing 0.2 s early so a lapped
+codec decodes the frame right (`:79`; without it a seek in AAC was off by 0.06). The service turns
+a timeline into the mixer's plan (`core/service/ServiceAudio.cpp:21`): every `#aclip` on an audio
+lane (an audio-kind `#track` or an `#atrack`) with its gain, fades, its lane's gain, an `#atrack`'s
+pan, mute and solo; `audio clip add --src <bind>` places a rack source's own sound and runs to the
+end of the file when `--out` is not given (`InterstellarService.cpp:2881`, `:2890`); `#atrack` gain,
+pan, mute, solo and name are addresses. `render::mixAudio` (`render/AudioMix.cpp:34`) sums any span,
+pure and chunk-independent: a clip owns the frames whose start is inside it (`:46`), balance with
+unity at centre (`:52`), linear fades, varispeed by interpolation (`:78`). A render queued with sound
+on its timeline gets an audio stream (`ServiceRender.cpp:958`) and each output frame k carries
+exactly the samples [k·rate/fps, (k+1)·rate/fps) (`:1129`) — at 29.97 a frame owns 1601.6, and the
+total never drifts. The writer adds AAC 320 kb/s beside H.264/H.265 and 24-bit PCM beside
+ProRes/DNxHR (`host/FrameWriterFFmpeg.cpp:222`), framed to the encoder (`:350`, `:395`), a short or
+padded last frame. Deliver says what the render will carry (`app/widgets/OutputSpec.cpp:189`;
+model `timelines[].hasSound`); the queue row names it ("AAC 48 kHz"). Measured through
+`interstellar-cc` on real files: a camera file's 440 Hz dialogue at 0.125 and a 1 kHz bed at −6 dB
+(0.0626) with its fade, in ProRes's PCM; the stream exactly 2.5 s = 120000 samples for 2.5 s of
+timeline. Guarded by render `mix: sample-accurate placement…`, L2 `a render carries the mix…` (the
+cut sample-exact, gains, fades, mute, solo, pan, a range, 29.97 exact, PNG silent), host audio
+(decoder level/frequency/mono unity/seek exactness; the writer's tone reads back at 0.5000 PCM and
+0.5001 AAC, 2.000 s), `interstellar_render_codecs` (aac / pcm_s24le, 48 kHz stereo), UI `deliver:
+the sound a render carries`. Mutants run red: per-frame sample counts rounded (drift), mute
+ignored, fades ignored, the stream never added.
+
 ### DR-AUD-1 The suite audio schema parses and round-trips; Interstellar places clips (R-AUD-2, R-AUD-4)
 `#atrack` / `#aclip` are typed (`model/Project.h`); `#note`, `#arack`, `#aeffect`, `#aauto`,
 `#asend` are kept as `RawNode` and preserved byte-exact. `audio track add` and `audio clip add`

@@ -17,12 +17,14 @@
 #endif
 #include <cassert>
 
+#include "AudioSourceFFmpeg.h"
 #include "FrameSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
 #include <cstdio>
 #include <algorithm>
 #include <set>
 #include <utility>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -138,6 +140,79 @@ int main(int argc, char **argv)
         assert(deep.first >= 30 && deep.second <= 16);
         assert(fromEight.second >= 24 && readEight.second >= 24 && readEight.first <= 12);
         std::printf("  [PASS] a deep frame keeps its 10 bits through the real writer and decoder\n");
+    }
+    // ── R-AUD-5 (amended): the decoder, and the writer's sound read back by it ──
+    {
+        const std::string first = argv[1];
+        const std::string dir = first.find('/') == std::string::npos ? std::string(".") : first.substr(0, first.rfind('/'));
+        auto measure = [](const std::vector<float> &st, int ch, double rate, double &peak, double &hz) {
+            peak = 0;
+            int zc = 0;
+            const size_t n = st.size() / 2;
+            for (size_t i = 0; i < n; ++i)
+            {
+                peak = std::max(peak, (double)std::fabs(st[i * 2 + ch]));
+                if (i && (st[(i - 1) * 2 + ch] < 0) != (st[i * 2 + ch] < 0)) ++zc;
+            }
+            hz = zc / 2.0 / (n / rate);
+        };
+        interstellar_host::AudioSourceFFmpeg mono;
+        interstellar::IAudioSource::Info info;
+        assert(mono.open(dir + "/tone_mono.wav", 48000, info) && std::fabs(info.duration - 2.0) < 0.01 && info.fileRate == 44100 && info.fileChannels == 1);
+        std::vector<float> buf(24000 * 2);
+        assert(mono.read(24000, 24000, buf.data()));
+        double peak = 0, hz = 0;
+        measure(buf, 0, 48000, peak, hz);
+        std::printf("  mono 1 kHz at 44.1 kHz, read at 48 kHz: peak %.4f, %.1f Hz\n", peak, hz);
+        assert(std::fabs(peak - 0.125) < 0.003 && std::fabs(hz - 1000) < 3);
+        for (size_t i = 0; i < 24000; ++i) assert(buf[i * 2] == buf[i * 2 + 1]);   // mono: the same in both ears, at its own level
+        // a seek lands on the same samples as reading straight through to it
+        interstellar_host::AudioSourceFFmpeg seq, jump;
+        assert(seq.open(dir + "/tone_stereo.m4a", 48000, info) && jump.open(dir + "/tone_stereo.m4a", 48000, info));
+        std::vector<float> a(4096 * 2), b(4096 * 2);
+        for (long long p = 0; p < 60000; p += 4096) seq.read(p, 4096, a.data());
+        seq.read(60000, 4096, a.data());
+        jump.read(60000, 4096, b.data());
+        double worst = 0;
+        for (size_t i = 128; i < a.size(); ++i) worst = std::max(worst, (double)std::fabs(a[i] - b[i]));
+        std::printf("  stereo AAC: a seek to frame 60000 vs reading through: worst %.5f\n", worst);
+        assert(worst < 2e-3);
+        std::vector<float> lr(24000 * 2);
+        jump.read(24000, 24000, lr.data());
+        double pl = 0, hl = 0, pr = 0, hr = 0;
+        measure(lr, 0, 48000, pl, hl);
+        measure(lr, 1, 48000, pr, hr);
+        assert(std::fabs(hl - 440) < 3 && std::fabs(hr - 880) < 3);   // left is left, right is right
+        // the writer: 2 s of picture with a 0.5-amplitude 1 kHz tone, in both of its audio codecs
+        for (const char *codec : {"prores", "h264"})
+        {
+            interstellar::EncodeSpec spec;
+            spec.codec = codec;
+            spec.profile = std::string(codec) == "prores" ? "standard" : "";
+            spec.bitDepth = std::string(codec) == "prores" ? 10 : 8;
+            spec.audioRate = 48000;
+            const std::string out = dir + "/sound." + (std::string(codec) == "prores" ? "mov" : "mp4");
+            interstellar_host::FrameWriterFFmpeg w;
+            assert(w.begin(out, 64, 36, 24.0, 48, spec));
+            interstellar::Raster frame;
+            frame.allocate(64, 36, 128);
+            std::vector<float> tone(2000 * 2);
+            for (int k = 0; k < 48; ++k)
+            {
+                for (int i = 0; i < 2000; ++i)
+                    tone[i * 2] = tone[i * 2 + 1] = 0.5f * (float)std::sin(2 * 3.14159265358979 * 1000.0 * (k * 2000 + i) / 48000.0);
+                assert(w.write(frame) && w.writeAudio(tone.data(), 2000));
+            }
+            assert(w.end());
+            interstellar_host::AudioSourceFFmpeg back;
+            assert(back.open(out, 48000, info) && std::fabs(info.duration - 2.0) < 0.05);
+            std::vector<float> got(24000 * 2);
+            back.read(24000, 24000, got.data());
+            measure(got, 0, 48000, peak, hz);
+            std::printf("  %s: the muxed tone reads back at peak %.4f, %.1f Hz, %.3f s\n", codec, peak, hz, info.duration);
+            assert(std::fabs(peak - 0.5) < (std::string(codec) == "prores" ? 1e-4 : 0.02) && std::fabs(hz - 1000) < 3);
+        }
+        std::printf("  [PASS] audio: decoded at the mix rate, mono at unity, seeks exact, and the writer's sound reads back\n");
     }
     std::printf("interstellar_host_tests: %d file(s) passed\n", argc - 1);
     return 0;

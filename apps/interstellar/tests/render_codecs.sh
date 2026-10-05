@@ -119,5 +119,17 @@ s=$(INTERSTELLAR_VAAPI_DEVICE=/dev/dri/none spec --encoder hardware --out fb.mp4
 check fallback fb.mp4 codec_name h264
 if echo "$s" | grep -q "encoded in software" && [ "$(x264 fb.mp4)" = 1 ]; then echo "  [ok] no video unit: rendered in software, and said"; else echo "  [FAIL] fallback not said: $s"; fail=1; fi
 
+# R-AUD-9: a timeline with sound muxes the master — AAC beside H.264, 24-bit PCM beside ProRes
+"$FFMPEG" -loglevel error -f lavfi -i "sine=frequency=1000:sample_rate=44100:duration=2" -c:a pcm_s16le tone.wav
+"$CC" project open mv.isp : audio track add --name music : audio clip add --track music --src tone.wav --at 0 : project save > /dev/null
+render --format h264 --out sound.mp4
+render --format prores --out sound.mov
+astream() { "$FFPROBE" -v error -select_streams a:0 -show_entries "stream=$2" -of default=nw=1:nk=1 "$1" | head -1; }
+for pair in "sound.mp4 aac" "sound.mov pcm_s24le"; do
+  set -- $pair
+  got=$(astream "$1" codec_name); rate=$(astream "$1" sample_rate); ch=$(astream "$1" channels)
+  if [ "$got" = "$2" ] && [ "$rate" = 48000 ] && [ "$ch" = 2 ]; then echo "  [ok] $1: $got 48 kHz stereo"; else echo "  [FAIL] $1: audio $got $rate Hz $ch ch, wanted $2 48000 2"; fail=1; fi
+done
+
 [ $fail = 0 ] && echo "render_codecs: ok"
 exit $fail
