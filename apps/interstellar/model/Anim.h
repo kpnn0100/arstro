@@ -22,6 +22,8 @@
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -87,6 +89,117 @@ namespace anim
         if (t >= keys.back().t) return keys.back().v;
         const auto hi = std::upper_bound(keys.begin(), keys.end(), t, [](double x, const Key &k) { return x < k.t; });
         return segment(*(hi - 1), *hi, t);
+    }
+
+    // ── shapes (R-ANIM-6): a tone curve, a colour wheel, a crop — keyed like numbers ────────────
+    //
+    // A shape key carries TEXT in the address's own syntax ("x,y;x,y;…", "h,s,l", "x,y,w,h"). Between
+    // two keys the shape blends by the segment's PROGRESS — the same temporal sides as a number's
+    // (linear, an ease, a hold), measured on a 0 → 1 ramp, so "ease out" eases a curve's change too.
+    // A curve's points blend point by point when the two keys have as many; otherwise both are
+    // resampled at 17 x positions first. A wheel's hue takes the short way round the circle.
+
+    inline std::vector<double> numbers(const std::string &s)
+    {
+        std::vector<double> v;
+        const char *p = s.c_str();
+        while (*p)
+        {
+            char *end = nullptr;
+            const double x = std::strtod(p, &end);
+            if (end == p) { ++p; continue; }
+            v.push_back(x);
+            p = end;
+        }
+        return v;
+    }
+
+    inline std::string formatNumbers(const std::vector<double> &v, int group)
+    {
+        std::string out;
+        char b[32];
+        for (size_t i = 0; i < v.size(); ++i)
+        {
+            std::snprintf(b, sizeof b, "%.5g", v[i]);
+            if (i) out += group > 0 && i % (size_t)group == 0 ? ";" : ",";
+            out += b;
+        }
+        return out;
+    }
+
+    /** The progress (0 → 1) through the segment a → b at t, with their temporal sides. */
+    inline double progress(const Key &a, const Key &b, double t)
+    {
+        Key x = a, y = b;
+        x.v = 0.0;
+        y.v = 1.0;
+        x.speedOut = y.speedIn = 0.0;   // a shape's "speed" is its ease: speeds are flat, influence shapes it
+        return std::clamp(segment(x, y, t), 0.0, 1.0);
+    }
+
+    inline std::string blendShape(const std::string &a, const std::string &b, double u)
+    {
+        if (u <= 0.0) return a;
+        if (u >= 1.0) return b;
+        const bool points = a.find(';') != std::string::npos || b.find(';') != std::string::npos;
+        std::vector<double> va = numbers(a), vb = numbers(b);
+        if (points || va.size() == 2)
+        {
+            // curves: pairs (x, y); resample both when the counts differ
+            auto resample = [](const std::vector<double> &v) {
+                std::vector<std::pair<double, double>> p;
+                for (size_t i = 0; i + 1 < v.size(); i += 2) p.push_back({v[i], v[i + 1]});
+                std::sort(p.begin(), p.end());
+                std::vector<double> out;
+                for (int k = 0; k <= 16; ++k)
+                {
+                    const double x = k / 16.0;
+                    double y = p.empty() ? x : p.front().second;
+                    for (size_t i = 0; i + 1 < p.size(); ++i)
+                        if (x >= p[i].first && x <= p[i + 1].first)
+                        {
+                            const double w = p[i + 1].first - p[i].first;
+                            y = w > 0 ? p[i].second + (p[i + 1].second - p[i].second) * (x - p[i].first) / w : p[i].second;
+                        }
+                    if (!p.empty() && x > p.back().first) y = p.back().second;
+                    out.push_back(x);
+                    out.push_back(y);
+                }
+                return out;
+            };
+            if (va.size() != vb.size() || va.size() % 2) { va = resample(va); vb = resample(vb); }
+            std::vector<double> o(va.size());
+            for (size_t i = 0; i < va.size(); ++i) o[i] = va[i] + (vb[i] - va[i]) * u;
+            return formatNumbers(o, 2);
+        }
+        if (va.size() != vb.size() || va.empty()) return u < 0.5 ? a : b;   // nothing to blend: a step
+        std::vector<double> o(va.size());
+        for (size_t i = 0; i < va.size(); ++i) o[i] = va[i] + (vb[i] - va[i]) * u;
+        if (va.size() == 3)
+        {
+            // a wheel: hue in degrees, the short way round
+            double d = std::fmod(vb[0] - va[0] + 540.0, 360.0) - 180.0;
+            o[0] = std::fmod(va[0] + d * u + 360.0, 360.0);
+        }
+        return formatNumbers(o, 0);
+    }
+
+    struct ShapeKey
+    {
+        Key k;                // its time and temporal sides (k.v unused)
+        std::string shape;
+    };
+
+    /** A shape curve's value at `t`; `keys` sorted by time, not empty. */
+    inline std::string evalShape(const std::vector<ShapeKey> &keys, double t)
+    {
+        if (keys.empty()) return std::string();
+        if (t <= keys.front().k.t) return keys.front().shape;
+        if (t >= keys.back().k.t) return keys.back().shape;
+        size_t i = 0;
+        while (i + 1 < keys.size() && keys[i + 1].k.t <= t) ++i;
+        const auto &a = keys[i], &b = keys[i + 1];
+        return blendShape(a.shape, b.shape, progress(a.k, b.k, t));
     }
 
     /** Apply a preset to one key, as the right-click menu names them (R-ANIM-2). */

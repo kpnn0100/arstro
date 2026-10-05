@@ -200,7 +200,9 @@ not run. `node=` must name a `#rackobj`.
 speed), `v` in the address's units, and per side `in`/`out` = `linear` (default, not written) |
 `bezier` | `hold` (out only), with `speedIn`/`inflIn`, `speedOut`/`inflOut` written only for a
 bezier side (units per second; % of the segment, 0 < x ≤ 100). One curve per parameter, one key per
-time; a curve naming nothing is refused. Curves are the root timeline's — versions inherit them and
+time; a curve naming nothing is refused. A SHAPE key (a tone curve, a colour wheel, the mixer, the
+crop — R-ANIM-6) adds `shape=` with the value in the address's own syntax, quoted when it holds a `;`
+(`shape="0,0;0.5,0.7;1,1"`, `shape=120,60,10`); its `v` is 0, and a curve is all numbers or all shapes. Curves are the root timeline's — versions inherit them and
 add `#tlgrade` deltas — and a pin snapshots the rack's into `<stem>.pins/<commit>.anim`.
 
 ### 5.2 Beside the project: the preview cache (R-PLAY-1)

@@ -370,6 +370,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `anims[].keys[].inflIn` | number |  | Incoming influence, % of the segment. |
 | `anims[].keys[].speedOut` | number |  | Outgoing speed, units per second. |
 | `anims[].keys[].inflOut` | number |  | Outgoing influence, % of the segment. |
+| `anims[].keys[].shape` | string |  | A shape key's value in the address's own syntax; empty for a number (R-ANIM-6). |
+| `anims[].shape` | bool |  | The curve animates a shape — a tone curve, a colour wheel, a crop (R-ANIM-6). |
+| `anims[].shapeNow` | string |  | A shape curve's value now. |
 | `playbackFromCache` | bool | *machine* | The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1). |
 | `previewCacheFrames` | integer | *machine* | Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1). |
 | `previewCacheTotal` | integer | *machine* | Frames in the current timeline. |

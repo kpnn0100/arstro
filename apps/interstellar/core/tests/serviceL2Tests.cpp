@@ -1089,6 +1089,66 @@ int main()
         std::printf("    %zu curves reloaded\n", f.svc->model().anims.size());
     });
 
+    test("shapes animate: a wheel, a crop and a tone curve blend between keys; a pin freezes them (R-ANIM-6)", [] {
+        Fixture f("animshape");
+        f.standard();
+        auto frame = [&](const std::string &tl, double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(tl, t, 0, r));
+            return r;
+        };
+        // the still the animation must reproduce at source time 1.0 (half way): a midtone wheel
+        f.must("set a.grade.grade1=60,50,20");
+        const Raster still = frame("tl_1", 1.0);
+        f.must("set a.grade.grade1=0,0,0");
+        assert(frame("tl_1", 1.0).rgba != still.rgba);
+        f.must("key add a.grade.grade1 --at 0 --value 0,0,0");
+        f.must("key add a.grade.grade1 --at 2 --value 120,100,40");
+        assert(frame("tl_1", 1.0).rgba == still.rgba);
+        // a crop, on footage that has an edge to move (the flat fakes would not show one)
+        f.must("rack add \"" + f.path("footage/edge.mp4") + "\"");
+        f.must("clip add --track v0 --src edge --in 0 --out 2 --at 6 --name shotE");
+        f.must("set edge.xform.crop=0.1,0,0.8,1");
+        const Raster cropStill = frame("tl_1", 7.0);
+        f.must("set edge.xform.crop=0,0,1,1");
+        assert(frame("tl_1", 7.0).rgba != cropStill.rgba);
+        f.must("key add edge.xform.crop --at 0 --value 0,0,1,1");
+        f.must("key add edge.xform.crop --at 2 --value 0.2,0,0.6,1");
+        assert(frame("tl_1", 7.0).rgba == cropStill.rgba);
+        // the hue takes the short way round: 350° → 10° passes 0°, not 180°
+        f.must("key set a.grade.grade1 --at 0 --value 350,0,0");
+        f.must("key set a.grade.grade1 --at 2 --value 10,0,0");
+        f.must("set a.frame=1");
+        assert(has(f.out("get a.grade.grade1"), "=0,0,0"));
+        // a tone curve: different point counts are resampled; a speed is refused, an ease is not
+        f.must("key add a.curve.curve --at 0 --value \"0,0;1,1\"");
+        f.must("key add a.curve.curve --at 2 --value \"0,0;0.5,0.8;1,1\"");
+        const std::string mid = f.out("get a.curve.curve");
+        std::printf("    the curve at source 1.0: %s", mid.c_str());
+        assert(std::count(mid.begin(), mid.end(), ';') == 16);
+        std::string err;
+        assert(!f.run("key set a.curve.curve --at 0 --speed-out 2", &err) && has(err, "a shape"));
+        f.must("key set a.curve.curve --at 0 --ease ease-out");
+        assert(!f.run("key add a.basic.curveLog --at 0", &err));   // a switch has no curve
+        // the format keeps them, a pin freezes them
+        f.must("project save");
+        {
+            std::ifstream in(f.path("mv.isp"));
+            std::stringstream ss;
+            ss << in.rdbuf();
+            assert(has(ss.str(), "shape=\"0,0;0.5,0.8;1,1\"") && has(ss.str(), "shape=0.2,0,0.6,1"));
+        }
+        f.must("timeline new p1 --base main");
+        f.must("timeline pin p1");
+        const Raster pinned = frame("tl_2", 1.0);
+        f.must("key set a.grade.grade1 --at 2 --value 10,100,40");    // the base's wheel gains saturation and lift
+        assert(frame("tl_1", 1.0).rgba != pinned.rgba && frame("tl_2", 1.0).rgba == pinned.rgba);
+        // the last key removed leaves the shape as the parameter's own
+        f.must("key remove edge.xform.crop --at 0");
+        f.must("key remove edge.xform.crop --at 2");
+        assert(has(f.out("get edge.xform.crop"), "0.2,0,0.6,1"));
+    });
+
     test("the preview cache holds the graded frames, rebuilds only what an edit changed, and playback reads it (R-PLAY-1)", [] {
         Fixture f("pcache");
         f.standard();                                             // shotA 0–2 s, shotB 2–4 s: four 1-s segments

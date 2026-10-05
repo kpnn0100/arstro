@@ -27,6 +27,11 @@ namespace interstellar_v1
             {"detail.sharpenMasking", "Sharpen Masking"}, {"detail.nrLuminance", "NR Luminance"},
             {"detail.nrColor", "NR Colour"}, {"detail.lensDistortion", "Distortion"}, {"detail.lensCA", "Defringe"},
             {"detail.lensVignette", "Vignette"},
+            // R-ANIM-6: shapes — keyed like numbers, edited in Grade at the key's frame
+            {"curve.curve", "Tone Curve"}, {"curve.curveR", "Red Curve"}, {"curve.curveG", "Green Curve"},
+            {"curve.curveB", "Blue Curve"}, {"grade.grade0", "Shadows Wheel"}, {"grade.grade1", "Midtones Wheel"},
+            {"grade.grade2", "Highlights Wheel"}, {"mixer.mixer0", "Mixer Hue"}, {"mixer.mixer1", "Mixer Saturation"},
+            {"mixer.mixer2", "Mixer Luminance"}, {"xform.crop", "Crop"},
         };
         count = (int)(sizeof k / sizeof k[0]);
         return k;

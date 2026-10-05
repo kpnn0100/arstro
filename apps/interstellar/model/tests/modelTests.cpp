@@ -133,6 +133,12 @@ futureKey      = "kept verbatim"
 #anim id=an_2 node=clp_1 key=opacity
 #key anim=an_2 t=0.000 v=0.0
 #key anim=an_2 t=1.000 v=1.0
+#anim id=an_3 node=ro_2 key=grade.grade1
+#key anim=an_3 t=0.000 v=0.0 shape=350,20,-5
+#key anim=an_3 t=2.000 v=0.0 out=hold shape=10,40,5
+#anim id=an_4 node=ro_2 key=curve.curve
+#key anim=an_4 t=0.000 v=0.0 shape="0,0;1,1"
+#key anim=an_4 t=1.000 v=0.0 shape="0,0;0.5,0.7;1,1"
 
 #bind id=bn_1 target=gr1.exposure expr="sin(t) * 0.2"
 )ISP";
@@ -234,7 +240,16 @@ fps = 24
         CHECK(p.effect("ef_2")->unknown.size() == 2 && p.effect("ef_2")->unknown[1].first == "angle");
         CHECK(p.kindOf("ef_1") == NodeKind::Effect);
         // R-ANIM-1: curves by node id and key, their keys sorted by time, each side's shape kept
-        CHECK(p.anims.size() == 2 && p.animKeys.size() == 4 && p.kindOf("an_1") == NodeKind::Anim);
+        CHECK(p.anims.size() == 4 && p.animKeys.size() == 8 && p.kindOf("an_1") == NodeKind::Anim);
+        // R-ANIM-6: shape keys keep their text (quoted when it holds a ';')
+        CHECK(p.shapeKeysOf("an_3").size() == 2 && p.shapeKeysOf("an_3")[1].shape == "10,40,5" && p.shapeKeysOf("an_1").empty());
+        CHECK(p.shapeKeysOf("an_4")[1].shape == "0,0;0.5,0.7;1,1");
+        {
+            Project q;
+            std::string e2, bad = kEvery;
+            bad.replace(bad.find("#key anim=an_3 t=2.000 v=0.0 out=hold shape=10,40,5"), 51, "#key anim=an_3 t=2.000 v=1.0");
+            CHECK(!q.parse(bad, e2) && e2.find("mixes number keys and shape keys") != std::string::npos);
+        }
         CHECK(p.animOf("ro_2", "basic.exposure") && p.animOf("ro_2", "basic.exposure")->id == "an_1" && !p.animOf("ro_2", "basic.contrast"));
         {
             const auto ks = p.keysOf("an_1");
@@ -265,7 +280,7 @@ fps = 24
             std::string e2;
             CHECK(q.parse(kEvery, e2));
             q.dropAnimsOf("clp_1");
-            CHECK(q.anims.size() == 1 && q.animKeys.size() == 2 && !q.anim("an_2"));
+            CHECK(q.anims.size() == 3 && q.animKeys.size() == 6 && !q.anim("an_2"));
         }
         {
             Project q;
@@ -930,6 +945,17 @@ fps = 24
         wide[0].inflOut = wide[1].inflIn = 90.0;
         CHECK(anim::eval(wide, 0.4) < anim::eval(ease, 0.4));
         CHECK(!anim::preset(hold[0], "bounce"));
+        // R-ANIM-6: shapes blend by the segment's progress
+        CHECK(anim::blendShape("350,20,-5", "10,40,5", 0.5) == "0,30,0");             // hue the short way: through 0, not 180
+        CHECK(anim::blendShape("0,0;1,1", "0,0;1,0.5", 0.5) == "0,0;1,0.75");          // point by point
+        const std::string rs = anim::blendShape("0,0;1,1", "0,0;0.5,1;1,1", 0.5);      // counts differ: resampled at 17 x
+        CHECK(std::count(rs.begin(), rs.end(), ';') == 16);
+        std::vector<anim::ShapeKey> sk(2);
+        sk[0].k.t = 0; sk[0].shape = "0,0,1,1";
+        sk[1].k.t = 2; sk[1].shape = "0.2,0.2,0.6,0.6";
+        CHECK(anim::evalShape(sk, 1.0) == "0.1,0.1,0.8,0.8" && anim::evalShape(sk, -1) == "0,0,1,1");
+        CHECK(anim::preset(sk[0].k, "ease-out") && anim::evalShape(sk, 0.2) != "0.02,0.02,0.96,0.96");   // eased: slower than linear at the start
+        CHECK(anim::preset(sk[0].k, "hold") && anim::evalShape(sk, 1.99) == "0,0,1,1");
         std::printf("[PASS] keyframe curves evaluate like After Effects' (R-ANIM-2)\n");
     }
 

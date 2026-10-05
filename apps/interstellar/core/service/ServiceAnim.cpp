@@ -115,9 +115,12 @@ namespace interstellar
             const ParamDef *d = dot == std::string::npos ? nullptr : cosmoKey(parts.second.substr(dot + 1));
             if (!d || d->filter != parts.second.substr(0, dot))
                 return fail("`" + address + "` is not an animatable parameter — a rack node animates its colour keys, <bind>.<filter>.<key>");
-            if (d->kind != ParamKind::Scalar)
-                return fail("`" + parts.second + "` is a " + std::string(d->kind == ParamKind::Int ? "whole number" : "shape") +
-                            " — only a continuous colour value has a curve");
+            // R-ANIM-6: a curve, a wheel or a crop animates as a SHAPE; a switch or a whole number does not
+            const bool shape = d->kind == ParamKind::Points || d->kind == ParamKind::Triple || d->kind == ParamKind::Quad;
+            if (d->kind != ParamKind::Scalar && !shape)
+                return fail("`" + parts.second + "` is a " + std::string(d->kind == ParamKind::Int ? "whole number" : "switch") +
+                            " — a number, a curve, a wheel or a crop has a curve; this does not");
+            out.shape = shape;
             out.key = parts.second;
             out.cosmoKey = d->key;
             out.address = ro->name + "." + parts.second;
@@ -192,6 +195,17 @@ namespace interstellar
         return v;
     }
 
+    std::string InterstellarService::staticText(const AnimTarget &t)
+    {
+        // a shape's own text as Cosmo holds it (the base's)
+        ColourTree tree;
+        std::map<NodeId, int> idx;
+        std::string source, err, v;
+        if (colourTreeFor(rootOf(currentTimeline()), tree, idx, source, err) && idx.count(t.node))
+            paramText(tree[(size_t)idx[t.node]].own, t.cosmoKey, v);
+        return v;
+    }
+
     NodeId InterstellarService::rootOf(const NodeId &tl) const
     {
         const auto chain = mProject->chain(tl);
@@ -229,10 +243,11 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape)
+    bool InterstellarService::upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text)
     {
         Project &P = *mProject;
-        if (v < t.lo || v > t.hi)
+        if (t.shape && (!text || text->empty())) return fail(t.address + " is a shape: its key is a value in its own syntax, not a number");
+        if (!t.shape && (v < t.lo || v > t.hi))
             return fail(t.address + " is " + canonicalNumber(t.lo) + ".." + canonicalNumber(t.hi) + ", got " + canonicalNumber(v));
         at = msRound(at);
         const Anim *a = P.animOf(t.node, t.key);
@@ -249,7 +264,8 @@ namespace interstellar
         for (auto &k : P.animKeys)
             if (k.anim == animId && std::fabs(k.t - at) < 5e-4)
             {
-                k.v = tidy(v);
+                k.v = t.shape ? 0.0 : tidy(v);
+                if (t.shape) k.shape = *text;
                 if (shape)
                 {
                     const AnimKey s = toNode(animId, *shape);
@@ -260,13 +276,23 @@ namespace interstellar
         anim::Key k;
         if (shape) k = *shape;
         k.t = at;
-        k.v = tidy(v);
-        P.animKeys.push_back(toNode(animId, k));
+        k.v = t.shape ? 0.0 : tidy(v);
+        AnimKey n = toNode(animId, k);
+        if (t.shape) n.shape = *text;
+        P.animKeys.push_back(n);
         return true;
     }
 
     /** The static value a curve leaves behind when it goes (After Effects' stopwatch: the value at
      *  the current time stays). */
+    bool InterstellarService::writeStaticText(const AnimTarget &t, const std::string &text)
+    {
+        std::string err;
+        const int node = cosmoNodeOf(t.node);
+        if (node < 0) return fail(t.address + " is offline");
+        return mRack.setParam(node, t.cosmoKey, text, err) || fail(t.address + ": " + err);
+    }
+
     bool InterstellarService::writeStatic(const AnimTarget &t, double v)
     {
         Project &P = *mProject;
@@ -301,8 +327,8 @@ namespace interstellar
         if (t.owner == "rack" && tl && !tl->base.empty()) return true;   // a version: a delta on the animated value (setAddress)
         handled = true;
         double v = 0;
-        if (!parseDouble(value, v)) return fail(address + " needs a number, got `" + value + "`");
-        if (!curveEditable(t) || !upsertKey(t, t.now, v, nullptr)) return false;
+        if (!t.shape && !parseDouble(value, v)) return fail(address + " needs a number, got `" + value + "`");
+        if (!curveEditable(t) || !upsertKey(t, t.now, v, nullptr, &value)) return false;
         markDirty();
         bumpFrame();
         emit(Event(EK::ParamsChanged).with("address", t.address).with("value", value).with("target", "curve"));
@@ -353,8 +379,18 @@ namespace interstellar
             {
                 // the value: given, else what the parameter shows at that time now — so adding a key
                 // never changes the picture
-                double v = before.empty() ? staticValue(t) : anim::eval(before, at);
-                if (c.has("value") && !number("value", v)) return false;
+                double v = 0;
+                std::string text;
+                if (t.shape)
+                {
+                    const auto sk = a ? P.shapeKeysOf(a->id) : std::vector<anim::ShapeKey>{};
+                    text = c.has("value") ? c.flag("value") : sk.empty() ? staticText(t) : anim::evalShape(sk, at);
+                }
+                else
+                {
+                    v = before.empty() ? staticValue(t) : anim::eval(before, at);
+                    if (c.has("value") && !number("value", v)) return false;
+                }
                 anim::Key shape;
                 const anim::Key *sp = nullptr;
                 if (c.has("ease"))
@@ -362,8 +398,8 @@ namespace interstellar
                     if (!anim::preset(shape, c.flag("ease"))) return fail("key add: --ease is linear, ease, ease-in, ease-out or hold, got " + c.flag("ease"));
                     sp = &shape;
                 }
-                if (!upsertKey(t, at, v, sp)) return false;
-                return finish("key at " + canonicalNumber(at) + " = " + canonicalNumber(tidy(v)));
+                if (!upsertKey(t, at, v, sp, &text)) return false;
+                return finish("key at " + canonicalNumber(at) + " = " + (t.shape ? text : canonicalNumber(tidy(v))));
             }
             case CK::KeyRemove:
             {
@@ -372,9 +408,10 @@ namespace interstellar
                 if (before.size() == 1)
                 {
                     // the last key: the curve goes and its value stays as the parameter's own
-                    if (!writeStatic(t, k->v)) return false;
+                    const std::string kept = t.shape ? k->shape : canonicalNumber(k->v);
+                    if (!(t.shape ? writeStaticText(t, k->shape) : writeStatic(t, k->v))) return false;
                     P.dropAnim(a->id);
-                    return finish("the last key removed — the value " + canonicalNumber(k->v) + " stays");
+                    return finish("the last key removed — the value " + kept + " stays");
                 }
                 const NodeId animId = a->id;
                 P.animKeys.erase(std::remove_if(P.animKeys.begin(), P.animKeys.end(),
@@ -385,7 +422,8 @@ namespace interstellar
             case CK::KeyClear:
             {
                 if (!a) return fail("key clear: " + t.address + " is not animated");
-                if (!writeStatic(t, anim::eval(before, t.now))) return false;
+                if (!(t.shape ? writeStaticText(t, anim::evalShape(P.shapeKeysOf(a->id), t.now)) : writeStatic(t, anim::eval(before, t.now))))
+                    return false;
                 P.dropAnim(a->id);
                 return finish("animation removed — the value at " + canonicalNumber(t.now) + " stays");
             }
@@ -407,6 +445,8 @@ namespace interstellar
                     }
                 // a speed or an influence makes that side a bezier: that is what giving one means
                 double v = 0;
+                if (t.shape && (c.has("speed-in") || c.has("speed-out")))
+                    return fail("key set: " + t.address + " is a shape — its sides ease by influence; a speed has no unit to be in");
                 if (c.has("speed-in")) { if (!number("speed-in", v)) return false; x.speedIn = v; x.in = anim::Side::Bezier; }
                 if (c.has("speed-out")) { if (!number("speed-out", v)) return false; x.speedOut = v; x.out = anim::Side::Bezier; }
                 for (const char *f : {"influence-in", "influence-out"})
@@ -417,8 +457,9 @@ namespace interstellar
                         if (std::strcmp(f, "influence-in") == 0) { x.inflIn = v; x.in = anim::Side::Bezier; }
                         else { x.inflOut = v; x.out = anim::Side::Bezier; }
                     }
-                if (c.has("value") && !number("value", x.v)) return false;
-                if (x.v < t.lo || x.v > t.hi) return fail(t.address + " is " + canonicalNumber(t.lo) + ".." + canonicalNumber(t.hi) + ", got " + canonicalNumber(x.v));
+                if (t.shape && c.has("value")) k->shape = c.flag("value");
+                else if (c.has("value") && !number("value", x.v)) return false;
+                if (!t.shape && (x.v < t.lo || x.v > t.hi)) return fail(t.address + " is " + canonicalNumber(t.lo) + ".." + canonicalNumber(t.hi) + ", got " + canonicalNumber(x.v));
                 double to = at;
                 if (c.has("to"))
                 {
@@ -428,12 +469,12 @@ namespace interstellar
                 }
                 const AnimKey n = toNode(a->id, x);
                 k->t = to;
-                k->v = tidy(x.v);
+                k->v = t.shape ? 0.0 : tidy(x.v);
                 k->in = n.in; k->out = n.out;
                 k->speedIn = tidy(n.speedIn); k->speedOut = tidy(n.speedOut);
                 k->inflIn = tidy(n.inflIn); k->inflOut = tidy(n.inflOut);
                 return finish("key at " + canonicalNumber(to) + (to != at ? " (moved from " + canonicalNumber(at) + ")" : std::string()) +
-                              " = " + canonicalNumber(k->v) + ", in " + k->in + ", out " + k->out);
+                              " = " + (t.shape ? k->shape : canonicalNumber(k->v)) + ", in " + k->in + ", out " + k->out);
             }
             default: return fail("key: unknown verb");
         }
@@ -464,10 +505,14 @@ namespace interstellar
             n.node = to;
             n.key = a.key;
             P.anims.push_back(n);
-            for (anim::Key k : P.keysOf(a.id))
+            std::vector<AnimKey> keys;
+            for (const auto &k : P.animKeys) if (k.anim == a.id) keys.push_back(k);
+            for (auto k : keys)
             {
+                k.anim = n.id;
                 k.t = msRound(k.t + shift);
-                P.animKeys.push_back(toNode(n.id, k));
+                k.notes = Notes{};
+                P.animKeys.push_back(k);
             }
         }
     }
@@ -485,14 +530,19 @@ namespace interstellar
             if (pin)
             {
                 for (const auto &c : *pin)
-                    if (c.node == kv.first) setParamText(own, c.key.substr(c.key.find('.') + 1), canonicalNumber(anim::eval(c.keys, srcT)));
+                    if (c.node == kv.first)
+                        setParamText(own, c.key.substr(c.key.find('.') + 1),
+                                     c.shapes.empty() ? canonicalNumber(anim::eval(c.keys, srcT)) : anim::evalShape(c.shapes, srcT));
                 continue;
             }
             for (const auto &a : mProject->anims)
             {
                 if (a.node != kv.first) continue;
+                const std::string k = a.key.substr(a.key.find('.') + 1);
+                const auto sk = mProject->shapeKeysOf(a.id);
+                if (!sk.empty()) { setParamText(own, k, anim::evalShape(sk, srcT)); continue; }   // R-ANIM-6
                 const auto ks = mProject->keysOf(a.id);
-                if (!ks.empty()) setParamText(own, a.key.substr(a.key.find('.') + 1), canonicalNumber(anim::eval(ks, srcT)));
+                if (!ks.empty()) setParamText(own, k, canonicalNumber(anim::eval(ks, srcT)));
             }
         }
     }
@@ -515,10 +565,13 @@ namespace interstellar
         for (const auto &a : mProject->anims)
         {
             if (!mProject->rackObj(a.node)) continue;
-            for (const auto &k : mProject->keysOf(a.id))
-                o << a.node << ' ' << a.key << ' ' << canonicalNumber(k.t) << ' ' << canonicalNumber(k.v) << ' ' << anim::sideName(k.in) << ' '
-                  << anim::sideName(k.out) << ' ' << canonicalNumber(k.speedIn) << ' ' << canonicalNumber(k.inflIn) << ' '
-                  << canonicalNumber(k.speedOut) << ' ' << canonicalNumber(k.inflOut) << '\n';
+            for (const auto &k : mProject->animKeys)
+            {
+                if (k.anim != a.id) continue;
+                o << a.node << ' ' << a.key << ' ' << canonicalNumber(k.t) << ' ' << canonicalNumber(k.v) << ' ' << k.in << ' ' << k.out << ' '
+                  << canonicalNumber(k.speedIn) << ' ' << canonicalNumber(k.inflIn) << ' ' << canonicalNumber(k.speedOut) << ' '
+                  << canonicalNumber(k.inflOut) << ' ' << (k.shape.empty() ? std::string("-") : k.shape) << '\n';
+            }
         }
         return o.str();
     }
@@ -539,17 +592,23 @@ namespace interstellar
                 while (std::getline(f, line))
                 {
                     std::istringstream s(line);
-                    std::string node, key, in, out;
+                    std::string node, key, in, out, shape;
                     anim::Key k;
                     if (!(s >> node >> key >> k.t >> k.v >> in >> out >> k.speedIn >> k.inflIn >> k.speedOut >> k.inflOut)) continue;
+                    if (!(s >> shape)) shape = "-";   // a pin written before shapes keyed numbers only
                     anim::parseSide(in, k.in);
                     anim::parseSide(out, k.out);
                     PinCurve *c = nullptr;
                     for (auto &x2 : pc) if (x2.node == node && x2.key == key) c = &x2;
-                    if (!c) { pc.push_back(PinCurve{node, key, {}}); c = &pc.back(); }
-                    c->keys.push_back(k);
+                    if (!c) { pc.push_back(PinCurve{node, key, {}, {}}); c = &pc.back(); }
+                    if (shape != "-") c->shapes.push_back(anim::ShapeKey{k, shape});
+                    else c->keys.push_back(k);
                 }
-                for (auto &c : pc) std::sort(c.keys.begin(), c.keys.end(), [](const anim::Key &a, const anim::Key &b) { return a.t < b.t; });
+                for (auto &c : pc)
+                {
+                    std::sort(c.keys.begin(), c.keys.end(), [](const anim::Key &a, const anim::Key &b) { return a.t < b.t; });
+                    std::sort(c.shapes.begin(), c.shapes.end(), [](const anim::ShapeKey &a, const anim::ShapeKey &b) { return a.k.t < b.k.t; });
+                }
                 it = mPinCurves.emplace(commit, std::move(pc)).first;
             }
             return &it->second;
@@ -585,7 +644,10 @@ namespace interstellar
                 am.max = t.hi;
             }
             const auto ks = P.keysOf(a.id);
-            am.value = ks.empty() ? 0.0 : anim::eval(ks, am.now);
+            const auto sk = P.shapeKeysOf(a.id);
+            am.shape = !sk.empty();
+            am.value = ks.empty() || am.shape ? 0.0 : anim::eval(ks, am.now);
+            if (am.shape) am.shapeNow = anim::evalShape(sk, am.now);
             for (const auto &k : ks)
             {
                 KeyframeModel km;
@@ -597,6 +659,7 @@ namespace interstellar
                 km.speedOut = k.speedOut;
                 km.inflIn = k.inflIn;
                 km.inflOut = k.inflOut;
+                for (const auto &x : sk) if (std::fabs(x.k.t - k.t) < 5e-4) km.shape = x.shape;
                 am.keys.push_back(km);
             }
             m.anims.push_back(std::move(am));

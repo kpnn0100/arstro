@@ -440,6 +440,16 @@ namespace interstellar_v1
         for (const auto &p : std::vector<std::pair<const char *, const char *>>{
                  {"Linear", "linear"}, {"Ease", "ease"}, {"Ease In", "ease-in"}, {"Ease Out", "ease-out"}, {"Hold", "hold"}})
             items.push_back({p.first, [this, head, e = std::string(p.second)] { dispatch(head + " --ease " + e); }});
+        if (a->owner == "rack")
+            for (const auto &r : m.rack)
+                if (r.rackObj == a->node)
+                    items.push_back({"Edit in Grade at This Key", [this, bind = r.bindName, tt = k->t] {
+                        // Grade stands on the key's source frame: what it shows there is what the key holds
+                        dispatch("rack select " + cmd::quote(bind));
+                        dispatch("rack frame " + cmd::quote(bind) + " --at " + cmd::num(tt));
+                        setTab(0);
+                    }});
+        if (!a->shape)
         items.push_back({"Speed & Influence\xE2\x80\xA6", [this, head, address, kk = *k] {
             // the sides as numbers: what a speed is (units per second) and how far it reaches (%)
             mEdit->namePrompt()->showFields(

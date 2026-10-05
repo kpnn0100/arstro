@@ -84,6 +84,7 @@ namespace interstellar_v1
     void KeyGraph::fitRange(bool place)
     {
         if (mSel < 0 || mSel >= (int)mCurves.size()) return;
+        if (mCurves[(size_t)mSel].shape) { mLoT = -1.0; mHiT = 1.0; if (place) { mLo.set(-1.0); mHi.set(1.0); mLoL = -1.0; mHiL = 1.0; mRangePlaced = true; } return; }
         const auto ks = keysOf(mSel);
         if (ks.empty()) return;
         // the keys and whatever the curve does between them (an overshooting bezier)
@@ -162,6 +163,7 @@ namespace interstellar_v1
     {
         const auto &ks = liveKeys();
         if (key < 0 || key >= (int)ks.size()) return Point{-1, -1};
+        if (shapeShown()) return Point{xAt(ks[(size_t)key].t), plotRect().y + plotRect().h * 0.5};   // a shape: a row of keys
         return Point{xAt(ks[(size_t)key].t), yAt(ks[(size_t)key].v)};
     }
 
@@ -199,7 +201,7 @@ namespace interstellar_v1
         for (bool o : {true, false})
         {
             const anim::Side s = o ? ks[(size_t)mSelKey].out : ks[(size_t)mSelKey].in;
-            if (s != anim::Side::Bezier || (o && mSelKey + 1 >= (int)ks.size()) || (!o && mSelKey == 0)) continue;
+            if (shapeShown() || s != anim::Side::Bezier || (o && mSelKey + 1 >= (int)ks.size()) || (!o && mSelKey == 0)) continue;
             const Point h = handlePoint(mSelKey, o);
             if (std::hypot(p.x - h.x, p.y - h.y) <= kHit) { out = o; return mSelKey; }
         }
@@ -249,7 +251,7 @@ namespace interstellar_v1
                     const double tMin = mDrag.key > 0 ? ks[(size_t)mDrag.key - 1].t + kGapT : -1e9;
                     const double tMax = mDrag.key + 1 < (int)ks.size() ? ks[(size_t)mDrag.key + 1].t - kGapT : 1e9;
                     k.t = std::clamp(std::round(t * 1000.0) / 1000.0, tMin, tMax);
-                    k.v = std::clamp(v, a.min, a.max);
+                    if (!a.shape) k.v = std::clamp(v, a.min, a.max);   // a shape key moves in time only
                 }
                 else
                 {
@@ -276,11 +278,12 @@ namespace interstellar_v1
                     if (mDrag.kind == 1)
                     {
                         if (std::fabs(k.t - was.t) >= 5e-4) line += " --to " + cmd::num(k.t);
-                        line += " --value " + cmd::num(k.v);
+                        if (!a.shape) line += " --value " + cmd::num(k.v);
+                        else if (std::fabs(k.t - was.t) < 5e-4) line.clear();   // a shape key that did not move: nothing to say
                     }
                     else if (mDrag.kind == 3) line += " --speed-out " + cmd::num(k.speedOut) + " --influence-out " + cmd::num(k.inflOut);
                     else line += " --speed-in " + cmd::num(k.speedIn) + " --influence-in " + cmd::num(k.inflIn);
-                    onCommand(line);
+                    if (!line.empty()) onCommand(line);
                 }
                 mDrag = Drag{};
                 return true;
@@ -341,8 +344,16 @@ namespace interstellar_v1
         // now: where Grade stands (the reference frame) or the playhead in the clip
         const double nx = xAt(mNow);
         if (nx >= p.x && nx <= p.right()) glyph::line(t, nx, p.y, nx, p.bottom(), palette::primaryAlpha(0.45), 1.0);
+        // a shape: its keys on one row, joined — what it is at a key is edited in Grade at that frame
+        if (!ks.empty() && shapeShown())
+        {
+            const double y = p.y + p.h * 0.5;
+            glyph::line(t, xAt(ks.front().t), y, xAt(ks.back().t), y, palette::primaryAlpha(0.95 * sw), 1.5);
+            t.setFill(fade(palette::mutedForeground(), 0.85));
+            t.drawText(textfit::ellipsize(t, a.shapeNow, p.w - 8.0, 8.5, font::mono()), p.x + 3.0, p.bottom() - 3.0, 8.5, font::mono());
+        }
         // the curve — the render path's own function, sampled
-        if (!ks.empty())
+        else if (!ks.empty())
         {
             const int n = std::max(2, (int)(p.w / 2.0));
             t.beginPath();
@@ -381,6 +392,7 @@ namespace interstellar_v1
         t.restore();
         // the value axis ends, and the selected key in words
         char buf[96];
+        if (shapeShown()) return;
         t.setFill(fade(palette::mutedForeground(), 0.85));
         std::snprintf(buf, sizeof buf, "%.3g", mHi.value());
         t.drawText(buf, p.x + 3.0, p.y + 9.0, 8.5, font::mono());

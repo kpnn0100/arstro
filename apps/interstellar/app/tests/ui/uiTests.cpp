@@ -1314,6 +1314,55 @@ namespace
             r.click(q.x, q.y);
             CHECK(hasLine(r.svc, "key add c1.opacity --at 3"), "the Opacity diamond keys the clip at the playhead");
         }
+        {
+            // R-ANIM-6: a shape — the lane lists it; the graph keys it on a row, in time only; Grade edits it
+            Rig r(1440, 900, [](FakeService &s) {
+                s.edit();
+                s.m.selectedClip = "c1";
+                s.m.playhead = 1.0;
+                s.animateShape("s_day01.grade.grade1", {{2.0, "0,0,0"}, {5.0, "120,60,10"}});
+            });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            auto kl = tl->keyLane();
+            CHECK(kl->rowOf("s_day01.curve.curve") >= 0 && kl->rowOf("s_day01.xform.crop") >= 0 && kl->rowOf("s_day01.grade.grade1") >= 0,
+                  "the lane lists the source's curves, wheels and crop");
+            kl->select("s_day01.grade.grade1");
+            r.settle();
+            auto g = kl->graph();
+            CHECK(g->shapeShown() && std::fabs(g->keyPoint(0).y - g->keyPoint(1).y) < 1e-9, "a shape draws as a row of keys");
+            const Point k1 = world(*g, g->keyPoint(1).x, g->keyPoint(1).y);
+            r.svc.lines.clear();
+            r.drag(k1.x, k1.y, k1.x, k1.y - 20.0);
+            CHECK(withPrefix(r.svc, "key set").empty(), "dragging a shape key up and down changes nothing — a shape has no value axis");
+            r.settle();
+            r.drag(k1.x, k1.y, k1.x - 30.0, k1.y);
+            const std::string mv = withPrefix(r.svc, "key set s_day01.grade.grade1 --at 5 --to ");
+            CHECK(!mv.empty() && mv.find("--value") == std::string::npos, "dragging it sideways moves it in time only");
+            r.settle();
+            const Point k0 = world(*g, g->keyPoint(0).x, g->keyPoint(0).y);
+            r.app->pointer(0, k0.x, k0.y, 2, r.now);
+            r.app->pointer(2, k0.x, k0.y, 2, r.now + 40.0);
+            r.pump(250);
+            auto cm = r.app->edit().contextMenu();
+            int edit = -1;
+            bool speeds = false;
+            for (int i = 0; i < cm->itemCount(); ++i)
+            {
+                if (cm->item(i).label == "Edit in Grade at This Key") edit = i;
+                speeds = speeds || cm->item(i).label.rfind("Speed", 0) == 0;
+            }
+            CHECK(edit >= 0 && !speeds, "a shape key's menu: Edit in Grade at This Key, no typed speeds");
+            r.svc.lines.clear();
+            const Point ip = centre(*cm, cm->itemRect(edit));
+            r.click(ip.x, ip.y);
+            r.pump(32);
+            CHECK(hasLine(r.svc, "rack frame s_day01 --at 2") && r.app->tab() == EditScreen::Grade,
+                  "…which stands Grade on the key's source frame (rack frame s_day01 --at 2) and shows Grade");
+        }
     }
 
     void testPluginList()

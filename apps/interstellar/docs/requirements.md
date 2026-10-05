@@ -769,6 +769,29 @@ the SOURCE's contrast; diamonds fill eased; folding eases and dispatches nothing
 menu, the dialog). Shots `cut_key_lane`, `cut_key_lane_grade`, `cut_key_lane_mid` — looked at at both
 sizes (two bugs found that way: the graph's now line stood at Grade's reference frame; a chosen row
 was not scrolled into view).
+### DR-ANIM-3 Shapes animate: tone curves, colour wheels, the mixer and the crop (R-ANIM-6)
+A `#key` may carry `shape=` — the value in the address's own syntax (`"x,y;…"`, `h,s,l`, `x,y,w,h`) —
+and a curve is all numbers or all shapes (validated). `model/Anim.h`: a shape blends by the segment's
+PROGRESS (`progress`, `:131` — the keys' temporal sides on a 0 → 1 ramp, so presets and influence ease
+a shape too; speeds are flat), point by point when two curves have as many points and resampled at 17
+x positions otherwise, a wheel's hue the short way round (`blendShape`, `:140`; `evalShape`, `:194`).
+The service accepts the registry's Points, Triple and Quad kinds as shape targets
+(`ServiceAnim.cpp:118`; switches and whole numbers stay refused), keys them with text values
+(`key add|set --value <text>`; a speed on a shape is refused, `:449`; a missing value is the
+parameter's own, `staticText`, `:198`), applies them on the render path (`:543`), freezes them in pins
+(the pin's curve file gains the shape) and copies them with their node. Model: `anims[].shape`,
+`shapeNow`, `keys[].shape`. UI: the key lane's GRADE section lists the source's curves, wheels, mixer
+and crop (`ColourKeys.h`); the graph draws a shape as a row of keys moved in time only
+(`KeyGraph.cpp:347`); its menu offers presets and "Edit in Grade at This Key" — Grade stands on the
+key's source frame, where editing the curve or wheel rewrites that key (R-ANIM-3) — instead of typed
+speeds (`App.cpp:446`). Guarded by model tests (round trip with quoting; mixed curves refused; hue
+the short way; point-by-point and resampled curves; ease and hold on a crop), L2 `shapes animate…` (a
+wheel and a crop half-way render exactly the still of the blended value — the crop on the half-white
+"edge" fake, since a flat frame cannot show one; a curve resampled to 17 points; a speed refused; the
+file keeps the text; a pinned version stays put when the base's wheel changes; the last key's shape
+stays — red with shapes skipped on the render path) and the UI test (the lane lists them; a key row;
+a vertical drag says nothing, a sideways one moves time only; the menu's Grade jump).
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

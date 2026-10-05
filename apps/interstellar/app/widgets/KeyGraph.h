@@ -72,6 +72,8 @@ namespace interstellar_v1
         double rangeLoTarget() const { return mLoT; }
         double timeAtX(double x) const;
         double xAt(double t) const;
+        /** The selected curve is a SHAPE (R-ANIM-6): drawn as a row of keys, moved in time only. */
+        bool shapeShown() const { return mSel >= 0 && mSel < (int)mCurves.size() && mCurves[(size_t)mSel].shape; }
         double yAt(double v) const;
 
     protected:

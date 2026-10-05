@@ -222,7 +222,7 @@ namespace interstellar
         {
             NodeId node;
             std::string key, cosmoKey, address, owner;   // owner: rack | effect | clip
-            bool clipClock = false, inherited = false;
+            bool clipClock = false, inherited = false, shape = false;   // shape: a curve, a wheel, a crop (R-ANIM-6)
             double now = 0, lo = -1e300, hi = 1e300, staticValue = 0;
         };
         struct PinCurve
@@ -230,6 +230,7 @@ namespace interstellar
             NodeId node;
             std::string key;
             std::vector<anim::Key> keys;
+            std::vector<anim::ShapeKey> shapes;
         };
         using PinCurves = std::vector<PinCurve>;
         double sourceNow(const NodeId &roId) const;
@@ -238,7 +239,9 @@ namespace interstellar
         double animatedValue(const AnimTarget &t);
         NodeId rootOf(const NodeId &tl) const;
         bool curveEditable(const AnimTarget &t);
-        bool upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape);
+        bool upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text = nullptr);
+        std::string staticText(const AnimTarget &t);
+        bool writeStaticText(const AnimTarget &t, const std::string &text);
         bool writeStatic(const AnimTarget &t, double v);
         bool setAnimated(const std::string &address, const std::string &value, bool &handled);
         bool animCommand(const Command &c);

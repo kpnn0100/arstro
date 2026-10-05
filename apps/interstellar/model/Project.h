@@ -279,6 +279,7 @@ namespace interstellar
         double t = 0, v = 0;
         std::string in = "linear", out = "linear";   // linear | bezier | hold
         double speedIn = 0, inflIn = 33.333, speedOut = 0, inflOut = 33.333;
+        std::string shape;                           // R-ANIM-6: a shape key's value ("x,y;…", "h,s,l", "x,y,w,h"); "" = a number
         Fields unknown;
         Notes notes;
     };
@@ -388,6 +389,8 @@ namespace interstellar
         const Anim *animOf(const NodeId &node, const std::string &key) const;
         /** A curve's keyframes, sorted by time, as the evaluator takes them (model/Anim.h). */
         std::vector<anim::Key> keysOf(const NodeId &animId) const;
+        /** A SHAPE curve's keys (R-ANIM-6), sorted by time; empty when the curve is numeric. */
+        std::vector<anim::ShapeKey> shapeKeysOf(const NodeId &animId) const;
         /** Drop every curve of `node` and their keyframes (the node is gone). */
         void dropAnimsOf(const NodeId &node);
         /** Drop one curve and its keyframes. */

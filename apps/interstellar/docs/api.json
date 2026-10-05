@@ -2235,6 +2235,24 @@
       "doc": "Outgoing influence, % of the segment."
     },
     {
+      "path": "anims[].keys[].shape",
+      "type": "string",
+      "stable": true,
+      "doc": "A shape key's value in the address's own syntax; empty for a number (R-ANIM-6)."
+    },
+    {
+      "path": "anims[].shape",
+      "type": "bool",
+      "stable": true,
+      "doc": "The curve animates a shape — a tone curve, a colour wheel, a crop (R-ANIM-6)."
+    },
+    {
+      "path": "anims[].shapeNow",
+      "type": "string",
+      "stable": true,
+      "doc": "A shape curve's value now."
+    },
+    {
       "path": "playbackFromCache",
       "type": "bool",
       "stable": false,

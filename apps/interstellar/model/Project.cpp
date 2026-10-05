@@ -448,6 +448,25 @@ namespace interstellar
         std::sort(v.begin(), v.end(), [](const anim::Key &a, const anim::Key &b) { return a.t < b.t; });
         return v;
     }
+    std::vector<anim::ShapeKey> Project::shapeKeysOf(const NodeId &animId) const
+    {
+        std::vector<anim::ShapeKey> v;
+        for (const auto &k : animKeys)
+        {
+            if (k.anim != animId || k.shape.empty()) continue;
+            anim::ShapeKey x;
+            x.k.t = k.t;
+            anim::parseSide(k.in, x.k.in);
+            anim::parseSide(k.out, x.k.out);
+            x.k.inflIn = k.inflIn;
+            x.k.inflOut = k.inflOut;
+            x.shape = k.shape;
+            v.push_back(x);
+        }
+        std::sort(v.begin(), v.end(), [](const anim::ShapeKey &a, const anim::ShapeKey &b) { return a.k.t < b.k.t; });
+        return v;
+    }
+
     void Project::dropAnim(const NodeId &animId)
     {
         anims.erase(std::remove_if(anims.begin(), anims.end(), [&](const Anim &a) { return a.id == animId; }), anims.end());
@@ -1387,6 +1406,7 @@ namespace interstellar
                 { err = "two #anim for node=" + a.node + " key=" + a.key + " — one parameter has one curve"; return false; }
             }
             std::set<std::string> at;
+            std::map<std::string, bool> shaped;
             for (const auto &k : animKeys)
             {
                 if (!anim(k.anim)) { err = "#key anim=" + k.anim + " names no #anim"; return false; }
@@ -1395,6 +1415,9 @@ namespace interstellar
                 { err = "#key anim=" + k.anim + " t=" + canonicalNumber(k.t) + ": in/out is linear, bezier or hold"; return false; }
                 if (k.inflIn <= 0 || k.inflIn > 100 || k.inflOut <= 0 || k.inflOut > 100)
                 { err = "#key anim=" + k.anim + " t=" + canonicalNumber(k.t) + ": an influence is a percent, above 0 and at most 100"; return false; }
+                if (k.shape.empty() ? shaped.count(k.anim) && shaped[k.anim] : shaped.count(k.anim) && !shaped[k.anim])
+                { err = "#anim " + k.anim + " mixes number keys and shape keys — a curve is one or the other"; return false; }
+                shaped[k.anim] = !k.shape.empty();
                 if (!at.insert(k.anim + "\x01" + canonicalNumber(k.t)).second)
                 { err = "two #key on anim=" + k.anim + " at t=" + canonicalNumber(k.t) + " — a curve has one value at a time"; return false; }
             }

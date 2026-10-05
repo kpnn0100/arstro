@@ -365,6 +365,7 @@ namespace schema
             number<AnimKey>("inflIn", &AnimKey::inflIn, 33.333, 0, false, bezIn),
             number<AnimKey>("speedOut", &AnimKey::speedOut, 0.0, 0, false, bezOut),
             number<AnimKey>("inflOut", &AnimKey::inflOut, 33.333, 0, false, bezOut),
+            text<AnimKey>("shape", &AnimKey::shape, 0, false, [](const AnimKey &k, const Project &) { return !k.shape.empty(); }),
         };
         return f;
     }

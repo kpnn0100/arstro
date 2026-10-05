@@ -225,10 +225,10 @@ namespace interstellar
                 Json ks = Json::array();
                 for (const auto &k : a.keys)
                     ks.push(Json::object().set("t", k.t).set("v", k.v).set("in", k.in).set("out", k.out)
-                                .set("speedIn", k.speedIn).set("inflIn", k.inflIn).set("speedOut", k.speedOut).set("inflOut", k.inflOut));
+                                .set("speedIn", k.speedIn).set("inflIn", k.inflIn).set("speedOut", k.speedOut).set("inflOut", k.inflOut).set("shape", k.shape));
                 anims.push(Json::object().set("id", a.id).set("node", a.node).set("nodeBind", a.nodeBind).set("owner", a.owner)
                                .set("key", a.key).set("address", a.address).set("clock", a.clock).set("now", a.now).set("value", a.value)
-                               .set("min", a.min).set("max", a.max).set("keys", ks));
+                               .set("min", a.min).set("max", a.max).set("shape", a.shape).set("shapeNow", a.shapeNow).set("keys", ks));
             }
             j.set("anims", anims);
         }
@@ -462,6 +462,9 @@ namespace interstellar
             {"anims[].keys[].inflIn", "number", "Incoming influence, % of the segment."},
             {"anims[].keys[].speedOut", "number", "Outgoing speed, units per second."},
             {"anims[].keys[].inflOut", "number", "Outgoing influence, % of the segment."},
+            {"anims[].keys[].shape", "string", "A shape key's value in the address's own syntax; empty for a number (R-ANIM-6)."},
+            {"anims[].shape", "bool", "The curve animates a shape — a tone curve, a colour wheel, a crop (R-ANIM-6)."},
+            {"anims[].shapeNow", "string", "A shape curve's value now."},
             {"playbackFromCache", "bool", "The frame on the monitor while playing was decoded from the preview cache (R-PLAY-1).", true},
             {"previewCacheFrames", "integer", "Frames of the current timeline in the preview cache AND current — an edit drops the ones it changed (R-PLAY-1).", true},
             {"previewCacheTotal", "integer", "Frames in the current timeline.", true},

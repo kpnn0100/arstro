@@ -314,6 +314,14 @@ namespace istest
             m.anims.push_back(x);
             return &m.anims.back();
         }
+        void animateShape(const std::string &address, std::vector<std::pair<double, std::string>> keys)
+        {
+            AnimModel *a = animFor(address, true);
+            a->shape = true;
+            for (const auto &k : keys) { KeyframeModel km; km.t = k.first; km.shape = k.second; a->keys.push_back(km); }
+            std::sort(a->keys.begin(), a->keys.end(), [](const KeyframeModel &x, const KeyframeModel &y) { return x.t < y.t; });
+            a->shapeNow = a->keys.front().shape;
+        }
         void animate(const std::string &address, std::vector<std::pair<double, double>> keys)
         {
             AnimModel *a = animFor(address, true);
@@ -350,6 +358,10 @@ namespace istest
                 m.tracks.push_back(tk);
             }
             else if (a[0] == "clip" && a.size() >= 3 && a[1] == "copy") { m.hasClipClipboard = true; m.clipClipboardFrom = a[2]; }
+            else if (a[0] == "rack" && a.size() >= 5 && a[1] == "frame")
+            {
+                for (auto &n : m.rack) if (n.bindName == a[2]) n.frame = std::atof(a[4].c_str());
+            }
             else if (a[0] == "key" && a.size() >= 3 && (a[1] == "add" || a[1] == "remove" || a[1] == "set"))
             {
                 auto flag = [&](const std::string &f, double &v) {

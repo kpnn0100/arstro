@@ -96,6 +96,7 @@ namespace interstellar
         std::string in = "linear", out = "linear";   // linear | bezier | hold
         double speedIn = 0, speedOut = 0;            // units per second
         double inflIn = 33.333, inflOut = 33.333;    // percent of the segment
+        std::string shape;                           // a shape key's value (R-ANIM-6); "" = a number
     };
 
     /** One animated parameter (R-ANIM-1). The UI evaluates `keys` with model/Anim.h — the same
@@ -112,6 +113,8 @@ namespace interstellar
         double now = 0;               // the current time on that clock (Grade's reference frame; the playhead in the clip)
         double value = 0;             // the curve's value now
         double min = 0, max = 0;      // the parameter's range, for the graph's value axis
+        bool shape = false;           // a curve, a wheel or a crop: keys carry text, the graph draws a key row (R-ANIM-6)
+        std::string shapeNow;         // a shape curve's value now
         std::vector<KeyframeModel> keys;
     };
 

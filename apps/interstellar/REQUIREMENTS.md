@@ -249,7 +249,7 @@ The headline of this specification, and the reason it is not the first one.
   time) for rack nodes and effects, and inside the clip for a clip.
   (**AMENDED 2026-10-05, with R-ANIM-3:** the graph lives in the timeline's key lane only, under the
   selected clip, for every animated property of it — the Grade deck has no curves face.)
-- **R-ANIM-6 Shapes animate too** (added 2026-10-05, user request): a tone curve, a colour wheel
+- **R-ANIM-6 Shapes animate too** (added 2026-10-05, user request; ✅ DR-ANIM-3): a tone curve, a colour wheel
   (hue, saturation, luminance — hue takes the short way round) and the crop are keyed like numbers;
   between two keys a curve's points are interpolated point by point (resampled when their counts
   differ). A shape key is still the rack's (law 2): a version cannot carry its own.
