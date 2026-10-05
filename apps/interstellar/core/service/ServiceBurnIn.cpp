@@ -8,7 +8,8 @@
  *  Computed here per frame from the timeline at t; drawn by the host (`Host::drawText`) after the
  *  grade and the output transform, so a burn-in is never graded — and in an HDR render its white is
  *  graphics white (BT.2408), not the peak. Renders only — the monitor, a still
- *  and the preview cache never carry one.
+ *  and the preview cache never carry one. A render's burned-in captions (R-DLV-1) are drawn here too,
+ *  bottom centre, a line to a plate.
  */
 #include "ServiceInternal.h"
 #include "Project.h"
@@ -86,6 +87,34 @@ namespace interstellar
             o.valign = v == 't' ? 0 : 1;
             o.y = v == 't' ? margin : H - margin;
             items.push_back(std::move(o));
+        }
+        // R-DLV-1: the caption on screen at this frame — bottom centre, inside title safe, a plate to a
+        // line, the last line lowest (the cues never overlap: captionCues flattened them)
+        const double rs = (double)(std::llround(t * fps) - j.first) / fps;
+        const double cpx = std::max(12.0, H * 0.045);
+        for (const auto &q : j.burnCues)
+        {
+            if (rs < q.start - 1e-6 || rs >= q.end - 1e-6) continue;
+            std::vector<std::string> lines;
+            std::string line;
+            for (const char ch : q.text + "\n")
+                if (ch == '\n') { if (!line.empty()) lines.push_back(line); line.clear(); }
+                else line += ch;
+            double y = H * 0.92;
+            for (auto it = lines.rbegin(); it != lines.rend(); ++it)
+            {
+                OverlayText o;
+                o.text = *it;
+                o.x = W * 0.5;
+                o.y = y;
+                o.align = 1;
+                o.valign = 1;
+                o.px = cpx;
+                o.mono = false;
+                o.white = white;
+                items.push_back(std::move(o));
+                y -= std::ceil(cpx * 1.5) + 2.0;
+            }
         }
         return mHost.drawText && mHost.drawText(frame, items);
     }

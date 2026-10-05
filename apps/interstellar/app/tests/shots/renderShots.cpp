@@ -496,6 +496,27 @@ namespace
             r.click(p.x, p.y);
             r.settle();
         }});
+        v.push_back({"cut_caption", [](FakeService &s) {   // R-DLV-1: the caption under the playhead, on the monitor
+            s.edit();
+            s.m.captions = {{"cap_1", "cue1", 4.0, 3.0, "We left the harbour before first light,\nand nobody looked back."}};
+            s.m.playhead = 5.0;
+            ++s.m.revision;
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"deliver_captions", [](FakeService &s) {   // R-DLV-1: the captions pill on the RANGE header, its menu open
+            s.edit();
+            for (auto &tl : s.m.timelines) if (tl.id == "social30") tl.captions = 42;
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            auto os = r.app->edit().outputSpec();
+            os->setCaptionWay(arstro::interstellar_v1::OutputSpec::CapBurn, true);
+            r.settle();
+            const auto b = os->captionsButton();
+            const artboard::Point p = b->worldTransform().apply(artboard::Point{b->width.value() * 0.5, b->height.value() * 0.5});
+            r.click(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"recovery_offer", [](FakeService &s) {   // R-DLV-6: a newer autosave, offered
             s.edit();
             s.m.recoveryAvailable = true;

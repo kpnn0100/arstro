@@ -49,6 +49,8 @@ namespace interstellar_host
         if (mAFrame) av_frame_free(&mAFrame);
         if (mAEnc) avcodec_free_context(&mAEnc);
         mAStream = nullptr;
+        if (mSEnc) avcodec_free_context(&mSEnc);
+        mSStream = nullptr;
         mAudioFifo.clear();
         mAudioNext = 0;
         if (mFmt)
@@ -241,6 +243,31 @@ namespace interstellar_host
             mAFrame = av_frame_alloc();
             if (!mAFrame) { mError = "cannot allocate an audio frame"; return false; }
         }
+        if (!spec.subtitles.empty())
+        {
+            // R-DLV-1: the captions as a subtitle stream — 3GPP timed text in MP4/MOV, SubRip in MKV.
+            // Both encoders take ASS events, so they need the ASS header every FFmpeg subtitle encoder reads.
+            const bool mkv = ext == "mkv";
+            if (!mkv && ext != "mp4" && ext != "mov") { mError = "a subtitle track goes in an MP4, MOV or MKV, not ." + ext; return false; }
+            const AVCodec *sc = avcodec_find_encoder(mkv ? AV_CODEC_ID_SUBRIP : AV_CODEC_ID_MOV_TEXT);
+            if (!sc) { mError = std::string("this FFmpeg build has no ") + (mkv ? "SubRip" : "mov_text") + " encoder"; return false; }
+            mSStream = avformat_new_stream(mFmt, nullptr);
+            mSEnc = avcodec_alloc_context3(sc);
+            if (!mSStream || !mSEnc) { mError = "cannot allocate the subtitle encoder"; return false; }
+            static const char kAss[] =
+                "[Script Info]\r\nScriptType: v4.00+\r\nPlayResX: 384\r\nPlayResY: 288\r\n\r\n[V4+ Styles]\r\n"
+                "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
+                "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\r\n"
+                "Style: Default,Arial,16,&Hffffff,&Hffffff,&H0,&H0,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,0\r\n\r\n[Events]\r\n"
+                "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\r\n";
+            mSEnc->subtitle_header = reinterpret_cast<uint8_t *>(av_strdup(kAss));
+            mSEnc->subtitle_header_size = (int)sizeof kAss - 1;
+            mSEnc->time_base = AVRational{1, 1000};
+            if (mFmt->oformat->flags & AVFMT_GLOBALHEADER) mSEnc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            if (avcodec_open2(mSEnc, sc, nullptr) < 0) { mError = "the subtitle encoder refused these settings"; return false; }
+            if (avcodec_parameters_from_context(mSStream->codecpar, mSEnc) < 0) { mError = "cannot describe the subtitle stream"; return false; }
+            mSStream->time_base = mSEnc->time_base;
+        }
         const uint32_t tag = mStream->codecpar->codec_tag;
         if (avcodec_parameters_from_context(mStream->codecpar, mEnc) < 0) { mError = "cannot describe the stream"; return false; }
         if (tag) mStream->codecpar->codec_tag = tag;   // the parameters copy resets it
@@ -266,6 +293,7 @@ namespace interstellar_host
         }
         if (avio_open(&mFmt->pb, mPath.c_str(), AVIO_FLAG_WRITE) < 0) { mError = "cannot write " + mPath; return false; }
         if (avformat_write_header(mFmt, nullptr) < 0) { mError = "cannot write the container header"; return false; }
+        if (mSEnc && !writeSubtitles(spec.subtitles)) return false;   // the muxer interleaves them by time
 
         mFrame = av_frame_alloc();
         mPkt = av_packet_alloc();
@@ -390,6 +418,48 @@ namespace interstellar_host
             if (w < 0) { mError = "cannot write an audio packet"; return false; }
             (void)flush;
         }
+    }
+
+    bool FrameWriterFFmpeg::writeSubtitles(const std::vector<interstellar::EncodeSpec::Cue> &cues)
+    {
+        std::vector<uint8_t> buf(1 << 16);
+        long long lastMs = -1;
+        int order = 0;
+        for (const auto &c : cues)
+        {
+            long long startMs = std::llround(c.start * 1000.0);
+            const long long endMs = std::llround(c.end * 1000.0);
+            startMs = std::max(startMs, lastMs + 1);   // a muxer takes each stream's times strictly in order
+            if (endMs <= startMs) continue;
+            lastMs = startMs;
+            std::string text;
+            for (const char ch : c.text)
+                if (ch == '\n') text += "\\N";        // an ASS line break
+                else if (ch != '\r') text += ch;
+            AVSubtitle sub{};
+            sub.format = 1;                          // text
+            sub.pts = startMs * 1000;                // AV_TIME_BASE
+            sub.end_display_time = (uint32_t)(endMs - startMs);
+            sub.num_rects = 1;
+            sub.rects = static_cast<AVSubtitleRect **>(av_mallocz(sizeof(AVSubtitleRect *)));
+            if (sub.rects) sub.rects[0] = static_cast<AVSubtitleRect *>(av_mallocz(sizeof(AVSubtitleRect)));
+            if (!sub.rects || !sub.rects[0]) { avsubtitle_free(&sub); mError = "cannot allocate a subtitle"; return false; }
+            sub.rects[0]->type = SUBTITLE_ASS;
+            sub.rects[0]->ass = av_strdup((std::to_string(order++) + ",0,Default,,0,0,0,," + text).c_str());   // ReadOrder,Layer,Style,…,Text
+            const int n = avcodec_encode_subtitle(mSEnc, buf.data(), (int)buf.size(), &sub);
+            avsubtitle_free(&sub);
+            if (n < 0) { mError = "the subtitle encoder rejected a caption"; return false; }
+            AVPacket *pkt = av_packet_alloc();
+            if (!pkt || av_new_packet(pkt, n) < 0) { av_packet_free(&pkt); mError = "cannot allocate a subtitle packet"; return false; }
+            std::copy_n(buf.data(), n, pkt->data);
+            pkt->stream_index = mSStream->index;
+            pkt->pts = pkt->dts = av_rescale_q(startMs, AVRational{1, 1000}, mSStream->time_base);
+            pkt->duration = av_rescale_q(endMs - startMs, AVRational{1, 1000}, mSStream->time_base);
+            const int w = av_interleaved_write_frame(mFmt, pkt);
+            av_packet_free(&pkt);
+            if (w < 0) { mError = "cannot write a subtitle packet"; return false; }
+        }
+        return true;
     }
 
     bool FrameWriterFFmpeg::writeAudio(const float *stereo, int frames)

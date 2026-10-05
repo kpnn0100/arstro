@@ -39,6 +39,7 @@ namespace interstellar
             for (auto &n : r.clips) if (n.id == id) { f(n); return true; }
             for (auto &n : r.transitions) if (n.id == id) { f(n); return true; }
             for (auto &n : r.markers) if (n.id == id) { f(n); return true; }
+            for (auto &n : r.captions) if (n.id == id) { f(n); return true; }
             for (auto &n : r.audioTracks) if (n.id == id) { f(n); return true; }
             for (auto &n : r.audioClips) if (n.id == id) { f(n); return true; }
             return false;
@@ -50,6 +51,7 @@ namespace interstellar
             for (auto &n : p.clips) if (n.id == id) { f(n); return true; }
             for (auto &n : p.transitions) if (n.id == id) { f(n); return true; }
             for (auto &n : p.markers) if (n.id == id) { f(n); return true; }
+            for (auto &n : p.captions) if (n.id == id) { f(n); return true; }
             for (auto &n : p.audioTracks) if (n.id == id) { f(n); return true; }
             for (auto &n : p.audioClips) if (n.id == id) { f(n); return true; }
             return false;
@@ -88,6 +90,7 @@ namespace interstellar
             else if (const auto *n = p.clip(id)) name = n->name;
             else if (const auto *n = p.transition(id)) name = n->name;
             else if (const auto *n = p.marker(id)) name = n->name;
+            else if (const auto *n = p.caption(id)) name = n->name;
             else if (const auto *n = p.audioTrack(id)) name = n->name;
             else if (const auto *n = p.audioClip(id)) name = n->name;
             else if (const auto *n = p.rackObj(id)) name = n->name;
@@ -149,6 +152,7 @@ namespace interstellar
                 out.clips = std::move(B.clips);
                 out.transitions = std::move(B.transitions);
                 out.markers = std::move(B.markers);
+                out.captions = std::move(B.captions);
                 out.audioTracks = std::move(B.audioTracks);
                 out.audioClips = std::move(B.audioClips);
                 // Re-derived at this level rather than copied: a node broken in the base may be
@@ -161,7 +165,7 @@ namespace interstellar
             }
             auto eraseAll = [&](const std::set<NodeId> &ids) {
                 eraseIf(out.tracks, ids); eraseIf(out.clips, ids); eraseIf(out.transitions, ids);
-                eraseIf(out.markers, ids); eraseIf(out.audioTracks, ids); eraseIf(out.audioClips, ids);
+                eraseIf(out.markers, ids); eraseIf(out.captions, ids); eraseIf(out.audioTracks, ids); eraseIf(out.audioClips, ids);
                 for (const auto &i : ids) out.provenance.erase(i);
             };
 
@@ -215,6 +219,8 @@ namespace interstellar
                 if (n.timeline == tlId) { out.tracks.push_back(n); out.provenance[n.id] = Provenance::Local; }
             for (const auto &n : P.markers)
                 if (n.timeline == tlId) { out.markers.push_back(n); out.provenance[n.id] = Provenance::Local; }
+            for (const auto &n : P.captions)
+                if (n.timeline == tlId) { out.captions.push_back(n); out.provenance[n.id] = Provenance::Local; }
             for (const auto &n : P.audioTracks)
                 if (n.timeline == tlId) { out.audioTracks.push_back(n); out.provenance[n.id] = Provenance::Local; }
             for (const auto &n : P.clips)
@@ -310,6 +316,9 @@ namespace interstellar
             });
             std::sort(out.transitions.begin(), out.transitions.end(), [](const auto &a, const auto &b) { return a.id < b.id; });
             std::sort(out.markers.begin(), out.markers.end(), [](const Marker &a, const Marker &b) {
+                return a.at != b.at ? a.at < b.at : a.id < b.id;
+            });
+            std::sort(out.captions.begin(), out.captions.end(), [](const Caption &a, const Caption &b) {
                 return a.at != b.at ? a.at < b.at : a.id < b.id;
             });
             std::sort(out.audioTracks.begin(), out.audioTracks.end(), [](const ATrack &a, const ATrack &b) {
@@ -549,6 +558,12 @@ namespace interstellar
             if (m.at < 0.0) { err = "marker " + m.id + ": at is never negative"; return false; }
             return true;
         }
+        bool invariants(const Project &, const ResolvedTimeline &, const Caption &c, std::string &err)
+        {
+            if (c.at < 0.0) { err = "caption " + c.id + ": at is never negative"; return false; }
+            if (!(c.dur > 0.0)) { err = "caption " + c.id + ": dur is more than zero"; return false; }
+            return true;
+        }
         bool invariants(const Project &, const ResolvedTimeline &, const Track &, std::string &) { return true; }
         bool invariants(const Project &, const ResolvedTimeline &, const ATrack &, std::string &) { return true; }
 
@@ -655,7 +670,7 @@ namespace interstellar
             if (id.empty()) return "no such node: " + ref;
             if (P.tldrop(tl, id)) return id + " is dropped from " + tl;
             const NodeKind k = P.kindOf(id);
-            if (k != NodeKind::Track && k != NodeKind::Clip && k != NodeKind::Transition && k != NodeKind::Marker &&
+            if (k != NodeKind::Track && k != NodeKind::Clip && k != NodeKind::Transition && k != NodeKind::Marker && k != NodeKind::Caption &&
                 k != NodeKind::ATrack && k != NodeKind::AClip)
                 return id + " is " + std::string(nodeKindName(k)) + ", not an arrangement node";
             return id + " is not in timeline " + tl + " (it belongs to " + P.ownerOf(id) + ")";
@@ -683,7 +698,7 @@ namespace interstellar
         void eraseIds(Project &P, const std::set<NodeId> &ids)
         {
             eraseIf(P.tracks, ids); eraseIf(P.clips, ids); eraseIf(P.transitions, ids);
-            eraseIf(P.markers, ids); eraseIf(P.audioTracks, ids); eraseIf(P.audioClips, ids);
+            eraseIf(P.markers, ids); eraseIf(P.captions, ids); eraseIf(P.audioTracks, ids); eraseIf(P.audioClips, ids);
             P.effects.erase(std::remove_if(P.effects.begin(), P.effects.end(),
                                            [&](const Fx &x) { return !x.clip.empty() && ids.count(x.clip); }),
                             P.effects.end());
@@ -986,6 +1001,7 @@ namespace interstellar
         for (auto t : R.tracks) if (inherited(t.id)) { t.timeline = tl; stamp(t, "trk_", P.tracks); }
         for (auto t : R.audioTracks) if (inherited(t.id)) { t.timeline = tl; stamp(t, "atr_", P.audioTracks); }
         for (auto t : R.markers) if (inherited(t.id)) { t.timeline = tl; stamp(t, "mk_", P.markers); }
+        for (auto t : R.captions) if (inherited(t.id)) { t.timeline = tl; stamp(t, "cap_", P.captions); }
         for (auto c : R.clips) if (inherited(c.id)) { c.timeline = tl; stamp(c, "clp_", P.clips); }
         for (auto t : R.transitions) if (inherited(t.id)) { t.timeline = tl; stamp(t, "tr_", P.transitions); }
         for (auto a : R.audioClips) if (inherited(a.id)) { a.timeline = tl; stamp(a, "ac_", P.audioClips); }
@@ -1024,6 +1040,7 @@ namespace interstellar
         link(P.tracks, B.tracks, [&](const Track &n) { return n.timeline == tl; });
         link(P.audioTracks, B.audioTracks, [&](const ATrack &n) { return n.timeline == tl; });
         link(P.markers, B.markers, [&](const Marker &n) { return n.timeline == tl; });
+        link(P.captions, B.captions, [&](const Caption &n) { return n.timeline == tl; });
         link(P.clips, B.clips, [&](const Clip &n) { return P.clipTimeline(n) == tl; });
         link(P.transitions, B.transitions, [&](const Transition &n) { return P.transitionTimeline(n) == tl; });
         link(P.audioClips, B.audioClips, [&](const AClip &n) { return P.audioClipTimeline(n) == tl; });
@@ -1061,6 +1078,7 @@ namespace interstellar
         diffAll(P.tracks, B.tracks);
         diffAll(P.audioTracks, B.audioTracks);
         diffAll(P.markers, B.markers);
+        diffAll(P.captions, B.captions);
         diffAll(P.clips, B.clips);
         diffAll(P.transitions, B.transitions);
         diffAll(P.audioClips, B.audioClips);
@@ -1082,6 +1100,7 @@ namespace interstellar
         for (const auto &n : B.tracks) if (missing.count(n.id)) drop(n.id);
         for (const auto &n : B.audioTracks) if (missing.count(n.id)) drop(n.id);
         for (const auto &n : B.markers) if (missing.count(n.id)) drop(n.id);
+        for (const auto &n : B.captions) if (missing.count(n.id)) drop(n.id);
         for (const auto &n : B.clips) if (missing.count(n.id) && !missing.count(n.track)) drop(n.id);
         for (const auto &n : B.audioClips) if (missing.count(n.id) && !missing.count(n.track)) drop(n.id);
         for (const auto &n : B.transitions)
@@ -1097,6 +1116,7 @@ namespace interstellar
         unlink(P.tracks, [&](const Track &n) { return n.timeline == tl; });
         unlink(P.audioTracks, [&](const ATrack &n) { return n.timeline == tl; });
         unlink(P.markers, [&](const Marker &n) { return n.timeline == tl; });
+        unlink(P.captions, [&](const Caption &n) { return n.timeline == tl; });
         unlink(P.clips, [&](const Clip &n) { return P.clipTimeline(n) == tl; });
         unlink(P.transitions, [&](const Transition &n) { return P.transitionTimeline(n) == tl; });
         unlink(P.audioClips, [&](const AClip &n) { return P.audioClipTimeline(n) == tl; });
@@ -1214,6 +1234,7 @@ namespace interstellar
             added("clip", R.clips);
             added("transition", R.transitions);
             added("marker", R.markers);
+            added("caption", R.captions);
             added("atrack", R.audioTracks);
             added("aclip", R.audioClips);
             for (const auto &g : P.grades)
@@ -1242,7 +1263,8 @@ namespace interstellar
             resolve(P, tl, R, err);
             head += " — a root: " + std::to_string(R.tracks.size()) + " tracks, " + std::to_string(R.clips.size()) +
                     " clips, " + std::to_string(R.transitions.size()) + " transitions, " + std::to_string(R.markers.size()) +
-                    " markers, " + std::to_string(R.audioTracks.size() + R.audioClips.size()) + " audio — all its own";
+                    " markers, " + std::to_string(R.captions.size()) + " captions, " + std::to_string(R.audioTracks.size() + R.audioClips.size()) +
+                    " audio — all its own";
             for (const auto &g : P.grades)
                 if (g.timeline == tl)
                 {

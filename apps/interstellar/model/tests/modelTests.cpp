@@ -1088,6 +1088,33 @@ fps = 24
         CHECK(!q.parse(text, err) && err.find("angle=1") != std::string::npos && err.find("footage") != std::string::npos);
     }
 
+    /** R-DLV-1: a caption is an arrangement node — it round-trips (line breaks too), a version inherits it
+     *  and overrides it by DELTA, a drop hides it, a freeze copies it, and a zero span is refused. */
+    void captions()
+    {
+        Project p = load(std::string(kBase) + "#caption id=cap_1 name=cue1 timeline=tl_1 at=1.0 dur=2.5 text=\"Hello\\nworld\"\n");
+        rt(p);
+        CHECK(p.caption("cap_1") && p.caption("cap_1")->text == "Hello\nworld" && p.caption("cap_1")->dur == 2.5);
+        CHECK(p.serialize().find("#caption id=cap_1 name=cue1 timeline=tl_1 at=1.000 dur=2.500 text=\"Hello\\nworld\"") != std::string::npos);
+        ResolvedTimeline r = res(p, "tl_2");
+        CHECK(r.captions.size() == 1 && r.provenance["cap_1"] == Provenance::Inherited);
+        std::string err;
+        CHECK(setField(p, "tl_2", "cap_1", "text", "Bonjour", err));
+        CHECK(p.caption("cap_1")->text == "Hello\nworld");                     // the base keeps its words
+        r = res(p, "tl_2");
+        CHECK(r.captions[0].text == "Bonjour" && p.sets.size() == 1 && p.sets[0].timeline == "tl_2");   // a delta, not a copy
+        rt(p);
+        CHECK(!setField(p, "tl_1", "cap_1", "dur", "0", err) && err.find("dur") != std::string::npos);
+        CHECK(!setField(p, "tl_1", "cap_1", "at", "-1", err));
+        Project q = p;
+        CHECK(freezeCut(q, "tl_2", err));
+        r = res(q, "tl_2");
+        CHECK(r.captions.size() == 1 && r.captions[0].text == "Bonjour" && r.provenance[r.captions[0].id] == Provenance::Local);
+        CHECK(dropNode(p, "tl_2", "cap_1", err));
+        CHECK(res(p, "tl_2").captions.empty() && res(p, "tl_1").captions.size() == 1);
+        rt(p);
+    }
+
 int main()
 {
     roundTripEveryNode();
@@ -1113,6 +1140,7 @@ int main()
     threePointEdits();
     nestedTimelines();
     clipAngle();
-    std::printf("interstellar_model_tests: PASS (%d checks, 22 groups)\n", gChecks);
+    captions();
+    std::printf("interstellar_model_tests: PASS (%d checks, 23 groups)\n", gChecks);
     return 0;
 }

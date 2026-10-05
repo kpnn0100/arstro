@@ -148,6 +148,7 @@ deviations*, which is exactly what a timeline is.
   geom.crop.x=0.0 geom.crop.y=0.0 geom.crop.w=1.0 geom.crop.h=1.0
 #transition id=tr_1 name=tr_ab track=trk_1 between=clp_1,clp_2 kind=dissolve dur=0.500
 #marker id=mk_1 name=chorus timeline=tl_1 at=48.000 note="chorus in"
+#caption id=cap_1 name=cue1 timeline=tl_1 at=0.500 dur=1.250 text="We left the harbour\nbefore first light."
 ```
 
 `src` names a **`#rackobj`**, not a file: the colour and the pixels arrive together, from one place.
@@ -156,6 +157,11 @@ seconds, and it is shown live, already graded clip by clip. A timeline may never
 itself (refused on every edit; `lint` names a hand-made loop, which renders as nothing). A clip
 placing a timeline may carry `angle=<k>` (written only when set): it shows only that timeline's k-th
 video track — a multicam angle (R-EDT-5). `angle` on a clip of footage is a validation error.
+
+A **`#caption`** (R-DLV-1) is words on screen for a span of the timeline: `at` and `dur` in timeline
+seconds (`dur` more than zero), `text` with `\n` for a new line. It is an arrangement node like a
+marker, so a version inherits the base's captions and overrides one by `#tlset` (`text`, `at`, `dur`)
+or drops it by `#tldrop`; a freeze copies them. `caption import` writes one per SRT cue (`cue1`, `cue2`, …).
 
 **A colour field on a `#clip` is a validation ERROR**, not an ignored key — ignoring it would
 silently discard a user's edit. `grade`, `curve`, `mixer`, `lut`, `exposure`, `temp`, … all refused,

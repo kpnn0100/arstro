@@ -2285,6 +2285,71 @@ int main()
         assert(!g.run("render --timeline main --format h264 --res 46x26 --out \"" + g.path("c.mp4") + "\" --burnin tc@bl", &err) && has(err, "cannot draw text"));
     });
 
+    test("captions: an SRT onto the timeline, inherited by a version and overridden by delta, burned in, muxed and beside a render (R-DLV-1)", [] {
+        Fixture f("captions");
+        f.standard();                                   // shotA a 0–2, shotB b 2–4
+        const std::string srt = f.path("subs.srt");
+        std::ofstream(srt, std::ios::binary) << "\xEF\xBB\xBF" "1\r\n00:00:00,500 --> 00:00:01,250\r\n<i>Hello</i>\r\nworld\r\n\r\n"
+                                                "2\r\n00:00:02,000 --> 00:00:03,000 X1:10\r\nSecond {\\an8}line\r\n\r\n";
+        f.must("caption import \"" + srt + "\"");
+        auto caps = [&] { return f.svc->model().captions; };
+        assert(caps().size() == 2 && caps()[0].text == "Hello\nworld" && std::fabs(caps()[0].at - 0.5) < 1e-9 && std::fabs(caps()[0].dur - 0.75) < 1e-9);
+        assert(caps()[1].text == "Second line" && caps()[1].name == "cue2" && f.svc->model().captionsShown);
+        f.must("undo");                                 // one step
+        assert(caps().empty());
+        f.must("redo");
+        assert(caps().size() == 2);
+        // a version inherits them, and its edit is a delta on the base's caption
+        f.must("timeline new cut2 --base main");
+        f.must("timeline open cut2");
+        assert(caps().size() == 2);
+        f.must("set cue2.text=Zweite");
+        assert(caps()[1].text == "Zweite" && has(f.out("get cue2.text"), "Zweite"));
+        f.must("timeline open main");
+        assert(caps()[1].text == "Second line");
+        // export writes an SRT back
+        f.must("caption export \"" + f.path("out.srt") + "\" --timeline cut2");
+        std::ifstream e(f.path("out.srt"));
+        const std::string back((std::istreambuf_iterator<char>(e)), std::istreambuf_iterator<char>());
+        assert(back == "1\n00:00:00,500 --> 00:00:01,250\nHello\nworld\n\n2\n00:00:02,000 --> 00:00:03,000\nZweite\n\n");
+        // a render from 0.25 s: burned in at the frame's own time, a track and an .srt in the render's seconds
+        gBurns.clear();
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 46x26 --range 0.25:3 --out \"" + f.path("cap.mp4") + "\" --captions burn,track,sidecar");
+        assert(gBurns.size() == 66);
+        const auto &at12 = gBurns[12];                  // render 0.5 s = timeline 0.75 s: cue 1, two lines, the last lowest
+        assert(at12.size() == 2 && at12[0].text == "world" && at12[1].text == "Hello" && at12[1].y < at12[0].y);
+        assert(at12[0].align == 1 && at12[0].valign == 1 && !at12[0].mono && std::fabs(at12[0].x - 23.0) < 1e-9 && at12[0].px >= 12.0);
+        assert(gBurns[0].empty() && gBurns[24].empty() && gBurns[48].size() == 1 && gBurns[48][0].text == "Second line");   // 1.25 s ends cue 1
+        const auto &subs = gBegin.spec.subtitles;
+        assert(subs.size() == 2 && std::fabs(subs[0].start - 0.25) < 1e-9 && std::fabs(subs[0].end - 1.0) < 1e-9);
+        assert(std::fabs(subs[1].start - 1.75) < 1e-9 && std::fabs(subs[1].end - 2.75) < 1e-9 && subs[1].text == "Second line");
+        std::ifstream sc(f.path("cap.srt"));
+        const std::string side((std::istreambuf_iterator<char>(sc)), std::istreambuf_iterator<char>());
+        assert(side == "1\n00:00:00,250 --> 00:00:01,000\nHello\nworld\n\n2\n00:00:01,750 --> 00:00:02,750\nSecond line\n\n");
+        assert(has(f.svc->model().renders.back().spec, "captions burned in + track + .srt"));
+        // a stream shows one cue at a time: two that start together are one, an overlap ends the earlier
+        f.must("caption add --at 2 --dur 0.5 --text Over --name over1");
+        f.must("caption add --at 1 --dur 0.5 --text Mid --name mid1");
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("cap2.mp4") + "\" --captions track");
+        const auto &s2 = gBegin.spec.subtitles;
+        assert(s2.size() == 3 && std::fabs(s2[0].end - 1.0) < 1e-9 && s2[1].text == "Mid" && s2[2].text == "Second line\nOver" && std::fabs(s2[2].end - 3.0) < 1e-9);
+        f.must("caption remove over1");
+        f.must("caption remove mid1");
+        assert(caps().size() == 2);
+        // refusals name the way out
+        std::string err;
+        assert(!f.run("render --timeline main --format png-seq --out \"" + f.path("seq") + "\" --captions track", &err) && has(err, "sidecar writes an .srt"));
+        assert(!f.run("render --timeline main --format h264 --res 46x26 --out \"" + f.path("c.mp4") + "\" --captions subtitles", &err) && has(err, "burn, track or sidecar"));
+        assert(!f.run("render --timeline main --format h264 --res 46x26 --range 3.5:4 --out \"" + f.path("c.mp4") + "\" --captions track", &err) && has(err, "no captions in the range"));
+        assert(!f.run("caption add --at 1 --dur 0 --text x", &err) && has(err, "more than zero"));
+        std::ofstream(f.path("bad.srt")) << "1\n00:00:02,000 --> 00:00:01,000\nbackwards\n";
+        assert(!f.run("caption import \"" + f.path("bad.srt") + "\"", &err) && has(err, "ends after it starts"));
+        // the monitor's switch is presentation
+        f.must("view captions off");
+        assert(!f.svc->model().captionsShown);
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

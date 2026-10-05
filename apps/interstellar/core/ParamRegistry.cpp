@@ -131,6 +131,12 @@ namespace interstellar
             {O::AudioClip, "<aclip>.gain", "", "gain", PK::Scalar, "dB", -60, 12, 0, "Clip gain."},
             {O::AudioClip, "<aclip>.fade", "", "fade", PK::Scalar, "s", 0, 10, 0, "Fade in and out length."},
 
+            // ── caption (R-DLV-1) ──
+            {O::Caption, "<caption>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Timeline time the words appear."},
+            {O::Caption, "<caption>.dur", "", "dur", PK::Scalar, "s", 0, 0, 0, "How long they stay (more than zero)."},
+            {O::Caption, "<caption>.text", "", "text", PK::Text, "", 0, 0, 0, "The words; \\n is a new line."},
+            {O::Caption, "<caption>.name", "", "name", PK::Text, "", 0, 0, 0, "Caption name (what an address spells)."},
+
             // ── project header ──
             {O::Project, "project.masterGain", "", "masterGain", PK::Scalar, "dB", -60, 12, 0, "Master bus gain."},
             {O::Project, "project.name", "", "name", PK::Text, "", 0, 0, 0, "Project display name."},
@@ -176,6 +182,7 @@ namespace interstellar
             case O::Effect: return "effect";
             case O::AudioClip: return "aclip";
             case O::AudioTrack: return "atrack";
+            case O::Caption: return "caption";
             case O::Project: return "project";
         }
         return "?";

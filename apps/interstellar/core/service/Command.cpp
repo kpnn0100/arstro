@@ -177,12 +177,24 @@ namespace interstellar
               "profile=<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>", "res=<WxH>", "fps=<n|num/den>",
               "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>", "encoder=<software|hardware>",
               "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>", "peak=<400..10000>", "preset=<name>",
-              "burnin=<tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>"},
+              "burnin=<tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>", "captions=<burn,track,sidecar>"},
              "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: "
              "codec and profile, size (never above the project, same aspect), frame rate (the timeline is "
              "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the "
              "output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A "
              "flag the codec cannot honour is refused.", "R-RENDER-6"},
+            {K::CaptionImport, "caption import", "<file.srt>", 1, 1, {"offset=<s>", "replace"},
+             "Read an SRT's cues onto the open timeline as captions (timeline time, plus --offset); --replace drops the "
+             "timeline's captions first. Styling tags are not kept. One undo step.", "R-DLV-1"},
+            {K::CaptionExport, "caption export", "<file.srt>", 1, 1, {"timeline=<tl>"},
+             "Write a timeline's captions (the open one unless named) as an SRT.", "R-DLV-1"},
+            {K::CaptionAdd, "caption add", "", 0, 0, {"at=<t>", "dur=<s>", "text=<words>", "name=<n>"},
+             "A caption on the open timeline: its words (\\n is a new line) from --at for --dur seconds.", "R-DLV-1"},
+            {K::CaptionRemove, "caption remove", "<caption>", 1, 1, {},
+             "Remove a caption from the open timeline (a version drops the base's).", "R-DLV-1"},
+            {K::ViewCaptions, "view captions", "<on|off>", 1, 1, {},
+             "Show the caption under the playhead on the monitor, or not. Presentation; renders carry captions only "
+             "with render --captions.", "R-DLV-1"},
             {K::RenderCancel, "render cancel", "<job>", 1, 1, {}, "Cancel a queued or running render.", "R-RENDER-4"},
             {K::RenderPresetSave, "render preset save", "<name>", 1, 1,
              {"format=<h264|h265|prores|dnxhr|png-seq>", "profile=<p>", "res=<WxH>", "fps=<n|num/den>", "quality=<0..51>",

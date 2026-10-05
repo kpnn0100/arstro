@@ -88,7 +88,7 @@ one integrator who moves, wires, tests and commits each stream:
       13. [x] Autosave and crash recovery (R-DLV-5, R-DLV-6) — DR-DLV-1.
       13b. [x] Render presets (R-DLV-3) — DR-DLV-2.
       13c. [x] Burn-ins (R-DLV-2) — DR-DLV-3.
-      13e. [ ] Captions (R-DLV-1): SRT in, on the monitor, burned in or a subtitle track or a sidecar.
+      13e. [x] Captions (R-DLV-1) — DR-DLV-4.
       13d. [ ] DCP and IMF, unvalidated and saying so (R-DLV-4).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
@@ -139,6 +139,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a caption is a timeline node, and a render's captions are one cue at a time.** Captions
+could have lived in a sidecar file the project points at. They are `#caption` nodes instead, because a
+version must be able to change a line without copying the file (law 2), and an undo must take back an
+import. A subtitle stream (mov_text, SubRip) and a burned-in picture can show only one cue at a time.
+So the render joins cues that start together and shortens an earlier cue that runs into the next; the
+nodes themselves keep what the SRT said. SRT's HTML/ASS styling is dropped on import, because neither
+the monitor nor the burn could honour it.
 
 **2026-10-05 — the core decides what a burn-in says; the host draws it.** Drawing text needs a
 rasteriser and a typeface, and law 8 keeps both out of the core. So the core works out each item's

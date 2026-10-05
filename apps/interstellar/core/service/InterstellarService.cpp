@@ -355,6 +355,9 @@ namespace interstellar
             case CK::TrackWindow: case CK::TrackCancel: ok = requireProject() && trackCommand(c); break;
             case CK::StillGrab: case CK::StillApply: case CK::StillDelete: case CK::ViewWipe: ok = requireProject() && stillCommand(c); break;
             case CK::NodeSerial: case CK::NodeParallel: case CK::NodeRemove: ok = requireProject() && nodeCommand(c); break;
+            case CK::CaptionImport: case CK::CaptionExport: case CK::CaptionAdd: case CK::CaptionRemove: case CK::ViewCaptions:
+                ok = requireProject() && captionCommand(c);
+                break;
             case CK::ViewMatte:
             {
                 // R-CLR-1: presentation of the Grade monitor, not the project — no undo, no save
@@ -588,6 +591,7 @@ namespace interstellar
             m.clips.clear();
             m.transitions.clear();
             m.markers.clear();
+            m.captions.clear();
             m.selectedClip.clear();
             m.duration = 0;
             m.renders.clear();
@@ -748,7 +752,7 @@ namespace interstellar
                 tm.cutFrozen = t->frozen();
                 ResolvedTimeline tr;
                 std::string e3;
-                if (resolved(t->id, tr, e3)) tm.danglingDeltas = (int)tr.dangling.size();
+                if (resolved(t->id, tr, e3)) { tm.danglingDeltas = (int)tr.dangling.size(); tm.captions = (int)tr.captions.size(); }
                 for (const auto &d : P.drops) tm.overrides += d.timeline == t->id;
                 for (const auto &s : P.sets) tm.overrides += s.timeline == t->id;
                 for (const auto &g : P.grades) tm.overrides += g.timeline == t->id;
@@ -784,6 +788,8 @@ namespace interstellar
         m.clips.clear();
         m.transitions.clear();
         m.markers.clear();
+        m.captions.clear();
+        m.captionsShown = mShowCaptions;
         if (haveR)
         {
             auto prov = [&](const NodeId &id) {
@@ -860,6 +866,7 @@ namespace interstellar
             for (const auto &t : R.transitions)
                 m.transitions.push_back({t.id, t.clipA, t.clipB, t.kind, t.dur});
             for (const auto &k : R.markers) m.markers.push_back({k.id, k.name, k.at, k.note});
+            for (const auto &k : R.captions) m.captions.push_back({k.id, k.name, k.at, k.dur, k.text});   // R-DLV-1
             // R-EDT-5: the multicam clip under the playhead and its angles, named by what each shows
             m.multicamClip = multicamAt(R, m.playhead, false);
             m.multicamAngle = 0;
@@ -2158,10 +2165,11 @@ namespace interstellar
             return true;
         }
 
-        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::AClip || kind == NodeKind::ATrack)
+        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::AClip || kind == NodeKind::ATrack || kind == NodeKind::Caption)
         {
             const ParamOwner owner = kind == NodeKind::Clip ? ParamOwner::Clip : kind == NodeKind::Track ? ParamOwner::Track
-                                   : kind == NodeKind::ATrack ? ParamOwner::AudioTrack : ParamOwner::AudioClip;
+                                   : kind == NodeKind::ATrack ? ParamOwner::AudioTrack : kind == NodeKind::Caption ? ParamOwner::Caption
+                                   : ParamOwner::AudioClip;
             const ParamDef *d = ownerField(owner, a.rest);
             if (!d)
             {
@@ -2334,7 +2342,7 @@ namespace interstellar
             mOutput = out.str();
             return true;
         }
-        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::ATrack)
+        if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::ATrack || kind == NodeKind::Caption)
         {
             ResolvedTimeline R;
             if (!resolved(tl, R, err)) return fail(err);
@@ -2363,6 +2371,14 @@ namespace interstellar
             if (kind == NodeKind::Track)
                 for (const auto &t : R.tracks)
                     if (t.id == id) { value = trackField(t, a.rest); found = true; }
+            if (kind == NodeKind::Caption)   // R-DLV-1
+                for (const auto &k : R.captions)
+                    if (k.id == id)
+                    {
+                        found = true;
+                        value = a.rest == "at" ? canonicalNumber(k.at) : a.rest == "dur" ? canonicalNumber(k.dur) : a.rest == "text" ? k.text
+                              : a.rest == "name" ? k.name : std::string();
+                    }
             if (!found) return fail(a.name + " is not in timeline " + tl);
             if (value.empty() && a.rest != "name") return fail(a.name + " has no field `" + a.rest + "`");
             out << address << '=' << quoteIfNeeded(value) << '\n';
@@ -2602,6 +2618,7 @@ namespace interstellar
                 eraseIf(P.audioClips, [&](const AClip &x) { return x.timeline == tl || tracks.count(x.track) > 0; });
                 eraseIf(P.transitions, [&](const Transition &x) { return x.timeline == tl || tracks.count(x.track) > 0; });
                 eraseIf(P.markers, [&](const Marker &x) { return x.timeline == tl; });
+                eraseIf(P.captions, [&](const Caption &x) { return x.timeline == tl; });
                 eraseIf(P.drops, [&](const TlDrop &x) { return x.timeline == tl; });
                 eraseIf(P.sets, [&](const TlSet &x) { return x.timeline == tl; });
                 eraseIf(P.grades, [&](const TlGrade &x) { return x.timeline == tl; });

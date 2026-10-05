@@ -520,6 +520,12 @@ int main(int argc, char **argv)
     a->app->onPickTimelineToExport = [a](const std::string &name, std::function<void(const std::string &)> done) {
         pickFile(a, true, "Export timeline", "Timelines (EDL, FCPXML, OTIO)", {"*.edl", "*.fcpxml", "*.otio"}, name, ".fcpxml", done);
     };
+    a->app->onPickCaptionsToImport = [a](std::function<void(const std::string &)> done) {   // R-DLV-1
+        pickFile(a, false, "Import captions", "Captions (SRT)", {"*.srt", "*.SRT"}, std::string(), std::string(), done);
+    };
+    a->app->onPickCaptionsToExport = [a](const std::string &name, std::function<void(const std::string &)> done) {
+        pickFile(a, true, "Export captions", "Captions (SRT)", {"*.srt"}, name, ".srt", done);
+    };
     // R-MEDIA-3: the file a missing source is now (any media), or a folder to search for all of them
     a->app->onPickMediaToRelink = [a](const std::string &name, std::function<void(const std::string &)> done) {
         pickFile(a, false, ("Locate " + name).c_str(), "Media", {"*"}, std::string(), std::string(), done);

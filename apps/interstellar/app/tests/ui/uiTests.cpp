@@ -2831,6 +2831,87 @@ namespace
         CHECK(os->renderLine().find("tc@bl") == std::string::npos, "one chosen again is off");
     }
 
+    /** R-DLV-1: the caption under the playhead on the monitor (cross-faded), the menus, the Deliver pill. */
+    void testCaptionsUi()
+    {
+        std::printf("captions: the monitor, the menus, the Deliver pill\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            s.m.captions = {{"cap_1", "cue1", 4.0, 2.0, "Hello\nworld"}, {"cap_2", "cue2", 6.0, 1.0, "Second"}};
+            s.m.playhead = 1.0;
+            ++s.m.revision;
+        });
+        r.settle();
+        auto mon = r.app->edit().monitor();
+        CHECK(mon->subtitleText().empty() && mon->subtitleAmount() < 1e-9, "no caption where none is cut");
+        r.svc.m.playhead = 4.5;
+        ++r.svc.m.revision;
+        const double in = firstMoved(r, [&] { return mon->subtitleAmount(); }, 0.0);
+        CHECK(mon->subtitleText() == "Hello\nworld" && strictlyBetween(in, 0.0, 1.0), "the caption under the playhead fades in on the monitor");
+        r.settle();
+        r.svc.m.playhead = 6.5;
+        ++r.svc.m.revision;
+        bool cross = false;   // one frame at a time: the first frame with both in flight
+        for (int k = 0; k < 10 && !cross; ++k)
+        {
+            r.pump(16);
+            cross = mon->subtitleText() == "Second" && strictlyBetween(mon->subtitleLeavingAmount(), 0.0, 1.0) && strictlyBetween(mon->subtitleAmount(), 0.0, 1.0);
+        }
+        CHECK(cross, "the next caption cross-fades with the leaving one");
+        r.settle();
+        r.svc.m.captionsShown = false;
+        ++r.svc.m.revision;
+        r.settle();
+        CHECK(mon->subtitleText().empty() && mon->subtitleLeavingAmount() < 1e-9, "captions off: the monitor shows none");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Workspace", "     Show Captions") && hasLine(r.svc, "view captions on"), "Workspace > Show Captions turns them back on");
+        r.app->onPickCaptionsToImport = [](std::function<void(const std::string &)> done) { done("/subs/day 3.srt"); };
+        CHECK(clickMenuItem(r, "File", "Import Captions") && hasLine(r.svc, "caption import \"/subs/day 3.srt\""), "File > Import Captions reads an SRT");
+        std::string suggested;
+        r.app->onPickCaptionsToExport = [&](const std::string &name, std::function<void(const std::string &)> done) { suggested = name; done("/subs/out.srt"); };
+        CHECK(clickMenuItem(r, "File", "Export Captions") && suggested == "Social 30s.srt" && hasLine(r.svc, "caption export /subs/out.srt --timeline \"Social 30s\""),
+              "File > Export Captions writes the open timeline's");
+        // Deliver: the pill dims while the timeline has none, and offers the three ways when it has some
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        auto cm = r.app->edit().contextMenu();
+        CHECK(os->captionsButton()->label() == "No captions" && os->captionsAvailable() < 1e-9 && os->renderLine().find("--captions") == std::string::npos,
+              "no captions on the timeline: the pill says so, dimmed, and the line carries none");
+        for (auto &tl : r.svc.m.timelines) if (tl.id == "social30") tl.captions = 2;
+        ++r.svc.m.revision;
+        const double avail = firstMoved(r, [&] { return os->captionsAvailable(); }, 0.0);
+        CHECK(strictlyBetween(avail, 0.0, 1.0) && os->captionsButton()->label() == "Captions: off", "captions arriving brighten the pill, eased");
+        r.settle();
+        auto pick = [&](const std::string &prefix) {
+            const auto b = os->captionsButton();
+            const Point pb = centre(*b, Rect{0, 0, b->width.value(), b->height.value()});
+            r.click(pb.x, pb.y);
+            r.pump(250);
+            std::string labels;
+            for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind(prefix, 0) == 0) { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
+            return labels;
+        };
+        const std::string labels = pick("     Burn into");
+        CHECK(labels == "     Burn into the picture|     Subtitle track (MP4, MOV, MKV)|     Sidecar .srt beside the file|", "the RANGE header's pill offers the three ways");
+        r.settle();
+        CHECK(os->renderLine().find(" --captions burn") != std::string::npos && os->captionsButton()->label() == "Captions: burn", "…and the render line burns them in");
+        pick("     Subtitle track");
+        r.settle();
+        CHECK(os->renderLine().find(" --captions burn,track") != std::string::npos && os->captionsButton()->label() == "Captions: 2 ways", "…and muxes them as a track");
+        CHECK(os->specFlags().find("--captions") == std::string::npos, "captions are this render's, not a preset's");
+        os->formatPicker()->setSelected(4);   // PNG: no track to carry them
+        r.pump(32);
+        CHECK(os->renderLine().find(" --captions burn") != std::string::npos && os->renderLine().find("track") == std::string::npos, "a PNG sequence leaves the track out");
+        for (auto &tl : r.svc.m.timelines) if (tl.id == "social30") tl.captions = 0;   // the chosen ways stay, the captions go
+        ++r.svc.m.revision;
+        r.settle();
+        CHECK(os->captionWay(OutputSpec::CapBurn) && os->renderLine().find("--captions") == std::string::npos && os->captionsButton()->label() == "No captions",
+              "a timeline without captions renders none, whatever was chosen");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -3009,6 +3090,7 @@ int main()
     testSafetyUi();
     testRenderPresetsUi();
     testBurnInsUi();
+    testCaptionsUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

@@ -101,6 +101,7 @@ namespace interstellar
             case NodeKind::Clip: return "#clip";
             case NodeKind::Transition: return "#transition";
             case NodeKind::Marker: return "#marker";
+            case NodeKind::Caption: return "#caption";
             case NodeKind::ATrack: return "#atrack";
             case NodeKind::AClip: return "#aclip";
             case NodeKind::Fx: return "#fx";
@@ -332,7 +333,7 @@ namespace interstellar
         bool typedType(const std::string &t)
         {
             static const char *types[] = {"rack", "rackobj", "timeline", "tldrop", "tlset", "tlgrade", "track",
-                                          "clip", "transition", "marker", "atrack", "aclip", "fx", "effect", "anim", "key", "still"};
+                                          "clip", "transition", "marker", "caption", "atrack", "aclip", "fx", "effect", "anim", "key", "still"};
             for (const char *x : types)
                 if (t == x) return true;
             return false;
@@ -413,6 +414,8 @@ namespace interstellar
     const Transition *Project::transition(const NodeId &i) const { return findIn(transitions, i); }
     Marker *Project::marker(const NodeId &i) { return findIn(markers, i); }
     const Marker *Project::marker(const NodeId &i) const { return findIn(markers, i); }
+    Caption *Project::caption(const NodeId &i) { return findIn(captions, i); }
+    const Caption *Project::caption(const NodeId &i) const { return findIn(captions, i); }
     ATrack *Project::audioTrack(const NodeId &i) { return findIn(audioTracks, i); }
     const ATrack *Project::audioTrack(const NodeId &i) const { return findIn(audioTracks, i); }
     AClip *Project::audioClip(const NodeId &i) { return findIn(audioClips, i); }
@@ -502,6 +505,7 @@ namespace interstellar
         if (clip(i)) return NodeKind::Clip;
         if (transition(i)) return NodeKind::Transition;
         if (marker(i)) return NodeKind::Marker;
+        if (caption(i)) return NodeKind::Caption;
         if (audioTrack(i)) return NodeKind::ATrack;
         if (audioClip(i)) return NodeKind::AClip;
         if (fx(i)) return NodeKind::Fx;
@@ -528,7 +532,7 @@ namespace interstellar
         };
         NodeId r;
         if (!(r = scan(rackObjs)).empty() || !(r = scan(timelines)).empty() || !(r = scan(tracks)).empty() ||
-            !(r = scan(clips)).empty() || !(r = scan(transitions)).empty() || !(r = scan(markers)).empty() ||
+            !(r = scan(clips)).empty() || !(r = scan(transitions)).empty() || !(r = scan(markers)).empty() || !(r = scan(captions)).empty() ||
             !(r = scan(audioTracks)).empty() || !(r = scan(audioClips)).empty() || !(r = scan(stills)).empty())
             return r;
         for (const auto &n : raw)
@@ -563,6 +567,7 @@ namespace interstellar
         if (const Clip *c = clip(i)) return clipTimeline(*c);
         if (const Transition *t = transition(i)) return transitionTimeline(*t);
         if (const Marker *m = marker(i)) return m->timeline;
+        if (const Caption *c = caption(i)) return c->timeline;
         if (const ATrack *a = audioTrack(i)) return a->timeline;
         if (const AClip *a = audioClip(i)) return audioClipTimeline(*a);
         return {};
@@ -621,6 +626,7 @@ namespace interstellar
             for (const auto &n : p.clips) { f(n.id); f(n.track); f(n.src); f(n.from); }
             for (const auto &n : p.transitions) { f(n.id); f(n.clipA); f(n.clipB); f(n.from); }
             for (const auto &n : p.markers) { f(n.id); f(n.from); }
+            for (const auto &n : p.captions) { f(n.id); f(n.from); }
             for (const auto &n : p.audioTracks) { f(n.id); f(n.out); f(n.from); }
             for (const auto &n : p.audioClips) { f(n.id); f(n.track); f(n.from); }
             for (const auto &n : p.effects) { f(n.id); f(n.node); f(n.clip); }
@@ -664,7 +670,7 @@ namespace interstellar
             return false;
         };
         if (scan(rackObjs) || scan(timelines) || scan(tracks) || scan(clips) || scan(transitions) ||
-            scan(markers) || scan(audioTracks) || scan(audioClips) || scan(stills))
+            scan(markers) || scan(captions) || scan(audioTracks) || scan(audioClips) || scan(stills))
             return true;
         for (const auto &r : raw)
             if (get(r.fields, "name") == nm) return true;
@@ -702,6 +708,7 @@ namespace interstellar
         else if (Clip *n = clip(i)) slot = &n->name;
         else if (Transition *n = transition(i)) slot = &n->name;
         else if (Marker *n = marker(i)) slot = &n->name;
+        else if (Caption *n = caption(i)) slot = &n->name;
         else if (ATrack *n = audioTrack(i)) slot = &n->name;
         else if (AClip *n = audioClip(i)) slot = &n->name;
         RawNode *rawSelf = slot ? nullptr : rawNode(i);
@@ -992,6 +999,7 @@ namespace interstellar
             }
             else if (b.type == "transition") { Transition n; build(n); transitions.push_back(n); }
             else if (b.type == "marker") { Marker n; build(n); markers.push_back(n); }
+            else if (b.type == "caption") { Caption n; build(n); captions.push_back(n); }
             else if (b.type == "atrack") { ATrack n; build(n); audioTracks.push_back(n); }
             else if (b.type == "effect")
             {
@@ -1090,7 +1098,7 @@ namespace interstellar
             return true;
         };
         if (!all(rackObjs, "#rackobj") || !all(timelines, "#timeline") || !all(tracks, "#track") ||
-            !all(clips, "#clip") || !all(transitions, "#transition") || !all(markers, "#marker") ||
+            !all(clips, "#clip") || !all(transitions, "#transition") || !all(markers, "#marker") || !all(captions, "#caption") ||
             !all(audioTracks, "#atrack") || !all(audioClips, "#aclip") || !all(effects, "#fx") ||
             !all(imageEffects, "#effect") || !all(anims, "#anim") || !all(stills, "#still"))
             return false;
@@ -1125,7 +1133,7 @@ namespace interstellar
             return true;
         };
         return named(rackObjs, "#rackobj") && named(timelines, "#timeline") && named(tracks, "#track") &&
-               named(clips, "#clip") && named(transitions, "#transition") && named(markers, "#marker") &&
+               named(clips, "#clip") && named(transitions, "#transition") && named(markers, "#marker") && named(captions, "#caption") &&
                named(audioTracks, "#atrack") && named(audioClips, "#aclip");
     }
 
@@ -1142,7 +1150,7 @@ namespace interstellar
             }
         };
         index(rackObjs); index(timelines); index(tracks); index(clips); index(transitions);
-        index(markers); index(audioTracks); index(audioClips); index(stills);
+        index(markers); index(captions); index(audioTracks); index(audioClips); index(stills);
         for (const auto &n : effects) ids.insert(n.id);
         for (const auto &n : imageEffects) ids.insert(n.id);
         for (const auto &n : anims) ids.insert(n.id);
@@ -1159,6 +1167,7 @@ namespace interstellar
         for (auto &n : clips) { norm(n.track); norm(n.timeline); norm(n.src); }
         for (auto &n : transitions) { norm(n.track); norm(n.timeline); norm(n.clipA); norm(n.clipB); }
         for (auto &n : markers) norm(n.timeline);
+        for (auto &n : captions) norm(n.timeline);
         for (auto &n : audioTracks) { norm(n.timeline); norm(n.out); }
         for (auto &n : audioClips) { norm(n.track); norm(n.timeline); }
         for (auto &n : effects) { norm(n.node); norm(n.clip); }
@@ -1214,6 +1223,7 @@ namespace interstellar
                 case NodeKind::Clip: canonOverrides<Clip>(*this, s, rep); break;
                 case NodeKind::Transition: canonOverrides<Transition>(*this, s, rep); break;
                 case NodeKind::Marker: canonOverrides<Marker>(*this, s, rep); break;
+                case NodeKind::Caption: canonOverrides<Caption>(*this, s, rep); break;
                 case NodeKind::ATrack: canonOverrides<ATrack>(*this, s, rep); break;
                 case NodeKind::AClip: canonOverrides<AClip>(*this, s, rep); break;
                 default: break;                         // dangling or refused by validate(): verbatim
@@ -1226,7 +1236,7 @@ namespace interstellar
         bool isArrangement(NodeKind k)
         {
             return k == NodeKind::Track || k == NodeKind::Clip || k == NodeKind::Transition ||
-                   k == NodeKind::Marker || k == NodeKind::ATrack || k == NodeKind::AClip;
+                   k == NodeKind::Marker || k == NodeKind::Caption || k == NodeKind::ATrack || k == NodeKind::AClip;
         }
 
         template <class T> bool tlsetKeysEditable(const TlSet &s, std::string &err)
@@ -1304,6 +1314,8 @@ namespace interstellar
         }
         for (const auto &n : markers)
             if (!needTimeline("#marker", n.id, n.timeline)) return false;
+        for (const auto &n : captions)
+            if (!needTimeline("#caption", n.id, n.timeline)) return false;
         for (const auto &n : audioTracks)
             if (!needTimeline("#atrack", n.id, n.timeline)) return false;
 
@@ -1475,6 +1487,7 @@ namespace interstellar
                 case NodeKind::Clip: ok = tlsetKeysEditable<Clip>(s, err); break;
                 case NodeKind::Transition: ok = tlsetKeysEditable<Transition>(s, err); break;
                 case NodeKind::Marker: ok = tlsetKeysEditable<Marker>(s, err); break;
+                case NodeKind::Caption: ok = tlsetKeysEditable<Caption>(s, err); break;
                 case NodeKind::ATrack: ok = tlsetKeysEditable<ATrack>(s, err); break;
                 case NodeKind::AClip: ok = tlsetKeysEditable<AClip>(s, err); break;
                 default: break;
@@ -1623,6 +1636,7 @@ namespace interstellar
         group(o, typed(clips));
         group(o, typed(transitions));
         group(o, typed(markers));
+        group(o, typed(captions));
         group(o, rawOf("atrack", typed(audioTracks)));
         group(o, rawOf("aclip", typed(audioClips)));
         group(o, rawOf("arack", {}));

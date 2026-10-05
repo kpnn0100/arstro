@@ -235,6 +235,14 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   `--burnin "tc@bl,clip@tl,text=…@tc"`, never in a preset's flags. The control is on the header line
   because a chip row pushed Render out of reach. Shot: `deliver_burnins` (the column is scrolled first at
   1024×640). UI checks: 469.
+- Captions (R-DLV-1): the monitor draws the caption under the playhead the way a render burns it, and a
+  change cross-fades (`Monitor::setSubtitle`, fed every frame by `App::bindIfStale` unless the source
+  viewer or the matte view is up). File › Import Captions… → `onPickCaptionsToImport` → `caption import
+  <p>`. File › Export Captions… → `onPickCaptionsToExport("<timeline>.srt")` → `caption export <p>
+  --timeline <tl>`. Workspace › Show Captions → `view captions on|off`. Deliver's RANGE header line has a
+  captions pill ("No captions", dimmed and eased, while the chosen timeline has none) whose menu toggles
+  Burn into the picture / Subtitle track / Sidecar .srt. The render line gains `--captions burn,track`; a
+  PNG sequence leaves out the track. Shots: `cut_caption`, `deliver_captions`. UI checks: 484.
 
 ## Interchange (2026-10-05, R-XCH)
 

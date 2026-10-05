@@ -112,6 +112,13 @@ namespace interstellar_v1
             const Point o = mBurnBtn->worldTransform().apply(Point{0, 0});
             onBurnMenu(Rect{o.x, o.y, mBurnBtn->width.value(), mBurnBtn->height.value()});
         };
+        // R-DLV-1: the timeline's captions on this render, from a menu
+        mCapBtn = pill("No captions");
+        mCapBtn->onClick = [this] {
+            if (!onCaptionsMenu) return;
+            const Point o = mCapBtn->worldTransform().apply(Point{0, 0});
+            onCaptionsMenu(Rect{o.x, o.y, mCapBtn->width.value(), mCapBtn->height.value()});
+        };
         mSavePreset = pill("Save Preset\xE2\x80\xA6");
         mSavePreset->onClick = [this] { if (onSavePreset) onSavePreset(specFlags()); };
         mSetIn = pill("Set In");
@@ -200,14 +207,31 @@ namespace interstellar_v1
         return spec.empty() ? std::string() : " --burnin " + cmd::quote(spec);
     }
 
+    int OutputSpec::timelineCaptions() const
+    {
+        for (const auto &tl : mTimelines) if (tl.id == mTimeline) return tl.captions;
+        return 0;
+    }
+
+    std::string OutputSpec::captionsFlag() const
+    {
+        // R-DLV-1: only when the timeline has captions; a PNG sequence has no track to carry them
+        if (timelineCaptions() == 0) return std::string();
+        static const char *ways[kCapWays] = {"burn", "track", "sidecar"};
+        std::string spec;
+        for (int k = 0; k < kCapWays; ++k)
+            if (mCapOn[k] && !(k == CapTrack && format() == "png-seq")) spec += (spec.empty() ? "" : ",") + std::string(ways[k]);
+        return spec.empty() ? std::string() : " --captions " + spec;
+    }
+
     std::string OutputSpec::specFlags() const
     {
         // the line the controls would write, less what belongs to one render
         const std::string line = renderLine();
         const auto at = line.find(" --format ");
         std::string flags = at == std::string::npos ? std::string() : line.substr(at + 1);
-        // a render's own parts are not the spec: its range and its burn-ins
-        for (const char *own : {" --range ", " --burnin "})
+        // a render's own parts are not the spec: its range, its burn-ins and its captions
+        for (const char *own : {" --range ", " --burnin ", " --captions "})
         {
             const auto at = flags.find(own);
             if (at != std::string::npos) flags = flags.substr(0, at);
@@ -221,7 +245,7 @@ namespace interstellar_v1
         if (!mPreset.empty())
         {
             // R-DLV-3: the preset is the spec; the range is this render's own
-            std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --preset " + cmd::quote(mPreset) + burnFlag();
+            std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --preset " + cmd::quote(mPreset) + burnFlag() + captionsFlag();
             if (mRange->selected() == 1)
             {
                 const double fps = mProjFps > 0 ? mProjFps : 24.0;
@@ -253,7 +277,7 @@ namespace interstellar_v1
             const double out = mOut >= 0 ? mOut : mDuration;
             line += " --range " + cmd::seconds(mIn, fps) + ":" + cmd::seconds(out, fps);
         }
-        return line + burnFlag();   // R-DLV-2: this render's burn-ins
+        return line + burnFlag() + captionsFlag();   // R-DLV-2: this render's burn-ins; R-DLV-1: its captions
     }
 
     std::string OutputSpec::audioSentence() const
@@ -419,6 +443,18 @@ namespace interstellar_v1
         y += kSegH + kGap;
 
         mHdrRangeY = y;
+        {
+            // R-DLV-1: the captions ride the RANGE header's line, right-aligned; dimmed while the timeline has none
+            int n = 0;
+            for (int k = 0; k < kCapWays; ++k) n += mCapOn[k] ? 1 : 0;
+            static const char *one[kCapWays] = {"Captions: burn", "Captions: track", "Captions: .srt"};
+            int only = 0;
+            for (int k = 0; k < kCapWays; ++k) if (mCapOn[k]) only = k;
+            mCapBtn->setLabel(timelineCaptions() == 0 ? std::string("No captions") : n == 0 ? std::string("Captions: off")
+                              : n == 1 ? std::string(one[only]) : "Captions: " + std::to_string(n) + " ways");
+            const double ph = std::min(kSegH, cosmo_v2::kSectionHeaderHeight - 4.0);
+            place(*mCapBtn, w - kPadX - 100.0, y + (cosmo_v2::kSectionHeaderHeight - ph) * 0.5, 100.0, ph, 0.45 + 0.55 * mCapAvail.value());
+        }
         y += cosmo_v2::kSectionHeaderHeight;
         mRangeY = y;
         seg(*mRange, kPadX + kLabelW, y, cw, 1.0);
@@ -512,6 +548,15 @@ namespace interstellar_v1
             mPresetApplied = !mPreset.empty();
         }
         mPresetAmt.update(nowMs);
+        // R-DLV-1: the captions pill brightens when the chosen timeline has captions
+        const bool capAvail = timelineCaptions() > 0;
+        if (!mCapAvailInit) { mCapAvail.set(capAvail ? 1.0 : 0.0); mCapAvailApplied = capAvail; mCapAvailInit = true; }
+        else if (capAvail != mCapAvailApplied)
+        {
+            mCapAvail.animateTo(capAvail ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mCapAvailApplied = capAvail;
+        }
+        mCapAvail.update(nowMs);
         mScroll.setExtent(listTop(), listH(), (double)mTimelines.size() * kRowH);
         mScroll.advance(nowMs);
         mColScroll.setExtent(0.0, height.value(), mContentH);

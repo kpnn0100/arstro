@@ -153,6 +153,7 @@ namespace interstellar
         int overrides = 0;            // #tlset + #tlgrade count — "how far this version has diverged"
         bool hasSound = false;        // something on it sounds: a video render will carry the mix (R-AUD-9)
         bool placeable = false;       // R-EDT-4: it can be placed as a clip in the current timeline (no loop)
+        int captions = 0;             // R-DLV-1: how many captions it carries (a render can burn, mux or write them)
     };
 
     /** Where a node in the RESOLVED current timeline came from. Drawn differently, because "this
@@ -199,6 +200,14 @@ namespace interstellar
         NodeId id, name;
         double at = 0;
         std::string note;
+    };
+
+    /** R-DLV-1: a caption — words on screen for a span of the current timeline. */
+    struct CaptionModel
+    {
+        NodeId id, name;
+        double at = 0, dur = 0;
+        std::string text;   // a line break is a new line on screen
     };
 
     /** R-DLV-3: a render preset — a render's whole spec, by name. */
@@ -338,6 +347,9 @@ namespace interstellar
         long long autosavedAt = 0;                 // when this session last autosaved (unix seconds); 0 = not yet
         bool recoveryAvailable = false;            // an autosave newer than the project file waits: `project recover`
         long long recoveryTime = 0;                // when it was written (unix seconds)
+        // ── captions (R-DLV-1) ──
+        std::vector<CaptionModel> captions;        // the current timeline's, by time
+        bool captionsShown = true;                 // the monitor shows the caption under the playhead
         std::vector<TrackJobModel> trackJobs;      // R-CLR-2: this session's window tracks, oldest first
         std::vector<StillModel> stills;            // R-CLR-4: the gallery, oldest first
         NodeId wipeRef;                            // R-CLR-5: the monitor's wipe reference (a still or a timeline id); "" = none

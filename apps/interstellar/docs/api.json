@@ -883,7 +883,7 @@
     },
     {
       "verb": "render",
-      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>] [--peak <400..10000>] [--preset <name>] [--burnin <tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>]",
+      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>] [--peak <400..10000>] [--preset <name>] [--burnin <tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>] [--captions <burn,track,sidecar>]",
       "args": "",
       "minArgs": 0,
       "maxArgs": 0,
@@ -947,10 +947,95 @@
         {
           "name": "burnin",
           "value": "<tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>"
+        },
+        {
+          "name": "captions",
+          "value": "<burn,track,sidecar>"
         }
       ],
       "summary": "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused.",
       "requirement": "R-RENDER-6"
+    },
+    {
+      "verb": "caption import",
+      "usage": "caption import <file.srt> [--offset <s>] [--replace]",
+      "args": "<file.srt>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "offset",
+          "value": "<s>"
+        },
+        {
+          "name": "replace",
+          "value": ""
+        }
+      ],
+      "summary": "Read an SRT's cues onto the open timeline as captions (timeline time, plus --offset); --replace drops the timeline's captions first. Styling tags are not kept. One undo step.",
+      "requirement": "R-DLV-1"
+    },
+    {
+      "verb": "caption export",
+      "usage": "caption export <file.srt> [--timeline <tl>]",
+      "args": "<file.srt>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "timeline",
+          "value": "<tl>"
+        }
+      ],
+      "summary": "Write a timeline's captions (the open one unless named) as an SRT.",
+      "requirement": "R-DLV-1"
+    },
+    {
+      "verb": "caption add",
+      "usage": "caption add [--at <t>] [--dur <s>] [--text <words>] [--name <n>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "dur",
+          "value": "<s>"
+        },
+        {
+          "name": "text",
+          "value": "<words>"
+        },
+        {
+          "name": "name",
+          "value": "<n>"
+        }
+      ],
+      "summary": "A caption on the open timeline: its words (\\n is a new line) from --at for --dur seconds.",
+      "requirement": "R-DLV-1"
+    },
+    {
+      "verb": "caption remove",
+      "usage": "caption remove <caption>",
+      "args": "<caption>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Remove a caption from the open timeline (a version drops the base's).",
+      "requirement": "R-DLV-1"
+    },
+    {
+      "verb": "view captions",
+      "usage": "view captions <on|off>",
+      "args": "<on|off>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Show the caption under the playhead on the monitor, or not. Presentation; renders carry captions only with render --captions.",
+      "requirement": "R-DLV-1"
     },
     {
       "verb": "render cancel",
@@ -2380,6 +2465,12 @@
       "doc": "How far this version has diverged: #tlset + #tlgrade + #tldrop count."
     },
     {
+      "path": "timelines[].captions",
+      "type": "integer",
+      "stable": true,
+      "doc": "How many captions it carries — a render can burn them in, mux them or write an .srt (R-DLV-1)."
+    },
+    {
       "path": "timelines[].hasSound",
       "type": "boolean",
       "stable": true,
@@ -2822,6 +2913,48 @@
       "type": "integer",
       "stable": false,
       "doc": "When that autosave was written, unix seconds."
+    },
+    {
+      "path": "captions",
+      "type": "array",
+      "stable": true,
+      "doc": "The current timeline's captions, by time (R-DLV-1)."
+    },
+    {
+      "path": "captions[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "Caption id."
+    },
+    {
+      "path": "captions[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "Caption name — what `<caption>.text` spells."
+    },
+    {
+      "path": "captions[].at",
+      "type": "number",
+      "stable": true,
+      "doc": "Timeline seconds the words appear."
+    },
+    {
+      "path": "captions[].dur",
+      "type": "number",
+      "stable": true,
+      "doc": "Seconds they stay."
+    },
+    {
+      "path": "captions[].text",
+      "type": "string",
+      "stable": true,
+      "doc": "The words; a line break is a new line on screen."
+    },
+    {
+      "path": "captionsShown",
+      "type": "bool",
+      "stable": true,
+      "doc": "The monitor shows the caption under the playhead (`view captions`)."
     },
     {
       "path": "trackJobs",
@@ -4525,6 +4658,44 @@
       "range": "0.0..10.0",
       "neutral": 0.0,
       "doc": "Fade in and out length."
+    },
+    {
+      "address": "<caption>.at",
+      "owner": "caption",
+      "key": "at",
+      "kind": "scalar",
+      "unit": "s",
+      "range": "",
+      "neutral": 0.0,
+      "doc": "Timeline time the words appear."
+    },
+    {
+      "address": "<caption>.dur",
+      "owner": "caption",
+      "key": "dur",
+      "kind": "scalar",
+      "unit": "s",
+      "range": "",
+      "neutral": 0.0,
+      "doc": "How long they stay (more than zero)."
+    },
+    {
+      "address": "<caption>.text",
+      "owner": "caption",
+      "key": "text",
+      "kind": "text",
+      "unit": "",
+      "range": "",
+      "doc": "The words; \\n is a new line."
+    },
+    {
+      "address": "<caption>.name",
+      "owner": "caption",
+      "key": "name",
+      "kind": "text",
+      "unit": "",
+      "range": "",
+      "doc": "Caption name (what an address spells)."
     },
     {
       "address": "project.masterGain",

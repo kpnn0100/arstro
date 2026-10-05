@@ -144,7 +144,8 @@ namespace interstellar
                          .set("danglingDeltas", t.danglingDeltas)
                          .set("overrides", t.overrides)
                          .set("hasSound", t.hasSound)
-                         .set("placeable", t.placeable));
+                         .set("placeable", t.placeable)
+                         .set("captions", t.captions));
         j.set("timelines", tls);
         j.set("currentTimeline", m.currentTimeline);
 
@@ -233,6 +234,13 @@ namespace interstellar
         if (!st) j.set("autosavedAt", m.autosavedAt);   // clock times: not part of a stable dump
         j.set("recoveryAvailable", m.recoveryAvailable);
         if (!st) j.set("recoveryTime", m.recoveryTime);
+        {
+            Json caps = Json::array();
+            for (const auto &k : m.captions)
+                caps.push(Json::object().set("id", k.id).set("name", k.name).set("at", k.at).set("dur", k.dur).set("text", k.text));
+            j.set("captions", caps);
+            j.set("captionsShown", m.captionsShown);
+        }
         {
             Json tracks = Json::array();
             for (const auto &t : m.trackJobs)
@@ -481,6 +489,7 @@ namespace interstellar
             {"timelines[].cutFrozen", "bool", "Arrangement frozen."},
             {"timelines[].danglingDeltas", "integer", "Deltas whose target the base deleted — `rebase` reports them."},
             {"timelines[].overrides", "integer", "How far this version has diverged: #tlset + #tlgrade + #tldrop count."},
+            {"timelines[].captions", "integer", "How many captions it carries — a render can burn them in, mux them or write an .srt (R-DLV-1)."},
             {"timelines[].hasSound", "boolean", "Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9)."},
             {"timelines[].placeable", "boolean", "It can be placed as a clip in the current timeline — not itself, not a version of it, nothing that contains it (R-EDT-4)."},
             {"currentTimeline", "string", "The editor's current timeline id. Never what a render uses."},
@@ -555,6 +564,13 @@ namespace interstellar
             {"autosavedAt", "integer", "When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5).", true},
             {"recoveryAvailable", "bool", "An autosave newer than the project file waits — `project recover` (R-DLV-6)."},
             {"recoveryTime", "integer", "When that autosave was written, unix seconds.", true},
+            {"captions", "array", "The current timeline's captions, by time (R-DLV-1)."},
+            {"captions[].id", "string", "Caption id."},
+            {"captions[].name", "string", "Caption name — what `<caption>.text` spells."},
+            {"captions[].at", "number", "Timeline seconds the words appear."},
+            {"captions[].dur", "number", "Seconds they stay."},
+            {"captions[].text", "string", "The words; a line break is a new line on screen."},
+            {"captionsShown", "bool", "The monitor shows the caption under the playhead (`view captions`)."},
             {"trackJobs", "array", "This session's window tracks, oldest first (R-CLR-2)."},
             {"trackJobs[].id", "string", "Job id (t1, t2, …)."},
             {"trackJobs[].effect", "string", "The window tracked."},

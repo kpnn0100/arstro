@@ -66,6 +66,9 @@ namespace interstellar_v1
         /** R-XCH: an EDL / FCPXML / OTIO to read, or one to write (the extension picks the format). */
         std::function<void(std::function<void(const std::string &)> done)> onPickTimelineToImport;
         std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickTimelineToExport;
+        // R-DLV-1: an .srt to read onto the open timeline, and where to write one
+        std::function<void(std::function<void(const std::string &)> done)> onPickCaptionsToImport;
+        std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickCaptionsToExport;
         /** R-MEDIA-3: the file a missing source is now (named `name`, as it was), or a folder to search. */
         std::function<void(const std::string &name, std::function<void(const std::string &)> done)> onPickMediaToRelink;
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;

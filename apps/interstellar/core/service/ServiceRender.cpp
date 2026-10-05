@@ -27,8 +27,10 @@
 #include <cstring>
 #include <set>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <map>
+#include <sstream>
 #include <mutex>
 
 namespace fs = std::filesystem;
@@ -1236,8 +1238,43 @@ namespace interstellar
             }
             if (burns.empty()) return fail("render: --burnin names nothing to burn in");
         }
+        // R-DLV-1: the captions — burned in, a subtitle track, an .srt beside the file — checked up front
+        bool capBurn = false, capTrack = false, capSidecar = false;
+        std::vector<EncodeSpec::Cue> cues;
+        if (c.has("captions"))
+        {
+            std::istringstream in(c.flag("captions"));
+            std::string how;
+            while (std::getline(in, how, ','))
+            {
+                if (how == "burn") capBurn = true;
+                else if (how == "track") capTrack = true;
+                else if (how == "sidecar") capSidecar = true;
+                else return fail("render: --captions is burn, track or sidecar (or a list of them), got " + how);
+            }
+            std::string err;
+            if (!captionCues(tl, a, std::min(b, dur), cues, err)) return fail("render: " + err);
+            if (cues.empty()) return fail("render: --captions — " + mProject->timeline(tl)->name + " has no captions in the range (`caption import`)");
+            if (capBurn && !mHost.drawText) return fail("render: this build cannot draw text over a frame — --captions burn cannot be honoured");
+            if (capTrack)
+            {
+                std::string ext = fs::path(out).extension().string();
+                for (char &ch : ext) ch = (char)std::tolower((unsigned char)ch);
+                if (format == "png-seq") return fail("render: a PNG sequence has no subtitle track — --captions sidecar writes an .srt beside it");
+                if (ext != ".mp4" && ext != ".mov" && ext != ".mkv") return fail("render: a subtitle track goes in an .mp4, .mov or .mkv, not " + ext);
+                spec.subtitles = cues;
+            }
+        }
         auto job = std::make_unique<Job>();
         job->burns = burns;
+        if (capBurn) job->burnCues = cues;
+        if (capSidecar)
+        {
+            std::string base = out;
+            while (base.size() > 1 && (base.back() == '/' || base.back() == '\\')) base.pop_back();   // a PNG sequence's folder
+            job->sidecar = fs::path(base).replace_extension(".srt").string();
+            job->sidecarCues = cues;
+        }
         job->first = (long long)std::llround(a * fps);
         job->count = std::max<long long>(0, (long long)std::llround(b * fps) - job->first);
         if (job->count <= 0) return fail("render: timeline " + c.flag("timeline") + " is empty — nothing to render");
@@ -1283,6 +1320,9 @@ namespace interstellar
             if (!r.empty() && r.back() == '.') r.pop_back();
             w += " \xC2\xB7 " + std::to_string(W) + "\xC3\x97" + std::to_string(H) + " \xC2\xB7 " + r + " fps";
             if (!burns.empty()) w += " \xC2\xB7 burn-ins";
+            if (capBurn || capTrack || capSidecar)
+                w += std::string(" \xC2\xB7 captions ") + (capBurn ? "burned in" : capTrack ? "as a subtitle track" : "as an .srt") +
+                     (capBurn && capTrack ? " + track" : "") + ((capBurn || capTrack) && capSidecar ? " + .srt" : "");
             job->model.spec = w;
         }
         job->model.state = "queued";
@@ -1339,7 +1379,7 @@ namespace interstellar
             if (!planFrame(j.model.timeline, t, j.proxyEdge, plan, nullptr)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             plan.output = j.output;   // R-COLOR-4: the render's --output, not the monitor's view
             if (!executePlan(*mSync, plan, frame, true, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
-            if (!j.burns.empty() && !burnIn(j, t, frame)) { failJob("frame " + std::to_string(j.next) + ": the burn-ins could not be drawn"); return; }
+            if ((!j.burns.empty() || !j.burnCues.empty()) && !burnIn(j, t, frame)) { failJob("frame " + std::to_string(j.next) + ": the burn-ins could not be drawn"); return; }
             if (j.png)
             {
                 char name[32];
@@ -1373,6 +1413,21 @@ namespace interstellar
             if (j.next >= j.count)
             {
                 if (j.writer && !j.writer->end()) { failJob("the encoder failed to finish"); return; }
+                if (!j.sidecar.empty())
+                {
+                    // R-DLV-1: the captions beside the file, in its own seconds
+                    std::ostringstream srt;
+                    int n = 0;
+                    auto stamp = [](double s) {
+                        const long long ms = std::max(0LL, (long long)std::llround(s * 1000.0));
+                        char b[32];
+                        std::snprintf(b, sizeof b, "%02lld:%02lld:%02lld,%03lld", ms / 3600000, ms / 60000 % 60, ms / 1000 % 60, ms % 1000);
+                        return std::string(b);
+                    };
+                    for (const auto &q : j.sidecarCues) srt << ++n << "\n" << stamp(q.start) << " --> " << stamp(q.end) << "\n" << q.text << "\n\n";
+                    std::ofstream f(j.sidecar, std::ios::binary | std::ios::trunc);
+                    if (!f || !(f << srt.str())) { failJob("cannot write the captions beside it: " + j.sidecar); return; }
+                }
                 j.model.state = "done";
                 mSync->grade->releaseScratch();
                 emit(Event(EK::RenderFinished).with("job", j.model.id).with("timeline", j.model.timelineName)

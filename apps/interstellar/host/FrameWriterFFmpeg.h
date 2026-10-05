@@ -89,6 +89,10 @@ namespace interstellar_host
         std::vector<float> mAudioFifo;
         long long mAudioNext = 0;
         int mAudioFrameSize = 1024;
+        // R-DLV-1: the captions' stream — every cue written once, right after the header
+        AVCodecContext *mSEnc = nullptr;
+        AVStream *mSStream = nullptr;
+        bool writeSubtitles(const std::vector<interstellar::EncodeSpec::Cue> &cues);
         bool openEncoder(const AVCodec *codec, const interstellar::EncodeSpec &spec, int w, int h, const std::string &ext);
     };
 }

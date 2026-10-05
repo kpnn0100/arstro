@@ -21,6 +21,9 @@
 #include "DngWrite.h"
 #include "FrameSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
+extern "C" {
+#include <libavformat/avformat.h>
+}
 #include "HostFrameSource.h"
 #include "Sequence.h"
 #include "VideoFrameDecoder.h"
@@ -218,6 +221,63 @@ int main(int argc, char **argv)
             assert(std::fabs(peak - 0.5) < (std::string(codec) == "prores" ? 1e-4 : 0.02) && std::fabs(hz - 1000) < 3);
         }
         std::printf("  [PASS] audio: decoded at the mix rate, mono at unity, seeks exact, and the writer's sound reads back\n");
+    }
+    // ── R-DLV-1: a subtitle track — mov_text in an MP4, SubRip in an MKV — read back cue by cue ──
+    {
+        const std::string first = argv[1];
+        const std::string dir = first.find('/') == std::string::npos ? std::string(".") : first.substr(0, first.rfind('/'));
+        for (const char *ext : {"mp4", "mkv"})
+        {
+            interstellar::EncodeSpec spec;
+            spec.subtitles = {{0.25, 0.75, "Hello\nworld"}, {1.0, 1.5, "Second"}};
+            const std::string out = dir + "/captions." + ext;
+            interstellar_host::FrameWriterFFmpeg w;
+            assert(w.begin(out, 64, 36, 24.0, 48, spec));
+            interstellar::Raster frame;
+            frame.allocate(64, 36, 128);
+            for (int k = 0; k < 48; ++k) assert(w.write(frame));
+            assert(w.end());
+            AVFormatContext *fmt = nullptr;
+            assert(avformat_open_input(&fmt, out.c_str(), nullptr, nullptr) == 0 && avformat_find_stream_info(fmt, nullptr) >= 0);
+            int si = -1;
+            for (unsigned i = 0; i < fmt->nb_streams; ++i)
+                if (fmt->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) si = (int)i;
+            assert(si >= 0 && fmt->streams[si]->codecpar->codec_id == (std::string(ext) == "mkv" ? AV_CODEC_ID_SUBRIP : AV_CODEC_ID_MOV_TEXT));
+            std::vector<std::pair<double, std::string>> cues;
+            AVPacket *pkt = av_packet_alloc();
+            while (av_read_frame(fmt, pkt) >= 0)
+            {
+                if (pkt->stream_index == si && pkt->size > 2)
+                {
+                    // mov_text: a 16-bit length, then the UTF-8; SubRip: the text itself
+                    const bool movText = fmt->streams[si]->codecpar->codec_id == AV_CODEC_ID_MOV_TEXT;
+                    const int len = movText ? (pkt->data[0] << 8 | pkt->data[1]) : pkt->size;
+                    const std::string text(reinterpret_cast<const char *>(pkt->data) + (movText ? 2 : 0), (size_t)len);
+                    if (!text.empty()) cues.emplace_back(pkt->pts * av_q2d(fmt->streams[si]->time_base), text);
+                }
+                av_packet_unref(pkt);
+            }
+            av_packet_free(&pkt);
+            avformat_close_input(&fmt);
+            std::printf("  %s: %zu cues — %.3f s \"%s\", %.3f s \"%s\"\n", ext, cues.size(), cues.empty() ? 0.0 : cues[0].first,
+                        cues.empty() ? "" : cues[0].second.c_str(), cues.size() < 2 ? 0.0 : cues[1].first, cues.size() < 2 ? "" : cues[1].second.c_str());
+            assert(cues.size() == 2 && std::fabs(cues[0].first - 0.25) < 0.002 && std::fabs(cues[1].first - 1.0) < 0.002);
+            assert(cues[0].second.find("Hello") == 0 && cues[0].second.find("world") != std::string::npos && cues[1].second == "Second");
+        }
+        {
+            interstellar::EncodeSpec spec;
+            spec.codec = "prores";
+            spec.profile = "standard";
+            spec.bitDepth = 10;
+            spec.subtitles = {{0.0, 1.0, "x"}};
+            interstellar_host::FrameWriterFFmpeg w;
+            assert(w.begin(dir + "/captions.mov", 64, 36, 24.0, 24, spec));   // MOV carries mov_text too
+            interstellar::Raster frame;
+            frame.allocate(64, 36, 128);
+            for (int k = 0; k < 24; ++k) assert(w.write(frame));
+            assert(w.end());
+        }
+        std::printf("  [PASS] subtitles: mov_text in MP4 and MOV, SubRip in MKV, each cue at its time with its words\n");
     }
     // ── R-MEDIA-1: a CinemaDNG sequence by its pattern, through LibRaw; a vendor RAW refused by name ──
     {

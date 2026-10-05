@@ -62,6 +62,7 @@ static AppModel populatedModel()
     m.hasGradeTarget = true;
     m.timelines.push_back({"tl_1", "main", "", 0, false, "", false, 0, 0});
     m.timelines.push_back({"tl_2", "social30", "tl_1", 1, true, "8f2c1ab", true, 1, 3});
+    m.timelines.back().captions = 12;
     m.currentTimeline = "tl_2";
     TrackModel t; t.id = "trk_1"; t.name = "v0"; m.tracks.push_back(t);
     ClipModel c; c.id = "clp_1"; c.name = "shotA"; c.track = "trk_1"; c.src = "ro_2"; c.out = 4; c.duration = 4;
@@ -76,6 +77,8 @@ static AppModel populatedModel()
     m.recoveryAvailable = true;
     m.recoveryTime = 1700000000;
     m.renderPresets.push_back({"YouTube 1080p", true, "--format h264 --res 1920x1080", "H.264 · fits 1920x1080"});
+    m.captions.push_back({"cap_1", "cue1", 1.5, 2.0, "Hello\nworld"});
+    m.captionsShown = false;
     m.wipeLabel = "still_1";
     m.proxyJobs.push_back({"p1", "ro_2", "s_day01", "prores", 960, "/home/u/japan.proxies/s_day01_960.mov", 12, 96, "running", ""});
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";

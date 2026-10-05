@@ -100,6 +100,13 @@ namespace interstellar_v1
         bool wipeDragging() const { return mWipeDrag; }
         /** The divider's grip (local); empty when hidden. */
         artboard::Rect wipeGripRect() const;
+        /** R-DLV-1: the caption under the playhead, over the picture's foot, as a render burns it (a
+         *  plate to a line, sized to the picture). A change CROSS-FADES — the leaving words out while the
+         *  new ones come in; empty fades it away. Lifted above the angle bar while that shows. */
+        void setSubtitle(const std::string &text) { mSubWanted = text; }
+        double subtitleAmount() const { return mSubAmt.value(); }
+        double subtitleLeavingAmount() const { return mSubLeaveAmt.value(); }
+        const std::string &subtitleText() const { return mSubShown; }
         bool panning() const { return mPanning; }
         static constexpr double kMaxZoom = 8.0;
         static constexpr double kZoomNotch = 1.15;   // cosmo's
@@ -152,6 +159,9 @@ namespace interstellar_v1
         int mAngleActive = 0;
         bool mAnglesWanted = false, mAnglesApplied = false, mAnglesInit = false;
         artboard::AnimatedProperty mAnglesAmt{0.0}, mAngleSel{0.0};
+        std::string mSubWanted, mSubShown, mSubLeaving;             // R-DLV-1
+        artboard::AnimatedProperty mSubAmt{0.0}, mSubLeaveAmt{0.0};
+        bool mSubInit = false;
         int mAngleSelApplied = -1;
         bool mAngleSnap = true;                       // a new set of angles places the highlight, it does not travel
         cosmo_v2::HoverFade mAngleHover;

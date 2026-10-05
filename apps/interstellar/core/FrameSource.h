@@ -11,6 +11,7 @@
 #pragma once
 #include "Raster.h"
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -64,6 +65,10 @@ namespace interstellar
         double peak = 1000.0;           // pq: the mastering display's peak, cd/m²
         int audioRate = 0;              // R-AUD-9: 0 = no sound; else the master, stereo, at this rate —
                                         // AAC beside H.264/H.265, 24-bit PCM beside ProRes/DNxHR
+        // R-DLV-1: a subtitle track — mov_text in an MP4/MOV, SubRip in an MKV — its cues in the
+        // render's own seconds (0 = its first frame), in order, none overlapping
+        struct Cue { double start = 0, end = 0; std::string text; };
+        std::vector<Cue> subtitles;
     };
 
     class IFrameWriter

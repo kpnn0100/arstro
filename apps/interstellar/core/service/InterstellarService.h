@@ -262,6 +262,10 @@ namespace interstellar
         void fillPresetModel(AppModel &m) const;
         bool renderWithPreset(const Command &c);
         bool presetCommand(const Command &c);
+        // R-DLV-1: captions — the commands, and a render's cues (its own seconds, cut to [a, b])
+        bool captionCommand(const Command &c);
+        bool captionCues(const NodeId &tl, double a, double b, std::vector<EncodeSpec::Cue> &out, std::string &err);
+        bool mShowCaptions = true;
         // R-DLV-5/6 — ServiceSafety.cpp
         std::string autosavePath(const char *ext) const;
         bool writeAutosave(std::string &err);

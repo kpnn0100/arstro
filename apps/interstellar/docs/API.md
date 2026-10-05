@@ -75,7 +75,12 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `playhead <t>\|+<dt>\|-<dt>\|next-cut\|prev-cut` | Move the playhead; snapped to a frame. | R-TL-5 |
 | `play` | Start playback of the current timeline. | R-UI-3 |
 | `pause` | Stop playback. | R-UI-3 |
-| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>] [--peak <400..10000>] [--preset <name>] [--burnin <tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused. | R-RENDER-6 |
+| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>] [--peak <400..10000>] [--preset <name>] [--burnin <tc@bl,clip@tl,source@tr,srctc@br,text=…@tc>] [--captions <burn,track,sidecar>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused. | R-RENDER-6 |
+| `caption import <file.srt> [--offset <s>] [--replace]` | Read an SRT's cues onto the open timeline as captions (timeline time, plus --offset); --replace drops the timeline's captions first. Styling tags are not kept. One undo step. | R-DLV-1 |
+| `caption export <file.srt> [--timeline <tl>]` | Write a timeline's captions (the open one unless named) as an SRT. | R-DLV-1 |
+| `caption add [--at <t>] [--dur <s>] [--text <words>] [--name <n>]` | A caption on the open timeline: its words (\n is a new line) from --at for --dur seconds. | R-DLV-1 |
+| `caption remove <caption>` | Remove a caption from the open timeline (a version drops the base's). | R-DLV-1 |
+| `view captions <on\|off>` | Show the caption under the playhead on the monitor, or not. Presentation; renders carry captions only with render --captions. | R-DLV-1 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
 | `render preset save <name> [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <p>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <s>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <o>] [--peak <cd/m²>]` | Save a render's whole output spec by name (beside the engine settings: every project has it); `render --preset <name>` applies it, flags given beside it winning. --res is a frame to fit in at the project's aspect. | R-DLV-3 |
 | `render preset delete <name>` | Forget a saved render preset (the built-in ones stay). | R-DLV-3 |
@@ -218,6 +223,10 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<aclip>.out` | aclip | scalar | s |  | 0.0 | Source out-point. |
 | `<aclip>.gain` | aclip | scalar | dB | -60.0..12.0 | 0.0 | Clip gain. |
 | `<aclip>.fade` | aclip | scalar | s | 0.0..10.0 | 0.0 | Fade in and out length. |
+| `<caption>.at` | caption | scalar | s |  | 0.0 | Timeline time the words appear. |
+| `<caption>.dur` | caption | scalar | s |  | 0.0 | How long they stay (more than zero). |
+| `<caption>.text` | caption | text |  |  |  | The words; \n is a new line. |
+| `<caption>.name` | caption | text |  |  |  | Caption name (what an address spells). |
 | `project.masterGain` | project | scalar | dB | -60.0..12.0 | 0.0 | Master bus gain. |
 | `project.name` | project | text |  |  |  | Project display name. |
 | `<effect>.enabled` | effect | bool | 0\|1 |  | 1.0 | The plugin is on (R-FX-5). |
@@ -352,6 +361,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `timelines[].cutFrozen` | bool |  | Arrangement frozen. |
 | `timelines[].danglingDeltas` | integer |  | Deltas whose target the base deleted — `rebase` reports them. |
 | `timelines[].overrides` | integer |  | How far this version has diverged: #tlset + #tlgrade + #tldrop count. |
+| `timelines[].captions` | integer |  | How many captions it carries — a render can burn them in, mux them or write an .srt (R-DLV-1). |
 | `timelines[].hasSound` | boolean |  | Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9). |
 | `timelines[].placeable` | boolean |  | It can be placed as a clip in the current timeline — not itself, not a version of it, nothing that contains it (R-EDT-4). |
 | `currentTimeline` | string |  | The editor's current timeline id. Never what a render uses. |
@@ -426,6 +436,13 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `autosavedAt` | integer | *machine* | When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5). |
 | `recoveryAvailable` | bool |  | An autosave newer than the project file waits — `project recover` (R-DLV-6). |
 | `recoveryTime` | integer | *machine* | When that autosave was written, unix seconds. |
+| `captions` | array |  | The current timeline's captions, by time (R-DLV-1). |
+| `captions[].id` | string |  | Caption id. |
+| `captions[].name` | string |  | Caption name — what `<caption>.text` spells. |
+| `captions[].at` | number |  | Timeline seconds the words appear. |
+| `captions[].dur` | number |  | Seconds they stay. |
+| `captions[].text` | string |  | The words; a line break is a new line on screen. |
+| `captionsShown` | bool |  | The monitor shows the caption under the playhead (`view captions`). |
 | `trackJobs` | array |  | This session's window tracks, oldest first (R-CLR-2). |
 | `trackJobs[].id` | string |  | Job id (t1, t2, …). |
 | `trackJobs[].effect` | string |  | The window tracked. |

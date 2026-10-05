@@ -109,6 +109,15 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::PillButton> burnButton() { return mBurnBtn; }
         std::function<void(artboard::Rect world)> onBurnMenu;
         std::function<void(const std::string &current)> onBurnText;   // the Text item asks for its words
+        // ── R-DLV-1: the timeline's captions on this render — burned in, a subtitle track, an .srt beside
+        //    it — from a menu on the RANGE header's line; dimmed (eased) when the timeline has none ──
+        enum CapWay { CapBurn, CapTrack, CapSidecar, kCapWays };
+        void setCaptionWay(int k, bool on) { if (k >= 0 && k < kCapWays) mCapOn[k] = on; }
+        bool captionWay(int k) const { return k >= 0 && k < kCapWays && mCapOn[k]; }
+        int timelineCaptions() const;
+        std::shared_ptr<cosmo_v2::PillButton> captionsButton() { return mCapBtn; }
+        double captionsAvailable() const { return mCapAvail.value(); }
+        std::function<void(artboard::Rect world)> onCaptionsMenu;
         std::function<void(const std::string &flags)> onSavePreset;
 
         void advance(double nowMs) override;
@@ -147,6 +156,11 @@ namespace interstellar_v1
         bool mBurnOn[kBurns] = {false, false, false, false, false};
         std::string mBurnText;
         std::shared_ptr<cosmo_v2::PillButton> mBurnBtn;
+        bool mCapOn[kCapWays] = {false, false, false};
+        std::shared_ptr<cosmo_v2::PillButton> mCapBtn;
+        artboard::AnimatedProperty mCapAvail{0.0};
+        bool mCapAvailApplied = false, mCapAvailInit = false;
+        std::string captionsFlag() const;
         std::string burnFlag() const;
         bool mPresetApplied = false;
     public:

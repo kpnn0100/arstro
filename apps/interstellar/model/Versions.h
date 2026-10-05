@@ -64,6 +64,7 @@ namespace interstellar
         std::vector<Clip> clips;                // by at, then order, then id
         std::vector<Transition> transitions;    // by id
         std::vector<Marker> markers;            // by at, then id
+        std::vector<Caption> captions;          // by at, then id (R-DLV-1)
         std::vector<ATrack> audioTracks;        // by order, then id
         std::vector<AClip> audioClips;          // by at, then id
         /** Every node in the result. `Dangling` marks a node that is shown (so the editor can

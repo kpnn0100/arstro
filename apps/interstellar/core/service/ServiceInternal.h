@@ -260,6 +260,10 @@ namespace interstellar
         // R-DLV-2: what is burned in, and where (tc | srctc | clip | source | text=…, at tl tc tr bl bc br)
         struct Burn { std::string what, text, at; };
         std::vector<Burn> burns;
+        // R-DLV-1: the captions burned into the picture, and the .srt written beside the file when it
+        // finishes — the cues in the render's own seconds
+        std::vector<EncodeSpec::Cue> burnCues, sidecarCues;
+        std::string sidecar;
     };
 
     /** R-MEDIA-2: a proxy being made — the original decoded, prescaled and encoded one frame per pump. */

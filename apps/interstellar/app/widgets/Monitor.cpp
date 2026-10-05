@@ -279,6 +279,19 @@ namespace interstellar_v1
             mWipeLast = mWipeTarget;
         }
         mWipeLive.update(nowMs);
+        // R-DLV-1: the caption cross-fades — the leaving words carry their alpha out, the new come in
+        if (!mSubInit) { mSubShown = mSubWanted; mSubAmt.set(mSubWanted.empty() ? 0.0 : 1.0); mSubInit = true; }
+        else if (mSubWanted != mSubShown)
+        {
+            mSubLeaving = mSubShown;
+            mSubLeaveAmt.set(mSubAmt.value());
+            mSubLeaveAmt.animateTo(0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+            mSubShown = mSubWanted;
+            mSubAmt.set(0.0);
+            if (!mSubShown.empty()) mSubAmt.animateTo(1.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        mSubAmt.update(nowMs);
+        mSubLeaveAmt.update(nowMs);
         // R-EDT-5: the angle bar fades with its intent; the highlight travels to the active angle
         if (!mAnglesInit) { mAnglesAmt.set(mAnglesWanted ? 1.0 : 0.0); mAnglesApplied = mAnglesWanted; mAnglesInit = true; }
         if (mAnglesWanted != mAnglesApplied)
@@ -520,6 +533,30 @@ namespace interstellar_v1
                 t.drawText(name, r.x + 8.0 + nw + 6.0, by, kChipPx, font::sans());
             }
         }
+        // R-DLV-1: the caption under the playhead, as a render burns it — bottom centre of the picture,
+        // inside title safe, a plate to a line, the last line lowest; lifted over the angle bar
+        auto drawSubtitle = [&](const std::string &text, double a) {
+            if (a <= 0.001 || text.empty() || fr.w < 40.0 || fr.h < 24.0) return;
+            const double px = std::max(10.0, fr.h * 0.045), pad = std::round(px * 0.45), bh = std::ceil(px * 1.5);
+            std::vector<std::string> lines;
+            std::string line;
+            for (const char ch : text + "\n")
+                if (ch == '\n') { if (!line.empty()) lines.push_back(line); line.clear(); }
+                else line += ch;
+            double y = std::min(fr.y + fr.h * 0.92, fr.bottom() - 8.0 - aa * 34.0);
+            for (auto it = lines.rbegin(); it != lines.rend(); ++it)
+            {
+                const std::string s = textfit::ellipsize(t, *it, std::max(0.0, fr.w * 0.9 - 2 * pad), px, font::sans());
+                const double tw = t.measureText(s, px, font::sans());
+                const Rect plate{fr.x + (fr.w - tw) * 0.5 - pad, y - bh, tw + 2 * pad, bh};
+                drawRoundedRect(t, plate, radius::control(), Paint::filled(surface::scrim(0.62 * a)));
+                t.setFill(fade(palette::white(), a));
+                t.drawText(s, plate.x + pad, textfit::baseline(plate.y + bh * 0.5, px), px, font::sans());
+                y -= bh + 2.0;
+            }
+        };
+        drawSubtitle(mSubLeaving, mSubLeaveAmt.value());
+        drawSubtitle(mSubShown, mSubAmt.value());
         // The capture button, left of the caption (Grade — R-UI-11). Fades with its intent.
         const double ca = mCaptureAmt.value();
         mCaptureRect = Rect{0, 0, 0, 0};

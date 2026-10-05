@@ -206,6 +206,18 @@ namespace interstellar
         Notes notes;
     };
 
+    /** R-DLV-1: a caption — words on screen for a span of the timeline (an SRT cue). Timeline time,
+     *  like a marker; a version inherits it and overrides it by delta, like every arrangement node. */
+    struct Caption
+    {
+        NodeId id, name, timeline;
+        double at = 0, dur = 1;
+        std::string text;                   // UTF-8; a line break is a new line on screen
+        NodeId from;
+        Fields unknown;
+        Notes notes;
+    };
+
     /** `#atrack kind=audio` — the only audio lane Interstellar renders (audio-format §2.1). */
     struct ATrack
     {
@@ -329,7 +341,7 @@ namespace interstellar
     };
 
     /** What an id names. */
-    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Anim, Still, Raw };
+    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, Caption, ATrack, AClip, Fx, Effect, Anim, Still, Raw };
     const char *nodeKindName(NodeKind k);
 
     class Project
@@ -366,6 +378,7 @@ namespace interstellar
         std::vector<Clip> clips;
         std::vector<Transition> transitions;
         std::vector<Marker> markers;
+        std::vector<Caption> captions;               // R-DLV-1
         std::vector<ATrack> audioTracks;
         std::vector<AClip> audioClips;
         std::vector<Fx> effects;
@@ -404,6 +417,7 @@ namespace interstellar
         Clip *clip(const NodeId &);                 const Clip *clip(const NodeId &) const;
         Transition *transition(const NodeId &);     const Transition *transition(const NodeId &) const;
         Marker *marker(const NodeId &);             const Marker *marker(const NodeId &) const;
+        Caption *caption(const NodeId &);           const Caption *caption(const NodeId &) const;
         ATrack *audioTrack(const NodeId &);         const ATrack *audioTrack(const NodeId &) const;
         AClip *audioClip(const NodeId &);           const AClip *audioClip(const NodeId &) const;
         Fx *fx(const NodeId &);                     const Fx *fx(const NodeId &) const;

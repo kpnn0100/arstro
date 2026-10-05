@@ -81,6 +81,24 @@ namespace interstellar_v1
             mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
             noteActivity();
         };
+        // R-DLV-1: the timeline's captions on this render — each way toggles; none to offer says where they come from
+        mEdit->outputSpec()->onCaptionsMenu = [this](Rect at) {
+            auto os = mEdit->outputSpec();
+            std::vector<cosmo_v2::ContextMenu::Item> items;
+            if (os->timelineCaptions() == 0)
+                items.push_back({"No captions on this timeline \xE2\x80\x94 File \xE2\x80\xBA Import Captions\xE2\x80\xA6", [] {}});
+            else
+            {
+                static const char *names[OutputSpec::kCapWays] = {"Burn into the picture", "Subtitle track (MP4, MOV, MKV)", "Sidecar .srt beside the file"};
+                for (int k = 0; k < OutputSpec::kCapWays; ++k)
+                {
+                    const bool on = os->captionWay(k);
+                    items.push_back({std::string(on ? "\xE2\x80\xA2  " : "     ") + names[k], [os, k, on] { os->setCaptionWay(k, !on); }});
+                }
+            }
+            mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+            noteActivity();
+        };
         mEdit->outputSpec()->onBurnText = [this](const std::string &current) {   // R-DLV-2
             mEdit->namePrompt()->show("Burn in text", "Words over every frame of this render, top centre (empty: none).", current, "Burn in",
                                       [this](const std::string &t) { mEdit->outputSpec()->setBurnText(t); });
@@ -310,6 +328,20 @@ namespace interstellar_v1
                      dispatch("interchange export " + cmd::quote(name) + " --out " + cmd::quote(p));
                  });
              }},
+            // R-DLV-1: captions — an SRT onto the open timeline, and back out
+            {"Import Captions...",           [this] {
+                 if (onPickCaptionsToImport)
+                     onPickCaptionsToImport([this](const std::string &p) { dispatch("caption import " + cmd::quote(p)); });
+             }},
+            {"Export Captions...",           [this] {
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 std::string name;
+                 for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) name = tl.name;
+                 if (name.empty() || m.captions.empty() || !onPickCaptionsToExport) return;
+                 onPickCaptionsToExport(name + ".srt", [this, name](const std::string &p) {
+                     dispatch("caption export " + cmd::quote(p) + " --timeline " + cmd::quote(name));
+                 });
+             }},
             {"Relink Media...",              [this] { openRelinkMenu(Point(width() * 0.25, 40.0)); }},   // R-MEDIA-3
             {"Render...",                    [this] { mEdit->setTab(EditScreen::Deliver); }},
         }});
@@ -363,7 +395,7 @@ namespace interstellar_v1
     /** The Workspace menu: the tabs, and the project's proxy switch (R-MEDIA-2), marked when on. */
     void App::refreshWorkspaceMenu(const interstellar::AppModel &m)
     {
-        const int key = m.screen == interstellar::Screen::Edit ? (m.useProxies ? 2 : 1) : 0;
+        const int key = m.screen == interstellar::Screen::Edit ? (m.useProxies ? 2 : 1) + (m.captionsShown ? 0 : 2) : 0;
         if (key == mWorkspaceMenuFor) return;
         mWorkspaceMenuFor = key;
         std::vector<cosmo_v2::MenuStrip::Item> items = {
@@ -376,6 +408,9 @@ namespace interstellar_v1
         {
             items.push_back({std::string(m.useProxies ? "\xE2\x80\xA2  " : "     ") + "Use Proxies", [this, on = !m.useProxies] { dispatch(std::string("proxy use ") + (on ? "on" : "off")); }});
             items.push_back({"     Make Proxies for All Video", [this] { dispatch("proxy make"); }});
+            // R-DLV-1: the caption under the playhead on the monitor
+            items.push_back({std::string(m.captionsShown ? "\xE2\x80\xA2  " : "     ") + "Show Captions",
+                             [this, on = !m.captionsShown] { dispatch(std::string("view captions ") + (on ? "on" : "off")); }});
         }
         mEdit->topBar()->menus()->setItems(3, std::move(items));
     }
@@ -1135,6 +1170,14 @@ namespace interstellar_v1
         mEdit->monitor()->setAngles(m.multicamAngles, m.multicamAngle,
                                     mEdit->tab() == EditScreen::Cut && m.sourceView.empty() && !m.multicamClip.empty());
         mEdit->monitor()->setWipe(!m.wipeRef.empty(), m.wipeVertical, m.wipeAt, m.wipeLabel);   // R-CLR-5
+        {
+            // R-DLV-1: the caption under the playhead, while the monitor shows the timeline
+            std::string sub;
+            if (m.captionsShown && m.sourceView.empty() && !m.matteView)
+                for (const auto &k : m.captions)
+                    if (m.playhead >= k.at - 1e-6 && m.playhead < k.at + k.dur - 1e-6) sub += (sub.empty() ? "" : "\n") + k.text;
+            mEdit->monitor()->setSubtitle(sub);
+        }
         if (mBound && m.revision == mSeenRevision)
         {
             if (m.screen == Screen::Edit) fetchFrame(m, false);   // the monitor may have resized

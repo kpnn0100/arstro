@@ -280,6 +280,20 @@ namespace schema
         return f;
     }
 
+    template <> inline const char *typeName<Caption>() { return "caption"; }
+    template <> inline const std::vector<Field<Caption>> &fields<Caption>()
+    {
+        static const std::vector<Field<Caption>> f = {
+            text<Caption>("id", &Caption::id, 0, false),
+            text<Caption>("name", &Caption::name, 0, false, nonEmpty<Caption>(&Caption::name)),
+            ref<Caption>("timeline", &Caption::timeline, 0, false),
+            time<Caption>("at", &Caption::at, 0.0, 0, true),
+            time<Caption>("dur", &Caption::dur, 1.0, 0, true),
+            text<Caption>("text", &Caption::text, 0, true),
+            ref<Caption>("from", &Caption::from, 0, false, nonEmpty<Caption>(&Caption::from)),
+        };
+        return f;
+    }
     template <> inline const char *typeName<Marker>() { return "marker"; }
     template <> inline const std::vector<Field<Marker>> &fields<Marker>()
     {

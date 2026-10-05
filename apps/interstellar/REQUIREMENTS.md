@@ -643,10 +643,16 @@ reserves the rest so adopting it is not a migration.
   it changes the whole clip). Switched from the monitor's angle bar in Cut or Alt+1…9 — while paused
   or playing; the bar names each angle by its source, without per-angle pictures (said).
 
-## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 3 ✅ DR-DLV-2, 2 ✅ DR-DLV-3, 1, 4 next)
+## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 3 ✅ DR-DLV-2, 2 ✅ DR-DLV-3, 1 ✅ DR-DLV-4, 4 next)
 
 - **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
-  (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`.
+  (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`. — ✅ (DR-DLV-4). A caption is a timeline node
+  (a version inherits and overrides it by delta). The monitor shows the one under the playhead
+  (Workspace › Show Captions). A render carries them only when asked: burned in, as a track (MOV takes
+  mov_text too) and/or as an .srt, in the render's own seconds and cut to its range. A stream shows one
+  cue at a time, so overlapping cues are joined or shortened. SRT styling (italics, positions) is not
+  kept. The Cut timeline has no caption lane yet: captions are edited by address (`cue3.text=…`) or by
+  importing again.
 - **R-DLV-2 Burn-ins**: timecode, clip name, source name and free text, positioned, on a render.
   — ✅ (DR-DLV-3). Record timecode starts at 01:00:00:00, and source timecode is the media's own. They
   are drawn over the finished frame (never graded), at graphics white in an HDR render (BT.2408), on

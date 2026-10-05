@@ -274,6 +274,72 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-DLV-4 Captions (R-DLV-1)
+A caption is a `#caption` node: `at`, `dur` and `text` in timeline seconds (`model/Project.h:211`, schema
+`model/Schema.h:283`). It is an arrangement node like a marker, so `resolve` inherits it, a `#tlset`
+overrides `text`/`at`/`dur` on a version, a `#tldrop` hides it, and a freeze copies it. Invariants: `at`
+is never negative and `dur` is more than zero.
+
+Commands (`core/service/ServiceCaptions.cpp:157`):
+- `caption import <file.srt> [--offset s] [--replace]` reads an SRT (`:76`: a BOM, CRLF, `,` or `.`
+  milliseconds and a position after the end time are all accepted; HTML/ASS styling is dropped, `:63`)
+  onto the open timeline as `cue1`, `cue2`, … in one undo step. `--replace` drops the timeline's own
+  captions first.
+- `caption add --at --dur --text [--name]` and `caption remove`.
+- `caption export <file.srt> [--timeline]`.
+- `view captions on|off` controls only what the monitor shows.
+- Addresses `<caption>.at/.dur/.text/.name` go through `setField`, so a version's edit is a delta.
+
+A render carries captions only when asked: `render --captions burn,track,sidecar`
+(`core/service/ServiceRender.cpp:1244`). `captionCues` (`ServiceCaptions.cpp:128`) cuts the timeline's
+captions to the render's range and shifts them into its own seconds. A stream shows one cue at a time,
+so cues that start together are joined and an earlier cue that overlaps the next is shortened (`:140`).
+- **burn**: the caption on screen at each frame is drawn by the host, through the burn-in path. It sits
+  bottom centre inside title safe, a plate to each line with the last line lowest, sized 4.5 % of the
+  frame (`core/service/ServiceBurnIn.cpp:91`), at graphics white in HDR.
+- **track**: `EncodeSpec::subtitles` (`core/FrameSource.h`) is muxed by the writer
+  (`host/FrameWriterFFmpeg.cpp:246`, `:423`) as 3GPP timed text (mov_text) in MP4/MOV or SubRip in MKV.
+  The encoder takes ASS events with a minimal ASS header, and the cues are written right after the
+  container header so the muxer interleaves them by time. A PNG sequence or another container is
+  refused, and a PNG sequence is pointed at `sidecar`.
+- **sidecar**: `<out>.srt` beside the file (beside a PNG sequence's folder), written when the render
+  finishes (`ServiceRender.cpp:1416`).
+
+A timeline with no captions in the range is refused ("`caption import`"). The queue row's spec says
+"· captions burned in + track + .srt".
+
+Model: `captions[]` (the current timeline's), `captionsShown`, `timelines[].captions`.
+
+UI:
+- The monitor draws the caption under the playhead the way the burn does, cross-faded on change and
+  lifted above the multicam bar (`app/widgets/Monitor.cpp:536`, fed by `app/App.cpp:1174`).
+- File › Import Captions… / Export Captions… and Workspace › Show Captions (`App.cpp:332`, `:412`).
+- Deliver's RANGE header line has a captions pill (`app/widgets/OutputSpec.cpp:447`), dimmed (eased)
+  while the chosen timeline has none. Its menu toggles the three ways (`App.cpp:85`); the render line
+  gains `--captions` (`OutputSpec.cpp:216`), never in a preset's flags, and a PNG sequence leaves out the
+  track.
+
+Guarded by:
+- Model `captions()` (`model/tests/modelTests.cpp:1093`): the round trip with a line break, a version's
+  text delta, the invariants, freeze, drop.
+- Host `subtitles`: mov_text in MP4 and MOV and SubRip in MKV read back cue by cue at 0.25 s and 1.0 s.
+- L2 `captions…`:
+  - the SRT with BOM/CRLF/tags/position imports as "Hello\nworld" at 0.5 s for 0.75 s; undo and redo;
+  - a version's `cue2.text` is a delta, and the export round trip;
+  - a 0.25–3 s render burns "Hello" over "world" at render 0.5 s and nothing at 0 s or 1.25 s; the track
+    reads 0.25–1.0 and 1.75–2.75; the .srt says the same;
+  - the join and the shortening;
+  - the refusals: PNG + track, an unknown way, an empty range, a zero span, a backwards cue.
+- UI `testCaptionsUi`: fade-in, the cross-fade, off, the menus, the pill eased, the line, PNG leaving out
+  the track, no captions meaning none.
+- Shots `cut_caption`, `deliver_captions`.
+- E2E: the CLI rendered MP4 (h264 + mov_text, frame 24 looked at: two lines burned in), MKV (h264 +
+  subrip, extracted back to the same SRT) and the sidecar.
+
+Mutants run red: no range shift, no shortening, the tags kept, the frame time not the render's, no
+sidecar, a version not inheriting, the leaving caption snapped, the monitor ignoring Show Captions, the
+flag without captions, the pill's dimming snapped.
+
 ### DR-DLV-3 Burn-ins (R-DLV-2)
 `render --burnin "tc@bl,srctc@br,clip@tl,source@tr,text=DRAFT@tc"` (`core/service/ServiceRender.cpp:1214`)
 names what goes over every frame of that render, each item at one of six places (`tl tc tr bl bc br`):
