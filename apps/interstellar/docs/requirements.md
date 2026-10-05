@@ -668,6 +668,16 @@ add … --type blur.zoom` selected, × → `effect remove`, right-click → Move
 test's "no weight bar to drag", and the motion test's sliding switch; shots `grade_populated`,
 `grade_plugins_effect`, `grade_plugins_swap_mid` (both sizes, looked at).
 
+**Collapsible sections (amended 2026-10-05).** `EffectPanel` (`app/widgets/EffectPanel.cpp`) shows every
+effect of the selected effect's node, in stack order, as a section — a header with a disclosure
+arrow turning with the section's eased amount (`:224`), the effect's name and id, over its own
+SliderRows (built per effect INSTANCE, `:24`). A header click opens or closes it (`:191`), eased
+(`:158`): the body's height and the rows' opacity follow the amount, and rows outside it are culled
+(no input). Selecting an effect in the list opens its section and scrolls it into view as it will
+stand open (`:75`); the body scrolls (`EasedScroll`). Presentation only — nothing is dispatched.
+Guarded by the plugin-list UI test (two sections in order; the selected open, the other shut; a
+header opens eased; another collapses eased, its rows culled, no line dispatched — red with header
+clicks inert). Shot `grade_effects_sections`.
 ### DR-UI-15 Scopes: histogram, waveform, parade, vectorscope, clipping and levels in words; the clip overlay (R-UI-15)
 `scopesOf` (`app/widgets/Scopes.cpp`) measures the frame the monitor shows: a sampled histogram,
 a BT.709 luma waveform (256 × 128, log-scaled density), an R|G|B parade, a Cb/Cr vectorscope, and —

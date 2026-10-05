@@ -197,6 +197,13 @@ namespace
             r.app->edit().gradeInspector()->plugins()->select("ef_1");
             r.settle();
         }});
+        v.push_back({"grade_effects_sections", edit, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeInspector()->plugins()->select("ef_1");
+            r.settle();
+            r.app->edit().gradeInspector()->effectPanel()->setOpen("ef_2", true);
+            r.settle();
+        }});
         v.push_back({"grade_plugins_swap_mid", edit, [](Rig &r) {
             r.settle();
             r.app->edit().gradeInspector()->plugins()->select("ef_1");

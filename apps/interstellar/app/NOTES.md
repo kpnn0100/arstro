@@ -178,6 +178,12 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Shots added: `grade_plugins_effect`, `grade_plugins_swap_mid` (`grade_weight_caption` retired).
   UI checks: 266.
 
+## Effect sections (2026-10-05, R-FX-5 amended)
+
+- The effect panel lists every effect of the node as a collapsible section (header click = open/close,
+  eased, no command); the selected effect's section opens and scrolls into view. Shot
+  `grade_effects_sections`.
+
 ## Scopes (2026-10-05, R-UI-15)
 
 - The histogram slot is a SCOPES panel: Histogram · Waveform · Parade · Vector (cross-fade), a CLIP

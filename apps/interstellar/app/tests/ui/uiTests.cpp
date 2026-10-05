@@ -1355,6 +1355,23 @@ namespace
         const Point q1 = world(*radius, radius->width.value() * 0.8, radius->height.value() * 0.5);
         r.drag(q0.x, q0.y, q1.x, q1.y);
         CHECK(!withPrefix(r.svc, "set ef_1.radius=").empty(), "dragging Radius dispatched set ef_1.radius=<px>");
+        // R-FX-5 (amended): every effect of the node as a collapsible section — ef_1 open, ef_2 shut
+        CHECK(ep->sectionCount() == 2 && ep->sectionId(0) == "ef_1" && ep->sectionId(1) == "ef_2",
+              "the panel lists the node's two effects as sections, in stack order");
+        CHECK(ep->openAmount("ef_1") > 0.999 && ep->openAmount("ef_2") < 0.001, "the selected effect's section is open, the other shut");
+        r.svc.lines.clear();
+        Point h = centre(*ep, ep->headerRect(1));
+        r.click(h.x, h.y);
+        const double o2 = firstMoved(r, [&] { return ep->openAmount("ef_2"); }, 0.0);
+        CHECK(strictlyBetween(o2, 0.0, 1.0), "clicking a section's header opens it, eased");
+        r.settle();
+        CHECK(ep->sliderOf("ef_2", "length") && ep->sliderOf("ef_2", "length")->visible, "…showing its parameters");
+        h = centre(*ep, ep->headerRect(0));
+        r.click(h.x, h.y);
+        const double o1 = firstMoved(r, [&] { return ep->openAmount("ef_1"); }, 1.0);
+        CHECK(strictlyBetween(o1, 0.0, 1.0), "clicking an open header collapses it, eased");
+        r.settle();
+        CHECK(!ep->slider("radius")->visible && r.svc.lines.empty(), "a collapsed section's rows are culled; folding dispatched nothing");
         // + Add: the catalog, then the new effect is selected
         r.svc.lines.clear();
         p = centre(*pl, pl->addRect());
