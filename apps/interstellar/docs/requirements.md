@@ -274,6 +274,37 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-MEDIA-1 Camera RAW: CinemaDNG sequences through LibRaw; the vendor formats named (R-MEDIA-1)
+A numbered DNG run is one video source named by its pattern, `dir/name_%06d.dng`
+(`core/Sequence.h:45`) — FFmpeg's and Nuke's convention, and the source's identity in the .isp, the
+Cosmo slot and every cache key; `looksLikeVideo` knows it (`core/FrameSelector.h:52`). `rack add <folder>`
+takes the folder's numbered `.dng` run (the longest, `core/Sequence.h:104`) as its pattern; a pattern
+with no frame on disk, or a folder with none, is refused (`core/service/InterstellarService.cpp:1418`);
+the bind name is the clip's (`:1245`). The host chooses the decoder per moving source
+(`host/HostFrameSource.cpp:35`) — for the timeline and for Cosmo's decoder seam alike
+(`host/VideoFrameDecoder.cpp:48`), so Grade's reference frame is the timeline's frame. `FrameSourceDng`
+(`host/FrameSourceDng.cpp:81`) maps frame i to number first + i, a missing number holding the one before
+(`:121`), and develops each with LibRaw (`:111`) at 16 bits, the camera's white balance, its matrix to
+Rec.709 primaries, the BT.709 curve and no auto-brightening (`:131`) — one exposure for the clip; the
+frame is cached for the deep and 8-bit reads. FrameRate (51044) and TimeCodes (51043) are read from the
+first frame's IFD0 (`:14`); without them, 24 fps and no timecode. The reel is the clip name. LibRaw is
+the system's or the vendored build Cosmo uses (`host/CMakeLists.txt:30`). ARRIRAW (`.ari`), REDCODE
+(`.r3d`) and Blackmagic RAW (`.braw`) are named with their SDKs (`core/Sequence.h:153`): `rack add`
+refuses one unless the host reports a decoder for it (`Host::hasVendorDecoder`), naming the SDK and
+the way round (transcode); the seam an SDK build fills is `registerVendorDecoder`
+(`host/HostFrameSource.cpp:23`); a project naming one whose file is there shows it offline with
+`rack[].offlineWhy` (`InterstellarService.cpp:660`), in lint, the source bin and the rack tree. Guarded by
+host (a hand-written 12-frame LinearRaw sequence with a dropped frame: pattern from the folder, 64×36,
+25 fps and 01:00:10:00 from the tags, 16-bit with fine values, brighter frame by frame, one exposure
+(green equal across frames), the dropped frame held and frame k = number first + k, the 8-bit frame
+the deep one rounded, Cosmo's seam developing the same frame; vendor refusals and a registered decoder
+used), L2 `camera RAW…` (folder → pattern, video, placed without `--out`; refusals; an R3D named by a
+project offline with its reason, in lint), shot `cut_vendor_raw`, and by hand: a 320×180 24-frame
+CinemaDNG clip added as a folder, exported at 0 and 0.75 s (the moving bar where it was drawn), saved
+and reopened with Cosmo holding the pattern as a live slot. Mutants run red: the sequence not a video,
+FrameRate ignored, TimeCodes misread, auto-brightening on, the dropped frame showing the next, the
+registered decoder ignored, the vendor refusal, the folder not turned to its pattern, `offlineWhy`.
+
 ### DR-EDT-4 Multicam: a nested timeline showing one angle, switched with a cut (R-EDT-5)
 A clip placing a timeline may carry `angle` (`model/Schema.h:229`, written only when set): it shows
 that timeline's k-th video track alone (`core/service/ServiceRender.cpp:297`), so a version can switch

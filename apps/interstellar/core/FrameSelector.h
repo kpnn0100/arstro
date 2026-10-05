@@ -9,6 +9,7 @@
  *  The `.isp` (`#rackobj frame=`) is the authority; this is its runtime projection.
  */
 #pragma once
+#include "Sequence.h"
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -41,18 +42,20 @@ namespace interstellar
         return path + buf;
     }
 
-    /** By extension — the same list the host decoder uses to decide what FFmpeg opens. */
+    /** By extension — the same list the host decoder uses to decide what it opens as a moving
+     *  source — and a numbered DNG sequence (`clip_%06d.dng`, R-MEDIA-1) is one too. */
     inline bool looksLikeVideo(const std::string &spec)
     {
         std::string file;
         double t = 0;
         splitFrameSelector(spec, file, t);
+        if (seq::isSequence(file)) return true;
         const auto dot = file.find_last_of('.');
         if (dot == std::string::npos) return false;
         std::string e = file.substr(dot + 1);
         for (char &c : e) c = (char)std::tolower((unsigned char)c);
         static const char *kVideo[] = {"mp4", "mov", "mkv", "m4v", "avi", "mxf", "webm", "mts",
-                                       "m2ts", "wmv", "flv", "r3d", "braw"};
+                                       "m2ts", "wmv", "flv", "r3d", "braw", "ari"};
         for (const char *v : kVideo)
             if (e == v) return true;
         return false;

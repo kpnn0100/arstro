@@ -134,6 +134,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/render/ColourTransform.{h,cpp}` | render | **built** — camera curves, gamuts, working spaces (Rec.709, ACEScct), output transforms incl. PQ/HLG (R-COLOR-2..4, DR-COLOR-2/3) |
 | `apps/interstellar/render/AudioMix.{h,cpp}` | render | **built** — the master sum: placement, gain, fades, balance, varispeed; pure and sample-accurate (R-AUD-5 amended, R-AUD-9, DR-AUD-2) |
 | `apps/interstellar/core/Interchange.{h,cpp}` · `Timecode.h` | core | **built** — EDL (CMX 3600), FCPXML 1.9, OTIO in and out; drop-frame timecode (R-XCH, DR-XCH-1) |
+| `apps/interstellar/core/Sequence.h` | core | **built** — a numbered DNG run named `name_%06d.dng` is one video source; a folder's pattern; the vendor RAW formats by name (R-MEDIA-1, DR-MEDIA-1) |
 | `apps/interstellar/core/AudioOut.h` | core | **built** — the sound output seam; its blocking write is the playback clock (R-AUD-6) |
 | `apps/interstellar/host/AudioOutPulse` | host | **built** — PulseAudio simple API (PipeWire serves it), ~60 ms buffer; optional at build |
 | `apps/interstellar/core/AudioSource.h` | core | **built** — the audio decode seam (stereo float at the mix rate) |
@@ -152,6 +153,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/service/ServiceAnim.cpp` | core | **built** — addresses → curves and clocks, `key add|remove|set|clear`, `set` keying, curves on the render path, pins' curve snapshots (R-ANIM, DR-ANIM-1) |
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
+| `apps/interstellar/host/FrameSourceDng` · `makeVideoSource` / `registerVendorDecoder` (HostFrameSource) | host | **built** — CinemaDNG through LibRaw at 16 bits, rate and timecode from its tags; the decoder chosen per moving source; the vendor SDK seam (R-MEDIA-1, DR-MEDIA-1) |
 | `apps/interstellar/host/FrameSourceFFmpeg` · `FrameWriterFFmpeg` | host | **carried forward** from the first build; the writer now takes an `EncodeSpec` — H.264, H.265 8/10-bit, ProRes Proxy…4444, DNxHR LB…444, BT.709 tagged (DR-RENDER-6, D-9); a deep frame decodes and encodes as RGBA64 (DR-COLOR-1) |
 | `apps/interstellar/host/VideoFrameDecoder` · `HostFrameSource` · `PngWriter` | host | **built** — Cosmo's decoder seam, the timeline's source (stills through Cosmo's own decoder, for R-RENDER-5), PNG out |
 | `apps/interstellar/cli/main.cpp` | front end | **built** — `interstellar-cc`, argv/stdout only (DR-SVC-3) |

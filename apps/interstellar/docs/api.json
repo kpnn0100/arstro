@@ -1869,6 +1869,12 @@
       "doc": "Offline: reads as missing, never as a stall (R-RACK-7)."
     },
     {
+      "path": "rack[].offlineWhy",
+      "type": "string",
+      "stable": true,
+      "doc": "Why it is offline when the file is there: the decoder it needs (a vendor RAW SDK, R-MEDIA-1); \"\" = missing."
+    },
+    {
       "path": "rack[].weight",
       "type": "number",
       "stable": true,

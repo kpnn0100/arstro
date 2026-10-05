@@ -66,6 +66,9 @@ namespace interstellar
             std::function<std::unique_ptr<IAudioSource>()> audioSource;
             /** The machine's sound output (R-AUD-6); unset = playback is picture only (tests, the CLI). */
             std::function<std::unique_ptr<IAudioOut>()> audioOut;
+            /** R-MEDIA-1: whether a vendor RAW decoder (an SDK build) is installed for `ext` ("r3d",
+             *  "braw", "ari"); unset = none is, and such a file is refused naming its SDK. */
+            std::function<bool(const std::string &ext)> hasVendorDecoder;
             /** An encoder for `path`, chosen by its extension (h264 .mp4, prores .mov). */
             std::function<std::unique_ptr<IFrameWriter>()> frameWriter;
             /** A PNG writer, for stills and png sequences. */

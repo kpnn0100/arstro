@@ -657,6 +657,17 @@ namespace interstellar
                 m.rack.push_back(r);
             }
 
+        // R-MEDIA-1: an offline vendor RAW whose file IS there says which SDK it needs
+        for (auto &r : m.rack)
+        {
+            r.offlineWhy.clear();
+            const VendorRaw *v = r.failed ? vendorRawFor(r.media) : nullptr;
+            std::string file;
+            double t = 0;
+            splitFrameSelector(resolvePath(r.media), file, t);
+            if (v && fs::exists(file) && !(mHost.hasVendorDecoder && mHost.hasVendorDecoder(v->ext)))
+                r.offlineWhy = std::string(v->format) + " needs " + v->sdk + " — not in this build";
+        }
         mSelection.erase(std::remove_if(mSelection.begin(), mSelection.end(), [&](const NodeId &id) { return !P.rackObj(id); }),
                          mSelection.end());
         for (auto &r : m.rack)
@@ -1231,7 +1242,7 @@ namespace interstellar
         std::string f;
         double t = 0;
         splitFrameSelector(cosmoName, f, t);
-        std::string stem = fileStem(f);
+        std::string stem = seq::isSequence(f) ? seq::stem(f) : fileStem(f);   // R-MEDIA-1: a sequence by its clip name
         for (char &ch : stem) ch = (char)std::tolower((unsigned char)ch);
         return mProject->freshName(stem.empty() ? "node" : stem);
     }
@@ -1403,8 +1414,23 @@ namespace interstellar
                     std::string file;
                     double t = 0;
                     splitFrameSelector(a, file, t);
-                    const std::string abs = fs::absolute(file).lexically_normal().string();
-                    if (!fs::exists(abs)) return fail("rack add: no such file: " + file);
+                    std::string abs = fs::absolute(file).lexically_normal().string();
+                    // R-MEDIA-1: a CinemaDNG clip's folder is its numbered sequence; a pattern names one
+                    if (fs::is_directory(abs))
+                    {
+                        std::string pattern, why;
+                        if (!seq::fromFolder(abs, pattern, why)) return fail("rack add: " + why);
+                        abs = pattern;
+                    }
+                    else if (seq::isSequence(abs))
+                    {
+                        if (!seq::firstFrameExists(abs)) return fail("rack add: no frame of " + file + " is on disk");
+                    }
+                    else if (!fs::exists(abs)) return fail("rack add: no such file: " + file);
+                    if (const VendorRaw *v = vendorRawFor(abs); v && !(mHost.hasVendorDecoder && mHost.hasVendorDecoder(v->ext)))
+                        return fail("rack add: " + file + " is " + v->format + " — decoding it needs " + v->sdk +
+                                    ", which is licensed per user and not in this build; install the SDK build of the decoder, "
+                                    "or transcode to ProRes or DNxHR first");
                     stored.push_back(joinFrameSelector(abs, t));
                     RackObj ro;
                     ro.id = P.freshId("ro_");
@@ -3119,7 +3145,8 @@ namespace interstellar
             if (r.failed)
             {
                 ++offline;
-                out << "offline   " << (r.bindName.empty() ? r.cosmoName : r.bindName) << "  " << r.media << '\n';
+                out << "offline   " << (r.bindName.empty() ? r.cosmoName : r.bindName) << "  " << r.media
+                    << (r.offlineWhy.empty() ? std::string() : "  (" + r.offlineWhy + ")") << '\n';
             }
         for (const auto &t : mProject->timelines)
         {

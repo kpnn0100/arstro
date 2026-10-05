@@ -78,7 +78,9 @@ one integrator who moves, wires, tests and commits each stream:
       10b. [x] Speed ramps (R-EDT-3) — DR-EDT-2.
       10c. [x] Nested timelines (R-EDT-4) — DR-EDT-3.
       10d. [x] Multicam (R-EDT-5) — DR-EDT-4.
-      11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).
+      11. [x] Media: CinemaDNG through LibRaw, the vendor SDK seam (R-MEDIA-1) — DR-MEDIA-1.
+      11b. [ ] Proxies, offline/online (R-MEDIA-2).
+      11c. [ ] Relink (R-MEDIA-3).
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
@@ -130,6 +132,16 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a RAW sequence is a pattern; vendor RAW is refused at the door.** A CinemaDNG clip is a
+folder of numbered frames; naming it `name_%06d.dng` (FFmpeg's and Nuke's spelling) makes it one
+source with one identity — the .isp, Cosmo's slot, the caches — with no new node kind, and Cosmo
+grades it through the same decoder seam as video. Development is fixed per clip (camera white
+balance, matrix, BT.709, no auto-brightening) so footage does not flicker; a log or wide-gamut
+interpretation is the input transform's job as for any file. ARRIRAW, R3D and BRAW cannot be decoded
+without their vendors' per-user SDKs, so `rack add` refuses them naming the SDK — accepting them would
+let Cosmo's save-on-add drop the failed slot (D-2) — while a project made where the SDK exists opens
+with the source offline and the reason shown.
 
 **2026-10-05 — a multicam is a nested timeline with an angle, not a new kind of node.** Premiere's
 multicam source sequence is a sequence whose tracks are the cameras, and a multicam clip is that

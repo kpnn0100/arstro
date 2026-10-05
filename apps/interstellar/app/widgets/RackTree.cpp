@@ -388,7 +388,9 @@ namespace interstellar_v1
             const double usesRight = w - kPadX - kBypassBox - 8.0;
             if (fa > 0.001)
             {
-                const std::string s = textfit::ellipsize(t, "offline \xE2\x80\x94 media missing", usesRight - (x0 + 18.0), kMetaPx, font::sans());
+                // R-MEDIA-1: the reason when the file is there but nothing here decodes it
+                const std::string why = n.offlineWhy.empty() ? "offline \xE2\x80\x94 media missing" : "offline \xE2\x80\x94 " + n.offlineWhy;
+                const std::string s = textfit::ellipsize(t, why, usesRight - (x0 + 18.0), kMetaPx, font::sans());
                 t.setFill(fade(palette::destructive(), a * fa));
                 t.drawText(s, x0 + 18.0, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
             }

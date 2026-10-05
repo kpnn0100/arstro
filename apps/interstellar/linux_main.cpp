@@ -76,6 +76,7 @@ namespace
             return std::unique_ptr<cosmo::IImageDecoder>(new interstellar_host::VideoFrameDecoder(std::move(sel)));
         };
         h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
+        h.hasVendorDecoder = [](const std::string &ext) { return interstellar_host::vendorDecoderInstalled(ext); };   // R-MEDIA-1
         h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
 #ifdef INTERSTELLAR_HAVE_PULSE
         h.audioOut = [] { return std::unique_ptr<IAudioOut>(new interstellar_host::AudioOutPulse()); };   // R-AUD-6

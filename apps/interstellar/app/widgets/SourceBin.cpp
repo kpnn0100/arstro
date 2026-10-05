@@ -206,7 +206,8 @@ namespace interstellar_v1
             if (n.failed)
             {
                 t.setFill(fade(palette::destructive(), a));
-                t.drawText(textfit::ellipsize(t, "offline \xE2\x80\x94 media missing", w - kPadX - x, 9.0, font::sans()), x, textfit::baseline(l2, 9.0), 9.0, font::sans());
+                const std::string why = n.offlineWhy.empty() ? "offline \xE2\x80\x94 media missing" : "offline \xE2\x80\x94 " + n.offlineWhy;   // R-MEDIA-1
+                t.drawText(textfit::ellipsize(t, why, w - kPadX - x, 9.0, font::sans()), x, textfit::baseline(l2, 9.0), 9.0, font::sans());
             }
             else
             {

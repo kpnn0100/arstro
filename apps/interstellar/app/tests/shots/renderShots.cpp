@@ -431,6 +431,17 @@ namespace
             ++s.m.revision;
         };
         v.push_back({"cut_multicam", multicam, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"cut_vendor_raw", [](FakeService &s) {   // R-MEDIA-1: an R3D the project names, offline for want of its SDK
+            s.edit();
+            for (auto &n : s.m.rack)
+                if (n.rackObj == "ro7")
+                {
+                    n.media = "/footage/B002_C014.R3D";
+                    n.cosmoName = "B002_C014 corridor";
+                    n.offlineWhy = "REDCODE RAW needs the RED R3D SDK \xE2\x80\x94 not in this build";
+                }
+            ++s.m.revision;
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

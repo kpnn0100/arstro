@@ -99,7 +99,7 @@ namespace
                     return true;
                 }
             }
-            if (path.find("missing") != std::string::npos || !fs::exists(path)) return false;
+            if (path.find("missing") != std::string::npos || (!fs::exists(path) && !seq::firstFrameExists(path))) return false;   // a DNG sequence: its frames
             gOpens[fs::path(path).filename().string()]++;
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
             mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
@@ -1628,6 +1628,39 @@ int main()
         for (const auto &c : C2.clips) assert(std::fabs(c.at - (c.src == P.idForRef("a") ? 0.0 : 0.5)) < 1e-9);
         assert(C2.audioClips.size() == 1 && has(C2.audioClips[0].src, "b.mp4") && std::fabs(C2.audioClips[0].at - 0.5) < 1e-9);
         assert(!f.run("multicam new cams3 --sources a,b --sync timecode --in a=1", &err) && has(err, "--sync in"));
+    });
+
+    test("camera RAW: a CinemaDNG folder is one source by its pattern; a vendor RAW is refused naming its SDK (R-MEDIA-1)", [] {
+        Fixture f("raw");
+        f.standard();
+        std::string err;
+        fs::create_directories(f.path("footage/C001"));
+        for (int k = 10; k < 14; ++k) std::ofstream(f.path("footage/C001/C001_0000" + std::to_string(k) + ".dng")) << "x";
+        std::ofstream(f.path("footage/C001/notes.txt")) << "x";
+        f.must("rack add \"" + f.path("footage/C001") + "\"");
+        const RackNodeModel *r = nullptr;
+        for (const auto &n : f.svc->model().rack) if (n.bindName == "c001") r = &n;
+        assert(r && has(r->media, "C001_%06d.dng") && r->video && !r->failed);
+        f.must("track add --kind video --name v1");
+        f.must("clip add --track v1 --src c001 --in 0 --at 6");   // no --out: the sequence's own length
+        // refusals: an empty folder, a pattern with no frames, the vendor formats
+        fs::create_directories(f.path("footage/empty"));
+        assert(!f.run("rack add \"" + f.path("footage/empty") + "\"", &err) && has(err, "holds no numbered .dng"));
+        assert(!f.run("rack add \"" + f.path("footage/C009_%06d.dng") + "\"", &err) && has(err, "no frame of"));
+        std::ofstream(f.path("footage/clip.R3D")) << "x";
+        assert(!f.run("rack add \"" + f.path("footage/clip.R3D") + "\"", &err) && has(err, "REDCODE RAW") && has(err, "RED R3D SDK"));
+        std::ofstream(f.path("footage/clip.ari")) << "x";
+        assert(!f.run("rack add \"" + f.path("footage/clip.ari") + "\"", &err) && has(err, "ARRI Image SDK"));
+        // a project that already names one (made where the SDK is): offline, and saying why
+        f.must("project save");
+        std::ofstream(f.path("mv.isp"), std::ios::app) << "#rackobj id=ro_90 name=redclip kind=source weight=1.0 media=footage/clip.R3D frame=0.0\n";
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        const RackNodeModel *red = nullptr;
+        for (const auto &n : f.svc->model().rack) if (n.bindName == "redclip") red = &n;
+        assert(red && red->failed && red->offlineWhy == "REDCODE RAW needs the RED R3D SDK — not in this build");
+        assert(has(f.out("lint"), "(REDCODE RAW needs the RED R3D SDK — not in this build)"));
+        for (const auto &n : f.svc->model().rack) if (n.bindName == "c001") assert(!n.failed && n.offlineWhy.empty());
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

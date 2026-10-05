@@ -8,12 +8,23 @@
  */
 #pragma once
 #include "FrameSource.h"
+#include <functional>
 #include <memory>
+#include <string>
 
 namespace arstro
 {
 namespace interstellar_host
 {
+    /** R-MEDIA-1: the decoder for a MOVING source, not yet opened — a CinemaDNG sequence through
+     *  LibRaw, a vendor RAW through its SDK's decoder when one is registered, else FFmpeg. Null, with
+     *  `why` naming what is missing, when nothing in this build can decode it. */
+    std::unique_ptr<interstellar::IFrameSource> makeVideoSource(const std::string &file, std::string *why = nullptr);
+    /** R-MEDIA-1: the seam an SDK build fills — `ext` ("ari", "r3d", "braw") → its decoder. */
+    using VendorFactory = std::function<std::unique_ptr<interstellar::IFrameSource>()>;
+    void registerVendorDecoder(const std::string &ext, VendorFactory make);
+    bool vendorDecoderInstalled(const std::string &ext);
+
     class HostFrameSource : public interstellar::IFrameSource
     {
     public:

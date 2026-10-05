@@ -18,8 +18,13 @@
 #include <cassert>
 
 #include "AudioSourceFFmpeg.h"
+#include "DngWrite.h"
 #include "FrameSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
+#include "HostFrameSource.h"
+#include "Sequence.h"
+#include "VideoFrameDecoder.h"
+#include <filesystem>
 #include <cstdio>
 #include <algorithm>
 #include <set>
@@ -213,6 +218,76 @@ int main(int argc, char **argv)
             assert(std::fabs(peak - 0.5) < (std::string(codec) == "prores" ? 1e-4 : 0.02) && std::fabs(hz - 1000) < 3);
         }
         std::printf("  [PASS] audio: decoded at the mix rate, mono at unity, seeks exact, and the writer's sound reads back\n");
+    }
+    // ── R-MEDIA-1: a CinemaDNG sequence by its pattern, through LibRaw; a vendor RAW refused by name ──
+    {
+        const std::string first = argv[1];
+        const std::string base = first.find('/') == std::string::npos ? std::string(".") : first.substr(0, first.rfind('/'));
+        const std::string dir = base + "/A001_C002";
+        std::filesystem::create_directories(dir);
+        const int w = 64, h = 36;
+        for (int k = 0; k < 12; ++k)
+        {
+            if (k == 5) continue;   // a dropped frame on the card: number 000105 is missing
+            std::vector<uint16_t> px((size_t)w * h * 3);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                {
+                    const size_t i = ((size_t)y * w + x) * 3;
+                    px[i] = (uint16_t)(x * 300 + k * 1500);   // brighter frame by frame
+                    px[i + 1] = 12000;
+                    px[i + 2] = (uint16_t)(y * 400 + 100);
+                }
+            char name[64];
+            std::snprintf(name, sizeof name, "/A001_C002_%06d.dng", 100 + k);
+            assert(dngtest::write(dir + name, w, h, px, 25.0, {0x00, 0x10, 0x00, 0x01, 0, 0, 0, 0}));   // 01:00:10:00
+        }
+        std::string pattern, why;
+        assert(interstellar::seq::fromFolder(dir, pattern, why) && pattern == dir + "/A001_C002_%06d.dng");
+        assert(interstellar::looksLikeVideo(pattern) && interstellar::seq::stem(pattern) == "A001_C002");
+#ifdef INTERSTELLAR_HAVE_LIBRAW
+        interstellar_host::HostFrameSource src;
+        interstellar::IFrameSource::Info info;
+        assert(src.open(pattern, info));
+        std::printf("  CinemaDNG %s: %dx%d %.2f fps, %lld frames, %d-bit, TC %s, reel %s\n", pattern.c_str(), info.width, info.height,
+                    info.fps, info.frames, info.bitDepth, info.timecode.c_str(), info.reel.c_str());
+        assert(info.width == w && info.height == h && info.frames == 12 && std::fabs(info.fps - 25.0) < 1e-6);
+        assert(info.bitDepth == 16 && info.timecode == "01:00:10:00" && info.reel == "A001_C002");
+        interstellar::Raster f0, f3, f4, f5, f6, d2, s2;
+        assert(src.frameAt(0, f0) && src.frameAt(3, f3) && src.frameAt(4, f4) && src.frameAt(5, f5) && src.frameAt(6, f6));
+        const size_t at = ((size_t)10 * w + 20) * 4;
+        std::printf("  frame 0 R %d G %d, frame 3 R %d G %d; frames 4 / 5 (dropped) / 6 R %d %d %d\n", f0.rgba[at], f0.rgba[at + 1],
+                    f3.rgba[at], f3.rgba[at + 1], f4.rgba[at], f5.rgba[at], f6.rgba[at]);
+        assert(f3.rgba[at] > f0.rgba[at] + 10);
+        // one exposure for the clip: the same recorded value develops alike in every frame (green is constant)
+        assert(std::abs((int)f3.rgba[at + 1] - (int)f0.rgba[at + 1]) <= 1);
+        // the dropped frame holds the one before it — which is its own picture, not the one after
+        assert(hashRaster(f5) == hashRaster(f4) && f4.rgba[at] > f3.rgba[at] && f6.rgba[at] > f4.rgba[at]);
+        interstellar::Raster f10, f11;
+        assert(src.frameAt(10, f10) && src.frameAt(11, f11) && hashRaster(f10) != hashRaster(f11));   // frame k is number first + k
+        // deep: the developed 16 bits, not 8 widened — and the 8-bit frame is the deep one rounded
+        assert(src.frameAtDeep(2, d2) && d2.deep() && src.frameAt(2, s2));
+        size_t fine = 0;
+        for (size_t i = 0; i < d2.rgba16.size(); i += 4) fine += d2.rgba16[i] % 257 != 0;
+        interstellar::Raster round;
+        interstellar::toShallow(d2, round);
+        assert(fine > d2.rgba16.size() / 8 && round.rgba == s2.rgba);
+        // Cosmo's decoder seam develops the same frame (the reference frame Grade shows)
+        interstellar_host::VideoFrameDecoder dec;
+        const cosmo::DecodedImage di = dec.decodeFile(pattern + "#t=0.120");   // 0.12 s at 25 fps = frame 3
+        assert(di.width == w && di.rgba == f3.rgba && di.name == "A001_C002");
+        std::printf("  [PASS] CinemaDNG: pattern from the folder, rate and timecode from its tags, 16-bit, a dropped frame held, Cosmo's seam agrees\n");
+#else
+        std::printf("  [SKIP] CinemaDNG: this build has no LibRaw\n");
+#endif
+        // the vendor formats: refused by name until an SDK build registers a decoder
+        std::string need;
+        assert(!interstellar_host::makeVideoSource(base + "/clip.R3D", &need) && need.find("RED R3D SDK") != std::string::npos);
+        assert(!interstellar_host::makeVideoSource(base + "/clip.braw", &need) && need.find("Blackmagic RAW SDK") != std::string::npos);
+        assert(!interstellar_host::vendorDecoderInstalled("r3d"));
+        interstellar_host::registerVendorDecoder("r3d", [] { return std::unique_ptr<interstellar::IFrameSource>(new interstellar_host::FrameSourceFFmpeg()); });
+        assert(interstellar_host::vendorDecoderInstalled("R3D") && interstellar_host::makeVideoSource(base + "/clip.r3d"));
+        std::printf("  [PASS] vendor RAW: %s — and a registered decoder is used\n", need.c_str());
     }
     std::printf("interstellar_host_tests: %d file(s) passed\n", argc - 1);
     return 0;

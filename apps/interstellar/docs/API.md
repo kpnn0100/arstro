@@ -279,6 +279,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].bypass` | bool |  | Cosmo's bypass. |
 | `rack[].pending` | bool |  | Pixels still decoding. |
 | `rack[].failed` | bool |  | Offline: reads as missing, never as a stall (R-RACK-7). |
+| `rack[].offlineWhy` | string |  | Why it is offline when the file is there: the decoder it needs (a vendor RAW SDK, R-MEDIA-1); "" = missing. |
 | `rack[].weight` | number |  | Grade weight 0..1 (R-RACK-4). |
 | `rack[].media` | string |  | Source file (file name only when stable). |
 | `rack[].frame` | number |  | Reference frame a video is graded on, seconds (R-RACK-3). |

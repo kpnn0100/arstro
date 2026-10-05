@@ -561,11 +561,16 @@ reserves the rest so adopting it is not a migration.
   reel tags), shown, and used by every interchange format. — ✅ (the clip inspector's Reel and
   Source TC rows; `rack[].timecode`/`reel`).
 
-## R-MEDIA — media management — ⏳ NOT STARTED (added 2026-10-05)
+## R-MEDIA — media management — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-MEDIA-1, 2–3 next)
 
 - **R-MEDIA-1 Camera RAW**: CinemaDNG sequences through LibRaw. ARRIRAW, R3D and BRAW need their
   vendors' SDKs, which are licensed per user and not in this build: a decoder seam takes them when
-  installed, and the app names the missing SDK instead of failing silently.
+  installed, and the app names the missing SDK instead of failing silently. — ✅ (DR-MEDIA-1). A CinemaDNG
+  clip is added as its folder (or as `name_%06d.dng`), developed at 16 bits with the camera's white
+  balance and colour matrix to Rec.709 and one exposure for the whole clip; its rate and timecode
+  come from its tags (24 fps and none without them, said). A vendor RAW is refused at `rack add`
+  naming its SDK — and a project that already names one shows it offline with that reason. RAW plays
+  at the speed LibRaw develops a frame; a proxy (R-MEDIA-2) is the way to smooth playback (said).
 - **R-MEDIA-2 Proxies, offline/online**: a proxy (ProRes Proxy or H.264 at a chosen size) is made
   per source; a project switch picks proxies or originals for the monitor; renders always use
   originals.

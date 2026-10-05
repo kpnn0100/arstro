@@ -1,12 +1,55 @@
 #include "HostFrameSource.h"
 #include "FrameSelector.h"
+#include "FrameSourceDng.h"
 #include "FrameSourceFFmpeg.h"
 #include "core/decode/NativeImageDecoder.h"
+#include <map>
+#include <mutex>
 
 namespace arstro
 {
 namespace interstellar_host
 {
+    namespace
+    {
+        std::mutex gVendorMu;
+        std::map<std::string, VendorFactory> &vendors()
+        {
+            static std::map<std::string, VendorFactory> m;
+            return m;
+        }
+    }
+
+    void registerVendorDecoder(const std::string &ext, VendorFactory make)
+    {
+        std::lock_guard<std::mutex> l(gVendorMu);
+        vendors()[interstellar::seq::lower(ext)] = std::move(make);
+    }
+
+    bool vendorDecoderInstalled(const std::string &ext)
+    {
+        std::lock_guard<std::mutex> l(gVendorMu);
+        return vendors().count(interstellar::seq::lower(ext)) > 0;
+    }
+
+    std::unique_ptr<interstellar::IFrameSource> makeVideoSource(const std::string &file, std::string *why)
+    {
+        if (interstellar::seq::isSequence(file)) return std::unique_ptr<interstellar::IFrameSource>(new FrameSourceDng());
+        if (const interstellar::VendorRaw *v = interstellar::vendorRawFor(file))
+        {
+            VendorFactory make;
+            {
+                std::lock_guard<std::mutex> l(gVendorMu);
+                const auto it = vendors().find(v->ext);
+                if (it != vendors().end()) make = it->second;
+            }
+            if (make) return make();
+            if (why) *why = std::string(v->format) + " needs " + v->sdk + ", which is licensed per user and not in this build";
+            return nullptr;
+        }
+        return std::unique_ptr<interstellar::IFrameSource>(new FrameSourceFFmpeg());
+    }
+
     HostFrameSource::HostFrameSource() = default;
     HostFrameSource::~HostFrameSource() = default;
 
@@ -17,8 +60,8 @@ namespace interstellar_host
         mIsStill = !interstellar::looksLikeVideo(path);
         if (!mIsStill)
         {
-            mVideo.reset(new FrameSourceFFmpeg());
-            return mVideo->open(path, out) && out.valid();
+            mVideo = makeVideoSource(path);
+            return mVideo && mVideo->open(path, out) && out.valid();
         }
         cosmo::NativeImageDecoder dec;
         cosmo::DecodedImage d = dec.decodeFile(path, cosmo::Fidelity::Full);

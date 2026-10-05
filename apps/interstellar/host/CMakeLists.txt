@@ -14,6 +14,7 @@ if(INTERSTELLAR_AV_FOUND)
     ${CMAKE_CURRENT_SOURCE_DIR}/FrameWriterFFmpeg.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VideoFrameDecoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HostFrameSource.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FrameSourceDng.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PngWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Thumbnailer.cpp)
   target_include_directories(interstellar_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -25,6 +26,21 @@ if(INTERSTELLAR_AV_FOUND)
     target_sources(interstellar_host PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/AudioOutPulse.cpp)
     target_link_libraries(interstellar_host PUBLIC PkgConfig::INTERSTELLAR_PULSE)
     target_compile_definitions(interstellar_host PUBLIC INTERSTELLAR_HAVE_PULSE=1)
+  endif()
+  # R-MEDIA-1: CinemaDNG sequences through LibRaw — the system's, else the vendored build Cosmo uses
+  pkg_check_modules(INTERSTELLAR_LIBRAW IMPORTED_TARGET libraw)
+  set(INTERSTELLAR_VENDORED_LIBRAW ${CMAKE_CURRENT_SOURCE_DIR}/../../../core/ImageProcessing/lib/LibRaw)
+  if(INTERSTELLAR_LIBRAW_FOUND)
+    target_link_libraries(interstellar_host PUBLIC PkgConfig::INTERSTELLAR_LIBRAW)
+    target_compile_definitions(interstellar_host PUBLIC INTERSTELLAR_HAVE_LIBRAW=1)
+  elseif(EXISTS ${INTERSTELLAR_VENDORED_LIBRAW}/libraw/libraw.h AND EXISTS ${INTERSTELLAR_VENDORED_LIBRAW}/lib/libraw.a)
+    find_package(OpenMP)
+    target_include_directories(interstellar_host PRIVATE ${INTERSTELLAR_VENDORED_LIBRAW})
+    target_link_libraries(interstellar_host PUBLIC ${INTERSTELLAR_VENDORED_LIBRAW}/lib/libraw.a z)
+    if(OpenMP_CXX_FOUND)
+      target_link_libraries(interstellar_host PUBLIC OpenMP::OpenMP_CXX)
+    endif()
+    target_compile_definitions(interstellar_host PUBLIC INTERSTELLAR_HAVE_LIBRAW=1)
   endif()
   message(STATUS "interstellar: video enabled (libavformat ${INTERSTELLAR_AV_libavformat_VERSION})")
 else()
