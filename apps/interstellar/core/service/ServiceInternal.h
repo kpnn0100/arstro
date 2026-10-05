@@ -252,6 +252,20 @@ namespace interstellar
         std::unique_ptr<IFrameWriter> writer;
     };
 
+    /** R-MEDIA-2: a proxy being made — the original decoded, prescaled and encoded one frame per pump. */
+    struct InterstellarService::ProxyJob
+    {
+        ProxyJobModel model;
+        std::string media;            // the original, resolved
+        EncodeSpec spec;
+        std::unique_ptr<IFrameSource> source;
+        std::unique_ptr<IFrameWriter> writer;
+        int width = 0, height = 0;    // the proxy's frame (even)
+        int srcWidth = 0;             // the original's width — plugins are sized in it
+        double fps = 24.0;
+        bool begun = false;
+    };
+
     /** A rack load in flight. `entryRackObj[i]` is the #rackobj bound to the i-th `.cmp` entry. */
     struct InterstellarService::PendingRack
     {

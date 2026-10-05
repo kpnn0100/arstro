@@ -93,6 +93,9 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `edit insert [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point INSERT: the source (the viewer's, or --src) between its In/Out at the timeline In (or the playhead) on the target track; a clip there is split and everything after moves right on every track. Any three of source In/Out and timeline In/Out decide the fourth. | R-EDT-1 |
 | `edit overwrite [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away and nothing moves. | R-EDT-1 |
 | `multicam new <name> [--sources <a,b,...>] [--sync <timecode\|in>] [--in <src=t,...>] [--audio <src\|none>] [--track <trk>] [--at <t>]` | A multicam: a new timeline with one video track per source (angle 1, 2, … in the order given), lined up by their timecode (default) or by their in-points (--in a=1.5,b=0.4 — source seconds, 0 when not given), and the sound of one source (--audio, default the first; none for silence). With --track, also placed on the current timeline at --at (else the playhead), showing angle 1. | R-EDT-5 |
+| `proxy make [<source>…] [--codec <prores\|h264>] [--edge <px>]` | Make a proxy of each named video source (none named: every one without a proxy) — ProRes Proxy (default) or H.264, its long edge --edge px (960 unless given), in <project>.proxies/ — as a background job like a render. The monitor uses it while `proxy use on`; renders never do. | R-MEDIA-2 |
+| `proxy remove <source…>` | Forget a source's proxy: the monitor decodes the original again. The file stays on disk. | R-MEDIA-2 |
+| `proxy use <on\|off>` | The project's switch: the monitor (and playback, the preview cache, capture) decodes each source's proxy where it has one — or the originals. Renders and export-still always decode the originals. | R-MEDIA-2 |
 | `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
@@ -282,6 +285,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].offlineWhy` | string |  | Why it is offline when the file is there: the decoder it needs (a vendor RAW SDK, R-MEDIA-1); "" = missing. |
 | `rack[].weight` | number |  | Grade weight 0..1 (R-RACK-4). |
 | `rack[].media` | string |  | Source file (file name only when stable). |
+| `rack[].proxy` | string |  | Its proxy file, resolved; empty = none (R-MEDIA-2). |
 | `rack[].frame` | number |  | Reference frame a video is graded on, seconds (R-RACK-3). |
 | `rack[].video` | bool |  | A video source. |
 | `rack[].usedBy` | integer |  | Clips referencing it in the current timeline. |
@@ -375,6 +379,18 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].height` | integer |  | Output frame height. |
 | `renders[].fps` | number |  | Output rate the timeline is sampled at. |
 | `renders[].spec` | string |  | The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate. |
+| `useProxies` | bool |  | The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2). |
+| `proxyJobs` | array |  | This session's proxy jobs, oldest first. |
+| `proxyJobs[].id` | string |  | Job id (p1, p2, …). |
+| `proxyJobs[].rackObj` | string |  | The source's #rackobj id. |
+| `proxyJobs[].bindName` | string |  | Its bind name. |
+| `proxyJobs[].codec` | string |  | prores (ProRes Proxy) \| h264. |
+| `proxyJobs[].edge` | integer |  | The long edge asked for, px. |
+| `proxyJobs[].outPath` | string |  | The proxy file (file name only when stable). |
+| `proxyJobs[].done` | integer |  | Frames written. |
+| `proxyJobs[].total` | integer |  | Frames in the source. |
+| `proxyJobs[].state` | string |  | queued \| running \| done \| failed \| cancelled. |
+| `proxyJobs[].error` | string |  | Why it failed. |
 | `canUndo` | bool |  | `undo` has something to undo (R-EDIT-1). |
 | `canRedo` | bool |  | `redo` has something to redo. |
 | `undoLabel` | string |  | What `undo` would undo, e.g. `set a.basic.exposure`. |

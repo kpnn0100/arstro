@@ -46,6 +46,7 @@ namespace interstellar
 {
     class Project;
     struct Clip;
+    struct RackObj;
     struct AnimKey;
     struct ResolvedTimeline;
     namespace render {
@@ -151,6 +152,7 @@ namespace interstellar
     private:
         struct Source;
         struct Job;
+        struct ProxyJob;      // R-MEDIA-2 (ServiceProxy.cpp)
         struct PendingRack;
         struct UndoState;
         struct UndoEntry;
@@ -235,6 +237,21 @@ namespace interstellar
         /** R-EDT-5: a timeline's angles — its video tracks, by order (angle k = element k-1). */
         std::vector<NodeId> anglesOf(const NodeId &timeline) const;
         void pumpJobs();
+        // R-MEDIA-2 — ServiceProxy.cpp
+        bool proxyCommand(const Command &c);
+        Source *proxyFor(const RackObj &ro, std::string &media);   // the monitor's proxy source, or null
+        int srcWidthOf(const RackObj &ro, const std::string &media, const Source &s) const;
+        void pumpProxies();
+        std::string proxyDir() const;
+        /** Set while a render or export-still plans: frames decode the ORIGINALS, never a proxy. */
+        bool mOriginalsOnly = false;
+        struct OriginalsOnly
+        {
+            explicit OriginalsOnly(InterstellarService &s) : svc(s), was(s.mOriginalsOnly) { s.mOriginalsOnly = true; }
+            ~OriginalsOnly() { svc.mOriginalsOnly = was; }
+            InterstellarService &svc;
+            bool was;
+        };
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
@@ -404,6 +421,8 @@ namespace interstellar
         int mAheadPlannedEdge = 0;
         unsigned mAheadPlannedRevision = ~0u;
         std::vector<std::unique_ptr<Job>> mJobs;
+        std::vector<std::unique_ptr<ProxyJob>> mProxyJobs;   // R-MEDIA-2
+        int mProxySeq = 0;
         int mNextJob = 1;
 
         // edit history, clipboard, settings, presets

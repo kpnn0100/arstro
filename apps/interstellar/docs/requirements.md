@@ -274,6 +274,36 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-MEDIA-2 Proxies, offline/online (R-MEDIA-2)
+`proxy make [<source>…] [--codec prores|h264] [--edge <px>]` (`core/service/ServiceProxy.cpp:76`) queues
+one job per video source (none named: every one without a proxy; a still is refused — it needs none);
+a job (`:178`) decodes the original frame by frame, shrinks it to the long edge by area average (never
+up, `:37`), drops an odd row or column for the encoder's chroma, and writes ProRes Proxy 10-bit
+(default) or H.264 to `<project>.proxies/<bind>_<edge>.mov|mp4`, one frame per pump like a render,
+its progress in `proxyJobs[]` every frame. Only when the last frame is written does the source
+reference it (`#rackobj proxy= proxyScale=`, `:231`), so a half-made proxy is never shown. `proxy use
+on|off` is the project's switch (`proxies = true` in the header, `model/Schema.h:140`). Planning takes
+a source's proxy when the switch is on, the source has one and it opens (`proxyFor`,
+`core/service/ServiceRender.cpp:197`) — for the timeline, Grade's source frame, the viewer, playback, the
+preview cache and capture — and plugins keep their size in ORIGINAL pixels through `proxyScale`
+(`srcWidthOf`, `:208`). A render job and export-still plan under `OriginalsOnly` (`:1208`, `:1268`): they
+decode the originals whatever the switch. `proxy remove` forgets a proxy (or cancels one being made);
+the file stays. Undo restores the `.isp` but keeps the proxy fields as they are
+(`core/service/ServiceEdit.cpp:141`): a proxy finished after an edit survives undoing it. Model:
+`useProxies`, `proxyJobs[]`, `rack[].proxy`. UI: a video source's menu has Make Proxy / Make Proxy
+Again / Remove Proxy / Cancel Proxy (`app/App.cpp:196`); Workspace › Use Proxies (marked while on) and
+Make Proxies for All Video (`:291`); the source bin's row says "proxy ·" or "proxy 40% ·"
+(`app/widgets/SourceBin.cpp:36`); the monitor's caption says "proxies" (timeline) or "proxy" (Grade,
+viewer) (`app/App.cpp:1021`). Guarded by L2 `proxies…` (refusals; two jobs done, 96 frames each, 48×27 →
+24×14, ProRes Proxy 10-bit, the original's values; undo of an earlier edit keeps them; the .isp
+fields; the monitor reading a marked proxy only while the switch is on; export-still and a render
+reading originals and the monitor back on the proxy after; remove; a 4 px blur 6 px soft on the
+original and 4 px through the half-size proxy), UI (the rows, the menu items, the switch both ways,
+both captions), by hand (a 1280×720 clip: `a_320.mov` ProRes Proxy 320×180 10-bit 4:2:2 48 frames;
+capture through it edge energy 1.31 against export-still's 4.2 from the original). Mutants run red:
+renders or export-still on a proxy, the switch ignored, plugins sized in proxy pixels, undo dropping
+proxies, no shrink, no OriginalsOnly in render jobs.
+
 ### DR-MEDIA-1 Camera RAW: CinemaDNG sequences through LibRaw; the vendor formats named (R-MEDIA-1)
 A numbered DNG run is one video source named by its pattern, `dir/name_%06d.dng`
 (`core/Sequence.h:45`) — FFmpeg's and Nuke's convention, and the source's identity in the .isp, the

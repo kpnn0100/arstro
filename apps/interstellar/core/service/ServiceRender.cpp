@@ -194,6 +194,25 @@ namespace interstellar
         return out;
     }
 
+    InterstellarService::Source *InterstellarService::proxyFor(const RackObj &ro, std::string &media)
+    {
+        // R-MEDIA-2: a proxy only for the monitor, only when the project says so, only when it opens
+        if (!mProject->proxies || mOriginalsOnly || ro.proxy.empty()) return nullptr;
+        const std::string p = resolvePath(ro.proxy);
+        Source *s = source(*mSync, p);
+        if (!s || !s->ok) return nullptr;   // a deleted proxy file: the original, silently correct
+        media = p;
+        return s;
+    }
+
+    int InterstellarService::srcWidthOf(const RackObj &ro, const std::string &media, const Source &s) const
+    {
+        // plugins are sized in the ORIGINAL's pixels: a proxy's width is scaled back up to it
+        if (!ro.proxy.empty() && media == resolvePath(ro.proxy) && ro.proxyScale > 0)
+            return (int)std::lround(s.info.width / ro.proxyScale);
+        return s.info.width;
+    }
+
     bool InterstellarService::decodeLayer(RenderCtx &ctx, const PlanLayer &l, Raster &out, bool deep)
     {
         Source *s = source(ctx, l.media);
@@ -401,8 +420,8 @@ namespace interstellar
             const RackObj *ro = P.rackObj(c->src);
             if (!ro || ro->media.empty()) continue;   // offline: drawn as missing by the UI
             PlanLayer L;
-            L.media = resolvePath(ro->media);
-            Source *s = source(*mSync, L.media);   // info only — nothing decodes on this thread
+            Source *s = proxyFor(*ro, L.media);   // R-MEDIA-2: the monitor's proxy, when the project uses one
+            if (!s) s = source(*mSync, L.media = resolvePath(ro->media));   // info only — nothing decodes on this thread
             if (!s || !s->ok) continue;
             // Source frame from the clip's SOURCE time at the SOURCE's own rate (a 30p clip in a 24p
             // project steps at 30p); a still is frame 0 forever (R-VOL-6).
@@ -453,7 +472,7 @@ namespace interstellar
             // the composite scale.
             L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
             effectChain(ro->id, L.effects, L.effectsKey, srcT);
-            L.srcWidth = s->info.width;
+            L.srcWidth = srcWidthOf(*ro, L.media, *s);
             L.input = inputTransform(*ro, workingOf(P));
             if (!ro->lut.empty())
             {
@@ -482,8 +501,8 @@ namespace interstellar
         const RackObj *ro = mProject->rackObj(roId);
         if (!ro || ro->media.empty()) return false;
         PlanLayer L;
-        L.media = resolvePath(ro->media);
-        Source *s = source(*mSync, L.media);
+        Source *s = proxyFor(*ro, L.media);   // R-MEDIA-2
+        if (!s) s = source(*mSync, L.media = resolvePath(ro->media));
         if (!s || !s->ok) return false;
         const double fps = s->info.fps > 0 ? s->info.fps : 24.0;
         const double at = t < 0 ? ro->frame : t;
@@ -494,7 +513,7 @@ namespace interstellar
         L.weight = std::clamp(ro->weight, 0.0, 1.0);
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
         effectChain(roId, L.effects, L.effectsKey, at);
-        L.srcWidth = s->info.width;
+        L.srcWidth = srcWidthOf(*ro, L.media, *s);
         L.input = inputTransform(*ro, workingOf(*mProject));
         if (!ro->lut.empty())
         {
@@ -502,7 +521,7 @@ namespace interstellar
             L.lut = loadLut(resolvePath(ro->lut), why, &L.lutKey);
         }
         // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
-        // is graded as itself.
+        // is graded as itself (a proxy's shape is its original's, give or take an odd row)
         outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
         plan.layers.push_back(L);
         plan.key = "src|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
@@ -1186,6 +1205,7 @@ namespace interstellar
             // graded, composited and handed to the encoder at 16 bits per component
             const bool deep = !j.png && j.spec.bitDepth > 8;
             FramePlan plan;
+            OriginalsOnly originals(*this);   // R-MEDIA-2: renders always decode the originals
             if (!planFrame(j.model.timeline, t, j.proxyEdge, plan, nullptr)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             plan.output = j.output;   // R-COLOR-4: the render's --output, not the monitor's view
             if (!executePlan(*mSync, plan, frame, true, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
@@ -1245,6 +1265,7 @@ namespace interstellar
         t = snapToFrame(std::max(0.0, t), mProject->fps);
         Raster frame;
         bool any = false;
+        OriginalsOnly originals(*this);   // R-MEDIA-2: a still is a deliverable — never a proxy
         if (!renderTimelineFrame(tl, t, 0, frame, &any)) return false;
         std::string err;
         if (!mHost.writeImage(out, frame, err)) return fail("export-still: " + err);

@@ -80,6 +80,8 @@ namespace interstellar
         double frame = 0.0;                 // the reference frame Cosmo grades, seconds (R-RACK-3)
         std::string input = "rec709";       // what the media IS — its input colour transform (R-COLOR-2)
         std::string lut;                    // an input LUT (.cube) after the input transform; "" = none (R-COLOR-5)
+        std::string proxy;                  // R-MEDIA-2: its proxy file (the monitor's, when the project uses proxies); "" = none
+        double proxyScale = 1.0;            // the proxy's width over the original's (plugins are sized in ORIGINAL pixels)
         Fields unknown;
         Notes notes;
     };
@@ -327,6 +329,7 @@ namespace interstellar
         std::string timebase = "seconds";
         int sampleRate = 48000;
         double masterGain = 0.0;
+        bool proxies = false;                // R-MEDIA-2: the monitor decodes proxies where a source has one; renders never do
         /** Which timeline the EDITOR last had open — presentation. A render never reads it
          *  (R-RENDER-1). */
         NodeId current;

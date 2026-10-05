@@ -235,6 +235,7 @@ namespace
     WriterBegin gBegin;
     bool gNoHardware = false;   // the capture writer plays a machine with no video unit (R-PLAY-3)
 
+    EncodeSpec gProxySpec;   // R-MEDIA-2: what the last proxy was encoded as
     struct CaptureWriter : public IFrameWriter
     {
         std::vector<Raster> *sink;
@@ -242,8 +243,9 @@ namespace
         bool begin(const std::string &p, int w, int h, double fps, long long n, const EncodeSpec &spec) override
         {
             mPath = p;
-            mCacheFile = p.find(".cache/") != std::string::npos;
+            mCacheFile = p.find(".cache/") != std::string::npos || p.find(".proxies/") != std::string::npos;   // R-PLAY-1, R-MEDIA-2: read back
             mFrames.clear();
+            if (p.find(".proxies/") != std::string::npos) gProxySpec = spec;
             if (mCacheFile) { mCacheSpec = spec; mCacheW = w; mCacheH = h; return true; }   // not a render: gBegin is the render's
             gBegin = WriterBegin{p, w, h, fps, n, spec};
             gAudio.clear();
@@ -262,7 +264,7 @@ namespace
             std::ofstream(mPath).put('\0');
             std::lock_guard<std::mutex> l(gMemMu);
             gMemFiles[mPath] = std::move(mFrames);
-            ++gCacheSegmentsWritten;
+            if (mPath.find(".cache/") != std::string::npos) ++gCacheSegmentsWritten;
             return true;
         }
         bool writeAudio(const float *st, int frames) override
@@ -1661,6 +1663,93 @@ int main()
         assert(red && red->failed && red->offlineWhy == "REDCODE RAW needs the RED R3D SDK — not in this build");
         assert(has(f.out("lint"), "(REDCODE RAW needs the RED R3D SDK — not in this build)"));
         for (const auto &n : f.svc->model().rack) if (n.bindName == "c001") assert(!n.failed && n.offlineWhy.empty());
+    });
+
+    test("proxies: made in the background, the monitor's while the project says so, never a render's (R-MEDIA-2)", [] {
+        Fixture f("proxy");
+        f.standard();                                   // shotA a 0–2, shotB b 2–4; a still in the rack
+        std::string err;
+        assert(!f.run("proxy make still", &err) && has(err, "needs no proxy"));
+        assert(!f.run("proxy make a --edge 4", &err) && has(err, "16 … 8192"));
+        f.must("set shotA.opacity=0.5");                // an edit made BEFORE the proxies exist …
+        f.must("proxy make --edge 24 --codec prores");  // every video source: a and b (the still needs none)
+        const AppModel &m = f.svc->model();
+        assert(m.proxyJobs.size() == 2 && m.proxyJobs[0].state == "done" && m.proxyJobs[1].state == "done" && m.proxyJobs[0].total == 96);
+        auto rackNode = [&](const std::string &bind) -> const RackNodeModel & {
+            for (const auto &n : f.svc->model().rack) if (n.bindName == bind) return n;
+            assert(false);
+            return f.svc->model().rack.front();
+        };
+        const std::string pa = rackNode("a").proxy, pb = rackNode("b").proxy;
+        assert(has(pa, "mv.proxies/a_24.mov") && has(pb, "mv.proxies/b_24.mov") && rackNode("still").proxy.empty());
+        f.must("undo");                                 // … undone after: the proxies stay
+        assert(!rackNode("a").proxy.empty() && has(f.out("get shotA.opacity"), "shotA.opacity=1.0"));
+        {
+            std::lock_guard<std::mutex> l(gMemMu);
+            auto &frames = gMemFiles[pa];
+            std::printf("    proxy of a: %zu frames at %dx%d (%s %s, %d-bit)\n", frames.size(), frames[0].width, frames[0].height,
+                        gProxySpec.codec.c_str(), gProxySpec.profile.c_str(), gProxySpec.bitDepth);
+            assert(frames.size() == 96 && frames[0].width == 24 && frames[0].height == 14);   // 48×27 → 24×13.5 → 24×14, even
+            assert(gProxySpec.codec == "prores" && gProxySpec.profile == "proxy" && gProxySpec.bitDepth == 10);
+            assert(frames[24].rgba[0] == 24 && frames[24].rgba[2] == 100);                    // the original's frame 24, its values
+            for (const auto *fr : {&gMemFiles[pa], &gMemFiles[pb]})   // mark the proxies, so a frame says which file it came from
+                for (auto &x : const_cast<std::vector<Raster> &>(*fr))
+                    for (size_t i = 2; i < x.rgba.size(); i += 4) x.rgba[i] = 7;
+        }
+        f.must("project save");
+        {
+            std::ifstream in(f.path("mv.isp"));
+            const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            assert(has(isp, "proxy=mv.proxies/a_24.mov") && has(isp, "proxyScale=0.5") && !has(isp, "proxies ="));
+        }
+        auto monitor = [&](double t) {
+            Raster r;
+            assert(f.svc->renderFrame(t, 0, r));
+            return std::make_pair((int)r.rgba[((size_t)13 * r.width + 24) * 4], (int)r.rgba[((size_t)13 * r.width + 24) * 4 + 2]);
+        };
+        assert(monitor(1.0) == std::make_pair(24, 100));   // the switch is off: the original
+        f.must("proxy use on");
+        assert(f.svc->model().useProxies && monitor(1.0) == std::make_pair(24, 7) && monitor(3.0).second == 7);   // the same frame, from the proxy
+        // a deliverable is never a proxy: export-still and a render decode the originals
+        f.must("export-still --timeline main --out \"" + f.path("s.png") + "\" --at 1");
+        const Raster &still = f.images[f.path("s.png")];
+        assert(still.rgba[((size_t)13 * still.width + 24) * 4 + 2] == 100);
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("r.mp4") + "\"");
+        assert(f.written.size() == 96 && f.written[24].rgba[((size_t)13 * 46 + 23) * 4 + 2] == 100);
+        assert(monitor(1.0).second == 7);               // … and the monitor is back on the proxy after it
+        // forgetting one proxy: that source's original, the other's proxy
+        f.must("proxy remove a");
+        assert(rackNode("a").proxy.empty() && monitor(1.0).second == 100 && monitor(3.0).second == 7);
+        assert(!f.run("proxy remove a", &err) && has(err, "has no proxy"));
+        f.must("proxy use off");
+        assert(monitor(3.0).second == 100);
+        // a plugin is sized in ORIGINAL pixels: a blur through a half-size proxy is as wide as on the original
+        f.must("rack add \"" + f.path("footage/edge.mp4") + "\"");
+        f.must("track add --kind video --name v1");
+        f.must("clip add --track v1 --src edge --in 0 --out 2 --at 6");
+        f.must("effect add edge --type blur.gaussian");
+        f.must("set ef_1.radius=4");
+        f.must("proxy make edge --edge 24");
+        auto softWidth = [&] {
+            Raster r;
+            assert(f.svc->renderFrame(7.0, 0, r));
+            int n = 0;
+            for (int x = 0; x < r.width; ++x) { const int v = r.rgba[((size_t)13 * r.width + x) * 4]; n += v > 20 && v < 235; }
+            return n;
+        };
+        const int onOriginal = softWidth();
+        f.must("proxy use on");
+        const int onProxy = softWidth();
+        std::printf("    a 4 px blur across the edge: %d px soft on the original, %d px through the half-size proxy\n", onOriginal, onProxy);
+        assert(onOriginal >= 4 && std::abs(onProxy - onOriginal) <= 2);
+        f.must("proxy use off");
+        f.must("project save");
+        {
+            std::ifstream in(f.path("mv.isp"));
+            const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            assert(!has(isp, "a_24.mov") && has(isp, "proxy=mv.proxies/b_24.mov"));
+        }
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

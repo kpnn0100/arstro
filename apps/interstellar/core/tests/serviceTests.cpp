@@ -68,6 +68,8 @@ static AppModel populatedModel()
     m.clips.push_back(c);
     m.transitions.push_back({"tr_1", "clp_1", "clp_2", "dissolve", 0.5});
     m.markers.push_back({"mk_1", "chorus", 48, "chorus in"});
+    m.useProxies = true;
+    m.proxyJobs.push_back({"p1", "ro_2", "s_day01", "prores", 960, "/home/u/japan.proxies/s_day01_960.mov", 12, 96, "running", ""});
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";
     r.format = "h264"; r.state = "queued";
     m.renders.push_back(r);

@@ -104,6 +104,7 @@ namespace interstellar
                           .set("offlineWhy", r.offlineWhy)
                           .set("weight", r.weight)
                           .set("media", st ? baseName(r.media) : r.media)
+                          .set("proxy", st ? baseName(r.proxy) : r.proxy)
                           .set("frame", r.frame)
                           .set("video", r.video)
                           .set("usedBy", r.usedBy)
@@ -219,6 +220,21 @@ namespace interstellar
                              .set("fps", r.fps)
                              .set("spec", r.spec));
         j.set("renders", renders);
+        j.set("useProxies", m.useProxies);
+        Json proxies = Json::array();
+        for (const auto &p : m.proxyJobs)
+            proxies.push(Json::object()
+                             .set("id", p.id)
+                             .set("rackObj", p.rackObj)
+                             .set("bindName", p.bindName)
+                             .set("codec", p.codec)
+                             .set("edge", Json::integer(p.edge))
+                             .set("outPath", st ? baseName(p.outPath) : p.outPath)
+                             .set("done", p.done)
+                             .set("total", p.total)
+                             .set("state", p.state)
+                             .set("error", p.error));
+        j.set("proxyJobs", proxies);
         j.set("canUndo", m.canUndo);
         j.set("canRedo", m.canRedo);
         j.set("undoLabel", m.undoLabel);
@@ -392,6 +408,7 @@ namespace interstellar
             {"rack[].offlineWhy", "string", "Why it is offline when the file is there: the decoder it needs (a vendor RAW SDK, R-MEDIA-1); \"\" = missing."},
             {"rack[].weight", "number", "Grade weight 0..1 (R-RACK-4)."},
             {"rack[].media", "string", "Source file (file name only when stable)."},
+            {"rack[].proxy", "string", "Its proxy file, resolved; empty = none (R-MEDIA-2)."},
             {"rack[].frame", "number", "Reference frame a video is graded on, seconds (R-RACK-3)."},
             {"rack[].video", "bool", "A video source."},
             {"rack[].usedBy", "integer", "Clips referencing it in the current timeline."},
@@ -485,6 +502,18 @@ namespace interstellar
             {"renders[].height", "integer", "Output frame height."},
             {"renders[].fps", "number", "Output rate the timeline is sampled at."},
             {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
+            {"useProxies", "bool", "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."},
+            {"proxyJobs", "array", "This session's proxy jobs, oldest first."},
+            {"proxyJobs[].id", "string", "Job id (p1, p2, …)."},
+            {"proxyJobs[].rackObj", "string", "The source's #rackobj id."},
+            {"proxyJobs[].bindName", "string", "Its bind name."},
+            {"proxyJobs[].codec", "string", "prores (ProRes Proxy) | h264."},
+            {"proxyJobs[].edge", "integer", "The long edge asked for, px."},
+            {"proxyJobs[].outPath", "string", "The proxy file (file name only when stable)."},
+            {"proxyJobs[].done", "integer", "Frames written."},
+            {"proxyJobs[].total", "integer", "Frames in the source."},
+            {"proxyJobs[].state", "string", "queued | running | done | failed | cancelled."},
+            {"proxyJobs[].error", "string", "Why it failed."},
             {"canUndo", "bool", "`undo` has something to undo (R-EDIT-1)."},
             {"canRedo", "bool", "`redo` has something to redo."},
             {"undoLabel", "string", "What `undo` would undo, e.g. `set a.basic.exposure`."},

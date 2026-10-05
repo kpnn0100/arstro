@@ -33,6 +33,15 @@ namespace interstellar_v1
                 items.emplace_back(n.rackObj.empty() ? n.bindName : n.rackObj, n);
             }
         mRows.sync(items, kRowH);
+        // R-MEDIA-2: a proxy being made says how far; one made says so
+        mProxyNote.clear();
+        for (const auto &j : m.proxyJobs)
+            if ((j.state == "queued" || j.state == "running") && j.total > 0)
+                mProxyNote[j.rackObj] = "proxy " + std::to_string((int)(100 * j.done / j.total)) + "% \xC2\xB7 ";
+            else if (j.state == "queued" || j.state == "running")
+                mProxyNote[j.rackObj] = "proxy\xE2\x80\xA6 \xC2\xB7 ";
+        for (const auto &n : mSources)
+            if (!n.proxy.empty() && !mProxyNote.count(n.rackObj)) mProxyNote[n.rackObj] = "proxy \xC2\xB7 ";
         bool anyVideoClip = false;
         for (const auto &c : m.clips) if (!c.audio) { anyVideoClip = true; break; }
         mHighlightWanted = !anyVideoClip && !mSources.empty() && !m.tracks.empty();
@@ -197,7 +206,8 @@ namespace interstellar_v1
             else if (n.video) glyph::film(t, gb, gc);
             else cosmo_v2::icon::image(t, gb, gc);
             const double x = kPadX + 18.0;
-            const std::string uses = std::string(n.sharesMedia > 0 ? "shared \xC2\xB7 " : "") +
+            const auto pn = mProxyNote.find(n.rackObj);
+            const std::string uses = (pn != mProxyNote.end() ? pn->second : std::string()) + std::string(n.sharesMedia > 0 ? "shared \xC2\xB7 " : "") +
                                      (n.usedBy == 0 ? "unused" : (n.usedBy == 1 ? "1 clip" : std::to_string(n.usedBy) + " clips"));
             const double uw = t.measureText(uses, 9.0, font::sans());
             const std::string nm = textfit::ellipsize(t, n.cosmoName.empty() ? n.bindName : n.cosmoName, w - kPadX - x, 11.0, font::sans());

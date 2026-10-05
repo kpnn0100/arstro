@@ -2417,6 +2417,52 @@ namespace
         CHECK(strictlyBetween(out, 0.0, 1.0), "off the multicam clip the bar fades out");
     }
 
+    /** R-MEDIA-2: proxies — made from a source's menu, the project's switch in Workspace, said on the rows and the picture. */
+    void testProxiesUi()
+    {
+        std::printf("proxies: the source menu, the Workspace switch, the rows, the caption\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            for (auto &n : s.m.rack)
+                if (n.rackObj == "ro2") n.proxy = "/home/editor/Projects/night-ferry-day3.proxies/s_day01_960.mov";
+            s.m.proxyJobs.push_back({"p1", "ro3", "s_day02", "prores", 960, "/x.proxies/s_day02_960.mov", 12, 96, "running", ""});
+            ++s.m.revision;
+        });
+        r.settle();
+        auto sb = r.app->edit().sourceBin();
+        CHECK(sb->proxyNote("ro2") == "proxy \xC2\xB7 " && sb->proxyNote("ro3") == "proxy 12% \xC2\xB7 " && sb->proxyNote("ro5").empty(),
+              "the source bin says which sources have a proxy, and how far one being made is");
+        auto rt = r.app->edit().rackTree();
+        auto cm = r.app->edit().contextMenu();
+        const Point p = centre(*rt, rt->rowRect(1));   // s_day01
+        r.app->pointer(1, p.x - 40, p.y, 0, r.now);
+        r.app->pointer(0, p.x - 40, p.y, 2, r.now);
+        r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(labels.find("Make Proxy Again|") != std::string::npos && labels.find("Remove Proxy|") != std::string::npos,
+              "a source with a proxy offers Make Proxy Again and Remove Proxy");
+        r.svc.lines.clear();
+        for (int i = 0; i < cm->itemCount(); ++i)
+            if (cm->item(i).label == "Remove Proxy") { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
+        CHECK(hasLine(r.svc, "proxy remove s_day01"), "…Remove Proxy dispatches proxy remove s_day01");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Workspace", "     Use Proxies") && hasLine(r.svc, "proxy use on"), "Workspace › Use Proxies turns the switch on");
+        r.svc.m.useProxies = true;
+        ++r.svc.m.revision;
+        r.settle();
+        r.app->setTab(1);
+        r.settle();
+        CHECK(r.app->edit().monitor()->caption().find("proxies") != std::string::npos, "the monitor's caption says it shows proxies");
+        r.app->setTab(0);   // Grade: the selected source, s_day01, through its proxy
+        r.settle();
+        CHECK(r.app->edit().monitor()->caption().find("proxy") != std::string::npos, "…and in Grade, that this source is its proxy");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Workspace", "\xE2\x80\xA2  Use Proxies") && hasLine(r.svc, "proxy use off"), "…marked while on, and the same item turns it off");
+        CHECK(clickMenuItem(r, "Workspace", "     Make Proxies for All Video") && hasLine(r.svc, "proxy make"), "Make Proxies for All Video dispatches proxy make");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2587,6 +2633,7 @@ int main()
     testInterchangeUi();
     testEditingUi();
     testMulticamUi();
+    testProxiesUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

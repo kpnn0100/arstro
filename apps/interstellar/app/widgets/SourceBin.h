@@ -26,6 +26,7 @@
 #include "EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include <functional>
+#include <map>
 #include <string>
 
 namespace arstro
@@ -42,6 +43,12 @@ namespace interstellar_v1
         void bind(const interstellar::AppModel &m);
 
         artboard::Rect rowRect(int i) const;   // i = index into the listed sources
+        /** R-MEDIA-2: what the row says of its proxy ("proxy · ", "proxy 40% · ", "" = none). */
+        std::string proxyNote(const std::string &rackObj) const
+        {
+            const auto it = mProxyNote.find(rackObj);
+            return it == mProxyNote.end() ? std::string() : it->second;
+        }
         artboard::Rect viewport() const;
         const EasedScroll &scroll() const { return mScroll; }
         double highlightAmount() const { return mHighlight.value(); }
@@ -74,6 +81,7 @@ namespace interstellar_v1
         int mDragRow = -1;                               // the row a press landed on
         bool mDragMoved = false;
         AnimatedRows<interstellar::RackNodeModel> mRows;
+        std::map<std::string, std::string> mProxyNote;   // R-MEDIA-2: rackObj → "proxy 40% · " | "proxy · "
         EasedScroll mScroll;
         cosmo_v2::HoverFade mHover, mSel;
         std::string mSelectedBind;

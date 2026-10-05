@@ -57,6 +57,7 @@ namespace interstellar
         bool pending = false;         // pixels still decoding
         bool failed = false;          // offline: reads as MISSING, never as a stall (R-RACK-7)
         std::string offlineWhy;       // R-MEDIA-1: why, when it is not just missing ("REDCODE RAW needs the RED R3D SDK…")
+        std::string proxy;            // R-MEDIA-2: its proxy file, resolved; "" = none
         double weight = 1.0;          // grade weight, 0..1 — a continuous bypass (R-RACK-4)
         std::string media;            // source file
         double frame = 0.0;           // reference frame a video is graded on, seconds (R-RACK-3)
@@ -198,6 +199,20 @@ namespace interstellar
         std::string note;
     };
 
+    /** R-MEDIA-2: a proxy being made, made or refused. */
+    struct ProxyJobModel
+    {
+        NodeId id;                    // p1, p2, …
+        NodeId rackObj;
+        std::string bindName;
+        std::string codec;            // prores (ProRes Proxy) | h264
+        int edge = 0;                 // the long edge asked for
+        std::string outPath;
+        long long done = 0, total = 0;
+        std::string state;            // queued | running | done | failed | cancelled
+        std::string error;
+    };
+
     struct RenderJobModel
     {
         NodeId id;
@@ -283,6 +298,9 @@ namespace interstellar
 
         // ── Deliver ──
         std::vector<RenderJobModel> renders;
+        // ── proxies (R-MEDIA-2) ──
+        bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
+        std::vector<ProxyJobModel> proxyJobs;      // this session's proxy jobs, oldest first
 
         // ── Edit: one undo history across the rack and the project (R-EDIT-1) ──
         bool canUndo = false, canRedo = false;

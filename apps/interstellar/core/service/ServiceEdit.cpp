@@ -138,6 +138,11 @@ namespace interstellar
             // Which timeline is OPEN is presentation: undoing a cut must not switch the version
             // being looked at.
             if (p.timeline(mProject->current)) p.current = mProject->current;
+            // R-MEDIA-2: which proxies exist and whether the monitor uses them is media management,
+            // outside undo like a render — a proxy finished after an edit must survive undoing it
+            p.proxies = mProject->proxies;
+            for (auto &ro : p.rackObjs)
+                if (const RackObj *now = mProject->rackObj(ro.id)) { ro.proxy = now->proxy; ro.proxyScale = now->proxyScale; }
             *mProject = std::move(p);
         }
         for (const auto &n : s.rack)

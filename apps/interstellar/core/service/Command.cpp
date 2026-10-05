@@ -229,6 +229,15 @@ namespace interstellar
              "by their timecode (default) or by their in-points (--in a=1.5,b=0.4 — source seconds, 0 when not given), "
              "and the sound of one source (--audio, default the first; none for silence). With --track, also placed "
              "on the current timeline at --at (else the playhead), showing angle 1.", "R-EDT-5"},
+            {K::ProxyMake, "proxy make", "[<source>…]", 0, -1, {"codec=<prores|h264>", "edge=<px>"},
+             "Make a proxy of each named video source (none named: every one without a proxy) — ProRes Proxy (default) or "
+             "H.264, its long edge --edge px (960 unless given), in <project>.proxies/ — as a background job like a render. "
+             "The monitor uses it while `proxy use on`; renders never do.", "R-MEDIA-2"},
+            {K::ProxyRemove, "proxy remove", "<source…>", 1, -1, {},
+             "Forget a source's proxy: the monitor decodes the original again. The file stays on disk.", "R-MEDIA-2"},
+            {K::ProxyUse, "proxy use", "<on|off>", 1, 1, {},
+             "The project's switch: the monitor (and playback, the preview cache, capture) decodes each source's proxy where "
+             "it has one — or the originals. Renders and export-still always decode the originals.", "R-MEDIA-2"},
             {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
              "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
              "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",

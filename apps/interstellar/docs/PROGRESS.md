@@ -79,7 +79,7 @@ one integrator who moves, wires, tests and commits each stream:
       10c. [x] Nested timelines (R-EDT-4) — DR-EDT-3.
       10d. [x] Multicam (R-EDT-5) — DR-EDT-4.
       11. [x] Media: CinemaDNG through LibRaw, the vendor SDK seam (R-MEDIA-1) — DR-MEDIA-1.
-      11b. [ ] Proxies, offline/online (R-MEDIA-2).
+      11b. [x] Proxies, offline/online (R-MEDIA-2) — DR-MEDIA-2.
       11c. [ ] Relink (R-MEDIA-3).
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
@@ -132,6 +132,15 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — proxies are the monitor's, outside undo, and only whole.** Every NLE draws the line
+the same way: proxies serve the person working, never the deliverable — so a render and export-still
+plan under "originals only" whatever the switch, and everything else a person looks at follows it.
+A proxy stores the original's code values (not a graded or transformed picture), so the input
+transform, LUT, grade and plugins apply to it unchanged and its colour is the original's at a lower
+resolution; plugins keep their size in original pixels. It is referenced only once its last frame is
+written, and undo leaves proxy references alone: a background job finishing between an edit and its
+undo must not be undone with it.
 
 **2026-10-05 — a RAW sequence is a pattern; vendor RAW is refused at the door.** A CinemaDNG clip is a
 folder of numbered frames; naming it `name_%06d.dng` (FFmpeg's and Nuke's spelling) makes it one

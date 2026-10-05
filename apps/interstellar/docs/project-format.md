@@ -57,6 +57,11 @@ Interstellar's own data *about* a Cosmo node — never colour:
 | `weight` | the **grade weight**, a continuous `bypass`. Cosmo has no concept of it |
 | `lut` | an input LUT (`.cube`) applied after the input transform, before Cosmo (R-COLOR-5); absent = none |
 | `input` | what the media IS — its input colour transform (R-COLOR-2): `rec709` (the default, not written), `srgb`, `linear`, `logc3`, `logc4`, `slog3`, `vlog`, `clog3`, `log3g10`, `bmdfilm5`. The media's interpretation, not a grade |
+| `proxy` · `proxyScale` | its proxy file (R-MEDIA-2) — the original's code values, smaller and cheaper to decode — and the proxy's width over the original's (plugins are sized in original pixels). Absent = none. Written only once the proxy's last frame is |
+
+`media` may name a CinemaDNG sequence by its pattern, `footage/A001_C001/A001_C001_%06d.dng`
+(R-MEDIA-1). The header's `proxies = true` (absent = false) points the monitor at proxies; renders
+always decode the originals.
 
 ---
 

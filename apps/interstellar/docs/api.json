@@ -1281,6 +1281,45 @@
       "requirement": "R-EDT-5"
     },
     {
+      "verb": "proxy make",
+      "usage": "proxy make [<source>…] [--codec <prores|h264>] [--edge <px>]",
+      "args": "[<source>…]",
+      "minArgs": 0,
+      "maxArgs": -1,
+      "flags": [
+        {
+          "name": "codec",
+          "value": "<prores|h264>"
+        },
+        {
+          "name": "edge",
+          "value": "<px>"
+        }
+      ],
+      "summary": "Make a proxy of each named video source (none named: every one without a proxy) — ProRes Proxy (default) or H.264, its long edge --edge px (960 unless given), in <project>.proxies/ — as a background job like a render. The monitor uses it while `proxy use on`; renders never do.",
+      "requirement": "R-MEDIA-2"
+    },
+    {
+      "verb": "proxy remove",
+      "usage": "proxy remove <source…>",
+      "args": "<source…>",
+      "minArgs": 1,
+      "maxArgs": -1,
+      "flags": [],
+      "summary": "Forget a source's proxy: the monitor decodes the original again. The file stays on disk.",
+      "requirement": "R-MEDIA-2"
+    },
+    {
+      "verb": "proxy use",
+      "usage": "proxy use <on|off>",
+      "args": "<on|off>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "The project's switch: the monitor (and playback, the preview cache, capture) decodes each source's proxy where it has one — or the originals. Renders and export-still always decode the originals.",
+      "requirement": "R-MEDIA-2"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",
@@ -1887,6 +1926,12 @@
       "doc": "Source file (file name only when stable)."
     },
     {
+      "path": "rack[].proxy",
+      "type": "string",
+      "stable": true,
+      "doc": "Its proxy file, resolved; empty = none (R-MEDIA-2)."
+    },
+    {
       "path": "rack[].frame",
       "type": "number",
       "stable": true,
@@ -2443,6 +2488,78 @@
       "type": "string",
       "stable": true,
       "doc": "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."
+    },
+    {
+      "path": "useProxies",
+      "type": "bool",
+      "stable": true,
+      "doc": "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."
+    },
+    {
+      "path": "proxyJobs",
+      "type": "array",
+      "stable": true,
+      "doc": "This session's proxy jobs, oldest first."
+    },
+    {
+      "path": "proxyJobs[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "Job id (p1, p2, …)."
+    },
+    {
+      "path": "proxyJobs[].rackObj",
+      "type": "string",
+      "stable": true,
+      "doc": "The source's #rackobj id."
+    },
+    {
+      "path": "proxyJobs[].bindName",
+      "type": "string",
+      "stable": true,
+      "doc": "Its bind name."
+    },
+    {
+      "path": "proxyJobs[].codec",
+      "type": "string",
+      "stable": true,
+      "doc": "prores (ProRes Proxy) | h264."
+    },
+    {
+      "path": "proxyJobs[].edge",
+      "type": "integer",
+      "stable": true,
+      "doc": "The long edge asked for, px."
+    },
+    {
+      "path": "proxyJobs[].outPath",
+      "type": "string",
+      "stable": true,
+      "doc": "The proxy file (file name only when stable)."
+    },
+    {
+      "path": "proxyJobs[].done",
+      "type": "integer",
+      "stable": true,
+      "doc": "Frames written."
+    },
+    {
+      "path": "proxyJobs[].total",
+      "type": "integer",
+      "stable": true,
+      "doc": "Frames in the source."
+    },
+    {
+      "path": "proxyJobs[].state",
+      "type": "string",
+      "stable": true,
+      "doc": "queued | running | done | failed | cancelled."
+    },
+    {
+      "path": "proxyJobs[].error",
+      "type": "string",
+      "stable": true,
+      "doc": "Why it failed."
     },
     {
       "path": "canUndo",

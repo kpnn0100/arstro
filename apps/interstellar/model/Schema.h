@@ -137,6 +137,7 @@ namespace schema
             text<Project>("timebase", &Project::timebase, 0, false),
             integer<Project>("sampleRate", &Project::sampleRate, 48000, 0, false),
             number<Project>("masterGain", &Project::masterGain, 0.0, 0, false),
+            boolean<Project>("proxies", &Project::proxies, false, 0, false, [](const Project &p, const Project &) { return p.proxies; }),   // R-MEDIA-2
             ref<Project>("current", &Project::current, 0, false, nonEmpty<Project>(&Project::current)),
         };
         return f;
@@ -169,6 +170,8 @@ namespace schema
             text<RackObj>("input", &RackObj::input, 1, false,
                           [](const RackObj &r, const Project &) { return !r.input.empty() && r.input != "rec709"; }),
             text<RackObj>("lut", &RackObj::lut, 1, false, nonEmpty<RackObj>(&RackObj::lut)),
+            text<RackObj>("proxy", &RackObj::proxy, 1, false, nonEmpty<RackObj>(&RackObj::proxy)),   // R-MEDIA-2
+            number<RackObj>("proxyScale", &RackObj::proxyScale, 1.0, 1, false, [](const RackObj &r, const Project &) { return !r.proxy.empty(); }),
         };
         return f;
     }

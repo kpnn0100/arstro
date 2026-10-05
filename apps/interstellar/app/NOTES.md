@@ -203,6 +203,10 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   per `multicamAngles` entry, the `multicamAngle` one under a travelling highlight; a chip click or
   Alt+1…9 → `multicam angle <n>`. An angle clip reads "angle n ·" on the timeline. Shot: `cut_multicam`.
   UI checks: 406.
+- Proxies (R-MEDIA-2): a video source's rack menu → `proxy make <bind>` / `proxy remove <bind>`;
+  Workspace › Use Proxies → `proxy use on|off` (marked while on), Make Proxies for All Video →
+  `proxy make`; the source bin row says "proxy ·" / "proxy 40% ·"; the caption says "proxies" (timeline)
+  or "proxy" (Grade, viewer). UI checks: 414.
 
 ## Interchange (2026-10-05, R-XCH)
 

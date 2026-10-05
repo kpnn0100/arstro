@@ -561,7 +561,7 @@ reserves the rest so adopting it is not a migration.
   reel tags), shown, and used by every interchange format. — ✅ (the clip inspector's Reel and
   Source TC rows; `rack[].timecode`/`reel`).
 
-## R-MEDIA — media management — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-MEDIA-1, 2–3 next)
+## R-MEDIA — media management — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-MEDIA-1, 2 ✅ DR-MEDIA-2, 3 next)
 
 - **R-MEDIA-1 Camera RAW**: CinemaDNG sequences through LibRaw. ARRIRAW, R3D and BRAW need their
   vendors' SDKs, which are licensed per user and not in this build: a decoder seam takes them when
@@ -573,7 +573,10 @@ reserves the rest so adopting it is not a migration.
   at the speed LibRaw develops a frame; a proxy (R-MEDIA-2) is the way to smooth playback (said).
 - **R-MEDIA-2 Proxies, offline/online**: a proxy (ProRes Proxy or H.264 at a chosen size) is made
   per source; a project switch picks proxies or originals for the monitor; renders always use
-  originals.
+  originals. — ✅ (DR-MEDIA-2). "The monitor" is everything that shows a picture to work by: playback,
+  the preview cache, Grade, the source viewer, capture; export-still is a deliverable and decodes
+  originals like a render. A proxy carries the original's code values, so its colour is the
+  original's; it is referenced only once complete, and proxies sit outside undo, as renders do.
 - **R-MEDIA-3 Relink**: offline media listed in one place, relinked one by one or by searching a
   folder for matching names.
 

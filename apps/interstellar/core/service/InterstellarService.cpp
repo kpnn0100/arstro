@@ -348,6 +348,7 @@ namespace interstellar
             case CK::EditInsert: case CK::EditOverwrite: case CK::MulticamNew: case CK::MulticamAngle:
                 ok = requireProject() && editingCommand(c);
                 break;
+            case CK::ProxyMake: case CK::ProxyRemove: case CK::ProxyUse: ok = requireProject() && proxyCommand(c); break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -449,6 +450,7 @@ namespace interstellar
             }
         }
         pumpJobs();
+        pumpProxies();   // R-MEDIA-2
         pumpPreviewCache();
     }
 
@@ -477,6 +479,8 @@ namespace interstellar
     {
         if (mPending || mCacheForced) return true;
         for (const auto &j : mJobs)
+            if (j->model.state == "queued" || j->model.state == "running") return true;
+        for (const auto &j : mProxyJobs)
             if (j->model.state == "queued" || j->model.state == "running") return true;
         return false;
     }
@@ -569,6 +573,8 @@ namespace interstellar
             m.selectedClip.clear();
             m.duration = 0;
             m.renders.clear();
+            m.useProxies = false;
+            m.proxyJobs.clear();
             fillEditModel();
             return;
         }
@@ -660,6 +666,8 @@ namespace interstellar
         // R-MEDIA-1: an offline vendor RAW whose file IS there says which SDK it needs
         for (auto &r : m.rack)
         {
+            const RackObj *pro = P.rackObj(r.rackObj);
+            r.proxy = pro && !pro->proxy.empty() ? resolvePath(pro->proxy) : std::string();   // R-MEDIA-2
             r.offlineWhy.clear();
             const VendorRaw *v = r.failed ? vendorRawFor(r.media) : nullptr;
             std::string file;
@@ -868,6 +876,9 @@ namespace interstellar
 
         m.renders.clear();
         for (const auto &j : mJobs) m.renders.push_back(j->model);
+        m.useProxies = P.proxies;   // R-MEDIA-2
+        m.proxyJobs.clear();
+        for (const auto &j : mProxyJobs) m.proxyJobs.push_back(j->model);
         fillEditModel();
     }
 
@@ -1157,6 +1168,7 @@ namespace interstellar
         mSync->sources.clear();
         resetPreview();
         mJobs.clear();
+        mProxyJobs.clear();
         mCache->clear();
         mSync->grade->releaseScratch();
         mSelectedClip.clear();

@@ -193,6 +193,14 @@ namespace interstellar_v1
             mEdit->contextMenu()->enterRenameMode(name);
         }});
         if (!n.group && !n.failed) items.push_back({"Duplicate as Variant  (Ctrl+D)", [this, b] { dispatch("rack duplicate " + b); }});
+        // R-MEDIA-2: a lighter file for the monitor
+        if (!n.group && !n.failed && n.video)
+        {
+            bool making = false;
+            for (const auto &j : m2.proxyJobs) making = making || (j.rackObj == n.rackObj && (j.state == "queued" || j.state == "running"));
+            if (!making) items.push_back({n.proxy.empty() ? "Make Proxy" : "Make Proxy Again", [this, b] { dispatch("proxy make " + b); }});
+            if (!n.proxy.empty() || making) items.push_back({making ? "Cancel Proxy" : "Remove Proxy", [this, b] { dispatch("proxy remove " + b); }});
+        }
         if (!n.group)
         {
             // R-COLOR-2: what the source IS — the list opens in place of this menu
@@ -277,6 +285,26 @@ namespace interstellar_v1
         ms->addMenu({"Colour", {}});
         refreshPresetMenu(mHooks.model ? mHooks.model() : emptyModel());
         refreshColourMenu(mHooks.model ? mHooks.model() : emptyModel());
+    }
+
+    /** The Workspace menu: the tabs, and the project's proxy switch (R-MEDIA-2), marked when on. */
+    void App::refreshWorkspaceMenu(const interstellar::AppModel &m)
+    {
+        const int key = m.screen == interstellar::Screen::Edit ? (m.useProxies ? 2 : 1) : 0;
+        if (key == mWorkspaceMenuFor) return;
+        mWorkspaceMenuFor = key;
+        std::vector<cosmo_v2::MenuStrip::Item> items = {
+            {"Grade        (1)",             [this] { mEdit->setTab(EditScreen::Grade); }},
+            {"Cut          (2)",             [this] { mEdit->setTab(EditScreen::Cut); }},
+            {"Deliver      (3)",             [this] { mEdit->setTab(EditScreen::Deliver); }},
+            {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }},
+        };
+        if (key)
+        {
+            items.push_back({std::string(m.useProxies ? "\xE2\x80\xA2  " : "     ") + "Use Proxies", [this, on = !m.useProxies] { dispatch(std::string("proxy use ") + (on ? "on" : "off")); }});
+            items.push_back({"     Make Proxies for All Video", [this] { dispatch("proxy make"); }});
+        }
+        mEdit->topBar()->menus()->setItems(3, std::move(items));
     }
 
     void App::refreshColourMenu(const interstellar::AppModel &m)
@@ -948,6 +976,7 @@ namespace interstellar_v1
         }
         refreshPresetMenu(m);
         refreshColourMenu(m);
+        refreshWorkspaceMenu(m);
         // Home's recents are unknown until the service has published once (revision 0):
         // that is the loading state, drawn as skeleton cards.
         mHome->setLoading(m.revision == 0);
@@ -989,6 +1018,7 @@ namespace interstellar_v1
         // playing: the size the read-ahead keeps up at (R-PLAY-2) — the paused frame is sharp again
         if (m.playing && m.playbackEdge > 0)
             cap += "  \xC2\xB7  \xE2\x96\xB6 " + (m.playbackFromCache ? std::string("cached") : std::to_string(m.playbackEdge) + " px");
+        if (m.useProxies) cap += "  \xC2\xB7  proxies";   // R-MEDIA-2: said on the picture it changes
         mon->setCaption(cap);
 
         // is there a picture to show? (a clip under the playhead in the resolved timeline)
@@ -1038,6 +1068,7 @@ namespace interstellar_v1
         if (n.video) cap += std::string("  \xC2\xB7  ") + (previewing ? "seek " : "ref ") + cmd::timecode(at, fps);
         if (m.sourceWidth > 0 && m.sourceHeight > 0)
             cap += "  \xC2\xB7  " + std::to_string(m.sourceWidth) + "\xC3\x97" + std::to_string(m.sourceHeight);
+        if (m.useProxies && !n.proxy.empty()) cap += "  \xC2\xB7  proxy";   // R-MEDIA-2: this picture is its proxy
         mon->setCaption(cap);
 
         const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge ||
@@ -1075,6 +1106,8 @@ namespace interstellar_v1
         if (m.sourceIn >= 0 || m.sourceOut >= 0)
             cap += "  \xC2\xB7  " + (m.sourceIn >= 0 ? cmd::timecode(m.sourceIn, fps) : std::string("\xE2\x80\x94")) + " \xE2\x80\x93 " +
                    (m.sourceOut >= 0 ? cmd::timecode(m.sourceOut, fps) : std::string("\xE2\x80\x94"));
+        for (const auto &r : m.rack)
+            if (m.useProxies && r.bindName == m.sourceView && !r.proxy.empty()) cap += "  \xC2\xB7  proxy";   // R-MEDIA-2
         mon->setCaption(cap);
         const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge || m.sourceView != mFetchedBind ||
                              std::fabs(at - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision;
