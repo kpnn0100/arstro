@@ -336,7 +336,10 @@ namespace interstellar
             // Source frame from the clip's SOURCE time at the SOURCE's own rate (a 30p clip in a 24p
             // project steps at 30p); a still is frame 0 forever (R-VOL-6).
             const double srcFps = s->info.fps > 0 ? s->info.fps : P.fps;
-            L.frame = s->info.frames <= 1 ? 0 : (long long)std::floor(a.localTime * srcFps + 1e-6);
+            double localTime = a.localTime;
+            // R-EDT-3: a ramped clip's source time is the integral of its speed, not in + offset × speed
+            if (const anim::Ramp *rp = rampFor(*c); rp && t >= c->at - 1e-9 && t < c->end() + 1e-9) localTime = rp->sourceAt(t - c->at);
+            L.frame = s->info.frames <= 1 ? 0 : (long long)std::floor(localTime * srcFps + 1e-6);
             for (const auto &fx : P.effects)
             {
                 if (fx.type == "freeze" && fx.clip == c->id)
@@ -351,7 +354,7 @@ namespace interstellar
             }
             std::string e;
             // R-ANIM: the rack's and the effects' curves at this SOURCE time; the clip's on its own footage clock
-            const double srcT = std::max(0.0, a.localTime);
+            const double srcT = std::max(0.0, localTime);
             if (!gradeFor(tl, ro->id, L.params, e, srcT)) L.params = EditParams{};   // an unbound node renders ungraded
             L.identity = render::GradeEngine::isIdentity(L.params);
             // D-7: ancestor groups whose weight is below 1 fade their own contribution.

@@ -244,6 +244,7 @@ namespace interstellar
         // the preview cache re-checks its frames after anything, and waits for the user to stop
         if (ok) ++mEpoch;
         if (ok && mOpen) pruneAnims();   // a node that went takes its curves (R-ANIM-1)
+        if (ok && mOpen && before) retimeRamps();   // R-EDT-3: a ramped clip's length follows its curve, in the same undo step
         if (c.kind != CK::CacheBuild && c.kind != CK::CacheClear && c.kind != CK::Wait && c.kind != CK::StatePrint) mLastCommandMs = mNowMs;
         if (ok && structural(c.kind)) clearHistory();
         else if (ok && before) recordEdit(c, *before);

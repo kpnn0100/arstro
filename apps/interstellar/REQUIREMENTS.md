@@ -587,7 +587,7 @@ reserves the rest so adopting it is not a migration.
 - **R-CLR-5 Split-screen wipe**: the monitor compares the current frame with a still or another
   version, split horizontally or vertically, the split dragged.
 
-## R-EDT — editing — 🔶 IN PROGRESS (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3–5 next)
+## R-EDT — editing — 🔶 IN PROGRESS (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3 ✅ DR-EDT-2, 4–5 next)
 
 - **R-EDT-1 Three-point editing**: a source viewer with its own In/Out, timeline In/Out, and Insert
   (ripples) or Overwrite to the target track. — ✅ (DR-EDT-1). One monitor: in Cut the viewer shows
@@ -596,7 +596,10 @@ reserves the rest so adopting it is not a migration.
 - **R-EDT-2 J/K/L shuttle**: L plays forward, J backward, repeated presses speed up (1×, 2×, 4×), K
   pauses; K+J/L steps a frame. — ✅ (DR-EDT-1). Sound is heard at 1× forward only (said).
 - **R-EDT-3 Speed ramps**: a clip's speed is animatable (R-ANIM); the source frame is the integral
-  of the speed curve, so a ramp is continuous.
+  of the speed curve, so a ramp is continuous. — ✅ (DR-EDT-2). The speed is keyed on the clip's
+  FOOTAGE clock like its other curves (v at source time s, so no circularity); the clip lasts ∫ ds/v,
+  its stored speed the average that makes that length. With a ramp, a key's place in the key lane is
+  its source frame's share of the clip, not its timeline instant (said).
 - **R-EDT-4 Nested sequences**: a timeline used as a clip in another timeline.
 - **R-EDT-5 Multicam**: sources synced by timecode (or by their in-points) form a multicam clip whose
   angle is switched at the playhead, each switch a cut.

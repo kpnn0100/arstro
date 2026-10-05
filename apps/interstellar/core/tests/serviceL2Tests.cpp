@@ -1428,6 +1428,45 @@ int main()
         assert(onV1);
     });
 
+    test("a speed ramp: the source frame is the integral of the speed, the clip lasts what the curve says (R-EDT-3)", [] {
+        Fixture f("retime");                            // (not "ramp": the fake reads any path with "ramp" as its 16-bit ramp)
+        f.standard();                                   // shotA: a 0–2 s at 0, speed 1 (the fake's frame f has R = f)
+        const std::string tl = f.svc->model().timelines[0].id;
+        auto frameAt = [&](double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(tl, t, 0, r));
+            return (int)r.rgba[0];
+        };
+        assert(frameAt(1.0) == 24);
+        // 1× at source 0, 3× at source 2, linear: v(s) = 1 + s → τ(s) = ln(1 + s), the clip lasts ln 3
+        f.must("key add shotA.speed --at 0 --value 1");
+        f.must("key add shotA.speed --at 2 --value 3");
+        const Clip *c = f.svc->project().clip(f.svc->project().idForRef("shotA"));
+        std::printf("    ramped shotA: stored average speed %.4f (2 / ln 3 = %.4f)\n", c->speed, 2.0 / std::log(3.0));
+        assert(std::fabs(c->speed - 2.0 / std::log(3.0)) < 2e-3);              // so it lasts ln 3 ≈ 1.099 s
+        // the frame at t is source e^t − 1 — 0.649 s at t = 0.5, 1.718 s at t = 1
+        assert(std::abs(frameAt(0.5) - (int)std::floor((std::exp(0.5) - 1.0) * 24.0)) <= 1);
+        assert(std::abs(frameAt(1.0) - (int)std::floor((std::exp(1.0) - 1.0) * 24.0)) <= 1);
+        // continuous: frame after frame the source only advances, by more as the speed rises
+        int prev = -1, firstStep = 0, lastStep = 0;
+        for (int k = 0; k < 26; ++k)
+        {
+            const int fr = frameAt(k / 24.0);
+            assert(fr >= prev);
+            if (k == 1) firstStep = fr - prev;
+            if (k == 25) lastStep = fr - prev;
+            prev = fr;
+        }
+        assert(firstStep <= 2 && lastStep >= 2);
+        // one undo step takes the key away — and the length comes back with it
+        f.must("undo");
+        c = f.svc->project().clip(f.svc->project().idForRef("shotA"));
+        assert(std::fabs(c->speed - 1.0) < 1e-6);
+        f.must("redo");
+        c = f.svc->project().clip(f.svc->project().idForRef("shotA"));
+        assert(std::fabs(c->speed - 2.0 / std::log(3.0)) < 2e-3);
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

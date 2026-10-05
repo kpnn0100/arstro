@@ -274,6 +274,21 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-EDT-2 A speed ramp: the source frame is the integral of the speed (R-EDT-3)
+`<clip>.speed` is animatable (`core/service/ServiceAnim.cpp` — the clip set), keyed on the footage
+clock like the clip's other curves: v(s) at source time s, held to 0.1 … 8×. `anim::Ramp`
+(`model/Anim.h:210`) tabulates τ(s) = ∫ ds / v(s) from the in-point (trapezoid, ≥ 480 steps a second of
+source) and inverts it; the service builds it once per (keys, in, out) (`core/service/ServiceEditing.cpp:36`)
+and the plan takes a ramped clip's source time from it instead of in + offset × speed
+(`core/service/ServiceRender.cpp:340`) — the rack's, the effects' and the clip's curves all read that
+source time too. After every undoable command (`InterstellarService.cpp:247`) a ramped clip's stored speed
+becomes the average that makes its length the curve's (`ServiceEditing.cpp:52`), inside the same undo
+step, so spans, the timeline's end and a render's frame count need no second notion of length. The key
+lane lists Speed among the clip's rows. Guarded by L2 `a speed ramp…` (1× → 3× linear over 2 s of
+source: the stored average 1.8205 = 2 / ln 3; frames at 0.5 s and 1 s are source e^t − 1; monotonic
+with growing steps; undo/redo), UI (the Speed row keys a ramp). Mutants run red: the plan ignoring
+the ramp, no retime after an edit, integrating v instead of 1/v.
+
 ### DR-EDT-1 Editing like an editor: J/K/L, marks, a source viewer, three-point Insert and Overwrite (R-EDT-1, R-EDT-2)
 The shuttle (`core/service/ServiceEditing.cpp:47`): `shuttle forward` plays at 1× then 2× and 4× on
 each press, `back` the same reversed, `stop` pauses; the clock runs at the rate

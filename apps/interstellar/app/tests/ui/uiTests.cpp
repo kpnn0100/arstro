@@ -1308,11 +1308,22 @@ namespace
             CHECK(typed.find("--speed-out 2.5") != std::string::npos && typed.find("--speed-in") == std::string::npos,
                   "only the changed number is sent (an untouched side stays linear): --speed-out 2.5");
             // a clip property keys the CLIP
+            kl->select("c1.opacity", false);   // into view: the CLIP section has six rows now (R-EDT-3's Speed)
+            r.settle();
             r.svc.lines.clear();
             const int op = kl->rowOf("c1.opacity");
             const Point q = centre(*kl, kl->diamondRect(op));
             r.click(q.x, q.y);
             CHECK(hasLine(r.svc, "key add c1.opacity --at 3"), "the Opacity diamond keys the clip at the playhead");
+            // R-EDT-3: the clip's speed has a row too — a ramp is keyed like any clip curve
+            kl->select("c1.speed", false);
+            r.settle();
+            r.svc.lines.clear();
+            const int sp = kl->rowOf("c1.speed");
+            CHECK(sp >= 0, "the CLIP section lists Speed");
+            const Point qs = centre(*kl, kl->diamondRect(sp));
+            r.click(qs.x, qs.y);
+            CHECK(hasLine(r.svc, "key add c1.speed --at 3"), "…and its diamond keys a speed ramp at the playhead");
         }
         {
             // R-ANIM-7: two curves together, a box across both, a group shift, copy and paste

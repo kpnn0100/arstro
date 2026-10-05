@@ -222,6 +222,9 @@ namespace interstellar
         bool lutExport(const Command &c);   // R-COLOR-6 (ServiceRender.cpp)
         bool interchangeCommand(const Command &c);   // R-XCH (ServiceInterchange.cpp)
         bool editingCommand(const Command &c);       // R-EDT-1/2 (ServiceEditing.cpp)
+        /** R-EDT-3: the speed ramp of a clip, or null when its speed is a constant (ServiceEditing.cpp). */
+        const anim::Ramp *rampFor(const Clip &c) const;
+        void retimeRamps();
         void pumpJobs();
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
@@ -366,6 +369,7 @@ namespace interstellar
         std::string mSourceView;
         double mSourceIn = -1.0, mSourceOut = -1.0, mSourcePlayhead = 0.0;
         NodeId mTargetTrack;
+        mutable std::map<NodeId, std::pair<std::string, anim::Ramp>> mRamps;   // R-EDT-3: by clip, with what built it
         unsigned mSoundSeq = ~0u;                    // the frame sequence the player's plan was made at
         unsigned mEpoch = 0;                         // rises on every command and rack load: the cache re-checks
         double mLastCommandMs = -1e9;                // the cache builds when the user has stopped for a moment

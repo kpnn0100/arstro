@@ -56,7 +56,8 @@ namespace interstellar
         const std::set<std::string> &clipAnimatable()
         {
             static const std::set<std::string> k{"opacity", "geom.x", "geom.y", "geom.scale", "geom.rotation", "geom.anchor.x",
-                                                  "geom.anchor.y", "geom.crop.x", "geom.crop.y", "geom.crop.w", "geom.crop.h"};
+                                                  "geom.anchor.y", "geom.crop.x", "geom.crop.y", "geom.crop.w", "geom.crop.h",
+                                                  "speed"};   // R-EDT-3: a ramp, on the footage clock like the rest
             return k;
         }
 
@@ -164,6 +165,7 @@ namespace interstellar
             // the clip's own footage clock (Premiere's and Resolve's): a move, a head trim or a split
             // leaves every key on the frame it was set on
             out.now = std::clamp(c->in + (mModel.playhead - c->at) * c->speed, c->in, c->out);
+            if (const anim::Ramp *rp = rampFor(*c)) out.now = rp->sourceAt(mModel.playhead - c->at);   // R-EDT-3: where a ramp has got to
             const auto prov = R.provenance.find(id);
             out.inherited = prov != R.provenance.end() && prov->second != Provenance::Local;
             out.staticValue = schema::find<Clip>(parts.second)->num(*c);

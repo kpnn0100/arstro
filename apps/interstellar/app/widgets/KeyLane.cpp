@@ -18,8 +18,10 @@ namespace interstellar_v1
         constexpr double kPadX = 9.75;
         constexpr double kDiamondW = 20.0;
         // the clip's own properties (R-ANIM-1), in the order an editor reads a transform
-        const char *const kClipKey[] = {"opacity", "geom.x", "geom.y", "geom.scale", "geom.rotation"};
-        const char *const kClipLabel[] = {"Opacity", "Position X", "Position Y", "Scale", "Rotation"};
+        // …and its speed (R-EDT-3): a ramp keyed on the same footage clock
+        const char *const kClipKey[] = {"opacity", "geom.x", "geom.y", "geom.scale", "geom.rotation", "speed"};
+        const char *const kClipLabel[] = {"Opacity", "Position X", "Position Y", "Scale", "Rotation", "Speed"};
+        constexpr int kClipRows = (int)(sizeof kClipKey / sizeof kClipKey[0]);
     }
 
     KeyLane::KeyLane()
@@ -64,7 +66,7 @@ namespace interstellar_v1
         };
         const std::string clipName = c.name.empty() ? c.id : c.name;
         header("CLIP");
-        for (int i = 0; i < 5; ++i) prop("CLIP", kClipLabel[i], c.id, kClipKey[i], clipName + "." + kClipKey[i]);
+        for (int i = 0; i < kClipRows; ++i) prop("CLIP", kClipLabel[i], c.id, kClipKey[i], clipName + "." + kClipKey[i]);
         if (!c.srcName.empty())
         {
             header("GRADE");

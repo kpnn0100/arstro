@@ -13,6 +13,7 @@
 #include "Versions.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 
 namespace arstro
@@ -29,6 +30,42 @@ namespace interstellar
             char *end = nullptr;
             out = std::strtod(s.c_str(), &end);
             return end && end != s.c_str() && !*end && std::isfinite(out);
+        }
+    }
+
+    const anim::Ramp *InterstellarService::rampFor(const Clip &c) const
+    {
+        const Anim *a = mProject->animOf(c.id, "speed");
+        if (!a) return nullptr;
+        const auto keys = mProject->keysOf(a->id);
+        if (keys.empty()) return nullptr;
+        // built once per (keys, in, out): planning asks every frame
+        std::string sig = std::to_string(c.in) + ":" + std::to_string(c.out);
+        for (const auto &k : keys)
+            sig += "|" + std::to_string(k.t) + "," + std::to_string(k.v) + "," + anim::sideName(k.in) + anim::sideName(k.out) + "," +
+                   std::to_string(k.speedIn) + "," + std::to_string(k.speedOut) + "," + std::to_string(k.inflIn) + "," + std::to_string(k.inflOut);
+        auto &slot = mRamps[c.id];
+        if (slot.first != sig) slot = {sig, anim::Ramp::build(keys, c.in, c.out)};
+        return &slot.second;
+    }
+
+    void InterstellarService::retimeRamps()
+    {
+        // a ramped clip's stored speed is the AVERAGE that makes its length the curve's — so everything
+        // that measures a clip (spans, the end of the timeline, a render's frame count) is right
+        Project &P = *mProject;
+        ResolvedTimeline R;
+        std::string err;
+        const NodeId tl = currentTimeline();
+        if (tl.empty() || !resolve(P, tl, R, err)) return;
+        for (const auto &c : R.clips)
+        {
+            const anim::Ramp *r = rampFor(c);
+            if (!r || !(r->duration() > 0.0)) continue;
+            const double avg = (c.out - c.in) / r->duration();
+            char b[32];
+            std::snprintf(b, sizeof b, "%.7g", avg);
+            if (std::fabs(std::atof(b) - c.speed) > 1e-6) setField(P, tl, c.id, "speed", b, err);
         }
     }
 

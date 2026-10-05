@@ -202,6 +202,51 @@ namespace anim
         return blendShape(a.shape, b.shape, progress(a.k, b.k, t));
     }
 
+    // ── speed ramps (R-EDT-3) ────────────────────────────────────────────────────────────────────
+    //
+    // A clip's speed keyed on its FOOTAGE clock: v(s) at source time s. The clip's own time at s is
+    // τ(s) = ∫ ds / v(s) from its in-point, so the clip lasts τ(out) and the frame shown τ seconds into
+    // it is the inverse — continuous however the curve turns. Speeds are held to 0.1 … 8×.
+    struct Ramp
+    {
+        std::vector<double> s, tau;           // a table of τ against s, in-point first
+        double duration() const { return tau.empty() ? 0.0 : tau.back(); }
+
+        static Ramp build(const std::vector<Key> &keys, double in, double out)
+        {
+            Ramp r;
+            if (keys.empty() || !(out > in)) return r;
+            const int n = std::clamp((int)std::ceil((out - in) * 480.0), 64, 40000);
+            const double h = (out - in) / n;
+            auto inv = [&](double x) { return 1.0 / std::clamp(eval(keys, x), 0.1, 8.0); };
+            r.s.resize((size_t)n + 1);
+            r.tau.resize((size_t)n + 1);
+            r.s[0] = in;
+            r.tau[0] = 0.0;
+            double prev = inv(in);
+            for (int i = 1; i <= n; ++i)
+            {
+                const double x = in + h * i, cur = inv(x);
+                r.s[(size_t)i] = x;
+                r.tau[(size_t)i] = r.tau[(size_t)i - 1] + h * 0.5 * (prev + cur);   // trapezoid on 1/v
+                prev = cur;
+            }
+            return r;
+        }
+
+        /** The source time `t` seconds into the clip. */
+        double sourceAt(double t) const
+        {
+            if (tau.empty()) return 0.0;
+            if (t <= 0.0) return s.front();
+            if (t >= tau.back()) return s.back();
+            const auto hi = std::upper_bound(tau.begin(), tau.end(), t);
+            const size_t i = (size_t)(hi - tau.begin());
+            const double f = (t - tau[i - 1]) / std::max(1e-12, tau[i] - tau[i - 1]);
+            return s[i - 1] + (s[i] - s[i - 1]) * f;
+        }
+    };
+
     /** Apply a preset to one key, as the right-click menu names them (R-ANIM-2). */
     inline bool preset(Key &k, const std::string &name)
     {
