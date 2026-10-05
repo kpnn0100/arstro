@@ -130,7 +130,7 @@ namespace interstellar
         }
     }
 
-    bool InterstellarService::applyState(const UndoState &s, std::string &err)
+    bool InterstellarService::applyState(const UndoState &s, std::string &err, bool keepMedia)
     {
         if (s.project != mProject->serialize())
         {
@@ -142,10 +142,10 @@ namespace interstellar
             // R-MEDIA-2/3: which proxies exist, whether the monitor uses them, and where a source's file
             // is are media management, outside undo like a render — a proxy finished or a file relinked
             // after an edit must survive undoing it
-            p.proxies = mProject->proxies;
-            p.stills = mProject->stills;   // R-CLR-4: the gallery is a reference shelf, outside undo
+            if (keepMedia) p.proxies = mProject->proxies;
+            if (keepMedia) p.stills = mProject->stills;   // R-CLR-4: the gallery is a reference shelf, outside undo
             for (auto &ro : p.rackObjs)
-                if (const RackObj *now = mProject->rackObj(ro.id))
+                if (const RackObj *now = keepMedia ? mProject->rackObj(ro.id) : nullptr)
                 {
                     ro.proxy = now->proxy;
                     ro.proxyScale = now->proxyScale;
@@ -419,6 +419,11 @@ namespace interstellar
                 if (f.second != "0" && f.second != "1") return fail("settings: " + f.first + " is 0 or 1");
                 (f.first == "hardwareVideo" ? next.hardwareVideo : next.previewCache) = f.second == "1";
             }
+            else if (f.first == "autosave")
+            {
+                if (!num || (v != 0 && (v < 10 || v > 3600))) return fail("settings: autosave is 0 (off) or 10..3600 seconds");
+                next.autosaveSeconds = (int)v;
+            }
             else if (f.first == "keyLaneHeight")
             {
                 if (!num || v < 80 || v > 600) return fail("settings: keyLaneHeight is 80..600 px");
@@ -437,7 +442,7 @@ namespace interstellar
             }
             else
             {
-                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache", "keyLaneHeight"});
+                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache", "keyLaneHeight", "autosave"});
                 return fail("settings: no setting `" + f.first + "`" + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
             }
         }
@@ -467,6 +472,7 @@ namespace interstellar
             else if (k == "hardwareVideo") mSettings.hardwareVideo = v != 0;
             else if (k == "previewCache") mSettings.previewCache = v != 0;
             else if (k == "keyLaneHeight" && v >= 80 && v <= 600) mSettings.keyLaneHeight = v;
+            else if (k == "autosave" && (v == 0 || (v >= 10 && v <= 3600))) mSettings.autosaveSeconds = v;
         }
     }
 
@@ -478,7 +484,7 @@ namespace interstellar
         std::ofstream f(mHost.settingsPath, std::ios::trunc);
         f << "cpuPercent=" << mSettings.cpuPercent << "\nthreads=" << mSettings.threads << "\npreviewEdge="
           << mSettings.previewEdge << "\nuseGpu=" << (mSettings.useGpu ? 1 : 0) << "\nuiScale=" << mSettings.uiScale
-          << "\nhardwareVideo=" << (mSettings.hardwareVideo ? 1 : 0) << "\npreviewCache=" << (mSettings.previewCache ? 1 : 0) << "\nkeyLaneHeight=" << mSettings.keyLaneHeight << "\n";
+          << "\nhardwareVideo=" << (mSettings.hardwareVideo ? 1 : 0) << "\npreviewCache=" << (mSettings.previewCache ? 1 : 0) << "\nkeyLaneHeight=" << mSettings.keyLaneHeight << "\nautosave=" << mSettings.autosaveSeconds << "\n";
         return (bool)f;
     }
 
@@ -510,7 +516,8 @@ namespace interstellar
                  .with("uiScale", mSettings.uiScale)
                  .with("hardwareVideo", mSettings.hardwareVideo)
                  .with("previewCache", mSettings.previewCache)
-                 .with("keyLaneHeight", mSettings.keyLaneHeight));
+                 .with("keyLaneHeight", mSettings.keyLaneHeight)
+                 .with("autosave", mSettings.autosaveSeconds));
     }
 
     void InterstellarService::rescanPresets()

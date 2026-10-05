@@ -261,7 +261,8 @@ namespace interstellar
             case CK::ProjectNew: ok = projectNew(c); break;
             case CK::ProjectOpen: ok = projectOpen(c.arg(0)); break;
             case CK::ProjectSave: ok = requireProject() && projectSave(c.arg(0)); break;
-            case CK::ProjectClose: projectClose(); ok = true; break;
+            case CK::ProjectClose: projectClose(true); ok = true; break;
+            case CK::ProjectAutosave: case CK::ProjectRecover: ok = requireProject() && safetyCommand(c); break;
 
             case CK::RackImport: case CK::RackAdd: case CK::RackGroupNew: case CK::RackDuplicate:
             case CK::RackFrame: case CK::RackRename: case CK::RackSelect: case CK::RackRemove:
@@ -464,6 +465,7 @@ namespace interstellar
         pumpJobs();
         pumpProxies();   // R-MEDIA-2
         pumpTracks();    // R-CLR-2
+        pumpAutosave();  // R-DLV-5
         pumpPreviewCache();
     }
 
@@ -1078,6 +1080,9 @@ namespace interstellar
         mCache->clear();
         mModel.playhead = 0;
         mModel.dirty = false;
+        mModel.autosavedAt = 0;
+        mAutosaveDueMs = 0;
+        checkRecovery();   // R-DLV-6
         if (repaired > 0)
             emit(Event(EK::Info).with("text", "repaired " + std::to_string(repaired) + " non-finite value(s) to their defaults"));
         touchRecent(mIspPath);
@@ -1188,6 +1193,8 @@ namespace interstellar
             for (auto &a : mProject->audioClips) rebase(a.src);
         }
         if (!mProject->save(target, err)) return fail("project save: " + err);
+        removeAutosave();   // R-DLV-5: what it held is in the file now
+        mAutosaveDueMs = 0;
         mIspPath = target;
         mModel.dirty = false;
         emit(Event(EK::ProjectSaved).with("path", target).with("cmp", rackBlocked ? std::string() : mRack.path()));
@@ -1197,8 +1204,11 @@ namespace interstellar
         return true;
     }
 
-    void InterstellarService::projectClose()
+    void InterstellarService::projectClose(bool deliberate)
     {
+        if (deliberate && mOpen) removeAutosave();   // R-DLV-5: closing keeps or gives up the changes — either way not a crash
+        mModel.autosavedAt = 0;
+        mAutosaveDueMs = 0;
         const bool was = mOpen;
         mOpen = false;
         mPending.reset();

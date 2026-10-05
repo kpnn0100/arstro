@@ -274,6 +274,29 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-DLV-1 Autosave and crash recovery (R-DLV-5, R-DLV-6)
+While the project has unsaved changes (`core/service/ServiceSafety.cpp:108`), the first change starts a
+clock and every `settings.autosave` seconds (60; 0 = off; 10..3600, `core/service/ServiceEdit.cpp:422`) the
+service writes `<stem>.autosave.grades` — every rack node's own params and bypass as Cosmo holds them —
+then `<stem>.autosave.isp`, the .isp as it is in memory (`:65`), each beside its name and renamed over it
+(`:36`), so a crash mid-write leaves the last autosave whole; `project autosave` writes now. A save removes
+them (`core/service/InterstellarService.cpp:1196`), and so does a deliberate `project close` (`:1209`);
+opening another project does not. Opening a project checks for an autosave newer than its file
+(`checkRecovery`, `ServiceSafety.cpp:90`, `InterstellarService.cpp:1085` — file times compared only with each
+other, the file clock's epoch being the library's) and offers it (`recoveryAvailable`, `recoveryTime`).
+`project recover` (`:120`) parses the autosave .isp, reads the grades and restores both as an undo
+restore does — the .isp, and every grade written THROUGH Cosmo — but taking the autosave's own
+proxies, stills and relinked files (`applyState(…, keepMedia=false)`, `:159`); the history clears and the
+project is left unsaved. `--discard` removes it. UI: the recovery is offered once per autosave in Cosmo's
+confirm dialog — Discard or Recover (`app/App.cpp:1119`); Settings has Autosave Every Minute / Every 5
+Minutes / Off, marked (`:310`). Guarded by L2 `autosave…` (no write before the interval, one after; the
+grades file holds the edit; a "crash" — a new session — is offered the autosave; recover restores two
+grades, a clip move and a still, unsaved; save removes it; discard; a deliberate close leaves nothing; an
+autosave older than the file is not offered; the setting's range), UI (the menu, the offer once, its
+primary answer), shot `recovery_offer` (a message that overran Cosmo's one-line dialog, shortened).
+Mutants run red: no interval, no removal on save, none on close, any autosave offered, the grades not
+restored, the current media kept in a recovery.
+
 ### DR-CLR-4 The node graph (R-CLR-3)
 The rack is the graph: a source's own grade, then each group it is in — a group grades its members'
 results, the SERIAL chain. `node serial <node>` (`core/service/ServiceNodes.cpp:28`) wraps the node in a new

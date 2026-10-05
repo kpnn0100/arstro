@@ -468,6 +468,12 @@ namespace
             r.app->edit().gradeDeck()->setView(2);
             r.settle();
         }});
+        v.push_back({"recovery_offer", [](FakeService &s) {   // R-DLV-6: a newer autosave, offered
+            s.edit();
+            s.m.recoveryAvailable = true;
+            s.m.recoveryTime = 1790000000;
+            ++s.m.revision;
+        }, [](Rig &r) { r.settle(); }});
         v.push_back({"relink_media", edit, [](Rig &r) {   // R-MEDIA-3: File › Relink Media — the offline sources in one list
             r.settle();
             r.app->openRelinkMenu(artboard::Point(r.app->width() * 0.25, 40.0));

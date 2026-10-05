@@ -223,6 +223,9 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Node graph (R-CLR-3): the Grade deck's tabs SOURCES · STILLS · NODES (cross-fade, travelling
   underline); a node click → `rack select <bind>`; its menu → `node serial <bind>`, `node parallel <bind>`,
   `set <par>.parallelMix=<x>`, `node remove <bind>`. Shot: `grade_node_graph`. UI checks: 447.
+- Safety (R-DLV-5/6): Settings › Autosave Every Minute / Every 5 Minutes / Off → `settings set
+  autosave=60|300|0`; a recoverable autosave is offered once in Cosmo's confirm dialog → `project recover`
+  / `project recover --discard`. Shot: `recovery_offer`. UI checks: 453.
 
 ## Interchange (2026-10-05, R-XCH)
 

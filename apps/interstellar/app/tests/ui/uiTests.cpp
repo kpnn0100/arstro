@@ -2716,6 +2716,32 @@ namespace
         CHECK(x1 > x0 + 20.0 && strictlyBetween(mid, x0, x1) && g->nodeAlpha("ro91") > 0.99, "a node added: the ones after it SLIDE along, it fades in");
     }
 
+    /** R-DLV-5/6: the autosave interval in the Settings menu; a recoverable autosave offered once. */
+    void testSafetyUi()
+    {
+        std::printf("safety: autosave in Settings, the recovery offer\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.settings.autosaveSeconds = 60; ++s.m.revision; });
+        r.settle();
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Settings", "     Autosave Every 5 Minutes") && hasLine(r.svc, "settings set autosave=300"),
+              "Settings › Autosave Every 5 Minutes sets it (the current one is marked)");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Settings", "     Autosave Off") && hasLine(r.svc, "settings set autosave=0"), "…and Off");
+        auto dlg = r.app->edit().confirm();
+        CHECK(!dlg->isOpen(), "no offer without an autosave");
+        r.svc.m.recoveryAvailable = true;
+        r.svc.m.recoveryTime = 1790000000;
+        ++r.svc.m.revision;
+        r.settle();
+        CHECK(dlg->isOpen() && dlg->buttonCount() == 2, "a newer autosave is offered: Discard or Recover");
+        r.svc.lines.clear();
+        CHECK(dlg->confirmDefault() && hasLine(r.svc, "project recover"), "…Recover (the primary answer) dispatches project recover");
+        r.settle();
+        ++r.svc.m.revision;   // the model still says so (the fake keeps it): asked ONCE per autosave
+        r.settle();
+        CHECK(!dlg->isOpen(), "the same autosave is not offered twice");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2891,6 +2917,7 @@ int main()
     testMatteUi();
     testStillsUi();
     testNodeGraphUi();
+    testSafetyUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

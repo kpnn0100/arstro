@@ -262,6 +262,7 @@ namespace interstellar
         bool hardwareVideo = false;   // R-PLAY-3: H.264/H.265 encode on the GPU's video unit (VA-API) where present
         bool previewCache = true;     // R-PLAY-1: a window builds the graded preview cache when idle
         int keyLaneHeight = 140;      // R-ANIM-8: the Cut key lane's height, px (dragged at its top edge)
+        int autosaveSeconds = 60;     // R-DLV-5: unsaved changes written beside the project this often; 0 = off
         // ── measured, read-only ──
         bool gpuAvailable = false;
         bool gpuInUse = false;        // the last frame graded on the UI thread ran on the GPU (R-GPU-1)
@@ -323,6 +324,10 @@ namespace interstellar
         // ── proxies (R-MEDIA-2) ──
         bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
         bool matteView = false;                    // R-CLR-1: Grade's monitor shows the selected source's matte
+        // ── safety (R-DLV-5/6) ──
+        long long autosavedAt = 0;                 // when this session last autosaved (unix seconds); 0 = not yet
+        bool recoveryAvailable = false;            // an autosave newer than the project file waits: `project recover`
+        long long recoveryTime = 0;                // when it was written (unix seconds)
         std::vector<TrackJobModel> trackJobs;      // R-CLR-2: this session's window tracks, oldest first
         std::vector<StillModel> stills;            // R-CLR-4: the gallery, oldest first
         NodeId wipeRef;                            // R-CLR-5: the monitor's wipe reference (a still or a timeline id); "" = none

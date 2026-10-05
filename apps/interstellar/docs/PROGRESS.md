@@ -85,7 +85,10 @@ one integrator who moves, wires, tests and commits each stream:
       12b. [x] Window tracking (R-CLR-2) — DR-CLR-2.
       12c. [x] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5) — DR-CLR-3.
       12d. [x] The node graph (R-CLR-3) — DR-CLR-4.
-      13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
+      13. [x] Autosave and crash recovery (R-DLV-5, R-DLV-6) — DR-DLV-1.
+      13b. [ ] Render presets (R-DLV-3).
+      13c. [ ] Burn-ins and captions (R-DLV-1, R-DLV-2).
+      13d. [ ] DCP and IMF, unvalidated and saying so (R-DLV-4).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -135,6 +138,13 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — an autosave is the .isp plus every grade, and recovery goes through Cosmo.** Cosmo's
+`.cmp` can only be saved over itself — and while a source is offline not at all (D-2) — so "saved
+beside itself" cannot mean a second `.cmp`. The undo machinery already captures exactly the state that
+matters (the .isp text and each node's own params and bypass) and restores it through Cosmo, so the
+autosave is that capture written to disk, and recovery is that restore. It is removed by a save and by
+a deliberate close, so only a session that ended without either — a crash — leaves one to offer.
 
 **2026-10-05 — the node graph is the rack, drawn; a parallel node is an empty variant added by its mix.**
 Cosmo's groups already are serial nodes (a group grades its members' results), so the graph adds no

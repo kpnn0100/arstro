@@ -129,6 +129,7 @@ namespace interstellar_v1
         /** The Colour menu: the working space, the current one marked (R-COLOR-3). */
         void refreshColourMenu(const interstellar::AppModel &m);
         void refreshWorkspaceMenu(const interstellar::AppModel &m);
+        void refreshSettingsMenu(const interstellar::AppModel &m);   // R-DLV-5
         /** The rack row's input-colour list, opened in place of its menu (R-COLOR-2). */
         void openInputColourMenu(const std::string &bind, artboard::Point at);
         void setUiScale(int percent, bool animate);
@@ -175,6 +176,8 @@ namespace interstellar_v1
         std::vector<std::string> mPresetNames;          // what the Preset menu lists now
         std::string mColourMenuFor;                     // the working space the Colour menu marks
         int mWorkspaceMenuFor = -1;                     // R-MEDIA-2: 0 no project · 1 originals · 2 proxies
+        int mSettingsMenuFor = -2;                      // R-DLV-5: the autosave interval the Settings menu marks
+        std::string mRecoveryAsked;                     // R-DLV-6: the autosave already offered (project|time)
         unsigned mThumbEpoch = 0;                       // the host's thumbnail epoch last seen
         artboard::GestureRecognizer mRecognizer;
 

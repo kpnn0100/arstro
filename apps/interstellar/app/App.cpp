@@ -306,6 +306,22 @@ namespace interstellar_v1
         refreshColourMenu(mHooks.model ? mHooks.model() : emptyModel());
     }
 
+    /** The Settings menu: Engine Settings, and how often unsaved work is autosaved (R-DLV-5), marked. */
+    void App::refreshSettingsMenu(const interstellar::AppModel &m)
+    {
+        const int s = m.settings.autosaveSeconds;
+        if (s == mSettingsMenuFor) return;
+        mSettingsMenuFor = s;
+        auto mark = [&](int v) { return std::string(s == v ? "\xE2\x80\xA2  " : "     "); };
+        std::vector<cosmo_v2::MenuStrip::Item> items = {
+            {"Engine Settings...",           [this] { openSettings(); }},
+            {mark(60) + "Autosave Every Minute",    [this] { dispatch("settings set autosave=60"); }},
+            {mark(300) + "Autosave Every 5 Minutes", [this] { dispatch("settings set autosave=300"); }},
+            {mark(0) + "Autosave Off",              [this] { dispatch("settings set autosave=0"); }},
+        };
+        mEdit->topBar()->menus()->setItems(2, std::move(items));
+    }
+
     /** The Workspace menu: the tabs, and the project's proxy switch (R-MEDIA-2), marked when on. */
     void App::refreshWorkspaceMenu(const interstellar::AppModel &m)
     {
@@ -1099,6 +1115,20 @@ namespace interstellar_v1
         refreshPresetMenu(m);
         refreshColourMenu(m);
         refreshWorkspaceMenu(m);
+        refreshSettingsMenu(m);
+        // R-DLV-6: an autosave newer than the file — the session before ended without saving; asked once
+        if (m.screen == interstellar::Screen::Edit && m.recoveryAvailable)
+        {
+            const std::string key = m.projectPath + "|" + std::to_string(m.recoveryTime);
+            if (key != mRecoveryAsked)
+            {
+                mRecoveryAsked = key;
+                // Cosmo's dialog draws one line: the message is short on purpose (design rule R5)
+                mEdit->confirm()->show("Recover unsaved changes?", "An autosave is newer than this project's file.",
+                                       {{"Discard", true, false, [this] { dispatch("project recover --discard"); }},
+                                        {"Recover", false, true, [this] { dispatch("project recover"); }}});
+            }
+        }
         // Home's recents are unknown until the service has published once (revision 0):
         // that is the loading state, drawn as skeleton cards.
         mHome->setLoading(m.revision == 0);

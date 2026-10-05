@@ -16,7 +16,9 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `project new <path.isp> [--fps <n>] [--res <WxH>]` | Create a project and its rack (an empty .cmp beside it), and open it. | R-SCOPE-2 |
 | `project open <path.isp>` | Open a project: its timelines, and the hosted Cosmo project its #rack names. | R-SCOPE-2 |
 | `project save [path.isp]` | Save the .isp and the rack's .cmp. A path saves the .isp there. | R-RACK-2 |
-| `project close` | Close the project and return Home. | R-UI-1 |
+| `project close` | Close the project and return Home (its autosave goes: closing is a decision). | R-UI-1 |
+| `project autosave` | Write the autosave now — the .isp and every rack node's grade beside the project (<stem>.autosave.*); it happens by itself every `autosave` seconds while there are unsaved changes. | R-DLV-5 |
+| `project recover [--discard]` | Put back an autosave newer than the project file (after a crash): the .isp and every grade, through Cosmo; the project is left unsaved so you decide. --discard removes the autosave instead. | R-DLV-6 |
 | `colour working <rec709\|acescct>` | The project's working space: Rec.709 (display-referred, Cosmo's own — the default) or ACEScct (scene-referred; the monitor and each render then apply an output transform). | R-COLOR-3 |
 | `rack import <path.cmp>` | Point the rack at an existing Cosmo project — its groups and grades are the rack. | R-RACK-1 |
 | `rack add <media…>` | Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it). | R-RACK-3 |
@@ -413,6 +415,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].spec` | string |  | The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate. |
 | `useProxies` | bool |  | The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2). |
 | `matteView` | bool |  | Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1). |
+| `autosavedAt` | integer | *machine* | When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5). |
+| `recoveryAvailable` | bool |  | An autosave newer than the project file waits — `project recover` (R-DLV-6). |
+| `recoveryTime` | integer | *machine* | When that autosave was written, unix seconds. |
 | `trackJobs` | array |  | This session's window tracks, oldest first (R-CLR-2). |
 | `trackJobs[].id` | string |  | Job id (t1, t2, …). |
 | `trackJobs[].effect` | string |  | The window tracked. |
@@ -539,6 +544,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |
 | `settings.previewEdge` | integer |  | Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected. |
 | `settings.keyLaneHeight` | integer |  | The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8). |
+| `settings.autosave` | integer |  | Unsaved changes are written beside the project this often, seconds; 0 = off (R-DLV-5). |
 | `settings.previewCache` | bool |  | A window builds the graded preview cache of the current timeline when idle (R-PLAY-1). |
 | `settings.useGpu` | bool |  | GPU opt-in for the grade step (only where a backend exists). |
 | `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3). |

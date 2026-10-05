@@ -2131,6 +2131,64 @@ int main()
         assert(!f.run("node remove a", &err) && has(err, "is a source"));
     });
 
+    test("autosave writes unsaved work beside the project every interval; a crash's autosave is offered and recovered (R-DLV-5, R-DLV-6)", [] {
+        Fixture f("autosave");
+        f.standard();
+        f.must("project save");
+        const std::string isp = f.path("mv.autosave.isp"), grades = f.path("mv.autosave.grades");
+        f.must("settings set autosave=10");
+        f.must("set a.basic.exposure=0.4");
+        f.must("clip move shotB --at 3");
+        // the first unsaved change starts the clock; nothing before the interval, then one write
+        f.svc->pump(f.now += 1000);
+        f.svc->pump(f.now += 5000);
+        assert(!fs::exists(isp));
+        f.svc->pump(f.now += 6000);
+        assert(fs::exists(isp) && fs::exists(grades) && f.svc->model().autosavedAt > 0);
+        {
+            std::ifstream g(grades);
+            const std::string text((std::istreambuf_iterator<char>(g)), std::istreambuf_iterator<char>());
+            assert(has(text, "exposure=0.4"));
+        }
+        f.must("set b.basic.contrast=20");          // after the autosave: only in memory, then lost with the session
+        f.must("still grab a --name kept");         // (and a still: the gallery comes back with the rest)
+        f.must("project autosave");                 // … unless written now
+        // a crash: a new session, the project never saved
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(f.svc->model().recoveryAvailable && f.svc->model().recoveryTime > 0);
+        assert(evalValue(f, "get a.basic.exposure") == 0.0);   // the file's state
+        f.must("project recover");
+        assert(evalValue(f, "get a.basic.exposure") == 0.4 && evalValue(f, "get b.basic.contrast") == 20.0);
+        assert(has(f.out("get shotB.at"), "shotB.at=3.0") && f.svc->model().stills.size() == 1);
+        assert(f.svc->model().dirty && !f.svc->model().recoveryAvailable);   // recovered, not saved
+        f.must("project save");                     // kept: the autosave is spent
+        assert(!fs::exists(isp) && !fs::exists(grades));
+        // discarded instead
+        f.must("set a.basic.exposure=0.9");
+        f.must("project autosave");
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(f.svc->model().recoveryAvailable);
+        f.must("project recover --discard");
+        assert(!fs::exists(isp) && evalValue(f, "get a.basic.exposure") == 0.4 && !f.svc->model().recoveryAvailable);
+        std::string err;
+        assert(!f.run("project recover", &err) && has(err, "no autosave"));
+        // a deliberate close is not a crash; an autosave older than the file is not offered
+        f.must("set a.basic.exposure=0.7");
+        f.must("project autosave");
+        f.must("project close");
+        assert(!fs::exists(isp));
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        f.must("set a.basic.exposure=0.8");
+        f.must("project autosave");
+        fs::last_write_time(isp, fs::last_write_time(f.path("mv.isp")) - std::chrono::hours(1));
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(!f.svc->model().recoveryAvailable);
+        assert(!f.run("settings set autosave=5", &err) && has(err, "10..3600"));
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

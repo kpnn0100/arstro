@@ -643,7 +643,7 @@ reserves the rest so adopting it is not a migration.
   it changes the whole clip). Switched from the monitor's angle bar in Cut or Alt+1…9 — while paused
   or playing; the bar names each angle by its source, without per-angle pictures (said).
 
-## R-DLV — delivery and safety — ⏳ NOT STARTED (added 2026-10-05)
+## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 1–4 next)
 
 - **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
   (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`.
@@ -654,8 +654,12 @@ reserves the rest so adopting it is not a migration.
   package. Neither can be validated here (no cinema server, no DCP/IMF validator in this build) — the
   app says so on every package it writes.
 - **R-DLV-5 Autosave**: the project is saved beside itself every minute while it has unsaved changes.
+  — ✅ (DR-DLV-1). "Saved beside itself" is the .isp and every rack node's grade (Cosmo's .cmp can only
+  be saved over itself, and not at all while a source is offline, D-2); the interval is a setting
+  (60 s; 0 = off). A save or a deliberate close removes it.
 - **R-DLV-6 Crash recovery**: opening a project whose autosave is newer than its file offers the
-  autosave.
+  autosave. — ✅ (DR-DLV-1). Recovering leaves the project unsaved, so keeping it is a save; the undo
+  history starts there.
 
 ---
 

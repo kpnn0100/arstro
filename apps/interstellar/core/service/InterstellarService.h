@@ -180,7 +180,7 @@ namespace interstellar
         bool projectNew(const Command &c);
         bool projectOpen(const std::string &path);
         bool projectSave(const std::string &path);
-        void projectClose();
+        void projectClose(bool deliberate = false);   // deliberate: `project close` — the autosave goes too (R-DLV-5)
         void finishRackLoad();
         void loadRecents();
         void touchRecent(const std::string &path);
@@ -249,6 +249,14 @@ namespace interstellar
         bool proxyCommand(const Command &c);
         // R-MEDIA-3 — ServiceMedia.cpp
         bool mediaCommand(const Command &c);
+        // R-DLV-5/6 — ServiceSafety.cpp
+        std::string autosavePath(const char *ext) const;
+        bool writeAutosave(std::string &err);
+        void removeAutosave();
+        void checkRecovery();
+        void pumpAutosave();
+        bool safetyCommand(const Command &c);
+        double mAutosaveDueMs = 0;
         // R-CLR-3 — ServiceNodes.cpp
         bool nodeCommand(const Command &c);
         // R-CLR-4/5 — ServiceStills.cpp
@@ -376,7 +384,8 @@ namespace interstellar
         static bool undoable(Command::Kind k);
         static bool structural(Command::Kind k);
         void captureState(UndoState &out) const;
-        bool applyState(const UndoState &s, std::string &err);
+        /** `keepMedia`: proxies, stills and relinked files stay as they are now (an undo); off for a recovery. */
+        bool applyState(const UndoState &s, std::string &err, bool keepMedia = true);
         void recordEdit(const Command &c, const UndoState &before);
         void clearHistory();
         bool settingsCommand(const Command &c);

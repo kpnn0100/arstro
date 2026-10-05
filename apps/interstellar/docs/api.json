@@ -49,8 +49,33 @@
       "minArgs": 0,
       "maxArgs": 0,
       "flags": [],
-      "summary": "Close the project and return Home.",
+      "summary": "Close the project and return Home (its autosave goes: closing is a decision).",
       "requirement": "R-UI-1"
+    },
+    {
+      "verb": "project autosave",
+      "usage": "project autosave",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Write the autosave now — the .isp and every rack node's grade beside the project (<stem>.autosave.*); it happens by itself every `autosave` seconds while there are unsaved changes.",
+      "requirement": "R-DLV-5"
+    },
+    {
+      "verb": "project recover",
+      "usage": "project recover [--discard]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "discard",
+          "value": ""
+        }
+      ],
+      "summary": "Put back an autosave newer than the project file (after a crash): the .isp and every grade, through Cosmo; the project is left unsaved so you decide. --discard removes the autosave instead.",
+      "requirement": "R-DLV-6"
     },
     {
       "verb": "colour working",
@@ -2672,6 +2697,24 @@
       "doc": "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."
     },
     {
+      "path": "autosavedAt",
+      "type": "integer",
+      "stable": false,
+      "doc": "When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5)."
+    },
+    {
+      "path": "recoveryAvailable",
+      "type": "bool",
+      "stable": true,
+      "doc": "An autosave newer than the project file waits — `project recover` (R-DLV-6)."
+    },
+    {
+      "path": "recoveryTime",
+      "type": "integer",
+      "stable": false,
+      "doc": "When that autosave was written, unix seconds."
+    },
+    {
       "path": "trackJobs",
       "type": "array",
       "stable": true,
@@ -3426,6 +3469,12 @@
       "type": "integer",
       "stable": true,
       "doc": "The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8)."
+    },
+    {
+      "path": "settings.autosave",
+      "type": "integer",
+      "stable": true,
+      "doc": "Unsaved changes are written beside the project this often, seconds; 0 = off (R-DLV-5)."
     },
     {
       "path": "settings.previewCache",

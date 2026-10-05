@@ -36,7 +36,13 @@ namespace interstellar
              "Open a project: its timelines, and the hosted Cosmo project its #rack names.", "R-SCOPE-2"},
             {K::ProjectSave, "project save", "[path.isp]", 0, 1, {},
              "Save the .isp and the rack's .cmp. A path saves the .isp there.", "R-RACK-2"},
-            {K::ProjectClose, "project close", "", 0, 0, {}, "Close the project and return Home.", "R-UI-1"},
+            {K::ProjectClose, "project close", "", 0, 0, {}, "Close the project and return Home (its autosave goes: closing is a decision).", "R-UI-1"},
+            {K::ProjectAutosave, "project autosave", "", 0, 0, {},
+             "Write the autosave now — the .isp and every rack node's grade beside the project (<stem>.autosave.*); "
+             "it happens by itself every `autosave` seconds while there are unsaved changes.", "R-DLV-5"},
+            {K::ProjectRecover, "project recover", "", 0, 0, {"discard"},
+             "Put back an autosave newer than the project file (after a crash): the .isp and every grade, through Cosmo; "
+             "the project is left unsaved so you decide. --discard removes the autosave instead.", "R-DLV-6"},
 
             {K::ColourWorking, "colour working", "<rec709|acescct>", 1, 1, {},
              "The project's working space: Rec.709 (display-referred, Cosmo's own — the default) or ACEScct "

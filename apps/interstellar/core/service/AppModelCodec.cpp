@@ -224,6 +224,9 @@ namespace interstellar
         j.set("renders", renders);
         j.set("useProxies", m.useProxies);
         j.set("matteView", m.matteView);
+        if (!st) j.set("autosavedAt", m.autosavedAt);   // clock times: not part of a stable dump
+        j.set("recoveryAvailable", m.recoveryAvailable);
+        if (!st) j.set("recoveryTime", m.recoveryTime);
         {
             Json tracks = Json::array();
             for (const auto &t : m.trackJobs)
@@ -357,6 +360,7 @@ namespace interstellar
         settings.set("hardwareVideo", m.settings.hardwareVideo);
         settings.set("previewCache", m.settings.previewCache);
         settings.set("keyLaneHeight", m.settings.keyLaneHeight);
+        settings.set("autosave", m.settings.autosaveSeconds);
         settings.set("uiScale", m.settings.uiScale);
         if (!st)
         {
@@ -537,6 +541,9 @@ namespace interstellar
             {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
             {"useProxies", "bool", "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."},
             {"matteView", "bool", "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."},
+            {"autosavedAt", "integer", "When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5).", true},
+            {"recoveryAvailable", "bool", "An autosave newer than the project file waits — `project recover` (R-DLV-6)."},
+            {"recoveryTime", "integer", "When that autosave was written, unix seconds.", true},
             {"trackJobs", "array", "This session's window tracks, oldest first (R-CLR-2)."},
             {"trackJobs[].id", "string", "Job id (t1, t2, …)."},
             {"trackJobs[].effect", "string", "The window tracked."},
@@ -663,6 +670,7 @@ namespace interstellar
             {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},
             {"settings.previewEdge", "integer", "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."},
             {"settings.keyLaneHeight", "integer", "The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8)."},
+            {"settings.autosave", "integer", "Unsaved changes are written beside the project this often, seconds; 0 = off (R-DLV-5)."},
             {"settings.previewCache", "bool", "A window builds the graded preview cache of the current timeline when idle (R-PLAY-1)."},
             {"settings.useGpu", "bool", "GPU opt-in for the grade step (only where a backend exists)."},
             {"settings.hardwareVideo", "bool", "H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3)."},
