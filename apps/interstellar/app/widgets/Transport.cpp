@@ -1,4 +1,5 @@
 #include "Transport.h"
+#include "anim/Motion.h"
 #include "CommandLine.h"
 #include "Glyphs.h"
 #include "TextFit.h"
@@ -22,6 +23,10 @@ namespace interstellar_v1
         constexpr double kPlayFadeMs = 160.0;
         /** Below this, a playing playhead's step is followed directly (it IS the motion). */
         constexpr double kFollowStepS = 0.5;
+        constexpr double kMeterW = 64.0;      // the stereo meter (R-AUD-8)
+        constexpr double kFloorDb = -48.0;
+        inline double toDb(double v) { return v > 1e-6 ? 20.0 * std::log10(v) : -120.0; }
+        Color fade(Color c, double a) { c.a *= a; return c; }
     }
 
     Transport::Transport() { height.set(shell::transportH()); }
@@ -35,6 +40,18 @@ namespace interstellar_v1
         mMarkers.clear();
         for (const auto &mk : m.markers) mMarkers.push_back(mk.at);
         if (!mScrubbing) mTargetTime = m.playhead;   // a gesture in flight outranks the model
+        mPeakIn[0] = m.meterPeakL; mPeakIn[1] = m.meterPeakR;
+        mRmsIn[0] = m.meterRmsL; mRmsIn[1] = m.meterRmsR;
+        mClipIn = m.meterClip;
+        mSoundIn = false;
+        for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) mSoundIn = tl.hasSound;
+    }
+
+    Rect Transport::meterRect() const
+    {
+        const double a = mMeterAmt.value();
+        const double x1 = width.value() - kPad - kDurW - 6.0;
+        return Rect{x1 - kMeterW * a, height.value() * 0.5 - 6.0, kMeterW * a, 12.0};
     }
 
     Rect Transport::buttonRect(int i) const
@@ -46,7 +63,8 @@ namespace interstellar_v1
     Rect Transport::scrubRect() const
     {
         const double x0 = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0;
-        const double x1 = width.value() - kPad - kDurW - 6.0;
+        // the meter, when shown, takes its width from the scrubber — through its eased amount
+        const double x1 = width.value() - kPad - kDurW - 6.0 - (kMeterW + 10.0) * mMeterAmt.value();
         return Rect{x0, 0, std::max(0.0, x1 - x0), height.value()};
     }
 
@@ -147,6 +165,39 @@ namespace interstellar_v1
             mPlayApplied = mPlaying;
         }
         mPlayAmt.update(nowMs);
+        // R-AUD-8: meter ballistics, continuous; reduced motion shows the level as it is
+        const double dt = mMeterInit ? std::clamp(nowMs - mLastMs, 0.0, 200.0) : 0.0;
+        mLastMs = nowMs;
+        if (!mMeterInit)
+        {
+            mMeterAmt.set(mSoundIn ? 1.0 : 0.0);
+            mSoundApplied = mSoundIn;
+            mMeterInit = true;
+        }
+        for (int c = 0; c < 2; ++c)
+        {
+            auto ballistic = [&](double &live, double target) {
+                if (reducedMotion()) { live = target; return; }
+                if (target > live) live += (target - live) * std::min(1.0, dt / 30.0);   // attack: ~30 ms
+                else live = std::max(target, live - 24.0 * dt / 1000.0);                // release: 24 dB/s
+            };
+            ballistic(mPeakDb[c], std::max(-120.0, toDb(mPeakIn[c])));
+            ballistic(mRmsDb[c], std::max(-120.0, toDb(mRmsIn[c])));
+            if (mPeakDb[c] >= mHoldDb[c]) { mHoldDb[c] = mPeakDb[c]; mHoldAt[c] = nowMs; }
+            else if (nowMs - mHoldAt[c] > 1500.0) mHoldDb[c] = reducedMotion() ? mPeakDb[c] : std::max(mPeakDb[c], mHoldDb[c] - 20.0 * dt / 1000.0);
+        }
+        if (mClipIn != mClipApplied)
+        {
+            mClipAmt.animateTo(mClipIn ? 1.0 : 0.0, mClipIn ? motion::kHoverMs : 300.0, Easing::EaseOutCubic, nowMs);
+            mClipApplied = mClipIn;
+        }
+        mClipAmt.update(nowMs);
+        if (mSoundIn != mSoundApplied)
+        {
+            mMeterAmt.animateTo(mSoundIn ? 1.0 : 0.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
+            mSoundApplied = mSoundIn;
+        }
+        mMeterAmt.update(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         Segment::advance(nowMs);
@@ -201,6 +252,27 @@ namespace interstellar_v1
             }
             const double r = 4.5 + 1.0 * hv;
             drawCircle(t, x, cy, r, Paint::filled(palette::white()));
+        }
+        if (const double ma = mMeterAmt.value(); ma > 0.001)
+        {
+            // R-AUD-8: two bars, left over right; RMS quiet, peak bright, the top 3 dB destructive
+            const Rect mr = meterRect();
+            auto xOf = [&](double db) { return mr.x + std::clamp((db - kFloorDb) / -kFloorDb, 0.0, 1.0) * mr.w; };
+            const double hotX = xOf(-3.0);
+            for (int c = 0; c < 2; ++c)
+            {
+                const double y = mr.y + 2.0 + c * 5.0, bh = 3.0;
+                drawRoundedRect(t, Rect{mr.x, y, mr.w, bh}, radius::hairline(), Paint::filled(fade(palette::secondary(), ma)));
+                const double rx = xOf(mRmsDb[c]), px = xOf(mPeakDb[c]);
+                if (rx > mr.x) drawRoundedRect(t, Rect{mr.x, y, std::min(rx, hotX) - mr.x, bh}, radius::hairline(), Paint::filled(fade(palette::success(), 0.45 * ma)));
+                if (px > mr.x) drawRoundedRect(t, Rect{mr.x, y, std::min(px, hotX) - mr.x, bh}, radius::hairline(), Paint::filled(fade(palette::success(), 0.9 * ma)));
+                if (px > hotX) drawRoundedRect(t, Rect{hotX, y, px - hotX, bh}, radius::hairline(), Paint::filled(fade(palette::destructive(), ma)));
+                const double hx = xOf(mHoldDb[c]);
+                if (mHoldDb[c] > kFloorDb) glyph::line(t, hx, y - 0.5, hx, y + bh + 0.5, fade(palette::white(), 0.8 * ma), 1.0);
+            }
+            // the clip lamp
+            drawCircle(t, mr.right() + 5.0, mr.y + 6.0, 2.5, Paint::filled(fade(palette::secondary(), ma)));
+            if (const double ca = mClipAmt.value(); ca > 0.001) drawCircle(t, mr.right() + 5.0, mr.y + 6.0, 2.5, Paint::filled(fade(palette::destructive(), ca * ma)));
         }
         const std::string dur = cmd::timecode(mDuration, mFps);
         t.setFill(palette::mutedForeground());

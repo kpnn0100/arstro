@@ -104,6 +104,18 @@ namespace interstellar
             mAhead->cacheSrcs.resize(k);
             for (size_t i = 0; i < k; ++i) mAhead->threads.emplace_back([this, i] { aheadLoop(i); });
         }
+        if (mHost.audioOut)
+        {
+            // R-AUD-6: the sound thread; it opens the output the first time there is something to hear
+            mPlayer.reset(new AudioPlayer());
+            mPlayer->out = mHost.audioOut();
+            mPlayer->thread = std::thread([this] { playerLoop(); });
+        }
+        if (mHost.audioSource)
+        {
+            mPeaks.reset(new PeakStore());
+            mPeaks->thread = std::thread([this] { peaksLoop(); });
+        }
         if (mHost.rackDecoder)
         {
             auto make = mHost.rackDecoder;
@@ -127,6 +139,24 @@ namespace interstellar
     InterstellarService::~InterstellarService()
     {
         stopCache();   // the builder grades through mCache and the host: first
+        if (mPlayer)
+        {
+            {
+                std::lock_guard<std::mutex> l(mPlayer->mu);
+                mPlayer->quit = true;
+            }
+            mPlayer->cv.notify_all();
+            if (mPlayer->thread.joinable()) mPlayer->thread.join();
+        }
+        if (mPeaks)
+        {
+            {
+                std::lock_guard<std::mutex> l(mPeaks->mu);
+                mPeaks->quit = true;
+            }
+            mPeaks->cv.notify_all();
+            if (mPeaks->thread.joinable()) mPeaks->thread.join();
+        }
         if (mAhead)
         {
             {
@@ -385,17 +415,22 @@ namespace interstellar
                 mPreroll = false;
                 mPlayFromT = mModel.playhead;
                 mPlayFromMs = mNowMs;
+                startSound();   // R-AUD-6: the sound starts with the picture's clock
             }
         }
         if (mPlaying && mOpen && !mPreroll)
         {
             const double dur = timelineDuration(currentTimeline());
-            double t = mPlayFromT + (mNowMs - mPlayFromMs) / 1000.0;
+            syncSoundPlan();
+            // R-AUD-6: when it is heard, the sound is the clock; otherwise the wall clock, as before
+            double t = 0;
+            if (!soundTime(t)) t = mPlayFromT + (mNowMs - mPlayFromMs) / 1000.0;
             if (dur > 0 && t >= dur)
             {
                 t = dur;
                 mPlaying = false;
                 mPlayEdge = 0;
+                stopSound();
                 emit(Event(EK::PlaybackChanged).with("playing", false));
             }
             const double snapped = snapToFrame(t, mProject->fps);
@@ -762,7 +797,9 @@ namespace interstellar
                 cm.duration = std::max(0.0, a.out - a.in);
                 cm.gain = a.gain;
                 cm.audio = true;
-                cm.offline = !fs::exists(resolvePath(a.src));
+                cm.media = resolvePath(a.src);
+                cm.offline = !fs::exists(cm.media);
+                if (!cm.offline) requestPeaks(cm.media);   // R-AUD-7: its envelope, computed once
                 cm.provenance = prov(a.id);
                 m.clips.push_back(cm);
             }
@@ -845,6 +882,7 @@ namespace interstellar
             for (const auto &d : render::colour::outputs()) m.colourOutputs.push_back({d.id, d.label});
         }
         m.workingSpace = render::colour::known(render::colour::workings(), mProject->colorspace) ? mProject->colorspace : std::string("rec709");
+        fillSoundModel(m);
         m.hasClipClipboard = mHasClipClipboard;
         m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
@@ -2936,6 +2974,7 @@ namespace interstellar
             mPlayRate = 0;
             mPreroll = mAhead != nullptr;
             mPrerollFromMs = mNowMs;
+            if (!mPreroll) startSound();
             emit(Event(EK::PlaybackChanged).with("playing", true));
             return true;
         }
@@ -2943,6 +2982,7 @@ namespace interstellar
         {
             if (!mPlaying) return true;
             mPlaying = false;
+            stopSound();
             mPlayEdge = 0;   // the paused frame is graded at the full preview size again
             emit(Event(EK::PlaybackChanged).with("playing", false));
             return true;
@@ -2990,7 +3030,9 @@ namespace interstellar
         {
             mPlayFromT = t;
             mPlayFromMs = mNowMs;
+            if (mSoundClock) { stopSound(); startSound(); }   // a seek while playing: the sound jumps with it
         }
+        else soundGrain(t);   // R-AUD-6: a scrub plays a short grain where it lands
         bumpFrame();
         emit(Event(EK::PlayheadMoved).with("t", t).with("frame", (long long)std::llround(t * fps)));
         return true;

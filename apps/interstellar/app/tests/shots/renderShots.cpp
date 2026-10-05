@@ -362,6 +362,17 @@ namespace
             r.click(p.x - 30.0, p.y);
             r.settle();
         }});
+        // R-AUD-7/8: the Cut tab with its audio clips' waveforms and the transport's meter mid-song
+        v.push_back({"cut_sound", [](FakeService &s) {
+            s.edit();
+            s.m.playing = true;
+            s.m.meterPeakL = 0.62; s.m.meterPeakR = 0.48;
+            s.m.meterRmsL = 0.30; s.m.meterRmsR = 0.24;
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+        }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

@@ -76,6 +76,46 @@ namespace interstellar
         std::shared_ptr<const render::colour::Transform> output;
     };
 
+    /** R-AUD-6/8: the sound thread. It mixes ahead of the ear and writes to the host's output, whose
+     *  blocking write is the clock; it keeps the level of every block it wrote for the meters. */
+    struct InterstellarService::AudioPlayer
+    {
+        std::unique_ptr<IAudioOut> out;
+        bool opened = false, failed = false;
+        std::thread thread;
+        std::mutex mu;
+        std::condition_variable cv;
+        bool quit = false;
+        bool playing = false;
+        long long from = 0;                          // the timeline frame playback started at
+        unsigned gen = 0;                            // every start, stop or seek: the thread flushes
+        std::shared_ptr<const render::AudioPlan> plan;
+        std::deque<long long> grains;                // scrub grains to sound, by start frame
+        std::atomic<long long> written{0};           // frames written since `from`, this generation
+        std::atomic<unsigned> writtenGen{0};
+        std::atomic<double> latency{0.0};
+        int rate = 48000;
+        struct Block { long long frame; int frames; float peak[2], rms[2]; };
+        std::deque<Block> blocks;                    // under mu: the last second written
+        long long clipFrame = -(1LL << 60);          // the last frame that passed full scale
+        std::map<std::string, std::unique_ptr<IAudioSource>> sources;   // the thread's own decoders
+    };
+
+    /** R-AUD-7: one file's envelope at a time, on its own thread, cached beside the project. */
+    struct InterstellarService::PeakStore
+    {
+        static constexpr double kPerSecond = 100.0;
+        std::thread thread;
+        std::mutex mu;
+        std::condition_variable cv;
+        bool quit = false;
+        std::deque<std::string> queue;
+        std::set<std::string> asked;
+        std::map<std::string, std::vector<float>> done;
+        std::string dir;                             // <stem>.peaks; "" = memory only
+        std::atomic<unsigned> epoch{0};
+    };
+
     /** A .cube read once per (path, size, mtime) — plans ask for it every frame (R-COLOR-5). Null and
      *  `err` when it does not read; `stamp` names the version the caches key on. Thread-safe. */
     std::shared_ptr<const render::Lut> loadLut(const std::string &resolvedPath, std::string &err, std::string *stamp = nullptr);

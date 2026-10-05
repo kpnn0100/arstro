@@ -320,6 +320,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `clips[].duration` | number |  | Timeline duration, (out-in)/speed. |
 | `clips[].opacity` | number |  | Clip opacity. |
 | `clips[].gain` | number |  | Audio clip gain, dB. |
+| `clips[].media` | string |  | Audio clips: the file, resolved — the key of its waveform envelope (R-AUD-7). |
 | `clips[].audio` | bool |  | An audio clip (#aclip). |
 | `clips[].offline` | bool |  | Its media is missing. |
 | `clips[].provenance` | enum(local\|inherited\|overridden\|dangling) |  | Where it came from in this version. |
@@ -420,6 +421,13 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `effectTypes[].type` | string |  | The type to name in `effect add --type`. |
 | `effectTypes[].label` | string |  | Its name for a person. |
 | `effectTypes[].family` | string |  | Its menu family. |
+| `soundPlaying` | boolean |  | Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear. |
+| `meterPeakL` | number |  | The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8). |
+| `meterPeakR` | number |  | …right. |
+| `meterRmsL` | number |  | The master's RMS now, left, linear. |
+| `meterRmsR` | number |  | …right. |
+| `meterClip` | boolean |  | The sum passed full scale in the last 3 s of playback. |
+| `peaksEpoch` | integer |  | Rises when a waveform envelope lands; `AppHooks::audioPeaks(media)` has it (R-AUD-7). |
 | `workingSpace` | string |  | The project's working space: rec709 (Cosmo's own, display-referred) or acescct (`colour working`, R-COLOR-3). |
 | `colourInputs` | array |  | The source spaces `set <bind>.input=` accepts, in menu order (R-COLOR-2). |
 | `colourInputs[].id` | string |  | What to dispatch. |

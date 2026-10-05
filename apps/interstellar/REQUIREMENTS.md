@@ -291,7 +291,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-AUD — the audio project format — 🔶 IN PROGRESS (schema + placement: DR-AUD-1; the mix in renders: DR-AUD-2; playback, waveforms, meters next)
+## R-AUD — the audio project format — ✅ IMPLEMENTED (schema + placement: DR-AUD-1; the mix in renders: DR-AUD-2; heard, drawn, metered: DR-AUD-3)
 
 Designed now, for Solaris to adopt whole. Interstellar implements the subset it needs; the schema
 reserves the rest so adopting it is not a migration.
@@ -317,11 +317,14 @@ reserves the rest so adopting it is not a migration.
   (EQ, dynamics, plugins) stays Solaris's.)
 - **R-AUD-6 Playback is heard, in sync** (added 2026-10-05): the master plays through the host's
   audio device while the timeline plays; the audio clock drives the picture when it plays, and a
-  scrub plays a short grain.
+  scrub plays a short grain. — ✅ (DR-AUD-3; PulseAudio/PipeWire in the GTK host). Without a sound
+  server, or with nothing to hear, playback is picture only on the wall clock, as before.
 - **R-AUD-7 Waveforms** on audio clips (added 2026-10-05): peak envelopes computed once per file and
-  kept beside the project.
+  kept beside the project. — ✅ (DR-AUD-3; `<stem>.peaks/`, 100 peaks a second, linear in
+  amplitude).
 - **R-AUD-8 Meters** (added 2026-10-05): the master's peak and RMS per channel while playing, with a
-  held peak and a clip indicator.
+  held peak and a clip indicator. — ✅ (DR-AUD-3; in the transport, −48…0 dB, what is heard rather
+  than what was last mixed).
 - **R-AUD-9 Renders carry the mix** (added 2026-10-05): every video render muxes the master (AAC for
   H.264/H.265, 24-bit PCM for ProRes/DNxHR), sample-accurate to the picture. — ✅ (DR-AUD-2). Said:
   a timeline with nothing sounding renders picture only; a PNG sequence carries no sound (no `.wav`

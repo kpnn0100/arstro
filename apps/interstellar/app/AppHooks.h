@@ -23,6 +23,7 @@
 #include "../core/service/AppModel.h"
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -50,6 +51,9 @@ namespace interstellar_v1
          *  (R-UI-11 "Copy Frame"); `bind` empty = the timeline at the playhead. Empty = the menu
          *  offers only "Save Frame…". */
         std::function<bool(const std::string &bind, std::string &err)> copyFrame;
+        /** R-AUD-7 (optional): a file's waveform envelope — peak of |L|,|R| per 1/perSecond s — once the
+         *  service has it (false until then; `model.peaksEpoch` rises when one lands). */
+        std::function<bool(const std::string &media, std::vector<float> &peaks, double &perSecond)> audioPeaks;
     };
 }
 }

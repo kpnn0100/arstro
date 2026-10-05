@@ -173,6 +173,7 @@ namespace interstellar
         double opacity = 1.0;
         double gain = 0.0;            // audio clips, dB
         bool audio = false;
+        std::string media;            // audio clips: the file, resolved — its waveform's key (R-AUD-7)
         bool offline = false;
         Provenance provenance = Provenance::Local;
     };
@@ -295,6 +296,12 @@ namespace interstellar
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
+        // ── sound (R-AUD-6..8) ──
+        bool soundPlaying = false;                 // the audio clock drives the playhead (a sound output, something to hear)
+        double meterPeakL = 0, meterPeakR = 0;     // the master's level the listener hears now, linear (1 = full scale)
+        double meterRmsL = 0, meterRmsR = 0;
+        bool meterClip = false;                    // the sum passed full scale in the last 3 s of playback
+        unsigned peaksEpoch = 0;                   // rises when a waveform envelope lands (`AppHooks::audioPeaks`)
         // ── colour management (R-COLOR) ──
         std::string workingSpace = "rec709";        // the project's: rec709 | acescct
         std::vector<ColourChoiceModel> colourInputs;   // what `set <bind>.input=` accepts, in menu order

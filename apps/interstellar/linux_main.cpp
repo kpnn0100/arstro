@@ -16,6 +16,9 @@
 #include "App.h"
 #include "EmbeddedFonts.h"
 #include "AudioSourceFFmpeg.h"
+#ifdef INTERSTELLAR_HAVE_PULSE
+#include "AudioOutPulse.h"
+#endif
 #include "FrameWriterFFmpeg.h"
 #include "HostFrameSource.h"
 #include "InterstellarService.h"
@@ -74,6 +77,9 @@ namespace
         };
         h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
         h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
+#ifdef INTERSTELLAR_HAVE_PULSE
+        h.audioOut = [] { return std::unique_ptr<IAudioOut>(new interstellar_host::AudioOutPulse()); };   // R-AUD-6
+#endif
         h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
         h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
             return interstellar_host::writePng(p, r, err);
@@ -446,6 +452,7 @@ int main(int argc, char **argv)
     // Stills decode on the Thumbnailer's worker; the app re-asks when this moves (D-5, D-6).
     hooks.thumbnailEpoch = [a]() { return a->thumbs.epoch(); };
     // Grade's monitor and the ref-frame slider's preview: one source, graded (R-UI-3, R-RACK-3).
+    hooks.audioPeaks = [a](const std::string &media, std::vector<float> &peaks, double &per) { return a->svc.audioPeaks(media, peaks, per); };
     hooks.renderSource = [a](const std::string &bind, double t, int edge, Raster &out) {
         return a->svc.renderSourceFrame(bind, t, edge, out);
     };

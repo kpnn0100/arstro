@@ -274,6 +274,37 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-AUD-3 Playback is heard on the audio clock, scrubs sound, the master is metered, clips show their waveform (R-AUD-6, R-AUD-7, R-AUD-8)
+The core names an output seam, `IAudioOut` (`core/AudioOut.h`): stereo float whose blocking `write`
+is the clock. The GTK host fills it with PulseAudio's simple API — PipeWire serves it — at a ~60 ms
+target buffer (`host/AudioOutPulse.cpp:18`). The service's sound thread (`core/service/ServiceAudio.cpp:175`)
+mixes 1024-frame blocks ahead from the playhead and writes them; play starts it with the picture's
+clock (`InterstellarService.cpp:418`, after pre-roll; at once without the read-ahead pool), pause and
+a seek bump its generation so it flushes what the device still holds (`ServiceAudio.cpp:121`); an
+edit while playing replaces its plan, heard after the buffered tens of milliseconds (`:163`). While it
+runs the playhead IS the sound: frames written minus the device's latency (`:152`, used at
+`InterstellarService.cpp:427`); otherwise the wall clock, as before — no sound server, nothing to
+hear, a test. A playhead move while paused sounds an 80 ms grain eased over 4 ms at each end, the
+newest grain winning a fast scrub (`ServiceAudio.cpp:136`, `InterstellarService.cpp:3035`). Every
+written block keeps its peak and RMS per channel; the model publishes the block being HEARD (written
+minus latency), with the clip flag held three seconds (`ServiceAudio.cpp:267`; `soundPlaying`,
+`meterPeakL/R`, `meterRmsL/R`, `meterClip`). The transport draws them (`app/widgets/Transport.cpp:50`):
+RMS quiet, peak bright, −48…0 dB, the top 3 dB destructive, a held peak, a clip lamp — a meter's
+ballistics (an attack eased over ~30 ms, a 24 dB/s fall, the hold 1.5 s then 20 dB/s), the meter
+eased in only on a timeline with sound, the scrubber giving way. Waveforms: one file at a time on its
+own thread (`ServiceAudio.cpp:333`), the peak of |L|,|R| per 10 ms, written to
+`<stem>.peaks/<fnv(path,size,mtime)>.pk` and read back next time; `peaksEpoch` rises as each lands
+and `AppHooks::audioPeaks` hands it over (`:322`); `clips[].media` names the file. The timeline draws
+the clip's own span of the envelope behind its label, fading in when it lands (`app/widgets/Timeline.cpp:920`).
+Guarded by L2 `playback is heard…` (a fake output that takes samples at real-time pace: the
+playhead is written minus latency while the wall clock leaps 5 s; an edit while playing reaches the
+meters; a pause flushes once; a scrub's grain is 3840 frames, eased; meters read 0.1 and 0.4; the
+envelopes cached as two files; no sound server → picture only on the wall clock), UI `sound: meters
+and waveforms` (attack eased, release rate, hold, lamp eased, the meter easing away on a silent
+timeline, a waveform fading in and changing pixels). Mutants run red: the wall clock instead of the
+audio clock, a pause without flush, an unramped grain, edits not reaching the player. Not exercised
+here: the PulseAudio class against a real device — the suite never plays sound on this desktop.
+
 ### DR-AUD-2 The master mix, in every video render (R-AUD-5 amended, R-AUD-9)
 The core names a decode seam, `IAudioSource` (`core/AudioSource.h`): any file read as interleaved
 stereo float at the mix rate, frame-addressed. FFmpeg fills it (`host/AudioSourceFFmpeg.cpp`): the

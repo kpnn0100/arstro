@@ -172,6 +172,18 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   The host's pickers are GTK file choosers filtered to .cube (`linux_main.cpp`).
 - Shot added: `grade_lut_effect`. UI checks: 352.
 
+## Sound (2026-10-05, R-AUD-6..9)
+
+- Transport: a stereo meter before the duration (`meterRect()`, live `meterDb(ch)`, `meterHoldDb`,
+  `clipAmount`, `meterAmount`), eased in only when the current timeline `hasSound`; the scrubber
+  gives way through the same eased amount. Ballistics are the meter's: attack eased ~30 ms, release
+  24 dB/s, hold 1.5 s then 20 dB/s; reduced motion shows the level as it is.
+- Timeline: an audio clip draws its file's envelope (`AppHooks::audioPeaks`, re-asked when
+  `peaksEpoch` rises) behind its label, the clip's own span, fading in when it lands
+  (`waveformAmount(media)`).
+- Deliver › AUDIO: what the render carries (`OutputSpec::audioSentence()`).
+- Shot added: `cut_sound`. UI checks: 368.
+
 ## Cutting like an editor (2026-10-02, R-UI-14 / R-TL-6)
 
 - Drag a source row out of the source bin onto a lane: an eased ghost (snapped; "new video track"

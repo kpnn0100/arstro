@@ -48,6 +48,7 @@ namespace interstellar_v1
         mEdit->onAddFootage = [this] { if (onPickFootage) onPickFootage(); };
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
+        mEdit->timeline()->peaksFor = mHooks.audioPeaks;   // R-AUD-7
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
         // the image-processing stack (R-FX-5): the catalog menu and a row's menu

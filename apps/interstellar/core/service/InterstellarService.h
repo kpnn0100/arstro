@@ -27,6 +27,7 @@
 #include "Event.h"
 #include "FrameSelector.h"
 #include "Effects.h"
+#include "AudioOut.h"
 #include "AudioSource.h"
 #include "FrameSource.h"
 #include "Rack.h"
@@ -63,6 +64,8 @@ namespace interstellar
             /** A decoder for a file's SOUND, read at the mix rate as stereo (R-AUD-5 amended); unset
              *  = the timeline is silent (renders carry no audio, playback is picture only). */
             std::function<std::unique_ptr<IAudioSource>()> audioSource;
+            /** The machine's sound output (R-AUD-6); unset = playback is picture only (tests, the CLI). */
+            std::function<std::unique_ptr<IAudioOut>()> audioOut;
             /** An encoder for `path`, chosen by its extension (h264 .mp4, prores .mov). */
             std::function<std::unique_ptr<IFrameWriter>()> frameWriter;
             /** A PNG writer, for stills and png sequences. */
@@ -131,6 +134,9 @@ namespace interstellar
         PlaybackStats playbackStats() const { return {mAheadHits, mAheadMisses, mPlayEdge, mPlayRate, mAheadShown, mAheadLag, mCacheShown}; }
         /** A NAMED timeline at `t` — what render and export-still use (R-RENDER-1). */
         bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr, bool deep = false);
+        /** R-AUD-7: a file's waveform envelope — the peak of |L|,|R| per 1/perSecond s — once computed
+         *  (false until then; `model().peaksEpoch` rises when one lands). Thread-safe. */
+        bool audioPeaks(const std::string &media, std::vector<float> &peaks, double &perSecond);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
          *  the version's overrides, the group fold. */
         bool gradeFor(const NodeId &timeline, const NodeId &rackObj, EditParams &out, std::string &err, double srcT = -1.0);
@@ -149,6 +155,8 @@ namespace interstellar
         struct RenderCtx;
         struct PreviewWorker;
         struct AheadPool;
+        struct AudioPlayer;   // R-AUD-6/8: the sound thread (ServiceAudio.cpp)
+        struct PeakStore;     // R-AUD-7: waveform envelopes (ServiceAudio.cpp)
         struct PreviewCache;
 
         void emit(const Event &e);
@@ -219,6 +227,16 @@ namespace interstellar
         // R-AUD-5 (amended), R-AUD-9 — ServiceAudio.cpp
         bool planAudio(const NodeId &timeline, render::AudioPlan &out);
         IAudioSource *audioSourceFor(RenderCtx &ctx, const std::string &media, int rate);
+        IAudioSource *audioSourceIn(std::map<std::string, std::unique_ptr<IAudioSource>> &cache, const std::string &media, int rate);
+        void startSound();                 // playback heard from the playhead (R-AUD-6)
+        void stopSound();
+        void soundGrain(double t);         // a scrub's short grain
+        bool soundTime(double &t);         // the audio clock: what is heard now, once it runs
+        void syncSoundPlan();              // an edit while playing reaches the ear
+        void playerLoop();
+        void peaksLoop();
+        void requestPeaks(const std::string &media);
+        void fillSoundModel(AppModel &m);
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
         bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
         bool present(FramePlan &&plan, Raster &out);
@@ -337,6 +355,10 @@ namespace interstellar
         std::unique_ptr<PreviewWorker> mPreview;     // last member: stopped first
         std::unique_ptr<AheadPool> mAhead;           // stopped in the destructor, before mPreview
         std::unique_ptr<PreviewCache> mPCache;       // made when first wanted; stopped first in the destructor
+        std::unique_ptr<AudioPlayer> mPlayer;        // R-AUD-6: made when the host has a sound output
+        std::unique_ptr<PeakStore> mPeaks;           // R-AUD-7: made when the host can decode sound
+        bool mSoundClock = false;                    // the audio clock drives the playhead now
+        unsigned mSoundSeq = ~0u;                    // the frame sequence the player's plan was made at
         unsigned mEpoch = 0;                         // rises on every command and rack load: the cache re-checks
         double mLastCommandMs = -1e9;                // the cache builds when the user has stopped for a moment
         bool mCacheForced = false;                   // `cache build`: now, whatever the idle rule says

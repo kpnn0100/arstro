@@ -2208,6 +2208,69 @@ namespace
         CHECK(os->audioSentence().find("No sound on this timeline") != std::string::npos, "a silent timeline: picture only, said");
     }
 
+    /** R-AUD-7/8: the meter's ballistics and lamp, eased in only where there is sound; the waveform
+     *  fading in when its envelope lands. */
+    void testSoundUi()
+    {
+        std::printf("sound: meters and waveforms\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); s.peaksReady = false; });
+        r.app->setTab(1);
+        r.settle();
+        auto tr = r.app->edit().transport();
+        CHECK(tr->meterAmount() > 0.999, "the timeline has sound: the transport carries a meter");
+        // attack: -6 dB arrives eased (a frame or two), not in one frame
+        r.svc.m.meterPeakL = r.svc.m.meterPeakR = 0.5;
+        r.svc.m.meterRmsL = r.svc.m.meterRmsR = 0.35;
+        ++r.svc.m.revision;
+        const double first = firstMoved(r, [&] { return tr->meterDb(0); }, -120.0);
+        CHECK(first > -120.0 && first < -6.1, "the peak rises EASED: the first frame is short of -6 dB");
+        r.pump(120);
+        CHECK(std::fabs(tr->meterDb(0) + 6.02) < 0.2, "…and reaches -6 dB within a few frames");
+        // release: the level falls at 24 dB/s, the held peak stays 1.5 s
+        r.svc.m.meterPeakL = r.svc.m.meterPeakR = 0.0;
+        r.svc.m.meterRmsL = r.svc.m.meterRmsR = 0.0;
+        ++r.svc.m.revision;
+        r.pump(250);
+        CHECK(tr->meterDb(0) < -8.5 && tr->meterDb(0) > -15.0, "the peak FALLS at a meter's rate (about 6 dB in 250 ms), never to silence at once");
+        CHECK(std::fabs(tr->meterHoldDb(0) + 6.02) < 0.3, "the held peak stays where the level was");
+        r.pump(2000);
+        CHECK(tr->meterHoldDb(0) < -12.0, "…and falls after its hold");
+        // the clip lamp lights eased
+        r.svc.m.meterClip = true;
+        ++r.svc.m.revision;
+        const double lamp = firstMoved(r, [&] { return tr->clipAmount(); }, 0.0);
+        CHECK(strictlyBetween(lamp, 0.0, 1.0), "the clip lamp lights EASED");
+        // a timeline with no sound: the meter eases away and the scrubber takes its room back
+        const double scrubW = tr->scrubRect().w;
+        for (auto &tl : r.svc.m.timelines) tl.hasSound = false;
+        ++r.svc.m.revision;
+        const double away = firstMoved(r, [&] { return tr->meterAmount(); }, 1.0);
+        CHECK(strictlyBetween(away, 0.0, 1.0), "on a silent timeline the meter EASES away");
+        r.settle();
+        CHECK(tr->meterAmount() < 0.001 && tr->scrubRect().w > scrubW + 60.0, "…and the scrubber takes back its width");
+        // R-AUD-7: the envelope lands — the clip's waveform fades in, and pixels change
+        auto tl = r.app->edit().timeline();
+        const std::string media = "/audio/dialogue_day3.wav";
+        CHECK(tl->waveformAmount(media) == 0.0, "no envelope yet: no waveform");
+        r.frame();
+        const Rect lane = tl->laneRect("a1");
+        const Point pw = world(*tl, lane.x + 80.0, lane.y + lane.h * 0.62);
+        uint32_t before = 0;
+        int changed = 0;
+        std::vector<uint32_t> col;
+        for (int dx = 0; dx < 120; ++dx) col.push_back(r.pixel((int)pw.x + dx, (int)pw.y));
+        r.svc.peaksReady = true;
+        r.svc.m.peaksEpoch += 1;
+        ++r.svc.m.revision;
+        const double wa = firstMoved(r, [&] { return tl->waveformAmount(media); }, 0.0);
+        CHECK(strictlyBetween(wa, 0.0, 1.0), "the waveform FADES in when its envelope lands");
+        r.settle();
+        r.frame();
+        for (int dx = 0; dx < 120; ++dx) changed += r.pixel((int)pw.x + dx, (int)pw.y) != col[(size_t)dx];
+        (void)before;
+        CHECK(changed > 60, "…and the clip shows it: the pixels along its centre line changed");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2304,6 +2367,7 @@ int main()
     testColourManagement();
     testLuts();
     testDeliverSound();
+    testSoundUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

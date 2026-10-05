@@ -188,6 +188,44 @@ namespace
     };
     std::vector<float> gAudio;   // what the last render wrote as sound
 
+    /** R-AUD-6: a sound output that takes samples at the rate a device would (real time), so the
+     *  audio clock is a real clock; it keeps what it was given, and says when it was flushed. */
+    struct FakeAudioOut : public IAudioOut
+    {
+        static std::mutex mu;
+        static std::vector<float> heard;
+        static int flushes, opens;
+        static bool refuse;
+        int rate = 48000;
+        bool open(int r, std::string &err) override
+        {
+            if (refuse) { err = "no sound server (test)"; return false; }
+            rate = r;
+            std::lock_guard<std::mutex> l(mu);
+            ++opens;
+            return true;
+        }
+        bool write(const float *st, int frames) override
+        {
+            {
+                std::lock_guard<std::mutex> l(mu);
+                heard.insert(heard.end(), st, st + (size_t)frames * 2);
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds((long long)(frames * 1e6 / rate)));
+            return true;
+        }
+        double latency() override { return 0.05; }
+        void flush() override
+        {
+            std::lock_guard<std::mutex> l(mu);
+            ++flushes;
+        }
+    };
+    std::mutex FakeAudioOut::mu;
+    std::vector<float> FakeAudioOut::heard;
+    int FakeAudioOut::flushes = 0, FakeAudioOut::opens = 0;
+    bool FakeAudioOut::refuse = false;
+
     /** What the last render asked its writer for (R-RENDER-6). */
     struct WriterBegin { std::string path; int w = 0, h = 0; double fps = 0; long long frames = 0; EncodeSpec spec; };
     WriterBegin gBegin;
@@ -252,6 +290,8 @@ namespace
         }
 
         bool async = false;   // the GTK host's asyncPreview
+        bool sound = false;   // a sound output (R-AUD-6)
+        double now = 1e12;    // a pump clock ahead of the service's own (it only moves forward)
 
         std::unique_ptr<InterstellarService> make()
         {
@@ -261,6 +301,7 @@ namespace
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
             h.audioSource = [] { return std::unique_ptr<IAudioSource>(new FakeAudioSource()); };
+            if (sound) h.audioOut = [] { return std::unique_ptr<IAudioOut>(new FakeAudioOut()); };
             h.writeImage = [this](const std::string &p, const Raster &r, std::string &) { images[p] = r; return true; };
             h.settingsPath = dir + "/settings.txt";
             h.presetDir = dir + "/presets";
@@ -1136,6 +1177,99 @@ int main()
         f.must("render --timeline main --format png-seq --range 0:0.5 --out \"" + f.path("frames") + "\"");
         assert(!has(f.svc->model().renders.back().spec, "AAC"));
         assert(!f.run("audio clip add --track music --src \"" + f.path("footage/still.png") + "\" --at 0", &err) && has(err, "no sound"));
+    });
+
+    test("playback is heard: the sound is the clock, a pause stops it, a scrub sounds a grain, the meters read it, waveforms are cached (R-AUD-6..8)", [] {
+        Fixture f("sound");
+        f.sound = true;
+        f.svc = f.make();
+        f.standard();
+        f.must("track add --kind audio");
+        f.must("audio clip add --track a0 --src a --in 0 --out 2 --at 0");
+        f.must("audio clip add --track a0 --src b --in 0 --out 2 --at 2");
+        f.must("project save");
+        auto pumpFor = [&](double ms) {
+            const auto t0 = std::chrono::steady_clock::now();
+            while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() < ms)
+            {
+                f.svc->pump(f.now += 10.0);
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        };
+        {
+            std::lock_guard<std::mutex> l(FakeAudioOut::mu);
+            FakeAudioOut::heard.clear();
+            FakeAudioOut::flushes = 0;
+        }
+        // play: the playhead is what the device has played, not the wall clock
+        f.must("play");
+        assert(f.svc->model().soundPlaying);
+        f.now += 5000.0;   // the WALL clock jumps five seconds: a wall-clock playhead would leap to the end
+        pumpFor(400);
+        const double t = f.svc->model().playhead;
+        size_t samples;
+        { std::lock_guard<std::mutex> l(FakeAudioOut::mu); samples = FakeAudioOut::heard.size() / 2; }
+        std::printf("    after ~0.4 s: playhead %.3f s, %zu frames handed to the device\n", t, samples);
+        assert(t > 0.15 && t < 0.8);                                          // heard time, not the leap
+        assert(std::fabs(t - ((double)samples / 48000 - 0.05)) < 0.1);         // written minus latency
+        // the meters read the level being heard: a's 0.1
+        assert(std::fabs(f.svc->model().meterPeakL - 0.1) < 1e-4 && std::fabs(f.svc->model().meterRmsR - 0.1) < 1e-4);
+        assert(!f.svc->model().meterClip);
+        // an edit while playing reaches the ear without a restart: a's lane doubled
+        f.must("set a0.gain=6.0206");
+        pumpFor(250);
+        assert(f.svc->model().soundPlaying && std::fabs(f.svc->model().meterPeakL - 0.2) < 1e-3);
+        // pause: the device is flushed (what it held is not heard) and the meters fall
+        int flushed;
+        { std::lock_guard<std::mutex> l(FakeAudioOut::mu); flushed = FakeAudioOut::flushes; }
+        f.must("pause");
+        pumpFor(60);
+        assert(!f.svc->model().soundPlaying && f.svc->model().meterPeakL == 0.0);
+        { std::lock_guard<std::mutex> l(FakeAudioOut::mu); assert(FakeAudioOut::flushes == flushed + 1); }
+        // a scrub sounds an 80 ms grain of b (doubled) where it lands, eased at both ends
+        size_t before;
+        { std::lock_guard<std::mutex> l(FakeAudioOut::mu); before = FakeAudioOut::heard.size(); }
+        f.must("playhead 2.5");
+        pumpFor(200);
+        {
+            std::lock_guard<std::mutex> l(FakeAudioOut::mu);
+            const size_t n = (FakeAudioOut::heard.size() - before) / 2;
+            assert(n == 3840);
+            const float mid = FakeAudioOut::heard[before + 1920 * 2], edge = FakeAudioOut::heard[before];
+            assert(std::fabs(mid - 0.4f) < 1e-4 && edge < 0.01f);
+        }
+        // across the cut while playing from 1.9: b, under the same doubled lane
+        f.must("playhead 1.9");
+        pumpFor(60);
+        f.must("play");
+        pumpFor(450);
+        assert(f.svc->model().playhead > 2.05);
+        assert(std::fabs(f.svc->model().meterPeakL - 0.4) < 1e-3);             // b, doubled
+        f.must("pause");
+        // the waveform envelopes, computed once and kept beside the project
+        pumpFor(300);
+        std::vector<float> peaks;
+        double per = 0;
+        const std::string a = fs::absolute(f.path("footage/a.mp4")).lexically_normal().string();
+        bool got = false;
+        for (const auto &c : f.svc->model().clips) if (c.audio && c.media.find("a.mp4") != std::string::npos) got = f.svc->audioPeaks(c.media, peaks, per);
+        assert(got && per == 100.0 && peaks.size() == 400 && std::fabs(peaks[10] - 0.1f) < 1e-5);
+        assert(f.svc->model().peaksEpoch >= 2);
+        assert(fs::exists(f.path("mv.peaks")) && std::distance(fs::directory_iterator(f.path("mv.peaks")), fs::directory_iterator{}) == 2);
+        (void)a;
+        // no sound server: playback is picture only, as before — never a stall
+        FakeAudioOut::refuse = true;
+        Fixture g("nosound");
+        g.sound = true;
+        g.svc = g.make();
+        g.standard();
+        g.must("track add --kind audio");
+        g.must("audio clip add --track a0 --src a --in 0 --out 2 --at 0");
+        g.must("play");
+        for (int i = 0; i < 20; ++i) { g.svc->pump(g.now += 10.0); std::this_thread::sleep_for(std::chrono::milliseconds(5)); }
+        g.svc->pump(g.now += 500.0);
+        assert(!g.svc->model().soundPlaying && g.svc->model().playhead > 0.4);   // the wall clock carried it
+        FakeAudioOut::refuse = false;
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

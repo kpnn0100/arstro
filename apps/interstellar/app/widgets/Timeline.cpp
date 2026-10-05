@@ -74,8 +74,26 @@ namespace interstellar_v1
 
     // ── model in ─────────────────────────────────────────────────────────────────────────
 
+    double Timeline::waveformAmount(const std::string &media) const
+    {
+        const auto it = mWaves.find(media);
+        return it == mWaves.end() ? 0.0 : it->second.amount.value();
+    }
+
     void Timeline::bind(const interstellar::AppModel &m)
     {
+        // R-AUD-7: ask for the envelopes not held yet whenever one may have landed
+        if (peaksFor && m.peaksEpoch != mPeaksEpoch)
+        {
+            mPeaksEpoch = m.peaksEpoch;
+            for (const auto &c : m.clips)
+                if (c.audio && !c.media.empty() && !mWaves.count(c.media))
+                {
+                    std::vector<float> pk;
+                    double per = 100.0;
+                    if (peaksFor(c.media, pk, per)) { Wave &w = mWaves[c.media]; w.peaks = std::move(pk); w.perSecond = per; }
+                }
+        }
         mFps = m.fps > 0 ? m.fps : 24.0;
         if (!mLaneDragging) mLaneHTarget = m.settings.keyLaneHeight > 0 ? m.settings.keyLaneHeight : 140.0;   // R-ANIM-8
         mDuration = std::max(0.0, m.duration);
@@ -650,6 +668,12 @@ namespace interstellar_v1
 
     void Timeline::advance(double nowMs)
     {
+        for (auto &kv : mWaves)
+        {
+            // an envelope that lands fades in — it is not there one frame and drawn the next
+            if (!kv.second.placed) { kv.second.amount.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs); kv.second.placed = true; }
+            kv.second.amount.update(nowMs);
+        }
         if (!mPpsInit && mEverBound && lanesRect().w > 0.0)
         {
             const double p = fitPps();
@@ -891,6 +915,39 @@ namespace interstellar_v1
             if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
             if (c.provenance == interstellar::Provenance::Overridden && r.w > 4.0)
                 drawRoundedRect(t, Rect{r.x, r.y, 3.0, r.h}, radius::hairline(), Paint::filled(fade(palette::primary(), a)));
+            if (c.audio && !c.media.empty())
+            {
+                // R-AUD-7: the clip's waveform, its envelope over the clip's own span of the file, behind
+                // the label; linear in amplitude, mirrored about the clip's lower third
+                const auto wv = mWaves.find(c.media);
+                const double wa = wv == mWaves.end() ? 0.0 : wv->second.amount.value();
+                if (wa > 0.001 && !wv->second.peaks.empty() && r.w > 2.0)
+                {
+                    const auto &pk = wv->second.peaks;
+                    const double per = wv->second.perSecond, cy = r.y + r.h * 0.62, amp = r.h * 0.34;
+                    const double x0 = std::max(r.x + 1.0, lr.x), x1 = std::min(r.right() - 1.0, lr.right());
+                    const double inStart = an.at.value();
+                    std::vector<std::pair<double, double>> top;
+                    for (double x = x0; x <= x1; x += 1.0)
+                    {
+                        const double s0 = c.in + (xToTime(x) - inStart), s1 = c.in + (xToTime(x + 1.0) - inStart);
+                        const long long b0 = (long long)std::floor(s0 * per), b1 = std::max(b0 + 1, (long long)std::ceil(s1 * per));
+                        float v = 0.0f;
+                        for (long long b = std::max(0LL, b0); b < b1 && b < (long long)pk.size(); ++b) v = std::max(v, pk[(size_t)b]);
+                        top.push_back({x, std::min(1.0, (double)v)});
+                    }
+                    if (top.size() > 1)
+                    {
+                        t.beginPath();
+                        t.moveTo(top.front().first, cy - top.front().second * amp);
+                        for (const auto &p : top) t.lineTo(p.first, cy - p.second * amp);
+                        for (auto it = top.rbegin(); it != top.rend(); ++it) t.lineTo(it->first, cy + it->second * amp);
+                        t.closePath();
+                        t.setFill(fade(palette::foreground(), 0.30 * a * wa));
+                        t.fillPath();
+                    }
+                }
+            }
             if (c.provenance == interstellar::Provenance::Dangling || c.offline)
             {
                 // hatching: the honest picture of "this is not really here"

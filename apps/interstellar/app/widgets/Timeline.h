@@ -97,6 +97,10 @@ namespace interstellar_v1
 
         /** Returns whether the line was accepted — a refused drop eases back. */
         std::function<bool(const std::string &line)> onCommand;
+        /** R-AUD-7: a file's waveform envelope (the app hands the host's hook through). */
+        std::function<bool(const std::string &media, std::vector<float> &peaks, double &perSecond)> peaksFor;
+        /** The live eased opacity of `media`'s waveform (0 until its envelope lands, then easing to 1). */
+        double waveformAmount(const std::string &media) const;
         /** Right-click on clip `id` / on an empty lane (`trackId` "" = below the tracks) at `t`, WORLD point. */
         std::function<void(const std::string &id, artboard::Point world)> onClipContext;
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
@@ -222,6 +226,10 @@ namespace interstellar_v1
         std::string mSelectedClip;
         double mDuration = 0.0, mFps = 24.0, mPlayhead = 0.0;
         bool mPlaying = false;
+        // R-AUD-7: the envelopes this view has, each fading in when it lands
+        struct Wave { std::vector<float> peaks; double perSecond = 100.0; artboard::AnimatedProperty amount{0.0}; bool placed = false; };
+        std::map<std::string, Wave> mWaves;
+        unsigned mPeaksEpoch = ~0u;
         bool mEverBound = false, mPopulated = false;
 
         // zoom + horizontal scroll (scroll is re-derived from the eased zoom while anchored)

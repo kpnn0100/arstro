@@ -57,6 +57,7 @@ namespace istest
     public:
         AppModel m;
         std::vector<std::string> lines;
+        bool peaksReady = true;     // R-AUD-7: the fake's envelopes are ready (a test turns it off to watch one land)
         bool refuseNext = false;
         std::string refuseMessage = "Refused: the version is pinned \xE2\x80\x94 colour is read-only at @a41c9e2";
         bool frameFails = false;
@@ -74,6 +75,15 @@ namespace istest
             h.renderFrame = [this](double t, int edge, Raster &out) { return renderFrame(t, edge, out); };
             h.thumbnail = [this](const std::string &p, double t, int edge, Raster &out) { return thumbnail(p, t, edge, out); };
             h.renderSource = [this](const std::string &b, double t, int edge, Raster &out) { return renderSource(b, t, edge, out); };
+            // R-AUD-7: an envelope per audio file once `peaksReady` — a swelling, breathing shape
+            h.audioPeaks = [this](const std::string &media, std::vector<float> &pk, double &per) {
+                if (!peaksReady) return false;
+                per = 100.0;
+                pk.resize(2000);
+                for (size_t i = 0; i < pk.size(); ++i)
+                    pk[i] = (float)(0.35 + 0.3 * std::sin(i * 0.031) * std::sin(i * 0.0047 + (double)media.size()));
+                return true;
+            };
             h.copyFrame = [this](const std::string &b, std::string &err) {
                 if (copyFails) { err = "Nothing to copy"; return false; }
                 copies.push_back(b);
@@ -152,6 +162,7 @@ namespace istest
             ClipModel c;
             c.id = id; c.name = id; c.track = track; c.src = src; c.srcName = srcName;
             c.at = at; c.in = in; c.out = out; c.duration = out - in; c.provenance = p; c.audio = audio;
+            if (audio) c.media = src;
             return c;
         }
 

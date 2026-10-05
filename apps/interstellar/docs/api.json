@@ -1958,6 +1958,12 @@
       "doc": "Audio clip gain, dB."
     },
     {
+      "path": "clips[].media",
+      "type": "string",
+      "stable": true,
+      "doc": "Audio clips: the file, resolved — the key of its waveform envelope (R-AUD-7)."
+    },
+    {
       "path": "clips[].audio",
       "type": "bool",
       "stable": true,
@@ -2556,6 +2562,48 @@
       "type": "string",
       "stable": true,
       "doc": "Its menu family."
+    },
+    {
+      "path": "soundPlaying",
+      "type": "boolean",
+      "stable": true,
+      "doc": "Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear."
+    },
+    {
+      "path": "meterPeakL",
+      "type": "number",
+      "stable": true,
+      "doc": "The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8)."
+    },
+    {
+      "path": "meterPeakR",
+      "type": "number",
+      "stable": true,
+      "doc": "…right."
+    },
+    {
+      "path": "meterRmsL",
+      "type": "number",
+      "stable": true,
+      "doc": "The master's RMS now, left, linear."
+    },
+    {
+      "path": "meterRmsR",
+      "type": "number",
+      "stable": true,
+      "doc": "…right."
+    },
+    {
+      "path": "meterClip",
+      "type": "boolean",
+      "stable": true,
+      "doc": "The sum passed full scale in the last 3 s of playback."
+    },
+    {
+      "path": "peaksEpoch",
+      "type": "integer",
+      "stable": true,
+      "doc": "Rises when a waveform envelope lands; `AppHooks::audioPeaks(media)` has it (R-AUD-7)."
     },
     {
       "path": "workingSpace",
