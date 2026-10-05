@@ -5,6 +5,8 @@
  *   * WAVEFORM — luma (BT.709) by column: x = the picture's x, y = the level, brightness = how many
  *     pixels of that column sit at that level (log-scaled, so a few clipped pixels still show).
  *   * PARADE — the same per channel, R | G | B side by side, each in its own colour.
+ *   * RGB WAVEFORM — the three channels' waveforms overlaid in one plot, additively: white where the
+ *     channels agree (a neutral), a colour where one runs away (a cast, a clipped channel).
  *   * VECTORSCOPE — chroma (Cb, Cr) as a 2-D density: angle is hue, distance from the centre is
  *     saturation. The panel draws the graticule (targets, the skin-tone line) over it.
  *   * The numbers that say what is wrong in words: the share of pixels CLIPPED at white (a channel
@@ -28,6 +30,7 @@ namespace interstellar_v1
         bool valid = false;
         HistogramData hist;
         interstellar::Raster waveform;   // kScopeW x kScopeH
+        interstellar::Raster waveformRgb;   // kScopeW x kScopeH, the channels overlaid (R-UI-15, amended)
         interstellar::Raster parade;     // 3 * kParadeW x kScopeH
         interstellar::Raster vector;     // kVectorN x kVectorN
         double clipHi[3] = {0, 0, 0};    // % of pixels with that channel at 255

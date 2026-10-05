@@ -32,6 +32,7 @@ namespace interstellar_v1
         mData = d;
         if (!d.valid) return;
         mWave.set(d.waveform);
+        mWaveRgb.set(d.waveformRgb);
         mParade.set(d.parade);
         mVector.set(d.vector);
     }
@@ -58,6 +59,14 @@ namespace interstellar_v1
         return Rect{x, 3.0, kW[m], kHeaderH - 6.0};
     }
     Rect ScopePanel::clipRect() const { return Rect{width.value() - kPadX - 44.0, 3.0, 44.0, kHeaderH - 6.0}; }
+    Rect ScopePanel::waveSwitchRect(int i) const
+    {
+        const Rect b = bodyRect();
+        const double w0 = 30.0, w1 = 30.0, h = 15.0;   // two 9-px labels and their padding
+        const double x = b.right() - 4.0 - w0 - w1;
+        return i == 0 ? Rect{x, b.y + 4.0, w0, h} : Rect{x + w0, b.y + 4.0, w1, h};
+    }
+
     Rect ScopePanel::bodyRect() const
     {
         return Rect{kPadX, kHeaderH + 2.0, std::max(0.0, width.value() - 2 * kPadX), std::max(0.0, height.value() - kHeaderH - kReadoutH - 4.0)};
@@ -86,7 +95,10 @@ namespace interstellar_v1
         case Gesture::Type::Move:
         {
             const int m = modeAt(local);
-            mHover.setHovered(m >= 0 ? m : clipRect().contains(local) ? 10 : -1);
+            const bool wave = mMode == Waveform;
+            mHover.setHovered(m >= 0 ? m : clipRect().contains(local) ? 10
+                                     : wave && waveSwitchRect(0).contains(local) ? 11
+                                     : wave && waveSwitchRect(1).contains(local) ? 12 : -1);
             return true;
         }
         case Gesture::Type::Down:
@@ -96,6 +108,8 @@ namespace interstellar_v1
             const int m = modeAt(local);
             if (m >= 0) setMode(m);
             else if (clipRect().contains(local)) setClipWarning(!mClip);
+            else if (mMode == Waveform && waveSwitchRect(0).contains(local)) setWaveRgb(false);
+            else if (mMode == Waveform && waveSwitchRect(1).contains(local)) setWaveRgb(true);
             return true;
         }
         default:
@@ -120,6 +134,12 @@ namespace interstellar_v1
             mClipApplied = mClip;
         }
         mClipAmt.update(nowMs);
+        if (mRgb != mRgbApplied)
+        {
+            mRgbAmt.animateTo(mRgb ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mRgbApplied = mRgb;
+        }
+        mRgbAmt.update(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         mSel.advance(nowMs, motion::kSelectMs);
@@ -165,7 +185,10 @@ namespace interstellar_v1
         if (const double a = mModeAmt[Waveform].value(); a > 0.001)
         {
             grid(a);
-            if (const int id = mWave.ensure(t)) { t.pushLayer(a); t.drawImage(id, b); t.popLayer(); }
+            // Luma and RGB cross-fade into each other (R-UI-15, amended)
+            const double rgb = mRgbAmt.value();
+            if (rgb < 0.999) if (const int id = mWave.ensure(t)) { t.pushLayer(a * (1.0 - rgb)); t.drawImage(id, b); t.popLayer(); }
+            if (rgb > 0.001) if (const int id = mWaveRgb.ensure(t)) { t.pushLayer(a * rgb); t.drawImage(id, b); t.popLayer(); }
         }
         if (const double a = mModeAmt[Parade].value(); a > 0.001)
         {
@@ -241,6 +264,23 @@ namespace interstellar_v1
             t.drawText("Clip", r.x + 18.0, textfit::baseline(r.y + r.h * 0.5, 9.5), 9.5, font::sans());
         }
         glyph::line(t, 0, kHeaderH - 0.5, w, kHeaderH - 0.5, palette::border(), 1.0);
+        // the waveform's Luma | RGB switch — with the waveform's own fade
+        if (const double a = mModeAmt[Waveform].value(); a > 0.001)
+        {
+            const char *names[2] = {"Luma", "RGB"};
+            const Rect all{waveSwitchRect(0).x, waveSwitchRect(0).y, waveSwitchRect(0).w + waveSwitchRect(1).w, waveSwitchRect(0).h};
+            drawRoundedRect(t, all, radius::control(), Paint::filledStroked(fade(palette::segmentedBg(), a), fade(palette::border(), a), 1.0));
+            for (int i = 0; i < 2; ++i)
+            {
+                const Rect r = waveSwitchRect(i);
+                const double on = i == 1 ? mRgbAmt.value() : 1.0 - mRgbAmt.value(), hv = mHover.amount(11 + i);
+                if (on > 0.001) drawRoundedRect(t, Rect{r.x + 1.5, r.y + 1.5, r.w - 3.0, r.h - 3.0}, radius::hairline(), Paint::filled(fade(palette::primary(), on * a)));
+                else if (hv > 0.001) drawRoundedRect(t, Rect{r.x + 1.5, r.y + 1.5, r.w - 3.0, r.h - 3.0}, radius::hairline(), Paint::filled(fade(palette::hoverWash(hv), a)));
+                t.setFill(fade(lerpColor(palette::mutedForeground(), palette::white(), on), a));
+                const double tw = t.measureText(names[i], 8.5, font::sansMedium());
+                t.drawText(names[i], r.x + (r.w - tw) * 0.5, textfit::baseline(r.y + r.h * 0.5, 8.5), 8.5, font::sansMedium());
+            }
+        }
         // the readout: what is wrong, in words (mono numbers), red when something clips
         const double ry = h - kReadoutH;
         drawRoundedRect(t, Rect{0, ry, w, kReadoutH}, 0.0, Paint::filled(palette::histogramBg()));

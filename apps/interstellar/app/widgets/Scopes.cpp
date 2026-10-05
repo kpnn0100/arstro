@@ -43,7 +43,8 @@ namespace interstellar_v1
         d.width = f.width;
         d.height = f.height;
         const int W = ScopeData::kScopeW, H = ScopeData::kScopeH, PW = ScopeData::kParadeW, N = ScopeData::kVectorN;
-        std::vector<uint32_t> wave((size_t)W * H, 0), par[3], vec((size_t)N * N, 0);
+        std::vector<uint32_t> wave((size_t)W * H, 0), par[3], vec((size_t)N * N, 0), rgb[3];
+        for (auto &c : rgb) c.assign((size_t)W * H, 0);
         for (auto &p : par) p.assign((size_t)PW * H, 0);
         bool used[3][256] = {};
         uint64_t hi[3] = {0, 0, 0}, lo[3] = {0, 0, 0};
@@ -67,6 +68,7 @@ namespace interstellar_v1
             wave[(size_t)row * W + col]++;
             const int pcol = x * PW / f.width;
             for (int c = 0; c < 3; ++c) par[c][(size_t)((255 - p[c]) * (H - 1) / 255) * PW + pcol]++;
+            for (int c = 0; c < 3; ++c) rgb[c][(size_t)((255 - p[c]) * (H - 1) / 255) * W + col]++;
             // chroma: Cb right, Cr up — red sits upper-left, as on any vectorscope
             const double cb = (p[2] - y709) / (1.8556 * 255.0), cr = (p[0] - y709) / (1.5748 * 255.0);
             const int vx = std::clamp((int)std::lround((cb + 0.5) * (N - 1)), 0, N - 1);
@@ -83,6 +85,19 @@ namespace interstellar_v1
         }
         d.waveform.allocate(W, H);
         paint(d.waveform, W, H, wave, 225, 236, 228);
+        {
+            // additive: each channel's density lights its own primary, so agreement reads white
+            uint32_t mx = 0;
+            for (const auto &c : rgb) for (uint32_t v : c) mx = std::max(mx, v);
+            const double lm = std::log1p((double)mx);
+            d.waveformRgb.allocate(W, H);
+            for (size_t i = 0; i < (size_t)W * H; ++i)
+            {
+                uint8_t *o = &d.waveformRgb.rgba[i * 4];
+                for (int c = 0; c < 3; ++c) o[c] = level(rgb[c][i], lm);
+                o[3] = std::max(o[0], std::max(o[1], o[2]));
+            }
+        }
         d.parade.allocate(3 * PW, H);
         paint(d.parade, PW, H, par[0], 236, 92, 92, 0, 3 * PW);
         paint(d.parade, PW, H, par[1], 104, 214, 112, PW, 3 * PW);

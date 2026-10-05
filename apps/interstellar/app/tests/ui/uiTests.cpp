@@ -1757,6 +1757,21 @@ namespace
                 for (int x = 0; x < N; ++x)
                     if (d.vector.rgba[((size_t)y * N + x) * 4 + 3] > best) { best = d.vector.rgba[((size_t)y * N + x) * 4 + 3]; bx = x; by = y; }
             CHECK(bx < N / 2 && by < N / 2, "a red frame lands in the vectorscope's upper-left, where red sits");
+            // R-UI-15 (amended): the RGB waveform lights each channel at its own level, in its own colour
+            const int W = ScopeData::kScopeW, H = ScopeData::kScopeH;
+            auto px = [&](int x, int y, int c) { return (int)d.waveformRgb.rgba[((size_t)y * W + x) * 4 + c]; };
+            const int rRow = (255 - 200) * (H - 1) / 255, gRow = (255 - 30) * (H - 1) / 255;
+            CHECK(px(W / 2, rRow, 0) > 0 && px(W / 2, rRow, 1) == 0 && px(W / 2, rRow, 2) == 0,
+                  "RGB waveform: red's level shows in red only");
+            CHECK(px(W / 2, gRow, 1) > 0 && px(W / 2, gRow, 2) > 0 && px(W / 2, gRow, 0) == 0,
+                  "…green and blue share their level, drawn cyan (where they agree)");
+            Raster grey;
+            grey.allocate(40, 40, 255);
+            for (size_t i = 0; i < grey.rgba.size(); i += 4) grey.rgba[i] = grey.rgba[i + 1] = grey.rgba[i + 2] = 128;
+            const ScopeData dg = scopesOf(grey);
+            const int row = (255 - 128) * (H - 1) / 255;
+            const uint8_t *q = &dg.waveformRgb.rgba[((size_t)row * W + W / 2) * 4];
+            CHECK(q[0] > 0 && q[0] == q[1] && q[1] == q[2], "a neutral grey draws white: the channels agree");
         }
         // the panel: modes cross-fade, the CLIP switch fades the monitor's overlay in
         Rig r(1440, 900, [](FakeService &s) { s.edit(); });
@@ -1773,6 +1788,16 @@ namespace
         auto mon = r.app->edit().monitor();
         const double ca = firstMoved(r, [&] { return mon->clipAmount(); }, 0.0);
         CHECK(sp->clipWarning() && strictlyBetween(ca, 0.0, 1.0), "the CLIP switch fades the monitor's clip overlay in");
+        // the waveform's Luma | RGB switch cross-fades the two plots
+        p = centre(*sp, sp->waveSwitchRect(1));
+        r.click(p.x, p.y);
+        const double rg = firstMoved(r, [&] { return sp->waveRgbAmount(); }, 0.0);
+        CHECK(sp->waveRgb() && strictlyBetween(rg, 0.0, 1.0), "RGB cross-fades the overlaid channel waveform in (first frame between)");
+        r.settle();
+        p = centre(*sp, sp->waveSwitchRect(0));
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(!sp->waveRgb() && sp->waveRgbAmount() < 1e-6, "Luma brings the luma waveform back");
     }
 
     /** R-UI-13: Ctrl + wheel zooms the monitor about the pointer, eased; drag pans; double-click fits. */

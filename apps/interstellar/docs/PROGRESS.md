@@ -62,7 +62,7 @@ one integrator who moves, wires, tests and commits each stream:
       commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
       1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
              lists the clip's properties, its source's colour keys and effects (R-ANIM-3/4 amended).
-      2. [ ] Waveform Luma | RGB overlay (R-UI-15 amended).
+      2. [x] Waveform Luma | RGB overlay (R-UI-15 amended).
       3. [ ] Collapsible effect sections in the effect panel (R-FX-5 amended).
       4. [ ] Keyframe limits: shapes animate, multi-curve graph, box-select, copy/paste keys,
              resizable lane (R-ANIM-6..8).

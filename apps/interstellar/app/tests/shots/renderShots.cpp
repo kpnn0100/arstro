@@ -376,6 +376,13 @@ namespace
             static const char *kNames[4] = {"", "grade_scope_waveform", "grade_scope_parade", "grade_scope_vector"};
             v.push_back({kNames[mode], edit, [mode](Rig &r) { r.settle(); r.app->edit().gradeInspector()->scopes()->setMode(mode); r.settle(); }});
         }
+        v.push_back({"grade_scope_waveform_rgb", edit, [](Rig &r) {
+            r.settle();
+            auto sp = r.app->edit().gradeInspector()->scopes();
+            sp->setMode(1);   // Waveform
+            sp->setWaveRgb(true);
+            r.settle();
+        }});
         v.push_back({"grade_clip_warning", [](FakeService &s) { s.edit(); s.m.gradeParams.exposure = 2.5f; s.m.gradeOwnParams.exposure = 2.5f; },
                      [](Rig &r) { r.settle(); r.app->edit().gradeInspector()->scopes()->setClipWarning(true); r.settle(); }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});

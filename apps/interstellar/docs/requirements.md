@@ -687,6 +687,13 @@ overlay) and `interstellar_host` (a 10-bit HEVC source reports 10, the rest 8). 
 `grade_populated` (histogram), `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
 `grade_clip_warning` (both sizes, looked at).
 
+**Luma | RGB (amended 2026-10-05).** `scopesOf` also builds `waveformRgb` (`Scopes.cpp:89`): each
+channel's per-column density at its own level, painted additively in its own primary, so a neutral
+reads white and a cast or a single clipped channel reads as its colour. The waveform's body carries a
+Luma | RGB switch in its top-right corner (`ScopePanel.cpp:62`, drawn with the waveform's own fade,
+`:267`); the two plots cross-fade (`:188`). Guarded by the UI test (a 200/30/30 frame lights red at
+red's level only and cyan where green and blue agree; a mid grey draws white; the switch
+cross-fades and returns). Shot `grade_scope_waveform_rgb`.
 ### DR-ANIM-1 Curves: `#anim` + `#key`, After Effects' bezier, on the footage's clock (R-ANIM-1, -2, -3, -5)
 The format (`model/Project.h`, `Schema.h`; project-format §5.3): `#anim id node key` names one
 parameter of one #rackobj, #effect or #clip by id; `#key anim t v [in out speedIn inflIn speedOut

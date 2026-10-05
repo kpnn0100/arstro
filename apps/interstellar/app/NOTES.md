@@ -188,6 +188,11 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Shots added: `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
   `grade_clip_warning`. UI checks: 275.
 
+## Waveform Luma | RGB (2026-10-05, R-UI-15 amended)
+
+- In Waveform mode the body's top-right corner carries a Luma | RGB switch (presentation, no command);
+  RGB overlays the channels additively (`ScopeData::waveformRgb`). Shot `grade_scope_waveform_rgb`.
+
 ## Playback (2026-10-05, R-PLAY-2)
 
 - While playing, the service grades ahead on a small pool and steps the playing size down (960 →

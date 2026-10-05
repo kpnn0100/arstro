@@ -51,6 +51,11 @@ namespace interstellar_v1
         artboard::Rect modeRect(int m) const;
         artboard::Rect clipRect() const;
         artboard::Rect bodyRect() const;
+        /** R-UI-15 (amended): the waveform's Luma | RGB switch, in the body's top-right corner. */
+        artboard::Rect waveSwitchRect(int i) const;   // 0 = Luma, 1 = RGB
+        void setWaveRgb(bool on) { mRgb = on; }
+        bool waveRgb() const { return mRgb; }
+        double waveRgbAmount() const { return mRgbAmt.value(); }   // the LIVE eased cross-fade
 
         std::function<void(bool on)> onClipWarning;
 
@@ -64,7 +69,9 @@ namespace interstellar_v1
 
     private:
         ScopeData mData;
-        ImageSlot mWave, mParade, mVector;
+        ImageSlot mWave, mWaveRgb, mParade, mVector;
+        bool mRgb = false, mRgbApplied = false;
+        artboard::AnimatedProperty mRgbAmt{0.0};
         int mMode = Histogram, mModeApplied = -1;
         artboard::AnimatedProperty mModeAmt[kModes];
         bool mClip = false, mClipApplied = false;
