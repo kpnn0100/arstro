@@ -1125,6 +1125,127 @@
       "requirement": "R-RENDER-5"
     },
     {
+      "verb": "shuttle",
+      "usage": "shuttle <forward|back|stop>",
+      "args": "<forward|back|stop>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "J/K/L: forward plays at 1×, then 2× and 4× on each press; back the same in reverse; stop pauses. Sound is heard at 1× forward only.",
+      "requirement": "R-EDT-2"
+    },
+    {
+      "verb": "mark",
+      "usage": "mark <in|out|clear> [--at <t>] [--source]",
+      "args": "<in|out|clear>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "source",
+          "value": ""
+        }
+      ],
+      "summary": "Set the timeline's In or Out at the playhead (or --at), or clear both; --source marks the source viewer.",
+      "requirement": "R-EDT-1"
+    },
+    {
+      "verb": "source view",
+      "usage": "source view <node|none>",
+      "args": "<node|none>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Show a rack source in the viewer, with its own playhead and In/Out, for three-point editing; none = the timeline.",
+      "requirement": "R-EDT-1"
+    },
+    {
+      "verb": "source playhead",
+      "usage": "source playhead <t>",
+      "args": "<t>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Move the source viewer's playhead (source seconds).",
+      "requirement": "R-EDT-1"
+    },
+    {
+      "verb": "edit target",
+      "usage": "edit target <track>",
+      "args": "<track>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "The video track Insert and Overwrite place on.",
+      "requirement": "R-EDT-1"
+    },
+    {
+      "verb": "edit insert",
+      "usage": "edit insert [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "src",
+          "value": "<node>"
+        },
+        {
+          "name": "in",
+          "value": "<t>"
+        },
+        {
+          "name": "out",
+          "value": "<t>"
+        },
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "track",
+          "value": "<trk>"
+        }
+      ],
+      "summary": "Three-point INSERT: the source (the viewer's, or --src) between its In/Out at the timeline In (or the playhead) on the target track; a clip there is split and everything after moves right on every track. Any three of source In/Out and timeline In/Out decide the fourth.",
+      "requirement": "R-EDT-1"
+    },
+    {
+      "verb": "edit overwrite",
+      "usage": "edit overwrite [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "src",
+          "value": "<node>"
+        },
+        {
+          "name": "in",
+          "value": "<t>"
+        },
+        {
+          "name": "out",
+          "value": "<t>"
+        },
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "track",
+          "value": "<trk>"
+        }
+      ],
+      "summary": "Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away and nothing moves.",
+      "requirement": "R-EDT-1"
+    },
+    {
       "verb": "interchange export",
       "usage": "interchange export <timeline> [--format <edl|fcpxml|otio|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]",
       "args": "<timeline>",
@@ -2628,6 +2749,60 @@
       "type": "string",
       "stable": true,
       "doc": "Its menu family."
+    },
+    {
+      "path": "shuttle",
+      "type": "number",
+      "stable": true,
+      "doc": "Playback rate: 0 paused, ±1, ±2, ±4 — `shuttle forward|back|stop` (J/K/L, R-EDT-2)."
+    },
+    {
+      "path": "markIn",
+      "type": "number",
+      "stable": true,
+      "doc": "The timeline's In, seconds; -1 = unset (`mark in`, R-EDT-1)."
+    },
+    {
+      "path": "markOut",
+      "type": "number",
+      "stable": true,
+      "doc": "The timeline's Out, seconds; -1 = unset."
+    },
+    {
+      "path": "sourceView",
+      "type": "string",
+      "stable": true,
+      "doc": "The rack source the viewer shows (`source view <node>`); empty = the timeline (R-EDT-1)."
+    },
+    {
+      "path": "sourceIn",
+      "type": "number",
+      "stable": true,
+      "doc": "The source viewer's In, source seconds; -1 = unset (`mark in --source`)."
+    },
+    {
+      "path": "sourceOut",
+      "type": "number",
+      "stable": true,
+      "doc": "The source viewer's Out, source seconds; -1 = unset."
+    },
+    {
+      "path": "sourcePlayhead",
+      "type": "number",
+      "stable": true,
+      "doc": "The source viewer's playhead, source seconds."
+    },
+    {
+      "path": "sourceDuration",
+      "type": "number",
+      "stable": true,
+      "doc": "The viewed source's length, seconds; 0 = a still or not yet opened."
+    },
+    {
+      "path": "targetTrack",
+      "type": "string",
+      "stable": true,
+      "doc": "The video track Insert and Overwrite place on (`edit target`)."
     },
     {
       "path": "soundPlaying",

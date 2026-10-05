@@ -92,6 +92,7 @@ namespace interstellar
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
             case CK::ClipPaste: case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: case CK::KeyShift: case CK::KeyPaste:
+            case CK::EditInsert: case CK::EditOverwrite:
                 return true;
             default: return false;
         }

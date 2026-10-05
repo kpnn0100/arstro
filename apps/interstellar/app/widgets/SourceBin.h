@@ -51,6 +51,8 @@ namespace interstellar_v1
         std::function<void()> onAddFootage;
         /** Right-click on the row of rack node `rackIndex`, at a WORLD point (the rack's menu). */
         std::function<void(int rackIndex, artboard::Point world)> onContext;
+        /** R-EDT-1: a double-click — the source opens in the viewer for three-point editing. */
+        std::function<void(const interstellar::RackNodeModel &source)> onOpen;
         enum class DragPhase { Move, Drop, Cancel };
         /** A source row is being dragged out (R-UI-14), at a WORLD point. */
         std::function<void(const interstellar::RackNodeModel &source, artboard::Point world, DragPhase)> onDragSource;

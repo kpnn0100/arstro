@@ -973,6 +973,57 @@ fps = 24
     }
 }
 
+    /** R-EDT-1: insert ripples every track and every sound; overwrite only cuts its own range. */
+    void threePointEdits()
+    {
+        Project p = load(kBase);                      // v0: c1 [0,4), c2 [4,8) in 10…14, c3 [8,12)
+        std::string err;
+        NodeId v1, a0, up, ins, ow, ow2;
+        CHECK(arrange::addTrack(p, "tl_1", "video", "v1", v1, err));
+        CHECK(arrange::addClip(p, "tl_1", v1, "ro_2", 0.0, 2.0, 9.0, "up", up, err));
+        CHECK(arrange::addTrack(p, "tl_1", "audio", "a0", a0, err));
+        AClip snd;
+        snd.id = p.freshId("aclp_");
+        snd.name = "snd";
+        snd.track = a0;
+        snd.src = "m.wav";
+        snd.at = 6.0;
+        snd.out = 2.0;
+        p.audioClips.push_back(snd);
+        // insert 3 s at 6 into c2: it splits at 6, everything at or after 6 moves 3 s right
+        CHECK(arrange::insertEdit(p, "tl_1", "trk_1", "ro_2", 30.0, 33.0, 6.0, ins, err));
+        ResolvedTimeline R;
+        CHECK(resolve(p, "tl_1", R, err));
+        auto spanAt = [&](const NodeId &trk, double at, double &in, double &out) {
+            for (const auto &c : R.clips) if (c.track == trk && std::fabs(c.at - at) < 1e-6) { in = c.in; out = c.out; return true; }
+            return false;
+        };
+        double in = 0, out = 0;
+        CHECK(spanAt("trk_1", 4.0, in, out) && in == 10.0 && out == 12.0);   // c2's left half
+        CHECK(spanAt("trk_1", 6.0, in, out) && in == 30.0 && out == 33.0);   // the insert
+        CHECK(spanAt("trk_1", 9.0, in, out) && in == 12.0 && out == 14.0);   // c2's right half, moved
+        CHECK(spanAt("trk_1", 11.0, in, out) && in == 20.0);                 // c3, moved
+        CHECK(spanAt(v1, 12.0, in, out));                                     // V2 moved with it: sync holds
+        CHECK(p.audioClip(snd.id) && p.audioClip(snd.id)->at == 9.0);         // and the sound
+        CHECK(p.transition("tr_1") && p.transition("tr_1")->clipB == "clp_2");   // the dissolve stays on c2
+        // overwrite 2 s at 5: the end of c2's left half and the head of the insert are cut away
+        CHECK(arrange::overwriteEdit(p, "tl_1", "trk_1", "ro_2", 40.0, 42.0, 5.0, ow, err));
+        CHECK(resolve(p, "tl_1", R, err));
+        CHECK(spanAt("trk_1", 4.0, in, out) && in == 10.0 && out == 11.0);
+        CHECK(spanAt("trk_1", 5.0, in, out) && in == 40.0 && out == 42.0);
+        CHECK(spanAt("trk_1", 7.0, in, out) && in == 31.0 && out == 33.0);
+        CHECK(spanAt(v1, 12.0, in, out) && p.audioClip(snd.id)->at == 9.0);   // nothing else moved
+        // overwrite inside one clip: it is split around the new one
+        CHECK(arrange::overwriteEdit(p, "tl_1", "trk_1", "ro_2", 50.0, 51.0, 12.0, ow2, err));
+        CHECK(resolve(p, "tl_1", R, err));
+        CHECK(spanAt("trk_1", 11.0, in, out) && in == 20.0 && out == 21.0);
+        CHECK(spanAt("trk_1", 12.0, in, out) && in == 50.0);
+        CHECK(spanAt("trk_1", 13.0, in, out) && in == 22.0 && out == 24.0);
+        CHECK(!arrange::insertEdit(p, "tl_1", a0, "ro_2", 0.0, 1.0, 0.0, ins, err) && err.find("not a video track") != std::string::npos);
+        CHECK(!arrange::overwriteEdit(p, "tl_1", "trk_1", "ro_2", 2.0, 2.0, 0.0, ow, err) && err.find("out after in") != std::string::npos);
+        rt(p);
+    }
+
 int main()
 {
     roundTripEveryNode();
@@ -995,6 +1046,7 @@ int main()
     diffReadsLikeAChangeList();
     saveAndLoad();
     freshIdNeverReuses();
-    std::printf("interstellar_model_tests: PASS (%d checks, 19 groups)\n", gChecks);
+    threePointEdits();
+    std::printf("interstellar_model_tests: PASS (%d checks, 20 groups)\n", gChecks);
     return 0;
 }

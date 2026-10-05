@@ -102,6 +102,22 @@ namespace interstellar_v1
         mSelectedClip = m.selectedClip;
         mTransitions = m.transitions;
         mMarkers = m.markers;
+        mMarkIn = m.markIn;
+        mMarkOut = m.markOut;
+        mBandOn = mMarkIn >= 0 || mMarkOut >= 0;
+        if (mBandOn)
+        {
+            // an In alone runs to the end; an Out alone from the start
+            mBandIn = mMarkIn >= 0 ? mMarkIn : 0.0;
+            mBandOut = mMarkOut >= 0 ? mMarkOut : std::max(mBandIn, m.duration);
+        }
+        mTargetTrack = m.targetTrack;
+        if (mTargetTrack.empty())
+        {
+            // no target set: the lowest video track is where an edit lands
+            int best = 1 << 30;
+            for (const auto &tk : m.tracks) if (!tk.audio && tk.order < best) { best = tk.order; mTargetTrack = tk.id; }
+        }
         mKeyLaneW->bind(m);   // where animation is authored (R-ANIM-3, amended)
         mKeyClip = mKeyLaneW->hasClip();
         mKeyClipData = {};
@@ -668,6 +684,21 @@ namespace interstellar_v1
 
     void Timeline::advance(double nowMs)
     {
+        if (mBandOn != mBandApplied)
+        {
+            mBandAmt.animateTo(mBandOn ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+            mBandApplied = mBandOn;
+        }
+        mBandAmt.update(nowMs);
+        if (mTargetTrack != mTargetApplied)
+        {
+            if (!mTargetApplied.empty()) mTargetAmt[mTargetApplied].animateTo(0.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+            auto &amt = mTargetAmt[mTargetTrack];
+            if (mTargetApplied.empty()) amt.set(1.0);   // first placement
+            else amt.animateTo(1.0, motion::kSelectMs, Easing::EaseOutCubic, nowMs);
+            mTargetApplied = mTargetTrack;
+        }
+        for (auto &kv : mTargetAmt) kv.second.update(nowMs);
         for (auto &kv : mWaves)
         {
             // an envelope that lands fades in — it is not there one frame and drawn the next
@@ -1060,6 +1091,9 @@ namespace interstellar_v1
             const bool dangling = tk.provenance == interstellar::Provenance::Dangling;
             if (tk.provenance == interstellar::Provenance::Overridden)
                 drawRoundedRect(t, Rect{0, y + 4, 2.0, th - 8}, 0.0, Paint::filled(palette::primary()));
+            // R-EDT-1: the target track for Insert/Overwrite — a bar at the header's right edge
+            if (const double ta = targetAmount(tk.id); ta > 0.001 && !tk.audio)
+                drawRoundedRect(t, Rect{hw - 4.0, y + 6.0, 3.0, th - 12.0}, radius::hairline(), Paint::filled(palette::primaryAlpha(0.9 * ta)));
             const Color gc = dangling ? palette::destructive() : palette::mutedForeground();
             if (tk.audio) glyph::speaker(t, Rect{9.75, cy - 5.5, 11, 11}, gc);
             else glyph::film(t, Rect{9.75, cy - 5.5, 11, 11}, gc);
@@ -1122,6 +1156,16 @@ namespace interstellar_v1
             if (cs.stale.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::whiteAlpha(0.22 * cs.stale.value())));
             if (cs.cached.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::successAlpha(0.9 * cs.cached.value())));
             if (cs.building.value() > 0.01) drawRoundedRect(t, bar, 0.0, Paint::filled(palette::primaryAlpha(0.9 * cs.building.value())));
+        }
+        if (const double ba = mBandAmt.value(); ba > 0.001)
+        {
+            // R-EDT-1: the In/Out span on the ruler, its brackets at the ends
+            const double x0 = std::max(rr.x, timeToX(mBandIn)), x1 = std::min(rr.right(), timeToX(mBandOut));
+            if (x1 > x0) drawRoundedRect(t, Rect{x0, rh - 6.0, x1 - x0, 6.0}, 0.0, Paint::filled(palette::whiteAlpha(0.14 * ba)));
+            Color bc = palette::foreground();
+            bc.a *= ba;
+            if (mMarkIn >= 0) glyph::line(t, timeToX(mMarkIn), 3.0, timeToX(mMarkIn), rh, bc, 1.5);
+            if (mMarkOut >= 0) glyph::line(t, timeToX(mMarkOut), 3.0, timeToX(mMarkOut), rh, bc, 1.5);
         }
         for (const auto &mk : mMarkers)
         {

@@ -85,6 +85,13 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `key paste [--at <t>] [--to <address>]` | Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced. | R-ANIM-7 |
 | `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
+| `shuttle <forward\|back\|stop>` | J/K/L: forward plays at 1×, then 2× and 4× on each press; back the same in reverse; stop pauses. Sound is heard at 1× forward only. | R-EDT-2 |
+| `mark <in\|out\|clear> [--at <t>] [--source]` | Set the timeline's In or Out at the playhead (or --at), or clear both; --source marks the source viewer. | R-EDT-1 |
+| `source view <node\|none>` | Show a rack source in the viewer, with its own playhead and In/Out, for three-point editing; none = the timeline. | R-EDT-1 |
+| `source playhead <t>` | Move the source viewer's playhead (source seconds). | R-EDT-1 |
+| `edit target <track>` | The video track Insert and Overwrite place on. | R-EDT-1 |
+| `edit insert [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point INSERT: the source (the viewer's, or --src) between its In/Out at the timeline In (or the playhead) on the target track; a clip there is split and everything after moves right on every track. Any three of source In/Out and timeline In/Out decide the fourth. | R-EDT-1 |
+| `edit overwrite [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away and nothing moves. | R-EDT-1 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
 | `lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>]` | Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. What is not per-pixel colour is left out and said so in the file. | R-COLOR-6 |
@@ -425,6 +432,15 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `effectTypes[].type` | string |  | The type to name in `effect add --type`. |
 | `effectTypes[].label` | string |  | Its name for a person. |
 | `effectTypes[].family` | string |  | Its menu family. |
+| `shuttle` | number |  | Playback rate: 0 paused, ±1, ±2, ±4 — `shuttle forward\|back\|stop` (J/K/L, R-EDT-2). |
+| `markIn` | number |  | The timeline's In, seconds; -1 = unset (`mark in`, R-EDT-1). |
+| `markOut` | number |  | The timeline's Out, seconds; -1 = unset. |
+| `sourceView` | string |  | The rack source the viewer shows (`source view <node>`); empty = the timeline (R-EDT-1). |
+| `sourceIn` | number |  | The source viewer's In, source seconds; -1 = unset (`mark in --source`). |
+| `sourceOut` | number |  | The source viewer's Out, source seconds; -1 = unset. |
+| `sourcePlayhead` | number |  | The source viewer's playhead, source seconds. |
+| `sourceDuration` | number |  | The viewed source's length, seconds; 0 = a still or not yet opened. |
+| `targetTrack` | string |  | The video track Insert and Overwrite place on (`edit target`). |
 | `soundPlaying` | boolean |  | Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear. |
 | `meterPeakL` | number |  | The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8). |
 | `meterPeakR` | number |  | …right. |

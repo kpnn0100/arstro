@@ -206,6 +206,22 @@ namespace interstellar
              "Remove a parameter's curve; the value it had now stays as the parameter's own.", "R-ANIM-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},
+            {K::Shuttle, "shuttle", "<forward|back|stop>", 1, 1, {},
+             "J/K/L: forward plays at 1×, then 2× and 4× on each press; back the same in reverse; stop pauses. "
+             "Sound is heard at 1× forward only.", "R-EDT-2"},
+            {K::Mark, "mark", "<in|out|clear>", 1, 1, {"at=<t>", "source"},
+             "Set the timeline's In or Out at the playhead (or --at), or clear both; --source marks the source viewer.", "R-EDT-1"},
+            {K::SourceView, "source view", "<node|none>", 1, 1, {},
+             "Show a rack source in the viewer, with its own playhead and In/Out, for three-point editing; none = the timeline.", "R-EDT-1"},
+            {K::SourcePlayhead, "source playhead", "<t>", 1, 1, {}, "Move the source viewer's playhead (source seconds).", "R-EDT-1"},
+            {K::EditTarget, "edit target", "<track>", 1, 1, {}, "The video track Insert and Overwrite place on.", "R-EDT-1"},
+            {K::EditInsert, "edit insert", "", 0, 0, {"src=<node>", "in=<t>", "out=<t>", "at=<t>", "track=<trk>"},
+             "Three-point INSERT: the source (the viewer's, or --src) between its In/Out at the timeline In (or the "
+             "playhead) on the target track; a clip there is split and everything after moves right on every track. "
+             "Any three of source In/Out and timeline In/Out decide the fourth.", "R-EDT-1"},
+            {K::EditOverwrite, "edit overwrite", "", 0, 0, {"src=<node>", "in=<t>", "out=<t>", "at=<t>", "track=<trk>"},
+             "Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away "
+             "and nothing moves.", "R-EDT-1"},
             {K::InterchangeExport, "interchange export", "<timeline>", 1, 1,
              {"format=<edl|fcpxml|otio|aaf>", "out=<path>", "track=<n>", "start=<HH:MM:SS:FF>"},
              "Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source "

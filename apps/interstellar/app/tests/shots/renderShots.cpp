@@ -373,6 +373,25 @@ namespace
             r.app->setTab(1);
             r.settle();
         }});
+        // R-EDT-1/2: the source viewer with its marks; the timeline's In/Out band, a 2× shuttle, the target track
+        v.push_back({"cut_source_viewer", [](FakeService &s) {
+            s.edit();
+            s.m.sourceView = "s_day02";
+            s.m.sourcePlayhead = 3.2;
+            s.m.sourceIn = 1.5;
+            s.m.sourceOut = 5.0;
+            s.m.sourceDuration = 8.0;
+            ++s.m.revision;
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"cut_marks_shuttle", [](FakeService &s) {
+            s.edit();
+            s.m.markIn = 3.0;
+            s.m.markOut = 7.5;
+            s.m.playing = true;
+            s.m.shuttle = 2.0;
+            s.m.targetTrack = "v2";
+            ++s.m.revision;
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

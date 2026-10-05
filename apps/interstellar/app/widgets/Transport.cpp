@@ -24,6 +24,7 @@ namespace interstellar_v1
         /** Below this, a playing playhead's step is followed directly (it IS the motion). */
         constexpr double kFollowStepS = 0.5;
         constexpr double kMeterW = 64.0;      // the stereo meter (R-AUD-8)
+        constexpr double kBadgeW = 28.0;      // the shuttle badge's room (R-EDT-2), taken from the scrubber
         constexpr double kFloorDb = -48.0;
         inline double toDb(double v) { return v > 1e-6 ? 20.0 * std::log10(v) : -120.0; }
         Color fade(Color c, double a) { c.a *= a; return c; }
@@ -33,13 +34,35 @@ namespace interstellar_v1
 
     void Transport::bind(const interstellar::AppModel &m)
     {
-        mDuration = std::max(0.0, m.duration);
         mFps = m.fps > 0 ? m.fps : 24.0;
-        mModelTime = m.playhead;
-        mPlaying = m.playing;
         mMarkers.clear();
-        for (const auto &mk : m.markers) mMarkers.push_back(mk.at);
-        if (!mScrubbing) mTargetTime = m.playhead;   // a gesture in flight outranks the model
+        if (mSourceMode)
+        {
+            // R-EDT-1: the source viewer's own clock
+            mDuration = std::max(0.0, m.sourceDuration);
+            mModelTime = m.sourcePlayhead;
+            mPlaying = false;
+            mMarkA = m.sourceIn;
+            mMarkB = m.sourceOut;
+        }
+        else
+        {
+            mDuration = std::max(0.0, m.duration);
+            mModelTime = m.playhead;
+            mPlaying = m.playing;
+            mMarkA = m.markIn;
+            mMarkB = m.markOut;
+            for (const auto &mk : m.markers) mMarkers.push_back(mk.at);
+        }
+        if (!mScrubbing) mTargetTime = mModelTime;   // a gesture in flight outranks the model
+        // R-EDT-2: the rate, said while it is not plain play
+        mBadgeOn = !mSourceMode && m.playing && std::fabs(m.shuttle) > 0 && std::fabs(m.shuttle - 1.0) > 1e-9;
+        if (mBadgeOn)
+        {
+            char b[16];
+            std::snprintf(b, sizeof b, "%s%g\xC3\x97", m.shuttle < 0 ? "\xE2\x88\x92" : "", std::fabs(m.shuttle));
+            mBadgeWanted = b;
+        }
         mPeakIn[0] = m.meterPeakL; mPeakIn[1] = m.meterPeakR;
         mRmsIn[0] = m.meterRmsL; mRmsIn[1] = m.meterRmsR;
         mClipIn = m.meterClip;
@@ -62,7 +85,7 @@ namespace interstellar_v1
 
     Rect Transport::scrubRect() const
     {
-        const double x0 = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0;
+        const double x0 = kPad + kButtons * (kBtn + 2.0) + 6.0 + kTcW + 6.0 + (kBadgeW + 4.0) * mBadgeAmt.value();
         // the meter, when shown, takes its width from the scrubber — through its eased amount
         const double x1 = width.value() - kPad - kDurW - 6.0 - (kMeterW + 10.0) * mMeterAmt.value();
         return Rect{x0, 0, std::max(0.0, x1 - x0), height.value()};
@@ -92,7 +115,7 @@ namespace interstellar_v1
         if (frame != mLastSentFrame)
         {
             mLastSentFrame = frame;
-            emit("playhead " + cmd::seconds(t, mFps));
+            emit((mSourceMode ? "source playhead " : "playhead ") + cmd::seconds(t, mFps));
         }
     }
 
@@ -198,6 +221,13 @@ namespace interstellar_v1
             mSoundApplied = mSoundIn;
         }
         mMeterAmt.update(nowMs);
+        if (mBadgeOn != mBadgeApplied)
+        {
+            mBadgeAmt.animateTo(mBadgeOn ? 1.0 : 0.0, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
+            mBadgeApplied = mBadgeOn;
+        }
+        if (mBadgeOn) mBadgeText = mBadgeWanted;   // the text holds while it fades out
+        mBadgeAmt.update(nowMs);
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         Segment::advance(nowMs);
@@ -232,8 +262,21 @@ namespace interstellar_v1
         const double cy = h * 0.5;
         const std::string tc = cmd::timecode(mShown.value(), mFps);
         const double tcX = kPad + kButtons * (kBtn + 2.0) + 6.0;
-        t.setFill(palette::foreground());
+        t.setFill(mSourceMode ? palette::primary() : palette::foreground());   // the source's clock reads in the accent
         t.drawText(tc, tcX, textfit::baseline(cy, kTcPx), kTcPx, font::mono());
+        if (const double ba = mBadgeAmt.value(); ba > 0.001 && !mBadgeText.empty())
+        {
+            // R-EDT-2: the shuttle rate, over the timecode's right end
+            const double bw = std::min(kBadgeW, t.measureText(mBadgeText, 9.0, font::monoMedium()) + 8.0);
+            const Rect br{tcX + kTcW + 4.0, cy - 7.0, bw, 14.0};   // in the room the scrubber eased aside
+            Color bg = palette::primary();
+            bg.a *= ba;
+            drawRoundedRect(t, br, radius::control(), Paint::filled(bg));
+            Color fg = palette::primaryForeground();
+            fg.a *= ba;
+            t.setFill(fg);
+            t.drawText(mBadgeText, br.x + 4.0, textfit::baseline(cy, 9.0), 9.0, font::monoMedium());
+        }
 
         // scrubber: pill track, accent fill to the shown time, marker ticks, white thumb
         const Rect sr = scrubRect();
@@ -250,6 +293,17 @@ namespace interstellar_v1
                 const double mx = timeToX(mt);
                 glyph::line(t, mx, cy - 6.0, mx, cy - 3.0, surface::marker(), 1.0);
             }
+            // R-EDT-1: the In and Out as brackets, the span between them washed
+            if (mMarkA >= 0 && mMarkB > mMarkA)
+                drawRoundedRect(t, Rect{timeToX(mMarkA), cy - 5.0, std::max(0.0, timeToX(mMarkB) - timeToX(mMarkA)), 10.0}, radius::hairline(), Paint::filled(palette::whiteAlpha(0.06)));
+            auto bracket = [&](double at, int dir) {
+                const double bx = timeToX(at);
+                glyph::line(t, bx, cy - 6.0, bx, cy + 6.0, palette::foreground(), 1.0);
+                glyph::line(t, bx, cy - 6.0, bx + dir * 3.0, cy - 6.0, palette::foreground(), 1.0);
+                glyph::line(t, bx, cy + 6.0, bx + dir * 3.0, cy + 6.0, palette::foreground(), 1.0);
+            };
+            if (mMarkA >= 0) bracket(mMarkA, +1);
+            if (mMarkB >= 0) bracket(mMarkB, -1);
             const double r = 4.5 + 1.0 * hv;
             drawCircle(t, x, cy, r, Paint::filled(palette::white()));
         }

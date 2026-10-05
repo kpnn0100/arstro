@@ -400,6 +400,19 @@ namespace
         static_cast<Host *>(user)->app->setSize(alloc->width, alloc->height);
     }
 
+    /** R-EDT-2: a release, for the keys whose HOLD means something (K: J and L step a frame). */
+    gboolean onKeyUp(GtkWidget *, GdkEventKey *e, gpointer user)
+    {
+        auto *a = static_cast<Host *>(user);
+        if (e->keyval != GDK_KEY_k && e->keyval != GDK_KEY_K) return FALSE;
+        artboard::KeyEvent ke;
+        ke.type = artboard::KeyEvent::Type::Up;
+        ke.keyCode = 'K';
+        a->app->key(ke);
+        gtk_widget_queue_draw(a->area);
+        return TRUE;
+    }
+
     gboolean onKey(GtkWidget *, GdkEventKey *e, gpointer user)
     {
         auto *a = static_cast<Host *>(user);
@@ -436,6 +449,8 @@ namespace
                 case GDK_KEY_Right: code = 39; break;
                 case GDK_KEY_Down: code = 40; break;
                 case GDK_KEY_Delete: code = 46; break;
+                case GDK_KEY_comma: code = 188; break;    // R-EDT-1: Insert (the OEM code; 44 is not a key here)
+                case GDK_KEY_period: code = 190; break;   // Overwrite (46 is Delete)
                 default:
                 {
                     const gunichar u = gdk_keyval_to_unicode(gdk_keyval_to_upper(e->keyval));
@@ -525,7 +540,7 @@ int main(int argc, char **argv)
     gtk_widget_set_size_request(a->area, a->minW, a->minH);
     gtk_widget_set_can_focus(a->area, TRUE);
     gtk_widget_add_events(a->area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK |
-                                       GDK_KEY_PRESS_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+                                       GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
     g_signal_connect(a->area, "draw", G_CALLBACK(onDraw), a);
     g_signal_connect(a->area, "button-press-event", G_CALLBACK(onButton), a);
     g_signal_connect(a->area, "button-release-event", G_CALLBACK(onButton), a);
@@ -533,6 +548,7 @@ int main(int argc, char **argv)
     g_signal_connect(a->area, "scroll-event", G_CALLBACK(onScroll), a);
     g_signal_connect(a->area, "size-allocate", G_CALLBACK(onSizeAllocate), a);
     g_signal_connect(a->area, "key-press-event", G_CALLBACK(onKey), a);
+    g_signal_connect(a->area, "key-release-event", G_CALLBACK(onKeyUp), a);
     gtk_container_add(GTK_CONTAINER(a->window), a->area);
 
     // A project path on the command line opens it directly — the same command the Home card sends.

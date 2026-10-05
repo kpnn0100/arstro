@@ -587,12 +587,14 @@ reserves the rest so adopting it is not a migration.
 - **R-CLR-5 Split-screen wipe**: the monitor compares the current frame with a still or another
   version, split horizontally or vertically, the split dragged.
 
-## R-EDT — editing — ⏳ NOT STARTED (added 2026-10-05)
+## R-EDT — editing — 🔶 IN PROGRESS (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3–5 next)
 
 - **R-EDT-1 Three-point editing**: a source viewer with its own In/Out, timeline In/Out, and Insert
-  (ripples) or Overwrite to the target track.
+  (ripples) or Overwrite to the target track. — ✅ (DR-EDT-1). One monitor: in Cut the viewer shows
+  the source (double-click it in the bin; Escape returns), scrubbed and stepped — it does not play
+  on its own (said). Insert ripples every track and every placed sound, so sync holds.
 - **R-EDT-2 J/K/L shuttle**: L plays forward, J backward, repeated presses speed up (1×, 2×, 4×), K
-  pauses; K+J/L steps a frame.
+  pauses; K+J/L steps a frame. — ✅ (DR-EDT-1). Sound is heard at 1× forward only (said).
 - **R-EDT-3 Speed ramps**: a clip's speed is animatable (R-ANIM); the source frame is the integral
   of the speed curve, so a ramp is continuous.
 - **R-EDT-4 Nested sequences**: a timeline used as a clip in another timeline.

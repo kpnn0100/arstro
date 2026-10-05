@@ -60,6 +60,16 @@ namespace arrange
     /** Remove a clip; with `ripple`, every later clip on its track shifts left by its length. */
     bool remove(Project &, const NodeId &timeline, const NodeId &clip, bool ripple, std::string &err);
 
+    /** R-EDT-1, three-point INSERT: `src` [in, out) placed at `at` on `track`. A clip of that track
+     *  spanning `at` is split there, and everything of the timeline at or after `at` — every track's
+     *  clips and every placed sound — moves right by the new clip's length, so sync holds. */
+    bool insertEdit(Project &, const NodeId &timeline, const NodeId &track, const NodeId &src, double in, double out,
+                    double at, NodeId &outId, std::string &err);
+    /** R-EDT-1, OVERWRITE: what lies on `track` in [at, at + out - in) is cut away — split at both
+     *  ends, the inside removed — and the clip placed there. Nothing else moves. */
+    bool overwriteEdit(Project &, const NodeId &timeline, const NodeId &track, const NodeId &src, double in, double out,
+                       double at, NodeId &outId, std::string &err);
+
     /** A local transition between two clips of one track, `a` before `b`. Refused when longer
      *  than either neighbour — it would consume the clip (project-format §7). */
     bool addTransition(Project &, const NodeId &timeline, const NodeId &a, const NodeId &b, const std::string &kind,

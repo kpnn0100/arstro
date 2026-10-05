@@ -15,6 +15,7 @@ namespace interstellar_v1
     {
         constexpr double kActiveWindowMs = 700.0;   // longer than the longest tween (520 ms in cosmo)
         constexpr int kKeyBackspace = 8, kKeyEsc = 27, kKeySpace = 32, kKeyLeft = 37, kKeyRight = 39, kKeyDelete = 46;
+        constexpr int kKeyComma = 188, kKeyPeriod = 190;   // R-EDT-1: Insert, Overwrite (OEM codes, as the host sends them)
 
     }
 
@@ -253,6 +254,12 @@ namespace interstellar_v1
             {"Paste Grade to Selected (Ctrl+V)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("grade paste " + cmd::quote(b)); }},
             {"Paste Grade to All Sources",   [this] { dispatch("grade paste --all"); }},
             {"Group Selection  (Ctrl+G)",    [this] { dispatch("rack group new"); }},
+            // R-EDT-1: three-point editing, the keys beside them
+            {"Mark In      (I)",             [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark in") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
+            {"Mark Out     (O)",             [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark out") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
+            {"Clear In / Out",               [this] { const auto &mm = mHooks.model ? mHooks.model() : emptyModel(); dispatch(std::string("mark clear") + (mEdit->tab() == EditScreen::Cut && !mm.sourceView.empty() ? " --source" : "")); }},
+            {"Insert       (,)",             [this] { dispatch("edit insert"); }},
+            {"Overwrite    (.)",             [this] { dispatch("edit overwrite"); }},
             {"Ungroup",                      [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack ungroup " + cmd::quote(b)); }},
             {"Duplicate as Variant (Ctrl+D)", [this] { const auto b = selectedBind(); if (!b.empty()) dispatch("rack duplicate " + cmd::quote(b)); }},
         }});
@@ -669,6 +676,10 @@ namespace interstellar_v1
                 dispatch("clip paste --at " + cmd::seconds(t, fps) + (track.empty() ? std::string() : " --track " + cmd::quote(track)));
             }});
         items.push_back({"Add Marker Here  (M at the playhead)", [this, t, fps] { dispatch("marker add " + freshMarkerName() + " --at " + cmd::seconds(t, fps)); }});
+        bool video = false;
+        for (const auto &tk : m.tracks) video = video || (tk.id == track && !tk.audio);
+        if (video && track != m.targetTrack)
+            items.push_back({"Target for Insert / Overwrite", [this, track] { dispatch("edit target " + cmd::quote(track)); }});   // R-EDT-1
         items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
         items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
@@ -753,6 +764,7 @@ namespace interstellar_v1
             return true;
         }
         if (textEditing()) return mEdit->dispatchKey(e);
+        if (e.type == KeyEvent::Type::Up && (e.keyCode == 'K' || e.keyCode == 'k')) { mKDown = false; return true; }   // R-EDT-2
         if (e.type != KeyEvent::Type::Down) return false;
         if (e.ctrl && editKey(e)) return true;
 
@@ -761,8 +773,39 @@ namespace interstellar_v1
         switch (e.keyCode)
         {
         case kKeySpace: dispatch(m.playing ? "pause" : "play"); return true;
-        case kKeyLeft: dispatch("playhead " + cmd::seconds(m.playhead - 1.0 / fps, fps)); return true;
-        case kKeyRight: dispatch("playhead " + cmd::seconds(m.playhead + 1.0 / fps, fps)); return true;
+        case kKeyLeft:
+        case kKeyRight:
+        {
+            const double d = (e.keyCode == kKeyLeft ? -1.0 : 1.0) / fps;
+            // the source viewer's own playhead while it shows a source (R-EDT-1)
+            if (mEdit->tab() == EditScreen::Cut && !m.sourceView.empty()) dispatch("source playhead " + cmd::seconds(std::max(0.0, m.sourcePlayhead + d), fps));
+            else dispatch("playhead " + cmd::seconds(m.playhead + d, fps));
+            return true;
+        }
+        // R-EDT-2: J/K/L — K held, J and L step a frame
+        case 'J': case 'L':
+        {
+            const bool fwd = e.keyCode == 'L';
+            if (mKDown) dispatch("playhead " + cmd::seconds(std::max(0.0, m.playhead + (fwd ? 1.0 : -1.0) / fps), fps));
+            else dispatch(fwd ? "shuttle forward" : "shuttle back");
+            return true;
+        }
+        case 'K':
+            mKDown = true;
+            if (m.playing) dispatch("shuttle stop");
+            return true;
+        // R-EDT-1: marks (the source's while the viewer shows one), Insert and Overwrite
+        case 'I': case 'O':
+        {
+            const bool src = mEdit->tab() == EditScreen::Cut && !m.sourceView.empty();
+            dispatch(std::string("mark ") + (e.keyCode == 'I' ? "in" : "out") + (src ? " --source" : ""));
+            return true;
+        }
+        case kKeyComma: dispatch("edit insert"); return true;
+        case kKeyPeriod: dispatch("edit overwrite"); return true;
+        case kKeyEsc:
+            if (mEdit->tab() == EditScreen::Cut && !m.sourceView.empty()) { dispatch("source view none"); return true; }
+            return false;
         case kKeyDelete:
         case kKeyBackspace:
             // Shift: RIPPLE — the gap closes (R-UI-14)
@@ -877,6 +920,8 @@ namespace interstellar_v1
         mHome->setLoading(m.revision == 0);
         mHome->bind(m);
         if (m.screen != Screen::Home && !m.projectName.empty()) mLoading->setProjectName(m.projectName);
+        // R-EDT-1: in Cut, a source in the viewer takes the transport
+        mEdit->transport()->setSourceMode(mEdit->tab() == EditScreen::Cut && !m.sourceView.empty());
         mEdit->bind(m, mPointerDown, nowMs);
         if (m.screen == Screen::Edit) fetchFrame(m, false);
     }
@@ -897,6 +942,11 @@ namespace interstellar_v1
                 fetchSource(m, n, edge, force);
                 return;
             }
+        }
+        if (mEdit->tab() == EditScreen::Cut && !m.sourceView.empty() && mHooks.renderSource)
+        {
+            fetchViewer(m, edge, force);
+            return;
         }
         mFetchedBind.clear();
         mon->setTimecode(cmd::timecode(m.playhead, m.fps));
@@ -976,6 +1026,39 @@ namespace interstellar_v1
         }
         // a grade change on the same frame dissolves; a seek is the picture moving (gotcha 10)
         mon->setFrame(mFrame, samePlace && !previewing);
+        mon->setState(Monitor::State::Frame);
+        showScopes(mFrame);
+    }
+
+    /** R-EDT-1: the SOURCE viewer — the viewed source, graded, at the viewer's playhead. */
+    void App::fetchViewer(const interstellar::AppModel &m, int edge, bool force)
+    {
+        auto mon = mEdit->monitor();
+        double fps = m.fps;
+        for (const auto &r : m.rack) if (r.bindName == m.sourceView && r.mediaFps > 0) fps = r.mediaFps;
+        const double at = m.sourcePlayhead;
+        mon->setTimecode(cmd::timecode(at, fps));
+        std::string cap = "SOURCE  \xC2\xB7  " + m.sourceView;
+        if (m.sourceIn >= 0 || m.sourceOut >= 0)
+            cap += "  \xC2\xB7  " + (m.sourceIn >= 0 ? cmd::timecode(m.sourceIn, fps) : std::string("\xE2\x80\x94")) + " \xE2\x80\x93 " +
+                   (m.sourceOut >= 0 ? cmd::timecode(m.sourceOut, fps) : std::string("\xE2\x80\x94"));
+        mon->setCaption(cap);
+        const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge || m.sourceView != mFetchedBind ||
+                             std::fabs(at - mFetchedAt) > 1e-9 || m.revision != mFetchedRevision;
+        if (!changed) return;
+        const bool samePlace = m.sourceView == mFetchedBind && std::fabs(at - mFetchedAt) <= 1e-9;
+        mFetchedSource = true;
+        mFetchedSeq = m.frameSeq;
+        mFetchedEdge = edge;
+        mFetchedAt = at;
+        mFetchedBind = m.sourceView;
+        mFetchedRevision = m.revision;
+        if (!mHooks.renderSource(m.sourceView, at, edge, mFrame) || mFrame.empty())
+        {
+            if (!samePlace || mon->state() != Monitor::State::Frame) mon->setState(Monitor::State::Loading);
+            return;
+        }
+        mon->setFrame(mFrame, samePlace);
         mon->setState(Monitor::State::Frame);
         showScopes(mFrame);
     }

@@ -298,6 +298,14 @@ namespace interstellar
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
+        // ── editing (R-EDT-1, R-EDT-2) ──
+        double shuttle = 0.0;                      // playback rate: 0 paused, ±1, ±2, ±4 (J/K/L)
+        double markIn = -1.0, markOut = -1.0;      // the timeline's In/Out, seconds; -1 = unset
+        std::string sourceView;                    // the rack source the viewer shows (bind name); "" = the timeline
+        double sourceIn = -1.0, sourceOut = -1.0;  // its In/Out, source seconds; -1 = unset
+        double sourcePlayhead = 0.0;               // its playhead, source seconds
+        double sourceDuration = 0.0;               // its length, seconds (0 = a still or unknown)
+        NodeId targetTrack;                        // the video track Insert/Overwrite place on
         // ── sound (R-AUD-6..8) ──
         bool soundPlaying = false;                 // the audio clock drives the playhead (a sound output, something to hear)
         double meterPeakL = 0, meterPeakR = 0;     // the master's level the listener hears now, linear (1 = full scale)

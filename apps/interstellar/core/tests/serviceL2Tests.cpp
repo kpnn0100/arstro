@@ -1337,6 +1337,97 @@ int main()
         assert(!f.run("interchange import \"" + f.path("nothing.edl") + "\"", &err) && has(err, "cannot read"));
     });
 
+    test("J/K/L shuttles both ways at 1×/2×/4×; three points place a source by Insert or Overwrite (R-EDT-1, R-EDT-2)", [] {
+        Fixture f("edit3");
+        f.standard();                                   // shotA (a 0–2 s) at 0, shotB (b 0–2 s) at 2
+        std::string err;
+        const std::string tl = f.svc->model().timelines[0].id;
+        auto clips = [&] {
+            std::vector<std::tuple<double, double, double, std::string>> v;
+            ResolvedTimeline R;
+            std::string e2;
+            resolve(f.svc->project(), tl, R, e2);
+            for (const auto &c : R.clips) v.emplace_back(c.at, c.in, c.out, f.svc->project().rackObj(c.src)->name);
+            std::sort(v.begin(), v.end());
+            return v;
+        };
+        // the shuttle: L 1× → 2× → 4×, J reverses, K stops; the clock runs at the rate
+        f.svc->pump(f.now);                                                // the service's clock is the test's from here
+        f.must("shuttle forward");
+        assert(f.svc->model().playing && f.svc->model().shuttle == 1.0);
+        f.must("shuttle forward");
+        assert(f.svc->model().shuttle == 2.0);
+        const double p0 = f.svc->model().playhead;
+        f.svc->pump(f.now += 600.0);                                       // the commands' own pumps took a few ms of it
+        const double moved = f.svc->model().playhead - p0;
+        std::printf("    2x for ~0.5-0.6 s: the playhead moved %.3f s\n", moved);
+        assert(moved > 0.9 && moved < 1.25);                               // twice the time that passed
+        f.must("shuttle forward");
+        assert(f.svc->model().shuttle == 4.0);
+        f.must("shuttle forward");
+        assert(f.svc->model().shuttle == 4.0);                             // 4× is the top
+        f.must("shuttle back");
+        assert(f.svc->model().shuttle == -1.0);
+        f.must("shuttle back");
+        assert(f.svc->model().shuttle == -2.0);
+        f.svc->pump(f.now += 10.0);
+        f.svc->pump(f.now += 2000.0);                                      // runs back past the start: stops AT it
+        assert(!f.svc->model().playing && f.svc->model().playhead == 0.0 && f.svc->model().shuttle == 0.0);
+        f.must("shuttle forward");
+        f.must("shuttle stop");
+        assert(!f.svc->model().playing && f.svc->model().shuttle == 0.0);
+        assert(!f.run("shuttle sideways", &err) && has(err, "forward, back or stop"));
+
+        // three-point INSERT from the viewer: b from 0 to 1.5 at the playhead (1.0) — shotA splits, all after moves
+        assert(!f.run("edit insert", &err) && has(err, "source view"));
+        assert(!f.run("mark in --source", &err) && has(err, "no source in the viewer"));
+        f.must("source view b");
+        assert(f.svc->model().sourceView == "b" && f.svc->model().sourceDuration == 4.0);
+        f.must("mark in --source --at 0");
+        f.must("source playhead 1.5");
+        f.must("mark out --source");
+        assert(f.svc->model().sourceIn == 0.0 && f.svc->model().sourceOut == 1.5);
+        f.must("playhead 1");
+        f.must("edit insert");
+        using C = std::tuple<double, double, double, std::string>;
+        auto want1 = std::vector<C>{C{0.0, 0.0, 1.0, "a"}, C{1.0, 0.0, 1.5, "b"}, C{2.5, 1.0, 2.0, "a"}, C{3.5, 0.0, 2.0, "b"}};
+        assert(clips() == want1);
+        assert(f.svc->model().playhead == 2.5);                            // the playhead lands at its end
+        f.must("undo");
+        assert(clips().size() == 2);
+        f.must("redo");
+        assert(clips() == want1);
+        // OVERWRITE, the fourth point from the timeline's marks: source In 2, timeline In 0.5 … Out 1.0
+        f.must("mark clear --source");
+        f.must("mark in --source --at 2");
+        f.must("mark in --at 0.5");
+        f.must("mark out --at 1");
+        f.must("edit overwrite");
+        auto v = clips();
+        assert(v.size() == 5 && v[0] == (C{0.0, 0.0, 0.5, "a"}) && v[1] == (C{0.5, 2.0, 2.5, "b"}) && v[2] == (C{1.0, 0.0, 1.5, "b"}));
+        assert(f.svc->model().markIn == -1.0 && f.svc->model().markOut == -1.0);   // the timeline marks are spent
+        // backtimed: the source's In and Out, the timeline's Out alone — the clip ENDS there
+        f.must("mark in --source --at 3");
+        f.must("mark out --source --at 3.5");
+        f.must("mark out --at 6");
+        f.must("edit overwrite");
+        v = clips();
+        assert(std::get<0>(v.back()) == 5.5 && std::get<1>(v.back()) == 3.0);
+        // the target track, and its refusals
+        f.must("track add --kind audio");
+        assert(!f.run("edit target a0", &err) && has(err, "not a video track"));
+        f.must("track add --kind video");
+        f.must("edit target v1");
+        assert(f.svc->model().targetTrack == f.svc->project().idForRef("v1"));
+        f.must("edit insert --src a --in 0 --out 1 --at 0");
+        bool onV1 = false;
+        ResolvedTimeline R;
+        std::string e2;
+        resolve(f.svc->project(), tl, R, e2);
+        for (const auto &c : R.clips) onV1 = onV1 || c.track == f.svc->project().idForRef("v1");
+        assert(onV1);
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

@@ -351,6 +351,75 @@ namespace arrange
         return true;
     }
 
+    bool insertEdit(Project &P, const NodeId &timeline, const NodeId &track, const NodeId &src, double in, double out,
+                    double at, NodeId &outId, std::string &err)
+    {
+        NodeId tl;
+        ResolvedTimeline R;
+        if (!timelineOf(P, timeline, tl, err) || !resolve(P, tl, R, err)) return false;
+        const NodeId trk = P.idForRef(track);
+        const Track *t = rTrack(R, trk);
+        if (!t || t->audio()) { err = track + " is not a video track of " + tl; return false; }
+        if (!(out > in)) { err = "an insert needs out after in"; return false; }
+        at = snap(std::max(0.0, at));
+        const double len = snap(out - in);
+        const Project backup = P;
+        // a clip of the target track across the record in is split there: the insert goes between
+        for (const auto &c : R.clips)
+            if (c.track == trk && c.at < at - kEps && c.end() > at + kEps)
+            {
+                NodeId right;
+                if (!split(P, tl, c.id, at, right, err)) { P = backup; return false; }
+                break;
+            }
+        ResolvedTimeline after;
+        if (!resolve(P, tl, after, err)) { P = backup; return false; }
+        // everything at or after the record in moves right — latest first, so nothing passes through another
+        std::vector<const Clip *> later;
+        for (const auto &c : after.clips) if (c.at >= at - kEps) later.push_back(&c);
+        std::sort(later.begin(), later.end(), [](const Clip *a, const Clip *b) { return a->at > b->at; });
+        for (const Clip *c : later)
+            if (!setFields(P, tl, c->id, {{"at", t3(snap(c->at + len))}}, err)) { P = backup; return false; }
+        for (const auto &a : after.audioClips)
+            if (a.at >= at - kEps && !setFields(P, tl, a.id, {{"at", t3(snap(a.at + len))}}, err)) { P = backup; return false; }
+        if (!addClip(P, tl, trk, src, in, out, at, std::string(), outId, err)) { P = backup; return false; }
+        return true;
+    }
+
+    bool overwriteEdit(Project &P, const NodeId &timeline, const NodeId &track, const NodeId &src, double in, double out,
+                       double at, NodeId &outId, std::string &err)
+    {
+        NodeId tl;
+        ResolvedTimeline R;
+        if (!timelineOf(P, timeline, tl, err) || !resolve(P, tl, R, err)) return false;
+        const NodeId trk = P.idForRef(track);
+        const Track *t = rTrack(R, trk);
+        if (!t || t->audio()) { err = track + " is not a video track of " + tl; return false; }
+        if (!(out > in)) { err = "an overwrite needs out after in"; return false; }
+        at = snap(std::max(0.0, at));
+        const double a = at, b = snap(at + out - in);
+        const Project backup = P;
+        // split what crosses either end, then drop everything inside [a, b)
+        for (double cut : {a, b})
+        {
+            ResolvedTimeline now;
+            if (!resolve(P, tl, now, err)) { P = backup; return false; }
+            for (const auto &c : now.clips)
+                if (c.track == trk && c.at < cut - kEps && c.end() > cut + kEps)
+                {
+                    NodeId right;
+                    if (!split(P, tl, c.id, cut, right, err)) { P = backup; return false; }
+                    break;
+                }
+        }
+        ResolvedTimeline cut;
+        if (!resolve(P, tl, cut, err)) { P = backup; return false; }
+        for (const auto &c : cut.clips)
+            if (c.track == trk && c.at >= a - kEps && c.end() <= b + kEps && !dropNode(P, tl, c.id, err)) { P = backup; return false; }
+        if (!addClip(P, tl, trk, src, in, out, at, std::string(), outId, err)) { P = backup; return false; }
+        return true;
+    }
+
     bool addTransition(Project &P, const NodeId &timeline, const NodeId &a, const NodeId &b, const std::string &kind,
                        double dur, NodeId &outId, std::string &err)
     {

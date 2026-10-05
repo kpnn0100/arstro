@@ -2313,6 +2313,84 @@ namespace
         CHECK(del->visible && del->y.value() + del->height.value() <= c2->height.value() + 0.5, "…to its clamped end, where Delete clip is reachable");
     }
 
+    void key(Rig &r, int code, bool up = false)
+    {
+        artboard::KeyEvent e;
+        e.type = up ? artboard::KeyEvent::Type::Up : artboard::KeyEvent::Type::Down;
+        e.keyCode = code;
+        r.app->key(e);
+    }
+
+    /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
+    void testEditingUi()
+    {
+        std::printf("editing: J/K/L, marks, the source viewer, insert and overwrite\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.playing = false; ++s.m.revision; });
+        r.app->setTab(1);
+        r.settle();
+        r.svc.lines.clear();
+        key(r, 'L');
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "shuttle forward", "L shuttles forward");
+        key(r, 'L');
+        r.pump(48);
+        auto tr = r.app->edit().transport();
+        const double badge = firstMoved(r, [&] { return tr->badgeAmount(); }, 0.0);
+        CHECK(strictlyBetween(badge, 0.0, 1.0) && tr->badgeText() == "2\xC3\x97", "at 2× the transport's badge says so, EASED in");
+        key(r, 'K');
+        CHECK(r.svc.lines.back() == "shuttle stop", "K stops");
+        const double ph = r.svc.m.playhead;
+        key(r, 'L');
+        CHECK(r.svc.lines.back().rfind("playhead ", 0) == 0 && r.svc.lines.back() != "playhead " + cmd::seconds(ph, r.svc.m.fps),
+              "K held, L steps a frame instead of shuttling");
+        key(r, 'K', true);
+        key(r, 'J');
+        CHECK(r.svc.lines.back() == "shuttle back", "K released, J shuttles back");
+        key(r, 'K');
+        key(r, 'K', true);
+        // marks and the edit keys
+        key(r, 'I');
+        CHECK(r.svc.lines.back() == "mark in", "I marks the timeline In");
+        key(r, 'O');
+        CHECK(r.svc.lines.back() == "mark out", "O marks its Out");
+        auto tl = r.app->edit().timeline();
+        r.svc.m.markIn = 2.0;
+        r.svc.m.markOut = 5.0;
+        ++r.svc.m.revision;
+        const double band = firstMoved(r, [&] { return tl->markBandAmount(); }, 0.0);
+        CHECK(strictlyBetween(band, 0.0, 1.0), "the In/Out band on the ruler EASES in");
+        key(r, 188);
+        CHECK(r.svc.lines.back() == "edit insert", "comma inserts");
+        key(r, 190);
+        CHECK(r.svc.lines.back() == "edit overwrite", "period overwrites");
+        // the source viewer: a double-click in the bin, the transport on the source's clock, Escape back
+        auto bin = r.app->edit().sourceBin();
+        const Point p = centre(*bin, bin->rowRect(1));
+        dblClick(r, p.x, p.y);
+        CHECK(r.svc.lines.back() == "source view s_day02", "double-clicking a source opens it in the viewer");
+        r.settle();
+        CHECK(tr->sourceMode(), "the transport drives the source viewer");
+        CHECK(r.app->edit().monitor()->caption().rfind("SOURCE", 0) == 0, "the monitor says it shows a SOURCE");
+        key(r, 'I');
+        CHECK(r.svc.lines.back() == "mark in --source", "I marks the SOURCE's In while it is in the viewer");
+        const Rect sr = tr->scrubRect();
+        const Point sp = world(*tr, sr.x + sr.w * 0.5, sr.h * 0.5);
+        r.click(sp.x, sp.y);
+        CHECK(r.svc.lines.back().rfind("source playhead ", 0) == 0, "scrubbing moves the source playhead");
+        key(r, 27);
+        CHECK(r.svc.lines.back() == "source view none", "Escape returns the viewer to the timeline");
+        r.settle();
+        CHECK(!tr->sourceMode(), "…and the transport to the timeline's clock");
+        // the target track: the lane menu sets it, the header's bar moves eased
+        const std::string v2 = "v2";
+        r.svc.m.targetTrack = "v1";
+        ++r.svc.m.revision;
+        r.settle();
+        r.svc.m.targetTrack = v2;
+        ++r.svc.m.revision;
+        const double tgt = firstMoved(r, [&] { return tl->targetAmount(v2); }, 0.0);
+        CHECK(strictlyBetween(tgt, 0.0, 1.0), "the target bar moves to the new track EASED");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2411,6 +2489,7 @@ int main()
     testDeliverSound();
     testSoundUi();
     testInterchangeUi();
+    testEditingUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

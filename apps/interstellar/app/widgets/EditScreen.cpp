@@ -54,6 +54,7 @@ namespace interstellar_v1
         mBin->onCommand = fwd;
         mBin->onAddFootage = [this] { if (onAddFootage) onAddFootage(); };
         mBin->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
+        mBin->onOpen = [this](const interstellar::RackNodeModel &n) { emit("source view " + cmd::quote(n.bindName)); };   // R-EDT-1
         mTimeline = std::make_shared<Timeline>();
         mTimeline->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
         mTimeline->onKeyPlotContext = [this](double t, Point w) { if (onKeyPlotContext) onKeyPlotContext(t, w); };

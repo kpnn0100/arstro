@@ -74,7 +74,10 @@ one integrator who moves, wires, tests and commits each stream:
       8. [x] Audio: the mix, muxed into every video render (R-AUD-5 amended, R-AUD-9) — DR-AUD-2.
       8b. [x] Audio: playback on the audio clock and scrub grains, waveforms, meters (R-AUD-6..8) — DR-AUD-3.
       9. [x] Interchange: EDL, FCPXML, OTIO, timecode and reels; AAF stated (R-XCH-1..5) — DR-XCH-1.
-      10. [ ] Editing: three-point, J/K/L, speed ramps, nested sequences, multicam (R-EDT-1..5).
+      10. [x] Editing: three-point Insert/Overwrite with a source viewer, J/K/L shuttle (R-EDT-1, R-EDT-2) — DR-EDT-1.
+      10b. [ ] Speed ramps (R-EDT-3).
+      10c. [ ] Nested timelines (R-EDT-4).
+      10d. [ ] Multicam (R-EDT-5).
       11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).

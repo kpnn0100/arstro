@@ -184,6 +184,18 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Deliver › AUDIO: what the render carries (`OutputSpec::audioSentence()`).
 - Shot added: `cut_sound`. UI checks: 368.
 
+## Editing (2026-10-05, R-EDT-1, R-EDT-2)
+
+- Keys: J/K/L → `shuttle back|stop|forward` (K held: J/L step a frame by `playhead ±1f`; the host
+  sends K's release), I/O → `mark in|out` (`--source` while the viewer shows a source), comma (188) →
+  `edit insert`, period (190) → `edit overwrite`; Edit menu has the same.
+- The source viewer: double-click a source in the Cut source bin → `source view <bind>`; the monitor
+  shows it (`SOURCE · <bind> · in – out`), the transport scrubs `source playhead <t>` in the accent;
+  Escape → `source view none`.
+- The timeline's In/Out band on the ruler, brackets on the scrubber, the target track's header bar,
+  the lane menu's "Target for Insert / Overwrite", a shuttle badge (2×, −4×) beside the timecode — each
+  eased. Shots added: `cut_source_viewer`, `cut_marks_shuttle`. UI checks: 391.
+
 ## Interchange (2026-10-05, R-XCH)
 
 - File › Import Timeline… → `onPickTimelineToImport` → `interchange import "<file>"` (a new root

@@ -146,6 +146,7 @@ namespace interstellar_v1
         void fetchFrame(const interstellar::AppModel &m, bool force);
         void showScopes(const interstellar::Raster &frame);
         void fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force);
+        void fetchViewer(const interstellar::AppModel &m, int edge, bool force);   // R-EDT-1: the source viewer
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }
         bool textEditing() const;
@@ -180,6 +181,7 @@ namespace interstellar_v1
         std::string mFetchedTimeline;
         unsigned mFetchedRevision = ~0u;
         bool mFetchedSource = false;                    // the monitor shows one source (Grade), not the timeline
+        bool mKDown = false;                            // R-EDT-2: K held — J/L step a frame
         std::string mFetchedBind;
         // the ref-frame slider's live preview (R-RACK-3): the source and the time it is dragged to;
         // mPreviewAt < 0 = not previewing (the monitor shows the committed reference frame)

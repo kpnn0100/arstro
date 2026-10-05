@@ -273,6 +273,15 @@ namespace interstellar
             j.set("colourOutputs", outs);
         }
         j.set("workingSpace", m.workingSpace);
+        j.set("shuttle", m.shuttle);
+        j.set("markIn", m.markIn);
+        j.set("markOut", m.markOut);
+        j.set("sourceView", m.sourceView);
+        j.set("sourceIn", m.sourceIn);
+        j.set("sourceOut", m.sourceOut);
+        j.set("sourcePlayhead", m.sourcePlayhead);
+        j.set("sourceDuration", m.sourceDuration);
+        j.set("targetTrack", m.targetTrack);
         j.set("soundPlaying", m.soundPlaying);
         j.set("meterPeakL", m.meterPeakL);
         j.set("meterPeakR", m.meterPeakR);
@@ -525,6 +534,15 @@ namespace interstellar
             {"effectTypes[].type", "string", "The type to name in `effect add --type`."},
             {"effectTypes[].label", "string", "Its name for a person."},
             {"effectTypes[].family", "string", "Its menu family."},
+            {"shuttle", "number", "Playback rate: 0 paused, ±1, ±2, ±4 — `shuttle forward|back|stop` (J/K/L, R-EDT-2)."},
+            {"markIn", "number", "The timeline's In, seconds; -1 = unset (`mark in`, R-EDT-1)."},
+            {"markOut", "number", "The timeline's Out, seconds; -1 = unset."},
+            {"sourceView", "string", "The rack source the viewer shows (`source view <node>`); empty = the timeline (R-EDT-1)."},
+            {"sourceIn", "number", "The source viewer's In, source seconds; -1 = unset (`mark in --source`)."},
+            {"sourceOut", "number", "The source viewer's Out, source seconds; -1 = unset."},
+            {"sourcePlayhead", "number", "The source viewer's playhead, source seconds."},
+            {"sourceDuration", "number", "The viewed source's length, seconds; 0 = a still or not yet opened."},
+            {"targetTrack", "string", "The video track Insert and Overwrite place on (`edit target`)."},
             {"soundPlaying", "boolean", "Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear."},
             {"meterPeakL", "number", "The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8)."},
             {"meterPeakR", "number", "…right."},

@@ -221,6 +221,7 @@ namespace interstellar
         bool exportStill(const Command &c);
         bool lutExport(const Command &c);   // R-COLOR-6 (ServiceRender.cpp)
         bool interchangeCommand(const Command &c);   // R-XCH (ServiceInterchange.cpp)
+        bool editingCommand(const Command &c);       // R-EDT-1/2 (ServiceEditing.cpp)
         void pumpJobs();
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
@@ -359,6 +360,12 @@ namespace interstellar
         std::unique_ptr<AudioPlayer> mPlayer;        // R-AUD-6: made when the host has a sound output
         std::unique_ptr<PeakStore> mPeaks;           // R-AUD-7: made when the host can decode sound
         bool mSoundClock = false;                    // the audio clock drives the playhead now
+        // R-EDT-1/2: the shuttle rate, the marks, the source viewer, the target track
+        double mShuttle = 0.0;
+        double mMarkIn = -1.0, mMarkOut = -1.0;
+        std::string mSourceView;
+        double mSourceIn = -1.0, mSourceOut = -1.0, mSourcePlayhead = 0.0;
+        NodeId mTargetTrack;
         unsigned mSoundSeq = ~0u;                    // the frame sequence the player's plan was made at
         unsigned mEpoch = 0;                         // rises on every command and rack load: the cache re-checks
         double mLastCommandMs = -1e9;                // the cache builds when the user has stopped for a moment

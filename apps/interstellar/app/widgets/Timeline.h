@@ -101,6 +101,12 @@ namespace interstellar_v1
         std::function<bool(const std::string &media, std::vector<float> &peaks, double &perSecond)> peaksFor;
         /** The live eased opacity of `media`'s waveform (0 until its envelope lands, then easing to 1). */
         double waveformAmount(const std::string &media) const;
+        double markBandAmount() const { return mBandAmt.value(); }   // R-EDT-1: the In/Out band, live
+        double targetAmount(const std::string &track) const
+        {
+            const auto it = mTargetAmt.find(track);
+            return it == mTargetAmt.end() ? 0.0 : it->second.value();
+        }
         /** Right-click on clip `id` / on an empty lane (`trackId` "" = below the tracks) at `t`, WORLD point. */
         std::function<void(const std::string &id, artboard::Point world)> onClipContext;
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
@@ -226,6 +232,12 @@ namespace interstellar_v1
         std::string mSelectedClip;
         double mDuration = 0.0, mFps = 24.0, mPlayhead = 0.0;
         bool mPlaying = false;
+        // R-EDT-1: the In/Out band and the target track, each eased when it changes
+        double mMarkIn = -1.0, mMarkOut = -1.0, mBandIn = 0.0, mBandOut = 0.0;
+        bool mBandOn = false, mBandApplied = false;
+        artboard::AnimatedProperty mBandAmt{0.0};
+        std::string mTargetTrack, mTargetApplied;
+        std::map<std::string, artboard::AnimatedProperty> mTargetAmt;
         // R-AUD-7: the envelopes this view has, each fading in when it lands
         struct Wave { std::vector<float> peaks; double perSecond = 100.0; artboard::AnimatedProperty amount{0.0}; bool placed = false; };
         std::map<std::string, Wave> mWaves;

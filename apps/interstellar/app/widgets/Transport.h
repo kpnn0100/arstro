@@ -38,6 +38,11 @@ namespace interstellar_v1
         Transport();
 
         void bind(const interstellar::AppModel &m);
+        /** R-EDT-1: the transport drives the SOURCE viewer — its playhead, its length, its marks. */
+        void setSourceMode(bool on) { mSourceMode = on; }
+        bool sourceMode() const { return mSourceMode; }
+        double badgeAmount() const { return mBadgeAmt.value(); }   // R-EDT-2: the shuttle rate's badge
+        const std::string &badgeText() const { return mBadgeText; }
 
         double displayedTime() const { return mShown.value(); }
         double playAmount() const { return mPlayAmt.value(); }   // 0 = play glyph, 1 = pause glyph
@@ -77,6 +82,11 @@ namespace interstellar_v1
         bool mScrubbing = false;
         long long mLastSentFrame = -1;
         // R-AUD-8: the meter — model targets, the live displayed levels, the hold, the lamp
+        bool mSourceMode = false;
+        double mMarkA = -1.0, mMarkB = -1.0;      // the In and Out the scrubber shows (timeline's or source's)
+        std::string mBadgeText, mBadgeWanted;     // "2×", "−4×" while shuttling off 1×
+        bool mBadgeOn = false, mBadgeApplied = false;
+        artboard::AnimatedProperty mBadgeAmt{0.0};
         double mPeakIn[2] = {0, 0}, mRmsIn[2] = {0, 0};
         double mPeakDb[2] = {-120, -120}, mRmsDb[2] = {-120, -120}, mHoldDb[2] = {-120, -120}, mHoldAt[2] = {0, 0};
         bool mClipIn = false, mClipApplied = false, mSoundIn = false, mSoundApplied = false, mMeterInit = false;

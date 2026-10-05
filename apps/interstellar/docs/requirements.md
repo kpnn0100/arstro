@@ -274,6 +274,34 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-EDT-1 Editing like an editor: J/K/L, marks, a source viewer, three-point Insert and Overwrite (R-EDT-1, R-EDT-2)
+The shuttle (`core/service/ServiceEditing.cpp:47`): `shuttle forward` plays at 1× then 2× and 4× on
+each press, `back` the same reversed, `stop` pauses; the clock runs at the rate
+(`InterstellarService.cpp:430`) and a reverse run stops AT the start; the read-ahead schedules in the
+playback's direction at a stride of |rate| (`ServiceRender.cpp:580`) and the monitor takes the nearest
+finished frame on the right side of the playhead (`:783`); sound plays at 1× forward only. Marks
+(`ServiceEditing.cpp:77`): the timeline's In/Out, or the source viewer's with `--source`, at the
+playhead or `--at`. The viewer (`:98`): `source view <node>` shows a rack source with its own playhead
+and marks. Insert and Overwrite (`:136`) decide the fourth point from three — the source's In and
+Out give the length and the timeline In (else the playhead) places it, or a timeline Out alone
+backtimes it; one source mark and both timeline marks give the other; missing source marks are the
+source's ends — on the target track (`edit target`, else the lowest video track). The edits are model
+operations (`model/Arrange.cpp:354`, `:389`): insert splits a clip spanning the record In and moves
+everything at or after it, on every track and every placed sound; overwrite splits at both ends and
+removes what lies between; both undo as one step. The playhead lands at the clip's end and the
+timeline marks are spent. Model: `shuttle`, `markIn/Out`, `sourceView`, `sourceIn/Out`,
+`sourcePlayhead`, `sourceDuration`, `targetTrack`. UI: J/K/L with K held stepping (the GTK host
+forwards K's release), I/O, comma/period (OEM key codes — 46 is Delete here), Edit-menu items, the
+source bin's double-click opens the viewer (`app/App.cpp:1034`: SOURCE caption, the transport on the
+source's clock in the accent — `app/widgets/Transport.cpp:41`), Escape returns; the In/Out band on the
+ruler and brackets on the scrubber (`app/widgets/Timeline.cpp:1162`), the target bar on a track header
+and its lane-menu item, a shuttle-rate badge — each eased. Guarded by model `threePointEdits`
+(split, ripple across tracks and sounds, overwrite across and inside clips, refusals), L2 `J/K/L
+shuttles both ways…` (rates, the clock at 2×, a reverse run stopping at 0, insert from the viewer,
+overwrite with the fourth point from the timeline's marks, a backtimed edit, the target track,
+undo/redo), UI `editing: J/K/L, marks, the source viewer…`. Mutants run red: the clock ignoring the
+rate, insert without the ripple, the fourth point not taken from the marks.
+
 ### DR-XCH-1 A cut goes out to EDL, FCPXML and OTIO and comes back the same; media keep their timecode and reel (R-XCH-1..5)
 `core/Interchange.{h,cpp}` holds one neutral cut (`XTimeline`: media with their source-timecode
 start and reel, clips on numbered tracks in media-relative source seconds, dissolves) and a

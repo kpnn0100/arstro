@@ -518,6 +518,25 @@ namespace istest
                 }
             }
             else if (a[0] == "colour" && a.size() >= 3 && a[1] == "working") m.workingSpace = a[2];
+            // R-EDT-1/2: the shuttle, the marks, the source viewer and the target, as the service keeps them
+            else if (a[0] == "shuttle" && a.size() >= 2)
+            {
+                if (a[1] == "stop") { m.playing = false; m.shuttle = 0; }
+                else if (a[1] == "forward") { m.shuttle = m.shuttle <= 0 ? 1.0 : std::min(4.0, m.shuttle * 2); m.playing = true; }
+                else { m.shuttle = m.shuttle >= 0 ? -1.0 : std::max(-4.0, m.shuttle * 2); m.playing = true; }
+            }
+            else if (a[0] == "mark" && a.size() >= 2)
+            {
+                const bool src = std::find(a.begin(), a.end(), "--source") != a.end();
+                double &in = src ? m.sourceIn : m.markIn, &out = src ? m.sourceOut : m.markOut;
+                const double at = src ? m.sourcePlayhead : m.playhead;
+                if (a[1] == "clear") in = out = -1;
+                else if (a[1] == "in") in = at;
+                else out = at;
+            }
+            else if (a[0] == "source" && a.size() >= 3 && a[1] == "view") { m.sourceView = a[2] == "none" ? std::string() : a[2]; m.sourceDuration = 8.0; }
+            else if (a[0] == "source" && a.size() >= 3 && a[1] == "playhead") { m.sourcePlayhead = std::stod(a[2]); ++m.frameSeq; }
+            else if (a[0] == "edit" && a.size() >= 3 && a[1] == "target") m.targetTrack = a[2];
             else if (a[0] == "project" && a.size() >= 2 && a[1] == "close") { home(); }
             else if (a[0] == "project" && a.size() >= 2 && a[1] == "save") m.dirty = false;
             else if (a[0] == "render")

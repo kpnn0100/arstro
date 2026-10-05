@@ -343,6 +343,8 @@ namespace interstellar
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::LutExport: ok = requireProject() && lutExport(c); break;
             case CK::InterchangeExport: case CK::InterchangeImport: ok = requireProject() && interchangeCommand(c); break;
+            case CK::Shuttle: case CK::Mark: case CK::SourceView: case CK::SourcePlayhead: case CK::EditTarget:
+            case CK::EditInsert: case CK::EditOverwrite: ok = requireProject() && editingCommand(c); break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -425,11 +427,12 @@ namespace interstellar
             syncSoundPlan();
             // R-AUD-6: when it is heard, the sound is the clock; otherwise the wall clock, as before
             double t = 0;
-            if (!soundTime(t)) t = mPlayFromT + (mNowMs - mPlayFromMs) / 1000.0;
-            if (dur > 0 && t >= dur)
+            if (!soundTime(t)) t = mPlayFromT + mShuttle * (mNowMs - mPlayFromMs) / 1000.0;   // R-EDT-2: at the shuttle's rate
+            if ((dur > 0 && t >= dur && mShuttle > 0) || (mShuttle < 0 && t <= 0.0))
             {
-                t = dur;
+                t = std::clamp(t, 0.0, dur > 0 ? dur : t);   // the end going forward, the start going back
                 mPlaying = false;
+                mShuttle = 0.0;
                 mPlayEdge = 0;
                 stopSound();
                 emit(Event(EK::PlaybackChanged).with("playing", false));
@@ -886,6 +889,23 @@ namespace interstellar
         }
         m.workingSpace = render::colour::known(render::colour::workings(), mProject->colorspace) ? mProject->colorspace : std::string("rec709");
         fillSoundModel(m);
+        // R-EDT-1/2
+        m.shuttle = mPlaying ? mShuttle : 0.0;
+        m.markIn = mMarkIn;
+        m.markOut = mMarkOut;
+        m.sourceView = mSourceView;
+        m.sourceIn = mSourceIn;
+        m.sourceOut = mSourceOut;
+        m.sourcePlayhead = mSourcePlayhead;
+        m.sourceDuration = 0.0;
+        if (!mSourceView.empty())
+            if (const RackObj *sv = mProject->rackObj(mProject->idForRef(mSourceView)))
+            {
+                const auto it = mSync->sources.find(resolvePath(sv->media));
+                if (it != mSync->sources.end() && it->second->ok && it->second->info.frames > 1)
+                    m.sourceDuration = it->second->info.frames / (it->second->info.fps > 0 ? it->second->info.fps : mProject->fps);
+            }
+        m.targetTrack = mTargetTrack;
         m.hasClipClipboard = mHasClipClipboard;
         m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
@@ -2969,6 +2989,7 @@ namespace interstellar
             const double dur = timelineDuration(currentTimeline());
             if (dur > 0 && mModel.playhead >= dur - 0.5 / fps) mModel.playhead = 0;
             mPlaying = true;
+            mShuttle = 1.0;   // R-EDT-2: play is the shuttle at 1× forward
             mPlayFromT = mModel.playhead;
             mPlayFromMs = mNowMs;
             mPlayEdge = mSettings.previewEdge > 0 ? std::min(mSettings.previewEdge, 960) : 960;   // stepped down or up by what the pool keeps up with
@@ -2985,6 +3006,7 @@ namespace interstellar
         {
             if (!mPlaying) return true;
             mPlaying = false;
+            mShuttle = 0.0;
             stopSound();
             mPlayEdge = 0;   // the paused frame is graded at the full preview size again
             emit(Event(EK::PlaybackChanged).with("playing", false));

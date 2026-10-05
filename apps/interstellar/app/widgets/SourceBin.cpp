@@ -93,6 +93,12 @@ namespace interstellar_v1
                 onDragSource(mSources[(size_t)i], worldTransform().apply(local), DragPhase::Drop);
             return true;
         }
+        case Gesture::Type::DoubleClick:
+        {
+            const int i = rowAt(local);
+            if (i >= 0 && i < (int)mSources.size() && !mSources[(size_t)i].failed && onOpen) onOpen(mSources[(size_t)i]);
+            return true;
+        }
         case Gesture::Type::RightClick:
         {
             const int i = rowAt(local);

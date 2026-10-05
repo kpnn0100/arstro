@@ -576,15 +576,21 @@ namespace interstellar
             workMs = mAhead->workMs;
         }
         const int lead = 1 + (int)std::ceil(workMs / 1000.0 * fps);
-        const int step = mPlayRate > 0 && mPlayRate < fps * 0.95 ? std::max(1, (int)std::ceil(fps / std::max(1.0, mPlayRate))) : 1;
+        int step = mPlayRate > 0 && mPlayRate < fps * 0.95 ? std::max(1, (int)std::ceil(fps / std::max(1.0, mPlayRate))) : 1;
+        // R-EDT-2: the shuttle — frames ahead in the playback's direction, every |rate|-th at 2× and 4×
+        const int dir = mShuttle < 0 ? -1 : 1;
+        const int stride = std::max(1, (int)std::lround(std::fabs(mShuttle)));
+        step *= stride;
         // plan on THIS thread (it reads the project and the rack), hand the work to the pool
         std::vector<AheadPool::Item> fresh;
         {
             std::lock_guard<std::mutex> l(mAhead->mu);
-            while (!mAhead->queue.empty() && mAhead->queue.front().t < now - 1e-6) mAhead->queue.pop_front();
+            // behind the playhead in the playback's direction: no longer wanted
+            auto behind = [&](double t) { return dir > 0 ? t < now - 1e-6 : t > now + 1e-6; };
+            for (auto q = mAhead->queue.begin(); q != mAhead->queue.end();) q = behind(q->t) ? mAhead->queue.erase(q) : std::next(q);
             for (auto it = mAhead->done.begin(); it != mAhead->done.end();)
             {
-                if (it->second.first >= now - 2.0 / fps) { ++it; continue; }
+                if (dir > 0 ? it->second.first >= now - 2.0 / fps : it->second.first <= now + 2.0 / fps) { ++it; continue; }
                 mAhead->doneFromCache.erase(it->first);
                 it = mAhead->done.erase(it);
             }
@@ -597,10 +603,11 @@ namespace interstellar
             mAheadPlannedRevision = mModel.revision;
         }
         const long long nowFrame = (long long)std::llround(now * fps);
-        for (auto it = mAheadPlanned.begin(); it != mAheadPlanned.end();) it = *it < nowFrame ? mAheadPlanned.erase(it) : std::next(it);
+        for (auto it = mAheadPlanned.begin(); it != mAheadPlanned.end();) it = (dir > 0 ? *it < nowFrame : *it > nowFrame) ? mAheadPlanned.erase(it) : std::next(it);
         for (int i = 0; i < horizon; ++i)
         {
-            const long long f = nowFrame + lead + (long long)i * step;
+            const long long f = nowFrame + dir * (lead * stride + (long long)i * step);
+            if (f < 0) break;
             const double t = snapToFrame(f / fps, fps);
             if (dur > 0 && t >= dur) break;
             if (!mAheadPlanned.insert(f).second) continue;
@@ -773,15 +780,22 @@ namespace interstellar
             ++mAheadMisses;
             const std::pair<double, Raster> *best = nullptr;
             const std::string *bestKey = nullptr;
+            // the newest finished frame not past the playhead — in the playback's direction (R-EDT-2)
+            const bool back = mShuttle < 0;
             for (const auto &kv : mAhead->done)
-                if (kv.second.first <= mModel.playhead + 1e-6 && (!best || kv.second.first > best->first)) { best = &kv.second; bestKey = &kv.first; }
+                if (back ? (kv.second.first >= mModel.playhead - 1e-6 && (!best || kv.second.first < best->first))
+                         : (kv.second.first <= mModel.playhead + 1e-6 && (!best || kv.second.first > best->first)))
+                {
+                    best = &kv.second;
+                    bestKey = &kv.first;
+                }
             if (best)
             {
                 out = best->second;
                 mLastFromCache = mAhead->doneFromCache.count(*bestKey) > 0;
                 mCacheShown += mLastFromCache;
                 ++mAheadShown;
-                mAheadLag += (mModel.playhead - best->first) * fps;
+                mAheadLag += std::fabs(mModel.playhead - best->first) * fps;
                 return true;
             }
         }
