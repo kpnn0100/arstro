@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-05 — the image-processing stack, scopes, read-ahead playback, hardware video.*
+*Last updated: 2026-10-05 — the image-processing stack, scopes, read-ahead playback, hardware video, the preview cache, keyframes and the graph editor.*
 
 ---
 
@@ -52,11 +52,12 @@ one integrator who moves, wires, tests and commits each stream:
       size, exact rates, range; D-9 (BT.601, untagged) fixed (DR-RENDER-6).
 - [x] Cutting like an editor: drop a source on the timeline, roll, slip, ripple delete, markers,
       clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
-- [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
+- [x] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
       and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: read-ahead — DONE (DR-PLAY-2);
       hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes: curves,
-      the grammar and the render path — DONE (DR-ANIM-1); the diamonds and the graph editor next.
+      the grammar and the render path — DONE (DR-ANIM-1); the diamonds, the graph editor and the key menu —
+      DONE (DR-ANIM-2). The 2026-10-05 request is complete.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -65,9 +66,10 @@ one integrator who moves, wires, tests and commits each stream:
          other suites.
       3. **Three-point editing**: a source viewer with its own In/Out, insert vs overwrite, J/K/L
          shuttle, I/O marks on the timeline, match frame.
-      4. **Colour science**: scopes (waveform, parade, vectorscope), colour management (ACES/OCIO,
+      4. **Colour science**: ~~scopes~~ (DONE 2026-10-05, DR-UI-15), colour management (ACES/OCIO,
          camera log input transforms), HDR (PQ/HLG) delivery, LUT import/export.
-      5. **Keyframes**: geometry, opacity and effect parameters over time; speed ramps and reverse.
+      5. **Keyframes**: ~~geometry, opacity, colour and effect parameters over time~~ (DONE 2026-10-05,
+         DR-ANIM-1/2); speed ramps and reverse remain.
       6. **Timeline power**: multi-select and group move, linked audio/video, track lock/target/sync
          lock, slide edits, nested sequences, multicam, subclips, a snapping toggle.
       7. **Media management**: proxy generation and online/offline switching, relink UI, source

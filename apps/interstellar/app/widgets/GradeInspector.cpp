@@ -1,4 +1,5 @@
 #include "GradeInspector.h"
+#include "KeyState.h"
 #include "CommandLine.h"
 #include "TextFit.h"
 #include "../../../cosmo/widgets/UnitConversions.h"
@@ -34,6 +35,7 @@ namespace interstellar_v1
         // A control → one `set` line. `basic` / `detail` split exactly where cosmo's own Basic
         // and Detail sections split; the keys and the unit conversions are RightColumn's.
         auto set = [this](const char *filter, const char *key, double (*toEngine)(double) = nullptr) {
+            mRowKeys.push_back(std::string(filter) + "." + key);   // row i's colour key, for its diamond (R-ANIM-3)
             return [this, filter, key, toEngine](double v) {
                 send(filter, {{key, cmd::num(toEngine ? toEngine(v) : v)}});
             };
@@ -80,6 +82,11 @@ namespace interstellar_v1
             }},
         };
         mBasicDetail = std::make_shared<ParamPanel>(std::move(sections));
+        // R-ANIM-3: a keyframe diamond on every row — a key at the reference frame, or not
+        mBasicDetail->setKeyColumn([this](int row) {
+            if (mBind.empty() || !onCommand || row < 0 || row >= (int)mRowKeys.size() || row >= (int)mRowStates.size()) return;
+            onCommand(keys::toggle(mBind + "." + mRowKeys[(size_t)row], mRowStates[(size_t)row], mKeyNow));
+        });
         mTabs->addPage("Basic/Detail", mBasicDetail);
 
         mMixer = std::make_shared<MixerPanel>();
@@ -169,6 +176,14 @@ namespace interstellar_v1
         mEffectPanel->bind(m, mPlugins->selected(), interacting);
         if (valid && !interacting) mCosmoMix->setValue(m.rack[(size_t)m.selectedRack].weight * 100.0);
         if (!valid) return;
+        // the diamonds follow the model even mid-gesture: they say where the keys are, not a value
+        {
+            const std::string ro = m.rack[(size_t)m.selectedRack].rackObj;
+            mKeyNow = keys::sourceNow(m, ro);
+            mRowStates.assign(mRowKeys.size(), 0);
+            for (size_t i = 0; i < mRowKeys.size(); ++i) mRowStates[i] = keys::state(m, ro, mRowKeys[i], mKeyNow);
+            mBasicDetail->setKeyStates(mRowStates);
+        }
         if (mBind != mLastBind)
         {
             if (!mLastBind.empty()) mSwapPending = true;   // a different node: cross-fade the page

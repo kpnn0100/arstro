@@ -16,6 +16,8 @@ namespace interstellar_v1
         constexpr double kFieldH = 28.0;
         constexpr double kBtnH = 28.0;
         constexpr double kBtnW = 88.0;
+        constexpr double kRowH = 34.0;      // a labelled field row (multi-field mode)
+        constexpr double kLabelW = 150.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
     }
 
@@ -32,11 +34,55 @@ namespace interstellar_v1
         mField->focusable = true;
         mField->opacity.set(0.0);
         addChild(mField);
+        for (auto &f : mFields)
+        {
+            f = std::make_shared<TextBox>(st);
+            f->focusable = true;
+            f->opacity.set(0.0);
+            f->visible = false;
+            addChild(f);
+        }
     }
+
+    void NamePrompt::showFields(const std::string &title, const std::string &message,
+                                const std::vector<std::pair<std::string, std::string>> &fields, const std::string &confirmLabel,
+                                std::function<void(const std::vector<std::string> &)> onConfirm)
+    {
+        mMulti = true;
+        mCount = std::min((int)fields.size(), kMaxFields);
+        for (int i = 0; i < kMaxFields; ++i)
+        {
+            mLabels[i] = i < mCount ? fields[(size_t)i].first : std::string();
+            mFields[i]->text = i < mCount ? fields[(size_t)i].second : std::string();
+            mFields[i]->visible = i < mCount;
+        }
+        mField->visible = false;
+        mOnConfirmFields = std::move(onConfirm);
+        mTitle = title;
+        mMessage = message;
+        mConfirmLabel = confirmLabel;
+        if (mCount > 0) { mFields[0]->selectAll(); mFields[0]->requestFocus(); }
+        mOpen = true;
+        mClosing = false;
+        mStartPending = true;
+        raise();
+    }
+
+    int NamePrompt::focusedField() const
+    {
+        for (int i = 0; i < mCount; ++i) if (mFields[i]->hasFocus()) return i;
+        return 0;
+    }
+
+    double NamePrompt::cardH() const { return mMulti ? 64.0 + mCount * kRowH + kPad + kBtnH + kPad : kCardH; }
 
     void NamePrompt::show(const std::string &title, const std::string &message, const std::string &initial,
                           const std::string &confirmLabel, std::function<void(const std::string &)> onConfirm)
     {
+        mMulti = false;
+        mCount = 0;
+        for (auto &f : mFields) f->visible = false;
+        mField->visible = true;
         mTitle = title;
         mMessage = message;
         mConfirmLabel = confirmLabel;
@@ -60,6 +106,15 @@ namespace interstellar_v1
     void NamePrompt::confirm()
     {
         if (!isOpen()) return;
+        if (mMulti)
+        {
+            std::vector<std::string> v;
+            for (int i = 0; i < mCount; ++i) v.push_back(mFields[i]->text);
+            auto action = mOnConfirmFields;   // copy out, close, THEN act
+            beginClose();
+            if (action) action(v);
+            return;
+        }
         std::string name = mField->text;
         while (!name.empty() && name.back() == ' ') name.pop_back();
         while (!name.empty() && name.front() == ' ') name.erase(name.begin());
@@ -76,13 +131,26 @@ namespace interstellar_v1
         if (!isOpen()) return false;
         if (e.type == KeyEvent::Type::Down && e.keyCode == 27) { cancel(); return true; }
         if (e.type == KeyEvent::Type::Down && (e.keyCode == 13 || e.keyCode == 10)) { confirm(); return true; }
+        if (mMulti)
+        {
+            const int i = focusedField();
+            if (e.type == KeyEvent::Type::Down && e.keyCode == 9 && mCount > 0)   // Tab: the next field
+            {
+                const int n = (i + 1) % mCount;
+                mFields[n]->requestFocus();
+                mFields[n]->selectAll();
+                return true;
+            }
+            if (i < mCount) mFields[i]->dispatchKey(e);
+            return true;
+        }
         mField->dispatchKey(e);
         return true;
     }
 
     Rect NamePrompt::cardRect() const
     {
-        return Rect{(width.value() - kCardW) * 0.5, (height.value() - kCardH) * 0.5 - 24.0, kCardW, kCardH};
+        return Rect{(width.value() - kCardW) * 0.5, (height.value() - cardH()) * 0.5 - 24.0, kCardW, cardH()};
     }
 
     Rect NamePrompt::buttonRect(int i) const
@@ -100,6 +168,13 @@ namespace interstellar_v1
         mField->y.set(c.y + 72.0);
         mField->width.set(c.w - 2 * kPad);
         mField->height.set(kFieldH);
+        for (int i = 0; i < kMaxFields; ++i)
+        {
+            mFields[i]->x.set(c.x + kPad + kLabelW);
+            mFields[i]->y.set(c.y + 60.0 + i * kRowH);
+            mFields[i]->width.set(std::max(0.0, c.w - 2 * kPad - kLabelW));
+            mFields[i]->height.set(kFieldH);
+        }
     }
 
     void NamePrompt::advance(double nowMs)
@@ -113,6 +188,7 @@ namespace interstellar_v1
         mAppear.update(nowMs);
         if (mClosing && !mAppear.isAnimating() && mAppear.value() <= 0.001) { mOpen = false; mClosing = false; }
         mField->opacity.set(mAppear.value());
+        for (auto &f : mFields) f->opacity.set(mAppear.value());
         if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         layout();
@@ -149,6 +225,13 @@ namespace interstellar_v1
         t.drawText(textfit::ellipsize(t, mTitle, c.w - 2 * kPad, 14.0, font::sansSemiBold()), c.x + kPad, c.y + kPad + 14.0, 14.0, font::sansSemiBold());
         t.setFill(fade(palette::mutedForeground(), a));
         t.drawText(textfit::ellipsize(t, mMessage, c.w - 2 * kPad, 12.0, font::sans()), c.x + kPad, c.y + kPad + 38.0, 12.0, font::sans());
+        if (mMulti)
+            for (int i = 0; i < mCount; ++i)
+            {
+                t.setFill(fade(palette::mutedForeground(), a));
+                t.drawText(textfit::ellipsize(t, mLabels[i], kLabelW - 8.0, 11.0, font::sans()), c.x + kPad,
+                           textfit::baseline(c.y + 60.0 + i * kRowH + kFieldH * 0.5, 11.0), 11.0, font::sans());
+            }
 
         for (int i = 0; i < 2; ++i)
         {

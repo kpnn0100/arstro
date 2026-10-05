@@ -125,6 +125,9 @@ namespace interstellar_v1
         const interstellar::AppModel *mLastModel = nullptr;
 
         std::string mBind;          // the selected node's bind name — the address prefix
+        std::vector<std::string> mRowKeys;   // Basic/Detail row → "basic.exposure" (R-ANIM-3)
+        std::vector<int> mRowStates;         // its diamond: 0 none · 1 animated · 2 a key here
+        double mKeyNow = 0.0;                // where the diamonds key: the reference frame
         std::string mLastBind;
         int mQuarterTurns = 0;
         bool mHasTarget = false, mBypassed = false, mRackEmpty = true;

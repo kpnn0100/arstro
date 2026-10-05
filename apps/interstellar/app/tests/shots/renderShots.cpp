@@ -150,6 +150,43 @@ namespace
             r.settle();
         }});
         // the IMAGE PROCESSING list (R-FX-5): Cosmo selected (its Mix + tabs), an effect selected
+        // keyframes (R-ANIM-3/4): diamonds on Cosmo's rows, the deck's Curves face, a key's handles
+        auto animated = [](FakeService &s) {
+            s.edit();
+            s.animate("s_day01.basic.exposure", {{0.0, -20.0}, {4.0, 25.0}, {9.0, 5.0}});
+            s.animate("s_day01.basic.contrast", {{2.0, 10.0}, {7.0, -15.0}});
+            auto *a = s.animFor("s_day01.basic.exposure", false);
+            a->keys[1].in = a->keys[1].out = "bezier";
+            a->keys[1].speedIn = a->keys[1].speedOut = 0.0;
+            a->keys[2].in = "bezier";
+            a->keys[2].speedIn = 0.0; a->keys[2].inflIn = 60.0;
+            s.m.rack[(size_t)s.m.selectedRack].frame = 4.0;   // Grade stands on the middle key
+            s.animFor("s_day01.basic.exposure", false)->now = 4.0;
+        };
+        v.push_back({"grade_curves", animated, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeDeck()->setCurves(true);
+            r.settle();
+            auto g = r.app->edit().gradeDeck()->keyGraph();
+            const Point k = world(*g, g->keyPoint(1).x, g->keyPoint(1).y);
+            r.press(k.x, k.y);
+            r.releaseAt(k.x, k.y);
+            r.settle();
+        }});
+        v.push_back({"grade_curves_mid", animated, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeDeck()->setCurves(true);
+            r.pump(100);
+        }});
+        v.push_back({"cut_key_lane", [](FakeService &s) {
+            s.edit();
+            for (const auto &c : s.m.clips)
+                if (c.id == s.m.selectedClip)
+                {
+                    const std::string n = c.name.empty() ? c.id : c.name;
+                    s.animate(n + ".opacity", {{c.in, 0.0}, {c.in + (c.out - c.in) * 0.4, 1.0}, {c.out, 0.6}});
+                }
+        }, [](Rig &r) { r.app->setTab(1); r.settle(); r.app->edit().timeline()->setKeysShown(true); r.settle(); }});
         v.push_back({"grade_plugins_effect", edit, [](Rig &r) {
             r.settle();
             r.app->edit().gradeInspector()->plugins()->select("ef_1");

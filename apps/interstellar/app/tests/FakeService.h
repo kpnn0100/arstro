@@ -285,6 +285,41 @@ namespace istest
             m.sourceWidth = 3840; m.sourceHeight = 2160;
         }
 
+        /** R-ANIM: a curve as the service would publish it — owner and clock from the node, keys sorted. */
+        AnimModel *animFor(const std::string &address, bool create)
+        {
+            const auto dot = address.find('.');
+            if (dot == std::string::npos) return nullptr;
+            const std::string name = address.substr(0, dot), key = address.substr(dot + 1);
+            std::string node, owner, bind = name;
+            double now = 0, lo = -1000, hi = 1000;
+            for (const auto &r : m.rack) if (r.bindName == name) { node = r.rackObj; owner = "rack"; now = r.frame; lo = -100; hi = 100; }
+            for (const auto &e : m.effects) if (e.id == name) { node = e.id; owner = "effect"; lo = 0; hi = 100; }
+            for (const auto &c : m.clips)
+                if (c.name == name || c.id == name)
+                {
+                    node = c.id; owner = "clip"; bind = c.name.empty() ? c.id : c.name;
+                    now = std::clamp(c.in + (m.playhead - c.at) * c.speed, c.in, c.out);
+                    if (key == "opacity") { lo = 0; hi = 1; }
+                }
+            if (node.empty()) return nullptr;
+            for (auto &x : m.anims) if (x.node == node && x.key == key) { x.now = now; return &x; }
+            if (!create) return nullptr;
+            AnimModel x;
+            x.id = "an_" + std::to_string(m.anims.size() + 1);
+            x.node = node; x.nodeBind = bind; x.owner = owner; x.key = key; x.address = bind + "." + key;
+            x.clock = owner == "clip" ? "clip" : "source";
+            x.now = now; x.min = lo; x.max = hi;
+            m.anims.push_back(x);
+            return &m.anims.back();
+        }
+        void animate(const std::string &address, std::vector<std::pair<double, double>> keys)
+        {
+            AnimModel *a = animFor(address, true);
+            for (const auto &k : keys) { KeyframeModel km; km.t = k.first; km.v = k.second; a->keys.push_back(km); }
+            std::sort(a->keys.begin(), a->keys.end(), [](const KeyframeModel &x, const KeyframeModel &y) { return x.t < y.t; });
+        }
+
         // ── hooks ───────────────────────────────────────────────────────────────────────
 
         bool dispatch(const std::string &line, std::string &err)
@@ -314,6 +349,35 @@ namespace istest
                 m.tracks.push_back(tk);
             }
             else if (a[0] == "clip" && a.size() >= 3 && a[1] == "copy") { m.hasClipClipboard = true; m.clipClipboardFrom = a[2]; }
+            else if (a[0] == "key" && a.size() >= 3 && (a[1] == "add" || a[1] == "remove" || a[1] == "set"))
+            {
+                auto flag = [&](const std::string &f, double &v) {
+                    for (size_t k = 3; k + 1 < a.size(); ++k) if (a[k] == "--" + f) { v = std::atof(a[k + 1].c_str()); return true; }
+                    return false;
+                };
+                AnimModel *an = animFor(a[2], a[1] == "add");
+                if (!an) { err = "key: no curve"; return false; }
+                double at = an->now, v = 0.5;
+                flag("at", at);
+                auto it = std::find_if(an->keys.begin(), an->keys.end(), [&](const KeyframeModel &k) { return std::fabs(k.t - at) < 5e-4; });
+                if (a[1] == "add")
+                {
+                    if (it == an->keys.end()) { KeyframeModel km; km.t = at; km.v = flag("value", v) ? v : 0.5; an->keys.push_back(km); }
+                }
+                else if (a[1] == "remove") { if (it != an->keys.end()) an->keys.erase(it); }
+                else if (it != an->keys.end())
+                {
+                    double x = 0;
+                    if (flag("to", x)) it->t = x;
+                    if (flag("value", x)) it->v = x;
+                    if (flag("speed-out", x)) { it->speedOut = x; it->out = "bezier"; }
+                    if (flag("influence-out", x)) { it->inflOut = x; it->out = "bezier"; }
+                    if (flag("speed-in", x)) { it->speedIn = x; it->in = "bezier"; }
+                    if (flag("influence-in", x)) { it->inflIn = x; it->in = "bezier"; }
+                }
+                std::sort(an->keys.begin(), an->keys.end(), [](const KeyframeModel &p, const KeyframeModel &q) { return p.t < q.t; });
+                if (an->keys.empty()) m.anims.erase(m.anims.begin() + (an - &m.anims[0]));
+            }
             else if (a[0] == "rack" && a.size() >= 3 && a[1] == "duplicate")
             {
                 // the service's behaviour: same file, own name, at the top of the rack, selected

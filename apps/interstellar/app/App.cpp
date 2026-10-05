@@ -61,6 +61,7 @@ namespace interstellar_v1
         // the Cut tab, like an editor (R-UI-14)
         mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
+        mEdit->onKeyContext = [this](const std::string &a, double t, Point w) { openKeyContext(a, t, w); };
         mEdit->onLaneContext = [this](const std::string &trk, double t, Point w) { openLaneContext(trk, t, w); };
         // the ref-frame slider previews in the monitor while dragged, nothing committed (R-RACK-3)
         mEdit->gradeDeck()->onPreview = [this](const std::string &bind, double t) {
@@ -420,6 +421,45 @@ namespace interstellar_v1
             items.push_back({e->enabled ? "Disable" : "Enable", [this, q, on = !e->enabled] { dispatch("set " + q + ".enabled=" + (on ? "1" : "0")); }});
             items.push_back({"Remove", [this, q] { dispatch("effect remove " + q); }});
         }
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    /** R-ANIM-2/4: a keyframe's menu — the presets, the sides typed as numbers, delete. */
+    void App::openKeyContext(const std::string &address, double t, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const interstellar::AnimModel *a = nullptr;
+        for (const auto &x : m.anims) if (x.address == address) a = &x;
+        if (!a) return;
+        const interstellar::KeyframeModel *k = nullptr;
+        for (const auto &x : a->keys) if (std::fabs(x.t - t) < 5e-4) k = &x;
+        if (!k) return;
+        const std::string head = "key set " + cmd::quote(address) + " --at " + cmd::num(k->t);
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &p : std::vector<std::pair<const char *, const char *>>{
+                 {"Linear", "linear"}, {"Ease", "ease"}, {"Ease In", "ease-in"}, {"Ease Out", "ease-out"}, {"Hold", "hold"}})
+            items.push_back({p.first, [this, head, e = std::string(p.second)] { dispatch(head + " --ease " + e); }});
+        items.push_back({"Speed & Influence\xE2\x80\xA6", [this, head, address, kk = *k] {
+            // the sides as numbers: what a speed is (units per second) and how far it reaches (%)
+            mEdit->namePrompt()->showFields(
+                "Keyframe at " + cmd::num(kk.t) + " s", address,
+                {{"Value", cmd::num(kk.v)},
+                 {"Incoming speed /s", cmd::num(kk.speedIn)}, {"Incoming influence %", cmd::num(kk.inflIn)},
+                 {"Outgoing speed /s", cmd::num(kk.speedOut)}, {"Outgoing influence %", cmd::num(kk.inflOut)}},
+                "Apply", [this, head, kk](const std::vector<std::string> &v) {
+                    // only what was changed: a speed given makes its side a bezier, so an untouched
+                    // linear side must not be sent back as "speed 0"
+                    if (v.size() < 5) return;
+                    const std::string was[5] = {cmd::num(kk.v), cmd::num(kk.speedIn), cmd::num(kk.inflIn), cmd::num(kk.speedOut), cmd::num(kk.inflOut)};
+                    const char *flag[5] = {"value", "speed-in", "influence-in", "speed-out", "influence-out"};
+                    std::string line = head;
+                    for (int i = 0; i < 5; ++i)
+                        if (v[(size_t)i] != was[i]) line += std::string(" --") + flag[i] + " " + v[(size_t)i];
+                    if (line != head) dispatch(line);
+                });
+        }});
+        items.push_back({"Delete Key", [this, address, tt = k->t] { dispatch("key remove " + cmd::quote(address) + " --at " + cmd::num(tt)); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }

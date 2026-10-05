@@ -71,6 +71,20 @@ namespace cosmo_v2
             }
     }
 
+    void ParamPanel::setKeyColumn(std::function<void(int row)> onKey)
+    {
+        for (size_t i = 0; i < mFlatRows.size(); ++i)
+        {
+            mFlatRows[i]->setKeyGutter(true);
+            mFlatRows[i]->onKeyClick = [onKey, i] { if (onKey) onKey((int)i); };
+        }
+    }
+
+    void ParamPanel::setKeyStates(const std::vector<int> &states)
+    {
+        for (size_t i = 0; i < mFlatRows.size() && i < states.size(); ++i) mFlatRows[i]->setKeyState(states[i]);
+    }
+
     void ParamPanel::setValues(const std::vector<double> &values)
     {
         for (size_t i = 0; i < mFlatRows.size() && i < values.size(); ++i)

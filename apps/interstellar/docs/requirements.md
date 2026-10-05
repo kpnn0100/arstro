@@ -726,6 +726,42 @@ not move when the base's curve does; effect and clip curves; a split keeps both 
 pins reading live curves, `set` never keying, clip curves not rendered. By hand: exposure −2 → 1.5
 eased and scale 1 → 1.6, three stills look right.
 
+### DR-ANIM-2 Diamonds and the graph editor (R-ANIM-3, R-ANIM-4)
+**Diamonds.** Cosmo's `SliderRow` gains an OPT-IN key gutter (`apps/cosmo/widgets/SliderRow.cpp:36`,
+`:38`, `:91`) — a diamond after the value: faint outline (no curve), outline (animated), filled (a key
+here), the fill and outline eased (180 ms) — and `ParamPanel::setKeyColumn`/`setKeyStates`
+(`ParamPanel.cpp:74`). Cosmo enables none: its 41 shots are byte-identical to the build before the
+gutter. Grade's Basic/Detail rows (`app/widgets/GradeInspector.cpp:86`, `:179`) and every effect
+parameter (`EffectPanel.cpp:38`) show one; the state comes from `anims[]` at the reference frame
+(`widgets/KeyState.h`, the service's own "now"), and a click dispatches `key add|remove <address>
+--at <reference frame>`.
+**The graph.** `app/widgets/KeyGraph.{h,cpp}` draws one curve at a time with `anim::eval` — the render
+path's function — over a host-given time window, its value axis fitted to the keys and any overshoot
+(`fitRange`, `:84`), eased when it changes and frozen during a drag; the selected key shows its
+bezier handles (`handlePoint`, `:168`). Direct manipulation (`handleGesture`, `:209`): a key drags in
+time (kept between its neighbours, to the millisecond) and value → `key set … --at t --to t' --value
+v`; a handle drags its slope (speed) and reach (influence) → `key set … --speed-out s --influence-out
+i`; a double-click adds a key on the curve (`:288`); a right-click opens the key's menu (`:295`).
+**Where it lives.** Grade: the deck's Sources | Curves switch (`GradeDeck.cpp:53`) cross-fades the
+filmstrip into the graph of the Grade target's curves and its effects' (`:119`), its plot spanning
+exactly the reference-frame track — source time over the whole source, the "now" line on the ref
+marker — and the deck grows by what a tall window can spare (`EditScreen.cpp:154`; none at ≤ 700 px,
+so the inspector's panels stay reachable), eased by the curves amount × Grade's tab amount so neither
+a switch nor a tab change jumps. Cut: a Keys toggle in the ruler's header opens a key lane under the
+tracks (`Timeline.cpp:82`, `:1119`, `:539`) — Opacity, Position X/Y, Scale, Rotation with a diamond
+each, and the chosen property's graph whose plot is the selected clip's own span on the timeline (its
+footage clock, `in … out`), so keys sit under the frames they key.
+**The key menu** (`App.cpp:429`): Linear, Ease, Ease In, Ease Out, Hold (`--ease`), "Speed &
+Influence…" — `NamePrompt::showFields` (`NamePrompt.cpp:47`), five typed numbers (value, speed and
+influence of each side), Tab between them — and Delete Key. Only the numbers changed are sent
+(`:451`): a speed given makes its side a bezier, so an untouched linear side must not come back as
+"speed 0". Guarded by the UI tests (`keyframes: …` — the diamond's line, its eased fill, removal; the
+Curves face cross-fading, the deck growing, the graph's axis equal to the ref track's; a key drag's
+line; the menu's items and its preset line; the dialog sending only the changed number; the Cut lane
+easing open, its diamond's line, the graph following the chosen property). Mutants red: the graph's
+release not dispatching; the dialog sending every field. Shots: `grade_curves`, `grade_curves_mid`,
+`cut_key_lane` — looked at, at both sizes.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

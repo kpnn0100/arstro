@@ -1,4 +1,6 @@
 #include "Timeline.h"
+#include "KeyGraph.h"
+#include "KeyState.h"
 #include "CommandLine.h"
 #include "Glyphs.h"
 #include "TextFit.h"
@@ -39,9 +41,67 @@ namespace interstellar_v1
         }
     }
 
-    Timeline::Timeline() { clipToBounds = true; }
+    namespace
+    {
+        // the clip properties a curve can drive (R-ANIM-1), as the key lane lists them
+        const char *const kPropKey[Timeline::kKeyProps] = {"opacity", "geom.x", "geom.y", "geom.scale", "geom.rotation"};
+        const char *const kPropLabel[Timeline::kKeyProps] = {"Opacity", "Position X", "Position Y", "Scale", "Rotation"};
+    }
+
+    Timeline::Timeline()
+    {
+        clipToBounds = true;
+        mKeyGraph = std::make_shared<KeyGraph>();
+        mKeyGraph->setHeaderShown(false);   // the lane's header column lists the properties
+        mKeyGraph->onCommand = [this](const std::string &l) { return emit(l); };
+        mKeyGraph->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
+        mKeyGraph->opacity.set(0.0);
+        mKeyGraph->visible = false;
+        addChild(mKeyGraph);
+    }
+
+    Rect Timeline::keysToggleRect() const { return Rect{shell::headerWidth() - 9.75 - 18.0, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
+    Rect Timeline::keyLaneRect() const
+    {
+        const double h = kKeyLaneH * mKeyLane.value();
+        return Rect{0.0, height.value() - h, width.value(), h};
+    }
+    Rect Timeline::keyPropRect(int i) const
+    {
+        const Rect r = keyLaneRect();
+        return Rect{0.0, r.y + 6.5 + i * kKeyRowH, shell::headerWidth(), kKeyRowH};
+    }
+    Rect Timeline::keyDiamondRect(int i) const
+    {
+        const Rect r = keyPropRect(i);
+        return Rect{r.right() - 9.75 - 14.0, r.y, 14.0 + 6.5, r.h};
+    }
 
     // ── model in ─────────────────────────────────────────────────────────────────────────
+
+    void Timeline::bindKeyLane(const interstellar::AppModel &m)
+    {
+        // the key lane: the selected clip, each property's diamond, the chosen property's curve
+        mKeyClip = false;
+        for (const auto &c : m.clips)
+            if (c.id == m.selectedClip && !c.audio) { mKeyClipData = c; mKeyClip = true; }
+        if (mKeyClip)
+        {
+            const auto &c = mKeyClipData;
+            mKeyNow = std::clamp(c.in + (m.playhead - c.at) * c.speed, c.in, c.out);   // the clip's own footage clock
+            std::vector<std::string> ids;
+            for (int i = 0; i < kKeyProps; ++i)
+            {
+                mKeyStates[i] = keys::state(m, c.id, kPropKey[i], mKeyNow);
+                if (const interstellar::AnimModel *a = keys::animOf(m, c.id, kPropKey[i]))
+                    if (mKeyProp == kPropKey[i]) ids.push_back(a->id);
+            }
+            std::string label = "Opacity";
+            for (int i = 0; i < kKeyProps; ++i) if (mKeyProp == kPropKey[i]) label = kPropLabel[i];
+            mKeyGraph->setEmptyText(label + " is not animated \xE2\x80\x94 click \xE2\x97\x87 to key it at the playhead");
+            mKeyGraph->bind(m, ids, c.in, c.out);
+        }
+    }
 
     void Timeline::bind(const interstellar::AppModel &m)
     {
@@ -52,6 +112,8 @@ namespace interstellar_v1
         mSelectedClip = m.selectedClip;
         mTransitions = m.transitions;
         mMarkers = m.markers;
+        mKeyModel = &m;   // the service's model outlives every frame: a property click rebinds from it
+        bindKeyLane(m);
         mCacheSegSeconds = m.previewCacheSegmentSeconds > 0 ? m.previewCacheSegmentSeconds : 1.0;
         if (mCacheSegs.size() < m.previewCacheSegments.size()) mCacheSegs.resize(m.previewCacheSegments.size());
         for (size_t n = 0; n < mCacheSegs.size(); ++n)
@@ -160,8 +222,9 @@ namespace interstellar_v1
     Rect Timeline::rulerRect() const { return Rect{shell::headerWidth(), 0, std::max(0.0, width.value() - shell::headerWidth()), shell::rulerH()}; }
     Rect Timeline::lanesRect() const
     {
+        // the key lane, when it is up, takes the bottom (its live eased height)
         return Rect{shell::headerWidth(), shell::rulerH(), std::max(0.0, width.value() - shell::headerWidth()),
-                    std::max(0.0, height.value() - shell::rulerH())};
+                    std::max(0.0, height.value() - shell::rulerH() - kKeyLaneH * mKeyLane.value())};
     }
     double Timeline::laneTop(double laneLive) const { return shell::rulerH() + laneLive * shell::trackH() - mVScroll.value(); }
     Rect Timeline::laneRect(const std::string &trackId) const
@@ -305,7 +368,8 @@ namespace interstellar_v1
         }
         case Gesture::Type::Down:
         {
-            if (zoomOutRect().contains(local) || zoomInRect().contains(local)) return true;
+            if (zoomOutRect().contains(local) || zoomInRect().contains(local) || keysToggleRect().contains(local)) return true;
+            if (mKeyLane.value() > 0.001 && keyLaneRect().contains(local)) return true;   // the lane's header column
             if (rulerRect().contains(local) && mDuration > 0.0)
             {
                 mDrag = Drag{};
@@ -469,6 +533,24 @@ namespace interstellar_v1
         }
         case Gesture::Type::Click:
         {
+            if (keysToggleRect().contains(local)) { mKeysWanted = !mKeysWanted; return true; }
+            if (mKeyLane.value() > 0.001 && keyLaneRect().contains(local))
+            {
+                // a property row selects its curve; its diamond keys it at the playhead (R-ANIM-3)
+                for (int i = 0; i < kKeyProps; ++i)
+                {
+                    if (keyDiamondRect(i).contains(local) && mKeyClip)
+                    {
+                        const std::string clip = mKeyClipData.name.empty() ? mKeyClipData.id : mKeyClipData.name;
+                        mKeyProp = kPropKey[i];
+                        if (mKeyModel) bindKeyLane(*mKeyModel);
+                        emit(keys::toggle(clip + "." + kPropKey[i], mKeyStates[i], mKeyNow));
+                        return true;
+                    }
+                    if (keyPropRect(i).contains(local)) { mKeyProp = kPropKey[i]; if (mKeyModel) bindKeyLane(*mKeyModel); return true; }
+                }
+                return true;
+            }
             if (zoomOutRect().contains(local)) { zoomBy(1.0 / kZoomStep, timeToX(mPlayhead)); return true; }
             if (zoomInRect().contains(local)) { zoomBy(kZoomStep, timeToX(mPlayhead)); return true; }
             if (rulerRect().contains(local)) return true;   // the press already moved the playhead
@@ -628,7 +710,30 @@ namespace interstellar_v1
             }
             mScroll.update(nowMs);
         }
-        mVScroll.setExtent(shell::rulerH(), std::max(0.0, height.value() - shell::rulerH()), (double)mTracks.size() * shell::trackH());
+        {
+            const bool want = mKeysWanted && mKeyClip;
+            if (want != mKeyLaneApplied)
+            {
+                mKeyLane.animateTo(want ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mKeyLaneApplied = want;
+            }
+            mKeyLane.update(nowMs);
+            // the graph spans the lanes; its plot is the selected clip, on the timeline's own x
+            const Rect kl = keyLaneRect();
+            const double hw = shell::headerWidth(), ka = mKeyLane.value();
+            mKeyGraph->x.set(hw);
+            mKeyGraph->y.set(kl.y);
+            mKeyGraph->width.set(std::max(0.0, width.value() - hw));
+            mKeyGraph->height.set(kKeyLaneH);   // a fixed height, revealed by the lane: it never squashes
+            mKeyGraph->opacity.set(ka);
+            mKeyGraph->visible = ka > 0.001 && mKeyClip;
+            if (mKeyClip)
+            {
+                const double dur = mKeyClipData.duration > 0 ? mKeyClipData.duration : (mKeyClipData.out - mKeyClipData.in) / std::max(1e-6, mKeyClipData.speed);
+                mKeyGraph->setPlotSpan(timeToX(mKeyClipData.at) - hw, timeToX(mKeyClipData.at + dur) - hw);
+            }
+        }
+        mVScroll.setExtent(shell::rulerH(), lanesRect().h, (double)mTracks.size() * shell::trackH());
         mVScroll.advance(nowMs);
         for (auto &cs : mCacheSegs)
         {
@@ -1007,8 +1112,47 @@ namespace interstellar_v1
             char buf[24];
             std::snprintf(buf, sizeof buf, "%.0f px/s", pps);
             t.setFill(fade(palette::mutedForeground(), 0.8));
-            const std::string z = textfit::ellipsize(t, buf, hw - 58.0 - 6.0, 8.5, font::mono());
+            const std::string z = textfit::ellipsize(t, buf, keysToggleRect().x - 58.0 - 4.0, 8.5, font::mono());   // up to the Keys toggle
             t.drawText(z, 58.0, textfit::baseline(rh * 0.5, 8.5), 8.5, font::mono());
+        }
+
+        // ── the key lane's header column: the clip's properties, a diamond each (R-ANIM-3) ──
+        {
+            const double ka = mKeyLane.value();
+            if (ka > 0.001)
+            {
+                const Rect kl = keyLaneRect();
+                t.save();
+                t.clipRect(0, kl.y, W, kl.h);
+                drawRoundedRect(t, Rect{0, kl.y, W, kKeyLaneH}, 0.0, Paint::filled(surface::trackHeaderBg()));
+                glyph::line(t, 0, kl.y + 0.5, W, kl.y + 0.5, palette::border(), 1.0);
+                for (int i = 0; i < kKeyProps; ++i)
+                {
+                    const Rect r = keyPropRect(i);
+                    const bool sel = mKeyProp == kPropKey[i];
+                    if (sel) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::primaryAlpha(0.16)));
+                    t.setFill(sel ? palette::foreground() : palette::mutedForeground());
+                    t.drawText(kPropLabel[i], 9.75, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
+                    const Rect d = keyDiamondRect(i);
+                    const double cx = d.x + 7.0, cy = d.y + d.h * 0.5, rr = 4.0;
+                    auto diamond = [&] { t.beginPath(); t.moveTo(cx, cy - rr); t.lineTo(cx + rr, cy); t.lineTo(cx, cy + rr); t.lineTo(cx - rr, cy); t.closePath(); };
+                    if (mKeyStates[i] == 2) { diamond(); t.setFill(palette::primary()); t.fillPath(); }
+                    diamond();
+                    t.setStroke(mKeyStates[i] == 0 ? palette::whiteAlpha(0.22) : palette::foreground(), 1.0);
+                    t.strokePath();
+                }
+                t.restore();
+            }
+        }
+        // the Keys toggle beside the zoom controls
+        {
+            const Rect b = keysToggleRect();
+            const double on = mKeyLane.value();
+            if (on > 0.001) drawRoundedRect(t, b, radius::control(), Paint::filled(palette::primaryAlpha(0.22 * on)));
+            const double cx = b.x + b.w * 0.5, cy = b.y + b.h * 0.5, rr = 4.5;
+            t.beginPath(); t.moveTo(cx, cy - rr); t.lineTo(cx + rr, cy); t.lineTo(cx, cy + rr); t.lineTo(cx - rr, cy); t.closePath();
+            t.setStroke(lerpColor(palette::mutedForeground(), palette::primary(), on), 1.0);
+            t.strokePath();
         }
 
         // ── the playhead: destructive, a position (ui-brief §1) ──

@@ -210,7 +210,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request; R-ANIM-1, -2, -5 and `set` keying (-3) built: DR-ANIM-1; the diamond (-3) and the graph editor (-4) next)
+## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the diamonds and the graph editor)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its

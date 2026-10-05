@@ -51,7 +51,8 @@ PUBLIC defines match the rest of the final binary.
   |---|---|
   | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
   | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
-  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
+  | Keyframes | ◇ beside a parameter → `key add|remove <address> --at <now>`; graph drags → `key set …`; key menu → `key set … --ease <preset>` / typed sides / `key remove` |
+| Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
   | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
   | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
 
@@ -197,6 +198,21 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   (`Timeline::cacheAmount` is the live value a test reads); the caption reads "▶ cached" when the
   frame came from it. Engine Settings gains two rows through cosmo's opt-in `setExtraRows`: Hardware
   video and Preview cache. Shot added: `cut_cache_bar`; live: `live_cut_cached`. UI checks: 282.
+
+## Keyframes (2026-10-05, R-ANIM-3/4)
+
+- Diamonds: cosmo's SliderRow key gutter, opt-in (cosmo's 41 shots unchanged), on Grade's Basic/Detail
+  rows and every effect parameter → `key add|remove <address> --at <reference frame>`.
+- Grade deck: Sources | Curves (shared segmented look, `SegmentedStyle.h`). Curves cross-fades the
+  filmstrip into `KeyGraph` on the ref track's axis; the deck grows by `GradeDeck::curvesExtraFor(H)`
+  (none at ≤ 700 px). Drag a key → `key set <a> --at t [--to t'] --value v`; a handle → `--speed-out s
+  --influence-out i` (or -in); double-click → `key add <a> --at t`; right-click → the key menu.
+- Key menu (App): Linear / Ease / Ease In / Ease Out / Hold → `--ease <preset>`; Speed & Influence… →
+  `NamePrompt::showFields` (5 numbers, Tab between), only changed ones sent; Delete Key → `key remove`.
+- Cut: the ◇ toggle at the ruler header's right opens the key lane (Opacity, Position X/Y, Scale,
+  Rotation; a diamond each → `key add|remove <clip>.<prop> --at <clip footage time>`), its graph's plot
+  spanning the selected clip.
+- Shots added: `grade_curves`, `grade_curves_mid`, `cut_key_lane`. UI checks: 301.
 
 ## Integrating (the GTK host)
 

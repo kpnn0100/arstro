@@ -63,6 +63,7 @@ namespace interstellar_v1
 
         Timeline();
         void bind(const interstellar::AppModel &m);
+        void bindKeyLane(const interstellar::AppModel &m);
 
         // ── the one time origin ──
         double timeToX(double t) const;
@@ -99,6 +100,24 @@ namespace interstellar_v1
         /** Right-click on clip `id` / on an empty lane (`trackId` "" = below the tracks) at `t`, WORLD point. */
         std::function<void(const std::string &id, artboard::Point world)> onClipContext;
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
+        /** R-ANIM-4: a right-click on a keyframe in the key lane — `address`, key time, WORLD point. */
+        std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
+
+        // ── the key lane (R-ANIM-3/4): the selected clip's properties, diamonds and graph ──
+        static constexpr double kKeyRowH = 19.5;                 // u(6)
+        static constexpr int kKeyProps = 5;
+        static constexpr double kKeyLaneH = kKeyProps * kKeyRowH + 13.0;
+        /** Show the key lane under the tracks while a clip is selected. Intent only; it eases. */
+        void setKeysShown(bool on) { mKeysWanted = on; }
+        bool keysShown() const { return mKeysWanted; }
+        double keyLaneAmount() const { return mKeyLane.value(); }
+        artboard::Rect keysToggleRect() const;
+        artboard::Rect keyLaneRect() const;
+        artboard::Rect keyPropRect(int i) const;      // a property row in the lane's header column
+        artboard::Rect keyDiamondRect(int i) const;
+        int keyPropState(int i) const { return i >= 0 && i < kKeyProps ? mKeyStates[i] : 0; }
+        const std::string &keyProp() const { return mKeyProp; }
+        std::shared_ptr<class KeyGraph> keyGraph() { return mKeyGraph; }
 
         // ── a source dragged in from the bin (R-UI-14) ──
         /** The pointer, carrying source `label` (about `dur` s long), is at WORLD point `at`. */
@@ -190,6 +209,16 @@ namespace interstellar_v1
         bool mEmptyWanted = true, mEmptyApplied = true, mEmptyInit = false;
         artboard::AnimatedProperty mEmptyAmt{1.0};
         std::vector<CacheSegAnim> mCacheSegs;
+        // the key lane (R-ANIM)
+        std::shared_ptr<class KeyGraph> mKeyGraph;
+        bool mKeysWanted = false, mKeyLaneApplied = false;
+        artboard::AnimatedProperty mKeyLane{0.0};
+        std::string mKeyProp = "opacity";
+        int mKeyStates[kKeyProps] = {0, 0, 0, 0, 0};
+        double mKeyNow = 0.0;
+        bool mKeyClip = false;
+        interstellar::ClipModel mKeyClipData;
+        const interstellar::AppModel *mKeyModel = nullptr;
         double mCacheSegSeconds = 1.0;
         std::string mSelectedClip;
         double mDuration = 0.0, mFps = 24.0, mPlayhead = 0.0;

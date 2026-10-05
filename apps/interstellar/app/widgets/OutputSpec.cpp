@@ -1,4 +1,5 @@
 #include "OutputSpec.h"
+#include "SegmentedStyle.h"
 #include "CommandLine.h"
 #include "Glyphs.h"
 #include "TextFit.h"
@@ -50,13 +51,7 @@ namespace interstellar_v1
     std::shared_ptr<cosmo_v2::SegmentedControl> OutputSpec::segmented(std::vector<std::string> labels, int selected)
     {
         auto s = std::make_shared<cosmo_v2::SegmentedControl>(std::move(labels));
-        s->containerBox = {Paint::filledStroked(palette::segmentedBg(), palette::border(), 1.0), radius::control()};
-        s->idleSegBox = {Paint{}, radius::hairline()};
-        s->activeSegBox = {Paint::filled(palette::primary()), radius::hairline()};
-        s->edgeRadius = radius::control();
-        s->idleText = {palette::mutedForeground(), 10.0, font::sans()};
-        s->activeText = {palette::white(), 10.0, font::sans()};
-        s->padding = 2.0;
+        styleSegmented(*s);
         s->setSelectedImmediate(selected);
         addChild(s);
         return s;

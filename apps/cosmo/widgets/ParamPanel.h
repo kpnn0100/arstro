@@ -59,6 +59,12 @@ namespace cosmo_v2
         /** Set a section action's armed state from outside — the picker disarms itself once it
          *  has taken its sample, and the button has to follow. */
         void setSectionActionArmed(const std::string &sectionTitle, bool armed);
+        /** Opt-in (an embedder's keyframes — SliderRow's key gutter): every row grows a diamond;
+         *  `onKey(row)` gets the flattened row index. Cosmo enables none. */
+        void setKeyColumn(std::function<void(int row)> onKey);
+        /** Per-row diamond states, in the flattened setValues order (see SliderRow::setKeyState). */
+        void setKeyStates(const std::vector<int> &states);
+        std::shared_ptr<SliderRow> row(int i) const { return i >= 0 && i < (int)mFlatRows.size() ? mFlatRows[(size_t)i] : nullptr; }
         void layout();  // call after width/height changes
 
     protected:

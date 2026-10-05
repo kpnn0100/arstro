@@ -52,6 +52,8 @@ namespace interstellar_v1
 
         std::map<std::string, std::vector<Row>> mRowsByType;   // type → its rows (Mix first)
         std::string mId, mType, mLabel, mNode;
+        std::map<std::string, int> mKeyStates;   // key → its diamond (R-ANIM-3)
+        double mKeyNow = 0.0;
     };
 }
 }

@@ -35,6 +35,9 @@
 #include "../../../cosmo/widgets/Filmstrip.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include "../../../cosmo/widgets/Breadcrumb.h"
+#include "../../../cosmo/widgets/SegmentedControl.h"
+#include "KeyGraph.h"
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
@@ -96,6 +99,20 @@ namespace interstellar_v1
         std::function<void(int rackIndex, artboard::Point local)> onContext;
         std::function<bool(const std::string &, double, int, interstellar::Raster &)> thumbnail;
 
+        /** R-ANIM-4: the deck's other face — Sources (the filmstrip) or Curves (the graph editor of
+         *  the Grade target and its effects, on the reference-frame track's time axis). The switch
+         *  records intent; the faces cross-fade and the host grows the deck by `curvesAmount()`. */
+        void setCurves(bool on) { mCurvesWanted = on; }
+        bool curvesWanted() const { return mCurvesWanted; }
+        double curvesAmount() const { return mCurvesAmt.value(); }
+        /** The extra height the host gives the deck for the graph — live, eased by the host. */
+        void setExtraHeight(double h) { mExtra = h; }
+        std::shared_ptr<KeyGraph> keyGraph() { return mGraph; }
+        std::shared_ptr<cosmo_v2::SegmentedControl> modeSwitch() { return mMode; }
+        /** Room the graph borrows from the columns above: only what a tall window can spare — none
+         *  at 700 px and below, where the inspector has none to give (R6: its panels stay reachable). */
+        static double curvesExtraFor(double windowH) { return std::clamp((windowH - 700.0) * 0.6, 0.0, 132.0); }
+
         void advance(double nowMs) override;
 
     protected:
@@ -105,7 +122,13 @@ namespace interstellar_v1
         bool hitTestSelf(const artboard::Point &p) const override { return localBounds().contains(p); }
 
     private:
-        double bandTop() const { return kHeaderH + cosmo_v2::Filmstrip::kHeight + 4.0; }
+        double bandTop() const { return kHeaderH + cosmo_v2::Filmstrip::kHeight + mExtra + 4.0; }
+        std::shared_ptr<KeyGraph> mGraph;
+        std::shared_ptr<cosmo_v2::SegmentedControl> mMode;
+        bool mCurvesWanted = false, mCurvesApplied = false;
+        artboard::AnimatedProperty mCurvesAmt{0.0};
+        double mExtra = 0.0;
+        static constexpr double kModeW = 124.0;
         void emit(const std::string &line) { if (onCommand) onCommand(line); }
         void refreshFrames();
         void rebuildCells();                          // the shown level's cells, selection and path

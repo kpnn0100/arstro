@@ -27,6 +27,7 @@
 #include "FakeService.h"
 #include "Rig.h"
 #include "widgets/TextFit.h"
+#include "widgets/CommandLine.h"
 #include "../../../cosmo/widgets/SliderRow.h"
 #include <algorithm>
 #include <cmath>
@@ -1178,6 +1179,120 @@ namespace
 
     /** R-FX-5 / R-RACK-4 (amended): the IMAGE PROCESSING list — Cosmo first with its Mix, effects
      *  after, a switch per row, add from the catalog, select to edit, remove, reorder. */
+    /** R-ANIM-3/4: diamonds key a parameter; the graph shows and edits its curve; a keyframe's menu
+     *  takes presets and typed numbers; Cut's key lane does the same for a clip. */
+    void testKeyframes()
+    {
+        std::printf("keyframes: diamonds, the graph editor, the key menu, the Cut key lane\n");
+        {
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.settle();
+            auto gi = r.app->edit().gradeInspector();
+            auto row = gi->basicDetail()->row(0);   // Exposure
+            CHECK(row && row->keyState() == 0, "an unanimated parameter's diamond is empty");
+            const double frame = r.svc.m.rack[(size_t)r.svc.m.selectedRack].frame;
+            r.svc.lines.clear();
+            Point p = centre(*row, row->keyRect());
+            r.click(p.x, p.y);
+            CHECK(hasLine(r.svc, "key add s_day01.basic.exposure --at " + arstro::interstellar_v1::cmd::num(frame)),
+                  "the Exposure diamond dispatched key add s_day01.basic.exposure --at <the reference frame>");
+            const double f = firstMoved(r, [&] { return row->keyFillAmount(); }, 0.0);
+            CHECK(row->keyState() == 2 && strictlyBetween(f, 0.0, 1.0), "the key is there: the diamond FILLS, eased (first frame between)");
+            r.settle();
+            r.svc.lines.clear();
+            r.click(p.x, p.y);
+            CHECK(hasLine(r.svc, "key remove s_day01.basic.exposure --at " + arstro::interstellar_v1::cmd::num(frame)), "clicking a filled diamond removes that key");
+        }
+        {
+            // the graph editor: the deck's Curves face, on the reference-frame track's axis
+            Rig r(1440, 900, [](FakeService &s) {
+                s.edit();
+                s.animate("s_day01.basic.exposure", {{0.0, -10.0}, {6.0, 30.0}});
+            });
+            r.settle();
+            auto deck = r.app->edit().gradeDeck();
+            const double deckH0 = deck->height.value();
+            auto sc = deck->modeSwitch();
+            auto *b = dynamic_cast<arstro::cosmo_v2::PillButton *>(sc->children()[1].get());
+            Point p = centre(*b, b->localBounds());
+            r.click(p.x, p.y);
+            const double ca = firstMoved(r, [&] { return deck->curvesAmount(); }, 0.0);
+            CHECK(strictlyBetween(ca, 0.0, 1.0), "Sources → Curves cross-fades the deck's faces (first frame between)");
+            r.settle();
+            CHECK(deck->height.value() > deckH0 + 30.0, "the deck GREW for the graph (the monitor gave the room, eased)");
+            auto g = deck->keyGraph();
+            CHECK(g->curveCount() == 1 && g->selectedAddress() == "s_day01.basic.exposure", "the graph shows the Grade target's curve");
+            const Rect tr = deck->frameTrackRect();
+            CHECK(std::fabs(g->plotRect().x - tr.x) < 1e-6 && std::fabs(g->plotRect().right() - tr.right()) < 1e-6,
+                  "the graph's time axis IS the reference-frame track's (source time, the whole source)");
+            // drag the second key up: one line on release, with the new value
+            Point k1 = world(*g, g->keyPoint(1).x, g->keyPoint(1).y);
+            r.svc.lines.clear();
+            r.drag(k1.x, k1.y, k1.x, k1.y - 12.0);
+            const std::string set = withPrefix(r.svc, "key set s_day01.basic.exposure --at 6 --value ");
+            CHECK(!set.empty() && set.find("--to") == std::string::npos, "dragging a key up dispatched key set … --at 6 --value <higher> (time kept)");
+            r.settle();
+            // right-click a key: the presets, the typed sides, delete
+            k1 = world(*g, g->keyPoint(0).x, g->keyPoint(0).y);
+            r.app->pointer(0, k1.x, k1.y, 2, r.now);
+            r.app->pointer(2, k1.x, k1.y, 2, r.now + 40.0);
+            r.pump(250);
+            auto cm = r.app->edit().contextMenu();
+            std::string labels;
+            for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+            std::printf("      %s\n", labels.c_str());
+            CHECK(cm->isOpen() && labels.find("Ease In") != std::string::npos && labels.find("Speed & Influence") != std::string::npos &&
+                      labels.find("Delete Key") != std::string::npos, "a keyframe's menu: presets, Speed & Influence…, Delete Key");
+            auto pick = [&](const std::string &label) {
+                for (int i = 0; i < cm->itemCount(); ++i)
+                    if (cm->item(i).label.rfind(label, 0) == 0) { const Point ip = centre(*cm, cm->itemRect(i)); r.click(ip.x, ip.y); r.pump(32); return; }
+            };
+            r.svc.lines.clear();
+            pick("Ease Out");
+            CHECK(hasLine(r.svc, "key set s_day01.basic.exposure --at 0 --ease ease-out"), "Ease Out dispatched key set … --ease ease-out");
+            r.settle();
+            r.app->pointer(0, k1.x, k1.y, 2, r.now);
+            r.app->pointer(2, k1.x, k1.y, 2, r.now + 40.0);
+            r.pump(250);
+            pick("Speed & Influence");
+            r.settle();
+            auto np = r.app->edit().namePrompt();
+            CHECK(np->isOpen() && np->fieldCount() == 5, "Speed & Influence… opens a dialog of five numbers");
+            np->fieldAt(3)->text = "2.5";   // outgoing speed
+            r.svc.lines.clear();
+            np->confirm();
+            const std::string typed = withPrefix(r.svc, "key set s_day01.basic.exposure --at 0");
+            CHECK(typed.find("--speed-out 2.5") != std::string::npos && typed.find("--speed-in") == std::string::npos,
+                  "only the changed number is sent (an untouched side stays linear): --speed-out 2.5");
+        }
+        {
+            // Cut: the key lane under the tracks, for the selected clip
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            CHECK(!r.svc.m.selectedClip.empty(), "a clip is selected");
+            r.svc.lines.clear();
+            Point p = centre(*tl, tl->keysToggleRect());
+            r.click(p.x, p.y);
+            const double ka = firstMoved(r, [&] { return tl->keyLaneAmount(); }, 0.0);
+            CHECK(strictlyBetween(ka, 0.0, 1.0), "the Keys toggle slides the key lane open (eased)");
+            r.settle();
+            CHECK(tl->lanesRect().bottom() <= tl->keyLaneRect().y + 1e-6, "the lanes give the lane its room; nothing overlaps");
+            p = centre(*tl, tl->keyDiamondRect(0));
+            r.click(p.x, p.y);
+            std::string clip;
+            for (const auto &c : r.svc.m.clips) if (c.id == r.svc.m.selectedClip) clip = c.name.empty() ? c.id : c.name;
+            CHECK(!withPrefix(r.svc, "key add " + clip + ".opacity --at ").empty(), "the Opacity diamond keys the selected clip at the playhead");
+            r.settle();
+            CHECK(tl->keyPropState(0) == 2 && tl->keyGraph()->curveCount() == 1, "the lane's graph now shows the clip's opacity curve");
+            p = centre(*tl, tl->keyPropRect(3));
+            r.click(p.x, p.y);
+            r.settle();
+            CHECK(tl->keyProp() == "geom.scale" && tl->keyGraph()->curveCount() == 0, "choosing Scale shows its (empty) graph");
+        }
+    }
+
     void testPluginList()
     {
         std::printf("the image-processing list (plugins)\n");
@@ -1786,6 +1901,7 @@ int main()
     testMonitorZoom();
     testCutEditing();
     testPluginList();
+    testKeyframes();
     testScopes();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;

@@ -21,6 +21,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace arstro
 {
@@ -33,6 +35,14 @@ namespace interstellar_v1
 
         void show(const std::string &title, const std::string &message, const std::string &initial,
                   const std::string &confirmLabel, std::function<void(const std::string &)> onConfirm);
+        /** Several labelled fields (R-ANIM-4's "Speed & Influence…": numbers typed for a keyframe's
+         *  sides). Tab moves between them; Enter confirms with every field's text, in order. */
+        static constexpr int kMaxFields = 5;
+        void showFields(const std::string &title, const std::string &message,
+                        const std::vector<std::pair<std::string, std::string>> &fields, const std::string &confirmLabel,
+                        std::function<void(const std::vector<std::string> &)> onConfirm);
+        std::shared_ptr<artboard::TextBox> fieldAt(int i) { return i >= 0 && i < kMaxFields ? mFields[i] : nullptr; }
+        int fieldCount() const { return mMulti ? mCount : 1; }
         bool isOpen() const { return mOpen && !mClosing; }
         double appearAmount() const { return mAppear.value(); }
 
@@ -59,6 +69,13 @@ namespace interstellar_v1
         std::shared_ptr<artboard::TextBox> mField;
         std::string mTitle, mMessage, mConfirmLabel;
         std::function<void(const std::string &)> mOnConfirm;
+        std::shared_ptr<artboard::TextBox> mFields[kMaxFields];
+        std::string mLabels[kMaxFields];
+        int mCount = 0;
+        bool mMulti = false;
+        std::function<void(const std::vector<std::string> &)> mOnConfirmFields;
+        double cardH() const;
+        int focusedField() const;
         bool mOpen = false, mClosing = false, mStartPending = false;
         double mLastMs = 0.0;
         artboard::AnimatedProperty mAppear{0.0};

@@ -120,6 +120,7 @@ namespace interstellar_v1
         void openRackContext(int rackIndex, artboard::Point at);
         void openCaptureMenu(artboard::Rect at);
         void openAddEffectMenu(artboard::Rect at);
+        void openKeyContext(const std::string &address, double t, artboard::Point at);
         void openPluginContext(const std::string &id, artboard::Point at);
         void dropSource(const std::string &src, const std::string &track, double at);
         void openClipContext(const std::string &clipId, artboard::Point at);
