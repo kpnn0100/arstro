@@ -58,7 +58,7 @@ one integrator who moves, wires, tests and commits each stream:
       hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes: curves,
       the grammar and the render path — DONE (DR-ANIM-1); the diamonds, the graph editor and the key menu —
       DONE (DR-ANIM-2). The 2026-10-05 request is complete.
-- [~] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
+- [x] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
       commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
       1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
              lists the clip's properties, its source's colour keys and effects (R-ANIM-3/4 amended).
