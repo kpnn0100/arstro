@@ -265,6 +265,20 @@ namespace interstellar
         Notes notes;
     };
 
+    /** R-CLR-4: a still — the monitor's graded frame and the grade it was made with, kept beside the
+     *  project (`<stem>.stills/<id>.png` and `.grade`): a reference to compare with (R-CLR-5) and a look
+     *  to apply, never a colour authority (the grade is a snapshot, like a pin's copy). */
+    struct Still
+    {
+        NodeId id, name;
+        std::string file;                   // the picture (.png), relative to the .isp
+        std::string grade;                  // the grade (EditParamsIO text), relative
+        std::string node;                   // the #rackobj it was grabbed from, by id ("" or gone: nothing to say)
+        double at = 0.0;                    // the source time it was grabbed at, seconds
+        Fields unknown;
+        Notes notes;
+    };
+
     /** R-ANIM-1: a curve — one animated parameter. `node` is the #rackobj, #effect or #clip it
      *  animates (by id, so a rename never orphans it); `key` is the parameter as an address spells it
      *  after the node ("basic.exposure", "radius", "opacity"). A rack node's and an effect's curve
@@ -313,7 +327,7 @@ namespace interstellar
     };
 
     /** What an id names. */
-    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Anim, Raw };
+    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Anim, Still, Raw };
     const char *nodeKindName(NodeKind k);
 
     class Project
@@ -354,6 +368,7 @@ namespace interstellar
         std::vector<AClip> audioClips;
         std::vector<Fx> effects;
         std::vector<Effect> imageEffects;            // R-FX-5: the rack's plugin stacks
+        std::vector<Still> stills;                   // R-CLR-4: the stills gallery
         std::vector<Anim> anims;                     // R-ANIM-1: the curves
         std::vector<AnimKey> animKeys;               // their keyframes
         std::vector<RawNode> raw;
@@ -391,6 +406,7 @@ namespace interstellar
         AClip *audioClip(const NodeId &);           const AClip *audioClip(const NodeId &) const;
         Fx *fx(const NodeId &);                     const Fx *fx(const NodeId &) const;
         Effect *effect(const NodeId &);             const Effect *effect(const NodeId &) const;
+        Still *still(const NodeId &);               const Still *still(const NodeId &) const;
         Anim *anim(const NodeId &);                 const Anim *anim(const NodeId &) const;
         /** The curve animating `key` of `node`, or null (R-ANIM-1). */
         const Anim *animOf(const NodeId &node, const std::string &key) const;

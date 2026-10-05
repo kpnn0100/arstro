@@ -50,10 +50,18 @@ namespace interstellar_v1
         mEdit->onAddFootage = [this] { if (onPickFootage) onPickFootage(); };
         mEdit->onHome = [this] { requestHome(); };
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
+        // R-CLR-4: the stills gallery
+        mEdit->gradeDeck()->stillPicture = mHooks.stillPicture;
+        mEdit->gradeDeck()->onStillContext = [this](const std::string &id, Point at) { openStillContext(id, at); };
+        mEdit->gradeDeck()->onStillActivate = [this](const std::string &id) {
+            const auto b = selectedBind();
+            if (!b.empty()) dispatch("still apply " + cmd::quote(id) + " " + cmd::quote(b));
+        };
         mEdit->timeline()->peaksFor = mHooks.audioPeaks;   // R-AUD-7
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
         mEdit->monitor()->onAngle = [this](int k) { dispatch("multicam angle " + std::to_string(k)); };   // R-EDT-5
+        mEdit->monitor()->onWipe = [this](double at) { dispatch("view wipe --at " + cmd::num(at)); };     // R-CLR-5
         // the image-processing stack (R-FX-5): the catalog menu and a row's menu
         // the CLIP switch in the scopes paints the monitor's overlay from the frame it shows
         mEdit->gradeInspector()->scopes()->onClipWarning = [this](bool on) {
@@ -329,6 +337,8 @@ namespace interstellar_v1
                  const auto b = selectedBind();
                  if (!b.empty()) openInputColourMenu(b, Point(width() * 0.5, 40.0));
              }},
+            // R-CLR-4: what the monitor shows, kept with its grade
+            {"     Grab Still  (Ctrl+Alt+G)", [this] { grabStill(); }},
             // R-CLR-1: the key a qualifier or a window makes, looked at
             {std::string(m.matteView ? "\xE2\x80\xA2  " : "     ") + "Show Matte  (Shift+H)", [this, on = !m.matteView] {
                  dispatch(std::string("view matte ") + (on ? "on" : "off"));
@@ -747,6 +757,31 @@ namespace interstellar_v1
         noteActivity();
     }
 
+    /** R-CLR-4: Grade grabs its source's graded reference frame; Cut, the timeline at the playhead. */
+    void App::grabStill()
+    {
+        const auto b = selectedBind();
+        if (mEdit->tab() == EditScreen::Grade && !b.empty()) dispatch("still grab " + cmd::quote(b));
+        else dispatch("still grab");
+        mEdit->gradeDeck()->showStills(true);   // the gallery comes forward to show what was kept
+    }
+
+    /** R-CLR-4/5: a still's menu — apply its grade, wipe the monitor against it, delete it. */
+    void App::openStillContext(const std::string &id, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::string name = id;
+        for (const auto &st : m.stills) if (st.id == id) name = st.name;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        const auto b = selectedBind();
+        if (!b.empty()) items.push_back({"Apply Grade to " + b, [this, id, b] { dispatch("still apply " + cmd::quote(id) + " " + cmd::quote(b)); }});
+        if (m.wipeRef == id) items.push_back({"Stop Wipe", [this] { dispatch("view wipe off"); }});
+        else items.push_back({"Wipe Against " + name, [this, id] { dispatch("view wipe " + cmd::quote(id)); }});
+        items.push_back({"Delete Still", [this, id] { dispatch("still delete " + cmd::quote(id)); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
     /** R-MEDIA-3: every offline source in one list — each found by hand, or all by searching a folder. */
     void App::openRelinkMenu(Point at)
     {
@@ -968,7 +1003,10 @@ namespace interstellar_v1
             else dispatch("project save");
             return true;
         case 'O': if (onPickProjectToOpen) onPickProjectToOpen(); return true;
-        case 'G': dispatch("rack group new"); return true;   // Group Selection
+        case 'G':
+            if (e.alt) { grabStill(); return true; }            // R-CLR-4: Ctrl+Alt+G, Resolve's grab
+            dispatch("rack group new");
+            return true;                                        // Group Selection
         case 'D':
         {
             // Duplicate as Variant (R-RACK-5): the Grade target, when it is a source
@@ -1020,6 +1058,7 @@ namespace interstellar_v1
         // frame, since a tab switch changes it without a new model
         mEdit->monitor()->setAngles(m.multicamAngles, m.multicamAngle,
                                     mEdit->tab() == EditScreen::Cut && m.sourceView.empty() && !m.multicamClip.empty());
+        mEdit->monitor()->setWipe(!m.wipeRef.empty(), m.wipeVertical, m.wipeAt, m.wipeLabel);   // R-CLR-5
         if (mBound && m.revision == mSeenRevision)
         {
             if (m.screen == Screen::Edit) fetchFrame(m, false);   // the monitor may have resized

@@ -96,6 +96,18 @@ namespace interstellar_v1
         /** Right-click on filmstrip cell `rackIndex` at a WORLD point. */
         std::function<void(int rackIndex, artboard::Point local)> onContext;
         std::function<bool(const std::string &, double, int, interstellar::Raster &)> thumbnail;
+        // ── R-CLR-4: the stills gallery, in place of the sources ──
+        /** Show the stills (true) or the sources. Intent only — the two strips cross-fade. */
+        void showStills(bool on) { mStillsWanted = on; }
+        bool stillsShown() const { return mStillsWanted; }
+        double stillsAmount() const { return mStillsAmt.value(); }
+        /** The header chip that switches between them (local; empty before the first paint). */
+        artboard::Rect stillsChipRect() const { return mStillsChip; }
+        std::shared_ptr<cosmo_v2::Filmstrip> stillsStrip() { return mStills; }
+        std::string stillOfCell(int cell) const { return cell >= 0 && cell < (int)mStillList.size() ? mStillList[(size_t)cell].id : std::string(); }
+        std::function<bool(const std::string &stillId, interstellar::Raster &out)> stillPicture;
+        std::function<void(const std::string &stillId, artboard::Point world)> onStillContext;
+        std::function<void(const std::string &stillId)> onStillActivate;
 
 
         void advance(double nowMs) override;
@@ -128,6 +140,15 @@ namespace interstellar_v1
         mutable double mHeaderRight = 84.0;           // where "SOURCES n" ends — measured in paint
 
         std::shared_ptr<cosmo_v2::Filmstrip> mStrip;
+        std::shared_ptr<cosmo_v2::Filmstrip> mStills;   // R-CLR-4
+        std::vector<interstellar::StillModel> mStillList;
+        std::string mStillsKey;
+        bool mStillsWanted = false, mStillsApplied = false;
+        artboard::AnimatedProperty mStillsAmt{0.0};
+        mutable artboard::Rect mStillsChip{0, 0, 0, 0};
+        double mChipHover = 0.0;
+        bool mChipHovered = false;
+        artboard::AnimatedProperty mChipHoverAmt{0.0};
         std::vector<interstellar::RackNodeModel> mRack;
         std::string mStructureKey;
         int mSelected = -1;

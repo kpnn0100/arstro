@@ -346,6 +346,20 @@ namespace schema
         return f;
     }
 
+    template <> inline const char *typeName<Still>() { return "still"; }
+    template <> inline const std::vector<Field<Still>> &fields<Still>()
+    {
+        static const std::vector<Field<Still>> f = {
+            text<Still>("id", &Still::id, 0, false),
+            text<Still>("name", &Still::name, 0, false, nonEmpty<Still>(&Still::name)),
+            text<Still>("node", &Still::node, 0, false, nonEmpty<Still>(&Still::node)),
+            time<Still>("at", &Still::at, 0.0, 0, false),
+            text<Still>("file", &Still::file, 1, false),
+            text<Still>("grade", &Still::grade, 1, false),
+        };
+        return f;
+    }
+
     template <> inline const char *typeName<Anim>() { return "anim"; }
     template <> inline const std::vector<Field<Anim>> &fields<Anim>()
     {

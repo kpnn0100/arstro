@@ -513,8 +513,9 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::planSourceFrame(const NodeId &roId, double t, int proxyEdge, FramePlan &plan)
+    bool InterstellarService::planSourceFrame(const NodeId &roId, double t, int proxyEdge, FramePlan &plan, const NodeId &timeline)
     {
+        const NodeId tl = timeline.empty() ? currentTimeline() : timeline;   // R-CLR-5: a wipe asks another version
         // One rack source, graded as the open version resolves it, full frame: what Grade's monitor
         // shows (R-UI-3) and what the reference-frame slider previews (R-RACK-3). `t < 0` = the
         // source's chosen reference frame.
@@ -529,7 +530,7 @@ namespace interstellar
         const double at = t < 0 ? ro->frame : t;
         L.frame = s->info.frames <= 1 ? 0 : std::clamp<long long>((long long)std::llround(at * fps), 0, s->info.frames - 1);
         std::string e;
-        if (!gradeFor(currentTimeline(), roId, L.params, e, at)) return false;
+        if (!gradeFor(tl, roId, L.params, e, at)) return false;
         L.identity = render::GradeEngine::isIdentity(L.params);
         L.weight = std::clamp(ro->weight, 0.0, 1.0);
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
@@ -539,7 +540,7 @@ namespace interstellar
             effectChain(roId, L.effects, L.effectsKey, at, &owners);
             splitMattes(roId, L.effects, owners, L, partial);
             std::string why;
-            if (!partial.empty() && gradeForBypassing(currentTimeline(), roId, partial, L.paramsGroupsOff, why, at))
+            if (!partial.empty() && gradeForBypassing(tl, roId, partial, L.paramsGroupsOff, why, at))
             {
                 L.groupMix = true;
                 L.groupWeight = 1.0;
@@ -870,7 +871,10 @@ namespace interstellar
             FramePlan ref;
             if (planReferenceFrame(proxyEdge, ref)) plan = std::move(ref);
         }
-        return present(std::move(plan), out);
+        if (!present(std::move(plan), out)) return false;
+        // R-CLR-5: the monitor only — another version's frame at the same time
+        applyWipe(out, [&](const NodeId &v, Raster &r) { return renderTimelineFrame(v, t, std::max(out.width, out.height), r); });
+        return true;
     }
 
     bool InterstellarService::renderSourceFrame(const std::string &bind, double t, int proxyEdge, Raster &out)
@@ -878,8 +882,15 @@ namespace interstellar
         if (!mOpen) return false;
         if (mSettings.previewEdge > 0) proxyEdge = proxyEdge > 0 ? std::min(proxyEdge, mSettings.previewEdge) : mSettings.previewEdge;
         FramePlan plan;
-        if (!planSourceFrame(mProject->idForRef(bind), t, proxyEdge, plan)) return false;
-        return present(std::move(plan), out);
+        const NodeId roId = mProject->idForRef(bind);
+        if (!planSourceFrame(roId, t, proxyEdge, plan)) return false;
+        if (!present(std::move(plan), out)) return false;
+        // R-CLR-5: the monitor only — Grade compares the same source as another version grades it
+        applyWipe(out, [&](const NodeId &v, Raster &r) {
+            FramePlan other;
+            return planSourceFrame(roId, t, std::max(out.width, out.height), other, v) && executePlan(*mSync, other, r);
+        });
+        return true;
     }
 
     bool InterstellarService::captureFrame(const std::string &bind, Raster &out)

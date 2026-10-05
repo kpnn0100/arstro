@@ -106,6 +106,7 @@ namespace interstellar
             case NodeKind::Fx: return "#fx";
             case NodeKind::Effect: return "#effect";
             case NodeKind::Anim: return "#anim";
+            case NodeKind::Still: return "#still";
             case NodeKind::Raw: return "a preserved node";
         }
         return "?";
@@ -331,7 +332,7 @@ namespace interstellar
         bool typedType(const std::string &t)
         {
             static const char *types[] = {"rack", "rackobj", "timeline", "tldrop", "tlset", "tlgrade", "track",
-                                          "clip", "transition", "marker", "atrack", "aclip", "fx", "effect", "anim", "key"};
+                                          "clip", "transition", "marker", "atrack", "aclip", "fx", "effect", "anim", "key", "still"};
             for (const char *x : types)
                 if (t == x) return true;
             return false;
@@ -420,6 +421,8 @@ namespace interstellar
     const Fx *Project::fx(const NodeId &i) const { return findIn(effects, i); }
     Effect *Project::effect(const NodeId &i) { return findIn(imageEffects, i); }
     const Effect *Project::effect(const NodeId &i) const { return findIn(imageEffects, i); }
+    Still *Project::still(const NodeId &i) { return findIn(stills, i); }
+    const Still *Project::still(const NodeId &i) const { return findIn(stills, i); }
     Anim *Project::anim(const NodeId &i) { return findIn(anims, i); }
     const Anim *Project::anim(const NodeId &i) const { return findIn(anims, i); }
     const Anim *Project::animOf(const NodeId &node, const std::string &key) const
@@ -504,6 +507,7 @@ namespace interstellar
         if (fx(i)) return NodeKind::Fx;
         if (effect(i)) return NodeKind::Effect;
         if (anim(i)) return NodeKind::Anim;
+        if (still(i)) return NodeKind::Still;
         for (const auto &r : raw)
         {
             if (r.id == i) return NodeKind::Raw;
@@ -525,7 +529,7 @@ namespace interstellar
         NodeId r;
         if (!(r = scan(rackObjs)).empty() || !(r = scan(timelines)).empty() || !(r = scan(tracks)).empty() ||
             !(r = scan(clips)).empty() || !(r = scan(transitions)).empty() || !(r = scan(markers)).empty() ||
-            !(r = scan(audioTracks)).empty() || !(r = scan(audioClips)).empty())
+            !(r = scan(audioTracks)).empty() || !(r = scan(audioClips)).empty() || !(r = scan(stills)).empty())
             return r;
         for (const auto &n : raw)
             if (!n.id.empty() && get(n.fields, "name") == s) return n.id;
@@ -621,6 +625,7 @@ namespace interstellar
             for (const auto &n : p.audioClips) { f(n.id); f(n.track); f(n.from); }
             for (const auto &n : p.effects) { f(n.id); f(n.node); f(n.clip); }
             for (const auto &n : p.imageEffects) { f(n.id); f(n.node); }
+            for (const auto &n : p.stills) { f(n.id); f(n.node); }
             for (const auto &n : p.anims) { f(n.id); f(n.node); }
             for (const auto &n : p.raw)
             {
@@ -659,7 +664,7 @@ namespace interstellar
             return false;
         };
         if (scan(rackObjs) || scan(timelines) || scan(tracks) || scan(clips) || scan(transitions) ||
-            scan(markers) || scan(audioTracks) || scan(audioClips))
+            scan(markers) || scan(audioTracks) || scan(audioClips) || scan(stills))
             return true;
         for (const auto &r : raw)
             if (get(r.fields, "name") == nm) return true;
@@ -995,6 +1000,7 @@ namespace interstellar
                 if (n.node.empty() || n.type.empty()) return fail(no, "#effect " + n.id + " needs node= (a rack node) and type=");
                 imageEffects.push_back(n);
             }
+            else if (b.type == "still") { Still n; build(n); stills.push_back(n); }   // R-CLR-4
             else if (b.type == "anim")
             {
                 Anim n;
@@ -1086,7 +1092,7 @@ namespace interstellar
         if (!all(rackObjs, "#rackobj") || !all(timelines, "#timeline") || !all(tracks, "#track") ||
             !all(clips, "#clip") || !all(transitions, "#transition") || !all(markers, "#marker") ||
             !all(audioTracks, "#atrack") || !all(audioClips, "#aclip") || !all(effects, "#fx") ||
-            !all(imageEffects, "#effect") || !all(anims, "#anim"))
+            !all(imageEffects, "#effect") || !all(anims, "#anim") || !all(stills, "#still"))
             return false;
         for (const auto &r : raw)
         {
@@ -1136,7 +1142,7 @@ namespace interstellar
             }
         };
         index(rackObjs); index(timelines); index(tracks); index(clips); index(transitions);
-        index(markers); index(audioTracks); index(audioClips);
+        index(markers); index(audioTracks); index(audioClips); index(stills);
         for (const auto &n : effects) ids.insert(n.id);
         for (const auto &n : imageEffects) ids.insert(n.id);
         for (const auto &n : anims) ids.insert(n.id);
@@ -1158,6 +1164,7 @@ namespace interstellar
         for (auto &n : effects) { norm(n.node); norm(n.clip); }
         for (auto &n : imageEffects) norm(n.node);
         for (auto &n : anims) norm(n.node);
+        for (auto &n : stills) norm(n.node);
         for (auto &n : drops) { norm(n.timeline); norm(n.node); }
         for (auto &n : sets) { norm(n.timeline); norm(n.node); }
         for (auto &n : grades) { norm(n.timeline); norm(n.node); }
@@ -1623,6 +1630,7 @@ namespace interstellar
         group(o, rawOf("asend", {}));
         group(o, typed(effects));
         group(o, typed(imageEffects));
+        group(o, typed(stills));
         {
             // each curve, then its keyframes in time order — a moved key is a one-line diff
             std::vector<Item> items;

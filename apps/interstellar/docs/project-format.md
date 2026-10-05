@@ -166,6 +166,19 @@ other arrangement node.
 
 ---
 
+## 4b. Stills (R-CLR-4)
+
+```
+#still id=st_1 name=look1 node=ro_2 at=0.000
+  file=night-ferry.stills/st_1.png grade=night-ferry.stills/st_1.grade
+```
+
+The gallery: a monitor picture and the grade it was made with (the node's own, EditParamsIO text) kept
+beside the project — a reference and a look to apply, never a colour authority. `node` names the source
+it was grabbed from (by id; it may be gone), `at` its source time.
+
+---
+
 ## 5. Effects
 
 ```

@@ -101,6 +101,10 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `view matte <on\|off>` | Grade's monitor shows the selected source's matte — where its grade reaches, white — instead of its picture: the key its qualifiers and windows (and its groups') make, so a key is pulled by looking at it. | R-CLR-1 |
 | `track window <effect> [--to <source seconds>] [--back]` | Make a window follow what is under it: from the playhead's frame of its source, forward (or --back) to --to (else the source's end or start), the window's centre keyed on every frame where the patch it covers is found again. A background job, one frame per pump; one undo step. | R-CLR-2 |
 | `track cancel` | Stop the running track; what it keyed stays (one undo step). | R-CLR-2 |
+| `still grab [<source>] [--name <n>]` | Keep what the monitor shows as a still, with the grade it was made with: a source's graded reference frame (named), or the timeline at the playhead with the grade of the clip on top there. Saved beside the project (<project>.stills/); the grade is a snapshot to apply, never an authority. | R-CLR-4 |
+| `still apply <still> [<node>…]` | Apply a still's grade to rack nodes (else the Grade target) — through Cosmo, as grade paste writes; one undo step. On the root timeline (a version stores overrides). | R-CLR-4 |
+| `still delete <still>` | Remove a still and its files. | R-CLR-4 |
+| `view wipe [<still\|timeline\|off>] [--split <vertical\|horizontal>] [--at <0..1>]` | Split the monitor between its picture and a reference — a still, or another version at the playhead — left \| right (vertical) or top / bottom, the split at --at of the frame (0.5 unless moved). With no name, only the split moves. Presentation: renders and export-still never wipe. | R-CLR-5 |
 | `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
@@ -411,6 +415,16 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `trackJobs[].total` | integer |  | Frames to track. |
 | `trackJobs[].state` | string |  | queued \| running \| done \| failed \| cancelled. |
 | `trackJobs[].error` | string |  | Why it stopped. |
+| `stills` | array |  | The stills gallery, oldest first (R-CLR-4). |
+| `stills[].id` | string |  | Still id (st_1 …). |
+| `stills[].name` | string |  | Its name — `still apply`, `view wipe` take it. |
+| `stills[].file` | string |  | Its picture (file name only when stable). |
+| `stills[].from` | string |  | The rack node it was grabbed from; empty = gone. |
+| `stills[].at` | number |  | The source time it was grabbed at, seconds. |
+| `wipeRef` | string |  | The monitor's wipe reference — a still or a timeline id; empty = no wipe (R-CLR-5). |
+| `wipeLabel` | string |  | Its name. |
+| `wipeVertical` | bool |  | Left \| right; false = top / bottom. |
+| `wipeAt` | number |  | The split, a share of the frame. |
 | `proxyJobs` | array |  | This session's proxy jobs, oldest first. |
 | `proxyJobs[].id` | string |  | Job id (p1, p2, …). |
 | `proxyJobs[].rackObj` | string |  | The source's #rackobj id. |

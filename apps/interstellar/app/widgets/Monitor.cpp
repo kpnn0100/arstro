@@ -125,6 +125,40 @@ namespace interstellar_v1
         mAnglesWanted = shown;
     }
 
+    void Monitor::setWipe(bool on, bool vertical, double at, const std::string &label)
+    {
+        mWipeWanted = on;
+        if (!on) return;
+        mWipeVertical = vertical;
+        mWipeLabel = label;
+        if (!mWipeDrag) mWipeTarget = std::clamp(at, 0.0, 1.0);   // a drag in flight outranks the model
+    }
+
+    double Monitor::wipeAtPoint(const Point &local) const
+    {
+        const Rect fr = frameRect();
+        return mWipeVertical ? (fr.w > 0 ? std::clamp((local.x - fr.x) / fr.w, 0.0, 1.0) : 0.5)
+                             : (fr.h > 0 ? std::clamp((local.y - fr.y) / fr.h, 0.0, 1.0) : 0.5);
+    }
+
+    bool Monitor::nearWipe(const Point &local) const
+    {
+        if (mWipeAmt.value() < 0.5) return false;
+        const Rect fr = frameRect();
+        if (!fr.contains(local)) return false;
+        const double at = mWipeLive.value();
+        return mWipeVertical ? std::fabs(local.x - (fr.x + at * fr.w)) <= 8.0 : std::fabs(local.y - (fr.y + at * fr.h)) <= 8.0;
+    }
+
+    Rect Monitor::wipeGripRect() const
+    {
+        if (mWipeAmt.value() < 0.5) return Rect{0, 0, 0, 0};
+        const Rect fr = frameRect();
+        const double at = mWipeLive.value();
+        return mWipeVertical ? Rect{fr.x + at * fr.w - 5.0, fr.y + fr.h * 0.5 - 14.0, 10.0, 28.0}
+                             : Rect{fr.x + fr.w * 0.5 - 14.0, fr.y + at * fr.h - 5.0, 28.0, 10.0};
+    }
+
     Rect Monitor::angleRect(int k) const
     {
         return k >= 1 && k <= (int)mAngleRects.size() && mAnglesAmt.value() > 0.5 ? mAngleRects[(size_t)k - 1] : Rect{0, 0, 0, 0};
@@ -166,6 +200,16 @@ namespace interstellar_v1
             if (frameRect().contains(local) && !mCaptureRect.contains(local) && !angleAt(local)) resetZoom();
             return true;
         case Gesture::Type::Down:
+            if (nearWipe(local))
+            {
+                // R-CLR-5: the divider is direct manipulation — it follows the pointer exactly
+                mWipeDrag = true;
+                mWipeTarget = wipeAtPoint(local);
+                mWipeLive.set(mWipeTarget);
+                mWipeLast = mWipeTarget;
+                if (onWipe) onWipe(mWipeTarget);
+                return true;
+            }
             if (mZoomTarget > 1.0 + 1e-9 && frameRect().contains(local) && !mCaptureRect.contains(local) && !angleAt(local))
             {
                 // a pan takes the view from where it is drawn now; the anchor lets go
@@ -177,6 +221,14 @@ namespace interstellar_v1
             return true;
         case Gesture::Type::DragStart:
         case Gesture::Type::Drag:
+            if (mWipeDrag)
+            {
+                mWipeTarget = wipeAtPoint(local);
+                mWipeLive.set(mWipeTarget);
+                mWipeLast = mWipeTarget;
+                if (onWipe) onWipe(mWipeTarget);
+                return true;
+            }
             if (mPanning)
             {
                 // direct manipulation: the picture follows the pointer exactly
@@ -193,6 +245,7 @@ namespace interstellar_v1
         case Gesture::Type::Up:
         case Gesture::Type::Drop:
             mPanning = false;
+            mWipeDrag = false;
             return true;
         default:
             break;
@@ -211,6 +264,21 @@ namespace interstellar_v1
         mCaptureAmt.update(nowMs);
         if (!isHovered()) mCaptureHover.clear();
         mCaptureHover.advance(nowMs);
+        // R-CLR-5: the wipe divider fades with its intent; a split the model moved eases there
+        if (!mWipeInit) { mWipeAmt.set(mWipeWanted ? 1.0 : 0.0); mWipeApplied = mWipeWanted; mWipeLive.set(mWipeTarget); mWipeLast = mWipeTarget; mWipeInit = true; }
+        if (mWipeWanted != mWipeApplied)
+        {
+            mWipeAmt.animateTo(mWipeWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            if (mWipeWanted && mWipeAmt.value() < 0.01) { mWipeLive.set(mWipeTarget); mWipeLast = mWipeTarget; }   // appearing: placed
+            mWipeApplied = mWipeWanted;
+        }
+        mWipeAmt.update(nowMs);
+        if (!mWipeDrag && std::fabs(mWipeTarget - mWipeLast) > 1e-9)
+        {
+            mWipeLive.animateTo(mWipeTarget, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
+            mWipeLast = mWipeTarget;
+        }
+        mWipeLive.update(nowMs);
         // R-EDT-5: the angle bar fades with its intent; the highlight travels to the active angle
         if (!mAnglesInit) { mAnglesAmt.set(mAnglesWanted ? 1.0 : 0.0); mAnglesApplied = mAnglesWanted; mAnglesInit = true; }
         if (mAnglesWanted != mAnglesApplied)
@@ -391,6 +459,32 @@ namespace interstellar_v1
             drawRoundedRect(t, chip, radius::control(), Paint::filled(fade(surface::scrim(0.72), za)));
             t.setFill(fade(palette::foreground(), za));
             t.drawText(z, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::mono());
+        }
+        // R-CLR-5: the wipe's divider, its grip, and which side is which
+        const double wa = mWipeAmt.value();
+        if (wa > 0.001 && fr.w > 0 && fr.h > 0)
+        {
+            const double at = mWipeLive.value();
+            t.save();
+            t.clipRect(fr.x, fr.y, fr.w, fr.h);
+            const Color line = fade(palette::white(), 0.85 * wa);
+            if (mWipeVertical) glyph::line(t, fr.x + at * fr.w, fr.y, fr.x + at * fr.w, fr.bottom(), line, 1.5);
+            else glyph::line(t, fr.x, fr.y + at * fr.h, fr.right(), fr.y + at * fr.h, line, 1.5);
+            const Rect g = wipeGripRect();
+            if (g.w > 0) drawRoundedRect(t, g, radius::pill(), Paint::filledStroked(fade(surface::scrim(0.72), wa), line, 1.0));
+            // A: the picture · B: the reference — at the two sides' far corners
+            const std::string b = "B \xC2\xB7 " + mWipeLabel;
+            const double bw = t.measureText(b, kChipPx, font::sans()) + 12.0;
+            const Rect ca{fr.x + 8.0, fr.bottom() - 26.0, t.measureText("A", kChipPx, font::sans()) + 12.0, 18.0};
+            const Rect cb{fr.right() - 8.0 - bw, mWipeVertical ? fr.bottom() - 26.0 : fr.bottom() - 26.0, bw, 18.0};
+            const Rect cA = mWipeVertical ? ca : Rect{fr.x + 8.0, fr.y + 8.0, ca.w, 18.0};
+            for (const auto &[r, txt] : {std::make_pair(cA, std::string("A")), std::make_pair(cb, b)})
+            {
+                drawRoundedRect(t, r, radius::control(), Paint::filled(fade(surface::scrim(0.72), wa)));
+                t.setFill(fade(palette::foreground(), wa));
+                t.drawText(txt, r.x + 6.0, textfit::baseline(r.y + r.h * 0.5, kChipPx), kChipPx, font::sans());
+            }
+            t.restore();
         }
         // R-EDT-5: the angle bar along the picture's foot — each chip its number (mono) and the source
         // it shows, at one width so the bar reads as a strip; the highlight sits between chips while it travels

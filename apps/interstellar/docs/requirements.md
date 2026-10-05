@@ -274,6 +274,37 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-CLR-3 The stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5)
+`still grab [<source>] [--name]` (`core/service/ServiceStills.cpp:141`) keeps what the monitor shows — a
+named source's graded reference frame (Grade), else the timeline at the playhead with the grade of the
+clip on top there — as `<project>.stills/<id>.png`, and the node's own grade as the open version folds
+it, overrides included (`:175`, as `grade copy` takes it) as `<id>.grade` (EditParamsIO text): a snapshot
+beside the project, never an authority. The gallery is `#still` nodes in the .isp (id, name, node, at,
+file, grade; `model/Schema.h`). `still apply <still> [<node>…]` (`:105`) writes the grade through Cosmo
+onto the nodes (else the Grade target), on the root timeline only, as Paste Grade does — one undo step;
+`still delete` removes it and its files. Stills are references: undo leaves the gallery as it is
+(`core/service/ServiceEdit.cpp:145`). `view wipe [<still|timeline|off>] [--split vertical|horizontal]
+[--at 0..1]` (`:59`) splits the MONITOR: `applyWipe` (`:209`) fits the reference into the picture's frame
+and paints it past the split (`:238`) — a still's picture (this session's grab, else its file decoded
+once, `stillPicture` `:41`), or another version: in Cut its frame at the time shown, in Grade the same
+source as that version grades it (`core/service/ServiceRender.cpp:875`, `:888`). Renders, export-still and
+capture never wipe. Model: `stills[]`, `wipeRef`, `wipeLabel`, `wipeVertical`, `wipeAt`. UI: the Grade
+deck's STILLS chip cross-fades the sources' strip to the stills' (Cosmo's filmstrip, thumbnails through
+`AppHooks::stillPicture`; `app/widgets/GradeDeck.cpp:117`, `:441`); a still's menu applies its grade, wipes
+against it (or stops), deletes it; a double-click applies it (`app/App.cpp:770`); Colour › Grab Still and
+Ctrl+Alt+G grab (`:761`). The monitor draws the divider with a grip and the A / B labels; dragging it is
+direct and asks `view wipe --at`; a split the model moves eases (`app/widgets/Monitor.cpp:128`, `:463`).
+Guarded by L2 `stills…` (the picture and grade written; apply to b and its one-step undo; a grab from
+the playhead takes b's grade at its source time; wipes both ways against a still pixel for pixel, the
+split moved alone; export-still unwiped; a wipe against a version in Cut and in Grade; a still grabbed
+on a version keeps the version's grade; off; the gallery outside undo; apply refused on a version;
+delete removes the files; the .isp carries them and a new session applies them), UI (the gallery's
+cross-fade, its menu, Grab Still, the divider shown, dragged, eased, faded), shot `grade_stills_wipe`,
+by hand (a real PNG and grade written; applied in a new session). Mutants run red: the split's axis
+swapped, no wipe in renderFrame, Grade's version wipe on the open version, undo dropping stills,
+overrides missing from a grab, apply on a version, `#still` not parsed (found by the new-session check —
+the first draft lost the gallery on reopen), the gallery's fade and the divider's ease snapped.
+
 ### DR-CLR-2 Tracking a window (R-CLR-2)
 `track window <effect> [--to <source seconds>] [--back]` (`core/service/ServiceTrack.cpp:69`) queues a job
 for a window on a SOURCE (a group's is refused: it has no one source to follow). It starts at the

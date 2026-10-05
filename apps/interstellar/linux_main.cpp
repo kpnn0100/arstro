@@ -499,6 +499,7 @@ int main(int argc, char **argv)
     hooks.thumbnailEpoch = [a]() { return a->thumbs.epoch(); };
     // Grade's monitor and the ref-frame slider's preview: one source, graded (R-UI-3, R-RACK-3).
     hooks.audioPeaks = [a](const std::string &media, std::vector<float> &peaks, double &per) { return a->svc.audioPeaks(media, peaks, per); };
+    hooks.stillPicture = [a](const std::string &id, interstellar::Raster &out) { return a->svc.stillPicture(id, out); };
     hooks.renderSource = [a](const std::string &bind, double t, int edge, Raster &out) {
         return a->svc.renderSourceFrame(bind, t, edge, out);
     };

@@ -49,6 +49,19 @@ namespace interstellar_v1
             if (onNavigate) onNavigate(mRack[(size_t)i].rackObj);
         };
         addChild(mStrip);
+        // R-CLR-4: the stills gallery — Cosmo's strip again, its cells the stills
+        mStills = std::make_shared<cosmo_v2::Filmstrip>();
+        mStills->onContext = [this](int cell, double x, double y) {
+            const std::string id = stillOfCell(cell);
+            if (!id.empty() && onStillContext) onStillContext(id, Point{x, y});
+        };
+        mStills->onActivate = [this](int cell) {
+            const std::string id = stillOfCell(cell);
+            if (!id.empty() && onStillActivate) onStillActivate(id);
+        };
+        mStills->opacity.set(0.0);
+        mStills->visible = false;
+        addChild(mStills);
         for (int k = 0; k < 2; ++k)
         {
             mCrumb[k] = std::make_shared<cosmo_v2::Breadcrumb>();
@@ -101,6 +114,32 @@ namespace interstellar_v1
         if (!wantedThere) mLevelWanted.clear();   // the group went away (ungrouped): back to the top
         if (!mLevelInit) { mLevel = mLevelWanted; mLevelInit = true; }
         rebuildCells();
+        // R-CLR-4: the stills' cells, rebuilt (thumbnails and all) only when the gallery changed
+        mStillList = m.stills;
+        std::string skey;
+        for (const auto &st : m.stills) skey += st.id + "|" + st.name + "|" + st.file + ";";
+        if (skey != mStillsKey)
+        {
+            mStillsKey = skey;
+            mStills->clearThumbs();
+            std::vector<cosmo_v2::Filmstrip::Cell> cells;
+            int slot = 0;
+            for (const auto &st : m.stills)
+            {
+                cosmo_v2::Filmstrip::Cell c;
+                c.name = st.name;
+                c.thumbSlot = slot++;
+                interstellar::Raster r;
+                if (!(stillPicture && stillPicture(st.id, r) && !r.empty()))
+                {
+                    r.allocate(16, 9, 0);
+                    for (size_t p = 0; p < r.rgba.size(); p += 4) { r.rgba[p] = r.rgba[p + 1] = r.rgba[p + 2] = 0x1A; r.rgba[p + 3] = 255; }
+                }
+                mStills->addThumb(r.rgba.data(), r.width, r.height);
+                cells.push_back(c);
+            }
+            mStills->setCells(cells);
+        }
 
         // the selected source's reference frame
         bindFrame(m);
@@ -223,16 +262,26 @@ namespace interstellar_v1
         mStrip->y.set(kHeaderH);
         mStrip->width.set(width.value());
         mStrip->height.set(cosmo_v2::Filmstrip::kHeight);
-        mStrip->opacity.set(lf);
-        // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was
+        // R-CLR-4: the sources and the stills cross-fade in one place
+        const double sa = mStillsAmt.value();
+        mStrip->opacity.set(lf * (1.0 - sa));
+        mStrip->visible = 1.0 - sa > 0.001;
+        mStills->x.set(0.0);
+        mStills->y.set(kHeaderH);
+        mStills->width.set(width.value());
+        mStills->height.set(cosmo_v2::Filmstrip::kHeight);
+        mStills->opacity.set(sa);
+        mStills->visible = sa > 0.001;
+        // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was — up to the chip
         const double bx = std::min(mHeaderRight, width.value());
+        const double chipW = mStillsChip.w > 0 ? mStillsChip.w + 8.0 : 72.0;
         for (auto &c : mCrumb)
         {
             c->x.set(bx);
             c->y.set((kHeaderH - cosmo_v2::Breadcrumb::kHeight) * 0.5);
-            c->width.set(std::max(0.0, width.value() - kPadX - bx));
+            c->width.set(std::max(0.0, width.value() - kPadX - bx - chipW));
             c->height.set(cosmo_v2::Breadcrumb::kHeight);
-            c->visible = c->opacity.value() > 0.001;   // the faded-out one takes no clicks
+            c->visible = c->opacity.value() > 0.001 && sa < 0.999;   // the faded-out one takes no clicks
         }
     }
 
@@ -328,12 +377,14 @@ namespace interstellar_v1
         {
         case Gesture::Type::Move:
         {
+            mChipHovered = mStillsChip.contains(local);
             mTrackHovered = mSelVideo && tr.contains(local);
             const int sd = stepAt(local);
             mStepHover.setHovered(sd < 0 ? 0 : (sd > 0 ? 1 : -1));
             return true;
         }
         case Gesture::Type::Click:
+            if (mStillsChip.contains(local)) { showStills(!mStillsWanted); return true; }   // R-CLR-4
             if (const int sd = stepAt(local)) { step(sd); return true; }
             break;
         case Gesture::Type::Down:
@@ -387,6 +438,20 @@ namespace interstellar_v1
 
     void GradeDeck::advance(double nowMs)
     {
+        // R-CLR-4: sources ↔ stills, a cross-fade; the chip's hover eases like every hover
+        if (mStillsWanted != mStillsApplied)
+        {
+            mStillsAmt.animateTo(mStillsWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mStillsApplied = mStillsWanted;
+        }
+        mStillsAmt.update(nowMs);
+        if (!isHovered()) mChipHovered = false;
+        if ((mChipHovered ? 1.0 : 0.0) != mChipHover)
+        {
+            mChipHover = mChipHovered ? 1.0 : 0.0;
+            mChipHoverAmt.animateTo(mChipHover, artboard::interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+        }
+        mChipHoverAmt.update(nowMs);
         // the level: fade the old cells out, swap, fade the new ones in (never a one-frame swap)
         if (!mLevelSwapping && mLevelWanted != mLevel && !mLevelFade.isAnimating())
         {
@@ -484,22 +549,44 @@ namespace interstellar_v1
         t.setStroke(palette::border(), 1.0);
         t.beginPath(); t.moveTo(0, 0.5); t.lineTo(w, 0.5); t.strokePath();
 
-        // header row: SOURCES · n ───
+        // header row: SOURCES · n ─── (or STILLS · n — R-CLR-4: the two cross-fade) ··· [STILLS n]
         const double hy = kHeaderH * 0.5;
-        t.setFill(palette::mutedForeground());
-        t.drawText("SOURCES", kPadX, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
-        const double lw = t.measureText("SOURCES", 9.0, font::sansSemiBold(), 0.13 * 9.0);
+        const double stA = mStillsAmt.value();
         int sources = 0;
         for (const auto &n : mRack) if (!n.group) ++sources;
-        const std::string count = std::to_string(sources);
-        t.setFill(fade(palette::mutedForeground(), 0.7));
-        t.drawText(count, kPadX + lw + 6.0, textfit::baseline(hy, 9.0), 9.0, font::mono());
+        const std::string srcCount = std::to_string(sources), stillCount = std::to_string(mStillList.size());
+        auto title = [&](const char *word, const std::string &count, double a) {
+            if (a <= 0.001) return 0.0;
+            t.setFill(fade(palette::mutedForeground(), a));
+            t.drawText(word, kPadX, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.13 * 9.0);
+            const double lw = t.measureText(word, 9.0, font::sansSemiBold(), 0.13 * 9.0);
+            t.setFill(fade(palette::mutedForeground(), 0.7 * a));
+            t.drawText(count, kPadX + lw + 6.0, textfit::baseline(hy, 9.0), 9.0, font::mono());
+            return lw + 6.0 + t.measureText(count, 9.0, font::mono());
+        };
+        const double srcW = title("SOURCES", srcCount, 1.0 - stA);
+        title("STILLS", stillCount, stA);
         // the breadcrumb (a child) takes the header's remaining width, where a rule would run
-        mHeaderRight = kPadX + lw + 6.0 + t.measureText(count, 9.0, font::mono()) + 6.5;
-        if (mRack.empty())
+        mHeaderRight = kPadX + (srcW > 0 ? srcW : t.measureText("SOURCES", 9.0, font::sansSemiBold(), 0.13 * 9.0) + 20.0) + 6.5;
+        {
+            // the switch: names the other shelf and how many it holds
+            const std::string chip = mStillsWanted ? "SOURCES " + srcCount : "STILLS " + stillCount;
+            const double cw = t.measureText(chip, 9.0, font::sansSemiBold(), 0.06 * 9.0) + 14.0;
+            mStillsChip = Rect{w - kPadX - cw, (kHeaderH - 17.0) * 0.5, cw, 17.0};
+            drawRoundedRect(t, mStillsChip, radius::control(), Paint::filledStroked(palette::hoverWash(mChipHoverAmt.value()), palette::border(), 1.0));
+            t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), mChipHoverAmt.value()));
+            t.drawText(chip, mStillsChip.x + 7.0, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.06 * 9.0);
+        }
+        if (mRack.empty() && stA < 0.999)
         {
             const std::string s = "Sources appear here as footage joins the rack.";
-            t.setFill(palette::mutedForeground());
+            t.setFill(fade(palette::mutedForeground(), 1.0 - stA));
+            t.drawText(s, (w - t.measureText(s, 11.0, font::sans())) * 0.5, kHeaderH + cosmo_v2::Filmstrip::kHeight * 0.5 + 4.0, 11.0, font::sans());
+        }
+        if (mStillList.empty() && stA > 0.001)
+        {
+            const std::string s = textfit::ellipsize(t, "Grab a still (Ctrl+Alt+G) to keep a frame and the grade it was made with.", w - 2 * kPadX, 11.0, font::sans());
+            t.setFill(fade(palette::mutedForeground(), stA));
             t.drawText(s, (w - t.measureText(s, 11.0, font::sans())) * 0.5, kHeaderH + cosmo_v2::Filmstrip::kHeight * 0.5 + 4.0, 11.0, font::sans());
         }
 

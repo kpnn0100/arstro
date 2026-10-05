@@ -74,6 +74,7 @@ namespace istest
             h.dispatch = [this](const std::string &l, std::string &err) { return dispatch(l, err); };
             h.renderFrame = [this](double t, int edge, Raster &out) { return renderFrame(t, edge, out); };
             h.thumbnail = [this](const std::string &p, double t, int edge, Raster &out) { return thumbnail(p, t, edge, out); };
+            h.stillPicture = [this](const std::string &id, Raster &out) { return thumbnail("/stills/" + id + ".png", 0.0, 172, out); };   // R-CLR-4
             h.renderSource = [this](const std::string &b, double t, int edge, Raster &out) { return renderSource(b, t, edge, out); };
             // R-AUD-7: an envelope per audio file once `peaksReady` — a swelling, breathing shape
             h.audioPeaks = [this](const std::string &media, std::vector<float> &pk, double &per) {

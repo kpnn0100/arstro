@@ -54,6 +54,8 @@ namespace interstellar_v1
         /** R-AUD-7 (optional): a file's waveform envelope — peak of |L|,|R| per 1/perSecond s — once the
          *  service has it (false until then; `model.peaksEpoch` rises when one lands). */
         std::function<bool(const std::string &media, std::vector<float> &peaks, double &perSecond)> audioPeaks;
+        /** R-CLR-4: a still's picture, for the gallery's thumbnail. */
+        std::function<bool(const std::string &stillId, interstellar::Raster &out)> stillPicture;
     };
 }
 }

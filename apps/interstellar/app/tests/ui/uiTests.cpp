@@ -2574,6 +2574,73 @@ namespace
         CHECK(labels.find("Cancel Tracking|") != std::string::npos && labels.find("Track Forward") == std::string::npos, "…and the row offers Cancel Tracking");
     }
 
+    /** R-CLR-4/5: the stills gallery in the Grade deck, its menu, Grab Still; the monitor's wipe divider. */
+    void testStillsUi()
+    {
+        std::printf("stills: the gallery, its menu, grab; the wipe divider\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            s.m.stills = {{"st_1", "look1", "/p.stills/st_1.png", "s_day01", 0.0}, {"st_2", "dusk", "/p.stills/st_2.png", "s_day02", 1.0}};
+            ++s.m.revision;
+        });
+        r.settle();
+        auto deck = r.app->edit().gradeDeck();
+        CHECK(deck->stillsAmount() < 0.001 && deck->stillsStrip()->cellCount() == 2, "the gallery holds the stills, the sources in front");
+        const Rect chip = deck->stillsChipRect();
+        const Point c = world(*deck, chip.x + chip.w * 0.5, chip.y + chip.h * 0.5);
+        r.click(c.x, c.y);
+        const double in = firstMoved(r, [&] { return deck->stillsAmount(); }, 0.0);
+        CHECK(chip.w > 0 && strictlyBetween(in, 0.0, 1.0), "the header's STILLS chip brings the gallery forward, cross-faded");
+        r.settle();
+        // a still's menu: apply, wipe, delete
+        auto st = deck->stillsStrip();
+        const Point p = world(*st, st->cellXForTest(0) + 30.0, st->height.value() * 0.5);
+        r.app->pointer(1, p.x, p.y, 0, r.now);
+        r.app->pointer(0, p.x, p.y, 2, r.now);
+        r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(labels == "Apply Grade to s_day01|Wipe Against look1|Delete Still|", "a still's menu: apply its grade, wipe against it, delete it");
+        r.svc.lines.clear();
+        for (int i = 0; i < cm->itemCount(); ++i)
+            if (cm->item(i).label == "Wipe Against look1") { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
+        CHECK(hasLine(r.svc, "view wipe st_1"), "…Wipe Against dispatches view wipe");
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Colour", "     Grab Still") && hasLine(r.svc, "still grab s_day01"), "Colour › Grab Still grabs the Grade target");
+        // the wipe divider: shown, dragged (direct), moved by the model (eased)
+        r.svc.m.wipeRef = "st_1";
+        r.svc.m.wipeLabel = "look1";
+        r.svc.m.wipeAt = 0.5;
+        ++r.svc.m.revision;
+        r.settle();
+        auto mon = r.app->edit().monitor();
+        const Rect g = mon->wipeGripRect();
+        CHECK(mon->wipeAmount() > 0.999 && g.w > 0 && std::fabs(mon->wipeLive() - 0.5) < 1e-6, "the divider stands at the split");
+        const Rect fr = mon->frameRect();
+        const Point g0 = world(*mon, g.x + g.w * 0.5, g.y + g.h * 0.5), g1 = world(*mon, fr.x + fr.w * 0.75, g.y + g.h * 0.5);
+        r.svc.lines.clear();
+        r.app->pointer(0, g0.x, g0.y, 0, r.now);
+        r.pump(16);
+        r.app->pointer(1, (g0.x + g1.x) * 0.5, g0.y, 0, r.now);
+        r.pump(16);
+        r.app->pointer(1, g1.x, g1.y, 0, r.now);
+        r.pump(16);
+        CHECK(mon->wipeDragging() && std::fabs(mon->wipeLive() - 0.75) < 0.01, "dragging it, the divider is under the pointer (no easing)");
+        r.app->pointer(2, g1.x, g1.y, 0, r.now);
+        r.pump(16);
+        CHECK(withPrefix(r.svc, "view wipe --at 0.7").size() > 0, "…and each new split is asked for");
+        r.svc.m.wipeAt = 0.25;
+        ++r.svc.m.revision;
+        const double mid = firstMoved(r, [&] { return mon->wipeLive(); }, mon->wipeLive());
+        CHECK(strictlyBetween(mid, 0.25, 0.76), "a split the model moved EASES there");
+        r.svc.m.wipeRef.clear();
+        ++r.svc.m.revision;
+        const double out = firstMoved(r, [&] { return mon->wipeAmount(); }, 1.0);
+        CHECK(strictlyBetween(out, 0.0, 1.0), "the wipe off: the divider fades out");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2747,6 +2814,7 @@ int main()
     testProxiesUi();
     testRelinkUi();
     testMatteUi();
+    testStillsUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

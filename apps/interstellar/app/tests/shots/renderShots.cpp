@@ -443,6 +443,19 @@ namespace
             r.click(p.x, p.y);
             r.settle();
         }});
+        v.push_back({"grade_stills_wipe", [](FakeService &s) {   // R-CLR-4/5: the gallery forward, the monitor wiped against a still
+            s.edit();
+            s.m.stills = {{"st_1", "look1", "/p.stills/st_1.png", "s_day01", 0.0}, {"st_2", "dusk", "/p.stills/st_2.png", "s_day02", 1.0},
+                          {"st_3", "teal_night", "/p.stills/st_3.png", "s_nite01", 2.0}};
+            s.m.wipeRef = "st_3";
+            s.m.wipeLabel = "teal_night";
+            s.m.wipeAt = 0.55;
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeDeck()->showStills(true);
+            r.settle();
+        }});
         v.push_back({"relink_media", edit, [](Rig &r) {   // R-MEDIA-3: File › Relink Media — the offline sources in one list
             r.settle();
             r.app->openRelinkMenu(artboard::Point(r.app->width() * 0.25, 40.0));

@@ -248,6 +248,19 @@ namespace interstellar
         bool proxyCommand(const Command &c);
         // R-MEDIA-3 — ServiceMedia.cpp
         bool mediaCommand(const Command &c);
+        // R-CLR-4/5 — ServiceStills.cpp
+        bool stillCommand(const Command &c);
+        std::string stillsDir() const;
+        /** R-CLR-5: `versionFrame(tl, out)` renders what the monitor would show from version `tl`. */
+        void applyWipe(Raster &out, const std::function<bool(const NodeId &, Raster &)> &versionFrame);
+        std::map<NodeId, Raster> mStillPictures;   // this session's grabs, and stills decoded once
+        std::string mWipeRef;                      // "" | still:<id> | timeline:<id>
+        bool mWipeVertical = true;
+        double mWipeAt = 0.5;
+    public:
+        /** R-CLR-4: a still's picture — the gallery's thumbnail, the wipe's reference. */
+        bool stillPicture(const NodeId &id, Raster &out);
+    private:
         // R-CLR-2 — ServiceTrack.cpp
         bool trackCommand(const Command &c);
         void pumpTracks();
@@ -287,7 +300,7 @@ namespace interstellar
         void requestPeaks(const std::string &media);
         void fillSoundModel(AppModel &m);
         bool planReferenceFrame(int proxyEdge, FramePlan &out);
-        bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out);
+        bool planSourceFrame(const NodeId &rackObj, double t, int proxyEdge, FramePlan &out, const NodeId &timeline = NodeId());
         bool present(FramePlan &&plan, Raster &out);
         bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember = true, bool deep = false);
         void previewLoop();

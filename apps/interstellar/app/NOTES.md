@@ -216,6 +216,10 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   → `view matte on|off`; the caption says "matte". Shot: `grade_window`. UI checks: 423.
 - Tracking (R-CLR-2): a window's plugin row → Track Forward / Track Backward (`track window <ef>
   [--back]`), Cancel Tracking while one runs (`track cancel`); the caption says "tracking N%". UI checks: 426.
+- Stills and wipe (R-CLR-4/5): the Grade deck's STILLS / SOURCES chip cross-fades the strips; a still's
+  menu → `still apply <id> <bind>` / `view wipe <id>` (Stop Wipe → `view wipe off`) / `still delete <id>`,
+  double-click → apply; Colour › Grab Still, Ctrl+Alt+G → `still grab <bind>` (Grade) or `still grab`
+  (Cut). The monitor's divider: drag → `view wipe --at <x>`. Shot: `grade_stills_wipe`. UI checks: 436.
 
 ## Interchange (2026-10-05, R-XCH)
 

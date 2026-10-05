@@ -270,6 +270,9 @@ namespace interstellar
         bool begun = false;
     };
 
+    /** A params set as `key=value` fields for Cosmo's Set — every key except masks (ServiceEdit.cpp). */
+    std::vector<std::pair<std::string, std::string>> paramFields(const EditParams &p);
+
     /** R-CLR-2: a window being tracked, one frame per pump. */
     struct InterstellarService::TrackJob
     {

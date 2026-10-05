@@ -199,6 +199,15 @@ namespace interstellar
         std::string note;
     };
 
+    /** R-CLR-4: a still in the gallery. */
+    struct StillModel
+    {
+        NodeId id, name;
+        std::string file;             // its picture, resolved
+        std::string from;             // the rack node it was grabbed from (bind name; "" = gone)
+        double at = 0;                // its source time
+    };
+
     /** R-CLR-2: a window being tracked. */
     struct TrackJobModel
     {
@@ -313,6 +322,11 @@ namespace interstellar
         bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
         bool matteView = false;                    // R-CLR-1: Grade's monitor shows the selected source's matte
         std::vector<TrackJobModel> trackJobs;      // R-CLR-2: this session's window tracks, oldest first
+        std::vector<StillModel> stills;            // R-CLR-4: the gallery, oldest first
+        NodeId wipeRef;                            // R-CLR-5: the monitor's wipe reference (a still or a timeline id); "" = none
+        std::string wipeLabel;                     // its name
+        bool wipeVertical = true;                  // left | right; false = top / bottom
+        double wipeAt = 0.5;                       // the split, a share of the frame
         std::vector<ProxyJobModel> proxyJobs;      // this session's proxy jobs, oldest first
 
         // ── Edit: one undo history across the rack and the project (R-EDIT-1) ──

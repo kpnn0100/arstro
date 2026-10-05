@@ -584,7 +584,7 @@ reserves the rest so adopting it is not a migration.
   D-2). Opened in Cosmo alone, a relinked source still names its old path (Cosmo cannot rename a slot;
   said).
 
-## R-CLR — colourist tools — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-CLR-1, 2 ✅ DR-CLR-1/DR-CLR-2, 3–5 next)
+## R-CLR — colourist tools — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-CLR-1, 2 ✅ DR-CLR-1/DR-CLR-2, 4–5 ✅ DR-CLR-3, 3 next)
 
 - **R-CLR-1 Qualifiers**: an HSL key (hue, saturation, luminance ranges with softness) that limits a
   node's grade to what it selects, with a matte view. — ✅ (DR-CLR-1). A qualifier is a plugin in the node's stack
@@ -602,9 +602,13 @@ reserves the rest so adopting it is not a migration.
   nodes and links, with serial and parallel nodes added and wired there; Cosmo stays the colour
   authority — a node is a Cosmo grade.
 - **R-CLR-4 A stills gallery**: grab the monitor's graded frame with its grade; apply a still's
-  grade to another source.
+  grade to another source. — ✅ (DR-CLR-3). A still's grade is the node's own as the open version folds it, a
+  snapshot beside the project (never an authority); applying it writes through Cosmo like Paste
+  Grade, on the root timeline (a version stores overrides). Stills sit outside undo, as references.
 - **R-CLR-5 Split-screen wipe**: the monitor compares the current frame with a still or another
-  version, split horizontally or vertically, the split dragged.
+  version, split horizontally or vertically, the split dragged. — ✅ (DR-CLR-3). Monitor only: renders, export-still and a still's
+  own grab never wipe. Against another version, Cut compares that version's frame at the same time;
+  Grade compares the same source as the other version grades it.
 
 ## R-EDT — editing — ✅ DONE (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3 ✅ DR-EDT-2, 4 ✅ DR-EDT-3, 5 ✅ DR-EDT-4)
 

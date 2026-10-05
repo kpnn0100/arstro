@@ -70,6 +70,9 @@ static AppModel populatedModel()
     m.markers.push_back({"mk_1", "chorus", 48, "chorus in"});
     m.useProxies = true;
     m.trackJobs.push_back({"t1", "ef_3", false, 12, 48, "running", ""});
+    m.stills.push_back({"st_1", "still_1", "/home/u/japan.stills/st_1.png", "s_day01", 4.25});
+    m.wipeRef = "st_1";
+    m.wipeLabel = "still_1";
     m.proxyJobs.push_back({"p1", "ro_2", "s_day01", "prores", 960, "/home/u/japan.proxies/s_day01_960.mov", 12, 96, "running", ""});
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";
     r.format = "h264"; r.state = "queued";

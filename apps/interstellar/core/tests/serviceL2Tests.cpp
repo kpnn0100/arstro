@@ -1991,6 +1991,99 @@ int main()
         assert(!f.run("track window " + g.substr(0, g.size() - 1), &err) && has(err, "on a group"));
     });
 
+    test("stills: grabbed with their grade, applied to other sources, wiped against the monitor (R-CLR-4, R-CLR-5)", [] {
+        Fixture f("stills");
+        f.standard();                                   // shotA a 0–2, shotB b 2–4; a's reference frame is 0
+        f.must("set a.basic.exposure=0.5");
+        f.must("still grab a --name look1");
+        const AppModel &m = f.svc->model();
+        assert(m.stills.size() == 1 && m.stills[0].name == "look1" && m.stills[0].from == "a" && has(m.stills[0].file, "mv.stills/st_"));
+        assert(f.images.count(m.stills[0].file) == 1);  // the picture, written
+        {
+            std::ifstream g(f.path("mv.stills/" + m.stills[0].id + ".grade"));
+            const std::string text((std::istreambuf_iterator<char>(g)), std::istreambuf_iterator<char>());
+            assert(has(text, "exposure=0.5"));            // the grade, a snapshot beside the project
+        }
+        // applied to b through Cosmo; one undo step
+        f.must("still apply look1 b");
+        assert(evalValue(f, "get b.basic.exposure") == 0.5);
+        f.must("undo");
+        assert(evalValue(f, "get b.basic.exposure") == 0.0);
+        f.must("redo");
+        f.must("undo");
+        // from the playhead: the timeline's picture and the grade of the clip on top
+        f.must("playhead 2.5");
+        f.must("still grab");
+        assert(m.stills.size() == 2 && m.stills[1].from == "b" && std::fabs(m.stills[1].at - 0.5) < 1e-9);
+        // the wipe: left the picture, right the still
+        auto monitor = [&](double t) { Raster r; assert(f.svc->renderFrame(t, 0, r)); return r; };
+        const Raster plain = monitor(1.0), still = f.images[m.stills[0].file];
+        auto at = [](const Raster &r, int x, int y) { return (int)r.rgba[((size_t)y * r.width + x) * 4]; };
+        f.must("view wipe look1 --split vertical --at 0.5");
+        assert(m.wipeRef == m.stills[0].id && m.wipeLabel == "look1" && m.wipeVertical && m.wipeAt == 0.5);
+        Raster w = monitor(1.0);
+        std::printf("    wipe: left %d (the picture %d), right %d (the still %d)\n", at(w, 10, 13), at(plain, 10, 13), at(w, 40, 13), at(still, 40, 13));
+        assert(at(w, 10, 13) == at(plain, 10, 13) && at(w, 40, 13) == at(still, 40, 13) && at(plain, 40, 13) != at(still, 40, 13));
+        f.must("view wipe --split horizontal --at 0.25");    // only the split moves
+        w = monitor(1.0);
+        assert(!m.wipeVertical && at(w, 40, 3) == at(plain, 40, 3) && at(w, 40, 20) == at(still, 40, 20));
+        // a deliverable never wipes
+        f.must("export-still --timeline main --out \"" + f.path("x.png") + "\" --at 1");
+        assert(f.images[f.path("x.png")].rgba == plain.rgba);
+        // against another version at the playhead
+        f.must("timeline new alt --base main");
+        f.must("timeline open alt");
+        f.must("set a.basic.exposure=1.0");
+        f.must("still grab a --name altlook");           // a still on a version keeps the version's grade
+        {
+            const std::string id = f.svc->model().stills.back().id;
+            std::ifstream g(f.path("mv.stills/" + id + ".grade"));
+            const std::string text((std::istreambuf_iterator<char>(g)), std::istreambuf_iterator<char>());
+            assert(has(text, "exposure=1\n") || has(text, "exposure=1.0"));
+            f.must("still delete altlook");
+        }
+        f.must("timeline open main");
+        f.must("view wipe alt --split vertical --at 0.5");
+        Raster alt;
+        assert(f.svc->renderTimelineFrame(f.svc->project().idForRef("alt"), 1.0, 0, alt));
+        w = monitor(1.0);
+        assert(m.wipeLabel == "alt" && at(w, 40, 13) == at(alt, 40, 13) && at(w, 10, 13) == at(plain, 10, 13) && at(alt, 40, 13) != at(plain, 40, 13));
+        {
+            // Grade's monitor: the same source, graded as the other version grades it, on the right
+            Raster g;
+            assert(f.svc->renderSourceFrame("a", 0.5, 0, g));
+            assert(at(g, 40, 13) > at(g, 10, 13) + 3);   // alt's a is brighter (exposure 1 against 0.5)
+        }
+        f.must("view wipe off");
+        assert(monitor(1.0).rgba == plain.rgba && m.wipeRef.empty());
+        // a still is a reference: undo leaves it; a version cannot take a grade
+        f.must("set b.basic.contrast=10");
+        f.must("still grab b --name look2");
+        f.must("undo");
+        assert(m.stills.size() == 3);
+        std::string err;
+        f.must("timeline open alt");
+        assert(!f.run("still apply look1 b", &err) && has(err, "is a version"));
+        f.must("timeline open main");
+        f.must("view wipe look2");
+        const std::string look2 = m.stills.back().id;
+        assert(fs::exists(f.path("mv.stills/" + look2 + ".grade")));
+        f.must("still delete look2");
+        assert(m.stills.size() == 2 && m.wipeRef.empty() && !fs::exists(f.path("mv.stills/" + look2 + ".grade")));
+        assert(!f.run("still apply look2", &err) && has(err, "no still named"));
+        // the gallery is in the .isp
+        f.must("project save");
+        std::ifstream in(f.path("mv.isp"));
+        const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        assert(has(isp, "#still id=st_1 name=look1") && has(isp, "grade=mv.stills/st_1.grade"));
+        // … and a new session has them, and applies them
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(f.svc->model().stills.size() == 2 && f.svc->model().stills[0].name == "look1");
+        f.must("still apply look1 b");
+        assert(evalValue(f, "get b.basic.exposure") == 0.5);
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

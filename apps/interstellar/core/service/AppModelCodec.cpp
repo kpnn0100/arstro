@@ -235,6 +235,21 @@ namespace interstellar
                                 .set("error", t.error));
             j.set("trackJobs", tracks);
         }
+        {
+            Json stills = Json::array();
+            for (const auto &s : m.stills)
+                stills.push(Json::object()
+                                .set("id", s.id)
+                                .set("name", s.name)
+                                .set("file", st ? baseName(s.file) : s.file)
+                                .set("from", s.from)
+                                .set("at", s.at));
+            j.set("stills", stills);
+        }
+        j.set("wipeRef", m.wipeRef);
+        j.set("wipeLabel", m.wipeLabel);
+        j.set("wipeVertical", m.wipeVertical);
+        j.set("wipeAt", m.wipeAt);
         Json proxies = Json::array();
         for (const auto &p : m.proxyJobs)
             proxies.push(Json::object()
@@ -526,6 +541,16 @@ namespace interstellar
             {"trackJobs[].total", "integer", "Frames to track."},
             {"trackJobs[].state", "string", "queued | running | done | failed | cancelled."},
             {"trackJobs[].error", "string", "Why it stopped."},
+            {"stills", "array", "The stills gallery, oldest first (R-CLR-4)."},
+            {"stills[].id", "string", "Still id (st_1 …)."},
+            {"stills[].name", "string", "Its name — `still apply`, `view wipe` take it."},
+            {"stills[].file", "string", "Its picture (file name only when stable)."},
+            {"stills[].from", "string", "The rack node it was grabbed from; empty = gone."},
+            {"stills[].at", "number", "The source time it was grabbed at, seconds."},
+            {"wipeRef", "string", "The monitor's wipe reference — a still or a timeline id; empty = no wipe (R-CLR-5)."},
+            {"wipeLabel", "string", "Its name."},
+            {"wipeVertical", "bool", "Left | right; false = top / bottom."},
+            {"wipeAt", "number", "The split, a share of the frame."},
             {"proxyJobs", "array", "This session's proxy jobs, oldest first."},
             {"proxyJobs[].id", "string", "Job id (p1, p2, …)."},
             {"proxyJobs[].rackObj", "string", "The source's #rackobj id."},

@@ -70,6 +70,8 @@ namespace interstellar_v1
         std::function<void(const std::string &name, std::function<void(const std::string &)> done)> onPickMediaToRelink;
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;
         void openRelinkMenu(artboard::Point at);
+        void grabStill();                                        // R-CLR-4
+        void openStillContext(const std::string &stillId, artboard::Point at);
         void openProjectPicked(const std::string &path);
         void newProjectPicked(const std::string &path);
         void footagePicked(const std::vector<std::string> &paths);

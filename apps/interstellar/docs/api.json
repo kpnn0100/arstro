@@ -1384,6 +1384,60 @@
       "requirement": "R-CLR-2"
     },
     {
+      "verb": "still grab",
+      "usage": "still grab [<source>] [--name <n>]",
+      "args": "[<source>]",
+      "minArgs": 0,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "name",
+          "value": "<n>"
+        }
+      ],
+      "summary": "Keep what the monitor shows as a still, with the grade it was made with: a source's graded reference frame (named), or the timeline at the playhead with the grade of the clip on top there. Saved beside the project (<project>.stills/); the grade is a snapshot to apply, never an authority.",
+      "requirement": "R-CLR-4"
+    },
+    {
+      "verb": "still apply",
+      "usage": "still apply <still> [<node>…]",
+      "args": "<still> [<node>…]",
+      "minArgs": 1,
+      "maxArgs": -1,
+      "flags": [],
+      "summary": "Apply a still's grade to rack nodes (else the Grade target) — through Cosmo, as grade paste writes; one undo step. On the root timeline (a version stores overrides).",
+      "requirement": "R-CLR-4"
+    },
+    {
+      "verb": "still delete",
+      "usage": "still delete <still>",
+      "args": "<still>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Remove a still and its files.",
+      "requirement": "R-CLR-4"
+    },
+    {
+      "verb": "view wipe",
+      "usage": "view wipe [<still|timeline|off>] [--split <vertical|horizontal>] [--at <0..1>]",
+      "args": "[<still|timeline|off>]",
+      "minArgs": 0,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "split",
+          "value": "<vertical|horizontal>"
+        },
+        {
+          "name": "at",
+          "value": "<0..1>"
+        }
+      ],
+      "summary": "Split the monitor between its picture and a reference — a still, or another version at the playhead — left | right (vertical) or top / bottom, the split at --at of the frame (0.5 unless moved). With no name, only the split moves. Presentation: renders and export-still never wipe.",
+      "requirement": "R-CLR-5"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",
@@ -2612,6 +2666,66 @@
       "type": "string",
       "stable": true,
       "doc": "Why it stopped."
+    },
+    {
+      "path": "stills",
+      "type": "array",
+      "stable": true,
+      "doc": "The stills gallery, oldest first (R-CLR-4)."
+    },
+    {
+      "path": "stills[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "Still id (st_1 …)."
+    },
+    {
+      "path": "stills[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name — `still apply`, `view wipe` take it."
+    },
+    {
+      "path": "stills[].file",
+      "type": "string",
+      "stable": true,
+      "doc": "Its picture (file name only when stable)."
+    },
+    {
+      "path": "stills[].from",
+      "type": "string",
+      "stable": true,
+      "doc": "The rack node it was grabbed from; empty = gone."
+    },
+    {
+      "path": "stills[].at",
+      "type": "number",
+      "stable": true,
+      "doc": "The source time it was grabbed at, seconds."
+    },
+    {
+      "path": "wipeRef",
+      "type": "string",
+      "stable": true,
+      "doc": "The monitor's wipe reference — a still or a timeline id; empty = no wipe (R-CLR-5)."
+    },
+    {
+      "path": "wipeLabel",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name."
+    },
+    {
+      "path": "wipeVertical",
+      "type": "bool",
+      "stable": true,
+      "doc": "Left | right; false = top / bottom."
+    },
+    {
+      "path": "wipeAt",
+      "type": "number",
+      "stable": true,
+      "doc": "The split, a share of the frame."
     },
     {
       "path": "proxyJobs",

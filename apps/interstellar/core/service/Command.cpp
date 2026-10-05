@@ -253,6 +253,18 @@ namespace interstellar
              "--to (else the source's end or start), the window's centre keyed on every frame where the patch it "
              "covers is found again. A background job, one frame per pump; one undo step.", "R-CLR-2"},
             {K::TrackCancel, "track cancel", "", 0, 0, {}, "Stop the running track; what it keyed stays (one undo step).", "R-CLR-2"},
+            {K::StillGrab, "still grab", "[<source>]", 0, 1, {"name=<n>"},
+             "Keep what the monitor shows as a still, with the grade it was made with: a source's graded reference frame "
+             "(named), or the timeline at the playhead with the grade of the clip on top there. Saved beside the project "
+             "(<project>.stills/); the grade is a snapshot to apply, never an authority.", "R-CLR-4"},
+            {K::StillApply, "still apply", "<still> [<node>…]", 1, -1, {},
+             "Apply a still's grade to rack nodes (else the Grade target) — through Cosmo, as grade paste writes; one undo "
+             "step. On the root timeline (a version stores overrides).", "R-CLR-4"},
+            {K::StillDelete, "still delete", "<still>", 1, 1, {}, "Remove a still and its files.", "R-CLR-4"},
+            {K::ViewWipe, "view wipe", "[<still|timeline|off>]", 0, 1, {"split=<vertical|horizontal>", "at=<0..1>"},
+             "Split the monitor between its picture and a reference — a still, or another version at the playhead — "
+             "left | right (vertical) or top / bottom, the split at --at of the frame (0.5 unless moved). With no name, "
+             "only the split moves. Presentation: renders and export-still never wipe.", "R-CLR-5"},
             {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
              "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
              "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",

@@ -351,6 +351,7 @@ namespace interstellar
             case CK::ProxyMake: case CK::ProxyRemove: case CK::ProxyUse: ok = requireProject() && proxyCommand(c); break;
             case CK::MediaOffline: case CK::MediaRelink: ok = requireProject() && mediaCommand(c); break;
             case CK::TrackWindow: case CK::TrackCancel: ok = requireProject() && trackCommand(c); break;
+            case CK::StillGrab: case CK::StillApply: case CK::StillDelete: case CK::ViewWipe: ok = requireProject() && stillCommand(c); break;
             case CK::ViewMatte:
             {
                 // R-CLR-1: presentation of the Grade monitor, not the project — no undo, no save
@@ -893,6 +894,24 @@ namespace interstellar
         m.matteView = mMatteView;   // R-CLR-1
         m.trackJobs.clear();
         for (const auto &j : mTrackJobs) m.trackJobs.push_back(j->model);   // R-CLR-2
+        m.stills.clear();   // R-CLR-4
+        for (const auto &st : P.stills)
+        {
+            const RackObj *from = P.rackObj(st.node);
+            m.stills.push_back({st.id, st.name, resolvePath(st.file), from ? from->name : std::string(), st.at});
+        }
+        m.wipeRef.clear();  // R-CLR-5
+        m.wipeLabel.clear();
+        if (mWipeRef.compare(0, 6, "still:") == 0)
+        {
+            if (const Still *st = P.still(mWipeRef.substr(6))) { m.wipeRef = st->id; m.wipeLabel = st->name; }
+        }
+        else if (mWipeRef.compare(0, 9, "timeline:") == 0)
+        {
+            if (const Timeline *wt = P.timeline(mWipeRef.substr(9))) { m.wipeRef = wt->id; m.wipeLabel = wt->name; }
+        }
+        m.wipeVertical = mWipeVertical;
+        m.wipeAt = mWipeAt;
         m.proxyJobs.clear();
         for (const auto &j : mProxyJobs) m.proxyJobs.push_back(j->model);
         fillEditModel();
@@ -1193,6 +1212,8 @@ namespace interstellar
         mJobs.clear();
         mProxyJobs.clear();
         mTrackJobs.clear();
+        mStillPictures.clear();
+        mWipeRef.clear();
         mCache->clear();
         mSync->grade->releaseScratch();
         mSelectedClip.clear();

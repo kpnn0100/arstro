@@ -90,6 +90,16 @@ namespace interstellar_v1
         /** The LIVE eased position of the highlight, in chips (0 = the first). */
         double angleHighlight() const { return mAngleSel.value(); }
         double zoomTarget() const { return mZoomTarget; }
+        /** R-CLR-5: the wipe's divider over the picture (the service draws the two sides). It eases to
+         *  `at` when the model moves it and follows the pointer exactly while dragged; `onWipe` asks
+         *  for each new split. Intent only — it fades with `on`. */
+        void setWipe(bool on, bool vertical, double at, const std::string &label);
+        std::function<void(double at)> onWipe;
+        double wipeAmount() const { return mWipeAmt.value(); }
+        double wipeLive() const { return mWipeLive.value(); }
+        bool wipeDragging() const { return mWipeDrag; }
+        /** The divider's grip (local); empty when hidden. */
+        artboard::Rect wipeGripRect() const;
         bool panning() const { return mPanning; }
         static constexpr double kMaxZoom = 8.0;
         static constexpr double kZoomNotch = 1.15;   // cosmo's
@@ -130,6 +140,13 @@ namespace interstellar_v1
         artboard::AnimatedProperty mCaptureAmt{0.0};
         cosmo_v2::HoverFade mCaptureHover;
         mutable artboard::Rect mCaptureRect{0, 0, 0, 0};
+        // R-CLR-5: the wipe divider
+        bool mWipeWanted = false, mWipeApplied = false, mWipeInit = false, mWipeVertical = true, mWipeDrag = false;
+        double mWipeTarget = 0.5, mWipeLast = -1.0;
+        std::string mWipeLabel;
+        artboard::AnimatedProperty mWipeAmt{0.0}, mWipeLive{0.5};
+        double wipeAtPoint(const artboard::Point &local) const;
+        bool nearWipe(const artboard::Point &local) const;
         // R-EDT-5: the angle bar
         std::vector<std::string> mAngleNames;
         int mAngleActive = 0;

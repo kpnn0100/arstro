@@ -45,23 +45,6 @@ namespace interstellar
             return (double)duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
         }
 
-        /** Every key of a params set except masks: `set mask=` APPENDS in Cosmo, so writing masks
-         *  back would duplicate them. Interstellar never edits masks, so no edit it records can
-         *  differ in them. */
-        std::vector<std::pair<std::string, std::string>> paramFields(const EditParams &p)
-        {
-            std::vector<std::pair<std::string, std::string>> out;
-            std::istringstream in(serializeParams(p));
-            std::string line;
-            while (std::getline(in, line))
-            {
-                const auto eq = line.find('=');
-                if (eq == std::string::npos || line.compare(0, eq, "mask") == 0) continue;
-                out.emplace_back(line.substr(0, eq), line.substr(eq + 1));
-            }
-            return out;
-        }
-
         std::string joinNames(const std::vector<std::string> &v)
         {
             std::string s;
@@ -79,6 +62,23 @@ namespace interstellar
         return true;
     }
 
+    /** Every key of a params set except masks: `set mask=` APPENDS in Cosmo, so writing masks
+     *  back would duplicate them. Interstellar never edits masks, so no edit it records can
+     *  differ in them. */
+    std::vector<std::pair<std::string, std::string>> paramFields(const EditParams &p)
+    {
+        std::vector<std::pair<std::string, std::string>> out;
+        std::istringstream in(serializeParams(p));
+        std::string line;
+        while (std::getline(in, line))
+        {
+            const auto eq = line.find('=');
+            if (eq == std::string::npos || line.compare(0, eq, "mask") == 0) continue;
+            out.emplace_back(line.substr(0, eq), line.substr(eq + 1));
+        }
+        return out;
+    }
+
     bool InterstellarService::undoable(Command::Kind k)
     {
         switch (k)
@@ -92,7 +92,7 @@ namespace interstellar
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
             case CK::ClipPaste: case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: case CK::KeyShift: case CK::KeyPaste:
-            case CK::EditInsert: case CK::EditOverwrite: case CK::MulticamNew: case CK::MulticamAngle:
+            case CK::EditInsert: case CK::EditOverwrite: case CK::MulticamNew: case CK::MulticamAngle: case CK::StillApply:
                 return true;
             default: return false;
         }
@@ -142,6 +142,7 @@ namespace interstellar
             // is are media management, outside undo like a render — a proxy finished or a file relinked
             // after an edit must survive undoing it
             p.proxies = mProject->proxies;
+            p.stills = mProject->stills;   // R-CLR-4: the gallery is a reference shelf, outside undo
             for (auto &ro : p.rackObjs)
                 if (const RackObj *now = mProject->rackObj(ro.id))
                 {

@@ -83,7 +83,7 @@ one integrator who moves, wires, tests and commits each stream:
       11c. [x] Relink (R-MEDIA-3) — DR-MEDIA-3.
       12. [x] Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows) — DR-CLR-1.
       12b. [x] Window tracking (R-CLR-2) — DR-CLR-2.
-      12c. [ ] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5).
+      12c. [x] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5) — DR-CLR-3.
       12d. [ ] The node graph (R-CLR-3).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
@@ -135,6 +135,13 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a still is a picture and a snapshot of a grade; the wipe is drawn by the service.** A
+gallery's grade must not become a second colour authority, so it is written beside the project as the
+same text Cosmo's params serialise to, and applying it goes through Cosmo exactly as Paste Grade does.
+The wipe is composed by the service into the monitor's picture rather than by the UI from two images:
+it is then one picture, testable pixel for pixel, the same in every front end, and it can never leak
+into a render because only the monitor's paths apply it.
 
 **2026-10-05 — a qualifier and a window are mattes in the node's stack, not colour.** Colour is Cosmo's
 and Cosmo has no HSL key; the grade weight already showed the way — Interstellar owning HOW MUCH of a
