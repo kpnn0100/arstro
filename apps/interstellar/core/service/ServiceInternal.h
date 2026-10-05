@@ -8,6 +8,7 @@
 #include "GradeEngine.h"
 #include "Composite.h"
 #include "ColourTransform.h"
+#include "Lut.h"
 #include "volume/Volume.h"
 #include <atomic>
 #include <condition_variable>
@@ -59,6 +60,9 @@ namespace interstellar
         int srcWidth = 0;               // the source's own width: plugin sizes are in its pixels
         // R-COLOR-2: the source's space → the working space, before Cosmo grades (null = identity)
         std::shared_ptr<const render::colour::Transform> input;
+        // R-COLOR-5: the source's input LUT, after the transform (null = none) and its version stamp
+        std::shared_ptr<const render::Lut> lut;
+        std::string lutKey;
         render::Layer layer;            // geometry, fit, opacity, blend, dissolve; src filled at execute
     };
 
@@ -70,6 +74,10 @@ namespace interstellar
         // R-COLOR-4: the working space → the picture: the monitor's view (Rec.709), or a render's --output
         std::shared_ptr<const render::colour::Transform> output;
     };
+
+    /** A .cube read once per (path, size, mtime) — plans ask for it every frame (R-COLOR-5). Null and
+     *  `err` when it does not read; `stamp` names the version the caches key on. Thread-safe. */
+    std::shared_ptr<const render::Lut> loadLut(const std::string &resolvedPath, std::string &err, std::string *stamp = nullptr);
 
     /** Decoders and a grade engine for ONE thread: the UI thread's (renders, stills) or the
      *  preview worker's. FrameCache is shared — it is thread-safe. */

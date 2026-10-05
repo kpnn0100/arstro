@@ -85,6 +85,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `key paste [--at <t>] [--to <address>]` | Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced. | R-ANIM-7 |
 | `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
+| `lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>]` | Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. What is not per-pixel colour is left out and said so in the file. | R-COLOR-6 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
 | `state print [--json] [--stable]` | Print the AppModel; --stable omits machine-dependent fields. | R-API-2 |
 | `api [--json] [--md]` | Print this document. | R-API-1 |
@@ -146,6 +147,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<bind>.bypass` | rackobj | bool |  |  | 0.0 | Cosmo's bypass for the node. |
 | `<bind>.frame` | rackobj | scalar | s |  | 0.0 | Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`. |
 | `<bind>.input` | rackobj | text | rec709\|srgb\|linear\|logc3\|logc4\|slog3\|vlog\|clog3\|log3g10\|bmdfilm5 |  |  | What the source IS: its input colour transform into the working space, before Cosmo grades it (R-COLOR-2). The media's interpretation, never a grade. |
+| `<bind>.lut` | rackobj | text | <file.cube>\|none |  |  | An input LUT on the source, after its input transform and before Cosmo (R-COLOR-5); `none` clears it. |
 | `<clip>.at` | clip | scalar | s |  | 0.0 | Timeline position of the clip's first frame. |
 | `<clip>.in` | clip | scalar | s |  | 0.0 | Source in-point. |
 | `<clip>.out` | clip | scalar | s |  | 0.0 | Source out-point (exclusive). |
@@ -269,6 +271,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
+| `rack[].lut` | string |  | Its input LUT (.cube) as the project names it; empty = none (`set <bind>.lut=`, R-COLOR-5). |
 | `rack[].input` | string |  | What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2). |
 | `rack[].mediaBitDepth` | integer |  | Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15). |
 | `rack[].sharesMedia` | integer |  | How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group. |
@@ -397,6 +400,8 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `effects[].order` | integer |  | Position in the stack; 0 = first after Cosmo. |
 | `effects[].enabled` | bool |  | On or off. |
 | `effects[].mix` | number |  | Output over input, 0..1. |
+| `effects[].fileKey` | string |  | The parameter that names its file — `path` for a LUT (`set ef_3.path=<file>`); empty = the plugin takes no file. |
+| `effects[].file` | string |  | The file a file-taking plugin reads — a LUT's .cube (`set ef_3.path=`); empty = none chosen (R-COLOR-5). |
 | `effects[].params` | array |  | Its parameters, from the catalog, with the value now. |
 | `effects[].params[].key` | string |  | The parameter's key — the address is `<effect id>.<key>`. |
 | `effects[].params[].label` | string |  | Its name for a person. |

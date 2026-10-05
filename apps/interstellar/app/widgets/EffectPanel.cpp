@@ -42,6 +42,21 @@ namespace interstellar_v1
         };
         make("mix", "Mix", 0.0, 1.0, true);
         for (const auto &p : e.params) make(p.key, p.label + (p.unit == "px" ? " (px)" : p.unit == "deg" ? " (\xC2\xB0)" : ""), p.min, p.max, p.unit.empty());
+        if (!e.fileKey.empty())
+        {
+            s.fileKey = e.fileKey;
+            auto b = std::make_shared<cosmo_v2::PillButton>("Choose a .cube\xE2\x80\xA6");
+            b->idleBox = {Paint::filledStroked(palette::secondary(), palette::border(), 1.0), radius::control()};
+            b->activeBox = b->idleBox;
+            b->idleText = {palette::foreground(), 10.0, font::sans()};
+            b->activeText = b->idleText;
+            b->hoverEmphasis = palette::white();
+            const std::string key = e.fileKey;
+            b->onClick = [this, id, key] { if (onChooseFile) onChooseFile(id, key); };
+            b->visible = false;
+            addChild(b);
+            s.fileButton = b;
+        }
         return s;
     }
 
@@ -62,6 +77,13 @@ namespace interstellar_v1
                 Section &s = sectionFor(*e);
                 s.label = e->label;
                 mShown.push_back(e->id);
+                if (s.fileButton && s.file != e->file)
+                {
+                    s.file = e->file;
+                    const auto slash = s.file.find_last_of('/');
+                    s.fileButton->setLabel(s.file.empty() ? std::string("Choose a .cube\xE2\x80\xA6")
+                                                          : "LUT  \xC2\xB7  " + (slash == std::string::npos ? s.file : s.file.substr(slash + 1)));
+                }
                 if (interacting) continue;   // a gesture in flight outranks the model
                 for (auto &r : s.rows)
                 {
@@ -82,7 +104,11 @@ namespace interstellar_v1
         for (auto &kv : mSections)
         {
             const bool shown = std::find(mShown.begin(), mShown.end(), kv.first) != mShown.end();
-            if (!shown) for (auto &r : kv.second.rows) r.slider->visible = false;
+            if (!shown)
+            {
+                for (auto &r : kv.second.rows) r.slider->visible = false;
+                if (kv.second.fileButton) kv.second.fileButton->visible = false;
+            }
         }
     }
 
@@ -92,6 +118,12 @@ namespace interstellar_v1
         if (it == mSections.end()) return nullptr;
         for (const auto &r : it->second.rows) if (r.key == key) return r.slider;
         return nullptr;
+    }
+
+    std::shared_ptr<cosmo_v2::PillButton> EffectPanel::fileButtonOf(const std::string &effectId) const
+    {
+        const auto it = mSections.find(effectId);
+        return it == mSections.end() ? nullptr : it->second.fileButton;
     }
 
     void EffectPanel::setOpen(const std::string &effectId, bool open)
@@ -112,7 +144,7 @@ namespace interstellar_v1
 
     double EffectPanel::bodyH(const Section &s) const
     {
-        const double full = kBodyPad + s.rows.size() * (cosmo_v2::SliderRow::kRowHeight + kRowGap);
+        const double full = kBodyPad + (s.rows.size() + (s.fileButton ? 1 : 0)) * (cosmo_v2::SliderRow::kRowHeight + kRowGap);
         return full * s.amount.value();
     }
 
@@ -152,6 +184,18 @@ namespace interstellar_v1
                 r.slider->visible = a > 0.02 && inside && y + cosmo_v2::SliderRow::kRowHeight > 0.0 && y < h;
                 y += cosmo_v2::SliderRow::kRowHeight + kRowGap;
             }
+            if (s.fileButton)
+            {
+                // the file row, under the sliders, by the same eased rules
+                const double rh = cosmo_v2::SliderRow::kRowHeight;
+                s.fileButton->x.set(kPadX);
+                s.fileButton->y.set(y);
+                s.fileButton->width.set(std::max(0.0, w - 2 * kPadX));
+                s.fileButton->height.set(rh);
+                s.fileButton->opacity.set(a);
+                const bool inside = y + rh <= top - kBodyPad + body + 0.5;
+                s.fileButton->visible = a > 0.02 && inside && y + rh > 0.0 && y < h;
+            }
         }
     }
 
@@ -175,7 +219,7 @@ namespace interstellar_v1
                 if (mShown[(size_t)i] == mId)
                 {
                     const Section &s = mSections.at(mId);
-                    const double full = kBodyPad + s.rows.size() * (cosmo_v2::SliderRow::kRowHeight + kRowGap);
+                    const double full = kBodyPad + (s.rows.size() + (s.fileButton ? 1 : 0)) * (cosmo_v2::SliderRow::kRowHeight + kRowGap);
                     mScroll.setExtent(0.0, height.value(), contentH() + full);
                     mScroll.reveal(sectionTop(i), kHeaderH + full);
                 }
@@ -213,6 +257,10 @@ namespace interstellar_v1
     {
         const double w = width.value(), h = height.value();
         drawRoundedRect(t, Rect{0, 0, w, h}, 0.0, Paint::filled(palette::card()));
+        // D-12: clipToBounds clips the CHILDREN, not this paint — a scrolled header must not draw
+        // over the plugin list above
+        t.save();
+        t.clipRect(0, 0, w, h);
         for (int i = 0; i < (int)mShown.size(); ++i)
         {
             const Rect r = headerRect(i);
@@ -238,6 +286,7 @@ namespace interstellar_v1
             t.setFill(fade(palette::mutedForeground(), 0.8));
             t.drawText(mShown[(size_t)i], w - kPadX - idW, textfit::baseline(cy, 9.0), 9.0, font::mono());
         }
+        t.restore();
         mScroll.drawBar(t, w);
     }
 }

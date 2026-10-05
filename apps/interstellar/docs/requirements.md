@@ -916,6 +916,34 @@ HLG, sRGB and P3 tags; an 8-bit HDR render refused), L2 (`--output pq` frames eq
 applied by hand — 0/65535; refusals; HDR off the video unit) and UI (`colour management`). Mutant
 run red: the render taking the monitor's view instead of its `--output`.
 
+### DR-COLOR-4 LUTs in — on a source and in its stack — and out of its grade (R-COLOR-5, R-COLOR-6)
+`render/Lut.{h,cpp}` reads Adobe/Resolve `.cube` files (`:114` — 1D or 3D, DOMAIN_MIN/MAX or
+Resolve's INPUT_RANGE; a size that disagrees with the rows, a stray word or data before the size is
+refused, naming the line), applies 1D linearly and 3D tetrahedrally (`:30` — exact on the lattice,
+greys stay grey) to 8-bit or deep frames with a mix (`:77`), and writes them (`:189`). The service
+reads each file once per (path, size, mtime) (`core/service/ServiceRender.cpp:131`) and the caches
+key on that stamp. In: a source's `<bind>.lut` (`core/service/InterstellarService.cpp:1859`; `none`
+clears; saved as `lut=` on the `#rackobj`) applies after its input transform, before Cosmo
+(`ServiceRender.cpp:510`); the `lut.cube` effect (`render/Effects.cpp:225`, family Colour) has a
+file parameter, `set ef_3.path=<file>` (`InterstellarService.cpp:1909`), which the effect chain
+loads and hands to the run (`:2435`) — the render library knows no paths. Out: `lut export <source>
+--out <file.cube> [--size 33] [--output …]` (`ServiceRender.cpp:1159`) evaluates the source's colour
+on a 16-bit lattice in the .cube's own order — input transform, input LUT, Cosmo's grade as the open
+version folds it with the non-per-pixel stages neutralised (`:1195`), the grade weight, its LUT
+effects, an optional output transform — and writes the result with a header saying what is in it and
+what was left out. Model: `rack[].lut`, `effects[].file`, `effects[].fileKey`. UI: the rack row's
+menu gains Input LUT… / Change Input LUT… / Remove Input LUT and Export LUT… (`app/App.cpp:200`)
+through host pickers (`linux_main.cpp:197`); a file-taking effect's section ends with a row naming
+its file, which picks one (`app/widgets/EffectPanel.cpp:45`, `app/App.cpp:62`). Measured: FFmpeg's
+own `lut3d` applying an exported 33-point LUT to the ungraded still of testsrc2 matches Interstellar's
+graded still with a mean difference of 0.32 code values, 99.9 % of samples within 3; the worst, 27,
+sits where the grade clips a saturated cyan's red to 0 while its green clips at 255 — two kinks in
+one lattice cell (65 points: 23). Guarded by render `cube: identity, round trip, tetrahedral…`
+(refusals included), L2 `a LUT goes on a source, in its stack, and comes out of its grade` (an
+inverting LUT on the source and as an effect; the baked LUT on the plain frame reproduces the grade
+— worst 0), UI `LUTs in and out`. Mutants run red: the export skipping the grade, the lattice order
+swapped, the input LUT not applied, a tetrahedral case mis-weighted. D-12 found on the way.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

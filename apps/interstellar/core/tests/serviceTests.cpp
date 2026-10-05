@@ -75,6 +75,8 @@ static AppModel populatedModel()
         EffectModel e;
         e.id = "ef_1"; e.node = "ro_1"; e.nodeBind = "a"; e.type = "blur.gaussian"; e.label = "Gaussian Blur"; e.family = "Blur";
         e.params.push_back(EffectParamModel{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0});
+        e.file = "looks/teal.cube";
+        e.fileKey = "path";
         m.effects.push_back(e);
         m.effectTypes.push_back({"blur.gaussian", "Gaussian Blur", "Blur"});
         m.colourInputs.push_back({"slog3", "Sony S-Log3"});

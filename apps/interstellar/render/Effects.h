@@ -22,10 +22,15 @@
  *  into a different shape (it is the frame's, and frames here are opaque).
  *
  *  A deep raster (R-COLOR-1) runs the same kernels at 16 bits per component.
+ *
+ *  Colour, in kinds: LUT — a `.cube` (1D or 3D) applied to the encoded picture, its mix the amount
+ *  (R-COLOR-5).
  */
 #pragma once
+#include "Lut.h"
 #include "Raster.h"
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -46,6 +51,9 @@ namespace render
     {
         std::string type, label, family;
         std::vector<EffectParamDef> params;
+        /** Parameters that name a FILE (a LUT's `path`): text, set as `set ef_3.path=<file>`; the
+         *  service loads the file and hands the result over in the run (R-COLOR-5). */
+        std::vector<std::string> files = {};
     };
 
     /** Every plugin there is, in menu order. */
@@ -59,6 +67,7 @@ namespace render
         std::string type;
         double mix = 1.0;
         std::map<std::string, double> p;        // every catalog key, defaults filled in
+        std::shared_ptr<const Lut> lut;         // lut.cube: its file, loaded by the service (null = none chosen)
         double get(const std::string &k) const
         {
             const auto it = p.find(k);

@@ -59,6 +59,10 @@ namespace interstellar_v1
         std::function<void()> onPickProjectToOpen, onPickProjectToCreate, onPickFootage;
         /** File › Save As…, Preset › Import Preset…, File › Export Still… (cosmo's File/Preset). */
         std::function<void()> onPickSaveAs, onPickPresetToImport, onPickStillToExport;
+        /** Host pickers for LUTs (R-COLOR-5/6): a .cube to read, a .cube to write (named `suggested`);
+         *  each answers through `done`, never on cancel. */
+        std::function<void(std::function<void(const std::string &)> done)> onPickLutToOpen;
+        std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickLutToSave;
         void openProjectPicked(const std::string &path);
         void newProjectPicked(const std::string &path);
         void footagePicked(const std::vector<std::string> &paths);

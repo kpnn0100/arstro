@@ -58,6 +58,11 @@ namespace interstellar_v1
         };
         mEdit->gradeInspector()->onAddEffect = [this](Rect r) { openAddEffectMenu(r); };
         mEdit->gradeInspector()->onPluginContext = [this](const std::string &id, Point w) { openPluginContext(id, w); };
+        // a LUT effect's file row (R-COLOR-5): the host picks the .cube, the line sets it
+        mEdit->gradeInspector()->effectPanel()->onChooseFile = [this](const std::string &id, const std::string &key) {
+            if (onPickLutToOpen)
+                onPickLutToOpen([this, id, key](const std::string &path) { dispatch("set " + cmd::quote(id + "." + key + "=" + path)); });
+        };
         // the Cut tab, like an editor (R-UI-14)
         mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
@@ -191,6 +196,17 @@ namespace interstellar_v1
             std::string now = "Rec.709";
             for (const auto &c : m2.colourInputs) if (c.id == n.input) now = c.label;
             items.push_back({"Input Colour (" + now + ")...", [this, name = n.bindName, at] { openInputColourMenu(name, at); }});
+            // R-COLOR-5/6: an input LUT in, the source's colour out
+            items.push_back({n.lut.empty() ? "Input LUT..." : "Change Input LUT...", [this, name = n.bindName] {
+                if (onPickLutToOpen)
+                    onPickLutToOpen([this, name](const std::string &path) { dispatch("set " + cmd::quote(name + ".lut=" + path)); });
+            }});
+            if (!n.lut.empty()) items.push_back({"Remove Input LUT", [this, name = n.bindName] { dispatch("set " + cmd::quote(name + ".lut=none")); }});
+            if (!n.failed)
+                items.push_back({"Export LUT...", [this, name = n.bindName, b] {
+                    if (onPickLutToSave)
+                        onPickLutToSave(name + ".cube", [this, b](const std::string &path) { dispatch("lut export " + b + " --out " + cmd::quote(path)); });
+                }});
         }
         if (!n.failed) items.push_back({"Copy Grade", [this, b] { dispatch("grade copy " + b); }});
         if (m2.hasGradeClipboard)

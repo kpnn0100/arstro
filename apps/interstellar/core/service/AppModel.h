@@ -68,6 +68,7 @@ namespace interstellar
         int sharesMedia = 0;          // OTHER sources on the same file (a variant and its original, R-RACK-5)
         int mediaBitDepth = 0;        // bits per component the source carries once opened (R-UI-15); 0 = unknown
         std::string input = "rec709"; // what the source IS — its input colour transform (R-COLOR-2)
+        std::string lut;              // its input LUT, as written in the project; "" = none (R-COLOR-5)
     };
 
     /** A plugin parameter as the UI draws it: its catalog definition and the value now (R-FX-5). */
@@ -88,6 +89,8 @@ namespace interstellar
         bool enabled = true;
         double mix = 1.0;
         std::vector<EffectParamModel> params;
+        std::string file;             // the file a file-taking plugin reads (a LUT's .cube); "" = none chosen
+        std::string fileKey;          // the parameter that names it (`path`); "" = the plugin takes no file
     };
 
     /** One keyframe (R-ANIM-2): a time on its curve's clock, a value, and each side's shape. */

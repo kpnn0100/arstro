@@ -12,6 +12,7 @@
 
 #include "AppModelCodec.h"
 #include "ColourTransform.h"
+#include "Lut.h"
 #include "InterstellarService.h"
 #include "Project.h"
 #include "core/ThreadBudget.h"
@@ -20,6 +21,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <functional>
 #include <map>
 #include <set>
@@ -977,6 +979,79 @@ int main()
         std::printf("    PQ render vs the transforms applied by hand: worst %d / 65535\n", worst);
         assert(worst <= 2);
         f.must("settings set hardwareVideo=0");
+    });
+
+    test("a LUT goes on a source, in its stack, and comes out of its grade (R-COLOR-5, R-COLOR-6)", [] {
+        Fixture f("luts");
+        f.standard();
+        std::string err;
+        const std::string tl = f.svc->model().timelines[0].id;
+        {
+            std::ofstream c(f.path("invert.cube"));
+            c << "TITLE \"invert\"\nLUT_3D_SIZE 2\n";
+            for (int b = 0; b < 2; ++b) for (int g = 0; g < 2; ++g) for (int r = 0; r < 2; ++r) c << 1 - r << " " << 1 - g << " " << 1 - b << "\n";
+            std::ofstream bad(f.path("bad.cube"));
+            bad << "LUT_3D_SIZE 3\n0 0 0\n";
+        }
+        Raster plain;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, plain));
+        auto inverted = [&](const Raster &r) {
+            for (size_t i = 0; i < r.rgba.size(); ++i)
+                if (i % 4 != 3 && std::abs((255 - plain.rgba[i]) - r.rgba[i]) > 1) return false;
+            return true;
+        };
+        // the input LUT: refused unless it reads, applied before Cosmo, saved, cleared
+        assert(!f.run("set a.lut=\"" + f.path("bad.cube") + "\"", &err) && has(err, "rows, the size says 27"));
+        f.must("set a.lut=\"" + f.path("invert.cube") + "\"");
+        Raster lutted;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, lutted) && inverted(lutted));
+        int ia = -1;
+        for (int i = 0; i < (int)f.svc->model().rack.size(); ++i) if (f.svc->model().rack[(size_t)i].bindName == "a") ia = i;
+        assert(has(f.svc->model().rack[(size_t)ia].lut, "invert.cube"));
+        f.must("project save");
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(has(f.out("get a.lut"), "invert.cube"));
+        f.must("set a.lut=none");
+        assert(has(f.out("get a.lut"), "a.lut=none"));
+        Raster again;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, again) && again.rgba == plain.rgba);   // not a cached LUT frame
+
+        // the LUT effect: in the stack, after Cosmo, its mix the amount
+        const std::string fx = f.out("effect add a --type lut.cube");
+        const std::string id = fx.substr(0, fx.find_first_of(" \n"));
+        assert(id.rfind("ef_", 0) == 0);
+        assert(has(f.out("get " + id + ".path"), "none"));
+        Raster none;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, none) && none.rgba == plain.rgba);       // no file: the picture as it came
+        assert(!f.run("set " + id + ".path=\"" + f.path("bad.cube") + "\"", &err) && has(err, "rows"));
+        f.must("set " + id + ".path=\"" + f.path("invert.cube") + "\"");
+        Raster fxd;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, fxd) && inverted(fxd));
+        bool fileShown = false;
+        for (const auto &e : f.svc->model().effects) fileShown = fileShown || (e.id == id && has(e.file, "invert.cube"));
+        assert(fileShown);
+        f.must("effect remove " + id);
+
+        // the export: a grade baked to a .cube reproduces the grade on the frame
+        f.must("set a.basic.exposure=0.6 a.basic.contrast=25 a.basic.vibrance=30 a.basic.texture=60");
+        Raster graded;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, graded));
+        assert(!f.run("lut export a --out \"" + f.path("x.cube") + "\" --size 1", &err) && has(err, "2 … 129"));
+        f.must("rack group new gr --nodes b");
+        assert(!f.run("lut export gr --out \"" + f.path("x.cube") + "\"", &err) && has(err, "group"));
+        f.must("lut export a --out \"" + f.path("a.cube") + "\"");
+        render::Lut baked;
+        assert(render::readCube(f.path("a.cube"), baked, err) && baked.size3d == 33);
+        std::ifstream in(f.path("a.cube"));
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        assert(has(text, "# Left out (not per-pixel colour): texture") && has(text, "In: Rec.709 code values"));
+        Raster viaLut = plain;
+        baked.apply(viaLut);
+        int worst = 0;
+        for (size_t i = 0; i < graded.rgba.size(); ++i) if (i % 4 != 3) worst = std::max(worst, std::abs(viaLut.rgba[i] - graded.rgba[i]));
+        std::printf("    the baked LUT on the plain frame vs the grade: worst %d code values\n", worst);
+        assert(worst <= 3);
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

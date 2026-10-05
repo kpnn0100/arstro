@@ -17,6 +17,9 @@
 #include "ColourTransform.h"
 #include "Composite.h"
 #include "Effects.h"
+#include "Lut.h"
+#include <fstream>
+#include <functional>
 #include "Prescale.h"
 #include "FrameCache.h"
 #include "GradeEngine.h"
@@ -593,6 +596,95 @@ namespace
         std::printf("[PASS] colour: Rec.709 is untouched; Rec.709 → ACEScct → Rec.709 round-trips within 1/512; PQ 203 = 0.5806, HLG 75%%; highlights stop at the peak\n");
     }
 
+    // ── LUTs (R-COLOR-5, R-COLOR-6) ───────────────────────────────────────────────────────────
+
+    Raster gradient(int w, int h);   // below, with the grade tests
+
+    Lut lutOf(int n, const std::function<void(float, float, float, float *)> &f)
+    {
+        Lut l;
+        l.size3d = n;
+        l.table.resize((size_t)n * n * n * 3);
+        for (int b = 0; b < n; ++b)
+            for (int g = 0; g < n; ++g)
+                for (int r = 0; r < n; ++r)
+                    f(r / float(n - 1), g / float(n - 1), b / float(n - 1), &l.table[(((size_t)b * n + g) * n + r) * 3]);
+        return l;
+    }
+
+    void test_cube_reads_applies_and_round_trips()
+    {
+        const std::string dir = std::getenv("INTERSTELLAR_TEST_DIR") ? std::getenv("INTERSTELLAR_TEST_DIR") : "/tmp";
+        // identity: nothing moves
+        Lut id = lutOf(17, [](float r, float g, float b, float *o) { o[0] = r; o[1] = g; o[2] = b; });
+        Raster img = gradient(64, 48), before = img;
+        id.apply(img);
+        for (size_t i = 0; i < img.rgba.size(); ++i) assert(std::abs(img.rgba[i] - before.rgba[i]) <= 1);
+        // a smooth look, written and read back exactly (6 decimals)
+        auto look = [](float r, float g, float b, float *o) { o[0] = std::pow(g, 0.8f); o[1] = 0.1f + 0.8f * r; o[2] = b * b; };
+        Lut lk = lutOf(33, look);
+        lk.title = "test look";
+        std::string err;
+        assert(writeCube(dir + "/look.cube", lk, {"made by renderTests"}, err));
+        Lut back;
+        assert(readCube(dir + "/look.cube", back, err) && back.size3d == 33 && back.title == "test look");
+        for (size_t i = 0; i < lk.table.size(); ++i) assert(std::fabs(back.table[i] - lk.table[i]) < 1e-6f);
+        // tetrahedral: exact on the lattice, and within a hair of the function between it
+        float in[3], out[3], want[3];
+        in[0] = 5 / 32.0f; in[1] = 17 / 32.0f; in[2] = 30 / 32.0f;
+        back.map(in, out);
+        look(in[0], in[1], in[2], want);
+        for (int c = 0; c < 3; ++c) assert(std::fabs(out[c] - want[c]) < 1e-5f);
+        float worst = 0;
+        for (float r = 0.03f; r < 1.0f; r += 0.11f)
+            for (float g = 0.05f; g < 1.0f; g += 0.13f)
+                for (float b = 0.07f; b < 1.0f; b += 0.17f)
+                {
+                    in[0] = r; in[1] = g; in[2] = b;
+                    back.map(in, out);
+                    look(r, g, b, want);
+                    for (int c = 0; c < 3; ++c) worst = std::max(worst, std::fabs(out[c] - want[c]));
+                }
+        assert(worst < 2e-3f);
+        // a neutral LUT keeps greys grey (tetrahedral's reason to exist)
+        Lut neutral = lutOf(9, [](float r, float g, float b, float *o) { const float y = 0.3f * r + 0.6f * g + 0.1f * b; o[0] = o[1] = o[2] = std::sqrt(y); });
+        in[0] = in[1] = in[2] = 0.37f;
+        neutral.map(in, out);
+        assert(std::fabs(out[0] - out[1]) < 1e-6f && std::fabs(out[1] - out[2]) < 1e-6f);
+        // a 1D LUT, Resolve's input range, and the refusals that name the line
+        {
+            std::ofstream f(dir + "/inv1d.cube");
+            f << "# an inverse\nLUT_1D_SIZE 2\nLUT_1D_INPUT_RANGE 0 1\n1 1 1\n0 0 0\n";
+        }
+        Lut inv;
+        assert(readCube(dir + "/inv1d.cube", inv, err) && inv.size1d == 2);
+        in[0] = 0.25f; in[1] = 0.5f; in[2] = 1.0f;
+        inv.map(in, out);
+        assert(std::fabs(out[0] - 0.75f) < 1e-6f && std::fabs(out[1] - 0.5f) < 1e-6f && std::fabs(out[2]) < 1e-6f);
+        {
+            std::ofstream f(dir + "/short.cube");
+            f << "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n";
+        }
+        Lut bad;
+        assert(!readCube(dir + "/short.cube", bad, err) && err.find("3 rows, the size says 8") != std::string::npos && bad.empty());
+        {
+            std::ofstream f(dir + "/junk.cube");
+            f << "LUT_3D_SIZE 2\n0 0 0\nhello\n";
+        }
+        assert(!readCube(dir + "/junk.cube", bad, err) && err.find(":3:") != std::string::npos);
+        // deep and 8-bit apply the same LUT; mix 0.5 is half way
+        Raster a8 = gradient(32, 8), a16, a16back;
+        toDeep(a8, a16);
+        back.apply(a8);
+        back.apply(a16);
+        toShallow(a16, a16back);
+        for (size_t i = 0; i < a8.rgba.size(); ++i) assert(std::abs(a8.rgba[i] - a16back.rgba[i]) <= 1);
+        Raster h = before;
+        inv.apply(h, 0.5);
+        for (size_t i = 0; i < h.rgba.size(); i += 4) assert(std::abs(h.rgba[i] - 128) <= 1);
+        std::printf("[PASS] cube: identity, write/read round trip, tetrahedral exact on the lattice (%.5f between), greys stay grey, 1D, refusals name the line\n", worst);
+    }
+
     void test_hostile_geometry_stays_in_bounds()
     {
         // Raw-pointer inner loops earn a hostile sweep: off-screen, sub-pixel, huge, extreme crops,
@@ -1138,6 +1230,7 @@ int main()
     test_deep_keeps_what_8_bits_cannot();
     test_camera_curves_put_grey_where_the_vendors_say();
     test_colour_identities_round_trips_and_hdr_levels();
+    test_cube_reads_applies_and_round_trips();
     std::printf("interstellar_render: all tests passed\n");
     return 0;
 }

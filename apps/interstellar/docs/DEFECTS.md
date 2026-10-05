@@ -66,6 +66,18 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-12 — A scrolled effect panel paints its section headers over the plugin list
+- **Area:** ui · **Status:** Closed (same commit) · **Severity:** S4 (cosmetic; the row under it
+  stays clickable) · **Found:** 2026-10-05, looking at the `grade_lut_effect` shot at 1024×640.
+- **Reproduce:** a node with three effects, the last one selected, at 1024×640: the panel scrolls
+  to reveal its section and the first header is drawn over the list's last row.
+- **Expected:** R6 (design rule) — content that scrolls is clipped to its container.
+- **Cause:** `EffectPanel` set `clipToBounds`, which in Artboard clips the CHILDREN only
+  (`Segment::renderContent`); the headers are the panel's own paint (DR-UI-16, commit 758dceb).
+- **Fix:** the headers are painted inside `clipRect(0, 0, w, h)` (`app/widgets/EffectPanel.cpp`).
+  Guarded by UI `LUTs in and out`: the plugin list is pixel-identical whether the panel below is
+  scrolled or not — red with the clip removed.
+
 ### D-11 — A ProRes master said nothing about its colour
 - **Area:** host · **Status:** Closed (same commit) · **Severity:** S2 (an untagged master in a
   colour tool: a reader guesses) · **Found:** 2026-10-05, probing R-COLOR-4's HDR renders.

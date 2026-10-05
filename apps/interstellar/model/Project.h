@@ -79,6 +79,7 @@ namespace interstellar
         std::string media;                  // the source file the timeline decodes
         double frame = 0.0;                 // the reference frame Cosmo grades, seconds (R-RACK-3)
         std::string input = "rec709";       // what the media IS — its input colour transform (R-COLOR-2)
+        std::string lut;                    // an input LUT (.cube) after the input transform; "" = none (R-COLOR-5)
         Fields unknown;
         Notes notes;
     };

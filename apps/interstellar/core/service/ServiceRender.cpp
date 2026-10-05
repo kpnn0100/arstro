@@ -128,6 +128,32 @@ namespace interstellar
         }
     }
 
+    std::shared_ptr<const render::Lut> loadLut(const std::string &path, std::string &err, std::string *stamp)
+    {
+        static std::mutex mu;
+        struct Entry { std::string version; std::shared_ptr<const render::Lut> lut; std::string err; };
+        static std::map<std::string, Entry> cache;
+        std::error_code ec;
+        const auto size = fs::file_size(path, ec);
+        if (ec) { err = "cannot read " + path; return nullptr; }
+        const auto mtime = fs::last_write_time(path, ec).time_since_epoch().count();
+        const std::string version = path + "@" + std::to_string((long long)size) + ":" + std::to_string((long long)mtime);
+        if (stamp) *stamp = version;
+        std::lock_guard<std::mutex> l(mu);
+        auto it = cache.find(path);
+        if (it == cache.end() || it->second.version != version)
+        {
+            // read once per version: an edited .cube on disk is read again, a plan never re-parses
+            auto lut = std::make_shared<render::Lut>();
+            Entry e;
+            e.version = version;
+            if (render::readCube(path, *lut, e.err)) e.lut = lut;
+            it = cache.insert_or_assign(path, std::move(e)).first;
+        }
+        if (!it->second.lut) err = it->second.err;
+        return it->second.lut;
+    }
+
     InterstellarService::Source *InterstellarService::source(RenderCtx &ctx, const std::string &media)
     {
         auto it = ctx.sources.find(media);
@@ -243,6 +269,7 @@ namespace interstellar
                           (int)l.layer.fit, l.layer.opacity, (int)l.layer.blend, l.layer.dissolveWithPrevious ? 1 : 0);
             k += l.media + l.fxKey + l.effectsKey + buf;
             if (l.input) k += "|" + l.input->key();
+            if (l.lut) k += "|lut:" + l.lutKey;
         }
     }
 
@@ -357,6 +384,11 @@ namespace interstellar
             effectChain(ro->id, L.effects, L.effectsKey, srcT);
             L.srcWidth = s->info.width;
             L.input = inputTransform(*ro, workingOf(P));
+            if (!ro->lut.empty())
+            {
+                std::string why;
+                L.lut = loadLut(resolvePath(ro->lut), why, &L.lutKey);   // unreadable: lint says so; the frame goes without
+            }
 
             const Track *tr = tracks[c->track];
             auto cv = [&](const char *k, double v) { return curveAt(c->id, k, srcT, v); };
@@ -410,6 +442,11 @@ namespace interstellar
         effectChain(roId, L.effects, L.effectsKey, at);
         L.srcWidth = s->info.width;
         L.input = inputTransform(*ro, workingOf(*mProject));
+        if (!ro->lut.empty())
+        {
+            std::string why;
+            L.lut = loadLut(resolvePath(ro->lut), why, &L.lutKey);
+        }
         // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
         // is graded as itself.
         outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
@@ -444,7 +481,8 @@ namespace interstellar
             const PlanLayer &l = plan.layers[i];
             const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
             render::FrameCache::Key key;
-            key.source = l.media + l.fxKey + l.effectsKey + (l.input ? "|" + l.input->key() : std::string());
+            key.source = l.media + l.fxKey + l.effectsKey + (l.input ? "|" + l.input->key() : std::string()) +
+                         (l.lut ? "|lut:" + l.lutKey : std::string());
             key.sourceFrame = l.frame;
             key.paramHash = ungradedOnly ? render::FrameCache::kUngraded : render::hashParams(l.params);
             key.level = l.edge;
@@ -469,6 +507,7 @@ namespace interstellar
                 // R-COLOR-2: the source's space → the working space; Cosmo grades the result, and the
                 // grade weight's "ungraded" is this picture, never the raw log
                 if (l.input) l.input->apply(ungraded);
+                if (l.lut) l.lut->apply(ungraded);   // R-COLOR-5: the source's input LUT, after its transform
                 if (key.paramHash == render::FrameCache::kUngraded) graded[i] = std::move(ungraded);
                 else
                 {
@@ -1114,6 +1153,106 @@ namespace interstellar
         if (!mHost.writeImage(out, frame, err)) return fail("export-still: " + err);
         mOutput = out + "\n";
         emit(Event(EK::RenderFinished).with("job", "still").with("timeline", mProject->timeline(tl)->name).with("frames", 1).with("out", out));
+        return true;
+    }
+
+    bool InterstellarService::lutExport(const Command &c)
+    {
+        // R-COLOR-6: the colour of one source — everything per-pixel between its file and the working
+        // space (or an output) — evaluated on a lattice at 16 bits and written as a 3D .cube
+        const RackObj *ro = mProject->rackObj(mProject->idForRef(c.arg(0)));
+        if (!ro) return fail("lut export: no rack node named " + c.arg(0));
+        if (ro->kind == "group") return fail("lut export: " + ro->name + " is a group — a LUT is baked from a source");
+        const std::string out = c.flag("out");
+        if (out.empty()) return fail("lut export: --out <file.cube> is required");
+        int n = 33;
+        if (c.has("size"))
+        {
+            const std::string ns = c.flag("size");
+            char *end = nullptr;
+            const long v = std::strtol(ns.c_str(), &end, 10);
+            if (!end || *end || v < 2 || v > 129) return fail("lut export: --size is 2 … 129, got " + ns);
+            n = (int)v;
+        }
+        const std::string output = c.has("output") ? c.flag("output") : std::string();
+        if (!output.empty() && !render::colour::known(render::colour::outputs(), output))
+            return fail("lut export: --output is rec709, rec709-2.4, srgb, p3d65, pq or hlg, got " + output);
+
+        EditParams p;
+        std::string err;
+        if (!gradeFor(currentTimeline(), ro->id, p, err, ro->frame)) return fail("lut export: " + err);
+        // not colour, or not per-pixel: a LUT cannot hold them, so they are left out (and said so)
+        p.texture = p.clarity = p.dehaze = 0;
+        p.grainAmount = 0;
+        p.sharpenAmount = 0;
+        p.nrLuminance = p.nrColor = 0;
+        p.lensDistortion = p.lensCA = p.lensVignette = 0;
+        p.cropX = p.cropY = 0;
+        p.cropW = p.cropH = 1;
+        p.rotation = 0;
+        p.quarterTurns = 0;
+        p.masks.clear();
+        p.mixerSpread = 0;   // the mixer's neighbourhood reach: per pixel, its strict answer
+
+        // the lattice: red fastest, then green, then blue — the .cube's own order, one row per blue
+        Raster lattice;
+        lattice.allocate16(n * n, n, 65535);
+        for (int b = 0; b < n; ++b)
+            for (int g = 0; g < n; ++g)
+                for (int r = 0; r < n; ++r)
+                {
+                    uint16_t *px = &lattice.rgba16[(((size_t)b * n + g) * n + r) * 4];
+                    px[0] = (uint16_t)std::lround(65535.0 * r / (n - 1));
+                    px[1] = (uint16_t)std::lround(65535.0 * g / (n - 1));
+                    px[2] = (uint16_t)std::lround(65535.0 * b / (n - 1));
+                }
+        const std::string working = workingOf(*mProject);
+        if (auto t = inputTransform(*ro, working)) t->apply(lattice);
+        std::string lutNote;
+        if (!ro->lut.empty())
+        {
+            std::string why;
+            if (auto l = loadLut(resolvePath(ro->lut), why)) l->apply(lattice);
+            else return fail("lut export: the input LUT does not read — " + why);
+            lutNote = ", its input LUT " + fs::path(ro->lut).filename().string();
+        }
+        Raster graded;
+        if (!mSync->grade->render(lattice, p, !render::GradeEngine::isIdentity(p), 0, graded) || !graded.deep() ||
+            graded.width != n * n || graded.height != n)
+            return fail("lut export: the grade did not render the lattice");
+        if (ro->weight < 1.0)
+        {
+            const double k = std::clamp(ro->weight, 0.0, 1.0);
+            for (size_t i = 0; i < graded.rgba16.size(); ++i)
+                graded.rgba16[i] = (uint16_t)std::lround(lattice.rgba16[i] + (graded.rgba16[i] - (double)lattice.rgba16[i]) * k);
+        }
+        std::vector<render::EffectRun> fx;
+        std::string fxKey;
+        effectChain(ro->id, fx, fxKey, ro->frame);
+        int luts = 0;
+        for (const auto &e : fx)
+            if (e.type == "lut.cube" && e.lut) { render::applyEffect(e, 1.0, graded); ++luts; }   // colour; the blurs are not
+        if (!output.empty()) render::colour::Transform::output(working, output, 1000.0).apply(graded);
+
+        render::Lut lut;
+        lut.title = ro->name + " (Interstellar)";
+        lut.size3d = n;
+        lut.table.resize((size_t)n * n * n * 3);
+        for (size_t i = 0, cnt = (size_t)n * n * n; i < cnt; ++i)
+            for (int k = 0; k < 3; ++k) lut.table[i * 3 + k] = graded.rgba16[i * 4 + k] / 65535.0f;
+        const std::string inLabel = render::colour::label(render::colour::inputs(), ro->input.empty() ? "rec709" : ro->input);
+        std::vector<std::string> comments = {
+            "Interstellar: the colour of " + ro->name + ", baked from its grade on timeline " + mProject->timeline(currentTimeline())->name,
+            "In: " + std::string(inLabel) + " code values as decoded" + lutNote,
+            "Out: " + std::string(render::colour::label(render::colour::workings(), working)) +
+                (output.empty() ? std::string() : std::string(" through the ") + render::colour::label(render::colour::outputs(), output) + " output"),
+            "Included: the input transform, Cosmo's per-pixel stages, the grade weight" + std::string(luts ? ", its LUT effects" : ""),
+            "Left out (not per-pixel colour): texture, clarity, dehaze, sharpening, noise reduction, grain, lens, crop and rotation, masks;",
+            "  the colour mixer's neighbourhood spread is taken as 0, its strict per-pixel answer",
+        };
+        if (!render::writeCube(out, lut, comments, err)) return fail("lut export: " + err);
+        mOutput = out + "\n";
+        emit(Event(EK::Info).with("text", "lut export: " + ro->name + " → " + out));
         return true;
     }
 }

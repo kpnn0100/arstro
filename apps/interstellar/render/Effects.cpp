@@ -222,6 +222,7 @@ namespace render
              {{"amount", "Amount", 0.2, 0.0, 1.0, ""}, {"centerX", "Centre X", 0.5, 0.0, 1.0, ""}, {"centerY", "Centre Y", 0.5, 0.0, 1.0, ""}}},
             {"blur.spin", "Spin Blur", "Blur",
              {{"angle", "Angle", 5.0, 0.0, 90.0, "deg"}, {"centerX", "Centre X", 0.5, 0.0, 1.0, ""}, {"centerY", "Centre Y", 0.5, 0.0, 1.0, ""}}},
+            {"lut.cube", "LUT", "Colour", {}, {"path"}},
         };
         return k;
     }
@@ -237,6 +238,11 @@ namespace render
     {
         if (!effectType(e.type)) return false;
         if (img.empty() || e.mix <= 0.0) return true;
+        if (e.type == "lut.cube")
+        {
+            if (e.lut) e.lut->apply(img, e.mix);   // no file chosen yet: the picture as it came
+            return true;
+        }
         if (img.deep()) run<uint16_t>(e, scale, img);   // R-COLOR-1: a delivery's deep frame, the same kernels at 16 bits
         else run<uint8_t>(e, scale, img);
         return true;

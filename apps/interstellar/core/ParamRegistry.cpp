@@ -78,6 +78,8 @@ namespace interstellar
             {O::RackObj, "<bind>.input", "", "input", PK::Text, "rec709|srgb|linear|logc3|logc4|slog3|vlog|clog3|log3g10|bmdfilm5", 0, 0, 0,
              "What the source IS: its input colour transform into the working space, before Cosmo grades it "
              "(R-COLOR-2). The media's interpretation, never a grade."},
+            {O::RackObj, "<bind>.lut", "", "lut", PK::Text, "<file.cube>|none", 0, 0, 0,
+             "An input LUT on the source, after its input transform and before Cosmo (R-COLOR-5); `none` clears it."},
 
             // ── clip (arrangement; on a derived version a write becomes a #tlset) ──
             {O::Clip, "<clip>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Timeline position of the clip's first frame."},

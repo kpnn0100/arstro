@@ -33,6 +33,7 @@
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -187,6 +188,36 @@ namespace
         {
             char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
             if (path) { a->app->presetImportPicked(path); g_free(path); }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
+    /** R-COLOR-5/6: a .cube to read, or one to write (the extension made sure). */
+    void pickLut(Host *a, bool save, const std::string &suggested, const std::function<void(const std::string &)> &done)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(save ? "Export LUT" : "Choose a LUT", GTK_WINDOW(a->window),
+                                                   save ? GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN, "_Cancel",
+                                                   GTK_RESPONSE_CANCEL, save ? "_Export" : "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+        addFilter(d, "LUTs (.cube)", {"*.cube", "*.CUBE"});
+        if (save)
+        {
+            gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+            gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), suggested.c_str());
+        }
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path)
+            {
+                std::string p = path;
+                g_free(path);
+                if (save && (p.size() < 5 || (p.compare(p.size() - 5, 5, ".cube") != 0 && p.compare(p.size() - 5, 5, ".CUBE") != 0))) p += ".cube";
+                gtk_widget_destroy(d);
+                gtk_widget_queue_draw(a->area);
+                done(p);
+                return;
+            }
         }
         gtk_widget_destroy(d);
         gtk_widget_queue_draw(a->area);
@@ -423,6 +454,8 @@ int main(int argc, char **argv)
     a->app->onPickFootage = [a] { pickFootage(a); };
     a->app->onPickSaveAs = [a] { pickSaveAs(a); };
     a->app->onPickPresetToImport = [a] { pickPresetToImport(a); };
+    a->app->onPickLutToOpen = [a](std::function<void(const std::string &)> done) { pickLut(a, false, std::string(), done); };
+    a->app->onPickLutToSave = [a](const std::string &name, std::function<void(const std::string &)> done) { pickLut(a, true, name, done); };
     a->app->onPickStillToExport = [a] { pickStillToExport(a); };
     a->app->onPickFrameToSave = [a] { pickFrameToSave(a); };
     // The largest screen scale this display can give a window for (cosmo R-SCALE-3): larger ones

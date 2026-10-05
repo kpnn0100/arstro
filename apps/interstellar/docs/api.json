@@ -1125,6 +1125,29 @@
       "requirement": "R-RENDER-5"
     },
     {
+      "verb": "lut export",
+      "usage": "lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>]",
+      "args": "<source>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "out",
+          "value": "<file.cube>"
+        },
+        {
+          "name": "size",
+          "value": "<2..129>"
+        },
+        {
+          "name": "output",
+          "value": "<rec709|rec709-2.4|srgb|p3d65|pq|hlg>"
+        }
+      ],
+      "summary": "Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. What is not per-pixel colour is left out and said so in the file.",
+      "requirement": "R-COLOR-6"
+    },
+    {
       "verb": "capture",
       "usage": "capture [--out <p.png>] [--source <bind>]",
       "args": "",
@@ -1669,6 +1692,12 @@
       "type": "number",
       "stable": true,
       "doc": "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."
+    },
+    {
+      "path": "rack[].lut",
+      "type": "string",
+      "stable": true,
+      "doc": "Its input LUT (.cube) as the project names it; empty = none (`set <bind>.lut=`, R-COLOR-5)."
     },
     {
       "path": "rack[].input",
@@ -2439,6 +2468,18 @@
       "doc": "Output over input, 0..1."
     },
     {
+      "path": "effects[].fileKey",
+      "type": "string",
+      "stable": true,
+      "doc": "The parameter that names its file — `path` for a LUT (`set ef_3.path=<file>`); empty = the plugin takes no file."
+    },
+    {
+      "path": "effects[].file",
+      "type": "string",
+      "stable": true,
+      "doc": "The file a file-taking plugin reads — a LUT's .cube (`set ef_3.path=`); empty = none chosen (R-COLOR-5)."
+    },
+    {
       "path": "effects[].params",
       "type": "array",
       "stable": true,
@@ -3141,6 +3182,15 @@
       "unit": "rec709|srgb|linear|logc3|logc4|slog3|vlog|clog3|log3g10|bmdfilm5",
       "range": "",
       "doc": "What the source IS: its input colour transform into the working space, before Cosmo grades it (R-COLOR-2). The media's interpretation, never a grade."
+    },
+    {
+      "address": "<bind>.lut",
+      "owner": "rackobj",
+      "key": "lut",
+      "kind": "text",
+      "unit": "<file.cube>|none",
+      "range": "",
+      "doc": "An input LUT on the source, after its input transform and before Cosmo (R-COLOR-5); `none` clears it."
     },
     {
       "address": "<clip>.at",

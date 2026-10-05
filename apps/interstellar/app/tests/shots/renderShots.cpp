@@ -348,6 +348,20 @@ namespace
                 }
             r.settle();
         }});
+        // R-COLOR-5: a LUT effect selected — its section ends with the file it reads
+        v.push_back({"grade_lut_effect", [](FakeService &s) {
+            s.edit();
+            auto e = FakeService::effect("ef_3", "ro2", "s_day01", "lut.cube", 2, true, 0.85);
+            e.file = "/home/editor/luts/Kodak 2383 D65.cube";
+            s.m.effects.push_back(e);
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.settle();
+            auto pl = r.app->edit().gradeInspector()->plugins();
+            const Point p = centre(*pl, pl->rowRect(3));
+            r.click(p.x - 30.0, p.y);
+            r.settle();
+        }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

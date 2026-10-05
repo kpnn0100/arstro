@@ -311,6 +311,7 @@ namespace interstellar
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: ok = requireProject() && animCommand(c); break;
             case CK::KeyShift: case CK::KeyCopy: case CK::KeyPaste: ok = requireProject() && keysCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
+            case CK::LutExport: ok = requireProject() && lutExport(c); break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -564,6 +565,7 @@ namespace interstellar
                 r.media = ro->media;
                 r.frame = ro->frame;
                 r.input = ro->input.empty() ? std::string("rec709") : ro->input;
+                r.lut = ro->lut;
                 r.video = looksLikeVideo(ro->media);
                 r.group = ro->kind == "group";
                 r.usedBy = usedBy.count(ro->id) ? usedBy[ro->id] : 0;
@@ -820,6 +822,11 @@ namespace interstellar
                         EffectParamModel pm{d.key, d.label, d.unit, d.def, d.def, d.min, d.max};
                         for (const auto &kv : e->unknown) if (kv.first == d.key) parseDouble(kv.second, pm.value);
                         em.params.push_back(pm);
+                    }
+                    for (const auto &fk : def->files)
+                    {
+                        em.fileKey = fk;
+                        for (const auto &kv : e->unknown) if (kv.first == fk) em.file = kv.second;
                     }
                 }
                 else em.label = e->type + " (unknown to this build)";
@@ -1849,6 +1856,18 @@ namespace interstellar
                 }
                 ro->input = value;
             }
+            else if (a.rest == "lut")
+            {
+                // R-COLOR-5: refused unless the file reads — a half-read LUT is a wrong picture
+                if (ro->kind == "group") return fail(ro->name + " is a group — an input LUT belongs to a source");
+                if (value.empty() || value == "none") ro->lut.clear();
+                else
+                {
+                    std::string why;
+                    if (!loadLut(resolvePath(value), why)) return fail(ro->name + ".lut: " + why);
+                    ro->lut = value;
+                }
+            }
             else if (a.rest == "frame")
             {
                 Command c;
@@ -1885,6 +1904,20 @@ namespace interstellar
                 if (!parseDouble(value, v) || v < 0 || v > 1) return fail(e->id + ".mix is 0..1, got `" + value + "`");
                 e->mix = v;
             }
+            else if (def && std::find(def->files.begin(), def->files.end(), a.rest) != def->files.end())
+            {
+                // a file the plugin reads (a LUT, R-COLOR-5): refused unless it reads
+                const std::string stored = value == "none" ? std::string() : value;
+                if (!stored.empty())
+                {
+                    std::string why;
+                    if (!loadLut(resolvePath(stored), why)) return fail(address + ": " + why);
+                }
+                bool found = false;
+                for (auto &kv : e->unknown)
+                    if (kv.first == a.rest) { kv.second = stored; found = true; }
+                if (!found) e->unknown.emplace_back(a.rest, stored);
+            }
             else
             {
                 const render::EffectParamDef *pd = nullptr;
@@ -1893,6 +1926,7 @@ namespace interstellar
                 {
                     std::vector<std::string> keys{"enabled", "mix"};
                     if (def) for (const auto &d : def->params) keys.push_back(d.key);
+                    if (def) for (const auto &k : def->files) keys.push_back(k);
                     return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "` (it has: " + joinNames(keys) + ")");
                 }
                 if (!parseDouble(value, v)) return fail(address + " needs a number, got `" + value + "`");
@@ -1997,6 +2031,7 @@ namespace interstellar
                 if (def) for (const auto &d : def->params) if (d.key == a.rest) pd = &d;
                 for (const auto &kv : e->unknown) if (kv.first == a.rest) v = kv.second;
                 if (v.empty() && pd) v = canonicalNumber(pd->def);
+                if (v.empty() && def && std::find(def->files.begin(), def->files.end(), a.rest) != def->files.end()) v = "none";
                 if (v.empty()) return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "`");
             }
             if (P.animOf(e->id, a.rest)) v = canonicalNumber(curveAt(e->id, a.rest, sourceNow(e->node), 0.0));   // R-ANIM: now
@@ -2012,6 +2047,7 @@ namespace interstellar
                 if (a.rest == "weight") out << address << '=' << canonicalNumber(ro->weight) << '\n';
                 else if (a.rest == "frame") out << address << '=' << canonicalTime(ro->frame) << '\n';
                 else if (a.rest == "input") out << address << '=' << (ro->input.empty() ? std::string("rec709") : ro->input) << '\n';
+                else if (a.rest == "lut") out << address << '=' << (ro->lut.empty() ? std::string("none") : ro->lut) << '\n';
                 else if (a.rest == "bypass")
                 {
                     bool b = false;
@@ -2393,6 +2429,16 @@ namespace interstellar
                     if (srcT >= 0) v = std::clamp(curveAt(e->id, d.key, srcT, v), d.min, d.max);   // R-ANIM: at this source time
                     r.p[d.key] = v;
                     key += ":" + canonicalNumber(v);
+                }
+                for (const auto &fk : def->files)
+                {
+                    // R-COLOR-5: the file, loaded here (the render path knows no paths) and keyed by version
+                    std::string v;
+                    for (const auto &kv : e->unknown) if (kv.first == fk) v = kv.second;
+                    if (v.empty()) continue;
+                    std::string why, stamp;
+                    r.lut = loadLut(resolvePath(v), why, &stamp);
+                    key += ":" + (r.lut ? stamp : std::string("unreadable"));
                 }
                 out.push_back(std::move(r));
             }

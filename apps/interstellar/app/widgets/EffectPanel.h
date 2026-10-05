@@ -14,6 +14,8 @@
  *  effect INSTANCE the first time it is shown and kept (a Segment never drops a child); rows of
  *  effects not shown are culled. While the pointer is down in here, `bind` does not re-seed the
  *  sliders — a gesture in flight outranks the model. The body scrolls when the sections outgrow it.
+ *  A plugin that reads a file (a LUT, R-COLOR-5) ends its section with a file row naming it;
+ *  clicking it asks the app to choose one (`onChooseFile`).
  */
 #pragma once
 #include "../Theme.h"
@@ -21,6 +23,7 @@
 #include "EasedScroll.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include "../../../cosmo/widgets/SliderRow.h"
+#include "../../../cosmo/widgets/PillButton.h"
 #include <functional>
 #include <map>
 #include <memory>
@@ -57,6 +60,11 @@ namespace interstellar_v1
         double scrollTarget() const { return mScroll.target(); }
 
         std::function<void(const std::string &line)> onCommand;
+        /** A file-taking plugin's row was clicked (a LUT, R-COLOR-5): the app picks the file and
+         *  dispatches `set <effect>.<key>=<file>`. */
+        std::function<void(const std::string &effectId, const std::string &key)> onChooseFile;
+        /** The file row of `effectId`, or null when it takes no file (tests aim clicks at it). */
+        std::shared_ptr<cosmo_v2::PillButton> fileButtonOf(const std::string &effectId) const;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -73,6 +81,8 @@ namespace interstellar_v1
         {
             std::string label, type;
             std::vector<Row> rows;
+            std::string fileKey, file;                         // a file-taking plugin's parameter and its file
+            std::shared_ptr<cosmo_v2::PillButton> fileButton;  // "LUT · teal.cube" / "Choose a .cube…"
             bool open = false, openApplied = false, placed = false;
             artboard::AnimatedProperty amount{0.0};
         };

@@ -2092,6 +2092,96 @@ namespace
               "ProRes is 10-bit already: HLG keeps it");
     }
 
+    /** R-COLOR-5/6: a LUT on a source from its menu, a LUT effect's file row, and the export. */
+    void testLuts()
+    {
+        std::printf("LUTs in and out\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            s.m.effects.push_back(FakeService::effect("ef_3", "ro2", "s_day01", "lut.cube", 2, true, 1.0));
+            ++s.m.revision;
+        });
+        std::string suggested;
+        r.app->onPickLutToOpen = [](std::function<void(const std::string &)> done) { done("/luts/teal.cube"); };
+        r.app->onPickLutToSave = [&suggested](const std::string &name, std::function<void(const std::string &)> done) {
+            suggested = name;
+            done("/out/" + name);
+        };
+        r.settle();
+        auto rt = r.app->edit().rackTree();
+        auto cm = r.app->edit().contextMenu();
+        auto rightClickRow = [&] {
+            const Point p = centre(*rt, rt->rowRect(1));
+            r.app->pointer(1, p.x - 40, p.y, 0, r.now);
+            r.app->pointer(0, p.x - 40, p.y, 2, r.now);
+            r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
+            r.pump(250);
+        };
+        auto clickItem = [&](const std::string &prefix) {
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind(prefix, 0) == 0)
+                {
+                    const Point q = centre(*cm, cm->itemRect(i));
+                    r.click(q.x, q.y);
+                    r.pump(64);
+                    return true;
+                }
+            return false;
+        };
+        rightClickRow();
+        r.svc.lines.clear();
+        CHECK(clickItem("Input LUT..."), "a source's menu offers Input LUT...");
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "set s_day01.lut=/luts/teal.cube", "…the host picks a .cube and the line sets it");
+        rightClickRow();
+        CHECK(clickItem("Remove Input LUT") && r.svc.lines.back() == "set s_day01.lut=none", "a source with a LUT offers Remove Input LUT");
+        rightClickRow();
+        CHECK(clickItem("Export LUT...") && suggested == "s_day01.cube" && r.svc.lines.back() == "lut export s_day01 --out /out/s_day01.cube",
+              "Export LUT... suggests <bind>.cube and dispatches lut export");
+        // the LUT effect: its section ends with a file row
+        auto gi = r.app->edit().gradeInspector();
+        auto pl = gi->plugins();
+        CHECK(pl->rowCount() == 4, "s_day01's stack now ends with its LUT effect");
+        Point p = centre(*pl, pl->rowRect(3));
+        r.click(p.x - 30.0, p.y);
+        r.settle();
+        auto ep = gi->effectPanel();
+        auto fb = ep->fileButtonOf("ef_3");
+        CHECK(fb && fb->visible && fb->label() == "Choose a .cube\xE2\x80\xA6", "the LUT's section offers Choose a .cube…");
+        CHECK(!ep->fileButtonOf("ef_1"), "a blur takes no file: no file row");
+        r.svc.lines.clear();
+        p = centre(*fb, fb->localBounds());
+        r.click(p.x, p.y);
+        r.settle();
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "set ef_3.path=/luts/teal.cube", "clicking it picks the file: set ef_3.path=<file>");
+        CHECK(fb->label() == "LUT  \xC2\xB7  teal.cube", "…and the row names the file");
+
+        // D-12: at 1024x640 the panel scrolls to the LUT's section — and paints nothing outside itself
+        Rig s(1024, 640, [](FakeService &f) {
+            f.edit();
+            f.m.effects.push_back(FakeService::effect("ef_3", "ro2", "s_day01", "lut.cube", 2, true, 1.0));
+            ++f.m.revision;
+        });
+        s.settle();
+        auto pl2 = s.app->edit().gradeInspector()->plugins();
+        auto ep2 = s.app->edit().gradeInspector()->effectPanel();
+        p = centre(*pl2, pl2->rowRect(3));
+        s.click(p.x - 30.0, p.y);
+        s.settle();
+        CHECK(ep2->headerRect(0).y < 0.0, "1024x640: the panel scrolled to reveal the LUT's section");
+        const Point tl = world(*pl2, 0, 0);
+        const int x0 = (int)tl.x, y0 = (int)tl.y, x1 = x0 + (int)pl2->width.value(), y1 = y0 + (int)pl2->height.value();
+        std::vector<uint32_t> scrolled;
+        for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) scrolled.push_back(s.pixel(x, y));
+        const Point mid = world(*ep2, ep2->width.value() * 0.5, ep2->height.value() * 0.5);
+        s.app->wheel(mid.x, mid.y, 40.0);
+        s.settle();
+        CHECK(ep2->headerRect(0).y >= -0.5, "…the wheel scrolls it back to the top");
+        bool same = true;
+        size_t k = 0;
+        for (int y = y0; y < y1; ++y) for (int x = x0; x < x1; ++x) same = same && s.pixel(x, y) == scrolled[k++];
+        CHECK(same, "the plugin list above is pixel-identical whether the panel below is scrolled or not (D-12)");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2186,6 +2276,7 @@ int main()
     testKeyframes();
     testScopes();
     testColourManagement();
+    testLuts();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

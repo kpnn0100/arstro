@@ -165,6 +165,12 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   H.264/PNG, or a low DNxHR profile) afterwards moves the colour back to Rec.709. The summary names
   the output.
 - Shots added: `grade_input_colour_menu`, `deliver_colour_pq`, `deliver_colour_pq_mid`. UI checks: 340.
+- LUTs (R-COLOR-5/6): rack row menu — Input LUT… / Change Input LUT… → `onPickLutToOpen` → `set
+  "<bind>.lut=<file>"`; Remove Input LUT → `set <bind>.lut=none`; Export LUT… → `onPickLutToSave`
+  (suggests `<bind>.cube`) → `lut export <bind> --out <file>`. A file-taking effect (`fileKey`, the
+  LUT) ends its section with a row ("Choose a .cube…" / "LUT · <name>") → `set "<ef>.path=<file>"`.
+  The host's pickers are GTK file choosers filtered to .cube (`linux_main.cpp`).
+- Shot added: `grade_lut_effect`. UI checks: 352.
 
 ## Cutting like an editor (2026-10-02, R-UI-14 / R-TL-6)
 

@@ -492,7 +492,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-COLOR — colour science — 🔶 IN PROGRESS (1–4 ✅, 5–6 next) (added 2026-10-05, user request "implement all the features you suggest")
+## R-COLOR — colour science — ✅ IMPLEMENTED (added 2026-10-05, user request "implement all the features you suggest")
 
 - **R-COLOR-1 Deliveries keep more than 8 bits.** A render decodes, grades, composites and encodes
   at 16 bits per channel, so a 10-bit ProRes, DNxHR or H.265 carries 10 bits of picture; the monitor
@@ -521,10 +521,14 @@ reserves the rest so adopting it is not a migration.
   (FFmpeg 4.4's MOV muxer cannot write one) — the H.265 render carries it in the bitstream; an HDR
   render is encoded in software (the mastering SEI is libx265's).
 - **R-COLOR-5 LUTs in**: a `.cube` (1D or 3D) as an input LUT on a source and as an effect in the
-  image-processing stack.
+  image-processing stack. — ✅ (DR-COLOR-4). The input LUT follows the input transform; a file that
+  does not read is refused, naming the line; an edited file on disk is read again.
 - **R-COLOR-6 LUTs out**: the colour of a source's grade baked to a 33-point `.cube` (the spatial
   stages — clarity, sharpening, noise reduction, grain, lens — cannot live in a LUT and are left
-  out, said in the file's header).
+  out, said in the file's header). — ✅ (DR-COLOR-4). Also left out and said: texture, dehaze, crop
+  and rotation, masks; the colour mixer's neighbourhood spread is taken as 0. A LUT cannot hold a
+  hard clip inside one lattice cell: measured on testsrc2, mean error 0.32 code values, 99.9 % within
+  3, worst 27 where the grade drives a saturated colour into a clip in two channels (23 at 65 points).
 
 ## R-GPU — the grade on the GPU — ✅ IMPLEMENTED (added 2026-10-05; DR-GPU-1: every Cosmo stage on the GPU, masks finished on the CPU)
 

@@ -130,6 +130,7 @@ namespace istest
                 e.label = "Directional Blur";
                 e.params = {{"length", "Length", "px", 30.0, 30.0, 0.0, 400.0}, {"angle", "Angle", "deg", 0.0, 0.0, -180.0, 180.0}};
             }
+            else if (type == "lut.cube") { e.label = "LUT"; e.family = "Colour"; e.fileKey = "path"; }
             else
             {
                 e.label = type == "blur.zoom" ? "Zoom Blur" : "Spin Blur";
@@ -483,6 +484,7 @@ namespace istest
                         {
                             if (key == "enabled") e.enabled = val == "1";
                             else if (key == "mix") e.mix = std::stod(val);
+                            else if (!e.fileKey.empty() && key == e.fileKey) e.file = val == "none" ? std::string() : val;
                             else for (auto &p : e.params) if (p.key == key) p.value = std::stod(val);
                         }
                     for (auto &n : m.rack)
@@ -491,6 +493,7 @@ namespace istest
                             if (key == "weight") n.weight = std::stod(val);
                             else if (key == "bypass") n.bypass = val == "1";
                             else if (key == "input") n.input = val;
+                            else if (key == "lut") n.lut = val == "none" ? std::string() : val;
                             else if (key == "basic.exposure" && m.selectedRack >= 0 && m.rack[m.selectedRack].bindName == bind)
                             {
                                 m.gradeOwnParams.exposure = (float)std::stod(val);

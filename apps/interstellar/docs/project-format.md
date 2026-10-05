@@ -55,6 +55,7 @@ Interstellar's own data *about* a Cosmo node — never colour:
 | `media` | the source file. The timeline decodes frame N from it, and Interstellar is the party that added it |
 | `frame` | which frame Cosmo grades (R-RACK-3) |
 | `weight` | the **grade weight**, a continuous `bypass`. Cosmo has no concept of it |
+| `lut` | an input LUT (`.cube`) applied after the input transform, before Cosmo (R-COLOR-5); absent = none |
 | `input` | what the media IS — its input colour transform (R-COLOR-2): `rec709` (the default, not written), `srgb`, `linear`, `logc3`, `logc4`, `slog3`, `vlog`, `clog3`, `log3g10`, `bmdfilm5`. The media's interpretation, not a grade |
 
 ---
