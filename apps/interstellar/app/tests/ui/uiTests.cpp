@@ -2641,6 +2641,81 @@ namespace
         CHECK(strictlyBetween(out, 0.0, 1.0), "the wipe off: the divider fades out");
     }
 
+    /** R-CLR-3: the node graph — the views' tabs, the nodes in order, their menus, a node added sliding the rest along. */
+    void testNodeGraphUi()
+    {
+        std::printf("node graph: the NODES view, its nodes, their menus, motion\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            auto v = s.m.rack[1];   // s_day01's parallel node
+            v.node = 90; v.rackObj = "ro90"; v.bindName = "s_day01_par"; v.cosmoName = "s_day01_par"; v.parent = -1; v.depth = 0;
+            v.parallelOf = "ro2"; v.parallelMix = 0.5;
+            s.m.rack.push_back(v);
+            ++s.m.revision;
+        });
+        r.settle();
+        auto deck = r.app->edit().gradeDeck();
+        const Rect tab = deck->viewTabRect(2);
+        const Point tp = world(*deck, tab.x + tab.w * 0.5, tab.y + tab.h * 0.5);
+        r.click(tp.x, tp.y);
+        const double in = firstMoved(r, [&] { return deck->viewAmount(2); }, 0.0);
+        CHECK(tab.w > 0 && strictlyBetween(in, 0.0, 1.0), "the NODES tab cross-fades the graph in");
+        r.settle();
+        auto g = deck->nodeGraph();
+        std::string order;
+        for (const auto &n : g->nodes()) order += n.key + ",";
+        CHECK(order == "in,ro2,ro90,mix,ro1,out,", "input · source · its parallel node · the mixer · its group · output");
+        const Rect ri = g->nodeRect("in"), rs = g->nodeRect("ro2"), rp = g->nodeRect("ro90"), rm = g->nodeRect("mix"), rg = g->nodeRect("ro1"), ro = g->nodeRect("out");
+        CHECK(ri.right() < rs.x && rs.right() < rm.x && rm.right() < rg.x && rg.right() < ro.x && std::fabs(rp.x - rs.x) < 1.0 && std::fabs(rp.y - rs.y) > 10.0,
+              "left to right, the parallel node beside its source, off its line");
+        CHECK(inside(Rect{ro.x + g->worldTransform().apply(artboard::Point{0, 0}).x, 0, ro.w, 1}, 1440, 900), "the output fits at 1440");
+        auto cm = r.app->edit().contextMenu();
+        auto rightClick = [&](const Rect &rr) {
+            const Point p = world(*g, rr.x + rr.w * 0.5, rr.y + rr.h * 0.5);
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.pump(250);
+            std::string l;
+            for (int i = 0; i < cm->itemCount(); ++i) l += cm->item(i).label + "|";
+            return l;
+        };
+        auto clickItem = [&](const std::string &label) {
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label == label) { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); return true; }
+            return false;
+        };
+        CHECK(rightClick(rs) == "Add Serial Node After|Add Parallel Node|", "a source's menu: add a serial or a parallel node");
+        r.svc.lines.clear();
+        CHECK(clickItem("Add Parallel Node") && hasLine(r.svc, "node parallel s_day01"), "…Add Parallel Node dispatches node parallel");
+        const std::string pl = rightClick(rp);
+        CHECK(pl.find("Mix 100%|") != std::string::npos && pl.find("Mix 50%") == std::string::npos && pl.find("Remove Parallel Node|") != std::string::npos,
+              "a parallel node's menu: its mix (not the one it has) and remove");
+        r.svc.lines.clear();
+        CHECK(clickItem("Mix 100%") && hasLine(r.svc, "set s_day01_par.parallelMix=1"), "…a mix sets parallelMix");
+        CHECK(rightClick(rg) == "Add Serial Node After|Remove Serial Node|", "a group's menu: add after it, or remove it");
+        cm->close();
+        r.svc.lines.clear();
+        const Point gc = world(*g, rg.x + rg.w * 0.5, rg.y + rg.h * 0.5);
+        r.click(gc.x, gc.y);
+        CHECK(hasLine(r.svc, "rack select gr1"), "clicking a node makes it the Grade target");
+        // a serial node inserted between the source and its group: the group's node slides along, eased
+        {
+            auto n = r.svc.m.rack[0];
+            n.node = 91; n.rackObj = "ro91"; n.bindName = "node"; n.cosmoName = "node"; n.parent = 0; n.depth = 1;
+            r.svc.m.rack.push_back(n);
+            r.svc.m.rack[1].parent = (int)r.svc.m.rack.size() - 1;
+            r.svc.m.selectedRack = 1;
+            ++r.svc.m.revision;
+        }
+        const double x0 = g->nodeRect("ro1").x;
+        r.pump(16);
+        const double mid = firstMoved(r, [&] { return g->nodeRect("ro1").x; }, x0);
+        r.settle();
+        const double x1 = g->nodeRect("ro1").x;
+        CHECK(x1 > x0 + 20.0 && strictlyBetween(mid, x0, x1) && g->nodeAlpha("ro91") > 0.99, "a node added: the ones after it SLIDE along, it fades in");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2815,6 +2890,7 @@ int main()
     testRelinkUi();
     testMatteUi();
     testStillsUi();
+    testNodeGraphUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

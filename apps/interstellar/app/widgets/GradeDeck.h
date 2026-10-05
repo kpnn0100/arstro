@@ -35,6 +35,7 @@
 #include "../../../cosmo/widgets/Filmstrip.h"
 #include "../../../cosmo/widgets/HoverFade.h"
 #include "../../../cosmo/widgets/Breadcrumb.h"
+#include "NodeGraph.h"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -97,12 +98,17 @@ namespace interstellar_v1
         std::function<void(int rackIndex, artboard::Point local)> onContext;
         std::function<bool(const std::string &, double, int, interstellar::Raster &)> thumbnail;
         // ── R-CLR-4: the stills gallery, in place of the sources ──
-        /** Show the stills (true) or the sources. Intent only — the two strips cross-fade. */
-        void showStills(bool on) { mStillsWanted = on; }
-        bool stillsShown() const { return mStillsWanted; }
-        double stillsAmount() const { return mStillsAmt.value(); }
-        /** The header chip that switches between them (local; empty before the first paint). */
-        artboard::Rect stillsChipRect() const { return mStillsChip; }
+        /** The deck's three views: 0 the sources, 1 the stills (R-CLR-4), 2 the node graph (R-CLR-3).
+         *  Intent only — they cross-fade, the header's underline travels. */
+        void setView(int v) { mViewWanted = std::clamp(v, 0, 2); }
+        int view() const { return mViewWanted; }
+        double viewAmount(int v) const { return v >= 0 && v < 3 ? mViewAmt[v].value() : 0.0; }
+        artboard::Rect viewTabRect(int v) const { return v >= 0 && v < 3 ? mViewTab[v] : artboard::Rect{0, 0, 0, 0}; }
+        void showStills(bool on) { setView(on ? 1 : 0); }
+        bool stillsShown() const { return mViewWanted == 1; }
+        double stillsAmount() const { return mViewAmt[1].value(); }
+        artboard::Rect stillsChipRect() const { return mViewTab[1]; }
+        std::shared_ptr<NodeGraph> nodeGraph() { return mGraph; }
         std::shared_ptr<cosmo_v2::Filmstrip> stillsStrip() { return mStills; }
         std::string stillOfCell(int cell) const { return cell >= 0 && cell < (int)mStillList.size() ? mStillList[(size_t)cell].id : std::string(); }
         std::function<bool(const std::string &stillId, interstellar::Raster &out)> stillPicture;
@@ -143,12 +149,14 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::Filmstrip> mStills;   // R-CLR-4
         std::vector<interstellar::StillModel> mStillList;
         std::string mStillsKey;
-        bool mStillsWanted = false, mStillsApplied = false;
-        artboard::AnimatedProperty mStillsAmt{0.0};
-        mutable artboard::Rect mStillsChip{0, 0, 0, 0};
-        double mChipHover = 0.0;
-        bool mChipHovered = false;
-        artboard::AnimatedProperty mChipHoverAmt{0.0};
+        std::shared_ptr<NodeGraph> mGraph;              // R-CLR-3
+        int mViewWanted = 0, mViewApplied = 0;
+        artboard::AnimatedProperty mViewAmt[3] = {artboard::AnimatedProperty{1.0}, artboard::AnimatedProperty{0.0}, artboard::AnimatedProperty{0.0}};
+        artboard::AnimatedProperty mTabX{0.0}, mTabW{0.0};
+        double mTabTX = -1.0, mTabTW = -1.0;          // where the underline is going
+        bool mTabPlaced = false;
+        mutable artboard::Rect mViewTab[3];
+        cosmo_v2::HoverFade mTabHover;
         std::vector<interstellar::RackNodeModel> mRack;
         std::string mStructureKey;
         int mSelected = -1;

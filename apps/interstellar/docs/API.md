@@ -105,6 +105,9 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `still apply <still> [<node>…]` | Apply a still's grade to rack nodes (else the Grade target) — through Cosmo, as grade paste writes; one undo step. On the root timeline (a version stores overrides). | R-CLR-4 |
 | `still delete <still>` | Remove a still and its files. | R-CLR-4 |
 | `view wipe [<still\|timeline\|off>] [--split <vertical\|horizontal>] [--at <0..1>]` | Split the monitor between its picture and a reference — a still, or another version at the playhead — left \| right (vertical) or top / bottom, the split at --at of the frame (0.5 unless moved). With no name, only the split moves. Presentation: renders and export-still never wipe. | R-CLR-5 |
+| `node serial <node> [--name <n>]` | Add a SERIAL node after a rack node: a new group around it, whose grade applies to its result — the rack's groups are the graph's serial chain. | R-CLR-3 |
+| `node parallel <source> [--name <n>]` | Add a PARALLEL node to a source: a variant grading the same input beside it, its difference from the input added to the source's result by <variant>.parallelMix (1 unless set). It starts empty, so nothing changes until it is graded. | R-CLR-3 |
+| `node remove <node>` | Remove a serial node (ungroups it) or a parallel node (removes the variant). | R-CLR-3 |
 | `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
@@ -168,6 +171,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<bind>.xform.quarterTurns` | cosmo | int |  | 0.0..3.0 | 0.0 | Quarter turns clockwise. |
 | `<bind>.weight` | rackobj | scalar | 0..1 | 0.0..1.0 | 1.0 | Grade weight: a continuous bypass, blending ungraded→graded (R-RACK-4). |
 | `<bind>.bypass` | rackobj | bool |  |  | 0.0 | Cosmo's bypass for the node. |
+| `<bind>.parallelMix` | rackobj | scalar | 0..1 | 0.0..1.0 | 1.0 | A parallel node's share: how much of its difference from the input is added to its source's result (R-CLR-3). |
 | `<bind>.frame` | rackobj | scalar | s |  | 0.0 | Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`. |
 | `<bind>.input` | rackobj | text | rec709\|srgb\|linear\|logc3\|logc4\|slog3\|vlog\|clog3\|log3g10\|bmdfilm5 |  |  | What the source IS: its input colour transform into the working space, before Cosmo grades it (R-COLOR-2). The media's interpretation, never a grade. |
 | `<bind>.lut` | rackobj | text | <file.cube>\|none |  |  | An input LUT on the source, after its input transform and before Cosmo (R-COLOR-5); `none` clears it. |
@@ -312,6 +316,8 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].weight` | number |  | Grade weight 0..1 (R-RACK-4). |
 | `rack[].media` | string |  | Source file (file name only when stable). |
 | `rack[].proxy` | string |  | Its proxy file, resolved; empty = none (R-MEDIA-2). |
+| `rack[].parallelOf` | string |  | A parallel node of that source (#rackobj id); empty = not one (R-CLR-3). |
+| `rack[].parallelMix` | number |  | A parallel node's share of its difference from the input. |
 | `rack[].frame` | number |  | Reference frame a video is graded on, seconds (R-RACK-3). |
 | `rack[].video` | bool |  | A video source. |
 | `rack[].usedBy` | integer |  | Clips referencing it in the current timeline. |

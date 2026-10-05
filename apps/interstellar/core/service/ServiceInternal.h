@@ -61,6 +61,9 @@ namespace interstellar
         // R-CLR-1/2: mattes — the source's own key its whole look (read from its input), its groups'
         // key their contribution (read from the picture with those groups off)
         std::vector<render::EffectRun> mattes, groupMattes;
+        // R-CLR-3: parallel nodes — each grades the same input; its difference from it is added by mix
+        struct Parallel { EditParams params; double mix = 1.0; };
+        std::vector<Parallel> parallel;
         int srcWidth = 0;               // the source's own width: plugin sizes are in its pixels
         // R-COLOR-2: the source's space → the working space, before Cosmo grades (null = identity)
         std::shared_ptr<const render::colour::Transform> input;

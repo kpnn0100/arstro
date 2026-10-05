@@ -83,6 +83,8 @@ namespace interstellar
         std::string proxy;                  // R-MEDIA-2: its proxy file (the monitor's, when the project uses proxies); "" = none
         double proxyScale = 1.0;            // the proxy's width over the original's (plugins are sized in ORIGINAL pixels)
         std::string cosmoPath;              // R-MEDIA-3: the file Cosmo's slot was added with, once relinked away from it ("" = media)
+        std::string parallelOf;             // R-CLR-3: a parallel node — this variant grades the same input as that source, blended in
+        double parallelMix = 1.0;           // how much of its difference from the input is added, 0..1
         Fields unknown;
         Notes notes;
     };

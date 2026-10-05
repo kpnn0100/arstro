@@ -2084,6 +2084,53 @@ int main()
         assert(evalValue(f, "get b.basic.exposure") == 0.5);
     });
 
+    test("the node graph: a serial node grades after, a parallel node adds its difference from the input by its mix (R-CLR-3)", [] {
+        Fixture f("nodes");
+        f.standard();                                   // shotA: a's frame 24 at t = 1 (R = 24, B = 100)
+        f.must("set a.basic.exposure=0.3");
+        auto blue = [&] { Raster r; assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, r)); return (int)r.rgba[((size_t)13 * 48 + 20) * 4 + 2]; };
+        const int base = blue();
+        // a parallel node: empty, it changes nothing
+        f.must("node parallel a");
+        const RackNodeModel *v = nullptr;
+        for (const auto &n : f.svc->model().rack) if (n.bindName == "a_par") v = &n;
+        assert(v && v->parallelOf == f.svc->project().idForRef("a") && v->parallelMix == 1.0);
+        assert(blue() == base);
+        // graded, its difference from the input is added to a's result
+        f.must("set a_par.basic.exposure=1.0");
+        const int full = blue();
+        std::printf("    parallel: a alone %d, + a graded parallel node %d\n", base, full);
+        assert(full > base + 10);
+        f.must("set a_par.parallelMix=0.5");
+        const int half = blue();
+        assert(half > base && half < full);
+        f.must("set a_par.parallelMix=0");
+        assert(blue() == base);
+        f.must("set a_par.parallelMix=1");
+        std::string err;
+        assert(!f.run("set a.parallelMix=0.5", &err) && has(err, "not a parallel node"));
+        assert(!f.run("node serial a_par", &err) && has(err, "parallel node"));
+        assert(!f.run("node parallel a_par", &err) && has(err, "parallel node itself"));
+        // a serial node after a: a group around it, graded after
+        f.must("node serial a --name grade2");
+        int parent = -1, gi = -1;
+        for (int i = 0; i < (int)f.svc->model().rack.size(); ++i)
+        {
+            if (f.svc->model().rack[(size_t)i].bindName == "a") parent = f.svc->model().rack[(size_t)i].parent;
+            if (f.svc->model().rack[(size_t)i].bindName == "grade2") gi = i;
+        }
+        assert(gi >= 0 && parent == gi && f.svc->model().rack[(size_t)gi].group);
+        f.must("set grade2.basic.exposure=-1.0");
+        assert(blue() < full - 10);
+        assert(!f.run("node parallel grade2", &err) && has(err, "is a group"));
+        // remove: the serial node ungroups, the parallel node goes, a source stays
+        f.must("node remove grade2");
+        assert(blue() == full);
+        f.must("node remove a_par");
+        assert(blue() == base && !f.svc->project().rackObj(f.svc->project().idForRef("a_par")));
+        assert(!f.run("node remove a", &err) && has(err, "is a source"));
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

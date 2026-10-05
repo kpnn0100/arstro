@@ -1438,6 +1438,46 @@
       "requirement": "R-CLR-5"
     },
     {
+      "verb": "node serial",
+      "usage": "node serial <node> [--name <n>]",
+      "args": "<node>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "name",
+          "value": "<n>"
+        }
+      ],
+      "summary": "Add a SERIAL node after a rack node: a new group around it, whose grade applies to its result — the rack's groups are the graph's serial chain.",
+      "requirement": "R-CLR-3"
+    },
+    {
+      "verb": "node parallel",
+      "usage": "node parallel <source> [--name <n>]",
+      "args": "<source>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "name",
+          "value": "<n>"
+        }
+      ],
+      "summary": "Add a PARALLEL node to a source: a variant grading the same input beside it, its difference from the input added to the source's result by <variant>.parallelMix (1 unless set). It starts empty, so nothing changes until it is graded.",
+      "requirement": "R-CLR-3"
+    },
+    {
+      "verb": "node remove",
+      "usage": "node remove <node>",
+      "args": "<node>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Remove a serial node (ungroups it) or a parallel node (removes the variant).",
+      "requirement": "R-CLR-3"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",
@@ -2048,6 +2088,18 @@
       "type": "string",
       "stable": true,
       "doc": "Its proxy file, resolved; empty = none (R-MEDIA-2)."
+    },
+    {
+      "path": "rack[].parallelOf",
+      "type": "string",
+      "stable": true,
+      "doc": "A parallel node of that source (#rackobj id); empty = not one (R-CLR-3)."
+    },
+    {
+      "path": "rack[].parallelMix",
+      "type": "number",
+      "stable": true,
+      "doc": "A parallel node's share of its difference from the input."
     },
     {
       "path": "rack[].frame",
@@ -3903,6 +3955,16 @@
       "range": "",
       "neutral": 0.0,
       "doc": "Cosmo's bypass for the node."
+    },
+    {
+      "address": "<bind>.parallelMix",
+      "owner": "rackobj",
+      "key": "parallelMix",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 1.0,
+      "doc": "A parallel node's share: how much of its difference from the input is added to its source's result (R-CLR-3)."
     },
     {
       "address": "<bind>.frame",

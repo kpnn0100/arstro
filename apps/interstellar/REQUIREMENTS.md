@@ -584,7 +584,7 @@ reserves the rest so adopting it is not a migration.
   D-2). Opened in Cosmo alone, a relinked source still names its old path (Cosmo cannot rename a slot;
   said).
 
-## R-CLR — colourist tools — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-CLR-1, 2 ✅ DR-CLR-1/DR-CLR-2, 4–5 ✅ DR-CLR-3, 3 next)
+## R-CLR — colourist tools — ✅ DONE (added 2026-10-05; 1 ✅ DR-CLR-1, 2 ✅ DR-CLR-1/DR-CLR-2, 3 ✅ DR-CLR-4, 4–5 ✅ DR-CLR-3)
 
 - **R-CLR-1 Qualifiers**: an HSL key (hue, saturation, luminance ranges with softness) that limits a
   node's grade to what it selects, with a matte view. — ✅ (DR-CLR-1). A qualifier is a plugin in the node's stack
@@ -600,7 +600,11 @@ reserves the rest so adopting it is not a migration.
   change of appearance is followed and a sudden one can drift (said).
 - **R-CLR-3 A node graph**: the rack's serial structure (a group's grade over its members') shown as
   nodes and links, with serial and parallel nodes added and wired there; Cosmo stays the colour
-  authority — a node is a Cosmo grade.
+  authority — a node is a Cosmo grade. — ✅ (DR-CLR-4). Serial nodes are groups (a new group around a node, made by
+  Cosmo); a parallel node is a variant of a source grading its input beside it, its difference from the
+  input added by its mix (Resolve's parallel mixer — a new one is empty, so adding it changes nothing).
+  The graph shows one source's chain (the Grade target's, a parallel node's source, a group's first
+  source); a group's parallel nodes and a layer mixer are not offered (said).
 - **R-CLR-4 A stills gallery**: grab the monitor's graded frame with its grade; apply a still's
   grade to another source. — ✅ (DR-CLR-3). A still's grade is the node's own as the open version folds it, a
   snapshot beside the project (never an authority); applying it writes through Cosmo like Paste

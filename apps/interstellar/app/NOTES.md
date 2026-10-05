@@ -220,6 +220,9 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   menu → `still apply <id> <bind>` / `view wipe <id>` (Stop Wipe → `view wipe off`) / `still delete <id>`,
   double-click → apply; Colour › Grab Still, Ctrl+Alt+G → `still grab <bind>` (Grade) or `still grab`
   (Cut). The monitor's divider: drag → `view wipe --at <x>`. Shot: `grade_stills_wipe`. UI checks: 436.
+- Node graph (R-CLR-3): the Grade deck's tabs SOURCES · STILLS · NODES (cross-fade, travelling
+  underline); a node click → `rack select <bind>`; its menu → `node serial <bind>`, `node parallel <bind>`,
+  `set <par>.parallelMix=<x>`, `node remove <bind>`. Shot: `grade_node_graph`. UI checks: 447.
 
 ## Interchange (2026-10-05, R-XCH)
 

@@ -62,6 +62,11 @@ namespace interstellar_v1
         mStills->opacity.set(0.0);
         mStills->visible = false;
         addChild(mStills);
+        // R-CLR-3: the node graph of the Grade target
+        mGraph = std::make_shared<NodeGraph>();
+        mGraph->opacity.set(0.0);
+        mGraph->visible = false;
+        addChild(mGraph);
         for (int k = 0; k < 2; ++k)
         {
             mCrumb[k] = std::make_shared<cosmo_v2::Breadcrumb>();
@@ -140,6 +145,8 @@ namespace interstellar_v1
             }
             mStills->setCells(cells);
         }
+
+        mGraph->bind(m);
 
         // the selected source's reference frame
         bindFrame(m);
@@ -262,19 +269,26 @@ namespace interstellar_v1
         mStrip->y.set(kHeaderH);
         mStrip->width.set(width.value());
         mStrip->height.set(cosmo_v2::Filmstrip::kHeight);
-        // R-CLR-4: the sources and the stills cross-fade in one place
-        const double sa = mStillsAmt.value();
-        mStrip->opacity.set(lf * (1.0 - sa));
-        mStrip->visible = 1.0 - sa > 0.001;
+        // R-CLR-3/4: the sources, the stills and the node graph cross-fade in one place
+        const double v0 = mViewAmt[0].value(), v1 = mViewAmt[1].value(), v2 = mViewAmt[2].value();
+        mStrip->opacity.set(lf * v0);
+        mStrip->visible = v0 > 0.001;
         mStills->x.set(0.0);
         mStills->y.set(kHeaderH);
         mStills->width.set(width.value());
         mStills->height.set(cosmo_v2::Filmstrip::kHeight);
-        mStills->opacity.set(sa);
-        mStills->visible = sa > 0.001;
-        // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was — up to the chip
+        mStills->opacity.set(v1);
+        mStills->visible = v1 > 0.001;
+        mGraph->x.set(0.0);
+        mGraph->y.set(kHeaderH);
+        mGraph->width.set(width.value());
+        mGraph->height.set(cosmo_v2::Filmstrip::kHeight);
+        mGraph->opacity.set(v2);
+        mGraph->visible = v2 > 0.001;
+        const double sa = 1.0 - v0;   // how far the sources' breadcrumb has gone
+        // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was — up to the tabs
         const double bx = std::min(mHeaderRight, width.value());
-        const double chipW = mStillsChip.w > 0 ? mStillsChip.w + 8.0 : 72.0;
+        const double chipW = mViewTab[0].w > 0 ? width.value() - mViewTab[0].x + 8.0 : 200.0;
         for (auto &c : mCrumb)
         {
             c->x.set(bx);
@@ -377,14 +391,19 @@ namespace interstellar_v1
         {
         case Gesture::Type::Move:
         {
-            mChipHovered = mStillsChip.contains(local);
+            {
+                int hv = -1;
+                for (int v = 0; v < 3; ++v) if (mViewTab[v].contains(local)) hv = v;
+                mTabHover.setHovered(hv);
+            }
             mTrackHovered = mSelVideo && tr.contains(local);
             const int sd = stepAt(local);
             mStepHover.setHovered(sd < 0 ? 0 : (sd > 0 ? 1 : -1));
             return true;
         }
         case Gesture::Type::Click:
-            if (mStillsChip.contains(local)) { showStills(!mStillsWanted); return true; }   // R-CLR-4
+            for (int v = 0; v < 3; ++v)
+                if (mViewTab[v].contains(local)) { setView(v); return true; }   // R-CLR-3/4: the deck's views
             if (const int sd = stepAt(local)) { step(sd); return true; }
             break;
         case Gesture::Type::Down:
@@ -438,20 +457,31 @@ namespace interstellar_v1
 
     void GradeDeck::advance(double nowMs)
     {
-        // R-CLR-4: sources ↔ stills, a cross-fade; the chip's hover eases like every hover
-        if (mStillsWanted != mStillsApplied)
+        // R-CLR-3/4: the views cross-fade; the tabs' underline travels to the one shown
+        if (mViewWanted != mViewApplied)
         {
-            mStillsAmt.animateTo(mStillsWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
-            mStillsApplied = mStillsWanted;
+            for (int v = 0; v < 3; ++v) mViewAmt[v].animateTo(v == mViewWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mViewApplied = mViewWanted;
         }
-        mStillsAmt.update(nowMs);
-        if (!isHovered()) mChipHovered = false;
-        if ((mChipHovered ? 1.0 : 0.0) != mChipHover)
+        for (auto &a : mViewAmt) a.update(nowMs);
         {
-            mChipHover = mChipHovered ? 1.0 : 0.0;
-            mChipHoverAmt.animateTo(mChipHover, artboard::interaction::kHoverMs, Easing::EaseOutCubic, nowMs);
+            const Rect tab = mViewTab[mViewWanted];
+            if (tab.w > 0)
+            {
+                if (!mTabPlaced) { mTabX.set(tab.x); mTabW.set(tab.w); mTabTX = tab.x; mTabTW = tab.w; mTabPlaced = true; }
+                else if (std::fabs(mTabTX - tab.x) > 0.5 || std::fabs(mTabTW - tab.w) > 0.5)
+                {
+                    mTabX.animateTo(tab.x, 200.0, Easing::EaseOutCubic, nowMs);
+                    mTabW.animateTo(tab.w, 200.0, Easing::EaseOutCubic, nowMs);
+                    mTabTX = tab.x;
+                    mTabTW = tab.w;
+                }
+            }
+            mTabX.update(nowMs);
+            mTabW.update(nowMs);
         }
-        mChipHoverAmt.update(nowMs);
+        if (!isHovered()) mTabHover.clear();
+        mTabHover.advance(nowMs);
         // the level: fade the old cells out, swap, fade the new ones in (never a one-frame swap)
         if (!mLevelSwapping && mLevelWanted != mLevel && !mLevelFade.isAnimating())
         {
@@ -551,7 +581,7 @@ namespace interstellar_v1
 
         // header row: SOURCES · n ─── (or STILLS · n — R-CLR-4: the two cross-fade) ··· [STILLS n]
         const double hy = kHeaderH * 0.5;
-        const double stA = mStillsAmt.value();
+        const double stA = mViewAmt[1].value(), srcA = mViewAmt[0].value(), grA = mViewAmt[2].value();
         int sources = 0;
         for (const auto &n : mRack) if (!n.group) ++sources;
         const std::string srcCount = std::to_string(sources), stillCount = std::to_string(mStillList.size());
@@ -564,18 +594,32 @@ namespace interstellar_v1
             t.drawText(count, kPadX + lw + 6.0, textfit::baseline(hy, 9.0), 9.0, font::mono());
             return lw + 6.0 + t.measureText(count, 9.0, font::mono());
         };
-        const double srcW = title("SOURCES", srcCount, 1.0 - stA);
+        const double srcW = title("SOURCES", srcCount, srcA);
         title("STILLS", stillCount, stA);
+        title("NODES", std::string(), grA);
         // the breadcrumb (a child) takes the header's remaining width, where a rule would run
         mHeaderRight = kPadX + (srcW > 0 ? srcW : t.measureText("SOURCES", 9.0, font::sansSemiBold(), 0.13 * 9.0) + 20.0) + 6.5;
         {
-            // the switch: names the other shelf and how many it holds
-            const std::string chip = mStillsWanted ? "SOURCES " + srcCount : "STILLS " + stillCount;
-            const double cw = t.measureText(chip, 9.0, font::sansSemiBold(), 0.06 * 9.0) + 14.0;
-            mStillsChip = Rect{w - kPadX - cw, (kHeaderH - 17.0) * 0.5, cw, 17.0};
-            drawRoundedRect(t, mStillsChip, radius::control(), Paint::filledStroked(palette::hoverWash(mChipHoverAmt.value()), palette::border(), 1.0));
-            t.setFill(lerpColor(palette::mutedForeground(), palette::foreground(), mChipHoverAmt.value()));
-            t.drawText(chip, mStillsChip.x + 7.0, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.06 * 9.0);
+            // the views: SOURCES · STILLS · NODES, right-aligned, the shown one underlined (the line travels)
+            const std::string labels[3] = {"SOURCES", "STILLS", "NODES"};
+            double right = w - kPadX;
+            for (int v = 2; v >= 0; --v)
+            {
+                const double tw = t.measureText(labels[v], 9.0, font::sansSemiBold(), 0.06 * 9.0) + 12.0;
+                mViewTab[v] = Rect{right - tw, (kHeaderH - 17.0) * 0.5, tw, 17.0};
+                right -= tw + 2.0;
+            }
+            for (int v = 0; v < 3; ++v)
+            {
+                const Rect r = mViewTab[v];
+                const double hv = mTabHover.amount(v);
+                if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv)));
+                const double on = mViewAmt[v].value();
+                t.setFill(lerpColor(lerpColor(palette::mutedForeground(), palette::foreground(), hv * 0.6), palette::foreground(), on));
+                t.drawText(labels[v], r.x + 6.0, textfit::baseline(hy, 9.0), 9.0, font::sansSemiBold(), 0.06 * 9.0);
+            }
+            if (mTabW.value() > 0)
+                drawRoundedRect(t, Rect{mTabX.value() + 4.0, mViewTab[0].bottom() - 1.0, std::max(0.0, mTabW.value() - 8.0), 1.5}, radius::pill(), Paint::filled(palette::primary()));
         }
         if (mRack.empty() && stA < 0.999)
         {

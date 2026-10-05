@@ -104,6 +104,7 @@ namespace interstellar
         {
             case CK::ProjectNew: case CK::ProjectOpen: case CK::ProjectClose: case CK::RackImport:
             case CK::RackAdd: case CK::RackGroupNew: case CK::RackUngroup: case CK::RackDuplicate: case CK::RackRemove:
+            case CK::NodeSerial: case CK::NodeParallel: case CK::NodeRemove:
                 return true;
             default: return false;
         }

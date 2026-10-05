@@ -274,6 +274,32 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-CLR-4 The node graph (R-CLR-3)
+The rack is the graph: a source's own grade, then each group it is in — a group grades its members'
+results, the SERIAL chain. `node serial <node>` (`core/service/ServiceNodes.cpp:28`) wraps the node in a new
+group, made by Cosmo as `rack group new` makes one. `node parallel <source>` (`:37`) makes a variant (`rack
+duplicate`) marked `#rackobj parallelOf=<source> parallelMix=` and starts it EMPTY — Cosmo's identity grade,
+none of the plugins or curves the duplicate copied (`:51`) — so adding it changes nothing. The plan gives
+each source its non-empty parallel nodes (`planParallel`, `core/service/ServiceRender.cpp:198`), their params
+and mix in the cache and plan keys; the layer grades each from the SAME input and adds its difference from
+the input by its mix to the source's result (`:657`; `render::addDifference` `render/Matte.cpp:159`) — Resolve's
+parallel mixer — before the groups' partial weights and the source's weight. `<bind>.parallelMix` (0..1)
+sets the share (`core/service/InterstellarService.cpp:2029`). `node remove` (`ServiceNodes.cpp:77`) ungroups a
+serial node or removes a parallel node; a source is refused. Model: `rack[].parallelOf`,
+`rack[].parallelMix`. UI: the Grade deck's third view, NODES (tabs SOURCES · STILLS · NODES with a
+travelling underline, the views cross-fading, `app/widgets/GradeDeck.cpp:460`, `:603`), draws the Grade
+target's chain left to right — input, source, its parallel nodes in the source's column off its line, a
+"+" mixer, its groups, output (`app/widgets/NodeGraph.cpp:21`, `:70`, `:195`), each node at its own eased
+place, new ones fading in; a click makes a node the Grade target; a right-click asks for its menu — add a
+serial or a parallel node, a parallel node's mix (100/75/50/25 %), remove (`app/App.cpp:764`). Guarded by L2
+`the node graph…` (an empty parallel node changes nothing; graded, its difference is added; half at 0.5,
+none at 0; refusals; a serial node is a group around the source, graded after it; removal of both kinds;
+a source refused), UI (the tab's cross-fade, the nodes' order and places, each kind's menu and its line,
+a click selecting, a node added sliding the rest along), shot `grade_node_graph` looked at (a parallel
+label measured without its share, then the mixer placed before the wider parallel node — both fixed).
+Mutants run red: no parallel planning, no parallel key (a stale frame), a parallel node not starting
+empty, the mix ignored, the nodes' slide snapped, the views' cross-fade snapped.
+
 ### DR-CLR-3 The stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5)
 `still grab [<source>] [--name]` (`core/service/ServiceStills.cpp:141`) keeps what the monitor shows — a
 named source's graded reference frame (Grade), else the timeline at the playhead with the grade of the

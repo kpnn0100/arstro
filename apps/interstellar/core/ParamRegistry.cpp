@@ -73,6 +73,8 @@ namespace interstellar
             {O::RackObj, "<bind>.weight", "", "weight", PK::Scalar, "0..1", 0, 1, 1,
              "Grade weight: a continuous bypass, blending ungraded→graded (R-RACK-4)."},
             {O::RackObj, "<bind>.bypass", "", "bypass", PK::Bool, "", 0, 1, 0, "Cosmo's bypass for the node."},
+            {O::RackObj, "<bind>.parallelMix", "", "parallelMix", PK::Scalar, "0..1", 0, 1, 1,
+             "A parallel node's share: how much of its difference from the input is added to its source's result (R-CLR-3)."},
             {O::RackObj, "<bind>.frame", "", "frame", PK::Scalar, "s", 0, 0, 0,
              "Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`."},
             {O::RackObj, "<bind>.input", "", "input", PK::Text, "rec709|srgb|linear|logc3|logc4|slog3|vlog|clog3|log3g10|bmdfilm5", 0, 0, 0,

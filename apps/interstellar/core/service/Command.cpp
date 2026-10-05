@@ -265,6 +265,15 @@ namespace interstellar
              "Split the monitor between its picture and a reference — a still, or another version at the playhead — "
              "left | right (vertical) or top / bottom, the split at --at of the frame (0.5 unless moved). With no name, "
              "only the split moves. Presentation: renders and export-still never wipe.", "R-CLR-5"},
+            {K::NodeSerial, "node serial", "<node>", 1, 1, {"name=<n>"},
+             "Add a SERIAL node after a rack node: a new group around it, whose grade applies to its result — the rack's "
+             "groups are the graph's serial chain.", "R-CLR-3"},
+            {K::NodeParallel, "node parallel", "<source>", 1, 1, {"name=<n>"},
+             "Add a PARALLEL node to a source: a variant grading the same input beside it, its difference from the input "
+             "added to the source's result by <variant>.parallelMix (1 unless set). It starts empty, so nothing changes "
+             "until it is graded.", "R-CLR-3"},
+            {K::NodeRemove, "node remove", "<node>", 1, 1, {},
+             "Remove a serial node (ungroups it) or a parallel node (removes the variant).", "R-CLR-3"},
             {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
              "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
              "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",

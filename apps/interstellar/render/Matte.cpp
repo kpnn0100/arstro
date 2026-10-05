@@ -156,6 +156,22 @@ namespace render
         else mixT<uint8_t>(a, b, key);
     }
 
+    void addDifference(const Raster &base, const Raster &branch, double mix, Raster &out)
+    {
+        if (base.width != out.width || base.height != out.height || branch.width != out.width || branch.height != out.height) return;
+        Raster b = base, br = branch;
+        if (out.deep()) { toDeep(b, b); toDeep(br, br); }
+        else { toShallow(b, b); toShallow(br, br); }
+        const size_t n = (size_t)out.width * out.height;
+        for (size_t i = 0; i < n; ++i)
+            for (int c = 0; c < 3; ++c)
+            {
+                const size_t k = i * 4 + c;
+                if (out.deep()) out.rgba16[k] = (uint16_t)std::clamp(std::lround(out.rgba16[k] + mix * ((double)br.rgba16[k] - b.rgba16[k])), 0L, 65535L);
+                else out.rgba[k] = (uint8_t)std::clamp(std::lround(out.rgba[k] + mix * ((double)br.rgba[k] - b.rgba[k])), 0L, 255L);
+            }
+    }
+
     void keyPicture(const std::vector<float> &key, int width, int height, Raster &out)
     {
         out.allocate(width, height, 255);

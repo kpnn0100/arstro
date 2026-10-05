@@ -221,6 +221,7 @@ namespace interstellar
                          std::vector<NodeId> *owners = nullptr) const;   // owners: the rack node each run belongs to (R-CLR)
         /** R-CLR-1/2: split a chain's mattes from its plugins — the source's own, and its groups' (whose
          *  groups join `partial`, so their contribution is computed apart and keyed). */
+        void planParallel(const NodeId &timeline, const RackObj &ro, double srcT, struct PlanLayer &L);   // R-CLR-3
         void splitMattes(const NodeId &roId, std::vector<render::EffectRun> &runs, const std::vector<NodeId> &owners,
                          struct PlanLayer &L, std::set<NodeId> &partial) const;
         bool mMatteView = false;   // R-CLR-1: Grade's monitor shows the selected source's key, white = graded
@@ -248,6 +249,8 @@ namespace interstellar
         bool proxyCommand(const Command &c);
         // R-MEDIA-3 — ServiceMedia.cpp
         bool mediaCommand(const Command &c);
+        // R-CLR-3 — ServiceNodes.cpp
+        bool nodeCommand(const Command &c);
         // R-CLR-4/5 — ServiceStills.cpp
         bool stillCommand(const Command &c);
         std::string stillsDir() const;

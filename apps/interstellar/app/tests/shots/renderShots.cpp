@@ -456,6 +456,18 @@ namespace
             r.app->edit().gradeDeck()->showStills(true);
             r.settle();
         }});
+        v.push_back({"grade_node_graph", [](FakeService &s) {   // R-CLR-3: s_day01 — a parallel node, then its group
+            s.edit();
+            auto v = s.m.rack[1];
+            v.node = 90; v.rackObj = "ro90"; v.bindName = "s_day01_par"; v.cosmoName = "s_day01_par"; v.parent = -1; v.depth = 0;
+            v.parallelOf = "ro2"; v.parallelMix = 0.6;
+            s.m.rack.push_back(v);
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeDeck()->setView(2);
+            r.settle();
+        }});
         v.push_back({"relink_media", edit, [](Rig &r) {   // R-MEDIA-3: File › Relink Media — the offline sources in one list
             r.settle();
             r.app->openRelinkMenu(artboard::Point(r.app->width() * 0.25, 40.0));

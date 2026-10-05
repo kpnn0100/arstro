@@ -84,7 +84,7 @@ one integrator who moves, wires, tests and commits each stream:
       12. [x] Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows) — DR-CLR-1.
       12b. [x] Window tracking (R-CLR-2) — DR-CLR-2.
       12c. [x] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5) — DR-CLR-3.
-      12d. [ ] The node graph (R-CLR-3).
+      12d. [x] The node graph (R-CLR-3) — DR-CLR-4.
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
@@ -135,6 +135,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — the node graph is the rack, drawn; a parallel node is an empty variant added by its mix.**
+Cosmo's groups already are serial nodes (a group grades its members' results), so the graph adds no
+second structure — a serial node is a group, made by Cosmo. Cosmo has no parallel structure, so a
+parallel node is a variant of the source (a real Cosmo grade on the same media) marked `parallelOf`,
+and the render adds its difference from the input — Resolve's parallel mixer, chosen over a layer
+mixer's average because an empty parallel node must change nothing, which is what lets one be added
+without the picture jumping.
 
 **2026-10-05 — a still is a picture and a snapshot of a grade; the wipe is drawn by the service.** A
 gallery's grade must not become a second colour authority, so it is written beside the project as the

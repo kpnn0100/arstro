@@ -71,6 +71,7 @@ namespace interstellar_v1
         std::function<void(std::function<void(const std::string &)> done)> onPickFolder;
         void openRelinkMenu(artboard::Point at);
         void grabStill();                                        // R-CLR-4
+        void openNodeContext(const NodeGraph::Node &n, artboard::Point at);   // R-CLR-3
         void openStillContext(const std::string &stillId, artboard::Point at);
         void openProjectPicked(const std::string &path);
         void newProjectPicked(const std::string &path);

@@ -352,6 +352,7 @@ namespace interstellar
             case CK::MediaOffline: case CK::MediaRelink: ok = requireProject() && mediaCommand(c); break;
             case CK::TrackWindow: case CK::TrackCancel: ok = requireProject() && trackCommand(c); break;
             case CK::StillGrab: case CK::StillApply: case CK::StillDelete: case CK::ViewWipe: ok = requireProject() && stillCommand(c); break;
+            case CK::NodeSerial: case CK::NodeParallel: case CK::NodeRemove: ok = requireProject() && nodeCommand(c); break;
             case CK::ViewMatte:
             {
                 // R-CLR-1: presentation of the Grade monitor, not the project — no undo, no save
@@ -682,6 +683,8 @@ namespace interstellar
         {
             const RackObj *pro = P.rackObj(r.rackObj);
             r.proxy = pro && !pro->proxy.empty() ? resolvePath(pro->proxy) : std::string();   // R-MEDIA-2
+            r.parallelOf = pro ? pro->parallelOf : std::string();                              // R-CLR-3
+            r.parallelMix = pro ? pro->parallelMix : 1.0;
             r.offlineWhy.clear();
             const VendorRaw *v = r.failed ? vendorRawFor(r.media) : nullptr;
             std::string file;
@@ -2023,7 +2026,14 @@ namespace interstellar
                 return true;
             }
             // ── Interstellar's own fields on a rack node ──
-            if (a.rest == "weight")
+            if (a.rest == "parallelMix")
+            {
+                double v = 0;
+                if (ro->parallelOf.empty()) return fail(ro->name + " is not a parallel node — `node parallel <source>` makes one");
+                if (!parseDouble(value, v) || v < 0 || v > 1) return fail(ro->name + ".parallelMix is 0..1, got `" + value + "`");
+                ro->parallelMix = v;
+            }
+            else if (a.rest == "weight")
             {
                 double v = 0;
                 if (!parseDouble(value, v) || v < 0 || v > 1) return fail(ro->name + ".weight is 0..1, got `" + value + "`");
@@ -2238,6 +2248,7 @@ namespace interstellar
             if (dot == std::string::npos)
             {
                 if (a.rest == "weight") out << address << '=' << canonicalNumber(ro->weight) << '\n';
+                else if (a.rest == "parallelMix") out << address << '=' << canonicalNumber(ro->parallelMix) << '\n';
                 else if (a.rest == "frame") out << address << '=' << canonicalTime(ro->frame) << '\n';
                 else if (a.rest == "input") out << address << '=' << (ro->input.empty() ? std::string("rec709") : ro->input) << '\n';
                 else if (a.rest == "lut") out << address << '=' << (ro->lut.empty() ? std::string("none") : ro->lut) << '\n';

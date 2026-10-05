@@ -58,6 +58,8 @@ namespace interstellar
         bool failed = false;          // offline: reads as MISSING, never as a stall (R-RACK-7)
         std::string offlineWhy;       // R-MEDIA-1: why, when it is not just missing ("REDCODE RAW needs the RED R3D SDK…")
         std::string proxy;            // R-MEDIA-2: its proxy file, resolved; "" = none
+        NodeId parallelOf;            // R-CLR-3: a parallel node of that source (#rackobj id); "" = not one
+        double parallelMix = 1.0;
         double weight = 1.0;          // grade weight, 0..1 — a continuous bypass (R-RACK-4)
         std::string media;            // source file
         double frame = 0.0;           // reference frame a video is graded on, seconds (R-RACK-3)

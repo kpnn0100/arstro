@@ -53,6 +53,9 @@ namespace interstellar_v1
         // R-CLR-4: the stills gallery
         mEdit->gradeDeck()->stillPicture = mHooks.stillPicture;
         mEdit->gradeDeck()->onStillContext = [this](const std::string &id, Point at) { openStillContext(id, at); };
+        // R-CLR-3: the node graph — a click makes a node the Grade target, a right-click its menu
+        mEdit->gradeDeck()->nodeGraph()->onSelect = [this](const std::string &bind) { dispatch("rack select " + cmd::quote(bind)); };
+        mEdit->gradeDeck()->nodeGraph()->onContext = [this](const NodeGraph::Node &n, Point at) { openNodeContext(n, at); };
         mEdit->gradeDeck()->onStillActivate = [this](const std::string &id) {
             const auto b = selectedBind();
             if (!b.empty()) dispatch("still apply " + cmd::quote(id) + " " + cmd::quote(b));
@@ -753,6 +756,25 @@ namespace interstellar_v1
             items.push_back({"Place Timeline Here...", [this, track, t, at] { openPlaceTimelineMenu(track, t, at); }});   // R-EDT-4
         items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
         items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    /** R-CLR-3: a node's menu — add a serial or a parallel node, a parallel node's mix, remove one. */
+    void App::openNodeContext(const NodeGraph::Node &n, Point at)
+    {
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        const std::string b = cmd::quote(n.bind);
+        if (n.kind == NodeGraph::Kind::Source || n.kind == NodeGraph::Kind::Group)
+            items.push_back({"Add Serial Node After", [this, b] { dispatch("node serial " + b); }});
+        if (n.kind == NodeGraph::Kind::Source) items.push_back({"Add Parallel Node", [this, b] { dispatch("node parallel " + b); }});
+        if (n.kind == NodeGraph::Kind::Parallel)
+            for (int pct : {100, 75, 50, 25})
+                if (std::lround(n.mix * 100) != pct)
+                    items.push_back({"Mix " + std::to_string(pct) + "%", [this, b, pct] { dispatch("set " + b + ".parallelMix=" + cmd::num(pct / 100.0)); }});
+        if (n.kind == NodeGraph::Kind::Parallel) items.push_back({"Remove Parallel Node", [this, b] { dispatch("node remove " + b); }});
+        if (n.kind == NodeGraph::Kind::Group) items.push_back({"Remove Serial Node", [this, b] { dispatch("node remove " + b); }});
+        if (items.empty()) return;
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }

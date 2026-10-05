@@ -30,6 +30,8 @@ namespace render
     void applyMatte(const EffectRun &m, const Raster &input, std::vector<float> &key);
     /** `b` = a + (b − a) × key, per pixel (alpha kept); the two the same size, 8- or 16-bit alike. */
     void mixByKey(const Raster &a, Raster &b, const std::vector<float> &key);
+    /** R-CLR-3: `out` += mix × (branch − base), per pixel, clamped — a parallel node's contribution. */
+    void addDifference(const Raster &base, const Raster &branch, double mix, Raster &out);
     /** The key as a grey picture — the matte view (white = the grade reaches it). */
     void keyPicture(const std::vector<float> &key, int width, int height, Raster &out);
 }

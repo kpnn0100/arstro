@@ -173,6 +173,8 @@ namespace schema
             text<RackObj>("proxy", &RackObj::proxy, 1, false, nonEmpty<RackObj>(&RackObj::proxy)),   // R-MEDIA-2
             number<RackObj>("proxyScale", &RackObj::proxyScale, 1.0, 1, false, [](const RackObj &r, const Project &) { return !r.proxy.empty(); }),
             text<RackObj>("cosmoPath", &RackObj::cosmoPath, 1, false, nonEmpty<RackObj>(&RackObj::cosmoPath)),   // R-MEDIA-3
+            text<RackObj>("parallelOf", &RackObj::parallelOf, 1, false, nonEmpty<RackObj>(&RackObj::parallelOf)),   // R-CLR-3
+            number<RackObj>("parallelMix", &RackObj::parallelMix, 1.0, 1, false, [](const RackObj &r, const Project &) { return !r.parallelOf.empty(); }),
         };
         return f;
     }

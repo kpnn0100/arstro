@@ -195,6 +195,23 @@ namespace interstellar
         return out;
     }
 
+    void InterstellarService::planParallel(const NodeId &tl, const RackObj &ro, double srcT, PlanLayer &L)
+    {
+        // R-CLR-3: the source's parallel nodes — variants grading its input beside it
+        for (const auto &v : mProject->rackObjs)
+        {
+            if (v.parallelOf != ro.id || v.parallelMix <= 0.0 || cosmoNodeOf(v.id) < 0) continue;
+            PlanLayer::Parallel p;
+            std::string e;
+            if (!gradeFor(tl, v.id, p.params, e, srcT) || render::GradeEngine::isIdentity(p.params)) continue;   // empty: adds nothing
+            p.mix = std::clamp(v.parallelMix, 0.0, 1.0);
+            char buf[64];
+            std::snprintf(buf, sizeof buf, "|par:%016llx@%.4f", (unsigned long long)render::hashParams(p.params), p.mix);
+            L.effectsKey += buf;   // law 7: the cache and the plan key name what the branches add
+            L.parallel.push_back(std::move(p));
+        }
+    }
+
     void InterstellarService::splitMattes(const NodeId &roId, std::vector<render::EffectRun> &runs, const std::vector<NodeId> &owners,
                                           PlanLayer &L, std::set<NodeId> &partial) const
     {
@@ -484,6 +501,7 @@ namespace interstellar
             std::vector<NodeId> owners;
             effectChain(ro->id, L.effects, L.effectsKey, srcT, &owners);
             splitMattes(ro->id, L.effects, owners, L, partial);   // R-CLR-1/2: a group's matte keys its contribution
+            planParallel(tl, *ro, srcT, L);
             if (!partial.empty() && gradeForBypassing(tl, ro->id, partial, L.paramsGroupsOff, e, srcT))
             {
                 L.groupMix = true;
@@ -492,7 +510,7 @@ namespace interstellar
             L.weight = std::clamp(ro->weight, 0.0, 1.0);
             // A partial mix needs the frames it mixes at one size — grade at source size and let
             // the composite scale (a matte too: its key, the input and the grade line up pixel for pixel)
-            L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix || !L.mattes.empty() ? 0 : proxyEdge;
+            L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix || !L.mattes.empty() || !L.parallel.empty() ? 0 : proxyEdge;
             L.srcWidth = srcWidthOf(*ro, L.media, *s);
             L.input = inputTransform(*ro, workingOf(P));
             if (!ro->lut.empty())
@@ -539,13 +557,14 @@ namespace interstellar
             std::set<NodeId> partial;
             effectChain(roId, L.effects, L.effectsKey, at, &owners);
             splitMattes(roId, L.effects, owners, L, partial);
+            planParallel(tl, *ro, at, L);
             std::string why;
             if (!partial.empty() && gradeForBypassing(tl, roId, partial, L.paramsGroupsOff, why, at))
             {
                 L.groupMix = true;
                 L.groupWeight = 1.0;
             }
-            if (L.groupMix || !L.mattes.empty()) L.edge = 0;
+            if (L.groupMix || !L.mattes.empty() || !L.parallel.empty()) L.edge = 0;
         }
         L.srcWidth = srcWidthOf(*ro, L.media, *s);
         L.input = inputTransform(*ro, workingOf(*mProject));
@@ -596,7 +615,7 @@ namespace interstellar
                 layers.push_back(L);
                 continue;
             }
-            const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
+            const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix && l.parallel.empty());
             render::FrameCache::Key key;
             key.source = l.media + l.fxKey + l.effectsKey + (l.input ? "|" + l.input->key() : std::string()) +
                          (l.lut ? "|lut:" + l.lutKey : std::string());
@@ -635,6 +654,13 @@ namespace interstellar
                 else
                 {
                     if (!ctx.grade->render(ungraded, l.params, !l.identity, l.edge, graded[i])) continue;
+                    // R-CLR-3: each parallel node grades the same input; its difference is added (Resolve's parallel mixer)
+                    for (const auto &p : l.parallel)
+                    {
+                        Raster branch;
+                        if (!ctx.grade->render(ungraded, p.params, true, l.edge, branch)) continue;
+                        render::addDifference(ungraded, branch, p.mix, graded[i]);
+                    }
                     if (l.groupMix)
                     {
                         // The groups' own contribution, faded: off ↔ on by the product of their weights —

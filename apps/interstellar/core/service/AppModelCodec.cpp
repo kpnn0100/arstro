@@ -105,6 +105,8 @@ namespace interstellar
                           .set("weight", r.weight)
                           .set("media", st ? baseName(r.media) : r.media)
                           .set("proxy", st ? baseName(r.proxy) : r.proxy)
+                          .set("parallelOf", r.parallelOf)
+                          .set("parallelMix", r.parallelMix)
                           .set("frame", r.frame)
                           .set("video", r.video)
                           .set("usedBy", r.usedBy)
@@ -438,6 +440,8 @@ namespace interstellar
             {"rack[].weight", "number", "Grade weight 0..1 (R-RACK-4)."},
             {"rack[].media", "string", "Source file (file name only when stable)."},
             {"rack[].proxy", "string", "Its proxy file, resolved; empty = none (R-MEDIA-2)."},
+            {"rack[].parallelOf", "string", "A parallel node of that source (#rackobj id); empty = not one (R-CLR-3)."},
+            {"rack[].parallelMix", "number", "A parallel node's share of its difference from the input."},
             {"rack[].frame", "number", "Reference frame a video is graded on, seconds (R-RACK-3)."},
             {"rack[].video", "bool", "A video source."},
             {"rack[].usedBy", "integer", "Clips referencing it in the current timeline."},
