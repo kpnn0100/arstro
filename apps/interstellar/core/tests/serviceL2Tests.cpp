@@ -15,6 +15,7 @@
 #include "Lut.h"
 #include "InterstellarService.h"
 #include "Project.h"
+#include "Versions.h"
 #include "core/ThreadBudget.h"
 #include <cmath>
 #include <cstdio>
@@ -30,6 +31,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <chrono>
 #include <vector>
 
@@ -102,6 +104,7 @@ namespace
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
             mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
             mRamp = path.find("ramp") != std::string::npos;   // R-COLOR-1: a ramp finer than 8 bits
+            if (path.find("a.mp4") != std::string::npos) { out.timecode = "01:00:10:00"; out.reel = "A001"; }   // R-XCH-5
             out.width = 48;
             out.height = 27;
             out.fps = 24;
@@ -1270,6 +1273,68 @@ int main()
         g.svc->pump(g.now += 500.0);
         assert(!g.svc->model().soundPlaying && g.svc->model().playhead > 0.4);   // the wall clock carried it
         FakeAudioOut::refuse = false;
+    });
+
+    test("a timeline goes out as EDL, FCPXML and OTIO and comes back the same; the media's timecode and reel travel (R-XCH-1..5)", [] {
+        Fixture f("xch");
+        f.standard();                                   // shotA (a 0–2 s) at 0, shotB (b 1–3 s) at 2
+        std::string err;
+        f.must("transition add --between shotA,shotB --dur 0.5");
+        f.must("track add --kind video");
+        f.must("clip add --track v1 --src a --in 3 --out 4 --at 1 --name over");
+        f.must("set shotB.speed=2");
+        f.must("track add --kind audio");
+        f.must("audio clip add --track a0 --src \"" + f.path("footage/music.wav") + "\" --at 0 --out 3 --gain -6");
+        // refusals: AAF named and routed, a format it cannot guess, an out of range track
+        assert(!f.run("interchange export main --out \"" + f.path("cut.aaf") + "\"", &err) && has(err, "otioconvert"));
+        assert(!f.run("interchange export main --out \"" + f.path("cut.txt") + "\"", &err) && has(err, "edl, fcpxml or otio"));
+        assert(!f.run("interchange export main --out \"" + f.path("cut.edl") + "\" --track 3", &err) && has(err, "1 … 2"));
+        f.must("interchange export main --out \"" + f.path("cut.edl") + "\"");
+        assert(has(f.svc->output(), "one video track"));
+        std::ifstream e(f.path("cut.edl"));
+        const std::string edl((std::istreambuf_iterator<char>(e)), std::istreambuf_iterator<char>());
+        // R-XCH-5: a's reel and its timecode (01:00:10:00) — the clip from 0 s of it starts at 01:00:10:00
+        assert(has(edl, "001  A001     V     C        01:00:10:00 01:00:12:00 01:00:00:00 01:00:02:00"));
+        assert(has(edl, "M2   b") && has(edl, "* TO CLIP NAME: b"));
+        f.must("interchange export main --out \"" + f.path("cut.fcpxml") + "\"");
+        f.must("interchange export main --out \"" + f.path("cut.otio") + "\" --start 10:00:00:00");
+        std::ifstream o(f.path("cut.otio"));
+        const std::string otio((std::istreambuf_iterator<char>(o)), std::istreambuf_iterator<char>());
+        assert(has(otio, "\"value\": 864000.0"));   // 10:00:00:00 at 24
+        // back in: three new root timelines, the same cut each time
+        f.must("interchange import \"" + f.path("cut.edl") + "\" --name e");
+        f.must("interchange import \"" + f.path("cut.fcpxml") + "\" --name x");
+        f.must("interchange import \"" + f.path("cut.otio") + "\" --name o");
+        assert(has(f.svc->output(), "imported 3 clips, 1 dissolves into timeline o"));
+        const Project &P = f.svc->project();
+        auto clipsOf = [&](const std::string &name) {
+            std::vector<std::tuple<double, double, double, double>> v;
+            ResolvedTimeline R;
+            std::string e2;
+            for (const auto &t : P.timelines)
+                if (t.name == name && resolve(P, t.id, R, e2))
+                    for (const auto &c : R.clips) v.emplace_back(c.at, c.in, c.out, c.speed);
+            std::sort(v.begin(), v.end());
+            return v;
+        };
+        const auto want = clipsOf("main");
+        assert(want.size() == 3 && clipsOf("x") == want && clipsOf("o") == want);
+        const auto fromEdl = clipsOf("e");                  // the EDL carries V1 only
+        assert(fromEdl.size() == 2 && std::get<1>(fromEdl[0]) == 0.0 && std::get<3>(fromEdl[1]) == 2.0);   // timecode taken back off
+        size_t aclips = 0;
+        for (const auto &a : P.audioClips) aclips += a.gain == -6.0;
+        assert(aclips == 3);                                // main's, the FCPXML's and the OTIO's
+        assert(f.svc->model().currentTimeline != P.timelines[0].id);   // the import is opened
+        // media found by name under --media when the file it names is gone
+        {
+            std::ofstream edl2(f.path("moved.edl"));
+            edl2 << "TITLE: moved\nFCM: NON-DROP FRAME\n\n001  b        V     C        00:00:01:00 00:00:02:00 01:00:00:00 01:00:01:00\n* FROM CLIP NAME: b\n";
+        }
+        f.must("interchange import \"" + f.path("moved.edl") + "\" --name m1");
+        assert(has(f.svc->output(), "not placed") && has(f.svc->output(), "--media"));
+        f.must("interchange import \"" + f.path("moved.edl") + "\" --name m2 --media \"" + f.path("footage") + "\"");
+        assert(has(f.svc->output(), "imported 1 clips"));
+        assert(!f.run("interchange import \"" + f.path("nothing.edl") + "\"", &err) && has(err, "cannot read"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

@@ -69,6 +69,8 @@ namespace interstellar
         int mediaBitDepth = 0;        // bits per component the source carries once opened (R-UI-15); 0 = unknown
         std::string input = "rec709"; // what the source IS — its input colour transform (R-COLOR-2)
         std::string lut;              // its input LUT, as written in the project; "" = none (R-COLOR-5)
+        std::string timecode;         // R-XCH-5: the file's first frame as source timecode, once opened; "" = none
+        std::string reel;             // R-XCH-5: the reel/tape name the file carries, once opened; "" = none
     };
 
     /** A plugin parameter as the UI draws it: its catalog definition and the value now (R-FX-5). */

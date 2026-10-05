@@ -543,16 +543,23 @@ reserves the rest so adopting it is not a migration.
   playback, the preview cache and renders, falling back to the CPU when the backend declines a job;
   its output matches the CPU reference within a stated tolerance, measured by a test.
 
-## R-XCH — interchange — ⏳ NOT STARTED (added 2026-10-05)
+## R-XCH — interchange — ✅ IMPLEMENTED (added 2026-10-05; DR-XCH-1)
 
 - **R-XCH-1 EDL** (CMX 3600) export and import of a timeline's video cut, with source reel names and
-  record/source timecodes.
-- **R-XCH-2 FCPXML** (1.9) export and import — what Final Cut Pro, Premiere and Resolve read.
-- **R-XCH-3 OpenTimelineIO** (`.otio`) export and import.
+  record/source timecodes. — ✅ One video track per EDL (`--track`), drop-frame at 29.97/59.94,
+  dissolves and M2 speed; FROM/TO clip comments as OTIO and Resolve write them.
+- **R-XCH-2 FCPXML** (1.9) export and import — what Final Cut Pro, Premiere and Resolve read. — ✅
+  Spine offsets count from the sequence's `tcStart` (Apple's model; OTIO's fcpx adapter ignores
+  `tcStart` and so reads a 01:00:00:00 timeline with an hour of gap in front — said). Titles,
+  generators and compound clips are not read in v1.
+- **R-XCH-3 OpenTimelineIO** (`.otio`) export and import. — ✅ Verified against OpenTimelineIO
+  0.18.1's own readers (cmx_3600, fcpx_xml, otio_json) and its writers.
 - **R-XCH-4 AAF**: no AAF library exists on this platform's build; until one is chosen, AAF is
-  reached through OTIO's converters outside the app, and the app says so.
+  reached through OTIO's converters outside the app, and the app says so. — ✅ (said: `interchange
+  export --format aaf` refuses, naming `otioconvert` and the otio-aaf-adapter).
 - **R-XCH-5 Source timecode and reel names** are read from the media (container/stream timecode,
-  reel tags), shown, and used by every interchange format.
+  reel tags), shown, and used by every interchange format. — ✅ (the clip inspector's Reel and
+  Source TC rows; `rack[].timecode`/`reel`).
 
 ## R-MEDIA — media management — ⏳ NOT STARTED (added 2026-10-05)
 

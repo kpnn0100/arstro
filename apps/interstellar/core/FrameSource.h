@@ -25,6 +25,9 @@ namespace interstellar
             double fps = 24.0;
             long long frames = 0;
             int bitDepth = 8;           // bits per component the source carries (frameAt is 8-bit; frameAtDeep keeps them)
+            std::string timecode;       // R-XCH-5: the first frame's source timecode ("10:00:00:00"), "" = none
+            std::string reel;           // R-XCH-5: the reel/tape name the camera wrote, "" = none
+            bool hasAudio = false;      // the file carries sound too
             bool valid() const { return width > 0 && height > 0; }
         };
 

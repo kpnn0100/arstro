@@ -63,6 +63,9 @@ namespace interstellar_v1
          *  each answers through `done`, never on cancel. */
         std::function<void(std::function<void(const std::string &)> done)> onPickLutToOpen;
         std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickLutToSave;
+        /** R-XCH: an EDL / FCPXML / OTIO to read, or one to write (the extension picks the format). */
+        std::function<void(std::function<void(const std::string &)> done)> onPickTimelineToImport;
+        std::function<void(const std::string &suggested, std::function<void(const std::string &)> done)> onPickTimelineToExport;
         void openProjectPicked(const std::string &path);
         void newProjectPicked(const std::string &path);
         void footagePicked(const std::vector<std::string> &paths);

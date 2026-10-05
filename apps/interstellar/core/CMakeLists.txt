@@ -22,6 +22,11 @@ add_executable(interstellar_core_tests tests/coreTests.cpp)
 target_link_libraries(interstellar_core_tests PRIVATE interstellar_core)
 add_test(NAME interstellar_core COMMAND interstellar_core_tests)
 
+# L1: the interchange formats, text in and text out (R-XCH).
+add_executable(interstellar_interchange_tests tests/interchangeTests.cpp)
+target_link_libraries(interstellar_interchange_tests PRIVATE interstellar_core)
+add_test(NAME interstellar_interchange COMMAND interstellar_interchange_tests)
+
 # L1: the grammar, the codec and the address registry — the tables the API document is made of.
 add_executable(interstellar_service_tests tests/serviceTests.cpp)
 target_link_libraries(interstellar_service_tests PRIVATE interstellar_core)

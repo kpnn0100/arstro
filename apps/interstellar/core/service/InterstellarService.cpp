@@ -342,6 +342,7 @@ namespace interstellar
             case CK::KeyShift: case CK::KeyCopy: case CK::KeyPaste: ok = requireProject() && keysCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::LutExport: ok = requireProject() && lutExport(c); break;
+            case CK::InterchangeExport: case CK::InterchangeImport: ok = requireProject() && interchangeCommand(c); break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -611,6 +612,8 @@ namespace interstellar
                 {
                     r.mediaFps = src->second->info.fps > 0 ? src->second->info.fps : 24.0;
                     r.mediaBitDepth = src->second->info.bitDepth;
+                    r.timecode = src->second->info.timecode;
+                    r.reel = src->second->info.reel;
                     r.mediaDuration = src->second->info.frames <= 1 ? 0.0 : (double)src->second->info.frames / r.mediaFps;
                 }
                 r.overridden = overridden.count(ro->id) > 0;

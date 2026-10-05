@@ -1125,6 +1125,60 @@
       "requirement": "R-RENDER-5"
     },
     {
+      "verb": "interchange export",
+      "usage": "interchange export <timeline> [--format <edl|fcpxml|otio|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]",
+      "args": "<timeline>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "format",
+          "value": "<edl|fcpxml|otio|aaf>"
+        },
+        {
+          "name": "out",
+          "value": "<path>"
+        },
+        {
+          "name": "track",
+          "value": "<n>"
+        },
+        {
+          "name": "start",
+          "value": "<HH:MM:SS:FF>"
+        }
+      ],
+      "summary": "Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it.",
+      "requirement": "R-XCH-1"
+    },
+    {
+      "verb": "interchange import",
+      "usage": "interchange import <file> [--format <edl|fcpxml|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]",
+      "args": "<file>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "format",
+          "value": "<edl|fcpxml|otio>"
+        },
+        {
+          "name": "media",
+          "value": "<dir>"
+        },
+        {
+          "name": "name",
+          "value": "<timeline>"
+        },
+        {
+          "name": "fps",
+          "value": "<rate>"
+        }
+      ],
+      "summary": "Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed.",
+      "requirement": "R-XCH-1"
+    },
+    {
       "verb": "lut export",
       "usage": "lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>]",
       "args": "<source>",
@@ -1692,6 +1746,18 @@
       "type": "number",
       "stable": true,
       "doc": "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."
+    },
+    {
+      "path": "rack[].timecode",
+      "type": "string",
+      "stable": true,
+      "doc": "The file's first frame as source timecode (\"10:00:00:00\"), once opened; empty = it carries none (R-XCH-5)."
+    },
+    {
+      "path": "rack[].reel",
+      "type": "string",
+      "stable": true,
+      "doc": "The reel/tape name the file carries, once opened; empty = none (R-XCH-5)."
     },
     {
       "path": "rack[].lut",

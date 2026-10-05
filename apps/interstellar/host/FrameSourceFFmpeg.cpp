@@ -90,6 +90,25 @@ namespace interstellar_host
         }
         if (mInfo.frames < 1) mInfo.frames = 1;
 
+        // R-XCH-5: the source timecode and the reel, where the camera or the transcoder wrote them —
+        // the video stream's tags, then a timecode (tmcd) track's, then the container's
+        auto tag = [&](AVDictionary *d, const char *k) -> std::string {
+            const AVDictionaryEntry *e = d ? av_dict_get(d, k, nullptr, 0) : nullptr;
+            return e && e->value ? std::string(e->value) : std::string();
+        };
+        mInfo.timecode = tag(st->metadata, "timecode");
+        for (unsigned i = 0; mInfo.timecode.empty() && i < mFmt->nb_streams; ++i) mInfo.timecode = tag(mFmt->streams[i]->metadata, "timecode");
+        if (mInfo.timecode.empty()) mInfo.timecode = tag(mFmt->metadata, "timecode");
+        // the reel rides on the timecode track in a QuickTime file, so every stream is asked
+        for (const char *k : {"reel_name", "reel", "tape", "com.apple.proapps.reel"})
+        {
+            if (!mInfo.reel.empty()) break;
+            mInfo.reel = tag(st->metadata, k);
+            for (unsigned i = 0; mInfo.reel.empty() && i < mFmt->nb_streams; ++i) mInfo.reel = tag(mFmt->streams[i]->metadata, k);
+            if (mInfo.reel.empty()) mInfo.reel = tag(mFmt->metadata, k);
+        }
+        mInfo.hasAudio = av_find_best_stream(mFmt, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0) >= 0;
+
         if (mInfo.width <= 0 || mInfo.height <= 0) { closeAll(); return false; }
         out = mInfo;
         return true;

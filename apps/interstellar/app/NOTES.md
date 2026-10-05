@@ -184,6 +184,14 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Deliver › AUDIO: what the render carries (`OutputSpec::audioSentence()`).
 - Shot added: `cut_sound`. UI checks: 368.
 
+## Interchange (2026-10-05, R-XCH)
+
+- File › Import Timeline… → `onPickTimelineToImport` → `interchange import "<file>"` (a new root
+  timeline, opened); File › Export Timeline… → `onPickTimelineToExport` (suggests `<timeline>.fcpxml`;
+  the extension picks EDL / FCPXML / OTIO) → `interchange export "<timeline>" --out <file>`.
+- The clip inspector shows Reel and Source TC (the file's timecode at the clip's in, R-XCH-5), and
+  scrolls when it outgrows the window (at 1024×640 the actions sit below the fold). UI checks: 373.
+
 ## Cutting like an editor (2026-10-02, R-UI-14 / R-TL-6)
 
 - Drag a source row out of the source bin onto a lane: an eased ghost (snapped; "new video track"

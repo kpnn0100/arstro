@@ -85,6 +85,8 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `key paste [--at <t>] [--to <address>]` | Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced. | R-ANIM-7 |
 | `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
+| `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
+| `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
 | `lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>]` | Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. What is not per-pixel colour is left out and said so in the file. | R-COLOR-6 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
 | `state print [--json] [--stable]` | Print the AppModel; --stable omits machine-dependent fields. | R-API-2 |
@@ -276,6 +278,8 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
+| `rack[].timecode` | string |  | The file's first frame as source timecode ("10:00:00:00"), once opened; empty = it carries none (R-XCH-5). |
+| `rack[].reel` | string |  | The reel/tape name the file carries, once opened; empty = none (R-XCH-5). |
 | `rack[].lut` | string |  | Its input LUT (.cube) as the project names it; empty = none (`set <bind>.lut=`, R-COLOR-5). |
 | `rack[].input` | string |  | What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2). |
 | `rack[].mediaBitDepth` | integer |  | Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15). |

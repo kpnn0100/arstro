@@ -2271,6 +2271,48 @@ namespace
         CHECK(changed > 60, "…and the clip shows it: the pixels along its centre line changed");
     }
 
+    /** R-XCH: File › Import / Export Timeline dispatch the grammar; the inspector shows reel and source TC. */
+    void testInterchangeUi()
+    {
+        std::printf("interchange: the File menu and the clip's reel and source timecode\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            for (auto &n : s.m.rack)
+                if (n.bindName == "s_day02") { n.reel = "A001C007"; n.timecode = "10:00:00:00"; n.mediaFps = 24.0; }
+            s.m.selectedClip = "c2";
+            ++s.m.revision;
+        });
+        std::string suggested;
+        r.app->onPickTimelineToImport = [](std::function<void(const std::string &)> done) { done("/cuts/from avid.edl"); };
+        r.app->onPickTimelineToExport = [&suggested](const std::string &name, std::function<void(const std::string &)> done) {
+            suggested = name;
+            done("/cuts/social.otio");
+        };
+        r.app->setTab(1);
+        r.settle();
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "File", "Import Timeline") && !r.svc.lines.empty() && r.svc.lines.back() == "interchange import \"/cuts/from avid.edl\"",
+              "File > Import Timeline… dispatches interchange import <file>");
+        r.pump(250);
+        CHECK(clickMenuItem(r, "File", "Export Timeline") && suggested == "Social 30s.fcpxml" &&
+                  r.svc.lines.back() == "interchange export \"Social 30s\" --out /cuts/social.otio",
+              "File > Export Timeline… names the open timeline and dispatches interchange export");
+        auto ci = r.app->edit().clipInspector();
+        std::printf("    clip c2: reel %s, source TC %s\n", ci->reel().c_str(), ci->sourceTimecode().c_str());
+        CHECK(ci->reel() == "A001C007" && ci->sourceTimecode() == "10:00:01:00", "the inspector shows the clip's reel and its source timecode at its in");
+        // R6: at 1024×640 the taller column scrolls, and its actions come within reach
+        Rig s(1024, 640, [](FakeService &f) { f.edit(); f.m.selectedClip = "c2"; ++f.m.revision; });
+        s.app->setTab(1);
+        s.settle();
+        auto c2 = s.app->edit().clipInspector();
+        CHECK(c2->scroll().scrollable(), "1024x640: the clip inspector scrolls");
+        auto del = c2->deleteButton();
+        const Point mid = world(*c2, c2->width.value() * 0.5, c2->height.value() * 0.5);
+        s.app->wheel(mid.x, mid.y, -40.0);
+        s.settle();
+        CHECK(del->visible && del->y.value() + del->height.value() <= c2->height.value() + 0.5, "…to its clamped end, where Delete clip is reachable");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2368,6 +2410,7 @@ int main()
     testLuts();
     testDeliverSound();
     testSoundUi();
+    testInterchangeUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

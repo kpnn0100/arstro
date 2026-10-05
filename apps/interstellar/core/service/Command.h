@@ -57,7 +57,7 @@ namespace interstellar
             // transport
             Playhead, Play, Pause,
             // delivery (R-RENDER)
-            Render, RenderCancel, ExportStill, LutExport,
+            Render, RenderCancel, ExportStill, LutExport, InterchangeExport, InterchangeImport,
             // the graded preview cache (R-PLAY-1)
             CacheBuild, CacheClear,
             // keyframes (R-ANIM)

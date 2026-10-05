@@ -201,6 +201,36 @@ namespace
         gtk_widget_queue_draw(a->area);
     }
 
+    /** A file to read or to write, with the filter and the extension a save makes sure of. */
+    void pickFile(Host *a, bool save, const char *title, const char *filterName, std::initializer_list<const char *> patterns,
+                  const std::string &suggested, const std::string &ensureExt, const std::function<void(const std::string &)> &done)
+    {
+        GtkWidget *d = gtk_file_chooser_dialog_new(title, GTK_WINDOW(a->window), save ? GTK_FILE_CHOOSER_ACTION_SAVE : GTK_FILE_CHOOSER_ACTION_OPEN,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, save ? "_Export" : "_Open", GTK_RESPONSE_ACCEPT, nullptr);
+        addFilter(d, filterName, patterns);
+        if (save)
+        {
+            gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d), TRUE);
+            gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d), suggested.c_str());
+        }
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+        {
+            char *path = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
+            if (path)
+            {
+                std::string p = path;
+                g_free(path);
+                if (save && !ensureExt.empty() && std::filesystem::path(p).extension().empty()) p += ensureExt;
+                gtk_widget_destroy(d);
+                gtk_widget_queue_draw(a->area);
+                done(p);
+                return;
+            }
+        }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+    }
+
     /** R-COLOR-5/6: a .cube to read, or one to write (the extension made sure). */
     void pickLut(Host *a, bool save, const std::string &suggested, const std::function<void(const std::string &)> &done)
     {
@@ -465,6 +495,12 @@ int main(int argc, char **argv)
     a->app->onPickPresetToImport = [a] { pickPresetToImport(a); };
     a->app->onPickLutToOpen = [a](std::function<void(const std::string &)> done) { pickLut(a, false, std::string(), done); };
     a->app->onPickLutToSave = [a](const std::string &name, std::function<void(const std::string &)> done) { pickLut(a, true, name, done); };
+    a->app->onPickTimelineToImport = [a](std::function<void(const std::string &)> done) {
+        pickFile(a, false, "Import timeline", "Timelines (EDL, FCPXML, OTIO)", {"*.edl", "*.EDL", "*.fcpxml", "*.xml", "*.otio"}, std::string(), std::string(), done);
+    };
+    a->app->onPickTimelineToExport = [a](const std::string &name, std::function<void(const std::string &)> done) {
+        pickFile(a, true, "Export timeline", "Timelines (EDL, FCPXML, OTIO)", {"*.edl", "*.fcpxml", "*.otio"}, name, ".fcpxml", done);
+    };
     a->app->onPickStillToExport = [a] { pickStillToExport(a); };
     a->app->onPickFrameToSave = [a] { pickFrameToSave(a); };
     // The largest screen scale this display can give a window for (cosmo R-SCALE-3): larger ones

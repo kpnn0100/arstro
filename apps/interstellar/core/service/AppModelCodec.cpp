@@ -113,7 +113,9 @@ namespace interstellar
                           .set("sharesMedia", r.sharesMedia)
                           .set("mediaBitDepth", r.mediaBitDepth)
                           .set("input", r.input)
-                          .set("lut", r.lut));
+                          .set("lut", r.lut)
+                          .set("timecode", r.timecode)
+                          .set("reel", r.reel));
         j.set("rack", rack);
         j.set("selectedRack", m.selectedRack);
         j.set("hasGradeTarget", m.hasGradeTarget);
@@ -376,6 +378,8 @@ namespace interstellar
             {"rack[].selected", "bool", "In the selection that Group Selection groups (R-RACK-8)."},
             {"rack[].mediaDuration", "number", "Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened."},
             {"rack[].mediaFps", "number", "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."},
+            {"rack[].timecode", "string", "The file's first frame as source timecode (\"10:00:00:00\"), once opened; empty = it carries none (R-XCH-5)."},
+            {"rack[].reel", "string", "The reel/tape name the file carries, once opened; empty = none (R-XCH-5)."},
             {"rack[].lut", "string", "Its input LUT (.cube) as the project names it; empty = none (`set <bind>.lut=`, R-COLOR-5)."},
             {"rack[].input", "string", "What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2)."},
             {"rack[].mediaBitDepth", "integer", "Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15)."},

@@ -220,6 +220,7 @@ namespace interstellar
         bool renderCommand(const Command &c);
         bool exportStill(const Command &c);
         bool lutExport(const Command &c);   // R-COLOR-6 (ServiceRender.cpp)
+        bool interchangeCommand(const Command &c);   // R-XCH (ServiceInterchange.cpp)
         void pumpJobs();
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);

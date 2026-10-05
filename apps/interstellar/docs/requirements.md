@@ -274,6 +274,38 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-XCH-1 A cut goes out to EDL, FCPXML and OTIO and comes back the same; media keep their timecode and reel (R-XCH-1..5)
+`core/Interchange.{h,cpp}` holds one neutral cut (`XTimeline`: media with their source-timecode
+start and reel, clips on numbered tracks in media-relative source seconds, dissolves) and a
+writer and reader per format, text only: CMX 3600 (`:160`, `:225` — reels ≤ 32 characters, source
+and record timecode from 01:00:00:00, a dissolve as the outgoing held at the cut then `D nnn`, `M2`
+speed, FROM/TO CLIP comments as OTIO and Resolve write and read them), FCPXML 1.9 (`:480`, `:590` —
+assets with `media-rep`, the lowest video track as the spine with gaps, every other track as a
+connected clip on its lane in its parent's time, audio below, `Cross Dissolve`, a linear `timeMap`
+for speed, `adjust-volume` for gain; a `<clip>`'s own `<video>` is its media), OTIO JSON (`:862`,
+`:906` — Clip.1 with an external reference and its available range, Gap.1, Transition.1 with the
+held outgoing as out_offset, LinearTimeWarp.1; Clip.2's media_references read too). Small readers
+of XML (`:408`) and JSON (`:748`) — no new dependency. Timecode (`core/Timecode.h`, header-only so
+the UI can show it) counts drop-frame at 29.97/59.94. The service maps a resolved timeline out
+(`core/service/ServiceInterchange.cpp:57`: V1 is the lowest video track, A1 the lowest audio lane;
+each file opened for its frames, its timecode and its reel — `host/FrameSourceFFmpeg.cpp:93`, the
+reel found on QuickTime's timecode track) and a file in (`:194`): media found as written, else by
+clip/reel name under `--media`, picture media added to the rack in one add, an EDL's timecode taken
+back off each file's own start (`:266`), then a NEW root timeline with its tracks named after it,
+its clips, speeds and dissolves, opened (`:277`); what cannot be found is listed, not placed. AAF
+is refused with the way to it (R-XCH-4). UI: File › Import Timeline… / Export Timeline… through
+host pickers (`app/App.cpp:234`); the clip inspector's Reel and Source TC (`app/widgets/ClipInspector.cpp:74`),
+the column now scrolling (it outgrew 1024×640). Verified with OpenTimelineIO 0.18.1 in a scratch
+virtualenv: its cmx_3600, fcpx_xml and otio_json readers read our files to the same clips,
+positions, source timecode, the dissolve and the 2× speed (fcpx_xml with an hour's gap — it ignores
+`tcStart`); its EDL and FCPXML writers' files import here to the same cut (their own FCPXML writer
+drops the speed and the dissolve). Guarded by `interstellar_interchange` (timecode with drop-frame
+and a 21-minute round trip; each format's exact lines and a round trip, refusals), L2 `a timeline
+goes out as EDL, FCPXML and OTIO and comes back the same…` (reel A001 and 01:00:10:00 in the EDL;
+`--start`; three imports equal to the original; --media search), UI `interchange: the File menu…`.
+Mutants run red: the import ignoring a file's timecode start, the export ignoring the reel tag, the
+FCPXML reader keeping `tcStart` in the record time.
+
 ### DR-AUD-3 Playback is heard on the audio clock, scrubs sound, the master is metered, clips show their waveform (R-AUD-6, R-AUD-7, R-AUD-8)
 The core names an output seam, `IAudioOut` (`core/AudioOut.h`): stereo float whose blocking `write`
 is the clock. The GTK host fills it with PulseAudio's simple API — PipeWire serves it — at a ~60 ms

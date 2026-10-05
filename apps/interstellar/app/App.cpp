@@ -230,6 +230,20 @@ namespace interstellar_v1
             {"Save As...   (Ctrl+Shift+S)",  [this] { if (onPickSaveAs) onPickSaveAs(); }},
             {"Add Footage...",               [this] { if (onPickFootage) onPickFootage(); }},
             {"Export Still...",              [this] { if (onPickStillToExport) onPickStillToExport(); }},
+            // R-XCH: a cut for another editor, and back
+            {"Import Timeline...",           [this] {
+                 if (onPickTimelineToImport)
+                     onPickTimelineToImport([this](const std::string &p) { dispatch("interchange import " + cmd::quote(p)); });
+             }},
+            {"Export Timeline...",           [this] {
+                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                 std::string name;
+                 for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) name = tl.name;
+                 if (name.empty() || !onPickTimelineToExport) return;
+                 onPickTimelineToExport(name + ".fcpxml", [this, name](const std::string &p) {
+                     dispatch("interchange export " + cmd::quote(name) + " --out " + cmd::quote(p));
+                 });
+             }},
             {"Render...",                    [this] { mEdit->setTab(EditScreen::Deliver); }},
         }});
         ms->addMenu({"Edit", {

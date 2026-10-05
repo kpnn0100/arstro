@@ -206,6 +206,16 @@ namespace interstellar
              "Remove a parameter's curve; the value it had now stays as the parameter's own.", "R-ANIM-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},
              "Write one composited frame of a named timeline.", "R-RENDER-5"},
+            {K::InterchangeExport, "interchange export", "<timeline>", 1, 1,
+             {"format=<edl|fcpxml|otio|aaf>", "out=<path>", "track=<n>", "start=<HH:MM:SS:FF>"},
+             "Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source "
+             "timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record "
+             "clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it.", "R-XCH-1"},
+            {K::InterchangeImport, "interchange import", "<file>", 1, 1,
+             {"format=<edl|fcpxml|otio>", "media=<dir>", "name=<timeline>", "fps=<rate>"},
+             "Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or "
+             "by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the "
+             "project's unless --fps. Media that cannot be found is listed, not placed.", "R-XCH-1"},
             {K::LutExport, "lut export", "<source>", 1, 1, {"out=<file.cube>", "size=<2..129>", "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>"},
              "Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, "
              "its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. "

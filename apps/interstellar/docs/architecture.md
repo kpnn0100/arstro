@@ -133,6 +133,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, transitions held (R-TL-4, DR-TL-4) |
 | `apps/interstellar/render/ColourTransform.{h,cpp}` | render | **built** — camera curves, gamuts, working spaces (Rec.709, ACEScct), output transforms incl. PQ/HLG (R-COLOR-2..4, DR-COLOR-2/3) |
 | `apps/interstellar/render/AudioMix.{h,cpp}` | render | **built** — the master sum: placement, gain, fades, balance, varispeed; pure and sample-accurate (R-AUD-5 amended, R-AUD-9, DR-AUD-2) |
+| `apps/interstellar/core/Interchange.{h,cpp}` · `Timecode.h` | core | **built** — EDL (CMX 3600), FCPXML 1.9, OTIO in and out; drop-frame timecode (R-XCH, DR-XCH-1) |
 | `apps/interstellar/core/AudioOut.h` | core | **built** — the sound output seam; its blocking write is the playback clock (R-AUD-6) |
 | `apps/interstellar/host/AudioOutPulse` | host | **built** — PulseAudio simple API (PipeWire serves it), ~60 ms buffer; optional at build |
 | `apps/interstellar/core/AudioSource.h` | core | **built** — the audio decode seam (stereo float at the mix rate) |
