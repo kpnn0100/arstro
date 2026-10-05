@@ -216,6 +216,8 @@ namespace interstellar
         j.set("redoLabel", m.redoLabel);
         j.set("hasGradeClipboard", m.hasGradeClipboard);
         j.set("gradeClipboardFrom", m.gradeClipboardFrom);
+        j.set("playbackEdge", m.playbackEdge);
+        j.set("playbackRate", m.playbackRate);
         {
             Json fx = Json::array();
             for (const auto &e : m.effects)
@@ -410,6 +412,8 @@ namespace interstellar
             {"redoLabel", "string", "What `redo` would redo."},
             {"hasGradeClipboard", "bool", "`grade copy` has filled the clipboard (R-EDIT-2)."},
             {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
+            {"playbackEdge", "integer", "The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2)."},
+            {"playbackRate", "number", "Frames the read-ahead finished per second over the last half second; 0 = not playing."},
             {"effects", "array", "Every plugin of every rack node's image-processing stack, by node then order (R-FX-5)."},
             {"effects[].id", "string", "The plugin's id, `ef_<n>` — stable for its life, the root of its addresses."},
             {"effects[].node", "string", "The #rackobj whose stack it is in."},

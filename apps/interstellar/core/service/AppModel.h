@@ -238,6 +238,10 @@ namespace interstellar
         std::string undoLabel, redoLabel;   // "set a.basic.exposure", "clip move shotA"
         bool hasGradeClipboard = false;     // `grade copy` has something to paste
         std::string gradeClipboardFrom;     // the bind name it was copied from
+        // ── playback (R-PLAY-2) ──
+        int playbackEdge = 0;                      // the long edge playback grades at now; 0 = not playing (full preview)
+        double playbackRate = 0;                   // frames the read-ahead finished per second, last half second
+
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order

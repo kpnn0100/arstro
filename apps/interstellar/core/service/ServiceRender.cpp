@@ -13,10 +13,12 @@
 #include "ActiveSet.h"
 #include "Composite.h"
 #include "ParamHash.h"
+#include "Prescale.h"
 #include "Project.h"
 #include "Versions.h"
 #include "volume/TemporalOps.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cctype>
 #include <cstdio>
@@ -386,6 +388,13 @@ namespace interstellar
             {
                 Raster ungraded;
                 if (!decodeLayer(ctx, l, ungraded)) continue;
+                // a PREVIEW of a large source: shrink it (linear-light box) before the grade turns every
+                // pixel into float — the 4K-at-640 cost (R-PLAY-2); a full-size render never takes this
+                if (l.edge > 0)
+                {
+                    Raster small;
+                    if (render::prescale(ungraded, l.edge, small)) ungraded = std::move(small);
+                }
                 if (key.paramHash == render::FrameCache::kUngraded) graded[i] = std::move(ungraded);
                 else
                 {
@@ -424,12 +433,130 @@ namespace interstellar
         return executePlan(*mSync, plan, out);
     }
 
+    int InterstellarService::playEdge(int requested) const
+    {
+        // Preview quality caps the monitor's render edge (R-SET-3) — a cap, never an upscale — and
+        // while playing, the edge the read-ahead keeps up at caps it again (R-PLAY-2).
+        int e = requested;
+        if (mSettings.previewEdge > 0) e = e > 0 ? std::min(e, mSettings.previewEdge) : mSettings.previewEdge;
+        if (mPlaying && mPlayEdge > 0) e = e > 0 ? std::min(e, mPlayEdge) : mPlayEdge;
+        return e;
+    }
+
+    void InterstellarService::scheduleAhead()
+    {
+        if (!mAhead) return;
+        const NodeId tl = currentTimeline();
+        const double fps = mProject->fps > 0 ? mProject->fps : 24.0;
+        const double dur = timelineDuration(tl);
+        const int edge = playEdge(mLastMonitorEdge > 0 ? mLastMonitorEdge : 1600);
+        const double now = mModel.playhead;
+        const int workers = (int)mAhead->threads.size();
+        const int horizon = workers * 2 + 2;
+        // Aim where the playhead WILL be when a frame is done (its work time, smoothed), and when the
+        // pool finishes fewer frames than the timeline shows, grade every n-th one so the ones it
+        // finishes are on time — a lower picture rate, never a picture that lags.
+        double workMs = 0;
+        {
+            std::lock_guard<std::mutex> l(mAhead->mu);
+            workMs = mAhead->workMs;
+        }
+        const int lead = 1 + (int)std::ceil(workMs / 1000.0 * fps);
+        const int step = mPlayRate > 0 && mPlayRate < fps * 0.95 ? std::max(1, (int)std::ceil(fps / std::max(1.0, mPlayRate))) : 1;
+        // plan on THIS thread (it reads the project and the rack), hand the work to the pool
+        std::vector<AheadPool::Item> fresh;
+        {
+            std::lock_guard<std::mutex> l(mAhead->mu);
+            while (!mAhead->queue.empty() && mAhead->queue.front().t < now - 1e-6) mAhead->queue.pop_front();
+            for (auto it = mAhead->done.begin(); it != mAhead->done.end();)
+                it = it->second.first < now - 2.0 / fps ? mAhead->done.erase(it) : std::next(it);
+        }
+        // plan each frame once per (edge, project state): planning reads the rack and is not free
+        if (edge != mAheadPlannedEdge || mModel.revision != mAheadPlannedRevision)
+        {
+            mAheadPlanned.clear();
+            mAheadPlannedEdge = edge;
+            mAheadPlannedRevision = mModel.revision;
+        }
+        const long long nowFrame = (long long)std::llround(now * fps);
+        for (auto it = mAheadPlanned.begin(); it != mAheadPlanned.end();) it = *it < nowFrame ? mAheadPlanned.erase(it) : std::next(it);
+        for (int i = 0; i < horizon; ++i)
+        {
+            const long long f = nowFrame + lead + (long long)i * step;
+            const double t = snapToFrame(f / fps, fps);
+            if (dur > 0 && t >= dur) break;
+            if (!mAheadPlanned.insert(f).second) continue;
+            AheadPool::Item it;
+            bool any = false;
+            if (!planFrame(tl, t, edge, it.plan, &any) || !any) continue;
+            it.key = it.plan.key;
+            it.t = t;
+            fresh.push_back(std::move(it));
+        }
+        {
+            std::lock_guard<std::mutex> l(mAhead->mu);
+            for (auto &it : fresh)
+            {
+                if (mAhead->done.count(it.key) || mAhead->busy.count(it.key)) continue;
+                bool queued = false;
+                for (const auto &q : mAhead->queue) queued = queued || q.key == it.key;
+                if (!queued) mAhead->queue.push_back(std::move(it));
+            }
+        }
+        mAhead->cv.notify_all();
+        // keep up: if the pool finished fewer frames than the timeline asks for, grade smaller
+        if (mNowMs - mRateFromMs >= 500.0)
+        {
+            const long long fin = mAhead->finished.load();
+            mPlayRate = (fin - mRateFromDone) * 1000.0 / (mNowMs - mRateFromMs);
+            mRateFromMs = mNowMs;
+            mRateFromDone = fin;
+            const int cap = mSettings.previewEdge > 0 ? mSettings.previewEdge : 1600;
+            if (mPlayRate < fps * 0.9 && mPlayEdge > 640)
+                mPlayEdge = mPlayEdge > 1280 ? 1280 : mPlayEdge > 960 ? 960 : 640;
+            else if (mPlayRate > fps * 1.8 && mPlayEdge < std::min(cap, 1280))
+                mPlayEdge = std::min(std::min(cap, 1280), mPlayEdge < 960 ? 960 : 1280);   // headroom: sharper again
+        }
+    }
+
+    void InterstellarService::aheadLoop(size_t worker)
+    {
+        AheadPool &p = *mAhead;
+        for (;;)
+        {
+            AheadPool::Item it;
+            {
+                std::unique_lock<std::mutex> l(p.mu);
+                p.cv.wait(l, [&] { return p.stop || !p.queue.empty(); });
+                if (p.stop) return;
+                it = std::move(p.queue.front());
+                p.queue.pop_front();
+                p.busy.insert(it.key);
+                if (p.resetSources[worker])
+                {
+                    p.ctxs[worker]->sources.clear();   // this worker's own decoders, on its own thread
+                    p.resetSources[worker] = 0;
+                }
+            }
+            Raster frame;
+            const auto t0 = std::chrono::steady_clock::now();
+            const bool ok = executePlan(*p.ctxs[worker], it.plan, frame);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            {
+                std::lock_guard<std::mutex> l(p.mu);
+                p.workMs = p.workMs <= 0 ? ms : p.workMs * 0.8 + ms * 0.2;
+                p.busy.erase(it.key);
+                if (ok) p.done[it.key] = {it.t, std::move(frame)};
+            }
+            p.finished.fetch_add(1);
+        }
+    }
+
     bool InterstellarService::renderFrame(double t, int proxyEdge, Raster &out)
     {
         if (!mOpen) return false;
-        // Preview quality caps the monitor's render edge (R-SET-3) — a cap, never an upscale. A
-        // render and an export-still go through renderTimelineFrame at full size, untouched.
-        if (mSettings.previewEdge > 0) proxyEdge = proxyEdge > 0 ? std::min(proxyEdge, mSettings.previewEdge) : mSettings.previewEdge;
+        if (proxyEdge > 0) mLastMonitorEdge = proxyEdge;
+        proxyEdge = playEdge(proxyEdge);
         FramePlan plan;
         bool any = false;
         if (!planFrame(currentTimeline(), t, proxyEdge, plan, &any)) return false;
@@ -473,6 +600,27 @@ namespace interstellar
     bool InterstellarService::present(FramePlan &&plan, Raster &out)
     {
         if (!mHost.asyncPreview) return executePlan(*mSync, plan, out);
+
+        // Playing: the frame due now from the read-ahead ring (R-PLAY-2) — or, when it is not
+        // ready, the newest ring frame not after it: dropping a frame, never stalling the picture.
+        if (mPlaying && mAhead && plan.key.compare(0, 4, "src|") != 0)   // a timeline frame, not Grade's source
+        {
+            std::lock_guard<std::mutex> l(mAhead->mu);
+            const double fps = mProject->fps > 0 ? mProject->fps : 24.0;
+            const auto hit = mAhead->done.find(plan.key);
+            if (hit != mAhead->done.end()) { out = hit->second.second; ++mAheadHits; ++mAheadShown; return true; }
+            ++mAheadMisses;
+            const std::pair<double, Raster> *best = nullptr;
+            for (const auto &kv : mAhead->done)
+                if (kv.second.first <= mModel.playhead + 1e-6 && (!best || kv.second.first > best->first)) best = &kv.second;
+            if (best)
+            {
+                out = best->second;
+                ++mAheadShown;
+                mAheadLag += (mModel.playhead - best->first) * fps;
+                return true;
+            }
+        }
 
         // The monitor on a worker (D-5): hand over the plan, answer at once with the newest
         // finished frame. When the requested frame lands, pump() raises frameSeq and the view

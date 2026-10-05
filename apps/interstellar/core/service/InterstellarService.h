@@ -107,6 +107,17 @@ namespace interstellar
          *  reference frame, Grade), "" = the current timeline at the playhead. For the host's
          *  clipboard copy; `capture --out` saves the same pixels. */
         bool captureFrame(const std::string &bind, Raster &out);
+        /** R-PLAY-2, for benches and tests: the monitor's frames while playing that came ready from
+         *  the read-ahead pool (hits) or not (misses), and the long edge playback grades at. */
+        struct PlaybackStats
+        {
+            long long hits = 0, misses = 0;   // the frame due was ready / was not
+            int edge = 0;
+            double rate = 0;                  // frames the pool finished per second
+            long long shown = 0;              // frames handed to the monitor while playing
+            double lagFrames = 0;             // how far behind the playhead the shown picture was, summed
+        };
+        PlaybackStats playbackStats() const { return {mAheadHits, mAheadMisses, mPlayEdge, mPlayRate, mAheadShown, mAheadLag}; }
         /** A NAMED timeline at `t` — what render and export-still use (R-RENDER-1). */
         bool renderTimelineFrame(const NodeId &timeline, double t, int proxyEdge, Raster &out, bool *anyClip = nullptr);
         /** The effective grade of a rack object in a timeline: colour source (live rack or pin),
@@ -126,6 +137,7 @@ namespace interstellar
         struct FramePlan;
         struct RenderCtx;
         struct PreviewWorker;
+        struct AheadPool;
 
         void emit(const Event &e);
         bool dispatchInner(const Command &c);
@@ -196,6 +208,10 @@ namespace interstellar
         bool present(FramePlan &&plan, Raster &out);
         bool executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out);
         void previewLoop();
+        // R-PLAY-2: while playing, grade the frames after the playhead in parallel
+        void aheadLoop(size_t worker);
+        void scheduleAhead();
+        int playEdge(int requested) const;
         bool gradeForBypassing(const NodeId &timeline, const NodeId &rackObj, const std::set<NodeId> &groupsOff,
                                EditParams &out, std::string &err);
         double timelineDuration(const NodeId &timeline) const;
@@ -250,6 +266,19 @@ namespace interstellar
         std::unique_ptr<RenderCtx> mSync;            // the UI thread's decoders + grade engine
         render::GradeEngine *mGrade = nullptr;       // == mSync->grade (settings reach it)
         std::unique_ptr<PreviewWorker> mPreview;     // last member: stopped first
+        std::unique_ptr<AheadPool> mAhead;           // stopped in the destructor, before mPreview
+        int mPlayEdge = 0;                           // the long edge playback grades at now (0 = not playing)
+        int mLastMonitorEdge = 0;                    // the edge the monitor last asked for
+        bool mPreroll = false;                       // Play pressed: the clock waits for the first frames
+        double mPrerollFromMs = 0;
+        double mRateFromMs = 0;                      // the read-ahead rate's window
+        long long mRateFromDone = 0;
+        double mPlayRate = 0;                        // frames the pool finished per second, last window
+        long long mAheadHits = 0, mAheadMisses = 0, mAheadShown = 0;
+        double mAheadLag = 0;
+        std::set<long long> mAheadPlanned;           // frames already handed to the pool at the current edge
+        int mAheadPlannedEdge = 0;
+        unsigned mAheadPlannedRevision = ~0u;
         std::vector<std::unique_ptr<Job>> mJobs;
         int mNextJob = 1;
 

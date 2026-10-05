@@ -10,7 +10,9 @@
 #include "volume/Volume.h"
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -86,6 +88,26 @@ namespace interstellar
         std::atomic<unsigned> doneSeq{0};
         unsigned seenSeq = 0;
         RenderCtx ctx;
+    };
+
+    /** R-PLAY-2: the read-ahead pool. While playing, the UI thread plans the frames after the
+     *  playhead (cheap) and these workers grade them in parallel — each with its OWN decoders and
+     *  grade engine (RenderCtx is one thread's) — into a small ring keyed by plan, which the monitor
+     *  reads. A frame is a pure function of its plan (R-RENDER-2), so a ring frame IS the frame. */
+    struct InterstellarService::AheadPool
+    {
+        struct Item { std::string key; double t = 0; FramePlan plan; };
+        std::vector<std::thread> threads;
+        std::vector<std::unique_ptr<RenderCtx>> ctxs;
+        std::vector<char> resetSources;
+        std::mutex mu;
+        std::condition_variable cv;
+        std::deque<Item> queue;
+        std::set<std::string> busy;
+        std::map<std::string, std::pair<double, Raster>> done;   // key → (t, frame)
+        bool stop = false;
+        std::atomic<long long> finished{0};
+        double workMs = 0;              // a frame's work, smoothed — how far ahead to aim
     };
 
     /** A queued render of a NAMED timeline (R-RENDER-1), advanced a frame per pump (R-RENDER-4). */

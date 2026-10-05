@@ -686,3 +686,24 @@ the vectorscope; the readout; Waveform CROSS-FADES — red when set; the CLIP sw
 overlay) and `interstellar_host` (a 10-bit HEVC source reports 10, the rest 8). Shots
 `grade_populated` (histogram), `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
 `grade_clip_warning` (both sizes, looked at).
+
+### DR-PLAY-2 Playback reads ahead, at a size it keeps up with; a preview prescales large sources (R-PLAY-2)
+`AheadPool` (`core/service/ServiceInternal.h`): 2–4 workers (cores ÷ 6), each with its OWN decoders
+and grade engine. While playing, `scheduleAhead` (`core/service/ServiceRender.cpp`) plans — on the UI
+thread, once per frame per (edge, project revision) — the frames from the playhead plus the measured
+latency (smoothed work time), every n-th frame when the pool finishes fewer than the timeline needs
+(`:446`), and the workers (`aheadLoop`, `:522`) execute them into a ring keyed by plan. `present`
+(`:600`) answers a timeline
+frame from the ring — exact, or else the newest ring frame not after the playhead (a dropped frame,
+never a stall) — and Grade's source frames never touch it. `playEdge` (`:436`) caps the monitor's edge by
+Preview quality and, while playing, by the edge the pool keeps up with: Play starts at 960, steps to
+640 when the pool's rate falls under 0.9 × fps, up again over 1.8 × fps; Pause returns to the full
+preview edge. Play pre-rolls until the first frames are ready (≤ 500 ms). The model publishes
+`playbackEdge`/`playbackRate`; the caption says "▶ 640 px". `render::prescale` (`render/Prescale.cpp`)
+box-reduces a PREVIEW of a large source by an integer factor (keeping 2× the edge) in linear light
+before the grade's float conversion — 4K at 640 px: 82 → 39 ms; a full-size render never prescales.
+Measured (`interstellar_play_bench`, 24 threads, exposure+contrast+clarity): 1080p — 111 of 112 due
+frames shown, mean lag 0.09 frames; 4K — 98 of 100, 0.13 frames; both at 640 px while playing.
+Guarded by L2 `playback reads ahead…` (ring frames are pixel-identical to a direct render of the same
+t; the pool's frames are shown; Pause returns to edge 0 — red with the ring ignored) and the render
+suite's prescale test (a half-white 2×2 block averages to 188, not 128; no prescale at full size).

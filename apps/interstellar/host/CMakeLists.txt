@@ -43,3 +43,8 @@ if(INTERSTELLAR_AV_FOUND)
   add_executable(interstellar_open_bench EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/bench/openBench.cpp)
   target_link_libraries(interstellar_open_bench PRIVATE interstellar_host)
 endif()
+# Not a test: what a frame of playback costs, graded and not (R-PLAY).
+if(INTERSTELLAR_AV_FOUND)
+  add_executable(interstellar_play_bench EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/bench/playBench.cpp)
+  target_link_libraries(interstellar_play_bench PRIVATE interstellar_host)
+endif()

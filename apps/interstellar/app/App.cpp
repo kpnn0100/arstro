@@ -729,6 +729,8 @@ namespace interstellar_v1
         std::string cap;
         for (const auto &tl : m.timelines) if (tl.id == m.currentTimeline) cap = tl.name.empty() ? tl.id : tl.name;
         if (m.width > 0 && m.height > 0) cap += (cap.empty() ? "" : "  \xC2\xB7  ") + std::to_string(m.width) + "\xC3\x97" + std::to_string(m.height);
+        // playing: the size the read-ahead keeps up at (R-PLAY-2) — the paused frame is sharp again
+        if (m.playing && m.playbackEdge > 0) cap += "  \xC2\xB7  \xE2\x96\xB6 " + std::to_string(m.playbackEdge) + " px";
         mon->setCaption(cap);
 
         // is there a picture to show? (a clip under the playhead in the resolved timeline)

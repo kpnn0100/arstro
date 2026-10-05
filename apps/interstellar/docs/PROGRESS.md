@@ -54,8 +54,8 @@ one integrator who moves, wires, tests and commits each stream:
       clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
 - [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
-      and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: proxies, read-ahead,
-      hardware video (R-PLAY).
+      and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: read-ahead — DONE (DR-PLAY-2);
+      the graded preview cache and hardware video (R-PLAY-1, R-PLAY-3) next.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -104,6 +104,15 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — no source proxies: the grade is the cost (R-PLAY-1 amended).** Measured before
+building what was asked: a 1080p frame decodes in 4 ms and grades in 170 ms at a 1600-px preview; 4K
+decodes in 11 ms and grades in 220 ms; Cosmo's GPU path is unavailable here (no change with it on).
+A proxy re-encode of the sources would have saved the 4 ms. What works: read-ahead on a few workers
+at a size the machine keeps up with (stepping 960 → 640), prescaling large sources in linear light
+before the grade (4K at 640 px: 82 → 39 ms), and — next — caching the GRADED preview as H.264, which
+is the request's own idea applied to the frames that are expensive to make. Frame-level parallelism
+gains little beyond 2 workers because Cosmo's engine already spreads one frame over the cores.
 
 **2026-10-05 — plugins are rack nodes' children in the `.isp`, Cosmo stays plugin one (R-FX-5).**
 Colour is Cosmo's and is always first: a blur after a grade is what the eye expects, and letting a

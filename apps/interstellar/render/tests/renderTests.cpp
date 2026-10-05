@@ -16,6 +16,7 @@
 #include "ActiveSet.h"
 #include "Composite.h"
 #include "Effects.h"
+#include "Prescale.h"
 #include "FrameCache.h"
 #include "GradeEngine.h"
 #include "ParamHash.h"
@@ -850,6 +851,25 @@ namespace
         std::printf("[PASS] effects: zoom and spin smear about a fixed centre\n");
     }
 
+    void test_prescale_is_gamma_correct_and_preview_only()
+    {
+        assert(prescaleFactor(3840, 2160, 640) == 3 && prescaleFactor(1920, 1080, 640) == 1 && prescaleFactor(3840, 2160, 0) == 1);
+        Raster out;
+        Raster big = solid(3840, 2160, 90, 140, 200);
+        assert(!prescale(big, 0, out) && out.empty());                       // a full-size render never prescales
+        assert(prescale(big, 640, out) && out.width == 1280 && out.height == 720);
+        assert(is(out, 100, 100, 90, 140, 200, 255, 1));                     // a flat field stays itself
+        // a 0/255 checker averages in LINEAR light: half power is ~188, not the 128 an 8-bit mean gives
+        Raster chk = solid(1920, 1080, 0, 0, 0);
+        for (int y = 0; y < 1080; ++y)
+            for (int x = 0; x < 1920; ++x)
+                if ((x + y) % 2) { uint8_t *p = &chk.rgba[((size_t)y * 1920 + x) * 4]; p[0] = p[1] = p[2] = 255; }
+        assert(prescale(chk, 480, out) && out.width == 960);   // factor 2: each block is half white
+        std::printf("      checker → %d\n", px(out, 10, 10)[0]);
+        assert(std::abs(px(out, 10, 10)[0] - 188) <= 2);
+        std::printf("[PASS] prescale: integer factor keeping 2x the preview edge, linear-light average, never at full size\n");
+    }
+
     void test_effect_mix_zero_is_identity_and_half_is_between()
     {
         Raster a = solid(40, 40, 0, 0, 0);
@@ -876,6 +896,7 @@ int main()
     test_directional_blur_follows_its_angle();
     test_zoom_and_spin_keep_their_centre();
     test_effect_mix_zero_is_identity_and_half_is_between();
+    test_prescale_is_gamma_correct_and_preview_only();
     test_blend_modes_on_known_operands();
     test_half_scale_contain_lands_centred();
     test_rotation_90_moves_a_known_pixel();

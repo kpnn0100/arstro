@@ -870,6 +870,50 @@ int main()
         assert(has(text, "#effect id=ef_1 ") && has(text, "radius=4.0") && has(text, "type=blur.gaussian"));
     });
 
+    test("playback reads ahead: frames from the pool are the frames, on time, and pausing goes sharp again (R-PLAY-2)", [] {
+        Fixture f("ahead");
+        f.async = true;          // the GTK host's binding: a preview worker and the read-ahead pool
+        f.svc = f.make();
+        f.standard();
+        f.must("set a.basic.exposure=0.3");
+        const auto t0 = std::chrono::steady_clock::now();
+        auto nowMs = [&] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() + 1000.0; };
+        f.svc->pump(nowMs());
+        std::string err;
+        assert(f.svc->dispatchText("play", err));
+        Raster r;
+        double last = -1;
+        int checked = 0;
+        long long hitsBefore = 0;
+        while (nowMs() < 1000.0 + 1500.0 && f.svc->model().playing)
+        {
+            f.svc->pump(nowMs());
+            const double t = f.svc->model().playhead;
+            if (t != last)
+            {
+                last = t;
+                hitsBefore = f.svc->playbackStats().hits;
+                assert(f.svc->renderFrame(t, 48, r) || r.empty());
+                if (f.svc->playbackStats().hits > hitsBefore && checked < 5)
+                {
+                    // a ring frame IS the frame: the same pixels a direct render of t gives at that edge
+                    Raster direct;
+                    assert(f.svc->renderTimelineFrame("tl_1", t, f.svc->playbackStats().edge, direct));
+                    assert(direct.rgba == r.rgba);
+                    ++checked;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const auto st = f.svc->playbackStats();
+        std::printf("    played: %lld shown, %lld exact, lag %.2f frames, edge %d, pool %.1f fps\n", st.shown, st.hits,
+                    st.shown ? st.lagFrames / st.shown : 0.0, st.edge, st.rate);
+        assert(checked > 0 && st.hits > 0 && st.edge > 0);
+        assert(st.shown > 0 && st.lagFrames / st.shown < 2.0);   // never far behind the playhead
+        f.must("pause");
+        assert(f.svc->playbackStats().edge == 0);                  // paused: graded at the full preview size
+    });
+
     test("the same script on two services dumps the same stable state", [] {
         Fixture a("equiv_a"), b("equiv_b");
         for (Fixture *f : {&a, &b})

@@ -187,6 +187,12 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Shots added: `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
   `grade_clip_warning`. UI checks: 275.
 
+## Playback (2026-10-05, R-PLAY-2)
+
+- While playing, the service grades ahead on a small pool and steps the playing size down (960 →
+  640) when it falls behind; the monitor caption adds "▶ 640 px". Pause → the full preview size.
+  Nothing to do in the app beyond the caption: `renderFrame` answers from the ring.
+
 ## Integrating (the GTK host)
 
 ```cpp

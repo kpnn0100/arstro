@@ -92,6 +92,16 @@ namespace interstellar
         {
             mPreview.reset(new PreviewWorker());
             mPreview->thread = std::thread([this] { previewLoop(); });
+            // R-PLAY-2: a few frames graded side by side; each worker owns a decoder set and an engine
+            mAhead.reset(new AheadPool());
+            size_t k = (size_t)std::clamp((int)std::thread::hardware_concurrency() / 6, 2, 4);
+            if (const char *e = std::getenv("INTERSTELLAR_AHEAD_WORKERS")) k = (size_t)std::clamp(std::atoi(e), 1, 8);   // benches
+            for (size_t i = 0; i < k; ++i)
+            {
+                mAhead->ctxs.emplace_back(new RenderCtx());
+                mAhead->resetSources.push_back(0);
+            }
+            for (size_t i = 0; i < k; ++i) mAhead->threads.emplace_back([this, i] { aheadLoop(i); });
         }
         if (mHost.rackDecoder)
         {
@@ -115,6 +125,15 @@ namespace interstellar
 
     InterstellarService::~InterstellarService()
     {
+        if (mAhead)
+        {
+            {
+                std::lock_guard<std::mutex> l(mAhead->mu);
+                mAhead->stop = true;
+            }
+            mAhead->cv.notify_all();
+            for (auto &t : mAhead->threads) if (t.joinable()) t.join();
+        }
         if (mPreview)
         {
             {
@@ -321,7 +340,26 @@ namespace interstellar
         }
         if (mPending && !mRack.loading()) finishRackLoad();
 
-        if (mPlaying && mOpen)
+        if (mPlaying && mOpen) scheduleAhead();
+        if (mPlaying && mOpen && mPreroll)
+        {
+            // pre-roll (R-PLAY-2): the clock starts when the first frames are graded, or after half a
+            // second whatever happens — an editor's pre-roll, not a stall
+            size_t ready = 0;
+            if (mAhead)
+            {
+                std::lock_guard<std::mutex> l(mAhead->mu);
+                for (const auto &kv : mAhead->done) ready += kv.second.first > mModel.playhead;
+            }
+            const size_t want = mAhead ? std::min<size_t>(3, mAhead->threads.size() + 1) : 0;
+            if (ready >= want || mNowMs - mPrerollFromMs >= 500.0)
+            {
+                mPreroll = false;
+                mPlayFromT = mModel.playhead;
+                mPlayFromMs = mNowMs;
+            }
+        }
+        if (mPlaying && mOpen && !mPreroll)
         {
             const double dur = timelineDuration(currentTimeline());
             double t = mPlayFromT + (mNowMs - mPlayFromMs) / 1000.0;
@@ -329,6 +367,7 @@ namespace interstellar
             {
                 t = dur;
                 mPlaying = false;
+                mPlayEdge = 0;
                 emit(Event(EK::PlaybackChanged).with("playing", false));
             }
             const double snapped = snapToFrame(t, mProject->fps);
@@ -346,6 +385,13 @@ namespace interstellar
     {
         // A different project: the worker's decoders point at the old media, and the last frame
         // belongs to the old project. Dropped under the lock; the worker re-opens what it needs.
+        if (mAhead)
+        {
+            std::lock_guard<std::mutex> l(mAhead->mu);
+            mAhead->queue.clear();
+            mAhead->done.clear();
+            for (auto &r : mAhead->resetSources) r = 1;
+        }
         if (!mPreview) return;
         std::lock_guard<std::mutex> l(mPreview->mu);
         mPreview->pending.reset();
@@ -709,6 +755,8 @@ namespace interstellar
         m.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
         m.hasGradeClipboard = mHasClipboard;
         m.gradeClipboardFrom = mClipboardFrom;
+        m.playbackEdge = mPlaying ? mPlayEdge : 0;
+        m.playbackRate = mPlaying ? mPlayRate : 0.0;
         // ── the plugin stacks (R-FX-5) ──
         m.effects.clear();
         if (mProject && mOpen)
@@ -2702,6 +2750,12 @@ namespace interstellar
             mPlaying = true;
             mPlayFromT = mModel.playhead;
             mPlayFromMs = mNowMs;
+            mPlayEdge = mSettings.previewEdge > 0 ? std::min(mSettings.previewEdge, 960) : 960;   // stepped down or up by what the pool keeps up with
+            mRateFromMs = mNowMs;
+            mRateFromDone = mAhead ? mAhead->finished.load() : 0;
+            mPlayRate = 0;
+            mPreroll = mAhead != nullptr;
+            mPrerollFromMs = mNowMs;
             emit(Event(EK::PlaybackChanged).with("playing", true));
             return true;
         }
@@ -2709,6 +2763,7 @@ namespace interstellar
         {
             if (!mPlaying) return true;
             mPlaying = false;
+            mPlayEdge = 0;   // the paused frame is graded at the full preview size again
             emit(Event(EK::PlaybackChanged).with("playing", false));
             return true;
         }

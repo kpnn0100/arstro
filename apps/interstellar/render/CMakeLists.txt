@@ -29,6 +29,7 @@ add_library(interstellar_render STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/ActiveSet.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Composite.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Effects.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Prescale.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FrameCache.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/GradeEngine.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ParamHash.cpp)

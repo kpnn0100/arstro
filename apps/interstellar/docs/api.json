@@ -1954,6 +1954,18 @@
       "doc": "The bind name the clipboard grade came from."
     },
     {
+      "path": "playbackEdge",
+      "type": "integer",
+      "stable": true,
+      "doc": "The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2)."
+    },
+    {
+      "path": "playbackRate",
+      "type": "number",
+      "stable": true,
+      "doc": "Frames the read-ahead finished per second over the last half second; 0 = not playing."
+    },
+    {
       "path": "effects",
       "type": "array",
       "stable": true,

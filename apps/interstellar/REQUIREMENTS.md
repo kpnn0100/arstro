@@ -235,16 +235,23 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster")
+## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster"; R-PLAY-2 DONE, DR-PLAY-2)
 
-- **R-PLAY-1 Proxies**: a source can have a PREVIEW proxy — an edit-friendly re-encode (short GOP,
-  H.264, at most 1280 on the long edge) made in the background into the project's cache — and the
-  monitor plays from it while it exists. A proxy never reaches a render or an export (R-SET-3's
-  spirit: preview quality never changes a delivery); its state (none / building n % / ready) shows
-  on the source.
+- **R-PLAY-1 A preview cache of GRADED frames** — (**AMENDED 2026-10-05, the same day, after
+  measuring:** the request suggested pre-encoded H.264 *proxies* of the sources. Measured on this
+  machine with `interstellar_play_bench`: decoding a frame costs 4 ms (1080p) and 11 ms (4K), the
+  grade 170–220 ms at a 1600-px preview. A source proxy would speed up the 4 ms. So the pre-encoded
+  H.264 is of the frames that are expensive to make — the GRADED preview.) The current timeline can
+  be cached in the background as H.264 at the preview size, and playback reads a frame from the
+  cache — at decode speed — whenever that frame has not changed since it was cached (each frame is
+  checked by its plan key, so an edit invalidates only the frames it touches). A cache never
+  reaches a render or an export.
 - **R-PLAY-2 Playback reads ahead**: while playing, the frames after the playhead are decoded and
   graded on workers into a small ring, and the monitor shows the frame due NOW — dropping, never
-  stalling, when the machine falls behind.
+  stalling, when the machine falls behind. The playing picture is graded at the size the machine keeps up
+  with — stepped down (1280 → 960 → 640) when the read-ahead falls behind, up when it has headroom,
+  said on the monitor's caption — and the paused frame is graded at the full preview size. Play
+  pre-rolls (at most half a second) so the first frames are ready.
 - **R-PLAY-3 Hardware video, as a setting**: Engine Settings gains **Hardware video** (off / on):
   proxies and H.264/H.265 renders encode on the GPU's video unit (VA-API) when it is on and one is
   present, falling back to software with a note when it is not — never failing a render because a
