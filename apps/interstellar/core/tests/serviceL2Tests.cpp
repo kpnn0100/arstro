@@ -112,6 +112,7 @@ namespace
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
             mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
             mRamp = path.find("ramp") != std::string::npos;   // R-COLOR-1: a ramp finer than 8 bits
+            mMove = path.find("move.mp4") != std::string::npos;   // R-CLR-2: a 7×7 square drifting right and down
             if (path.find("a.mp4") != std::string::npos) { out.timecode = "01:00:10:00"; out.reel = "A001"; }   // R-XCH-5
             if (path.find("b.mp4") != std::string::npos) out.timecode = "01:00:11:00";   // R-EDT-5: one second after a
             out.width = 48;
@@ -149,6 +150,15 @@ namespace
                 return true;
             }
             out.allocate(48, 27);
+            if (mMove)
+            {
+                // frame f: the square's top-left at (4 + f, 6 + f / 2), on a dark ground
+                for (size_t i = 0; i < out.rgba.size(); i += 4) { out.rgba[i] = out.rgba[i + 1] = out.rgba[i + 2] = 20; out.rgba[i + 3] = 255; }
+                const int x0 = 4 + (int)f, y0 = 6 + (int)f / 2;
+                for (int y = y0; y < y0 + 7 && y < 27; ++y)
+                    for (int x = x0; x < x0 + 7 && x < 48; ++x) { uint8_t *p = &out.rgba[((size_t)y * 48 + x) * 4]; p[0] = p[1] = p[2] = 230; }
+                return true;
+            }
             for (size_t i = 0; i < out.rgba.size(); i += 4)
             {
                 if (mEdge)
@@ -168,7 +178,7 @@ namespace
 
     private:
         uint8_t mG = 0;
-        bool mEdge = false, mRamp = false;
+        bool mEdge = false, mRamp = false, mMove = false;
         std::vector<Raster> mMem;
     };
 
@@ -299,7 +309,7 @@ namespace
 
         explicit Fixture(const std::string &name) : dir(scratch(name))
         {
-            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4", "ramp.mp4", "music.wav"}) std::ofstream(dir + "/footage/" + f) << "x";
+            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4", "ramp.mp4", "music.wav", "move.mp4"}) std::ofstream(dir + "/footage/" + f) << "x";
             svc = make();
         }
 
@@ -1925,6 +1935,60 @@ int main()
         assert(px(6.5, 10) == 255);                                          // the group's grade only on the right
         f.must("set edge.basic.exposure=-1");
         assert(px(6.5, 10) == dark);                                         // the member's own grade is not the group's to limit
+    });
+
+    test("a tracked window follows what is under it, forward and back, keyed every frame, one undo step (R-CLR-2)", [] {
+        Fixture f("track");
+        f.standard();
+        f.must("rack add \"" + f.path("footage/move.mp4") + "\"");
+        f.must("track add --kind video --name v1");
+        f.must("clip add --track v1 --src move --in 0 --out 3 --at 10");
+        const std::string w = f.out("effect add move --type window.shape");
+        const std::string wi = w.substr(0, w.size() - 1);
+        std::string err;
+        assert(!f.run("track window ef_99", &err) && has(err, "not a window"));
+        // on the square at frame 0: its centre (7, 9) of 48×27
+        f.must("set " + wi + ".centerX=" + std::to_string(7.5 / 48) + " " + wi + ".centerY=" + std::to_string(9.5 / 27) + " " +
+               wi + ".width=" + std::to_string(11.0 / 48) + " " + wi + ".height=" + std::to_string(11.0 / 27));
+        f.must("playhead 10");
+        f.must("track window " + wi + " --to 1");
+        const AppModel &m = f.svc->model();
+        assert(m.trackJobs.size() == 1 && m.trackJobs[0].state == "done" && m.trackJobs[0].done == 24 && m.trackJobs[0].total == 24);
+        auto keyAt = [&](const std::string &k, double t) {
+            const Project &P = f.svc->project();
+            const Anim *a = P.animOf(P.idForRef(wi), k);
+            if (!a) return -1.0;
+            for (const auto &key : P.keysOf(a->id)) if (std::fabs(key.t - t) < 1e-3) return key.v;
+            return -1.0;
+        };
+        const Project &P = f.svc->project();
+        const Anim *ax = P.animOf(P.idForRef(wi), "centerX");
+        std::printf("    forward: %zu keys; at frame 20 the window is at (%.4f, %.4f), the square's centre (%.4f, %.4f)\n",
+                    ax ? P.keysOf(ax->id).size() : 0, keyAt("centerX", 20.0 / 24), keyAt("centerY", 20.0 / 24), 27.5 / 48, 19.5 / 27);
+        assert(ax && P.keysOf(ax->id).size() == 25);                                 // the start and every frame after it
+        for (int fr : {0, 7, 20, 24})
+        {
+            assert(std::fabs(keyAt("centerX", fr / 24.0) - (4 + fr + 3.5) / 48) < 1.01 / 48);
+            assert(std::fabs(keyAt("centerY", fr / 24.0) - (6 + fr / 2 + 3.5) / 27) < 1.01 / 27);
+        }
+        f.must("undo");                                                              // the whole track, one step
+        assert(!f.svc->project().animOf(P.idForRef(wi), "centerX") || f.svc->project().keysOf(f.svc->project().animOf(P.idForRef(wi), "centerX")->id).empty());
+        f.must("redo");
+        assert(std::fabs(keyAt("centerX", 1.0) - 31.5 / 48) < 1.01 / 48);
+        // backward, from source 1 s to 0.5 s
+        f.must("key clear " + wi + ".centerX");
+        f.must("key clear " + wi + ".centerY");
+        f.must("set " + wi + ".centerX=" + std::to_string(31.5 / 48) + " " + wi + ".centerY=" + std::to_string(21.5 / 27));
+        f.must("playhead 11");
+        f.must("track window " + wi + " --back --to 0.5");
+        assert(f.svc->model().trackJobs.back().state == "done" && f.svc->model().trackJobs.back().done == 12);
+        assert(std::fabs(keyAt("centerX", 0.5) - 19.5 / 48) < 1.01 / 48 && std::fabs(keyAt("centerY", 0.5) - 15.5 / 27) < 1.01 / 27);
+        f.must("track window " + wi + " --to 0.2");                                 // forward, to before the start: the job says why it stopped
+        assert(f.svc->model().trackJobs.back().state == "failed" && has(f.svc->model().trackJobs.back().error, "nothing to track"));
+        // a window on a group has no one source to follow
+        f.must("rack group new grp --nodes move");
+        const std::string g = f.out("effect add grp --type window.shape");
+        assert(!f.run("track window " + g.substr(0, g.size() - 1), &err) && has(err, "on a group"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

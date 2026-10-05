@@ -248,6 +248,11 @@ namespace interstellar
             {K::ViewMatte, "view matte", "<on|off>", 1, 1, {},
              "Grade's monitor shows the selected source's matte — where its grade reaches, white — instead of its picture: "
              "the key its qualifiers and windows (and its groups') make, so a key is pulled by looking at it.", "R-CLR-1"},
+            {K::TrackWindow, "track window", "<effect>", 1, 1, {"to=<source seconds>", "back"},
+             "Make a window follow what is under it: from the playhead's frame of its source, forward (or --back) to "
+             "--to (else the source's end or start), the window's centre keyed on every frame where the patch it "
+             "covers is found again. A background job, one frame per pump; one undo step.", "R-CLR-2"},
+            {K::TrackCancel, "track cancel", "", 0, 0, {}, "Stop the running track; what it keyed stays (one undo step).", "R-CLR-2"},
             {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
              "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
              "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",

@@ -99,6 +99,8 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `media offline` | List the offline sources in one place: each one's bind name, the file it names, and why it is offline. | R-MEDIA-3 |
 | `media relink [<source> <file>] [--search <folder>]` | Point a source at its file where it is now — `<source> <file>` (a CinemaDNG folder or pattern too), or --search <folder>: every offline source found there by its file name (a sequence by its folder). The grade, its history in this session and every clip stay; Cosmo keeps the slot it had. Refused, saying why, if the rack's structure changed since it was saved (Cosmo cannot save while a source is offline, D-2). | R-MEDIA-3 |
 | `view matte <on\|off>` | Grade's monitor shows the selected source's matte — where its grade reaches, white — instead of its picture: the key its qualifiers and windows (and its groups') make, so a key is pulled by looking at it. | R-CLR-1 |
+| `track window <effect> [--to <source seconds>] [--back]` | Make a window follow what is under it: from the playhead's frame of its source, forward (or --back) to --to (else the source's end or start), the window's centre keyed on every frame where the patch it covers is found again. A background job, one frame per pump; one undo step. | R-CLR-2 |
+| `track cancel` | Stop the running track; what it keyed stays (one undo step). | R-CLR-2 |
 | `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
@@ -401,6 +403,14 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].spec` | string |  | The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate. |
 | `useProxies` | bool |  | The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2). |
 | `matteView` | bool |  | Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1). |
+| `trackJobs` | array |  | This session's window tracks, oldest first (R-CLR-2). |
+| `trackJobs[].id` | string |  | Job id (t1, t2, …). |
+| `trackJobs[].effect` | string |  | The window tracked. |
+| `trackJobs[].backward` | bool |  | Tracking towards the source's start. |
+| `trackJobs[].done` | integer |  | Frames tracked. |
+| `trackJobs[].total` | integer |  | Frames to track. |
+| `trackJobs[].state` | string |  | queued \| running \| done \| failed \| cancelled. |
+| `trackJobs[].error` | string |  | Why it stopped. |
 | `proxyJobs` | array |  | This session's proxy jobs, oldest first. |
 | `proxyJobs[].id` | string |  | Job id (p1, p2, …). |
 | `proxyJobs[].rackObj` | string |  | The source's #rackobj id. |

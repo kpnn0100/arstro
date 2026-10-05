@@ -82,7 +82,7 @@ one integrator who moves, wires, tests and commits each stream:
       11b. [x] Proxies, offline/online (R-MEDIA-2) — DR-MEDIA-2.
       11c. [x] Relink (R-MEDIA-3) — DR-MEDIA-3.
       12. [x] Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows) — DR-CLR-1.
-      12b. [ ] Window tracking (R-CLR-2).
+      12b. [x] Window tracking (R-CLR-2) — DR-CLR-2.
       12c. [ ] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5).
       12d. [ ] The node graph (R-CLR-3).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).

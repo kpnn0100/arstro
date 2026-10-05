@@ -350,6 +350,7 @@ namespace interstellar
                 break;
             case CK::ProxyMake: case CK::ProxyRemove: case CK::ProxyUse: ok = requireProject() && proxyCommand(c); break;
             case CK::MediaOffline: case CK::MediaRelink: ok = requireProject() && mediaCommand(c); break;
+            case CK::TrackWindow: case CK::TrackCancel: ok = requireProject() && trackCommand(c); break;
             case CK::ViewMatte:
             {
                 // R-CLR-1: presentation of the Grade monitor, not the project — no undo, no save
@@ -460,6 +461,7 @@ namespace interstellar
         }
         pumpJobs();
         pumpProxies();   // R-MEDIA-2
+        pumpTracks();    // R-CLR-2
         pumpPreviewCache();
     }
 
@@ -490,6 +492,8 @@ namespace interstellar
         for (const auto &j : mJobs)
             if (j->model.state == "queued" || j->model.state == "running") return true;
         for (const auto &j : mProxyJobs)
+            if (j->model.state == "queued" || j->model.state == "running") return true;
+        for (const auto &j : mTrackJobs)
             if (j->model.state == "queued" || j->model.state == "running") return true;
         return false;
     }
@@ -887,6 +891,8 @@ namespace interstellar
         for (const auto &j : mJobs) m.renders.push_back(j->model);
         m.useProxies = P.proxies;   // R-MEDIA-2
         m.matteView = mMatteView;   // R-CLR-1
+        m.trackJobs.clear();
+        for (const auto &j : mTrackJobs) m.trackJobs.push_back(j->model);   // R-CLR-2
         m.proxyJobs.clear();
         for (const auto &j : mProxyJobs) m.proxyJobs.push_back(j->model);
         fillEditModel();
@@ -1186,6 +1192,7 @@ namespace interstellar
         resetPreview();
         mJobs.clear();
         mProxyJobs.clear();
+        mTrackJobs.clear();
         mCache->clear();
         mSync->grade->releaseScratch();
         mSelectedClip.clear();

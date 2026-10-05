@@ -274,6 +274,28 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-CLR-2 Tracking a window (R-CLR-2)
+`track window <effect> [--to <source seconds>] [--back]` (`core/service/ServiceTrack.cpp:69`) queues a job
+for a window on a SOURCE (a group's is refused: it has no one source to follow). It starts at the
+playhead's frame of that source when a clip of it is under the playhead, else at its reference frame
+(`:100`), and runs to `--to`, else the source's end (or start). The job (`:132`) decodes the source frame by
+frame at an analysis size (a long edge of 320 px at most, Rec.709 luma by area average, `:36`), takes the
+patch the window covers (its size, at least 8 px a side) and searches each next frame within a reach
+around the last position for the least sum of absolute differences — a candidate abandoned only once
+its partial sum is worse than the best (`:205`), the nearest of equals kept — re-takes the patch where it
+was found (`:226`) and keys the window's centre there (`:228`, the start keyed too). One frame per pump,
+progress in `trackJobs[]`; the whole track is one undo step from the state it began in (`:143`); `track
+cancel` stops it, keeping what was keyed. UI: a window's plugin row has Track Forward, Track Backward and,
+while one runs, Cancel Tracking (`app/App.cpp:546`); the caption says "tracking N%" (`:1134`). Guarded by L2
+`a tracked window…` (a 7×7 square drifting right one pixel and down half a pixel a frame: forward from
+source 0 to 1 s, 25 keys, the window on the square within a pixel at frames 0, 7, 20 and 24; undo removes
+the whole track and redo restores it; backward from 1 s to 0.5 s on it within a pixel; a direction with
+nothing to track stops saying so; a group's window refused), UI (the row's items, the caption, Cancel
+Tracking). Found by the test: an early exit that read `sad < best` before summing made every candidate
+after a perfect match score 0, so the tie-break kept the window where it was — the mutant restoring it
+runs red, as do: the direction ignored, no undo entry, the start from the reference frame not the
+playhead, the start not keyed, no reach.
+
 ### DR-CLR-1 Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows)
 Two plugins in a node's stack grade nothing: they make a KEY — 0..1 per pixel, where the node's
 grade reaches (`render/Matte.h`, catalog `render/Effects.cpp:227`). `qualifier.hsl` (`render/Matte.cpp:37`)

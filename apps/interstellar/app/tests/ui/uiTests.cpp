@@ -2545,6 +2545,33 @@ namespace
         for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
         CHECK(labels.find("Qualifier (HSL)|") != std::string::npos && labels.find("Window|") != std::string::npos,
               "the plugin menu offers a Qualifier and a Window");
+        cm->close();
+        // R-CLR-2: a window's row offers tracking; while one runs, its progress is on the caption
+        r.svc.m.effects.push_back(FakeService::effect("ef_4", "ro2", "s_day01", "window.shape", 2, true, 1.0));
+        ++r.svc.m.revision;
+        r.settle();
+        auto rightClickRow = [&](int i) {
+            const Rect rr = pl->rowRect(i);
+            const Point p = world(*pl, rr.x + rr.w * 0.5 - 30.0, rr.y + rr.h * 0.5);
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.pump(250);
+        };
+        rightClickRow(pl->rowCount() - 1);
+        r.svc.lines.clear();
+        bool clicked = false;
+        for (int i = 0; i < cm->itemCount(); ++i)
+            if (cm->item(i).label == "Track Backward") { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); clicked = true; break; }
+        CHECK(clicked && hasLine(r.svc, "track window ef_4 --back"), "a window's row offers Track Backward (and Forward)");
+        r.svc.m.trackJobs.push_back({"t1", "ef_4", true, 6, 24, "running", ""});
+        ++r.svc.m.revision;
+        r.settle();
+        CHECK(r.app->edit().monitor()->caption().find("tracking 25%") != std::string::npos, "the caption says how far the track has got");
+        rightClickRow(pl->rowCount() - 1);
+        labels.clear();
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(labels.find("Cancel Tracking|") != std::string::npos && labels.find("Track Forward") == std::string::npos, "…and the row offers Cancel Tracking");
     }
 
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */

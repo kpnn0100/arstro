@@ -214,6 +214,8 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Mattes (R-CLR-1/2): Qualifier (HSL) and Window in the plugin menu → `effect add <node> --type
   qualifier.hsl|window.shape`, their sliders the effect panel's; Colour › Show Matte / Shift+H in Grade
   → `view matte on|off`; the caption says "matte". Shot: `grade_window`. UI checks: 423.
+- Tracking (R-CLR-2): a window's plugin row → Track Forward / Track Backward (`track window <ef>
+  [--back]`), Cancel Tracking while one runs (`track cancel`); the caption says "tracking N%". UI checks: 426.
 
 ## Interchange (2026-10-05, R-XCH)
 

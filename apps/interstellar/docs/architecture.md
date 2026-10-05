@@ -154,6 +154,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/service/ServiceAnim.cpp` | core | **built** — addresses → curves and clocks, `key add|remove|set|clear`, `set` keying, curves on the render path, pins' curve snapshots (R-ANIM, DR-ANIM-1) |
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
+| `apps/interstellar/core/service/ServiceTrack.cpp` | core | **built** — a window tracked by patch matching, keyed every frame, a background job, one undo step (R-CLR-2, DR-CLR-2) |
 | `apps/interstellar/core/service/ServiceMedia.cpp` | core | **built** — offline media in one list; relink one by one or by searching a folder; the rack reloaded with what was only in memory put back through Cosmo (R-MEDIA-3, DR-MEDIA-3) |
 | `apps/interstellar/core/service/ServiceProxy.cpp` | core | **built** — proxies: made by a background job (area-average to an edge, ProRes Proxy or H.264), the project's switch, outside undo (R-MEDIA-2, DR-MEDIA-2) |
 | `apps/interstellar/host/FrameSourceDng` · `makeVideoSource` / `registerVendorDecoder` (HostFrameSource) | host | **built** — CinemaDNG through LibRaw at 16 bits, rate and timecode from its tags; the decoder chosen per moving source; the vendor SDK seam (R-MEDIA-1, DR-MEDIA-1) |

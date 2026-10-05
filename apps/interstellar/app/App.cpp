@@ -543,6 +543,18 @@ namespace interstellar_v1
             if (e->order > 0) items.push_back({"Move Up", [this, q, to = e->order - 1] { dispatch("effect move " + q + " --to " + std::to_string(to)); }});
             if (e->order < count - 1) items.push_back({"Move Down", [this, q, to = e->order + 1] { dispatch("effect move " + q + " --to " + std::to_string(to)); }});
             items.push_back({e->enabled ? "Disable" : "Enable", [this, q, on = !e->enabled] { dispatch("set " + q + ".enabled=" + (on ? "1" : "0")); }});
+            // R-CLR-2: a window follows what is under it, from the playhead
+            if (e->type == "window.shape")
+            {
+                bool tracking = false;
+                for (const auto &t : m.trackJobs) tracking = tracking || t.state == "queued" || t.state == "running";
+                if (tracking) items.push_back({"Cancel Tracking", [this] { dispatch("track cancel"); }});
+                else
+                {
+                    items.push_back({"Track Forward", [this, q] { dispatch("track window " + q); }});
+                    items.push_back({"Track Backward", [this, q] { dispatch("track window " + q + " --back"); }});
+                }
+            }
             items.push_back({"Remove", [this, q] { dispatch("effect remove " + q); }});
         }
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
@@ -1119,6 +1131,9 @@ namespace interstellar_v1
             cap += "  \xC2\xB7  " + std::to_string(m.sourceWidth) + "\xC3\x97" + std::to_string(m.sourceHeight);
         if (m.useProxies && !n.proxy.empty()) cap += "  \xC2\xB7  proxy";   // R-MEDIA-2: this picture is its proxy
         if (m.matteView) cap += "  \xC2\xB7  matte";                         // R-CLR-1: the key, not the picture
+        for (const auto &t : m.trackJobs)                                       // R-CLR-2: a track's progress, on the picture it moves
+            if ((t.state == "queued" || t.state == "running") && t.total > 0)
+                cap += "  \xC2\xB7  tracking " + std::to_string((int)(100 * t.done / t.total)) + "%";
         mon->setCaption(cap);
 
         const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge ||

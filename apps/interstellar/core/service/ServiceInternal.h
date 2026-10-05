@@ -270,6 +270,24 @@ namespace interstellar
         bool begun = false;
     };
 
+    /** R-CLR-2: a window being tracked, one frame per pump. */
+    struct InterstellarService::TrackJob
+    {
+        TrackJobModel model;
+        std::string media;
+        double from = 0, to = -1;                 // source seconds; to < 0 = the source's end (or start)
+        std::unique_ptr<IFrameSource> source;
+        double fps = 24.0;
+        int aw = 0, ah = 0;                       // the analysis size
+        long long frame = 0, end = 0;
+        double cx = 0.5, cy = 0.5;                // where the window is, shares of the picture
+        int tw = 8, th = 8;
+        std::vector<float> patch;                 // what it covers, luma at the analysis size
+        bool begun = false;
+        Command cmd;
+        std::shared_ptr<UndoState> before;        // the whole track undoes as one step
+    };
+
     /** A rack load in flight. `entryRackObj[i]` is the #rackobj bound to the i-th `.cmp` entry. */
     struct InterstellarService::PendingRack
     {

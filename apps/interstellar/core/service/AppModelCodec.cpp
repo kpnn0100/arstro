@@ -222,6 +222,19 @@ namespace interstellar
         j.set("renders", renders);
         j.set("useProxies", m.useProxies);
         j.set("matteView", m.matteView);
+        {
+            Json tracks = Json::array();
+            for (const auto &t : m.trackJobs)
+                tracks.push(Json::object()
+                                .set("id", t.id)
+                                .set("effect", t.effect)
+                                .set("backward", t.backward)
+                                .set("done", t.done)
+                                .set("total", t.total)
+                                .set("state", t.state)
+                                .set("error", t.error));
+            j.set("trackJobs", tracks);
+        }
         Json proxies = Json::array();
         for (const auto &p : m.proxyJobs)
             proxies.push(Json::object()
@@ -505,6 +518,14 @@ namespace interstellar
             {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
             {"useProxies", "bool", "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."},
             {"matteView", "bool", "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."},
+            {"trackJobs", "array", "This session's window tracks, oldest first (R-CLR-2)."},
+            {"trackJobs[].id", "string", "Job id (t1, t2, …)."},
+            {"trackJobs[].effect", "string", "The window tracked."},
+            {"trackJobs[].backward", "bool", "Tracking towards the source's start."},
+            {"trackJobs[].done", "integer", "Frames tracked."},
+            {"trackJobs[].total", "integer", "Frames to track."},
+            {"trackJobs[].state", "string", "queued | running | done | failed | cancelled."},
+            {"trackJobs[].error", "string", "Why it stopped."},
             {"proxyJobs", "array", "This session's proxy jobs, oldest first."},
             {"proxyJobs[].id", "string", "Job id (p1, p2, …)."},
             {"proxyJobs[].rackObj", "string", "The source's #rackobj id."},

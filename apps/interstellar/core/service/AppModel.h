@@ -199,6 +199,17 @@ namespace interstellar
         std::string note;
     };
 
+    /** R-CLR-2: a window being tracked. */
+    struct TrackJobModel
+    {
+        NodeId id;                    // t1, t2, …
+        NodeId effect;                // the window
+        bool backward = false;
+        long long done = 0, total = 0;   // frames
+        std::string state;            // queued | running | done | failed | cancelled
+        std::string error;
+    };
+
     /** R-MEDIA-2: a proxy being made, made or refused. */
     struct ProxyJobModel
     {
@@ -301,6 +312,7 @@ namespace interstellar
         // ── proxies (R-MEDIA-2) ──
         bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
         bool matteView = false;                    // R-CLR-1: Grade's monitor shows the selected source's matte
+        std::vector<TrackJobModel> trackJobs;      // R-CLR-2: this session's window tracks, oldest first
         std::vector<ProxyJobModel> proxyJobs;      // this session's proxy jobs, oldest first
 
         // ── Edit: one undo history across the rack and the project (R-EDIT-1) ──

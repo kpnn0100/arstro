@@ -1355,6 +1355,35 @@
       "requirement": "R-CLR-1"
     },
     {
+      "verb": "track window",
+      "usage": "track window <effect> [--to <source seconds>] [--back]",
+      "args": "<effect>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "to",
+          "value": "<source seconds>"
+        },
+        {
+          "name": "back",
+          "value": ""
+        }
+      ],
+      "summary": "Make a window follow what is under it: from the playhead's frame of its source, forward (or --back) to --to (else the source's end or start), the window's centre keyed on every frame where the patch it covers is found again. A background job, one frame per pump; one undo step.",
+      "requirement": "R-CLR-2"
+    },
+    {
+      "verb": "track cancel",
+      "usage": "track cancel",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "Stop the running track; what it keyed stays (one undo step).",
+      "requirement": "R-CLR-2"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",
@@ -2535,6 +2564,54 @@
       "type": "bool",
       "stable": true,
       "doc": "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."
+    },
+    {
+      "path": "trackJobs",
+      "type": "array",
+      "stable": true,
+      "doc": "This session's window tracks, oldest first (R-CLR-2)."
+    },
+    {
+      "path": "trackJobs[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "Job id (t1, t2, …)."
+    },
+    {
+      "path": "trackJobs[].effect",
+      "type": "string",
+      "stable": true,
+      "doc": "The window tracked."
+    },
+    {
+      "path": "trackJobs[].backward",
+      "type": "bool",
+      "stable": true,
+      "doc": "Tracking towards the source's start."
+    },
+    {
+      "path": "trackJobs[].done",
+      "type": "integer",
+      "stable": true,
+      "doc": "Frames tracked."
+    },
+    {
+      "path": "trackJobs[].total",
+      "type": "integer",
+      "stable": true,
+      "doc": "Frames to track."
+    },
+    {
+      "path": "trackJobs[].state",
+      "type": "string",
+      "stable": true,
+      "doc": "queued | running | done | failed | cancelled."
+    },
+    {
+      "path": "trackJobs[].error",
+      "type": "string",
+      "stable": true,
+      "doc": "Why it stopped."
     },
     {
       "path": "proxyJobs",
