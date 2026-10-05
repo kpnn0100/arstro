@@ -46,6 +46,7 @@ namespace interstellar
         int quality = 18;               // constant quality (CRF) for h264/h265: 0 best … 51
         std::string speed = "medium";   // the x264/x265 preset
         int bitDepth = 8;               // h265: 8 | 10 · prores 10 · dnxhr per profile · h264 8
+        bool hardware = false;          // R-PLAY-3: encode on the GPU's video unit when there is one
     };
 
     class IFrameWriter
@@ -58,6 +59,9 @@ namespace interstellar
         virtual bool begin(const std::string &path, int w, int h, double fps, long long frames, const EncodeSpec &spec) = 0;
         virtual bool write(const Raster &frame) = 0;
         virtual bool end() = 0;
+        /** What the writer did differently from what was asked, in words ("" = nothing) — e.g. a
+         *  hardware encode that fell back to software because no device was there (R-PLAY-3). */
+        virtual std::string note() const { return std::string(); }
     };
 }
 }

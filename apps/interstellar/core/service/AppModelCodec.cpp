@@ -242,6 +242,7 @@ namespace interstellar
         settings.set("threads", m.settings.threads);
         settings.set("previewEdge", m.settings.previewEdge);
         settings.set("useGpu", m.settings.useGpu);
+        settings.set("hardwareVideo", m.settings.hardwareVideo);
         settings.set("uiScale", m.settings.uiScale);
         if (!st)
         {
@@ -443,6 +444,7 @@ namespace interstellar
             {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},
             {"settings.previewEdge", "integer", "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."},
             {"settings.useGpu", "bool", "GPU opt-in for the grade step (only where a backend exists)."},
+            {"settings.hardwareVideo", "bool", "H.264/H.265 encode on the GPU's video unit (VA-API) for renders; falls back to software, said (R-PLAY-3)."},
             {"settings.uiScale", "integer", "Percent of the design size the window draws at."},
             {"settings.gpuAvailable", "bool", "A GPU backend exists on this machine.", true},
             {"settings.cores", "integer", "Cores on this machine.", true},

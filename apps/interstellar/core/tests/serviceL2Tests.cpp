@@ -110,6 +110,7 @@ namespace
     /** What the last render asked its writer for (R-RENDER-6). */
     struct WriterBegin { std::string path; int w = 0, h = 0; double fps = 0; long long frames = 0; EncodeSpec spec; };
     WriterBegin gBegin;
+    bool gNoHardware = false;   // the capture writer plays a machine with no video unit (R-PLAY-3)
 
     struct CaptureWriter : public IFrameWriter
     {
@@ -118,10 +119,13 @@ namespace
         bool begin(const std::string &p, int w, int h, double fps, long long n, const EncodeSpec &spec) override
         {
             gBegin = WriterBegin{p, w, h, fps, n, spec};
+            mNote = spec.hardware && gNoHardware ? "hardware video unavailable (test) \xe2\x80\x94 encoded in software" : "";
             return true;
         }
         bool write(const Raster &f) override { sink->push_back(f); return true; }
         bool end() override { return true; }
+        std::string note() const override { return mNote; }
+        std::string mNote;
     };
 
     struct Fixture
@@ -771,6 +775,23 @@ int main()
         assert(gBegin.spec.profile == "standard" && gBegin.spec.bitDepth == 10 && has(f.svc->model().renders.back().spec, "ProRes 422 10-bit"));
         f.must("render --timeline main --res 46x26 --fps 24000/1001 --out \"" + f.path("ntsc.mp4") + "\"");
         assert(std::fabs(gBegin.fps - 24000.0 / 1001.0) < 1e-12 && has(f.svc->model().renders.back().spec, "23.976 fps"));
+        // R-PLAY-3: the video unit is a setting for H.264/H.265, overridable per render, and said
+        assert(!gBegin.spec.hardware);                                    // off by default
+        assert(refused("--format prores --res 46x26 --out x.mov --encoder hardware", "no hardware encoder"));
+        assert(refused("--res 46x26 --out x.mp4 --encoder gpu", "software or hardware"));
+        f.must("settings set hardwareVideo=1");
+        f.must("render --timeline main --res 46x26 --out \"" + f.path("hw.mp4") + "\"");
+        assert(gBegin.spec.hardware && has(f.svc->model().renders.back().spec, "hardware"));
+        f.must("render --timeline main --format prores --res 46x26 --out \"" + f.path("hw.mov") + "\"");
+        assert(!gBegin.spec.hardware);                                    // an intermediate is never sent to the video unit
+        f.must("render --timeline main --res 46x26 --encoder software --out \"" + f.path("sw.mp4") + "\"");
+        assert(!gBegin.spec.hardware);
+        gNoHardware = true;                                               // no video unit: the render still finishes, and says so
+        f.must("render --timeline main --res 46x26 --out \"" + f.path("fb.mp4") + "\"");
+        gNoHardware = false;
+        assert(f.svc->model().renders.back().state == "done" && has(f.svc->model().renders.back().spec, "encoded in software"));
+        f.svc = f.make();                                                 // persisted
+        assert(f.svc->model().settings.hardwareVideo);
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

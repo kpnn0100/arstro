@@ -52,8 +52,9 @@ namespace cosmo_v2
     // One label mapping, read by both chipRects (which sizes the chip to its text) and
     // onOverlay (which draws it) -- two copies would drift and mis-place every chip
     // after the first in a row.
-    std::string SettingsDialog::chipLabel(int row, int i)
+    std::string SettingsDialog::chipLabel(int row, int i) const
     {
+        if (row >= kRows) return mExtra[(size_t)(row - kRows)].chips[(size_t)i];
         return row == kRowScale   ? scaleLabel(kScales[i])
              : row == kRowQuality ? edgeLabel(i)
              : row == kRowThreads ? threadLabel(kThreads[i])
@@ -97,7 +98,7 @@ namespace cosmo_v2
     {
         row = -1; chip = -1; done = false;
         if (doneRect().contains(p)) { done = true; return; }
-        for (int r = 0; r < kRows; ++r)
+        for (int r = 0; r < totalRows(); ++r)
         {
             if (!rowShown(r)) continue;
             std::vector<Rect> chips; chipRects(r, chips);
@@ -111,7 +112,7 @@ namespace cosmo_v2
         // Summed from the rows rather than kRows * kBlockH: a wrapped row is taller, and a card
         // sized for the unwrapped height would clip its own Done button.
         double rows = 0.0;
-        for (int r = 0; r < kRows; ++r)
+        for (int r = 0; r < totalRows(); ++r)
             if (rowShown(r)) rows += rowBlockH(r) + kRowGap;
         const double h = kPad + kHeaderH + rows + kFooterH + kPad;
         const double x = (width.value() - kCardW) * 0.5;
@@ -200,14 +201,20 @@ namespace cosmo_v2
         if (doneRect().contains(p)) { beginClose(); return true; }
 
         std::vector<Rect> chips;
-        for (int row = 0; row < kRows; ++row)
+        for (int row = 0; row < totalRows(); ++row)
         {
             if (!rowShown(row)) continue;
             chipRects(row, chips);
             for (int i = 0; i < (int)chips.size(); ++i)
                 if (chips[i].contains(p))
                 {
-                    if (row == kRowScale)
+                    if (row >= kRows)
+                    {
+                        ExtraRow &x = mExtra[(size_t)(row - kRows)];
+                        x.selected = i;
+                        if (x.onSelect) x.onSelect(i);
+                    }
+                    else if (row == kRowScale)
                     {
                         // A scale this display cannot give a window for is inert, like the GPU
                         // "On" chip with no backend — clicking it must not set a scale the
@@ -250,12 +257,13 @@ namespace cosmo_v2
 
         const char *rowLabels[kRows] = {"Screen scale", "Preview quality", "CPU threads",
                                         "CPU limit", "GPU acceleration", "Input"};
-        for (int row = 0; row < kRows; ++row)
+        for (int row = 0; row < totalRows(); ++row)
         {
             if (!rowShown(row)) continue;
             const double ly = blockTop(c, row);
             t.setFill(fade(palette::mutedForeground(), a));
-            std::string rowLbl = rowLabels[row];
+            std::string rowLbl = row >= kRows ? mExtra[(size_t)(row - kRows)].label : rowLabels[row];
+            if (row >= kRows && !mExtra[(size_t)(row - kRows)].note.empty()) rowLbl += "  \xc2\xb7  " + mExtra[(size_t)(row - kRows)].note;
             // Middot suffixes. "Auto uses this" is why the two CPU rows sit together:
             // without it the Auto chip above reads as if it still meant every core (R-CPU-2).
             // Middot suffixes name the consequence, because neither row's effect is where the
@@ -282,7 +290,8 @@ namespace cosmo_v2
             const int n = rowChipCount(row);
             for (int i = 0; i < n; ++i)
             {
-                const bool sel = row == kRowScale   ? (kScales[i] == mUiScale)
+                const bool sel = row >= kRows       ? (mExtra[(size_t)(row - kRows)].selected == i)
+                               : row == kRowScale   ? (kScales[i] == mUiScale)
                                : row == kRowQuality ? (kEdges[i] == mEdge)
                                : row == kRowThreads ? (kThreads[i] == mThreadCount)
                                : row == kRowCpu     ? (kCpuPercents[i] == mCpuPercent)

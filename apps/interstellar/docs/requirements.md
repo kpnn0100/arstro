@@ -707,3 +707,27 @@ frames shown, mean lag 0.09 frames; 4K — 98 of 100, 0.13 frames; both at 640 p
 Guarded by L2 `playback reads ahead…` (ring frames are pixel-identical to a direct render of the same
 t; the pool's frames are shown; Pause returns to edge 0 — red with the ring ignored) and the render
 suite's prescale test (a half-white 2×2 block averages to 188, not 128; no prescale at full size).
+
+### DR-PLAY-3 Hardware video: a setting, a render flag, and a fallback that says so (R-PLAY-3, R-SET-4)
+`EncodeSpec::hardware` (`core/FrameSource.h`) asks the writer for the GPU's video unit. `render`
+(`core/service/ServiceRender.cpp:739`) sets it from `settings.hardwareVideo` for H.264/H.265 and lets
+`--encoder software|hardware` override it (`:745`); ProRes, DNxHR and PNG are refused a hardware
+encoder before anything is queued. `FrameWriterFFmpeg` (`host/FrameWriterFFmpeg.cpp:92`) opens a
+VA-API device (`INTERSTELLAR_VAAPI_DEVICE`, else FFmpeg's default render node) and `h264_vaapi` /
+`hevc_vaapi` with a GPU frame pool (NV12, or P010 for 10-bit) at constant QP = `--quality` (`:170`);
+each frame is converted on the CPU with the same BT.709 matrix and tags as software (D-9) and
+uploaded (`:266`). Any failure — no device, no encoder in this FFmpeg, the encoder refusing the
+size — closes the GPU path and opens the software encoder with a note (`:102`, `:107`); the service
+appends it to the job's spec in words and emits it as info (`ServiceRender.cpp:887`), so the queue
+row reads "… · hardware video unavailable (no VA-API device) — encoded in software" and the render
+still finishes. `--speed` applies to that fallback; the video unit has no presets. The switch is a
+`settings set hardwareVideo=0|1` line (`core/service/ServiceEdit.cpp:401`), persisted, and a row
+Interstellar adds to cosmo's Engine Settings through the dialog's opt-in extra rows
+(`SettingsDialog::setExtraRows`, `apps/cosmo/widgets/SettingsDialog.h:67`; `app/App.cpp:88`) — cosmo
+adds none, and its 41 shots are byte-identical before and after. Guarded by L2 `a render carries its
+whole output spec…` (setting on → hardware asked; ProRes → not; `--encoder software` → not; a writer
+with no unit → done, said; persisted — red with the setting ignored), the UI test (the On chip
+dispatches `settings set hardwareVideo=1` — red with the dialog's callback dropped) and
+`interstellar_render_codecs`: on this machine (AMD, radeonsi) the hardware file has no libx264
+signature, is tagged BT.709 and decodes to 215,58,28 against the still's 216,59,30; with the device
+pointed nowhere it is libx264's, and said.

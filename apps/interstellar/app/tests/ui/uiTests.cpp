@@ -1045,6 +1045,12 @@ namespace
             CHECK(clickMenuItem(r, "Preset", "Apply  Film/Warm") && hasLine(r.svc, apply), "the Preset menu lists the library: Apply Film/Warm dispatched preset apply");
             CHECK(clickMenuItem(r, "Workspace", "Cut") && r.app->tab() == EditScreen::Cut, "Workspace > Cut switched the tab");
             CHECK(clickMenuItem(r, "Settings", "Engine Settings") && r.app->settings().isOpen(), "Settings > Engine Settings opened cosmo's settings dialog");
+            r.settle();
+            CHECK(r.app->settings().extraRowCount() == 1, "Interstellar adds one row of its own to cosmo's dialog: Hardware video (R-PLAY-3)");
+            const Rect on = r.app->settings().extraChipRect(0, 1);
+            CHECK(on.w > 0, "the Hardware video row has an On chip");
+            r.click(on.x + on.w * 0.5, on.y + on.h * 0.5);
+            CHECK(hasLine(r.svc, "settings set hardwareVideo=1"), "Hardware video > On dispatched settings set hardwareVideo=1");
         }
         {
             Rig r(1440, 900, [](FakeService &s) { s.edit(); });

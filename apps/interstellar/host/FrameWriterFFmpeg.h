@@ -12,6 +12,12 @@
  *  The codec comes from the spec, and the container must agree with it: a `.mp4` holding ProRes is
  *  refused, naming the containers that would do, rather than written as a surprise.
  *
+ *  Hardware (R-PLAY-3): with `spec.hardware`, H.264/H.265 encode through VA-API (`h264_vaapi`,
+ *  `hevc_vaapi`) — frames are converted to NV12/P010 in software and uploaded to a surface pool.
+ *  Anything missing (no device, no driver, the encoder refusing) falls back to the software encoder
+ *  and says so in `note()`, never failing a render because a device is absent. The device is
+ *  INTERSTELLAR_VAAPI_DEVICE, else FFmpeg's default (the first render node).
+ *
  *  Colour (D-9): the RGB→YUV conversion is BT.709 at video (limited) range and the stream is TAGGED
  *  BT.709, so a player does not guess — untagged BT.601 conversion shifted every hue slightly in an
  *  app whose subject is colour.
@@ -26,6 +32,8 @@ struct AVStream;
 struct AVFrame;
 struct AVPacket;
 struct SwsContext;
+struct AVBufferRef;
+struct AVCodec;
 
 namespace arstro
 {
@@ -48,6 +56,9 @@ namespace interstellar_host
         static bool handles(const std::string &path);
         /** The last error, for a rejection message that names what went wrong. */
         const std::string &error() const { return mError; }
+        std::string note() const override { return mNote; }
+        /** True when the last begin() opened a hardware encoder. */
+        bool hardware() const { return mHwDevice != nullptr; }
 
     private:
         bool drain(bool flush);
@@ -61,7 +72,12 @@ namespace interstellar_host
         SwsContext *mSws = nullptr;
         long long mNext = 0;
         bool mOpen = false;
-        std::string mError;
+        std::string mError, mNote, mPath;
+        double mFps = 24.0;
+        // R-PLAY-3: VA-API — the device, its surface pool, and the software frame converted into first
+        AVBufferRef *mHwDevice = nullptr, *mHwFrames = nullptr;
+        AVFrame *mSwFrame = nullptr;
+        bool openEncoder(const AVCodec *codec, const interstellar::EncodeSpec &spec, int w, int h, const std::string &ext);
     };
 }
 }

@@ -235,7 +235,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster"; R-PLAY-2 DONE, DR-PLAY-2)
+## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster"; R-PLAY-2 DONE, DR-PLAY-2; R-PLAY-3 DONE for renders, DR-PLAY-3)
 
 - **R-PLAY-1 A preview cache of GRADED frames** — (**AMENDED 2026-10-05, the same day, after
   measuring:** the request suggested pre-encoded H.264 *proxies* of the sources. Measured on this
@@ -253,9 +253,11 @@ The headline of this specification, and the reason it is not the first one.
   said on the monitor's caption — and the paused frame is graded at the full preview size. Play
   pre-rolls (at most half a second) so the first frames are ready.
 - **R-PLAY-3 Hardware video, as a setting**: Engine Settings gains **Hardware video** (off / on):
-  proxies and H.264/H.265 renders encode on the GPU's video unit (VA-API) when it is on and one is
-  present, falling back to software with a note when it is not — never failing a render because a
-  device is missing.
+  the preview cache (R-PLAY-1) and H.264/H.265 renders encode on the GPU's video unit (VA-API) when it
+  is on and one is present, falling back to software with a note when it is not — never failing a
+  render because a device is missing. A render may override the setting (`--encoder`); ProRes, DNxHR
+  and PNG have no hardware encoder and are refused one. (Wording follows R-PLAY-1's amendment: the
+  request's "proxies" are the graded preview cache.)
 
 ---
 
@@ -430,7 +432,7 @@ reserves the rest so adopting it is not a migration.
 - **R-EDIT-3 Presets are Cosmo's `.apf`**: save a node's grade to the library, import an `.apf`,
   apply one to a source (Cosmo applies presets to an image, not a group).
 
-## R-SET — engine settings — ✅ IMPLEMENTED (DR-SET-1..3)
+## R-SET — engine settings — ✅ IMPLEMENTED (DR-SET-1..3, DR-PLAY-3)
 
 - **R-SET-1 Cosmo's Engine Settings dialog, reused**: Screen scale, Preview quality, CPU threads,
   CPU limit, GPU acceleration (cosmo's Input row is hidden — Interstellar has no touch shell). Each
@@ -438,7 +440,8 @@ reserves the rest so adopting it is not a migration.
 - **R-SET-2 One CPU limit for the whole app.** The share of cores is one budget: the hosted Cosmo's
   decode pool and the engine threads Interstellar's own frame path runs on both come from it.
 - **R-SET-3 Preview quality caps the monitor**, never a render or an export, and never upscales.
-- **R-SET-4 Hardware video** (added 2026-10-05) — R-PLAY-3's switch, persisted like the others.
+- **R-SET-4 Hardware video** (added 2026-10-05) — R-PLAY-3's switch, persisted like the others; a row
+  Interstellar adds after cosmo's (cosmo's own dialog is unchanged). DR-PLAY-3.
 
 ---
 

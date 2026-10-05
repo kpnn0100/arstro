@@ -65,14 +65,14 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
 | `grade paste [node…] [--all]` | Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: it writes through to Cosmo. | R-EDIT-2 |
 | `rack ungroup <group>` | Dissolve a group; its members keep their own grades. | R-RACK-4 |
-| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
+| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%), hardwareVideo (0\|1: H.264/H.265 on the GPU's video unit). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
 | `preset apply <name> [--node <bind>]` | Apply a library preset to a rack source (the Grade target by default). Root timeline only. | R-EDIT-3 |
 | `preset save <name> [--node <bind>]` | Save a rack source's grade to the library as <name>.apf. | R-EDIT-3 |
 | `preset import <path.apf>` | Copy an .apf (from Cosmo or anywhere) into the library. | R-EDIT-3 |
 | `playhead <t>\|+<dt>\|-<dt>\|next-cut\|prev-cut` | Move the playhead; snapped to a frame. | R-TL-5 |
 | `play` | Start playback of the current timeline. | R-UI-3 |
 | `pause` | Stop playback. | R-UI-3 |
-| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused. | R-RENDER-6 |
+| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused. | R-RENDER-6 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
@@ -212,7 +212,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `render.failed` | `job`, `timeline`, `why` | A render stopped with an error or was cancelled. |
 | `lint.report` | `offline`, `dangling`, `refused` | Counts from `lint`; details follow as info. |
 | `history.changed` | `did`, `label`, `canUndo`, `canRedo` | An edit was recorded, undone or redone (did = edit \| undo \| redo \| cleared). |
-| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale` | Engine settings after a change, all keys. |
+| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo` | Engine settings after a change, all keys. |
 | `presets.changed` | `count` | The preset library was rescanned. |
 
 ## Model
@@ -370,6 +370,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |
 | `settings.previewEdge` | integer |  | Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected. |
 | `settings.useGpu` | bool |  | GPU opt-in for the grade step (only where a backend exists). |
+| `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders; falls back to software, said (R-PLAY-3). |
 | `settings.uiScale` | integer |  | Percent of the design size the window draws at. |
 | `settings.gpuAvailable` | bool | *machine* | A GPU backend exists on this machine. |
 | `settings.cores` | integer | *machine* | Cores on this machine. |

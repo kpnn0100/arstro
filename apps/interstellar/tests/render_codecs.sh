@@ -70,5 +70,28 @@ if [ $(d $r1 $r2) -le 4 ] && [ $(d $g1 $g2) -le 4 ] && [ $(d $b1 $b2) -le 4 ]; t
 else
   echo "  [FAIL] the H.264 render's colour drifted from the still"; fail=1
 fi
+# R-PLAY-3: the video unit. Where VA-API answers, a hardware render is a real H.264 with the same
+# tags and the same colour; where it does not, the render still finishes, in software, and says so.
+spec() { "$CC" project open mv.isp : render --timeline main "$@" : wait render.done : state print --json | tr ',' '\n' | grep '"spec"' | tail -1; }
+s=$(spec --encoder hardware --out hw.mp4)
+echo "  hardware: $s"
+check hardware hw.mp4 codec_name h264
+check hardware hw.mp4 color_space bt709
+x264() { LC_ALL=C grep -a -c 'x264 - core' "$1" || true; }   # libx264 signs its stream; the video unit does not
+if echo "$s" | grep -q "encoded in software"; then
+  echo "  [skip] no VA-API video unit on this machine: the colour check ran on the software fallback"
+elif [ "$(x264 hw.mp4)" = 0 ]; then echo "  [ok] hardware: encoded by the video unit, not libx264"
+else echo "  [FAIL] hardware: the file carries libx264's signature"; fail=1; fi
+c=$(px hw.mp4); echo "  still $a  hardware $c"
+set -- $c; r3=$1; g3=$2; b3=$3
+if [ $(d $r1 $r3) -le 6 ] && [ $(d $g1 $g3) -le 6 ] && [ $(d $b1 $b3) -le 6 ]; then
+  echo "  [ok] the hardware render decodes to the still's colour (within 6)"
+else
+  echo "  [FAIL] the hardware render's colour drifted from the still"; fail=1
+fi
+s=$(INTERSTELLAR_VAAPI_DEVICE=/dev/dri/none spec --encoder hardware --out fb.mp4)
+check fallback fb.mp4 codec_name h264
+if echo "$s" | grep -q "encoded in software" && [ "$(x264 fb.mp4)" = 1 ]; then echo "  [ok] no video unit: rendered in software, and said"; else echo "  [FAIL] fallback not said: $s"; fail=1; fi
+
 [ $fail = 0 ] && echo "render_codecs: ok"
 exit $fail

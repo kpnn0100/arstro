@@ -55,6 +55,25 @@ namespace cosmo_v2
         /** A host with no touch shell (Interstellar) hides the Input row; the card sizes to the
          *  rows it shows. Default: shown — cosmo's dialog is unchanged (R-SETTINGS). */
         void setInputRowShown(bool shown) { mShowInput = shown; }
+        /** Opt-in (an embedder's own settings; cosmo adds none, so its dialog is unchanged): rows
+         *  drawn after the built-in ones, each a label, a note, chips and the chip selected. */
+        struct ExtraRow
+        {
+            std::string label, note;
+            std::vector<std::string> chips;
+            int selected = 0;
+            std::function<void(int)> onSelect;
+        };
+        void setExtraRows(std::vector<ExtraRow> rows) { mExtra = std::move(rows); }
+        void setExtraSelected(int row, int chip) { if (row >= 0 && row < (int)mExtra.size()) mExtra[(size_t)row].selected = chip; }
+        int extraRowCount() const { return (int)mExtra.size(); }
+        /** Where chip `chip` of extra row `row` is drawn, in the dialog's space — for a test's click. */
+        artboard::Rect extraChipRect(int row, int chip) const
+        {
+            std::vector<artboard::Rect> rs;
+            chipRects(kRows + row, rs);
+            return chip >= 0 && chip < (int)rs.size() ? rs[(size_t)chip] : artboard::Rect{};
+        }
         /** The LIVE eased appearance (0 shut … 1 open) — what a test reads to tell a fade from a cut. */
         double appearAmount() const { return mAppear.value(); }
         /** Public (unlike the rest of the Segment overrides) because the HOME screen
@@ -90,10 +109,12 @@ namespace cosmo_v2
         /** The text on chip `i` of `row` — ONE mapping, read both by chipRects (which
          *  sizes each chip to its text) and by the paint. Two copies would drift and
          *  mis-place every chip after the first in a row. */
-        static std::string chipLabel(int row, int i);
+        std::string chipLabel(int row, int i) const;
+        int totalRows() const { return kRows + (int)mExtra.size(); }
         void hitTargets(const artboard::Point &p, int &row, int &chip, bool &done) const;
         int rowChipCount(int row) const
         {
+            if (row >= kRows) return (int)mExtra[(size_t)(row - kRows)].chips.size();
             return row == kRowScale   ? (int)kScales.size()
                  : row == kRowQuality ? (int)kEdges.size()
                  : row == kRowThreads ? (int)kThreads.size()
@@ -102,7 +123,7 @@ namespace cosmo_v2
         }
         // Flat HoverFade ids: rows laid out contiguously, then Done.
         int chipId(int row, int chip) const { int b = 0; for (int r = 0; r < row; ++r) b += rowChipCount(r); return b + chip; }
-        int doneId() const { int b = 0; for (int r = 0; r < kRows; ++r) b += rowChipCount(r); return b; }
+        int doneId() const { int b = 0; for (int r = 0; r < totalRows(); ++r) b += rowChipCount(r); return b; }
 
         static const std::vector<int> &kScales;      // UI scale options, % (== AppSettings::uiScales)
         static const std::vector<int> kEdges;        // preview long-edge options
@@ -123,6 +144,7 @@ namespace cosmo_v2
         bool mGpuAvailable = false;  // a platform GPU backend exists (else the row is disabled)
         bool mTouchUi = false;       // draw the touch shell instead of this one (R-TOUCH-6)
         bool mShowInput = true;      // the Input row; a host without a touch shell hides it
+        std::vector<ExtraRow> mExtra;   // an embedder's own rows (none in cosmo)
         bool rowShown(int row) const { return row != kRowTouch || mShowInput; }
         HoverFade mHover;         // per-chip / Done hover cross-fade (R-G-3)
     };

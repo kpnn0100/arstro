@@ -84,6 +84,9 @@ namespace interstellar_v1
         mSettings->onThreads = [this](int v) { dispatch("settings set threads=" + std::to_string(v)); };
         mSettings->onCpuPercent = [this](int v) { dispatch("settings set cpuPercent=" + std::to_string(v)); };
         mSettings->onUseGpu = [this](bool on) { dispatch(std::string("settings set useGpu=") + (on ? "1" : "0")); };
+        // Interstellar's own row, after cosmo's (opt-in: cosmo's dialog has none). R-PLAY-3
+        mSettings->setExtraRows({{"Hardware video", "H.264 / H.265 on the video unit", {"Off", "On"}, 0,
+                                  [this](int i) { dispatch(std::string("settings set hardwareVideo=") + (i ? "1" : "0")); }}});
         buildMenus();
 
         mRecognizer.setSink([this](const Gesture &g) {
@@ -137,6 +140,7 @@ namespace interstellar_v1
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         const auto &st = m.settings;
+        mSettings->setExtraSelected(0, st.hardwareVideo ? 1 : 0);
         mSettings->show(st.uiScale, mMaxUiScale, st.previewEdge, st.threads, st.cpuPercent, st.useGpu, st.gpuAvailable, false);
         noteActivity();
     }

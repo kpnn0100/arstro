@@ -398,6 +398,11 @@ namespace interstellar
                 if (f.second != "0" && f.second != "1") return fail("settings: useGpu is 0 or 1");
                 next.useGpu = f.second == "1";
             }
+            else if (f.first == "hardwareVideo")
+            {
+                if (f.second != "0" && f.second != "1") return fail("settings: hardwareVideo is 0 or 1");
+                next.hardwareVideo = f.second == "1";
+            }
             else if (f.first == "uiScale")
             {
                 const auto &ok = cosmo::AppSettings::uiScales();
@@ -411,7 +416,7 @@ namespace interstellar
             }
             else
             {
-                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale"});
+                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo"});
                 return fail("settings: no setting `" + f.first + "`" + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
             }
         }
@@ -438,6 +443,7 @@ namespace interstellar
             else if (k == "previewEdge" && (v == 0 || (v >= 256 && v <= 16384))) mSettings.previewEdge = v;
             else if (k == "useGpu") mSettings.useGpu = v != 0;
             else if (k == "uiScale") mSettings.uiScale = cosmo::AppSettings::clampUiScale(v);
+            else if (k == "hardwareVideo") mSettings.hardwareVideo = v != 0;
         }
     }
 
@@ -448,7 +454,8 @@ namespace interstellar
         fs::create_directories(fs::path(mHost.settingsPath).parent_path(), ec);
         std::ofstream f(mHost.settingsPath, std::ios::trunc);
         f << "cpuPercent=" << mSettings.cpuPercent << "\nthreads=" << mSettings.threads << "\npreviewEdge="
-          << mSettings.previewEdge << "\nuseGpu=" << (mSettings.useGpu ? 1 : 0) << "\nuiScale=" << mSettings.uiScale << "\n";
+          << mSettings.previewEdge << "\nuseGpu=" << (mSettings.useGpu ? 1 : 0) << "\nuiScale=" << mSettings.uiScale
+          << "\nhardwareVideo=" << (mSettings.hardwareVideo ? 1 : 0) << "\n";
         return (bool)f;
     }
 
@@ -475,7 +482,8 @@ namespace interstellar
                  .with("threads", mSettings.threads)
                  .with("previewEdge", mSettings.previewEdge)
                  .with("useGpu", mSettings.useGpu)
-                 .with("uiScale", mSettings.uiScale));
+                 .with("uiScale", mSettings.uiScale)
+                 .with("hardwareVideo", mSettings.hardwareVideo));
     }
 
     void InterstellarService::rescanPresets()

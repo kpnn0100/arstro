@@ -175,6 +175,7 @@ namespace interstellar
         int previewEdge = 1600;       // monitor/preview render long edge, px; a cap, never an upscale
         bool useGpu = false;
         int uiScale = 100;            // percent of the design size — the host draws through it
+        bool hardwareVideo = false;   // R-PLAY-3: H.264/H.265 encode on the GPU's video unit (VA-API) where present
         // ── measured, read-only ──
         bool gpuAvailable = false;
         int cores = 0, engineThreads = 0, decodeWorkers = 0;

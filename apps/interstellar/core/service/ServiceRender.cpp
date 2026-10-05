@@ -735,6 +735,15 @@ namespace interstellar
             if (!speeds.count(c.flag("speed"))) return fail("render: --speed is ultrafast … veryslow, got " + c.flag("speed"));
             spec.speed = c.flag("speed");
         }
+        // the encoder: the GPU's video unit when the setting (or the flag) asks and the codec has one
+        spec.hardware = lossy && mSettings.hardwareVideo;
+        if (c.has("encoder"))
+        {
+            const std::string e = c.flag("encoder");
+            if (e != "software" && e != "hardware") return fail("render: --encoder is software or hardware, got " + e);
+            if (e == "hardware" && !lossy) return fail("render: " + format + " has no hardware encoder — H.264 and H.265 do");
+            spec.hardware = e == "hardware";
+        }
         spec.bitDepth = format == "prores" ? 10 : format == "dnxhr" ? (spec.profile == "hqx" || spec.profile == "444" ? 10 : 8) : 8;
         if (c.has("bits"))
         {
@@ -830,7 +839,7 @@ namespace interstellar
             std::string w = name;
             if (inter) { std::string pf = spec.profile; for (char &ch : pf) ch = (char)std::toupper((unsigned char)ch); w += " " + (pf == "STANDARD" ? std::string("422") : pf); }
             if (format == "h265" || inter) w += " " + std::to_string(spec.bitDepth) + "-bit";
-            if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + spec.speed;
+            if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + (spec.hardware ? std::string("hardware") : spec.speed);
             char rate[32];
             std::snprintf(rate, sizeof rate, "%.3f", fps);
             std::string r = rate;
@@ -873,6 +882,12 @@ namespace interstellar
                 {
                     failJob("the encoder refused " + j.model.outPath);
                     return;
+                }
+                // what the writer did differently (a hardware encode that fell back), said in the row
+                if (j.writer && !j.writer->note().empty())
+                {
+                    j.model.spec += " \xC2\xB7 " + j.writer->note();
+                    emit(Event(EK::Info).with("text", "render " + j.model.id + ": " + j.writer->note()));
                 }
                 j.begun = true;
             }

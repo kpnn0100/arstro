@@ -11,7 +11,7 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Defects: [`DEFECTS.md`](DEFECTS.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-02 — Grade without a transport, the capture button, the reference-frame slider, browsing groups like cosmo.*
+*Last updated: 2026-10-05 — the image-processing stack, scopes, read-ahead playback, hardware video.*
 
 ---
 
@@ -55,7 +55,7 @@ one integrator who moves, wires, tests and commits each stream:
 - [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
       and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: read-ahead — DONE (DR-PLAY-2);
-      the graded preview cache and hardware video (R-PLAY-1, R-PLAY-3) next.
+      hardware video — DONE (DR-PLAY-3); the graded preview cache (R-PLAY-1) next.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -104,6 +104,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — hardware video is VA-API through FFmpeg, and never a reason to fail.** The video unit
+is reached through the FFmpeg we already link (`h264_vaapi`/`hevc_vaapi`), not a vendor SDK, so it
+works on AMD and Intel under Linux with nothing new to ship. Colour conversion stays on the CPU with
+the same BT.709 matrix as software, so a hardware render is the same picture (measured within 1 code
+value). A missing device downgrades to software with the reason in the job's spec — a render that
+fails because a laptop has no video unit would be worse than a slow one. Interstellar's row joins
+cosmo's settings dialog through an opt-in API rather than a fork of the dialog.
 
 **2026-10-05 — no source proxies: the grade is the cost (R-PLAY-1 amended).** Measured before
 building what was asked: a 1080p frame decodes in 4 ms and grades in 170 ms at a 1600-px preview; 4K

@@ -51,7 +51,7 @@ PUBLIC defines match the rest of the final binary.
   |---|---|
   | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
   | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
-  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`) |
+  | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own row after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1` |
   | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
   | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
 
