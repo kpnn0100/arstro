@@ -86,6 +86,8 @@ namespace interstellar
             {O::Clip, "<clip>.in", "", "in", PK::Scalar, "s", 0, 0, 0, "Source in-point."},
             {O::Clip, "<clip>.out", "", "out", PK::Scalar, "s", 0, 0, 0, "Source out-point (exclusive)."},
             {O::Clip, "<clip>.speed", "", "speed", PK::Scalar, "×", 0.1, 8, 1, "Playback speed."},
+            {O::Clip, "<clip>.angle", "", "angle", PK::Int, "", 0, 99, 0,
+             "A multicam clip's angle: the placed timeline's video track it shows; 0 = all of it (R-EDT-5)."},
             {O::Clip, "<clip>.opacity", "", "opacity", PK::Scalar, "0..1", 0, 1, 1, "Clip opacity."},
             {O::Clip, "<clip>.blend", "", "blend", PK::Text, "normal|add|multiply|screen", 0, 0, 0, "Blend mode."},
             {O::Clip, "<clip>.fit", "", "fit", PK::Text, "contain|cover|stretch", 0, 0, 0, "How the source fits the frame."},

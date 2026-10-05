@@ -33,6 +33,7 @@
 #include "ImageSlot.h"
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace arstro
 {
@@ -78,6 +79,16 @@ namespace interstellar_v1
         void setClipWarning(bool on) { mClipWanted = on; }
         double clipAmount() const { return mClipAmt.value(); }
         double zoomLive() const { return mZoom.value(); }
+        /** R-EDT-5: a multicam clip's angles as chips along the picture's foot; the active one is
+         *  marked by a highlight that TRAVELS to it (220 ms) when the angle changes, and the bar fades
+         *  with `shown`. A click asks for that angle (1-based). Intent only. */
+        void setAngles(const std::vector<std::string> &names, int active, bool shown);
+        std::function<void(int angle)> onAngle;
+        /** Where angle `k` (1-based) was last painted (local); empty when hidden. */
+        artboard::Rect angleRect(int k) const;
+        double anglesAmount() const { return mAnglesAmt.value(); }
+        /** The LIVE eased position of the highlight, in chips (0 = the first). */
+        double angleHighlight() const { return mAngleSel.value(); }
         double zoomTarget() const { return mZoomTarget; }
         bool panning() const { return mPanning; }
         static constexpr double kMaxZoom = 8.0;
@@ -119,6 +130,16 @@ namespace interstellar_v1
         artboard::AnimatedProperty mCaptureAmt{0.0};
         cosmo_v2::HoverFade mCaptureHover;
         mutable artboard::Rect mCaptureRect{0, 0, 0, 0};
+        // R-EDT-5: the angle bar
+        std::vector<std::string> mAngleNames;
+        int mAngleActive = 0;
+        bool mAnglesWanted = false, mAnglesApplied = false, mAnglesInit = false;
+        artboard::AnimatedProperty mAnglesAmt{0.0}, mAngleSel{0.0};
+        int mAngleSelApplied = -1;
+        bool mAngleSnap = true;                       // a new set of angles places the highlight, it does not travel
+        cosmo_v2::HoverFade mAngleHover;
+        mutable std::vector<artboard::Rect> mAngleRects;
+        int angleAt(const artboard::Point &local) const;   // 1-based, 0 = none
         ImageSlot mClipMask;
         bool mClipWanted = false, mClipApplied = false;
         artboard::AnimatedProperty mClipAmt{0.0};

@@ -105,6 +105,7 @@ namespace
             mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
             mRamp = path.find("ramp") != std::string::npos;   // R-COLOR-1: a ramp finer than 8 bits
             if (path.find("a.mp4") != std::string::npos) { out.timecode = "01:00:10:00"; out.reel = "A001"; }   // R-XCH-5
+            if (path.find("b.mp4") != std::string::npos) out.timecode = "01:00:11:00";   // R-EDT-5: one second after a
             out.width = 48;
             out.height = 27;
             out.fps = 24;
@@ -1331,7 +1332,7 @@ int main()
         // media found by name under --media when the file it names is gone
         {
             std::ofstream edl2(f.path("moved.edl"));
-            edl2 << "TITLE: moved\nFCM: NON-DROP FRAME\n\n001  b        V     C        00:00:01:00 00:00:02:00 01:00:00:00 01:00:01:00\n* FROM CLIP NAME: b\n";
+            edl2 << "TITLE: moved\nFCM: NON-DROP FRAME\n\n001  b        V     C        01:00:12:00 01:00:13:00 01:00:00:00 01:00:01:00\n* FROM CLIP NAME: b\n";   // b's 1 s (its timecode starts 01:00:11:00)
         }
         f.must("interchange import \"" + f.path("moved.edl") + "\" --name m1");
         assert(has(f.svc->output(), "not placed") && has(f.svc->output(), "--media"));
@@ -1559,6 +1560,74 @@ int main()
         assert(red(1.25) == 42);                        // reel at 0.75: inner, unchanged
         assert(red(3.25) == 30);                        // reel at 2.75 is `back` → main, already being drawn: clear
         f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("l.mp4") + "\"");
+    });
+
+    test("a multicam: sources lined up by timecode or in-points, one angle shown, each switch a cut (R-EDT-5)", [] {
+        Fixture f("multicam");
+        f.standard();                                   // a: timecode 01:00:10:00, b: 01:00:11:00; still: none
+        std::string err;
+        assert(!f.run("multicam new cams --sources a", &err) && has(err, "two or more"));
+        assert(!f.run("multicam new cams --sources a,still", &err) && has(err, "still carries no timecode"));
+        assert(!f.run("multicam new cams --sources a,b --audio still", &err) && has(err, "one of the --sources"));
+        f.must("track add --kind video --name v1");
+        f.must("multicam new cams --sources a,b --track v1 --at 0");
+        // the multicam: a on angle 1 at 0, b on angle 2 at 1 s (its timecode is one second later); a's sound
+        const Project &P = f.svc->project();
+        const NodeId cams = P.idForRef("cams");
+        ResolvedTimeline C;
+        assert(resolve(P, cams, C, err) && C.clips.size() == 2 && C.audioClips.size() == 1);
+        const auto angles = std::vector<NodeId>{C.tracks[0].id, C.tracks[1].id};
+        for (const auto &c : C.clips)
+            assert(c.track == angles[c.src == P.idForRef("a") ? 0 : 1] && std::fabs(c.at - (c.src == P.idForRef("a") ? 0.0 : 1.0)) < 1e-9);
+        assert(std::fabs(C.audioClips[0].at) < 1e-9 && has(C.audioClips[0].src, "a.mp4"));
+        auto onV1 = [&] {
+            std::vector<ClipModel> v;
+            for (const auto &c : f.svc->model().clips) if (c.track == P.idForRef("v1")) v.push_back(c);
+            std::sort(v.begin(), v.end(), [](const ClipModel &x, const ClipModel &y) { return x.at < y.at; });
+            return v;
+        };
+        assert(onV1().size() == 1 && onV1()[0].nested && onV1()[0].angle == 1 && std::fabs(onV1()[0].duration - 5.0) < 1e-9);
+        f.must("playhead 0.5");
+        const AppModel &m = f.svc->model();
+        assert(m.multicamClip == onV1()[0].id && m.multicamAngle == 1 && m.multicamAngles == std::vector<std::string>({"a", "b"}));
+        auto px = [&](double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(P.idForRef("main"), t, 0, r));
+            return std::make_pair((int)r.rgba[0], (int)r.rgba[1]);   // (source frame, the file's green: a 60, b 200)
+        };
+        assert(px(1.5) == std::make_pair(36, 60));      // angle 1: a's frame 36
+        // switch to angle 2 at 2 s: a cut — before it a, after it b at its own synced frame
+        f.must("playhead 2.0");
+        f.must("multicam angle 2");
+        assert(onV1().size() == 2 && onV1()[0].angle == 1 && onV1()[1].angle == 2 && std::fabs(onV1()[1].at - 2.0) < 1e-9);
+        assert(px(1.5) == std::make_pair(36, 60));
+        assert(px(2.5) == std::make_pair(36, 200));     // cams 2.5 s: b began at 1 s → b's 1.5 s
+        assert(m.multicamAngle == 2);
+        // on a clip's first frame the angle changes without a cut
+        f.must("multicam angle 1");
+        assert(onV1().size() == 2 && onV1()[1].angle == 1);
+        f.must("undo");                                 // each switch one step
+        assert(onV1().size() == 2 && onV1()[1].angle == 2);
+        f.must("undo");
+        assert(onV1().size() == 1 && onV1()[0].angle == 1);
+        f.must("redo");
+        // the sound is the multicam's (a's, 0.1) across the cut, never doubled
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("mc.mp4") + "\"");
+        auto at = [&](double t) { return gAudio[(size_t)std::llround(t * 48000) * 2]; };
+        std::printf("    multicam sound: %.3f at 1.5, %.3f at 2.5, %.3f at 4.5\n", at(1.5), at(2.5), at(4.5));
+        assert(std::fabs(at(1.5) - 0.1) < 1e-4 && std::fabs(at(2.5) - 0.1) < 1e-4 && std::fabs(at(4.5)) < 1e-4);
+        // refusals: past the last angle, an angle on footage, nothing under the playhead
+        assert(!f.run("multicam angle 3", &err) && has(err, "has 2 angle(s)"));
+        assert(!f.run("set shotA.angle=1", &err) && has(err, "places footage"));
+        f.must("playhead 6.0");
+        assert(!f.run("multicam angle 1", &err) && has(err, "no multicam clip under the playhead") && f.svc->model().multicamClip.empty());
+        // by in-points: a's 1.0 s and b's 0.5 s meet — a at 0, b at 0.5; b's sound with --audio
+        f.must("multicam new cams2 --sources a,b --in a=1.0,b=0.5 --audio b");
+        ResolvedTimeline C2;
+        assert(resolve(P, P.idForRef("cams2"), C2, err));
+        for (const auto &c : C2.clips) assert(std::fabs(c.at - (c.src == P.idForRef("a") ? 0.0 : 0.5)) < 1e-9);
+        assert(C2.audioClips.size() == 1 && has(C2.audioClips[0].src, "b.mp4") && std::fabs(C2.audioClips[0].at - 0.5) < 1e-9);
+        assert(!f.run("multicam new cams3 --sources a,b --sync timecode --in a=1", &err) && has(err, "--sync in"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

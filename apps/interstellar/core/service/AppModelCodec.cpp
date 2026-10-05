@@ -175,6 +175,7 @@ namespace interstellar
                            .set("audio", c.audio).set("media", c.media)
                            .set("offline", c.offline)
                            .set("nested", c.nested)
+                           .set("angle", Json::integer(c.angle))
                            .set("provenance", provenanceName(c.provenance)));
         j.set("clips", clips);
 
@@ -284,6 +285,13 @@ namespace interstellar
         j.set("sourcePlayhead", m.sourcePlayhead);
         j.set("sourceDuration", m.sourceDuration);
         j.set("targetTrack", m.targetTrack);
+        j.set("multicamClip", m.multicamClip);
+        j.set("multicamAngle", Json::integer(m.multicamAngle));
+        {
+            Json names = Json::array();
+            for (const auto &n : m.multicamAngles) names.push(Json::string(n));
+            j.set("multicamAngles", names);
+        }
         j.set("soundPlaying", m.soundPlaying);
         j.set("meterPeakL", m.meterPeakL);
         j.set("meterPeakR", m.meterPeakR);
@@ -440,6 +448,7 @@ namespace interstellar
             {"clips[].audio", "bool", "An audio clip (#aclip)."},
             {"clips[].offline", "bool", "Its media is missing."},
             {"clips[].nested", "bool", "It places another timeline — a nested sequence (R-EDT-4)."},
+            {"clips[].angle", "integer", "A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5)."},
             {"clips[].provenance", "enum(local|inherited|overridden|dangling)", "Where it came from in this version."},
             {"transitions", "array", "Transitions in the resolved current timeline."},
             {"transitions[].id", "string", "Transition id."},
@@ -547,6 +556,9 @@ namespace interstellar
             {"sourcePlayhead", "number", "The source viewer's playhead, source seconds."},
             {"sourceDuration", "number", "The viewed source's length, seconds; 0 = a still or not yet opened."},
             {"targetTrack", "string", "The video track Insert and Overwrite place on (`edit target`)."},
+            {"multicamClip", "string", "The multicam clip under the playhead — what `multicam angle` switches; empty = none (R-EDT-5)."},
+            {"multicamAngle", "integer", "The angle it shows at the playhead, 1-based."},
+            {"multicamAngles", "array", "Its angles, in order: the name of the source each angle's track shows."},
             {"soundPlaying", "boolean", "Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear."},
             {"meterPeakL", "number", "The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8)."},
             {"meterPeakR", "number", "…right."},

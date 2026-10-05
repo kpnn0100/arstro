@@ -226,6 +226,7 @@ namespace schema
             time<Clip>("in", &Clip::in, 0.0, 1, true),
             time<Clip>("out", &Clip::out, 0.0, 1, true),
             number<Clip>("speed", &Clip::speed, 1.0, 1, true),
+            integer<Clip>("angle", &Clip::angle, 0, 1, true, [](const Clip &c, const Project &) { return c.angle != 0; }),   // R-EDT-5
             text<Clip>("fit", &Clip::fit, 1, true),
             number<Clip>("opacity", &Clip::opacity, 1.0, 1, true),
             text<Clip>("blend", &Clip::blend, 1, true),

@@ -179,6 +179,7 @@ namespace interstellar
         std::string media;            // audio clips: the file, resolved — its waveform's key (R-AUD-7)
         bool offline = false;
         bool nested = false;          // R-EDT-4: it places another timeline (src is that timeline's id)
+        int angle = 0;                // R-EDT-5: the placed timeline's video track it shows (0 = all of it)
         Provenance provenance = Provenance::Local;
     };
 
@@ -308,6 +309,10 @@ namespace interstellar
         double sourcePlayhead = 0.0;               // its playhead, source seconds
         double sourceDuration = 0.0;               // its length, seconds (0 = a still or unknown)
         NodeId targetTrack;                        // the video track Insert/Overwrite place on
+        // ── multicam (R-EDT-5): the multicam clip under the playhead, what `multicam angle` switches ──
+        NodeId multicamClip;                       // "" = none under the playhead
+        int multicamAngle = 0;                     // the angle it shows there, 1-based
+        std::vector<std::string> multicamAngles;   // its angles' names (the source each angle track shows)
         // ── sound (R-AUD-6..8) ──
         bool soundPlaying = false;                 // the audio clock drives the playhead (a sound output, something to hear)
         double meterPeakL = 0, meterPeakR = 0;     // the master's level the listener hears now, linear (1 = full scale)

@@ -1353,6 +1353,12 @@ namespace interstellar
                       (names.empty() ? "(none — the rack is empty)" : names);
                 return false;
             }
+            if (c.angle < 0 || (c.angle > 0 && !timeline(c.src)))   // R-EDT-5
+            {
+                err = "#clip " + c.id + ": angle=" + std::to_string(c.angle) + (c.angle < 0 ? " — an angle is 1 or more (0 = the whole timeline)"
+                                                                                              : " — an angle picks a track of a placed TIMELINE; src=" + c.src + " is footage");
+                return false;
+            }
             if (!anchor("#clip", c.id, c.track, c.timeline, false)) return false;
         }
         for (const auto &a : audioClips)

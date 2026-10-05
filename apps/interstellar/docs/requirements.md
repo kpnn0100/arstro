@@ -274,6 +274,39 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-EDT-4 Multicam: a nested timeline showing one angle, switched with a cut (R-EDT-5)
+A clip placing a timeline may carry `angle` (`model/Schema.h:229`, written only when set): it shows
+that timeline's k-th video track alone (`core/service/ServiceRender.cpp:297`), so a version can switch
+angles as a `#tlset` delta like any clip field (`<clip>.angle`, `core/ParamRegistry.cpp:89`); an angle on
+footage, or below 0, is refused on load and on edit (`model/Project.cpp:1356`, `model/Versions.cpp:503`).
+`multicam new <name> --sources a,b,…` (`core/service/ServiceEditing.cpp:195`) checks everything first,
+then builds a root timeline with one video track per source — angle k is the k-th source — placed by
+timecode (each file's first-frame timecode at its own rate, `:240`; a source without one is refused,
+pointing at `--sync in`) or by in-points (`--in a=1.5,b=0.4`, the in-points meet, `:242`), and an audio
+track with one source's sound (`--audio`, default the first; `none`). `--track` also places it on the
+current timeline at `--at` (else the playhead) showing angle 1. `multicam angle <n>` (`:308`) takes the
+top-most angle-showing clip under the playhead (`multicamAt`, `:73`; else any placed timeline, or
+`--clip`), refuses an angle past the timeline's video tracks (`anglesOf`, `:95`), and from that frame
+on shows angle n — splitting the clip there (keys copied, as `clip split` does), or, on its first frame,
+changing the whole clip; one undo step. The sound is the multicam's, held across switches, each cut
+carrying its window of it — never doubled. Model: `clips[].angle`; `multicamClip`, `multicamAngle`,
+`multicamAngles` (each angle named by the source its track shows, `InterstellarService.cpp:823`). UI:
+in Cut, over a multicam clip, the monitor's angle bar (`app/widgets/Monitor.cpp:116`, painted `:395`)
+— one chip per angle, the active one marked by a highlight that travels 220 ms, the bar fading with its
+intent, set every frame since a tab switch changes it (`app/App.cpp:930`); a click or Alt+1…9
+(`app/App.cpp:796`) dispatches `multicam angle n`; an angle clip reads "angle n ·" on the timeline.
+Guarded by model `clipAngle` (written only when set; a version's switch is a delta; footage and −1
+refused; a hand-edited angle on footage refused at load), L2 `a multicam…` (refusals: one source, no
+timecode, `--audio` outside the sources, `--in` with timecode; a at 0 and b at 1 s by timecode; the
+placed clip 5 s at angle 1; the model's angles a, b; frames (36, 60) before and (36, 200) after a switch
+at 2 s; a switch on a first frame changes without a cut; each switch one undo step; the sound 0.1
+across the cut and 0 past it; angle 3 refused; by in-points a at 0, b at 0.5 with b's sound), UI (the
+bar absent in Grade, fading in in Cut, a click and Alt+3 dispatching, Alt+4 inert, the highlight caught
+mid-travel, the bar fading out), shot `cut_multicam`. Mutants run red: the render ignoring the angle,
+timecode or in-point sync dropped or reversed, no split on a switch, the sound's offset, the angle
+switch not undoable, no angle-count check, the edit invariant, `angle` always written, the bar's
+travel and fade snapped, the Alt key.
+
 ### DR-EDT-3 A timeline placed as a clip (R-EDT-4)
 A `#clip`'s `src` may name a `#timeline` as well as a `#rackobj` (`model/Project.cpp:1348`,
 `model/Arrange.cpp:154`, `model/Versions.cpp:476` for `set <clip>.src=`). `nestingRefused`

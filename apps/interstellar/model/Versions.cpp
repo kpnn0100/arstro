@@ -497,9 +497,15 @@ namespace interstellar
             return true;
         }
 
-        bool invariants(const Project &, const ResolvedTimeline &R, const Clip &c, std::string &err)
+        bool invariants(const Project &P, const ResolvedTimeline &R, const Clip &c, std::string &err)
         {
             if (c.speed == 0.0) { err = "clip " + c.id + ": speed 0 leaves no frames — refused, not clamped"; return false; }
+            if (c.angle < 0 || (c.angle > 0 && !P.timeline(c.src)))   // R-EDT-5
+            {
+                err = "clip " + c.id + (c.angle < 0 ? ": an angle is 1 or more (0 = the whole timeline)"
+                                                    : ": an angle picks a track of a placed timeline, and this clip places footage");
+                return false;
+            }
             if (!(c.in < c.out))
             {
                 err = "clip " + c.id + ": in " + canonicalTime(c.in) + " >= out " + canonicalTime(c.out) +

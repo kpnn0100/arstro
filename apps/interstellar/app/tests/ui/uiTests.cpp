@@ -2360,6 +2360,63 @@ namespace
         r.app->key(e);
     }
 
+    /** R-EDT-5: the multicam angle bar — Cut only, fading; a click and Alt+n switch; the highlight travels. */
+    void testMulticamUi()
+    {
+        std::printf("multicam: the angle bar on the monitor\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            s.m.playing = false;
+            auto c = FakeService::clip("mc1", "v2", "cams", "cams", 4.0, 0.0, 6.0, arstro::interstellar::Provenance::Local);
+            c.nested = true;
+            c.angle = 1;
+            s.m.clips.push_back(c);
+            s.m.multicamClip = "mc1";
+            s.m.multicamAngle = 1;
+            s.m.multicamAngles = {"A001_C003", "B002_C011", "C003_C007"};
+            ++s.m.revision;
+        });
+        auto mon = r.app->edit().monitor();
+        r.app->setTab(0);
+        r.settle();
+        CHECK(mon->anglesAmount() < 0.001, "Grade shows no angle bar");
+        r.app->setTab(1);
+        r.pump(16);
+        const double in = firstMoved(r, [&] { return mon->anglesAmount(); }, 0.0);
+        CHECK(strictlyBetween(in, 0.0, 1.0), "in Cut the angle bar FADES in over a multicam clip");
+        r.settle();
+        CHECK(mon->anglesAmount() > 0.999 && mon->angleRect(3).w > 0 && std::fabs(mon->angleHighlight()) < 1e-9,
+              "…three chips, the first marked");
+        r.svc.lines.clear();
+        const Rect a2 = mon->angleRect(2);
+        const Point p = world(*mon, a2.x + a2.w * 0.5, a2.y + a2.h * 0.5);
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "multicam angle 2"), "clicking angle 2 dispatches multicam angle 2");
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = '3';
+        e.alt = true;
+        r.svc.lines.clear();
+        r.app->key(e);
+        CHECK(hasLine(r.svc, "multicam angle 3") && r.app->edit().tab() == 1, "Alt+3 switches to angle 3 — and does not switch tabs");
+        e.keyCode = '4';
+        r.svc.lines.clear();
+        r.app->key(e);
+        CHECK(r.svc.lines.empty(), "Alt+4 with three angles does nothing");
+        // the service answered: angle 2 here — the highlight travels there
+        r.svc.m.multicamAngle = 2;
+        ++r.svc.m.revision;
+        const double mid = firstMoved(r, [&] { return mon->angleHighlight(); }, 0.0);
+        CHECK(strictlyBetween(mid, 0.0, 1.0), "the highlight TRAVELS to the new angle (live value between the chips)");
+        r.settle();
+        CHECK(std::fabs(mon->angleHighlight() - 1.0) < 1e-6, "…and rests on it");
+        // off the multicam: the bar fades out
+        r.svc.m.multicamClip.clear();
+        ++r.svc.m.revision;
+        const double out = firstMoved(r, [&] { return mon->anglesAmount(); }, 1.0);
+        CHECK(strictlyBetween(out, 0.0, 1.0), "off the multicam clip the bar fades out");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2529,6 +2586,7 @@ int main()
     testSoundUi();
     testInterchangeUi();
     testEditingUi();
+    testMulticamUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

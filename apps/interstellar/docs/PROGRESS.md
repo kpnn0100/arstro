@@ -77,7 +77,7 @@ one integrator who moves, wires, tests and commits each stream:
       10. [x] Editing: three-point Insert/Overwrite with a source viewer, J/K/L shuttle (R-EDT-1, R-EDT-2) — DR-EDT-1.
       10b. [x] Speed ramps (R-EDT-3) — DR-EDT-2.
       10c. [x] Nested timelines (R-EDT-4) — DR-EDT-3.
-      10d. [ ] Multicam (R-EDT-5).
+      10d. [x] Multicam (R-EDT-5) — DR-EDT-4.
       11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
@@ -130,6 +130,16 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a multicam is a nested timeline with an angle, not a new kind of node.** Premiere's
+multicam source sequence is a sequence whose tracks are the cameras, and a multicam clip is that
+sequence showing one of them; switching cuts the clip. Built that way here it costs one integer on a
+clip (`angle`, the placed timeline's k-th video track) and inherits everything nested timelines
+already do — live edits inside, versions as deltas (a version may switch angles), the plan key, the
+sound, loop refusal. The multicam's sound is one chosen source, held across angle switches, because
+the usual production has one good recorder and a picture switch must not jump the dialogue. The
+angle bar names angles by their sources; per-angle pictures would cost a full render per angle per
+playhead move and are left for when the preview pool can afford them.
 
 **2026-10-05 — a nested timeline is live, clear where empty, and never inside itself.** Resolve's
 compound clips and Premiere's nests both show the nested sequence live, so an edit inside reaches

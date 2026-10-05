@@ -92,6 +92,8 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `edit target <track>` | The video track Insert and Overwrite place on. | R-EDT-1 |
 | `edit insert [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point INSERT: the source (the viewer's, or --src) between its In/Out at the timeline In (or the playhead) on the target track; a clip there is split and everything after moves right on every track. Any three of source In/Out and timeline In/Out decide the fourth. | R-EDT-1 |
 | `edit overwrite [--src <node>] [--in <t>] [--out <t>] [--at <t>] [--track <trk>]` | Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away and nothing moves. | R-EDT-1 |
+| `multicam new <name> [--sources <a,b,...>] [--sync <timecode\|in>] [--in <src=t,...>] [--audio <src\|none>] [--track <trk>] [--at <t>]` | A multicam: a new timeline with one video track per source (angle 1, 2, … in the order given), lined up by their timecode (default) or by their in-points (--in a=1.5,b=0.4 — source seconds, 0 when not given), and the sound of one source (--audio, default the first; none for silence). With --track, also placed on the current timeline at --at (else the playhead), showing angle 1. | R-EDT-5 |
+| `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
 | `lut export <source> [--out <file.cube>] [--size <2..129>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>]` | Bake a source's colour — its input transform and LUT, its grade as the open version folds it, its weight, its LUT effects — into a 3D .cube (33 points unless --size), optionally through an output transform. What is not per-pixel colour is left out and said so in the file. | R-COLOR-6 |
@@ -161,6 +163,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<clip>.in` | clip | scalar | s |  | 0.0 | Source in-point. |
 | `<clip>.out` | clip | scalar | s |  | 0.0 | Source out-point (exclusive). |
 | `<clip>.speed` | clip | scalar | × | 0.1..8.0 | 1.0 | Playback speed. |
+| `<clip>.angle` | clip | int |  | 0.0..99.0 | 0.0 | A multicam clip's angle: the placed timeline's video track it shows; 0 = all of it (R-EDT-5). |
 | `<clip>.opacity` | clip | scalar | 0..1 | 0.0..1.0 | 1.0 | Clip opacity. |
 | `<clip>.blend` | clip | text | normal\|add\|multiply\|screen |  |  | Blend mode. |
 | `<clip>.fit` | clip | text | contain\|cover\|stretch |  |  | How the source fits the frame. |
@@ -336,6 +339,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `clips[].audio` | bool |  | An audio clip (#aclip). |
 | `clips[].offline` | bool |  | Its media is missing. |
 | `clips[].nested` | bool |  | It places another timeline — a nested sequence (R-EDT-4). |
+| `clips[].angle` | integer |  | A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5). |
 | `clips[].provenance` | enum(local\|inherited\|overridden\|dangling) |  | Where it came from in this version. |
 | `transitions` | array |  | Transitions in the resolved current timeline. |
 | `transitions[].id` | string |  | Transition id. |
@@ -443,6 +447,9 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `sourcePlayhead` | number |  | The source viewer's playhead, source seconds. |
 | `sourceDuration` | number |  | The viewed source's length, seconds; 0 = a still or not yet opened. |
 | `targetTrack` | string |  | The video track Insert and Overwrite place on (`edit target`). |
+| `multicamClip` | string |  | The multicam clip under the playhead — what `multicam angle` switches; empty = none (R-EDT-5). |
+| `multicamAngle` | integer |  | The angle it shows at the playhead, 1-based. |
+| `multicamAngles` | array |  | Its angles, in order: the name of the source each angle's track shows. |
 | `soundPlaying` | boolean |  | Playback is heard and the audio clock drives the playhead (R-AUD-6) — false without a sound output or with nothing to hear. |
 | `meterPeakL` | number |  | The master's peak the listener hears now, left, linear (1 = full scale; R-AUD-8). |
 | `meterPeakR` | number |  | …right. |

@@ -1013,7 +1013,8 @@ namespace interstellar_v1
                 else if (c.provenance == interstellar::Provenance::Inherited) sub = "inherited";
                 else if (c.provenance == interstellar::Provenance::Overridden) sub = "overridden here";
                 else if (c.audio) sub = cmd::num(c.gain) + " dB";
-                else sub = (c.nested ? "timeline \xC2\xB7 " : "") + cmd::timecode(clipDur(c), mFps).substr(3);
+                else sub = (c.angle > 0 ? "angle " + std::to_string(c.angle) + " \xC2\xB7 " : c.nested ? "timeline \xC2\xB7 " : "") +
+                           cmd::timecode(clipDur(c), mFps).substr(3);
                 if (r.h >= 24.0)
                 {
                     t.setFill(fade(warnText ? palette::destructive() : palette::mutedForeground(), a * 0.9));

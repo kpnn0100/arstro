@@ -345,7 +345,9 @@ namespace interstellar
             case CK::LutExport: ok = requireProject() && lutExport(c); break;
             case CK::InterchangeExport: case CK::InterchangeImport: ok = requireProject() && interchangeCommand(c); break;
             case CK::Shuttle: case CK::Mark: case CK::SourceView: case CK::SourcePlayhead: case CK::EditTarget:
-            case CK::EditInsert: case CK::EditOverwrite: ok = requireProject() && editingCommand(c); break;
+            case CK::EditInsert: case CK::EditOverwrite: case CK::MulticamNew: case CK::MulticamAngle:
+                ok = requireProject() && editingCommand(c);
+                break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -791,6 +793,7 @@ namespace interstellar
                 cm.duration = c.duration();
                 cm.opacity = c.opacity;
                 cm.offline = !nt && (!ro || cosmoNodeOf(ro->id) < 0);
+                cm.angle = c.angle;
                 cm.provenance = prov(c.id);
                 m.clips.push_back(cm);
             }
@@ -817,6 +820,31 @@ namespace interstellar
             for (const auto &t : R.transitions)
                 m.transitions.push_back({t.id, t.clipA, t.clipB, t.kind, t.dur});
             for (const auto &k : R.markers) m.markers.push_back({k.id, k.name, k.at, k.note});
+            // R-EDT-5: the multicam clip under the playhead and its angles, named by what each shows
+            m.multicamClip = multicamAt(R, m.playhead, false);
+            m.multicamAngle = 0;
+            m.multicamAngles.clear();
+            for (const auto &c : R.clips)
+                if (c.id == m.multicamClip)
+                {
+                    m.multicamAngle = c.angle;
+                    ResolvedTimeline N;
+                    std::string e5;
+                    for (const auto &trk : anglesOf(c.src))
+                    {
+                        std::string label;
+                        if (resolved(c.src, N, e5))
+                            for (const auto &x : N.clips)
+                                if (x.track == trk && label.empty())
+                                {
+                                    const RackObj *ro = P.rackObj(x.src);
+                                    const Timeline *t = ro ? nullptr : P.timeline(x.src);
+                                    label = ro ? ro->name : t ? t->name : x.name;
+                                }
+                        if (label.empty()) if (const Track *tk = P.track(trk)) label = tk->name;
+                        m.multicamAngles.push_back(label);
+                    }
+                }
         }
         bool selValid = false;
         for (const auto &c : m.clips) selValid = selValid || c.id == mSelectedClip;

@@ -1062,6 +1062,32 @@ fps = 24
         CHECK(std::find(loops.begin(), loops.end(), reel) != loops.end() && std::find(loops.begin(), loops.end(), "tl_1") != loops.end());
     }
 
+    /** R-EDT-5: a placed timeline's angle — written only when set, refused on footage. */
+    void clipAngle()
+    {
+        Project p = load(kBase);
+        std::string err;
+        NodeId cams, t1, t2, c1, c2, mc;
+        CHECK(newTimeline(p, "cams", "", cams, err));
+        CHECK(arrange::addTrack(p, cams, "video", "", t1, err) && arrange::addTrack(p, cams, "video", "", t2, err));
+        CHECK(arrange::addClip(p, cams, t1, "ro_2", 0.0, 4.0, 0.0, "", c1, err) && arrange::addClip(p, cams, t2, "ro_2", 0.0, 4.0, 1.0, "", c2, err));
+        CHECK(arrange::addClip(p, "tl_1", "trk_1", "cams", 0.0, 5.0, 12.0, "mc", mc, err));
+        CHECK(p.serialize().find("angle=") == std::string::npos);     // 0 is not written: old files stay byte-exact
+        CHECK(setField(p, "tl_1", mc, "angle", "2", err) && p.clip(mc)->angle == 2);
+        CHECK(p.serialize().find("angle=2") != std::string::npos);
+        rt(p);
+        CHECK(setField(p, "social", mc, "angle", "1", err));           // a version switches angle as a delta
+        CHECK(p.clip(mc)->angle == 2 && p.tlset("tl_2", mc) != nullptr);
+        CHECK(!setField(p, "tl_1", "clp_1", "angle", "1", err) && err.find("places footage") != std::string::npos);
+        CHECK(!setField(p, "tl_1", mc, "angle", "-1", err) && err.find("1 or more") != std::string::npos);
+        std::string text = p.serialize();
+        const auto at = text.find("name=c1 ");
+        CHECK(at != std::string::npos);
+        text.insert(at, "angle=1 ");
+        Project q;
+        CHECK(!q.parse(text, err) && err.find("angle=1") != std::string::npos && err.find("footage") != std::string::npos);
+    }
+
 int main()
 {
     roundTripEveryNode();
@@ -1086,6 +1112,7 @@ int main()
     freshIdNeverReuses();
     threePointEdits();
     nestedTimelines();
-    std::printf("interstellar_model_tests: PASS (%d checks, 21 groups)\n", gChecks);
+    clipAngle();
+    std::printf("interstellar_model_tests: PASS (%d checks, 22 groups)\n", gChecks);
     return 0;
 }

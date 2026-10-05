@@ -410,6 +410,27 @@ namespace
             r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
             r.settle();
         }});
+        auto multicam = [](FakeService &s) {   // R-EDT-5: a multicam cut twice, the playhead on angle 2
+            s.edit();
+            s.m.playing = false;
+            using arstro::interstellar::Provenance;
+            const char *names[] = {"m1", "m2", "m3"};
+            const double at[] = {12.0, 13.5, 14.5}, len[] = {1.5, 1.0, 1.5};
+            const int ang[] = {1, 2, 3};
+            for (int i = 0; i < 3; ++i)
+            {
+                auto c = FakeService::clip(names[i], "v2", "cams", "cams", at[i], at[i] - 12.0, at[i] - 12.0 + len[i], Provenance::Local);
+                c.nested = true;
+                c.angle = ang[i];
+                s.m.clips.push_back(c);
+            }
+            s.m.playhead = 13.75;
+            s.m.multicamClip = "m2";
+            s.m.multicamAngle = 2;
+            s.m.multicamAngles = {"A001_C003", "B002_C011", "C003_C007"};
+            ++s.m.revision;
+        };
+        v.push_back({"cut_multicam", multicam, [](Rig &r) { r.app->setTab(1); r.settle(); }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

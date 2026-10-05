@@ -199,6 +199,10 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   `placeable`) opens the placeable timelines in place of the menu → `clip add --track <trk> --src <tl>
   --in 0 --at <t>`; a nested clip's menu has "Open Timeline <name>" → `timeline open <name>`; the clip
   draws a second edge inside its own and "timeline ·" before its length. Shot: `cut_nested`. UI checks: 397.
+- Multicam (R-EDT-5): in Cut, over a multicam clip (`multicamClip`), the monitor's angle bar — one chip
+  per `multicamAngles` entry, the `multicamAngle` one under a travelling highlight; a chip click or
+  Alt+1…9 → `multicam angle <n>`. An angle clip reads "angle n ·" on the timeline. Shot: `cut_multicam`.
+  UI checks: 406.
 
 ## Interchange (2026-10-05, R-XCH)
 

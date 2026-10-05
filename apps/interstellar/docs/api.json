@@ -1246,6 +1246,60 @@
       "requirement": "R-EDT-1"
     },
     {
+      "verb": "multicam new",
+      "usage": "multicam new <name> [--sources <a,b,...>] [--sync <timecode|in>] [--in <src=t,...>] [--audio <src|none>] [--track <trk>] [--at <t>]",
+      "args": "<name>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "sources",
+          "value": "<a,b,...>"
+        },
+        {
+          "name": "sync",
+          "value": "<timecode|in>"
+        },
+        {
+          "name": "in",
+          "value": "<src=t,...>"
+        },
+        {
+          "name": "audio",
+          "value": "<src|none>"
+        },
+        {
+          "name": "track",
+          "value": "<trk>"
+        },
+        {
+          "name": "at",
+          "value": "<t>"
+        }
+      ],
+      "summary": "A multicam: a new timeline with one video track per source (angle 1, 2, … in the order given), lined up by their timecode (default) or by their in-points (--in a=1.5,b=0.4 — source seconds, 0 when not given), and the sound of one source (--audio, default the first; none for silence). With --track, also placed on the current timeline at --at (else the playhead), showing angle 1.",
+      "requirement": "R-EDT-5"
+    },
+    {
+      "verb": "multicam angle",
+      "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
+      "args": "<n>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "clip",
+          "value": "<clip>"
+        },
+        {
+          "name": "at",
+          "value": "<t>"
+        }
+      ],
+      "summary": "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",
+      "requirement": "R-EDT-5"
+    },
+    {
       "verb": "interchange export",
       "usage": "interchange export <timeline> [--format <edl|fcpxml|otio|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]",
       "args": "<timeline>",
@@ -2175,6 +2229,12 @@
       "doc": "It places another timeline — a nested sequence (R-EDT-4)."
     },
     {
+      "path": "clips[].angle",
+      "type": "integer",
+      "stable": true,
+      "doc": "A multicam clip's angle: the placed timeline's video track it shows, 1-based; 0 = all of it (R-EDT-5)."
+    },
+    {
       "path": "clips[].provenance",
       "type": "enum(local|inherited|overridden|dangling)",
       "stable": true,
@@ -2815,6 +2875,24 @@
       "type": "string",
       "stable": true,
       "doc": "The video track Insert and Overwrite place on (`edit target`)."
+    },
+    {
+      "path": "multicamClip",
+      "type": "string",
+      "stable": true,
+      "doc": "The multicam clip under the playhead — what `multicam angle` switches; empty = none (R-EDT-5)."
+    },
+    {
+      "path": "multicamAngle",
+      "type": "integer",
+      "stable": true,
+      "doc": "The angle it shows at the playhead, 1-based."
+    },
+    {
+      "path": "multicamAngles",
+      "type": "array",
+      "stable": true,
+      "doc": "Its angles, in order: the name of the source each angle's track shows."
     },
     {
       "path": "soundPlaying",
@@ -3538,6 +3616,16 @@
       "range": "0.1..8.0",
       "neutral": 1.0,
       "doc": "Playback speed."
+    },
+    {
+      "address": "<clip>.angle",
+      "owner": "clip",
+      "key": "angle",
+      "kind": "int",
+      "unit": "",
+      "range": "0.0..99.0",
+      "neutral": 0.0,
+      "doc": "A multicam clip's angle: the placed timeline's video track it shows; 0 = all of it (R-EDT-5)."
     },
     {
       "address": "<clip>.opacity",

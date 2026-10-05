@@ -223,6 +223,16 @@ namespace interstellar
             {K::EditOverwrite, "edit overwrite", "", 0, 0, {"src=<node>", "in=<t>", "out=<t>", "at=<t>", "track=<trk>"},
              "Three-point OVERWRITE: as insert, but what lies on the target track in the new clip's range is cut away "
              "and nothing moves.", "R-EDT-1"},
+            {K::MulticamNew, "multicam new", "<name>", 1, 1,
+             {"sources=<a,b,...>", "sync=<timecode|in>", "in=<src=t,...>", "audio=<src|none>", "track=<trk>", "at=<t>"},
+             "A multicam: a new timeline with one video track per source (angle 1, 2, … in the order given), lined up "
+             "by their timecode (default) or by their in-points (--in a=1.5,b=0.4 — source seconds, 0 when not given), "
+             "and the sound of one source (--audio, default the first; none for silence). With --track, also placed "
+             "on the current timeline at --at (else the playhead), showing angle 1.", "R-EDT-5"},
+            {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
+             "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
+             "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",
+             "R-EDT-5"},
             {K::InterchangeExport, "interchange export", "<timeline>", 1, 1,
              {"format=<edl|fcpxml|otio|aaf>", "out=<path>", "track=<n>", "start=<HH:MM:SS:FF>"},
              "Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source "

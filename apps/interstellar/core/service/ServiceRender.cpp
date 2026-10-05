@@ -280,7 +280,8 @@ namespace interstellar
         return planFrameIn(tl, t, proxyEdge, plan, anyClip, stack);
     }
 
-    bool InterstellarService::planFrameIn(const NodeId &tl, double t, int proxyEdge, FramePlan &plan, bool *anyClip, std::vector<NodeId> &stack)
+    bool InterstellarService::planFrameIn(const NodeId &tl, double t, int proxyEdge, FramePlan &plan, bool *anyClip, std::vector<NodeId> &stack,
+                                          int angle)
     {
         if (anyClip) *anyClip = false;
         plan = FramePlan{};
@@ -293,6 +294,14 @@ namespace interstellar
 
         std::map<NodeId, const Track *> tracks;
         for (const auto &x : R.tracks) tracks[x.id] = &x;
+        // R-EDT-5: a multicam clip's angle — the angle-th video track alone ("" past the last: nothing)
+        NodeId angleTrack;
+        if (angle > 0)
+        {
+            int k = 0;
+            for (const auto &x : R.tracks)
+                if (!x.audio() && ++k == angle) angleTrack = x.id;
+        }
         std::vector<render::ClipSpan> spans;
         std::map<NodeId, const Clip *> clips;
         for (const auto &c : R.clips)
@@ -301,6 +310,7 @@ namespace interstellar
             if (prov != R.provenance.end() && prov->second == Provenance::Dangling) continue;   // shown, never rendered
             const auto tr = tracks.find(c.track);
             if (tr == tracks.end() || tr->second->audio() || tr->second->mute) continue;
+            if (angle > 0 && c.track != angleTrack) continue;
             render::ClipSpan s;
             s.id = c.id;
             s.trackOrder = tr->second->order;
@@ -374,7 +384,7 @@ namespace interstellar
                 auto inner = std::make_shared<FramePlan>();
                 bool innerAny = false;
                 stack.push_back(tl);
-                const bool ok = planFrameIn(c->src, (double)f / P.fps, proxyEdge, *inner, &innerAny, stack);
+                const bool ok = planFrameIn(c->src, (double)f / P.fps, proxyEdge, *inner, &innerAny, stack, c->angle);
                 stack.pop_back();
                 if (!ok || !innerAny) continue;   // nothing cut there: the nested clip is transparent
                 inner->output.reset();

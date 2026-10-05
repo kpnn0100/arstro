@@ -52,6 +52,7 @@ namespace interstellar_v1
         mEdit->timeline()->peaksFor = mHooks.audioPeaks;   // R-AUD-7
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
+        mEdit->monitor()->onAngle = [this](int k) { dispatch("multicam angle " + std::to_string(k)); };   // R-EDT-5
         // the image-processing stack (R-FX-5): the catalog menu and a row's menu
         // the CLIP switch in the scopes paints the monitor's overlay from the frame it shows
         mEdit->gradeInspector()->scopes()->onClipWarning = [this](bool on) {
@@ -792,6 +793,12 @@ namespace interstellar_v1
 
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         const double fps = m.fps > 0 ? m.fps : 24.0;
+        // R-EDT-5: Alt+1…9 switches the multicam clip under the playhead to that angle, from here
+        if (e.alt && e.keyCode >= '1' && e.keyCode <= '9' && mEdit->tab() == EditScreen::Cut && !m.multicamClip.empty())
+        {
+            if (e.keyCode - '0' <= (int)m.multicamAngles.size()) dispatch("multicam angle " + std::to_string(e.keyCode - '0'));
+            return true;
+        }
         switch (e.keyCode)
         {
         case kKeySpace: dispatch(m.playing ? "pause" : "play"); return true;
@@ -920,6 +927,10 @@ namespace interstellar_v1
     void App::bindIfStale(double nowMs)
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        // R-EDT-5: in Cut, the multicam clip under the playhead offers its angles on the monitor — every
+        // frame, since a tab switch changes it without a new model
+        mEdit->monitor()->setAngles(m.multicamAngles, m.multicamAngle,
+                                    mEdit->tab() == EditScreen::Cut && m.sourceView.empty() && !m.multicamClip.empty());
         if (mBound && m.revision == mSeenRevision)
         {
             if (m.screen == Screen::Edit) fetchFrame(m, false);   // the monitor may have resized

@@ -226,13 +226,19 @@ namespace interstellar
         /** R-EDT-3: the speed ramp of a clip, or null when its speed is a constant (ServiceEditing.cpp). */
         const anim::Ramp *rampFor(const Clip &c) const;
         void retimeRamps();
+        /** R-EDT-5: the top-most clip under `t` showing an angle of a placed timeline — or, when
+         *  `anyNested`, failing that the top-most placing a timeline at all. "" = none. */
+        NodeId multicamAt(const ResolvedTimeline &R, double t, bool anyNested) const;
+        /** R-EDT-5: a timeline's angles — its video tracks, by order (angle k = element k-1). */
+        std::vector<NodeId> anglesOf(const NodeId &timeline) const;
         void pumpJobs();
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
         /** R-EDT-4: `stack` = the timelines being planned around this one (a nested clip plans its
          *  timeline here, without the view transform — it is a picture in the working space). */
-        bool planFrameIn(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip, std::vector<NodeId> &stack);
+        bool planFrameIn(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip, std::vector<NodeId> &stack,
+                         int angle = 0);   // R-EDT-5: > 0 = only that video track (a multicam clip's angle)
         // R-AUD-5 (amended), R-AUD-9 — ServiceAudio.cpp
         bool planAudio(const NodeId &timeline, render::AudioPlan &out);
         bool planAudioIn(const NodeId &timeline, render::AudioPlan &out, std::vector<NodeId> &stack);

@@ -113,14 +113,44 @@ namespace interstellar_v1
 
     bool Monitor::hitTestSelf(const Point &p) const { return localBounds().contains(p); }   // the wheel lands here
 
+    void Monitor::setAngles(const std::vector<std::string> &names, int active, bool shown)
+    {
+        shown = shown && !names.empty();
+        if (shown)
+        {
+            if (names != mAngleNames) mAngleSnap = true;   // another multicam: nowhere to travel from
+            mAngleNames = names;
+            mAngleActive = active;
+        }
+        mAnglesWanted = shown;
+    }
+
+    Rect Monitor::angleRect(int k) const
+    {
+        return k >= 1 && k <= (int)mAngleRects.size() && mAnglesAmt.value() > 0.5 ? mAngleRects[(size_t)k - 1] : Rect{0, 0, 0, 0};
+    }
+
+    int Monitor::angleAt(const Point &local) const
+    {
+        for (int k = 1; k <= (int)mAngleRects.size(); ++k)
+            if (angleRect(k).contains(local)) return k;
+        return 0;
+    }
+
     bool Monitor::handleGesture(const Gesture &g, const Point &local)
     {
         switch (g.type)
         {
         case Gesture::Type::Move:
             mCaptureHover.setHovered(mCaptureRect.contains(local) ? 0 : -1);
+            mAngleHover.setHovered(angleAt(local) - 1);
             return true;
         case Gesture::Type::Click:
+            if (const int k = angleAt(local))
+            {
+                if (onAngle) onAngle(k);
+                return true;
+            }
             if (mCaptureRect.contains(local))
             {
                 const Point o = worldTransform().apply(Point{mCaptureRect.x, mCaptureRect.y});
@@ -133,10 +163,10 @@ namespace interstellar_v1
             zoomAbout(std::pow(kZoomNotch, -g.delta.y / shell::wheelNotchPx()), local);
             return true;
         case Gesture::Type::DoubleClick:
-            if (frameRect().contains(local) && !mCaptureRect.contains(local)) resetZoom();
+            if (frameRect().contains(local) && !mCaptureRect.contains(local) && !angleAt(local)) resetZoom();
             return true;
         case Gesture::Type::Down:
-            if (mZoomTarget > 1.0 + 1e-9 && frameRect().contains(local) && !mCaptureRect.contains(local))
+            if (mZoomTarget > 1.0 + 1e-9 && frameRect().contains(local) && !mCaptureRect.contains(local) && !angleAt(local))
             {
                 // a pan takes the view from where it is drawn now; the anchor lets go
                 mCentre = centreFor(std::max(1.0, mZoom.value()));
@@ -181,6 +211,25 @@ namespace interstellar_v1
         mCaptureAmt.update(nowMs);
         if (!isHovered()) mCaptureHover.clear();
         mCaptureHover.advance(nowMs);
+        // R-EDT-5: the angle bar fades with its intent; the highlight travels to the active angle
+        if (!mAnglesInit) { mAnglesAmt.set(mAnglesWanted ? 1.0 : 0.0); mAnglesApplied = mAnglesWanted; mAnglesInit = true; }
+        if (mAnglesWanted != mAnglesApplied)
+        {
+            mAnglesAmt.animateTo(mAnglesWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            if (mAnglesWanted && mAnglesAmt.value() < 0.01) mAngleSnap = true;   // appearing: placed, not travelled
+            mAnglesApplied = mAnglesWanted;
+        }
+        mAnglesAmt.update(nowMs);
+        const int sel = std::max(0, mAngleActive - 1);
+        if (mAngleSnap) { mAngleSel.set(sel); mAngleSelApplied = sel; mAngleSnap = false; }
+        else if (sel != mAngleSelApplied)
+        {
+            mAngleSel.animateTo(sel, 220.0, Easing::EaseOutCubic, nowMs);   // a value catching up to a source it does not control
+            mAngleSelApplied = sel;
+        }
+        mAngleSel.update(nowMs);
+        if (!isHovered()) mAngleHover.clear();
+        mAngleHover.advance(nowMs);
         mPhaseMs = nowMs;
         if (!mStateInit)
         {
@@ -342,6 +391,40 @@ namespace interstellar_v1
             drawRoundedRect(t, chip, radius::control(), Paint::filled(fade(surface::scrim(0.72), za)));
             t.setFill(fade(palette::foreground(), za));
             t.drawText(z, chip.x + 6.0, textfit::baseline(chip.y + chip.h * 0.5, kChipPx), kChipPx, font::mono());
+        }
+        // R-EDT-5: the angle bar along the picture's foot — each chip its number (mono) and the source
+        // it shows, at one width so the bar reads as a strip; the highlight sits between chips while it travels
+        const double aa = mAnglesAmt.value();
+        mAngleRects.clear();
+        if (aa > 0.001 && fr.w > 40.0 && !mAngleNames.empty())
+        {
+            const int n = (int)mAngleNames.size();
+            double cw = 0.0;
+            for (int k = 0; k < n; ++k)
+                cw = std::max(cw, t.measureText(std::to_string(k + 1), kChipPx, font::mono()) + 6.0 + t.measureText(mAngleNames[(size_t)k], kChipPx, font::sans()) + 16.0);
+            const double gap = 4.0, room = fr.w - 16.0;
+            cw = std::max(28.0, std::min(cw, (room - gap * (n - 1)) / n));
+            const double total = cw * n + gap * (n - 1), h = 22.0;
+            const double x0 = fr.x + (fr.w - total) * 0.5, y = fr.bottom() - 8.0 - h;
+            drawRoundedRect(t, Rect{x0 - 4.0, y - 4.0, total + 8.0, h + 8.0}, radius::control(), Paint::filled(fade(surface::scrim(0.72), aa)));
+            const double hs = std::clamp(mAngleSel.value(), 0.0, (double)(n - 1));
+            drawRoundedRect(t, Rect{x0 + hs * (cw + gap), y, cw, h}, radius::control(), Paint::filled(palette::primaryAlpha(0.85 * aa)));
+            for (int k = 0; k < n; ++k)
+            {
+                const Rect r{x0 + k * (cw + gap), y, cw, h};
+                mAngleRects.push_back(r);
+                const double hv = mAngleHover.amount(k);
+                if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * aa)));
+                const double on = std::clamp(1.0 - std::fabs(mAngleSel.value() - k), 0.0, 1.0);
+                const std::string num = std::to_string(k + 1);
+                const double nw = t.measureText(num, kChipPx, font::mono());
+                const double by = textfit::baseline(r.y + r.h * 0.5, kChipPx);
+                t.setFill(fade(lerpColor(palette::mutedForeground(), palette::primaryForeground(), on), aa));
+                t.drawText(num, r.x + 8.0, by, kChipPx, font::mono());
+                const std::string name = textfit::ellipsize(t, mAngleNames[(size_t)k], std::max(0.0, r.w - nw - 22.0), kChipPx, font::sans());
+                t.setFill(fade(lerpColor(palette::foreground(), palette::primaryForeground(), on), aa));
+                t.drawText(name, r.x + 8.0 + nw + 6.0, by, kChipPx, font::sans());
+            }
         }
         // The capture button, left of the caption (Grade — R-UI-11). Fades with its intent.
         const double ca = mCaptureAmt.value();

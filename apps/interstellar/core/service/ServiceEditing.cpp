@@ -11,6 +11,7 @@
 #include "ServiceInternal.h"
 #include "Arrange.h"
 #include "Versions.h"
+#include "Timecode.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -67,6 +68,39 @@ namespace interstellar
             std::snprintf(b, sizeof b, "%.7g", avg);
             if (std::fabs(std::atof(b) - c.speed) > 1e-6) setField(P, tl, c.id, "speed", b, err);
         }
+    }
+
+    NodeId InterstellarService::multicamAt(const ResolvedTimeline &R, double t, bool anyNested) const
+    {
+        std::map<NodeId, int> order;
+        for (const auto &x : R.tracks)
+            if (!x.audio()) order[x.id] = x.order;
+        const double half = 0.5 / (mProject->fps > 0 ? mProject->fps : 24.0);
+        NodeId best;
+        int bestOrder = -1;
+        bool bestAngle = false;
+        for (const auto &c : R.clips)
+        {
+            const auto o = order.find(c.track);
+            const auto pv = R.provenance.find(c.id);
+            if (o == order.end() || !mProject->timeline(c.src) || t < c.at - 1e-9 || t > c.end() - half) continue;
+            if (pv != R.provenance.end() && pv->second == Provenance::Dangling) continue;
+            const bool a = c.angle > 0;
+            if (!a && !anyNested) continue;
+            if ((a && !bestAngle) || (a == bestAngle && o->second > bestOrder)) { best = c.id; bestOrder = o->second; bestAngle = a; }
+        }
+        return best;
+    }
+
+    std::vector<NodeId> InterstellarService::anglesOf(const NodeId &tl) const
+    {
+        std::vector<NodeId> out;
+        ResolvedTimeline R;
+        std::string err;
+        if (!resolved(tl, R, err)) return out;
+        for (const auto &t : R.tracks)   // by order already
+            if (!t.audio()) out.push_back(t.id);
+        return out;
     }
 
     bool InterstellarService::editingCommand(const Command &c)
@@ -158,9 +192,155 @@ namespace interstellar
             return true;
         }
 
+        if (c.kind == CK::MulticamNew)
+        {
+            // R-EDT-5: one video track per source, lined up; the sound of one of them
+            const std::string name = c.arg(0);
+            auto split = [](const std::string &v) {
+                std::vector<std::string> out;
+                size_t a = 0;
+                while (a <= v.size())
+                {
+                    const size_t b = std::min(v.find(',', a), v.size());
+                    if (b > a) out.push_back(v.substr(a, b - a));
+                    a = b + 1;
+                }
+                return out;
+            };
+            const std::vector<std::string> refs = split(c.flag("sources"));
+            if (refs.size() < 2) return fail("multicam new: --sources names two or more rack sources, comma-separated");
+            const std::string sync = c.has("sync") ? c.flag("sync") : c.has("in") ? "in" : "timecode";
+            if (sync != "timecode" && sync != "in") return fail("multicam new: --sync is timecode or in, got " + sync);
+            if (sync == "timecode" && c.has("in")) return fail("multicam new: --in lines the sources up by in-points — it goes with --sync in");
+            std::map<NodeId, double> ins;
+            for (const auto &kv : split(c.flag("in")))
+            {
+                const auto eq = kv.find('=');
+                double v = 0;
+                const RackObj *ro = eq == std::string::npos ? nullptr : P.rackObj(P.idForRef(kv.substr(0, eq)));
+                if (!ro || !parseDouble(kv.substr(eq + 1), v) || v < 0) return fail("multicam new: --in is <source>=<seconds>,…, got " + kv);
+                ins[ro->id] = v;
+            }
+            struct Cam { const RackObj *ro; double len, start; };
+            std::vector<Cam> cams;
+            for (const auto &r : refs)
+            {
+                const RackObj *ro = P.rackObj(P.idForRef(r));
+                if (!ro || ro->kind == "group" || ro->media.empty()) return fail("multicam new: no rack source named " + r);
+                const Source *s = source(*mSync, resolvePath(ro->media));
+                if (!s || !s->ok) return fail("multicam new: " + ro->name + " cannot be opened");
+                const double sfps = s->info.fps > 0 ? s->info.fps : fps;
+                Cam cam{ro, s->info.frames > 1 ? s->info.frames / sfps : 5.0, 0.0};
+                if (sync == "timecode")
+                {
+                    long long f = 0;
+                    if (s->info.timecode.empty() || !xch::framesFromTc(s->info.timecode, xch::TcRate::of(sfps), f))
+                        return fail("multicam new: " + ro->name + " carries no timecode — line the sources up by their in-points: --sync in --in " +
+                                    ro->name + "=<seconds>,…");
+                    cam.start = f / sfps;
+                }
+                else cam.start = -ins[ro->id];   // the in-points meet: source i starts in_i before them
+                cams.push_back(cam);
+            }
+            const std::string audioRef = c.flag("audio", refs.front());
+            const Cam *heard = nullptr;
+            for (const auto &cam : cams)
+                if (audioRef != "none" && cam.ro->id == P.idForRef(audioRef)) heard = &cam;
+            if (audioRef != "none" && !heard) return fail("multicam new: --audio names one of the --sources (or none), got " + audioRef);
+            NodeId track;
+            if (c.has("track"))
+            {
+                const NodeId outer = currentTimeline();
+                ResolvedTimeline R;
+                if (!resolved(outer, R, err)) return fail(err);
+                track = P.idForRef(c.flag("track"));
+                bool video = false;
+                for (const auto &t : R.tracks) video = video || (t.id == track && !t.audio());
+                if (!video) return fail("multicam new: --track " + c.flag("track") + " is not a video track of this timeline");
+            }
+            double at = mModel.playhead;
+            if (!parseT("at", at)) return false;
+            double t0 = cams.front().start;
+            for (const auto &cam : cams) t0 = std::min(t0, cam.start);
+            NodeId id;
+            if (!newTimeline(P, name, "", id, err)) return fail("multicam new: " + err);
+            for (const auto &cam : cams)
+            {
+                NodeId trk, cl;
+                if (!arrange::addTrack(P, id, "video", "", trk, err) ||
+                    !arrange::addClip(P, id, trk, cam.ro->id, 0.0, snapToFrame(cam.len, fps), snapToFrame(cam.start - t0, fps), "", cl, err))
+                    return fail("multicam new: " + err);
+            }
+            if (heard)
+            {
+                NodeId atrk;
+                if (!arrange::addTrack(P, id, "audio", "", atrk, err)) return fail("multicam new: " + err);
+                AClip a;
+                a.id = P.freshId("aclp_");
+                a.name = P.freshName(heard->ro->name + "_sound");
+                a.track = atrk;
+                a.timeline = id;
+                a.src = heard->ro->media;
+                a.at = snapToFrame(heard->start - t0, fps);
+                a.out = snapToFrame(heard->len, fps);
+                P.audioClips.push_back(a);
+            }
+            mOutput = id + "\n";
+            if (!track.empty())
+            {
+                NodeId placed;
+                const NodeId outer = currentTimeline();
+                if (!arrange::addClip(P, outer, track, id, 0.0, snapToFrame(timelineDuration(id), fps), snapToFrame(at, fps), "", placed, err) ||
+                    !setField(P, outer, placed, "angle", "1", err))
+                    return fail("multicam new: " + err);
+                mOutput += placed + "\n";
+            }
+            markDirty();
+            bumpFrame();
+            emit(Event(EK::TimelineChanged).with("timeline", id).with("what", "multicam " + name));
+            return true;
+        }
+
         const NodeId tl = currentTimeline();
         ResolvedTimeline R;
         if (!resolved(tl, R, err)) return fail(err);
+
+        if (c.kind == CK::MulticamAngle)
+        {
+            // R-EDT-5: from this frame on, angle n — a cut, unless it is the clip's first frame
+            const std::string a = c.arg(0);
+            char *end = nullptr;
+            const long n = std::strtol(a.c_str(), &end, 10);
+            if (!end || *end || n < 1 || n > 99) return fail("multicam angle: an angle number, 1 or more, got " + a);
+            double t = mModel.playhead;
+            if (!parseT("at", t)) return false;
+            t = snapToFrame(t, fps);
+            const NodeId id = c.has("clip") ? P.idForRef(c.flag("clip")) : multicamAt(R, t, true);
+            const Clip *cl = nullptr;
+            for (const auto &x : R.clips)
+                if (x.id == id) cl = &x;
+            if (!cl || !P.timeline(cl->src))
+                return fail(c.has("clip") ? "multicam angle: " + c.flag("clip") + " places no timeline" : "multicam angle: no multicam clip under the playhead");
+            if (t < cl->at - 1e-9 || t > cl->end() - 0.5 / fps) return fail("multicam angle: " + cl->name + " is not under " + canonicalTime(t));
+            const auto angles = anglesOf(cl->src);
+            if ((size_t)n > angles.size())
+                return fail("multicam angle: " + P.timeline(cl->src)->name + " has " + std::to_string(angles.size()) + " angle(s)");
+            NodeId target = cl->id;
+            const int was = cl->angle;
+            if (t > cl->at + 0.5 / fps && was != n)
+            {
+                NodeId right;
+                if (!arrange::split(P, tl, cl->id, t, right, err)) return fail("multicam angle: " + err);
+                copyAnims(cl->id, right, 0.0);
+                target = right;
+            }
+            if (was != n && !setField(P, tl, target, "angle", std::to_string(n), err)) return fail("multicam angle: " + err);
+            markDirty();
+            bumpFrame();
+            mOutput = target + "\n";
+            emit(Event(EK::ArrangeChanged).with("timeline", tl).with("what", "angle " + std::to_string(n)).with("node", target));
+            return true;
+        }
 
         if (c.kind == CK::EditTarget)
         {

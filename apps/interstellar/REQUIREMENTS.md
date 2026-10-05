@@ -587,7 +587,7 @@ reserves the rest so adopting it is not a migration.
 - **R-CLR-5 Split-screen wipe**: the monitor compares the current frame with a still or another
   version, split horizontally or vertically, the split dragged.
 
-## R-EDT — editing — 🔶 IN PROGRESS (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3 ✅ DR-EDT-2, 4 ✅ DR-EDT-3, 5 next)
+## R-EDT — editing — ✅ DONE (added 2026-10-05; 1–2 ✅ DR-EDT-1, 3 ✅ DR-EDT-2, 4 ✅ DR-EDT-3, 5 ✅ DR-EDT-4)
 
 - **R-EDT-1 Three-point editing**: a source viewer with its own In/Out, timeline In/Out, and Insert
   (ripples) or Overwrite to the target track. — ✅ (DR-EDT-1). One monitor: in Cut the viewer shows
@@ -609,7 +609,12 @@ reserves the rest so adopting it is not a migration.
   carry a nested clip — it says how many it left out (export the nested timeline on its own). A ramped
   nested clip's sound plays at the ramp's average speed (said).
 - **R-EDT-5 Multicam**: sources synced by timecode (or by their in-points) form a multicam clip whose
-  angle is switched at the playhead, each switch a cut.
+  angle is switched at the playhead, each switch a cut. — ✅ (DR-EDT-4). A multicam is a timeline (a
+  nested sequence, R-EDT-4) with one video track per source — the angles, in the order given — lined
+  up by timecode or by in-points, carrying ONE source's sound (chosen; it does not follow the angle,
+  said). Its clip shows one angle; switching at the playhead cuts the clip there (at its first frame
+  it changes the whole clip). Switched from the monitor's angle bar in Cut or Alt+1…9 — while paused
+  or playing; the bar names each angle by its source, without per-angle pictures (said).
 
 ## R-DLV — delivery and safety — ⏳ NOT STARTED (added 2026-10-05)
 

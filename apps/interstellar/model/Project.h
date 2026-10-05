@@ -165,8 +165,9 @@ namespace interstellar
     {
         NodeId id, name, track, timeline;
         int order = 0;
-        NodeId src;                         // a #rackobj id: colour and pixels from one place
+        NodeId src;                         // a #rackobj id: colour and pixels from one place — or a #timeline (R-EDT-4)
         double at = 0, in = 0, out = 0, speed = 1.0;
+        int angle = 0;                      // R-EDT-5: a placed timeline shows only its angle-th video track (0 = all of it)
         std::string fit = "contain";
         double opacity = 1.0;
         std::string blend = "normal";
