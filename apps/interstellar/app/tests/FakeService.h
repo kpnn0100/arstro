@@ -294,6 +294,7 @@ namespace istest
             std::string node, owner, bind = name;
             double now = 0, lo = -1000, hi = 1000;
             for (const auto &r : m.rack) if (r.bindName == name) { node = r.rackObj; owner = "rack"; now = r.frame; lo = -100; hi = 100; }
+            if (owner == "rack" && key == "basic.exposure") { lo = -5; hi = 5; }   // the service's own range, EV
             for (const auto &e : m.effects) if (e.id == name) { node = e.id; owner = "effect"; lo = 0; hi = 100; }
             for (const auto &c : m.clips)
                 if (c.name == name || c.id == name)

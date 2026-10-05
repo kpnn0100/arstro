@@ -1,5 +1,4 @@
 #include "GradeDeck.h"
-#include "SegmentedStyle.h"
 #include "CommandLine.h"
 #include "Glyphs.h"
 #include "TextFit.h"
@@ -50,17 +49,6 @@ namespace interstellar_v1
             if (onNavigate) onNavigate(mRack[(size_t)i].rackObj);
         };
         addChild(mStrip);
-        // R-ANIM-4: the graph editor, the deck's other face
-        mGraph = std::make_shared<KeyGraph>();
-        mGraph->onCommand = [this](const std::string &l) { emit(l); return true; };
-        mGraph->opacity.set(0.0);
-        mGraph->visible = false;
-        addChild(mGraph);
-        mMode = std::make_shared<cosmo_v2::SegmentedControl>(std::vector<std::string>{"Sources", "Curves"});
-        styleSegmented(*mMode);
-        mMode->setSelectedImmediate(0);
-        mMode->onChange = [this](int i) { mCurvesWanted = i == 1; };
-        addChild(mMode);
         for (int k = 0; k < 2; ++k)
         {
             mCrumb[k] = std::make_shared<cosmo_v2::Breadcrumb>();
@@ -116,24 +104,6 @@ namespace interstellar_v1
 
         // the selected source's reference frame
         bindFrame(m);
-        // the graph: the Grade target's curves and its effects', over the whole source
-        {
-            std::vector<std::string> ids;
-            double t1 = mSelVideo ? mSourceDur : 0.0;
-            if (mSelected >= 0 && mSelected < (int)m.rack.size())
-            {
-                const std::string ro = m.rack[(size_t)mSelected].rackObj;
-                std::vector<std::string> nodes{ro};
-                for (const auto &e : m.effects) if (e.node == ro) nodes.push_back(e.id);
-                for (const auto &a : m.anims)
-                    if (std::find(nodes.begin(), nodes.end(), a.node) != nodes.end())
-                    {
-                        ids.push_back(a.id);
-                        for (const auto &k : a.keys) t1 = std::max(t1, k.t);   // a group: as far as its keys go
-                    }
-            }
-            mGraph->bind(m, ids, 0.0, t1 > 0 ? t1 : 1.0);
-        }
     }
 
     void GradeDeck::rebuildCells()
@@ -248,37 +218,19 @@ namespace interstellar_v1
     void GradeDeck::layout()
     {
         // a level change: the strip slides a little from the side it came from while it fades
-        const double lf = mLevelFade.value(), ca = mCurvesAmt.value();
+        const double lf = mLevelFade.value();
         mStrip->x.set(18.0 * (1.0 - lf) * (mLevelSwapping ? -mLevelDir : mLevelDir));
         mStrip->y.set(kHeaderH);
         mStrip->width.set(width.value());
         mStrip->height.set(cosmo_v2::Filmstrip::kHeight);
-        mStrip->opacity.set(lf * (1.0 - ca));
-        mStrip->visible = ca < 0.999;   // the hidden face takes no clicks
-        // the graph: the strip's place plus the room the host adds, on the ref track's time axis
-        mGraph->x.set(0);
-        mGraph->y.set(kHeaderH);
-        mGraph->width.set(width.value());
-        mGraph->height.set(cosmo_v2::Filmstrip::kHeight + mExtra);
-        mGraph->opacity.set(ca);
-        mGraph->visible = ca > 0.001;
-        {
-            const Rect tr = frameTrackRect();
-            mGraph->setPlotSpan(tr.x, tr.right());
-        }
-        const double modeX = std::max(0.0, width.value() - kPadX - kModeW);
-        mMode->x.set(modeX);
-        mMode->y.set(4.0);
-        mMode->width.set(kModeW);
-        mMode->height.set(kHeaderH - 8.0);
-        mMode->layout();
+        mStrip->opacity.set(lf);
         // cosmo's breadcrumb sits in the header, after "SOURCES n", where the rule was
         const double bx = std::min(mHeaderRight, width.value());
         for (auto &c : mCrumb)
         {
             c->x.set(bx);
             c->y.set((kHeaderH - cosmo_v2::Breadcrumb::kHeight) * 0.5);
-            c->width.set(std::max(0.0, modeX - 6.5 - bx) * (1.0 - ca));
+            c->width.set(std::max(0.0, width.value() - kPadX - bx));
             c->height.set(cosmo_v2::Breadcrumb::kHeight);
             c->visible = c->opacity.value() > 0.001;   // the faded-out one takes no clicks
         }
@@ -435,13 +387,6 @@ namespace interstellar_v1
 
     void GradeDeck::advance(double nowMs)
     {
-        if (mCurvesWanted != mCurvesApplied)
-        {
-            mCurvesAmt.animateTo(mCurvesWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
-            mCurvesApplied = mCurvesWanted;
-            if (mMode->selected() != (mCurvesWanted ? 1 : 0)) mMode->setSelected(mCurvesWanted ? 1 : 0);
-        }
-        mCurvesAmt.update(nowMs);
         // the level: fade the old cells out, swap, fade the new ones in (never a one-frame swap)
         if (!mLevelSwapping && mLevelWanted != mLevel && !mLevelFade.isAnimating())
         {

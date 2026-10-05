@@ -45,6 +45,10 @@ in the section heading. Read before any code; conflict-check before accepting a 
 - **R-SCOPE-4 Not in v1**, stated so it is not silently attempted: node-graph compositing, motion
   tracking, stabilisation, optical-flow retiming, subtitles, multi-user editing, and any audio
   capability beyond placing and gain-staging a clip (R-AUD-5).
+  (**AMENDED 2026-10-05, user request "implement all the features you suggest" for film work:** a
+  grading node graph (R-CLR-3), window tracking (R-CLR-2), captions (R-DLV-1), and audio playback,
+  waveforms, meters and a mix in renders (R-AUD-6..9) are now in scope. Stabilisation, optical-flow
+  retiming and multi-user editing stay out.)
 - **R-SCOPE-5** v1 platform is Linux. Windows follows cosmo's MSYS2 path.
 
 ---
@@ -201,6 +205,10 @@ The headline of this specification, and the reason it is not the first one.
   to every source under it, after the source's own (inner first, the way a group's grade stacks).
   An effect belongs to the rack like a grade does: the same in every version; a version that needs
   a different one duplicates the source (R-RACK-5), the rule law 2 already gives curves.
+  (**AMENDED 2026-10-05, user request "the effect panel should be able to collapse an item":** the
+  effect panel shows every effect of the node as a COLLAPSIBLE section — a header with its name, its
+  on/off and a disclosure arrow, its parameters under it — the selected one open; opening and
+  closing is eased and is presentation, never a command.)
 - **R-FX-6 Blur, in kinds** (added 2026-10-05, user request): Gaussian, Box, Directional (motion:
   length + angle), Zoom (amount + centre) and Spin (angle + centre). Sizes are in SOURCE pixels and
   scale with the proxy, so a preview and a render blur alike.
@@ -210,7 +218,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the diamonds and the graph editor)
+## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the diamonds and the graph editor; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
@@ -226,11 +234,31 @@ The headline of this specification, and the reason it is not the first one.
 - **R-ANIM-3 Setting an animated parameter keys it**: once a parameter has a curve, a `set` (a
   slider) writes a keyframe at the current time instead of the static value. A diamond beside each
   parameter adds or removes a keyframe at the current time.
+  (**AMENDED 2026-10-05, user request "the animation for a property should only happen in the
+  timeline, not Grade":** animation is AUTHORED in the timeline only. Grade sets a still look and
+  shows no diamond and no curve; its sliders edit an animated value where Grade stands (the
+  reference frame), which is editing, not animating. The diamonds live in the Cut tab's key lane,
+  beside every property of the selected clip — its own (opacity, geometry), its source's colour keys
+  and its source's effects — and key at the PLAYHEAD, on the clip's footage clock. A source's colour
+  and effect curves stay the source's (R-ANIM-1, law 1): the lane shows them under the clip, keys
+  under the frames they key, so every clip of that source shows the same curve.)
 - **R-ANIM-4 A graph editor**: every animated parameter of the selection can be shown as its value
   curve over time, keyframes dragged in time and value, bezier handles dragged to shape speed and
   influence, and a right-click on a keyframe types the incoming / outgoing speed and influence or
   picks a preset. The graph runs on the same time axis the reference-frame slider uses (source
   time) for rack nodes and effects, and inside the clip for a clip.
+  (**AMENDED 2026-10-05, with R-ANIM-3:** the graph lives in the timeline's key lane only, under the
+  selected clip, for every animated property of it — the Grade deck has no curves face.)
+- **R-ANIM-6 Shapes animate too** (added 2026-10-05, user request): a tone curve, a colour wheel
+  (hue, saturation, luminance — hue takes the short way round) and the crop are keyed like numbers;
+  between two keys a curve's points are interpolated point by point (resampled when their counts
+  differ). A shape key is still the rack's (law 2): a version cannot carry its own.
+- **R-ANIM-7 The graph edits like an editor's** (added 2026-10-05, user request): several curves at
+  once (each normalised to its own range, the selected one in front), box-select of keys across
+  them, moving a selection together, and copy/paste of keys to the playhead or another property.
+- **R-ANIM-8 The key lane is usable at 1024×640** (added 2026-10-05, user request): its height is
+  dragged at its top edge (remembered), its property list scrolls, and it never hides the tracks
+  completely.
 - **R-ANIM-5 Animation is the rack's, like colour** (law 2): a curve is not a scalar, so a derived
   version cannot carry its own — it inherits the base's curves live, and a scalar `#tlgrade` delta
   still adds on top of the animated value.
@@ -283,6 +311,19 @@ reserves the rest so adopting it is not a migration.
 - **R-AUD-5 Interstellar does not mix, record or process audio.** It places clips, stages gain and
   sums to a master so a cut can be watched and delivered with its bed. Sound design is Solaris's,
   and the format is the seam between them.
+  (**AMENDED 2026-10-05, user request "no sound" in the film review:** it MIXES — clip gain and
+  fades, track gain, mute and solo summed to a stereo master — and plays it, draws it, meters it and
+  delivers it (R-AUD-6..9). It still does not record, and processing beyond gain and fades
+  (EQ, dynamics, plugins) stays Solaris's.)
+- **R-AUD-6 Playback is heard, in sync** (added 2026-10-05): the master plays through the host's
+  audio device while the timeline plays; the audio clock drives the picture when it plays, and a
+  scrub plays a short grain.
+- **R-AUD-7 Waveforms** on audio clips (added 2026-10-05): peak envelopes computed once per file and
+  kept beside the project.
+- **R-AUD-8 Meters** (added 2026-10-05): the master's peak and RMS per channel while playing, with a
+  held peak and a clip indicator.
+- **R-AUD-9 Renders carry the mix** (added 2026-10-05): every video render muxes the master (AAC for
+  H.264/H.265, 24-bit PCM for ProRes/DNxHR), sample-accurate to the picture.
 
 ---
 
@@ -416,6 +457,9 @@ reserves the rest so adopting it is not a migration.
   and white per channel, and the **levels used** — how many of the 256 code values occur — so
   banding from a crushed or 8-bit-starved range is visible as a number, not only as gaps. A
   **clip warning** overlay on the monitor marks clipped pixels.
+  (**AMENDED 2026-10-05, user request "the waveform should have a colour-split option":** the
+  waveform has a **Luma | RGB** switch; RGB overlays the three channels' waveforms in one plot, each
+  in its channel colour, additive — white where they agree, a colour where one channel runs away.)
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.
@@ -445,6 +489,96 @@ reserves the rest so adopting it is not a migration.
 - **R-SET-4 Hardware video and Preview cache** (added 2026-10-05) — R-PLAY-3's and R-PLAY-1's switches,
   persisted like the others; rows Interstellar adds after cosmo's (cosmo's own dialog is unchanged).
   DR-PLAY-1, DR-PLAY-3.
+
+---
+
+## R-COLOR — colour science — ⏳ NOT STARTED (added 2026-10-05, user request "implement all the features you suggest")
+
+- **R-COLOR-1 Deliveries keep more than 8 bits.** A render decodes, grades, composites and encodes
+  at 16 bits per channel, so a 10-bit ProRes, DNxHR or H.265 carries 10 bits of picture; the monitor
+  and the preview cache may stay 8-bit.
+- **R-COLOR-2 Input transforms per source**: a source says what it is — Rec.709, sRGB, linear, ARRI
+  LogC3/LogC4, Sony S-Log3 (S-Gamut3.Cine), Panasonic V-Log, Canon Log 3, RED Log3G10 (RWG),
+  Blackmagic Film Gen 5 — and is converted to the working space before Cosmo grades it.
+- **R-COLOR-3 A working space**: Rec.709 (display-referred, the default and Cosmo's own) or ACEScct
+  (scene-referred), chosen per project.
+- **R-COLOR-4 Output transforms, HDR included**: Rec.709 (2.4), sRGB, P3-D65, Rec.2100 PQ and
+  Rec.2100 HLG, chosen per render; an HDR render is 10-bit H.265 (or ProRes) tagged with its
+  primaries, transfer and mastering metadata.
+- **R-COLOR-5 LUTs in**: a `.cube` (1D or 3D) as an input LUT on a source and as an effect in the
+  image-processing stack.
+- **R-COLOR-6 LUTs out**: the colour of a source's grade baked to a 33-point `.cube` (the spatial
+  stages — clarity, sharpening, noise reduction, grain, lens — cannot live in a LUT and are left
+  out, said in the file's header).
+
+## R-GPU — the grade on the GPU — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-GPU-1 With Use GPU on, the grade runs on Cosmo's GPU backend** (OpenGL compute) for previews,
+  playback, the preview cache and renders, falling back to the CPU when the backend declines a job;
+  its output matches the CPU reference within a stated tolerance, measured by a test.
+
+## R-XCH — interchange — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-XCH-1 EDL** (CMX 3600) export and import of a timeline's video cut, with source reel names and
+  record/source timecodes.
+- **R-XCH-2 FCPXML** (1.9) export and import — what Final Cut Pro, Premiere and Resolve read.
+- **R-XCH-3 OpenTimelineIO** (`.otio`) export and import.
+- **R-XCH-4 AAF**: no AAF library exists on this platform's build; until one is chosen, AAF is
+  reached through OTIO's converters outside the app, and the app says so.
+- **R-XCH-5 Source timecode and reel names** are read from the media (container/stream timecode,
+  reel tags), shown, and used by every interchange format.
+
+## R-MEDIA — media management — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-MEDIA-1 Camera RAW**: CinemaDNG sequences through LibRaw. ARRIRAW, R3D and BRAW need their
+  vendors' SDKs, which are licensed per user and not in this build: a decoder seam takes them when
+  installed, and the app names the missing SDK instead of failing silently.
+- **R-MEDIA-2 Proxies, offline/online**: a proxy (ProRes Proxy or H.264 at a chosen size) is made
+  per source; a project switch picks proxies or originals for the monitor; renders always use
+  originals.
+- **R-MEDIA-3 Relink**: offline media listed in one place, relinked one by one or by searching a
+  folder for matching names.
+
+## R-CLR — colourist tools — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-CLR-1 Qualifiers**: an HSL key (hue, saturation, luminance ranges with softness) that limits a
+  node's grade to what it selects, with a matte view.
+- **R-CLR-2 Windows and tracking**: a node's circle/rectangle window can be tracked — its position
+  follows a feature through the shot (forward and backward from the playhead), the track stored as
+  keyframes (R-ANIM).
+- **R-CLR-3 A node graph**: the rack's serial structure (a group's grade over its members') shown as
+  nodes and links, with serial and parallel nodes added and wired there; Cosmo stays the colour
+  authority — a node is a Cosmo grade.
+- **R-CLR-4 A stills gallery**: grab the monitor's graded frame with its grade; apply a still's
+  grade to another source.
+- **R-CLR-5 Split-screen wipe**: the monitor compares the current frame with a still or another
+  version, split horizontally or vertically, the split dragged.
+
+## R-EDT — editing — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-EDT-1 Three-point editing**: a source viewer with its own In/Out, timeline In/Out, and Insert
+  (ripples) or Overwrite to the target track.
+- **R-EDT-2 J/K/L shuttle**: L plays forward, J backward, repeated presses speed up (1×, 2×, 4×), K
+  pauses; K+J/L steps a frame.
+- **R-EDT-3 Speed ramps**: a clip's speed is animatable (R-ANIM); the source frame is the integral
+  of the speed curve, so a ramp is continuous.
+- **R-EDT-4 Nested sequences**: a timeline used as a clip in another timeline.
+- **R-EDT-5 Multicam**: sources synced by timecode (or by their in-points) form a multicam clip whose
+  angle is switched at the playhead, each switch a cut.
+
+## R-DLV — delivery and safety — ⏳ NOT STARTED (added 2026-10-05)
+
+- **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
+  (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`.
+- **R-DLV-2 Burn-ins**: timecode, clip name, source name and free text, positioned, on a render.
+- **R-DLV-3 Render presets**: a render's whole spec saved by name and applied in one step; a few
+  built in (YouTube 1080p, ProRes HQ master, Review H.264).
+- **R-DLV-4 DCP and IMF**: a DCP (JPEG 2000 XYZ in MXF with CPL, PKL and ASSETMAP) and an IMF App 2E
+  package. Neither can be validated here (no cinema server, no DCP/IMF validator in this build) — the
+  app says so on every package it writes.
+- **R-DLV-5 Autosave**: the project is saved beside itself every minute while it has unsaved changes.
+- **R-DLV-6 Crash recovery**: opening a project whose autosave is newer than its file offers the
+  autosave.
 
 ---
 

@@ -50,6 +50,8 @@ namespace interstellar_v1
         void setHeaderShown(bool on) { mHeaderH = on ? kHeaderH : 0.0; }
         /** What the plot says when the parameter has no curve yet. */
         void setEmptyText(const std::string &s) { mEmptyText = s; }
+        /** The host's "now" on the curve's clock (the key lane: the playhead inside the clip). */
+        void setNow(double t) { mNowOverride = t; mHasNowOverride = true; }
         void advance(double nowMs) override;
 
         std::function<bool(const std::string &)> onCommand;
@@ -90,6 +92,8 @@ namespace interstellar_v1
         double mT0 = 0, mT1 = 1, mNow = 0;
         double mSpanX0 = -1, mSpanX1 = -1;
         double mHeaderH = kHeaderH;
+        double mNowOverride = 0.0;
+        bool mHasNowOverride = false;
         std::string mEmptyText = "Nothing animated here \xE2\x80\x94 click \xE2\x97\x87 beside a parameter to key it";
         artboard::AnimatedProperty mLo{0.0}, mHi{1.0}, mSwitch{1.0};
         double mLoT = 0, mHiT = 1, mLoL = 0, mHiL = 1;

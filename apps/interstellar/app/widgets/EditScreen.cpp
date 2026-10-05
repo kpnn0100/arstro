@@ -42,7 +42,6 @@ namespace interstellar_v1
         mGradeInspector->onCommand = fwd;
         mGradeDeck = std::make_shared<GradeDeck>();
         mGradeDeck->onCommand = fwd;
-        mGradeDeck->keyGraph()->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
         mGradeDeck->onContext = [this](int i, Point p) { if (onRackContext) onRackContext(i, p); };
         // browsing groups (R-UI-12): the tree and the strip open the same group, either way round
         mRack->onOpenGroup = [this](const std::string &ro) { mGradeDeck->openGroup(ro); };
@@ -151,10 +150,7 @@ namespace interstellar_v1
         const double W = width.value(), H = height.value();
         const double top = shell::topBarH();
         const double deckH = shell::deckH(H);
-        // R-ANIM-4: Grade's deck grows for its graph — by the eased curves amount, and only as far as
-        // Grade is the tab (the transport's complement), so neither a mode switch nor a tab change jumps
-        const double curvesExtra = GradeDeck::curvesExtraFor(H) * mGradeDeck->curvesAmount() * (1.0 - mTransportAmt.value());
-        const double deckY = H - deckH - curvesExtra;
+        const double deckY = H - deckH;
         const double lw = shell::leftW(), rw = shell::rightW();
         const double colH = std::max(0.0, deckY - top);
 
@@ -182,17 +178,16 @@ namespace interstellar_v1
         const double pageDeckY = deckY - top;
         place(*mRack, 0, 0, lw, colH);
         place(*mGradeInspector, W - rw, 0, rw, colH);
-        place(*mGradeDeck, 0, pageDeckY, W, deckH + curvesExtra);
-        mGradeDeck->setExtraHeight(curvesExtra);
+        place(*mGradeDeck, 0, pageDeckY, W, deckH);
         mGradeInspector->layout();
         mGradeDeck->layout();
         place(*mBin, 0, 0, lw, colH);
         place(*mClipInspector, W - rw, 0, rw, colH);
-        place(*mTimeline, 0, pageDeckY + curvesExtra, W, deckH);
+        place(*mTimeline, 0, pageDeckY, W, deckH);
         mClipInspector->layout();
         place(*mChecks, 0, 0, lw, colH);
         place(*mOutput, W - rw, 0, rw, colH);
-        place(*mQueue, 0, pageDeckY + curvesExtra, W, deckH);
+        place(*mQueue, 0, pageDeckY, W, deckH);
         mOutput->layout();
 
         place(*mNamePrompt, 0, 0, W, H);

@@ -1,5 +1,4 @@
 #include "EffectPanel.h"
-#include "KeyState.h"
 #include "CommandLine.h"
 #include "TextFit.h"
 #include "../../../cosmo/widgets/SectionHeader.h"
@@ -35,12 +34,6 @@ namespace interstellar_v1
                 onCommand("set " + cmd::quote(mId + "." + key + "=" + cmd::num(percent ? v / 100.0 : v)));
             };
             r.slider->visible = false;
-            // R-ANIM-3: a diamond keys this parameter at the reference frame
-            r.slider->setKeyGutter(true);
-            r.slider->onKeyClick = [this, key] {
-                if (mId.empty() || !onCommand) return;
-                onCommand(keys::toggle(mId + "." + key, mKeyStates.count(key) ? mKeyStates[key] : 0, mKeyNow));
-            };
             addChild(r.slider);
             rows.push_back(r);
         };
@@ -61,12 +54,8 @@ namespace interstellar_v1
             for (auto &r : kv.second) r.slider->visible = e && kv.first == e->type;
         if (!e) return;
         auto &rows = rowsFor(*e);
-        mKeyNow = keys::sourceNow(m, e->node);
-        mKeyStates.clear();
         for (auto &r : rows)
         {
-            mKeyStates[r.key] = keys::state(m, e->id, r.key, mKeyNow);
-            r.slider->setKeyState(mKeyStates[r.key]);
             r.slider->visible = true;
             if (interacting) continue;   // a gesture in flight outranks the model
             double v = 0.0;

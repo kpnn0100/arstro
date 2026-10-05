@@ -58,6 +58,23 @@ one integrator who moves, wires, tests and commits each stream:
       hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes: curves,
       the grammar and the render path — DONE (DR-ANIM-1); the diamonds, the graph editor and the key menu —
       DONE (DR-ANIM-2). The 2026-10-05 request is complete.
+- [~] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
+      commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
+      1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
+             lists the clip's properties, its source's colour keys and effects (R-ANIM-3/4 amended).
+      2. [ ] Waveform Luma | RGB overlay (R-UI-15 amended).
+      3. [ ] Collapsible effect sections in the effect panel (R-FX-5 amended).
+      4. [ ] Keyframe limits: shapes animate, multi-curve graph, box-select, copy/paste keys,
+             resizable lane (R-ANIM-6..8).
+      5. [ ] The grade on the GPU — route the video grade through Cosmo's GL backend (R-GPU-1).
+      6. [ ] 16-bit delivery path (R-COLOR-1).
+      7. [ ] Input/working/output transforms, HDR, LUTs in and out (R-COLOR-2..6).
+      8. [ ] Audio: mix, playback, waveforms, meters, in renders (R-AUD-5 amended, R-AUD-6..9).
+      9. [ ] Interchange: EDL, FCPXML, OTIO, timecode and reels; AAF stated (R-XCH-1..5).
+      10. [ ] Editing: three-point, J/K/L, speed ramps, nested sequences, multicam (R-EDT-1..5).
+      11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).
+      12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
+      13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master

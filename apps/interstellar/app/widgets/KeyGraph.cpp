@@ -68,7 +68,7 @@ namespace interstellar_v1
         mSel = 0;
         for (int i = 0; i < (int)mCurves.size(); ++i)
             if (mCurves[(size_t)i].address == was) mSel = i;
-        mNow = mSel < (int)mCurves.size() ? mCurves[(size_t)mSel].now : 0.0;
+        mNow = mHasNowOverride ? mNowOverride : mSel < (int)mCurves.size() ? mCurves[(size_t)mSel].now : 0.0;
         if (mSelKey >= (int)(mSel < (int)mCurves.size() ? mCurves[(size_t)mSel].keys.size() : 0)) mSelKey = -1;
         if (mDrag.kind == 0) fitRange(false);
     }
