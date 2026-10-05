@@ -155,6 +155,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
 | `apps/interstellar/core/service/ServicePresets.cpp` | core | **built** — render presets: three built in, the user's beside the settings, `render --preset` (R-DLV-3, DR-DLV-2) |
+| `apps/interstellar/host/MxfWriter` · `host/PackageWriter` | host | **built** — DCP (AS-DCP) and IMF App 2E (AS-02) track files to asdcplib's layout, JPEG 2000 through OpenJPEG, CPL/PKL/ASSETMAP; every package said unvalidated (R-DLV-4, DR-DLV-5) |
 | `apps/interstellar/core/service/ServiceCaptions.cpp` | core | **built** — captions: SRT in and out, `#caption` nodes on the open timeline, a render's cues (its own seconds, one at a time) for the burn, the track and the .srt (R-DLV-1, DR-DLV-4) |
 | `apps/interstellar/core/service/ServiceBurnIn.cpp` · `core/Overlay.h` · `app/BurnText` | core · app | **built** — burn-ins: the core names each text and its place per frame; the host draws it in the app's typeface over the finished frame (R-DLV-2, DR-DLV-3) |
 | `apps/interstellar/core/service/ServiceSafety.cpp` | core | **built** — autosave beside the project (the .isp and every grade), crash recovery through Cosmo (R-DLV-5/6, DR-DLV-1) |

@@ -173,7 +173,8 @@ namespace interstellar
             {K::Pause, "pause", "", 0, 0, {}, "Stop playback.", "R-UI-3"},
 
             {K::Render, "render", "", 0, 0,
-             {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|h265|prores|dnxhr|png-seq>",
+             {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|h265|prores|dnxhr|png-seq|dcp|imf>",
+              "container=<2k-flat|2k-scope|2k-full|4k-flat|4k-scope|4k-full>",
               "profile=<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>", "res=<WxH>", "fps=<n|num/den>",
               "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>", "encoder=<software|hardware>",
               "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>", "peak=<400..10000>", "preset=<name>",
@@ -182,7 +183,9 @@ namespace interstellar
              "codec and profile, size (never above the project, same aspect), frame rate (the timeline is "
              "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the "
              "output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A "
-             "flag the codec cannot honour is refused.", "R-RENDER-6"},
+             "flag the codec cannot honour is refused. dcp and imf write a folder (R-DLV-4): a SMPTE DCP (JPEG 2000 DCI "
+             "X'Y'Z' fitted in its --container, 5.1 PCM) or an IMF App 2E package (JPEG 2000 RGB 12-bit, stereo PCM) — "
+             "neither validated here, and the render says so.", "R-RENDER-6"},
             {K::CaptionImport, "caption import", "<file.srt>", 1, 1, {"offset=<s>", "replace"},
              "Read an SRT's cues onto the open timeline as captions (timeline time, plus --offset); --replace drops the "
              "timeline's captions first. Styling tags are not kept. One undo step.", "R-DLV-1"},

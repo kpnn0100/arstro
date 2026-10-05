@@ -23,7 +23,11 @@ namespace interstellar_v1
         constexpr double kFieldH = 26.0;
         constexpr double kButtonH = 30.0;
         constexpr double kLineH = 19.5;       // u(6): a sentence row
-        const char *kCodecs[5] = {"h264", "h265", "prores", "dnxhr", "png-seq"};
+        const char *kCodecs[7] = {"h264", "h265", "prores", "dnxhr", "png-seq", "dcp", "imf"};
+        // R-DLV-4: a DCP's containers, each a frame the picture is fitted inside
+        const char *kContainers[4] = {"2k-flat", "2k-scope", "4k-flat", "4k-scope"};
+        const char *kContainerLabels[4] = {"2K Flat", "2K Scope", "4K Flat", "4K Scope"};
+        const int kContainerW[4] = {1998, 2048, 3996, 4096}, kContainerH[4] = {1080, 858, 2160, 1716};
         const char *kProres[5] = {"proxy", "lt", "standard", "hq", "4444"};
         const char *kDnx[5] = {"lb", "sq", "hq", "hqx", "444"};
         const int kCrf[4] = {28, 23, 18, 12};
@@ -63,7 +67,7 @@ namespace interstellar_v1
     OutputSpec::OutputSpec()
     {
         clipToBounds = true;
-        mCodec = segmented({"H.264", "H.265", "ProRes", "DNxHR", "PNG"}, 0);
+        mCodec = segmented({"H.264", "H.265", "ProRes", "DNxHR", "PNG", "DCP", "IMF"}, 0);
         mCodec->onChange = [this](int i) {
             // an 8-bit codec cannot carry HDR: the colour goes back to Rec.709 rather than a refused line
             if (mColour && mColour->selected() >= 4 && (i == 0 || i == 4)) mColour->setSelected(0);
@@ -86,6 +90,8 @@ namespace interstellar_v1
             if (format() == "dnxhr" && mDnx->selected() < 3) mDnx->setSelected(3);
         };
         mSize = segmented({"Full", "\xC2\xBD", "\xC2\xBC"}, 0);
+        mContainer = segmented({kContainerLabels[0], kContainerLabels[1], kContainerLabels[2], kContainerLabels[3]}, 0);
+        mContainer->onChange = [this](int) { if (!mContainerSync) mContainerChosen = true; };
         mRange = segmented({"Whole", "In \xE2\x80\x93 Out"}, 0);
 
         auto pill = [this](const char *label) {
@@ -157,13 +163,22 @@ namespace interstellar_v1
         addChild(mRender);
     }
 
-    std::string OutputSpec::format() const { return kCodecs[std::clamp(mCodec->selected(), 0, 4)]; }
+    std::string OutputSpec::format() const { return kCodecs[std::clamp(mCodec->selected(), 0, 6)]; }
 
     void OutputSpec::outputSizeFor(int &w, int &h) const
     {
         // the service's own arithmetic (a long edge, aspect kept), so the line it gets is one it takes
         w = mProjW;
         h = mProjH;
+        if (format() == "dcp" && w > 0 && h > 0)
+        {
+            // the service's fit: inside the container, never enlarged
+            const int k = std::clamp(mContainer->selected(), 0, 3);
+            const double s = std::min(1.0, std::min((double)kContainerW[k] / w, (double)kContainerH[k] / h));
+            w = std::min(kContainerW[k], (int)std::lround(mProjW * s));
+            h = std::min(kContainerH[k], (int)std::lround(mProjH * s));
+            return;
+        }
         const int div = mSize->selected() == 1 ? 2 : mSize->selected() == 2 ? 4 : 1;
         if (div == 1 || w <= 0 || h <= 0) return;
         const int longEdge = std::max(w, h), edge = longEdge / div;
@@ -263,8 +278,10 @@ namespace interstellar_v1
             if (mSpeed->selected() != 1) line += std::string(" --speed ") + kSpeeds[std::clamp(mSpeed->selected(), 0, 2)];
         }
         if (f == "h265" && mDepth->selected() == 1) line += " --bits 10";
-        if (mColour->selected() != 0) line += std::string(" --output ") + kOutputs[std::clamp(mColour->selected(), 0, 5)];
-        if (mSize->selected() != 0)
+        // R-DLV-4: a DCP's colour is DCI X'Y'Z' and its size its container
+        if (f != "dcp" && mColour->selected() != 0) line += std::string(" --output ") + kOutputs[std::clamp(mColour->selected(), 0, 5)];
+        if (f == "dcp") line += std::string(" --container ") + kContainers[std::clamp(mContainer->selected(), 0, 3)];
+        else if (mSize->selected() != 0)
         {
             int w = 0, h = 0;
             outputSizeFor(w, h);
@@ -287,6 +304,8 @@ namespace interstellar_v1
         const std::string f = format();
         if (!sound) return "No sound on this timeline: the render is picture only";
         if (f == "png-seq") return "A PNG sequence carries no sound: render a video for the mix";
+        if (f == "dcp") return "Sound: the master mix on L/R of 5.1, 24-bit PCM 48 kHz";
+        if (f == "imf") return "Sound: the master mix, 24-bit PCM 48 kHz stereo";
         return std::string("Sound: the master mix, ") + (f == "prores" || f == "dnxhr" ? "24-bit PCM" : "AAC") + " 48 kHz stereo";
     }
 
@@ -300,7 +319,8 @@ namespace interstellar_v1
         std::string s = std::to_string(w) + "\xC3\x97" + std::to_string(h) + " \xC2\xB7 " + rateText(fps) + " fps \xC2\xB7 ";
         s += mRange->selected() == 1 ? cmd::timecode(a, mProjFps) + "\xE2\x80\x93" + cmd::timecode(b, mProjFps) : std::string("whole timeline");
         s += " \xC2\xB7 " + std::to_string(frames) + " frames";
-        if (mColour->selected() != 0) s += std::string(" \xC2\xB7 ") + kOutputLabels[std::clamp(mColour->selected(), 0, 5)];
+        if (format() == "dcp") s += std::string(" \xC2\xB7 in ") + kContainerLabels[std::clamp(mContainer->selected(), 0, 3)] + " \xC2\xB7 X'Y'Z'";
+        else if (mColour->selected() != 0) s += std::string(" \xC2\xB7 ") + kOutputLabels[std::clamp(mColour->selected(), 0, 5)];
         return s;
     }
 
@@ -310,6 +330,7 @@ namespace interstellar_v1
         const std::string dir = mProjectDir.empty() ? std::string("renders") : mProjectDir + "/renders";
         const std::string f = format();
         if (f == "png-seq") return dir + "/" + mTimeline + "-png/";
+        if (f == "dcp" || f == "imf") return dir + "/" + mTimeline + (f == "dcp" ? "_DCP" : "_IMF");   // a package is a folder
         if (f == "prores" || f == "dnxhr") return dir + "/" + mTimeline + (f == "dnxhr" ? "-dnxhr" : "") + ".mov";
         return dir + "/" + mTimeline + (f == "h265" ? "-hevc" : "") + ".mp4";
     }
@@ -333,6 +354,12 @@ namespace interstellar_v1
         mProjW = m.width;
         mProjH = m.height;
         mProjFps = m.fps > 0 ? m.fps : 24.0;
+        if (!mContainerChosen && mProjW > 0 && mProjH > 0)
+        {
+            // R-DLV-4: the container the service would choose — scope for 2:1 and wider, 4K when the picture fills it
+            const int k = (mProjW >= 3996 || mProjH >= 2160 ? 2 : 0) + ((double)mProjW / mProjH >= 2.0 ? 1 : 0);
+            if (mContainer->selected() != k) { mContainerSync = true; mContainer->setSelected(k); mContainerSync = false; }
+        }
         mDuration = m.duration;
         mPlayhead = m.playhead;
         const auto slash = m.projectPath.find_last_of('/');
@@ -370,6 +397,8 @@ namespace interstellar_v1
         case Quality: case Speed: return f == "h264" || f == "h265";
         case Depth: return f == "h265";
         case PngNote: return f == "png-seq";
+        case Container: case DcpNote: return f == "dcp";
+        case ImfNote: return f == "imf";
         case InOut: return mRange->selected() == 1;
         default: return false;
         }
@@ -425,19 +454,22 @@ namespace interstellar_v1
         optional(Quality, mQuality.get());
         optional(Speed, mSpeed.get());
         optional(Depth, mDepth.get());
+        for (const int r : {(int)PngNote, (int)DcpNote, (int)ImfNote})
         {
-            const double a = mRows[PngNote].amt.value();
-            mRowY[PngNote] = y;
+            const double a = mRows[r].amt.value();
+            mRowY[r] = y;
             y += (kLineH + kGap) * a;
         }
-        mColourY = y;                                     // R-COLOR-4: every codec has one
-        seg(*mColour, kPadX + kLabelW, y, cw, dim);
+        const double pa = mRows[Container].amt.value(), pa2 = pa * pa, keep = (1.0 - pa) * (1.0 - pa);
+        mColourY = y;                                     // R-COLOR-4: every codec has one (a DCP's is fixed: it cross-fades to words)
+        seg(*mColour, kPadX + kLabelW, y, cw, dim * keep);
         y += kSegH + kGap;
 
         mHdrSizeY = y;
         y += cosmo_v2::kSectionHeaderHeight;
-        mSizeY = y;
-        seg(*mSize, kPadX + kLabelW, y, cw, dim);
+        mSizeY = y;                                       // R-DLV-4: a DCP's container takes the size's place, cross-faded
+        seg(*mSize, kPadX + kLabelW, y, cw, dim * keep);
+        seg(*mContainer, kPadX + kLabelW, y, cw, dim * pa2);
         y += kSegH + kGap;
         mRateY = y;
         y += kSegH + kGap;
@@ -662,15 +694,29 @@ namespace interstellar_v1
         label("Speed", mRowY[Speed], sq(mRows[Speed].amt.value()));
         label("Depth", mRowY[Depth], sq(mRows[Depth].amt.value()));
         label("Colour", mColourY, 1.0);
-        if (const double a = mRows[PngNote].amt.value(); a > 0.001)
-        {
+        auto note = [&](int r, const char *s) {
+            const double a = mRows[r].amt.value();
+            if (a <= 0.001) return;
             t.setFill(fade(palette::mutedForeground(), a));
-            t.drawText(textfit::ellipsize(t, "8-bit RGBA, one lossless PNG per frame", w - 2 * kPadX, 10.0, font::sans()),
-                       kPadX, textfit::baseline(mRowY[PngNote] + kLineH * 0.5, 10.0), 10.0, font::sans());
+            t.drawText(textfit::ellipsize(t, s, w - 2 * kPadX, 10.0, font::sans()), kPadX, textfit::baseline(mRowY[r] + kLineH * 0.5, 10.0), 10.0, font::sans());
+        };
+        note(PngNote, "8-bit RGBA, one lossless PNG per frame");
+        // R-DLV-4: said before the render, as the render's row says it after
+        note(DcpNote, "Not validated here \xE2\x80\x94 check it before a cinema");
+        note(ImfNote, "Not validated here \xE2\x80\x94 check it with Photon");
+        if (const double pa = mRows[Container].amt.value(); pa > 0.001)
+        {
+            const double a = pa * pa;
+            t.setFill(fade(palette::foreground(), a));
+            t.drawText("DCI X'Y'Z' 12-bit", kPadX + kLabelW + 8.0, textfit::baseline(mColourY + kSegH * 0.5, 10.0), 10.0, font::sans());
         }
 
         cosmo_v2::drawSectionHeader(t, kPadX, mHdrSizeY, w - 2 * kPadX, "SIZE & RATE");
-        label("Size", mSizeY, 1.0);
+        {
+            const double pa = mRows[Container].amt.value();
+            label("Size", mSizeY, (1.0 - pa) * (1.0 - pa));
+            label("Container", mSizeY, pa * pa);
+        }
         label("Rate", mRateY, 1.0);
         {
             // the rate stepper: ‹ value › on the segmented surface

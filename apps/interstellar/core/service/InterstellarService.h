@@ -73,6 +73,8 @@ namespace interstellar
             std::function<bool(const std::string &ext)> hasVendorDecoder;
             /** An encoder for `path`, chosen by its extension (h264 .mp4, prores .mov). */
             std::function<std::unique_ptr<IFrameWriter>()> frameWriter;
+            // R-DLV-4: a DCP or IMF package writer (EncodeSpec::codec dcp | imf); absent = none
+            std::function<std::unique_ptr<IFrameWriter>()> packageWriter;
             /** A PNG writer, for stills and png sequences. */
             std::function<bool(const std::string &path, const Raster &frame, std::string &err)> writeImage;
             /** R-DLV-1/2: draw text over a frame (8- or 16-bit) in the app's typeface; unset = this build

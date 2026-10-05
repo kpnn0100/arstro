@@ -1061,8 +1061,11 @@ namespace interstellar
         std::string ext = fs::path(out).extension().string();
         for (char &ch : ext) ch = (char)std::tolower((unsigned char)ch);
         if (format.empty()) format = ext == ".mov" ? "prores" : ext == ".mp4" || ext == ".mkv" ? "h264" : "png-seq";
-        if (format != "h264" && format != "h265" && format != "prores" && format != "dnxhr" && format != "png-seq")
-            return fail("render: --format is h264, h265, prores, dnxhr or png-seq, got " + format);
+        if (format != "h264" && format != "h265" && format != "prores" && format != "dnxhr" && format != "png-seq" && format != "dcp" && format != "imf")
+            return fail("render: --format is h264, h265, prores, dnxhr, png-seq, dcp or imf, got " + format);
+        const bool pkg = format == "dcp" || format == "imf";   // R-DLV-4: a folder of track files and the XML naming them
+        if (pkg && !ext.empty()) return fail("render: a " + std::string(format == "dcp" ? "DCP" : "IMF package") + " is a folder — --out names it, without an extension");
+        if (!pkg && c.has("container")) return fail("render: --container is a DCP's (2k-flat, 2k-scope, 4k-flat, …)");
 
         // ── the output spec (R-RENDER-6): every flag checked against the codec BEFORE queueing ──
         const bool lossy = format == "h264" || format == "h265";
@@ -1084,7 +1087,7 @@ namespace interstellar
         else if (inter) spec.profile = format == "prores" ? "standard" : "hq";
         if (c.has("quality"))
         {
-            if (!lossy) return fail("render: --quality applies to H.264 and H.265 — " + (inter ? format + "'s quality is its --profile" : std::string("a PNG sequence is lossless")));
+            if (!lossy) return fail("render: --quality applies to H.264 and H.265 — " + (inter ? format + "'s quality is its --profile" : pkg ? format + " sets its own" : std::string("a PNG sequence is lossless")));
             const std::string qs = c.flag("quality");   // flag() returns by value: keep it alive for `end`
             char *end = nullptr;
             const long q = std::strtol(qs.c_str(), &end, 10);
@@ -1107,9 +1110,10 @@ namespace interstellar
             if (e == "hardware" && !lossy) return fail("render: " + format + " has no hardware encoder — H.264 and H.265 do");
             spec.hardware = e == "hardware";
         }
-        spec.bitDepth = format == "prores" ? 10 : format == "dnxhr" ? (spec.profile == "hqx" || spec.profile == "444" ? 10 : 8) : 8;
+        spec.bitDepth = format == "prores" ? 10 : format == "dnxhr" ? (spec.profile == "hqx" || spec.profile == "444" ? 10 : 8) : pkg ? 12 : 8;
         if (c.has("bits"))
         {
+            if (pkg) return fail("render: a " + format + "'s pictures are 12-bit JPEG 2000 — --bits does not apply");
             const std::string b = c.flag("bits");
             if (b != "8" && b != "10") return fail("render: --bits is 8 or 10, got " + b);
             const int bits = b == "10" ? 10 : 8;
@@ -1120,13 +1124,16 @@ namespace interstellar
         }
 
         // R-COLOR-4: the output colour transform; HDR needs 10 bits, and is signalled by the software encoder
-        std::string output = "rec709";
+        std::string output = format == "dcp" ? "dcdm" : "rec709";
         double peak = 1000.0;
         if (c.has("output"))
         {
             output = c.flag("output");
             if (!render::colour::known(render::colour::outputs(), output))
                 return fail("render: --output is rec709, rec709-2.4, srgb, p3d65, pq or hlg, got " + output);
+            // R-DLV-4: a DCP's picture is DCI X'Y'Z', and only a DCP's is
+            if (format == "dcp" && output != "dcdm") return fail("render: a DCP's picture is DCI X'Y'Z' (dcdm) — --output does not choose it");
+            if (format != "dcp" && output == "dcdm") return fail("render: dcdm (DCI X'Y'Z') is a DCP's picture — --format dcp");
         }
         if (c.has("peak"))
         {
@@ -1157,13 +1164,36 @@ namespace interstellar
         // R-AUD-9: every video render carries the master when the timeline has sound to carry
         {
             render::AudioPlan ap;
-            if (format != "png-seq" && mHost.audioSource && planAudio(tl, ap) && !ap.empty()) spec.audioRate = ap.rate;
+            if (format != "png-seq" && mHost.audioSource && planAudio(tl, ap) && !ap.empty()) spec.audioRate = pkg ? 48000 : ap.rate;   // a package's sound is 48 kHz
         }
 
         // size: never above the project, and its aspect (a reframe is not in v1)
         const int PW = mProject->width, PH = mProject->height;
         int W = PW, H = PH, proxyEdge = 0;
-        if (c.has("res"))
+        std::string container;
+        if (format == "dcp")
+        {
+            // R-DLV-4: the picture fitted inside a DCI container (centred, black around it), never enlarged
+            if (c.has("res")) return fail("render: a DCP's size is its --container (2k-flat, 2k-scope, 2k-full, 4k-flat, 4k-scope, 4k-full)");
+            struct Box { const char *name; int w, h; };
+            static const Box boxes[] = {{"2k-flat", 1998, 1080}, {"2k-scope", 2048, 858}, {"2k-full", 2048, 1080},
+                                        {"4k-flat", 3996, 2160}, {"4k-scope", 4096, 1716}, {"4k-full", 4096, 2160}};
+            const bool scope = PH > 0 && (double)PW / PH >= 2.0;
+            container = c.has("container") ? c.flag("container") : std::string(PW >= 3996 || PH >= 2160 ? "4k-" : "2k-") + (scope ? "scope" : "flat");
+            const Box *box = nullptr;
+            for (const auto &b : boxes) if (container == b.name) box = &b;
+            if (!box) return fail("render: --container is 2k-flat, 2k-scope, 2k-full, 4k-flat, 4k-scope or 4k-full, got " + container);
+            const double s = std::min((double)box->w / PW, (double)box->h / PH);
+            if (s > 1.0 + 1e-9)
+                return fail("render: the project (" + std::to_string(PW) + "x" + std::to_string(PH) + ") is smaller than the " + container + " container (" +
+                            std::to_string(box->w) + "x" + std::to_string(box->h) + ") — a render never upscales");
+            W = std::min(box->w, (int)std::lround(PW * s));
+            H = std::min(box->h, (int)std::lround(PH * s));
+            proxyEdge = s >= 1.0 - 1e-9 ? 0 : std::max(W, H);
+            spec.containerW = box->w;
+            spec.containerH = box->h;
+        }
+        else if (c.has("res"))
         {
             int rw = 0, rh = 0;
             if (std::sscanf(c.flag("res").c_str(), "%dx%d", &rw, &rh) != 2 || rw <= 0 || rh <= 0) return fail("render: --res is WxH, got " + c.flag("res"));
@@ -1177,7 +1207,7 @@ namespace interstellar
             H = oh;
             proxyEdge = std::max(rw, rh) >= std::max(PW, PH) ? 0 : std::max(rw, rh);
         }
-        if (format != "png-seq" && ((W % 2) || (H % 2)))
+        if (format != "png-seq" && !pkg && ((W % 2) || (H % 2)))
             return fail("render: " + format + " needs even dimensions, " + std::to_string(W) + "x" + std::to_string(H) + " is not");
         double fps = mProject->fps;
         if (c.has("fps"))
@@ -1195,6 +1225,20 @@ namespace interstellar
                 if (ok) fps /= den;
             }
             if (!ok || !(fps > 0.0) || fps > 240.0) return fail("render: --fps is a rate in (0, 240] or num/den, got " + f);
+        }
+        if (pkg)
+        {
+            // R-DLV-4: the rates a package may run at — the cinema's, or App 2E's
+            auto is = [&](double r) { return std::fabs(fps - r) < 1e-3; };
+            char shown[32];
+            std::snprintf(shown, sizeof shown, "%.3f", fps);
+            if (format == "dcp" && spec.containerW > 2048 && !is(24.0))
+                return fail("render: a 4K DCP runs at 24 fps here, not " + std::string(shown) + " — --fps 24 or a 2K container");
+            if (format == "dcp" && !is(24.0) && !is(25.0) && !is(30.0) && !is(48.0))
+                return fail("render: a DCP runs at 24, 25, 30 or 48 fps, not " + std::string(shown) + " — --fps 24 (23.976 is not a cinema rate)");
+            if (format == "imf" && !is(24000.0 / 1001) && !is(24.0) && !is(25.0) && !is(30000.0 / 1001) && !is(30.0) && !is(50.0) && !is(60000.0 / 1001) && !is(60.0))
+                return fail("render: an IMF App 2E package runs at 23.976, 24, 25, 29.97, 30, 50, 59.94 or 60 fps, not " + std::string(shown));
+            if (format == "imf" && (W > 4096 || H > 3112)) return fail("render: an App 2E picture is at most 4096x3112 — --res");
         }
         for (const auto &u : mProject->unrenderable())
             if (u.find(tl) != std::string::npos)
@@ -1256,6 +1300,8 @@ namespace interstellar
             if (!captionCues(tl, a, std::min(b, dur), cues, err)) return fail("render: " + err);
             if (cues.empty()) return fail("render: --captions — " + mProject->timeline(tl)->name + " has no captions in the range (`caption import`)");
             if (capBurn && !mHost.drawText) return fail("render: this build cannot draw text over a frame — --captions burn cannot be honoured");
+            if (pkg && (capTrack || capSidecar))
+                return fail("render: a " + std::string(format == "dcp" ? "DCP's" : "IMF package's") + " subtitles are timed-text track files, not in this build — --captions burn");
             if (capTrack)
             {
                 std::string ext = fs::path(out).extension().string();
@@ -1278,6 +1324,7 @@ namespace interstellar
         job->first = (long long)std::llround(a * fps);
         job->count = std::max<long long>(0, (long long)std::llround(b * fps) - job->first);
         if (job->count <= 0) return fail("render: timeline " + c.flag("timeline") + " is empty — nothing to render");
+        if (format == "dcp" && job->count < (long long)std::lround(fps)) return fail("render: a DCP reel lasts at least a second — this is " + std::to_string(job->count) + " frames");
         job->png = format == "png-seq";
         job->spec = spec;
         job->width = W;
@@ -1285,7 +1332,15 @@ namespace interstellar
         job->proxyEdge = proxyEdge;
         job->fps = fps;
         job->output = outputTransform(workingOf(*mProject), output, peak);
-        if (!job->png)
+        if (pkg)
+        {
+            if (!mHost.packageWriter) return fail(std::string("render: this build cannot write a ") + (format == "dcp" ? "DCP" : "IMF package"));
+            spec.title = fs::path(out).filename().string();
+            if (spec.title.empty()) spec.title = fs::path(out).parent_path().filename().string();
+            job->spec = spec;
+            job->writer = mHost.packageWriter();
+        }
+        else if (!job->png)
         {
             if (!mHost.frameWriter) return fail("render: no encoder installed (the host must provide one)");
             job->writer = mHost.frameWriter();
@@ -1303,14 +1358,16 @@ namespace interstellar
         job->model.fps = fps;
         {
             // the spec in words, for the queue row — what was asked, all of it
-            const std::string name = format == "h264" ? "H.264" : format == "h265" ? "H.265" : format == "prores" ? "ProRes" : format == "dnxhr" ? "DNxHR" : "PNG sequence";
+            const std::string name = format == "h264" ? "H.264" : format == "h265" ? "H.265" : format == "prores" ? "ProRes" : format == "dnxhr" ? "DNxHR"
+                                   : format == "dcp" ? "DCP " + container + " JPEG 2000 XYZ 12-bit" : format == "imf" ? "IMF App 2E JPEG 2000 RGB 12-bit" : "PNG sequence";
             std::string w = name;
             if (inter) { std::string pf = spec.profile; for (char &ch : pf) ch = (char)std::toupper((unsigned char)ch); w += " " + (pf == "STANDARD" ? std::string("422") : pf); }
             if (format == "h265" || inter) w += " " + std::to_string(spec.bitDepth) + "-bit";
             if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + (spec.hardware ? std::string("hardware") : spec.speed);
             if (spec.audioRate > 0)
-                w += std::string(" \xC2\xB7 ") + (inter ? "PCM 24-bit " : "AAC ") + std::to_string(spec.audioRate / 1000) + " kHz";
-            if (output != "rec709")
+                w += std::string(" \xC2\xB7 ") + (format == "dcp" ? "PCM 24-bit 5.1 (the mix on L/R) " : format == "imf" ? "PCM 24-bit stereo " : inter ? "PCM 24-bit " : "AAC ") +
+                     std::to_string(spec.audioRate / 1000) + " kHz";
+            if (output != "rec709" && output != "dcdm")
                 w += std::string(" \xC2\xB7 ") + render::colour::label(render::colour::outputs(), output) +
                      (output == "pq" ? " " + std::to_string((long long)std::llround(peak)) + " cd/m\xC2\xB2" : std::string());
             char rate[32];

@@ -41,7 +41,7 @@ namespace interstellar
         // "--a 1 --b x" → {{a,1},{b,x}}; the flags a preset may hold
         bool parseFlags(const std::string &text, std::vector<std::pair<std::string, std::string>> &out, std::string &bad)
         {
-            static const std::vector<std::string> allowed = {"format", "profile", "res", "fps", "quality", "speed", "bits", "encoder", "output", "peak"};
+            static const std::vector<std::string> allowed = {"format", "profile", "res", "fps", "quality", "speed", "bits", "encoder", "output", "peak", "container"};
             std::istringstream in(text);
             std::string k, v;
             out.clear();

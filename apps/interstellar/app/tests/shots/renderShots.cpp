@@ -517,6 +517,24 @@ namespace
             r.click(p.x, p.y);
             r.settle();
         }});
+        v.push_back({"deliver_dcp", edit, [](Rig &r) {   // R-DLV-4: a DCP — the container in the size's place, the note
+            r.app->setTab(2);
+            r.settle();
+            r.app->edit().outputSpec()->formatPicker()->setSelected(5);
+            r.settle();
+        }});
+        v.push_back({"deliver_dcp_mid", edit, [](Rig &r) {   // …mid cross-fade
+            r.app->setTab(2);
+            r.settle();
+            r.app->edit().outputSpec()->formatPicker()->setSelected(5);
+            r.pump(80);
+        }});
+        v.push_back({"deliver_imf", edit, [](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            r.app->edit().outputSpec()->formatPicker()->setSelected(6);
+            r.settle();
+        }});
         v.push_back({"recovery_offer", [](FakeService &s) {   // R-DLV-6: a newer autosave, offered
             s.edit();
             s.m.recoveryAvailable = true;

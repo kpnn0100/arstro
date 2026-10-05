@@ -274,6 +274,85 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-DLV-5 DCP and IMF packages, unvalidated and saying so (R-DLV-4)
+`render --format dcp|imf --out <folder>` (`core/service/ServiceRender.cpp:1066`) writes a folder through
+the host's package writer (`Host::packageWriter`, `:1341`). A host without one refuses.
+
+**DCP (SMPTE).**
+- Picture: the render's `dcdm` output (`render/ColourTransform.cpp:352`), DCI X'Y'Z' per ST 428-1. The
+  display light becomes CIE XYZ without adaptation, white sits at 48 of 52.37 cd/m², and gamma is 2.6.
+  D65 white comes out as the published 3884/3960/4092. From ACEScct it is the same picture the Rec.709
+  output shows.
+- Container: `--container 2k-flat|2k-scope|2k-full|4k-flat|4k-scope|4k-full` (`ServiceRender.cpp:1174`).
+  The default is scope from 2:1, and 4K when the picture fills it. The picture is fitted inside, centred,
+  and never enlarged.
+- Rates: 24/25/30/48 at 2K and 24 at 4K (`:1231`), because OpenJPEG's DCI modes cap only 24 and 48.
+- A reel lasts at least a second. `--output`, `--res`, `--bits` and `--quality` are refused with the
+  way out.
+
+**IMF App 2E.**
+- The project's size (at most 4096×3112) and its `--output` colour, signalled in the descriptor.
+- Rates: 23.976 to 60.
+
+**Sound.** Both carry the master at 48 kHz: on L/R of 5.1 in a DCP, as stereo in an IMF. Captions are
+burned in only; timed-text track files are not built.
+
+**Host.**
+- `host/PackageWriter.cpp:123` encodes JPEG 2000 with OpenJPEG through libavcodec: DCI 2K/4K profile
+  for the DCP; for the IMF, a 9/7 at 10:1 in CPRL as RGB 12-bit. A DCP picture is centred in its
+  container (`:240`).
+- `host/MxfWriter.cpp` writes the track files to the layout of the reference implementation (asdcplib's
+  asdcp-wrap and as-02-wrap), set for set. That means a 16 KiB header, a body partition, the index
+  table, the footer and the RIP. The header is rewritten in place at the end (`:629`).
+  - DCP: OP-Atom, with an RGBA descriptor plus a JPEG 2000 sub-descriptor parsed from the first
+    codestream (`:53`); frame-wrapped 24-bit sound with 5.1 MCA labels.
+  - IMF: OP1a with the index in its own partition; clip-wrapped stereo with the MCA "ST" group,
+    carrying MCATitle, PRM and FCMP; J2CLayout and VideoLineMap.
+  FFmpeg 4.4's own MXF muxer writes neither descriptor and refuses multichannel OP-Atom sound.
+- The XML (`:346`):
+  - DCP: CPL (ST 429-7), PKL (ST 429-8, SHA-1 base64 hashes and sizes), ASSETMAP and VOLINDEX
+    (ST 429-9).
+  - IMF: CPL (ST 2067-3:2016, Core Constraints 2020, App 2E 2020 identification) whose
+    EssenceDescriptorList repeats the track files' descriptors in RegXML as Netflix Photon writes them,
+    plus a PKL and an ASSETMAP.
+- The writer's note says "NOT validated here" and names a checker (`:197`). The render's row and its
+  Info event carry it. The IMF note also names the known gap: its JPEG 2000 is ISO 15444-1 (signalled
+  as such, `060e2b34.04010107.04010202.03010100`), not an IMF profile, because OpenJPEG 2.4 cannot
+  write one.
+
+**UI.** Deliver's format picker gains DCP and IMF. For a DCP, the Container row takes Size's place and
+the colour control becomes the words "DCI X'Y'Z' 12-bit", both cross-faded so the column keeps its
+height (`app/widgets/OutputSpec.cpp:470`, `:281`). Each package has its own eased note row saying it is
+not validated. The default path is a folder (`<timeline>_DCP` or `_IMF`).
+
+**Checked during development, outside this build:**
+- asdcplib's asdcp-info parses both DCP track files (descriptor, JPEG 2000 header, index, footer), and
+  asdcp-unwrap extracts the frames and the WAV.
+- ClairMeta 1.6.2 runs its 78 checks on a CLI-rendered 2K Flat DCP: Success, with ISDCF naming advice
+  only.
+- Netflix Photon 5.0.1 passes the IMF's ASSETMAP, PKL and both track files. The CPL's single error is
+  the JPEG 2000 profile above. Getting there took fixes Photon pointed at: the MCA title and kinds, the
+  J2CLayout, the VideoLineMap and the 2020 namespaces.
+
+**Guarded by:**
+- Render `dcdm` values.
+- Host packages (`host/tests/hostTests.cpp:285`): a 2K Flat DCP and an App 2E IMF, each with three
+  frames that FFmpeg reads back. The DCP frame is decoded with its picture centred (the last column at
+  x 1958, black beyond). The index points at an essence key for every frame, the header holds the
+  duration, the CPL holds the durations, and every PKL size is true.
+- L2 `packages…`: 2048×1152 fitted to 1920×1080 in 1998×1080; X'Y'Z' pictures equal the dcdm transform
+  of an ordinary render; 24 frames and 48000 samples; the IMF at 2048×1152; the twelve refusals; a host
+  with no writer.
+- UI `testPackagesUi`; shots `deliver_dcp`, `deliver_dcp_mid`, `deliver_imf`.
+- E2E: the CLI rendered both. Frames from each were looked at (the DCP's pillarboxed).
+
+Mutants run red:
+- index offsets after the frame, the header not rewritten, the picture not centred, the sound not in
+  the PKL;
+- the DCP not dcdm, the fit by max, the reel and rate rules gone, the frame writer used;
+- the 48/52.37 white gone, the container left out of the line, the container not following the
+  project.
+
 ### DR-DLV-4 Captions (R-DLV-1)
 A caption is a `#caption` node: `at`, `dur` and `text` in timeline seconds (`model/Project.h:211`, schema
 `model/Schema.h:283`). It is an arrangement node like a marker, so `resolve` inherits it, a `#tlset`

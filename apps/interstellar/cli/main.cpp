@@ -19,6 +19,7 @@
 #ifdef INTERSTELLAR_HAVE_FFMPEG
 #include "AudioSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
+#include "PackageWriter.h"
 #include "HostFrameSource.h"
 #include "PngWriter.h"
 #include "VideoFrameDecoder.h"
@@ -84,6 +85,7 @@ namespace
 #endif
         h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
         h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
+        h.packageWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::PackageWriter()); };   // R-DLV-4
         h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
             return interstellar_host::writePng(p, r, err);
         };

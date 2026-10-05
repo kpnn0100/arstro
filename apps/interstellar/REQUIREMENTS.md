@@ -643,7 +643,7 @@ reserves the rest so adopting it is not a migration.
   it changes the whole clip). Switched from the monitor's angle bar in Cut or Alt+1…9 — while paused
   or playing; the bar names each angle by its source, without per-angle pictures (said).
 
-## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 3 ✅ DR-DLV-2, 2 ✅ DR-DLV-3, 1 ✅ DR-DLV-4, 4 next)
+## R-DLV — delivery and safety — ✅ (added 2026-10-05; 5–6 DR-DLV-1, 3 DR-DLV-2, 2 DR-DLV-3, 1 DR-DLV-4, 4 DR-DLV-5)
 
 - **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
   (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`. — ✅ (DR-DLV-4). A caption is a timeline node
@@ -664,7 +664,16 @@ reserves the rest so adopting it is not a migration.
   preset on a 4:3 project is 1440×1080), never above the project; a flag given beside it wins.
 - **R-DLV-4 DCP and IMF**: a DCP (JPEG 2000 XYZ in MXF with CPL, PKL and ASSETMAP) and an IMF App 2E
   package. Neither can be validated here (no cinema server, no DCP/IMF validator in this build) — the
-  app says so on every package it writes.
+  app says so on every package it writes. — ✅ (DR-DLV-5).
+  - DCP: SMPTE; the picture is DCI X'Y'Z' 12-bit, fitted inside a 2K/4K Flat/Scope/Full container and
+    never enlarged; 24/25/30/48 fps at 2K, 24 at 4K; the master on L/R of 5.1; a reel lasts at least a
+    second.
+  - IMF: App 2E 2020 at the project's size and colour, the master as stereo.
+  - Captions are burned in only. Timed-text track files are not built.
+  - The IMF picture's JPEG 2000 is ISO 15444-1, not an IMF profile: OpenJPEG 2.4 here cannot write one,
+    and the package's note says so.
+  - Checked during development (not in this build) with asdcplib, ClairMeta and Netflix Photon: they
+    parse the DCP, the DCP passes, and the IMF passes but for that profile.
 - **R-DLV-5 Autosave**: the project is saved beside itself every minute while it has unsaved changes.
   — ✅ (DR-DLV-1). "Saved beside itself" is the .isp and every rack node's grade (Cosmo's .cmp can only
   be saved over itself, and not at all while a source is offline, D-2); the interval is a setting

@@ -243,6 +243,11 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   captions pill ("No captions", dimmed and eased, while the chosen timeline has none) whose menu toggles
   Burn into the picture / Subtitle track / Sidecar .srt. The render line gains `--captions burn,track`; a
   PNG sequence leaves out the track. Shots: `cut_caption`, `deliver_captions`. UI checks: 484.
+- Packages (R-DLV-4): FORMAT gains DCP and IMF (`render … --format dcp|imf`, a folder `<timeline>_DCP` or
+  `_IMF`). For a DCP the Container row (2K Flat · 2K Scope · 4K Flat · 4K Scope → `--container`) takes
+  Size's place. It follows the project until it is chosen. The colour control becomes the words "DCI X'Y'Z'
+  12-bit", both cross-faded. An eased note row says "Not validated here — check it before a cinema / with
+  Photon". Shots: `deliver_dcp`, `deliver_dcp_mid`, `deliver_imf`. UI checks: 490.
 
 ## Interchange (2026-10-05, R-XCH)
 

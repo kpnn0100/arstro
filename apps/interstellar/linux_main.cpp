@@ -21,6 +21,7 @@
 #include "AudioOutPulse.h"
 #endif
 #include "FrameWriterFFmpeg.h"
+#include "PackageWriter.h"
 #include "HostFrameSource.h"
 #include "InterstellarService.h"
 #include "PngWriter.h"
@@ -84,6 +85,7 @@ namespace
         h.audioOut = [] { return std::unique_ptr<IAudioOut>(new interstellar_host::AudioOutPulse()); };   // R-AUD-6
 #endif
         h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
+        h.packageWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::PackageWriter()); };   // R-DLV-4
         h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
             return interstellar_host::writePng(p, r, err);
         };

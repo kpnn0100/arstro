@@ -271,7 +271,8 @@ namespace colour
     const std::vector<Def> &outputs()
     {
         static const std::vector<Def> k = {{"rec709", "Rec.709"}, {"rec709-2.4", "Rec.709 2.4"}, {"srgb", "sRGB"},
-                                           {"p3d65", "P3-D65"},   {"pq", "HDR PQ"},              {"hlg", "HDR HLG"}};
+                                           {"p3d65", "P3-D65"},   {"pq", "HDR PQ"},              {"hlg", "HDR HLG"},
+                                           {"dcdm", "DCI XYZ"}};   // R-DLV-4: a DCP's picture, and only a DCP's
         return k;
     }
     bool known(const std::vector<Def> &list, const std::string &id)
@@ -348,6 +349,25 @@ namespace colour
         const bool aces = working == "acescct";
         const std::string out = known(outputs(), output) ? output : "rec709";
         if (!aces && (out == "rec709" || out == "srgb")) return t;   // the graded code values, as the monitor showed them
+        if (out == "dcdm")
+        {
+            // R-DLV-4: DCI X'Y'Z' (SMPTE ST 428-1) — the display's light as CIE XYZ, not adapted (a D65
+            // white stays D65), white at 48 cd/m² of the 52.37 the code range spans, then gamma 2.6
+            double toRec[9], xyz[9];
+            t.add(aces ? Op::DecodeAcescct : Op::DecodeSrgb);
+            if (aces)
+            {
+                convert(kAP1, kRec709, toRec);
+                t.addMatrix(toRec);
+                t.add(Op::ToneSdr);
+            }
+            rgbToXyz(kRec709, xyz);
+            for (double &v : xyz) v *= 48.0 / 52.37;
+            t.addMatrix(xyz);
+            t.add(Op::EncodeGamma, 2.6f);
+            t.mKey = "out:" + working + ">dcdm";
+            return t;
+        }
         double m[9];
         convert(aces ? kAP1 : kRec709, *outputGamut(out), m);
         t.add(aces ? Op::DecodeAcescct : Op::DecodeSrgb);

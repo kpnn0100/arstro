@@ -583,6 +583,22 @@ namespace
         const float lo = mapOne(pq, 0.6f, 0.6f, 0.6f, 0), hi = mapOne(pq, 0.9f, 0.9f, 0.9f, 0), top = mapOne(pq, 1.2f, 1.2f, 1.2f, 0);
         assert(lo < hi && hi <= top && top <= 0.7519f && top > 0.70f);
         assert(colour::Transform::output("acescct", "pq", 1000.0).key() != colour::Transform::output("acescct", "pq", 4000.0).key());
+        // R-DLV-4: DCI X'Y'Z' — D65 white at 48 cd/m² is the published 3884 / 3960 / 4092 of 4095; black is 0
+        const auto dc = colour::Transform::output("rec709", "dcdm");
+        auto cv12 = [&](float r, float g, float b, int c) { return (int)std::lround(mapOne(dc, r, g, b, c) * 4095.0f); };
+        assert(std::abs(cv12(1, 1, 1, 0) - 3884) <= 1 && std::abs(cv12(1, 1, 1, 1) - 3960) <= 1 && std::abs(cv12(1, 1, 1, 2) - 4092) <= 1);
+        assert(cv12(0, 0, 0, 0) == 0 && cv12(0, 0, 0, 1) == 0 && cv12(1, 0, 0, 1) < cv12(0, 1, 0, 1));   // green carries most luminance
+        // from ACEScct it is the same picture the Rec.709 output shows, carried as XYZ (one tone map, not two)
+        {
+            const auto adc = colour::Transform::output("acescct", "dcdm"), a709 = colour::Transform::output("acescct", "rec709");
+            for (float v : {0.3f, 0.45f, 0.6f})
+            {
+                const float p[3] = {v, v * 0.9f, v * 0.8f};
+                float shown[3];
+                a709.map(p, shown);
+                for (int c = 0; c < 3; ++c) assert(std::fabs(mapOne(adc, p[0], p[1], p[2], c) - mapOne(dc, shown[0], shown[1], shown[2], c)) < 2e-3f);
+            }
+        }
         // deep and 8-bit apply the same function
         Raster r8;
         r8.allocate(16, 2, 255);

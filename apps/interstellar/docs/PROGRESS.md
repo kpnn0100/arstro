@@ -89,7 +89,7 @@ one integrator who moves, wires, tests and commits each stream:
       13b. [x] Render presets (R-DLV-3) — DR-DLV-2.
       13c. [x] Burn-ins (R-DLV-2) — DR-DLV-3.
       13e. [x] Captions (R-DLV-1) — DR-DLV-4.
-      13d. [ ] DCP and IMF, unvalidated and saying so (R-DLV-4).
+      13d. [x] DCP and IMF, unvalidated and saying so (R-DLV-4) — DR-DLV-5.
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -139,6 +139,16 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — DCP and IMF track files come from our own MXF writer, laid out as asdcplib lays them.**
+FFmpeg 4.4's MXF muxer writes no RGBA or JPEG 2000 sub-descriptor and refuses multichannel OP-Atom
+sound, so it cannot make a DCP. Vendoring asdcplib would add a library and its OpenSSL dependency to the
+build. Instead `host/MxfWriter` writes the reference implementation's layout set for set, with labels
+taken from its dictionary and SMPTE's registers. asdcplib, ClairMeta and Photon were built or fetched in
+a scratch area to check the output during development, and none is in the build. So the app still says,
+on every package, that it is not validated here. The IMF's JPEG 2000 is signalled as the generic
+ISO 15444-1 label it really is rather than a profile it does not meet. Photon reports that, and the note
+names it.
 
 **2026-10-05 — a caption is a timeline node, and a render's captions are one cue at a time.** Captions
 could have lived in a sidecar file the project points at. They are `#caption` nodes instead, because a

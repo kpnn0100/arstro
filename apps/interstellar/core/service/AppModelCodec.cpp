@@ -687,7 +687,7 @@ namespace interstellar
             {"colourInputs", "array", "The source spaces `set <bind>.input=` accepts, in menu order (R-COLOR-2)."},
             {"colourInputs[].id", "string", "What to dispatch."},
             {"colourInputs[].label", "string", "Its name for a person."},
-            {"colourOutputs", "array", "The output transforms `render --output` accepts (R-COLOR-4)."},
+            {"colourOutputs", "array", "The output transforms `render --output` accepts (R-COLOR-4); dcdm (DCI X'Y'Z') is a DCP's only (R-DLV-4)."},
             {"colourOutputs[].id", "string", "What to dispatch."},
             {"colourOutputs[].label", "string", "Its name for a person."},
             {"hasClipClipboard", "bool", "`clip copy` has filled the clip clipboard (R-TL-6)."},

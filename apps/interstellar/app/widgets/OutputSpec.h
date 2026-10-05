@@ -67,7 +67,7 @@ namespace interstellar_v1
         std::shared_ptr<artboard::TextBox> pathField() { return mPath; }
 
         // the spec's controls, for tests and shots
-        enum RowId { ProresProfile, DnxProfile, Quality, Speed, Depth, PngNote, InOut, kRows };
+        enum RowId { ProresProfile, DnxProfile, Quality, Speed, Depth, PngNote, InOut, Container, DcpNote, ImfNote, kRows };
         std::shared_ptr<cosmo_v2::SegmentedControl> proresProfile() { return mProres; }
         std::shared_ptr<cosmo_v2::SegmentedControl> dnxProfile() { return mDnx; }
         std::shared_ptr<cosmo_v2::SegmentedControl> qualityPicker() { return mQuality; }
@@ -76,6 +76,7 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::SegmentedControl> colourPicker() { return mColour; }   // R-COLOR-4
         std::shared_ptr<cosmo_v2::SegmentedControl> sizePicker() { return mSize; }
         std::shared_ptr<cosmo_v2::SegmentedControl> rangePicker() { return mRange; }
+        std::shared_ptr<cosmo_v2::SegmentedControl> containerPicker() { return mContainer; }   // R-DLV-4: a DCP's
         std::shared_ptr<cosmo_v2::PillButton> setInButton() { return mSetIn; }
         std::shared_ptr<cosmo_v2::PillButton> setOutButton() { return mSetOut; }
         /** The frame-rate stepper's two buttons (local; dir -1 = slower, +1 = faster). */
@@ -144,7 +145,8 @@ namespace interstellar_v1
         double mProjFps = 24.0, mDuration = 0.0, mPlayhead = 0.0;
         double mIn = 0.0, mOut = -1.0;                    // the In–Out range (seconds); mOut < 0 = the end
 
-        std::shared_ptr<cosmo_v2::SegmentedControl> mCodec, mProres, mDnx, mQuality, mSpeed, mDepth, mSize, mRange;
+        std::shared_ptr<cosmo_v2::SegmentedControl> mCodec, mProres, mDnx, mQuality, mSpeed, mDepth, mSize, mRange, mContainer;
+        bool mContainerChosen = false, mContainerSync = false;   // the container follows the project until chosen
         std::shared_ptr<cosmo_v2::SegmentedControl> mColour;
         std::shared_ptr<cosmo_v2::PillButton> mSetIn, mSetOut;
         std::shared_ptr<cosmo_v2::PillButton> mPresetBtn, mSavePreset;   // R-DLV-3

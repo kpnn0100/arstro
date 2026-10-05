@@ -2912,6 +2912,37 @@ namespace
               "a timeline without captions renders none, whatever was chosen");
     }
 
+    /** R-DLV-4: DCP and IMF on the Deliver tab — the container takes the size's place, the colour becomes words, each says it is unvalidated. */
+    void testPackagesUi()
+    {
+        std::printf("packages: DCP and IMF on the Deliver tab\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });   // a 3840x2160 project
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        os->formatPicker()->setSelected(5);
+        const double c = firstMoved(r, [&] { return os->rowAmount(OutputSpec::Container); }, 0.0);
+        CHECK(strictlyBetween(c, 0.0, 1.0), "DCP: the container cross-fades in where the size was, eased");
+        r.settle();
+        const std::string dcp = os->renderLine();
+        CHECK(dcp.find("--format dcp") != std::string::npos && dcp.find("--container 4k-flat") != std::string::npos && dcp.find("--res") == std::string::npos &&
+                  dcp.find("--output") == std::string::npos && dcp.find("renders/social30_DCP --format") != std::string::npos,
+              "…the line names the container the project fills (4K Flat), no size, no colour, and a folder");
+        CHECK(os->rowAmount(OutputSpec::DcpNote) > 0.99 && os->colourPicker()->opacity.value() < 0.01, "…says it is not validated, and the colour is fixed");
+        os->containerPicker()->setSelected(1);
+        r.pump(32);
+        CHECK(os->renderLine().find("--container 2k-scope") != std::string::npos, "a container chosen is the one rendered");
+        os->formatPicker()->setSelected(6);
+        r.settle();
+        const std::string imf = os->renderLine();
+        CHECK(imf.find("--format imf") != std::string::npos && imf.find("--container") == std::string::npos && os->rowAmount(OutputSpec::ImfNote) > 0.99 &&
+                  os->rowAmount(OutputSpec::Container) < 0.01 && os->colourPicker()->opacity.value() > 0.99,
+              "IMF: the project's size, the colour row back, its own note");
+        os->colourPicker()->setSelected(4);
+        r.pump(32);
+        CHECK(os->formatPicker()->selected() == 6 && os->renderLine().find("--output pq") != std::string::npos, "an IMF carries HDR without changing the codec");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -3091,6 +3122,7 @@ int main()
     testRenderPresetsUi();
     testBurnInsUi();
     testCaptionsUi();
+    testPackagesUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

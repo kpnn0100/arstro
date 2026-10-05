@@ -255,6 +255,36 @@ namespace
 
     EncodeSpec gProxySpec;   // R-MEDIA-2: what the last proxy was encoded as
     std::vector<std::vector<OverlayText>> gBurns;   // R-DLV-1/2: what each frame was asked to carry
+    // R-DLV-4: what a package writer is handed — the host's real one is tested in interstellar_host
+    struct PackageCapture
+    {
+        std::string path;
+        int w = 0, h = 0, frames = 0;
+        double fps = 0;
+        long long audioSamples = 0;
+        bool ended = false;
+        EncodeSpec spec;
+        Raster first;
+    };
+    PackageCapture gPackage;
+    struct PackageCaptureWriter : public IFrameWriter
+    {
+        bool begin(const std::string &p, int w, int h, double fps, long long, const EncodeSpec &spec) override
+        {
+            gPackage = PackageCapture{};
+            gPackage.path = p;
+            gPackage.w = w;
+            gPackage.h = h;
+            gPackage.fps = fps;
+            gPackage.spec = spec;
+            return true;
+        }
+        bool write(const Raster &f) override { if (gPackage.frames++ == 0) gPackage.first = f; return f.width == gPackage.w && f.height == gPackage.h; }
+        bool writeAudio(const float *, int n) override { gPackage.audioSamples += n; return true; }
+        bool end() override { gPackage.ended = true; return true; }
+        std::string note() const override { return "NOT validated here (test)"; }
+    };
+
     struct CaptureWriter : public IFrameWriter
     {
         std::vector<Raster> *sink;
@@ -316,6 +346,7 @@ namespace
 
         bool async = false;   // the GTK host's asyncPreview
         bool sound = false;   // a sound output (R-AUD-6)
+        bool noPackages = false;   // a host with no DCP/IMF writer (R-DLV-4)
         bool noText = false;  // a host that cannot draw text (R-DLV-2)
         double now = 1e12;    // a pump clock ahead of the service's own (it only moves forward)
 
@@ -326,6 +357,7 @@ namespace
             h.rackDecoder = [](std::shared_ptr<const FrameSelector> sel) { return std::unique_ptr<cosmo::IImageDecoder>(new FakeDecoder(sel)); };
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
+            if (!noPackages) h.packageWriter = [] { return std::unique_ptr<IFrameWriter>(new PackageCaptureWriter()); };
             h.audioSource = [] { return std::unique_ptr<IAudioSource>(new FakeAudioSource()); };
             if (sound) h.audioOut = [] { return std::unique_ptr<IAudioOut>(new FakeAudioOut()); };
             h.writeImage = [this](const std::string &p, const Raster &r, std::string &) { images[p] = r; return true; };
@@ -2348,6 +2380,64 @@ int main()
         // the monitor's switch is presentation
         f.must("view captions off");
         assert(!f.svc->model().captionsShown);
+    });
+
+    test("packages: a DCP fitted in its DCI container as X'Y'Z' 12-bit with a second of 48 kHz sound; an IMF at the project's size; both said unvalidated (R-DLV-4)", [] {
+        Fixture f("package");
+        f.must("project new \"" + f.path("mv.isp") + "\" --fps 24 --res 2048x1152");
+        f.must("rack add \"" + f.path("footage/a.mp4") + "\"");
+        f.must("track add --kind video");
+        f.must("clip add --track v0 --src a --in 0 --out 2 --at 0 --name shotA");
+        f.must("audio track add --name A1");
+        f.must("audio clip add --track A1 --src a --in 0 --out 2 --at 0");
+        f.must("render --timeline main --format dcp --range 0:1 --out \"" + f.path("Feature_FTR_2K") + "\"");
+        // 2048x1152 in 2K Flat (1998x1080): fitted by height to 1920x1080, centred by the writer
+        assert(gPackage.spec.codec == "dcp" && gPackage.w == 1920 && gPackage.h == 1080 && gPackage.spec.containerW == 1998 && gPackage.spec.containerH == 1080);
+        assert(gPackage.spec.output == "dcdm" && gPackage.spec.bitDepth == 12 && gPackage.first.deep() && gPackage.frames == 24 && gPackage.ended);
+        assert(gPackage.spec.audioRate == 48000 && gPackage.audioSamples == 48000 && gPackage.spec.title == "Feature_FTR_2K");
+        assert(has(f.svc->model().renders.back().spec, "DCP 2k-flat") && has(f.svc->model().renders.back().spec, "NOT validated"));
+        // its pictures are the render's DCI X'Y'Z': the dcdm transform of what an ordinary render of the frame shows
+        const Raster dcp = gPackage.first;
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 1920x1080 --range 0:1 --out \"" + f.path("ref.mp4") + "\"");
+        Raster ref;
+        toDeep(f.written[0], ref);
+        render::colour::Transform::output("rec709", "dcdm").apply(ref);
+        const size_t mid = ((size_t)540 * 1920 + 960) * 4;
+        for (int c = 0; c < 3; ++c) assert(std::abs((int)dcp.rgba16[mid + c] - (int)ref.rgba16[mid + c]) < 700);
+        assert(std::abs((int)dcp.rgba16[mid + 1] - (int)f.written[0].rgba[mid + 1] * 257) > 2000);   // not the Rec.709 code values
+        // an IMF at the project's size, Rec.709 RGB, the master at 48 kHz
+        f.must("render --timeline main --format imf --range 0:1 --out \"" + f.path("Feature_IMF") + "\"");
+        assert(gPackage.spec.codec == "imf" && gPackage.w == 2048 && gPackage.h == 1152 && gPackage.spec.output == "rec709" && gPackage.audioSamples == 48000);
+        assert(has(f.svc->model().renders.back().spec, "IMF App 2E") && has(f.svc->model().renders.back().spec, "NOT validated"));
+        // the rules, each refused with the way out
+        std::string err;
+        auto refused = [&](const std::string &flags, const char *why) {
+            const bool no = !f.run("render --timeline main " + flags, &err);
+            if (!no || !has(err, why)) std::printf("    expected \"%s\", got: %s\n", why, err.c_str());
+            assert(no && has(err, why));
+        };
+        refused("--format dcp --range 0:0.5 --out \"" + f.path("a") + "\"", "at least a second");
+        refused("--format dcp --fps 24000/1001 --out \"" + f.path("b") + "\"", "24, 25, 30 or 48");
+        refused("--format dcp --container 4k-flat --out \"" + f.path("c") + "\"", "smaller than the 4k-flat container");
+        refused("--format dcp --container imax --out \"" + f.path("c") + "\"", "2k-flat, 2k-scope");
+        refused("--format dcp --output rec709 --out \"" + f.path("d") + "\"", "DCI X'Y'Z'");
+        refused("--format dcp --res 1920x1080 --out \"" + f.path("d") + "\"", "its --container");
+        refused("--format h264 --output dcdm --out \"" + f.path("e.mp4") + "\"", "--format dcp");
+        refused("--format imf --out \"" + f.path("f.mxf") + "\"", "is a folder");
+        refused("--format dcp --bits 10 --out \"" + f.path("g") + "\"", "12-bit");
+        refused("--format imf --fps 12 --out \"" + f.path("h") + "\"", "App 2E package runs at");
+        refused("--format h264 --container 2k-flat --out \"" + f.path("i.mp4") + "\"", "a DCP's");
+        f.must("caption add --at 0 --dur 1 --text Hello");
+        refused("--format dcp --captions track --out \"" + f.path("j") + "\"", "--captions burn");
+        Fixture g("package2");
+        g.noPackages = true;
+        g.svc = g.make();
+        g.must("project new \"" + g.path("mv.isp") + "\" --fps 24 --res 2048x1152");
+        g.must("rack add \"" + g.path("footage/a.mp4") + "\"");
+        g.must("track add --kind video");
+        g.must("clip add --track v0 --src a --in 0 --out 2 --at 0 --name shotA");
+        assert(!g.run("render --timeline main --format dcp --out \"" + g.path("k") + "\"", &err) && has(err, "cannot write a DCP"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

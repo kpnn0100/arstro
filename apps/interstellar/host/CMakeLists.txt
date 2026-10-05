@@ -16,6 +16,8 @@ if(INTERSTELLAR_AV_FOUND)
     ${CMAKE_CURRENT_SOURCE_DIR}/HostFrameSource.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FrameSourceDng.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PngWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MxfWriter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PackageWriter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Thumbnailer.cpp)
   target_include_directories(interstellar_host PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
   target_link_libraries(interstellar_host PUBLIC interstellar_core PkgConfig::INTERSTELLAR_AV PkgConfig::INTERSTELLAR_PIXBUF)

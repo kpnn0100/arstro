@@ -21,6 +21,9 @@
 #include "DngWrite.h"
 #include "FrameSourceFFmpeg.h"
 #include "FrameWriterFFmpeg.h"
+#include "PackageWriter.h"
+#include <fstream>
+#include <iterator>
 extern "C" {
 #include <libavformat/avformat.h>
 }
@@ -278,6 +281,125 @@ int main(int argc, char **argv)
             assert(w.end());
         }
         std::printf("  [PASS] subtitles: mov_text in MP4 and MOV, SubRip in MKV, each cue at its time with its words\n");
+    }
+    // ── R-DLV-4: a DCP and an IMF package — MXF that FFmpeg reads back frame by frame, and XML that names it ──
+    {
+        const std::string first = argv[1];
+        const std::string dir = first.find('/') == std::string::npos ? std::string(".") : first.substr(0, first.rfind('/'));
+        auto slurp = [](const std::string &p) {
+            std::ifstream f(p, std::ios::binary);
+            return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        };
+        auto between = [](const std::string &s, const std::string &a, const std::string &b, size_t from = 0) {
+            const size_t i = s.find(a, from);
+            if (i == std::string::npos) return std::string();
+            const size_t j = s.find(b, i + a.size());
+            return j == std::string::npos ? std::string() : s.substr(i + a.size(), j - i - a.size());
+        };
+        for (const bool imf : {false, true})
+        {
+            const std::string pkg = dir + (imf ? "/pkg_imf" : "/pkg_dcp");
+            std::filesystem::remove_all(pkg);
+            interstellar::EncodeSpec spec;
+            spec.codec = imf ? "imf" : "dcp";
+            spec.bitDepth = 12;
+            spec.audioRate = 48000;
+            spec.output = imf ? "rec709" : "dcdm";
+            const int w = 1920, h = 1080;
+            if (!imf) { spec.containerW = 1998; spec.containerH = 1080; }   // 2K Flat: the picture pillarboxed
+            interstellar_host::PackageWriter pw;
+            assert(pw.begin(pkg, w, h, 24.0, 3, spec));
+            assert(pw.note().find("NOT validated") != std::string::npos);
+            interstellar::Raster frame;
+            frame.allocate(w, h, 0);
+            interstellar::toDeep(frame, frame);
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    for (int c = 0; c < 3; ++c) frame.rgba16[((size_t)y * w + x) * 4 + c] = (uint16_t)(x * 65535 / (w - 1));
+            std::vector<float> tone(2000 * 2);
+            for (int i = 0; i < 2000; ++i) tone[i * 2] = tone[i * 2 + 1] = 0.25f * (float)std::sin(2 * 3.14159265358979 * 1000.0 * i / 48000.0);
+            for (int k = 0; k < 3; ++k) assert(pw.write(frame) && pw.writeAudio(tone.data(), 2000));
+            if (!pw.end()) { std::printf("package: %s\n", pw.error().c_str()); assert(false); }
+            // the track files: FFmpeg's MXF demuxer finds the JPEG 2000 stream, three frames, at the container's size
+            std::string picFile, sndFile, cplFile, pklFile;
+            for (const auto &e : std::filesystem::directory_iterator(pkg))
+            {
+                const std::string n = e.path().filename().string();
+                if (n.rfind(imf ? "IMG_" : "j2c_", 0) == 0) picFile = e.path().string();
+                if (n.rfind(imf ? "AUD_" : "pcm_", 0) == 0) sndFile = e.path().string();
+                if (n.rfind(imf ? "CPL_" : "cpl_", 0) == 0) cplFile = e.path().string();
+                if (n.rfind(imf ? "PKL_" : "pkl_", 0) == 0) pklFile = e.path().string();
+            }
+            assert(!picFile.empty() && !sndFile.empty() && !cplFile.empty() && !pklFile.empty());
+            assert(std::filesystem::exists(pkg + "/ASSETMAP.xml") && std::filesystem::exists(pkg + "/VOLINDEX.xml") == !imf);
+            AVFormatContext *fmt = nullptr;
+            assert(avformat_open_input(&fmt, picFile.c_str(), nullptr, nullptr) == 0 && avformat_find_stream_info(fmt, nullptr) >= 0);
+            assert(fmt->nb_streams >= 1 && fmt->streams[0]->codecpar->codec_id == AV_CODEC_ID_JPEG2000);
+            assert(fmt->streams[0]->codecpar->width == (imf ? 1920 : 1998) && fmt->streams[0]->codecpar->height == 1080);
+            int packets = 0;
+            AVPacket *pkt = av_packet_alloc();
+            while (av_read_frame(fmt, pkt) >= 0)
+            {
+                if (pkt->size > 2 && pkt->data[0] == 0xff && pkt->data[1] == 0x4f && packets++ == 0 && !imf)
+                {
+                    // the picture centred in 2K Flat: its brightest column (x 1919 of 1920) at 39 + 1919, black beyond
+                    const AVCodec *dec = avcodec_find_decoder(AV_CODEC_ID_JPEG2000);
+                    AVCodecContext *dc = avcodec_alloc_context3(dec);
+                    AVFrame *fr = av_frame_alloc();
+                    assert(avcodec_open2(dc, dec, nullptr) == 0 && avcodec_send_packet(dc, pkt) == 0 && avcodec_receive_frame(dc, fr) == 0);
+                    auto px = [&](int x, int y, int c) { return (int)reinterpret_cast<const uint16_t *>(fr->data[0] + (size_t)y * fr->linesize[0])[x * 3 + c] >> 4; };
+                    std::printf("  DCP frame: X'Y'Z' at x 1957 = %d %d %d, at x 1980 = %d\n", px(1957, 540, 0), px(1957, 540, 1), px(1957, 540, 2), px(1980, 540, 1));
+                    assert(fr->format == AV_PIX_FMT_XYZ12LE && px(1957, 540, 1) > 3000 && px(1980, 540, 1) < 16 && px(10, 540, 1) < 16);
+                    av_frame_free(&fr);
+                    avcodec_free_context(&dc);
+                }
+                av_packet_unref(pkt);
+            }
+            av_packet_free(&pkt);
+            avformat_close_input(&fmt);
+            assert(packets == 3);
+            {
+                // the index names each frame's KLV (an essence key at every offset) and the header the duration —
+                // both written at the end, the header rewritten in place
+                const std::string mxf = slurp(picFile);
+                const std::string jkey("\x06\x0e\x2b\x34\x01\x02\x01\x01\x0d\x01\x03\x01\x15\x01\x08\x01", 16);
+                const std::string idxKey("\x06\x0e\x2b\x34\x02\x53\x01\x01\x0d\x01\x02\x01\x01\x10\x01\x00", 16);
+                const std::string rgbaKey("\x06\x0e\x2b\x34\x02\x53\x01\x01\x0d\x01\x01\x01\x01\x01\x29\x00", 16);
+                auto be = [&](size_t at, int n) { uint64_t v = 0; for (int i = 0; i < n; ++i) v = v << 8 | (uint8_t)mxf[at + i]; return v; };
+                auto tag = [&](size_t set, uint16_t want) -> size_t {   // the value offset of a tag in a local set (4-byte BER)
+                    const size_t end = set + 20 + be(set + 17, 3);
+                    for (size_t q = set + 20; q + 4 <= end; q += 4 + be(q + 2, 2))
+                        if (be(q, 2) == want) return q + 4;
+                    return 0;
+                };
+                const size_t essence = 0x4000 + 16 + 4 + be(0x4000 + 17, 3);   // after the body partition pack
+                const size_t idx = mxf.find(idxKey), entries = tag(idx, 0x3f0a);
+                assert(idx != std::string::npos && entries && be(entries, 4) == 3 && be(entries + 4, 4) == 11);
+                for (int k = 0; k < 3; ++k)
+                    assert(mxf.compare(essence + be(entries + 8 + k * 11 + 3, 8), 16, jkey) == 0);
+                const size_t desc = mxf.find(rgbaKey), dur = tag(desc, 0x3002);
+                assert(desc != std::string::npos && dur && be(dur, 8) == 3);
+            }
+            // the XML: the CPL names both track files and their durations; the PKL's sizes are the files'
+            const std::string cpl = slurp(cplFile), pkl = slurp(pklFile), am = slurp(pkg + "/ASSETMAP.xml");
+            assert(cpl.find(imf ? "http://www.smpte-ra.org/schemas/2067-3/2016" : "http://www.smpte-ra.org/schemas/429-7/2006/CPL") != std::string::npos);
+            assert(cpl.find(imf ? "<IntrinsicDuration>6000</IntrinsicDuration>" : "<IntrinsicDuration>3</IntrinsicDuration>") != std::string::npos);
+            if (imf) assert(cpl.find("<r0:RGBADescriptor") != std::string::npos && cpl.find("<r0:WAVEPCMDescriptor") != std::string::npos &&
+                            cpl.find("http://www.smpte-ra.org/ns/2067-21/2020") != std::string::npos);
+            else assert(cpl.find("<ScreenAspectRatio>1998 1080</ScreenAspectRatio>") != std::string::npos && cpl.find("<MainSound>") != std::string::npos);
+            int listed = 0;
+            for (size_t at = pkl.find("<Asset>"); at != std::string::npos; at = pkl.find("<Asset>", at + 1))
+            {
+                const std::string file = between(pkl, "<OriginalFileName>", "</OriginalFileName>", at);
+                const long long size = std::stoll(between(pkl, "<Size>", "</Size>", at));
+                assert((long long)std::filesystem::file_size(pkg + "/" + file) == size && am.find("<Path>" + file + "</Path>") != std::string::npos);
+                ++listed;
+            }
+            assert(listed == 3 && am.find("<PackingList>true</PackingList>") != std::string::npos);
+            std::printf("  %s: %s + %s + CPL + PKL + ASSETMAP — 3 frames read back, every size in the PKL true\n", imf ? "IMF" : "DCP",
+                        std::filesystem::path(picFile).filename().c_str(), std::filesystem::path(sndFile).filename().c_str());
+        }
+        std::printf("  [PASS] packages: a SMPTE DCP (2K Flat, 5.1) and an IMF App 2E (RGB 12-bit, stereo) that read back\n");
     }
     // ── R-MEDIA-1: a CinemaDNG sequence by its pattern, through LibRaw; a vendor RAW refused by name ──
     {

@@ -69,6 +69,9 @@ namespace interstellar
         // render's own seconds (0 = its first frame), in order, none overlapping
         struct Cue { double start = 0, end = 0; std::string text; };
         std::vector<Cue> subtitles;
+        // R-DLV-4: a package (codec dcp | imf) — a DCP's container the picture is centred in, and its title
+        int containerW = 0, containerH = 0;
+        std::string title;
     };
 
     class IFrameWriter
