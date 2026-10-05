@@ -81,7 +81,10 @@ one integrator who moves, wires, tests and commits each stream:
       11. [x] Media: CinemaDNG through LibRaw, the vendor SDK seam (R-MEDIA-1) — DR-MEDIA-1.
       11b. [x] Proxies, offline/online (R-MEDIA-2) — DR-MEDIA-2.
       11c. [x] Relink (R-MEDIA-3) — DR-MEDIA-3.
-      12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
+      12. [x] Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows) — DR-CLR-1.
+      12b. [ ] Window tracking (R-CLR-2).
+      12c. [ ] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5).
+      12d. [ ] The node graph (R-CLR-3).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
@@ -132,6 +135,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a qualifier and a window are mattes in the node's stack, not colour.** Colour is Cosmo's
+and Cosmo has no HSL key; the grade weight already showed the way — Interstellar owning HOW MUCH of a
+node's grade reaches, never what it does. A matte is that weight made per-pixel: a plugin type that
+keys instead of processing, so it inherits the plugin stack's storage, undo, animation (a window
+tracks by keys), panel and cache key for nothing. A source's key limits its whole look; a group's
+limits the group's contribution, computed apart exactly as a partial group weight is (D-7) — which is
+what a serial node's window means.
 
 **2026-10-05 — a relink moves the .isp's path; Cosmo keeps its slot.** Cosmo's slot identity is the path
 it was added with and nothing outside Cosmo may rewrite its file (law 1), so the `.isp` holds the

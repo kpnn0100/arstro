@@ -274,6 +274,32 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-CLR-1 Qualifiers, windows and the matte view (R-CLR-1, R-CLR-2 windows)
+Two plugins in a node's stack grade nothing: they make a KEY — 0..1 per pixel, where the node's
+grade reaches (`render/Matte.h`, catalog `render/Effects.cpp:227`). `qualifier.hsl` (`render/Matte.cpp:37`)
+keys hue (a centre, a half-width, a softness; 180° = every hue, and a grey has no hue), saturation
+((max − min) / max) and Rec.709 luma ranges, each with its softness, inverted on request, on the input's
+code values. `window.shape` (`:72`) keys a circle (an ellipse in the picture) or a rectangle by centre,
+width and height (shares of the picture), feathered outward over a share of the width (round on any
+aspect), inverted on request. A matte's mix fades its limit (`1 − mix·(1 − k)`); several intersect. The
+plan splits a chain's mattes from its plugins by owner (`core/service/ServiceRender.cpp:198`, `:486`): a
+source's own key limits its whole look — its grade, its groups', its plugins — mixed back to its input
+by the key (`:662`, `mixByKey` `render/Matte.cpp:144`); a group's key limits that group's contribution,
+computed apart as a partial group weight is (D-7) and read from the picture it grades (`:627`). A
+matted layer grades at source size so key, input and grade line up. Effects being animatable, a
+window's centre and size animate by keys (R-ANIM). The matte view (`view matte on|off`,
+`core/service/InterstellarService.cpp:353`) turns Grade's monitor into the selected source's key as grey
+(`ServiceRender.cpp:560`, `:671`; `keyPicture` `render/Matte.cpp:159`), never cached. UI: the plugin menu
+lists Qualifier (HSL) and Window; their sliders are the effect panel's; Colour › Show Matte (Shift+H in
+Grade, `app/App.cpp:333`, `:920`) and the caption says "matte". Guarded by L2 `qualifiers and windows…`
+(the edge source darkened by a grade: a luma key selecting the white, then the black only, mix 0 and 0.5,
+inverted; a hue key on a's blue graded at its hue and not at another; a hard window left and right; a
+feathered circle rising 188 → 204 → 250 across its edge; the matte view 255 inside and 0 outside; a
+window keyed from left to right over a second; a group's window limiting the group's grade and not the
+member's), UI (the menu, the toggle both ways, the caption, the plugin menu), shot `grade_window`.
+Mutants run red: group keys ignored, source keys ignored, a group's matte taken as the source's, no
+feather, no matte view, invert ignored, mix ignored, the hue band ignored.
+
 ### DR-MEDIA-3 Relink: offline media in one list, found by hand or by name in a folder (R-MEDIA-3)
 `media offline` (`core/service/ServiceMedia.cpp:60`) lists every offline source with its file and why
 (missing, or the vendor SDK it needs). `media relink <source> <file>` points one source at its file

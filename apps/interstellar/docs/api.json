@@ -1345,6 +1345,16 @@
       "requirement": "R-MEDIA-3"
     },
     {
+      "verb": "view matte",
+      "usage": "view matte <on|off>",
+      "args": "<on|off>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Grade's monitor shows the selected source's matte — where its grade reaches, white — instead of its picture: the key its qualifiers and windows (and its groups') make, so a key is pulled by looking at it.",
+      "requirement": "R-CLR-1"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",
@@ -2519,6 +2529,12 @@
       "type": "bool",
       "stable": true,
       "doc": "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."
+    },
+    {
+      "path": "matteView",
+      "type": "bool",
+      "stable": true,
+      "doc": "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."
     },
     {
       "path": "proxyJobs",
@@ -4237,6 +4253,176 @@
       "range": "0.0..1.0",
       "neutral": 0.5,
       "doc": "Spin Blur: Centre Y."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.hue",
+      "owner": "effect",
+      "key": "hue",
+      "kind": "scalar",
+      "unit": "deg",
+      "range": "0.0..360.0",
+      "neutral": 0.0,
+      "doc": "Qualifier (HSL): Hue."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.hueWidth",
+      "owner": "effect",
+      "key": "hueWidth",
+      "kind": "scalar",
+      "unit": "deg",
+      "range": "0.0..180.0",
+      "neutral": 180.0,
+      "doc": "Qualifier (HSL): Hue Width."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.hueSoft",
+      "owner": "effect",
+      "key": "hueSoft",
+      "kind": "scalar",
+      "unit": "deg",
+      "range": "0.0..90.0",
+      "neutral": 10.0,
+      "doc": "Qualifier (HSL): Hue Softness."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.satLow",
+      "owner": "effect",
+      "key": "satLow",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.0,
+      "doc": "Qualifier (HSL): Sat Low."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.satHigh",
+      "owner": "effect",
+      "key": "satHigh",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 1.0,
+      "doc": "Qualifier (HSL): Sat High."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.satSoft",
+      "owner": "effect",
+      "key": "satSoft",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..0.5",
+      "neutral": 0.05,
+      "doc": "Qualifier (HSL): Sat Softness."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.lumLow",
+      "owner": "effect",
+      "key": "lumLow",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.0,
+      "doc": "Qualifier (HSL): Luma Low."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.lumHigh",
+      "owner": "effect",
+      "key": "lumHigh",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 1.0,
+      "doc": "Qualifier (HSL): Luma High."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.lumSoft",
+      "owner": "effect",
+      "key": "lumSoft",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..0.5",
+      "neutral": 0.05,
+      "doc": "Qualifier (HSL): Luma Softness."
+    },
+    {
+      "address": "<effect:qualifier.hsl>.invert",
+      "owner": "effect",
+      "key": "invert",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.0,
+      "doc": "Qualifier (HSL): Invert."
+    },
+    {
+      "address": "<effect:window.shape>.shape",
+      "owner": "effect",
+      "key": "shape",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.0,
+      "doc": "Window: Rectangle."
+    },
+    {
+      "address": "<effect:window.shape>.centerX",
+      "owner": "effect",
+      "key": "centerX",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Window: Centre X."
+    },
+    {
+      "address": "<effect:window.shape>.centerY",
+      "owner": "effect",
+      "key": "centerY",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Window: Centre Y."
+    },
+    {
+      "address": "<effect:window.shape>.width",
+      "owner": "effect",
+      "key": "width",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..2.0",
+      "neutral": 0.5,
+      "doc": "Window: Width."
+    },
+    {
+      "address": "<effect:window.shape>.height",
+      "owner": "effect",
+      "key": "height",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..2.0",
+      "neutral": 0.5,
+      "doc": "Window: Height."
+    },
+    {
+      "address": "<effect:window.shape>.feather",
+      "owner": "effect",
+      "key": "feather",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..0.5",
+      "neutral": 0.05,
+      "doc": "Window: Feather."
+    },
+    {
+      "address": "<effect:window.shape>.invert",
+      "owner": "effect",
+      "key": "invert",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.0,
+      "doc": "Window: Invert."
     }
   ]
 }

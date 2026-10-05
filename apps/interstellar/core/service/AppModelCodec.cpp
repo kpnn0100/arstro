@@ -221,6 +221,7 @@ namespace interstellar
                              .set("spec", r.spec));
         j.set("renders", renders);
         j.set("useProxies", m.useProxies);
+        j.set("matteView", m.matteView);
         Json proxies = Json::array();
         for (const auto &p : m.proxyJobs)
             proxies.push(Json::object()
@@ -503,6 +504,7 @@ namespace interstellar
             {"renders[].fps", "number", "Output rate the timeline is sampled at."},
             {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
             {"useProxies", "bool", "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."},
+            {"matteView", "bool", "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."},
             {"proxyJobs", "array", "This session's proxy jobs, oldest first."},
             {"proxyJobs[].id", "string", "Job id (p1, p2, …)."},
             {"proxyJobs[].rackObj", "string", "The source's #rackobj id."},

@@ -59,7 +59,7 @@ namespace interstellar
             // delivery (R-RENDER)
             Render, RenderCancel, ExportStill, LutExport, InterchangeExport, InterchangeImport,
             Shuttle, Mark, SourceView, SourcePlayhead, EditTarget, EditInsert, EditOverwrite, MulticamNew, MulticamAngle,
-            ProxyMake, ProxyRemove, ProxyUse, MediaOffline, MediaRelink,
+            ProxyMake, ProxyRemove, ProxyUse, MediaOffline, MediaRelink, ViewMatte,
             // the graded preview cache (R-PLAY-1)
             CacheBuild, CacheClear,
             // keyframes (R-ANIM)

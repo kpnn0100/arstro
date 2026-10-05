@@ -350,6 +350,14 @@ namespace interstellar
                 break;
             case CK::ProxyMake: case CK::ProxyRemove: case CK::ProxyUse: ok = requireProject() && proxyCommand(c); break;
             case CK::MediaOffline: case CK::MediaRelink: ok = requireProject() && mediaCommand(c); break;
+            case CK::ViewMatte:
+            {
+                // R-CLR-1: presentation of the Grade monitor, not the project — no undo, no save
+                const std::string a = c.arg(0);
+                ok = a == "on" || a == "off" ? true : fail("view matte: on or off, got " + a);
+                if (ok && mMatteView != (a == "on")) { mMatteView = a == "on"; bumpFrame(); }
+                break;
+            }
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -878,6 +886,7 @@ namespace interstellar
         m.renders.clear();
         for (const auto &j : mJobs) m.renders.push_back(j->model);
         m.useProxies = P.proxies;   // R-MEDIA-2
+        m.matteView = mMatteView;   // R-CLR-1
         m.proxyJobs.clear();
         for (const auto &j : mProxyJobs) m.proxyJobs.push_back(j->model);
         fillEditModel();
@@ -2561,10 +2570,12 @@ namespace interstellar
     // arrangement
     // ──────────────────────────────────────────────────────────────────────────────────────────
 
-    void InterstellarService::effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT) const
+    void InterstellarService::effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT,
+                                          std::vector<NodeId> *owners) const
     {
         out.clear();
         key.clear();
+        if (owners) owners->clear();
         const Project &P = *mProject;
         // the node, then its ancestor groups (inner first), by the rack's live tree
         std::vector<NodeId> chain{roId};
@@ -2615,6 +2626,7 @@ namespace interstellar
                     r.lut = loadLut(resolvePath(v), why, &stamp);
                     key += ":" + (r.lut ? stamp : std::string("unreadable"));
                 }
+                if (owners) owners->push_back(owner);
                 out.push_back(std::move(r));
             }
         }

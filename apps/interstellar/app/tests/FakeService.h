@@ -141,6 +141,14 @@ namespace istest
                 e.params = {{"length", "Length", "px", 30.0, 30.0, 0.0, 400.0}, {"angle", "Angle", "deg", 0.0, 0.0, -180.0, 180.0}};
             }
             else if (type == "lut.cube") { e.label = "LUT"; e.family = "Colour"; e.fileKey = "path"; }
+            else if (type == "window.shape")
+            {
+                e.label = "Window";
+                e.family = "Matte";
+                e.params = {{"shape", "Rectangle", "", 0.0, 0.0, 0.0, 1.0}, {"centerX", "Centre X", "", 0.4, 0.5, 0.0, 1.0},
+                            {"centerY", "Centre Y", "", 0.45, 0.5, 0.0, 1.0}, {"width", "Width", "", 0.35, 0.5, 0.0, 2.0},
+                            {"height", "Height", "", 0.5, 0.5, 0.0, 2.0}, {"feather", "Feather", "", 0.08, 0.05, 0.0, 0.5}, {"invert", "Invert", "", 0.0, 0.0, 0.0, 1.0}};
+            }
             else
             {
                 e.label = type == "blur.zoom" ? "Zoom Blur" : "Spin Blur";
@@ -199,7 +207,7 @@ namespace istest
             // R-FX-5: s_day01 carries a plugin stack; the catalog is the service's
             m.effectTypes = {{"blur.gaussian", "Gaussian Blur", "Blur"}, {"blur.box", "Box Blur", "Blur"},
                              {"blur.directional", "Directional Blur", "Blur"}, {"blur.zoom", "Zoom Blur", "Blur"},
-                             {"blur.spin", "Spin Blur", "Blur"}};
+                             {"blur.spin", "Spin Blur", "Blur"}, {"qualifier.hsl", "Qualifier (HSL)", "Matte"}, {"window.shape", "Window", "Matte"}};
             // R-COLOR: the service's lists (abridged), Rec.709 everywhere until a test changes it
             m.colourInputs = {{"rec709", "Rec.709"}, {"srgb", "sRGB"}, {"linear", "Linear (Rec.709)"}, {"logc3", "ARRI LogC3"},
                               {"slog3", "Sony S-Log3"}, {"vlog", "Panasonic V-Log"}};

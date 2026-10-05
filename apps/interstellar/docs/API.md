@@ -98,6 +98,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `proxy use <on\|off>` | The project's switch: the monitor (and playback, the preview cache, capture) decodes each source's proxy where it has one — or the originals. Renders and export-still always decode the originals. | R-MEDIA-2 |
 | `media offline` | List the offline sources in one place: each one's bind name, the file it names, and why it is offline. | R-MEDIA-3 |
 | `media relink [<source> <file>] [--search <folder>]` | Point a source at its file where it is now — `<source> <file>` (a CinemaDNG folder or pattern too), or --search <folder>: every offline source found there by its file name (a sequence by its folder). The grade, its history in this session and every clip stay; Cosmo keeps the slot it had. Refused, saying why, if the rack's structure changed since it was saved (Cosmo cannot save while a source is offline, D-2). | R-MEDIA-3 |
+| `view matte <on\|off>` | Grade's monitor shows the selected source's matte — where its grade reaches, white — instead of its picture: the key its qualifiers and windows (and its groups') make, so a key is pulled by looking at it. | R-CLR-1 |
 | `multicam angle <n> [--clip <clip>] [--at <t>]` | Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step. | R-EDT-5 |
 | `interchange export <timeline> [--format <edl\|fcpxml\|otio\|aaf>] [--out <path>] [--track <n>] [--start <HH:MM:SS:FF>]` | Write a timeline for another editor: a CMX 3600 EDL (one video track, --track; reels and source timecode), FCPXML 1.9 or OpenTimelineIO — the format from --format or the extension. The record clock starts at 01:00:00:00 unless --start. AAF is refused, naming the way to it. | R-XCH-1 |
 | `interchange import <file> [--format <edl\|fcpxml\|otio>] [--media <dir>] [--name <timeline>] [--fps <rate>]` | Read an EDL, FCPXML or OTIO into a NEW root timeline: its media added to the rack (found by path, or by clip/reel name under --media), its tracks, clips, dissolves and speeds. An EDL's rate is the project's unless --fps. Media that cannot be found is listed, not placed. | R-XCH-1 |
@@ -216,6 +217,23 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<effect:blur.spin>.angle` | effect | scalar | deg | 0.0..90.0 | 5.0 | Spin Blur: Angle. |
 | `<effect:blur.spin>.centerX` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Spin Blur: Centre X. |
 | `<effect:blur.spin>.centerY` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Spin Blur: Centre Y. |
+| `<effect:qualifier.hsl>.hue` | effect | scalar | deg | 0.0..360.0 | 0.0 | Qualifier (HSL): Hue. |
+| `<effect:qualifier.hsl>.hueWidth` | effect | scalar | deg | 0.0..180.0 | 180.0 | Qualifier (HSL): Hue Width. |
+| `<effect:qualifier.hsl>.hueSoft` | effect | scalar | deg | 0.0..90.0 | 10.0 | Qualifier (HSL): Hue Softness. |
+| `<effect:qualifier.hsl>.satLow` | effect | scalar | 0..1 | 0.0..1.0 | 0.0 | Qualifier (HSL): Sat Low. |
+| `<effect:qualifier.hsl>.satHigh` | effect | scalar | 0..1 | 0.0..1.0 | 1.0 | Qualifier (HSL): Sat High. |
+| `<effect:qualifier.hsl>.satSoft` | effect | scalar | 0..1 | 0.0..0.5 | 0.05 | Qualifier (HSL): Sat Softness. |
+| `<effect:qualifier.hsl>.lumLow` | effect | scalar | 0..1 | 0.0..1.0 | 0.0 | Qualifier (HSL): Luma Low. |
+| `<effect:qualifier.hsl>.lumHigh` | effect | scalar | 0..1 | 0.0..1.0 | 1.0 | Qualifier (HSL): Luma High. |
+| `<effect:qualifier.hsl>.lumSoft` | effect | scalar | 0..1 | 0.0..0.5 | 0.05 | Qualifier (HSL): Luma Softness. |
+| `<effect:qualifier.hsl>.invert` | effect | scalar | 0..1 | 0.0..1.0 | 0.0 | Qualifier (HSL): Invert. |
+| `<effect:window.shape>.shape` | effect | scalar | 0..1 | 0.0..1.0 | 0.0 | Window: Rectangle. |
+| `<effect:window.shape>.centerX` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Window: Centre X. |
+| `<effect:window.shape>.centerY` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Window: Centre Y. |
+| `<effect:window.shape>.width` | effect | scalar | 0..1 | 0.0..2.0 | 0.5 | Window: Width. |
+| `<effect:window.shape>.height` | effect | scalar | 0..1 | 0.0..2.0 | 0.5 | Window: Height. |
+| `<effect:window.shape>.feather` | effect | scalar | 0..1 | 0.0..0.5 | 0.05 | Window: Feather. |
+| `<effect:window.shape>.invert` | effect | scalar | 0..1 | 0.0..1.0 | 0.0 | Window: Invert. |
 
 ## Events
 
@@ -382,6 +400,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].fps` | number |  | Output rate the timeline is sampled at. |
 | `renders[].spec` | string |  | The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate. |
 | `useProxies` | bool |  | The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2). |
+| `matteView` | bool |  | Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1). |
 | `proxyJobs` | array |  | This session's proxy jobs, oldest first. |
 | `proxyJobs[].id` | string |  | Job id (p1, p2, …). |
 | `proxyJobs[].rackObj` | string |  | The source's #rackobj id. |

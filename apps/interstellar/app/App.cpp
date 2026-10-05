@@ -317,8 +317,9 @@ namespace interstellar_v1
 
     void App::refreshColourMenu(const interstellar::AppModel &m)
     {
-        if (m.workingSpace == mColourMenuFor) return;
-        mColourMenuFor = m.workingSpace;
+        const std::string menuKey = m.workingSpace + (m.matteView ? "|matte" : "");
+        if (menuKey == mColourMenuFor) return;
+        mColourMenuFor = menuKey;
         // the current working space is marked with a dot; the others are indented to line up
         auto mark = [&](const char *id) { return m.workingSpace == id ? std::string("\xE2\x80\xA2  ") : std::string("     "); };
         std::vector<cosmo_v2::MenuStrip::Item> items = {
@@ -327,6 +328,11 @@ namespace interstellar_v1
             {"Input Colour of Selected...", [this] {
                  const auto b = selectedBind();
                  if (!b.empty()) openInputColourMenu(b, Point(width() * 0.5, 40.0));
+             }},
+            // R-CLR-1: the key a qualifier or a window makes, looked at
+            {std::string(m.matteView ? "\xE2\x80\xA2  " : "     ") + "Show Matte  (Shift+H)", [this, on = !m.matteView] {
+                 dispatch(std::string("view matte ") + (on ? "on" : "off"));
+                 if (on) mEdit->setTab(EditScreen::Grade);
              }},
         };
         mEdit->topBar()->menus()->setItems(5, std::move(items));
@@ -911,6 +917,10 @@ namespace interstellar_v1
                 return true;
             }
             return false;
+        case 'H':
+            // R-CLR-1: Shift+H — the matte, in Grade (a colourist's highlight key)
+            if (e.shift && mEdit->tab() == EditScreen::Grade) { dispatch(std::string("view matte ") + (m.matteView ? "off" : "on")); return true; }
+            return false;
         case 'M':
             if (mEdit->tab() == EditScreen::Cut && m.duration > 0.0)
             {
@@ -1108,6 +1118,7 @@ namespace interstellar_v1
         if (m.sourceWidth > 0 && m.sourceHeight > 0)
             cap += "  \xC2\xB7  " + std::to_string(m.sourceWidth) + "\xC3\x97" + std::to_string(m.sourceHeight);
         if (m.useProxies && !n.proxy.empty()) cap += "  \xC2\xB7  proxy";   // R-MEDIA-2: this picture is its proxy
+        if (m.matteView) cap += "  \xC2\xB7  matte";                         // R-CLR-1: the key, not the picture
         mon->setCaption(cap);
 
         const bool changed = force || !mFetchedSource || m.frameSeq != mFetchedSeq || edge != mFetchedEdge ||

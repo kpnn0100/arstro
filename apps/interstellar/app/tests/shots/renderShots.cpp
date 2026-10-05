@@ -431,6 +431,18 @@ namespace
             ++s.m.revision;
         };
         v.push_back({"cut_multicam", multicam, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"grade_window", [](FakeService &s) {   // R-CLR-2: a window on s_day01, its section open
+            s.edit();
+            s.m.effects.push_back(FakeService::effect("ef_4", "ro2", "s_day01", "window.shape", 2, true, 1.0));
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.settle();
+            auto pl = r.app->edit().gradeInspector()->plugins();
+            const Rect rr = pl->rowRect(pl->rowCount() - 1);
+            const artboard::Point p = world(*pl, rr.x + rr.w * 0.5 - 30.0, rr.y + rr.h * 0.5);
+            r.click(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"relink_media", edit, [](Rig &r) {   // R-MEDIA-3: File › Relink Media — the offline sources in one list
             r.settle();
             r.app->openRelinkMenu(artboard::Point(r.app->width() * 0.25, 40.0));

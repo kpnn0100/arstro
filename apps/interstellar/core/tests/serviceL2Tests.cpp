@@ -1839,6 +1839,94 @@ int main()
         assert(!failed("d001") && has(f.svc->output(), "moved/D001/D001_%06d.dng"));
     });
 
+    test("qualifiers and windows limit a node's grade to what they select; the matte view shows the key (R-CLR-1, R-CLR-2)", [] {
+        Fixture f("matte");
+        f.standard();
+        f.must("rack add \"" + f.path("footage/edge.mp4") + "\"");   // left half white, right half black
+        f.must("track add --kind video --name v1");
+        f.must("clip add --track v1 --src edge --in 0 --out 2 --at 6");
+        auto px = [&](double t, int x, int y = 13) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame("tl_1", t, 0, r) && r.width == 48);
+            return (int)r.rgba[((size_t)y * 48 + x) * 4];
+        };
+        assert(px(6.5, 10) == 255 && px(6.5, 40) == 0);
+        f.must("set edge.basic.exposure=-1");
+        const int dark = px(6.5, 10);
+        assert(dark < 230);                                                  // the grade reaches the white
+        // a luma qualifier: the bright half only, then everything but it
+        f.must("effect add edge --type qualifier.hsl");
+        assert(px(6.5, 10) == dark);                                         // the defaults select everything
+        f.must("set ef_1.lumLow=0.5");
+        assert(px(6.5, 10) == dark);
+        f.must("set ef_1.lumLow=0 ef_1.lumHigh=0.4");                         // the dark half only: white is left alone
+        assert(px(6.5, 10) == 255);
+        f.must("set ef_1.mix=0");                                            // a matte at mix 0 limits nothing
+        assert(px(6.5, 10) == dark);
+        f.must("set ef_1.mix=0.5");                                          // … at 0.5, half its limit
+        assert(px(6.5, 10) > dark + 10 && px(6.5, 10) < 245);
+        f.must("set ef_1.mix=1 ef_1.invert=1");
+        assert(px(6.5, 10) == dark);
+        f.must("effect remove ef_1");
+        // a hue qualifier on a's frame (12, 60, 100) — hue ~206°: its hue is graded, another hue is not
+        f.must("set a.basic.exposure=1");
+        auto aPx = [&] { Raster r; assert(f.svc->renderTimelineFrame("tl_1", 0.5, 0, r)); return (int)r.rgba[((size_t)13 * 48 + 20) * 4 + 2]; };
+        const int bright = aPx();
+        assert(bright > 100);
+        const std::string q = f.out("effect add a --type qualifier.hsl");
+        const std::string qa = q.substr(0, q.size() - 1);
+        f.must("set " + qa + ".hue=206 " + qa + ".hueWidth=15");
+        assert(aPx() == bright);
+        f.must("set " + qa + ".hue=100");
+        assert(aPx() == 100);                                                // another hue: a's blue as it was
+        f.must("effect remove " + qa);
+        f.must("set a.basic.exposure=0");
+        // a window: the left half, hard; then off to the right; then a feathered circle
+        const std::string w = f.out("effect add edge --type window.shape");
+        const std::string wi = w.substr(0, w.size() - 1);
+        f.must("set " + wi + ".shape=1 " + wi + ".centerX=0.25 " + wi + ".width=0.5 " + wi + ".height=2 " + wi + ".feather=0");
+        assert(px(6.5, 10) == dark);
+        f.must("set " + wi + ".centerX=0.75");
+        assert(px(6.5, 10) == 255);
+        f.must("set " + wi + ".shape=0 " + wi + ".centerX=0.25 " + wi + ".centerY=0.5 " + wi + ".width=0.2 " + wi + ".height=0.6 " + wi + ".feather=0.15");
+        std::vector<int> row;
+        for (int x = 12; x < 24; ++x) row.push_back(px(6.5, x));
+        bool between = false;
+        for (size_t k = 1; k < row.size(); ++k) { assert(row[k] >= row[k - 1]); between = between || (row[k] > dark + 5 && row[k] < 250); }
+        std::printf("    a feathered window across the white: %d … %d … %d\n", row.front(), row[row.size() / 2], row.back());
+        assert(row.front() == dark && row.back() > 245 && between);
+        // the matte view: Grade's monitor shows the key
+        f.must("rack select edge");
+        f.must("view matte on");
+        assert(f.svc->model().matteView);
+        {
+            Raster r;
+            assert(f.svc->renderSourceFrame("edge", 0.5, 0, r));
+            const int centre = r.rgba[((size_t)13 * r.width + 12) * 4], outside = r.rgba[((size_t)13 * r.width + 40) * 4];
+            std::printf("    matte view: %d at the window's centre, %d outside it (%dx%d)\n", centre, outside, r.width, r.height);
+            assert(centre == 255 && outside == 0 && r.rgba[((size_t)13 * r.width + 12) * 4 + 1] == 255);
+        }
+        f.must("view matte off");
+        // an animated window follows its keys (source time 0 → 1 s: the left of centre, then the right)
+        f.must("set " + wi + ".shape=1 " + wi + ".width=0.5 " + wi + ".height=2 " + wi + ".feather=0");
+        f.must("key add " + wi + ".centerX --at 0 --value 0.25");
+        f.must("key add " + wi + ".centerX --at 1 --value 0.75");
+        assert(px(6.0, 10) == dark && px(7.0, 10) == 255);
+        f.must("key clear " + wi + ".centerX");
+        f.must("effect remove " + wi);
+        // a group's window limits the GROUP's contribution, not the member's own grade
+        f.must("set edge.basic.exposure=0");
+        f.must("rack group new grp --nodes edge");
+        f.must("set grp.basic.exposure=-1");
+        assert(px(6.5, 10) == dark);
+        const std::string g = f.out("effect add grp --type window.shape");
+        const std::string gi = g.substr(0, g.size() - 1);
+        f.must("set " + gi + ".shape=1 " + gi + ".centerX=0.75 " + gi + ".width=0.5 " + gi + ".height=2 " + gi + ".feather=0");
+        assert(px(6.5, 10) == 255);                                          // the group's grade only on the right
+        f.must("set edge.basic.exposure=-1");
+        assert(px(6.5, 10) == dark);                                         // the member's own grade is not the group's to limit
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

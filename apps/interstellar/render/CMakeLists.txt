@@ -31,6 +31,7 @@ add_library(interstellar_render STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/ColourTransform.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Composite.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Effects.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Matte.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Lut.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Prescale.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FrameCache.cpp

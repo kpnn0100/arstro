@@ -211,6 +211,9 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   "Locate <name> (<file>)..." → `onPickMediaToRelink` → `media relink <bind> <path>`; "Search a Folder
   for All..." → `onPickFolder` → `media relink --search <dir>`; an offline row's menu has Relink....
   Shot: `relink_media`. UI checks: 419.
+- Mattes (R-CLR-1/2): Qualifier (HSL) and Window in the plugin menu → `effect add <node> --type
+  qualifier.hsl|window.shape`, their sliders the effect panel's; Colour › Show Matte / Shift+H in Grade
+  → `view matte on|off`; the caption says "matte". Shot: `grade_window`. UI checks: 423.
 
 ## Interchange (2026-10-05, R-XCH)
 

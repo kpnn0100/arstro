@@ -223,6 +223,16 @@ namespace render
             {"blur.spin", "Spin Blur", "Blur",
              {{"angle", "Angle", 5.0, 0.0, 90.0, "deg"}, {"centerX", "Centre X", 0.5, 0.0, 1.0, ""}, {"centerY", "Centre Y", 0.5, 0.0, 1.0, ""}}},
             {"lut.cube", "LUT", "Colour", {}, {"path"}},
+            // R-CLR-1/2: mattes — where the node's grade reaches (Matte.h), not what it does
+            {"qualifier.hsl", "Qualifier (HSL)", "Matte",
+             {{"hue", "Hue", 0.0, 0.0, 360.0, "deg"}, {"hueWidth", "Hue Width", 180.0, 0.0, 180.0, "deg"}, {"hueSoft", "Hue Softness", 10.0, 0.0, 90.0, "deg"},
+              {"satLow", "Sat Low", 0.0, 0.0, 1.0, ""}, {"satHigh", "Sat High", 1.0, 0.0, 1.0, ""}, {"satSoft", "Sat Softness", 0.05, 0.0, 0.5, ""},
+              {"lumLow", "Luma Low", 0.0, 0.0, 1.0, ""}, {"lumHigh", "Luma High", 1.0, 0.0, 1.0, ""}, {"lumSoft", "Luma Softness", 0.05, 0.0, 0.5, ""},
+              {"invert", "Invert", 0.0, 0.0, 1.0, ""}}},
+            {"window.shape", "Window", "Matte",
+             {{"shape", "Rectangle", 0.0, 0.0, 1.0, ""}, {"centerX", "Centre X", 0.5, 0.0, 1.0, ""}, {"centerY", "Centre Y", 0.5, 0.0, 1.0, ""},
+              {"width", "Width", 0.5, 0.0, 2.0, ""}, {"height", "Height", 0.5, 0.0, 2.0, ""}, {"feather", "Feather", 0.05, 0.0, 0.5, ""},
+              {"invert", "Invert", 0.0, 0.0, 1.0, ""}}},
         };
         return k;
     }
@@ -238,6 +248,7 @@ namespace render
     {
         if (!effectType(e.type)) return false;
         if (img.empty() || e.mix <= 0.0) return true;
+        if (e.type == "qualifier.hsl" || e.type == "window.shape") return true;   // a matte: keyed by the service (Matte.h), not run on pixels
         if (e.type == "lut.cube")
         {
             if (e.lut) e.lut->apply(img, e.mix);   // no file chosen yet: the picture as it came

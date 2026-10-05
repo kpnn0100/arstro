@@ -584,13 +584,17 @@ reserves the rest so adopting it is not a migration.
   D-2). Opened in Cosmo alone, a relinked source still names its old path (Cosmo cannot rename a slot;
   said).
 
-## R-CLR — colourist tools — ⏳ NOT STARTED (added 2026-10-05)
+## R-CLR — colourist tools — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-CLR-1, 2 windows ✅ DR-CLR-1 — tracking next, 3–5 next)
 
 - **R-CLR-1 Qualifiers**: an HSL key (hue, saturation, luminance ranges with softness) that limits a
-  node's grade to what it selects, with a matte view.
+  node's grade to what it selects, with a matte view. — ✅ (DR-CLR-1). A qualifier is a plugin in the node's stack
+  (`qualifier.hsl`) that grades nothing: it keys where the node's grade reaches, read from the node's
+  input; on a group it limits the group's own contribution. Colour stays Cosmo's. The matte view is
+  Grade's monitor (`view matte`, Shift+H); a matted layer grades at source size (said).
 - **R-CLR-2 Windows and tracking**: a node's circle/rectangle window can be tracked — its position
   follows a feature through the shot (forward and backward from the playhead), the track stored as
-  keyframes (R-ANIM).
+  keyframes (R-ANIM). — 🔶 windows ✅ (DR-CLR-1): `window.shape`, a circle or a rectangle, feathered,
+  inverted, animatable by keys like any plugin parameter; tracking next.
 - **R-CLR-3 A node graph**: the rack's serial structure (a group's grade over its members') shown as
   nodes and links, with serial and parallel nodes added and wired there; Cosmo stays the colour
   authority — a node is a Cosmo grade.

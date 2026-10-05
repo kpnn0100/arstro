@@ -2516,6 +2516,37 @@ namespace
         CHECK(clickItem("Relink...") && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"), "an offline source's menu offers Relink...");
     }
 
+    /** R-CLR-1/2: the matte types in the plugin menu; the matte view from the Colour menu and Shift+H, said on the caption. */
+    void testMatteUi()
+    {
+        std::printf("mattes: the plugin menu, Show Matte, Shift+H, the caption\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Colour", "     Show Matte") && hasLine(r.svc, "view matte on"), "Colour › Show Matte turns the matte view on");
+        r.svc.m.matteView = true;
+        ++r.svc.m.revision;
+        r.settle();
+        CHECK(r.app->edit().monitor()->caption().find("matte") != std::string::npos, "Grade's caption says it shows the matte");
+        r.svc.lines.clear();
+        artboard::KeyEvent e;
+        e.type = artboard::KeyEvent::Type::Down;
+        e.keyCode = 'H';
+        e.shift = true;
+        r.app->key(e);
+        CHECK(hasLine(r.svc, "view matte off"), "Shift+H in Grade toggles it");
+        // the catalog's mattes are in the plugin menu
+        auto pl = r.app->edit().gradeInspector()->plugins();
+        const Point add = centre(*pl, pl->addRect());
+        r.click(add.x, add.y);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(labels.find("Qualifier (HSL)|") != std::string::npos && labels.find("Window|") != std::string::npos,
+              "the plugin menu offers a Qualifier and a Window");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2688,6 +2719,7 @@ int main()
     testMulticamUi();
     testProxiesUi();
     testRelinkUi();
+    testMatteUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

@@ -58,6 +58,9 @@ namespace interstellar
         // R-FX-5: the plugins after Cosmo — the source's, then its groups' — and their key
         std::vector<render::EffectRun> effects;
         std::string effectsKey;
+        // R-CLR-1/2: mattes — the source's own key its whole look (read from its input), its groups'
+        // key their contribution (read from the picture with those groups off)
+        std::vector<render::EffectRun> mattes, groupMattes;
         int srcWidth = 0;               // the source's own width: plugin sizes are in its pixels
         // R-COLOR-2: the source's space → the working space, before Cosmo grades (null = identity)
         std::shared_ptr<const render::colour::Transform> input;
@@ -77,6 +80,7 @@ namespace interstellar
         std::string key;                // identity of the pixels this plan produces
         // R-COLOR-4: the working space → the picture: the monitor's view (Rec.709), or a render's --output
         std::shared_ptr<const render::colour::Transform> output;
+        bool matte = false;             // R-CLR-1: the matte view — each layer's key, as grey, instead of its picture
     };
 
     /** R-AUD-6/8: the sound thread. It mixes ahead of the ear and writes to the host's output, whose

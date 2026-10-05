@@ -300,6 +300,7 @@ namespace interstellar
         std::vector<RenderJobModel> renders;
         // ── proxies (R-MEDIA-2) ──
         bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
+        bool matteView = false;                    // R-CLR-1: Grade's monitor shows the selected source's matte
         std::vector<ProxyJobModel> proxyJobs;      // this session's proxy jobs, oldest first
 
         // ── Edit: one undo history across the rack and the project (R-EDIT-1) ──

@@ -14,6 +14,7 @@
 #include "Composite.h"
 #include "ParamHash.h"
 #include "Prescale.h"
+#include "Matte.h"
 #include "Project.h"
 #include "Versions.h"
 #include "volume/TemporalOps.h"
@@ -192,6 +193,24 @@ namespace interstellar
         Source *out = s.get();
         ctx.sources[media] = std::move(s);
         return out;
+    }
+
+    void InterstellarService::splitMattes(const NodeId &roId, std::vector<render::EffectRun> &runs, const std::vector<NodeId> &owners,
+                                          PlanLayer &L, std::set<NodeId> &partial) const
+    {
+        std::vector<render::EffectRun> plugins;
+        for (size_t i = 0; i < runs.size(); ++i)
+        {
+            if (!render::isMatte(runs[i].type)) { plugins.push_back(std::move(runs[i])); continue; }
+            const NodeId owner = i < owners.size() ? owners[i] : roId;
+            if (owner == roId) L.mattes.push_back(std::move(runs[i]));
+            else
+            {
+                L.groupMattes.push_back(std::move(runs[i]));
+                partial.insert(owner);   // its contribution computed apart, so the key can limit it
+            }
+        }
+        runs = std::move(plugins);
     }
 
     InterstellarService::Source *InterstellarService::proxyFor(const RackObj &ro, std::string &media)
@@ -462,6 +481,9 @@ namespace interstellar
                     }
                 }
             }
+            std::vector<NodeId> owners;
+            effectChain(ro->id, L.effects, L.effectsKey, srcT, &owners);
+            splitMattes(ro->id, L.effects, owners, L, partial);   // R-CLR-1/2: a group's matte keys its contribution
             if (!partial.empty() && gradeForBypassing(tl, ro->id, partial, L.paramsGroupsOff, e, srcT))
             {
                 L.groupMix = true;
@@ -469,9 +491,8 @@ namespace interstellar
             }
             L.weight = std::clamp(ro->weight, 0.0, 1.0);
             // A partial mix needs the frames it mixes at one size — grade at source size and let
-            // the composite scale.
-            L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
-            effectChain(ro->id, L.effects, L.effectsKey, srcT);
+            // the composite scale (a matte too: its key, the input and the grade line up pixel for pixel)
+            L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix || !L.mattes.empty() ? 0 : proxyEdge;
             L.srcWidth = srcWidthOf(*ro, L.media, *s);
             L.input = inputTransform(*ro, workingOf(P));
             if (!ro->lut.empty())
@@ -512,7 +533,19 @@ namespace interstellar
         L.identity = render::GradeEngine::isIdentity(L.params);
         L.weight = std::clamp(ro->weight, 0.0, 1.0);
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
-        effectChain(roId, L.effects, L.effectsKey, at);
+        {
+            std::vector<NodeId> owners;
+            std::set<NodeId> partial;
+            effectChain(roId, L.effects, L.effectsKey, at, &owners);
+            splitMattes(roId, L.effects, owners, L, partial);
+            std::string why;
+            if (!partial.empty() && gradeForBypassing(currentTimeline(), roId, partial, L.paramsGroupsOff, why, at))
+            {
+                L.groupMix = true;
+                L.groupWeight = 1.0;
+            }
+            if (L.groupMix || !L.mattes.empty()) L.edge = 0;
+        }
         L.srcWidth = srcWidthOf(*ro, L.media, *s);
         L.input = inputTransform(*ro, workingOf(*mProject));
         if (!ro->lut.empty())
@@ -524,7 +557,8 @@ namespace interstellar
         // is graded as itself (a proxy's shape is its original's, give or take an odd row)
         outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
         plan.layers.push_back(L);
-        plan.key = "src|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
+        plan.matte = mMatteView;   // R-CLR-1: the key a colourist pulls is looked at in Grade
+        plan.key = std::string(plan.matte ? "matte|" : "src|") + std::to_string(plan.width) + "x" + std::to_string(plan.height);
         planKeyAppend(plan.key, plan.layers.back());
         plan.output = outputTransform(workingOf(*mProject), "rec709", 1000.0);
         if (plan.output) plan.key += "|" + plan.output->key();
@@ -574,7 +608,7 @@ namespace interstellar
             if (l.weight > 0.0 && l.weight < 1.0) key.source += "|w" + canonicalNumber(l.weight);
             if (l.groupMix && !ungradedOnly)
                 key.source += "|g" + canonicalNumber(l.groupWeight) + ":" + std::to_string(render::hashParams(l.paramsGroupsOff));
-            if (!remember || !mCache->get(key, graded[i]))
+            if (!remember || plan.matte || !mCache->get(key, graded[i]))
             {
                 Raster ungraded;
                 if (!decodeLayer(ctx, l, ungraded, deep)) continue;
@@ -590,17 +624,31 @@ namespace interstellar
                 // grade weight's "ungraded" is this picture, never the raw log
                 if (l.input) l.input->apply(ungraded);
                 if (l.lut) l.lut->apply(ungraded);   // R-COLOR-5: the source's input LUT, after its transform
-                if (key.paramHash == render::FrameCache::kUngraded) graded[i] = std::move(ungraded);
+                std::vector<float> matteKey;   // R-CLR-1/2: where this layer's grade reaches
+                const bool keyed = !l.mattes.empty() || plan.matte;
+                if (key.paramHash == render::FrameCache::kUngraded)
+                {
+                    if (keyed) graded[i] = ungraded;   // a matte reads the input, so it is kept
+                    else graded[i] = std::move(ungraded);
+                }
                 else
                 {
                     if (!ctx.grade->render(ungraded, l.params, !l.identity, l.edge, graded[i])) continue;
                     if (l.groupMix)
                     {
-                        // The groups' own contribution, faded: off ↔ on by the product of their weights.
+                        // The groups' own contribution, faded: off ↔ on by the product of their weights —
+                        // and, where a group has a matte, by its key, read from the picture it grades
                         Raster off;
                         if (ctx.grade->render(ungraded, l.paramsGroupsOff, !render::GradeEngine::isIdentity(l.paramsGroupsOff), l.edge, off))
                         {
-                            mixWeight(off, graded[i], l.groupWeight);
+                            if (l.groupMattes.empty()) mixWeight(off, graded[i], l.groupWeight);
+                            else
+                            {
+                                std::vector<float> gk((size_t)off.width * off.height, (float)l.groupWeight);
+                                for (const auto &m : l.groupMattes) render::applyMatte(m, off, gk);
+                                render::mixByKey(off, graded[i], gk);
+                                matteKey = gk;
+                            }
                         }
                     }
                     mixWeight(ungraded, graded[i], l.weight);
@@ -611,7 +659,22 @@ namespace interstellar
                     const double scale = l.srcWidth > 0 ? (double)graded[i].width / l.srcWidth : 1.0;
                     for (const auto &e : l.effects) render::applyEffect(e, scale, graded[i]);
                 }
-                if (remember) mCache->put(key, graded[i]);
+                // the source's own mattes limit its whole look — grade, groups, plugins — read from its input
+                if (!l.mattes.empty() && !ungraded.empty())
+                {
+                    std::vector<float> sk;
+                    for (const auto &m : l.mattes) render::applyMatte(m, ungraded, sk);
+                    render::mixByKey(ungraded, graded[i], sk);
+                    if (matteKey.size() == sk.size()) for (size_t k = 0; k < sk.size(); ++k) matteKey[k] *= sk[k];
+                    else matteKey = sk;
+                }
+                if (plan.matte && !graded[i].empty())
+                {
+                    // the matte view: the key as grey (no matte: all of it is graded)
+                    if (matteKey.size() != (size_t)graded[i].width * graded[i].height) matteKey.assign((size_t)graded[i].width * graded[i].height, 1.0f);
+                    render::keyPicture(matteKey, graded[i].width, graded[i].height, graded[i]);
+                }
+                if (remember && !plan.matte) mCache->put(key, graded[i]);
             }
             render::Layer L = l.layer;
             L.src = &graded[i];

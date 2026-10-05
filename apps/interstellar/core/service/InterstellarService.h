@@ -216,7 +216,13 @@ namespace interstellar
         bool effectCommand(const Command &c);
         /** The plugins a source's pixels pass through after Cosmo (R-FX-5): its own enabled effects
          *  in order, then each ancestor group's, inner first — and a cache-key string of all of it. */
-        void effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT = -1.0) const;
+        void effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key, double srcT = -1.0,
+                         std::vector<NodeId> *owners = nullptr) const;   // owners: the rack node each run belongs to (R-CLR)
+        /** R-CLR-1/2: split a chain's mattes from its plugins — the source's own, and its groups' (whose
+         *  groups join `partial`, so their contribution is computed apart and keyed). */
+        void splitMattes(const NodeId &roId, std::vector<render::EffectRun> &runs, const std::vector<NodeId> &owners,
+                         struct PlanLayer &L, std::set<NodeId> &partial) const;
+        bool mMatteView = false;   // R-CLR-1: Grade's monitor shows the selected source's key, white = graded
         bool resolved(const NodeId &timeline, ResolvedTimeline &out, std::string &err) const;
         NodeId currentTimeline() const;
         NodeId timelineRef(const std::string &s) const;
