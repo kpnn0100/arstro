@@ -82,6 +82,7 @@ namespace interstellar
         std::string lut;                    // an input LUT (.cube) after the input transform; "" = none (R-COLOR-5)
         std::string proxy;                  // R-MEDIA-2: its proxy file (the monitor's, when the project uses proxies); "" = none
         double proxyScale = 1.0;            // the proxy's width over the original's (plugins are sized in ORIGINAL pixels)
+        std::string cosmoPath;              // R-MEDIA-3: the file Cosmo's slot was added with, once relinked away from it ("" = media)
         Fields unknown;
         Notes notes;
     };

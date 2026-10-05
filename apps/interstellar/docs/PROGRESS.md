@@ -80,7 +80,7 @@ one integrator who moves, wires, tests and commits each stream:
       10d. [x] Multicam (R-EDT-5) — DR-EDT-4.
       11. [x] Media: CinemaDNG through LibRaw, the vendor SDK seam (R-MEDIA-1) — DR-MEDIA-1.
       11b. [x] Proxies, offline/online (R-MEDIA-2) — DR-MEDIA-2.
-      11c. [ ] Relink (R-MEDIA-3).
+      11c. [x] Relink (R-MEDIA-3) — DR-MEDIA-3.
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
       13. [ ] Delivery and safety: captions, burn-ins, presets, DCP/IMF, autosave, recovery (R-DLV-1..6).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
@@ -132,6 +132,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a relink moves the .isp's path; Cosmo keeps its slot.** Cosmo's slot identity is the path
+it was added with and nothing outside Cosmo may rewrite its file (law 1), so the `.isp` holds the
+source's file and remembers the slot's (`cosmoPath`), and the decoder seam — which already answers
+"which frame" for a stored path — also answers "which file". Cosmo re-decodes only on a load, and
+while a source is offline its `.cmp` cannot be saved (D-2), so a relink reloads the rack and puts back
+everything only in memory through Cosmo, as undo does; a structural change since the save cannot be
+put back that way, so the relink is refused with the way round rather than losing it.
 
 **2026-10-05 — proxies are the monitor's, outside undo, and only whole.** Every NLE draws the line
 the same way: proxies serve the person working, never the deliverable — so a render and export-still

@@ -238,6 +238,13 @@ namespace interstellar
             {K::ProxyUse, "proxy use", "<on|off>", 1, 1, {},
              "The project's switch: the monitor (and playback, the preview cache, capture) decodes each source's proxy where "
              "it has one — or the originals. Renders and export-still always decode the originals.", "R-MEDIA-2"},
+            {K::MediaOffline, "media offline", "", 0, 0, {},
+             "List the offline sources in one place: each one's bind name, the file it names, and why it is offline.", "R-MEDIA-3"},
+            {K::MediaRelink, "media relink", "[<source> <file>]", 0, 2, {"search=<folder>"},
+             "Point a source at its file where it is now — `<source> <file>` (a CinemaDNG folder or pattern too), or "
+             "--search <folder>: every offline source found there by its file name (a sequence by its folder). The grade, "
+             "its history in this session and every clip stay; Cosmo keeps the slot it had. Refused, saying why, if the "
+             "rack's structure changed since it was saved (Cosmo cannot save while a source is offline, D-2).", "R-MEDIA-3"},
             {K::MulticamAngle, "multicam angle", "<n>", 1, 1, {"clip=<clip>", "at=<t>"},
              "Switch the multicam clip under the playhead (or --at; --clip names it) to angle n FROM there: the clip "
              "is cut at that frame and the rest shows angle n — at its first frame, the whole clip does. One undo step.",

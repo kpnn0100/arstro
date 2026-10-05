@@ -239,6 +239,9 @@ namespace interstellar
         void pumpJobs();
         // R-MEDIA-2 — ServiceProxy.cpp
         bool proxyCommand(const Command &c);
+        // R-MEDIA-3 — ServiceMedia.cpp
+        bool mediaCommand(const Command &c);
+        std::string slotFile(const RackObj &ro) const;   // the file Cosmo's slot names (cosmoPath, else media), resolved
         Source *proxyFor(const RackObj &ro, std::string &media);   // the monitor's proxy source, or null
         int srcWidthOf(const RackObj &ro, const std::string &media, const Source &s) const;
         void pumpProxies();

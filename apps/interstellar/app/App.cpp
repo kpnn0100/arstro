@@ -1,4 +1,5 @@
 #include "App.h"
+#include <filesystem>
 #include "widgets/CommandLine.h"
 #include <algorithm>
 #include <cmath>
@@ -193,6 +194,12 @@ namespace interstellar_v1
             mEdit->contextMenu()->enterRenameMode(name);
         }});
         if (!n.group && !n.failed) items.push_back({"Duplicate as Variant  (Ctrl+D)", [this, b] { dispatch("rack duplicate " + b); }});
+        // R-MEDIA-3: a missing file, found where it is now
+        if (!n.group && n.failed && n.offlineWhy.empty())
+            items.push_back({"Relink...", [this, b, file = std::filesystem::path(n.media).filename().string()] {
+                if (onPickMediaToRelink)
+                    onPickMediaToRelink(file, [this, b](const std::string &p) { dispatch("media relink " + b + " " + cmd::quote(p)); });
+            }});
         // R-MEDIA-2: a lighter file for the monitor
         if (!n.group && !n.failed && n.video)
         {
@@ -254,6 +261,7 @@ namespace interstellar_v1
                      dispatch("interchange export " + cmd::quote(name) + " --out " + cmd::quote(p));
                  });
              }},
+            {"Relink Media...",              [this] { openRelinkMenu(Point(width() * 0.25, 40.0)); }},   // R-MEDIA-3
             {"Render...",                    [this] { mEdit->setTab(EditScreen::Deliver); }},
         }});
         ms->addMenu({"Edit", {
@@ -717,6 +725,37 @@ namespace interstellar_v1
             items.push_back({"Place Timeline Here...", [this, track, t, at] { openPlaceTimelineMenu(track, t, at); }});   // R-EDT-4
         items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
         items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    /** R-MEDIA-3: every offline source in one list — each found by hand, or all by searching a folder. */
+    void App::openRelinkMenu(Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        int missing = 0;
+        for (const auto &n : m.rack)
+        {
+            if (n.group || !n.failed) continue;
+            const std::string file = std::filesystem::path(n.media).filename().string();
+            const std::string name = n.cosmoName.empty() ? n.bindName : n.cosmoName;
+            if (!n.offlineWhy.empty())
+            {
+                items.push_back({name + " \xE2\x80\x94 " + n.offlineWhy, [] {}});   // nothing to locate: a decoder is missing
+                continue;
+            }
+            ++missing;
+            items.push_back({"Locate " + name + " (" + file + ")...", [this, b = cmd::quote(n.bindName), file] {
+                if (onPickMediaToRelink)
+                    onPickMediaToRelink(file, [this, b](const std::string &p) { dispatch("media relink " + b + " " + cmd::quote(p)); });
+            }});
+        }
+        if (missing > 0)
+            items.push_back({"Search a Folder for " + std::string(missing > 1 ? "All..." : "It..."), [this] {
+                if (onPickFolder) onPickFolder([this](const std::string &dir) { dispatch("media relink --search " + cmd::quote(dir)); });
+            }});
+        if (items.empty()) items.push_back({"No media is offline", [] {}});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }

@@ -349,6 +349,7 @@ namespace interstellar
                 ok = requireProject() && editingCommand(c);
                 break;
             case CK::ProxyMake: case CK::ProxyRemove: case CK::ProxyUse: ok = requireProject() && proxyCommand(c); break;
+            case CK::MediaOffline: case CK::MediaRelink: ok = requireProject() && mediaCommand(c); break;
             case CK::Capture:
             {
                 if (!requireProject()) break;
@@ -1100,6 +1101,13 @@ namespace interstellar
             for (size_t i = 0; i < ns.size() && i < p->entryRackObj.size(); ++i)
                 if (!p->entryRackObj[i].empty()) mNodeOf[p->entryRackObj[i]] = ns[i].node;
         }
+        // R-MEDIA-3: a reload for a relink puts back what was only in memory — every node's own
+        // params and bypass, written THROUGH Cosmo as an undo restore does
+        if (p->restore)
+        {
+            std::string err;
+            if (!applyState(*p->restore, err)) emit(Event(EK::Error).with("why", "media relink: the grades could not be put back: " + err));
+        }
         int failed = 0;
         for (const auto &n : mRack.model().nodes) failed += n.failed;
         emit(Event(EK::RackLoaded).with("images", mRack.imageCount()).with("failed", failed));
@@ -1259,6 +1267,12 @@ namespace interstellar
         return mProject->freshName(stem.empty() ? "node" : stem);
     }
 
+    std::string InterstellarService::slotFile(const RackObj &ro) const
+    {
+        // the file Cosmo's slot names: where the source was when it was added, until a relink moved it
+        return resolvePath(ro.cosmoPath.empty() ? ro.media : ro.cosmoPath);
+    }
+
     void InterstellarService::bindFromCmp(const std::vector<ColourNode> &entries)
     {
         // Each `.cmp` entry to its #rackobj. First by `node=cn_<i>` (the entry index written at the
@@ -1283,7 +1297,7 @@ namespace interstellar
                 if (ro.node == want)
                 {
                     const bool kindOk = (ro.kind == "group") == entries[i].group;
-                    const bool mediaOk = entries[i].group || resolvePath(ro.media) == mediaOf(entries[i]);
+                    const bool mediaOk = entries[i].group || slotFile(ro) == mediaOf(entries[i]);
                     if (kindOk && mediaOk) bound[i] = ro.id;
                     else indexOk = false;
                 }
@@ -1306,7 +1320,7 @@ namespace interstellar
                     continue;
                 }
                 for (const auto &ro : P.rackObjs)
-                    if (ro.kind != "group" && !taken.count(ro.id) && resolvePath(ro.media) == mediaOf(entries[i]))
+                    if (ro.kind != "group" && !taken.count(ro.id) && slotFile(ro) == mediaOf(entries[i]))
                     {
                         bound[i] = ro.id;
                         taken.insert(ro.id);
@@ -1343,6 +1357,11 @@ namespace interstellar
                 {
                     mFrames->set(entries[i].imagePath, ro->frame);
                     mStoredPath[ro->id] = entries[i].imagePath;
+                    // R-MEDIA-3: a source relinked since Cosmo stored it decodes from where the .isp says
+                    std::string f;
+                    double t = 0;
+                    splitFrameSelector(entries[i].imagePath, f, t);
+                    if (!ro->media.empty() && resolvePath(ro->media) != f) mFrames->setFile(entries[i].imagePath, resolvePath(ro->media));
                 }
         if (mPending) mPending->entryRackObj = bound;
     }

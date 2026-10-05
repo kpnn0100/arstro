@@ -517,6 +517,20 @@ int main(int argc, char **argv)
     a->app->onPickTimelineToExport = [a](const std::string &name, std::function<void(const std::string &)> done) {
         pickFile(a, true, "Export timeline", "Timelines (EDL, FCPXML, OTIO)", {"*.edl", "*.fcpxml", "*.otio"}, name, ".fcpxml", done);
     };
+    // R-MEDIA-3: the file a missing source is now (any media), or a folder to search for all of them
+    a->app->onPickMediaToRelink = [a](const std::string &name, std::function<void(const std::string &)> done) {
+        pickFile(a, false, ("Locate " + name).c_str(), "Media", {"*"}, std::string(), std::string(), done);
+    };
+    a->app->onPickFolder = [a](std::function<void(const std::string &)> done) {
+        GtkWidget *d = gtk_file_chooser_dialog_new("Search a folder for missing media", GTK_WINDOW(a->window), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                                                   "_Cancel", GTK_RESPONSE_CANCEL, "_Search", GTK_RESPONSE_ACCEPT, nullptr);
+        std::string picked;
+        if (gtk_dialog_run(GTK_DIALOG(d)) == GTK_RESPONSE_ACCEPT)
+            if (char *p = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d))) { picked = p; g_free(p); }
+        gtk_widget_destroy(d);
+        gtk_widget_queue_draw(a->area);
+        if (!picked.empty()) done(picked);
+    };
     a->app->onPickStillToExport = [a] { pickStillToExport(a); };
     a->app->onPickFrameToSave = [a] { pickFrameToSave(a); };
     // The largest screen scale this display can give a window for (cosmo R-SCALE-3): larger ones

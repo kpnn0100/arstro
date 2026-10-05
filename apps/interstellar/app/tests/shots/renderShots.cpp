@@ -431,6 +431,11 @@ namespace
             ++s.m.revision;
         };
         v.push_back({"cut_multicam", multicam, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"relink_media", edit, [](Rig &r) {   // R-MEDIA-3: File › Relink Media — the offline sources in one list
+            r.settle();
+            r.app->openRelinkMenu(artboard::Point(r.app->width() * 0.25, 40.0));
+            r.settle();
+        }});
         v.push_back({"cut_vendor_raw", [](FakeService &s) {   // R-MEDIA-1: an R3D the project names, offline for want of its SDK
             s.edit();
             for (auto &n : s.m.rack)

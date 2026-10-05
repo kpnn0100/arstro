@@ -207,6 +207,10 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   Workspace › Use Proxies → `proxy use on|off` (marked while on), Make Proxies for All Video →
   `proxy make`; the source bin row says "proxy ·" / "proxy 40% ·"; the caption says "proxies" (timeline)
   or "proxy" (Grade, viewer). UI checks: 414.
+- Relink (R-MEDIA-3): File › Relink Media... opens the offline sources as a list in a context menu —
+  "Locate <name> (<file>)..." → `onPickMediaToRelink` → `media relink <bind> <path>`; "Search a Folder
+  for All..." → `onPickFolder` → `media relink --search <dir>`; an offline row's menu has Relink....
+  Shot: `relink_media`. UI checks: 419.
 
 ## Interchange (2026-10-05, R-XCH)
 

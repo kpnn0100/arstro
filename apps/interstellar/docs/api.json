@@ -1320,6 +1320,31 @@
       "requirement": "R-MEDIA-2"
     },
     {
+      "verb": "media offline",
+      "usage": "media offline",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "List the offline sources in one place: each one's bind name, the file it names, and why it is offline.",
+      "requirement": "R-MEDIA-3"
+    },
+    {
+      "verb": "media relink",
+      "usage": "media relink [<source> <file>] [--search <folder>]",
+      "args": "[<source> <file>]",
+      "minArgs": 0,
+      "maxArgs": 2,
+      "flags": [
+        {
+          "name": "search",
+          "value": "<folder>"
+        }
+      ],
+      "summary": "Point a source at its file where it is now — `<source> <file>` (a CinemaDNG folder or pattern too), or --search <folder>: every offline source found there by its file name (a sequence by its folder). The grade, its history in this session and every clip stay; Cosmo keeps the slot it had. Refused, saying why, if the rack's structure changed since it was saved (Cosmo cannot save while a source is offline, D-2).",
+      "requirement": "R-MEDIA-3"
+    },
+    {
       "verb": "multicam angle",
       "usage": "multicam angle <n> [--clip <clip>] [--at <t>]",
       "args": "<n>",

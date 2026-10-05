@@ -280,6 +280,16 @@ int main(int argc, char **argv)
 #else
         std::printf("  [SKIP] CinemaDNG: this build has no LibRaw\n");
 #endif
+        // R-MEDIA-3: the decoder seam decodes a stored path from where the .isp says its file is now
+        {
+            auto sel = std::make_shared<interstellar::FrameSelector>();
+            sel->setFile("/gone/plain.mp4#t=0.500", first);
+            interstellar_host::VideoFrameDecoder moved(sel);
+            const cosmo::DecodedImage di = moved.decodeFile("/gone/plain.mp4#t=0.500");
+            interstellar_host::VideoFrameDecoder plain;
+            assert(di.width > 0 && plain.decodeFile("/gone/plain.mp4#t=0.500").width == 0);
+            std::printf("  [PASS] a relinked path decodes from its new file (%dx%d); unmapped, it is missing\n", di.width, di.height);
+        }
         // the vendor formats: refused by name until an SDK build registers a decoder
         std::string need;
         assert(!interstellar_host::makeVideoSource(base + "/clip.R3D", &need) && need.find("RED R3D SDK") != std::string::npos);

@@ -35,11 +35,13 @@ namespace interstellar_host
 
     cosmo::DecodedImage VideoFrameDecoder::decodeFile(const std::string &path, cosmo::Fidelity f)
     {
-        if (!looksLikeVideo(path)) return mStills->decodeFile(path, f);
-
         std::string file;
         double seconds = 0;
         splitFrameSelector(path, file, seconds);
+        // R-MEDIA-3: a relinked source is decoded from where the .isp says it is now; Cosmo's slot
+        // keeps the path it was added with (its identity)
+        if (mSelector) file = mSelector->fileFor(path, file);
+        if (!looksLikeVideo(file)) return mStills->decodeFile(file, f);
         // The .isp's `#rackobj frame=` wins over the selector baked into the stored path: choosing a
         // new reference frame changes neither a parameter nor the Cosmo node (R-RACK-3).
         if (mSelector) seconds = mSelector->frameFor(path, seconds);

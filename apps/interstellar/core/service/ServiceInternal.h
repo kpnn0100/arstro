@@ -274,6 +274,7 @@ namespace interstellar
         std::vector<std::string> addedPaths;         // Add: as handed to Cosmo
         std::vector<NodeId> addedRackObjs;           // Add: pre-created, in path order
         bool projectOpening = false;                 // an Open that is also the project's open
+        std::shared_ptr<UndoState> restore;          // R-MEDIA-3: a relink's reload puts these back
     };
 
     /** Everything an undoable edit can change: the `.isp` text, and each bound rack node's own

@@ -56,10 +56,18 @@ namespace
     class FakeDecoder : public cosmo::IImageDecoder
     {
     public:
+        explicit FakeDecoder(std::shared_ptr<const FrameSelector> sel = nullptr) : mSel(std::move(sel)) {}
+        std::shared_ptr<const FrameSelector> mSel;
         cosmo::DecodedImage decodeFile(const std::string &path) override
         {
             cosmo::DecodedImage d;
             if (path.find("missing") != std::string::npos) return d;   // reads as failed
+            // R-MEDIA-3: as the real seam does — the file the .isp names now; a file that is not there fails
+            std::string file;
+            double t = 0;
+            splitFrameSelector(path, file, t);
+            if (mSel) file = mSel->fileFor(path, file);
+            if (!fs::exists(file) && !seq::firstFrameExists(file)) return d;
             d.width = 32;
             d.height = 18;
             d.rgba.assign((size_t)d.width * d.height * 4, 120);
@@ -303,7 +311,7 @@ namespace
         {
             InterstellarService::Host h;
             h.asyncPreview = async;
-            h.rackDecoder = [](std::shared_ptr<const FrameSelector>) { return std::unique_ptr<cosmo::IImageDecoder>(new FakeDecoder()); };
+            h.rackDecoder = [](std::shared_ptr<const FrameSelector> sel) { return std::unique_ptr<cosmo::IImageDecoder>(new FakeDecoder(sel)); };
             h.frameSource = [] { return std::unique_ptr<IFrameSource>(new FakeFrameSource()); };
             h.frameWriter = [this] { return std::unique_ptr<IFrameWriter>(new CaptureWriter(&written)); };
             h.audioSource = [] { return std::unique_ptr<IAudioSource>(new FakeAudioSource()); };
@@ -1750,6 +1758,85 @@ int main()
             const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
             assert(!has(isp, "a_24.mov") && has(isp, "proxy=mv.proxies/b_24.mov"));
         }
+    });
+
+    test("relink: offline media listed, found by name in a folder or pointed at one by one; grades and unsaved edits kept (R-MEDIA-3)", [] {
+        Fixture f("relink");
+        f.standard();                                   // shotA a 0–2, shotB b 2–4
+        f.must("set a.basic.exposure=0.3");
+        f.must("project save");
+        Raster graded;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, graded));
+        const int before = graded.rgba[0];                // shotA's frame 24, graded
+        fs::create_directories(f.path("footage/moved/deeper"));
+        fs::rename(f.path("footage/a.mp4"), f.path("footage/moved/deeper/a.mp4"));
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        auto failed = [&](const std::string &bind) {
+            for (const auto &n : f.svc->model().rack) if (n.bindName == bind) return n.failed;
+            assert(false);
+            return false;
+        };
+        auto red = [&](double t) {
+            Raster r;
+            bool any = false;
+            f.svc->renderTimelineFrame("tl_1", t, 0, r, &any);
+            return any ? (int)r.rgba[0] : -1;
+        };
+        assert(failed("a") && !failed("b") && red(1.0) == -1);
+        assert(has(f.out("media offline"), "a  ") && has(f.svc->output(), "(missing)") && !has(f.svc->output(), "b  "));
+        // an edit only in memory: Cosmo cannot save while a is offline (D-2)
+        f.must("set b.basic.exposure=0.4");
+        std::string err;
+        assert(!f.run("project save", &err) && has(err, "NOT the rack"));
+        assert(!f.run("media relink --search \"" + f.path("nowhere") + "\"", &err) && has(err, "no folder"));
+        assert(!f.run("media relink a \"" + f.path("footage/still.png") + "\"", &err) && has(err, "a video"));
+        f.must("media relink --search \"" + f.path("footage") + "\"");
+        assert(has(f.svc->output(), "a → ") && has(f.svc->output(), "moved/deeper/a.mp4"));
+        assert(!failed("a") && red(1.0) == before);                                       // shotA plays again, graded as it was
+        assert(evalValue(f, "get a.basic.exposure") == 0.3 && evalValue(f, "get b.basic.exposure") == 0.4);   // its grade, and the unsaved edit
+        assert(has(f.out("media offline"), "no source is offline"));
+        // the move is the .isp's; now the rack saves too — and a new session finds a where it is
+        f.must("project save");
+        {
+            std::ifstream in(f.path("mv.isp"));
+            const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            assert(has(isp, "media=footage/moved/deeper/a.mp4"));
+        }
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(!failed("a") && red(1.0) == before && evalValue(f, "get a.basic.exposure") == 0.3 && evalValue(f, "get b.basic.exposure") == 0.4);
+        // one by one; and refused while the rack's structure differs from its saved one
+        const int beforeB = red(3.0);                    // shotB's frame 24, graded 0.4
+        fs::rename(f.path("footage/b.mp4"), f.path("footage/moved/b.mp4"));
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(failed("b"));
+        f.must("rack group new grp --nodes still");
+        assert(!f.run("media relink b \"" + f.path("footage/moved/b.mp4") + "\"", &err) && has(err, "groups or names changed"));
+        f.must("rack ungroup grp");                     // the structure as saved again
+        f.must("set a.basic.exposure=0.5");             // undoable, before the relink …
+        f.must("media relink b \"" + f.path("footage/moved/b.mp4") + "\"");
+        assert(!failed("b") && red(3.0) == beforeB && beforeB > 24);
+        f.must("undo");                                 // … undone after it: the relink stays
+        assert(!failed("b") && evalValue(f, "get a.basic.exposure") == 0.3);
+        {
+            f.must("project save");
+            std::ifstream in(f.path("mv.isp"));
+            const std::string isp((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            assert(has(isp, "media=footage/moved/b.mp4"));
+        }
+        // a CinemaDNG clip is found by its folder
+        fs::create_directories(f.path("footage/D001"));
+        for (int k = 0; k < 3; ++k) std::ofstream(f.path("footage/D001/D001_00000" + std::to_string(k) + ".dng")) << "x";
+        f.must("rack add \"" + f.path("footage/D001") + "\"");
+        f.must("project save");
+        fs::rename(f.path("footage/D001"), f.path("footage/moved/D001"));
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(failed("d001"));
+        f.must("media relink --search \"" + f.path("footage") + "\"");
+        assert(!failed("d001") && has(f.svc->output(), "moved/D001/D001_%06d.dng"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

@@ -76,15 +76,31 @@ namespace interstellar
             std::lock_guard<std::mutex> l(mMu);
             mFrames[storedPath] = seconds;
         }
+        /** R-MEDIA-3: the FILE to decode for a path as Cosmo stores it — a relinked source keeps its
+         *  Cosmo slot (whose identity is the stored path) and is decoded from where the `.isp` says
+         *  it now is. `fallback` (the stored path's own file) when it was never moved. */
+        std::string fileFor(const std::string &storedPath, const std::string &fallback) const
+        {
+            std::lock_guard<std::mutex> l(mMu);
+            const auto it = mFiles.find(storedPath);
+            return it == mFiles.end() ? fallback : it->second;
+        }
+        void setFile(const std::string &storedPath, const std::string &file)
+        {
+            std::lock_guard<std::mutex> l(mMu);
+            mFiles[storedPath] = file;
+        }
         void clear()
         {
             std::lock_guard<std::mutex> l(mMu);
             mFrames.clear();
+            mFiles.clear();
         }
 
     private:
         mutable std::mutex mMu;
         std::map<std::string, double> mFrames;
+        std::map<std::string, std::string> mFiles;
     };
 }
 }

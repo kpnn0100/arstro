@@ -2463,6 +2463,59 @@ namespace
         CHECK(clickMenuItem(r, "Workspace", "     Make Proxies for All Video") && hasLine(r.svc, "proxy make"), "Make Proxies for All Video dispatches proxy make");
     }
 
+    /** R-MEDIA-3: offline media in one list — located by hand or searched for in a folder. */
+    void testRelinkUi()
+    {
+        std::printf("relink: File › Relink Media, the offline row's menu\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        std::string asked;
+        r.app->onPickMediaToRelink = [&asked](const std::string &name, std::function<void(const std::string &)> done) { asked = name; done("/cards/B002_C014.mov"); };
+        r.app->onPickFolder = [](std::function<void(const std::string &)> done) { done("/cards"); };
+        r.settle();
+        auto cm = r.app->edit().contextMenu();
+        auto clickItem = [&](const std::string &prefix) {
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind(prefix, 0) == 0)
+                {
+                    const Point q = centre(*cm, cm->itemRect(i));
+                    r.click(q.x, q.y);
+                    r.pump(64);
+                    return true;
+                }
+            return false;
+        };
+        CHECK(clickMenuItem(r, "File", "Relink Media"), "File offers Relink Media...");
+        r.pump(250);
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        std::printf("      %s\n", labels.c_str());
+        CHECK(cm->isOpen() && labels == "Locate B002_C014 corridor (B002_C014.mov)...|Search a Folder for It...|",
+              "…listing every offline source, and a folder search");
+        r.svc.lines.clear();
+        CHECK(clickItem("Locate ") && asked == "B002_C014.mov" && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"),
+              "Locate asks the host for the file by its old name and relinks to it");
+        clickMenuItem(r, "File", "Relink Media");
+        r.pump(250);
+        r.svc.lines.clear();
+        CHECK(clickItem("Search a Folder") && hasLine(r.svc, "media relink --search /cards"), "Search a Folder relinks every source found there");
+        // the offline row's own menu (the source bin's rows are the rack's sources, groups left out)
+        cm->close();
+        r.app->setTab(1);
+        r.settle();
+        int row = -1, k = 0;
+        for (const auto &n : r.svc.m.rack)
+            if (!n.group) { if (n.bindName == "s_off01") row = k; ++k; }
+        auto sb = r.app->edit().sourceBin();
+        const Rect rr = sb->rowRect(row);
+        const Point p = world(*sb, rr.x + rr.w * 0.5, rr.y + rr.h * 0.5);
+        r.app->pointer(1, p.x, p.y, 0, r.now);
+        r.app->pointer(0, p.x, p.y, 2, r.now);
+        r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        r.svc.lines.clear();
+        CHECK(clickItem("Relink...") && hasLine(r.svc, "media relink s_off01 /cards/B002_C014.mov"), "an offline source's menu offers Relink...");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2634,6 +2687,7 @@ int main()
     testEditingUi();
     testMulticamUi();
     testProxiesUi();
+    testRelinkUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

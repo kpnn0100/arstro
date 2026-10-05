@@ -172,6 +172,7 @@ namespace schema
             text<RackObj>("lut", &RackObj::lut, 1, false, nonEmpty<RackObj>(&RackObj::lut)),
             text<RackObj>("proxy", &RackObj::proxy, 1, false, nonEmpty<RackObj>(&RackObj::proxy)),   // R-MEDIA-2
             number<RackObj>("proxyScale", &RackObj::proxyScale, 1.0, 1, false, [](const RackObj &r, const Project &) { return !r.proxy.empty(); }),
+            text<RackObj>("cosmoPath", &RackObj::cosmoPath, 1, false, nonEmpty<RackObj>(&RackObj::cosmoPath)),   // R-MEDIA-3
         };
         return f;
     }

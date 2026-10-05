@@ -561,7 +561,7 @@ reserves the rest so adopting it is not a migration.
   reel tags), shown, and used by every interchange format. — ✅ (the clip inspector's Reel and
   Source TC rows; `rack[].timecode`/`reel`).
 
-## R-MEDIA — media management — 🔶 IN PROGRESS (added 2026-10-05; 1 ✅ DR-MEDIA-1, 2 ✅ DR-MEDIA-2, 3 next)
+## R-MEDIA — media management — ✅ DONE (added 2026-10-05; 1 ✅ DR-MEDIA-1, 2 ✅ DR-MEDIA-2, 3 ✅ DR-MEDIA-3)
 
 - **R-MEDIA-1 Camera RAW**: CinemaDNG sequences through LibRaw. ARRIRAW, R3D and BRAW need their
   vendors' SDKs, which are licensed per user and not in this build: a decoder seam takes them when
@@ -578,7 +578,11 @@ reserves the rest so adopting it is not a migration.
   originals like a render. A proxy carries the original's code values, so its colour is the
   original's; it is referenced only once complete, and proxies sit outside undo, as renders do.
 - **R-MEDIA-3 Relink**: offline media listed in one place, relinked one by one or by searching a
-  folder for matching names.
+  folder for matching names. — ✅ (DR-MEDIA-3). The grade, this session's unsaved colour edits and
+  every clip stay. A relink reloads the rack, so it is refused — saying why and what to do — if the
+  rack's groups or names changed since its last save (Cosmo cannot save while a source is offline,
+  D-2). Opened in Cosmo alone, a relinked source still names its old path (Cosmo cannot rename a slot;
+  said).
 
 ## R-CLR — colourist tools — ⏳ NOT STARTED (added 2026-10-05)
 

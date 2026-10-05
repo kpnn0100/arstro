@@ -274,6 +274,35 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-MEDIA-3 Relink: offline media in one list, found by hand or by name in a folder (R-MEDIA-3)
+`media offline` (`core/service/ServiceMedia.cpp:60`) lists every offline source with its file and why
+(missing, or the vendor SDK it needs). `media relink <source> <file>` points one source at its file
+where it is now (a folder becomes its CinemaDNG pattern; a still for a video, or the reverse, is
+refused); `media relink --search <folder>` indexes the folder once (recursively, `:42`) and relinks every
+missing source found there by its file name — a sequence by its folder. A source's file is the `.isp`'s;
+Cosmo's slot keeps the path it was added with, so the `.isp` remembers it (`cosmoPath`, `:174`) and binds
+the `.cmp` entry by it (`slotFile`, `core/service/InterstellarService.cpp:1270`), and the decoder seam
+decodes a stored path from the file the `.isp` names now (`FrameSelector::fileFor`, `core/FrameSelector.h:82`;
+`host/VideoFrameDecoder.cpp:43`; set at binding, `InterstellarService.cpp:1360`). Cosmo decodes only on a
+load, so the rack is reloaded from its `.cmp` — as old as its last save while a source was offline (D-2)
+— and what was only in memory is put back after: every node's own params and bypass, captured first
+(`ServiceMedia.cpp:189`) and written THROUGH Cosmo as an undo restore writes them
+(`InterstellarService.cpp:1104`). A structural change since the save cannot be put back that way, so the
+relink is refused naming it (`ServiceMedia.cpp:164`). A relink is media management, outside undo
+(`core/service/ServiceEdit.cpp:141`). UI: File › Relink Media... lists every offline source — "Locate
+<name> (<file>)..." each (the host asks for the file by its old name), "Search a Folder for All..." —
+and a decoder-missing source with its reason (`app/App.cpp:733`); an offline source's menu has
+Relink... (`:197`); the GTK host's file and folder pickers (`linux_main.cpp:520`). Guarded by L2
+`relink…` (listed missing; an unsaved edit while offline; refusals; found by search two folders down;
+plays graded as before; grade and unsaved edit kept; saved and found in a new session; refused after a
+regroup, accepted after ungrouping; an undo of an earlier edit keeps the relink; a CinemaDNG folder
+found by name), host (a relinked stored path decodes from its new file, missing unmapped), UI (the
+list, Locate, Search, the row's Relink...), shot `relink_media`, and by hand with the real Cosmo (a graded
+source moved, listed missing, found by search: its grade and another source's unsaved edit kept, the
+exported still identical to before the move, max difference 0). Mutants run red: no restore after the
+reload, no structure check, `cosmoPath` not kept, the decoder's map not set, undo dropping the relink,
+the sequence search, the seam ignoring the map.
+
 ### DR-MEDIA-2 Proxies, offline/online (R-MEDIA-2)
 `proxy make [<source>…] [--codec prores|h264] [--edge <px>]` (`core/service/ServiceProxy.cpp:76`) queues
 one job per video source (none named: every one without a proxy; a still is refused — it needs none);
