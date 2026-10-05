@@ -139,7 +139,8 @@ namespace interstellar
                          .set("cutFrozen", t.cutFrozen)
                          .set("danglingDeltas", t.danglingDeltas)
                          .set("overrides", t.overrides)
-                         .set("hasSound", t.hasSound));
+                         .set("hasSound", t.hasSound)
+                         .set("placeable", t.placeable));
         j.set("timelines", tls);
         j.set("currentTimeline", m.currentTimeline);
 
@@ -173,6 +174,7 @@ namespace interstellar
                            .set("gain", c.gain)
                            .set("audio", c.audio).set("media", c.media)
                            .set("offline", c.offline)
+                           .set("nested", c.nested)
                            .set("provenance", provenanceName(c.provenance)));
         j.set("clips", clips);
 
@@ -410,6 +412,7 @@ namespace interstellar
             {"timelines[].danglingDeltas", "integer", "Deltas whose target the base deleted — `rebase` reports them."},
             {"timelines[].overrides", "integer", "How far this version has diverged: #tlset + #tlgrade + #tldrop count."},
             {"timelines[].hasSound", "boolean", "Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9)."},
+            {"timelines[].placeable", "boolean", "It can be placed as a clip in the current timeline — not itself, not a version of it, nothing that contains it (R-EDT-4)."},
             {"currentTimeline", "string", "The editor's current timeline id. Never what a render uses."},
             {"tracks", "array", "The resolved current timeline's tracks."},
             {"tracks[].id", "string", "Track id."},
@@ -424,8 +427,8 @@ namespace interstellar
             {"clips[].id", "string", "Clip id."},
             {"clips[].name", "string", "Clip name — an address prefix."},
             {"clips[].track", "string", "Track id."},
-            {"clips[].src", "string", "#rackobj id (video) or media path (audio)."},
-            {"clips[].srcName", "string", "The rack node's bind name."},
+            {"clips[].src", "string", "#rackobj id (video), #timeline id (a nested timeline, R-EDT-4) or media path (audio)."},
+            {"clips[].srcName", "string", "The rack node's (or nested timeline's) bind name."},
             {"clips[].at", "number", "Timeline position, seconds."},
             {"clips[].in", "number", "Source in-point, seconds."},
             {"clips[].out", "number", "Source out-point, seconds."},
@@ -436,6 +439,7 @@ namespace interstellar
             {"clips[].media", "string", "Audio clips: the file, resolved — the key of its waveform envelope (R-AUD-7)."},
             {"clips[].audio", "bool", "An audio clip (#aclip)."},
             {"clips[].offline", "bool", "Its media is missing."},
+            {"clips[].nested", "bool", "It places another timeline — a nested sequence (R-EDT-4)."},
             {"clips[].provenance", "enum(local|inherited|overridden|dangling)", "Where it came from in this version."},
             {"transitions", "array", "Transitions in the resolved current timeline."},
             {"transitions[].id", "string", "Transition id."},

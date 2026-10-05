@@ -946,6 +946,15 @@ namespace interstellar_v1
             if (hv > 0.001) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
             if (c.provenance == interstellar::Provenance::Overridden && r.w > 4.0)
                 drawRoundedRect(t, Rect{r.x, r.y, 3.0, r.h}, radius::hairline(), Paint::filled(fade(palette::primary(), a)));
+            if (c.nested && r.w > 8.0)
+            {
+                // R-EDT-4: a timeline inside a clip — a second edge inside the first, the stack of a sequence
+                t.save();
+                t.clipRect(r.x, r.y, r.w, r.h);
+                glyph::line(t, r.x + 3.0, r.y + 2.5, r.right() - 3.0, r.y + 2.5, fade(palette::foreground(), 0.28 * a), 1.0);
+                glyph::line(t, r.x + 3.0, r.bottom() - 2.5, r.right() - 3.0, r.bottom() - 2.5, fade(palette::foreground(), 0.28 * a), 1.0);
+                t.restore();
+            }
             if (c.audio && !c.media.empty())
             {
                 // R-AUD-7: the clip's waveform, its envelope over the clip's own span of the file, behind
@@ -1004,7 +1013,7 @@ namespace interstellar_v1
                 else if (c.provenance == interstellar::Provenance::Inherited) sub = "inherited";
                 else if (c.provenance == interstellar::Provenance::Overridden) sub = "overridden here";
                 else if (c.audio) sub = cmd::num(c.gain) + " dB";
-                else sub = cmd::timecode(clipDur(c), mFps).substr(3);
+                else sub = (c.nested ? "timeline \xC2\xB7 " : "") + cmd::timecode(clipDur(c), mFps).substr(3);
                 if (r.h >= 24.0)
                 {
                     t.setFill(fade(warnText ? palette::destructive() : palette::mutedForeground(), a * 0.9));

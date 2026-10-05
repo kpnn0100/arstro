@@ -76,6 +76,14 @@ namespace interstellar
 
     bool resolve(const Project &, const NodeId &timeline, ResolvedTimeline &out, std::string &err);
 
+    /** R-EDT-4: a clip may place another TIMELINE. Would a clip of `into` placing `src` put a timeline
+     *  inside itself — because `src` (or anything it places, at any depth) is `into` or a version of
+     *  it, which inherits the very clip? True = refused, with `err` naming the loop. */
+    bool nestingRefused(const Project &, const NodeId &into, const NodeId &src, std::string &err);
+    /** Every timeline that contains itself through nesting — only a hand-edited .isp can (every edit
+     *  is checked above). `lint` names them; the render places nothing for the clip that closes it. */
+    std::vector<NodeId> nestingCycles(const Project &);
+
     /** Colour overrides for one rack node in one timeline, accumulated up the base chain —
      *  nearest timeline wins per key. Nearest first. A PINNED timeline contributes its own
      *  deltas and stops the walk: the pin freezes the base's colour, and the base's own deltas are

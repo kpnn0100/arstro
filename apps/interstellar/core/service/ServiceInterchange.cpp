@@ -132,9 +132,11 @@ namespace interstellar
                 return i;
             };
             std::map<NodeId, int> clipIndex;
+            int nestedSkipped = 0;
             for (const auto &cl : R.clips)
             {
                 if (dangling(cl.id) || !vNum.count(cl.track)) continue;
+                if (P.timeline(cl.src)) { ++nestedSkipped; continue; }   // R-EDT-4: not carried (said below)
                 const RackObj *ro = P.rackObj(cl.src);
                 if (!ro || ro->media.empty()) continue;
                 xch::XClip x;
@@ -184,6 +186,8 @@ namespace interstellar
             }
             else text = format == "fcpxml" ? xch::writeFcpxml(t) : xch::writeOtio(t);
             if (dips) note += " (" + std::to_string(dips) + " dip(s) written as dissolves)";
+            if (nestedSkipped)
+                note += " (" + std::to_string(nestedSkipped) + " nested-timeline clip(s) not carried — export each nested timeline on its own)";
             std::ofstream f(out, std::ios::binary);
             if (!f || !(f << text)) return fail("interchange export: cannot write " + out);
             mOutput = "exported " + std::to_string(t.clips.size()) + " clips of " + t.name + " to " + out + note + "\n";

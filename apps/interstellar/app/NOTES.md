@@ -195,6 +195,10 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - The timeline's In/Out band on the ruler, brackets on the scrubber, the target track's header bar,
   the lane menu's "Target for Insert / Overwrite", a shuttle badge (2×, −4×) beside the timecode — each
   eased. Shots added: `cut_source_viewer`, `cut_marks_shuttle`. UI checks: 391.
+- Nested timelines (R-EDT-4): the lane menu's "Place Timeline Here..." (only when some timeline is
+  `placeable`) opens the placeable timelines in place of the menu → `clip add --track <trk> --src <tl>
+  --in 0 --at <t>`; a nested clip's menu has "Open Timeline <name>" → `timeline open <name>`; the clip
+  draws a second edge inside its own and "timeline ·" before its length. Shot: `cut_nested`. UI checks: 397.
 
 ## Interchange (2026-10-05, R-XCH)
 
@@ -372,7 +376,7 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | drag a source from the bin onto a lane | `clip add --track <trk> --src <bind> --in 0 --at <t>` (first `track add --kind video` on an empty timeline) |
 | Shift+Delete · M · Ctrl+C / Ctrl+X / Ctrl+V (Cut tab) | `clip delete <clip> --ripple` · `marker add m<n> --at <playhead>` · `clip copy <clip>` / + `clip delete <clip>` / `clip paste` |
 | clip menu: Add Dissolve to Next · Speed N% | `transition add --between <a>,<b> --dur 0.5` · `clip speed <clip> <s>` |
-| lane menu: Paste Here · Add Marker Here · Add Video/Audio Track | `clip paste --at <t> [--track <trk>]` · `marker add m<n> --at <t>` · `track add --kind video|audio` |
+| lane menu: Paste Here · Add Marker Here · Add Video/Audio Track · Place Timeline Here... | `clip paste --at <t> [--track <trk>]` · `marker add m<n> --at <t>` · `track add --kind video|audio` · `clip add --track <trk> --src <timeline> --in 0 --at <t>` |
 | ruler click/drag, empty-lane click | `playhead <t>` |
 | inspector Split / Delete; keys `S`, `Delete`/`Backspace` (Cut tab) | `clip split <clip> --at <playhead>`, `clip delete <clip>` |
 | keys Space / ← → | `play`·`pause`; `playhead <t ∓ 1 frame>` (keys `1 2 3` switch tabs — presentation) |

@@ -91,9 +91,10 @@ namespace interstellar
             {K::TrackAdd, "track add", "", 0, 0, {"kind=<video|audio>", "name=<n>"},
              "Add a track to the current timeline.", "R-TL-1"},
             {K::ClipAdd, "clip add", "", 0, 0,
-             {"track=<trk>", "src=<rackobj>", "in=<t>", "out=<t>", "at=<t>", "name=<n>"},
-             "Place a span of a rack source on a track. Without --out, the rest of the source from --in "
-             "(a still: 5 s) — what a drag from the source bin drops.", "R-TL-1"},
+             {"track=<trk>", "src=<rackobj|timeline>", "in=<t>", "out=<t>", "at=<t>", "name=<n>"},
+             "Place a span of a rack source — or of another timeline, nested (R-EDT-4) — on a track. Without "
+             "--out, the rest of the source from --in (a still: 5 s; a timeline: to its last clip's end) — what "
+             "a drag from the source bin drops. A timeline that would end up inside itself is refused.", "R-TL-1"},
             {K::ClipTrim, "clip trim", "<clip>", 1, 1, {"in=<t>", "out=<t>"},
              "Set a clip's source in and/or out point (seconds into the SOURCE, like `<clip>.in`); "
              "trimming the head keeps the remaining frames where they were on the timeline.", "R-TL-3"},

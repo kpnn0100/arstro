@@ -28,6 +28,12 @@ namespace interstellar
 {
     bool InterstellarService::planAudio(const NodeId &tl, render::AudioPlan &out)
     {
+        std::vector<NodeId> stack;
+        return planAudioIn(tl, out, stack);
+    }
+
+    bool InterstellarService::planAudioIn(const NodeId &tl, render::AudioPlan &out, std::vector<NodeId> &stack)
+    {
         out = render::AudioPlan{};
         if (!mOpen) return false;
         const Project &P = *mProject;
@@ -67,6 +73,38 @@ namespace interstellar
             it.fadeOut = a.fadeOut;
             it.pan = std::clamp(l.pan, -1.0, 1.0);
             out.items.push_back(it);
+        }
+        // R-EDT-4: a nested timeline's sound rides its clip — the clip's window of the nested mix,
+        // moved to the clip's place and played at its speed (a ramp's average); its video track's
+        // mute silences it, and a solo elsewhere does too, as it does every lane that is not soloed
+        std::map<NodeId, const Track *> videoTracks;
+        for (const auto &t : R.tracks)
+            if (!t.audio()) videoTracks[t.id] = &t;
+        for (const auto &c : R.clips)
+        {
+            const auto vt = videoTracks.find(c.track);
+            if (!P.timeline(c.src) || dangling(c.id) || vt == videoTracks.end() || vt->second->mute || anySolo) continue;
+            if (c.src == tl || std::find(stack.begin(), stack.end(), c.src) != stack.end()) continue;   // a loop places nothing
+            render::AudioPlan inner;
+            stack.push_back(tl);
+            const bool ok = planAudioIn(c.src, inner, stack);
+            stack.pop_back();
+            if (!ok) continue;
+            const double cs = c.speed > 0 ? c.speed : 1.0;
+            for (const auto &i : inner.items)
+            {
+                const double lo = std::max(i.at, c.in), hi = std::min(i.end(), c.out);
+                if (!(hi > lo)) continue;
+                const double is = i.speed > 0 ? i.speed : 1.0;
+                render::AudioItem it = i;
+                it.in = i.in + (lo - i.at) * is;
+                it.out = i.in + (hi - i.at) * is;
+                it.speed = is * cs;
+                it.at = c.at + (lo - c.in) / cs;
+                it.fadeIn = lo > i.at + 1e-9 ? 0.0 : i.fadeIn / cs;     // a fade the window cut off is not heard
+                it.fadeOut = hi < i.end() - 1e-9 ? 0.0 : i.fadeOut / cs;
+                out.items.push_back(it);
+            }
         }
         return true;
     }

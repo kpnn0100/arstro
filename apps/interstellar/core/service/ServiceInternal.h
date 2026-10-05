@@ -65,6 +65,9 @@ namespace interstellar
         std::shared_ptr<const render::Lut> lut;
         std::string lutKey;
         render::Layer layer;            // geometry, fit, opacity, blend, dissolve; src filled at execute
+        // R-EDT-4: a nested timeline's frame, planned at the clip's local time — composited, not
+        // decoded; it is already graded (each of its clips by its own source), so nothing grades it again
+        std::shared_ptr<const InterstellarService::FramePlan> nested;
     };
 
     struct InterstellarService::FramePlan

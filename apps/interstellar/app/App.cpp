@@ -658,7 +658,9 @@ namespace interstellar_v1
             for (double sp : {0.5, 1.0, 2.0})
                 if (std::fabs(clip.speed - sp) > 1e-9)
                     items.push_back({"Speed " + std::to_string((int)std::lround(sp * 100)) + "%", [this, q, sp] { dispatch("clip speed " + q + " " + cmd::num(sp)); }});
-            if (!clip.srcName.empty())
+            if (clip.nested)
+                items.push_back({"Open Timeline " + clip.srcName, [this, s = clip.srcName] { dispatch("timeline open " + cmd::quote(s)); }});   // R-EDT-4
+            else if (!clip.srcName.empty())
                 items.push_back({"Show Source in Grade", [this, s = clip.srcName] { dispatch("rack select " + cmd::quote(s)); mEdit->setTab(EditScreen::Grade); }});
         }
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
@@ -680,8 +682,28 @@ namespace interstellar_v1
         for (const auto &tk : m.tracks) video = video || (tk.id == track && !tk.audio);
         if (video && track != m.targetTrack)
             items.push_back({"Target for Insert / Overwrite", [this, track] { dispatch("edit target " + cmd::quote(track)); }});   // R-EDT-1
+        bool placeable = false;
+        for (const auto &tl : m.timelines) placeable = placeable || tl.placeable;
+        if (video && placeable)
+            items.push_back({"Place Timeline Here...", [this, track, t, at] { openPlaceTimelineMenu(track, t, at); }});   // R-EDT-4
         items.push_back({"Add Video Track", [this] { dispatch("track add --kind video"); }});
         items.push_back({"Add Audio Track", [this] { dispatch("track add --kind audio"); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    /** R-EDT-4: the timelines that can go inside this one, as a list in place of the lane menu. */
+    void App::openPlaceTimelineMenu(const std::string &track, double t, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const double fps = m.fps > 0 ? m.fps : 24.0;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &tl : m.timelines)
+            if (tl.placeable)
+                items.push_back({std::string(tl.depth * 2, ' ') + tl.name, [this, track, t, fps, name = tl.name] {
+                    dispatch("clip add --track " + cmd::quote(track) + " --src " + cmd::quote(name) + " --in 0 --at " + cmd::seconds(t, fps));
+                }});
+        if (items.empty()) return;
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }

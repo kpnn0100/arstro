@@ -139,6 +139,7 @@ namespace interstellar_v1
         void dropSource(const std::string &src, const std::string &track, double at);
         void openClipContext(const std::string &clipId, artboard::Point at);
         void openLaneContext(const std::string &trackId, double t, artboard::Point at);
+        void openPlaceTimelineMenu(const std::string &trackId, double t, artboard::Point at);
         std::string freshMarkerName() const;
         std::string captureBind() const;
         std::string mCaptureBind;                       // what the open capture menu captures ("" = the timeline)

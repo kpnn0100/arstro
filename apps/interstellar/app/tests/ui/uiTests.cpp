@@ -1875,6 +1875,34 @@ namespace
         for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
         CHECK(cm->isOpen() && labels.find("Add Video Track") != std::string::npos && labels.find("Paste Here") != std::string::npos,
               "right-clicking an empty lane offers Paste Here and new tracks");
+        CHECK(labels.find("Place Timeline") == std::string::npos, "…and no Place Timeline while no timeline can go inside this one");
+        // R-EDT-4: a timeline that can go inside this one (main: social30's base, which holds nothing of it)
+        cm->close();
+        r.svc.m.timelines[0].placeable = true;
+        ++r.svc.m.revision;
+        r.pump(300);
+        r.app->pointer(1, empty.x, empty.y, 0, r.now);
+        r.app->pointer(0, empty.x, empty.y, 2, r.now);
+        r.app->pointer(2, empty.x, empty.y, 2, r.now + 40.0);
+        r.pump(250);
+        auto clickItem = [&](const std::string &prefix) {
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind(prefix, 0) == 0)
+                {
+                    const Point q = centre(*cm, cm->itemRect(i));
+                    r.click(q.x, q.y);
+                    r.pump(250);
+                    return true;
+                }
+            return false;
+        };
+        CHECK(clickItem("Place Timeline Here..."), "a video lane offers Place Timeline Here... when one can be placed");
+        labels.clear();
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(cm->isOpen() && labels == "main|", "…the list opens in its place, naming only what may go inside");
+        r.svc.lines.clear();
+        CHECK(clickItem("main") && hasLine(r.svc, "clip add --track v2 --src main --in 0 --at 15"),
+              "…and picking one places it at the clicked time on that lane");
     }
 
     /** R-UI-15: the scopes measure what they say — on frames whose answer is known. */

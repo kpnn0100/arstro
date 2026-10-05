@@ -330,6 +330,74 @@ namespace interstellar
         return resolveImpl(P, tl, out, err, stack);
     }
 
+    namespace
+    {
+        // the timelines `tl`'s clips place, directly, as `tl` resolves (a version may re-point one)
+        std::vector<NodeId> placedTimelines(const Project &P, const NodeId &tl)
+        {
+            std::vector<NodeId> out;
+            ResolvedTimeline R;
+            std::string err;
+            if (!resolve(P, tl, R, err)) return out;
+            for (const auto &c : R.clips)
+                if (P.timeline(c.src)) out.push_back(c.src);
+            return out;
+        }
+
+        std::string timelineName(const Project &P, const NodeId &id)
+        {
+            const Timeline *t = P.timeline(id);
+            return t && !t->name.empty() ? t->name : id;
+        }
+    }
+
+    bool nestingRefused(const Project &P, const NodeId &into, const NodeId &src, std::string &err)
+    {
+        // where the new clip would live: `into`, and every version of it (they inherit the clip)
+        std::set<NodeId> holders;
+        for (const auto &t : P.timelines)
+            for (const auto &c : P.chain(t.id))
+                if (c == into) holders.insert(t.id);
+        // what `src` shows, at every depth, itself included — reaching a holder closes a loop
+        std::set<NodeId> seen;
+        std::vector<std::pair<NodeId, std::string>> todo{{src, timelineName(P, src)}};
+        while (!todo.empty())
+        {
+            const auto [x, path] = todo.back();
+            todo.pop_back();
+            if (!seen.insert(x).second) continue;
+            if (holders.count(x))
+            {
+                err = "placing " + timelineName(P, src) + " in " + timelineName(P, into) + " would put a timeline inside itself (" +
+                      timelineName(P, into) + " → " + path + (x == into ? "" : ", a version of " + timelineName(P, into)) + ")";
+                return true;
+            }
+            for (const auto &y : placedTimelines(P, x)) todo.push_back({y, path + " → " + timelineName(P, y)});
+        }
+        return false;
+    }
+
+    std::vector<NodeId> nestingCycles(const Project &P)
+    {
+        std::vector<NodeId> out;
+        for (const auto &t : P.timelines)
+        {
+            std::set<NodeId> seen;
+            std::vector<NodeId> todo = placedTimelines(P, t.id);
+            bool loop = false;
+            while (!todo.empty() && !loop)
+            {
+                const NodeId x = todo.back();
+                todo.pop_back();
+                if (x == t.id) loop = true;
+                else if (seen.insert(x).second)
+                    for (const auto &y : placedTimelines(P, x)) todo.push_back(y);
+            }
+            if (loop) out.push_back(t.id);
+        }
+        return out;
+    }
+
     std::vector<std::pair<std::string, double>> gradeDeltas(const Project &P, const NodeId &timeline, const NodeId &rackObj)
     {
         std::vector<std::pair<std::string, double>> out;
@@ -405,9 +473,10 @@ namespace interstellar
             if (type == "clip" && key == "src")
             {
                 if (P.rackObj(id)) return true;
+                if (P.timeline(id)) return !nestingRefused(P, R.timeline, id, err);   // R-EDT-4
                 std::string names;
                 for (const auto &n : P.bindNames()) names += (names.empty() ? "" : ", ") + n;
-                err = "src=" + id + " names no #rackobj; the rack's bind names are: " + (names.empty() ? "(none)" : names);
+                err = "src=" + id + " names no #rackobj or #timeline; the rack's bind names are: " + (names.empty() ? "(none)" : names);
                 return false;
             }
             if (type == "aclip" && key == "track")

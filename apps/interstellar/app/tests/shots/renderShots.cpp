@@ -392,6 +392,24 @@ namespace
             s.m.targetTrack = "v2";
             ++s.m.revision;
         }, [](Rig &r) { r.app->setTab(1); r.settle(); }});
+        v.push_back({"cut_nested", [](FakeService &s) {   // R-EDT-4: a timeline placed as a clip, its menu open
+            s.edit();
+            auto c = FakeService::clip("n1", "v2", "main", "main", 12.0, 0.0, 3.0, arstro::interstellar::Provenance::Local);
+            c.nested = true;
+            s.m.clips.push_back(c);
+            s.m.timelines[0].placeable = true;
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            const Rect cr = tl->clipRect("n1");
+            const Point p = world(*tl, cr.x + cr.w * 0.5, cr.y + cr.h * 0.5);
+            r.app->pointer(1, p.x, p.y, 0, r.now);
+            r.app->pointer(0, p.x, p.y, 2, r.now);
+            r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+            r.settle();
+        }});
         v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

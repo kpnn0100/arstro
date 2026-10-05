@@ -274,6 +274,40 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-EDT-3 A timeline placed as a clip (R-EDT-4)
+A `#clip`'s `src` may name a `#timeline` as well as a `#rackobj` (`model/Project.cpp:1348`,
+`model/Arrange.cpp:154`, `model/Versions.cpp:476` for `set <clip>.src=`). `nestingRefused`
+(`model/Versions.cpp:354`) refuses a placement that would put a timeline inside itself: the clip
+lives in the timeline and in every version of it, so what the placed timeline shows — at every depth,
+as each resolves — must reach none of them; the refusal names the path (`main → reel`).
+`nestingCycles` (`:380`) finds the loops only a hand-edited `.isp` can hold; `lint` names them
+(`core/service/InterstellarService.cpp:3117`). The render (`core/service/ServiceRender.cpp:364`) plans
+the nested timeline's frame at the clip's local time — speed, ramp and freeze applied — at the outer
+frame's size and WITHOUT the view transform (it is a working-space picture; the view applies once,
+outside), and the layer composites it (`:526`) where empty is clear, so the tracks below show
+through; geometry, opacity, blend and dissolves are the clip's, as for footage. A timeline already
+being planned around the frame places nothing (`planFrameIn`'s stack, `:283`), so a loop cannot
+recurse. The plan key carries the nested plan's (`:273`), so the preview cache rebuilds exactly the
+seconds an edit inside the nested timeline changed. The sound (`core/service/ServiceAudio.cpp:77`):
+the nested mix's items cut to the clip's window, moved to its place, at its speed (a ramp's average),
+fades cut by the window dropped; its video track's mute silences it, and so does any solo. `clip add
+--src <timeline>` without `--out` runs to the timeline's end (`InterstellarService.cpp:2677`);
+`timeline delete` refuses a timeline another places (`:2437`); interchange export leaves nested clips
+out and says how many (`core/service/ServiceInterchange.cpp:139`). Model: `clips[].nested` (and
+`srcName` = the timeline's name), `timelines[].placeable` (`InterstellarService.cpp:717`). UI: the
+lane menu's **Place Timeline Here...** opens the placeable timelines in its place (`app/App.cpp:696`);
+a nested clip's menu has **Open Timeline**; the clip draws a second edge inside its own and
+"timeline ·" before its length (`app/widgets/Timeline.cpp:951`). Guarded by model `nestedTimelines`
+(placement; the four loops — itself, back, through an inheriting version, a version of itself;
+`set src`; the hand-edited loop named), L2 `a timeline placed as a clip…` (the nested picture equals
+the reel's frame byte for byte in Rec.709 and ACEScct; clear where the reel is empty; the clip's speed;
+`--out` defaulting; the mix 0.1 / 0.4 / 0.3 / 0.0 at 0.5 / 1.5 / 3.0 / 3.75 s; mute; refusals; an
+inner edit rebuilding 2 of 4 cache segments; a hand-edited loop linted and drawn without recursing),
+UI (the lane menu offers and lists only placeable timelines; picking one dispatches `clip add`), shot
+`cut_nested`. Mutants run red: no nested key, the view transform left on the nested plan, no loop
+guard (picture or sound), the sound's place, its mute, no delete refusal, `--out` not the timeline's
+length, holders without versions, `set src` unchecked, the cycle finder, lint, the menu's filters.
+
 ### DR-EDT-2 A speed ramp: the source frame is the integral of the speed (R-EDT-3)
 `<clip>.speed` is animatable (`core/service/ServiceAnim.cpp` — the clip set), keyed on the footage
 clock like the clip's other curves: v(s) at source time s, held to 0.1 … 8×. `anim::Ramp`

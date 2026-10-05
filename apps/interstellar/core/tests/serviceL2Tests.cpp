@@ -375,6 +375,9 @@ namespace
 
     void test(const char *name, const std::function<void()> &fn)
     {
+        // INTERSTELLAR_TEST_ONLY=<text>: only the tests whose name holds it (a mutant's quick run)
+        const char *only = std::getenv("INTERSTELLAR_TEST_ONLY");
+        if (only && *only && !std::strstr(name, only)) return;
         fn();
         ++gPassed;
         std::printf("[PASS] %s\n", name);
@@ -1465,6 +1468,97 @@ int main()
         f.must("redo");
         c = f.svc->project().clip(f.svc->project().idForRef("shotA"));
         assert(std::fabs(c->speed - 2.0 / std::log(3.0)) < 2e-3);
+    });
+
+    test("a timeline placed as a clip: its picture, its sound, live edits, and never inside itself (R-EDT-4)", [] {
+        Fixture f("nest");
+        f.standard();                                   // main: shotA a 0–2 at 0, shotB b 0–2 at 2 (frame f has R = f)
+        f.must("track add --kind audio");
+        f.must("audio clip add --track a0 --src a --in 0 --out 2 --at 0");   // main's own sound: 0.1 for 2 s
+        f.must("timeline new reel");
+        f.must("timeline open reel");
+        f.must("track add --kind video --name rv0");
+        f.must("clip add --track rv0 --src b --in 0 --out 2 --at 0 --name inner");
+        f.must("audio track add --name music");
+        f.must("audio clip add --track music --src \"" + f.path("footage/music.wav") + "\" --at 0");   // 0.3 for 4 s
+        f.must("timeline open main");
+        f.must("track add --kind video --name v1");
+        f.must("clip add --track v1 --src reel --in 0.5 --out 3 --at 1 --name nest");   // reel 0.5–3 at main 1–3.5
+        const NodeId main = f.svc->project().idForRef("main"), reel = f.svc->project().idForRef("reel");
+        const ClipModel *n = nullptr;
+        for (const auto &c : f.svc->model().clips) if (c.name == "nest") n = &c;
+        assert(n && n->nested && n->srcName == "reel" && !n->offline && n->src == reel);
+        auto placeable = [&](const std::string &name) {
+            for (const auto &t : f.svc->model().timelines) if (t.name == name) return t.placeable;
+            assert(false);
+            return false;
+        };
+        assert(placeable("reel") && !placeable("main"));   // what the lane menu offers here: never itself
+        auto frame = [&](const NodeId &tl, double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(tl, t, 0, r));
+            return r;
+        };
+        auto red = [&](double t) { return (int)frame(main, t).rgba[0]; };
+        assert(red(0.5) == 12);                         // before the nest: shotA
+        assert(red(1.25) == 18);                        // reel at 0.75: inner, b's frame 18
+        assert(red(2.25) == 42);                        // reel at 1.75, over shotB
+        assert(red(3.0) == 24);                         // reel at 2.5 has no picture: the nest is clear, shotB shows
+        const Raster outer = frame(main, 1.25), inner = frame(reel, 0.75);
+        assert(outer.width == inner.width && outer.rgba == inner.rgba);    // the nested picture IS the reel's frame
+        f.must("colour working acescct");               // … in any working space: the view applies once, outside
+        assert(frame(main, 1.25).rgba == frame(reel, 0.75).rgba && frame(main, 1.25).rgba != outer.rgba);
+        f.must("colour working rec709");
+        // the clip's own speed plays the nested timeline faster, like footage
+        f.must("set nest.speed=2.0");
+        assert(red(1.25) == 24);                        // reel at 0.5 + 0.25 × 2 = 1.0
+        f.must("undo");
+        // no --out: the rest of the timeline — to where its last clip (or sound) ends
+        f.must("clip add --track v1 --src reel --in 1 --at 6 --name nest2");
+        for (const auto &c : f.svc->model().clips) if (c.name == "nest2") assert(std::fabs(c.out - 4.0) < 1e-9);
+        f.must("clip delete nest2");
+        // its sound joins the mix, through the clip's window: reel's music under main's a
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("n.mp4") + "\"");
+        auto at = [&](double t) { return gAudio[(size_t)std::llround(t * 48000) * 2]; };
+        auto near = [](float a, double b) { return std::fabs(a - b) < 1e-4; };
+        std::printf("    the mix: %.3f at 0.5, %.3f at 1.5, %.3f at 3.0, %.3f at 3.75\n", at(0.5), at(1.5), at(3.0), at(3.75));
+        assert(near(at(0.5), 0.1) && near(at(1.5), 0.4) && near(at(3.0), 0.3) && near(at(3.75), 0.0));
+        f.must("set v1.mute=1");                        // the nest's track muted: its picture and its sound
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("m.mp4") + "\"");
+        assert(near(at(1.5), 0.1) && red(1.25) == 30);  // a alone; shotA's own frame shows
+        f.must("set v1.mute=0");
+        // the loops are refused, and a placed timeline cannot be deleted from under its clip
+        std::string err;
+        f.must("timeline open reel");
+        assert(!f.run("clip add --track rv0 --src main --in 0 --out 1 --at 3", &err) && has(err, "inside itself"));
+        assert(!placeable("main") && !placeable("reel"));  // from inside reel: main holds reel, so neither
+        assert(!f.run("timeline delete reel", &err) && has(err, "main places reel as clip nest"));
+        // an edit inside the nested timeline reaches the outer one — and the preview cache rebuilds
+        // exactly the seconds it changed
+        f.must("timeline open main");
+        f.must("cache build");
+        f.must("wait cache.done");
+        f.must("timeline open reel");
+        f.must("set inner.in=1.0 inner.out=3.0");       // inner: b 1–3 — the same reel seconds, other frames
+        f.must("timeline open main");
+        assert(red(1.25) == 42 && red(2.25) == 66);     // reel 0.75 → b 1.75; reel 1.75 → b 2.75
+        gCacheSegmentsWritten = 0;
+        f.must("cache build");
+        f.must("wait cache.done");
+        std::printf("    after an edit inside the nest: %d of 4 cache segments rebuilt\n", gCacheSegmentsWritten);
+        assert(gCacheSegmentsWritten == 2);             // main 1–3 is what changed
+        // a loop only a hand-edited file can make: named by lint, and the render does not recurse
+        f.must("project save");
+        const NodeId rv0 = f.svc->project().idForRef("rv0");
+        std::ofstream(f.path("mv.isp"), std::ios::app) << "#clip id=clp_99 name=back track=" << rv0 << " order=9 src=" << main
+                                                       << " at=2.5 in=0.0 out=1.0\n";
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(has(f.out("lint"), "timeline reel contains itself"));
+        assert(red(1.25) == 42);                        // reel at 0.75: inner, unchanged
+        assert(red(3.25) == 30);                        // reel at 2.75 is `back` → main, already being drawn: clear
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("l.mp4") + "\"");
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

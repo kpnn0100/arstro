@@ -714,6 +714,8 @@ namespace interstellar
                     render::AudioPlan ap;
                     tm.hasSound = mHost.audioSource && planAudio(t->id, ap) && !ap.empty();
                 }
+                std::string e4;   // R-EDT-4: what the lane menu may offer to place here
+                tm.placeable = t->id != P.current && !nestingRefused(P, P.current, t->id, e4);
                 m.timelines.push_back(tm);
                 if (m.timelines.size() <= P.timelines.size()) walk(t->id, depth + 1);
             }
@@ -779,14 +781,16 @@ namespace interstellar
                 cm.track = c.track;
                 cm.src = c.src;
                 const RackObj *ro = P.rackObj(c.src);
-                cm.srcName = ro ? ro->name : c.src;
+                const Timeline *nt = ro ? nullptr : P.timeline(c.src);   // R-EDT-4
+                cm.nested = nt != nullptr;
+                cm.srcName = ro ? ro->name : nt ? nt->name : c.src;
                 cm.at = c.at;
                 cm.in = c.in;
                 cm.out = c.out;
                 cm.speed = c.speed;
                 cm.duration = c.duration();
                 cm.opacity = c.opacity;
-                cm.offline = !ro || cosmoNodeOf(ro->id) < 0;
+                cm.offline = !nt && (!ro || cosmoNodeOf(ro->id) < 0);
                 cm.provenance = prov(c.id);
                 m.clips.push_back(cm);
             }
@@ -2430,6 +2434,14 @@ namespace interstellar
                 for (const auto &o : P.timelines)
                     if (o.base == tl) return fail("timeline delete: " + o.name + " is based on " + t->name + " — delete or rebase it first");
                 if (P.timelines.size() <= 1) return fail("timeline delete: a project keeps at least one timeline");
+                // R-EDT-4: a timeline another one places as a clip is in use
+                for (const auto &o : P.timelines)
+                {
+                    ResolvedTimeline R;
+                    if (o.id == tl || !resolved(o.id, R, err)) continue;
+                    for (const auto &x : R.clips)
+                        if (x.src == tl) return fail("timeline delete: " + o.name + " places " + t->name + " as clip " + x.name + " — delete that clip first");
+                }
                 std::set<NodeId> tracks, clips;
                 for (const auto &x : P.tracks)
                     if (x.timeline == tl) tracks.insert(x.id);
@@ -2659,15 +2671,22 @@ namespace interstellar
                 {
                     // the rest of the source — what a drop from the source bin means (R-UI-14)
                     const RackObj *ro = P.rackObj(P.idForRef(c.flag("src")));
-                    if (!ro || ro->kind == "group") return fail("clip add: " + c.flag("src") + " is not a rack source");
-                    if (!looksLikeVideo(ro->media)) out = in + 5.0;   // a still: an editor's default hold
+                    const Timeline *nt = ro ? nullptr : P.timeline(P.idForRef(c.flag("src")));
+                    if (nt)
+                    {
+                        // R-EDT-4: a nested timeline — the rest of it, to where its last clip ends
+                        out = snapToFrame(timelineDuration(nt->id), fps);
+                        if (!(out > in)) return fail("clip add: --in is at or past the end of " + nt->name + (out > 0 ? "" : " (it is empty)"));
+                    }
+                    else if (!ro || ro->kind == "group") return fail("clip add: " + c.flag("src") + " is not a rack source or a timeline");
+                    else if (!looksLikeVideo(ro->media)) out = in + 5.0;   // a still: an editor's default hold
                     else
                     {
                         auto *s = source(*mSync, resolvePath(ro->media));
                         if (!s || !s->ok || s->info.frames <= 0) return fail("clip add: " + ro->name + " cannot be opened to know its length — give --out");
                         out = snapToFrame((double)s->info.frames / (s->info.fps > 0 ? s->info.fps : fps), fps);
                     }
-                    if (!(out > in)) return fail("clip add: --in is at or past the end of " + ro->name);
+                    if (!nt && !(out > in)) return fail("clip add: --in is at or past the end of " + ro->name);
                 }
                 NodeId id;
                 if (!arrange::addClip(P, tl, track, P.idForRef(c.flag("src")), in, out, at, c.flag("name"), id, err))
@@ -3094,6 +3113,12 @@ namespace interstellar
         {
             ++refused;
             out << "refused   " << u << '\n';
+        }
+        for (const auto &id : nestingCycles(*mProject))   // R-EDT-4: only a hand-edited .isp gets here
+        {
+            ++refused;
+            const Timeline *t = mProject->timeline(id);
+            out << "refused   timeline " << (t ? t->name : id) << " contains itself through its nested clips — the clip that closes the loop shows nothing\n";
         }
         for (const auto &fx : mProject->effects)
         {

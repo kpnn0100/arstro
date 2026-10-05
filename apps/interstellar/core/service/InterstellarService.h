@@ -152,6 +152,7 @@ namespace interstellar
         struct UndoState;
         struct UndoEntry;
         struct FramePlan;
+        friend struct PlanLayer;   // R-EDT-4: a layer may hold a nested timeline's plan
         struct RenderCtx;
         struct PreviewWorker;
         struct AheadPool;
@@ -229,8 +230,12 @@ namespace interstellar
         Source *source(RenderCtx &ctx, const std::string &media);
         bool decodeLayer(RenderCtx &ctx, const struct PlanLayer &l, Raster &out, bool deep = false);
         bool planFrame(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip);
+        /** R-EDT-4: `stack` = the timelines being planned around this one (a nested clip plans its
+         *  timeline here, without the view transform — it is a picture in the working space). */
+        bool planFrameIn(const NodeId &timeline, double t, int proxyEdge, FramePlan &out, bool *anyClip, std::vector<NodeId> &stack);
         // R-AUD-5 (amended), R-AUD-9 — ServiceAudio.cpp
         bool planAudio(const NodeId &timeline, render::AudioPlan &out);
+        bool planAudioIn(const NodeId &timeline, render::AudioPlan &out, std::vector<NodeId> &stack);
         IAudioSource *audioSourceFor(RenderCtx &ctx, const std::string &media, int rate);
         IAudioSource *audioSourceIn(std::map<std::string, std::unique_ptr<IAudioSource>> &cache, const std::string &media, int rate);
         void startSound();                 // playback heard from the playhead (R-AUD-6)

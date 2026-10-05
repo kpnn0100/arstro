@@ -270,10 +270,17 @@ namespace interstellar
             k += l.media + l.fxKey + l.effectsKey + buf;
             if (l.input) k += "|" + l.input->key();
             if (l.lut) k += "|lut:" + l.lutKey;
+            if (l.nested) k += "{" + l.nested->key + "}";   // law 7: the nested picture is part of this one
         }
     }
 
     bool InterstellarService::planFrame(const NodeId &tl, double t, int proxyEdge, FramePlan &plan, bool *anyClip)
+    {
+        std::vector<NodeId> stack;
+        return planFrameIn(tl, t, proxyEdge, plan, anyClip, stack);
+    }
+
+    bool InterstellarService::planFrameIn(const NodeId &tl, double t, int proxyEdge, FramePlan &plan, bool *anyClip, std::vector<NodeId> &stack)
     {
         if (anyClip) *anyClip = false;
         plan = FramePlan{};
@@ -324,11 +331,65 @@ namespace interstellar
         std::map<int, NodeId> roOfIndex;
         for (const auto &kv : idx) roOfIndex[kv.second] = kv.first;
 
+        // the clip's own placement — geometry, fit, opacity, blend — over whatever picture it shows
+        auto place = [&](PlanLayer &L, const Clip *c, const render::Active &a, double srcT) {
+            const auto tr = tracks.find(c->track);
+            const double trackOpacity = tr != tracks.end() ? tr->second->opacity : 1.0;
+            auto cv = [&](const char *k, double v) { return curveAt(c->id, k, srcT, v); };
+            // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
+            // identically; the composite works in output pixels.
+            L.layer.geom.x = cv("geom.x", c->geom.x) * plan.width;
+            L.layer.geom.y = cv("geom.y", c->geom.y) * plan.height;
+            L.layer.geom.scale = cv("geom.scale", c->geom.scale);
+            L.layer.geom.rotation = cv("geom.rotation", c->geom.rotation);
+            L.layer.geom.anchorX = cv("geom.anchor.x", c->geom.anchorX);
+            L.layer.geom.anchorY = cv("geom.anchor.y", c->geom.anchorY);
+            L.layer.geom.cropX = cv("geom.crop.x", c->geom.cropX);
+            L.layer.geom.cropY = cv("geom.crop.y", c->geom.cropY);
+            L.layer.geom.cropW = cv("geom.crop.w", c->geom.cropW);
+            L.layer.geom.cropH = cv("geom.crop.h", c->geom.cropH);
+            L.layer.fit = fitOf(c->fit);
+            L.layer.opacity = std::clamp(cv("opacity", c->opacity) * trackOpacity * a.weight, 0.0, 1.0);
+            L.layer.blend = blendOf(c->blend);
+            L.layer.dissolveWithPrevious = a.dissolveWithPrevious;
+        };
+
         for (const auto &a : active)
         {
             const Clip *c = clips[a.id];
-            const RackObj *ro = c ? P.rackObj(c->src) : nullptr;
-            if (!c || !ro || ro->media.empty()) continue;   // offline: drawn as missing by the UI
+            if (!c) continue;
+            double localTime = a.localTime;
+            // R-EDT-3: a ramped clip's source time is the integral of its speed, not in + offset × speed
+            if (const anim::Ramp *rp = rampFor(*c); rp && t >= c->at - 1e-9 && t < c->end() + 1e-9) localTime = rp->sourceAt(t - c->at);
+            if (P.timeline(c->src))
+            {
+                // R-EDT-4: a nested timeline — its frame at the clip's local time, at this frame's size.
+                // A timeline already being planned around this one is a loop a hand-edited .isp made
+                // (lint names it): it places nothing rather than recursing forever.
+                if (std::find(stack.begin(), stack.end(), c->src) != stack.end() || c->src == tl) continue;
+                long long f = (long long)std::floor(localTime * P.fps + 1e-6);
+                for (const auto &fx : P.effects)
+                    if (fx.type == "freeze" && fx.clip == c->id)
+                        f = freezeRemap(f, (long long)std::floor((c->in + fx.at * c->speed) * P.fps + 1e-6));
+                auto inner = std::make_shared<FramePlan>();
+                bool innerAny = false;
+                stack.push_back(tl);
+                const bool ok = planFrameIn(c->src, (double)f / P.fps, proxyEdge, *inner, &innerAny, stack);
+                stack.pop_back();
+                if (!ok || !innerAny) continue;   // nothing cut there: the nested clip is transparent
+                inner->output.reset();
+                PlanLayer L;
+                L.media = "timeline:" + c->src;
+                L.frame = f;
+                L.edge = proxyEdge;
+                L.srcWidth = inner->width;
+                L.nested = inner;
+                place(L, c, a, std::max(0.0, localTime));
+                plan.layers.push_back(std::move(L));
+                continue;
+            }
+            const RackObj *ro = P.rackObj(c->src);
+            if (!ro || ro->media.empty()) continue;   // offline: drawn as missing by the UI
             PlanLayer L;
             L.media = resolvePath(ro->media);
             Source *s = source(*mSync, L.media);   // info only — nothing decodes on this thread
@@ -336,9 +397,6 @@ namespace interstellar
             // Source frame from the clip's SOURCE time at the SOURCE's own rate (a 30p clip in a 24p
             // project steps at 30p); a still is frame 0 forever (R-VOL-6).
             const double srcFps = s->info.fps > 0 ? s->info.fps : P.fps;
-            double localTime = a.localTime;
-            // R-EDT-3: a ramped clip's source time is the integral of its speed, not in + offset × speed
-            if (const anim::Ramp *rp = rampFor(*c); rp && t >= c->at - 1e-9 && t < c->end() + 1e-9) localTime = rp->sourceAt(t - c->at);
             L.frame = s->info.frames <= 1 ? 0 : (long long)std::floor(localTime * srcFps + 1e-6);
             for (const auto &fx : P.effects)
             {
@@ -393,24 +451,7 @@ namespace interstellar
                 L.lut = loadLut(resolvePath(ro->lut), why, &L.lutKey);   // unreadable: lint says so; the frame goes without
             }
 
-            const Track *tr = tracks[c->track];
-            auto cv = [&](const char *k, double v) { return curveAt(c->id, k, srcT, v); };
-            // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
-            // identically; the composite works in output pixels.
-            L.layer.geom.x = cv("geom.x", c->geom.x) * plan.width;
-            L.layer.geom.y = cv("geom.y", c->geom.y) * plan.height;
-            L.layer.geom.scale = cv("geom.scale", c->geom.scale);
-            L.layer.geom.rotation = cv("geom.rotation", c->geom.rotation);
-            L.layer.geom.anchorX = cv("geom.anchor.x", c->geom.anchorX);
-            L.layer.geom.anchorY = cv("geom.anchor.y", c->geom.anchorY);
-            L.layer.geom.cropX = cv("geom.crop.x", c->geom.cropX);
-            L.layer.geom.cropY = cv("geom.crop.y", c->geom.cropY);
-            L.layer.geom.cropW = cv("geom.crop.w", c->geom.cropW);
-            L.layer.geom.cropH = cv("geom.crop.h", c->geom.cropH);
-            L.layer.fit = fitOf(c->fit);
-            L.layer.opacity = std::clamp(cv("opacity", c->opacity) * (tr ? tr->opacity : 1.0) * a.weight, 0.0, 1.0);
-            L.layer.blend = blendOf(c->blend);
-            L.layer.dissolveWithPrevious = a.dissolveWithPrevious;
+            place(L, c, a, srcT);
             plan.layers.push_back(std::move(L));
         }
         if (anyClip) *anyClip = !plan.layers.empty();
@@ -482,6 +523,15 @@ namespace interstellar
         for (size_t i = 0; i < plan.layers.size(); ++i)
         {
             const PlanLayer &l = plan.layers[i];
+            if (l.nested)
+            {
+                // R-EDT-4: the nested timeline composited as a picture, then placed like any layer
+                if (!executePlan(ctx, *l.nested, graded[i], remember, deep)) continue;
+                render::Layer L = l.layer;
+                L.src = &graded[i];
+                layers.push_back(L);
+                continue;
+            }
             const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
             render::FrameCache::Key key;
             key.source = l.media + l.fxKey + l.effectsKey + (l.input ? "|" + l.input->key() : std::string()) +

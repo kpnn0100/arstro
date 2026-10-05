@@ -143,19 +143,21 @@ namespace arrange
         }
         const NodeId ro = P.idForRef(src);
         const RackObj *r = P.rackObj(ro);
-        if (!r)
+        const Timeline *nested = r ? nullptr : P.timeline(ro);   // R-EDT-4: a timeline placed as a clip
+        if (!r && !nested)
         {
             std::string names;
             for (const auto &n : P.bindNames()) names += (names.empty() ? "" : ", ") + n;
-            err = src + " names no #rackobj; the rack's bind names are: " + (names.empty() ? "(none)" : names);
+            err = src + " names no #rackobj or #timeline; the rack's bind names are: " + (names.empty() ? "(none)" : names);
             return false;
         }
+        if (nested && nestingRefused(P, tl, ro, err)) return false;
         if (!finite({in, out, at}, err)) return false;
         in = snap(in); out = snap(out); at = snap(at);
         if (!(in < out)) { err = "in " + t3(in) + " >= out " + t3(out) + " — a clip with no frames is not a clip"; return false; }
         if (in < 0.0 || at < 0.0) { err = "in and at are never negative"; return false; }
         std::string nm = name;
-        if (nm.empty()) nm = numbered(P, r->name.empty() ? "clip" : r->name);
+        if (nm.empty()) nm = numbered(P, r ? (r->name.empty() ? "clip" : r->name) : nested->name);
         else
         {
             if (!Project::nameIsLegal(nm, err)) return false;

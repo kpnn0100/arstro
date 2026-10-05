@@ -356,7 +356,7 @@
     },
     {
       "verb": "clip add",
-      "usage": "clip add [--track <trk>] [--src <rackobj>] [--in <t>] [--out <t>] [--at <t>] [--name <n>]",
+      "usage": "clip add [--track <trk>] [--src <rackobj|timeline>] [--in <t>] [--out <t>] [--at <t>] [--name <n>]",
       "args": "",
       "minArgs": 0,
       "maxArgs": 0,
@@ -367,7 +367,7 @@
         },
         {
           "name": "src",
-          "value": "<rackobj>"
+          "value": "<rackobj|timeline>"
         },
         {
           "name": "in",
@@ -386,7 +386,7 @@
           "value": "<n>"
         }
       ],
-      "summary": "Place a span of a rack source on a track. Without --out, the rest of the source from --in (a still: 5 s) — what a drag from the source bin drops.",
+      "summary": "Place a span of a rack source — or of another timeline, nested (R-EDT-4) — on a track. Without --out, the rest of the source from --in (a still: 5 s; a timeline: to its last clip's end) — what a drag from the source bin drops. A timeline that would end up inside itself is refused.",
       "requirement": "R-TL-1"
     },
     {
@@ -2007,6 +2007,12 @@
       "doc": "Something on it sounds (an unmuted #aclip that decodes): a video render carries the mix (R-AUD-9)."
     },
     {
+      "path": "timelines[].placeable",
+      "type": "boolean",
+      "stable": true,
+      "doc": "It can be placed as a clip in the current timeline — not itself, not a version of it, nothing that contains it (R-EDT-4)."
+    },
+    {
       "path": "currentTimeline",
       "type": "string",
       "stable": true,
@@ -2094,13 +2100,13 @@
       "path": "clips[].src",
       "type": "string",
       "stable": true,
-      "doc": "#rackobj id (video) or media path (audio)."
+      "doc": "#rackobj id (video), #timeline id (a nested timeline, R-EDT-4) or media path (audio)."
     },
     {
       "path": "clips[].srcName",
       "type": "string",
       "stable": true,
-      "doc": "The rack node's bind name."
+      "doc": "The rack node's (or nested timeline's) bind name."
     },
     {
       "path": "clips[].at",
@@ -2161,6 +2167,12 @@
       "type": "bool",
       "stable": true,
       "doc": "Its media is missing."
+    },
+    {
+      "path": "clips[].nested",
+      "type": "bool",
+      "stable": true,
+      "doc": "It places another timeline — a nested sequence (R-EDT-4)."
     },
     {
       "path": "clips[].provenance",

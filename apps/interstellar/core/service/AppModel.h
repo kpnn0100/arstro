@@ -148,6 +148,7 @@ namespace interstellar
         int danglingDeltas = 0;       // deltas whose target the base deleted — `rebase` reports them
         int overrides = 0;            // #tlset + #tlgrade count — "how far this version has diverged"
         bool hasSound = false;        // something on it sounds: a video render will carry the mix (R-AUD-9)
+        bool placeable = false;       // R-EDT-4: it can be placed as a clip in the current timeline (no loop)
     };
 
     /** Where a node in the RESOLVED current timeline came from. Drawn differently, because "this
@@ -168,8 +169,8 @@ namespace interstellar
     struct ClipModel
     {
         NodeId id, name, track;
-        NodeId src;                   // the #rackobj id (video) or a media path (audio)
-        std::string srcName;          // the rack node's bind name, for the clip label
+        NodeId src;                   // the #rackobj id (video), a #timeline id (nested, R-EDT-4) or a media path (audio)
+        std::string srcName;          // the rack node's (or nested timeline's) bind name, for the clip label
         double at = 0, in = 0, out = 0, speed = 1.0;
         double duration = 0;          // timeline seconds — derived, (out-in)/speed
         double opacity = 1.0;
@@ -177,6 +178,7 @@ namespace interstellar
         bool audio = false;
         std::string media;            // audio clips: the file, resolved — its waveform's key (R-AUD-7)
         bool offline = false;
+        bool nested = false;          // R-EDT-4: it places another timeline (src is that timeline's id)
         Provenance provenance = Provenance::Local;
     };
 

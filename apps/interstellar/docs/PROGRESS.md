@@ -76,7 +76,7 @@ one integrator who moves, wires, tests and commits each stream:
       9. [x] Interchange: EDL, FCPXML, OTIO, timecode and reels; AAF stated (R-XCH-1..5) — DR-XCH-1.
       10. [x] Editing: three-point Insert/Overwrite with a source viewer, J/K/L shuttle (R-EDT-1, R-EDT-2) — DR-EDT-1.
       10b. [x] Speed ramps (R-EDT-3) — DR-EDT-2.
-      10c. [ ] Nested timelines (R-EDT-4).
+      10c. [x] Nested timelines (R-EDT-4) — DR-EDT-3.
       10d. [ ] Multicam (R-EDT-5).
       11. [ ] Media: CinemaDNG + SDK seam, proxies, relink (R-MEDIA-1..3).
       12. [ ] Colourist tools: qualifiers, tracked windows, node graph, stills, wipe (R-CLR-1..5).
@@ -130,6 +130,15 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — a nested timeline is live, clear where empty, and never inside itself.** Resolve's
+compound clips and Premiere's nests both show the nested sequence live, so an edit inside reaches
+every placement — a copy would fork the cut silently. The nested picture is the working-space
+composite (no view transform, so ACEScct is viewed once) with empty areas transparent, as both NLEs
+do, so a nest on V2 overlays V1. The loop check counts versions: a version inherits the clip, so
+placing `social` (a version of `main`) inside `main`, or `main` inside anything `social` shows, is
+refused. A hand-edited loop is linted and drawn as nothing rather than refused at load, so the file
+still opens to be fixed.
 
 **2026-10-05 — curves: the root's, on the footage's clock, frozen by pins.** A rack node's curve
 runs in SOURCE time so every clip of that footage animates alike and Grade's reference-frame slider

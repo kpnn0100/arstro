@@ -1024,6 +1024,44 @@ fps = 24
         rt(p);
     }
 
+    /** R-EDT-4: a timeline placed as a clip — and every way of putting a timeline inside itself refused. */
+    void nestedTimelines()
+    {
+        Project p = load(kBase);                      // main (tl_1) ← social (tl_2, a version of main)
+        std::string err;
+        NodeId reel, rv0, rc, nest, x;
+        CHECK(newTimeline(p, "reel", "", reel, err));
+        CHECK(arrange::addTrack(p, reel, "video", "rv0", rv0, err));
+        CHECK(arrange::addClip(p, reel, rv0, "ro_2", 0.0, 3.0, 0.0, "", rc, err));
+        CHECK(arrange::addClip(p, "tl_1", "trk_1", "reel", 0.5, 2.5, 12.0, "", nest, err));
+        ResolvedTimeline R;
+        CHECK(resolve(p, "tl_1", R, err));
+        const Clip *n = nullptr;
+        for (const auto &c : R.clips) if (c.id == nest) n = &c;
+        CHECK(n && n->src == reel && n->name == "reel_1" && n->in == 0.5 && n->out == 2.5);
+        CHECK(resolve(p, "social", R, err));           // the version inherits the nested clip
+        bool inherited = false;
+        for (const auto &c : R.clips) inherited = inherited || c.id == nest;
+        CHECK(inherited && nestingCycles(p).empty());
+        // the loops: itself, directly back, through a version that inherits the clip, and a version of itself
+        CHECK(!arrange::addClip(p, "tl_1", "trk_1", "main", 0.0, 1.0, 20.0, "", x, err) && err.find("inside itself") != std::string::npos);
+        CHECK(!arrange::addClip(p, reel, rv0, "main", 0.0, 1.0, 5.0, "", x, err) && err.find("main → reel") != std::string::npos);
+        CHECK(!arrange::addClip(p, reel, rv0, "social", 0.0, 1.0, 5.0, "", x, err) && err.find("social → reel") != std::string::npos);
+        CHECK(!arrange::addClip(p, "tl_1", "trk_1", "social", 0.0, 1.0, 20.0, "", x, err) && err.find("a version of main") != std::string::npos);
+        // re-pointing a clip is the same check (`set <clip>.src=`)
+        CHECK(!setField(p, reel, rc, "src", "main", err) && err.find("inside itself") != std::string::npos);
+        CHECK(setField(p, reel, rc, "src", "s_a", err));
+        CHECK(!arrange::addClip(p, "tl_1", "trk_1", "nowhere", 0.0, 1.0, 20.0, "", x, err) && err.find("no #rackobj or #timeline") != std::string::npos);
+        rt(p);
+        // a hand-edited loop loads (validation is per node) and is NAMED, not recursed into
+        std::string text = p.serialize();
+        text += "#clip id=clp_90 name=back track=" + rv0 + " order=9 src=tl_1 at=9.0 in=0.0 out=1.0\n";
+        Project q = load(text);
+        const auto loops = nestingCycles(q);
+        CHECK(loops.size() == 2);                      // main and reel — social shows the loop but is not in it
+        CHECK(std::find(loops.begin(), loops.end(), reel) != loops.end() && std::find(loops.begin(), loops.end(), "tl_1") != loops.end());
+    }
+
 int main()
 {
     roundTripEveryNode();
@@ -1047,6 +1085,7 @@ int main()
     saveAndLoad();
     freshIdNeverReuses();
     threePointEdits();
-    std::printf("interstellar_model_tests: PASS (%d checks, 20 groups)\n", gChecks);
+    nestedTimelines();
+    std::printf("interstellar_model_tests: PASS (%d checks, 21 groups)\n", gChecks);
     return 0;
 }

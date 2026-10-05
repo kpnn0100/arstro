@@ -1345,11 +1345,11 @@ namespace interstellar
                       " — a clip with no frames is not a clip";
                 return false;
             }
-            if (!rackObj(c.src))
+            if (!rackObj(c.src) && !timeline(c.src))   // R-EDT-4: a timeline may be placed as a clip
             {
                 std::string names;
                 for (const auto &n : bindNames()) names += (names.empty() ? "" : ", ") + n;
-                err = "#clip " + c.id + ": src=" + c.src + " names no #rackobj; the rack's bind names are: " +
+                err = "#clip " + c.id + ": src=" + c.src + " names no #rackobj or #timeline; the rack's bind names are: " +
                       (names.empty() ? "(none — the rack is empty)" : names);
                 return false;
             }

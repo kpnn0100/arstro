@@ -144,6 +144,9 @@ deviations*, which is exactly what a timeline is.
 ```
 
 `src` names a **`#rackobj`**, not a file: the colour and the pixels arrive together, from one place.
+It may instead name a **`#timeline`** — a nested sequence (R-EDT-4): `in`/`out` are that timeline's
+seconds, and it is shown live, already graded clip by clip. A timeline may never end up inside
+itself (refused on every edit; `lint` names a hand-made loop, which renders as nothing).
 
 **A colour field on a `#clip` is a validation ERROR**, not an ignored key — ignoring it would
 silently discard a user's edit. `grade`, `curve`, `mixer`, `lut`, `exposure`, `temp`, … all refused,
