@@ -274,6 +274,42 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-DLV-3 Burn-ins (R-DLV-2)
+`render --burnin "tc@bl,srctc@br,clip@tl,source@tr,text=DRAFT@tc"` (`core/service/ServiceRender.cpp:1214`)
+names what goes over every frame of that render, each item at one of six places (`tl tc tr bl bc br`):
+`tc`, the record timecode, 01:00:00:00 at the timeline's start (the broadcast habit the interchange
+formats share, drop-frame and 23.976 alike, `core/service/ServiceBurnIn.cpp:55`); `srctc`, the top
+clip's source timecode, i.e. its media's own start plus the source time it shows (`:68`); `clip` and
+`source`, the top clip's name and its source's (a nested timeline's name); and `text=…`. Where nothing is
+cut, the item reads "—". Sizes come from the frame (3.2 % of its height, a 2.5 % margin) on a translucent
+black plate. The core NAMES the text and its place (`core/Overlay.h`). The host DRAWS it
+(`Host::drawText`) after the grade and the output transform (`ServiceRender.cpp:1342`), so a burn-in is
+never graded. In a PQ or HLG render its white is graphics white, not the peak: BT.2408's 203 cd/m², which
+is 0.58 PQ and 0.75 HLG (`ServiceBurnIn.cpp:46`). The drawing is the app's own typeface:
+`app/BurnText.cpp:16` uses the app library's CairoTarget and the embedded JetBrains Mono / Roboto,
+composited premultiplied into an 8- or 16-bit frame. `linux_main.cpp` and `interstellar-cc` install it;
+the CLI links the app library for it (`CMakeLists.txt:22`). A host without it refuses `--burnin` ("this
+build cannot draw text over a frame") rather than rendering without the burn-ins. Renders only: the
+monitor, a still and the preview cache never carry one, and the render's spec says "· burn-ins".
+
+UI: the Deliver tab's OUTPUT header line carries "No burn-ins" / "n burn-ins"
+(`app/widgets/OutputSpec.cpp:442`). It opens a menu of the five, each with its place, the ones on marked
+(`app/App.cpp:68`); Text… asks for its words. The render line gains `--burnin` (`OutputSpec.cpp:188`). The
+burn-ins belong to one render, like its range, so a saved preset never holds them.
+
+Guarded by:
+- L2 `burn-ins…`: frame 0 reads 01:00:00:00 · 01:00:10:00 · shotA · a · DRAFT, and frame 60 reads
+  01:00:02:12 · 01:00:11:12 · shotB. Also checked: the places, the size, the frame graded underneath,
+  PQ 0.5807 and HLG 0.75, a still carrying none, and a host without text refusing.
+- UI `testBurnInsUi`: the menu's five, the count, the render line, Text… and its words, none in a
+  preset's flags, off again.
+- Shot `deliver_burnins` at both sizes. A chip row was tried first and pushed Render out of reach at
+  1440×900, which the Deliver test caught, so the control rides the header line as the preset does.
+- E2E: a CLI PNG-sequence render's frame was looked at.
+
+Mutants run red: no burn-in call, no source TC start, no record start, no refusal without text, the
+white ignored, a menu item only turning on, the count never shown, and the header pill not placed.
+
 ### DR-DLV-2 Render presets (R-DLV-3)
 A preset is a render's output spec as the flags `render` takes, less the timeline, the path and the
 range, by name. Three are built in (`core/service/ServicePresets.cpp:31`): YouTube 1080p (H.264, a

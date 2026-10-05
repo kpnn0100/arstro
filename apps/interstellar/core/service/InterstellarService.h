@@ -30,6 +30,7 @@
 #include "AudioOut.h"
 #include "AudioSource.h"
 #include "FrameSource.h"
+#include "Overlay.h"
 #include "Rack.h"
 #include "Raster.h"
 #include <atomic>
@@ -74,6 +75,9 @@ namespace interstellar
             std::function<std::unique_ptr<IFrameWriter>()> frameWriter;
             /** A PNG writer, for stills and png sequences. */
             std::function<bool(const std::string &path, const Raster &frame, std::string &err)> writeImage;
+            /** R-DLV-1/2: draw text over a frame (8- or 16-bit) in the app's typeface; unset = this build
+             *  cannot, and a render that asks for burn-ins is refused saying so. */
+            std::function<bool(Raster &frame, const std::vector<OverlayText> &items)> drawText;
             /** The recents index; "" = none (tests). */
             std::string recentsPath;
             /** Engine settings file (cpuPercent, threads, previewEdge, useGpu, uiScale); "" = not
@@ -249,6 +253,8 @@ namespace interstellar
         bool proxyCommand(const Command &c);
         // R-MEDIA-3 — ServiceMedia.cpp
         bool mediaCommand(const Command &c);
+        // R-DLV-2 — ServiceBurnIn.cpp
+        bool burnIn(const struct Job &j, double t, Raster &frame);
         // R-DLV-3 — ServicePresets.cpp
         std::string presetsPath() const;
         std::vector<std::pair<std::string, std::string>> userPresets() const;

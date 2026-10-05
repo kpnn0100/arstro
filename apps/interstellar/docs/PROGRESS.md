@@ -87,7 +87,8 @@ one integrator who moves, wires, tests and commits each stream:
       12d. [x] The node graph (R-CLR-3) — DR-CLR-4.
       13. [x] Autosave and crash recovery (R-DLV-5, R-DLV-6) — DR-DLV-1.
       13b. [x] Render presets (R-DLV-3) — DR-DLV-2.
-      13c. [ ] Burn-ins and captions (R-DLV-1, R-DLV-2).
+      13c. [x] Burn-ins (R-DLV-2) — DR-DLV-3.
+      13e. [ ] Captions (R-DLV-1): SRT in, on the monitor, burned in or a subtitle track or a sidecar.
       13d. [ ] DCP and IMF, unvalidated and saying so (R-DLV-4).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
@@ -138,6 +139,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — the core decides what a burn-in says; the host draws it.** Drawing text needs a
+rasteriser and a typeface, and law 8 keeps both out of the core. So the core works out each item's
+text and place per frame, and the host draws it through `Host::drawText`, using the app's CairoTarget and
+the fonts compiled into the binary. A render's burn-in then reads like the product. The CLI links the app
+library to get it. A host without text refuses `--burnin` rather than rendering without the burn-ins.
+The text is drawn after the output transform. In an HDR render its white is BT.2408's graphics white, not
+the peak.
 
 **2026-10-05 — an autosave is the .isp plus every grade, and recovery goes through Cosmo.** Cosmo's
 `.cmp` can only be saved over itself — and while a source is offline not at all (D-2) — so "saved

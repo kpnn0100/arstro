@@ -16,6 +16,12 @@ else()
   message(STATUS "interstellar: skipped (needs cosmo_core — the rack hosts a real CosmoService)")
 endif()
 
+# R-DLV-1/2: the CLI draws burn-ins and captions in the app's typeface — the app library's text drawer
+if(TARGET interstellar_app AND TARGET interstellar-cc)
+  target_link_libraries(interstellar-cc PRIVATE interstellar_app)
+  target_compile_definitions(interstellar-cc PRIVATE INTERSTELLAR_HAVE_TEXT=1)
+endif()
+
 # The GTK window: the app's hooks bound to the service. The ONLY OS code in the GUI.
 if(TARGET interstellar_app AND TARGET interstellar_host)
   find_package(PkgConfig REQUIRED)

@@ -643,11 +643,15 @@ reserves the rest so adopting it is not a migration.
   it changes the whole clip). Switched from the monitor's angle bar in Cut or Alt+1…9 — while paused
   or playing; the bar names each angle by its source, without per-angle pictures (said).
 
-## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 3 ✅ DR-DLV-2, 1, 2, 4 next)
+## R-DLV — delivery and safety — 🔶 IN PROGRESS (added 2026-10-05; 5–6 ✅ DR-DLV-1, 3 ✅ DR-DLV-2, 2 ✅ DR-DLV-3, 1, 4 next)
 
 - **R-DLV-1 Captions**: SRT import, shown on the monitor, burned in or carried as a subtitle track
   (MP4 mov_text, MKV SRT) or written as a sidecar `.srt`.
 - **R-DLV-2 Burn-ins**: timecode, clip name, source name and free text, positioned, on a render.
+  — ✅ (DR-DLV-3). Record timecode starts at 01:00:00:00, and source timecode is the media's own. They
+  are drawn over the finished frame (never graded), at graphics white in an HDR render (BT.2408), on
+  renders only. They belong to one render, so a preset never holds them. A build that cannot draw text
+  refuses them, and says why.
 - **R-DLV-3 Render presets**: a render's whole spec saved by name and applied in one step; a few
   built in (YouTube 1080p, ProRes HQ master, Review H.264). — ✅ (DR-DLV-2). Saved beside the engine settings,
   so every project has them; a preset's size is a frame to fit in at the project's aspect (a 1080p

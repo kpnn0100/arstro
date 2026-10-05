@@ -64,6 +64,27 @@ namespace interstellar_v1
             mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
             noteActivity();
         };
+        // R-DLV-2: this render's burn-ins — each item toggles one; Text… asks for its words
+        mEdit->outputSpec()->onBurnMenu = [this](Rect at) {
+            auto os = mEdit->outputSpec();
+            static const char *names[OutputSpec::kBurns] = {"Timecode, bottom left", "Source timecode, bottom right", "Clip name, top left",
+                                                            "Source name, top right", "Text\xE2\x80\xA6, top centre"};
+            std::vector<cosmo_v2::ContextMenu::Item> items;
+            for (int b = 0; b < OutputSpec::kBurns; ++b)
+            {
+                const bool on = os->burn(b) && (b != OutputSpec::BurnText || !os->burnText().empty());
+                std::string label = std::string(on ? "\xE2\x80\xA2  " : "     ") + names[b];
+                if (b == OutputSpec::BurnText && on) label = "\xE2\x80\xA2  Text: " + os->burnText();
+                if (b == OutputSpec::BurnText) items.push_back({label, [os] { if (os->onBurnText) os->onBurnText(os->burnText()); }});
+                else items.push_back({label, [os, b, on] { os->setBurn(b, !on); }});
+            }
+            mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+            noteActivity();
+        };
+        mEdit->outputSpec()->onBurnText = [this](const std::string &current) {   // R-DLV-2
+            mEdit->namePrompt()->show("Burn in text", "Words over every frame of this render, top centre (empty: none).", current, "Burn in",
+                                      [this](const std::string &t) { mEdit->outputSpec()->setBurnText(t); });
+        };
         mEdit->outputSpec()->onSavePreset = [this](const std::string &flags) {
             mEdit->namePrompt()->show("Save render preset", "These output settings, by name — in every project.", "", "Save",
                                       [this, flags](const std::string &name) {

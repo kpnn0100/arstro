@@ -254,6 +254,7 @@ namespace
     bool gNoHardware = false;   // the capture writer plays a machine with no video unit (R-PLAY-3)
 
     EncodeSpec gProxySpec;   // R-MEDIA-2: what the last proxy was encoded as
+    std::vector<std::vector<OverlayText>> gBurns;   // R-DLV-1/2: what each frame was asked to carry
     struct CaptureWriter : public IFrameWriter
     {
         std::vector<Raster> *sink;
@@ -315,6 +316,7 @@ namespace
 
         bool async = false;   // the GTK host's asyncPreview
         bool sound = false;   // a sound output (R-AUD-6)
+        bool noText = false;  // a host that cannot draw text (R-DLV-2)
         double now = 1e12;    // a pump clock ahead of the service's own (it only moves forward)
 
         std::unique_ptr<InterstellarService> make()
@@ -327,6 +329,13 @@ namespace
             h.audioSource = [] { return std::unique_ptr<IAudioSource>(new FakeAudioSource()); };
             if (sound) h.audioOut = [] { return std::unique_ptr<IAudioOut>(new FakeAudioOut()); };
             h.writeImage = [this](const std::string &p, const Raster &r, std::string &) { images[p] = r; return true; };
+            if (!noText)
+                h.drawText = [](Raster &frame, const std::vector<OverlayText> &items) {
+                    gBurns.push_back(items);
+                    // a mark where it drew, so a test can see the text is laid over the finished frame
+                    if (!frame.deep() && !frame.rgba.empty()) { frame.rgba[0] = 255; frame.rgba[1] = 0; frame.rgba[2] = 255; }
+                    return true;
+                };
             h.settingsPath = dir + "/settings.txt";
             h.presetDir = dir + "/presets";
             auto s = std::make_unique<InterstellarService>(budget, h);
@@ -2226,6 +2235,54 @@ int main()
         f.must("render preset delete \"Grade review\"");
         assert(f.svc->model().renderPresets.size() == 3);
         assert(!f.run("render preset delete \"Grade review\"", &err) && has(err, "no preset named"));
+    });
+
+    test("burn-ins: record and source timecode, clip and source names and text, placed, on a render's every frame (R-DLV-2)", [] {
+        Fixture f("burnin");
+        f.standard();                                   // shotA a 0–2 (TC 01:00:10:00), shotB b 2–4 (TC 01:00:11:00)
+        f.must("set a.basic.exposure=0.5");
+        gBurns.clear();
+        f.written.clear();
+        f.must("render --timeline main --format h264 --res 46x26 --out \"" + f.path("b.mp4") + "\" --burnin \"tc@bl,srctc@br,clip@tl,source@tr,text=DRAFT@tc\"");
+        assert(gBurns.size() == 96 && f.written.size() == 96);
+        auto item = [&](int frame, int k) { return gBurns[(size_t)frame][(size_t)k]; };
+        std::printf("    frame 0: %s · %s · %s · %s · %s;  frame 60: %s · %s · %s\n", item(0, 0).text.c_str(), item(0, 1).text.c_str(), item(0, 2).text.c_str(),
+                    item(0, 3).text.c_str(), item(0, 4).text.c_str(), item(60, 0).text.c_str(), item(60, 1).text.c_str(), item(60, 2).text.c_str());
+        assert(item(0, 0).text == "01:00:00:00" && item(24, 0).text == "01:00:01:00" && item(0, 0).mono);
+        assert(item(0, 1).text == "01:00:10:00" && item(12, 1).text == "01:00:10:12");   // a's own timecode at the frame it shows
+        assert(item(60, 1).text == "01:00:11:12");                                         // b's, 12 frames into shotB
+        assert(item(0, 2).text == "shotA" && item(60, 2).text == "shotB" && item(0, 3).text == "a" && item(60, 3).text == "b");
+        assert(item(0, 4).text == "DRAFT" && !item(0, 4).mono);
+        // the places: left/right, top/bottom, inside a margin; sized to the frame
+        const auto bl = item(0, 0), tr = item(0, 3), tc = item(0, 4);
+        assert(bl.align == 0 && bl.valign == 1 && bl.x > 0 && bl.y > 13 && bl.y < 26);
+        assert(tr.align == 2 && tr.valign == 0 && tr.x > 23 && tr.x < 46 && tr.y < 13 && tc.align == 1 && std::fabs(tc.x - 23.0) < 1e-9);
+        assert(bl.px >= 10.0);
+        // laid over the finished frame — after the grade
+        assert(f.written[0].rgba[0] == 255 && f.written[0].rgba[1] == 0 && f.written[0].rgba[2] == 255);
+        // the spec says so; refusals name the grammar
+        assert(has(f.svc->model().renders.back().spec, "burn-ins"));
+        std::string err;
+        assert(!f.run("render --timeline main --format h264 --res 46x26 --out \"" + f.path("c.mp4") + "\" --burnin \"foo@bl\"", &err) && has(err, "tc, srctc, clip"));
+        assert(!f.run("render --timeline main --format h264 --res 46x26 --out \"" + f.path("c.mp4") + "\" --burnin tc", &err) && has(err, "needs a place"));
+        assert(item(0, 0).white == 1.0);
+        // an HDR render's burn-in is graphics white, not the peak: 203 cd/m² (BT.2408)
+        gBurns.clear();
+        f.must("render --timeline main --format h265 --bits 10 --output pq --res 46x26 --out \"" + f.path("pq.mp4") + "\" --burnin tc@bl");
+        assert(!gBurns.empty() && std::fabs(gBurns[0][0].white - 0.5807) < 1e-3);
+        gBurns.clear();
+        f.must("render --timeline main --format h265 --bits 10 --output hlg --res 46x26 --out \"" + f.path("hlg.mp4") + "\" --burnin tc@bl");
+        assert(!gBurns.empty() && std::fabs(gBurns[0][0].white - 0.75) < 1e-9);
+        // a still never carries one
+        gBurns.clear();
+        f.must("export-still --timeline main --out \"" + f.path("s.png") + "\" --at 1");
+        assert(gBurns.empty());
+        // a host that cannot draw text refuses rather than renders without them
+        Fixture g("burnin2");
+        g.noText = true;
+        g.svc = g.make();
+        g.standard();
+        assert(!g.run("render --timeline main --format h264 --res 46x26 --out \"" + g.path("c.mp4") + "\" --burnin tc@bl", &err) && has(err, "cannot draw text"));
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

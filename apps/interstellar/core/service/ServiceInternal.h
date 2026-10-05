@@ -257,6 +257,9 @@ namespace interstellar
         std::shared_ptr<const render::colour::Transform> output;   // R-COLOR-4: --output (null = as graded)
         bool begun = false;
         std::unique_ptr<IFrameWriter> writer;
+        // R-DLV-2: what is burned in, and where (tc | srctc | clip | source | text=…, at tl tc tr bl bc br)
+        struct Burn { std::string what, text, at; };
+        std::vector<Burn> burns;
     };
 
     /** R-MEDIA-2: a proxy being made — the original decoded, prescaled and encoded one frame per pump. */

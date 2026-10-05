@@ -99,6 +99,16 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::PillButton> presetButton() { return mPresetBtn; }
         std::shared_ptr<cosmo_v2::PillButton> savePresetButton() { return mSavePreset; }
         std::function<void(artboard::Rect world)> onPresetMenu;
+        // ── R-DLV-2: burn-ins, five: record TC (bottom left), source TC (bottom right), clip (top left),
+        //    source (top right), text (top centre) — chosen from a menu on the OUTPUT header's line ──
+        enum Burn { BurnTc, BurnSrcTc, BurnClip, BurnSource, BurnText, kBurns };
+        void setBurn(int b, bool on) { if (b >= 0 && b < kBurns) mBurnOn[b] = on; }
+        bool burn(int b) const { return b >= 0 && b < kBurns && mBurnOn[b]; }
+        void setBurnText(const std::string &t) { mBurnText = t; mBurnOn[BurnText] = !t.empty(); }
+        const std::string &burnText() const { return mBurnText; }
+        std::shared_ptr<cosmo_v2::PillButton> burnButton() { return mBurnBtn; }
+        std::function<void(artboard::Rect world)> onBurnMenu;
+        std::function<void(const std::string &current)> onBurnText;   // the Text item asks for its words
         std::function<void(const std::string &flags)> onSavePreset;
 
         void advance(double nowMs) override;
@@ -134,6 +144,10 @@ namespace interstellar_v1
         std::vector<int> controlState() const;
         double mPresetY = 0;
         artboard::AnimatedProperty mPresetAmt{0.0};      // how far the controls have dimmed for a preset
+        bool mBurnOn[kBurns] = {false, false, false, false, false};
+        std::string mBurnText;
+        std::shared_ptr<cosmo_v2::PillButton> mBurnBtn;
+        std::string burnFlag() const;
         bool mPresetApplied = false;
     public:
         double presetAmount() const { return mPresetAmt.value(); }

@@ -2786,6 +2786,51 @@ namespace
               "…and saves the controls' flags under it");
     }
 
+    /** R-DLV-2: the burn-in chips on Deliver — toggled (eased), carried by the line, the text asked for. */
+    void testBurnInsUi()
+    {
+        std::printf("burn-ins: the Deliver burn-in menu\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        auto cm = r.app->edit().contextMenu();
+        auto pick = [&](const std::string &prefix) {
+            const auto bb = os->burnButton();
+            const Point pb = centre(*bb, Rect{0, 0, bb->width.value(), bb->height.value()});
+            r.click(pb.x, pb.y);
+            r.pump(250);
+            std::string labels;
+            for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind(prefix, 0) == 0) { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
+            return labels;
+        };
+        CHECK(os->renderLine().find("--burnin") == std::string::npos && os->burnButton()->label() == "No burn-ins", "no burn-ins until one is chosen");
+        const std::string first = pick("     Timecode");
+        CHECK(first == "     Timecode, bottom left|     Source timecode, bottom right|     Clip name, top left|     Source name, top right|     Text\xE2\x80\xA6, top centre|",
+              "the OUTPUT header's burn-in menu lists the five, each with its place");
+        r.settle();
+        CHECK(os->burn(OutputSpec::BurnTc) && os->burnButton()->label() == "1 burn-in", "choosing one turns it on, and the button counts it");
+        pick("     Clip name");
+        r.settle();
+        CHECK(os->renderLine().find("--burnin tc@bl,clip@tl") != std::string::npos, "…and the render line burns in the timecode and the clip");
+        pick("     Text");
+        r.pump(250);
+        auto np = r.app->edit().namePrompt();
+        CHECK(np->isOpen(), "Text… asks for its words");
+        np->field()->text = "DRAFT v3";
+        np->confirm();
+        r.settle();
+        CHECK(os->renderLine().find("--burnin \"tc@bl,clip@tl,text=DRAFT v3@tc\"") != std::string::npos && os->burnButton()->label() == "3 burn-ins",
+              "…and burns them in top centre");
+        CHECK(os->specFlags().find("--burnin") == std::string::npos, "burn-ins are this render's, not a preset's");
+        const std::string marked = pick("\xE2\x80\xA2  Timecode");
+        CHECK(marked.find("\xE2\x80\xA2  Text: DRAFT v3|") != std::string::npos, "the menu marks the ones on, the text by its words");
+        r.settle();
+        CHECK(os->renderLine().find("tc@bl") == std::string::npos, "one chosen again is off");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2963,6 +3008,7 @@ int main()
     testNodeGraphUi();
     testSafetyUi();
     testRenderPresetsUi();
+    testBurnInsUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

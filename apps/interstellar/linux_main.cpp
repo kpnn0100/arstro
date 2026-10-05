@@ -14,6 +14,7 @@
  *  something is moving (`needsRedraw`), so a window at rest costs nothing.
  */
 #include "App.h"
+#include "BurnText.h"
 #include "EmbeddedFonts.h"
 #include "AudioSourceFFmpeg.h"
 #ifdef INTERSTELLAR_HAVE_PULSE
@@ -77,6 +78,7 @@ namespace
         };
         h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
         h.hasVendorDecoder = [](const std::string &ext) { return interstellar_host::vendorDecoderInstalled(ext); };   // R-MEDIA-1
+        h.drawText = [](interstellar::Raster &f, const std::vector<interstellar::OverlayText> &items) { return interstellar_v1::drawOverlayText(f, items); };   // R-DLV-1/2
         h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
 #ifdef INTERSTELLAR_HAVE_PULSE
         h.audioOut = [] { return std::unique_ptr<IAudioOut>(new interstellar_host::AudioOutPulse()); };   // R-AUD-6

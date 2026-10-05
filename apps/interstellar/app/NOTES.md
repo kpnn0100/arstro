@@ -229,6 +229,12 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Render presets (R-DLV-3): Deliver's FORMAT line → "Preset: …" (Custom + every preset; the line
   becomes `render … --preset <name>` and the range, the controls dim, a touched control means Custom) and
   Save Preset… → `render preset save <name> <the controls' flags>`. Shot: `deliver_preset`. UI checks: 460.
+- Burn-ins (R-DLV-2): Deliver's OUTPUT header line → "No burn-ins" / "n burn-ins". It opens a menu of
+  Timecode (bottom left), Source timecode (bottom right), Clip name (top left), Source name (top right)
+  and Text… (top centre; it asks for the words); the ones on are marked. The render line gains
+  `--burnin "tc@bl,clip@tl,text=…@tc"`, never in a preset's flags. The control is on the header line
+  because a chip row pushed Render out of reach. Shot: `deliver_burnins` (the column is scrolled first at
+  1024×640). UI checks: 469.
 
 ## Interchange (2026-10-05, R-XCH)
 

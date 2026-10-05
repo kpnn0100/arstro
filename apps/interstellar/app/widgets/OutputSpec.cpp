@@ -105,6 +105,13 @@ namespace interstellar_v1
             const Point o = mPresetBtn->worldTransform().apply(Point{0, 0});
             onPresetMenu(Rect{o.x, o.y, mPresetBtn->width.value(), mPresetBtn->height.value()});
         };
+        // R-DLV-2: this render's burn-ins, from a menu — the column keeps its height
+        mBurnBtn = pill("No burn-ins");
+        mBurnBtn->onClick = [this] {
+            if (!onBurnMenu) return;
+            const Point o = mBurnBtn->worldTransform().apply(Point{0, 0});
+            onBurnMenu(Rect{o.x, o.y, mBurnBtn->width.value(), mBurnBtn->height.value()});
+        };
         mSavePreset = pill("Save Preset\xE2\x80\xA6");
         mSavePreset->onClick = [this] { if (onSavePreset) onSavePreset(specFlags()); };
         mSetIn = pill("Set In");
@@ -178,14 +185,33 @@ namespace interstellar_v1
         mPresetBtn->setLabel("Preset: " + (name.empty() ? std::string("Custom") : name));
     }
 
+    std::string OutputSpec::burnFlag() const
+    {
+        // R-DLV-2: this render's burn-ins (not a preset's: they belong to one render, like its range)
+        static const char *items[kBurns] = {"tc@bl", "srctc@br", "clip@tl", "source@tr", ""};
+        std::string spec;
+        for (int b = 0; b < kBurns; ++b)
+        {
+            if (!mBurnOn[b]) continue;
+            std::string item = b == BurnText ? "text=" + mBurnText + "@tc" : items[b];
+            if (b == BurnText && (mBurnText.empty() || mBurnText.find_first_of(",@\"") != std::string::npos)) continue;   // the grammar's own separators
+            spec += (spec.empty() ? "" : ",") + item;
+        }
+        return spec.empty() ? std::string() : " --burnin " + cmd::quote(spec);
+    }
+
     std::string OutputSpec::specFlags() const
     {
         // the line the controls would write, less what belongs to one render
         const std::string line = renderLine();
         const auto at = line.find(" --format ");
         std::string flags = at == std::string::npos ? std::string() : line.substr(at + 1);
-        const auto range = flags.find(" --range ");
-        if (range != std::string::npos) flags = flags.substr(0, range);
+        // a render's own parts are not the spec: its range and its burn-ins
+        for (const char *own : {" --range ", " --burnin "})
+        {
+            const auto at = flags.find(own);
+            if (at != std::string::npos) flags = flags.substr(0, at);
+        }
         return flags;
     }
 
@@ -195,7 +221,7 @@ namespace interstellar_v1
         if (!mPreset.empty())
         {
             // R-DLV-3: the preset is the spec; the range is this render's own
-            std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --preset " + cmd::quote(mPreset);
+            std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --preset " + cmd::quote(mPreset) + burnFlag();
             if (mRange->selected() == 1)
             {
                 const double fps = mProjFps > 0 ? mProjFps : 24.0;
@@ -227,7 +253,7 @@ namespace interstellar_v1
             const double out = mOut >= 0 ? mOut : mDuration;
             line += " --range " + cmd::seconds(mIn, fps) + ":" + cmd::seconds(out, fps);
         }
-        return line;
+        return line + burnFlag();   // R-DLV-2: this render's burn-ins
     }
 
     std::string OutputSpec::audioSentence() const
@@ -412,6 +438,14 @@ namespace interstellar_v1
         y += kLineH + kGap;
 
         mHdrOutputY = y;
+        {
+            // R-DLV-2: the burn-ins ride the OUTPUT header's line, right-aligned, as the preset rides FORMAT's
+            int n = 0;
+            for (int b = 0; b < kBurns; ++b) n += burn(b) && (b != BurnText || !mBurnText.empty()) ? 1 : 0;
+            mBurnBtn->setLabel(n == 0 ? std::string("No burn-ins") : std::to_string(n) + (n == 1 ? " burn-in" : " burn-ins"));
+            const double ph = std::min(kSegH, cosmo_v2::kSectionHeaderHeight - 4.0);
+            place(*mBurnBtn, w - kPadX - 92.0, y + (cosmo_v2::kSectionHeaderHeight - ph) * 0.5, 92.0, ph, 1.0);
+        }
         y += cosmo_v2::kSectionHeaderHeight;
         place(*mPath, kPadX, y, w - 2 * kPadX, kFieldH, 1.0);
         y += kFieldH + kGap * 2;

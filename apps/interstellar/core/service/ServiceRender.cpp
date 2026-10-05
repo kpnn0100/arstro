@@ -1209,7 +1209,35 @@ namespace interstellar
             b = std::atof(r.substr(colon + 1).c_str());
             if (!(b > a) || a < 0) return fail("render: --range needs 0 <= a < b");
         }
+        // R-DLV-2: the burn-ins, checked before anything is queued
+        std::vector<Job::Burn> burns;
+        if (c.has("burnin"))
+        {
+            if (!mHost.drawText) return fail("render: this build cannot draw text over a frame — no burn-ins");
+            std::string spec = c.flag("burnin");
+            size_t pos = 0;
+            while (pos <= spec.size())
+            {
+                const size_t comma = std::min(spec.find(',', pos), spec.size());
+                const std::string item = spec.substr(pos, comma - pos);
+                pos = comma + 1;
+                if (item.empty()) continue;
+                const auto at = item.rfind('@');
+                Job::Burn b;
+                b.at = at == std::string::npos ? std::string() : item.substr(at + 1);
+                std::string what = at == std::string::npos ? item : item.substr(0, at);
+                if (what.compare(0, 5, "text=") == 0) { b.text = what.substr(5); what = "text"; }
+                b.what = what;
+                static const std::set<std::string> whats{"tc", "srctc", "clip", "source", "text"}, ats{"tl", "tc", "tr", "bl", "bc", "br"};
+                if (!whats.count(b.what)) return fail("render: --burnin item " + item + " — tc, srctc, clip, source or text=… (then @tl, @tc, @tr, @bl, @bc, @br)");
+                if (!ats.count(b.at)) return fail("render: --burnin " + item + " needs a place: @tl, @tc, @tr, @bl, @bc or @br");
+                if (b.what == "text" && b.text.empty()) return fail("render: --burnin text= needs the text");
+                burns.push_back(b);
+            }
+            if (burns.empty()) return fail("render: --burnin names nothing to burn in");
+        }
         auto job = std::make_unique<Job>();
+        job->burns = burns;
         job->first = (long long)std::llround(a * fps);
         job->count = std::max<long long>(0, (long long)std::llround(b * fps) - job->first);
         if (job->count <= 0) return fail("render: timeline " + c.flag("timeline") + " is empty — nothing to render");
@@ -1254,6 +1282,7 @@ namespace interstellar
             while (!r.empty() && r.back() == '0') r.pop_back();
             if (!r.empty() && r.back() == '.') r.pop_back();
             w += " \xC2\xB7 " + std::to_string(W) + "\xC3\x97" + std::to_string(H) + " \xC2\xB7 " + r + " fps";
+            if (!burns.empty()) w += " \xC2\xB7 burn-ins";
             job->model.spec = w;
         }
         job->model.state = "queued";
@@ -1310,6 +1339,7 @@ namespace interstellar
             if (!planFrame(j.model.timeline, t, j.proxyEdge, plan, nullptr)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             plan.output = j.output;   // R-COLOR-4: the render's --output, not the monitor's view
             if (!executePlan(*mSync, plan, frame, true, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
+            if (!j.burns.empty() && !burnIn(j, t, frame)) { failJob("frame " + std::to_string(j.next) + ": the burn-ins could not be drawn"); return; }
             if (j.png)
             {
                 char name[32];

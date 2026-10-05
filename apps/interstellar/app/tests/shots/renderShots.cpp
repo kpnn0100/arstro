@@ -479,6 +479,23 @@ namespace
             r.app->edit().outputSpec()->setPreset("YouTube 1080p");
             r.settle();
         }});
+        v.push_back({"deliver_burnins", edit, [](Rig &r) {   // R-DLV-2: burn-ins chosen, the menu open on the OUTPUT header
+            r.app->setTab(2);
+            r.settle();
+            auto os = r.app->edit().outputSpec();
+            os->setBurn(arstro::interstellar_v1::OutputSpec::BurnTc, true);
+            os->setBurn(arstro::interstellar_v1::OutputSpec::BurnClip, true);
+            os->setBurnText("DRAFT v3");
+            r.settle();
+            // the column scrolled to its foot first: at 1024x640 the OUTPUT header is below the fold
+            const artboard::Point mid = os->worldTransform().apply(artboard::Point{os->width.value() * 0.5, os->height.value() * 0.6});
+            r.app->wheel(mid.x, mid.y, -40.0);
+            r.settle();
+            const auto bb = os->burnButton();
+            const artboard::Point p = bb->worldTransform().apply(artboard::Point{bb->width.value() * 0.5, bb->height.value() * 0.5});
+            r.click(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"recovery_offer", [](FakeService &s) {   // R-DLV-6: a newer autosave, offered
             s.edit();
             s.m.recoveryAvailable = true;

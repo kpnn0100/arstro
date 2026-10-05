@@ -30,6 +30,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#ifdef INTERSTELLAR_HAVE_TEXT
+#include "../app/BurnText.h"
+#endif
 
 using namespace arstro;
 using namespace arstro::interstellar;
@@ -76,6 +79,9 @@ namespace
         };
         h.frameSource = [] { return std::unique_ptr<IFrameSource>(new interstellar_host::HostFrameSource()); };
         h.hasVendorDecoder = [](const std::string &ext) { return interstellar_host::vendorDecoderInstalled(ext); };   // R-MEDIA-1
+#ifdef INTERSTELLAR_HAVE_TEXT
+        h.drawText = [](interstellar::Raster &f, const std::vector<interstellar::OverlayText> &items) { return interstellar_v1::drawOverlayText(f, items); };   // R-DLV-1/2
+#endif
         h.audioSource = [] { return std::unique_ptr<IAudioSource>(new interstellar_host::AudioSourceFFmpeg()); };
         h.frameWriter = [] { return std::unique_ptr<IFrameWriter>(new interstellar_host::FrameWriterFFmpeg()); };
         h.writeImage = [](const std::string &p, const Raster &r, std::string &err) {
