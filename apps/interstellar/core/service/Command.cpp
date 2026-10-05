@@ -105,6 +105,12 @@ namespace interstellar
              "Shift a clip's source range without moving it on the timeline.", "R-TL-3"},
             {K::ClipSpeed, "clip speed", "<clip> <speed>", 2, 2, {}, "Set a clip's playback speed.", "R-TL-3"},
             {K::ClipSelect, "clip select", "[clip]", 0, 1, {}, "Select a clip (none clears).", "R-UI-3"},
+            {K::EffectAdd, "effect add", "<node>", 1, 1, {"type=<plugin>"},
+             "Add an image-processing plugin to a rack node's stack, after Cosmo and the node's other effects; "
+             "prints its id (`ef_<n>`, stable for its life). Parameters are addresses: `set ef_3.radius=12`.", "R-FX-5"},
+            {K::EffectRemove, "effect remove", "<effect>", 1, 1, {}, "Remove a plugin from its node's stack.", "R-FX-5"},
+            {K::EffectMove, "effect move", "<effect>", 1, 1, {"to=<index>"},
+             "Move a plugin to position <index> of its node's stack (0 = first after Cosmo).", "R-FX-5"},
             {K::ClipCopy, "clip copy", "<clip>", 1, 1, {},
              "Keep a clip — its source range, speed, geometry, opacity and blend — to paste.", "R-TL-6"},
             {K::ClipPaste, "clip paste", "", 0, 0, {"at=<t>", "track=<trk>"},

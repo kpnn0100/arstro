@@ -166,6 +166,23 @@ A temporal effect attaches to a **rack node** (it belongs to the footage, like t
 window (R-VOL-4) — it is declared data, not something the engine infers, because residency has to
 be computable before the first frame is read.
 
+### 5.1 The image-processing stack (R-FX-5)
+
+```
+#effect id=ef_1 node=ro_2 type=blur.gaussian order=0 enabled=true mix=0.8 radius=12.0
+#effect id=ef_2 node=ro_2 type=blur.directional order=1 enabled=false mix=1.0 length=40.0 angle=30.0
+#effect id=ef_3 node=ro_5 type=blur.box order=0 enabled=true mix=1.0 radius=6.0
+```
+
+A rack node's plugins after Cosmo (which is plugin one and is not written here — it is the node's
+grade in the `.cmp`). `id` is stable for the effect's whole life and never renumbered, so a diff of
+a project under version control reads as "ef_1's radius changed". `order` is the position in the
+node's stack (0 = first after Cosmo); a group's (`node=` a group) run on every member after the
+member's own. `enabled` and `mix` (0..1) are every plugin's; the rest of the line is the plugin's
+own parameters, in source pixels / degrees / 0..1 as the catalog says — validated by the service,
+not the format, so a plugin this build does not know keeps every parameter it carried and is simply
+not run. `node=` must name a `#rackobj`.
+
 ---
 
 ## 6. Canonical serialization

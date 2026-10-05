@@ -75,6 +75,7 @@ namespace
             if (path.find("missing") != std::string::npos || !fs::exists(path)) return false;
             gOpens[fs::path(path).filename().string()]++;
             mG = (uint8_t)(path.find("b.mp4") != std::string::npos ? 200 : 60);
+            mEdge = path.find("edge") != std::string::npos;   // a hard vertical edge: what a blur changes
             out.width = 48;
             out.height = 27;
             out.fps = 24;
@@ -86,6 +87,13 @@ namespace
             out.allocate(48, 27);
             for (size_t i = 0; i < out.rgba.size(); i += 4)
             {
+                if (mEdge)
+                {
+                    const bool left = (i / 4) % 48 < 24;
+                    out.rgba[i] = out.rgba[i + 1] = out.rgba[i + 2] = left ? 255 : 0;
+                    out.rgba[i + 3] = 255;
+                    continue;
+                }
                 out.rgba[i] = (uint8_t)(f & 0xff);
                 out.rgba[i + 1] = mG;
                 out.rgba[i + 2] = 100;
@@ -96,6 +104,7 @@ namespace
 
     private:
         uint8_t mG = 0;
+        bool mEdge = false;
     };
 
     /** What the last render asked its writer for (R-RENDER-6). */
@@ -126,7 +135,7 @@ namespace
 
         explicit Fixture(const std::string &name) : dir(scratch(name))
         {
-            for (const char *f : {"a.mp4", "b.mp4", "still.png"}) std::ofstream(dir + "/footage/" + f) << "x";
+            for (const char *f : {"a.mp4", "b.mp4", "still.png", "edge.mp4"}) std::ofstream(dir + "/footage/" + f) << "x";
             svc = make();
         }
 
@@ -800,6 +809,65 @@ int main()
         bool at20 = false;
         for (const auto &c : f.svc->model().clips) at20 = at20 || std::fabs(c.at - 20.0) < 1e-9;
         assert(!at20);
+    });
+
+    test("a rack node's plugin stack runs after Cosmo: add, order, on/off, mix, groups, variants, undo (R-FX-5, R-FX-6)", [] {
+        Fixture f("effects");
+        f.standard();
+        f.must("rack add \"" + f.path("footage/edge.mp4") + "\"");
+        f.must("clip add --track v0 --src edge --in 0 --out 2 --at 6 --name shotE");
+        auto edgeAt = [&](int x) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame("tl_1", 6.5, 0, r) && r.width == 48);
+            return (int)r.rgba[((size_t)13 * 48 + x) * 4];
+        };
+        const int sharpL = edgeAt(22), sharpR = edgeAt(25);
+        assert(sharpL > 200 && sharpR < 40);                                   // a hard edge, ungraded
+        std::string err;
+        assert(!f.run("effect add edge --type blur.nonsense", &err) && has(err, "blur.gaussian"));
+        const std::string id = f.out("effect add edge --type blur.gaussian");
+        assert(id == "ef_1\n");
+        const auto &m = f.svc->model();
+        assert(m.effects.size() == 1 && m.effects[0].nodeBind == "edge" && m.effects[0].label == "Gaussian Blur");
+        assert(m.effects[0].params.size() == 1 && m.effects[0].params[0].key == "radius" && std::fabs(m.effects[0].params[0].value - 8.0) < 1e-9);
+        assert(m.effectTypes.size() >= 5);
+        const int blurL = edgeAt(22), blurR = edgeAt(25);
+        assert(blurL < sharpL - 20 && blurR > sharpR + 20);                    // the edge softened
+        assert(f.out("get ef_1.radius") == "ef_1.radius=8.0\n");
+        assert(!f.run("set ef_1.radius=500", &err) && has(err, "0.0..200.0"));
+        assert(!f.run("set ef_1.length=3", &err) && has(err, "no parameter"));
+        f.must("set ef_1.enabled=0");
+        assert(edgeAt(22) == sharpL);                                          // off: the input, exactly
+        f.must("set ef_1.enabled=1");
+        f.must("set ef_1.mix=0");
+        assert(edgeAt(22) == sharpL);                                          // mix 0: the input
+        f.must("set ef_1.mix=1");
+        // a second plugin, then reorder: the stack's order is the file's `order`
+        f.must("effect add edge --type blur.box");
+        f.must("effect move ef_2 --to 0");
+        assert(f.svc->project().effect("ef_2")->order == 0 && f.svc->project().effect("ef_1")->order == 1);
+        f.must("effect remove ef_2");
+        assert(f.svc->project().effect("ef_1")->order == 0);
+        // a GROUP's plugins reach its members, after their own
+        f.must("rack group new look --nodes edge");
+        f.must("set ef_1.enabled=0");
+        const std::string gid = f.out("effect add look --type blur.box");
+        assert(gid == "ef_3\n" && edgeAt(22) < sharpL - 10);                    // the group's blur, on the member
+        f.must("effect remove ef_3");
+        assert(edgeAt(22) == sharpL);
+        f.must("undo");                                                        // one step brings it back
+        assert(f.svc->project().effect("ef_3") && edgeAt(22) < sharpL - 10);
+        // a variant gets its own copy of the stack, fresh ids
+        f.must("set ef_1.radius=4");
+        f.must("rack duplicate edge");
+        int copies = 0;
+        for (const auto &e : f.svc->project().imageEffects)
+            if (e.node != f.svc->project().effect("ef_1")->node && e.type == "blur.gaussian") { ++copies; assert(e.id != "ef_1"); }
+        assert(copies == 1);
+        // the file keeps it all, and a reopen reads it back
+        f.must("project save");
+        const std::string text = f.svc->project().serialize();
+        assert(has(text, "#effect id=ef_1 ") && has(text, "radius=4.0") && has(text, "type=blur.gaussian"));
     });
 
     test("the same script on two services dumps the same stable state", [] {

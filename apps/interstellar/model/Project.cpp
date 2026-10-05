@@ -104,6 +104,7 @@ namespace interstellar
             case NodeKind::ATrack: return "#atrack";
             case NodeKind::AClip: return "#aclip";
             case NodeKind::Fx: return "#fx";
+            case NodeKind::Effect: return "#effect";
             case NodeKind::Raw: return "a preserved node";
         }
         return "?";
@@ -329,7 +330,7 @@ namespace interstellar
         bool typedType(const std::string &t)
         {
             static const char *types[] = {"rack", "rackobj", "timeline", "tldrop", "tlset", "tlgrade", "track",
-                                          "clip", "transition", "marker", "atrack", "aclip", "fx"};
+                                          "clip", "transition", "marker", "atrack", "aclip", "fx", "effect"};
             for (const char *x : types)
                 if (t == x) return true;
             return false;
@@ -416,6 +417,8 @@ namespace interstellar
     const AClip *Project::audioClip(const NodeId &i) const { return findIn(audioClips, i); }
     Fx *Project::fx(const NodeId &i) { return findIn(effects, i); }
     const Fx *Project::fx(const NodeId &i) const { return findIn(effects, i); }
+    Effect *Project::effect(const NodeId &i) { return findIn(imageEffects, i); }
+    const Effect *Project::effect(const NodeId &i) const { return findIn(imageEffects, i); }
     RawNode *Project::rawNode(const NodeId &i) { return findIn(raw, i); }
     const RawNode *Project::rawNode(const NodeId &i) const { return findIn(raw, i); }
     TlSet *Project::tlset(const NodeId &tl, const NodeId &n) { return findDelta(sets, tl, n); }
@@ -438,6 +441,7 @@ namespace interstellar
         if (audioTrack(i)) return NodeKind::ATrack;
         if (audioClip(i)) return NodeKind::AClip;
         if (fx(i)) return NodeKind::Fx;
+        if (effect(i)) return NodeKind::Effect;
         for (const auto &r : raw)
         {
             if (r.id == i) return NodeKind::Raw;
@@ -554,6 +558,7 @@ namespace interstellar
             for (const auto &n : p.audioTracks) { f(n.id); f(n.out); f(n.from); }
             for (const auto &n : p.audioClips) { f(n.id); f(n.track); f(n.from); }
             for (const auto &n : p.effects) { f(n.id); f(n.node); f(n.clip); }
+            for (const auto &n : p.imageEffects) { f(n.id); f(n.node); }
             for (const auto &n : p.raw)
             {
                 for (const auto &kv : n.fields) f(kv.second);
@@ -690,6 +695,7 @@ namespace interstellar
         for (auto &n : audioTracks) fix(n.out);
         for (auto &n : audioClips) fix(n.track);
         for (auto &n : effects) { fix(n.node); fix(n.clip); }
+        for (auto &n : imageEffects) fix(n.node);
         for (auto &r : raw)
         {
             bool touched = false;
@@ -918,6 +924,13 @@ namespace interstellar
             else if (b.type == "transition") { Transition n; build(n); transitions.push_back(n); }
             else if (b.type == "marker") { Marker n; build(n); markers.push_back(n); }
             else if (b.type == "atrack") { ATrack n; build(n); audioTracks.push_back(n); }
+            else if (b.type == "effect")
+            {
+                Effect n;
+                build(n);
+                if (n.node.empty() || n.type.empty()) return fail(no, "#effect " + n.id + " needs node= (a rack node) and type=");
+                imageEffects.push_back(n);
+            }
             else if (b.type == "fx")
             {
                 Fx n;
@@ -994,7 +1007,8 @@ namespace interstellar
         };
         if (!all(rackObjs, "#rackobj") || !all(timelines, "#timeline") || !all(tracks, "#track") ||
             !all(clips, "#clip") || !all(transitions, "#transition") || !all(markers, "#marker") ||
-            !all(audioTracks, "#atrack") || !all(audioClips, "#aclip") || !all(effects, "#fx"))
+            !all(audioTracks, "#atrack") || !all(audioClips, "#aclip") || !all(effects, "#fx") ||
+            !all(imageEffects, "#effect"))
             return false;
         for (const auto &r : raw)
         {
@@ -1046,6 +1060,7 @@ namespace interstellar
         index(rackObjs); index(timelines); index(tracks); index(clips); index(transitions);
         index(markers); index(audioTracks); index(audioClips);
         for (const auto &n : effects) ids.insert(n.id);
+        for (const auto &n : imageEffects) ids.insert(n.id);
         for (const auto &r : raw)
             if (!r.id.empty()) ids.insert(r.id);
         auto norm = [&](std::string &ref) {
@@ -1062,6 +1077,7 @@ namespace interstellar
         for (auto &n : audioTracks) { norm(n.timeline); norm(n.out); }
         for (auto &n : audioClips) { norm(n.track); norm(n.timeline); }
         for (auto &n : effects) { norm(n.node); norm(n.clip); }
+        for (auto &n : imageEffects) norm(n.node);
         for (auto &n : drops) { norm(n.timeline); norm(n.node); }
         for (auto &n : sets) { norm(n.timeline); norm(n.node); }
         for (auto &n : grades) { norm(n.timeline); norm(n.node); }
@@ -1293,6 +1309,12 @@ namespace interstellar
             if (x.radius < 0) { err = "#fx " + x.id + ": radius is a frame count, never negative"; return false; }
         }
 
+        for (const auto &x : imageEffects)
+        {
+            if (!rackObj(x.node)) { err = "#effect " + x.id + ": node=" + x.node + " names no #rackobj"; return false; }
+            if (x.mix < 0.0 || x.mix > 1.0) { err = "#effect " + x.id + ": mix is 0..1"; return false; }
+        }
+
         // ── deltas: the timeline must exist; the TARGET may not (that is "dangling") ──
         std::set<std::string> seen;
         auto delta = [&](const char *type, const NodeId &tl, const NodeId &node, bool rackTarget) {
@@ -1486,6 +1508,7 @@ namespace interstellar
         group(o, rawOf("aauto", {}));
         group(o, rawOf("asend", {}));
         group(o, typed(effects));
+        group(o, typed(imageEffects));
         {
             std::vector<Item> items;
             for (const auto &r : raw)

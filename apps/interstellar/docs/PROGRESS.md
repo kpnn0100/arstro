@@ -52,6 +52,10 @@ one integrator who moves, wires, tests and commits each stream:
       size, exact rates, range; D-9 (BT.601, untagged) fixed (DR-RENDER-6).
 - [x] Cutting like an editor: drop a source on the timeline, roll, slip, ripple delete, markers,
       clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
+- [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix, (2) the
+      image-processing stack with Blur kinds — core DONE (DR-FX-5/6), the panel next, (3) keyframes
+      and a graph editor (R-ANIM), (4) scopes (R-UI-15), (5) smooth preview: proxies, read-ahead,
+      hardware video (R-PLAY).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:
       1. **Audio**: playback in the monitor, waveforms, meters, clip/track volume and fades, the master
@@ -100,6 +104,13 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-05 — plugins are rack nodes' children in the `.isp`, Cosmo stays plugin one (R-FX-5).**
+Colour is Cosmo's and is always first: a blur after a grade is what the eye expects, and letting a
+plugin run before Cosmo would mean Cosmo's own stills (the .cmp) no longer describe the colour of
+its input. A plugin's parameters are the node's open fields, validated by the service's catalog
+rather than the format, so a new plugin is a catalog row, not a format change. Group plugins run
+after the member's own, inner first — the order a group's grade stacks in.
 
 **2026-10-02 — a render never upscales or reframes (R-RENDER-6).** Sizes are fractions of the
 project, so the render path's long-edge proxy produces them exactly and a pixel is never invented;

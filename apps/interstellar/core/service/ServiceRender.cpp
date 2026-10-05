@@ -188,7 +188,7 @@ namespace interstellar
                           l.edge, l.layer.geom.x, l.layer.geom.y, l.layer.geom.scale, l.layer.geom.rotation, l.layer.geom.anchorX,
                           l.layer.geom.anchorY, l.layer.geom.cropX, l.layer.geom.cropY, l.layer.geom.cropW, l.layer.geom.cropH,
                           (int)l.layer.fit, l.layer.opacity, (int)l.layer.blend, l.layer.dissolveWithPrevious ? 1 : 0);
-            k += l.media + l.fxKey + buf;
+            k += l.media + l.fxKey + l.effectsKey + buf;
         }
     }
 
@@ -298,6 +298,8 @@ namespace interstellar
             // A partial mix needs the frames it mixes at one size — grade at source size and let
             // the composite scale.
             L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
+            effectChain(ro->id, L.effects, L.effectsKey);
+            L.srcWidth = s->info.width;
 
             const Track *tr = tracks[c->track];
             // Clip offsets are stored in FRAME units, so a proxy and a full render place a clip
@@ -344,6 +346,8 @@ namespace interstellar
         L.identity = render::GradeEngine::isIdentity(L.params);
         L.weight = std::clamp(ro->weight, 0.0, 1.0);
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
+        effectChain(roId, L.effects, L.effectsKey);
+        L.srcWidth = s->info.width;
         // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
         // is graded as itself.
         outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
@@ -371,7 +375,7 @@ namespace interstellar
             const PlanLayer &l = plan.layers[i];
             const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
             render::FrameCache::Key key;
-            key.source = l.media + l.fxKey;
+            key.source = l.media + l.fxKey + l.effectsKey;
             key.sourceFrame = l.frame;
             key.paramHash = ungradedOnly ? render::FrameCache::kUngraded : render::hashParams(l.params);
             key.level = l.edge;
@@ -396,6 +400,12 @@ namespace interstellar
                         }
                     }
                     mixWeight(ungraded, graded[i], l.weight);
+                }
+                // the plugins after Cosmo (R-FX-5), sized in source pixels: scale to this frame
+                if (!l.effects.empty() && !graded[i].empty())
+                {
+                    const double scale = l.srcWidth > 0 ? (double)graded[i].width / l.srcWidth : 1.0;
+                    for (const auto &e : l.effects) render::applyEffect(e, scale, graded[i]);
                 }
                 mCache->put(key, graded[i]);
             }
@@ -564,8 +574,9 @@ namespace interstellar
         if (c.has("quality"))
         {
             if (!lossy) return fail("render: --quality applies to H.264 and H.265 — " + (inter ? format + "'s quality is its --profile" : std::string("a PNG sequence is lossless")));
+            const std::string qs = c.flag("quality");   // flag() returns by value: keep it alive for `end`
             char *end = nullptr;
-            const long q = std::strtol(c.flag("quality").c_str(), &end, 10);
+            const long q = std::strtol(qs.c_str(), &end, 10);
             if (!end || *end || q < 0 || q > 51) return fail("render: --quality is 0 (best) … 51, got " + c.flag("quality"));
             spec.quality = (int)q;
         }

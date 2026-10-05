@@ -498,6 +498,46 @@
       "requirement": "R-UI-3"
     },
     {
+      "verb": "effect add",
+      "usage": "effect add <node> [--type <plugin>]",
+      "args": "<node>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "type",
+          "value": "<plugin>"
+        }
+      ],
+      "summary": "Add an image-processing plugin to a rack node's stack, after Cosmo and the node's other effects; prints its id (`ef_<n>`, stable for its life). Parameters are addresses: `set ef_3.radius=12`.",
+      "requirement": "R-FX-5"
+    },
+    {
+      "verb": "effect remove",
+      "usage": "effect remove <effect>",
+      "args": "<effect>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Remove a plugin from its node's stack.",
+      "requirement": "R-FX-5"
+    },
+    {
+      "verb": "effect move",
+      "usage": "effect move <effect> [--to <index>]",
+      "args": "<effect>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "to",
+          "value": "<index>"
+        }
+      ],
+      "summary": "Move a plugin to position <index> of its node's stack (0 = first after Cosmo).",
+      "requirement": "R-FX-5"
+    },
+    {
       "verb": "clip copy",
       "usage": "clip copy <clip>",
       "args": "<clip>",
@@ -1908,6 +1948,138 @@
       "doc": "The bind name the clipboard grade came from."
     },
     {
+      "path": "effects",
+      "type": "array",
+      "stable": true,
+      "doc": "Every plugin of every rack node's image-processing stack, by node then order (R-FX-5)."
+    },
+    {
+      "path": "effects[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "The plugin's id, `ef_<n>` — stable for its life, the root of its addresses."
+    },
+    {
+      "path": "effects[].node",
+      "type": "string",
+      "stable": true,
+      "doc": "The #rackobj whose stack it is in."
+    },
+    {
+      "path": "effects[].nodeBind",
+      "type": "string",
+      "stable": true,
+      "doc": "That node's bind name."
+    },
+    {
+      "path": "effects[].type",
+      "type": "string",
+      "stable": true,
+      "doc": "The plugin type (`blur.gaussian` …)."
+    },
+    {
+      "path": "effects[].label",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name for a person."
+    },
+    {
+      "path": "effects[].family",
+      "type": "string",
+      "stable": true,
+      "doc": "Its menu family (Blur)."
+    },
+    {
+      "path": "effects[].order",
+      "type": "integer",
+      "stable": true,
+      "doc": "Position in the stack; 0 = first after Cosmo."
+    },
+    {
+      "path": "effects[].enabled",
+      "type": "bool",
+      "stable": true,
+      "doc": "On or off."
+    },
+    {
+      "path": "effects[].mix",
+      "type": "number",
+      "stable": true,
+      "doc": "Output over input, 0..1."
+    },
+    {
+      "path": "effects[].params",
+      "type": "array",
+      "stable": true,
+      "doc": "Its parameters, from the catalog, with the value now."
+    },
+    {
+      "path": "effects[].params[].key",
+      "type": "string",
+      "stable": true,
+      "doc": "The parameter's key — the address is `<effect id>.<key>`."
+    },
+    {
+      "path": "effects[].params[].label",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name for a person."
+    },
+    {
+      "path": "effects[].params[].unit",
+      "type": "string",
+      "stable": true,
+      "doc": "px (source pixels — scales with the proxy), deg, or empty for 0..1."
+    },
+    {
+      "path": "effects[].params[].value",
+      "type": "number",
+      "stable": true,
+      "doc": "The value now."
+    },
+    {
+      "path": "effects[].params[].def",
+      "type": "number",
+      "stable": true,
+      "doc": "The default a new effect starts with."
+    },
+    {
+      "path": "effects[].params[].min",
+      "type": "number",
+      "stable": true,
+      "doc": "The lowest value `set` accepts."
+    },
+    {
+      "path": "effects[].params[].max",
+      "type": "number",
+      "stable": true,
+      "doc": "The highest value `set` accepts."
+    },
+    {
+      "path": "effectTypes",
+      "type": "array",
+      "stable": true,
+      "doc": "The plugin catalog — what `effect add --type` accepts."
+    },
+    {
+      "path": "effectTypes[].type",
+      "type": "string",
+      "stable": true,
+      "doc": "The type to name in `effect add --type`."
+    },
+    {
+      "path": "effectTypes[].label",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name for a person."
+    },
+    {
+      "path": "effectTypes[].family",
+      "type": "string",
+      "stable": true,
+      "doc": "Its menu family."
+    },
+    {
       "path": "hasClipClipboard",
       "type": "bool",
       "stable": true,
@@ -2797,6 +2969,126 @@
       "unit": "",
       "range": "",
       "doc": "Project display name."
+    },
+    {
+      "address": "<effect>.enabled",
+      "owner": "effect",
+      "key": "enabled",
+      "kind": "bool",
+      "unit": "0|1",
+      "range": "",
+      "neutral": 1.0,
+      "doc": "The plugin is on (R-FX-5)."
+    },
+    {
+      "address": "<effect>.mix",
+      "owner": "effect",
+      "key": "mix",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 1.0,
+      "doc": "The plugin's output mixed over its input."
+    },
+    {
+      "address": "<effect:blur.gaussian>.radius",
+      "owner": "effect",
+      "key": "radius",
+      "kind": "scalar",
+      "unit": "px",
+      "range": "0.0..200.0",
+      "neutral": 8.0,
+      "doc": "Gaussian Blur: Radius (source pixels; scales with the proxy)."
+    },
+    {
+      "address": "<effect:blur.box>.radius",
+      "owner": "effect",
+      "key": "radius",
+      "kind": "scalar",
+      "unit": "px",
+      "range": "0.0..200.0",
+      "neutral": 8.0,
+      "doc": "Box Blur: Radius (source pixels; scales with the proxy)."
+    },
+    {
+      "address": "<effect:blur.directional>.length",
+      "owner": "effect",
+      "key": "length",
+      "kind": "scalar",
+      "unit": "px",
+      "range": "0.0..400.0",
+      "neutral": 30.0,
+      "doc": "Directional Blur: Length (source pixels; scales with the proxy)."
+    },
+    {
+      "address": "<effect:blur.directional>.angle",
+      "owner": "effect",
+      "key": "angle",
+      "kind": "scalar",
+      "unit": "deg",
+      "range": "-180.0..180.0",
+      "neutral": 0.0,
+      "doc": "Directional Blur: Angle."
+    },
+    {
+      "address": "<effect:blur.zoom>.amount",
+      "owner": "effect",
+      "key": "amount",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.2,
+      "doc": "Zoom Blur: Amount."
+    },
+    {
+      "address": "<effect:blur.zoom>.centerX",
+      "owner": "effect",
+      "key": "centerX",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Zoom Blur: Centre X."
+    },
+    {
+      "address": "<effect:blur.zoom>.centerY",
+      "owner": "effect",
+      "key": "centerY",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Zoom Blur: Centre Y."
+    },
+    {
+      "address": "<effect:blur.spin>.angle",
+      "owner": "effect",
+      "key": "angle",
+      "kind": "scalar",
+      "unit": "deg",
+      "range": "0.0..90.0",
+      "neutral": 5.0,
+      "doc": "Spin Blur: Angle."
+    },
+    {
+      "address": "<effect:blur.spin>.centerX",
+      "owner": "effect",
+      "key": "centerX",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Spin Blur: Centre X."
+    },
+    {
+      "address": "<effect:blur.spin>.centerY",
+      "owner": "effect",
+      "key": "centerY",
+      "kind": "scalar",
+      "unit": "0..1",
+      "range": "0.0..1.0",
+      "neutral": 0.5,
+      "doc": "Spin Blur: Centre Y."
     }
   ]
 }

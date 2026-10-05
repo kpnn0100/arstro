@@ -206,6 +206,8 @@ both RGBA hashes; they must match.
   only opt-in, and prove cosmo's pixels unchanged (`cosmo_shots` before/after, byte compare).
 - **Undo restores states** (`ServiceEdit.cpp`): add a command to `undoable()` if it edits the
   project or a node's params, to `structural()` if it changes the rack's node set.
+- **`Command::flag()` returns a `std::string` BY VALUE.** `strtol(c.flag("x").c_str(), &end, …)`
+  leaves `end` dangling into a dead temporary (D-10) — bind the flag to a local first.
 
 ---
 

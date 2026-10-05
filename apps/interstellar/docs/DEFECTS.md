@@ -66,6 +66,18 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-10 — `render --quality` was parsed through a dangling pointer
+- **Area:** service · **Status:** Closed (same commit) · **Severity:** S3 (undefined behaviour;
+  happened to work) · **Found:** 2026-10-05, when the same pattern made `effect move --to 0` refuse
+  a valid index.
+- **Cause:** `std::strtol(c.flag("quality").c_str(), &end, 10)` — `Command::flag` returns a
+  `std::string` BY VALUE, so the temporary dies at the end of the expression and `end` points into
+  freed memory; the `*end` check that follows reads it (`core/service/ServiceRender.cpp`, R-RENDER-6,
+  commit 118bf4b).
+- **Fix:** bind the flag to a local string first, in both places. Guarded by L2 `effect move ef_2
+  --to 0` (which failed with the pattern) and the render-spec refusals; the lesson is in the
+  implement skill's gotchas.
+
 ### D-9 — Renders were converted to YUV with BT.601 coefficients and left untagged
 - **Area:** render / host · **Status:** Closed (same commit) · **Severity:** S2 (wrong colour in a
   colour tool) · **Found:** 2026-10-02, reading `FrameWriterFFmpeg` for the user's "detail options

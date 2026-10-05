@@ -623,3 +623,30 @@ Paste Here, Add Marker Here, Add Video/Audio Track (`:456`). Guarded by `testCut
 V2, refusal over audio, an empty timeline making its track, roll, slip, the keys, both menus);
 mutants (Alt ignored for roll; the ghost set, not eased) went red. Shots `cut_drop_source`,
 `cut_roll_mid`, `cut_slip_mid`, `cut_clip_menu` (both sizes, looked at).
+
+### DR-FX-5 A rack node's image-processing stack (R-FX-5)
+The `.isp` carries `#effect id=ef_<n> node=<rackobj> type=… order=… enabled=… mix=… <params…>`
+(`model/Project.h` `Effect`; the schema knows the fixed fields, the plugin's parameters ride the
+open key=value fields the parser already preserves — project-format §5.1). `effect add <node>
+--type <t>` / `effect remove` / `effect move --to <i>` (`core/service/InterstellarService.cpp:2267`)
+keep `order` dense; `set`/`get <effect>.enabled|mix|<param>` (`:1749`, `:1863`) validate against the
+catalog's ranges. `effectChain` (`:2219`) gives a source's plugins after Cosmo — its own enabled
+ones in order, then each ancestor group's, inner first — and a cache-key string; the frame path
+applies them after the grade and weight, sized in source pixels scaled to the frame
+(`core/service/ServiceRender.cpp:404`), and keys the frame cache on them. `rack remove`, `rack
+ungroup` drop a node's plugins; `rack duplicate` copies them with fresh ids; add/remove/move are
+undoable. The model publishes `effects[]` (with each parameter's catalog definition and value) and
+`effectTypes[]`; the registry documents every plugin parameter, generated from the one catalog.
+A plugin belongs to the rack like a grade: the same in every version — and a PIN freezes Cosmo's
+colour, not the plugins (a limit, said here). Guarded by L2 `a rack node's plugin stack runs after
+Cosmo…` (an edge source: blur softens it, off and mix 0 give the input exactly, reorder, a group's
+plugin on its member, undo, a variant's own copy, the file) — red with the group walk cut and with
+the plugins not applied — and the model round-trip (`#effect` byte-exact, refused on a missing node).
+
+### DR-FX-6 Blur, in kinds (R-FX-6)
+`render/Effects.cpp` — the catalog (`:128`) and `applyEffect` (`:150`): Gaussian (three box passes,
+σ = radius/2), Box (separable sliding window), Directional (bilinear samples along a line), Zoom
+(along the ray to a centre), Spin (along an arc); rows in parallel; sizes × `scale`; mix lerps the
+output over the input. Guarded by the render suite: every blur leaves a flat field flat; Gaussian
+symmetric, energy kept within 3 %, less spread at half scale; directional along its angle only
+(red with the angle ignored); zoom and spin keep their centre; mix 0 = input, 0.5 = half way.

@@ -215,6 +215,23 @@ namespace interstellar
         j.set("redoLabel", m.redoLabel);
         j.set("hasGradeClipboard", m.hasGradeClipboard);
         j.set("gradeClipboardFrom", m.gradeClipboardFrom);
+        {
+            Json fx = Json::array();
+            for (const auto &e : m.effects)
+            {
+                Json ps = Json::array();
+                for (const auto &p : e.params)
+                    ps.push(Json::object().set("key", p.key).set("label", p.label).set("unit", p.unit).set("value", p.value)
+                                .set("def", p.def).set("min", p.min).set("max", p.max));
+                fx.push(Json::object().set("id", e.id).set("node", e.node).set("nodeBind", e.nodeBind).set("type", e.type)
+                            .set("label", e.label).set("family", e.family).set("order", e.order).set("enabled", e.enabled)
+                            .set("mix", e.mix).set("params", ps));
+            }
+            j.set("effects", fx);
+            Json types = Json::array();
+            for (const auto &t : m.effectTypes) types.push(Json::object().set("type", t.type).set("label", t.label).set("family", t.family));
+            j.set("effectTypes", types);
+        }
         j.set("hasClipClipboard", m.hasClipClipboard);
         j.set("clipClipboardFrom", m.clipClipboardFrom);
         Json settings = Json::object();
@@ -391,6 +408,28 @@ namespace interstellar
             {"redoLabel", "string", "What `redo` would redo."},
             {"hasGradeClipboard", "bool", "`grade copy` has filled the clipboard (R-EDIT-2)."},
             {"gradeClipboardFrom", "string", "The bind name the clipboard grade came from."},
+            {"effects", "array", "Every plugin of every rack node's image-processing stack, by node then order (R-FX-5)."},
+            {"effects[].id", "string", "The plugin's id, `ef_<n>` — stable for its life, the root of its addresses."},
+            {"effects[].node", "string", "The #rackobj whose stack it is in."},
+            {"effects[].nodeBind", "string", "That node's bind name."},
+            {"effects[].type", "string", "The plugin type (`blur.gaussian` …)."},
+            {"effects[].label", "string", "Its name for a person."},
+            {"effects[].family", "string", "Its menu family (Blur)."},
+            {"effects[].order", "integer", "Position in the stack; 0 = first after Cosmo."},
+            {"effects[].enabled", "bool", "On or off."},
+            {"effects[].mix", "number", "Output over input, 0..1."},
+            {"effects[].params", "array", "Its parameters, from the catalog, with the value now."},
+            {"effects[].params[].key", "string", "The parameter's key — the address is `<effect id>.<key>`."},
+            {"effects[].params[].label", "string", "Its name for a person."},
+            {"effects[].params[].unit", "string", "px (source pixels — scales with the proxy), deg, or empty for 0..1."},
+            {"effects[].params[].value", "number", "The value now."},
+            {"effects[].params[].def", "number", "The default a new effect starts with."},
+            {"effects[].params[].min", "number", "The lowest value `set` accepts."},
+            {"effects[].params[].max", "number", "The highest value `set` accepts."},
+            {"effectTypes", "array", "The plugin catalog — what `effect add --type` accepts."},
+            {"effectTypes[].type", "string", "The type to name in `effect add --type`."},
+            {"effectTypes[].label", "string", "Its name for a person."},
+            {"effectTypes[].family", "string", "Its menu family."},
             {"hasClipClipboard", "bool", "`clip copy` has filled the clip clipboard (R-TL-6)."},
             {"clipClipboardFrom", "string", "The name of the clip it was copied from."},
             {"settings", "group", "Engine settings (R-SET)."},

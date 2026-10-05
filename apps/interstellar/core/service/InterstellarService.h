@@ -25,6 +25,7 @@
 #include "Command.h"
 #include "Event.h"
 #include "FrameSelector.h"
+#include "Effects.h"
 #include "FrameSource.h"
 #include "Rack.h"
 #include "Raster.h"
@@ -174,6 +175,10 @@ namespace interstellar
         // versions + arrangement
         bool timelineCommand(const Command &c);
         bool arrangeCommand(const Command &c);
+        bool effectCommand(const Command &c);
+        /** The plugins a source's pixels pass through after Cosmo (R-FX-5): its own enabled effects
+         *  in order, then each ancestor group's, inner first — and a cache-key string of all of it. */
+        void effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key) const;
         bool resolved(const NodeId &timeline, ResolvedTimeline &out, std::string &err) const;
         NodeId currentTimeline() const;
         NodeId timelineRef(const std::string &s) const;

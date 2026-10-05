@@ -49,6 +49,9 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `clip slip <clip> [--by <dt>]` | Shift a clip's source range without moving it on the timeline. | R-TL-3 |
 | `clip speed <clip> <speed>` | Set a clip's playback speed. | R-TL-3 |
 | `clip select [clip]` | Select a clip (none clears). | R-UI-3 |
+| `effect add <node> [--type <plugin>]` | Add an image-processing plugin to a rack node's stack, after Cosmo and the node's other effects; prints its id (`ef_<n>`, stable for its life). Parameters are addresses: `set ef_3.radius=12`. | R-FX-5 |
+| `effect remove <effect>` | Remove a plugin from its node's stack. | R-FX-5 |
+| `effect move <effect> [--to <index>]` | Move a plugin to position <index> of its node's stack (0 = first after Cosmo). | R-FX-5 |
 | `clip copy <clip>` | Keep a clip — its source range, speed, geometry, opacity and blend — to paste. | R-TL-6 |
 | `clip paste [--at <t>] [--track <trk>]` | Place a new clip from the copied one (default: at the playhead, on its track). | R-TL-6 |
 | `transition add [--between <a,b>] [--kind <dissolve\|dip>] [--dur <s>]` | Dissolve between two adjacent clips; the outgoing clip is HELD through it. | R-TL-4 |
@@ -166,6 +169,18 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<aclip>.fade` | aclip | scalar | s | 0.0..10.0 | 0.0 | Fade in and out length. |
 | `project.masterGain` | project | scalar | dB | -60.0..12.0 | 0.0 | Master bus gain. |
 | `project.name` | project | text |  |  |  | Project display name. |
+| `<effect>.enabled` | effect | bool | 0\|1 |  | 1.0 | The plugin is on (R-FX-5). |
+| `<effect>.mix` | effect | scalar | 0..1 | 0.0..1.0 | 1.0 | The plugin's output mixed over its input. |
+| `<effect:blur.gaussian>.radius` | effect | scalar | px | 0.0..200.0 | 8.0 | Gaussian Blur: Radius (source pixels; scales with the proxy). |
+| `<effect:blur.box>.radius` | effect | scalar | px | 0.0..200.0 | 8.0 | Box Blur: Radius (source pixels; scales with the proxy). |
+| `<effect:blur.directional>.length` | effect | scalar | px | 0.0..400.0 | 30.0 | Directional Blur: Length (source pixels; scales with the proxy). |
+| `<effect:blur.directional>.angle` | effect | scalar | deg | -180.0..180.0 | 0.0 | Directional Blur: Angle. |
+| `<effect:blur.zoom>.amount` | effect | scalar | 0..1 | 0.0..1.0 | 0.2 | Zoom Blur: Amount. |
+| `<effect:blur.zoom>.centerX` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Zoom Blur: Centre X. |
+| `<effect:blur.zoom>.centerY` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Zoom Blur: Centre Y. |
+| `<effect:blur.spin>.angle` | effect | scalar | deg | 0.0..90.0 | 5.0 | Spin Blur: Angle. |
+| `<effect:blur.spin>.centerX` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Spin Blur: Centre X. |
+| `<effect:blur.spin>.centerY` | effect | scalar | 0..1 | 0.0..1.0 | 0.5 | Spin Blur: Centre Y. |
 
 ## Events
 
@@ -323,6 +338,28 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `redoLabel` | string |  | What `redo` would redo. |
 | `hasGradeClipboard` | bool |  | `grade copy` has filled the clipboard (R-EDIT-2). |
 | `gradeClipboardFrom` | string |  | The bind name the clipboard grade came from. |
+| `effects` | array |  | Every plugin of every rack node's image-processing stack, by node then order (R-FX-5). |
+| `effects[].id` | string |  | The plugin's id, `ef_<n>` — stable for its life, the root of its addresses. |
+| `effects[].node` | string |  | The #rackobj whose stack it is in. |
+| `effects[].nodeBind` | string |  | That node's bind name. |
+| `effects[].type` | string |  | The plugin type (`blur.gaussian` …). |
+| `effects[].label` | string |  | Its name for a person. |
+| `effects[].family` | string |  | Its menu family (Blur). |
+| `effects[].order` | integer |  | Position in the stack; 0 = first after Cosmo. |
+| `effects[].enabled` | bool |  | On or off. |
+| `effects[].mix` | number |  | Output over input, 0..1. |
+| `effects[].params` | array |  | Its parameters, from the catalog, with the value now. |
+| `effects[].params[].key` | string |  | The parameter's key — the address is `<effect id>.<key>`. |
+| `effects[].params[].label` | string |  | Its name for a person. |
+| `effects[].params[].unit` | string |  | px (source pixels — scales with the proxy), deg, or empty for 0..1. |
+| `effects[].params[].value` | number |  | The value now. |
+| `effects[].params[].def` | number |  | The default a new effect starts with. |
+| `effects[].params[].min` | number |  | The lowest value `set` accepts. |
+| `effects[].params[].max` | number |  | The highest value `set` accepts. |
+| `effectTypes` | array |  | The plugin catalog — what `effect add --type` accepts. |
+| `effectTypes[].type` | string |  | The type to name in `effect add --type`. |
+| `effectTypes[].label` | string |  | Its name for a person. |
+| `effectTypes[].family` | string |  | Its menu family. |
 | `hasClipClipboard` | bool |  | `clip copy` has filled the clip clipboard (R-TL-6). |
 | `clipClipboardFrom` | string |  | The name of the clip it was copied from. |
 | `settings` | group |  | Engine settings (R-SET). |

@@ -242,6 +242,22 @@ namespace interstellar
         Notes notes;
     };
 
+    /*  An image-processing plugin on a rack node (R-FX-5): `#effect id=ef_3 node=ro_2 type=blur.gaussian
+     *  order=0 enabled=1 mix=1.0 radius=12.0`. The schema knows the fixed fields; the plugin's own
+     *  parameters are the node's open key=value fields — `unknown`, which the parser already keeps
+     *  in file order — and the service's plugin catalog validates them. So a new plugin type needs no
+     *  format change, and a file written by a newer build keeps every parameter it carried. */
+    struct Effect
+    {
+        NodeId id, node;
+        std::string type;
+        int order = 0;                      // position in the node's stack (after Cosmo, which is first)
+        bool enabled = true;
+        double mix = 1.0;                   // 0 = the effect's input, 1 = its output
+        Fields unknown;                     // the plugin's parameters
+        Notes notes;
+    };
+
     // ── parsed, preserved, refused at render ──────────────────────────────────────────────────
 
     struct RawChild
@@ -265,7 +281,7 @@ namespace interstellar
     };
 
     /** What an id names. */
-    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Raw };
+    enum class NodeKind { None, Rack, RackObj, Timeline, Track, Clip, Transition, Marker, ATrack, AClip, Fx, Effect, Raw };
     const char *nodeKindName(NodeKind k);
 
     class Project
@@ -304,6 +320,7 @@ namespace interstellar
         std::vector<ATrack> audioTracks;
         std::vector<AClip> audioClips;
         std::vector<Fx> effects;
+        std::vector<Effect> imageEffects;            // R-FX-5: the rack's plugin stacks
         std::vector<RawNode> raw;
 
         // ── text I/O ──
@@ -338,6 +355,7 @@ namespace interstellar
         ATrack *audioTrack(const NodeId &);         const ATrack *audioTrack(const NodeId &) const;
         AClip *audioClip(const NodeId &);           const AClip *audioClip(const NodeId &) const;
         Fx *fx(const NodeId &);                     const Fx *fx(const NodeId &) const;
+        Effect *effect(const NodeId &);             const Effect *effect(const NodeId &) const;
         RawNode *rawNode(const NodeId &);           const RawNode *rawNode(const NodeId &) const;
         TlSet *tlset(const NodeId &tl, const NodeId &node);
         const TlSet *tlset(const NodeId &tl, const NodeId &node) const;

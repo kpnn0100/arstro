@@ -15,6 +15,7 @@
 
 #include "ActiveSet.h"
 #include "Composite.h"
+#include "Effects.h"
 #include "FrameCache.h"
 #include "GradeEngine.h"
 #include "ParamHash.h"
@@ -772,10 +773,109 @@ namespace
         assert(hashParams(q) != hashParams(p));
         std::printf("[PASS] param hash: FNV-1a vectors, equal grades equal, any change differs, never 0\n");
     }
+
+    // ── Effects (R-FX-6) ─────────────────────────────────────────────────────────────────────
+
+    EffectRun runOf(const std::string &type, std::map<std::string, double> p = {}, double mix = 1.0)
+    {
+        EffectRun e;
+        e.type = type;
+        e.mix = mix;
+        for (const auto &d : effectType(type)->params) e.p[d.key] = d.def;
+        for (const auto &kv : p) e.p[kv.first] = kv.second;
+        return e;
+    }
+
+    void test_every_blur_leaves_a_flat_field_flat()
+    {
+        for (const auto &t : effectCatalog())
+        {
+            Raster r = solid(64, 40, 120, 60, 200);
+            assert(applyEffect(runOf(t.type), 1.0, r));
+            for (int y = 0; y < 40; y += 7)
+                for (int x = 0; x < 64; x += 7) assert(is(r, x, y, 120, 60, 200, 255, 1));
+        }
+        std::printf("[PASS] effects: every blur leaves a flat field flat (no drift, no edge darkening)\n");
+    }
+
+    void test_gaussian_spreads_symmetrically_and_keeps_energy()
+    {
+        Raster r = solid(81, 81, 0, 0, 0);
+        for (int y = 36; y < 45; ++y)
+            for (int x = 36; x < 45; ++x) { uint8_t *p = &r.rgba[((size_t)y * 81 + x) * 4]; p[0] = p[1] = p[2] = 255; }
+        const double before = meanRgb(r);
+        assert(applyEffect(runOf("blur.gaussian", {{"radius", 8.0}}), 1.0, r));
+        const double after = meanRgb(r);
+        assert(std::fabs(after - before) / before < 0.03);                        // energy kept
+        assert(px(r, 40, 40)[0] < 255 && px(r, 40, 40)[0] > px(r, 40, 52)[0]);     // the centre fell, the edge rose
+        assert(std::abs(px(r, 30, 40)[0] - px(r, 50, 40)[0]) <= 1);              // symmetric
+        assert(std::abs(px(r, 40, 30)[0] - px(r, 40, 50)[0]) <= 1);
+        assert(px(r, 2, 2)[0] == 0);                                              // far away: untouched
+        // scale: a half-size proxy blurs by half the pixels, the same share of the picture
+        Raster small = solid(41, 41, 0, 0, 0);
+        for (int y = 18; y < 23; ++y)
+            for (int x = 18; x < 23; ++x) { uint8_t *p = &small.rgba[((size_t)y * 41 + x) * 4]; p[0] = p[1] = p[2] = 255; }
+        Raster small2 = small;
+        applyEffect(runOf("blur.gaussian", {{"radius", 8.0}}), 0.5, small);
+        applyEffect(runOf("blur.gaussian", {{"radius", 8.0}}), 1.0, small2);
+        assert(px(small, 20, 20)[0] > px(small2, 20, 20)[0]);                     // less spread at half scale
+        std::printf("[PASS] effects: Gaussian spreads symmetrically, keeps energy, scales with the proxy\n");
+    }
+
+    void test_directional_blur_follows_its_angle()
+    {
+        // a vertical white line: an angle-0 (horizontal) blur widens it, never lengthens it
+        Raster r = solid(60, 60, 0, 0, 0);
+        for (int y = 20; y < 40; ++y) { uint8_t *p = &r.rgba[((size_t)y * 60 + 30) * 4]; p[0] = p[1] = p[2] = 255; }
+        Raster v = r;
+        assert(applyEffect(runOf("blur.directional", {{"length", 12.0}, {"angle", 0.0}}), 1.0, r));
+        assert(px(r, 34, 30)[0] > 0 && px(r, 26, 30)[0] > 0);                     // spread sideways
+        assert(px(r, 30, 15)[0] == 0 && px(r, 30, 45)[0] == 0);                    // not along the line
+        assert(applyEffect(runOf("blur.directional", {{"length", 12.0}, {"angle", 90.0}}), 1.0, v));
+        assert(px(v, 34, 30)[0] == 0 && px(v, 30, 16)[0] > 0);                      // 90°: along the line only
+        std::printf("[PASS] effects: a directional blur smears along its angle and nowhere else\n");
+    }
+
+    void test_zoom_and_spin_keep_their_centre()
+    {
+        Raster r = solid(61, 61, 0, 0, 0);
+        for (int y = 0; y < 61; ++y)
+            for (int x = 0; x < 61; ++x) { uint8_t *p = &r.rgba[((size_t)y * 61 + x) * 4]; p[0] = (uint8_t)(x * 4); p[1] = (uint8_t)(y * 4); }
+        Raster z = r, sp = r;
+        assert(applyEffect(runOf("blur.zoom", {{"amount", 0.5}}), 1.0, z));
+        assert(applyEffect(runOf("blur.spin", {{"angle", 30.0}}), 1.0, sp));
+        assert(is(z, 30, 30, px(r, 30, 30)[0], px(r, 30, 30)[1], 0, 255, 1));      // the centre does not move
+        assert(is(sp, 30, 30, px(r, 30, 30)[0], px(r, 30, 30)[1], 0, 255, 1));
+        assert(z.rgba != r.rgba && sp.rgba != r.rgba);                              // elsewhere it smears
+        std::printf("[PASS] effects: zoom and spin smear about a fixed centre\n");
+    }
+
+    void test_effect_mix_zero_is_identity_and_half_is_between()
+    {
+        Raster a = solid(40, 40, 0, 0, 0);
+        for (int x = 0; x < 20; ++x)
+            for (int y = 0; y < 40; ++y) { uint8_t *p = &a.rgba[((size_t)y * 40 + x) * 4]; p[0] = p[1] = p[2] = 255; }
+        Raster none = a, half = a, full = a;
+        applyEffect(runOf("blur.box", {{"radius", 5.0}}, 0.0), 1.0, none);
+        applyEffect(runOf("blur.box", {{"radius", 5.0}}, 0.5), 1.0, half);
+        applyEffect(runOf("blur.box", {{"radius", 5.0}}, 1.0), 1.0, full);
+        assert(none.rgba == a.rgba);
+        const int o = px(a, 21, 20)[0], f = px(full, 21, 20)[0], hlf = px(half, 21, 20)[0];
+        assert(f > o && std::abs(hlf - (o + f) / 2) <= 1);
+        EffectRun bad;
+        bad.type = "blur.nonsense";
+        assert(!applyEffect(bad, 1.0, a));
+        std::printf("[PASS] effects: mix 0 is the input, mix 0.5 is half way; an unknown type is refused\n");
+    }
 }
 
 int main()
 {
+    test_every_blur_leaves_a_flat_field_flat();
+    test_gaussian_spreads_symmetrically_and_keeps_energy();
+    test_directional_blur_follows_its_angle();
+    test_zoom_and_spin_keep_their_centre();
+    test_effect_mix_zero_is_identity_and_half_is_between();
     test_blend_modes_on_known_operands();
     test_half_scale_contain_lands_centred();
     test_rotation_90_moves_a_known_pixel();

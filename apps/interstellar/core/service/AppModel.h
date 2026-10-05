@@ -68,6 +68,32 @@ namespace interstellar
         int sharesMedia = 0;          // OTHER sources on the same file (a variant and its original, R-RACK-5)
     };
 
+    /** A plugin parameter as the UI draws it: its catalog definition and the value now (R-FX-5). */
+    struct EffectParamModel
+    {
+        std::string key, label, unit;           // unit: "px" (source pixels), "deg", "" (0..1)
+        double value = 0, def = 0, min = 0, max = 1;
+    };
+
+    /** One plugin in a rack node's stack, after Cosmo (R-FX-5). */
+    struct EffectModel
+    {
+        NodeId id;                    // `ef_<n>` — stable for the effect's life; the address root
+        NodeId node;                  // the #rackobj whose stack it is in
+        std::string nodeBind;         // that node's bind name
+        std::string type, label, family;
+        int order = 0;                // 0 = first after Cosmo
+        bool enabled = true;
+        double mix = 1.0;
+        std::vector<EffectParamModel> params;
+    };
+
+    /** A plugin the catalog offers ("Add effect"). */
+    struct EffectTypeModel
+    {
+        std::string type, label, family;
+    };
+
     /** One timeline — a VERSION (R-VER). Ordered so a base precedes everything derived from it. */
     struct TimelineModel
     {
@@ -211,6 +237,9 @@ namespace interstellar
         std::string undoLabel, redoLabel;   // "set a.basic.exposure", "clip move shotA"
         bool hasGradeClipboard = false;     // `grade copy` has something to paste
         std::string gradeClipboardFrom;     // the bind name it was copied from
+        // ── the image-processing stacks (R-FX-5) ──
+        std::vector<EffectModel> effects;          // every plugin of every node, by node then order
+        std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
         bool hasClipClipboard = false;      // `clip copy` has something to paste (R-TL-6)
         std::string clipClipboardFrom;      // the clip it was copied from
 

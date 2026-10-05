@@ -132,6 +132,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/model/Arrange.{h,cpp}` | model | **built** — the cut operations, derived-aware (R-TL-3) |
 | `apps/interstellar/render/ActiveSet.{h,cpp}` | render | **built** — clips live at t, transitions held (R-TL-4, DR-TL-4) |
 | `apps/interstellar/render/Composite.{h,cpp}` | render | **built** — geometry · fit · blend · the one-base dissolve (R-FX-3, DR-FX-3) |
+| `apps/interstellar/render/Effects.{h,cpp}` | render | **built** — the plugin catalog and the Blur kinds (Gaussian, Box, Directional, Zoom, Spin), in source pixels scaled to the proxy (R-FX-5/6, DR-FX-5/6) |
 | `apps/interstellar/render/GradeEngine.{h,cpp}` · `ParamHash` · `FrameCache` | render | **built** — EditEngine per frame, cached on the param hash (DR-RENDER-2) |
 | `apps/interstellar/core/Rack.{h,cpp}` | core | **built** — the hosted `CosmoService`, async load, read-through own-params cache (R-RACK, DR-RACK-1..5) |
 | `apps/interstellar/core/Colour.{h,cpp}` | core | **built** — the ONE fold, pin snapshots through Cosmo's reader, deltas (DR-RACK-4, DR-VER-2/3) |

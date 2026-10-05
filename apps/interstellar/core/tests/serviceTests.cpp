@@ -71,6 +71,13 @@ static AppModel populatedModel()
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";
     r.format = "h264"; r.state = "queued";
     m.renders.push_back(r);
+    {
+        EffectModel e;
+        e.id = "ef_1"; e.node = "ro_1"; e.nodeBind = "a"; e.type = "blur.gaussian"; e.label = "Gaussian Blur"; e.family = "Blur";
+        e.params.push_back(EffectParamModel{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0});
+        m.effects.push_back(e);
+        m.effectTypes.push_back({"blur.gaussian", "Gaussian Blur", "Blur"});
+    }
     m.presets.push_back({"Film/Warm fade", "Film"});
     return m;
 }

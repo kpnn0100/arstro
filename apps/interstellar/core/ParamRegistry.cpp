@@ -1,4 +1,5 @@
 #include "ParamRegistry.h"
+#include "Effects.h"
 
 namespace arstro
 {
@@ -119,7 +120,19 @@ namespace interstellar
             {O::Project, "project.masterGain", "", "masterGain", PK::Scalar, "dB", -60, 12, 0, "Master bus gain."},
             {O::Project, "project.name", "", "name", PK::Text, "", 0, 0, 0, "Project display name."},
         };
-        return defs;
+        // R-FX-5: every plugin's parameters, generated from the ONE catalog (render/Effects.h) — so a
+        // new plugin is documented the moment it exists, and no second list can drift.
+        static const std::vector<ParamDef> all = [] {
+            std::vector<ParamDef> v = defs;
+            v.push_back({O::Effect, "<effect>.enabled", "", "enabled", PK::Bool, "0|1", 0, 1, 1, "The plugin is on (R-FX-5)."});
+            v.push_back({O::Effect, "<effect>.mix", "", "mix", PK::Scalar, "0..1", 0, 1, 1, "The plugin's output mixed over its input."});
+            for (const auto &t : render::effectCatalog())
+                for (const auto &d : t.params)
+                    v.push_back({O::Effect, "<effect:" + t.type + ">." + d.key, "", d.key, PK::Scalar, d.unit.empty() ? std::string("0..1") : d.unit,
+                                 d.min, d.max, d.def, t.label + ": " + d.label + (d.unit == "px" ? " (source pixels; scales with the proxy)" : "") + "."});
+            return v;
+        }();
+        return all;
     }
 
     const ParamDef *cosmoKey(const std::string &key)
@@ -145,6 +158,7 @@ namespace interstellar
             case O::Clip: return "clip";
             case O::Track: return "track";
             case O::Fx: return "fx";
+            case O::Effect: return "effect";
             case O::AudioClip: return "aclip";
             case O::Project: return "project";
         }

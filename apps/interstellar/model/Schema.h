@@ -324,6 +324,20 @@ namespace schema
         return f;
     }
 
+    template <> inline const char *typeName<Effect>() { return "effect"; }
+    template <> inline const std::vector<Field<Effect>> &fields<Effect>()
+    {
+        static const std::vector<Field<Effect>> f = {
+            text<Effect>("id", &Effect::id, 0, false),
+            ref<Effect>("node", &Effect::node, 0, false),
+            text<Effect>("type", &Effect::type, 0, false),
+            integer<Effect>("order", &Effect::order, 0, 0, true),
+            boolean<Effect>("enabled", &Effect::enabled, true, 0, true),
+            number<Effect>("mix", &Effect::mix, 1.0, 0, true),
+        };
+        return f;
+    }
+
     template <> inline const char *typeName<Fx>() { return "fx"; }
     template <> inline const std::vector<Field<Fx>> &fields<Fx>()
     {

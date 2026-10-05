@@ -72,6 +72,10 @@ done while its authority is a fake.**
 - **R-RACK-4 Grouping is the blending mechanism.** A group's offsets stack onto every descendant;
   nesting is the user's way of saying "these shots share a look". A node carries a continuous
   **grade weight** (0..1) — a scalable `bypass` — which is Interstellar's, not Cosmo's.
+  (**AMENDED 2026-10-05, user request "remove the weight slider in Grade":** the weight is no longer
+  a bar on every rack row — it is the **Mix** of the node's Cosmo plugin in its image-processing
+  stack (R-FX-5), where every plugin has an on/off and a mix. The address `<node>.weight` and its
+  rendering are unchanged, so a project that set it renders the same.)
 - **R-RACK-5 A variant is a duplicated rack node**, not a per-clip override. One shot needing two
   looks is two nodes on one file. A per-clip grade would put colour in two places (R-G-3).
   (**AMENDED 2026-10-02, user request "duplicate source — same source but a different blending,
@@ -176,7 +180,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-FX — basic video effects — ✅ IMPLEMENTED (DR-FX-2, DR-FX-3, DR-RENDER-2)
+## R-FX — basic video effects — 🚧 IN PROGRESS (DR-FX-2, DR-FX-3, DR-RENDER-2; R-FX-5, R-FX-6 in progress)
 
 - **R-FX-1 The seventeen Cosmo stages apply per frame**, unchanged, because they are radius 0.
   Exposure, contrast, tone regions, curve, white balance, vibrance, mixer, grade, dehaze, grain,
@@ -187,9 +191,64 @@ The headline of this specification, and the reason it is not the first one.
   **freeze** (radius 0 with a remapped `t`, proves the time axis is addressable).
 - **R-FX-3 Geometry and composite per clip**: position, scale, rotation, anchor, crop, opacity,
   blend mode, fit.
+- **R-FX-5 Every rack node has an image-processing STACK of plugins** (added 2026-10-05, user
+  request). Selecting a source or a group shows its stack: **Cosmo** is plugin one — the colour,
+  always first, on/off = the node's bypass, Mix = its weight — and effects follow in order, each
+  with its own **unique, stable id** (`ef_<n>`, kept for the effect's whole life and never
+  renumbered, so a project under version control diffs as "this effect changed"), an on/off, a
+  mix, and its parameters as
+  addresses (`ef_3.radius`). Effects can be added, removed and reordered. A group's effects apply
+  to every source under it, after the source's own (inner first, the way a group's grade stacks).
+  An effect belongs to the rack like a grade does: the same in every version; a version that needs
+  a different one duplicates the source (R-RACK-5), the rule law 2 already gives curves.
+- **R-FX-6 Blur, in kinds** (added 2026-10-05, user request): Gaussian, Box, Directional (motion:
+  length + angle), Zoom (amount + centre) and Spin (angle + centre). Sizes are in SOURCE pixels and
+  scale with the proxy, so a preview and a render blur alike.
 - **R-FX-4 A clip's `geom.crop` and a source's `xform.crop` are different things.** The source's is
   its framing — one per source, part of the look. The clip's is a reframe of the graded result, per
   shot. They sit on opposite sides of the colour stage, which is why they are not one address.
+
+---
+
+## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request)
+
+- **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
+  parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
+  own unique id against the NODE's id (rename-safe) and the key. A rack node's and an effect's
+  curves run in SOURCE time — the footage's own clock, shared by every clip of it; a clip's run in
+  CLIP time, so moving a clip moves its animation.
+- **R-ANIM-2 Interpolation is a spline you can shape**: each keyframe is linear, bezier or hold;
+  a bezier keyframe has an incoming and an outgoing SPEED (units per second) and INFLUENCE (% of
+  the segment) — After Effects' model, so "ease in 33 %" means what an editor expects. Presets:
+  Linear, Ease, Ease In, Ease Out, Hold.
+- **R-ANIM-3 Setting an animated parameter keys it**: once a parameter has a curve, a `set` (a
+  slider) writes a keyframe at the current time instead of the static value. A diamond beside each
+  parameter adds or removes a keyframe at the current time.
+- **R-ANIM-4 A graph editor**: every animated parameter of the selection can be shown as its value
+  curve over time, keyframes dragged in time and value, bezier handles dragged to shape speed and
+  influence, and a right-click on a keyframe types the incoming / outgoing speed and influence or
+  picks a preset. The graph runs on the same time axis the reference-frame slider uses (source
+  time) for rack nodes and effects, and inside the clip for a clip.
+- **R-ANIM-5 Animation is the rack's, like colour** (law 2): a curve is not a scalar, so a derived
+  version cannot carry its own — it inherits the base's curves live, and a scalar `#tlgrade` delta
+  still adds on top of the animated value.
+
+---
+
+## R-PLAY — smooth preview — 🚧 IN PROGRESS (added 2026-10-05, user request "playback directly is a disaster")
+
+- **R-PLAY-1 Proxies**: a source can have a PREVIEW proxy — an edit-friendly re-encode (short GOP,
+  H.264, at most 1280 on the long edge) made in the background into the project's cache — and the
+  monitor plays from it while it exists. A proxy never reaches a render or an export (R-SET-3's
+  spirit: preview quality never changes a delivery); its state (none / building n % / ready) shows
+  on the source.
+- **R-PLAY-2 Playback reads ahead**: while playing, the frames after the playhead are decoded and
+  graded on workers into a small ring, and the monitor shows the frame due NOW — dropping, never
+  stalling, when the machine falls behind.
+- **R-PLAY-3 Hardware video, as a setting**: Engine Settings gains **Hardware video** (off / on):
+  proxies and H.264/H.265 renders encode on the GPU's video unit (VA-API) when it is on and one is
+  present, falling back to software with a note when it is not — never failing a render because a
+  device is missing.
 
 ---
 
@@ -230,6 +289,9 @@ reserves the rest so adopting it is not a migration.
   a window.
 - **R-RENDER-5 A still exported from Interstellar and the same frame exported from Cosmo are
   byte-identical.** The cheapest possible proof that R-RACK-2 actually holds.
+  (**AMENDED 2026-10-05:** for a node with no effects after Cosmo and no animated parameter —
+  Cosmo has neither, so a frame that uses them cannot equal a Cosmo still; the identity still binds
+  everything else, and the test keeps proving it.)
 - **R-RENDER-6 Deliver states the whole output spec** (added 2026-10-02, user request "Deliver needs
   detail options for render"). Every choice is a flag of `render`, shown in Deliver and named in the
   queue row: **codec** (H.264, H.265, ProRes Proxy/LT/422/HQ/4444, DNxHR LB/SQ/HQ/HQX/444, PNG
@@ -266,7 +328,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..14, DR-UI-3c, DR-UI-11a/b; gap: drag-to-regroup, needs a Cosmo move — D-8)
+## R-UI — the two screens — 🚧 IN PROGRESS (DR-UI-1..14, DR-UI-3c, DR-UI-11a/b; R-UI-15 in progress; gap: drag-to-regroup, needs a Cosmo move — D-8)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the
@@ -333,6 +395,13 @@ reserves the rest so adopting it is not a migration.
   the next touching clip; a **marker** at the playhead (M); **add a track**; **copy / cut / paste**
   a clip (Ctrl+C / Ctrl+X / Ctrl+V, R-TL-6). A right-click on a clip offers all of them. A
   modifier-drag says what it will do while it is held.
+- **R-UI-15 Scopes, like Resolve's** (added 2026-10-05, user request "data visual graphs for
+  checking the quality — clipping, bit depth"). Beside the monitor in Grade: **Histogram**,
+  **Waveform** (luma), **Parade** (R G B), **Vectorscope** (with skin-tone line), computed from the
+  frame the monitor shows. Each says what is wrong in words: the share of pixels CLIPPED at black
+  and white per channel, and the **levels used** — how many of the 256 code values occur — so
+  banding from a crushed or 8-bit-starved range is visible as a number, not only as gaps. A
+  **clip warning** overlay on the monitor marks clipped pixels.
 - **R-UI-8 Screen scale, eased** — cosmo's R-SCALE: the shell draws at 75–200 %, the scale ZOOMS
   (260 ms) with the layout re-derived from the drawn scale every frame, input maps through it, and
   the window minimum follows the target scale.
@@ -359,6 +428,7 @@ reserves the rest so adopting it is not a migration.
 - **R-SET-2 One CPU limit for the whole app.** The share of cores is one budget: the hosted Cosmo's
   decode pool and the engine threads Interstellar's own frame path runs on both come from it.
 - **R-SET-3 Preview quality caps the monitor**, never a render or an export, and never upscales.
+- **R-SET-4 Hardware video** (added 2026-10-05) — R-PLAY-3's switch, persisted like the others.
 
 ---
 

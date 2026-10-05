@@ -124,6 +124,9 @@ futureKey      = "kept verbatim"
 #fx id=fx_2 node=ro_2 type=blend radius=1 shutter=180.0
 #fx id=fx_3 clip=clp_1 type=freeze at=2.000
 
+#effect id=ef_1 node=ro_2 type=blur.gaussian order=0 enabled=true mix=0.8 radius=12.0
+#effect id=ef_2 node=ro_2 type=blur.directional order=1 enabled=false mix=1.0 length=40.0 angle=30.0
+
 #bind id=bn_1 target=gr1.exposure expr="sin(t) * 0.2"
 )ISP";
 
@@ -216,6 +219,20 @@ fps = 24
         CHECK(p.hasRack && p.rack.writeBranch == "main");
         CHECK(p.rackObjs.size() == 3 && p.timelines.size() == 3 && p.tracks.size() == 3 && p.clips.size() == 4);
         CHECK(p.audioTracks.size() == 1 && p.audioClips.size() == 1 && p.effects.size() == 3);
+        // R-FX-5: an image-processing plugin keeps its fixed fields AND its own parameters
+        CHECK(p.imageEffects.size() == 2 && p.effect("ef_1") && p.effect("ef_1")->type == "blur.gaussian");
+        CHECK(near(p.effect("ef_1")->mix, 0.8) && p.effect("ef_1")->enabled && !p.effect("ef_2")->enabled);
+        CHECK(p.effect("ef_1")->unknown.size() == 1 && p.effect("ef_1")->unknown[0].first == "radius" &&
+              p.effect("ef_1")->unknown[0].second == "12.0");
+        CHECK(p.effect("ef_2")->unknown.size() == 2 && p.effect("ef_2")->unknown[1].first == "angle");
+        CHECK(p.kindOf("ef_1") == NodeKind::Effect);
+        {
+            Project q;
+            std::string e2;
+            std::string bad = kEvery;
+            bad.replace(bad.find("#effect id=ef_1 node=ro_2"), 25, "#effect id=ef_1 node=ro_9");
+            CHECK(!q.parse(bad, e2) && e2.find("names no #rackobj") != std::string::npos);
+        }
         CHECK(p.drops.size() == 1 && p.sets.size() == 1 && p.grades.size() == 1);
         CHECK(p.timeline("tl_3")->pinned() && p.timeline("tl_3")->pinCommit() == "8f2c1ab" && p.timeline("tl_3")->frozen());
         CHECK(p.clip("clp_9")->timeline == "tl_2");

@@ -50,6 +50,10 @@ namespace interstellar
         double groupWeight = 1.0;
         double weight = 1.0;            // the source's own weight: ungraded → graded
         int edge = 0;                   // grade at this long edge (0 = source size)
+        // R-FX-5: the plugins after Cosmo — the source's, then its groups' — and their key
+        std::vector<render::EffectRun> effects;
+        std::string effectsKey;
+        int srcWidth = 0;               // the source's own width: plugin sizes are in its pixels
         render::Layer layer;            // geometry, fit, opacity, blend, dissolve; src filled at execute
     };
 

@@ -45,6 +45,8 @@ namespace interstellar
             // arrangement (R-TL)
             TrackAdd, ClipAdd, ClipTrim, ClipSplit, ClipMove, ClipDelete, ClipRoll, ClipSlip,
             ClipSpeed, ClipSelect, TransitionAdd, MarkerAdd, ClipCopy, ClipPaste,
+            // the image-processing stack (R-FX-5)
+            EffectAdd, EffectRemove, EffectMove,
             // temporal effects (R-FX-2)
             FxAdd, FxDelete,
             // audio subset (R-AUD-2)

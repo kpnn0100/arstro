@@ -90,7 +90,7 @@ namespace interstellar
             case CK::ClipDelete: case CK::ClipRoll: case CK::ClipSlip: case CK::ClipSpeed:
             case CK::TransitionAdd: case CK::MarkerAdd: case CK::FxAdd: case CK::FxDelete:
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
-            case CK::ClipPaste:
+            case CK::ClipPaste: case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
                 return true;
             default: return false;
         }
@@ -317,6 +317,8 @@ namespace interstellar
                 if (!mRack.ungroup(node, err)) return fail("rack ungroup: " + err);
                 const NodeId id = ro->id;
                 mNodeOf.erase(id);
+                P.imageEffects.erase(std::remove_if(P.imageEffects.begin(), P.imageEffects.end(), [&](const Effect &f) { return f.node == id; }),
+                                     P.imageEffects.end());   // a group's plugins go with the group (R-FX-5)
                 P.rackObjs.erase(std::remove_if(P.rackObjs.begin(), P.rackObjs.end(), [&](const RackObj &r) { return r.id == id; }),
                                  P.rackObjs.end());
                 markDirty();

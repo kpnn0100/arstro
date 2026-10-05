@@ -256,6 +256,10 @@ namespace interstellar
                 ok = requireProject() && arrangeCommand(c);
                 break;
 
+            case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
+                ok = requireProject() && effectCommand(c);
+                break;
+
             case CK::Playhead: case CK::Play: case CK::Pause:
                 ok = requireProject() && playheadCommand(c);
                 break;
@@ -704,6 +708,43 @@ namespace interstellar
         m.redoLabel = mRedo.empty() ? std::string() : mRedo.back().label;
         m.hasGradeClipboard = mHasClipboard;
         m.gradeClipboardFrom = mClipboardFrom;
+        // ── the plugin stacks (R-FX-5) ──
+        m.effects.clear();
+        if (mProject && mOpen)
+        {
+            const Project &P = *mProject;
+            std::vector<const Effect *> all;
+            for (const auto &e : P.imageEffects) all.push_back(&e);
+            std::stable_sort(all.begin(), all.end(), [](const Effect *a, const Effect *b) {
+                return a->node != b->node ? a->node < b->node : a->order < b->order;
+            });
+            for (const Effect *e : all)
+            {
+                EffectModel em;
+                em.id = e->id;
+                em.node = e->node;
+                if (const RackObj *ro = P.rackObj(e->node)) em.nodeBind = ro->name;
+                em.type = e->type;
+                em.order = e->order;
+                em.enabled = e->enabled;
+                em.mix = e->mix;
+                if (const render::EffectTypeDef *def = render::effectType(e->type))
+                {
+                    em.label = def->label;
+                    em.family = def->family;
+                    for (const auto &d : def->params)
+                    {
+                        EffectParamModel pm{d.key, d.label, d.unit, d.def, d.def, d.min, d.max};
+                        for (const auto &kv : e->unknown) if (kv.first == d.key) parseDouble(kv.second, pm.value);
+                        em.params.push_back(pm);
+                    }
+                }
+                else em.label = e->type + " (unknown to this build)";
+                m.effects.push_back(std::move(em));
+            }
+        }
+        if (m.effectTypes.empty())
+            for (const auto &t : render::effectCatalog()) m.effectTypes.push_back({t.type, t.label, t.family});
         m.hasClipClipboard = mHasClipClipboard;
         m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
@@ -1271,6 +1312,19 @@ namespace interstellar
                 P.rackObjs.push_back(ro);
                 mNodeOf[ro.id] = added[0];
                 mStoredPath[ro.id] = stored;
+                // its own copy of the original's plugin stack, each with a fresh id (R-FX-5)
+                {
+                    std::vector<Effect> copies;
+                    for (const auto &fx : P.imageEffects)
+                        if (fx.node == copyOfSrc.id) copies.push_back(fx);
+                    for (auto &fx : copies)
+                    {
+                        fx.id = P.freshId("ef_");
+                        fx.node = ro.id;
+                        fx.notes = Notes{};
+                        P.imageEffects.push_back(fx);
+                    }
+                }
                 // The new variant is the selection and the Grade target, so it is in view (the
                 // strip and the tree follow the target) and the next edit lands on IT.
                 mSelection = {ro.id};
@@ -1381,6 +1435,8 @@ namespace interstellar
                 mSelection.erase(std::remove(mSelection.begin(), mSelection.end(), id), mSelection.end());
                 P.grades.erase(std::remove_if(P.grades.begin(), P.grades.end(), [&](const TlGrade &g) { return g.node == id; }), P.grades.end());
                 P.effects.erase(std::remove_if(P.effects.begin(), P.effects.end(), [&](const Fx &f) { return f.node == id; }), P.effects.end());
+                P.imageEffects.erase(std::remove_if(P.imageEffects.begin(), P.imageEffects.end(), [&](const Effect &f) { return f.node == id; }),
+                                     P.imageEffects.end());
                 P.rackObjs.erase(std::remove_if(P.rackObjs.begin(), P.rackObjs.end(), [&](const RackObj &r) { return r.id == id; }), P.rackObjs.end());
                 markDirty();
                 bumpFrame();
@@ -1690,6 +1746,46 @@ namespace interstellar
             return true;
         }
 
+        if (kind == NodeKind::Effect)
+        {
+            // ── a plugin's own fields (R-FX-5): on/off, mix, and its type's parameters ──
+            Effect *e = P.effect(id);
+            const render::EffectTypeDef *def = render::effectType(e->type);
+            double v = 0;
+            if (a.rest == "enabled")
+            {
+                if (value != "0" && value != "1") return fail(e->id + ".enabled is 0 or 1");
+                e->enabled = value == "1";
+            }
+            else if (a.rest == "mix")
+            {
+                if (!parseDouble(value, v) || v < 0 || v > 1) return fail(e->id + ".mix is 0..1, got `" + value + "`");
+                e->mix = v;
+            }
+            else
+            {
+                const render::EffectParamDef *pd = nullptr;
+                if (def) for (const auto &d : def->params) if (d.key == a.rest) pd = &d;
+                if (!pd)
+                {
+                    std::vector<std::string> keys{"enabled", "mix"};
+                    if (def) for (const auto &d : def->params) keys.push_back(d.key);
+                    return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "` (it has: " + joinNames(keys) + ")");
+                }
+                if (!parseDouble(value, v)) return fail(address + " needs a number, got `" + value + "`");
+                if (v < pd->min || v > pd->max)
+                    return fail(address + " is " + canonicalNumber(pd->min) + ".." + canonicalNumber(pd->max) + (pd->unit.empty() ? "" : " " + pd->unit) + ", got " + value);
+                bool found = false;
+                for (auto &kv : e->unknown)
+                    if (kv.first == a.rest) { kv.second = canonicalNumber(v); found = true; }
+                if (!found) e->unknown.emplace_back(a.rest, canonicalNumber(v));
+            }
+            markDirty();
+            bumpFrame();
+            emit(Event(EK::ParamsChanged).with("address", e->id + "." + a.rest).with("value", value).with("target", "effect"));
+            return true;
+        }
+
         if (kind == NodeKind::Clip || kind == NodeKind::Track || kind == NodeKind::AClip)
         {
             const ParamOwner owner = kind == NodeKind::Clip ? ParamOwner::Clip : kind == NodeKind::Track ? ParamOwner::Track : ParamOwner::AudioClip;
@@ -1764,6 +1860,25 @@ namespace interstellar
         }
         const NodeId id = P.idForRef(a.name);
         const NodeKind kind = P.kindOf(id);
+        if (kind == NodeKind::Effect)
+        {
+            const Effect *e = P.effect(id);
+            const render::EffectTypeDef *def = render::effectType(e->type);
+            std::string v;
+            if (a.rest == "enabled") v = e->enabled ? "1" : "0";
+            else if (a.rest == "mix") v = canonicalNumber(e->mix);
+            else if (a.rest == "type") v = e->type;
+            else
+            {
+                const render::EffectParamDef *pd = nullptr;
+                if (def) for (const auto &d : def->params) if (d.key == a.rest) pd = &d;
+                for (const auto &kv : e->unknown) if (kv.first == a.rest) v = kv.second;
+                if (v.empty() && pd) v = canonicalNumber(pd->def);
+                if (v.empty()) return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "`");
+            }
+            mOutput = e->id + "." + a.rest + "=" + v + "\n";
+            return true;
+        }
         if (kind == NodeKind::RackObj)
         {
             const RackObj *ro = P.rackObj(id);
@@ -2100,6 +2215,137 @@ namespace interstellar
     // ──────────────────────────────────────────────────────────────────────────────────────────
     // arrangement
     // ──────────────────────────────────────────────────────────────────────────────────────────
+
+    void InterstellarService::effectChain(const NodeId &roId, std::vector<render::EffectRun> &out, std::string &key) const
+    {
+        out.clear();
+        key.clear();
+        const Project &P = *mProject;
+        // the node, then its ancestor groups (inner first), by the rack's live tree
+        std::vector<NodeId> chain{roId};
+        if (mRack.isOpen())
+        {
+            const auto &ns = mRack.model().nodes;
+            int node = -1;
+            for (const auto &kv : mNodeOf) if (kv.first == roId) node = kv.second;
+            int guard = (int)ns.size() + 1;
+            while (node >= 0 && guard-- > 0)
+            {
+                int parent = -1;
+                for (const auto &n : ns) if (n.node == node) parent = n.parent;
+                if (parent < 0) break;
+                for (const auto &kv : mNodeOf) if (kv.second == parent) chain.push_back(kv.first);
+                node = parent;
+            }
+        }
+        for (const auto &owner : chain)
+        {
+            std::vector<const Effect *> stack;
+            for (const auto &e : P.imageEffects) if (e.node == owner && e.enabled && e.mix > 0.0) stack.push_back(&e);
+            std::stable_sort(stack.begin(), stack.end(), [](const Effect *a, const Effect *b) { return a->order < b->order; });
+            for (const Effect *e : stack)
+            {
+                const render::EffectTypeDef *def = render::effectType(e->type);
+                if (!def) continue;   // a plugin this build does not know: kept in the file, not run
+                render::EffectRun r;
+                r.type = e->type;
+                r.mix = std::clamp(e->mix, 0.0, 1.0);
+                key += "|" + e->type + "@" + canonicalNumber(r.mix);
+                for (const auto &d : def->params)
+                {
+                    double v = d.def;
+                    for (const auto &kv : e->unknown)
+                        if (kv.first == d.key) parseDouble(kv.second, v);
+                    r.p[d.key] = v;
+                    key += ":" + canonicalNumber(v);
+                }
+                out.push_back(std::move(r));
+            }
+        }
+    }
+
+    bool InterstellarService::effectCommand(const Command &c)
+    {
+        Project &P = *mProject;
+        auto stackOf = [&](const NodeId &node) {
+            std::vector<Effect *> v;
+            for (auto &e : P.imageEffects) if (e.node == node) v.push_back(&e);
+            std::stable_sort(v.begin(), v.end(), [](const Effect *a, const Effect *b) { return a->order < b->order; });
+            return v;
+        };
+        auto effectRef = [&](const std::string &ref, Effect *&out) {
+            out = P.effect(P.idForRef(ref));
+            if (out) return true;
+            std::vector<std::string> ids;
+            for (const auto &e : P.imageEffects) ids.push_back(e.id);
+            const auto near = nearest(ref, ids);
+            return fail("no effect " + ref + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
+        };
+        auto changed = [&](const char *what, const NodeId &id) {
+            markDirty();
+            bumpFrame();
+            emit(Event(EK::RackChanged).with("what", what).with("node", id));
+            return true;
+        };
+        switch (c.kind)
+        {
+            case CK::EffectAdd:
+            {
+                RackObj *ro = P.rackObj(P.idForRef(c.arg(0)));
+                if (!ro)
+                {
+                    const auto near = nearest(c.arg(0), P.bindNames());
+                    return fail("effect add: no rack node named " + c.arg(0) + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
+                }
+                const std::string type = c.flag("type");
+                const render::EffectTypeDef *def = render::effectType(type);
+                if (!def)
+                {
+                    std::vector<std::string> types;
+                    for (const auto &t : render::effectCatalog()) types.push_back(t.type);
+                    return fail("effect add: --type is one of " + joinNames(types) + (type.empty() ? std::string() : ", got " + type));
+                }
+                Effect e;
+                e.id = P.freshId("ef_");
+                e.node = ro->id;
+                e.type = type;
+                e.order = (int)stackOf(ro->id).size();
+                for (const auto &d : def->params) e.unknown.emplace_back(d.key, canonicalNumber(d.def));
+                P.imageEffects.push_back(e);
+                mOutput = e.id + "\n";
+                return changed("effect added", e.id);
+            }
+            case CK::EffectRemove:
+            {
+                Effect *e = nullptr;
+                if (!effectRef(c.arg(0), e)) return false;
+                const NodeId node = e->node, id = e->id;
+                P.imageEffects.erase(std::remove_if(P.imageEffects.begin(), P.imageEffects.end(), [&](const Effect &x) { return x.id == id; }),
+                                     P.imageEffects.end());
+                int i = 0;
+                for (Effect *x : stackOf(node)) x->order = i++;
+                return changed("effect removed", id);
+            }
+            case CK::EffectMove:
+            {
+                Effect *e = nullptr;
+                if (!effectRef(c.arg(0), e)) return false;
+                const std::string ts = c.flag("to");   // flag() returns by value: keep it alive for `end`
+                char *end = nullptr;
+                long to = std::strtol(ts.c_str(), &end, 10);
+                if (!c.has("to") || ts.empty() || !end || *end) return fail("effect move: --to <index>, 0 = first after Cosmo");
+                auto stack = stackOf(e->node);
+                const NodeId id = e->id;
+                stack.erase(std::remove(stack.begin(), stack.end(), e), stack.end());
+                to = std::clamp<long>(to, 0, (long)stack.size());
+                stack.insert(stack.begin() + to, e);
+                for (size_t i = 0; i < stack.size(); ++i) stack[i]->order = (int)i;
+                return changed("effect moved", id);
+            }
+            default:
+                return fail("not an effect command");
+        }
+    }
 
     bool InterstellarService::arrangeCommand(const Command &c)
     {
