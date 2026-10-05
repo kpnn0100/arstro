@@ -362,6 +362,24 @@ namespace istest
             {
                 for (auto &n : m.rack) if (n.bindName == a[2]) n.frame = std::atof(a[4].c_str());
             }
+            else if (a[0] == "key" && a.size() >= 4 && a[1] == "copy")
+            {
+                // "--keys a@t,b@t": count them, and the properties they came from
+                const std::string &list = a[3];
+                std::set<std::string> props;
+                int n = 0;
+                size_t from = 0;
+                while (from < list.size())
+                {
+                    const size_t comma = std::min(list.find(',', from), list.size());
+                    const std::string item = list.substr(from, comma - from);
+                    props.insert(item.substr(0, item.rfind('@')));
+                    ++n;
+                    from = comma + 1;
+                }
+                m.keyClipboardCount = n;
+                m.keyClipboardCurves = (int)props.size();
+            }
             else if (a[0] == "key" && a.size() >= 3 && (a[1] == "add" || a[1] == "remove" || a[1] == "set"))
             {
                 auto flag = [&](const std::string &f, double &v) {

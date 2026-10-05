@@ -62,6 +62,7 @@ namespace interstellar_v1
         mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
         mEdit->onKeyContext = [this](const std::string &a, double t, Point w) { openKeyContext(a, t, w); };
+        mEdit->onKeyPlotContext = [this](double t, Point w) { openKeyPlotContext(t, w); };
         mEdit->onLaneContext = [this](const std::string &trk, double t, Point w) { openLaneContext(trk, t, w); };
         // the ref-frame slider previews in the monitor while dragged, nothing committed (R-RACK-3)
         mEdit->gradeDeck()->onPreview = [this](const std::string &bind, double t) {
@@ -469,7 +470,39 @@ namespace interstellar_v1
                     if (line != head) dispatch(line);
                 });
         }});
+        if (KeyGraph *g = keyGraphShown())
+        {
+            const std::string list = g->selectionList().empty() ? address + "@" + cmd::num(k->t) : g->selectionList();
+            const int n = std::max(1, g->selectionCount());
+            items.push_back({n > 1 ? "Copy " + std::to_string(n) + " Keys  (Ctrl+C)" : std::string("Copy Key  (Ctrl+C)"),
+                             [this, list] { dispatch("key copy --keys " + cmd::quote(list)); }});
+        }
         items.push_back({"Delete Key", [this, address, tt = k->t] { dispatch("key remove " + cmd::quote(address) + " --at " + cmd::num(tt)); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    KeyGraph *App::keyGraphShown()
+    {
+        auto tl = mEdit->timeline();
+        if (mEdit->tab() != EditScreen::Cut || !tl || tl->keyLaneAmount() < 0.5) return nullptr;
+        return tl->keyLane()->graph().get();
+    }
+
+    /** R-ANIM-7: the key lane's empty plot — paste the copied keys at the playhead, here, or onto
+     *  the front property. */
+    void App::openKeyPlotContext(double t, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        if (m.keyClipboardCount <= 0) return;
+        auto tl = mEdit->timeline();
+        const double now = tl->keyLane()->now();
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        items.push_back({"Paste Keys at Playhead  (Ctrl+V)", [this, now] { dispatch("key paste --at " + cmd::num(now)); }});
+        items.push_back({"Paste Keys Here", [this, t] { dispatch("key paste --at " + cmd::num(t)); }});
+        const std::string front = tl->keyLane()->selected();
+        if (m.keyClipboardCurves == 1 && !front.empty())
+            items.push_back({"Paste onto " + front, [this, front, now] { dispatch("key paste --to " + cmd::quote(front) + " --at " + cmd::num(now)); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }
@@ -718,8 +751,18 @@ namespace interstellar_v1
         {
             if (mEdit->tab() == EditScreen::Cut)
             {
-                // a CLIP on the Cut tab (R-TL-6): copy / cut / paste at the playhead
+                // keys first, when the key lane holds a selection or the clipboard holds keys (R-ANIM-7)
                 const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+                if (KeyGraph *g = keyGraphShown())
+                {
+                    if (e.keyCode == 'C' && g->selectionCount() > 0) { dispatch("key copy --keys " + cmd::quote(g->selectionList())); return true; }
+                    if (e.keyCode == 'V' && m.keyClipboardCount > 0)
+                    {
+                        dispatch("key paste --at " + cmd::num(mEdit->timeline()->keyLane()->now()));
+                        return true;
+                    }
+                }
+                // a CLIP on the Cut tab (R-TL-6): copy / cut / paste at the playhead
                 if (e.keyCode == 'V') { if (!m.hasClipClipboard) return false; dispatch("clip paste"); return true; }
                 if (m.selectedClip.empty()) return false;
                 const std::string q = cmd::quote(m.selectedClip);

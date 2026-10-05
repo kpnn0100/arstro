@@ -231,6 +231,8 @@ namespace interstellar
                                .set("min", a.min).set("max", a.max).set("shape", a.shape).set("shapeNow", a.shapeNow).set("keys", ks));
             }
             j.set("anims", anims);
+            j.set("keyClipboardCount", m.keyClipboardCount);
+            j.set("keyClipboardCurves", m.keyClipboardCurves);
         }
         if (!st)
         {
@@ -269,6 +271,7 @@ namespace interstellar
         settings.set("useGpu", m.settings.useGpu);
         settings.set("hardwareVideo", m.settings.hardwareVideo);
         settings.set("previewCache", m.settings.previewCache);
+        settings.set("keyLaneHeight", m.settings.keyLaneHeight);
         settings.set("uiScale", m.settings.uiScale);
         if (!st)
         {
@@ -442,6 +445,8 @@ namespace interstellar
             {"playbackEdge", "integer", "The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2)."},
             {"playbackRate", "number", "Frames the read-ahead finished per second over the last half second; 0 = not playing."},
             {"anims", "array", "Every animated parameter — its curve (R-ANIM-1)."},
+            {"keyClipboardCount", "integer", "Keyframes `key copy` holds; 0 = none (R-ANIM-7)."},
+            {"keyClipboardCurves", "integer", "…from how many properties (`key paste --to` needs exactly one)."},
             {"anims[].id", "string", "The curve's id, `an_<n>`."},
             {"anims[].node", "string", "The #rackobj, #effect or #clip it animates."},
             {"anims[].nodeBind", "string", "That node's name (an effect: its id)."},
@@ -499,6 +504,7 @@ namespace interstellar
             {"settings.cpuPercent", "integer", "Share of the machine's cores the app may schedule — the rack's decode and the frame path alike."},
             {"settings.threads", "integer", "Engine worker threads; 0 = auto (from cpuPercent)."},
             {"settings.previewEdge", "integer", "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."},
+            {"settings.keyLaneHeight", "integer", "The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8)."},
             {"settings.previewCache", "bool", "A window builds the graded preview cache of the current timeline when idle (R-PLAY-1)."},
             {"settings.useGpu", "bool", "GPU opt-in for the grade step (only where a backend exists)."},
             {"settings.hardwareVideo", "bool", "H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3)."},

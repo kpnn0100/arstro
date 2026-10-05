@@ -43,6 +43,7 @@ namespace interstellar
 {
     class Project;
     struct Clip;
+    struct AnimKey;
     struct ResolvedTimeline;
     namespace render { class GradeEngine; class FrameCache; }
 
@@ -245,6 +246,15 @@ namespace interstellar
         bool writeStatic(const AnimTarget &t, double v);
         bool setAnimated(const std::string &address, const std::string &value, bool &handled);
         bool animCommand(const Command &c);
+        bool keysCommand(const Command &c);   // key shift | copy | paste (R-ANIM-7)
+        struct KeyClip
+        {
+            NodeId node;
+            std::string key;
+            bool shape = false;
+            std::vector<AnimKey> keys;   // times relative to the clipboard's earliest
+        };
+        std::vector<KeyClip> mKeyClipboard;
         void pruneAnims();
         void copyAnims(const NodeId &from, const NodeId &to, double shift);
         void applyColourCurves(const NodeId &tl, ColourTree &tree, const std::map<NodeId, int> &idx, double srcT);

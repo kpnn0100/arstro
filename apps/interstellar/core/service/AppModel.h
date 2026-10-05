@@ -206,6 +206,7 @@ namespace interstellar
         int uiScale = 100;            // percent of the design size — the host draws through it
         bool hardwareVideo = false;   // R-PLAY-3: H.264/H.265 encode on the GPU's video unit (VA-API) where present
         bool previewCache = true;     // R-PLAY-1: a window builds the graded preview cache when idle
+        int keyLaneHeight = 140;      // R-ANIM-8: the Cut key lane's height, px (dragged at its top edge)
         // ── measured, read-only ──
         bool gpuAvailable = false;
         int cores = 0, engineThreads = 0, decodeWorkers = 0;
@@ -284,6 +285,8 @@ namespace interstellar
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
         // ── keyframes (R-ANIM) ──
         std::vector<AnimModel> anims;              // every curve of the project
+        int keyClipboardCount = 0;                 // keyframes `key copy` holds (R-ANIM-7); 0 = none
+        int keyClipboardCurves = 0;                // …from how many properties
         bool hasClipClipboard = false;      // `clip copy` has something to paste (R-TL-6)
         std::string clipClipboardFrom;      // the clip it was copied from
 

@@ -103,6 +103,7 @@ namespace interstellar_v1
         std::function<void(const std::string &clipId, artboard::Point world)> onClipContext;
         /** R-ANIM-4: a right-click on a keyframe in a graph — `address`, key time `t`, at a world point. */
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
+        std::function<void(double t, artboard::Point world)> onKeyPlotContext;
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
         /** The capture button (transport or, in Grade, the monitor caption) at a WORLD rect. */
         std::function<void(artboard::Rect)> onCapture;

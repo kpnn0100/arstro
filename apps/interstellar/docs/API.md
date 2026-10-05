@@ -65,7 +65,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `grade copy <node>` | Copy a rack node's grade (its own params, masks excluded) to the clipboard. | R-EDIT-2 |
 | `grade paste [node…] [--all]` | Paste the copied grade onto rack nodes (or every source with --all). Root timeline only: it writes through to Cosmo. | R-EDIT-2 |
 | `rack ungroup <group>` | Dissolve a group; its members keep their own grades. | R-RACK-4 |
-| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%), hardwareVideo (0\|1: H.264/H.265 on the GPU's video unit), previewCache (0\|1: build the graded preview cache when idle). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
+| `settings set <key>=<value> …` | Engine settings: cpuPercent (25\|50\|75\|100), threads (0=auto), previewEdge (px), useGpu (0\|1), uiScale (%), hardwareVideo (0\|1: H.264/H.265 on the GPU's video unit), previewCache (0\|1: build the graded preview cache when idle), keyLaneHeight (px, 80..600: the Cut key lane). Persisted; one CPU budget for the rack and the render path. | R-SET-1 |
 | `preset apply <name> [--node <bind>]` | Apply a library preset to a rack source (the Grade target by default). Root timeline only. | R-EDIT-3 |
 | `preset save <name> [--node <bind>]` | Save a rack source's grade to the library as <name>.apf. | R-EDIT-3 |
 | `preset import <path.apf>` | Copy an .apf (from Cosmo or anywhere) into the library. | R-EDIT-3 |
@@ -79,6 +79,9 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `key add <address> [--at <t>] [--value <v>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5). | R-ANIM-1 |
 | `key remove <address> [--at <t>]` | Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays. | R-ANIM-1 |
 | `key set <address> [--at <t>] [--to <t>] [--value <v>] [--in <linear\|bezier\|hold>] [--out <linear\|bezier\|hold>] [--speed-in <units/s>] [--influence-in <%>] [--speed-out <units/s>] [--influence-out <%>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a bezier. --ease applies a preset. | R-ANIM-2 |
+| `key shift [--keys <address@t,…>] [--by <s>]` | Move several keyframes in time together, by --by seconds (one undo step) — a box-selection dragged in the graph. Refused when a key would land on another of its curve. | R-ANIM-7 |
+| `key copy [--keys <address@t,…>]` | Copy keyframes (their values, shapes and sides, times relative to the earliest) to the key clipboard. | R-ANIM-7 |
+| `key paste [--at <t>] [--to <address>]` | Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced. | R-ANIM-7 |
 | `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
 | `capture [--out <p.png>] [--source <bind>]` | Save what the monitor shows, at full resolution: --source names a rack source (its reference frame, graded — Grade); without it, the current timeline at the playhead. | R-UI-11 |
@@ -218,7 +221,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `render.failed` | `job`, `timeline`, `why` | A render stopped with an error or was cancelled. |
 | `lint.report` | `offline`, `dangling`, `refused` | Counts from `lint`; details follow as info. |
 | `history.changed` | `did`, `label`, `canUndo`, `canRedo` | An edit was recorded, undone or redone (did = edit \| undo \| redo \| cleared). |
-| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo`, `previewCache` | Engine settings after a change, all keys. |
+| `settings.changed` | `cpuPercent`, `threads`, `previewEdge`, `useGpu`, `uiScale`, `hardwareVideo`, `previewCache`, `keyLaneHeight` | Engine settings after a change, all keys. |
 | `presets.changed` | `count` | The preset library was rescanned. |
 | `cache.changed` | `timeline`, `frames`, `total`, `building` | The preview cache of the current timeline: frames cached and current, of total (R-PLAY-1). |
 | `keys.changed` | `address`, `keys` | A parameter's curve changed; how many keyframes it has now (0 = no curve) (R-ANIM). |
@@ -350,6 +353,8 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `playbackEdge` | integer |  | The long edge playback grades at now — stepped down when the read-ahead falls behind, up with headroom; 0 = not playing (R-PLAY-2). |
 | `playbackRate` | number |  | Frames the read-ahead finished per second over the last half second; 0 = not playing. |
 | `anims` | array |  | Every animated parameter — its curve (R-ANIM-1). |
+| `keyClipboardCount` | integer |  | Keyframes `key copy` holds; 0 = none (R-ANIM-7). |
+| `keyClipboardCurves` | integer |  | …from how many properties (`key paste --to` needs exactly one). |
 | `anims[].id` | string |  | The curve's id, `an_<n>`. |
 | `anims[].node` | string |  | The #rackobj, #effect or #clip it animates. |
 | `anims[].nodeBind` | string |  | That node's name (an effect: its id). |
@@ -407,6 +412,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.cpuPercent` | integer |  | Share of the machine's cores the app may schedule — the rack's decode and the frame path alike. |
 | `settings.threads` | integer |  | Engine worker threads; 0 = auto (from cpuPercent). |
 | `settings.previewEdge` | integer |  | Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected. |
+| `settings.keyLaneHeight` | integer |  | The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8). |
 | `settings.previewCache` | bool |  | A window builds the graded preview cache of the current timeline when idle (R-PLAY-1). |
 | `settings.useGpu` | bool |  | GPU opt-in for the grade step (only where a backend exists). |
 | `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3). |

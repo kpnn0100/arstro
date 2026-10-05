@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <set>
 #include <sstream>
 
 namespace arstro
@@ -480,6 +481,162 @@ namespace interstellar
         }
     }
 
+    // ── several keys at once: shift, copy, paste (R-ANIM-7) ─────────────────────────────────────
+
+    bool InterstellarService::keysCommand(const Command &c)
+    {
+        Project &P = *mProject;
+        const char *verb = c.kind == CK::KeyShift ? "key shift" : c.kind == CK::KeyCopy ? "key copy" : "key paste";
+        auto addressOf = [&](const NodeId &node, const std::string &key) {
+            if (const RackObj *ro = P.rackObj(node)) return ro->name + "." + key;
+            if (const Clip *cl = P.clip(node)) return (cl->name.empty() ? cl->id : cl->name) + "." + key;
+            return node + "." + key;
+        };
+        // --keys "<address>@<t>,…" → each key's curve and time
+        struct Picked { AnimTarget t; NodeId anim; double at = 0; };
+        std::vector<Picked> picked;
+        if (c.kind != CK::KeyPaste)
+        {
+            const std::string list = c.flag("keys");
+            if (list.empty()) return fail(std::string(verb) + ": --keys \"<address>@<t>,…\" names the keyframes");
+            size_t from = 0;
+            while (from <= list.size())
+            {
+                const size_t comma = std::min(list.find(',', from), list.size());
+                const std::string item = list.substr(from, comma - from);
+                from = comma + 1;
+                if (item.empty()) continue;
+                const size_t atSign = item.rfind('@');
+                Picked p;
+                std::string why;
+                if (atSign == std::string::npos || !parseDouble(item.substr(atSign + 1), p.at))
+                    return fail(std::string(verb) + ": `" + item + "` is not <address>@<seconds>");
+                if (!animTarget(item.substr(0, atSign), p.t, why)) return fail(std::string(verb) + ": " + why);
+                const Anim *an = P.animOf(p.t.node, p.t.key);
+                bool found = false;
+                if (an) for (const auto &k : P.animKeys) found = found || (k.anim == an->id && std::fabs(k.t - p.at) < 5e-4);
+                if (!found) return fail(std::string(verb) + ": " + p.t.address + " has no key at " + canonicalNumber(p.at));
+                p.anim = an->id;
+                p.at = msRound(p.at);
+                picked.push_back(p);
+            }
+        }
+        auto finish = [&](const std::string &what, const std::set<std::string> &addresses) {
+            markDirty();
+            bumpFrame();
+            for (const auto &a : addresses)
+            {
+                AnimTarget t;
+                std::string why;
+                int n = 0;
+                if (animTarget(a, t, why))
+                    if (const Anim *an = P.animOf(t.node, t.key)) n = (int)P.keysOf(an->id).size();
+                emit(Event(EK::KeysChanged).with("address", a).with("keys", n));
+            }
+            mOutput = what + "\n";
+            return true;
+        };
+        switch (c.kind)
+        {
+            case CK::KeyShift:
+            {
+                double by = 0;
+                const std::string b = c.flag("by");
+                if (!parseDouble(b, by)) return fail("key shift: --by is seconds, got `" + b + "`");
+                by = msRound(by);
+                for (const auto &p : picked) if (!curveEditable(p.t)) return false;
+                // the times each curve would have afterwards: no two keys may meet
+                std::map<NodeId, std::multiset<long long>> after;
+                for (const auto &k : P.animKeys)
+                {
+                    bool moving = false;
+                    for (const auto &p : picked) moving = moving || (k.anim == p.anim && std::fabs(k.t - p.at) < 5e-4);
+                    after[k.anim].insert(std::llround((moving ? k.t + by : k.t) * 1000.0));
+                }
+                for (const auto &kv : after)
+                    for (long long ms : kv.second)
+                        if (kv.second.count(ms) > 1)
+                            return fail("key shift: two keys of one curve would meet at " + canonicalNumber(ms / 1000.0) + " — shift by another amount");
+                std::set<std::string> addresses;
+                for (auto &k : P.animKeys)
+                    for (const auto &p : picked)
+                        if (k.anim == p.anim && std::fabs(k.t - p.at) < 5e-4) { k.t = msRound(k.t + by); addresses.insert(p.t.address); break; }
+                return finish("moved " + std::to_string(picked.size()) + " keys by " + canonicalNumber(by) + " s", addresses);
+            }
+            case CK::KeyCopy:
+            {
+                double earliest = 1e300;
+                for (const auto &p : picked) earliest = std::min(earliest, p.at);
+                mKeyClipboard.clear();
+                for (const auto &p : picked)
+                {
+                    KeyClip *kc = nullptr;
+                    for (auto &x : mKeyClipboard) if (x.node == p.t.node && x.key == p.t.key) kc = &x;
+                    if (!kc) { mKeyClipboard.push_back(KeyClip{p.t.node, p.t.key, p.t.shape, {}}); kc = &mKeyClipboard.back(); }
+                    for (const auto &k : P.animKeys)
+                        if (k.anim == p.anim && std::fabs(k.t - p.at) < 5e-4)
+                        {
+                            AnimKey x = k;
+                            x.t = msRound(k.t - earliest);
+                            x.notes = Notes{};
+                            kc->keys.push_back(x);
+                        }
+                }
+                mOutput = "copied " + std::to_string(picked.size()) + " keys\n";
+                return true;
+            }
+            case CK::KeyPaste:
+            {
+                if (mKeyClipboard.empty()) return fail("key paste: nothing copied — `key copy --keys …` first");
+                std::vector<std::pair<AnimTarget, const KeyClip *>> targets;
+                std::string why;
+                if (c.has("to"))
+                {
+                    if (mKeyClipboard.size() != 1)
+                        return fail("key paste: --to takes keys copied from ONE property; these came from " + std::to_string(mKeyClipboard.size()));
+                    AnimTarget t;
+                    if (!animTarget(c.flag("to"), t, why)) return fail("key paste: " + why);
+                    if (t.shape != mKeyClipboard[0].shape)
+                        return fail("key paste: " + t.address + (t.shape ? " is a shape and the keys are numbers" : " is a number and the keys are shapes"));
+                    targets.push_back({t, &mKeyClipboard[0]});
+                }
+                else
+                    for (const auto &kc : mKeyClipboard)
+                    {
+                        AnimTarget t;
+                        if (!animTarget(addressOf(kc.node, kc.key), t, why)) return fail("key paste: " + why);
+                        targets.push_back({t, &kc});
+                    }
+                double at = 0;
+                const bool hasAt = c.has("at");
+                if (hasAt)
+                {
+                    const std::string a = c.flag("at");
+                    if (!parseDouble(a, at)) return fail("key paste: --at is seconds, got `" + a + "`");
+                }
+                std::set<std::string> addresses;
+                int n = 0;
+                for (const auto &tc : targets)
+                {
+                    if (!curveEditable(tc.first)) return false;
+                    const double base = hasAt ? at : tc.first.now;
+                    for (const auto &k : tc.second->keys)
+                    {
+                        anim::Key shape;
+                        anim::parseSide(k.in, shape.in);
+                        anim::parseSide(k.out, shape.out);
+                        shape.speedIn = k.speedIn; shape.speedOut = k.speedOut; shape.inflIn = k.inflIn; shape.inflOut = k.inflOut;
+                        if (!upsertKey(tc.first, base + k.t, k.v, &shape, &k.shape)) return false;
+                        ++n;
+                    }
+                    addresses.insert(tc.first.address);
+                }
+                return finish("pasted " + std::to_string(n) + " keys", addresses);
+            }
+            default: return fail("key: unknown verb");
+        }
+    }
+
     // ── keeping curves with their nodes ─────────────────────────────────────────────────────────
 
     void InterstellarService::pruneAnims()
@@ -621,6 +778,9 @@ namespace interstellar
     void InterstellarService::fillAnimModel(AppModel &m)
     {
         m.anims.clear();
+        m.keyClipboardCount = 0;
+        m.keyClipboardCurves = (int)mKeyClipboard.size();
+        for (const auto &kc : mKeyClipboard) m.keyClipboardCount += (int)kc.keys.size();
         if (!mOpen) return;
         const Project &P = *mProject;
         for (const auto &a : P.anims)

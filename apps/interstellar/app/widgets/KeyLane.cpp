@@ -29,6 +29,7 @@ namespace interstellar_v1
         mGraph->setHeaderShown(false);   // the column lists the properties
         mGraph->onCommand = [this](const std::string &l) { return onCommand && onCommand(l); };
         mGraph->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
+        mGraph->onPlotContext = [this](double t, Point w) { if (onPlotContext) onPlotContext(t, w); };
         addChild(mGraph);
     }
 
@@ -90,6 +91,8 @@ namespace interstellar_v1
                 mOpenApplied[r.section] = !r.folded;
             }
         if (mSelected.empty() || rowOf(mSelected) < 0) mSelected = mRows.size() > 1 ? mRows[1].address : std::string();
+        mShownRows.erase(std::remove_if(mShownRows.begin(), mShownRows.end(), [&](const std::string &a) { return rowOf(a) < 0; }), mShownRows.end());
+        if (std::find(mShownRows.begin(), mShownRows.end(), mSelected) == mShownRows.end()) mShownRows.push_back(mSelected);
     }
 
     void KeyLane::bindGraph(const interstellar::AppModel &m)
@@ -97,14 +100,16 @@ namespace interstellar_v1
         if (!mHasClip) return;
         std::vector<std::string> ids;
         std::string label;
-        const int i = rowOf(mSelected);
-        if (i >= 0)
+        if (const int i = rowOf(mSelected); i >= 0) label = mRows[(size_t)i].label;
+        for (const auto &addr : mShownRows)
         {
-            label = mRows[(size_t)i].label;
+            const int i = rowOf(addr);
+            if (i < 0) continue;
             if (const interstellar::AnimModel *a = keys::animOf(m, mRows[(size_t)i].node, mRows[(size_t)i].key)) ids.push_back(a->id);
         }
         mGraph->setEmptyText(label + " is not animated \xE2\x80\x94 click \xE2\x97\x87 to key it at the playhead");
         mGraph->setNow(mNow);   // the playhead in the clip — not Grade's reference frame
+        mGraph->setFront(mSelected);
         mGraph->bind(m, ids, mClip.in, mClip.out);
     }
 
@@ -115,10 +120,21 @@ namespace interstellar_v1
         bindGraph(m);
     }
 
-    void KeyLane::select(const std::string &address)
+    void KeyLane::select(const std::string &address, bool add)
     {
         const int i = rowOf(address);
         if (i < 0) return;
+        if (!add) mShownRows.clear();
+        const auto it = std::find(mShownRows.begin(), mShownRows.end(), address);
+        if (add && it != mShownRows.end() && mShownRows.size() > 1)
+        {
+            // Ctrl/Shift-click on a shown property hides it again
+            mShownRows.erase(it);
+            if (mSelected == address) mSelected = mShownRows.back();
+            if (mModel) bindGraph(*mModel);
+            return;
+        }
+        if (it == mShownRows.end()) mShownRows.push_back(address);
         mSelected = address;
         // bring it into view (content coords: the row's top without the scroll)
         mScroll.reveal(rowRect(i).y + mScroll.value() - kTopPad, kRowH);
@@ -242,9 +258,10 @@ namespace interstellar_v1
                     r.folded = mFolded.count(r.section) > 0;
                     return true;
                 }
-                mSelected = r.address;
-                if (mModel) bindGraph(*mModel);
-                if (diamondRect(i).contains(local) && onCommand) onCommand(keys::toggle(r.address, r.state, mNow));
+                const bool onDiamond = diamondRect(i).contains(local);
+                if (!onDiamond || std::find(mShownRows.begin(), mShownRows.end(), r.address) == mShownRows.end())
+                    select(r.address, g.ctrl || g.shift);
+                if (onDiamond && onCommand) onCommand(keys::toggle(r.address, r.state, mNow));
                 return true;
             }
             default: return true;
@@ -281,8 +298,10 @@ namespace interstellar_v1
             }
             const double open = openOf(row.section);
             const bool sel = row.address == mSelected;
+            const bool shownToo = !sel && std::find(mShownRows.begin(), mShownRows.end(), row.address) != mShownRows.end();
             t.pushLayer(open);
             if (sel) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::primaryAlpha(0.16)));
+            else if (shownToo) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::whiteAlpha(0.06)));
             else if (mHover.amount(i) > 0.001) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::hoverWash(mHover.amount(i))));
             t.setFill(sel ? palette::foreground() : palette::mutedForeground());
             t.drawText(textfit::ellipsize(t, row.label, r.w - kPadX - kDiamondW - 4.0, 10.0, font::sans()), kPadX, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());

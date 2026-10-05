@@ -1315,6 +1315,90 @@ namespace
             CHECK(hasLine(r.svc, "key add c1.opacity --at 3"), "the Opacity diamond keys the clip at the playhead");
         }
         {
+            // R-ANIM-7: two curves together, a box across both, a group shift, copy and paste
+            Rig r(1440, 900, [](FakeService &s) {
+                s.edit();
+                s.m.selectedClip = "c1";
+                s.m.playhead = 1.0;
+                s.animate("s_day01.basic.exposure", {{2.0, -1.0}, {5.0, 2.0}});
+                s.animate("s_day01.basic.contrast", {{3.0, 10.0}, {6.0, -20.0}});
+            });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            auto kl = tl->keyLane();
+            kl->select("s_day01.basic.exposure");
+            kl->select("s_day01.basic.contrast", true);   // Ctrl-click: shown together
+            r.settle();
+            auto g = kl->graph();
+            CHECK(g->curveCount() == 2 && g->selectedAddress() == "s_day01.basic.contrast", "two properties drawn together, the last chosen in front");
+            // a box from the plot's top-left to past the first key of each curve
+            const Rect pr = g->plotRect();
+            // dragged from the right to past the plot's left edge (exposure's first key sits ON that edge)
+            const double xMid = (g->keyPointOf(0, 0).x + g->keyPointOf(0, 1).x) * 0.5;
+            const Point b0 = world(*g, std::min(xMid, g->keyPointOf(1, 1).x - 4.0), pr.bottom() - 2.0);
+            const Point b1 = world(*g, pr.x - 6.0, pr.y + 2.0);
+            r.drag(b0.x, b0.y, b1.x, b1.y);
+            std::printf("      box selected %d: %s\n", g->selectionCount(), g->selectionList().c_str());
+            CHECK(g->selectionCount() == 2 && g->isSelected(0, 0) && g->isSelected(1, 0), "a box selects the keys inside it, across both curves");
+            // drag one of them: both move in time together — one command
+            const Point k = world(*g, g->keyPointOf(1, 0).x, g->keyPointOf(1, 0).y);
+            r.svc.lines.clear();
+            r.drag(k.x, k.y, k.x + 25.0, k.y);
+            const std::string sh = withPrefix(r.svc, "key shift --keys ");
+            CHECK(!sh.empty() && sh.find("s_day01.basic.exposure@2") != std::string::npos && sh.find("s_day01.basic.contrast@3") != std::string::npos &&
+                      sh.find("--by ") != std::string::npos, "dragging a selected key shifts the whole selection: key shift --keys … --by dt");
+            r.settle();
+            // Ctrl+C copies the selection; Ctrl+V pastes at the playhead; the empty plot offers paste
+            r.svc.lines.clear();
+            ctrlKey(r, 'C');
+            CHECK(!withPrefix(r.svc, "key copy --keys ").empty(), "Ctrl+C in the key lane copies the selected keys");
+            ctrlKey(r, 'V');
+            CHECK(hasLine(r.svc, "key paste --at 3"), "Ctrl+V pastes them at the playhead (the clip's footage time 3)");
+            const Point e = world(*g, pr.right() - 6.0, pr.y + pr.h * 0.5);
+            r.app->pointer(0, e.x, e.y, 2, r.now);
+            r.app->pointer(2, e.x, e.y, 2, r.now + 40.0);
+            r.pump(250);
+            auto cm = r.app->edit().contextMenu();
+            std::string labels;
+            for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+            CHECK(cm->isOpen() && labels.find("Paste Keys at Playhead") != std::string::npos && labels.find("Paste Keys Here") != std::string::npos,
+                  "right-click on empty plot offers paste at the playhead or there");
+            cm->close();
+        }
+        {
+            // R-ANIM-8: the lane is resized at its top edge, the height saved, and never hides every track
+            Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.selectedClip = "c1"; });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            const double h0 = tl->keyLaneH();
+            const Rect gb = tl->keyLaneGrabRect();
+            const Point a0 = centre(*tl, gb);
+            r.svc.lines.clear();
+            r.drag(a0.x, a0.y, a0.x, a0.y - 40.0);
+            CHECK(tl->keyLaneH() > h0 + 30.0, "dragging the lane's top edge up makes it taller (direct manipulation)");
+            CHECK(!withPrefix(r.svc, "settings set keyLaneHeight=").empty(), "…and the height is saved: settings set keyLaneHeight=<px>");
+            r.svc.m.settings.keyLaneHeight = 600;   // more than the window can give
+            ++r.svc.m.revision;
+            r.settle();
+            CHECK(tl->lanesRect().h >= arstro::interstellar_v1::shell::trackH() - 1e-6, "however tall it is asked to be, one track still shows");
+        }
+        {
+            Rig r(1024, 640, [](FakeService &s) { s.edit(); s.m.selectedClip = "c1"; });
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            CHECK(tl->lanesRect().h >= arstro::interstellar_v1::shell::trackH() - 1e-6 && tl->keyLaneH() >= 80.0 - 1e-6,
+                  "at 1024x640 the lane leaves a track showing and keeps a usable height");
+        }
+        {
             // R-ANIM-6: a shape — the lane lists it; the graph keys it on a row, in time only; Grade edits it
             Rig r(1440, 900, [](FakeService &s) {
                 s.edit();

@@ -47,15 +47,28 @@ namespace interstellar_v1
         mKeyLaneW = std::make_shared<KeyLane>();
         mKeyLaneW->onCommand = [this](const std::string &l) { return emit(l); };
         mKeyLaneW->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
+        mKeyLaneW->onPlotContext = [this](double t, Point w) { if (onKeyPlotContext) onKeyPlotContext(t, w); };
         mKeyLaneW->opacity.set(0.0);
         mKeyLaneW->visible = false;
         addChild(mKeyLaneW);
     }
 
     Rect Timeline::keysToggleRect() const { return Rect{shell::headerWidth() - 9.75 - 18.0, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
+    double Timeline::keyLaneH() const
+    {
+        const double room = height.value() - shell::rulerH() - shell::trackH();   // one track always shows
+        return std::clamp(mLaneH.value(), std::min(kKeyLaneMinH, std::max(0.0, room)), std::max(0.0, room));
+    }
+
+    Rect Timeline::keyLaneGrabRect() const
+    {
+        const Rect r = keyLaneRect();
+        return Rect{0.0, r.y - 6.0, width.value(), 6.0};
+    }
+
     Rect Timeline::keyLaneRect() const
     {
-        const double h = kKeyLaneH * mKeyLane.value();
+        const double h = keyLaneH() * mKeyLane.value();
         return Rect{0.0, height.value() - h, width.value(), h};
     }
 
@@ -64,6 +77,7 @@ namespace interstellar_v1
     void Timeline::bind(const interstellar::AppModel &m)
     {
         mFps = m.fps > 0 ? m.fps : 24.0;
+        if (!mLaneDragging) mLaneHTarget = m.settings.keyLaneHeight > 0 ? m.settings.keyLaneHeight : 140.0;   // R-ANIM-8
         mDuration = std::max(0.0, m.duration);
         mPlayhead = m.playhead;
         mPlaying = m.playing;
@@ -184,7 +198,7 @@ namespace interstellar_v1
     {
         // the key lane, when it is up, takes the bottom (its live eased height)
         return Rect{shell::headerWidth(), shell::rulerH(), std::max(0.0, width.value() - shell::headerWidth()),
-                    std::max(0.0, height.value() - shell::rulerH() - kKeyLaneH * mKeyLane.value())};
+                    std::max(0.0, height.value() - shell::rulerH() - keyLaneH() * mKeyLane.value())};
     }
     double Timeline::laneTop(double laneLive) const { return shell::rulerH() + laneLive * shell::trackH() - mVScroll.value(); }
     Rect Timeline::laneRect(const std::string &trackId) const
@@ -329,6 +343,7 @@ namespace interstellar_v1
         case Gesture::Type::Down:
         {
             if (zoomOutRect().contains(local) || zoomInRect().contains(local) || keysToggleRect().contains(local)) return true;
+            if (mKeyLane.value() > 0.5 && keyLaneGrabRect().contains(local)) { mLaneDragging = true; return true; }   // R-ANIM-8
             if (rulerRect().contains(local) && mDuration > 0.0)
             {
                 mDrag = Drag{};
@@ -390,6 +405,15 @@ namespace interstellar_v1
         case Gesture::Type::DragStart:
         case Gesture::Type::Drag:
         {
+            if (mLaneDragging)
+            {
+                // the pointer is the animation: the lane's top edge follows it
+                const double room = height.value() - shell::rulerH() - shell::trackH();
+                const double h = std::clamp(height.value() - local.y, std::min(kKeyLaneMinH, room), std::max(kKeyLaneMinH, std::min(600.0, room)));
+                mLaneH.set(h);
+                mLaneHTarget = mLaneHLast = h;
+                return true;
+            }
             if (mDrag.kind == DragKind::Scrub)
             {
                 const double t = std::clamp(xToTime(local.x), 0.0, mDuration);
@@ -458,6 +482,12 @@ namespace interstellar_v1
         case Gesture::Type::Up:
         case Gesture::Type::Drop:
         {
+            if (mLaneDragging)
+            {
+                mLaneDragging = false;
+                emit("settings set keyLaneHeight=" + std::to_string((int)std::lround(std::clamp(mLaneH.value(), 80.0, 600.0))));
+                return true;
+            }
             const Drag d = mDrag;
             mDrag = Drag{};
             mGuideWanted = false;
@@ -652,6 +682,13 @@ namespace interstellar_v1
             }
             mScroll.update(nowMs);
         }
+        if (!mLaneDragging && mLaneHTarget != mLaneHLast)
+        {
+            // a height from the model (another session, an undo of a setting) eases there
+            if (mLaneHLast < 0) mLaneH.set(mLaneHTarget); else mLaneH.animateTo(mLaneHTarget, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+            mLaneHLast = mLaneHTarget;
+        }
+        mLaneH.update(nowMs);
         {
             const bool want = mKeysWanted && mKeyClip;
             if (want != mKeyLaneApplied)
@@ -667,7 +704,7 @@ namespace interstellar_v1
             mKeyLaneW->x.set(0);
             mKeyLaneW->y.set(kl.y);
             mKeyLaneW->width.set(width.value());
-            mKeyLaneW->height.set(kKeyLaneH);
+            mKeyLaneW->height.set(keyLaneH());
             mKeyLaneW->opacity.set(ka);
             mKeyLaneW->visible = ka > 0.001 && mKeyClip;
             mKeyLaneW->setColumnWidth(shell::headerWidth());

@@ -57,7 +57,7 @@ namespace interstellar
             {EK::LintReport, "lint.report", {"offline", "dangling", "refused"}, "Counts from `lint`; details follow as info."},
             {EK::HistoryChanged, "history.changed", {"did", "label", "canUndo", "canRedo"},
              "An edit was recorded, undone or redone (did = edit | undo | redo | cleared)."},
-            {EK::SettingsChanged, "settings.changed", {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache"},
+            {EK::SettingsChanged, "settings.changed", {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache", "keyLaneHeight"},
              "Engine settings after a change, all keys."},
             {EK::PresetsChanged, "presets.changed", {"count"}, "The preset library was rescanned."},
             {EK::CacheChanged, "cache.changed", {"timeline", "frames", "total", "building"},

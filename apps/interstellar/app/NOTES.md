@@ -222,7 +222,13 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   drag a key → `key set <a> --at t [--to t'] --value v`; a handle → `--speed-out s --influence-out i`
   (or -in); double-click → `key add <a> --at t`; right-click → the key menu (presets, Speed &
   Influence… via `NamePrompt::showFields`, only changed numbers sent; Delete Key).
-- Shots: `cut_key_lane`, `cut_key_lane_grade`, `cut_key_lane_mid`. UI checks: 299.
+- Several properties at once: Ctrl/Shift-click rows (the last chosen in front). Box-select on empty
+  plot; a selected key's drag with a multi-selection → `key shift --keys "a@t,…" --by dt`. Key menu
+  "Copy Key(s)" → `key copy --keys …`; empty-plot menu → `key paste --at <t>` / `--to <front>`;
+  Ctrl+C/V copy/paste keys in Cut when the lane has a selection or the clipboard has keys.
+- The lane's top edge (a 6-px band above it) resizes it → `settings set keyLaneHeight=<px>`; it never
+  hides the last track.
+- Shots: `cut_key_lane`, `cut_key_lane_grade`, `cut_key_lane_mid`, `cut_key_lane_multi`. UI checks: 326.
 
 ## Integrating (the GTK host)
 

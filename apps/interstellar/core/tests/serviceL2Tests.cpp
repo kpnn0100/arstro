@@ -1149,6 +1149,45 @@ int main()
         assert(has(f.out("get edge.xform.crop"), "0.2,0,0.6,1"));
     });
 
+    test("several keys at once: shift together, copy, paste to the same or another property; the lane's height persists (R-ANIM-7, R-ANIM-8)", [] {
+        Fixture f("animkeys");
+        f.standard();
+        f.must("key add a.basic.exposure --at 0 --value 0");
+        f.must("key add a.basic.exposure --at 1 --value 1");
+        f.must("key add shotA.opacity --at 0 --value 0");
+        f.must("key add shotA.opacity --at 1.5 --value 1");
+        auto keysOf = [&](const std::string &address) {
+            std::vector<double> v;
+            for (const auto &a : f.svc->model().anims)
+                if (a.address == address) for (const auto &k : a.keys) v.push_back(k.t);
+            return v;
+        };
+        // a box-selection across two curves, moved together: one command, one undo step
+        f.must("key shift --keys \"a.basic.exposure@1,shotA.opacity@1.5\" --by 0.25");
+        assert(keysOf("a.basic.exposure") == std::vector<double>({0.0, 1.25}) && keysOf("shotA.opacity") == std::vector<double>({0.0, 1.75}));
+        std::string err;
+        assert(!f.run("key shift --keys \"a.basic.exposure@0\" --by 1.25", &err) && has(err, "would meet"));
+        assert(!f.run("key shift --keys \"a.basic.exposure@0.5\" --by 1", &err) && has(err, "no key at"));
+        f.must("undo");
+        assert(keysOf("a.basic.exposure") == std::vector<double>({0.0, 1.0}));
+        // copy two keys of one property; paste them at 3 s onto the same property, then onto another clip's
+        f.must("key copy --keys \"shotA.opacity@0,shotA.opacity@1.5\"");
+        assert(f.svc->model().keyClipboardCount == 2 && f.svc->model().keyClipboardCurves == 1);
+        f.must("key paste --at 3");
+        assert(keysOf("shotA.opacity") == std::vector<double>({0.0, 1.5, 3.0, 4.5}));
+        f.must("key paste --to shotB.opacity --at 0");
+        assert(keysOf("shotB.opacity") == std::vector<double>({0.0, 1.5}));
+        assert(!f.run("key paste --to a.curve.curve", &err) && has(err, "is a shape"));
+        f.must("key copy --keys \"a.basic.exposure@0,shotA.opacity@0\"");
+        assert(!f.run("key paste --to shotB.opacity", &err) && has(err, "ONE property"));
+        assert(!f.run("key copy --keys \"nonsense\"", &err) && has(err, "<address>@<seconds>"));
+        // R-ANIM-8: the lane's height is a setting, bounded, persisted
+        f.must("settings set keyLaneHeight=220");
+        assert(!f.run("settings set keyLaneHeight=20", &err) && has(err, "80..600"));
+        f.svc = f.make();
+        assert(f.svc->model().settings.keyLaneHeight == 220);
+    });
+
     test("the preview cache holds the graded frames, rebuilds only what an edit changed, and playback reads it (R-PLAY-1)", [] {
         Fixture f("pcache");
         f.standard();                                             // shotA 0–2 s, shotB 2–4 s: four 1-s segments

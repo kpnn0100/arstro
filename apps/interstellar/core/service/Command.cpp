@@ -146,7 +146,7 @@ namespace interstellar
             {K::SettingsSet, "settings set", "<key>=<value> …", 1, -1, {},
              "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu "
              "(0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit), previewCache (0|1: build the graded "
-             "preview cache when idle). Persisted; one CPU budget for the rack and "
+             "preview cache when idle), keyLaneHeight (px, 80..600: the Cut key lane). Persisted; one CPU budget for the rack and "
              "the render path.", "R-SET-1", true},
             {K::PresetApply, "preset apply", "<name>", 1, 1, {"node=<bind>"},
              "Apply a library preset to a rack source (the Grade target by default). Root timeline only.",
@@ -188,6 +188,14 @@ namespace interstellar
              "Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per "
              "second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a "
              "bezier. --ease applies a preset.", "R-ANIM-2"},
+            {K::KeyShift, "key shift", "", 0, 0, {"keys=<address@t,…>", "by=<s>"},
+             "Move several keyframes in time together, by --by seconds (one undo step) — a box-selection dragged in the "
+             "graph. Refused when a key would land on another of its curve.", "R-ANIM-7"},
+            {K::KeyCopy, "key copy", "", 0, 0, {"keys=<address@t,…>"},
+             "Copy keyframes (their values, shapes and sides, times relative to the earliest) to the key clipboard.", "R-ANIM-7"},
+            {K::KeyPaste, "key paste", "", 0, 0, {"at=<t>", "to=<address>"},
+             "Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties "
+             "they came from, or onto --to when one property was copied. Same-time keys are replaced.", "R-ANIM-7"},
             {K::KeyClear, "key clear", "<address>", 1, 1, {},
              "Remove a parameter's curve; the value it had now stays as the parameter's own.", "R-ANIM-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},

@@ -291,6 +291,7 @@ namespace interstellar
             case CK::Render: case CK::RenderCancel: ok = requireProject() && renderCommand(c); break;
             case CK::CacheBuild: case CK::CacheClear: ok = requireProject() && cacheCommand(c); break;
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: ok = requireProject() && animCommand(c); break;
+            case CK::KeyShift: case CK::KeyCopy: case CK::KeyPaste: ok = requireProject() && keysCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::Capture:
             {

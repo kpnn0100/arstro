@@ -61,7 +61,7 @@ namespace interstellar
             // the graded preview cache (R-PLAY-1)
             CacheBuild, CacheClear,
             // keyframes (R-ANIM)
-            KeyAdd, KeyRemove, KeySet, KeyClear,
+            KeyAdd, KeyRemove, KeySet, KeyClear, KeyShift, KeyCopy, KeyPaste,
             // introspection
             StatePrint, Api, Lint, Wait, Quit
         };

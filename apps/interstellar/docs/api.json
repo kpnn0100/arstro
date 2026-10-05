@@ -773,7 +773,7 @@
       "minArgs": 1,
       "maxArgs": -1,
       "flags": [],
-      "summary": "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu (0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit), previewCache (0|1: build the graded preview cache when idle). Persisted; one CPU budget for the rack and the render path.",
+      "summary": "Engine settings: cpuPercent (25|50|75|100), threads (0=auto), previewEdge (px), useGpu (0|1), uiScale (%), hardwareVideo (0|1: H.264/H.265 on the GPU's video unit), previewCache (0|1: build the graded preview cache when idle), keyLaneHeight (px, 80..600: the Cut key lane). Persisted; one CPU budget for the rack and the render path.",
       "requirement": "R-SET-1"
     },
     {
@@ -1019,6 +1019,59 @@
       ],
       "summary": "Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a bezier. --ease applies a preset.",
       "requirement": "R-ANIM-2"
+    },
+    {
+      "verb": "key shift",
+      "usage": "key shift [--keys <address@t,…>] [--by <s>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "keys",
+          "value": "<address@t,…>"
+        },
+        {
+          "name": "by",
+          "value": "<s>"
+        }
+      ],
+      "summary": "Move several keyframes in time together, by --by seconds (one undo step) — a box-selection dragged in the graph. Refused when a key would land on another of its curve.",
+      "requirement": "R-ANIM-7"
+    },
+    {
+      "verb": "key copy",
+      "usage": "key copy [--keys <address@t,…>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "keys",
+          "value": "<address@t,…>"
+        }
+      ],
+      "summary": "Copy keyframes (their values, shapes and sides, times relative to the earliest) to the key clipboard.",
+      "requirement": "R-ANIM-7"
+    },
+    {
+      "verb": "key paste",
+      "usage": "key paste [--at <t>] [--to <address>]",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [
+        {
+          "name": "at",
+          "value": "<t>"
+        },
+        {
+          "name": "to",
+          "value": "<address>"
+        }
+      ],
+      "summary": "Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced.",
+      "requirement": "R-ANIM-7"
     },
     {
       "verb": "key clear",
@@ -1357,7 +1410,8 @@
         "useGpu",
         "uiScale",
         "hardwareVideo",
-        "previewCache"
+        "previewCache",
+        "keyLaneHeight"
       ],
       "summary": "Engine settings after a change, all keys."
     },
@@ -2115,6 +2169,18 @@
       "doc": "Every animated parameter — its curve (R-ANIM-1)."
     },
     {
+      "path": "keyClipboardCount",
+      "type": "integer",
+      "stable": true,
+      "doc": "Keyframes `key copy` holds; 0 = none (R-ANIM-7)."
+    },
+    {
+      "path": "keyClipboardCurves",
+      "type": "integer",
+      "stable": true,
+      "doc": "…from how many properties (`key paste --to` needs exactly one)."
+    },
+    {
       "path": "anims[].id",
       "type": "string",
       "stable": true,
@@ -2455,6 +2521,12 @@
       "type": "integer",
       "stable": true,
       "doc": "Cap on the monitor's render long edge, px; 0 = full. Renders are unaffected."
+    },
+    {
+      "path": "settings.keyLaneHeight",
+      "type": "integer",
+      "stable": true,
+      "doc": "The Cut key lane's height, px, 80..600 — dragged at its top edge (R-ANIM-8)."
     },
     {
       "path": "settings.previewCache",

@@ -102,9 +102,15 @@ namespace interstellar_v1
         std::function<void(const std::string &trackId, double t, artboard::Point world)> onLaneContext;
         /** R-ANIM-4: a right-click on a keyframe in the key lane — `address`, key time, WORLD point. */
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
+        std::function<void(double t, artboard::Point world)> onKeyPlotContext;   // right-click on the lane's empty plot
 
         // ── the key lane (R-ANIM-3/4): where animation is authored — the selected clip's properties ──
-        static constexpr double kKeyLaneH = 140.0;
+        static constexpr double kKeyLaneMinH = 80.0;
+        /** The lane's height now: the setting (R-ANIM-8), or the drag in flight, never more than leaves
+         *  one track showing. */
+        double keyLaneH() const;
+        artboard::Rect keyLaneGrabRect() const;   // the band above the lane that resizes it
+        bool resizingKeyLane() const { return mLaneDragging; }
         /** Show the key lane under the tracks while a clip is selected. Intent only; it eases. */
         void setKeysShown(bool on) { mKeysWanted = on; }
         bool keysShown() const { return mKeysWanted; }
@@ -206,6 +212,9 @@ namespace interstellar_v1
         // the key lane (R-ANIM)
         std::shared_ptr<KeyLane> mKeyLaneW;
         bool mKeysWanted = false, mKeyLaneApplied = false;
+        artboard::AnimatedProperty mLaneH{140.0};
+        double mLaneHTarget = 140.0, mLaneHLast = -1.0;
+        bool mLaneDragging = false;
         artboard::AnimatedProperty mKeyLane{0.0};
         bool mKeyClip = false;
         interstellar::ClipModel mKeyClipData;

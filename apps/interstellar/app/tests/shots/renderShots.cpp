@@ -177,6 +177,20 @@ namespace
             r.releaseAt(k.x, k.y);
             r.settle();
         }});
+        v.push_back({"cut_key_lane_multi", animated, [](Rig &r) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            tl->keyLane()->select("s_day01.basic.contrast");
+            tl->keyLane()->select("s_day01.basic.exposure", true);
+            r.settle();
+            auto g = tl->keyLane()->graph();
+            g->selectKey(0, 1, false);
+            g->selectKey(1, 1, true);
+            r.settle();
+        }});
         v.push_back({"cut_key_lane_mid", animated, [](Rig &r) {
             r.app->setTab(1);
             r.settle();

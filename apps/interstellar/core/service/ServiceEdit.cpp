@@ -91,7 +91,7 @@ namespace interstellar
             case CK::TransitionAdd: case CK::MarkerAdd: case CK::FxAdd: case CK::FxDelete:
             case CK::AudioTrackAdd: case CK::AudioClipAdd: case CK::GradePaste: case CK::PresetApply:
             case CK::ClipPaste: case CK::EffectAdd: case CK::EffectRemove: case CK::EffectMove:
-            case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear:
+            case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: case CK::KeyShift: case CK::KeyPaste:
                 return true;
             default: return false;
         }
@@ -404,6 +404,11 @@ namespace interstellar
                 if (f.second != "0" && f.second != "1") return fail("settings: " + f.first + " is 0 or 1");
                 (f.first == "hardwareVideo" ? next.hardwareVideo : next.previewCache) = f.second == "1";
             }
+            else if (f.first == "keyLaneHeight")
+            {
+                if (!num || v < 80 || v > 600) return fail("settings: keyLaneHeight is 80..600 px");
+                next.keyLaneHeight = (int)v;
+            }
             else if (f.first == "uiScale")
             {
                 const auto &ok = cosmo::AppSettings::uiScales();
@@ -417,7 +422,7 @@ namespace interstellar
             }
             else
             {
-                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache"});
+                const auto near = nearest(f.first, {"cpuPercent", "threads", "previewEdge", "useGpu", "uiScale", "hardwareVideo", "previewCache", "keyLaneHeight"});
                 return fail("settings: no setting `" + f.first + "`" + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
             }
         }
@@ -446,6 +451,7 @@ namespace interstellar
             else if (k == "uiScale") mSettings.uiScale = cosmo::AppSettings::clampUiScale(v);
             else if (k == "hardwareVideo") mSettings.hardwareVideo = v != 0;
             else if (k == "previewCache") mSettings.previewCache = v != 0;
+            else if (k == "keyLaneHeight" && v >= 80 && v <= 600) mSettings.keyLaneHeight = v;
         }
     }
 
@@ -457,7 +463,7 @@ namespace interstellar
         std::ofstream f(mHost.settingsPath, std::ios::trunc);
         f << "cpuPercent=" << mSettings.cpuPercent << "\nthreads=" << mSettings.threads << "\npreviewEdge="
           << mSettings.previewEdge << "\nuseGpu=" << (mSettings.useGpu ? 1 : 0) << "\nuiScale=" << mSettings.uiScale
-          << "\nhardwareVideo=" << (mSettings.hardwareVideo ? 1 : 0) << "\npreviewCache=" << (mSettings.previewCache ? 1 : 0) << "\n";
+          << "\nhardwareVideo=" << (mSettings.hardwareVideo ? 1 : 0) << "\npreviewCache=" << (mSettings.previewCache ? 1 : 0) << "\nkeyLaneHeight=" << mSettings.keyLaneHeight << "\n";
         return (bool)f;
     }
 
@@ -486,7 +492,8 @@ namespace interstellar
                  .with("useGpu", mSettings.useGpu)
                  .with("uiScale", mSettings.uiScale)
                  .with("hardwareVideo", mSettings.hardwareVideo)
-                 .with("previewCache", mSettings.previewCache));
+                 .with("previewCache", mSettings.previewCache)
+                 .with("keyLaneHeight", mSettings.keyLaneHeight));
     }
 
     void InterstellarService::rescanPresets()

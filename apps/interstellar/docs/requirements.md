@@ -792,6 +792,33 @@ file keeps the text; a pinned version stays put when the base's wheel changes; t
 stays — red with shapes skipped on the render path) and the UI test (the lane lists them; a key row;
 a vertical drag says nothing, a sideways one moves time only; the menu's Grade jump).
 
+### DR-ANIM-4 The graph edits like an editor's; the lane sizes itself (R-ANIM-7, R-ANIM-8)
+**Several curves.** In the key lane a Ctrl/Shift-click on a property adds it to the graph (again
+removes it); the last chosen is in FRONT. `KeyGraph` (rewritten, `app/widgets/KeyGraph.cpp`) draws
+every chosen curve, each normalised to its own fitted range (eased per curve), the front one on top
+with its value axis and handles, the others quieter; shapes are spread as rows. **Selection** is by
+(property, time) and survives a rebind: a click selects a key, Shift adds or removes, a box dragged
+on empty plot selects every key inside it across curves (`:364`, `:425`). Dragging a selected key of
+a multi-selection moves them all in time (`:378`) and dispatches ONE line — `key shift --keys
+"<address>@<t>,…" --by <dt>` (`ServiceAnim.cpp:541`), refused when two keys of a curve would meet
+(`:559`), undone in one step. **Copy/paste**: `key copy --keys …` keeps values, shapes and sides with
+times relative to the earliest; `key paste [--at t] [--to <address>]` (`:588`) lands the earliest at
+`--at` (default each curve's now) on the properties they came from, or onto `--to` when one property
+was copied (number vs shape checked). The key menu gains "Copy Key(s)"; a right-click on empty plot
+offers "Paste Keys at Playhead", "Paste Keys Here" and "Paste onto <front>" (`App.cpp:494`); Ctrl+C /
+Ctrl+V in the Cut tab copy and paste keys first when the lane holds a selection or the clipboard holds
+keys (`:754`). Model: `keyClipboardCount`, `keyClipboardCurves`.
+**The lane's size** (R-ANIM-8): `settings.keyLaneHeight` (80..600, persisted) is the lane's height,
+eased when the model changes it; a 6-px band above the lane resizes it by direct manipulation and
+saves the height on release (`Timeline.cpp:410`); `keyLaneH()` (`:57`) never takes more than leaves
+one track showing, so at 1024×640 the tracks stay visible and the lane stays usable.
+Guarded by L2 `several keys at once…` (shift across two curves; a collision refused — red with the
+check removed; undo; copy two keys, paste at 3 s and onto another clip; a shape target refused; one
+property required for --to; the setting bounded and persisted) and the UI test (two curves drawn,
+the last in front; a box selects across both; a selected key's drag dispatches `key shift`; Ctrl+C /
+Ctrl+V; the plot's paste menu; the lane resized and saved; one track still shows when asked for 600
+px and at 1024×640). Shot `cut_key_lane_multi`.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

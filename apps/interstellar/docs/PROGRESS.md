@@ -64,8 +64,8 @@ one integrator who moves, wires, tests and commits each stream:
              lists the clip's properties, its source's colour keys and effects (R-ANIM-3/4 amended).
       2. [x] Waveform Luma | RGB overlay (R-UI-15 amended).
       3. [x] Collapsible effect sections in the effect panel (R-FX-5 amended).
-      4. [~] Keyframe limits: shapes animate — DONE (DR-ANIM-3); multi-curve graph, box-select,
-             copy/paste keys, resizable lane (R-ANIM-7, R-ANIM-8) next.
+      4. [x] Keyframe limits: shapes animate (DR-ANIM-3); multi-curve graph, box-select, copy/paste
+             keys, resizable lane (DR-ANIM-4).
       5. [ ] The grade on the GPU — route the video grade through Cosmo's GL backend (R-GPU-1).
       6. [ ] 16-bit delivery path (R-COLOR-1).
       7. [ ] Input/working/output transforms, HDR, LUTs in and out (R-COLOR-2..6).

@@ -218,7 +218,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — 🚧 IN PROGRESS (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the diamonds and the graph editor; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day)
+## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the key lane, DR-ANIM-3 shapes, DR-ANIM-4 the graph and the lane's size; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
@@ -253,10 +253,10 @@ The headline of this specification, and the reason it is not the first one.
   (hue, saturation, luminance — hue takes the short way round) and the crop are keyed like numbers;
   between two keys a curve's points are interpolated point by point (resampled when their counts
   differ). A shape key is still the rack's (law 2): a version cannot carry its own.
-- **R-ANIM-7 The graph edits like an editor's** (added 2026-10-05, user request): several curves at
+- **R-ANIM-7 The graph edits like an editor's** (added 2026-10-05, user request; ✅ DR-ANIM-4): several curves at
   once (each normalised to its own range, the selected one in front), box-select of keys across
   them, moving a selection together, and copy/paste of keys to the playhead or another property.
-- **R-ANIM-8 The key lane is usable at 1024×640** (added 2026-10-05, user request): its height is
+- **R-ANIM-8 The key lane is usable at 1024×640** (added 2026-10-05, user request; ✅ DR-ANIM-4): its height is
   dragged at its top edge (remembered), its property list scrolls, and it never hides the tracks
   completely.
 - **R-ANIM-5 Animation is the rack's, like colour** (law 2): a curve is not a scalar, so a derived

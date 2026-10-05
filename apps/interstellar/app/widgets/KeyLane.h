@@ -71,7 +71,9 @@ namespace interstellar_v1
         artboard::Rect rowRect(int i) const;       // local, scrolled — where it is DRAWN
         artboard::Rect diamondRect(int i) const;
         const std::string &selected() const { return mSelected; }
-        void select(const std::string &address);
+        /** Choose `address` (add = keep the others shown too: the graph draws them together, R-ANIM-7). */
+        void select(const std::string &address, bool add = false);
+        const std::vector<std::string> &shown() const { return mShownRows; }
         std::shared_ptr<KeyGraph> graph() { return mGraph; }
         double scrollTarget() const { return mScroll.target(); }
         double scrollValue() const { return mScroll.value(); }
@@ -80,6 +82,7 @@ namespace interstellar_v1
 
         std::function<bool(const std::string &)> onCommand;
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
+        std::function<void(double t, artboard::Point world)> onPlotContext;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
@@ -103,7 +106,8 @@ namespace interstellar_v1
         };
         std::map<std::string, DiamondAnim> mDia;   // by address: a key's diamond fills, eased
         double rowH(int i) const;
-        std::string mSelected = "";             // the chosen property's address
+        std::string mSelected = "";             // the chosen (front) property's address
+        std::vector<std::string> mShownRows;    // every property chosen, in click order (the graph draws them)
         bool mHasClip = false;
         interstellar::ClipModel mClip;
         double mNow = 0.0;
