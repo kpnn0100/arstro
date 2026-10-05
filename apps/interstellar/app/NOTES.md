@@ -165,6 +165,18 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   Here, Add Video/Audio Track.
 - Shots added: `cut_drop_source`, `cut_roll_mid`, `cut_slip_mid`, `cut_clip_menu`. UI checks: 253.
 
+## The IMAGE PROCESSING list (2026-10-05, R-FX-5; R-RACK-4 amended)
+
+- Under the histogram: Cosmo first (switch = bypass, mix = weight), then the node's effects (switch,
+  mix %, × on hover). Click selects (presentation); right-click: Move Up / Move Down / Enable /
+  Remove; "+ Add": the catalog (Gaussian, Box, Directional, Zoom, Spin), the new one selected.
+- Cosmo selected → its Mix slider + cosmo's tabs; an effect selected → `EffectPanel` (Mix + the
+  catalog's parameters as cosmo SliderRows), cross-faded.
+- The rack row's weight bar is gone (and its "weight N%" caption): the weight is Cosmo's Mix.
+- The column is taller than before: cosmo's Mixer/Curve page scrolls to the curve (wheel).
+- Shots added: `grade_plugins_effect`, `grade_plugins_swap_mid` (`grade_weight_caption` retired).
+  UI checks: 266.
+
 ## Integrating (the GTK host)
 
 ```cpp
@@ -235,7 +247,9 @@ it — `TabSwitcher` is the same look with `highlightPos()` public), `MaskPanel`
 | rack row, filmstrip cell, source-bin row | `rack select <bind>` |
 | rack group chevron, double-click a group row or folder chip, breadcrumb crumb | — (presentation: open/shut, the strip's level) |
 | rack bypass toggle | `set <bind>.bypass=1` / `=0` |
-| rack weight bar (drag, 0.01 steps) | `set <bind>.weight=<0..1>` |
+| Cosmo's Mix slider (IMAGE PROCESSING, Cosmo selected) | `set <bind>.weight=<0..1>` |
+| plugin switch · × · Move Up/Down · + Add | `set <bind>.bypass=0|1` (Cosmo) / `set <ef>.enabled=0|1` · `effect remove <ef>` · `effect move <ef> --to <i>` · `effect add <bind> --type <t>` |
+| effect panel sliders | `set <ef>.mix=<0..1>`, `set <ef>.<param>=<v>` |
 | reference-frame slider (drag previews in the monitor through `renderSource`; on release) | `rack frame <bind> --at <t>` (on the source's own frame grid, `rack[].mediaFps`) |
 | reference-frame ‹ / › (one source frame) | `rack frame <bind> --at <frame ∓ 1/mediaFps>` |
 | Basic/Detail sliders | `set <bind>.basic.<exposure·contrast·highlights·shadows·whites·blacks·temp·tint·vibrance·saturation·texture·clarity·dehaze·grainAmount·grainSize>=<v>` and `set <bind>.detail.<sharpenAmount·sharpenRadius·sharpenMasking·nrLuminance·nrColor·lensDistortion·lensCA·lensVignette>=<v>` — engine units via cosmo's `toEv`, `toKelvin`, `toTint`, `toRadiusPx` |

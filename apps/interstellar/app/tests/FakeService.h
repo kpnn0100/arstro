@@ -118,6 +118,27 @@ namespace istest
             m.projectName = "Night Ferry \xE2\x80\x94 Day 3";
         }
 
+        static EffectModel effect(const char *id, const char *node, const char *bind, const std::string &type, int order, bool enabled, double mix)
+        {
+            EffectModel e;
+            e.id = id; e.node = node; e.nodeBind = bind; e.type = type; e.order = order; e.enabled = enabled; e.mix = mix;
+            e.family = "Blur";
+            if (type == "blur.gaussian") { e.label = "Gaussian Blur"; e.params = {{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0}}; }
+            else if (type == "blur.box") { e.label = "Box Blur"; e.params = {{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0}}; }
+            else if (type == "blur.directional")
+            {
+                e.label = "Directional Blur";
+                e.params = {{"length", "Length", "px", 30.0, 30.0, 0.0, 400.0}, {"angle", "Angle", "deg", 0.0, 0.0, -180.0, 180.0}};
+            }
+            else
+            {
+                e.label = type == "blur.zoom" ? "Zoom Blur" : "Spin Blur";
+                e.params = {{type == "blur.zoom" ? "amount" : "angle", type == "blur.zoom" ? "Amount" : "Angle", type == "blur.zoom" ? "" : "deg", 0.2, 0.2, 0.0, 1.0},
+                            {"centerX", "Centre X", "", 0.5, 0.5, 0.0, 1.0}, {"centerY", "Centre Y", "", 0.5, 0.5, 0.0, 1.0}};
+            }
+            return e;
+        }
+
         static RackNodeModel node(int id, const char *ro, const char *bind, const char *name, int parent, int depth, bool group)
         {
             RackNodeModel n;
@@ -160,6 +181,14 @@ namespace istest
             n = node(8, "ro8", "s_drone01", "DJI_0042 approach", -1, 0, false);
             n.video = true; n.media = "/footage/DJI_0042.mp4"; n.pending = true; n.usedBy = 1; m.rack.push_back(n);
             selectRack(1);
+
+            // R-FX-5: s_day01 carries a plugin stack; the catalog is the service's
+            m.effectTypes = {{"blur.gaussian", "Gaussian Blur", "Blur"}, {"blur.box", "Box Blur", "Blur"},
+                             {"blur.directional", "Directional Blur", "Blur"}, {"blur.zoom", "Zoom Blur", "Blur"},
+                             {"blur.spin", "Spin Blur", "Blur"}};
+            m.effects.clear();
+            m.effects.push_back(effect("ef_1", "ro2", "s_day01", "blur.gaussian", 0, true, 0.8));
+            m.effects.push_back(effect("ef_2", "ro2", "s_day01", "blur.directional", 1, false, 1.0));
 
             TimelineModel tl;
             m.timelines.clear();
@@ -327,6 +356,21 @@ namespace istest
             }
             else if (a[0] == "clip" && a.size() >= 3 && a[1] == "delete")
                 m.clips.erase(std::remove_if(m.clips.begin(), m.clips.end(), [&](const ClipModel &c) { return c.id == a[2]; }), m.clips.end());
+            else if (a[0] == "effect" && a.size() >= 3 && a[1] == "add")
+            {
+                std::string type, node;
+                for (size_t k = 3; k + 1 < a.size(); ++k) if (a[k] == "--type") type = a[k + 1];
+                for (const auto &n : m.rack) if (n.bindName == a[2]) node = n.rackObj;
+                int order = 0;
+                for (const auto &e : m.effects) order += e.node == node;
+                m.effects.push_back(effect(("ef_" + std::to_string(m.effects.size() + 10)).c_str(), node.c_str(), a[2].c_str(), type, order, true, 1.0));
+            }
+            else if (a[0] == "effect" && a.size() >= 3 && a[1] == "remove")
+            {
+                m.effects.erase(std::remove_if(m.effects.begin(), m.effects.end(), [&](const EffectModel &e) { return e.id == a[2]; }), m.effects.end());
+                std::map<std::string, int> next;   // the service keeps each stack's order dense
+                for (auto &e : m.effects) e.order = next[e.node]++;
+            }
             else if (a[0] == "set" && a.size() >= 2)
             {
                 for (size_t k = 1; k < a.size(); ++k)
@@ -334,6 +378,13 @@ namespace istest
                     const auto eq = a[k].find('='), dot = a[k].find('.');
                     if (eq == std::string::npos || dot == std::string::npos) continue;
                     const std::string bind = a[k].substr(0, dot), key = a[k].substr(dot + 1, eq - dot - 1), val = a[k].substr(eq + 1);
+                    for (auto &e : m.effects)
+                        if (e.id == bind)
+                        {
+                            if (key == "enabled") e.enabled = val == "1";
+                            else if (key == "mix") e.mix = std::stod(val);
+                            else for (auto &p : e.params) if (p.key == key) p.value = std::stod(val);
+                        }
                     for (auto &n : m.rack)
                         if (n.bindName == bind)
                         {

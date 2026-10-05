@@ -67,6 +67,9 @@ namespace interstellar_v1
         mEdit->gradeDeck()->thumbnail = mHooks.thumbnail;
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
+        // the image-processing stack (R-FX-5): the catalog menu and a row's menu
+        mEdit->gradeInspector()->onAddEffect = [this](Rect r) { openAddEffectMenu(r); };
+        mEdit->gradeInspector()->onPluginContext = [this](const std::string &id, Point w) { openPluginContext(id, w); };
         // the Cut tab, like an editor (R-UI-14)
         mEdit->onDropSource = [this](const std::string &src, const std::string &track, double at) { dropSource(src, track, at); };
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
@@ -371,6 +374,58 @@ namespace interstellar_v1
             }});
         items.push_back({"Save Frame...", [this] { if (onPickFrameToSave) onPickFrameToSave(); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+        noteActivity();
+    }
+
+    // ── the image-processing stack (R-FX-5) ──
+
+    /** "+ Add" in the IMAGE PROCESSING list: the catalog, each item `effect add <node> --type <t>`;
+     *  the new effect is selected so its parameters are what shows next. */
+    void App::openAddEffectMenu(Rect at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        const std::string node = selectedBind();
+        if (node.empty()) return;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &t : m.effectTypes)
+            items.push_back({t.label, [this, node, type = t.type] {
+                std::set<std::string> before;
+                for (const auto &e : (mHooks.model ? mHooks.model() : emptyModel()).effects) before.insert(e.id);
+                if (!dispatch("effect add " + cmd::quote(node) + " --type " + type)) return;
+                for (const auto &e : (mHooks.model ? mHooks.model() : emptyModel()).effects)
+                    if (!before.count(e.id)) mEdit->gradeInspector()->plugins()->select(e.id);
+            }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+        noteActivity();
+    }
+
+    /** Right-click on a plugin row: reorder, switch, remove — Cosmo's row only switches. */
+    void App::openPluginContext(const std::string &id, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (id.empty())
+        {
+            if (m.selectedRack < 0 || m.selectedRack >= (int)m.rack.size()) return;
+            const auto &n = m.rack[(size_t)m.selectedRack];
+            items.push_back({n.bypass ? "Enable Cosmo" : "Disable Cosmo", [this, b = n.bindName, on = !n.bypass] {
+                dispatch("set " + cmd::quote(b + ".bypass=" + (on ? "1" : "0")));
+            }});
+        }
+        else
+        {
+            const interstellar::EffectModel *e = nullptr;
+            int count = 0;
+            for (const auto &x : m.effects) if (x.id == id) e = &x;
+            if (!e) return;
+            for (const auto &x : m.effects) count += x.node == e->node;
+            const std::string q = cmd::quote(id);
+            if (e->order > 0) items.push_back({"Move Up", [this, q, to = e->order - 1] { dispatch("effect move " + q + " --to " + std::to_string(to)); }});
+            if (e->order < count - 1) items.push_back({"Move Down", [this, q, to = e->order + 1] { dispatch("effect move " + q + " --to " + std::to_string(to)); }});
+            items.push_back({e->enabled ? "Disable" : "Enable", [this, q, on = !e->enabled] { dispatch("set " + q + ".enabled=" + (on ? "1" : "0")); }});
+            items.push_back({"Remove", [this, q] { dispatch("effect remove " + q); }});
+        }
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
     }
 

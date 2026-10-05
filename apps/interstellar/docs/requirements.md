@@ -650,3 +650,20 @@ the plugins not applied — and the model round-trip (`#effect` byte-exact, refu
 output over the input. Guarded by the render suite: every blur leaves a flat field flat; Gaussian
 symmetric, energy kept within 3 %, less spread at half scale; directional along its angle only
 (red with the angle ignored); zoom and spin keep their centre; mix 0 = input, 0.5 = half way.
+
+### DR-UI-16 The IMAGE PROCESSING list and the effect panel; the weight leaves the rack row (R-FX-5, R-RACK-4 amended)
+`PluginList` (`app/widgets/PluginList.cpp`) under the histogram shows the Grade target's stack:
+Cosmo first (switch = `set <bind>.bypass`, its mix % = the weight), then the node's effects in order
+(switch = `set <ef>.enabled`, mix %, a × on hover = `effect remove`); its height eases with its row
+count; rows travel (AnimatedRows); switches slide. A row click SELECTS it (presentation); a
+right-click asks the app for Move Up / Move Down / Enable / Remove (`app/App.cpp`
+`openPluginContext`), "+ Add" for the catalog (`openAddEffectMenu`, which selects the new effect).
+`GradeInspector` (`app/widgets/GradeInspector.cpp` `layout`) lays out histogram · list · then
+Cosmo's **Mix** slider (`set <bind>.weight`) and cosmo's tabs, or the selected effect's
+`EffectPanel` (Mix + the catalog's parameters as cosmo `SliderRow`s, `set <ef>.<key>`), cross-faded
+through one eased amount. The rack row lost its weight bar, its drag and its caption
+(`app/widgets/RackTree.cpp`). Guarded by `testPluginList` (Cosmo's switch and Mix, an effect's
+switch, select → the panel CROSS-FADES — red when set —, Radius, + Add → the catalog → `effect
+add … --type blur.zoom` selected, × → `effect remove`, right-click → Move Down/Remove), the rack
+test's "no weight bar to drag", and the motion test's sliding switch; shots `grade_populated`,
+`grade_plugins_effect`, `grade_plugins_swap_mid` (both sizes, looked at).

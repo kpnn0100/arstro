@@ -137,7 +137,7 @@ namespace
         v.push_back({"edit_menu_preset", [](FakeService &s) { s.edit(); s.m.presets = {{"Film/Warm fade", "Film"}, {"Film/Bleach", "Film"}, {"Soft skin", ""}}; ++s.m.revision; },
                      [openMenu](Rig &r) { r.settle(); openMenu(r, 4, 400); }});
         v.push_back({"edit_settings", edit, [](Rig &r) { r.settle(); r.app->openSettings(); r.settle(); }});
-        // cosmo's selection + right-click menu on rack items; the weight bar's caption
+        // cosmo's selection + right-click menu on rack items
         v.push_back({"grade_multiselect", [](FakeService &s) { s.edit(); for (int k : {1, 2, 3}) s.m.rack[(size_t)k].selected = true; ++s.m.revision; },
                      [](Rig &r) { r.settle(); }});
         v.push_back({"grade_context_menu", edit, [](Rig &r) {
@@ -149,13 +149,16 @@ namespace
             r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
             r.settle();
         }});
-        v.push_back({"grade_weight_caption", edit, [](Rig &r) {
+        // the IMAGE PROCESSING list (R-FX-5): Cosmo selected (its Mix + tabs), an effect selected
+        v.push_back({"grade_plugins_effect", edit, [](Rig &r) {
             r.settle();
-            auto rt = r.app->edit().rackTree();
-            const Rect wr = rt->weightRect(2);
-            const Point p = world(*rt, wr.x + wr.w * 0.5, wr.y + wr.h * 0.5);
-            r.move(p.x, p.y);
+            r.app->edit().gradeInspector()->plugins()->select("ef_1");
             r.settle();
+        }});
+        v.push_back({"grade_plugins_swap_mid", edit, [](Rig &r) {
+            r.settle();
+            r.app->edit().gradeInspector()->plugins()->select("ef_1");
+            r.pump(80);
         }});
         // the capture button (R-UI-11) and Grade without a transport (R-UI-3, amended)
         v.push_back({"grade_capture_menu", edit, [](Rig &r) {

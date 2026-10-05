@@ -120,6 +120,32 @@ namespace interstellar_v1
         };
         mTabs->addPage("Xform", mXform);
         addChild(mTabs);
+
+        // R-FX-5: the node's plugin stack, Cosmo first; the selected row decides the panel below
+        mPlugins = std::make_shared<PluginList>();
+        mPlugins->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mPlugins->onSelect = [this](const std::string &id) {
+            mEffectWanted = !id.empty();
+            if (mLastModel) mEffectPanel->bind(*mLastModel, id, false);   // the panel shows it at once
+        };
+        mPlugins->onAdd = [this](Rect r) { if (onAddEffect) onAddEffect(r); };
+        mPlugins->onRowContext = [this](const std::string &id, Point w) { if (onPluginContext) onPluginContext(id, w); };
+        addChild(mPlugins);
+        mEffectPanel = std::make_shared<EffectPanel>();
+        mEffectPanel->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mEffectPanel->visible = false;
+        addChild(mEffectPanel);
+        // Cosmo's Mix is the node's weight (R-RACK-4, amended): one slider here, not a bar per row
+        mCosmoMix = std::make_shared<SliderRow>("Mix", 0.0, 100.0, 100.0);
+        mCosmoMix->onChange = [this](double v) {
+            if (!mBind.empty() && onCommand) onCommand("set " + cmd::quote(mBind + ".weight=" + cmd::num(v / 100.0)));
+        };
+        addChild(mCosmoMix);
+    }
+
+    double GradeInspector::tabsTop() const
+    {
+        return HistogramWidget::kHeight + mPlugins->wantedHeight() + SliderRow::kRowHeight + 13.0;   // the Mix row and its gaps
     }
 
     void GradeInspector::send(const char *filter, const Fields &fields)
@@ -136,6 +162,11 @@ namespace interstellar_v1
         mBind = valid ? m.rack[m.selectedRack].bindName : std::string();
         mBypassed = valid && m.rack[m.selectedRack].bypass;
         mTabs->enabled = valid;   // nothing to edit: the panels take no input (the wash says why)
+        mLastModel = &m;   // the service's model outlives every frame; a selection re-binds from it
+        mPlugins->bind(m);
+        mEffectWanted = !mPlugins->selected().empty();
+        mEffectPanel->bind(m, mPlugins->selected(), interacting);
+        if (valid && !interacting) mCosmoMix->setValue(m.rack[(size_t)m.selectedRack].weight * 100.0);
         if (!valid) return;
         if (mBind != mLastBind)
         {
@@ -185,19 +216,37 @@ namespace interstellar_v1
 
     Rect GradeInspector::stackRect() const
     {
-        const double top = HistogramWidget::kHeight;
+        const double top = tabsTop();
         return Rect{0, top, width.value(), std::max(0.0, height.value() - top)};
     }
 
     void GradeInspector::layout()
     {
+        // histogram · the plugin list (its height eases with its rows) · then Cosmo's Mix and tabs
+        // OR the selected effect's panel, cross-faded through one live amount
         const double w = width.value(), h = height.value();
         mHistogram->x.set(0.0); mHistogram->y.set(0.0); mHistogram->width.set(w);
-        const double tabsY = HistogramWidget::kHeight;
+        const double listY = HistogramWidget::kHeight, listH = mPlugins->wantedHeight();
+        mPlugins->x.set(0.0); mPlugins->y.set(listY); mPlugins->width.set(w); mPlugins->height.set(listH);
+        const double f = mPluginFade.value();
+        const double below = listY + listH;
+        mCosmoMix->x.set(9.75); mCosmoMix->y.set(below + 6.5);
+        mCosmoMix->width.set(std::max(0.0, w - 19.5)); mCosmoMix->height.set(SliderRow::kRowHeight);
+        mCosmoMix->layout();
+        mCosmoMix->opacity.set(1.0 - f);
+        mCosmoMix->visible = f < 0.999;
+        const double tabsY = tabsTop();
         mTabs->x.set(0.0); mTabs->y.set(tabsY);
         mTabs->width.set(w); mTabs->height.set(std::max(0.0, h - tabsY));
+        mTabs->opacity.set(1.0 - f);
+        mTabs->visible = f < 0.999;
         mTabs->layoutPages();
         mBasicDetail->layout(); mColorTab->layout(); mGrade->layout(); mXform->layout();
+        mEffectPanel->x.set(0.0); mEffectPanel->y.set(below);
+        mEffectPanel->width.set(w); mEffectPanel->height.set(std::max(0.0, h - below));
+        mEffectPanel->opacity.set(f);
+        mEffectPanel->visible = f > 0.001;
+        mEffectPanel->layout();
     }
 
     bool GradeInspector::handleGesture(const Gesture &g, const Point &local)
@@ -246,6 +295,12 @@ namespace interstellar_v1
             mSwap.animateTo(1.0, motion::kScrollMs, Easing::EaseOutCubic, nowMs);
             mSwapPending = false;
         }
+        if (mEffectWanted != mEffectApplied)
+        {
+            mPluginFade.animateTo(mEffectWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mEffectApplied = mEffectWanted;
+        }
+        mPluginFade.update(nowMs);
         mEmptyAmt.update(nowMs);
         mBypassAmt.update(nowMs);
         mSwap.update(nowMs);
@@ -261,19 +316,21 @@ namespace interstellar_v1
 
     void GradeInspector::onOverlay(IRenderTarget &t) const
     {
-        const Rect band = stackRect();
-        const Rect page{band.x, band.y + mTabs->tabHeight, band.w, std::max(0.0, band.h - mTabs->tabHeight)};
+        const Rect stack = stackRect();
+        const Rect page{stack.x, stack.y + mTabs->tabHeight, stack.w, std::max(0.0, stack.h - mTabs->tabHeight)};
+        const double cosmoShown = 1.0 - mPluginFade.value();   // the Cosmo page's washes go with it
+        const Rect band{0, HistogramWidget::kHeight, width.value(), std::max(0.0, height.value() - HistogramWidget::kHeight)};
         t.save();
         t.clipRect(0, 0, width.value(), height.value());
         // a different node selected: the page re-seats under a card wash that eases away
-        const double sw = 1.0 - mSwap.value();
+        const double sw = (1.0 - mSwap.value()) * cosmoShown;
         if (sw > 0.001)
         {
             Color c = palette::card(); c.a *= sw * 0.9;
             drawRoundedRect(t, page, 0.0, Paint::filled(c));
         }
         // the selected node is bypassed: cosmo's own scrim + pill (R-BYPASS-4's look)
-        const double ba = mBypassAmt.value() * (1.0 - mEmptyAmt.value());
+        const double ba = mBypassAmt.value() * (1.0 - mEmptyAmt.value()) * cosmoShown;
         if (ba > 0.001 && page.h > 0.0)
         {
             drawRoundedRect(t, page, 0.0, Paint::filled(surface::scrim(kDimAlpha * ba)));

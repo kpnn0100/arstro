@@ -18,7 +18,6 @@ namespace interstellar_v1
         constexpr double kGlyph = 12.0;
         constexpr double kChevron = 12.0;   // the open/shut column every row reserves, so names align
         constexpr double kBypassBox = 20.0;
-        constexpr double kWeightW = 36.0;
         constexpr double kNamePx = 11.0;
         constexpr double kMetaPx = 9.0;
         Color fade(Color c, double a) { c.a *= a; return c; }
@@ -48,8 +47,6 @@ namespace interstellar_v1
         for (const auto &n : m.rack)
         {
             const std::string key = n.rackObj.empty() ? n.bindName : n.rackObj;
-            auto &w = mWeights[key];
-            if (mDragRow < 0) w.target = n.weight;   // a gesture in flight outranks the model
             auto &st = mStates[key];
             st.want[0] = n.bypass; st.want[1] = n.pending; st.want[2] = n.failed; st.want[3] = n.overridden;
             st.want[4] = n.selected;
@@ -112,12 +109,9 @@ namespace interstellar_v1
         // Row-relative geometry from a row's TOP, so a fading ghost row (no index any more)
         // draws its controls exactly where its live self had them.
         Rect bypassAt(double w, double top) { return Rect{w - kPadX - kBypassBox, top + (RackTree::kRowH - kBypassBox) * 0.5, kBypassBox, kBypassBox}; }
-        // line two, just before the uses column: a generous hit band around a 3 px bar
-        Rect weightAt(double w, double top) { return Rect{w - kPadX - kBypassBox - 8.0 - 44.0 - kWeightW, top + 17.0, kWeightW, 12.0}; }
     }
 
     Rect RackTree::bypassRect(int i) const { return bypassAt(width.value(), rowTopLocal(i)); }
-    Rect RackTree::weightRect(int i) const { return weightAt(width.value(), rowTopLocal(i)); }
 
     Rect RackTree::chevronRect(int i) const
     {
@@ -141,12 +135,6 @@ namespace interstellar_v1
         return st ? st->bypass.value() : (mRack[i].bypass ? 1.0 : 0.0);
     }
 
-    double RackTree::shownWeight(int i) const
-    {
-        if (i < 0 || i >= (int)mRack.size()) return 0.0;
-        auto it = mWeights.find(mRack[i].rackObj.empty() ? mRack[i].bindName : mRack[i].rackObj);
-        return it == mWeights.end() ? mRack[i].weight : it->second.v.value();
-    }
 
     int RackTree::rowAt(const Point &p) const
     {
@@ -166,7 +154,6 @@ namespace interstellar_v1
             if (mRack.empty() && emptyChip(viewport()).contains(local)) { mHover.setHovered(1); return true; }
             const int i = rowAt(local);
             mHover.setHovered(i >= 0 ? (mRack[(size_t)i].group && chevronRect(i).contains(local) ? 1000 + i : 10 + i) : -1);
-            mWeightTip.setHovered(i >= 0 && !mRack[i].failed && weightRect(i).contains(local) ? i : -1);
             return true;
         }
         case Gesture::Type::RightClick:
@@ -176,35 +163,6 @@ namespace interstellar_v1
             return true;
         }
         case Gesture::Type::Down:
-        {
-            const int i = rowAt(local);
-            if (i >= 0 && !mRack[i].failed && weightRect(i).contains(local))
-            {
-                mDragRow = i;
-                const Rect wr = weightRect(i);
-                const double v = std::clamp((local.x - wr.x) / wr.w, 0.0, 1.0);
-                auto &w = mWeights[mRack[i].rackObj.empty() ? mRack[i].bindName : mRack[i].rackObj];
-                w.target = v; w.v.set(v); w.last = v;   // direct manipulation: under the pointer
-            }
-            return true;
-        }
-        case Gesture::Type::DragStart:
-        case Gesture::Type::Drag:
-            if (mDragRow >= 0 && mDragRow < (int)mRack.size())
-            {
-                const Rect wr = weightRect(mDragRow);
-                const double v = std::round(std::clamp((local.x - wr.x) / wr.w, 0.0, 1.0) * 100.0) / 100.0;
-                auto &w = mWeights[mRack[mDragRow].rackObj.empty() ? mRack[mDragRow].bindName : mRack[mDragRow].rackObj];
-                if (v != w.target)
-                {
-                    w.target = v; w.v.set(v); w.last = v;
-                    emit("set " + cmd::quote(mRack[mDragRow].bindName + ".weight=" + cmd::num(v)));
-                }
-            }
-            return true;
-        case Gesture::Type::Up:
-        case Gesture::Type::Drop:
-            mDragRow = -1;
             return true;
         case Gesture::Type::DoubleClick:
         {
@@ -239,14 +197,6 @@ namespace interstellar_v1
                 emit("set " + cmd::quote(n.bindName + ".bypass=" + (n.bypass ? "0" : "1")));
                 return true;
             }
-            if (weightRect(i).contains(local) && !n.failed)
-            {
-                // a click on the bar is a one-point drag: send where it landed
-                const Rect wr = weightRect(i);
-                const double v = std::round(std::clamp((local.x - wr.x) / wr.w, 0.0, 1.0) * 100.0) / 100.0;
-                emit("set " + cmd::quote(n.bindName + ".weight=" + cmd::num(v)));
-                return true;
-            }
             const auto ovr = mOvrRects.find(i);
             if (n.overridden && ovr != mOvrRects.end() && ovr->second.contains(local))
             {
@@ -276,17 +226,6 @@ namespace interstellar_v1
         mRows.advance(nowMs);
         mScroll.setExtent(kHeaderH, std::max(0.0, height.value() - kHeaderH), (double)mRows.count() * kRowH);
         mScroll.advance(nowMs);
-        for (auto &kv : mWeights)
-        {
-            auto &w = kv.second;
-            if (w.last < 0.0) { w.v.set(w.target); w.last = w.target; }
-            else if (w.target != w.last)
-            {
-                w.v.animateTo(w.target, motion::kCatchUpMs, Easing::EaseOutCubic, nowMs);
-                w.last = w.target;
-            }
-            w.v.update(nowMs);
-        }
         for (auto &kv : mStates)
         {
             RowState &st = kv.second;
@@ -301,8 +240,7 @@ namespace interstellar_v1
             }
             st.init = true;
         }
-        if (!isHovered()) { mHover.clear(); mWeightTip.clear(); }
-        mWeightTip.advance(nowMs);
+        if (!isHovered()) mHover.clear();
         mHover.advance(nowMs);
         mSel.advance(nowMs, motion::kSelectMs);
         Segment::advance(nowMs);
@@ -446,7 +384,7 @@ namespace interstellar_v1
             t.setFill(fade(lerpColor(palette::foreground(), palette::destructive(), fa), content));
             t.drawText(nm, x0 + 18.0, textfit::baseline(l1, kNamePx), kNamePx, fam);
 
-            // line two: what it spells, its weight, its uses — or the reason it has neither
+            // line two: what it spells and its uses — or the reason it has neither
             const double usesRight = w - kPadX - kBypassBox - 8.0;
             if (fa > 0.001)
             {
@@ -457,21 +395,15 @@ namespace interstellar_v1
             if (fa < 0.999)
             {
                 const double la = content * (1.0 - fa);
-                const Rect wr = weightAt(w, top);
-                const double wv = i >= 0 ? shownWeight(i) : n.weight;
-                // Hovering (or dragging) the bar names it: "weight 75%" cross-fades over the count.
-                const double tip = i >= 0 ? std::max(mWeightTip.amount(i), i == mDragRow ? 1.0 : 0.0) : 0.0;
                 const std::string uses = n.group ? std::string() : usesLabel(n.usedBy);
+                double usesW = 0.0;
                 if (!uses.empty())
                 {
-                    const double uw = t.measureText(uses, kMetaPx, font::sans());
+                    usesW = t.measureText(uses, kMetaPx, font::sans());
                     t.setFill(fade(palette::mutedForeground(), la));
-                    t.drawText(uses, usesRight - uw, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
+                    t.drawText(uses, usesRight - usesW, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
                 }
-                drawRoundedRect(t, Rect{wr.x, l2 - 1.5, wr.w, 3.0}, radius::pill(), Paint::filled(fade(palette::secondary(), la)));
-                if (wv * wr.w >= 3.0)
-                    drawRoundedRect(t, Rect{wr.x, l2 - 1.5, wv * wr.w, 3.0}, radius::pill(), Paint::filled(fade(palette::primary(), la)));
-                const double room = wr.x - 6.0 - (x0 + 18.0);
+                const double room = usesRight - usesW - 8.0 - (x0 + 18.0);
                 if (pe > 0.001)
                 {
                     t.setFill(fade(palette::mutedForeground(), la * pe));
@@ -479,16 +411,8 @@ namespace interstellar_v1
                 }
                 if (pe < 0.999)
                 {
-                    // Hovering the bar names it: "grade weight 80%" cross-fades over the bind name,
-                    // where there is room for it (the user asked what the slider was).
-                    t.setFill(fade(palette::mutedForeground(), la * (1.0 - pe) * (1.0 - tip)));
+                    t.setFill(fade(palette::mutedForeground(), la * (1.0 - pe)));
                     t.drawText(textfit::ellipsize(t, n.bindName, room, kMetaPx, font::mono()), x0 + 18.0, textfit::baseline(l2, kMetaPx), kMetaPx, font::mono());
-                    if (tip > 0.001)
-                    {
-                        const std::string wl = "weight " + std::to_string((int)std::lround(wv * 100.0)) + "%";
-                        t.setFill(fade(palette::foreground(), la * (1.0 - pe) * tip));
-                        t.drawText(textfit::ellipsize(t, wl, room, kMetaPx, font::sans()), x0 + 18.0, textfit::baseline(l2, kMetaPx), kMetaPx, font::sans());
-                    }
                 }
             }
 

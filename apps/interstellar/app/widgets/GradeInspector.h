@@ -22,6 +22,12 @@
  *  on-photo overlay to be usable — see NOTES.md. The white-balance eyedropper is dropped for the
  *  same reason (it samples a click on the photo).
  *
+ *  Above the panels, the node's IMAGE PROCESSING list (R-FX-5, `PluginList`): Cosmo first — its row
+ *  selected shows a Mix slider (the node's weight, which used to be a bar on every rack row,
+ *  R-RACK-4 amended) and cosmo's own tabs; an effect's row selected cross-fades to its parameters
+ *  (`EffectPanel`). Which row is selected is presentation; the switches, the mix and every slider
+ *  are command lines.
+ *
  *  States: no grade target → an eased card wash with a sentence naming what to do; the selected
  *  node BYPASSED → cosmo's own scrim-and-pill treatment; a change of selected node → the page
  *  cross-fades (cosmo's EditStackTabs page-swap idiom), since cosmo's sliders take a programmatic
@@ -40,6 +46,9 @@
 #include "../../../cosmo/widgets/GradePanel.h"
 #include "../../../cosmo/widgets/XformPanel.h"
 #include "../../../cosmo/widgets/StackPanel.h"
+#include "../../../cosmo/widgets/SliderRow.h"
+#include "PluginList.h"
+#include "EffectPanel.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -67,6 +76,15 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::GradePanel> gradePanel() { return mGrade; }
         std::shared_ptr<cosmo_v2::XformPanel> xform() { return mXform; }
         std::shared_ptr<cosmo_v2::HistogramWidget> histogram() { return mHistogram; }
+        std::shared_ptr<PluginList> plugins() { return mPlugins; }
+        std::shared_ptr<EffectPanel> effectPanel() { return mEffectPanel; }
+        std::shared_ptr<cosmo_v2::SliderRow> cosmoMix() { return mCosmoMix; }
+        /** The LIVE eased swap between Cosmo's panels (0) and the selected effect's (1). */
+        double pluginFade() const { return mPluginFade.value(); }
+        /** "+ Add" in the plugin list, at a WORLD rect: the screen opens the catalog menu. */
+        std::function<void(artboard::Rect world)> onAddEffect;
+        /** Right-click on a plugin row ("" = Cosmo) at a WORLD point. */
+        std::function<void(const std::string &id, artboard::Point world)> onPluginContext;
         const std::string &target() const { return mBind; }
         double emptyAmount() const { return mEmptyAmt.value(); }
         double bypassAmount() const { return mBypassAmt.value(); }
@@ -95,6 +113,13 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::CurvePanel> mCurve;
         std::shared_ptr<cosmo_v2::GradePanel> mGrade;
         std::shared_ptr<cosmo_v2::XformPanel> mXform;
+        std::shared_ptr<PluginList> mPlugins;
+        std::shared_ptr<EffectPanel> mEffectPanel;
+        std::shared_ptr<cosmo_v2::SliderRow> mCosmoMix;     // the node's weight — Cosmo's Mix
+        double tabsTop() const;
+        bool mEffectWanted = false, mEffectApplied = false;
+        artboard::AnimatedProperty mPluginFade{0.0};
+        const interstellar::AppModel *mLastModel = nullptr;
 
         std::string mBind;          // the selected node's bind name — the address prefix
         std::string mLastBind;

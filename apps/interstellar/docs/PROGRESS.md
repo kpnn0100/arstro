@@ -52,8 +52,8 @@ one integrator who moves, wires, tests and commits each stream:
       size, exact rates, range; D-9 (BT.601, untagged) fixed (DR-RENDER-6).
 - [x] Cutting like an editor: drop a source on the timeline, roll, slip, ripple delete, markers,
       clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
-- [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix, (2) the
-      image-processing stack with Blur kinds — core DONE (DR-FX-5/6), the panel next, (3) keyframes
+- [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
+      (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
       and a graph editor (R-ANIM), (4) scopes (R-UI-15), (5) smooth preview: proxies, read-ahead,
       hardware video (R-PLAY).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie

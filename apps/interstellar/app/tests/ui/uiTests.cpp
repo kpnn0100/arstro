@@ -132,14 +132,11 @@ namespace
         CHECK(near(fill.r, p.r) && near(fill.g, p.g) && near(fill.b, p.b), "cosmo's shared slider fill follows the accent");
         CHECK(near(sharedTheme().tab.activeIndicatorColor.b, p.b), "cosmo's tab indicator follows the accent");
         CHECK(near(palette::ring().a, 0.5) && near(palette::ring().r, p.r), "ring() is the accent at 0.5");
-        // a reused cosmo widget DRAWS purple-pink: the Sharpening Amount slider (0..150, +40) has its
-        // fill running from the track's left end to 27% — sample inside it, clear of the thumb
-        std::vector<arstro::cosmo_v2::SliderRow *> rows;
-        for (auto &c : r.app->edit().gradeInspector()->basicDetail()->children())
-            if (auto *sr = dynamic_cast<arstro::cosmo_v2::SliderRow *>(c.get())) rows.push_back(sr);
-        artboard::Slider *sl = rows.size() > 15 ? firstChild<artboard::Slider>(*rows[15]) : nullptr;
-        CHECK(sl != nullptr, "found the Sharpening Amount slider inside cosmo's ParamPanel");
-        const Point a = world(*sl, sl->width.value() * 0.12, sl->height.value() * 0.5);
+        // a reused cosmo widget DRAWS purple-pink: cosmo's SliderRow as Cosmo's Mix (100 %, R-FX-5) has
+        // its fill running the whole track — sample inside it, clear of the thumb
+        artboard::Slider *sl = firstChild<artboard::Slider>(*r.app->edit().gradeInspector()->cosmoMix());
+        CHECK(sl != nullptr, "found the slider inside cosmo's SliderRow (Cosmo's Mix)");
+        const Point a = world(*sl, sl->width.value() * 0.4, sl->height.value() * 0.5);
         const uint32_t px = r.pixel((int)a.x, (int)std::floor(a.y));
         const int R = (px >> 16) & 0xFF, G = (px >> 8) & 0xFF, B = px & 0xFF;
         std::printf("      slider fill pixel at (%.0f,%.0f) = #%02X%02X%02X\n", a.x, a.y, R, G, B);
@@ -180,8 +177,15 @@ namespace
         gi->tabs()->setSelectedIndex(GradeInspector::kTabColor);
         r.settle();
         auto cp = gi->curve();
+        {
+            // the plugin list above the tabs (R-FX-5) leaves the curve below the fold: wheel the page
+            const Point mid = world(*gi, gi->width.value() * 0.5, gi->height.value() * 0.8);
+            r.app->wheel(mid.x, mid.y, -6.0);
+            r.settle();
+        }
         const Rect pb = cp->plotBox();
         const Point q = world(*cp, pb.x + pb.w * 0.5, pb.y + pb.h * (1.0 - 0.56));
+        CHECK(q.y < world(*gi, 0, gi->height.value()).y, "the wheel brings the tone curve into the column");
         r.drag(q.x, q.y, q.x, q.y - 14.0);
         const std::string cl = withPrefix(r.svc, "set s_day01.curve.curve=");
         std::printf("      %s\n", cl.c_str());
@@ -225,12 +229,14 @@ namespace
                 CHECK(hasLine(r.svc, want), what.c_str());
             }
         }
-        const Rect wr = rt->weightRect(2);
-        const Point w0 = world(*rt, wr.x + wr.w * 0.25, wr.y + wr.h * 0.5), w1 = world(*rt, wr.x + wr.w * 0.6, wr.y + wr.h * 0.5);
-        r.drag(w0.x, w0.y, w1.x, w1.y);
-        const std::string wl = withPrefix(r.svc, "set s_day02.weight=");
-        std::printf("      %s\n", wl.c_str());
-        CHECK(!wl.empty() && std::fabs(std::stod(wl.substr(wl.find('=') + 1)) - 0.6) < 0.06, "dragging the weight bar dispatched set s_day02.weight≈0.6");
+        {
+            // R-RACK-4 (amended): no weight bar on a rack row any more — the weight is Cosmo's Mix
+            r.svc.lines.clear();
+            const Rect row = rt->rowRect(2);
+            const Point bar = world(*rt, row.right() - 9.75 - 20.0 - 8.0 - 44.0 - 18.0, row.y + 23.0);   // where the bar used to be
+            r.drag(bar.x - 10.0, bar.y, bar.x + 10.0, bar.y);
+            CHECK(withPrefix(r.svc, "set s_day02.weight=").empty(), "the rack row has no weight bar to drag (it is Cosmo's Mix now)");
+        }
         bool added = false;
         r.app->onPickFootage = [&] { added = true; };
         p = centre(*rt, rt->addRect());
@@ -691,10 +697,11 @@ namespace
             CHECK(strictlyBetween(ft, t0, 10.0), "a playhead jump from the model EASES the transport there");
             auto rt = r.app->edit().rackTree();
             r.settle();
-            const double w0 = rt->shownWeight(2);
-            r.svc.dispatch("set s_day02.weight=0.2", err);
-            const double fw = firstMoved(r, [&] { return rt->shownWeight(2); }, w0);
-            CHECK(strictlyBetween(fw, w0, 0.2), "a weight the model changed EASES on the rack row");
+            auto pl = r.app->edit().gradeInspector()->plugins();
+            const double k0 = pl->switchAmount(1);   // ef_1, on
+            r.svc.dispatch("set ef_1.enabled=0", err);
+            const double fk = firstMoved(r, [&] { return pl->switchAmount(1); }, k0);
+            CHECK(strictlyBetween(fk, 0.0, k0), "a plugin switch the model changed SLIDES (first frame between)");
         }
         {
             // state that ARRIVES from the model — a toggle, a version switch, a rebase, a finished
@@ -1144,12 +1151,87 @@ namespace
         r.svc.edit();   // the fake grouped for real: back to the standard rack
         ++r.svc.m.revision;
         r.settle();
-        // The weight bar names itself on hover.
-        const Rect wr = rt->weightRect(2);
-        const Point wp = world(*rt, wr.x + wr.w * 0.5, wr.y + wr.h * 0.5);
-        r.move(wp.x, wp.y);
-        const double first = firstMoved(r, [&] { return rt->weightTipAmount(2); }, 0.0);
-        CHECK(strictlyBetween(first, 0.0, 1.0), "hovering the weight bar cross-fades in its caption (\"weight N%\")");
+    }
+
+    /** R-FX-5 / R-RACK-4 (amended): the IMAGE PROCESSING list — Cosmo first with its Mix, effects
+     *  after, a switch per row, add from the catalog, select to edit, remove, reorder. */
+    void testPluginList()
+    {
+        std::printf("the image-processing list (plugins)\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto gi = r.app->edit().gradeInspector();
+        auto pl = gi->plugins();
+        CHECK(pl->rowCount() == 3, "s_day01's stack: Cosmo, then its two effects");
+        // Cosmo's switch is the node's bypass; Cosmo's Mix is the node's weight
+        r.svc.lines.clear();
+        Point p = centre(*pl, pl->switchRect(0));
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "set s_day01.bypass=1"), "Cosmo's switch dispatched set s_day01.bypass=1");
+        auto mix = gi->cosmoMix();
+        const Point m0 = world(*mix, mix->width.value() * 0.55, mix->height.value() * 0.5);
+        const Point m1 = world(*mix, mix->width.value() * 0.95, mix->height.value() * 0.5);
+        r.svc.lines.clear();
+        r.drag(m0.x, m0.y, m1.x, m1.y);
+        CHECK(!withPrefix(r.svc, "set s_day01.weight=").empty(), "Cosmo's Mix slider dispatched set s_day01.weight=<0..1>");
+        // an effect's switch is its own
+        r.svc.lines.clear();
+        p = centre(*pl, pl->switchRect(2));
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "set ef_2.enabled=1"), "an effect's switch dispatched set ef_2.enabled=1");
+        // selecting an effect cross-fades to its parameters
+        p = centre(*pl, pl->rowRect(1));
+        r.click(p.x - 30.0, p.y);
+        CHECK(pl->selected() == "ef_1", "clicking the row selects ef_1 (presentation, no command)");
+        const double ff = firstMoved(r, [&] { return gi->pluginFade(); }, 0.0);
+        CHECK(strictlyBetween(ff, 0.0, 1.0), "the panel CROSS-FADES from Cosmo's tabs to the effect's parameters");
+        r.settle();
+        auto ep = gi->effectPanel();
+        auto radius = ep->slider("radius");
+        CHECK(ep->effect() == "ef_1" && radius && radius->visible, "the effect panel shows ef_1's Radius");
+        r.svc.lines.clear();
+        const Point q0 = world(*radius, radius->width.value() * 0.6, radius->height.value() * 0.5);
+        const Point q1 = world(*radius, radius->width.value() * 0.8, radius->height.value() * 0.5);
+        r.drag(q0.x, q0.y, q1.x, q1.y);
+        CHECK(!withPrefix(r.svc, "set ef_1.radius=").empty(), "dragging Radius dispatched set ef_1.radius=<px>");
+        // + Add: the catalog, then the new effect is selected
+        r.svc.lines.clear();
+        p = centre(*pl, pl->addRect());
+        r.click(p.x, p.y);
+        r.pump(250);
+        auto cm = r.app->edit().contextMenu();
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        std::printf("      %s\n", labels.c_str());
+        CHECK(cm->isOpen() && labels.find("Zoom Blur") != std::string::npos && labels.find("Spin Blur") != std::string::npos,
+              "+ Add opens the catalog — every blur kind");
+        int zi = -1;
+        for (int i = 0; i < cm->itemCount(); ++i) if (cm->item(i).label == "Zoom Blur") zi = i;
+        if (zi >= 0) { const Point ip = centre(*cm, cm->itemRect(zi)); r.click(ip.x, ip.y); r.pump(32); }
+        CHECK(hasLine(r.svc, "effect add s_day01 --type blur.zoom"), "…and picking one dispatched effect add s_day01 --type blur.zoom");
+        r.settle();
+        CHECK(pl->rowCount() == 4 && ep->effect() == pl->selected() && !pl->selected().empty() && ep->slider("amount"),
+              "the new effect is in the list and selected, its Amount shown");
+        // the list's height EASED to make room (no jump of the panel under it)
+        // remove: the × on hover
+        r.svc.lines.clear();
+        const Rect rr = pl->removeRect(1);
+        p = centre(*pl, rr);
+        r.move(p.x, p.y);
+        r.pump(64);
+        r.click(p.x, p.y);
+        CHECK(hasLine(r.svc, "effect remove ef_1"), "the row's × dispatched effect remove ef_1");
+        r.settle();
+        // right-click: reorder
+        p = centre(*pl, pl->rowRect(1));
+        r.app->pointer(1, p.x, p.y, 0, r.now);
+        r.app->pointer(0, p.x, p.y, 2, r.now);
+        r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
+        r.pump(250);
+        labels.clear();
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(cm->isOpen() && labels.find("Move Down") != std::string::npos && labels.find("Remove") != std::string::npos,
+              "right-clicking an effect row offers Move Down and Remove");
     }
 
     /** R-UI-3 (amended), R-UI-11: Grade drops the transport and its monitor shows the Grade target
@@ -1621,6 +1703,7 @@ int main()
     testVariants();
     testMonitorZoom();
     testCutEditing();
+    testPluginList();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

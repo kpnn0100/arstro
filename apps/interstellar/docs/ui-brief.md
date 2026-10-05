@@ -81,6 +81,10 @@ The tab that must feel exactly like cosmo, because it *is* cosmo: a **rack tree*
 right — `ParamPanel`, `MixerPanel`, `CurvePanel`, `GradePanel`, `XformPanel`, `HistogramWidget` —
 linked, not reimplemented. The deck is a **filmstrip of rack sources**.
 
+**The image-processing list** (R-FX-5) sits under the histogram: Cosmo first, then the node's
+effects, each with a switch and a mix; selecting one swaps cosmo's tabs for that effect's sliders.
+The weight is Cosmo's Mix there — rack rows carry no bar.
+
 **Groups browse like cosmo** (R-UI-12): in the tree a group is shut until opened (a chevron, eased),
 so grouping puts its members inside it; the filmstrip shows one level — the top or the open group —
 a double-click on a folder chip drills in, and cosmo's breadcrumb in the SOURCES header
