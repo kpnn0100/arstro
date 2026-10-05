@@ -201,6 +201,15 @@ namespace interstellar
         std::string note;
     };
 
+    /** R-DLV-3: a render preset — a render's whole spec, by name. */
+    struct RenderPresetModel
+    {
+        std::string name;
+        bool builtIn = false;
+        std::string flags;            // what `render --preset` lays under the flags given
+        std::string spec;             // in words: "H.264 · q18 · slow · fits 1920x1080"
+    };
+
     /** R-CLR-4: a still in the gallery. */
     struct StillModel
     {
@@ -321,6 +330,7 @@ namespace interstellar
 
         // ── Deliver ──
         std::vector<RenderJobModel> renders;
+        std::vector<RenderPresetModel> renderPresets;   // R-DLV-3: built in, then the saved ones
         // ── proxies (R-MEDIA-2) ──
         bool useProxies = false;                   // the project's switch: the monitor decodes proxies where a source has one
         bool matteView = false;                    // R-CLR-1: Grade's monitor shows the selected source's matte

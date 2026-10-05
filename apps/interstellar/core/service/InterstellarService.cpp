@@ -263,6 +263,7 @@ namespace interstellar
             case CK::ProjectSave: ok = requireProject() && projectSave(c.arg(0)); break;
             case CK::ProjectClose: projectClose(true); ok = true; break;
             case CK::ProjectAutosave: case CK::ProjectRecover: ok = requireProject() && safetyCommand(c); break;
+            case CK::RenderPresetSave: case CK::RenderPresetDelete: case CK::RenderPresetList: ok = presetCommand(c); break;
 
             case CK::RackImport: case CK::RackAdd: case CK::RackGroupNew: case CK::RackDuplicate:
             case CK::RackFrame: case CK::RackRename: case CK::RackSelect: case CK::RackRemove:
@@ -592,6 +593,7 @@ namespace interstellar
             m.renders.clear();
             m.useProxies = false;
             m.proxyJobs.clear();
+            fillPresetModel(m);
             fillEditModel();
             return;
         }
@@ -895,6 +897,7 @@ namespace interstellar
 
         m.renders.clear();
         for (const auto &j : mJobs) m.renders.push_back(j->model);
+        fillPresetModel(m);         // R-DLV-3
         m.useProxies = P.proxies;   // R-MEDIA-2
         m.matteView = mMatteView;   // R-CLR-1
         m.trackJobs.clear();

@@ -53,6 +53,23 @@ namespace interstellar_v1
         // R-CLR-4: the stills gallery
         mEdit->gradeDeck()->stillPicture = mHooks.stillPicture;
         mEdit->gradeDeck()->onStillContext = [this](const std::string &id, Point at) { openStillContext(id, at); };
+        // R-DLV-3: render presets — chosen from a list, or the Deliver controls kept under a name
+        mEdit->outputSpec()->onPresetMenu = [this](Rect at) {
+            const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+            auto os = mEdit->outputSpec();
+            std::vector<cosmo_v2::ContextMenu::Item> items;
+            items.push_back({std::string(os->preset().empty() ? "\xE2\x80\xA2  " : "     ") + "Custom", [os] { os->setPreset(std::string()); }});
+            for (const auto &p : m.renderPresets)
+                items.push_back({std::string(os->preset() == p.name ? "\xE2\x80\xA2  " : "     ") + p.name, [os, n = p.name] { os->setPreset(n); }});
+            mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+            noteActivity();
+        };
+        mEdit->outputSpec()->onSavePreset = [this](const std::string &flags) {
+            mEdit->namePrompt()->show("Save render preset", "These output settings, by name — in every project.", "", "Save",
+                                      [this, flags](const std::string &name) {
+                                          if (!name.empty()) dispatch("render preset save " + cmd::quote(name) + " " + flags);
+                                      });
+        };
         // R-CLR-3: the node graph — a click makes a node the Grade target, a right-click its menu
         mEdit->gradeDeck()->nodeGraph()->onSelect = [this](const std::string &bind) { dispatch("rack select " + cmd::quote(bind)); };
         mEdit->gradeDeck()->nodeGraph()->onContext = [this](const NodeGraph::Node &n, Point at) { openNodeContext(n, at); };

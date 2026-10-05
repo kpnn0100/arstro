@@ -468,6 +468,17 @@ namespace
             r.app->edit().gradeDeck()->setView(2);
             r.settle();
         }});
+        v.push_back({"deliver_preset", [](FakeService &s) {   // R-DLV-3: a preset chosen on the Deliver tab
+            s.edit();
+            s.m.renderPresets = {{"YouTube 1080p", true, "--format h264 --res 1920x1080 --quality 18 --speed slow", "H.264 \xC2\xB7 q18 \xC2\xB7 slow"},
+                                 {"ProRes HQ master", true, "--format prores --profile hq", "ProRes hq"}};
+            ++s.m.revision;
+        }, [](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            r.app->edit().outputSpec()->setPreset("YouTube 1080p");
+            r.settle();
+        }});
         v.push_back({"recovery_offer", [](FakeService &s) {   // R-DLV-6: a newer autosave, offered
             s.edit();
             s.m.recoveryAvailable = true;

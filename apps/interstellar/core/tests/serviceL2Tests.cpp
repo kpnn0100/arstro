@@ -2189,6 +2189,45 @@ int main()
         assert(!f.run("settings set autosave=5", &err) && has(err, "10..3600"));
     });
 
+    test("render presets: three built in, saved by name beside the settings, applied in one step, a given flag winning (R-DLV-3)", [] {
+        Fixture f("presets");
+        f.must("project new \"" + f.path("p.isp") + "\" --fps 24 --res 2880x2160");   // 4:3
+        f.must("rack add \"" + f.path("footage/a.mp4") + "\"");
+        f.must("track add --kind video");
+        f.must("clip add --track v0 --src a --in 0 --out 1 --at 0");
+        const AppModel &m = f.svc->model();
+        assert(m.renderPresets.size() >= 3 && m.renderPresets[0].name == "YouTube 1080p" && m.renderPresets[0].builtIn);
+        auto render = [&](const std::string &flags, const std::string &out) {
+            f.written.clear();
+            f.must("render --timeline main --range 0:0.125 --out \"" + f.path(out) + "\" " + flags);
+        };
+        // a 1080p frame on a 4:3 project: 1440×1080, its quality and speed
+        render("--preset \"YouTube 1080p\"", "yt.mp4");
+        std::printf("    YouTube 1080p on 2880x2160: %dx%d %s q%d %s\n", gBegin.w, gBegin.h, gBegin.spec.codec.c_str(), gBegin.spec.quality, gBegin.spec.speed.c_str());
+        assert(gBegin.w == 1440 && gBegin.h == 1080 && gBegin.spec.codec == "h264" && gBegin.spec.quality == 18 && gBegin.spec.speed == "slow");
+        render("--preset \"YouTube 1080p\" --quality 30", "yt2.mp4");                 // a flag given wins
+        assert(gBegin.spec.quality == 30 && gBegin.w == 1440);
+        render("--preset \"ProRes HQ master\"", "m.mov");
+        assert(gBegin.spec.codec == "prores" && gBegin.spec.profile == "hq" && gBegin.w == 2880 && gBegin.h == 2160);
+        // saved, listed, applied, kept for the next session
+        f.must("render preset save \"Grade review\" --format h265 --bits 10 --quality 20 --res 960x540");
+        assert(m.renderPresets.size() == 4 && m.renderPresets[3].name == "Grade review" && !m.renderPresets[3].builtIn);
+        assert(has(f.out("render preset list"), "Grade review  --format h265 --bits 10 --quality 20 --res 960x540"));
+        render("--preset \"Grade review\"", "g.mp4");
+        assert(gBegin.spec.codec == "h265" && gBegin.spec.bitDepth == 10 && gBegin.spec.quality == 20 && gBegin.w == 720 && gBegin.h == 540);
+        f.svc = f.make();
+        assert(f.svc->model().renderPresets.size() == 4);
+        std::string err;
+        assert(!f.run("render preset save \"YouTube 1080p\" --format h264", &err) && has(err, "built in"));
+        assert(!f.run("render preset save nofmt --quality 20", &err) && has(err, "--format"));
+        assert(!f.run("render preset save x --format h264 --out a.mp4", &err));
+        f.must("project open \"" + f.path("p.isp") + "\"");
+        assert(!f.run("render --timeline main --out \"" + f.path("n.mp4") + "\" --preset nothere", &err) && has(err, "no render preset named"));
+        f.must("render preset delete \"Grade review\"");
+        assert(f.svc->model().renderPresets.size() == 3);
+        assert(!f.run("render preset delete \"Grade review\"", &err) && has(err, "no preset named"));
+    });
+
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {
         Fixture f("clippaste");
         f.standard();

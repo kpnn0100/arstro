@@ -98,7 +98,7 @@ else
 fi
 # R-PLAY-3: the video unit. Where VA-API answers, a hardware render is a real H.264 with the same
 # tags and the same colour; where it does not, the render still finishes, in software, and says so.
-spec() { "$CC" project open mv.isp : render --timeline main "$@" : wait render.done : state print --json | tr ',' '\n' | grep '"spec"' | tail -1; }
+spec() { "$CC" project open mv.isp : render --timeline main "$@" : wait render.done : state print --json | tr ',' '\n' | grep '"spec"' | head -1; }   # the render's (renders come before renderPresets)
 s=$(spec --encoder hardware --out hw.mp4)
 echo "  hardware: $s"
 check hardware hw.mp4 codec_name h264

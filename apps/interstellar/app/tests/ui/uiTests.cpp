@@ -2742,6 +2742,50 @@ namespace
         CHECK(!dlg->isOpen(), "the same autosave is not offered twice");
     }
 
+    /** R-DLV-3: render presets on the Deliver tab — chosen, rendered with, left by touching a control, saved. */
+    void testRenderPresetsUi()
+    {
+        std::printf("render presets: the Deliver preset row\n");
+        Rig r(1440, 900, [](FakeService &s) {
+            s.edit();
+            s.m.renderPresets = {{"YouTube 1080p", true, "--format h264 --res 1920x1080", "H.264"}, {"ProRes HQ master", true, "--format prores --profile hq", "ProRes hq"}};
+            ++s.m.revision;
+        });
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        auto cm = r.app->edit().contextMenu();
+        const Point pb = centre(*os->presetButton(), Rect{0, 0, os->presetButton()->width.value(), os->presetButton()->height.value()});
+        r.click(pb.x, pb.y);
+        r.pump(250);
+        std::string labels;
+        for (int i = 0; i < cm->itemCount(); ++i) labels += cm->item(i).label + "|";
+        CHECK(cm->isOpen() && labels == "\xE2\x80\xA2  Custom|     YouTube 1080p|     ProRes HQ master|", "the preset row lists Custom and every preset");
+        for (int i = 0; i < cm->itemCount(); ++i)
+            if (cm->item(i).label == "     YouTube 1080p") { const Point q = centre(*cm, cm->itemRect(i)); r.click(q.x, q.y); r.pump(64); break; }
+        CHECK(os->preset() == "YouTube 1080p" && os->presetButton()->label() == "Preset: YouTube 1080p", "choosing one shows it");
+        const double dimming = firstMoved(r, [&] { return os->presetAmount(); }, 0.0);
+        CHECK(strictlyBetween(dimming, 0.0, 1.0), "…and the controls below dim, eased, while it decides");
+        r.settle();
+        CHECK(os->renderLine().find("--preset \"YouTube 1080p\"") != std::string::npos && os->renderLine().find("--format") == std::string::npos,
+              "…and the render line carries the preset, not the controls");
+        os->qualityPicker()->setSelected(3);   // a control touched: the controls are the spec again
+        r.pump(32);
+        CHECK(os->preset().empty() && os->renderLine().find("--format") != std::string::npos, "touching a control goes back to Custom");
+        // Save Preset… names the controls' spec
+        const Point sp = centre(*os->savePresetButton(), Rect{0, 0, os->savePresetButton()->width.value(), os->savePresetButton()->height.value()});
+        r.click(sp.x, sp.y);
+        r.pump(250);
+        auto np = r.app->edit().namePrompt();
+        CHECK(np->isOpen(), "Save Preset… asks for a name");
+        r.svc.lines.clear();
+        np->field()->text = "Night review";
+        np->confirm();
+        r.pump(64);
+        CHECK(withPrefix(r.svc, "render preset save \"Night review\" --format h264").size() > 0 && withPrefix(r.svc, "render preset save").find("--quality 12") != std::string::npos,
+              "…and saves the controls' flags under it");
+    }
+
     /** R-EDT-1/2: J/K/L, the marks, Insert/Overwrite keys; the source viewer; the band, the target, the badge — eased. */
     void testEditingUi()
     {
@@ -2918,6 +2962,7 @@ int main()
     testStillsUi();
     testNodeGraphUi();
     testSafetyUi();
+    testRenderPresetsUi();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

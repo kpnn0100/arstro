@@ -154,6 +154,7 @@ Every module, its layer, and the requirement that justifies it.
 | `apps/interstellar/core/service/ServiceAnim.cpp` | core | **built** — addresses → curves and clocks, `key add|remove|set|clear`, `set` keying, curves on the render path, pins' curve snapshots (R-ANIM, DR-ANIM-1) |
 | `apps/interstellar/core/service/ServiceCache.cpp` | core | **built** — the graded preview cache: plan-hash index, idle builder thread, segments read by playback (R-PLAY-1, DR-PLAY-1) |
 | `apps/interstellar/core/service/ServiceEdit.cpp` | core | **built** — one undo history, grade clipboard, presets, engine settings (DR-EDIT-1..3, DR-SET-1..3) |
+| `apps/interstellar/core/service/ServicePresets.cpp` | core | **built** — render presets: three built in, the user's beside the settings, `render --preset` (R-DLV-3, DR-DLV-2) |
 | `apps/interstellar/core/service/ServiceSafety.cpp` | core | **built** — autosave beside the project (the .isp and every grade), crash recovery through Cosmo (R-DLV-5/6, DR-DLV-1) |
 | `apps/interstellar/core/service/ServiceNodes.cpp` · `app/widgets/NodeGraph` | core · app | **built** — serial nodes (groups) and parallel nodes (empty variants added by their mix); the graph drawn in the Grade deck (R-CLR-3, DR-CLR-4) |
 | `apps/interstellar/core/service/ServiceStills.cpp` | core | **built** — the stills gallery (grab, apply, delete) and the monitor's split-screen wipe (R-CLR-4/5, DR-CLR-3) |

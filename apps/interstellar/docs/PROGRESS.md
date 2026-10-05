@@ -86,7 +86,7 @@ one integrator who moves, wires, tests and commits each stream:
       12c. [x] Stills gallery and the split-screen wipe (R-CLR-4, R-CLR-5) — DR-CLR-3.
       12d. [x] The node graph (R-CLR-3) — DR-CLR-4.
       13. [x] Autosave and crash recovery (R-DLV-5, R-DLV-6) — DR-DLV-1.
-      13b. [ ] Render presets (R-DLV-3).
+      13b. [x] Render presets (R-DLV-3) — DR-DLV-2.
       13c. [ ] Burn-ins and captions (R-DLV-1, R-DLV-2).
       13d. [ ] DCP and IMF, unvalidated and saying so (R-DLV-4).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie

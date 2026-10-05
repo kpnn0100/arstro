@@ -75,8 +75,11 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `playhead <t>\|+<dt>\|-<dt>\|next-cut\|prev-cut` | Move the playhead; snapped to a frame. | R-TL-5 |
 | `play` | Start playback of the current timeline. | R-UI-3 |
 | `pause` | Stop playback. | R-UI-3 |
-| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>] [--peak <400..10000>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused. | R-RENDER-6 |
+| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>] [--peak <400..10000>] [--preset <name>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused. | R-RENDER-6 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
+| `render preset save <name> [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <p>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <s>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <o>] [--peak <cd/m²>]` | Save a render's whole output spec by name (beside the engine settings: every project has it); `render --preset <name>` applies it, flags given beside it winning. --res is a frame to fit in at the project's aspect. | R-DLV-3 |
+| `render preset delete <name>` | Forget a saved render preset (the built-in ones stay). | R-DLV-3 |
+| `render preset list` | The render presets: YouTube 1080p, ProRes HQ master and Review H.264 built in, then the saved ones. | R-DLV-3 |
 | `cache build` | Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`. | R-PLAY-1 |
 | `cache clear` | Delete the current timeline's preview cache. | R-PLAY-1 |
 | `key add <address> [--at <t>] [--value <v>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5). | R-ANIM-1 |
@@ -413,6 +416,11 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `renders[].height` | integer |  | Output frame height. |
 | `renders[].fps` | number |  | Output rate the timeline is sampled at. |
 | `renders[].spec` | string |  | The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate. |
+| `renderPresets` | array |  | The render presets: built in, then the saved ones (R-DLV-3). |
+| `renderPresets[].name` | string |  | What `render --preset` takes. |
+| `renderPresets[].builtIn` | bool |  | One of the three built in (cannot be deleted). |
+| `renderPresets[].flags` | string |  | The render flags it lays under the ones given. |
+| `renderPresets[].spec` | string |  | The spec in words. |
 | `useProxies` | bool |  | The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2). |
 | `matteView` | bool |  | Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1). |
 | `autosavedAt` | integer | *machine* | When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5). |

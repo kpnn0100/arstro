@@ -274,6 +274,29 @@ timeline and exported with `export-still`, decodes to the same RGBA as `cosmo-cc
 `.cmp` — measured `111819bb5cc3145c0f1e54812d8f4c63` both sides on the 640×360 run; confirmed red when
 Interstellar's weight is 0.5. The cheapest proof that the rack really is Cosmo.
 
+### DR-DLV-2 Render presets (R-DLV-3)
+A preset is a render's output spec as the flags `render` takes, less the timeline, the path and the
+range, by name. Three are built in (`core/service/ServicePresets.cpp:31`): YouTube 1080p (H.264, a
+1920×1080 frame, q18, slow), ProRes HQ master (ProRes HQ at the project's size) and Review H.264 (a
+1280×720 frame, q26, fast). `render preset save <name> --format … [spec flags]` keeps one beside the engine
+settings (`render-presets`, one `name<TAB>flags` per line, `:77`) — every project has it — refusing a
+built-in name or a preset without a format (`:158`); `render preset delete`, `render preset list`.
+`render --preset <name>` (`core/service/ServiceRender.cpp:1051`) lays the preset's flags first and each flag
+given replaces its value (`ServicePresets.cpp:124`); a preset's `--res` is a frame to fit in — the project's
+aspect, inside it, even, never above the project (`:130`). Model: `renderPresets[]` (name, built in,
+flags, the spec in words). UI: the Deliver tab's FORMAT line carries "Preset: …" — the list of presets
+and Custom — and Save Preset… (`app/widgets/OutputSpec.cpp:352`, `app/App.cpp:56`); with a preset chosen the
+render line is `--preset` and the range only (`OutputSpec.cpp:197`), the controls dim (eased) and touching
+one returns to Custom (`:174`); Save Preset… asks a name and keeps the controls' flags (`:181`). Guarded by
+L2 `render presets…` (YouTube 1080p on a 2880×2160 project renders 1440×1080 at q18 slow; a given quality
+wins; ProRes HQ at the project's size; a preset saved, listed, applied — H.265 10-bit q20, a 960×540 frame
+on 4:3 = 720×540 — and kept for a new session; the refusals; delete), UI (the list, the chosen preset in
+the line, the controls dimming, Custom again on a touch, Save Preset… dispatching the controls' flags),
+shot `deliver_preset` (the preset row first moved the Render button out of reach at a small size —
+caught by the Deliver test — so it rides the FORMAT header's line). Mutants run red: the given flag not
+replacing the preset's, the size taken literally (refused on 4:3), presets not written, a built-in
+overwritten.
+
 ### DR-DLV-1 Autosave and crash recovery (R-DLV-5, R-DLV-6)
 While the project has unsaved changes (`core/service/ServiceSafety.cpp:108`), the first change starts a
 clock and every `settings.autosave` seconds (60; 0 = off; 10..3600, `core/service/ServiceEdit.cpp:422`) the

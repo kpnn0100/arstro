@@ -249,6 +249,13 @@ namespace interstellar
         bool proxyCommand(const Command &c);
         // R-MEDIA-3 — ServiceMedia.cpp
         bool mediaCommand(const Command &c);
+        // R-DLV-3 — ServicePresets.cpp
+        std::string presetsPath() const;
+        std::vector<std::pair<std::string, std::string>> userPresets() const;
+        bool presetFlags(const std::string &name, std::string &flags) const;
+        void fillPresetModel(AppModel &m) const;
+        bool renderWithPreset(const Command &c);
+        bool presetCommand(const Command &c);
         // R-DLV-5/6 — ServiceSafety.cpp
         std::string autosavePath(const char *ext) const;
         bool writeAutosave(std::string &err);

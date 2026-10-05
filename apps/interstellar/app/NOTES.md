@@ -226,6 +226,9 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Safety (R-DLV-5/6): Settings › Autosave Every Minute / Every 5 Minutes / Off → `settings set
   autosave=60|300|0`; a recoverable autosave is offered once in Cosmo's confirm dialog → `project recover`
   / `project recover --discard`. Shot: `recovery_offer`. UI checks: 453.
+- Render presets (R-DLV-3): Deliver's FORMAT line → "Preset: …" (Custom + every preset; the line
+  becomes `render … --preset <name>` and the range, the controls dim, a touched control means Custom) and
+  Save Preset… → `render preset save <name> <the controls' flags>`. Shot: `deliver_preset`. UI checks: 460.
 
 ## Interchange (2026-10-05, R-XCH)
 

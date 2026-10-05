@@ -90,6 +90,16 @@ namespace interstellar_v1
         std::string audioSentence() const;
 
         std::function<void(const std::string &line)> onCommand;
+        // ── R-DLV-3: render presets ──
+        /** Render with preset `name` ("" = Custom: the controls below). Touching any control goes back to Custom. */
+        void setPreset(const std::string &name);
+        const std::string &preset() const { return mPreset; }
+        /** The controls' spec as render flags — what Save Preset… keeps (no timeline, path or range). */
+        std::string specFlags() const;
+        std::shared_ptr<cosmo_v2::PillButton> presetButton() { return mPresetBtn; }
+        std::shared_ptr<cosmo_v2::PillButton> savePresetButton() { return mSavePreset; }
+        std::function<void(artboard::Rect world)> onPresetMenu;
+        std::function<void(const std::string &flags)> onSavePreset;
 
         void advance(double nowMs) override;
 
@@ -118,6 +128,16 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::SegmentedControl> mCodec, mProres, mDnx, mQuality, mSpeed, mDepth, mSize, mRange;
         std::shared_ptr<cosmo_v2::SegmentedControl> mColour;
         std::shared_ptr<cosmo_v2::PillButton> mSetIn, mSetOut;
+        std::shared_ptr<cosmo_v2::PillButton> mPresetBtn, mSavePreset;   // R-DLV-3
+        std::string mPreset;
+        std::vector<int> mPresetSnap;                     // the controls when the preset was chosen
+        std::vector<int> controlState() const;
+        double mPresetY = 0;
+        artboard::AnimatedProperty mPresetAmt{0.0};      // how far the controls have dimmed for a preset
+        bool mPresetApplied = false;
+    public:
+        double presetAmount() const { return mPresetAmt.value(); }
+    private:
         std::shared_ptr<artboard::TextBox> mPath;
         std::shared_ptr<cosmo_v2::PillButton> mRender;
         int mRateIndex = 0;                               // into the rate list; 0 = the project's

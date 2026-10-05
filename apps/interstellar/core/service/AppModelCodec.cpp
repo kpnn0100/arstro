@@ -222,6 +222,12 @@ namespace interstellar
                              .set("fps", r.fps)
                              .set("spec", r.spec));
         j.set("renders", renders);
+        {
+            Json presets = Json::array();
+            for (const auto &p : m.renderPresets)
+                presets.push(Json::object().set("name", p.name).set("builtIn", p.builtIn).set("flags", p.flags).set("spec", p.spec));
+            j.set("renderPresets", presets);
+        }
         j.set("useProxies", m.useProxies);
         j.set("matteView", m.matteView);
         if (!st) j.set("autosavedAt", m.autosavedAt);   // clock times: not part of a stable dump
@@ -539,6 +545,11 @@ namespace interstellar
             {"renders[].height", "integer", "Output frame height."},
             {"renders[].fps", "number", "Output rate the timeline is sampled at."},
             {"renders[].spec", "string", "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."},
+            {"renderPresets", "array", "The render presets: built in, then the saved ones (R-DLV-3)."},
+            {"renderPresets[].name", "string", "What `render --preset` takes."},
+            {"renderPresets[].builtIn", "bool", "One of the three built in (cannot be deleted)."},
+            {"renderPresets[].flags", "string", "The render flags it lays under the ones given."},
+            {"renderPresets[].spec", "string", "The spec in words."},
             {"useProxies", "bool", "The project's switch: the monitor decodes proxies where a source has one; renders never do (R-MEDIA-2)."},
             {"matteView", "bool", "Grade's monitor shows the selected source's matte — white where its grade reaches (R-CLR-1)."},
             {"autosavedAt", "integer", "When this session last autosaved, unix seconds; 0 = not yet (R-DLV-5).", true},

@@ -176,13 +176,22 @@ namespace interstellar
              {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|h265|prores|dnxhr|png-seq>",
               "profile=<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>", "res=<WxH>", "fps=<n|num/den>",
               "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>", "encoder=<software|hardware>",
-              "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>", "peak=<400..10000>"},
+              "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>", "peak=<400..10000>", "preset=<name>"},
              "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: "
              "codec and profile, size (never above the project, same aspect), frame rate (the timeline is "
              "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the "
              "output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A "
              "flag the codec cannot honour is refused.", "R-RENDER-6"},
             {K::RenderCancel, "render cancel", "<job>", 1, 1, {}, "Cancel a queued or running render.", "R-RENDER-4"},
+            {K::RenderPresetSave, "render preset save", "<name>", 1, 1,
+             {"format=<h264|h265|prores|dnxhr|png-seq>", "profile=<p>", "res=<WxH>", "fps=<n|num/den>", "quality=<0..51>",
+              "speed=<s>", "bits=<8|10>", "encoder=<software|hardware>", "output=<o>", "peak=<cd/m²>"},
+             "Save a render's whole output spec by name (beside the engine settings: every project has it); `render "
+             "--preset <name>` applies it, flags given beside it winning. --res is a frame to fit in at the project's aspect.",
+             "R-DLV-3"},
+            {K::RenderPresetDelete, "render preset delete", "<name>", 1, 1, {}, "Forget a saved render preset (the built-in ones stay).", "R-DLV-3"},
+            {K::RenderPresetList, "render preset list", "", 0, 0, {},
+             "The render presets: YouTube 1080p, ProRes HQ master and Review H.264 built in, then the saved ones.", "R-DLV-3"},
             {K::CacheBuild, "cache build", "", 0, 0, {},
              "Build the current timeline's graded preview cache now (a window also builds it when idle): "
              "one-second H.264 segments at the playing size, every frame checked by its plan, so only what "

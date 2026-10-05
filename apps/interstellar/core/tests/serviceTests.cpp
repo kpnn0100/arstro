@@ -75,6 +75,7 @@ static AppModel populatedModel()
     m.autosavedAt = 1700000100;
     m.recoveryAvailable = true;
     m.recoveryTime = 1700000000;
+    m.renderPresets.push_back({"YouTube 1080p", true, "--format h264 --res 1920x1080", "H.264 · fits 1920x1080"});
     m.wipeLabel = "still_1";
     m.proxyJobs.push_back({"p1", "ro_2", "s_day01", "prores", 960, "/home/u/japan.proxies/s_day01_960.mov", 12, 96, "running", ""});
     RenderJobModel r; r.id = "r1"; r.timeline = "tl_2"; r.timelineName = "social30"; r.outPath = "/tmp/out/s.mp4";

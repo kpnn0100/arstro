@@ -1048,6 +1048,7 @@ namespace interstellar
                 }
             return fail("render cancel: no job " + c.arg(0));
         }
+        if (c.has("preset")) return renderWithPreset(c);   // R-DLV-3: its flags under the ones given
         // R-RENDER-1: a render NAMES its timeline. There is no implicit current one.
         if (!c.has("timeline")) return fail("render: --timeline is required — a render never implies the open tab (R-RENDER-1)");
         const NodeId tl = timelineRef(c.flag("timeline"));

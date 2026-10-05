@@ -883,7 +883,7 @@
     },
     {
       "verb": "render",
-      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>] [--peak <400..10000>]",
+      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>] [--peak <400..10000>] [--preset <name>]",
       "args": "",
       "minArgs": 0,
       "maxArgs": 0,
@@ -939,6 +939,10 @@
         {
           "name": "peak",
           "value": "<400..10000>"
+        },
+        {
+          "name": "preset",
+          "value": "<name>"
         }
       ],
       "summary": "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused.",
@@ -953,6 +957,77 @@
       "flags": [],
       "summary": "Cancel a queued or running render.",
       "requirement": "R-RENDER-4"
+    },
+    {
+      "verb": "render preset save",
+      "usage": "render preset save <name> [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <p>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <s>] [--bits <8|10>] [--encoder <software|hardware>] [--output <o>] [--peak <cd/m²>]",
+      "args": "<name>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "format",
+          "value": "<h264|h265|prores|dnxhr|png-seq>"
+        },
+        {
+          "name": "profile",
+          "value": "<p>"
+        },
+        {
+          "name": "res",
+          "value": "<WxH>"
+        },
+        {
+          "name": "fps",
+          "value": "<n|num/den>"
+        },
+        {
+          "name": "quality",
+          "value": "<0..51>"
+        },
+        {
+          "name": "speed",
+          "value": "<s>"
+        },
+        {
+          "name": "bits",
+          "value": "<8|10>"
+        },
+        {
+          "name": "encoder",
+          "value": "<software|hardware>"
+        },
+        {
+          "name": "output",
+          "value": "<o>"
+        },
+        {
+          "name": "peak",
+          "value": "<cd/m²>"
+        }
+      ],
+      "summary": "Save a render's whole output spec by name (beside the engine settings: every project has it); `render --preset <name>` applies it, flags given beside it winning. --res is a frame to fit in at the project's aspect.",
+      "requirement": "R-DLV-3"
+    },
+    {
+      "verb": "render preset delete",
+      "usage": "render preset delete <name>",
+      "args": "<name>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "Forget a saved render preset (the built-in ones stay).",
+      "requirement": "R-DLV-3"
+    },
+    {
+      "verb": "render preset list",
+      "usage": "render preset list",
+      "args": "",
+      "minArgs": 0,
+      "maxArgs": 0,
+      "flags": [],
+      "summary": "The render presets: YouTube 1080p, ProRes HQ master and Review H.264 built in, then the saved ones.",
+      "requirement": "R-DLV-3"
     },
     {
       "verb": "cache build",
@@ -2683,6 +2758,36 @@
       "type": "string",
       "stable": true,
       "doc": "The whole output spec in words — codec, profile/bit depth, quality and speed, size, rate."
+    },
+    {
+      "path": "renderPresets",
+      "type": "array",
+      "stable": true,
+      "doc": "The render presets: built in, then the saved ones (R-DLV-3)."
+    },
+    {
+      "path": "renderPresets[].name",
+      "type": "string",
+      "stable": true,
+      "doc": "What `render --preset` takes."
+    },
+    {
+      "path": "renderPresets[].builtIn",
+      "type": "bool",
+      "stable": true,
+      "doc": "One of the three built in (cannot be deleted)."
+    },
+    {
+      "path": "renderPresets[].flags",
+      "type": "string",
+      "stable": true,
+      "doc": "The render flags it lays under the ones given."
+    },
+    {
+      "path": "renderPresets[].spec",
+      "type": "string",
+      "stable": true,
+      "doc": "The spec in words."
     },
     {
       "path": "useProxies",

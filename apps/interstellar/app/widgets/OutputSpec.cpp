@@ -98,6 +98,15 @@ namespace interstellar_v1
             addChild(b);
             return b;
         };
+        // R-DLV-3: a preset in one step, or the controls kept as one
+        mPresetBtn = pill("Preset: Custom");
+        mPresetBtn->onClick = [this] {
+            if (!onPresetMenu) return;
+            const Point o = mPresetBtn->worldTransform().apply(Point{0, 0});
+            onPresetMenu(Rect{o.x, o.y, mPresetBtn->width.value(), mPresetBtn->height.value()});
+        };
+        mSavePreset = pill("Save Preset\xE2\x80\xA6");
+        mSavePreset->onClick = [this] { if (onSavePreset) onSavePreset(specFlags()); };
         mSetIn = pill("Set In");
         mSetIn->onClick = [this] {
             mIn = mPlayhead;
@@ -156,9 +165,44 @@ namespace interstellar_v1
         return mRateIndex == 0 ? "Project \xC2\xB7 " + rateText(mProjFps) + " fps" : std::string(kRates[mRateIndex].label) + " fps";
     }
 
+    std::vector<int> OutputSpec::controlState() const
+    {
+        return {mCodec->selected(), mProres->selected(), mDnx->selected(), mQuality->selected(), mSpeed->selected(),
+                mDepth->selected(), mColour->selected(), mSize->selected(), mRateIndex};
+    }
+
+    void OutputSpec::setPreset(const std::string &name)
+    {
+        mPreset = name;
+        mPresetSnap = controlState();
+        mPresetBtn->setLabel("Preset: " + (name.empty() ? std::string("Custom") : name));
+    }
+
+    std::string OutputSpec::specFlags() const
+    {
+        // the line the controls would write, less what belongs to one render
+        const std::string line = renderLine();
+        const auto at = line.find(" --format ");
+        std::string flags = at == std::string::npos ? std::string() : line.substr(at + 1);
+        const auto range = flags.find(" --range ");
+        if (range != std::string::npos) flags = flags.substr(0, range);
+        return flags;
+    }
+
     std::string OutputSpec::renderLine() const
     {
         const std::string f = format();
+        if (!mPreset.empty())
+        {
+            // R-DLV-3: the preset is the spec; the range is this render's own
+            std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --preset " + cmd::quote(mPreset);
+            if (mRange->selected() == 1)
+            {
+                const double fps = mProjFps > 0 ? mProjFps : 24.0;
+                line += " --range " + cmd::seconds(mIn, fps) + ":" + cmd::seconds(mOut >= 0 ? mOut : mDuration, fps);
+            }
+            return line;
+        }
         std::string line = "render --timeline " + cmd::quote(mTimeline) + " --out " + cmd::quote(mPath->text) + " --format " + f;
         // a default is left out — the service's defaults are the same, and a plain render stays plain
         if (f == "prores" && mProres->selected() != 2) line += std::string(" --profile ") + kProres[mProres->selected()];
@@ -304,15 +348,26 @@ namespace interstellar_v1
         y += kNoteH;
 
         mHdrFormatY = y;
+        {
+            // R-DLV-3: the preset and Save Preset… ride the FORMAT header's line, right-aligned — the
+            // column keeps its height, so nothing below it moves
+            mPresetY = y;
+            const double ph = std::min(kSegH, cosmo_v2::kSectionHeaderHeight - 4.0);
+            const double py = y + (cosmo_v2::kSectionHeaderHeight - ph) * 0.5;
+            const double saveW = 92.0, presetW = std::clamp(w - 2 * kPadX - saveW - kGap - 64.0, 90.0, 190.0);
+            place(*mSavePreset, w - kPadX - saveW, py, saveW, ph, mPreset.empty() ? 1.0 : 0.45);
+            place(*mPresetBtn, w - kPadX - saveW - kGap - presetW, py, presetW, ph, 1.0);
+        }
         y += cosmo_v2::kSectionHeaderHeight;
-        seg(*mCodec, kPadX, y, w - 2 * kPadX, 1.0);
+        const double dim = 1.0 - 0.55 * mPresetAmt.value();   // R-DLV-3: a preset decides the spec
+        seg(*mCodec, kPadX, y, w - 2 * kPadX, dim);
         y += kSegH + kGap;
         auto optional = [&](int r, cosmo_v2::SegmentedControl *s) {
             const double a = mRows[r].amt.value();
             mRowY[r] = y;
             // the opacity leads the collapse (a²), so a leaving row is nearly gone before the row
             // arriving under it has travelled up to where it was
-            if (s) seg(*s, kPadX + kLabelW, y, cw, a * a);
+            if (s) seg(*s, kPadX + kLabelW, y, cw, a * a * dim);
             y += (kSegH + kGap) * a;
         };
         optional(ProresProfile, mProres.get());
@@ -326,13 +381,13 @@ namespace interstellar_v1
             y += (kLineH + kGap) * a;
         }
         mColourY = y;                                     // R-COLOR-4: every codec has one
-        seg(*mColour, kPadX + kLabelW, y, cw, 1.0);
+        seg(*mColour, kPadX + kLabelW, y, cw, dim);
         y += kSegH + kGap;
 
         mHdrSizeY = y;
         y += cosmo_v2::kSectionHeaderHeight;
         mSizeY = y;
-        seg(*mSize, kPadX + kLabelW, y, cw, 1.0);
+        seg(*mSize, kPadX + kLabelW, y, cw, dim);
         y += kSegH + kGap;
         mRateY = y;
         y += kSegH + kGap;
@@ -414,6 +469,15 @@ namespace interstellar_v1
 
     void OutputSpec::advance(double nowMs)
     {
+        // R-DLV-3: a control touched while a preset is chosen: the spec is the controls' again; the
+        // controls dim while a preset decides (eased — they stay usable: touching one means Custom)
+        if (!mPreset.empty() && controlState() != mPresetSnap) setPreset(std::string());
+        if (mPreset.empty() == mPresetApplied)
+        {
+            mPresetAmt.animateTo(mPreset.empty() ? 0.0 : 1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mPresetApplied = !mPreset.empty();
+        }
+        mPresetAmt.update(nowMs);
         mScroll.setExtent(listTop(), listH(), (double)mTimelines.size() * kRowH);
         mScroll.advance(nowMs);
         mColScroll.setExtent(0.0, height.value(), mContentH);

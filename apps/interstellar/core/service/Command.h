@@ -61,7 +61,7 @@ namespace interstellar
             Shuttle, Mark, SourceView, SourcePlayhead, EditTarget, EditInsert, EditOverwrite, MulticamNew, MulticamAngle,
             ProxyMake, ProxyRemove, ProxyUse, MediaOffline, MediaRelink, ViewMatte, TrackWindow, TrackCancel,
             StillGrab, StillApply, StillDelete, ViewWipe, NodeSerial, NodeParallel, NodeRemove,
-            ProjectAutosave, ProjectRecover,
+            ProjectAutosave, ProjectRecover, RenderPresetSave, RenderPresetDelete, RenderPresetList,
             // the graded preview cache (R-PLAY-1)
             CacheBuild, CacheClear,
             // keyframes (R-ANIM)
