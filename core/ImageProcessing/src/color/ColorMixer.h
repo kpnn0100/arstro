@@ -143,6 +143,10 @@ namespace arstro
          *  no luminance move, so `rgbToHsl`/`hslToRgb` and the chroma weight never run
          *  (12.29 ms on a 1.7 Mpx preview — R-PREVIEW-6, D-45). */
         bool isIdentity() const override { return mIdentity; }
+        /** The built per-hue tables, which channels are flat, and the spread — read by a GPU
+         *  backend so it applies the very adjustment the CPU does (R-GPU-2). */
+        const float *lut(int c) const { return mLut[c]; }
+        bool flat(int c) const { return mFlat[c]; }
 
         void process(const Image &in, Image &out) override;
 

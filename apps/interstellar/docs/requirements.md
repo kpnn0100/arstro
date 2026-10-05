@@ -819,6 +819,23 @@ the last in front; a box selects across both; a selected key's drag dispatches `
 Ctrl+V; the plot's paste menu; the lane resized and saved; one track still shows when asked for 600
 px and at 1024×640). Shot `cut_key_lane_multi`.
 
+### DR-GPU-1 With Use GPU on, the grade runs on Cosmo's GPU pipeline (R-GPU-1)
+Measured first: Cosmo's GL backend was available here but ported only exposure, contrast and white
+balance, so any real grade declined to the CPU — "Use GPU changed nothing". Cosmo's desktop backend
+is now a multi-pass pipeline (cosmo DR-GPU-8) porting every per-pixel stage, Texture, Clarity and
+the colour mixer; still CPU: geometry, lens, noise reduction, dehaze, sharpening, grain, masks — an
+edit using any of them declines whole, and says so. In Interstellar every render thread's engine
+(the UI thread's, the read-ahead workers', the preview worker's, the cache builder's) takes the
+setting at its next frame (`core/service/ServiceRender.cpp:376`, an atomic the settings write);
+with the GPU on only two read-ahead workers take jobs (`:548`) — more GL contexts would add memory,
+not speed; the frame cache keys on the processor (`:391`, law 7: the GPU may differ by a code value).
+Model: `settings.gpuInUse` — the UI thread's last graded frame ran on the GPU (`GradeEngine::
+lastAccelerated`). Measured with `interstellar_play_bench` on 4K + exposure/contrast/clarity under a
+loaded machine: playing, exact frames 78 → 120 of ~135 due, mean lag 0.44 → 0.01 frames; a 640-px
+grade 51 → 34 ms (the rest is CPU-side conversion and transfers). Guarded by L2 `with Use GPU on…`
+(the frame grades afresh on the GPU — `gpuInUse` — within 2/255 of the CPU; sharpening declines it;
+off again is CPU) and cosmo's `EditEngine_gl_pipeline_matches_cpu_per_stage`.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

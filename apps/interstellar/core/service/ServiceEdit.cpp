@@ -482,6 +482,8 @@ namespace interstellar
         cs.uiScale = mSettings.uiScale;
         mRack.applySettings(cs);
         mGrade->setPreferGpu(mSettings.useGpu);
+        mGpuWanted.store(mSettings.useGpu);   // R-GPU-1: every render thread's engine takes it at its next frame
+        if (mAhead) mAhead->cv.notify_all();
         mSettings.cores = mBudget.cores();
         mSettings.engineThreads = mBudget.engineThreads();
         mSettings.decodeWorkers = mBudget.decodeWorkers();

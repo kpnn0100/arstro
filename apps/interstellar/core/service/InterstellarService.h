@@ -30,6 +30,7 @@
 #include "FrameSource.h"
 #include "Rack.h"
 #include "Raster.h"
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -331,6 +332,7 @@ namespace interstellar
         double mLastCommandMs = -1e9;                // the cache builds when the user has stopped for a moment
         bool mCacheForced = false;                   // `cache build`: now, whatever the idle rule says
         long long mCacheShown = 0;
+        std::atomic<bool> mGpuWanted{false};         // R-GPU-1: the grade on Cosmo's GPU backend (read by every render thread)
         bool mLastFromCache = false;                 // the last frame shown while playing came from the cache
         int mPlayEdge = 0;                           // the long edge playback grades at now (0 = not playing)
         int mLastMonitorEdge = 0;                    // the edge the monitor last asked for

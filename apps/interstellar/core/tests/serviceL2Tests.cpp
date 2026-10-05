@@ -1188,6 +1188,38 @@ int main()
         assert(f.svc->model().settings.keyLaneHeight == 220);
     });
 
+    test("with Use GPU on, the grade runs on Cosmo's GPU backend and matches the CPU (R-GPU-1)", [] {
+        Fixture f("gpu");
+        f.standard();
+        f.must("set a.basic.exposure=0.4");
+        f.must("set a.basic.clarity=35");
+        f.must("set a.basic.vibrance=30");
+        f.must("set a.grade.grade1=200,40,5");
+        Raster cpu, gpu;
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, cpu));
+        if (!f.svc->model().settings.gpuAvailable) { std::printf("    skipped: no GPU backend on this host\n"); return; }
+        f.must("settings set useGpu=1");     // the frame cache keys on the processor: this grades afresh
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, gpu));
+        f.must("playhead 0");                // a command refreshes the model
+        assert(gpu.width == cpu.width && gpu.height == cpu.height);
+        int maxd = 0;
+        for (size_t i = 0; i < cpu.rgba.size(); ++i) maxd = std::max(maxd, std::abs((int)cpu.rgba[i] - (int)gpu.rgba[i]));
+        std::printf("    GPU vs CPU, max difference %d/255\n", maxd);
+        assert(maxd <= 2);
+        assert(f.svc->model().settings.useGpu && f.svc->model().settings.gpuInUse);   // it did run there
+        // a stage the GPU has not ported declines to the CPU — said, not hidden
+        f.must("set a.detail.sharpenAmount=40");
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, gpu));
+        f.must("playhead 0");
+        assert(!f.svc->model().settings.gpuInUse);
+        f.must("set a.detail.sharpenAmount=0");
+        f.must("settings set useGpu=0");
+        f.must("set a.basic.contrast=5");    // a grade not cached yet, on the CPU
+        assert(f.svc->renderTimelineFrame("tl_1", 1.0, 0, gpu));
+        f.must("playhead 0");
+        assert(!f.svc->model().settings.gpuInUse);
+    });
+
     test("the preview cache holds the graded frames, rebuilds only what an edit changed, and playback reads it (R-PLAY-1)", [] {
         Fixture f("pcache");
         f.standard();                                             // shotA 0–2 s, shotB 2–4 s: four 1-s segments

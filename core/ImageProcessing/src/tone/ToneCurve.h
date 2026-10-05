@@ -38,6 +38,10 @@ namespace arstro
         /** true = Log/perceptual (sRGB-encoded) domain (default); false = Linear. */
         void setLogScale(bool log);
         bool logScale() const { return mLog; }
+        /** The built tables (kLut entries each) — read by a GPU backend so it samples the very
+         *  curve the CPU does (R-GPU-2). */
+        const Pixel *masterLut() const { return mLut; }
+        const Pixel *channelLut(int c) const { return mChanLut[c < 0 ? 0 : (c >= kChannels ? kChannels - 1 : c)]; }
 
         /** True when the master and all three channel curves are the identity, so no
          *  pixel would move. Worth having as a cached flag rather than a scan: this is

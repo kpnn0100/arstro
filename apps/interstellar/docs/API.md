@@ -418,6 +418,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `settings.hardwareVideo` | bool |  | H.264/H.265 encode on the GPU's video unit (VA-API) for renders and the preview cache; falls back to software, said (R-PLAY-3). |
 | `settings.uiScale` | integer |  | Percent of the design size the window draws at. |
 | `settings.gpuAvailable` | bool | *machine* | A GPU backend exists on this machine. |
+| `settings.gpuInUse` | bool | *machine* | The last frame graded for a render, a still or the synchronous monitor ran on the GPU (R-GPU-1); false when the backend declined (a stage it has not ported). |
 | `settings.cores` | integer | *machine* | Cores on this machine. |
 | `settings.engineThreads` | integer | *machine* | Engine threads the budget resolves to now. |
 | `settings.decodeWorkers` | integer | *machine* | Decode workers the budget resolves to now. |

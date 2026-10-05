@@ -2559,6 +2559,12 @@
       "doc": "A GPU backend exists on this machine."
     },
     {
+      "path": "settings.gpuInUse",
+      "type": "bool",
+      "stable": false,
+      "doc": "The last frame graded for a render, a still or the synchronous monitor ran on the GPU (R-GPU-1); false when the backend declined (a stage it has not ported)."
+    },
+    {
       "path": "settings.cores",
       "type": "integer",
       "stable": false,

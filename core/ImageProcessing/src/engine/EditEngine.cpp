@@ -694,8 +694,8 @@ namespace arstro
             if (mAccel->process(linearSource, params, r))
             {
                 processed = std::move(r.processed);
-                mPreCurveHist = r.preCurveHist;
-                mPreMixerHue = r.preMixerHue;
+                if (mWantPreCurveHist) mPreCurveHist = r.preCurveHist;   // an unwanted tap keeps its last value (as on the CPU)
+                if (mWantPreMixerHue) mPreMixerHue = r.preMixerHue;
                 mLastHistogram = r.finalHist;
                 accelerated = true;
             }

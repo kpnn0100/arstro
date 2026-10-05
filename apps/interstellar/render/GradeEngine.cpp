@@ -51,6 +51,7 @@ namespace render
     {
         if (in.empty() || in.rgba.size() < (std::size_t)in.width * in.height * 4) return false;
 
+        mLastAccelerated = false;
         if (!hasParams || isIdentity(p))
         {
             out = in;
@@ -63,6 +64,7 @@ namespace render
         const arstro::Image linear = arstro::EditEngine::fromEncodedBytes(in.rgba.data(), in.width, in.height, 4);
         const int edge = longEdge > 0 ? longEdge : std::max(in.width, in.height);
         const arstro::PreviewBuffer buf = mEngine->renderImage(linear, p, edge);
+        mLastAccelerated = mEngine->lastRenderAccelerated();
 
         if (!buf.rgba || buf.width <= 0 || buf.height <= 0)
         {

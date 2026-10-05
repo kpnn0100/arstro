@@ -1174,8 +1174,8 @@ TEST(EditEngine_gl_backend_matches_cpu)
     for (size_t i = 0; i < g.size(); ++i) { int d = (int)g[i] - (int)cref[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
     CHECK(maxd <= 2);  // GPU vs CPU float, after sRGB encode + round to 8-bit
 
-    // An edit OUTSIDE the ported subset (saturation) must decline -> exact CPU output.
-    EditParams q = p; q.saturation = 40.f;
+    // An edit OUTSIDE the ported stages (sharpening — not ported yet) must decline -> exact CPU output.
+    EditParams q = p; q.sharpenAmount = 40.f;
     EditEngine cpu2; cpu2.setComputeAccelerator(nullptr);
     cpu2.addImage(bytes.data(), 24, 18, 4); cpu2.selectImage(0); cpu2.setPreviewSize(4096);
     cpu2.setCurrentParams(q);
@@ -1186,8 +1186,8 @@ TEST(EditEngine_gl_backend_matches_cpu)
     const std::vector<uint8_t> g2b(g2.rgba, g2.rgba + (size_t)g2.width * g2.height * 4);
     CHECK(g2b == c2ref);
 
-    // A per-channel tone curve is also outside the ported subset -> decline -> exact CPU.
-    EditParams r = p; r.curveChannel[0] = {{0.f, 0.f}, {0.5f, 0.9f}, {1.f, 1.f}};
+    // A lens correction is also outside the ported stages -> decline -> exact CPU.
+    EditParams r = p; r.lensVignette = -30.f;
     EditEngine cpu3; cpu3.setComputeAccelerator(nullptr);
     cpu3.addImage(bytes.data(), 24, 18, 4); cpu3.selectImage(0); cpu3.setPreviewSize(4096);
     cpu3.setCurrentParams(r);
@@ -1197,6 +1197,61 @@ TEST(EditEngine_gl_backend_matches_cpu)
     PreviewBuffer g3 = gpu.renderFull();
     const std::vector<uint8_t> g3b(g3.rgba, g3.rgba + (size_t)g3.width * g3.height * 4);
     CHECK(g3b == c3ref);
+}
+
+// The multi-pass desktop pipeline (Interstellar R-GPU-1, cosmo R-GPU-5 amended): every stage it
+// ports, alone and together, matches the CPU reference within 2/255 — tone regions, the tone curve
+// (master, per channel, log and linear domain), Texture and Clarity (their exact Gaussian),
+// vibrance and saturation, the colour mixer with and without its spread (the box cascade), the
+// three wheels with balance and the hue remap. Large enough (96x64) that Clarity's radius is real.
+TEST(EditEngine_gl_pipeline_matches_cpu_per_stage)
+{
+    const int W = 96, H = 64;
+    std::vector<uint8_t> bytes((size_t)W * H * 4);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+        {
+            uint8_t *q = &bytes[((size_t)y * W + x) * 4];
+            q[0] = (uint8_t)(x * 255 / W); q[1] = (uint8_t)(y * 255 / H); q[2] = (uint8_t)((x * 5 + y * 11) & 255); q[3] = 255;
+        }
+    auto render = [&](const EditParams &p, bool gpuWanted, bool &ranGpu) {
+        EditEngine e;
+        if (!gpuWanted) e.setComputeAccelerator(nullptr);
+        e.addImage(bytes.data(), W, H, 4); e.selectImage(0); e.setPreviewSize(4096);
+        e.setPreferGpu(gpuWanted);
+        e.setCurrentParams(p);
+        PreviewBuffer b = e.renderFull();
+        ranGpu = e.lastRenderAccelerated();
+        return std::vector<uint8_t>(b.rgba, b.rgba + (size_t)b.width * b.height * 4);
+    };
+    {
+        EditEngine probe;
+        if (!probe.gpuAvailable()) { std::printf("      skipped: no GPU backend available on this host\n"); CHECK(true); return; }
+    }
+    std::vector<std::pair<const char *, EditParams>> cases;
+    { EditParams p; p.highlights = -50; p.shadows = 40; p.whites = 20; p.blacks = -30; cases.push_back({"tone regions", p}); }
+    { EditParams p; p.curve = {{0, 0}, {0.3f, 0.2f}, {0.7f, 0.85f}, {1, 1}}; p.curveChannel[2] = {{0, 0}, {0.5f, 0.4f}, {1, 1}}; cases.push_back({"tone curve (log)", p}); }
+    { EditParams p; p.curveLog = false; p.curve = {{0, 0.05f}, {0.5f, 0.6f}, {1, 0.95f}}; cases.push_back({"tone curve (linear)", p}); }
+    { EditParams p; p.texture = 60; cases.push_back({"texture", p}); }
+    { EditParams p; p.clarity = -45; cases.push_back({"clarity", p}); }
+    { EditParams p; p.vibrance = 40; p.saturation = -20; cases.push_back({"vibrance + saturation", p}); }
+    { EditParams p; p.mixer[0] = {{30, 0.4f}, {200, -0.3f}}; p.mixer[2] = {{120, 0.5f}}; cases.push_back({"mixer", p}); }
+    { EditParams p; p.mixer[1] = {{0, 0.6f}, {180, -0.5f}}; p.mixerSpread = 100; cases.push_back({"mixer with spread", p}); }
+    { EditParams p; p.grade[0] = {210, 40, -15}; p.grade[1] = {90, 20, 5}; p.grade[2] = {35, 30, 10}; p.balance = -30; cases.push_back({"wheels + balance", p}); }
+    { EditParams p; p.remapEnable = true; p.remapSrc = 120; p.remapRange = 60; p.remapDst = 30; p.remapStrength = 0.9f; p.saturation = 30; cases.push_back({"hue remap", p}); }
+    { EditParams p; p.exposure = 0.5f; p.contrast = 25; p.highlights = -30; p.temp = 5600; p.clarity = 30; p.texture = 20; p.vibrance = 20;
+      p.mixer[0] = {{60, 0.2f}}; p.grade[1] = {200, 25, 0}; p.curve = {{0, 0}, {0.5f, 0.55f}, {1, 1}}; cases.push_back({"all together", p}); }
+    for (const auto &c : cases)
+    {
+        bool cpuGpu = false, gpuGpu = false;
+        const auto cref = render(c.second, false, cpuGpu);
+        const auto g = render(c.second, true, gpuGpu);
+        int maxd = 0;
+        for (size_t i = 0; i < g.size() && i < cref.size(); ++i) { int d = (int)g[i] - (int)cref[i]; if (d < 0) d = -d; if (d > maxd) maxd = d; }
+        std::printf("      %-22s on the GPU: %s, max diff %d\n", c.first, gpuGpu ? "yes" : "NO", maxd);
+        CHECK(gpuGpu && !cpuGpu);
+        CHECK(g.size() == cref.size() && maxd <= 2);
+    }
 }
 
 // The OpenGL ES 3.1 backend (Android's GPU path, and an ARM Linux board's — R-GPU-7),

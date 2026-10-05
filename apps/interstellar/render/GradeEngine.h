@@ -69,6 +69,9 @@ namespace render
          *  is available, and the CPU path stays the reference (R-RENDER-5 is held on CPU). */
         void setPreferGpu(bool prefer);
         bool gpuAvailable();
+        /** The last render that reached the engine ran on the GPU backend (R-GPU-1) — false after an
+         *  identity frame, a CPU render or a declined job. */
+        bool lastAccelerated() const { return mLastAccelerated; }
 
         /** True when `p` would change nothing. Compared through the parameter codec rather than
          *  field by field, for the same reason ParamHash is: a hand-written comparison is a second
@@ -78,6 +81,7 @@ namespace render
 
     private:
         void ensureEngine();
+        bool mLastAccelerated = false;
         std::unique_ptr<arstro::EditEngine> mEngine;
         bool mPreferGpu = false;
     };

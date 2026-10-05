@@ -812,6 +812,7 @@ namespace interstellar
         m.hasClipClipboard = mHasClipClipboard;
         m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
+        m.settings.gpuInUse = mGrade->lastAccelerated();   // R-GPU-1: measured, the UI thread's last grade
         m.presets = mPresets;
     }
 

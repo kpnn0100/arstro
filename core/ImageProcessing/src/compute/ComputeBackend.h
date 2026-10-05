@@ -60,6 +60,10 @@ namespace arstro
          *  float) — the software pipeline is the conformance reference. A backend may
          *  also decline (return false) an edit it does not yet fully support. */
         virtual bool process(const Image &linearSource, const EditParams &params, ComputeResult &out) = 0;
+        /** Whether the two INTERMEDIATE histogram taps are wanted (EditEngine forwards its own
+         *  switch). A backend that runs several stages may skip reading them back when not;
+         *  `ComputeResult::preCurveHist`/`preMixerHue` are then left empty. Default: wanted. */
+        virtual void setWantIntermediateTaps(bool preCurve, bool preMixer) { (void)preCurve; (void)preMixer; }
     };
 
     /** Several built backends, one of which is chosen at RUN time: the first whose
@@ -79,6 +83,10 @@ namespace arstro
         Kind kind() const override;
         bool available() const override { return chosen() != nullptr; }
         bool process(const Image &linearSource, const EditParams &params, ComputeResult &out) override;
+        void setWantIntermediateTaps(bool preCurve, bool preMixer) override
+        {
+            for (auto &c : mCandidates) if (c) c->setWantIntermediateTaps(preCurve, preMixer);
+        }
 
     private:
         IComputeBackend *chosen() const;

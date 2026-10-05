@@ -209,6 +209,7 @@ namespace interstellar
         int keyLaneHeight = 140;      // R-ANIM-8: the Cut key lane's height, px (dragged at its top edge)
         // ── measured, read-only ──
         bool gpuAvailable = false;
+        bool gpuInUse = false;        // the last frame graded on the UI thread ran on the GPU (R-GPU-1)
         int cores = 0, engineThreads = 0, decodeWorkers = 0;
     };
 

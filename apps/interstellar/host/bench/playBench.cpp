@@ -64,6 +64,7 @@ int main(int argc, char **argv)
     };
     if (std::getenv("BENCH_PLAY"))
     {
+        if (std::getenv("BENCH_GPU")) svc.dispatchText("settings set useGpu=1", err);   // R-GPU-1
         // R-PLAY-1: BENCH_CACHE=1 builds the graded preview cache first, then plays from it
         if (std::getenv("BENCH_CACHE"))
         {

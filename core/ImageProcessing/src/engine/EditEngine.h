@@ -161,6 +161,7 @@ namespace arstro
         {
             mWantPreCurveHist = preCurveLuma;
             mWantPreMixerHue = preMixerHue;
+            if (mAccel) mAccel->setWantIntermediateTaps(preCurveLuma, preMixerHue);   // a GPU backend may skip their read-back
         }
         bool wantsPreCurveHistogram() const { return mWantPreCurveHist; }
         bool wantsPreMixerHue() const { return mWantPreMixerHue; }

@@ -1483,7 +1483,14 @@ accelerator is used only when its result matches it.
   is defined and EGL/GL link (CMake auto-detects).
   - **Ported subset (this increment):** the per-pixel colour/tone point ops — **Exposure**,
     **Contrast**, **White Balance** (gains reused from `color::kelvinToRgbGain`) — plus the exact
-    sRGB **encode**. `process()` runs on the GPU only when the edit is entirely within that subset
+    sRGB **encode**. (**AMENDED 2026-10-05, for Interstellar's R-GPU-1 "GPU grading":** the desktop
+    backend is now a MULTI-PASS pipeline that also ports **Tone Regions**, the **Tone Curve** (master
+    and per channel, log and linear domain — the CPU's own tables uploaded), **Texture** and
+    **Clarity** (the exact separable Gaussian), **Vibrance/Saturation**, the **Colour Mixer** with its
+    spread (the box cascade) and **Colour Grading** (wheels, balance, hue remap) — matched to the CPU
+    within 1/255 per stage (`EditEngine_gl_pipeline_matches_cpu_per_stage`). Still declining to the
+    CPU: geometry, lens, noise reduction, dehaze, sharpening, grain, masks. The GLES backend keeps
+    the original subset.) `process()` runs on the GPU only when the edit is entirely within that subset
     (every other stage at its default); anything else (tone curve, mixer, grade, tone regions,
     vibrance/saturation, dehaze, grain, sharpen, noise reduction, lens, geometry, masks) **declines
     → CPU**, so all edits stay correct. The histogram taps are computed on the CPU from the GPU

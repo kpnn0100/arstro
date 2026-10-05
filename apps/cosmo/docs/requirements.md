@@ -833,6 +833,25 @@ conformance, not speed.
 
 ## 14. Filter bypass (R-BYPASS)
 
+### DR-GPU-8 The desktop GL backend is a multi-pass pipeline (R-GPU-5, amended 2026-10-05)
+`GlComputeBackend::process` (`core/ImageProcessing/src/compute/GlComputeBackend.cpp:159`) accepts an
+edit when every stage it uses is ported (`glcompute::pipelineSupports`, `GlComputeShared.h:68`) and
+then keeps the frame on the GPU from upload to encode, as a sequence of compute passes over two image
+buffers (`GlPipelineShaders.h`: point_pre = Exposure·Contrast·ToneRegions·WhiteBalance fused,
+curve, lum, gauss_h/v, box_h/v, local, vibrance, mix_weights, mix_apply, grading, encode), each a
+step-for-step port of its CPU stage. Where the CPU derives a table, the backend configures its own
+`ToneCurve` and `ColorMixer` with the same setters and uploads their tables (`:168`); the blurs
+reproduce `spatial::gaussianBlurPlane` (`:372`) and `fastBlurPlane`'s box cascade with the CPU's own
+widths (`:401`), clamped edges. Programs compile lazily per pass on the calling thread's context
+(a failed compile declines that pass from then on). The intermediate histogram taps are read back
+only when `IComputeBackend::setWantIntermediateTaps` (new, forwarded by
+`EditEngine::setWantIntermediateHistograms` and `SelectingComputeBackend`) asks for them. Measured
+on the AMD radeonsi here at 1080p: exposure+contrast+clarity+saturation 311 → 78 ms;
+regions+texture+vibrance+curves 117 → 50 ms; mixer with spread + wheels + remap 212 → 56 ms; max
+difference 1/255. Guarded by `EditEngine_gl_pipeline_matches_cpu_per_stage`
+(`unittest/engineTests.cpp:1207`: eleven cases, each run on the GPU and within 2/255 — red with
+Clarity's midtone gate dropped, max diff 22) and `EditEngine_gl_backend_matches_cpu` (its "declines"
+cases moved to stages still unported: sharpening and the lens).
 ### DR-BYPASS-1 Model
 `EditSession::GNode` carries `bypass`. `isBypassed(node)` / `setBypassed(node,on)` /
 `toggleBypass(node)` read and write it; `editTargetNode()` / `editTargetBypassed()` answer for

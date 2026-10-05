@@ -373,6 +373,9 @@ namespace interstellar
 
     bool InterstellarService::executePlan(RenderCtx &ctx, const FramePlan &plan, Raster &out, bool remember)
     {
+        // R-GPU-1: this thread's engine follows the setting (each thread owns its engine and its
+        // GL context; the GPU path declines to the CPU for any stage it has not ported)
+        ctx.grade->setPreferGpu(mGpuWanted.load(std::memory_order_relaxed));
         // Graded frames must outlive the compose call: one slot per layer.
         std::vector<Raster> graded(plan.layers.size());
         std::vector<render::Layer> layers;
@@ -385,6 +388,9 @@ namespace interstellar
             key.sourceFrame = l.frame;
             key.paramHash = ungradedOnly ? render::FrameCache::kUngraded : render::hashParams(l.params);
             key.level = l.edge;
+            // law 7: the cache keys on everything that changes the pixels — and the GPU's grade may
+            // differ from the CPU's by a code value (R-GPU-1), so which one made a frame is part of it
+            if (mGpuWanted.load(std::memory_order_relaxed) && !ungradedOnly) key.source += "|gpu";
             if (l.weight > 0.0 && l.weight < 1.0) key.source += "|w" + canonicalNumber(l.weight);
             if (l.groupMix && !ungradedOnly)
                 key.source += "|g" + canonicalNumber(l.groupWeight) + ":" + std::to_string(render::hashParams(l.paramsGroupsOff));
@@ -539,7 +545,8 @@ namespace interstellar
             AheadPool::Item it;
             {
                 std::unique_lock<std::mutex> l(p.mu);
-                p.cv.wait(l, [&] { return p.stop || !p.queue.empty(); });
+                // with the GPU on, two workers feed it: more GL contexts add memory, not speed
+                p.cv.wait(l, [&] { return p.stop || (!p.queue.empty() && (worker < 2 || !mGpuWanted.load())); });
                 if (p.stop) return;
                 it = std::move(p.queue.front());
                 p.queue.pop_front();
