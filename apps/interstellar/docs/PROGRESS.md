@@ -54,7 +54,7 @@ one integrator who moves, wires, tests and commits each stream:
       clip copy/cut/paste, clip and lane menus (DR-UI-14, DR-TL-6).
 - [~] The 2026-10-05 request: (1) the rack row's weight bar → the Cosmo plugin's Mix — DONE
       (DR-UI-16), (2) the image-processing stack with Blur kinds — DONE (DR-FX-5/6, DR-UI-16), (3) keyframes
-      and a graph editor (R-ANIM), (4) scopes (R-UI-15), (5) smooth preview: proxies, read-ahead,
+      and a graph editor (R-ANIM), (4) scopes — DONE (DR-UI-15), (5) smooth preview: proxies, read-ahead,
       hardware video (R-PLAY).
 - [ ] **The professional backlog** (2026-10-02, asked "what is missing for professional movie
       editing") — ranked, each a future R- line, none started:

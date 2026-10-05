@@ -3,6 +3,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 #include <algorithm>
@@ -62,6 +63,8 @@ namespace interstellar_host
         AVStream *st = mFmt->streams[mStream];
         mInfo.width = mDec->width;
         mInfo.height = mDec->height;
+        // what the source carries per component — the scopes say "10-bit source, 8-bit preview"
+        if (const AVPixFmtDescriptor *pd = av_pix_fmt_desc_get(mDec->pix_fmt)) mInfo.bitDepth = pd->comp[0].depth;
         // `avg_frame_rate` is what a container states; `r_frame_rate` is the best guess when it
         // does not. A still image has neither, so it falls back to 1 — which is right: a still is
         // a one-frame stream.

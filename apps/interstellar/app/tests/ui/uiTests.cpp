@@ -1555,6 +1555,65 @@ namespace
               "right-clicking an empty lane offers Paste Here and new tracks");
     }
 
+    /** R-UI-15: the scopes measure what they say — on frames whose answer is known. */
+    void testScopes()
+    {
+        using arstro::interstellar::Raster;
+        std::printf("scopes: clipping, levels, waveform, vectorscope, the clip overlay\n");
+        {
+            Raster f;
+            f.allocate(100, 50, 255);
+            for (int y = 0; y < 50; ++y)
+                for (int x = 50; x < 100; ++x) { uint8_t *p = &f.rgba[((size_t)y * 100 + x) * 4]; p[0] = p[1] = p[2] = 0; }
+            const ScopeData d = scopesOf(f);
+            CHECK(d.valid && std::fabs(d.clipHi[0] - 50.0) < 0.1 && std::fabs(d.clipLo[2] - 50.0) < 0.1,
+                  "half white / half black: 50 % clipped at white, 50 % crushed at black, per channel");
+            CHECK(d.levelsUsed() == 2, "…and it uses 2 of 256 levels");
+            const Raster m = clipMaskOf(f);
+            CHECK(m.rgba[0] == 255 && m.rgba[3] > 0 && m.rgba[((size_t)10 * 100 + 75) * 4 + 2] == 255,
+                  "the clip mask is red over the white half, blue over the black half");
+        }
+        {
+            Raster g;
+            g.allocate(256, 20, 255);
+            for (int y = 0; y < 20; ++y)
+                for (int x = 0; x < 256; ++x) { uint8_t *p = &g.rgba[((size_t)y * 256 + x) * 4]; p[0] = p[1] = p[2] = (uint8_t)x; }
+            const ScopeData d = scopesOf(g);
+            CHECK(d.levelsUsed() == 256, "a full ramp uses all 256 levels");
+            auto at = [&](const Raster &r, int x, int y) { return (int)r.rgba[((size_t)y * r.width + x) * 4 + 3]; };
+            const int H = ScopeData::kScopeH, W = ScopeData::kScopeW;
+            CHECK(at(d.waveform, 0, H - 1) > 0 && at(d.waveform, W - 1, 0) > 0 && at(d.waveform, 0, 0) == 0,
+                  "the waveform of a ramp rises left to right: black at the bottom-left, white at the top-right");
+        }
+        {
+            Raster red;
+            red.allocate(40, 40, 255);
+            for (size_t i = 0; i < red.rgba.size(); i += 4) { red.rgba[i] = 200; red.rgba[i + 1] = 30; red.rgba[i + 2] = 30; }
+            const ScopeData d = scopesOf(red);
+            int bx = -1, by = -1, best = 0;
+            const int N = ScopeData::kVectorN;
+            for (int y = 0; y < N; ++y)
+                for (int x = 0; x < N; ++x)
+                    if (d.vector.rgba[((size_t)y * N + x) * 4 + 3] > best) { best = d.vector.rgba[((size_t)y * N + x) * 4 + 3]; bx = x; by = y; }
+            CHECK(bx < N / 2 && by < N / 2, "a red frame lands in the vectorscope's upper-left, where red sits");
+        }
+        // the panel: modes cross-fade, the CLIP switch fades the monitor's overlay in
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto sp = r.app->edit().gradeInspector()->scopes();
+        CHECK(sp->data().valid && sp->readout().find("levels") != std::string::npos, "the readout says the levels used");
+        Point p = centre(*sp, sp->modeRect(ScopePanel::Waveform));
+        r.click(p.x, p.y);
+        const double wf = firstMoved(r, [&] { return sp->modeAmount(ScopePanel::Waveform); }, 0.0);
+        CHECK(strictlyBetween(wf, 0.0, 1.0), "Waveform CROSS-FADES in (first frame between)");
+        r.settle();
+        p = centre(*sp, sp->clipRect());
+        r.click(p.x, p.y);
+        auto mon = r.app->edit().monitor();
+        const double ca = firstMoved(r, [&] { return mon->clipAmount(); }, 0.0);
+        CHECK(sp->clipWarning() && strictlyBetween(ca, 0.0, 1.0), "the CLIP switch fades the monitor's clip overlay in");
+    }
+
     /** R-UI-13: Ctrl + wheel zooms the monitor about the pointer, eased; drag pans; double-click fits. */
     void testMonitorZoom()
     {
@@ -1704,6 +1763,7 @@ int main()
     testMonitorZoom();
     testCutEditing();
     testPluginList();
+    testScopes();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

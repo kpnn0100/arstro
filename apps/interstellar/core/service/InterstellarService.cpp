@@ -496,6 +496,7 @@ namespace interstellar
                 if (src != mSync->sources.end() && src->second->ok)
                 {
                     r.mediaFps = src->second->info.fps > 0 ? src->second->info.fps : 24.0;
+                    r.mediaBitDepth = src->second->info.bitDepth;
                     r.mediaDuration = src->second->info.frames <= 1 ? 0.0 : (double)src->second->info.frames / r.mediaFps;
                 }
                 r.overridden = overridden.count(ro->id) > 0;

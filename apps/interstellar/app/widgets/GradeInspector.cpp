@@ -25,8 +25,8 @@ namespace interstellar_v1
     GradeInspector::GradeInspector()
     {
         clipToBounds = true;
-        mHistogram = std::make_shared<HistogramWidget>();
-        addChild(mHistogram);
+        mScopes = std::make_shared<ScopePanel>();
+        addChild(mScopes);
 
         mTabs = std::make_shared<EditStackTabs>();
         mTabs->tabHeight = 27.0;
@@ -145,7 +145,7 @@ namespace interstellar_v1
 
     double GradeInspector::tabsTop() const
     {
-        return HistogramWidget::kHeight + mPlugins->wantedHeight() + SliderRow::kRowHeight + 13.0;   // the Mix row and its gaps
+        return ScopePanel::kHeight + mPlugins->wantedHeight() + SliderRow::kRowHeight + 13.0;   // the Mix row and its gaps
     }
 
     void GradeInspector::send(const char *filter, const Fields &fields)
@@ -163,6 +163,7 @@ namespace interstellar_v1
         mBypassed = valid && m.rack[m.selectedRack].bypass;
         mTabs->enabled = valid;   // nothing to edit: the panels take no input (the wash says why)
         mLastModel = &m;   // the service's model outlives every frame; a selection re-binds from it
+        mScopes->setSourceBits(valid ? m.rack[(size_t)m.selectedRack].mediaBitDepth : 0);
         mPlugins->bind(m);
         mEffectWanted = !mPlugins->selected().empty();
         mEffectPanel->bind(m, mPlugins->selected(), interacting);
@@ -222,11 +223,12 @@ namespace interstellar_v1
 
     void GradeInspector::layout()
     {
-        // histogram · the plugin list (its height eases with its rows) · then Cosmo's Mix and tabs
+        // scopes · the plugin list (its height eases with its rows) · then Cosmo's Mix and tabs
         // OR the selected effect's panel, cross-faded through one live amount
         const double w = width.value(), h = height.value();
-        mHistogram->x.set(0.0); mHistogram->y.set(0.0); mHistogram->width.set(w);
-        const double listY = HistogramWidget::kHeight, listH = mPlugins->wantedHeight();
+        mScopes->x.set(0.0); mScopes->y.set(0.0); mScopes->width.set(w); mScopes->height.set(ScopePanel::kHeight);
+        mScopes->layout();
+        const double listY = ScopePanel::kHeight, listH = mPlugins->wantedHeight();
         mPlugins->x.set(0.0); mPlugins->y.set(listY); mPlugins->width.set(w); mPlugins->height.set(listH);
         const double f = mPluginFade.value();
         const double below = listY + listH;
@@ -319,7 +321,7 @@ namespace interstellar_v1
         const Rect stack = stackRect();
         const Rect page{stack.x, stack.y + mTabs->tabHeight, stack.w, std::max(0.0, stack.h - mTabs->tabHeight)};
         const double cosmoShown = 1.0 - mPluginFade.value();   // the Cosmo page's washes go with it
-        const Rect band{0, HistogramWidget::kHeight, width.value(), std::max(0.0, height.value() - HistogramWidget::kHeight)};
+        const Rect band{0, ScopePanel::kHeight, width.value(), std::max(0.0, height.value() - ScopePanel::kHeight)};
         t.save();
         t.clipRect(0, 0, width.value(), height.value());
         // a different node selected: the page re-seats under a card wash that eases away

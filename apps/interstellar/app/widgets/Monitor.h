@@ -30,6 +30,7 @@
 #include "../Theme.h"
 #include "../../core/Raster.h"
 #include "../../../cosmo/widgets/HoverFade.h"
+#include "ImageSlot.h"
 #include <functional>
 #include <string>
 
@@ -71,6 +72,11 @@ namespace interstellar_v1
         void zoomAbout(double factor, artboard::Point at);
         /** Back to fit (double-click, Workspace › Reset Workspace). Intent only — it eases. */
         void resetZoom();
+        /** The clip warning (R-UI-15): `mask` is clipMaskOf(the frame shown); the overlay fades in and
+         *  out with `setClipWarning`. Presentation only. */
+        void setClipMask(const interstellar::Raster &mask) { mClipMask.set(mask); }
+        void setClipWarning(bool on) { mClipWanted = on; }
+        double clipAmount() const { return mClipAmt.value(); }
         double zoomLive() const { return mZoom.value(); }
         double zoomTarget() const { return mZoomTarget; }
         bool panning() const { return mPanning; }
@@ -113,6 +119,9 @@ namespace interstellar_v1
         artboard::AnimatedProperty mCaptureAmt{0.0};
         cosmo_v2::HoverFade mCaptureHover;
         mutable artboard::Rect mCaptureRect{0, 0, 0, 0};
+        ImageSlot mClipMask;
+        bool mClipWanted = false, mClipApplied = false;
+        artboard::AnimatedProperty mClipAmt{0.0};
         // zoom + pan: the centre is the picture point (0..1) at the frame's centre
         artboard::Point centreFor(double zoom) const;
         double mZoomTarget = 1.0, mZoomLast = 1.0;

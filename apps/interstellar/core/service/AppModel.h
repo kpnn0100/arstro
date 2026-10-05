@@ -66,6 +66,7 @@ namespace interstellar
         double mediaDuration = 0;     // seconds of source; 0 = a still, or not yet opened (R-RACK-3)
         double mediaFps = 0;          // the source's own frame rate once opened — a ref-frame step is 1/mediaFps (R-RACK-3)
         int sharesMedia = 0;          // OTHER sources on the same file (a variant and its original, R-RACK-5)
+        int mediaBitDepth = 0;        // bits per component the source carries once opened (R-UI-15); 0 = unknown
     };
 
     /** A plugin parameter as the UI draws it: its catalog definition and the value now (R-FX-5). */

@@ -129,6 +129,7 @@ namespace interstellar_v1
         std::string mCaptureBind;                       // what the open capture menu captures ("" = the timeline)
         std::string mRenameTarget;                      // the bind name the context menu is renaming
         void fetchFrame(const interstellar::AppModel &m, bool force);
+        void showScopes(const interstellar::Raster &frame);
         void fetchSource(const interstellar::AppModel &m, const interstellar::RackNodeModel &n, int edge, bool force);
         void layoutAll();
         void noteActivity() { mLastActivityMs = mNowMs; }

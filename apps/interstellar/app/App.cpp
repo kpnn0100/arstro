@@ -16,23 +16,6 @@ namespace interstellar_v1
         constexpr double kActiveWindowMs = 700.0;   // longer than the longest tween (520 ms in cosmo)
         constexpr int kKeyBackspace = 8, kKeyEsc = 27, kKeySpace = 32, kKeyLeft = 37, kKeyRight = 39, kKeyDelete = 46;
 
-        /** Display-referred 256-bin histogram of the monitor frame — what the reused cosmo
-         *  HistogramWidget plots. The pixels are the view's own (it is showing them). */
-        HistogramData histogramOf(const interstellar::Raster &r)
-        {
-            HistogramData h;
-            const size_t n = (size_t)r.width * r.height;
-            const size_t step = std::max<size_t>(1, n / 65536);   // sample: the plot is 280 px wide
-            for (size_t i = 0; i < n; i += step)
-            {
-                const uint8_t *p = &r.rgba[i * 4];
-                h.r[p[0]]++; h.g[p[1]]++; h.b[p[2]]++;
-                h.lum[std::min(255, (int)std::lround(0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]))]++;
-            }
-            for (int b = 0; b < HistogramData::kBins; ++b)
-                h.maxCount = std::max({h.maxCount, h.r[b], h.g[b], h.b[b], h.lum[b]});
-            return h;
-        }
     }
 
     const interstellar::AppModel &App::emptyModel()
@@ -68,6 +51,11 @@ namespace interstellar_v1
         mEdit->onRackContext = [this](int i, Point at) { openRackContext(i, at); };
         mEdit->onCapture = [this](Rect r) { openCaptureMenu(r); };
         // the image-processing stack (R-FX-5): the catalog menu and a row's menu
+        // the CLIP switch in the scopes paints the monitor's overlay from the frame it shows
+        mEdit->gradeInspector()->scopes()->onClipWarning = [this](bool on) {
+            if (on && !mFrame.empty()) mEdit->monitor()->setClipMask(clipMaskOf(mFrame));
+            mEdit->monitor()->setClipWarning(on);
+        };
         mEdit->gradeInspector()->onAddEffect = [this](Rect r) { openAddEffectMenu(r); };
         mEdit->gradeInspector()->onPluginContext = [this](const std::string &id, Point w) { openPluginContext(id, w); };
         // the Cut tab, like an editor (R-UI-14)
@@ -775,7 +763,7 @@ namespace interstellar_v1
         // a new time is the video moving, which is its own animation (gotcha 10)
         mon->setFrame(mFrame, samePlace && !m.playing && !scrubbing);
         mon->setState(Monitor::State::Frame);
-        mEdit->gradeInspector()->setHistogram(histogramOf(mFrame));
+        showScopes(mFrame);
     }
 
     /** The Grade monitor: one source, graded, at its reference frame or the slider's preview. */
@@ -812,7 +800,15 @@ namespace interstellar_v1
         // a grade change on the same frame dissolves; a seek is the picture moving (gotcha 10)
         mon->setFrame(mFrame, samePlace && !previewing);
         mon->setState(Monitor::State::Frame);
-        mEdit->gradeInspector()->setHistogram(histogramOf(mFrame));
+        showScopes(mFrame);
+    }
+
+    /** The SCOPES of the frame the monitor shows (R-UI-15), and the monitor's clip overlay when on. */
+    void App::showScopes(const interstellar::Raster &frame)
+    {
+        auto gi = mEdit->gradeInspector();
+        gi->setScopes(scopesOf(frame));
+        if (gi->scopes()->clipWarning()) mEdit->monitor()->setClipMask(clipMaskOf(frame));
     }
 
     bool App::needsRedraw(double nowMs) const

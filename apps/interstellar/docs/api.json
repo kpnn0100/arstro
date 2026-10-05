@@ -1456,6 +1456,12 @@
       "doc": "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."
     },
     {
+      "path": "rack[].mediaBitDepth",
+      "type": "integer",
+      "stable": true,
+      "doc": "Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15)."
+    },
+    {
       "path": "rack[].sharesMedia",
       "type": "integer",
       "stable": true,

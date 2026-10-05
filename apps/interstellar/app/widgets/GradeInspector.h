@@ -48,6 +48,7 @@
 #include "../../../cosmo/widgets/StackPanel.h"
 #include "../../../cosmo/widgets/SliderRow.h"
 #include "PluginList.h"
+#include "ScopePanel.h"
 #include "EffectPanel.h"
 #include <functional>
 #include <memory>
@@ -66,7 +67,9 @@ namespace interstellar_v1
 
         /** `interacting`: the pointer is down inside this column — do not re-seed the panels. */
         void bind(const interstellar::AppModel &m, bool interacting);
-        void setHistogram(const HistogramData &h) { mHistogram->setHistogram(h); }
+        /** The frame's scopes (R-UI-15) — the SCOPES panel where cosmo's histogram sat, which now
+         *  hosts that histogram as one of its modes. */
+        void setScopes(const ScopeData &d) { mScopes->setData(d); }
         void layout();
 
         std::shared_ptr<cosmo_v2::EditStackTabs> tabs() { return mTabs; }
@@ -75,7 +78,7 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::CurvePanel> curve() { return mCurve; }
         std::shared_ptr<cosmo_v2::GradePanel> gradePanel() { return mGrade; }
         std::shared_ptr<cosmo_v2::XformPanel> xform() { return mXform; }
-        std::shared_ptr<cosmo_v2::HistogramWidget> histogram() { return mHistogram; }
+        std::shared_ptr<ScopePanel> scopes() { return mScopes; }
         std::shared_ptr<PluginList> plugins() { return mPlugins; }
         std::shared_ptr<EffectPanel> effectPanel() { return mEffectPanel; }
         std::shared_ptr<cosmo_v2::SliderRow> cosmoMix() { return mCosmoMix; }
@@ -105,7 +108,7 @@ namespace interstellar_v1
         void syncPanels(const interstellar::AppModel &m);
         artboard::Rect stackRect() const;
 
-        std::shared_ptr<cosmo_v2::HistogramWidget> mHistogram;
+        std::shared_ptr<ScopePanel> mScopes;
         std::shared_ptr<cosmo_v2::EditStackTabs> mTabs;
         std::shared_ptr<cosmo_v2::ParamPanel> mBasicDetail;
         std::shared_ptr<cosmo_v2::StackPanel> mColorTab;

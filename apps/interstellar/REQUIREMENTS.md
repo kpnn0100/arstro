@@ -328,7 +328,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-UI — the two screens — 🚧 IN PROGRESS (DR-UI-1..14, DR-UI-3c, DR-UI-11a/b; R-UI-15 in progress; gap: drag-to-regroup, needs a Cosmo move — D-8)
+## R-UI — the two screens — ✅ IMPLEMENTED (DR-UI-1..16, DR-UI-3c, DR-UI-11a/b; gap: drag-to-regroup, needs a Cosmo move — D-8)
 
 - **R-UI-1 Home.** Recent projects as cards, newest first, with name, footage count and size; new,
   open, and a settings dialog. Cosmo's `HomeScreen` rhythm — this is the surface where "exactly the
@@ -353,6 +353,9 @@ reserves the rest so adopting it is not a migration.
 - **R-UI-5 Cosmo's widgets are reused as libraries**: `SliderRow`, `ParamPanel`, `MixerPanel`,
   `CurvePanel`, `GradePanel`, `XformPanel`, `HistogramWidget`, `Filmstrip`, `SegmentedControl`,
   `PillButton`, `IconButton`, `ConfirmDialog`. A copied widget is a divergence with a delay fuse.
+  (**AMENDED 2026-10-05:** the histogram became one mode of the SCOPES panel (R-UI-15), which draws
+  it to fill the scope body — cosmo's `HistogramWidget` has a fixed plot height. It is the same
+  data in the same channel colours; nothing of cosmo's was copied.)
 - **R-UI-6 Every state is drawn and shot**, empty and loading included, at two window sizes, and
   mid-transition as well as at rest.
 

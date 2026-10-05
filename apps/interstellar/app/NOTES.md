@@ -177,6 +177,16 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Shots added: `grade_plugins_effect`, `grade_plugins_swap_mid` (`grade_weight_caption` retired).
   UI checks: 266.
 
+## Scopes (2026-10-05, R-UI-15)
+
+- The histogram slot is a SCOPES panel: Histogram · Waveform · Parade · Vector (cross-fade), a CLIP
+  switch (eased overlay on the monitor: red = a channel at 255, blue = a channel at 0), and a
+  readout: ▲ clipped % · ▼ crushed % · levels used of 256 · source bits vs the 8-bit preview.
+- Computed in the app from the frame the monitor shows (`scopesOf`, sampled; the counts see every
+  pixel). Presentation only.
+- Shots added: `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
+  `grade_clip_warning`. UI checks: 275.
+
 ## Integrating (the GTK host)
 
 ```cpp

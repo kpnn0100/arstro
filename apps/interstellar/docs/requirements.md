@@ -667,3 +667,22 @@ switch, select → the panel CROSS-FADES — red when set —, Radius, + Add →
 add … --type blur.zoom` selected, × → `effect remove`, right-click → Move Down/Remove), the rack
 test's "no weight bar to drag", and the motion test's sliding switch; shots `grade_populated`,
 `grade_plugins_effect`, `grade_plugins_swap_mid` (both sizes, looked at).
+
+### DR-UI-15 Scopes: histogram, waveform, parade, vectorscope, clipping and levels in words; the clip overlay (R-UI-15)
+`scopesOf` (`app/widgets/Scopes.cpp`) measures the frame the monitor shows: a sampled histogram,
+a BT.709 luma waveform (256 × 128, log-scaled density), an R|G|B parade, a Cb/Cr vectorscope, and —
+over EVERY pixel — the share clipped at 255 and crushed at 0 per channel and the code values used
+per channel. `ScopePanel` (`app/widgets/ScopePanel.cpp`) replaces the histogram slot in the Grade
+column: mode tabs (Histogram · Waveform · Parade · Vector, cross-faded), graticules (25 % lines; the
+vectorscope's 100 % circle, 75 % targets and skin-tone line), a CLIP switch, and the readout line
+"▲ clipped % ▼ crushed % · levels n/256 · <bits>-bit source, 8-bit preview" (red at 0.5 % or more).
+The source's bit depth comes from the decoder (`IFrameSource::Info::bitDepth`, FFmpeg's pixel-format
+descriptor) into `rack[].mediaBitDepth`. The CLIP switch fades `clipMaskOf`'s overlay (red where a
+channel is at 255, blue where one is at 0) over the monitor's picture (`app/widgets/Monitor.cpp`),
+refreshed with each frame by `App::showScopes`. The histogram is drawn here, not by cosmo's
+fixed-height widget (R-UI-5 amended). Guarded by `testScopes` (half white/half black → 50 %/50 %,
+2 levels, the mask's colours; a ramp → 256 levels and a rising waveform; red lands upper-left on
+the vectorscope; the readout; Waveform CROSS-FADES — red when set; the CLIP switch fades the
+overlay) and `interstellar_host` (a 10-bit HEVC source reports 10, the rest 8). Shots
+`grade_populated` (histogram), `grade_scope_waveform`, `grade_scope_parade`, `grade_scope_vector`,
+`grade_clip_warning` (both sizes, looked at).

@@ -256,6 +256,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
+| `rack[].mediaBitDepth` | integer |  | Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15). |
 | `rack[].sharesMedia` | integer |  | How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group. |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
 | `hasGradeTarget` | bool |  | gradeParams/gradeOwnParams are meaningful. |

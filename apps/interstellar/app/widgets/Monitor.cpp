@@ -208,6 +208,12 @@ namespace interstellar_v1
             mZoomLast = mZoomTarget;
         }
         mZoom.update(nowMs);
+        if (mClipWanted != mClipApplied)
+        {
+            mClipAmt.animateTo(mClipWanted ? 1.0 : 0.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+            mClipApplied = mClipWanted;
+        }
+        mClipAmt.update(nowMs);
         Segment::advance(nowMs);
     }
 
@@ -271,6 +277,9 @@ namespace interstellar_v1
                 }
                 else
                     t.drawImage(mCurId, ir);
+                // the clip warning over the picture, eased (R-UI-15)
+                if (const double ca = mClipAmt.value(); ca > 0.001)
+                    if (const int id = mClipMask.ensure(t)) { t.pushLayer(ca); t.drawImage(id, ir); t.popLayer(); }
                 t.popLayer();
                 t.restore();
             }

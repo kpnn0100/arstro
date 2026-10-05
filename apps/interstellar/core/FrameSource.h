@@ -24,6 +24,7 @@ namespace interstellar
             int width = 0, height = 0;
             double fps = 24.0;
             long long frames = 0;
+            int bitDepth = 8;           // bits per component the source carries (the frames arrive as 8-bit RGBA)
             bool valid() const { return width > 0 && height > 0; }
         };
 

@@ -322,6 +322,14 @@ namespace
             r.app->pointer(2, p.x, p.y, 2, r.now + 40.0);
             r.settle();
         }});
+        // the scopes (R-UI-15): each mode, and the clip overlay on the monitor
+        for (int mode = 1; mode < 4; ++mode)
+        {
+            static const char *kNames[4] = {"", "grade_scope_waveform", "grade_scope_parade", "grade_scope_vector"};
+            v.push_back({kNames[mode], edit, [mode](Rig &r) { r.settle(); r.app->edit().gradeInspector()->scopes()->setMode(mode); r.settle(); }});
+        }
+        v.push_back({"grade_clip_warning", [](FakeService &s) { s.edit(); s.m.gradeParams.exposure = 2.5f; s.m.gradeOwnParams.exposure = 2.5f; },
+                     [](Rig &r) { r.settle(); r.app->edit().gradeInspector()->scopes()->setClipWarning(true); r.settle(); }});
         v.push_back({"edit_scale_125", [](FakeService &s) { s.edit(); s.m.settings.uiScale = 125; }, [](Rig &r) { r.settle(); }});
         v.push_back({"grade_hover", edit, [](Rig &r) {
             r.settle();

@@ -44,6 +44,8 @@ int main(int argc, char **argv)
         std::printf("%s: %dx%d %.3f fps, %lld frames (expect ~%lld)\n", path.c_str(), info.width, info.height,
                     info.fps, info.frames, expect);
         assert(info.frames >= expect - 2 && info.frames <= expect + 2);
+        // R-UI-15: the source's own bit depth reaches the scopes' readout
+        assert(info.bitDepth == (path.find("hevc10") != std::string::npos ? 10 : 8));
 
         // Sequential: every frame is a NEW picture — a frozen run is the playback bug.
         const long long n = std::min<long long>(info.frames, 72);
