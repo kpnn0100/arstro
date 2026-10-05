@@ -26,7 +26,9 @@
 #include <cstring>
 #include <set>
 #include <filesystem>
+#include <functional>
 #include <map>
+#include <mutex>
 
 namespace fs = std::filesystem;
 
@@ -69,6 +71,38 @@ namespace interstellar
                 ow = std::max(1, (int)std::lround(w * s));
                 oh = std::max(1, (int)std::lround(h * s));
             }
+        }
+
+        std::string workingOf(const Project &P)
+        {
+            return render::colour::known(render::colour::workings(), P.colorspace) ? P.colorspace : std::string("rec709");
+        }
+
+        /** A transform once per (from, to): plans are made every frame and a transform is a few
+         *  matrices. Null for identity, so the render path skips it without a call. */
+        std::shared_ptr<const render::colour::Transform> cachedTransform(const std::string &key, const std::function<render::colour::Transform()> &make)
+        {
+            static std::mutex mu;
+            static std::map<std::string, std::shared_ptr<const render::colour::Transform>> cache;
+            std::lock_guard<std::mutex> l(mu);
+            auto it = cache.find(key);
+            if (it != cache.end()) return it->second;
+            auto t = std::make_shared<render::colour::Transform>(make());
+            std::shared_ptr<const render::colour::Transform> out = t->identity() ? nullptr : t;
+            cache[key] = out;
+            return out;
+        }
+
+        std::shared_ptr<const render::colour::Transform> inputTransform(const RackObj &ro, const std::string &working)
+        {
+            const std::string in = ro.input.empty() ? std::string("rec709") : ro.input;
+            return cachedTransform("in|" + in + "|" + working, [&] { return render::colour::Transform::input(in, working); });
+        }
+
+        std::shared_ptr<const render::colour::Transform> outputTransform(const std::string &working, const std::string &output, double peak)
+        {
+            return cachedTransform("out|" + working + "|" + output + "|" + canonicalNumber(peak),
+                                   [&] { return render::colour::Transform::output(working, output, peak); });
         }
 
         /** The grade weight: a continuous bypass, ungraded → graded per pixel (R-RACK-4). */
@@ -208,6 +242,7 @@ namespace interstellar
                           l.layer.geom.anchorY, l.layer.geom.cropX, l.layer.geom.cropY, l.layer.geom.cropW, l.layer.geom.cropH,
                           (int)l.layer.fit, l.layer.opacity, (int)l.layer.blend, l.layer.dissolveWithPrevious ? 1 : 0);
             k += l.media + l.fxKey + l.effectsKey + buf;
+            if (l.input) k += "|" + l.input->key();
         }
     }
 
@@ -321,6 +356,7 @@ namespace interstellar
             L.edge = (L.weight < 1.0 && L.weight > 0.0) || L.groupMix ? 0 : proxyEdge;
             effectChain(ro->id, L.effects, L.effectsKey, srcT);
             L.srcWidth = s->info.width;
+            L.input = inputTransform(*ro, workingOf(P));
 
             const Track *tr = tracks[c->track];
             auto cv = [&](const char *k, double v) { return curveAt(c->id, k, srcT, v); };
@@ -345,6 +381,9 @@ namespace interstellar
         if (anyClip) *anyClip = !plan.layers.empty();
         plan.key = std::to_string(plan.width) + "x" + std::to_string(plan.height);
         for (const auto &l : plan.layers) planKeyAppend(plan.key, l);
+        // R-COLOR-4: the monitor's view is the Rec.709 output of the working space (nothing, in rec709)
+        plan.output = outputTransform(workingOf(P), "rec709", 1000.0);
+        if (plan.output) plan.key += "|" + plan.output->key();
         return true;
     }
 
@@ -370,12 +409,15 @@ namespace interstellar
         L.edge = L.weight < 1.0 && L.weight > 0.0 ? 0 : proxyEdge;
         effectChain(roId, L.effects, L.effectsKey, at);
         L.srcWidth = s->info.width;
+        L.input = inputTransform(*ro, workingOf(*mProject));
         // The source's own shape, fitted to the long edge — not the project's: a portrait phone clip
         // is graded as itself.
         outputSize(s->info.width, s->info.height, proxyEdge, plan.width, plan.height);
         plan.layers.push_back(L);
         plan.key = "src|" + std::to_string(plan.width) + "x" + std::to_string(plan.height);
         planKeyAppend(plan.key, plan.layers.back());
+        plan.output = outputTransform(workingOf(*mProject), "rec709", 1000.0);
+        if (plan.output) plan.key += "|" + plan.output->key();
         return true;
     }
 
@@ -402,7 +444,7 @@ namespace interstellar
             const PlanLayer &l = plan.layers[i];
             const bool ungradedOnly = l.weight <= 0.0 || (l.identity && !l.groupMix);
             render::FrameCache::Key key;
-            key.source = l.media + l.fxKey + l.effectsKey;
+            key.source = l.media + l.fxKey + l.effectsKey + (l.input ? "|" + l.input->key() : std::string());
             key.sourceFrame = l.frame;
             key.paramHash = ungradedOnly ? render::FrameCache::kUngraded : render::hashParams(l.params);
             key.level = l.edge;
@@ -424,6 +466,9 @@ namespace interstellar
                     Raster small;
                     if (render::prescale(ungraded, l.edge, small)) ungraded = std::move(small);
                 }
+                // R-COLOR-2: the source's space → the working space; Cosmo grades the result, and the
+                // grade weight's "ungraded" is this picture, never the raw log
+                if (l.input) l.input->apply(ungraded);
                 if (key.paramHash == render::FrameCache::kUngraded) graded[i] = std::move(ungraded);
                 else
                 {
@@ -452,6 +497,7 @@ namespace interstellar
             layers.push_back(L);
         }
         render::compose(layers, plan.width, plan.height, out);
+        if (plan.output) plan.output->apply(out);   // R-COLOR-4: the view, or a render's --output
         return true;
     }
 
@@ -835,6 +881,42 @@ namespace interstellar
                             "-bit" + (format == "h264" ? " here — H.265 offers 10-bit" : format == "dnxhr" ? " — the profile decides (hqx and 444 are 10-bit)" : ""));
         }
 
+        // R-COLOR-4: the output colour transform; HDR needs 10 bits, and is signalled by the software encoder
+        std::string output = "rec709";
+        double peak = 1000.0;
+        if (c.has("output"))
+        {
+            output = c.flag("output");
+            if (!render::colour::known(render::colour::outputs(), output))
+                return fail("render: --output is rec709, rec709-2.4, srgb, p3d65, pq or hlg, got " + output);
+        }
+        if (c.has("peak"))
+        {
+            if (output != "pq") return fail("render: --peak is PQ's mastering peak — this output is " + output);
+            const std::string ps = c.flag("peak");
+            char *end = nullptr;
+            peak = std::strtod(ps.c_str(), &end);
+            if (!end || *end || !(peak >= 400.0) || peak > 10000.0) return fail("render: --peak is 400 … 10000 cd/m², got " + ps);
+        }
+        if (render::colour::isHdr(output))
+        {
+            if (format == "png-seq" || format == "h264")
+                return fail("render: HDR needs 10 bits — H.265 --bits 10, ProRes or DNxHR HQX/444; " +
+                            std::string(format == "h264" ? "H.264 here is 8-bit" : "a PNG sequence here is 8-bit"));
+            if (spec.bitDepth < 10)
+            {
+                if (format == "h265" && !c.has("bits")) spec.bitDepth = 10;   // HDR H.265 is 10-bit
+                else return fail("render: HDR needs 10 bits — " + format + (format == "dnxhr" ? " " + spec.profile : std::string()) + " is 8-bit");
+            }
+            if (spec.hardware)
+            {
+                if (c.has("encoder")) return fail("render: HDR is encoded in software here — its mastering metadata is the software encoder's");
+                spec.hardware = false;
+            }
+        }
+        spec.output = output;
+        spec.peak = peak;
+
         // size: never above the project, and its aspect (a reframe is not in v1)
         const int PW = mProject->width, PH = mProject->height;
         int W = PW, H = PH, proxyEdge = 0;
@@ -896,6 +978,7 @@ namespace interstellar
         job->height = H;
         job->proxyEdge = proxyEdge;
         job->fps = fps;
+        job->output = outputTransform(workingOf(*mProject), output, peak);
         if (!job->png)
         {
             if (!mHost.frameWriter) return fail("render: no encoder installed (the host must provide one)");
@@ -919,6 +1002,9 @@ namespace interstellar
             if (inter) { std::string pf = spec.profile; for (char &ch : pf) ch = (char)std::toupper((unsigned char)ch); w += " " + (pf == "STANDARD" ? std::string("422") : pf); }
             if (format == "h265" || inter) w += " " + std::to_string(spec.bitDepth) + "-bit";
             if (lossy) w += " \xC2\xB7 q" + std::to_string(spec.quality) + " \xC2\xB7 " + (spec.hardware ? std::string("hardware") : spec.speed);
+            if (output != "rec709")
+                w += std::string(" \xC2\xB7 ") + render::colour::label(render::colour::outputs(), output) +
+                     (output == "pq" ? " " + std::to_string((long long)std::llround(peak)) + " cd/m\xC2\xB2" : std::string());
             char rate[32];
             std::snprintf(rate, sizeof rate, "%.3f", fps);
             std::string r = rate;
@@ -976,7 +1062,10 @@ namespace interstellar
             // R-COLOR-1: a codec that keeps more than 8 bits gets a picture that has them — decoded,
             // graded, composited and handed to the encoder at 16 bits per component
             const bool deep = !j.png && j.spec.bitDepth > 8;
-            if (!renderTimelineFrame(j.model.timeline, t, j.proxyEdge, frame, nullptr, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
+            FramePlan plan;
+            if (!planFrame(j.model.timeline, t, j.proxyEdge, plan, nullptr)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
+            plan.output = j.output;   // R-COLOR-4: the render's --output, not the monitor's view
+            if (!executePlan(*mSync, plan, frame, true, deep)) { failJob("frame " + std::to_string(j.next) + " failed"); return; }
             if (j.png)
             {
                 char name[32];

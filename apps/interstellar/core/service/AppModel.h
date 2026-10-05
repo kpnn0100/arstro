@@ -67,6 +67,7 @@ namespace interstellar
         double mediaFps = 0;          // the source's own frame rate once opened — a ref-frame step is 1/mediaFps (R-RACK-3)
         int sharesMedia = 0;          // OTHER sources on the same file (a variant and its original, R-RACK-5)
         int mediaBitDepth = 0;        // bits per component the source carries once opened (R-UI-15); 0 = unknown
+        std::string input = "rec709"; // what the source IS — its input colour transform (R-COLOR-2)
     };
 
     /** A plugin parameter as the UI draws it: its catalog definition and the value now (R-FX-5). */
@@ -122,6 +123,12 @@ namespace interstellar
     struct EffectTypeModel
     {
         std::string type, label, family;
+    };
+
+    /** A colour space a menu offers (R-COLOR): what to dispatch, and its name for a person. */
+    struct ColourChoiceModel
+    {
+        std::string id, label;
     };
 
     /** One timeline — a VERSION (R-VER). Ordered so a base precedes everything derived from it. */
@@ -284,6 +291,10 @@ namespace interstellar
         // ── the image-processing stacks (R-FX-5) ──
         std::vector<EffectModel> effects;          // every plugin of every node, by node then order
         std::vector<EffectTypeModel> effectTypes;  // what `effect add --type` accepts, in menu order
+        // ── colour management (R-COLOR) ──
+        std::string workingSpace = "rec709";        // the project's: rec709 | acescct
+        std::vector<ColourChoiceModel> colourInputs;   // what `set <bind>.input=` accepts, in menu order
+        std::vector<ColourChoiceModel> colourOutputs;  // what `render --output` accepts
         // ── keyframes (R-ANIM) ──
         std::vector<AnimModel> anims;              // every curve of the project
         int keyClipboardCount = 0;                 // keyframes `key copy` holds (R-ANIM-7); 0 = none

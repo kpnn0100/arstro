@@ -77,6 +77,9 @@ static AppModel populatedModel()
         e.params.push_back(EffectParamModel{"radius", "Radius", "px", 8.0, 8.0, 0.0, 200.0});
         m.effects.push_back(e);
         m.effectTypes.push_back({"blur.gaussian", "Gaussian Blur", "Blur"});
+        m.colourInputs.push_back({"slog3", "Sony S-Log3"});
+        m.colourOutputs.push_back({"pq", "HDR PQ"});
+        m.workingSpace = "acescct";
         AnimModel an;
         an.id = "an_1";
         an.node = "ro_1";

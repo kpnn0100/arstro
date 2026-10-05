@@ -5,6 +5,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libswscale/swscale.h>
 }
 #include <algorithm>
@@ -154,11 +155,16 @@ namespace interstellar_host
         else if (spec.codec == "h265") mEnc->pix_fmt = spec.bitDepth == 10 ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P;
         else if (spec.codec == "prores") mEnc->pix_fmt = pf == "4444" ? AV_PIX_FMT_YUV444P10LE : AV_PIX_FMT_YUV422P10LE;
         else mEnc->pix_fmt = pf == "444" ? AV_PIX_FMT_YUV444P10LE : pf == "hqx" ? AV_PIX_FMT_YUV422P10LE : AV_PIX_FMT_YUV422P;
-        // D-9: BT.709, video range, and SAID in the stream
-        mEnc->color_primaries = AVCOL_PRI_BT709;
-        mEnc->color_trc = AVCOL_TRC_BT709;
-        mEnc->colorspace = AVCOL_SPC_BT709;
+        // D-9: BT.709, video range, and SAID in the stream — R-COLOR-4: or what --output made the
+        // pixels: sRGB's transfer, P3-D65's primaries (gamma 2.6 has no tag: unspecified), Rec.2100
+        const std::string &out = spec.output;
+        const bool hdr = out == "pq" || out == "hlg";
+        mEnc->color_primaries = hdr ? AVCOL_PRI_BT2020 : out == "p3d65" ? AVCOL_PRI_SMPTE432 : AVCOL_PRI_BT709;
+        mEnc->color_trc = out == "pq" ? AVCOL_TRC_SMPTE2084 : out == "hlg" ? AVCOL_TRC_ARIB_STD_B67
+                        : out == "srgb" ? AVCOL_TRC_IEC61966_2_1 : out == "p3d65" ? AVCOL_TRC_UNSPECIFIED : AVCOL_TRC_BT709;
+        mEnc->colorspace = hdr ? AVCOL_SPC_BT2020_NCL : AVCOL_SPC_BT709;
         mEnc->color_range = AVCOL_RANGE_MPEG;
+        mSwsMatrix = hdr ? SWS_CS_BT2020 : SWS_CS_ITU709;
         AVRational tb = av_d2q(1.0 / (mFps > 0 ? mFps : 24.0), 1000000);
         mEnc->time_base = tb;
         mEnc->framerate = av_inv_q(tb);
@@ -177,7 +183,19 @@ namespace interstellar_host
             av_opt_set(mEnc->priv_data, "crf", std::to_string(spec.quality).c_str(), 0);
             if (spec.codec == "h265")
             {
-                av_opt_set(mEnc->priv_data, "x265-params", "log-level=error", 0);
+                std::string xp = "log-level=error";
+                if (hdr)
+                {
+                    // the HDR signalling in the bitstream itself: colour description, and for PQ the
+                    // mastering display (Rec.2020 primaries, D65, the peak, 0.005 cd/m²) — MaxCLL/MaxFALL
+                    // are 0, "unknown": a one-pass encode cannot know them before the first frame
+                    xp += std::string(":repeat-headers=1:colorprim=bt2020:colormatrix=bt2020nc:transfer=") +
+                          (out == "pq" ? "smpte2084:hdr10-opt=1" : "arib-std-b67");
+                    if (out == "pq")
+                        xp += ":master-display=G(8500,39850)B(6550,2300)R(35400,14600)WP(15635,16450)L(" +
+                              std::to_string((long long)std::llround(spec.peak * 10000.0)) + ",50):max-cll=0,0";
+                }
+                av_opt_set(mEnc->priv_data, "x265-params", xp.c_str(), 0);
                 if (ext != "mkv") mStream->codecpar->codec_tag = MKTAG('h', 'v', 'c', '1');   // QuickTime plays hvc1
             }
         }
@@ -195,6 +213,26 @@ namespace interstellar_host
         const uint32_t tag = mStream->codecpar->codec_tag;
         if (avcodec_parameters_from_context(mStream->codecpar, mEnc) < 0) { mError = "cannot describe the stream"; return false; }
         if (tag) mStream->codecpar->codec_tag = tag;   // the parameters copy resets it
+        if (out == "pq")
+        {
+            // the container's copy of the mastering display (Matroska writes it; MOV here does not)
+            if (auto *md = reinterpret_cast<AVMasteringDisplayMetadata *>(
+                    av_stream_new_side_data(mStream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(AVMasteringDisplayMetadata))))
+            {
+                *md = AVMasteringDisplayMetadata{};
+                const double prim[3][2] = {{0.708, 0.292}, {0.170, 0.797}, {0.131, 0.046}};
+                for (int i = 0; i < 3; ++i)
+                {
+                    md->display_primaries[i][0] = av_d2q(prim[i][0], 50000);
+                    md->display_primaries[i][1] = av_d2q(prim[i][1], 50000);
+                }
+                md->white_point[0] = av_d2q(0.3127, 50000);
+                md->white_point[1] = av_d2q(0.3290, 50000);
+                md->max_luminance = av_d2q(spec.peak, 10000);
+                md->min_luminance = av_d2q(0.005, 10000);
+                md->has_primaries = md->has_luminance = 1;
+            }
+        }
         if (avio_open(&mFmt->pb, mPath.c_str(), AVIO_FLAG_WRITE) < 0) { mError = "cannot write " + mPath; return false; }
         if (avformat_write_header(mFmt, nullptr) < 0) { mError = "cannot write the container header"; return false; }
 
@@ -250,8 +288,8 @@ namespace interstellar_host
         if (!mSws) { mError = "cannot build the colour converter"; return false; }
         if (mSws != prev)
         {
-            // D-9: full-range RGB in, BT.709 video-range YUV out — what the stream is tagged as
-            const int *coeffs = sws_getCoefficients(SWS_CS_ITU709);
+            // D-9: full-range RGB in, BT.709 (BT.2020 for HDR) video-range YUV out — what the stream is tagged as
+            const int *coeffs = sws_getCoefficients(mSwsMatrix);
             sws_setColorspaceDetails(mSws, coeffs, 1, coeffs, 0, 0, 1 << 16, 1 << 16);
         }
         if (av_frame_make_writable(target) < 0) { mError = "the frame is not writable"; return false; }
@@ -267,6 +305,12 @@ namespace interstellar_host
             if (av_hwframe_transfer_data(mFrame, mSwFrame, 0) < 0) { mError = "the upload to the GPU failed"; return false; }
         }
         mFrame->pts = mNext++;
+        // D-11: ProRes writes its frame header's colour bytes from the FRAME, not the encoder — unset,
+        // every ProRes master said "unspecified" whatever the container's colr atom claimed
+        mFrame->color_primaries = mEnc->color_primaries;
+        mFrame->color_trc = mEnc->color_trc;
+        mFrame->colorspace = mEnc->colorspace;
+        mFrame->color_range = mEnc->color_range;
 
         if (avcodec_send_frame(mEnc, mFrame) < 0) { mError = "the encoder rejected a frame"; return false; }
         return drain(false);

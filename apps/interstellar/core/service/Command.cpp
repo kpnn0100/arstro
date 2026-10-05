@@ -38,6 +38,9 @@ namespace interstellar
              "Save the .isp and the rack's .cmp. A path saves the .isp there.", "R-RACK-2"},
             {K::ProjectClose, "project close", "", 0, 0, {}, "Close the project and return Home.", "R-UI-1"},
 
+            {K::ColourWorking, "colour working", "<rec709|acescct>", 1, 1, {},
+             "The project's working space: Rec.709 (display-referred, Cosmo's own — the default) or ACEScct "
+             "(scene-referred; the monitor and each render then apply an output transform).", "R-COLOR-3"},
             {K::RackImport, "rack import", "<path.cmp>", 1, 1, {},
              "Point the rack at an existing Cosmo project — its groups and grades are the rack.", "R-RACK-1"},
             {K::RackAdd, "rack add", "<media…>", 1, -1, {},
@@ -164,10 +167,12 @@ namespace interstellar
             {K::Render, "render", "", 0, 0,
              {"timeline=<tl>", "out=<path>", "range=<a:b>", "format=<h264|h265|prores|dnxhr|png-seq>",
               "profile=<proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>", "res=<WxH>", "fps=<n|num/den>",
-              "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>", "encoder=<software|hardware>"},
+              "quality=<0..51>", "speed=<ultrafast…veryslow>", "bits=<8|10>", "encoder=<software|hardware>",
+              "output=<rec709|rec709-2.4|srgb|p3d65|pq|hlg>", "peak=<400..10000>"},
              "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: "
              "codec and profile, size (never above the project, same aspect), frame rate (the timeline is "
-             "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A "
+             "sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the "
+             "output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A "
              "flag the codec cannot honour is refused.", "R-RENDER-6"},
             {K::RenderCancel, "render cancel", "<job>", 1, 1, {}, "Cancel a queued or running render.", "R-RENDER-4"},
             {K::CacheBuild, "cache build", "", 0, 0, {},

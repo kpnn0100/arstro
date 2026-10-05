@@ -83,7 +83,7 @@ namespace interstellar
     {
         switch (k)
         {
-            case CK::Set: case CK::Revert: case CK::RackRename: case CK::RackFrame:
+            case CK::Set: case CK::Revert: case CK::RackRename: case CK::RackFrame: case CK::ColourWorking:
             case CK::TimelineNew: case CK::TimelinePin: case CK::TimelineUnpin: case CK::TimelineFreeze:
             case CK::TimelineThaw: case CK::TimelineRebase: case CK::TimelineDelete:
             case CK::TrackAdd: case CK::ClipAdd: case CK::ClipTrim: case CK::ClipSplit: case CK::ClipMove:

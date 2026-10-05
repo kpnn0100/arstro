@@ -53,6 +53,16 @@
       "requirement": "R-UI-1"
     },
     {
+      "verb": "colour working",
+      "usage": "colour working <rec709|acescct>",
+      "args": "<rec709|acescct>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [],
+      "summary": "The project's working space: Rec.709 (display-referred, Cosmo's own — the default) or ACEScct (scene-referred; the monitor and each render then apply an output transform).",
+      "requirement": "R-COLOR-3"
+    },
+    {
       "verb": "rack import",
       "usage": "rack import <path.cmp>",
       "args": "<path.cmp>",
@@ -848,7 +858,7 @@
     },
     {
       "verb": "render",
-      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>]",
+      "usage": "render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264|h265|prores|dnxhr|png-seq>] [--profile <proxy|lt|standard|hq|4444 · lb|sq|hq|hqx|444>] [--res <WxH>] [--fps <n|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8|10>] [--encoder <software|hardware>] [--output <rec709|rec709-2.4|srgb|p3d65|pq|hlg>] [--peak <400..10000>]",
       "args": "",
       "minArgs": 0,
       "maxArgs": 0,
@@ -896,9 +906,17 @@
         {
           "name": "encoder",
           "value": "<software|hardware>"
+        },
+        {
+          "name": "output",
+          "value": "<rec709|rec709-2.4|srgb|p3d65|pq|hlg>"
+        },
+        {
+          "name": "peak",
+          "value": "<400..10000>"
         }
       ],
-      "summary": "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused.",
+      "summary": "Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused.",
       "requirement": "R-RENDER-6"
     },
     {
@@ -1651,6 +1669,12 @@
       "type": "number",
       "stable": true,
       "doc": "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."
+    },
+    {
+      "path": "rack[].input",
+      "type": "string",
+      "stable": true,
+      "doc": "What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2)."
     },
     {
       "path": "rack[].mediaBitDepth",
@@ -2487,6 +2511,48 @@
       "doc": "Its menu family."
     },
     {
+      "path": "workingSpace",
+      "type": "string",
+      "stable": true,
+      "doc": "The project's working space: rec709 (Cosmo's own, display-referred) or acescct (`colour working`, R-COLOR-3)."
+    },
+    {
+      "path": "colourInputs",
+      "type": "array",
+      "stable": true,
+      "doc": "The source spaces `set <bind>.input=` accepts, in menu order (R-COLOR-2)."
+    },
+    {
+      "path": "colourInputs[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "What to dispatch."
+    },
+    {
+      "path": "colourInputs[].label",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name for a person."
+    },
+    {
+      "path": "colourOutputs",
+      "type": "array",
+      "stable": true,
+      "doc": "The output transforms `render --output` accepts (R-COLOR-4)."
+    },
+    {
+      "path": "colourOutputs[].id",
+      "type": "string",
+      "stable": true,
+      "doc": "What to dispatch."
+    },
+    {
+      "path": "colourOutputs[].label",
+      "type": "string",
+      "stable": true,
+      "doc": "Its name for a person."
+    },
+    {
       "path": "hasClipClipboard",
       "type": "bool",
       "stable": true,
@@ -3066,6 +3132,15 @@
       "range": "",
       "neutral": 0.0,
       "doc": "Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`."
+    },
+    {
+      "address": "<bind>.input",
+      "owner": "rackobj",
+      "key": "input",
+      "kind": "text",
+      "unit": "rec709|srgb|linear|logc3|logc4|slog3|vlog|clog3|log3g10|bmdfilm5",
+      "range": "",
+      "doc": "What the source IS: its input colour transform into the working space, before Cosmo grades it (R-COLOR-2). The media's interpretation, never a grade."
     },
     {
       "address": "<clip>.at",

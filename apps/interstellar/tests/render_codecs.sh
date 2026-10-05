@@ -1,7 +1,7 @@
 #!/bin/sh
 # R-RENDER-6 through the real encoders: every codec and profile Deliver offers is rendered by the
 # CLI (the grammar the GUI dispatches) and read back with ffprobe — codec, profile, pixel format,
-# the BT.709 tags (D-9), size and rate. Then the colour itself: an H.264 render, decoded by FFmpeg
+# the BT.709 tags (D-9, D-11), size and rate, and each output transform's tags (R-COLOR-4). Then the colour itself: an H.264 render, decoded by FFmpeg
 # honouring its tags, must give the same pixel as the PNG still of the same frame (D-9: an untagged
 # BT.601 conversion shifted a saturated colour by far more than the tolerance).
 #   render_codecs.sh <interstellar-cc> <ffmpeg> <ffprobe> <workdir>
@@ -53,6 +53,32 @@ check "dnxhr lb" dnxhr_lb.mov pix_fmt yuv422p
 check "dnxhr hqx" dnxhr_hqx.mov pix_fmt yuv422p10le
 check "dnxhr 444" dnxhr_444.mov pix_fmt yuv444p10le
 check "dnxhr hqx" dnxhr_hqx.mov profile "DNXHR HQX"
+# D-11: a ProRes master says its colour in its own frame header, where readers look first
+check "prores standard" prores_standard.mov color_primaries bt709
+check "prores standard" prores_standard.mov color_transfer bt709
+check "dnxhr hqx" dnxhr_hqx.mov color_space bt709
+
+# R-COLOR-4: an output transform tags what it made — HDR as Rec.2100 with its signalling
+render --format h265 --output pq --peak 1000 --out pq.mkv
+check "pq" pq.mkv pix_fmt yuv420p10le
+check "pq" pq.mkv color_primaries bt2020
+check "pq" pq.mkv color_transfer smpte2084
+check "pq" pq.mkv color_space bt2020nc
+md=$("$FFPROBE" -v error -select_streams v:0 -read_intervals "%+#1" -show_frames -show_entries frame=side_data_list -of compact pq.mkv | grep -c "max_luminance=10000000/10000" || true)
+if [ "$md" -ge 1 ]; then echo "  [ok] pq: the mastering display (Rec.2020, 1000 cd/m²) is in the stream"; else echo "  [FAIL] pq: no mastering display metadata"; fail=1; fi
+render --format prores --output pq --out pq.mov
+check "pq prores" pq.mov color_transfer smpte2084
+check "pq prores" pq.mov color_primaries bt2020
+render --format h265 --output hlg --out hlg.mp4
+check "hlg" hlg.mp4 color_transfer arib-std-b67
+check "hlg" hlg.mp4 pix_fmt yuv420p10le
+render --format h264 --output srgb --out srgb.mp4
+check "srgb" srgb.mp4 color_transfer iec61966-2-1
+render --format prores --output p3d65 --out p3.mov
+check "p3d65" p3.mov color_primaries smpte432
+if "$CC" project open mv.isp : render --timeline main --format h264 --output pq --out bad.mp4 > /dev/null 2>&1; then
+  echo "  [FAIL] an 8-bit HDR render was accepted"; fail=1
+else echo "  [ok] an 8-bit HDR render is refused"; fi
 render --format png-seq --range 0:0.5 --out frames
 n=$(ls frames | wc -l)
 if [ "$n" = 12 ]; then echo "  [ok] png-seq: 12 frames"; else echo "  [FAIL] png-seq: $n frames, wanted 12"; fail=1; fi

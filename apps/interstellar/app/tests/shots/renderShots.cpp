@@ -330,6 +330,36 @@ namespace
             clickSegShot(r, os->rangePicker(), 1);
             r.settle();
         }});
+        // R-COLOR-2..4: a source's input-colour list; Deliver with HDR PQ (the codec moved to H.265 10-bit) and mid-way
+        v.push_back({"grade_input_colour_menu", edit, [](Rig &r) {
+            r.settle();
+            auto rt = r.app->edit().rackTree();
+            const Point p = centre(*rt, rt->rowRect(1));
+            r.app->pointer(1, p.x - 40, p.y, 0, r.now);
+            r.app->pointer(0, p.x - 40, p.y, 2, r.now);
+            r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
+            r.settle();
+            auto cm = r.app->edit().contextMenu();
+            for (int i = 0; i < cm->itemCount(); ++i)
+                if (cm->item(i).label.rfind("Input Colour", 0) == 0)
+                {
+                    const Point q = centre(*cm, cm->itemRect(i));
+                    r.click(q.x, q.y);
+                }
+            r.settle();
+        }});
+        v.push_back({"deliver_colour_pq", edit, [clickSegShot](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            clickSegShot(r, r.app->edit().outputSpec()->colourPicker(), 4);
+            r.settle();
+        }});
+        v.push_back({"deliver_colour_pq_mid", edit, [clickSegShot](Rig &r) {
+            r.app->setTab(2);
+            r.settle();
+            clickSegShot(r, r.app->edit().outputSpec()->colourPicker(), 4);
+            r.pump(80);
+        }});
         v.push_back({"deliver_spec_codec_mid", edit, [clickSegShot](Rig &r) {
             r.app->setTab(2);
             r.settle();

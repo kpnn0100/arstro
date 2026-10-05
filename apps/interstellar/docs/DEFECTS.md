@@ -66,6 +66,21 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-11 — A ProRes master said nothing about its colour
+- **Area:** host · **Status:** Closed (same commit) · **Severity:** S2 (an untagged master in a
+  colour tool: a reader guesses) · **Found:** 2026-10-05, probing R-COLOR-4's HDR renders.
+- **Reproduce:** `render --timeline main --format prores --out r.mov`, then `ffprobe -show_entries
+  stream=color_primaries,color_transfer,color_space r.mov` → `unknown` ×3 (H.264 in .mp4 said
+  bt709).
+- **Expected:** D-9's fix — "the stream tagged BT.709"; R-COLOR-4 — a render tagged with what it is.
+- **Cause:** FFmpeg 4.4's ProRes encoder writes its frame header's colour bytes from each AVFrame,
+  not from the encoder context, and the writer's frames never set them, so every ProRes frame said
+  "unspecified"; a reader trusts the frame over the MOV's `colr` atom (which was right).
+- **Fix:** each frame carries the encoder's primaries, transfer, matrix and range
+  (`host/FrameWriterFFmpeg.cpp`). Guarded by `interstellar_render_codecs` (ProRes 422 bt709, ProRes
+  PQ bt2020/smpte2084, P3 smpte432); with the fix removed those three go red. A `movflags=write_colr`
+  change was tried first and proved unnecessary (the muxer writes `colr` whenever colour is set).
+
 ### D-10 — `render --quality` was parsed through a dangling pointer
 - **Area:** service · **Status:** Closed (same commit) · **Severity:** S3 (undefined behaviour;
   happened to work) · **Found:** 2026-10-05, when the same pattern made `effect move --to 0` refuse

@@ -69,7 +69,8 @@ one integrator who moves, wires, tests and commits each stream:
       5. [x] The grade on the GPU (R-GPU-1): Cosmo's GL backend is a multi-pass pipeline porting every
              stage (DR-GPU-1, cosmo DR-GPU-8).
       6. [x] 16-bit delivery path (R-COLOR-1) — DR-COLOR-1.
-      7. [ ] Input/working/output transforms, HDR, LUTs in and out (R-COLOR-2..6).
+      7. [x] Input/working/output transforms and HDR (R-COLOR-2..4) — DR-COLOR-2, DR-COLOR-3; D-11.
+      7b. [ ] LUTs in and out (R-COLOR-5, R-COLOR-6).
       8. [ ] Audio: mix, playback, waveforms, meters, in renders (R-AUD-5 amended, R-AUD-6..9).
       9. [ ] Interchange: EDL, FCPXML, OTIO, timecode and reels; AAF stated (R-XCH-1..5).
       10. [ ] Editing: three-point, J/K/L, speed ramps, nested sequences, multicam (R-EDT-1..5).

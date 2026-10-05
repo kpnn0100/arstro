@@ -185,6 +185,13 @@ namespace interstellar_v1
             mEdit->contextMenu()->enterRenameMode(name);
         }});
         if (!n.group && !n.failed) items.push_back({"Duplicate as Variant  (Ctrl+D)", [this, b] { dispatch("rack duplicate " + b); }});
+        if (!n.group)
+        {
+            // R-COLOR-2: what the source IS — the list opens in place of this menu
+            std::string now = "Rec.709";
+            for (const auto &c : m2.colourInputs) if (c.id == n.input) now = c.label;
+            items.push_back({"Input Colour (" + now + ")...", [this, name = n.bindName, at] { openInputColourMenu(name, at); }});
+        }
         if (!n.failed) items.push_back({"Copy Grade", [this, b] { dispatch("grade copy " + b); }});
         if (m2.hasGradeClipboard)
             items.push_back({selected > 1 ? "Paste Grade to Selection" : "Paste Grade", [this, selection] { dispatch("grade paste" + selection); }});
@@ -228,7 +235,42 @@ namespace interstellar_v1
             {"Reset Workspace",              [this] { mEdit->setTab(EditScreen::Grade); mEdit->timeline()->resetView(); mEdit->monitor()->resetZoom(); }},
         }});
         ms->addMenu({"Preset", {}});
+        ms->addMenu({"Colour", {}});
         refreshPresetMenu(mHooks.model ? mHooks.model() : emptyModel());
+        refreshColourMenu(mHooks.model ? mHooks.model() : emptyModel());
+    }
+
+    void App::refreshColourMenu(const interstellar::AppModel &m)
+    {
+        if (m.workingSpace == mColourMenuFor) return;
+        mColourMenuFor = m.workingSpace;
+        // the current working space is marked with a dot; the others are indented to line up
+        auto mark = [&](const char *id) { return m.workingSpace == id ? std::string("\xE2\x80\xA2  ") : std::string("     "); };
+        std::vector<cosmo_v2::MenuStrip::Item> items = {
+            {mark("rec709") + "Rec.709 Working Space", [this] { dispatch("colour working rec709"); }},
+            {mark("acescct") + "ACEScct Working Space", [this] { dispatch("colour working acescct"); }},
+            {"Input Colour of Selected...", [this] {
+                 const auto b = selectedBind();
+                 if (!b.empty()) openInputColourMenu(b, Point(width() * 0.5, 40.0));
+             }},
+        };
+        mEdit->topBar()->menus()->setItems(5, std::move(items));
+    }
+
+    void App::openInputColourMenu(const std::string &bind, Point at)
+    {
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::string current = "rec709";
+        bool group = false;
+        for (const auto &r : m.rack)
+            if (r.bindName == bind) { current = r.input; group = r.group; }
+        if (group) return;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        for (const auto &c : m.colourInputs)
+            items.push_back({(c.id == current ? std::string("\xE2\x80\xA2  ") : std::string("     ")) + c.label,
+                             [this, bind, id = c.id] { dispatch("set " + cmd::quote(bind) + ".input=" + id); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
     }
 
     void App::refreshPresetMenu(const interstellar::AppModel &m)
@@ -798,6 +840,7 @@ namespace interstellar_v1
             mScaleBound = true;
         }
         refreshPresetMenu(m);
+        refreshColourMenu(m);
         // Home's recents are unknown until the service has published once (revision 0):
         // that is the loading state, drawn as skeleton cards.
         mHome->setLoading(m.revision == 0);

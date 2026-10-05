@@ -166,6 +166,8 @@ namespace schema
             text<RackObj>("media", &RackObj::media, 1, false, nonEmpty<RackObj>(&RackObj::media)),
             time<RackObj>("frame", &RackObj::frame, 0.0, 1, false,
                           [](const RackObj &r, const Project &) { return !r.media.empty() || r.frame != 0.0; }),
+            text<RackObj>("input", &RackObj::input, 1, false,
+                          [](const RackObj &r, const Project &) { return !r.input.empty() && r.input != "rec709"; }),
         };
         return f;
     }

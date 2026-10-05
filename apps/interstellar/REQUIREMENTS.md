@@ -492,7 +492,7 @@ reserves the rest so adopting it is not a migration.
 
 ---
 
-## R-COLOR — colour science — 🔶 IN PROGRESS (added 2026-10-05, user request "implement all the features you suggest")
+## R-COLOR — colour science — 🔶 IN PROGRESS (1–4 ✅, 5–6 next) (added 2026-10-05, user request "implement all the features you suggest")
 
 - **R-COLOR-1 Deliveries keep more than 8 bits.** A render decodes, grades, composites and encodes
   at 16 bits per channel, so a 10-bit ProRes, DNxHR or H.265 carries 10 bits of picture; the monitor
@@ -501,12 +501,25 @@ reserves the rest so adopting it is not a migration.
   sequence and a still export (8-bit PNG), an 8-bit codec (H.264, H.265 8-bit, DNxHR LB/SQ/HQ).
 - **R-COLOR-2 Input transforms per source**: a source says what it is — Rec.709, sRGB, linear, ARRI
   LogC3/LogC4, Sony S-Log3 (S-Gamut3.Cine), Panasonic V-Log, Canon Log 3, RED Log3G10 (RWG),
-  Blackmagic Film Gen 5 — and is converted to the working space before Cosmo grades it.
+  Blackmagic Film Gen 5 — and is converted to the working space before Cosmo grades it. — ✅
+  (DR-COLOR-2). It is the media's interpretation (`<bind>.input`, saved on the `#rackobj`), never a
+  grade: Cosmo still owns every colour value (law 1). A log curve reads the file as video-range
+  YCbCr, as cameras write it.
 - **R-COLOR-3 A working space**: Rec.709 (display-referred, the default and Cosmo's own) or ACEScct
-  (scene-referred), chosen per project.
+  (scene-referred), chosen per project. — ✅ (DR-COLOR-2; `colour working`, the Colour menu). In
+  ACEScct Cosmo grades ACEScct values as its encoded input, and the monitor shows the Rec.709 output.
+  The tone map from scene to display is this program's (one function, stated in DR-COLOR-2), not
+  ACES's RRT — OpenColorIO is not available on this build machine.
 - **R-COLOR-4 Output transforms, HDR included**: Rec.709 (2.4), sRGB, P3-D65, Rec.2100 PQ and
   Rec.2100 HLG, chosen per render; an HDR render is 10-bit H.265 (or ProRes) tagged with its
-  primaries, transfer and mastering metadata.
+  primaries, transfer and mastering metadata. — ✅ (DR-COLOR-3). AMENDED (2026-10-05, while building
+  it): "Rec.709" is two outputs — `rec709`, the graded code values as the monitor showed them
+  (today's renders, unchanged), and `rec709-2.4`, display light re-encoded with a pure 2.4 power for
+  a BT.1886 master — because the family's monitor convention is sRGB-encoded and silently re-encoding
+  every existing render would change it. Said, not hidden: PQ's MaxCLL/MaxFALL are written as 0
+  ("unknown" — one pass cannot know them); ProRes HDR carries its Rec.2100 tags but no mastering box
+  (FFmpeg 4.4's MOV muxer cannot write one) — the H.265 render carries it in the bitstream; an HDR
+  render is encoded in software (the mastering SEI is libx265's).
 - **R-COLOR-5 LUTs in**: a `.cube` (1D or 3D) as an input LUT on a source and as an effect in the
   image-processing stack.
 - **R-COLOR-6 LUTs out**: the colour of a source's grade baked to a 33-point `.cube` (the spatial

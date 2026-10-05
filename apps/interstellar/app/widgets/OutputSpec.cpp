@@ -28,6 +28,9 @@ namespace interstellar_v1
         const char *kDnx[5] = {"lb", "sq", "hq", "hqx", "444"};
         const int kCrf[4] = {28, 23, 18, 12};
         const char *kSpeeds[3] = {"fast", "medium", "slow"};
+        // R-COLOR-4: the output transform; 4 and 5 are HDR (10 bits at least)
+        const char *kOutputs[6] = {"rec709", "rec709-2.4", "srgb", "p3d65", "pq", "hlg"};
+        const char *kOutputLabels[6] = {"Rec.709", "Rec.709 2.4", "sRGB", "P3-D65", "HDR PQ", "HDR HLG"};
         // the rate list: 0 = the project's own; the NTSC rates are exact fractions
         struct Rate { const char *label, *arg; double fps; };
         const Rate kRates[] = {{"Project", "", 0.0},          {"23.976", "24000/1001", 24000.0 / 1001.0},
@@ -61,12 +64,27 @@ namespace interstellar_v1
     {
         clipToBounds = true;
         mCodec = segmented({"H.264", "H.265", "ProRes", "DNxHR", "PNG"}, 0);
-        mCodec->onChange = [this](int) { refreshDefaultPath(); };
+        mCodec->onChange = [this](int i) {
+            // an 8-bit codec cannot carry HDR: the colour goes back to Rec.709 rather than a refused line
+            if (mColour && mColour->selected() >= 4 && (i == 0 || i == 4)) mColour->setSelected(0);
+            refreshDefaultPath();
+        };
         mProres = segmented({"Proxy", "LT", "422", "HQ", "4444"}, 2);
         mDnx = segmented({"LB", "SQ", "HQ", "HQX", "444"}, 2);
         mQuality = segmented({"Draft", "Good", "High", "Master"}, 2);
         mSpeed = segmented({"Fast", "Medium", "Slow"}, 1);
         mDepth = segmented({"8-bit", "10-bit"}, 0);
+        mDepth->onChange = [this](int i) { if (i == 0 && mColour && mColour->selected() >= 4) mColour->setSelected(0); };
+        mDnx->onChange = [this](int i) { if (i < 3 && mColour && mColour->selected() >= 4) mColour->setSelected(0); };
+        mColour = segmented({"709", "2.4", "sRGB", "P3", "PQ", "HLG"}, 0);
+        mColour->onChange = [this](int i) {
+            if (i < 4) return;
+            // HDR needs 10 bits: H.265 10-bit unless the codec already is a 10-bit one
+            const std::string f = format();
+            if (f == "h264" || f == "png-seq") mCodec->setSelected(1);
+            if (format() == "h265") mDepth->setSelected(1);
+            if (format() == "dnxhr" && mDnx->selected() < 3) mDnx->setSelected(3);
+        };
         mSize = segmented({"Full", "\xC2\xBD", "\xC2\xBC"}, 0);
         mRange = segmented({"Whole", "In \xE2\x80\x93 Out"}, 0);
 
@@ -151,6 +169,7 @@ namespace interstellar_v1
             if (mSpeed->selected() != 1) line += std::string(" --speed ") + kSpeeds[std::clamp(mSpeed->selected(), 0, 2)];
         }
         if (f == "h265" && mDepth->selected() == 1) line += " --bits 10";
+        if (mColour->selected() != 0) line += std::string(" --output ") + kOutputs[std::clamp(mColour->selected(), 0, 5)];
         if (mSize->selected() != 0)
         {
             int w = 0, h = 0;
@@ -176,7 +195,9 @@ namespace interstellar_v1
         const long long frames = std::max<long long>(0, std::llround(b * fps) - std::llround(a * fps));
         std::string s = std::to_string(w) + "\xC3\x97" + std::to_string(h) + " \xC2\xB7 " + rateText(fps) + " fps \xC2\xB7 ";
         s += mRange->selected() == 1 ? cmd::timecode(a, mProjFps) + "\xE2\x80\x93" + cmd::timecode(b, mProjFps) : std::string("whole timeline");
-        return s + " \xC2\xB7 " + std::to_string(frames) + " frames";
+        s += " \xC2\xB7 " + std::to_string(frames) + " frames";
+        if (mColour->selected() != 0) s += std::string(" \xC2\xB7 ") + kOutputLabels[std::clamp(mColour->selected(), 0, 5)];
+        return s;
     }
 
     std::string OutputSpec::defaultPath() const
@@ -294,6 +315,9 @@ namespace interstellar_v1
             mRowY[PngNote] = y;
             y += (kLineH + kGap) * a;
         }
+        mColourY = y;                                     // R-COLOR-4: every codec has one
+        seg(*mColour, kPadX + kLabelW, y, cw, 1.0);
+        y += kSegH + kGap;
 
         mHdrSizeY = y;
         y += cosmo_v2::kSectionHeaderHeight;
@@ -484,6 +508,7 @@ namespace interstellar_v1
         label("Quality", mRowY[Quality], sq(mRows[Quality].amt.value()));
         label("Speed", mRowY[Speed], sq(mRows[Speed].amt.value()));
         label("Depth", mRowY[Depth], sq(mRows[Depth].amt.value()));
+        label("Colour", mColourY, 1.0);
         if (const double a = mRows[PngNote].amt.value(); a > 0.001)
         {
             t.setFill(fade(palette::mutedForeground(), a));

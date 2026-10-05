@@ -186,6 +186,11 @@ namespace istest
             m.effectTypes = {{"blur.gaussian", "Gaussian Blur", "Blur"}, {"blur.box", "Box Blur", "Blur"},
                              {"blur.directional", "Directional Blur", "Blur"}, {"blur.zoom", "Zoom Blur", "Blur"},
                              {"blur.spin", "Spin Blur", "Blur"}};
+            // R-COLOR: the service's lists (abridged), Rec.709 everywhere until a test changes it
+            m.colourInputs = {{"rec709", "Rec.709"}, {"srgb", "sRGB"}, {"linear", "Linear (Rec.709)"}, {"logc3", "ARRI LogC3"},
+                              {"slog3", "Sony S-Log3"}, {"vlog", "Panasonic V-Log"}};
+            m.colourOutputs = {{"rec709", "Rec.709"}, {"pq", "HDR PQ"}, {"hlg", "HDR HLG"}};
+            m.workingSpace = "rec709";
             m.effects.clear();
             m.effects.push_back(effect("ef_1", "ro2", "s_day01", "blur.gaussian", 0, true, 0.8));
             m.effects.push_back(effect("ef_2", "ro2", "s_day01", "blur.directional", 1, false, 1.0));
@@ -485,6 +490,7 @@ namespace istest
                         {
                             if (key == "weight") n.weight = std::stod(val);
                             else if (key == "bypass") n.bypass = val == "1";
+                            else if (key == "input") n.input = val;
                             else if (key == "basic.exposure" && m.selectedRack >= 0 && m.rack[m.selectedRack].bindName == bind)
                             {
                                 m.gradeOwnParams.exposure = (float)std::stod(val);
@@ -494,6 +500,7 @@ namespace istest
                         }
                 }
             }
+            else if (a[0] == "colour" && a.size() >= 3 && a[1] == "working") m.workingSpace = a[2];
             else if (a[0] == "project" && a.size() >= 2 && a[1] == "close") { home(); }
             else if (a[0] == "project" && a.size() >= 2 && a[1] == "save") m.dirty = false;
             else if (a[0] == "render")

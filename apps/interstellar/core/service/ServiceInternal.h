@@ -7,6 +7,7 @@
 #include "FrameCache.h"
 #include "GradeEngine.h"
 #include "Composite.h"
+#include "ColourTransform.h"
 #include "volume/Volume.h"
 #include <atomic>
 #include <condition_variable>
@@ -56,6 +57,8 @@ namespace interstellar
         std::vector<render::EffectRun> effects;
         std::string effectsKey;
         int srcWidth = 0;               // the source's own width: plugin sizes are in its pixels
+        // R-COLOR-2: the source's space → the working space, before Cosmo grades (null = identity)
+        std::shared_ptr<const render::colour::Transform> input;
         render::Layer layer;            // geometry, fit, opacity, blend, dissolve; src filled at execute
     };
 
@@ -64,6 +67,8 @@ namespace interstellar
         int width = 0, height = 0;
         std::vector<PlanLayer> layers;
         std::string key;                // identity of the pixels this plan produces
+        // R-COLOR-4: the working space → the picture: the monitor's view (Rec.709), or a render's --output
+        std::shared_ptr<const render::colour::Transform> output;
     };
 
     /** Decoders and a grade engine for ONE thread: the UI thread's (renders, stills) or the
@@ -188,6 +193,7 @@ namespace interstellar
         int width = 0, height = 0;    // the output frame
         int proxyEdge = 0;            // the render path's long edge for it (0 = the project's size)
         double fps = 24.0;            // the output rate
+        std::shared_ptr<const render::colour::Transform> output;   // R-COLOR-4: --output (null = as graded)
         bool begun = false;
         std::unique_ptr<IFrameWriter> writer;
     };

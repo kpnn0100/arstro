@@ -11,6 +11,7 @@
 #include <cassert>
 
 #include "AppModelCodec.h"
+#include "ColourTransform.h"
 #include "InterstellarService.h"
 #include "Project.h"
 #include "core/ThreadBudget.h"
@@ -904,6 +905,78 @@ int main()
         toShallow(f.written[0], back);
         assert(f.svc->renderTimelineFrame(f.svc->model().timelines[0].id, 0.0, 0, eight) && !eight.deep());
         for (size_t i = 0; i < eight.rgba.size(); ++i) assert(std::abs(eight.rgba[i] - back.rgba[i]) <= 1);
+    });
+
+    test("a source says what it is, the project where it is graded, a render what it delivers (R-COLOR-2..4)", [] {
+        Fixture f("colour");
+        f.standard();
+        std::string err;
+        const std::string tl = f.svc->model().timelines[0].id;
+        Raster plain;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, plain));               // warms the frame cache too
+        // the address: a source's interpretation, refused for a group or a space it does not know
+        assert(!f.run("set a.input=slog4", &err) && has(err, "slog3"));
+        f.must("rack group new gr --nodes a");
+        assert(!f.run("set gr.input=slog3", &err) && has(err, "group"));
+        f.must("set a.input=slog3");
+        assert(has(f.out("get a.input"), "a.input=slog3"));
+        int ia = -1;
+        for (int i = 0; i < (int)f.svc->model().rack.size(); ++i) if (f.svc->model().rack[(size_t)i].bindName == "a") ia = i;
+        assert(ia >= 0 && f.svc->model().rack[(size_t)ia].input == "slog3");
+        assert(f.svc->model().colourInputs.size() == render::colour::inputs().size() && f.svc->model().workingSpace == "rec709");
+        // the frame is the input transform of the plain one, exactly (identity grade) — not the cached one
+        Raster logged, want = plain;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, logged));
+        render::colour::Transform::input("slog3", "rec709").apply(want);
+        assert(logged.rgba == want.rgba && logged.rgba != plain.rgba);
+        // saved on the #rackobj, read back, and undone like any edit
+        f.must("project save");
+        f.svc = f.make();
+        f.must("project open \"" + f.path("mv.isp") + "\"");
+        assert(has(f.out("get a.input"), "a.input=slog3"));
+        f.must("set a.input=vlog");
+        f.must("undo");
+        assert(has(f.out("get a.input"), "a.input=slog3"));
+        f.must("set a.input=rec709");
+        Raster back;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, back) && back.rgba == plain.rgba);
+
+        // ACEScct: a Rec.709 source is converted in and the monitor's view brings it back
+        assert(!f.run("colour working aces", &err) && has(err, "acescct"));
+        f.must("colour working acescct");
+        assert(f.svc->model().workingSpace == "acescct");
+        Raster viewed;
+        assert(f.svc->renderTimelineFrame(tl, 0.5, 0, viewed) && viewed.rgba.size() == plain.rgba.size());
+        int off = 0;
+        for (size_t i = 0; i < plain.rgba.size(); ++i) off = std::max(off, std::abs(viewed.rgba[i] - plain.rgba[i]));
+        assert(off <= 2);
+        f.must("undo");
+        assert(f.svc->model().workingSpace == "rec709");
+        f.must("colour working acescct");
+
+        // a render's output: PQ, 10-bit, its pixels the PQ transform of the working picture
+        assert(!f.run("render --timeline main --format h264 --output pq --res 46x26 --out \"" + f.path("x.mp4") + "\"", &err) && has(err, "10 bits"));
+        assert(!f.run("render --timeline main --format h265 --output srgb --peak 1000 --res 46x26 --out \"" + f.path("x.mp4") + "\"", &err) && has(err, "PQ's"));
+        assert(!f.run("render --timeline main --format h265 --output pq --peak 50 --res 46x26 --out \"" + f.path("x.mp4") + "\"", &err) && has(err, "400"));
+        f.must("settings set hardwareVideo=1");
+        f.written.clear();
+        f.must("render --timeline main --format h265 --output pq --peak 1000 --range 0:0.5 --res 46x26 --out \"" + f.path("pq.mkv") + "\"");
+        assert(gBegin.spec.output == "pq" && gBegin.spec.peak == 1000.0 && gBegin.spec.bitDepth == 10 && !gBegin.spec.hardware);
+        assert(has(f.svc->model().renders.back().spec, "HDR PQ 1000 cd/m"));
+        assert(!f.written.empty() && f.written[0].deep());
+        // the working picture (ACEScct, no view) at 16 bits, through the PQ output: what was written
+        f.must("colour working rec709");
+        Raster w709;
+        assert(f.svc->renderTimelineFrame(tl, 0.0, 46, w709) && w709.width == 46);
+        Raster expect;
+        toDeep(w709, expect);
+        render::colour::Transform::input("rec709", "acescct").apply(expect);
+        render::colour::Transform::output("acescct", "pq", 1000.0).apply(expect);
+        int worst = 0;
+        for (size_t i = 0; i < expect.rgba16.size(); ++i) worst = std::max(worst, std::abs((int)expect.rgba16[i] - (int)f.written[0].rgba16[i]));
+        std::printf("    PQ render vs the transforms applied by hand: worst %d / 65535\n", worst);
+        assert(worst <= 2);
+        f.must("settings set hardwareVideo=0");
     });
 
     test("a clip is copied and pasted whole; a drop places the rest of the source (R-TL-6, R-UI-14)", [] {

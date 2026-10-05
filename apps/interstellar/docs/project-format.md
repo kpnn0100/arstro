@@ -21,7 +21,7 @@ fps        = 24
 width      = 3840
 height     = 2160
 par        = 1.0
-colorspace = rec709
+colorspace = rec709         ; the WORKING space: rec709 (Cosmo's own) | acescct (R-COLOR-3)
 timebase   = seconds        ; see ../../../docs/audio-format.md §1
 sampleRate = 48000
 masterGain = 0.0
@@ -55,6 +55,7 @@ Interstellar's own data *about* a Cosmo node — never colour:
 | `media` | the source file. The timeline decodes frame N from it, and Interstellar is the party that added it |
 | `frame` | which frame Cosmo grades (R-RACK-3) |
 | `weight` | the **grade weight**, a continuous `bypass`. Cosmo has no concept of it |
+| `input` | what the media IS — its input colour transform (R-COLOR-2): `rec709` (the default, not written), `srgb`, `linear`, `logc3`, `logc4`, `slog3`, `vlog`, `clog3`, `log3g10`, `bmdfilm5`. The media's interpretation, not a grade |
 
 ---
 

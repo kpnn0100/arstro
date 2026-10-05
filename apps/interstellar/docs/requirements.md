@@ -867,6 +867,55 @@ readout`. Mutants run red: the grade packing from the 8-bit bytes, the composite
 the effects taking an 8-bit round trip, the job never asking for deep, the decode going through the
 8-bit volume, the writer narrowing before the encoder.
 
+### DR-COLOR-2 A source says what it is; the project says where it is graded (R-COLOR-2, R-COLOR-3)
+`render/ColourTransform.{h,cpp}` — knows no project. A transform is a short list of per-pixel ops
+built once per (source space, working space): a camera curve decoded from the vendor's published
+formula on 10-bit code values (`render/ColourTransform.cpp:128`; FFmpeg's video-range RGB mapped
+back first, Canon Log 3 on its IRE scale), a 3×3 gamut matrix from the primaries with Bradford
+adaptation to the ACES white (`:112`), then the working space's encoding (`:311`): Rec.709 —
+tone-mapped and sRGB-encoded for Cosmo; ACEScct — AP1 linear, ACEScct-encoded. A display-referred
+source entering ACEScct is inverse-tone-mapped, so the Rec.709 output gives it back (within 1/512).
+The tone map is ONE function (`:218`): on max(R,G,B), ratio-preserving, the identity to 0.6 and a
+rational shoulder above (slope 1 at the knee) — 18 % grey stays 18 %; an exponential shoulder was
+tried first and clipped S-Log3's top two stops to white (the test caught it). Each plan layer
+carries its source's transform (`core/service/ServiceRender.cpp:96`, `:359`), applied after the
+decode and before Cosmo grades (`:471`) — so the grade weight's "ungraded" picture is the
+transformed one, never raw log — and the frame cache and the plan key name it (law 7). The address
+`<bind>.input` (`core/service/InterstellarService.cpp:1840`, refused for a group and for unknown
+spaces) is saved on the `#rackobj` as `input=` (project-format §2); `colour working
+<rec709|acescct>` sets the header's `colorspace` (`:292`), undoable. Model: `rack[].input`,
+`workingSpace`, `colourInputs`. UI: the rack row's menu says "Input Colour (S-Log3)…" and opens the
+list in its place, the current one marked (`app/App.cpp:193`, `:260`); a Colour menu holds the
+working space (`:243`). Guarded by render `colour: seven camera curves put 18% grey at ACEScct
+0.4136…` (each vendor's published grey code value; Rec.709 red is ACES's AP1 red) and `colour:
+Rec.709 is untouched; … round-trips…`; L2 `a source says what it is, …` (the frame is exactly the
+transform of the plain one, a cached frame is not served after the change, saved, reloaded, undone;
+ACEScct through the Rec.709 view within 2 code values); UI `colour management`. Mutants run red: the
+cache key without the input transform, no view transform on the monitor.
+
+### DR-COLOR-3 A render says what it delivers: output transforms and HDR signalling (R-COLOR-4)
+`Transform::output` (`render/ColourTransform.cpp:345`): from Rec.709 working, `rec709`/`srgb` are
+the graded code values (identity), `rec709-2.4` re-encodes display light with a 2.4 power, `p3d65`
+converts to P3 primaries at gamma 2.6, `pq` places SDR white at 203 cd/m² (BT.2408), `hlg` puts
+reference white at 75 %; from ACEScct every output decodes to AP1 linear, converts gamut, and tone
+maps — SDR through the shared shoulder, PQ through a shoulder to the mastering peak, HLG through a
+unit shoulder. The monitor's plan carries the working space's Rec.709 output (`core/service/
+ServiceRender.cpp:385`, applied after the composite at `:500`); a render carries its `--output`
+(`:884` validates: PQ/HLG need 10 bits — H.265 is moved to 10-bit when `--bits` is not given, H.264
+and PNG are refused; `--peak` is PQ's alone, 400–10000; HDR is encoded in software; the job's plan
+takes it at `:1067`). The writer tags what it made (`host/FrameWriterFFmpeg.cpp:160`): primaries,
+transfer and matrix per output, BT.2020 coefficients for the YUV conversion of HDR; libx265 writes
+the colour description and, for PQ, the mastering display (Rec.2020, D65, the peak, 0.005 cd/m²)
+and MaxCLL/MaxFALL 0 = unknown (`:190`); Matroska also gets the mastering side data (`:218`).
+Deliver's FORMAT gains a COLOUR row (`app/widgets/OutputSpec.cpp:318`): choosing PQ or HLG moves an
+8-bit codec to H.265 10-bit (and DNxHR to HQX), choosing 8-bit later moves the colour back (`:80`) —
+the Render line is never one the service refuses. D-11 found and fixed on the way (ProRes masters
+said "unspecified" in their frame header). Guarded by `interstellar_render_codecs` (ffprobe: PQ
+H.265 = yuv420p10le, bt2020/smpte2084/bt2020nc and the mastering display in the stream; ProRes PQ,
+HLG, sRGB and P3 tags; an 8-bit HDR render refused), L2 (`--output pq` frames equal the transforms
+applied by hand — 0/65535; refusals; HDR off the video unit) and UI (`colour management`). Mutant
+run red: the render taking the monitor's view instead of its `--output`.
+
 ### DR-PLAY-1 The graded preview cache: one-second H.264 segments, every frame checked by its plan (R-PLAY-1)
 `core/service/ServiceCache.cpp`. The cache is the current timeline AS THE MONITOR SHOWS IT, at
 `cacheEdge()` (`:76` — 1280, under Preview quality), as `<stem>.cache/<timeline>/seg_<n>_<gen>.mp4`

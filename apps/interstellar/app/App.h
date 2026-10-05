@@ -112,6 +112,10 @@ namespace interstellar_v1
         void bindIfStale(double nowMs);
         void buildMenus();
         void refreshPresetMenu(const interstellar::AppModel &m);
+        /** The Colour menu: the working space, the current one marked (R-COLOR-3). */
+        void refreshColourMenu(const interstellar::AppModel &m);
+        /** The rack row's input-colour list, opened in place of its menu (R-COLOR-2). */
+        void openInputColourMenu(const std::string &bind, artboard::Point at);
         void setUiScale(int percent, bool animate);
         void applyLogicalSize();
         artboard::Transform rootTransform() const;
@@ -152,6 +156,7 @@ namespace interstellar_v1
         bool mScaleBound = false;
         artboard::AnimatedProperty mScaleAnim{1.0};
         std::vector<std::string> mPresetNames;          // what the Preset menu lists now
+        std::string mColourMenuFor;                     // the working space the Colour menu marks
         unsigned mThumbEpoch = 0;                       // the host's thumbnail epoch last seen
         artboard::GestureRecognizer mRecognizer;
 

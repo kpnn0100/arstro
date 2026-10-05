@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include "ActiveSet.h"
+#include "ColourTransform.h"
 #include "Composite.h"
 #include "Effects.h"
 #include "Prescale.h"
@@ -502,6 +503,94 @@ namespace
         assert(out.deep() && distinct(out, 0) >= 400);
         std::printf("[PASS] deep: a ramp finer than 8 bits survives grade, effect and composite (%d levels vs %d at 8-bit)\n",
                     distinct(graded, 0), distinct(graded8, 0));
+    }
+
+    // ── colour management (R-COLOR-2..4) ─────────────────────────────────────────────────────
+
+    float mapOne(const colour::Transform &t, float r, float g, float b, int c)
+    {
+        const float in[3] = {r, g, b};
+        float out[3];
+        t.map(in, out);
+        return out[c];
+    }
+
+    void test_camera_curves_put_grey_where_the_vendors_say()
+    {
+        // Each vendor's published 18 % grey code value, through its input transform into ACEScct,
+        // must land on ACEScct(0.18) = 0.41359 — the curve AND the gamut (grey is neutral in every
+        // gamut once adapted to the ACES white). A code value is mapped to FFmpeg's video-range RGB.
+        auto rgbOfCv = [](double cv) { return (float)((cv * 1023.0 - 64.0) / 876.0); };
+        const float want = (std::log2(0.18f) + 9.72f) / 17.52f;
+        struct G { const char *id; float x; };
+        const G greys[] = {{"logc3", rgbOfCv(0.391007)},  {"logc4", rgbOfCv(0.278396)},
+                           {"slog3", rgbOfCv(420.0 / 1023.0)}, {"vlog", rgbOfCv(0.423289)},
+                           {"clog3", 0.343391f},          // Canon Log 3 is defined on IRE itself
+                           {"log3g10", rgbOfCv(1.0 / 3.0)}, {"bmdfilm5", rgbOfCv(0.383562)}};
+        for (const G &g : greys)
+        {
+            const auto t = colour::Transform::input(g.id, "acescct");
+            assert(!t.identity());
+            for (int c = 0; c < 3; ++c)
+            {
+                const float v = mapOne(t, g.x, g.x, g.x, c);
+                if (std::fabs(v - want) > 2e-3f) std::printf("  %s grey: channel %d = %.5f, want %.5f\n", g.id, c, v, want);
+                assert(std::fabs(v - want) < 2e-3f);
+            }
+        }
+        // the gamut matrix: linear Rec.709 red is ACES's published (0.6131, 0.0702, 0.0206) in AP1
+        const auto lin = colour::Transform::input("linear", "acescct");
+        const float red[3] = {mapOne(lin, 1, 0, 0, 0), mapOne(lin, 1, 0, 0, 1), mapOne(lin, 1, 0, 0, 2)};
+        auto dec = [](float y) { return y <= 0.155251141552511f ? (y - 0.0729055341958355f) / 10.5402377416545f : std::exp2(y * 17.52f - 9.72f); };
+        assert(std::fabs(dec(red[0]) - 0.6131f) < 2e-3f && std::fabs(dec(red[1]) - 0.0702f) < 2e-3f && std::fabs(dec(red[2]) - 0.0206f) < 2e-3f);
+        // in the Rec.709 working space a log source is tone-mapped for Cosmo: grey stays 18 % (sRGB 0.4614)
+        const auto toRec = colour::Transform::input("slog3", "rec709");
+        assert(std::fabs(mapOne(toRec, rgbOfCv(420.0 / 1023.0), rgbOfCv(420.0 / 1023.0), rgbOfCv(420.0 / 1023.0), 1) - 0.4614f) < 2e-3f);
+        // and its brightest code value stays below white, with the curve still rising
+        assert(mapOne(toRec, 1, 1, 1, 0) < 1.0f && mapOne(toRec, 1, 1, 1, 0) > mapOne(toRec, 0.9f, 0.9f, 0.9f, 0));
+        std::printf("[PASS] colour: seven camera curves put 18%% grey at ACEScct 0.4136; Rec.709 red is ACES's AP1 red; S-Log3 grey stays 18%% in Rec.709\n");
+    }
+
+    void test_colour_identities_round_trips_and_hdr_levels()
+    {
+        // Rec.709 everywhere is nothing at all — today's pictures are untouched
+        assert(colour::Transform::input("rec709", "rec709").identity() && colour::Transform::input("srgb", "rec709").identity());
+        assert(colour::Transform::output("rec709", "rec709").identity() && colour::Transform::output("rec709", "srgb").identity());
+        // a Rec.709 source through ACEScct and back out to Rec.709 is itself (the inverse tone map)
+        const auto in = colour::Transform::input("rec709", "acescct"), out = colour::Transform::output("acescct", "rec709");
+        float worst = 0;
+        for (float r = 0.0f; r <= 0.95f; r += 0.05f)
+            for (float g = 0.0f; g <= 0.95f; g += 0.19f)
+                for (float b = 0.0f; b <= 0.95f; b += 0.19f)
+                {
+                    const float p[3] = {r, g, b};
+                    float a[3], o[3];
+                    in.map(p, a);
+                    out.map(a, o);
+                    for (int c = 0; c < 3; ++c) worst = std::max(worst, std::fabs(o[c] - p[c]));
+                }
+        assert(worst < 1.0f / 512.0f);
+        // HDR levels: SDR white at 203 cd/m² is PQ 0.5806 and HLG 75 %
+        assert(std::fabs(mapOne(colour::Transform::output("rec709", "pq"), 1, 1, 1, 0) - 0.5806f) < 3e-3f);
+        assert(std::fabs(mapOne(colour::Transform::output("rec709", "hlg"), 1, 1, 1, 0) - 0.75f) < 5e-3f);
+        // a scene-referred highlight rolls off to the mastering peak and never past it (PQ 1000 = 0.7518)
+        const auto pq = colour::Transform::output("acescct", "pq", 1000.0);
+        const float lo = mapOne(pq, 0.6f, 0.6f, 0.6f, 0), hi = mapOne(pq, 0.9f, 0.9f, 0.9f, 0), top = mapOne(pq, 1.2f, 1.2f, 1.2f, 0);
+        assert(lo < hi && hi <= top && top <= 0.7519f && top > 0.70f);
+        assert(colour::Transform::output("acescct", "pq", 1000.0).key() != colour::Transform::output("acescct", "pq", 4000.0).key());
+        // deep and 8-bit apply the same function
+        Raster r8;
+        r8.allocate(16, 2, 255);
+        for (int x = 0; x < 16; ++x) for (int c = 0; c < 3; ++c) r8.rgba[(size_t)x * 4 + c] = (uint8_t)(x * 16 + c * 5);
+        Raster r16;
+        toDeep(r8, r16);
+        const auto t = colour::Transform::input("vlog", "rec709");
+        t.apply(r8);
+        t.apply(r16);
+        Raster back;
+        toShallow(r16, back);
+        for (size_t i = 0; i < r8.rgba.size(); ++i) assert(std::abs(r8.rgba[i] - back.rgba[i]) <= 1);
+        std::printf("[PASS] colour: Rec.709 is untouched; Rec.709 → ACEScct → Rec.709 round-trips within 1/512; PQ 203 = 0.5806, HLG 75%%; highlights stop at the peak\n");
     }
 
     void test_hostile_geometry_stays_in_bounds()
@@ -1047,6 +1136,8 @@ int main()
     test_param_hash();
     test_deep_compose_places_layers_on_the_same_pixels();
     test_deep_keeps_what_8_bits_cannot();
+    test_camera_curves_put_grey_where_the_vendors_say();
+    test_colour_identities_round_trips_and_hdr_levels();
     std::printf("interstellar_render: all tests passed\n");
     return 0;
 }

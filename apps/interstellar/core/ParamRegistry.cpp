@@ -75,6 +75,9 @@ namespace interstellar
             {O::RackObj, "<bind>.bypass", "", "bypass", PK::Bool, "", 0, 1, 0, "Cosmo's bypass for the node."},
             {O::RackObj, "<bind>.frame", "", "frame", PK::Scalar, "s", 0, 0, 0,
              "Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`."},
+            {O::RackObj, "<bind>.input", "", "input", PK::Text, "rec709|srgb|linear|logc3|logc4|slog3|vlog|clog3|log3g10|bmdfilm5", 0, 0, 0,
+             "What the source IS: its input colour transform into the working space, before Cosmo grades it "
+             "(R-COLOR-2). The media's interpretation, never a grade."},
 
             // ── clip (arrangement; on a derived version a write becomes a #tlset) ──
             {O::Clip, "<clip>.at", "", "at", PK::Scalar, "s", 0, 0, 0, "Timeline position of the clip's first frame."},

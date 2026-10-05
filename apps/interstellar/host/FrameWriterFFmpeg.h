@@ -70,6 +70,7 @@ namespace interstellar_host
         AVFrame *mFrame = nullptr;
         AVPacket *mPkt = nullptr;
         SwsContext *mSws = nullptr;
+        int mSwsMatrix = 1;   // SWS_CS_ITU709; SWS_CS_BT2020 for an HDR output (R-COLOR-4)
         long long mNext = 0;
         bool mOpen = false;
         std::string mError, mNote, mPath;

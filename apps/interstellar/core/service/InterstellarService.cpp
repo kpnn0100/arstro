@@ -289,6 +289,24 @@ namespace interstellar
                 ok = requireProject() && playheadCommand(c);
                 break;
             case CK::Render: case CK::RenderCancel: ok = requireProject() && renderCommand(c); break;
+            case CK::ColourWorking:
+            {
+                // R-COLOR-3: where the grade happens. The media keep their interpretation (`<bind>.input`);
+                // every frame re-plans through the new transforms, so nothing stale is shown (law 7)
+                if (!requireProject()) break;
+                const std::string w = c.arg(0);
+                if (!render::colour::known(render::colour::workings(), w))
+                {
+                    ok = fail("colour working: rec709 or acescct, got " + w);
+                    break;
+                }
+                mProject->colorspace = w;
+                markDirty();
+                bumpFrame();
+                emit(Event(EK::ParamsChanged).with("address", "colorspace").with("value", w).with("target", "project"));
+                ok = true;
+                break;
+            }
             case CK::CacheBuild: case CK::CacheClear: ok = requireProject() && cacheCommand(c); break;
             case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: ok = requireProject() && animCommand(c); break;
             case CK::KeyShift: case CK::KeyCopy: case CK::KeyPaste: ok = requireProject() && keysCommand(c); break;
@@ -545,6 +563,7 @@ namespace interstellar
                 r.weight = ro->weight;
                 r.media = ro->media;
                 r.frame = ro->frame;
+                r.input = ro->input.empty() ? std::string("rec709") : ro->input;
                 r.video = looksLikeVideo(ro->media);
                 r.group = ro->kind == "group";
                 r.usedBy = usedBy.count(ro->id) ? usedBy[ro->id] : 0;
@@ -809,6 +828,12 @@ namespace interstellar
         }
         if (m.effectTypes.empty())
             for (const auto &t : render::effectCatalog()) m.effectTypes.push_back({t.type, t.label, t.family});
+        if (m.colourInputs.empty())
+        {
+            for (const auto &d : render::colour::inputs()) m.colourInputs.push_back({d.id, d.label});
+            for (const auto &d : render::colour::outputs()) m.colourOutputs.push_back({d.id, d.label});
+        }
+        m.workingSpace = render::colour::known(render::colour::workings(), mProject->colorspace) ? mProject->colorspace : std::string("rec709");
         m.hasClipClipboard = mHasClipClipboard;
         m.clipClipboardFrom = mHasClipClipboard && mClipClipboard ? mClipClipboard->name : std::string();
         m.settings = mSettings;
@@ -1812,6 +1837,18 @@ namespace interstellar
                 if (node < 0) return fail(ro->name + " is offline");
                 if (!mRack.setBypass(node, value == "1", err)) return fail(err);
             }
+            else if (a.rest == "input")
+            {
+                // R-COLOR-2: what the media is — a source's interpretation, not a grade (law 1 holds)
+                if (ro->kind == "group") return fail(ro->name + " is a group — an input transform belongs to a source");
+                if (!render::colour::known(render::colour::inputs(), value))
+                {
+                    std::string ids;
+                    for (const auto &d : render::colour::inputs()) ids += std::string(ids.empty() ? "" : ", ") + d.id;
+                    return fail(ro->name + ".input is one of " + ids + ", got `" + value + "`");
+                }
+                ro->input = value;
+            }
             else if (a.rest == "frame")
             {
                 Command c;
@@ -1974,6 +2011,7 @@ namespace interstellar
             {
                 if (a.rest == "weight") out << address << '=' << canonicalNumber(ro->weight) << '\n';
                 else if (a.rest == "frame") out << address << '=' << canonicalTime(ro->frame) << '\n';
+                else if (a.rest == "input") out << address << '=' << (ro->input.empty() ? std::string("rec709") : ro->input) << '\n';
                 else if (a.rest == "bypass")
                 {
                     bool b = false;

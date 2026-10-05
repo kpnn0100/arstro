@@ -36,7 +36,7 @@ namespace interstellar
             // project
             ProjectNew, ProjectOpen, ProjectSave, ProjectClose,
             // rack — the hosted Cosmo project (R-RACK)
-            RackImport, RackAdd, RackGroupNew, RackDuplicate, RackFrame, RackRename, RackSelect,
+            ColourWorking, RackImport, RackAdd, RackGroupNew, RackDuplicate, RackFrame, RackRename, RackSelect,
             // the address space
             Set, Get, Eval, Revert,
             // versions (R-VER)

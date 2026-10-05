@@ -153,6 +153,19 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
 - Queue rows print `renders[].spec` on line two before the path.
 - Shots added: `deliver_spec_h265`, `deliver_spec_codec_mid`. UI checks: 230.
 
+## Colour management (2026-10-05, R-COLOR-2..4)
+
+- Rack row menu (and the source bin's): "Input Colour (<space>)…" → the menu re-opens in place with
+  `colourInputs`, the current one marked "•" → `set <bind>.input=<id>` (not for a group).
+- Menu bar: **Colour** (index 5, after Preset, so Preset's `setItems(4, …)` is untouched) — "Rec.709
+  Working Space" / "ACEScct Working Space" (current marked "•") → `colour working <id>`; "Input
+  Colour of Selected…" opens the list for the selected source. Rebuilt when `workingSpace` changes.
+- Deliver › FORMAT › COLOUR: 709 · 2.4 · sRGB · P3 · PQ · HLG → `--output <id>` (Rec.709 left out).
+  PQ/HLG move H.264 or PNG to H.265 and set 10-bit, and DNxHR LB/SQ/HQ to HQX; choosing 8-bit (or
+  H.264/PNG, or a low DNxHR profile) afterwards moves the colour back to Rec.709. The summary names
+  the output.
+- Shots added: `grade_input_colour_menu`, `deliver_colour_pq`, `deliver_colour_pq_mid`. UI checks: 340.
+
 ## Cutting like an editor (2026-10-02, R-UI-14 / R-TL-6)
 
 - Drag a source row out of the source bin onto a lane: an eased ghost (snapped; "new video track"

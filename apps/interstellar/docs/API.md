@@ -17,6 +17,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `project open <path.isp>` | Open a project: its timelines, and the hosted Cosmo project its #rack names. | R-SCOPE-2 |
 | `project save [path.isp]` | Save the .isp and the rack's .cmp. A path saves the .isp there. | R-RACK-2 |
 | `project close` | Close the project and return Home. | R-UI-1 |
+| `colour working <rec709\|acescct>` | The project's working space: Rec.709 (display-referred, Cosmo's own — the default) or ACEScct (scene-referred; the monitor and each render then apply an output transform). | R-COLOR-3 |
 | `rack import <path.cmp>` | Point the rack at an existing Cosmo project — its groups and grades are the rack. | R-RACK-1 |
 | `rack add <media…>` | Add photos or videos to the rack. A video is graded on a reference frame (`clip.mp4#t=2.0` picks it). | R-RACK-3 |
 | `rack group new [name] [--nodes <a,b,…>]` | Group rack nodes — the named ones, else the selection; a group's grade stacks onto every descendant. No name: one is made up, as Cosmo does. | R-RACK-4 |
@@ -72,7 +73,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `playhead <t>\|+<dt>\|-<dt>\|next-cut\|prev-cut` | Move the playhead; snapped to a frame. | R-TL-5 |
 | `play` | Start playback of the current timeline. | R-UI-3 |
 | `pause` | Stop playback. | R-UI-3 |
-| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265. A flag the codec cannot honour is refused. | R-RENDER-6 |
+| `render [--timeline <tl>] [--out <path>] [--range <a:b>] [--format <h264\|h265\|prores\|dnxhr\|png-seq>] [--profile <proxy\|lt\|standard\|hq\|4444 · lb\|sq\|hq\|hqx\|444>] [--res <WxH>] [--fps <n\|num/den>] [--quality <0..51>] [--speed <ultrafast…veryslow>] [--bits <8\|10>] [--encoder <software\|hardware>] [--output <rec709\|rec709-2.4\|srgb\|p3d65\|pq\|hlg>] [--peak <400..10000>]` | Queue a render of a NAMED timeline (no implicit current one), with its whole output spec: codec and profile, size (never above the project, same aspect), frame rate (the timeline is sampled at it), constant quality and encoder speed for H.264/H.265, bit depth for H.265, the output colour transform (HDR PQ/HLG need 10 bits; --peak is PQ's mastering peak in cd/m²). A flag the codec cannot honour is refused. | R-RENDER-6 |
 | `render cancel <job>` | Cancel a queued or running render. | R-RENDER-4 |
 | `cache build` | Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`. | R-PLAY-1 |
 | `cache clear` | Delete the current timeline's preview cache. | R-PLAY-1 |
@@ -144,6 +145,7 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `<bind>.weight` | rackobj | scalar | 0..1 | 0.0..1.0 | 1.0 | Grade weight: a continuous bypass, blending ungraded→graded (R-RACK-4). |
 | `<bind>.bypass` | rackobj | bool |  |  | 0.0 | Cosmo's bypass for the node. |
 | `<bind>.frame` | rackobj | scalar | s |  | 0.0 | Reference frame a video source is graded on (R-RACK-3). Same as `rack frame`. |
+| `<bind>.input` | rackobj | text | rec709\|srgb\|linear\|logc3\|logc4\|slog3\|vlog\|clog3\|log3g10\|bmdfilm5 |  |  | What the source IS: its input colour transform into the working space, before Cosmo grades it (R-COLOR-2). The media's interpretation, never a grade. |
 | `<clip>.at` | clip | scalar | s |  | 0.0 | Timeline position of the clip's first frame. |
 | `<clip>.in` | clip | scalar | s |  | 0.0 | Source in-point. |
 | `<clip>.out` | clip | scalar | s |  | 0.0 | Source out-point (exclusive). |
@@ -267,6 +269,7 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `rack[].selected` | bool |  | In the selection that Group Selection groups (R-RACK-8). |
 | `rack[].mediaDuration` | number |  | Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened. |
 | `rack[].mediaFps` | number |  | The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened. |
+| `rack[].input` | string |  | What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2). |
 | `rack[].mediaBitDepth` | integer |  | Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15). |
 | `rack[].sharesMedia` | integer |  | How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group. |
 | `selectedRack` | integer |  | Index into rack of the Grade target; -1 = none. |
@@ -406,6 +409,13 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `effectTypes[].type` | string |  | The type to name in `effect add --type`. |
 | `effectTypes[].label` | string |  | Its name for a person. |
 | `effectTypes[].family` | string |  | Its menu family. |
+| `workingSpace` | string |  | The project's working space: rec709 (Cosmo's own, display-referred) or acescct (`colour working`, R-COLOR-3). |
+| `colourInputs` | array |  | The source spaces `set <bind>.input=` accepts, in menu order (R-COLOR-2). |
+| `colourInputs[].id` | string |  | What to dispatch. |
+| `colourInputs[].label` | string |  | Its name for a person. |
+| `colourOutputs` | array |  | The output transforms `render --output` accepts (R-COLOR-4). |
+| `colourOutputs[].id` | string |  | What to dispatch. |
+| `colourOutputs[].label` | string |  | Its name for a person. |
 | `hasClipClipboard` | bool |  | `clip copy` has filled the clip clipboard (R-TL-6). |
 | `clipClipboardFrom` | string |  | The name of the clip it was copied from. |
 | `settings` | group |  | Engine settings (R-SET). |

@@ -111,7 +111,8 @@ namespace interstellar
                           .set("mediaDuration", r.mediaDuration)
                           .set("mediaFps", r.mediaFps)
                           .set("sharesMedia", r.sharesMedia)
-                          .set("mediaBitDepth", r.mediaBitDepth));
+                          .set("mediaBitDepth", r.mediaBitDepth)
+                          .set("input", r.input));
         j.set("rack", rack);
         j.set("selectedRack", m.selectedRack);
         j.set("hasGradeTarget", m.hasGradeTarget);
@@ -261,7 +262,13 @@ namespace interstellar
             Json types = Json::array();
             for (const auto &t : m.effectTypes) types.push(Json::object().set("type", t.type).set("label", t.label).set("family", t.family));
             j.set("effectTypes", types);
+            Json ins = Json::array(), outs = Json::array();
+            for (const auto &c : m.colourInputs) ins.push(Json::object().set("id", c.id).set("label", c.label));
+            for (const auto &c : m.colourOutputs) outs.push(Json::object().set("id", c.id).set("label", c.label));
+            j.set("colourInputs", ins);
+            j.set("colourOutputs", outs);
         }
+        j.set("workingSpace", m.workingSpace);
         j.set("hasClipClipboard", m.hasClipClipboard);
         j.set("clipClipboardFrom", m.clipClipboardFrom);
         Json settings = Json::object();
@@ -360,6 +367,7 @@ namespace interstellar
             {"rack[].selected", "bool", "In the selection that Group Selection groups (R-RACK-8)."},
             {"rack[].mediaDuration", "number", "Seconds of source once opened (selecting a video opens it); 0 = a still or not yet opened."},
             {"rack[].mediaFps", "number", "The source's own frame rate once opened; one ref-frame step is 1/mediaFps seconds. 0 = not yet opened."},
+            {"rack[].input", "string", "What the source IS: its input colour transform into the working space (`set <bind>.input=`, R-COLOR-2)."},
             {"rack[].mediaBitDepth", "integer", "Bits per component the source carries once opened (8, 10, 12…); 0 = not yet opened. Frames reach the preview as 8-bit (R-UI-15)."},
             {"rack[].sharesMedia", "integer", "How many OTHER sources use the same file — a variant and its original share one (R-RACK-5); 0 for a group."},
             {"selectedRack", "integer", "Index into rack of the Grade target; -1 = none."},
@@ -499,6 +507,13 @@ namespace interstellar
             {"effectTypes[].type", "string", "The type to name in `effect add --type`."},
             {"effectTypes[].label", "string", "Its name for a person."},
             {"effectTypes[].family", "string", "Its menu family."},
+            {"workingSpace", "string", "The project's working space: rec709 (Cosmo's own, display-referred) or acescct (`colour working`, R-COLOR-3)."},
+            {"colourInputs", "array", "The source spaces `set <bind>.input=` accepts, in menu order (R-COLOR-2)."},
+            {"colourInputs[].id", "string", "What to dispatch."},
+            {"colourInputs[].label", "string", "Its name for a person."},
+            {"colourOutputs", "array", "The output transforms `render --output` accepts (R-COLOR-4)."},
+            {"colourOutputs[].id", "string", "What to dispatch."},
+            {"colourOutputs[].label", "string", "Its name for a person."},
             {"hasClipClipboard", "bool", "`clip copy` has filled the clip clipboard (R-TL-6)."},
             {"clipClipboardFrom", "string", "The name of the clip it was copied from."},
             {"settings", "group", "Engine settings (R-SET)."},

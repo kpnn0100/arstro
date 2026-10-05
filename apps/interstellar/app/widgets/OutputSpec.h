@@ -12,7 +12,9 @@
  *
  *   FORMAT    codec (cosmo SegmentedControl); then the rows that codec has — ProRes or DNxHR
  *             PROFILE, or H.264/H.265 QUALITY (Draft · Good · High · Master = CRF 28 · 23 · 18 · 12)
- *             and SPEED, and H.265's DEPTH; a PNG sequence says what it is instead.
+ *             and SPEED, and H.265's DEPTH; a PNG sequence says what it is instead; then COLOUR, the
+ *             output transform (Rec.709 · 2.4 · sRGB · P3 · PQ · HLG — HDR moves an 8-bit codec to
+ *             H.265 10-bit, and an 8-bit choice made later moves the colour back to Rec.709).
  *   SIZE      Full · ½ · ¼ of the project (a render never upscales or reframes), and the RATE — a
  *             stepper over the project's rate and the standard ones, the NTSC rates as exact
  *             fractions (24000/1001, not 23.976).
@@ -70,6 +72,7 @@ namespace interstellar_v1
         std::shared_ptr<cosmo_v2::SegmentedControl> qualityPicker() { return mQuality; }
         std::shared_ptr<cosmo_v2::SegmentedControl> speedPicker() { return mSpeed; }
         std::shared_ptr<cosmo_v2::SegmentedControl> depthPicker() { return mDepth; }
+        std::shared_ptr<cosmo_v2::SegmentedControl> colourPicker() { return mColour; }   // R-COLOR-4
         std::shared_ptr<cosmo_v2::SegmentedControl> sizePicker() { return mSize; }
         std::shared_ptr<cosmo_v2::SegmentedControl> rangePicker() { return mRange; }
         std::shared_ptr<cosmo_v2::PillButton> setInButton() { return mSetIn; }
@@ -110,6 +113,7 @@ namespace interstellar_v1
         double mIn = 0.0, mOut = -1.0;                    // the In–Out range (seconds); mOut < 0 = the end
 
         std::shared_ptr<cosmo_v2::SegmentedControl> mCodec, mProres, mDnx, mQuality, mSpeed, mDepth, mSize, mRange;
+        std::shared_ptr<cosmo_v2::SegmentedControl> mColour;
         std::shared_ptr<cosmo_v2::PillButton> mSetIn, mSetOut;
         std::shared_ptr<artboard::TextBox> mPath;
         std::shared_ptr<cosmo_v2::PillButton> mRender;
@@ -131,6 +135,7 @@ namespace interstellar_v1
 
         // where layout put things (paint draws the headers, labels and self-drawn rows there)
         double mHdrFormatY = 0, mHdrSizeY = 0, mHdrRangeY = 0, mHdrOutputY = 0, mNoteY = 0;
+        double mColourY = 0;
         double mRowY[kRows] = {}, mSizeY = 0, mRateY = 0, mRangeY = 0, mAudioY = 0, mSummaryY = 0, mListY = 0;
         double mContentH = 0;
     };

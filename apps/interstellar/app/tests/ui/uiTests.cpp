@@ -1037,7 +1037,7 @@ namespace
             auto ms = r.app->edit().topBar()->menus();
             std::string titles;
             for (int i = 0; i < ms->menuCount(); ++i) titles += (i ? " " : "") + ms->menu(i).title;
-            CHECK(titles == "File Edit Settings Workspace Preset", "the top bar carries cosmo's menu strip: File Edit Settings Workspace Preset");
+            CHECK(titles == "File Edit Settings Workspace Preset Colour", "the top bar carries cosmo's menu strip: File Edit Settings Workspace Preset, and Colour (R-COLOR-3)");
             CHECK(clickMenuItem(r, "File", "Save ") && hasLine(r.svc, "project save"), "File > Save dispatched project save");
             CHECK(clickMenuItem(r, "Edit", "Undo") && hasLine(r.svc, "undo"), "Edit > Undo dispatched undo");
             CHECK(clickMenuItem(r, "Edit", "Paste Grade to All") && hasLine(r.svc, "grade paste --all"), "Edit > Paste Grade to All dispatched grade paste --all");
@@ -2008,6 +2008,90 @@ namespace
 
     /** R-UI-12: groups like cosmo — grouping puts the items INSIDE a shut group; the tree's chevron
      *  opens it (eased); the strip shows one level, a double-click drills in, the breadcrumb goes up. */
+    /** R-COLOR-2..4: a source's input colour from its menu, the working space from the Colour menu,
+     *  the output colour in Deliver — HDR moving an 8-bit codec to H.265 10-bit. */
+    void testColourManagement()
+    {
+        std::printf("colour management\n");
+        Rig r(1440, 900, [](FakeService &s) { s.edit(); });
+        r.settle();
+        auto rt = r.app->edit().rackTree();
+        auto cm = r.app->edit().contextMenu();
+        const std::string bind = r.svc.m.rack[1].bindName;
+        auto rightClickRow = [&] {
+            const Point p = centre(*rt, rt->rowRect(1));
+            r.app->pointer(1, p.x - 40, p.y, 0, r.now);
+            r.app->pointer(0, p.x - 40, p.y, 2, r.now);
+            r.app->pointer(2, p.x - 40, p.y, 2, r.now + 40.0);
+            r.pump(250);
+        };
+        auto itemStarting = [&](const std::string &prefix) {
+            for (int i = 0; i < cm->itemCount(); ++i) if (cm->item(i).label.rfind(prefix, 0) == 0) return i;
+            return -1;
+        };
+        rightClickRow();
+        const int ic = itemStarting("Input Colour (Rec.709)");
+        CHECK(cm->isOpen() && ic >= 0, "a source's menu names its input colour: Input Colour (Rec.709)...");
+        Point q = centre(*cm, cm->itemRect(ic));
+        r.click(q.x, q.y);
+        r.pump(250);
+        CHECK(cm->isOpen() && cm->itemCount() == (int)r.svc.m.colourInputs.size(), "…which opens the list of source spaces in its place");
+        CHECK(cm->item(0).label.find("Rec.709") != std::string::npos && cm->item(0).label.rfind("\xE2\x80\xA2", 0) == 0,
+              "the current space is marked");
+        int slog = -1;
+        for (int i = 0; i < cm->itemCount(); ++i) if (cm->item(i).label.find("S-Log3") != std::string::npos) slog = i;
+        r.svc.lines.clear();
+        q = centre(*cm, cm->itemRect(slog));
+        r.click(q.x, q.y);
+        r.pump(64);
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "set " + bind + ".input=slog3", "choosing S-Log3 dispatches set <bind>.input=slog3");
+        rightClickRow();
+        CHECK(itemStarting("Input Colour (Sony S-Log3)") >= 0, "the menu now says what the source is");
+        r.click(5, 5);
+        r.pump(250);
+
+        // the working space, from the Colour menu
+        r.svc.lines.clear();
+        CHECK(clickMenuItem(r, "Colour", "     ACEScct"), "the Colour menu offers the ACEScct working space");
+        CHECK(!r.svc.lines.empty() && r.svc.lines.back() == "colour working acescct", "…and dispatches colour working acescct");
+        r.pump(250);
+        auto ms = r.app->edit().topBar()->menus();
+        bool marked = false;
+        for (int i = 0; i < ms->menuCount(); ++i)
+            if (ms->menu(i).title == "Colour")
+                for (const auto &it : ms->menu(i).items) marked = marked || it.label == "\xE2\x80\xA2  ACEScct Working Space";
+        CHECK(marked, "the Colour menu marks the working space the model says");
+
+        // Deliver: HDR needs 10 bits — an 8-bit codec moves to H.265 10-bit, and back again releases it
+        r.app->setTab(2);
+        r.settle();
+        auto os = r.app->edit().outputSpec();
+        auto clickSeg = [&](std::shared_ptr<arstro::cosmo_v2::SegmentedControl> sc, int i) {
+            auto *b = dynamic_cast<arstro::cosmo_v2::PillButton *>(sc->children()[(size_t)i].get());
+            const Point c = centre(*b, b->localBounds());
+            r.click(c.x, c.y);
+            r.pump(32);
+        };
+        clickSeg(os->formatPicker(), 0);
+        r.settle();
+        CHECK(os->renderLine().find("--output") == std::string::npos, "Rec.709 is the default and stays out of the line");
+        clickSeg(os->colourPicker(), 4);
+        r.settle();
+        CHECK(os->formatPicker()->selected() == 1 && os->depthPicker()->selected() == 1, "choosing PQ moves H.264 to H.265 10-bit");
+        const std::string line = os->renderLine();
+        CHECK(line.find("--format h265") != std::string::npos && line.find("--bits 10") != std::string::npos && line.find("--output pq") != std::string::npos,
+              "the line is one the service takes: --format h265 --bits 10 --output pq");
+        CHECK(os->summary().find("HDR PQ") != std::string::npos, "the summary says HDR PQ");
+        clickSeg(os->depthPicker(), 0);
+        r.settle();
+        CHECK(os->colourPicker()->selected() == 0, "choosing 8-bit afterwards puts the colour back to Rec.709, never a refused line");
+        clickSeg(os->formatPicker(), 2);
+        clickSeg(os->colourPicker(), 5);
+        r.settle();
+        CHECK(os->formatPicker()->selected() == 2 && os->renderLine().find("--output hlg") != std::string::npos,
+              "ProRes is 10-bit already: HLG keeps it");
+    }
+
     void testGroupBrowsing()
     {
         std::printf("browsing groups like cosmo\n");
@@ -2101,6 +2185,7 @@ int main()
     testPluginList();
     testKeyframes();
     testScopes();
+    testColourManagement();
     std::printf("\ninterstellar_app_ui_tests: %d checks passed\n", gChecks);
     return 0;
 }

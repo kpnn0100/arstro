@@ -56,6 +56,9 @@ namespace interstellar
         std::string speed = "medium";   // the x264/x265 preset
         int bitDepth = 8;               // h265: 8 | 10 · prores 10 · dnxhr per profile · h264 8
         bool hardware = false;          // R-PLAY-3: encode on the GPU's video unit when there is one
+        std::string output = "rec709";  // R-COLOR-4: what the pixels are — tags the stream (primaries,
+                                        // transfer, matrix) and, for pq/hlg, its HDR signalling
+        double peak = 1000.0;           // pq: the mastering display's peak, cd/m²
     };
 
     class IFrameWriter
