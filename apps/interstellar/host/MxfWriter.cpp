@@ -576,7 +576,11 @@ namespace interstellar_host
         {
             const std::time_t now = std::time(nullptr);
             std::tm g{};
+#ifdef _WIN32
+            gmtime_s(&g, &now);  // MSVC/MinGW-ucrt param order: (dest, source)
+#else
             gmtime_r(&now, &g);
+#endif
             const int y = g.tm_year + 1900;
             mWhen = {(uint8_t)(y >> 8), (uint8_t)y, (uint8_t)(g.tm_mon + 1), (uint8_t)g.tm_mday, (uint8_t)g.tm_hour, (uint8_t)g.tm_min, (uint8_t)g.tm_sec, 0};
         }

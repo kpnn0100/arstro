@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iterator>
 extern "C" {
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 }
 #include "HostFrameSource.h"

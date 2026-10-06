@@ -229,7 +229,11 @@ namespace interstellar_v1
         if (d < 7 * 86400) return std::to_string(d / 86400) + "d ago";
         std::time_t tt = (std::time_t)when;
         std::tm tmv{};
+#ifdef _WIN32
+        gmtime_s(&tmv, &tt);  // MSVC/MinGW-ucrt param order: (dest, source)
+#else
         gmtime_r(&tt, &tmv);
+#endif
         char buf[16];
         std::strftime(buf, sizeof buf, "%b %e", &tmv);
         return buf;

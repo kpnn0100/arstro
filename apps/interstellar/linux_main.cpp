@@ -479,8 +479,10 @@ int main(int argc, char **argv)
     // A 1080p grade allocates ~33 MB float buffers per frame; with glibc's defaults each is
     // returned to the OS and faulted back in on the next frame (measured: 34 ms → 23.4 ms per
     // full-res grade with the thresholds pinned — render/NOTES.md).
+#ifdef __GLIBC__   // mallopt is glibc's; other C runtimes keep their own policy
     mallopt(M_MMAP_THRESHOLD, 512 * 1024 * 1024);
     mallopt(M_TRIM_THRESHOLD, 1024 * 1024 * 1024);
+#endif
 
     gtk_init(&argc, &argv);
     // The typeface is in the binary, never resolved from the machine (arstro.design.rule §2.3).

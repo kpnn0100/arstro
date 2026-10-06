@@ -9,6 +9,9 @@ extern "C" {
 #include <libavutil/mastering_display_metadata.h>
 #include <libswscale/swscale.h>
 }
+
+// FFmpeg 5.1 replaced the channel_layout/channels pair with AVChannelLayout; 7 removed the old pair
+#define IS_AV_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 28, 100))
 #include <algorithm>
 #include <cstdlib>
 #include <cmath>
@@ -230,8 +233,12 @@ namespace interstellar_host
             mAEnc = avcodec_alloc_context3(ac);
             if (!mAStream || !mAEnc) { mError = "cannot allocate the audio encoder"; return false; }
             mAEnc->sample_rate = spec.audioRate;
+#if IS_AV_CH_LAYOUT
+            av_channel_layout_from_mask(&mAEnc->ch_layout, AV_CH_LAYOUT_STEREO);
+#else
             mAEnc->channel_layout = AV_CH_LAYOUT_STEREO;
             mAEnc->channels = 2;
+#endif
             mAEnc->sample_fmt = pcm ? AV_SAMPLE_FMT_S32 : AV_SAMPLE_FMT_FLTP;
             if (!pcm) mAEnc->bit_rate = 320000;
             mAEnc->time_base = AVRational{1, spec.audioRate};
@@ -274,8 +281,14 @@ namespace interstellar_host
         if (out == "pq")
         {
             // the container's copy of the mastering display (Matroska writes it; MOV here does not)
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(60, 31, 102)   // FFmpeg 7 moved stream side data onto codecpar
+            AVPacketSideData *sd = av_packet_side_data_new(&mStream->codecpar->coded_side_data, &mStream->codecpar->nb_coded_side_data,
+                                                           AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(AVMasteringDisplayMetadata), 0);
+            if (auto *md = reinterpret_cast<AVMasteringDisplayMetadata *>(sd ? sd->data : nullptr))
+#else
             if (auto *md = reinterpret_cast<AVMasteringDisplayMetadata *>(
                     av_stream_new_side_data(mStream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, sizeof(AVMasteringDisplayMetadata))))
+#endif
             {
                 *md = AVMasteringDisplayMetadata{};
                 const double prim[3][2] = {{0.708, 0.292}, {0.170, 0.797}, {0.131, 0.046}};
@@ -380,8 +393,12 @@ namespace interstellar_host
         av_frame_unref(mAFrame);
         mAFrame->nb_samples = frames;
         mAFrame->format = mAEnc->sample_fmt;
+#if IS_AV_CH_LAYOUT
+        av_channel_layout_copy(&mAFrame->ch_layout, &mAEnc->ch_layout);
+#else
         mAFrame->channel_layout = mAEnc->channel_layout;
         mAFrame->channels = 2;
+#endif
         mAFrame->sample_rate = mAEnc->sample_rate;
         if (av_frame_get_buffer(mAFrame, 0) < 0) { mError = "cannot allocate audio frame storage"; return false; }
         const float *s = mAudioFifo.data();

@@ -11,6 +11,9 @@ extern "C" {
 #include <cmath>
 #include <cstring>
 
+// FFmpeg 5.1 replaced the channel_layout/channels pair with AVChannelLayout; 7 removed the old pair
+#define IS_AV_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 28, 100))
+
 namespace arstro
 {
 namespace interstellar_host
@@ -39,7 +42,11 @@ namespace interstellar_host
         out.rate = mRate;
         if (avformat_open_input(&mFmt, path.c_str(), nullptr, nullptr) < 0) return false;
         if (avformat_find_stream_info(mFmt, nullptr) < 0) { closeAll(); return false; }
+#if LIBAVFORMAT_VERSION_MAJOR >= 59
+        const AVCodec *codec = nullptr;
+#else
         AVCodec *codec = nullptr;   // FFmpeg 4.4 takes a non-const pointer here
+#endif
         mStream = av_find_best_stream(mFmt, AVMEDIA_TYPE_AUDIO, -1, -1, &codec, 0);
         if (mStream < 0 || !codec) { closeAll(); return false; }   // a silent video, a still
         AVStream *st = mFmt->streams[mStream];
@@ -49,14 +56,27 @@ namespace interstellar_host
             closeAll();
             return false;
         }
+#if IS_AV_CH_LAYOUT
+        const int channels = mDec->ch_layout.nb_channels;
+        AVChannelLayout inLayout{}, outLayout{};
+        if (mDec->ch_layout.order != AV_CHANNEL_ORDER_UNSPEC) av_channel_layout_copy(&inLayout, &mDec->ch_layout);
+        else av_channel_layout_default(&inLayout, channels);
+        av_channel_layout_from_mask(&outLayout, AV_CH_LAYOUT_STEREO);
+        if (swr_alloc_set_opts2(&mSwr, &outLayout, AV_SAMPLE_FMT_FLT, mRate, &inLayout, mDec->sample_fmt,
+                                mDec->sample_rate, 0, nullptr) < 0)
+            swr_free(&mSwr);
+        av_channel_layout_uninit(&inLayout);
+#else
+        const int channels = mDec->channels;
         const int64_t inLayout = mDec->channel_layout ? (int64_t)mDec->channel_layout : av_get_default_channel_layout(mDec->channels);
         mSwr = swr_alloc_set_opts(nullptr, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, mRate, inLayout, mDec->sample_fmt,
                                   mDec->sample_rate, 0, nullptr);
+#endif
         // a mono file is a centre channel to libswresample, folded in at -3 dB; here mono is the same
         // signal in both ears at its own level (the mixer's centre is unity too)
         // (libswresample hard-codes sqrt(1/2) for pure mono, so the matrix is set outright)
         const double monoToStereo[2] = {1.0, 1.0};
-        if (mSwr && mDec->channels == 1) swr_set_matrix(mSwr, monoToStereo, 1);
+        if (mSwr && channels == 1) swr_set_matrix(mSwr, monoToStereo, 1);
         if (!mSwr || swr_init(mSwr) < 0) { closeAll(); return false; }
         mFrame = av_frame_alloc();
         mPkt = av_packet_alloc();
@@ -66,7 +86,7 @@ namespace interstellar_host
         else if (mFmt->duration > 0) dur = mFmt->duration / (double)AV_TIME_BASE;
         out.duration = dur;
         out.fileRate = mDec->sample_rate;
-        out.fileChannels = mDec->channels;
+        out.fileChannels = channels;
         mBufStart = 0;
         mPositioned = false;   // every position comes from the decoded frames' timestamps — an encoder's
                                // priming makes "the first sample is frame 0" untrue for AAC
