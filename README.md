@@ -54,7 +54,7 @@ arstro/
 ├── apps/          the applications — cosmo, genesis, pulsar, launcher, arstrobench, solaris, interstellar
 ├── examples/      small demos built on the stack
 ├── docs/          suite vision and shared-core design
-└── cmk            CLI over CMake: list targets, build or run one
+└── cmk            CLI over CMake: list targets, build or run one (cmk.cmd on Windows)
 ```
 
 ## Build
@@ -85,6 +85,9 @@ on first use, reconfigures when a `CMakeLists.txt` changes):
 ./cmk test -R artboard            # build all, then ctest (extra args go to ctest)
 ./cmk --debug build cosmo         # Debug build in build-debug/
 ```
+
+On Windows, run `.\cmk ...` from PowerShell or cmd (`cmk.cmd` puts the MSYS2 MinGW64
+toolchain on PATH, then runs the same script).
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the app-creation workflow, build targets, and
 submodule upgrade steps.

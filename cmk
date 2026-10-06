@@ -57,8 +57,11 @@ def configure(bdir, build_type, extra=()):
     (bdir / QUERY).parent.mkdir(parents=True, exist_ok=True)
     (bdir / QUERY).touch()
     cmd = ["cmake", "-S", ROOT, "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *extra]
-    if not (bdir / "CMakeCache.txt").exists() and shutil.which("ninja"):
-        cmd[1:1] = ["-G", "Ninja"]
+    if not (bdir / "CMakeCache.txt").exists():
+        if shutil.which("ninja"):
+            cmd[1:1] = ["-G", "Ninja"]
+        elif os.name == "nt":  # else CMake picks Visual Studio, not the MinGW kit
+            cmd[1:1] = ["-G", "MinGW Makefiles"]
     if sh(cmd) != 0:
         die("configure failed")
 
@@ -97,8 +100,12 @@ def ensure_configured(bdir, build_type):
 
 def load_codemodel(bdir, index):
     data = json.loads(index.read_text())
-    ref = next(r for r in data["reply"].values()
-               if isinstance(r, dict) and r.get("kind") == "codemodel")
+    # The index may be another client's (e.g. VS Code CMake Tools) with no
+    # codemodel in it; KeyError makes stale() reconfigure with our query.
+    ref = next((r for r in data["reply"].values()
+                if isinstance(r, dict) and r.get("kind") == "codemodel"), None)
+    if ref is None:
+        raise KeyError("codemodel")
     return json.loads((bdir / REPLY / ref["jsonFile"]).read_text())
 
 
@@ -226,7 +233,12 @@ def main():
     s = sub.add_parser("clean", help="clean the build tree")
     s.set_defaults(fn=cmd_clean)
 
-    a = p.parse_args()
+    # REMAINDER will not take a leading option (`test -R x`), so ctest's flags come back as extras
+    a, extra = p.parse_known_args()
+    if extra and a.cmd in ("test", "t"):
+        a.ctest = extra + a.ctest
+    elif extra:
+        p.error("unrecognized arguments: " + " ".join(extra))
     if not a.cmd:
         p.print_help()
         sys.exit(0)

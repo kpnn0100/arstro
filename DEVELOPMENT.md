@@ -82,6 +82,11 @@ List every target CMake knows about, then build or run one by name:
 A misspelt target name gets close-match suggestions. `-B DIR` picks another build tree
 and `-j N` caps parallelism (default: all cores).
 
+On **Windows**, `cmk.cmd` runs the same CLI from PowerShell or cmd — `.\cmk build cosmo`,
+`.\cmk run cosmo-cc -- --help`. It puts the MSYS2 MinGW64 toolchain first on PATH (so
+`gcc`, `cmake`, `ninja`, `pkg-config` and the GTK DLLs a built app loads are found) and
+uses MinGW's Python. MSYS2 is expected at `C:\msys64`; set `MSYS2_ROOT` if it is elsewhere.
+
 ### 2.1 Cross-platform build with CMake (Linux, Windows, macOS)
 
 The umbrella `CMakeLists.txt` builds the **cosmo** photo editor and the library unit
