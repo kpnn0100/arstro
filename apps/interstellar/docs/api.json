@@ -1177,7 +1177,7 @@
           "value": "<t>"
         }
       ],
-      "summary": "Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays.",
+      "summary": "Remove the keyframe at --at (default now). The last one leaves the parameter animated with no keys (R-ANIM-10); what it showed stays.",
       "requirement": "R-ANIM-1"
     },
     {
@@ -1283,6 +1283,31 @@
       ],
       "summary": "Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced.",
       "requirement": "R-ANIM-7"
+    },
+    {
+      "verb": "key mark",
+      "usage": "key mark <address> [--mode <offset|fixed>]",
+      "args": "<address>",
+      "minArgs": 1,
+      "maxArgs": 1,
+      "flags": [
+        {
+          "name": "mode",
+          "value": "<offset|fixed>"
+        }
+      ],
+      "summary": "Mark a parameter to animate (R-ANIM-10) — its row appears in the timeline's ANIMATION section. offset (the default): Grade's value is the base and the keys are added to it, so a change in Grade moves the whole animation; it starts with no keys and changes nothing. fixed: the keys ARE the value, Grade's value now is the first key, and a change in Grade later does not touch the animation. A curve, a wheel or a crop is fixed.",
+      "requirement": "R-ANIM-10"
+    },
+    {
+      "verb": "key mode",
+      "usage": "key mode <address> <offset|fixed>",
+      "args": "<address> <offset|fixed>",
+      "minArgs": 2,
+      "maxArgs": 2,
+      "flags": [],
+      "summary": "Turn an animated parameter's curve into the other mode — its keys converted against the base so the picture does not change.",
+      "requirement": "R-ANIM-10"
     },
     {
       "verb": "key clear",
@@ -3252,19 +3277,31 @@
       "path": "anims[].value",
       "type": "number",
       "stable": true,
-      "doc": "The curve's value now."
+      "doc": "The curve's value now (an offset's: the offset)."
+    },
+    {
+      "path": "anims[].mode",
+      "type": "string",
+      "stable": true,
+      "doc": "offset (the keys are added to the parameter's own value, its base) | fixed (the keys are the value) — R-ANIM-10."
+    },
+    {
+      "path": "anims[].base",
+      "type": "number",
+      "stable": true,
+      "doc": "The parameter's own value — what Grade sets: an offset's base, a fixed curve's starting value."
     },
     {
       "path": "anims[].min",
       "type": "number",
       "stable": true,
-      "doc": "The parameter's lowest value, for the graph."
+      "doc": "The lowest key value, for the graph (an offset: minus the parameter's span)."
     },
     {
       "path": "anims[].max",
       "type": "number",
       "stable": true,
-      "doc": "Its highest."
+      "doc": "The highest (an offset: plus the span)."
     },
     {
       "path": "anims[].keys",

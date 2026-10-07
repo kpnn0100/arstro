@@ -1343,17 +1343,17 @@ node's continuous colour key or an effect's mix/parameter run in SOURCE time, "n
 source's reference frame (`sourceNow`, `:88`); a clip's opacity and geometry run on the clip's own
 footage clock (in + offset × speed), so a move, a head trim or a split keeps every key on its frame.
 `key add|remove|set|clear` (`animCommand`, `:313`) — times to the millisecond, values tidied to
-float precision, a speed or influence making its side a bezier, the last key's removal and `key
-clear` leaving the value as the parameter's own (`writeStatic`). R-ANIM-3: `set` on an animated
-parameter keys it at now (`setAnimated`, `:289`; hooked first in `setAddress`,
-`InterstellarService.cpp:1723`). R-ANIM-5: curves are the root's (`curveEditable`, `:211`) — a version
+float precision, a speed or influence making its side a bezier, `key clear` leaving the value as the
+parameter's own (`writeStatic`). (Until 2026-10-07 a `set` on an animated parameter keyed it at now
+and the last key's removal dropped the curve. DR-ANIM-6 replaced both: a `set` writes the own value,
+and a curve with no keys stays marked.) R-ANIM-5: curves are the root's (`curveEditable`) — a version
 cannot key the rack or an effect, nor a clip it inherits; its `set` is a `#tlgrade` delta against the
-curve's value at now (`:1782`) and renders on top of it. The render path: `gradeFor` /
+parameter's own value (DR-ANIM-6) and renders on top of the animated value. The render path: `gradeFor` /
 `gradeForBypassing` replace each tree node's own value with its curve at the layer's source time
 before the deltas and the fold (`applyColourCurves`, `:477`; `ServiceRender.cpp:173`, `:276`),
 `effectChain` evaluates effect curves, `planFrame` the clip's (`ServiceRender.cpp:310`), so plan keys
-— and the frame cache, the ring, the preview cache — follow the animation; Grade's panels show the
-curves at the reference frame. Pins freeze curves: the commit hashes the .cmp AND the rack's curve
+— and the frame cache, the ring, the preview cache — follow the animation; Grade's panels show each
+parameter's own value (DR-ANIM-6). Pins freeze curves: the commit hashes the .cmp AND the rack's curve
 text (`InterstellarService.cpp:1584`), written to `<commit>.anim`, read by `pinCurvesFor` (`:526`).
 Curves follow their nodes: dropped with the node (`pruneAnims`, `:444`, after every command), copied
 by `rack duplicate` (colour and effect curves), `clip split` and `clip copy`/`paste` (`copyAnims`,
@@ -1366,6 +1366,74 @@ not move when the base's curve does; effect and clip curves; a split keeps both 
 `key clear` renders the same frame; undo; save and reload). Mutants red: curves ignored on the rack,
 pins reading live curves, `set` never keying, clip curves not rendered. By hand: exposure −2 → 1.5
 eased and scale 1 → 1.6, three stills look right.
+
+### DR-ANIM-6 Marked to animate, offset or fixed; a `set` writes the base (R-ANIM-3 amended a third time, R-ANIM-5 amended, R-ANIM-9, R-ANIM-10)
+**The format** (`model/Project.h:307`, `Schema.h:386`; project-format §5.3):
+- `#anim … mode=offset` is written only for an offset, so a file without it is fixed.
+- Validation refuses (`Project.cpp:1436`, `:1438`, `:1455`) a mode other than fixed or offset, an
+  offset on a `#clip`, and an offset with shape keys.
+- A curve with no keys is valid: it is a marked property.
+
+**The service** (`core/service/ServiceAnim.cpp`):
+- `curveMode` (`:232`): a curve keeps its own mode. A new one takes the default, offset, except a
+  shape or a clip's own property, which are fixed.
+- `keyRange` (`:240`): a key's value lies in the range (fixed) or ± its span (offset). `upsertKey`
+  (`:271`) range-checks a key against it and makes a new curve in that mode.
+- `animatedValue` (`:223`): fixed is the curve; offset is `clamp(own + curve)`.
+- `key mark` and `key mode` (`:497`; the grammar rows are `Command.cpp:238`, `:244`):
+  - a mark makes the curve. A fixed mark keys the own value (or text) at now;
+  - a mode change turns every key against the own value (to offset `v − base`, to fixed
+    `clamp(base + v)`), so the picture holds;
+  - a shape or a clip's property is refused as an offset.
+- `key remove` of the last key (`:412`) keeps the curve marked and folds what it showed into the own
+  value: fixed takes the key's value, offset takes `clamp(own + key)`.
+- `key clear` (`:434`) writes the value at now only when there were keys, then unmarks.
+- `key paste` (`:679`): a key copied in one mode and pasted into the other turns through the two
+  curves' own values (the clipboard keeps each curve's mode and base, `KeyClip`). A new target curve
+  takes the copied one's mode.
+- The render path:
+  - `applyColourCurves` (`:368`) adds an offset to the own value read from the tree and clamps it to
+    Cosmo's range, for both the live and the pinned path;
+  - `curveAt` (`:792`), which serves effects, clips and the tracker, returns `fallback + curve` for
+    an offset;
+  - a pin's `.anim` line gains a trailing `offset` token only for an offset (`:812`), so a fixed
+    line is byte-identical to before; `pinCurvesFor` reads it (`:839`).
+- `copyAnims` keeps the mode (`:728`). The model's `anims[].mode` and `anims[].base` (`:884`) give
+  the graph ± the span for an offset.
+
+**`set` and the version path** (`InterstellarService.cpp`):
+- the `setAnimated` hook is gone, so a `set` writes the own value;
+- Grade's panels no longer apply curves (`:726`), so a slider shows what `set` writes;
+- a version's delta is against the own value (`:2026`);
+- `get` of a marked parameter with no keys is its own value (`:2257`, `:2370`), and `eval --explain`
+  prints the own value BEFORE the curve with the curve's mode (`:2295`).
+
+**The tracker** (`ServiceTrack.cpp:133`, `keyPath`) keys a new curve fixed, and the path less the
+base on an offset centre.
+
+**Tests**:
+- Model `animModes`: round trip (fixed not written, `mode=offset` written), the three refusals, a
+  keyless offset valid, and D-13.
+- L2 `marked to animate`:
+  - an offset mark changes no pixel and keys nothing; a key without a value is a zero offset;
+  - an offset of +0.5 on base 0.25 renders exactly the still-0.75 frame, and moving the base to 0.5
+    renders the still-1.0 frame, keys unchanged;
+  - `key mode fixed` keeps the picture with the key turned to 1.0, after which a base change moves
+    nothing; back to offset keeps it too; one undo step;
+  - a fixed mark keys Grade's 20 and holds it against a later 40;
+  - the refusals: a shape, a clip's property, a bad mode, an unmarked parameter;
+  - a pin shows base + offset (a pin read as fixed would not);
+  - an offset key pasted onto a fixed curve lands as its value;
+  - the last key's removal keeps the mark and the picture; clear unmarks; the file says `mode=offset`
+    only where it is one.
+- L2 `keyframes: …` (rewritten): `set` moves the base (`explain` prints own 0.25, 2 keys, offset,
+  effective 1); Grade's slider shows 0.25; on a version it shows 0.35 after a 0.35 drag (+0.1).
+- L2 tracking: the tracked curve is fixed and `get` reads the key; a back-track on an offset-marked
+  centre stores path − base and `get` reads the path.
+- Eleven mutants were red: offset without the base, a mode change not converting, a pin dropping
+  the mode, a new curve made fixed, the last key unmarking, paste not converting, the panel applying
+  curves, the version delta against the curve, the tracker writing raw onto an offset, the tracker
+  starting an offset, and D-13's id taken by reference (the model test).
 
 ### DR-ANIM-5 The properties sit under the clip's track — only what is animated (R-ANIM-3, R-ANIM-4, R-ANIM-8, amended 2026-10-07 twice)
 This supersedes the lane-at-the-bottom layout of DR-ANIM-2 and DR-ANIM-4. What a row keys, the graph's

@@ -103,6 +103,8 @@ static AppModel populatedModel()
         an.key = "basic.exposure";
         an.address = "a.basic.exposure";
         an.clock = "source";
+        an.mode = "offset";
+        an.base = 0.25;
         an.keys.push_back(KeyframeModel{});
         m.anims.push_back(an);
     }

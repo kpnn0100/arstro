@@ -218,7 +218,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the key lane, DR-ANIM-3 shapes, DR-ANIM-4 the graph and the lane's size, DR-ANIM-5 the properties under the clip's track; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day; R-ANIM-3/4/8 amended again 2026-10-07)
+## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the key lane, DR-ANIM-3 shapes, DR-ANIM-4 the graph and the lane's size, DR-ANIM-5 the properties under the clip's track, DR-ANIM-6 marking and the two modes; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day; R-ANIM-3/4/8 amended again 2026-10-07; R-ANIM-3/5 amended a third time and R-ANIM-9/10 added 2026-10-07)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
@@ -259,6 +259,14 @@ The headline of this specification, and the reason it is not the first one.
   - A row's menu "Remove Animation" clears its curve (`key clear`), and the row eases out. A curve that
     loses its last key goes the same way.
   - While nothing is animated, the track opens to Animate… and one line saying what it is for.)
+  (**AMENDED 2026-10-07 a third time, user request "fixed: the value set at Grade is the initial value,
+  so changing it in Grade doesn't affect the animated value; offset: the value set at Grade is the
+  base value, so changing it affects all":** this contradicted the 2026-10-05 reading that Grade's
+  sliders "edit an animated value where Grade stands". Now a `set` (a Grade slider) writes the
+  parameter's OWN value and never a key, animated or not, and Grade's sliders show that own value.
+  What the own value does is the curve's mode (R-ANIM-10). Keys are written only by `key …` in the
+  timeline. A curve that loses its last key stays MARKED, with no keys, and what it showed stays as
+  the parameter's own value. Only Remove Animation (`key clear`) unmarks it.)
 - **R-ANIM-4 A graph editor**: every animated parameter of the selection can be shown as its value
   curve over time, keyframes dragged in time and value, bezier handles dragged to shape speed and
   influence, and a right-click on a keyframe types the incoming / outgoing speed and influence or
@@ -285,6 +293,40 @@ The headline of this specification, and the reason it is not the first one.
 - **R-ANIM-5 Animation is the rack's, like colour** (law 2): a curve is not a scalar, so a derived
   version cannot carry its own — it inherits the base's curves live, and a scalar `#tlgrade` delta
   still adds on top of the animated value.
+  (**AMENDED 2026-10-07, with R-ANIM-3/10:** the delta is measured against the parameter's OWN value,
+  which is what Grade's slider shows, not against the animated value at the reference frame. A slider
+  dragged on a version stays where it was dragged. The delta still adds on top of the animated value.)
+- **R-ANIM-9 A property is marked to animate in Grade, and the timeline lists what is marked** (added
+  2026-10-07, user request "user can mark which property in the Grade tab will be animated and it will
+  show directly in the timeline in a separate section: Animation; all animate-marked properties show
+  there with the automation's name made of property name, object name and group name"):
+  - each Grade parameter (and each effect's) has a mark. Marking it (`key mark <address>`) makes it
+    animated in the default mode (R-ANIM-10) and lists it in the timeline;
+  - the timeline's ANIMATION section sits below all its tracks. It holds one lane per marked
+    property of the sources in that timeline, named "<property> · <object> · <group>". The group is
+    Grade's panel (Light, Colour, Presence, Detail, Curves & Wheels, Crop) or the effect's name;
+  - it replaces the rows under the selected clip's track (R-ANIM-3's second amendment);
+  - unmarking is Remove Animation (`key clear`).
+  — 🚧 the service's marking is in (`key mark`, DR-ANIM-6). Grade's marks and the section are the
+  next commit.
+- **R-ANIM-10 Two modes: fixed or offset** (added 2026-10-07, user request "there will be 2 modes
+  for an animated property, fixed or offset"; ✅ DR-ANIM-6):
+  - **fixed**: the keys ARE the value. The value Grade sets is where the curve starts: marking fixed
+    keys it at the current time, and changing it in Grade afterwards does not change the animated
+    value.
+  - **offset**: the keys are ADDED to the value Grade sets (the base), clamped to the parameter's
+    range, so changing the base moves the whole animation. A key's value is ± the parameter's span.
+  - **default**: a new mark is an offset with no keys (a zero offset), so marking changes nothing on
+    screen (the user's choice). `key add` on an unmarked parameter marks it the same way.
+  - **switching**: `key mode <address> fixed|offset` turns the keys against the base, so the picture
+    does not move.
+  - **fixed only**: a shape (a tone curve, a wheel, the crop) and a clip's own property (opacity,
+    geometry, speed). Those have no Grade value to offset, and a speed's stored value is its ramp's
+    average (R-EDT-3).
+  - **tracking**: a track is a path, so a curve the tracker starts is fixed. On an offset centre,
+    each key is the path less the base.
+  - **in files**: the `.isp` writes `mode=offset` on an `#anim` only when it is one, so every
+    earlier file reads as fixed. A pin's curves keep their mode.
 
 ---
 

@@ -88,11 +88,13 @@ interstellar-cc project open mv.isp : set s_day01.basic.exposure=0.35 : project 
 | `cache build` | Build the current timeline's graded preview cache now (a window also builds it when idle): one-second H.264 segments at the playing size, every frame checked by its plan, so only what an edit changed is rebuilt. Playback reads it; a render never does. `wait cache.done`. | R-PLAY-1 |
 | `cache clear` | Delete the current timeline's preview cache. | R-PLAY-1 |
 | `key add <address> [--at <t>] [--value <v>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Add a keyframe to a parameter's curve (making the curve if it has none) — a rack node's colour key or an effect's parameter at a SOURCE time, a clip's opacity or geometry at a time on the clip's own footage clock. --at defaults to now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5). | R-ANIM-1 |
-| `key remove <address> [--at <t>]` | Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays. | R-ANIM-1 |
+| `key remove <address> [--at <t>]` | Remove the keyframe at --at (default now). The last one leaves the parameter animated with no keys (R-ANIM-10); what it showed stays. | R-ANIM-1 |
 | `key set <address> [--at <t>] [--to <t>] [--value <v>] [--in <linear\|bezier\|hold>] [--out <linear\|bezier\|hold>] [--speed-in <units/s>] [--influence-in <%>] [--speed-out <units/s>] [--influence-out <%>] [--ease <linear\|ease\|ease-in\|ease-out\|hold>]` | Shape the keyframe at --at: move it (--to), change its value, its incoming/outgoing interpolation, speed (units per second) and influence (% of the segment) — After Effects' model; giving a speed or influence makes that side a bezier. --ease applies a preset. | R-ANIM-2 |
 | `key shift [--keys <address@t,…>] [--by <s>]` | Move several keyframes in time together, by --by seconds (one undo step) — a box-selection dragged in the graph. Refused when a key would land on another of its curve. | R-ANIM-7 |
 | `key copy [--keys <address@t,…>]` | Copy keyframes (their values, shapes and sides, times relative to the earliest) to the key clipboard. | R-ANIM-7 |
 | `key paste [--at <t>] [--to <address>]` | Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties they came from, or onto --to when one property was copied. Same-time keys are replaced. | R-ANIM-7 |
+| `key mark <address> [--mode <offset\|fixed>]` | Mark a parameter to animate (R-ANIM-10) — its row appears in the timeline's ANIMATION section. offset (the default): Grade's value is the base and the keys are added to it, so a change in Grade moves the whole animation; it starts with no keys and changes nothing. fixed: the keys ARE the value, Grade's value now is the first key, and a change in Grade later does not touch the animation. A curve, a wheel or a crop is fixed. | R-ANIM-10 |
+| `key mode <address> <offset\|fixed>` | Turn an animated parameter's curve into the other mode — its keys converted against the base so the picture does not change. | R-ANIM-10 |
 | `key clear <address>` | Remove a parameter's curve; the value it had now stays as the parameter's own. | R-ANIM-1 |
 | `export-still [--timeline <tl>] [--out <p.png>] [--at <t>]` | Write one composited frame of a named timeline. | R-RENDER-5 |
 | `shuttle <forward\|back\|stop>` | J/K/L: forward plays at 1×, then 2× and 4× on each press; back the same in reverse; stop pauses. Sound is heard at 1× forward only. | R-EDT-2 |
@@ -491,9 +493,11 @@ Each line on the stream is `[evt] <name> key=value …`.
 | `anims[].address` | string |  | The whole address: what `key add\|remove\|set\|clear` and `set` take. |
 | `anims[].clock` | string |  | source (the footage's own time — rack and effects) \| clip (the clip's own footage time). |
 | `anims[].now` | number |  | The current time on that clock: the source's reference frame; the playhead inside the clip. |
-| `anims[].value` | number |  | The curve's value now. |
-| `anims[].min` | number |  | The parameter's lowest value, for the graph. |
-| `anims[].max` | number |  | Its highest. |
+| `anims[].value` | number |  | The curve's value now (an offset's: the offset). |
+| `anims[].mode` | string |  | offset (the keys are added to the parameter's own value, its base) \| fixed (the keys are the value) — R-ANIM-10. |
+| `anims[].base` | number |  | The parameter's own value — what Grade sets: an offset's base, a fixed curve's starting value. |
+| `anims[].min` | number |  | The lowest key value, for the graph (an offset: minus the parameter's span). |
+| `anims[].max` | number |  | The highest (an offset: plus the span). |
 | `anims[].keys` | array |  | Its keyframes, by time (R-ANIM-2). |
 | `anims[].keys[].t` | number |  | Time on the curve's clock, s. |
 | `anims[].keys[].v` | number |  | Value, in the address's units. |

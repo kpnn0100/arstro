@@ -301,6 +301,10 @@ namespace interstellar
     {
         NodeId id, node;
         std::string key;
+        /** R-ANIM-10: `fixed` — the keys ARE the value, the parameter's own value is where it started;
+         *  `offset` — the keys are ADDED to the parameter's own value (its base), so moving the base
+         *  moves the whole animation. A file without `mode` means fixed (what every curve was before). */
+        std::string mode = "fixed";
         Fields unknown;
         Notes notes;
     };
@@ -432,8 +436,8 @@ namespace interstellar
         std::vector<anim::ShapeKey> shapeKeysOf(const NodeId &animId) const;
         /** Drop every curve of `node` and their keyframes (the node is gone). */
         void dropAnimsOf(const NodeId &node);
-        /** Drop one curve and its keyframes. */
-        void dropAnim(const NodeId &animId);
+        /** Drop one curve and its keyframes (`id` may be the curve's own — it is copied first, D-13). */
+        void dropAnim(const NodeId &id);
         RawNode *rawNode(const NodeId &);           const RawNode *rawNode(const NodeId &) const;
         TlSet *tlset(const NodeId &tl, const NodeId &node);
         const TlSet *tlset(const NodeId &tl, const NodeId &node) const;

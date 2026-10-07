@@ -383,6 +383,7 @@ namespace schema
             text<Anim>("id", &Anim::id, 0, false),
             ref<Anim>("node", &Anim::node, 0, false),
             text<Anim>("key", &Anim::key, 0, false),
+            text<Anim>("mode", &Anim::mode, 0, false, [](const Anim &a, const Project &) { return a.mode != "fixed"; }),
         };
         return f;
     }

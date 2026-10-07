@@ -219,7 +219,8 @@ namespace interstellar
              "now on that clock (the source's reference frame; the playhead inside the clip), --value to what the parameter "
              "shows there. Root timeline only for the rack and effects: versions inherit curves (R-ANIM-5).", "R-ANIM-1"},
             {K::KeyRemove, "key remove", "<address>", 1, 1, {"at=<t>"},
-             "Remove the keyframe at --at (default now). The last one takes the curve with it; its value stays.", "R-ANIM-1"},
+             "Remove the keyframe at --at (default now). The last one leaves the parameter animated with no keys "
+             "(R-ANIM-10); what it showed stays.", "R-ANIM-1"},
             {K::KeySet, "key set", "<address>", 1, 1,
              {"at=<t>", "to=<t>", "value=<v>", "in=<linear|bezier|hold>", "out=<linear|bezier|hold>", "speed-in=<units/s>",
               "influence-in=<%>", "speed-out=<units/s>", "influence-out=<%>", "ease=<linear|ease|ease-in|ease-out|hold>"},
@@ -234,6 +235,15 @@ namespace interstellar
             {K::KeyPaste, "key paste", "", 0, 0, {"at=<t>", "to=<address>"},
              "Paste the copied keyframes with the earliest at --at (default: now on each curve's clock) — onto the properties "
              "they came from, or onto --to when one property was copied. Same-time keys are replaced.", "R-ANIM-7"},
+            {K::KeyMark, "key mark", "<address>", 1, 1, {"mode=<offset|fixed>"},
+             "Mark a parameter to animate (R-ANIM-10) — its row appears in the timeline's ANIMATION section. offset (the "
+             "default): Grade's value is the base and the keys are added to it, so a change in Grade moves the whole "
+             "animation; it starts with no keys and changes nothing. fixed: the keys ARE the value, Grade's value now is "
+             "the first key, and a change in Grade later does not touch the animation. A curve, a wheel or a crop is fixed.",
+             "R-ANIM-10"},
+            {K::KeyMode, "key mode", "<address> <offset|fixed>", 2, 2, {},
+             "Turn an animated parameter's curve into the other mode — its keys converted against the base so the "
+             "picture does not change.", "R-ANIM-10"},
             {K::KeyClear, "key clear", "<address>", 1, 1, {},
              "Remove a parameter's curve; the value it had now stays as the parameter's own.", "R-ANIM-1"},
             {K::ExportStill, "export-still", "", 0, 0, {"timeline=<tl>", "out=<p.png>", "at=<t>"},

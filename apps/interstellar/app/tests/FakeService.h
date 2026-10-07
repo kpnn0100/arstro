@@ -340,6 +340,9 @@ namespace istest
             x.node = node; x.nodeBind = bind; x.owner = owner; x.key = key; x.address = bind + "." + key;
             x.clock = owner == "clip" ? "clip" : "source";
             x.now = now; x.min = lo; x.max = hi;
+            // R-ANIM-10: a Grade parameter's new curve is an offset (its keys in ± the span); a clip's is fixed
+            x.mode = owner == "clip" ? "fixed" : "offset";
+            if (x.mode == "offset") { x.min = lo - hi; x.max = hi - lo; }
             m.anims.push_back(x);
             return &m.anims.back();
         }
@@ -436,7 +439,17 @@ namespace istest
                     if (flag("influence-in", x)) { it->inflIn = x; it->in = "bezier"; }
                 }
                 std::sort(an->keys.begin(), an->keys.end(), [](const KeyframeModel &p, const KeyframeModel &q) { return p.t < q.t; });
-                if (an->keys.empty()) m.anims.erase(m.anims.begin() + (an - &m.anims[0]));
+                // the last key removed leaves the parameter animated, with no keys (R-ANIM-10)
+            }
+            else if (a[0] == "key" && a.size() >= 3 && (a[1] == "mark" || a[1] == "mode"))
+            {
+                // R-ANIM-10: `key mark <address> [--mode m]` / `key mode <address> <m>`
+                std::string mode;
+                if (a[1] == "mode" && a.size() >= 4) mode = a[3];
+                for (size_t k = 3; k + 1 < a.size(); ++k) if (a[k] == "--mode") mode = a[k + 1];
+                AnimModel *an = animFor(a[2], a[1] == "mark");
+                if (!an) { err = "key: " + a[2] + " is not animated"; return false; }
+                if (!mode.empty()) an->mode = mode;
             }
             else if (a[0] == "key" && a.size() >= 3 && a[1] == "clear")
             {

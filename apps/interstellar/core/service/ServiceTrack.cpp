@@ -5,7 +5,8 @@
  *  forward (or `--back`) to `--to` (or the source's end / start), each next frame is searched for the
  *  patch the window covers — the least sum of absolute differences of luma, within a reach around
  *  where it was — and the window's centre is KEYED there (R-ANIM): a track is ordinary keys, edited,
- *  copied and undone like any. The patch is taken again where it was found each frame, so a slowly
+ *  copied and undone like any. A track is a path, so a curve it starts is fixed; on a centre marked
+ *  as an offset (R-ANIM-10) each key is the path less the window's own position. The patch is taken again where it was found each frame, so a slowly
  *  changing subject is followed (a fast change of appearance drifts — said in DR-CLR-2).
  *
  *  The search runs on the source's decoded frames at an analysis size (a long edge of 320 px at
@@ -129,6 +130,13 @@ namespace interstellar
         return true;
     }
 
+    void InterstellarService::keyPath(const AnimTarget &t, double at, double v)
+    {
+        // R-ANIM-10: the tracked position, in the curve's mode — a new curve fixed, an offset less its base
+        const bool offset = curveMode(t, "fixed") == "offset";
+        upsertKey(t, at, offset ? v - staticValue(t) : v, nullptr, nullptr, "fixed");
+    }
+
     void InterstellarService::pumpTracks()
     {
         for (auto &jp : mTrackJobs)
@@ -182,8 +190,8 @@ namespace interstellar
                 j.th = std::clamp((int)std::lround(h * j.ah), 8, j.ah);
                 patchAt(luma, j.aw, j.ah, (int)std::lround(j.cx * j.aw - 0.5), (int)std::lround(j.cy * j.ah - 0.5), j.tw, j.th, j.patch);
                 // the start is keyed too, so the track holds where it began
-                upsertKey(tx, t0, j.cx, nullptr, nullptr);
-                upsertKey(ty, t0, j.cy, nullptr, nullptr);
+                keyPath(tx, t0, j.cx);
+                keyPath(ty, t0, j.cy);
                 j.begun = true;
                 j.model.state = "running";
                 return;
@@ -225,8 +233,8 @@ namespace interstellar
             j.cy = std::clamp((by + 0.5) / j.ah, 0.0, 1.0);
             patchAt(luma, j.aw, j.ah, bx, by, j.tw, j.th, j.patch);
             const double t = j.frame / j.fps;
-            upsertKey(tx, t, j.cx, nullptr, nullptr);
-            upsertKey(ty, t, j.cy, nullptr, nullptr);
+            keyPath(tx, t, j.cx);
+            keyPath(ty, t, j.cy);
             ++j.model.done;
             markDirty();
             bumpFrame();

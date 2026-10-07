@@ -238,6 +238,18 @@ crop — R-ANIM-6) adds `shape=` with the value in the address's own syntax, quo
 (`shape="0,0;0.5,0.7;1,1"`, `shape=120,60,10`); its `v` is 0, and a curve is all numbers or all shapes. Curves are the root timeline's — versions inherit them and
 add `#tlgrade` deltas — and a pin snapshots the rack's into `<stem>.pins/<commit>.anim`.
 
+`mode=offset` (R-ANIM-10, 2026-10-07) makes the keys an OFFSET added to the parameter's own value
+(the rack's or the effect's, which Grade sets), clamped to its range. `v` is then the offset, within
+± the parameter's span. Absent means `fixed`: the keys are the value, as in every file before it.
+An offset on a `#clip` or with shape keys is refused. An `#anim` with no `#key` is valid: it is a
+parameter marked to animate that has no keys yet (R-ANIM-9). A pin's `.anim` line ends in `offset`
+for such a curve:
+
+```
+#anim id=an_3 node=ro_2 key=basic.contrast mode=offset
+#key anim=an_3 t=1.000 v=-10.0
+```
+
 ### 5.2 Beside the project: the preview cache (R-PLAY-1)
 
 `<stem>.cache/<timeline id>/` holds the graded preview cache: `seg_<n>_<gen>.mp4` (one second of

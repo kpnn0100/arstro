@@ -1088,6 +1088,32 @@ fps = 24
         CHECK(!q.parse(text, err) && err.find("angle=1") != std::string::npos && err.find("footage") != std::string::npos);
     }
 
+    /** R-ANIM-10: a curve's mode — absent means fixed (every file before it), offset is written, and
+     *  nothing but fixed or offset is a mode; a shape and a clip's own property are never an offset. */
+    void animModes()
+    {
+        const std::string base = std::string(kBase);
+        Project p = load(base + "#anim id=an_1 node=ro_2 key=basic.exposure\n#key anim=an_1 t=1.0 v=0.5\n"
+                                "#anim id=an_2 node=ro_2 key=basic.contrast mode=offset\n#key anim=an_2 t=1.0 v=-10.0\n");
+        rt(p);
+        CHECK(p.anim("an_1")->mode == "fixed" && p.anim("an_2")->mode == "offset");
+        const std::string out = p.serialize();
+        CHECK(out.find("#anim id=an_1 node=ro_2 key=basic.exposure\n") != std::string::npos);   // fixed is the default: not written
+        CHECK(out.find("key=basic.contrast mode=offset") != std::string::npos);
+        CHECK(refused(base + "#anim id=an_1 node=ro_2 key=basic.exposure mode=relative\n", "mode is fixed or offset"));
+        CHECK(refused(base + "#anim id=an_1 node=ro_2 key=curve.curve mode=offset\n#key anim=an_1 t=1.0 v=0.0 shape=\"0,0;1,1\"\n", "not by offset"));
+        // an offset curve with no keys yet is a marked property: valid
+        Project q = load(base + "#anim id=an_1 node=ro_2 key=basic.exposure mode=offset\n");
+        rt(q);
+        CHECK(q.keysOf("an_1").empty());
+        CHECK(refused(base + "#anim id=an_1 node=clp_1 key=opacity mode=offset\n", "offset on a clip"));
+        // D-13: dropping a curve by its own id (a reference into the list) takes its keys, not the next curve's
+        Project d = load(base + "#anim id=an_1 node=ro_2 key=basic.exposure\n#key anim=an_1 t=1.0 v=0.5\n"
+                                "#anim id=an_2 node=ro_2 key=basic.contrast\n#key anim=an_2 t=1.0 v=10.0\n");
+        d.dropAnim(d.anims[0].id);
+        CHECK(d.anims.size() == 1 && d.keysOf("an_1").empty() && d.keysOf("an_2").size() == 1);
+    }
+
     /** R-DLV-1: a caption is an arrangement node — it round-trips (line breaks too), a version inherits it
      *  and overrides it by DELTA, a drop hides it, a freeze copies it, and a zero span is refused. */
     void captions()
@@ -1141,6 +1167,7 @@ int main()
     nestedTimelines();
     clipAngle();
     captions();
-    std::printf("interstellar_model_tests: PASS (%d checks, 23 groups)\n", gChecks);
+    animModes();
+    std::printf("interstellar_model_tests: PASS (%d checks, 24 groups)\n", gChecks);
     return 0;
 }

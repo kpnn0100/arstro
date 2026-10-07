@@ -341,7 +341,9 @@ namespace interstellar
                 break;
             }
             case CK::CacheBuild: case CK::CacheClear: ok = requireProject() && cacheCommand(c); break;
-            case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: ok = requireProject() && animCommand(c); break;
+            case CK::KeyAdd: case CK::KeyRemove: case CK::KeySet: case CK::KeyClear: case CK::KeyMark: case CK::KeyMode:
+                ok = requireProject() && animCommand(c);
+                break;
             case CK::KeyShift: case CK::KeyCopy: case CK::KeyPaste: ok = requireProject() && keysCommand(c); break;
             case CK::ExportStill: ok = requireProject() && exportStill(c); break;
             case CK::LutExport: ok = requireProject() && lutExport(c); break;
@@ -721,7 +723,8 @@ namespace interstellar
             const NodeId ro = m.rack[(size_t)m.selectedRack].rackObj;
             if (colourTreeFor(cur, tree, idx, source, e2) && idx.count(ro))
             {
-                applyColourCurves(cur, tree, idx, sourceNow(ro));   // the panels show the curves where Grade stands (R-ANIM-3)
+                // R-ANIM-10: the panels show each parameter's OWN value — an offset curve's base, a fixed
+                // curve's starting value — never the animated one: a slider is what Grade sets
                 for (auto &kv : idx) applyDeltas(tree[(size_t)kv.second].own, gradeDeltas(P, cur, kv.first));
                 m.gradeOwnParams = tree[(size_t)idx[ro]].own;
                 m.gradeParams = foldEditTarget(tree, idx[ro]);
@@ -1966,13 +1969,6 @@ namespace interstellar
             return fail("no node named `" + a.name + "`" + (near.empty() ? "" : " (did you mean: " + joinNames(near) + "?)"));
         }
 
-        {
-            // R-ANIM-3: a parameter with a curve is keyed at the current time, not set
-            bool handled = false;
-            if (!setAnimated(address, value, handled)) return false;
-            if (handled) return true;
-        }
-
         if (kind == NodeKind::RackObj)
         {
             RackObj *ro = P.rackObj(id);
@@ -2027,8 +2023,8 @@ namespace interstellar
                 if (it == idx.end()) return fail(ro->name + " is not in the " + source);
                 double baseValue = 0;
                 paramScalar(tree[(size_t)it->second].own, key, baseValue);
-                // an animated key: the delta is against the curve where Grade stands (R-ANIM-5)
-                if (!pinCurvesFor(tl)) baseValue = curveAt(ro->id, filter + "." + key, sourceNow(ro->id), baseValue);
+                // an animated key too: the delta is on the parameter's OWN value, which is what Grade's slider
+                // shows (R-ANIM-10) — the render adds it to the animated value (R-ANIM-5)
                 // EditParams are floats: a delta finer than float precision is noise, and noise in
                 // a committed file is a diff nobody made (0.8 - 0.5 = 0.30000000000000004).
                 double delta = v - baseValue;
@@ -2258,7 +2254,10 @@ namespace interstellar
                 if (v.empty() && def && std::find(def->files.begin(), def->files.end(), a.rest) != def->files.end()) v = "none";
                 if (v.empty()) return fail(e->id + " (" + e->type + ") has no parameter `" + a.rest + "`");
             }
-            if (P.animOf(e->id, a.rest)) v = canonicalNumber(curveAt(e->id, a.rest, sourceNow(e->node), 0.0));   // R-ANIM: now
+            AnimTarget at;
+            std::string why;
+            if (P.animOf(e->id, a.rest) && animTarget(e->id + "." + a.rest, at, why))   // R-ANIM: now (an offset: on its own value)
+                v = canonicalNumber(animatedValue(at));
             mOutput = e->id + "." + a.rest + "=" + v + "\n";
             return true;
         }
@@ -2293,9 +2292,9 @@ namespace interstellar
             if (!colourTreeFor(tl, tree, idx, source, err)) return fail(err);
             const auto it = idx.find(ro->id);
             if (it == idx.end()) return fail(ro->name + " is not in the " + source + " (offline?)");
-            applyColourCurves(tl, tree, idx, sourceNow(ro->id));   // an animated key reads where Grade stands
-            std::string sourceOwn;
+            std::string sourceOwn;   // the parameter's own value — an offset's base (R-ANIM-10)
             paramText(tree[(size_t)it->second].own, key, sourceOwn);
+            applyColourCurves(tl, tree, idx, sourceNow(ro->id));   // an animated key reads where Grade stands
             const auto deltas = gradeDeltas(P, tl, ro->id);
             double delta = 0;
             bool hasDelta = false;
@@ -2312,7 +2311,8 @@ namespace interstellar
                 out << "  timeline   " << (t ? t->name : tl) << '\n';
                 out << "  source     " << source << "  own " << sourceOwn << '\n';
                 if (const Anim *an = P.animOf(ro->id, filter + "." + key))
-                    out << "  animated   " << P.keysOf(an->id).size() << " keys; at source time " << canonicalNumber(sourceNow(ro->id)) << '\n';
+                    out << "  animated   " << P.keysOf(an->id).size() << " keys, " << an->mode
+                        << (an->mode == "offset" ? " (added to its own value)" : "") << "; at source time " << canonicalNumber(sourceNow(ro->id)) << '\n';
                 if (hasDelta)
                 {
                     NodeId from;
@@ -2366,7 +2366,8 @@ namespace interstellar
                         value = clipField(c, a.rest);
                         found = true;
                         if (P.animOf(id, a.rest))   // R-ANIM: the curve at the playhead, on the clip's own clock
-                            value = canonicalNumber(curveAt(id, a.rest, std::clamp(c.in + (mModel.playhead - c.at) * c.speed, c.in, c.out), 0.0));
+                            value = canonicalNumber(curveAt(id, a.rest, std::clamp(c.in + (mModel.playhead - c.at) * c.speed, c.in, c.out),
+                                                            std::atof(value.c_str())));   // marked, no keys: its own value
                     }
             if (kind == NodeKind::Track)
                 for (const auto &t : R.tracks)

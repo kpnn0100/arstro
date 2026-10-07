@@ -301,6 +301,7 @@ namespace interstellar
                                 .set("speedIn", k.speedIn).set("inflIn", k.inflIn).set("speedOut", k.speedOut).set("inflOut", k.inflOut).set("shape", k.shape));
                 anims.push(Json::object().set("id", a.id).set("node", a.node).set("nodeBind", a.nodeBind).set("owner", a.owner)
                                .set("key", a.key).set("address", a.address).set("clock", a.clock).set("now", a.now).set("value", a.value)
+                               .set("mode", a.mode).set("base", a.base)
                                .set("min", a.min).set("max", a.max).set("shape", a.shape).set("shapeNow", a.shapeNow).set("keys", ks));
             }
             j.set("anims", anims);
@@ -619,9 +620,11 @@ namespace interstellar
             {"anims[].address", "string", "The whole address: what `key add|remove|set|clear` and `set` take."},
             {"anims[].clock", "string", "source (the footage's own time — rack and effects) | clip (the clip's own footage time)."},
             {"anims[].now", "number", "The current time on that clock: the source's reference frame; the playhead inside the clip."},
-            {"anims[].value", "number", "The curve's value now."},
-            {"anims[].min", "number", "The parameter's lowest value, for the graph."},
-            {"anims[].max", "number", "Its highest."},
+            {"anims[].value", "number", "The curve's value now (an offset's: the offset)."},
+            {"anims[].mode", "string", "offset (the keys are added to the parameter's own value, its base) | fixed (the keys are the value) — R-ANIM-10."},
+            {"anims[].base", "number", "The parameter's own value — what Grade sets: an offset's base, a fixed curve's starting value."},
+            {"anims[].min", "number", "The lowest key value, for the graph (an offset: minus the parameter's span)."},
+            {"anims[].max", "number", "The highest (an offset: plus the span)."},
             {"anims[].keys", "array", "Its keyframes, by time (R-ANIM-2)."},
             {"anims[].keys[].t", "number", "Time on the curve's clock, s."},
             {"anims[].keys[].v", "number", "Value, in the address's units."},

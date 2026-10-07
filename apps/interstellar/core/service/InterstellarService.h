@@ -352,6 +352,7 @@ namespace interstellar
             std::string key;
             std::vector<anim::Key> keys;
             std::vector<anim::ShapeKey> shapes;
+            std::string mode = "fixed";   // R-ANIM-10
         };
         using PinCurves = std::vector<PinCurve>;
         double sourceNow(const NodeId &roId) const;
@@ -360,11 +361,16 @@ namespace interstellar
         double animatedValue(const AnimTarget &t);
         NodeId rootOf(const NodeId &tl) const;
         bool curveEditable(const AnimTarget &t);
-        bool upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text = nullptr);
+        bool upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text = nullptr,
+                       const std::string &modeIfNew = "offset");
+        /** R-ANIM-10: a curve's mode (an existing curve's, else what a new one would be) and the range its
+         *  keys live in — an offset's is ± the parameter's span. */
+        std::string curveMode(const AnimTarget &t, const std::string &ifNew = "offset") const;
+        void keyRange(const AnimTarget &t, const std::string &mode, double &lo, double &hi) const;
+        void keyPath(const AnimTarget &t, double at, double v);   // a tracker's key (ServiceTrack.cpp)
         std::string staticText(const AnimTarget &t);
         bool writeStaticText(const AnimTarget &t, const std::string &text);
         bool writeStatic(const AnimTarget &t, double v);
-        bool setAnimated(const std::string &address, const std::string &value, bool &handled);
         bool animCommand(const Command &c);
         bool keysCommand(const Command &c);   // key shift | copy | paste (R-ANIM-7)
         struct KeyClip
@@ -373,6 +379,8 @@ namespace interstellar
             std::string key;
             bool shape = false;
             std::vector<AnimKey> keys;   // times relative to the clipboard's earliest
+            std::string mode = "fixed";  // R-ANIM-10: the curve it came from — an offset's keys are offsets
+            double base = 0;             // that parameter's own value when copied (to turn one mode into the other)
         };
         std::vector<KeyClip> mKeyClipboard;
         void pruneAnims();

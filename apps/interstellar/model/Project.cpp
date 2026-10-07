@@ -473,8 +473,11 @@ namespace interstellar
         return v;
     }
 
-    void Project::dropAnim(const NodeId &animId)
+    void Project::dropAnim(const NodeId &id)
     {
+        // a copy: `id` is often the dropped curve's own (`dropAnim(a->id)`), which the erase below moves
+        // the next curve into — read after it, it names the wrong curve (D-13)
+        const NodeId animId = id;
         anims.erase(std::remove_if(anims.begin(), anims.end(), [&](const Anim &a) { return a.id == animId; }), anims.end());
         animKeys.erase(std::remove_if(animKeys.begin(), animKeys.end(), [&](const AnimKey &k) { return k.anim == animId; }), animKeys.end());
     }
@@ -1429,6 +1432,10 @@ namespace interstellar
                 { err = "#anim " + a.id + ": node=" + a.node + " names no #rackobj, #effect or #clip"; return false; }
                 if (!curves.insert(a.node + "\x01" + a.key).second)
                 { err = "two #anim for node=" + a.node + " key=" + a.key + " — one parameter has one curve"; return false; }
+                if (a.mode != "fixed" && a.mode != "offset")
+                { err = "#anim " + a.id + ": mode is fixed or offset, got " + a.mode; return false; }
+                if (a.mode == "offset" && clip(a.node))
+                { err = "#anim " + a.id + " is an offset on a clip — a clip's own property animates by value (fixed)"; return false; }
             }
             std::set<std::string> at;
             std::map<std::string, bool> shaped;
@@ -1443,6 +1450,9 @@ namespace interstellar
                 if (k.shape.empty() ? shaped.count(k.anim) && shaped[k.anim] : shaped.count(k.anim) && !shaped[k.anim])
                 { err = "#anim " + k.anim + " mixes number keys and shape keys — a curve is one or the other"; return false; }
                 shaped[k.anim] = !k.shape.empty();
+                if (!k.shape.empty())
+                    if (const Anim *a = anim(k.anim); a && a->mode == "offset")
+                    { err = "#anim " + k.anim + " is an offset but has shape keys — a curve, a wheel or a crop animates by value, not by offset"; return false; }
                 if (!at.insert(k.anim + "\x01" + canonicalNumber(k.t)).second)
                 { err = "two #key on anim=" + k.anim + " at t=" + canonicalNumber(k.t) + " — a curve has one value at a time"; return false; }
             }

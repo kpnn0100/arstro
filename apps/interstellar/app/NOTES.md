@@ -391,7 +391,7 @@ app.onPickFootage         = [&]{ /* dialog */ app.footagePicked(paths); };
 | `widgets/RenderQueue` | Deliver deck: rows NAME their timeline; eased progress + derived fps rate; state cross-fades. |
 | `widgets/NamePrompt`, `SettingsDialog` | cosmo modal skeleton; Settings holds "Reduce motion" (→ `artboard::setReducedMotion`). |
 | `widgets/FadePage`, `EasedScroll`, `AnimatedRows`, `ImageSlot`, `TextFit`, `Glyphs`, `CommandLine` | shared mechanics: opacity tab page whose hit-testing follows intent; R6 scroll in one place; keyed list insert/remove/reorder that travels; per-target image registration; measured ellipsize/fit; the line glyphs cosmo's `icon::` lacks; command formatting (precision 7, frame-quantised times, quoting, grade addresses, timecode). |
-| `tests/FakeService.h`, `tests/Rig.h` | the fake model + recording dispatch + gradient frames; the Cairo rig shared by both harnesses. |
+| `tests/FakeService.h`, `tests/Rig.h` | the fake model + recording dispatch + gradient frames; the Cairo rig shared by both harnesses. The fake follows R-ANIM-10: a Grade parameter's new curve is an offset (a clip's is fixed), a curve keeps its mark when its last key goes, and `key mark` / `key mode` set the mode. |
 
 ### Reused from cosmo (compiled, unchanged)
 `Theme.cpp`, `EmbeddedFonts.cpp` + `cmake/embed_fonts.cmake`, and widgets `EditStackTabs`,

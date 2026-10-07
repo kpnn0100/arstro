@@ -208,6 +208,9 @@ both RGBA hashes; they must match.
   project or a node's params, to `structural()` if it changes the rack's node set.
 - **`Command::flag()` returns a `std::string` BY VALUE.** `strtol(c.flag("x").c_str(), &end, …)`
   leaves `end` dangling into a dead temporary (D-10) — bind the flag to a local first.
+- **Never pass a member of a vector element by reference to a function that erases from that
+  vector.** `dropAnim(a->id)` erased the curve, the next one slid into its slot, and the id it read
+  afterwards was the NEXT curve's (D-13). Copy the id first, in the callee.
 
 ---
 

@@ -60,6 +60,11 @@ one integrator who moves, wires, tests and commits each stream:
       DONE (DR-ANIM-2). The 2026-10-05 request is complete.
 - [x] **2026-10-07: property animation under the clip's track** (R-ANIM-3/4/8 amended) — DR-ANIM-5.
 - [x] **2026-10-07: only animated properties have a row; Animate… marks one** (R-ANIM-3 amended again) — DR-ANIM-5.
+- [ ] **2026-10-07: mark in Grade, an ANIMATION section, fixed or offset** (R-ANIM-3/5 amended, R-ANIM-9/10):
+      1. [x] the modes and marking in the model and the service: `key mark`, `key mode`, `mode=offset`,
+             `set` writes the base, a keyless curve stays marked; D-13 fixed on the way — DR-ANIM-6.
+      2. [ ] Grade's marks (cosmo's opt-in key gutter, restored as a mark) and the timeline's ANIMATION
+             section below all tracks, one lane per marked property, "property · object · group".
 - [x] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
       commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
       1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
@@ -141,6 +146,25 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-07 — two modes, offset the default; a `set` never keys; offset is for Grade's parameters.**
+The user asked for "fixed" (Grade's value is where the animation starts) and "offset" (Grade's value
+is a base the animation rides on), and chose offset as the default, so that marking changes nothing
+on screen.
+- A `set` used to key an animated parameter where Grade stood. Under both modes Grade's value is now
+  the parameter's OWN value, so `set` writes it and never keys, and the panels show it, not the curve.
+  Otherwise a slider could not move a base.
+- A version's delta is measured against that own value too. The slider then stays where it was
+  dragged, and the render still adds the delta to the animated value.
+- An offset is clamped to the parameter's range, and its keys span ± the range.
+- Shapes are fixed only: an offset curve or wheel has no single meaning.
+- A clip's own properties are fixed only. They have no Grade value, and a clip's stored speed is
+  derived from its ramp, so an offset there would feed back on itself.
+- The tracker writes a path, so a curve it starts is fixed, and on an offset centre it subtracts the
+  base.
+- The last key's removal keeps the mark, because the mark is the user's choice (R-ANIM-9). Only
+  `key clear` unmarks.
+- Built in two commits: the model and service first, then Grade's marks and the ANIMATION section.
 
 **2026-10-07 — only animated properties have a row; Animate… marks one.** Listing every property
 the clip could animate (40+) under its track made the rows a form to search, not a timeline to read.

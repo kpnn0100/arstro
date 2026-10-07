@@ -120,6 +120,8 @@ namespace interstellar
         std::string key;              // "basic.exposure", "radius", "opacity", "geom.x"
         std::string address;          // nodeBind + "." + key
         std::string clock;            // source (the footage's time) | clip (the clip's own footage time)
+        std::string mode = "fixed";   // R-ANIM-10: offset (keys added to the base) | fixed (keys are the value)
+        double base = 0;              // the parameter's own value — Grade's (an offset's base, a fixed curve's start)
         double now = 0;               // the current time on that clock (Grade's reference frame; the playhead in the clip)
         double value = 0;             // the curve's value now
         double min = 0, max = 0;      // the parameter's range, for the graph's value axis

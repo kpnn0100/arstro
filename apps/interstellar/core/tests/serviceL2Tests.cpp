@@ -1960,8 +1960,8 @@ int main()
         f.must("view matte off");
         // an animated window follows its keys (source time 0 → 1 s: the left of centre, then the right)
         f.must("set " + wi + ".shape=1 " + wi + ".width=0.5 " + wi + ".height=2 " + wi + ".feather=0");
-        f.must("key add " + wi + ".centerX --at 0 --value 0.25");
-        f.must("key add " + wi + ".centerX --at 1 --value 0.75");
+        f.must("key add " + wi + ".centerX --at 0 --value 0");      // an offset on its own 0.25 (R-ANIM-10)
+        f.must("key add " + wi + ".centerX --at 1 --value 0.5");
         assert(px(6.0, 10) == dark && px(7.0, 10) == 255);
         f.must("key clear " + wi + ".centerX");
         f.must("effect remove " + wi);
@@ -2012,18 +2012,26 @@ int main()
             assert(std::fabs(keyAt("centerX", fr / 24.0) - (4 + fr + 3.5) / 48) < 1.01 / 48);
             assert(std::fabs(keyAt("centerY", fr / 24.0) - (6 + fr / 2 + 3.5) / 27) < 1.01 / 27);
         }
+        // R-ANIM-10: a track is a path — the curve it starts is fixed, and the window is where the key says
+        assert(ax->mode == "fixed");
         f.must("undo");                                                              // the whole track, one step
         assert(!f.svc->project().animOf(P.idForRef(wi), "centerX") || f.svc->project().keysOf(f.svc->project().animOf(P.idForRef(wi), "centerX")->id).empty());
         f.must("redo");
         assert(std::fabs(keyAt("centerX", 1.0) - 31.5 / 48) < 1.01 / 48);
+        f.must("set move.frame=" + std::to_string(20.0 / 24));                     // Grade stands on source frame 20
+        assert(std::fabs(evalValue(f, "get " + wi + ".centerX") - keyAt("centerX", 20.0 / 24)) < 1e-3);   // (the frame is kept to the ms)
         // backward, from source 1 s to 0.5 s
         f.must("key clear " + wi + ".centerX");
         f.must("key clear " + wi + ".centerY");
         f.must("set " + wi + ".centerX=" + std::to_string(31.5 / 48) + " " + wi + ".centerY=" + std::to_string(21.5 / 27));
+        f.must("key mark " + wi + ".centerX");                                     // an offset on the window's own centre
         f.must("playhead 11");
         f.must("track window " + wi + " --back --to 0.5");
         assert(f.svc->model().trackJobs.back().state == "done" && f.svc->model().trackJobs.back().done == 12);
-        assert(std::fabs(keyAt("centerX", 0.5) - 19.5 / 48) < 1.01 / 48 && std::fabs(keyAt("centerY", 0.5) - 15.5 / 27) < 1.01 / 27);
+        // the offset's key is the path less the base (19.5 − 31.5); the window is still on the square
+        assert(std::fabs(keyAt("centerX", 0.5) - (19.5 - 31.5) / 48) < 1.01 / 48 && std::fabs(keyAt("centerY", 0.5) - 15.5 / 27) < 1.01 / 27);
+        f.must("set move.frame=0.5");
+        assert(std::fabs(evalValue(f, "get " + wi + ".centerX") - 19.5 / 48) < 1.01 / 48);
         f.must("track window " + wi + " --to 0.2");                                 // forward, to before the start: the job says why it stopped
         assert(f.svc->model().trackJobs.back().state == "failed" && has(f.svc->model().trackJobs.back().error, "nothing to track"));
         // a window on a group has no one source to follow
@@ -2581,7 +2589,7 @@ int main()
         assert(f.svc->playbackStats().edge == 0);                  // paused: graded at the full preview size
     });
 
-    test("keyframes: colour, effects and clips animate on their clocks; set keys; versions add, pins freeze (R-ANIM)", [] {
+    test("keyframes: colour, effects and clips animate on their clocks; a set moves the base; versions add, pins freeze (R-ANIM)", [] {
         Fixture f("anim");
         f.standard();                                             // shotA = a.mp4 0–2 s at 0; shotB = b.mp4 at 2
         auto frame = [&](const std::string &tl, double t) {
@@ -2596,12 +2604,15 @@ int main()
             return has(ss.str(), needle);
         };
         // the reference: exposure 0.5 held still, at timeline 1.0 = source time 1.0 of a
+        f.must("set a.basic.exposure=0.75");
+        const Raster still075 = frame("tl_1", 1.0);
         f.must("set a.basic.exposure=0.5");
         const Raster still05 = frame("tl_1", 1.0);
         f.must("set a.basic.exposure=0");
         const Raster still0 = frame("tl_1", 1.0);
         assert(still05.rgba != still0.rgba);
-        // R-ANIM-1/2: a linear curve 0 → 1 over source 0–2 s is 0.5 at source time 1
+        // R-ANIM-1/2: a linear curve 0 → 1 over source 0–2 s is 0.5 at source time 1 (R-ANIM-10: a new curve
+        // on a colour parameter is an offset on its own value — 0 here, so the offsets are the values)
         f.must("key add a.basic.exposure --at 0 --value 0");
         std::printf("    %s", f.out("key add a.basic.exposure --at 2 --value 1").c_str());
         assert(frame("tl_1", 1.0).rgba == still05.rgba);
@@ -2609,28 +2620,35 @@ int main()
         f.must("clip add --track v0 --src a --in 1 --out 1.5 --at 6 --name again");
         assert(frame("tl_1", 6.0).rgba == still05.rgba);
         assert(f.svc->model().anims.size() == 1 && f.svc->model().anims[0].keys.size() == 2 && f.svc->model().anims[0].clock == "source");
-        // R-ANIM-3: a set on an animated key writes a key where Grade stands (the reference frame)
+        assert(f.svc->model().anims[0].mode == "offset");
+        // R-ANIM-3 (amended): a set writes the parameter's own value — the BASE — and keys nothing; the
+        // offset curve rides on it (0.25 + 0.5 at source time 1)
         f.must("set a.frame=1.5");
-        f.must("set a.basic.exposure=0.8");
+        f.must("set a.basic.exposure=0.25");
         const AnimModel *am = &f.svc->model().anims[0];
-        assert(am->keys.size() == 3 && std::fabs(am->keys[1].t - 1.5) < 1e-9 && std::fabs(am->keys[1].v - 0.8) < 1e-6);
-        assert(has(f.out("get a.basic.exposure"), "=0.8"));
-        assert(has(f.out("eval a.basic.exposure --explain"), "animated   3 keys"));
+        assert(am->keys.size() == 2 && am->base == 0.25);
+        assert(frame("tl_1", 1.0).rgba == still075.rgba);
+        const std::string explained = f.out("eval a.basic.exposure --explain");
+        std::printf("%s", explained.c_str());
+        assert(has(explained, "own 0.25") && has(explained, "animated   2 keys, offset") && has(explained, "effective  1"));   // 0.25 + 0.75
         // shaping: a speed makes that side a bezier, written to the file only when it is one
         f.must("key set a.basic.exposure --at 0 --speed-out 2");
         f.must("project save");
-        assert(fileHas("#anim id=an_1 node=ro_1 key=basic.exposure") && fileHas("out=bezier speedOut=2.0 inflOut=33.333"));
+        assert(fileHas("#anim id=an_1 node=ro_1 key=basic.exposure mode=offset") && fileHas("out=bezier speedOut=2.0 inflOut=33.333"));
         assert(frame("tl_1", 0.5).rgba != still0.rgba);
         std::string err;
         assert(!f.run("key set a.basic.exposure --at 0 --influence-out 0", &err) && has(err, "percent"));
-        assert(!f.run("key add a.basic.exposure --at 1 --value 9", &err) && has(err, ".."));      // out of range
+        assert(!f.run("key add a.basic.exposure --at 1 --value 11", &err) && has(err, "offsets by -10.0..10.0"));   // ± the span
         assert(!f.run("key add shotA.at", &err) && has(err, "not its placement"));
         assert(!f.run("key remove a.basic.exposure --at 0.7", &err) && has(err, "no key at"));
         // R-ANIM-5: a version inherits the curve live, adds a scalar delta, and cannot key it
         f.must("timeline new v2 --base main");
         f.must("timeline open v2");
         assert(!f.run("key add a.basic.exposure --at 1", &err) && has(err, "R-ANIM-5"));
-        f.must("set a.basic.exposure=0.9");                    // curve says 0.8 at the reference frame → +0.1
+        f.must("set a.basic.exposure=0.35");                   // own 0.25 → +0.1, added to the animated value (R-ANIM-10)
+        f.must("rack select a");
+        double shownV2 = -1;                                   // the slider stays where it was dragged
+        assert(paramScalar(f.svc->model().gradeOwnParams, "exposure", shownV2) && std::fabs(shownV2 - 0.35) < 1e-6);
         f.must("project save");
         assert(fileHas("#tlgrade timeline=tl_2 node=ro_1 exposure=0.1"));
         f.must("timeline open main");
@@ -2640,11 +2658,12 @@ int main()
         const NodeId p1 = "tl_3";                              // main, v2, p1
         const Raster pinnedBefore = frame(p1, 1.0), mainBefore = frame("tl_1", 1.0);
         assert(pinnedBefore.rgba == mainBefore.rgba);
-        f.must("key set a.basic.exposure --at 1.5 --value 0.2");   // shapes source time 1.0
+        f.must("key set a.basic.exposure --at 2 --value 0.2");     // shapes source time 1.0
         assert(frame("tl_1", 1.0).rgba != mainBefore.rgba);
         assert(frame(p1, 1.0).rgba == pinnedBefore.rgba);
         // an effect's parameter, in the source's time
         f.must("effect add a --type blur.gaussian");
+        f.must("set ef_1.radius=0");                            // its own value (an offset's base): 0, not the default 8
         f.must("key add ef_1.radius --at 0 --value 0");
         f.must("key add ef_1.radius --at 2 --value 20");
         f.must("set a.frame=1");
@@ -2670,10 +2689,15 @@ int main()
         for (const auto &c : f.svc->model().clips)
             if (c.at > 0.9 && c.at < 1.1 && c.track == "trk_1") rightAt075 = has(f.out("get " + (c.name.empty() ? c.id : c.name) + ".opacity"), "=0.75");
         assert(rightAt075);
-        // the last key removed: the curve goes, its value stays
+        // the last key removed: still animated, with no keys; its value stays (the offset folded into the base)
         f.must("key remove ef_1.radius --at 0");
         f.must("key remove ef_1.radius --at 2");
         assert(has(f.out("get ef_1.radius"), "=20"));
+        {
+            bool marked = false;
+            for (const auto &a : f.svc->model().anims) marked = marked || (a.address == "ef_1.radius" && a.keys.empty() && a.base == 20);
+            assert(marked);
+        }
         // undo brings a removed key back; a deleted clip takes its curve with it; it all saves and loads
         f.must("undo");                                         // one key back (20)…
         f.must("undo");                                         // …and the other: 0 → 20 again, 10 at source time 1
@@ -2783,6 +2807,90 @@ int main()
         assert(!f.run("settings set keyLaneHeight=20", &err) && has(err, "80..600"));
         f.svc = f.make();
         assert(f.svc->model().settings.keyLaneHeight == 220);
+    });
+
+    test("marked to animate: an offset rides on Grade's value, a fixed curve ignores it; a mode changed keeps the picture (R-ANIM-9/10)", [] {
+        Fixture f("animmode");
+        f.standard();                                             // shotA = a 0–2 s at 0; shotB = b 0–2 s at 2
+        auto frame = [&](const std::string &tl, double t) {
+            Raster r;
+            assert(f.svc->renderTimelineFrame(tl, t, 0, r));
+            return r;
+        };
+        auto still = [&](const std::string &v) { f.must("set a.basic.exposure=" + v); return frame("tl_1", 1.0); };
+        const Raster s025 = still("0.25"), s075 = still("0.75"), s1 = still("1");
+        assert(s025.rgba != s075.rgba && s075.rgba != s1.rgba);
+        auto curve = [&](const std::string &address) -> const AnimModel * {
+            for (const auto &a : f.svc->model().anims) if (a.address == address) return &a;
+            return nullptr;
+        };
+        f.must("set a.basic.exposure=0.25");
+        // marking (offset, the default) keys nothing and changes nothing on screen; a key with no value is no offset
+        f.must("key mark a.basic.exposure");
+        assert(curve("a.basic.exposure") && curve("a.basic.exposure")->mode == "offset" && curve("a.basic.exposure")->keys.empty());
+        assert(curve("a.basic.exposure")->base == 0.25 && frame("tl_1", 1.0).rgba == s025.rgba);
+        f.must("set a.frame=1");
+        f.must("key add a.basic.exposure");
+        assert(curve("a.basic.exposure")->keys.size() == 1 && curve("a.basic.exposure")->keys[0].v == 0 && frame("tl_1", 1.0).rgba == s025.rgba);
+        f.must("key set a.basic.exposure --at 1 --value 0.5");
+        assert(frame("tl_1", 1.0).rgba == s075.rgba);
+        // Grade's slider shows the parameter's own value (the base), not the animated 0.75
+        f.must("rack select a");
+        double shown = -1;
+        assert(f.svc->model().hasGradeTarget && paramScalar(f.svc->model().gradeOwnParams, "exposure", shown) && shown == 0.25);
+        // offset: the value Grade sets is the base — moving it moves the whole animation, and keys nothing
+        f.must("set a.basic.exposure=0.5");
+        assert(frame("tl_1", 1.0).rgba == s1.rgba);
+        assert(curve("a.basic.exposure")->keys.size() == 1 && curve("a.basic.exposure")->keys[0].v == 0.5);
+        // to fixed: the keys turn against the base (0.5 + 0.5), the picture does not move…
+        f.must("key mode a.basic.exposure fixed");
+        assert(curve("a.basic.exposure")->mode == "fixed" && curve("a.basic.exposure")->keys[0].v == 1 && frame("tl_1", 1.0).rgba == s1.rgba);
+        // …and Grade's value no longer reaches the picture: it was only where the curve started
+        f.must("set a.basic.exposure=0");
+        assert(frame("tl_1", 1.0).rgba == s1.rgba);
+        // back to offset, against the base now 0: the keys are 1.0, the picture still does not move
+        f.must("key mode a.basic.exposure offset");
+        assert(curve("a.basic.exposure")->keys[0].v == 1 && frame("tl_1", 1.0).rgba == s1.rgba);
+        f.must("undo");                                           // a mode change is one undo step
+        assert(curve("a.basic.exposure")->mode == "fixed");
+        f.must("redo");
+        // a fixed mark: what Grade has set is where it starts — its first key, where Grade stands
+        f.must("set b.basic.contrast=20");
+        f.must("key mark b.basic.contrast --mode fixed");
+        assert(curve("b.basic.contrast")->mode == "fixed" && curve("b.basic.contrast")->keys.size() == 1 && curve("b.basic.contrast")->keys[0].v == 20);
+        f.must("set b.basic.contrast=40");
+        assert(has(f.out("get b.basic.contrast"), "=20"));          // the curve, not the 40 Grade now holds
+        std::string err;
+        assert(!f.run("key mark a.curve.curve --mode offset", &err) && has(err, "is a shape"));
+        assert(!f.run("key mark shotA.opacity --mode offset", &err) && has(err, "the clip's own"));
+        assert(!f.run("key mode a.basic.exposure sideways", &err) && has(err, "offset or fixed"));
+        assert(!f.run("key mode a.basic.vibrance offset", &err) && has(err, "key mark"));
+        // a pin keeps a curve's mode: base 0.5 plus 0.5 shows 1.0 in the pin too (read as fixed it would show 0.5)
+        f.must("set a.basic.exposure=0.5");
+        f.must("key set a.basic.exposure --at 1 --value 0.5");
+        assert(frame("tl_1", 1.0).rgba == s1.rgba);
+        f.must("timeline new p1 --base main");
+        f.must("timeline pin p1");
+        assert(frame("tl_2", 1.0).rgba == s1.rgba);
+        // the same offset copied onto another source's fixed curve shows the same VALUE there
+        f.must("set b.basic.exposure=0");
+        f.must("key mark b.basic.exposure --mode fixed");
+        f.must("key copy --keys \"a.basic.exposure@1\"");
+        f.must("key paste --to b.basic.exposure --at 1");
+        assert(curve("b.basic.exposure")->mode == "fixed");
+        for (const auto &k : curve("b.basic.exposure")->keys) if (k.t == 1) assert(k.v == 1);
+        // the last key removed: still marked, no keys, the picture as it was; clear unmarks, the value stays
+        f.must("key remove a.basic.exposure --at 1");
+        assert(curve("a.basic.exposure") && curve("a.basic.exposure")->keys.empty() && frame("tl_1", 1.0).rgba == s1.rgba);
+        f.must("key clear a.basic.exposure");
+        assert(!curve("a.basic.exposure") && frame("tl_1", 1.0).rgba == s1.rgba);
+        // the file says offset only where it is one
+        f.must("key mark a.basic.exposure");
+        f.must("project save");
+        std::ifstream in(f.path("mv.isp"));
+        std::stringstream ss;
+        ss << in.rdbuf();
+        assert(has(ss.str(), "key=basic.exposure mode=offset") && has(ss.str(), "key=basic.contrast\n"));   // b's fixed curve
     });
 
     test("with Use GPU on, the grade runs on Cosmo's GPU backend and matches the CPU (R-GPU-1)", [] {

@@ -10,6 +10,11 @@
  *  path. Law 2 holds: a curve is not a scalar, so the rack's and the effects' curves are the BASE's
  *  and a derived version inherits them live — its `#tlgrade` deltas add on top — and a pinned
  *  version reads the curves its pin snapshotted.
+ *
+ *  R-ANIM-10: a curve is FIXED (its keys are the value; the parameter's own value is only where it
+ *  started) or an OFFSET (its keys are added to the parameter's own value — the base Grade sets — so
+ *  moving the base moves the whole animation; clamped to the parameter's range). A `set` always writes
+ *  the parameter's own value; keys are written only by `key …` — animation is authored in the timeline.
  */
 #include "ServiceInternal.h"
 #include "ParamRegistry.h"
@@ -220,7 +225,24 @@ namespace interstellar
         const Anim *a = mProject->animOf(t.node, t.key);
         if (!a) return staticValue(t);
         const auto ks = mProject->keysOf(a->id);
+        if (a->mode == "offset") return std::clamp(staticValue(t) + (ks.empty() ? 0.0 : anim::eval(ks, t.now)), t.lo, t.hi);
         return ks.empty() ? staticValue(t) : anim::eval(ks, t.now);
+    }
+
+    std::string InterstellarService::curveMode(const AnimTarget &t, const std::string &ifNew) const
+    {
+        if (const Anim *a = mProject->animOf(t.node, t.key)) return a->mode;
+        // a shape animates by value only; so does a clip's own property — it has no Grade value to offset
+        // (its speed's stored value is the ramp's average, R-EDT-3)
+        return t.shape || t.owner == "clip" ? "fixed" : ifNew;
+    }
+
+    void InterstellarService::keyRange(const AnimTarget &t, const std::string &mode, double &lo, double &hi) const
+    {
+        // an offset may take the base anywhere in the range and back: ± the range's span
+        const double span = t.hi - t.lo;
+        lo = mode == "offset" ? -span : t.lo;
+        hi = mode == "offset" ? span : t.hi;
     }
 
     // ── writing ─────────────────────────────────────────────────────────────────────────────────
@@ -246,12 +268,17 @@ namespace interstellar
         return true;
     }
 
-    bool InterstellarService::upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text)
+    bool InterstellarService::upsertKey(const AnimTarget &t, double at, double v, const anim::Key *shape, const std::string *text,
+                                        const std::string &modeIfNew)
     {
         Project &P = *mProject;
         if (t.shape && (!text || text->empty())) return fail(t.address + " is a shape: its key is a value in its own syntax, not a number");
-        if (!t.shape && (v < t.lo || v > t.hi))
-            return fail(t.address + " is " + canonicalNumber(t.lo) + ".." + canonicalNumber(t.hi) + ", got " + canonicalNumber(v));
+        const std::string mode = curveMode(t, modeIfNew);
+        double lo = 0, hi = 0;
+        keyRange(t, mode, lo, hi);
+        if (!t.shape && (v < lo || v > hi))
+            return fail(t.address + (mode == "offset" ? " offsets by " : " is ") + canonicalNumber(lo) + ".." + canonicalNumber(hi) + ", got " +
+                        canonicalNumber(v));
         at = msRound(at);
         const Anim *a = P.animOf(t.node, t.key);
         NodeId animId;
@@ -262,6 +289,7 @@ namespace interstellar
             n.id = animId = P.freshId("an_");
             n.node = t.node;
             n.key = t.key;
+            n.mode = mode;
             P.anims.push_back(n);
         }
         for (auto &k : P.animKeys)
@@ -313,30 +341,6 @@ namespace interstellar
         const int node = cosmoNodeOf(t.node);
         if (node < 0) return fail(t.address + " is offline");
         return mRack.setParam(node, t.cosmoKey, s, err) || fail(t.address + ": " + err);
-    }
-
-    bool InterstellarService::setAnimated(const std::string &address, const std::string &value, bool &handled)
-    {
-        // R-ANIM-3: a parameter with a curve is keyed, not set — at the current time on its clock
-        handled = false;
-        const Project &P = *mProject;
-        const auto parts = splitFirst(address);
-        const NodeId id = P.idForRef(parts.first);
-        if (!P.animOf(id, parts.second)) return true;
-        AnimTarget t;
-        std::string why;
-        if (!animTarget(address, t, why)) return fail(why);
-        const Timeline *tl = P.timeline(currentTimeline());
-        if (t.owner == "rack" && tl && !tl->base.empty()) return true;   // a version: a delta on the animated value (setAddress)
-        handled = true;
-        double v = 0;
-        if (!t.shape && !parseDouble(value, v)) return fail(address + " needs a number, got `" + value + "`");
-        if (!curveEditable(t) || !upsertKey(t, t.now, v, nullptr, &value)) return false;
-        markDirty();
-        bumpFrame();
-        emit(Event(EK::ParamsChanged).with("address", t.address).with("value", value).with("target", "curve"));
-        emit(Event(EK::KeysChanged).with("address", t.address).with("keys", (int)mProject->keysOf(mProject->animOf(id, parts.second)->id).size()));
-        return true;
     }
 
     bool InterstellarService::animCommand(const Command &c)
@@ -391,7 +395,8 @@ namespace interstellar
                 }
                 else
                 {
-                    v = before.empty() ? staticValue(t) : anim::eval(before, at);
+                    // an offset's "now" is its offset (a new one: none); a fixed curve's is the value itself
+                    v = !before.empty() ? anim::eval(before, at) : curveMode(t) == "offset" ? 0.0 : staticValue(t);
                     if (c.has("value") && !number("value", v)) return false;
                 }
                 anim::Key shape;
@@ -410,11 +415,15 @@ namespace interstellar
                 if (!k) return fail("key remove: " + t.address + " has no key at " + canonicalNumber(at));
                 if (before.size() == 1)
                 {
-                    // the last key: the curve goes and its value stays as the parameter's own
-                    const std::string kept = t.shape ? k->shape : canonicalNumber(k->v);
-                    if (!(t.shape ? writeStaticText(t, k->shape) : writeStatic(t, k->v))) return false;
-                    P.dropAnim(a->id);
-                    return finish("the last key removed — the value " + kept + " stays");
+                    // the last key: the parameter stays ANIMATED (marked), with no keys; what it showed
+                    // stays — a fixed curve's value becomes its own, an offset is folded into the base
+                    const bool offset = a->mode == "offset";
+                    const double kept = offset ? std::clamp(staticValue(t) + k->v, t.lo, t.hi) : k->v;
+                    if (!(t.shape ? writeStaticText(t, k->shape) : writeStatic(t, kept))) return false;
+                    const NodeId animId = a->id;
+                    P.animKeys.erase(std::remove_if(P.animKeys.begin(), P.animKeys.end(), [&](const AnimKey &x) { return x.anim == animId; }),
+                                     P.animKeys.end());
+                    return finish("the last key removed — still animated, no keys; " + (t.shape ? std::string("its value") : canonicalNumber(tidy(kept))) + " stays");
                 }
                 const NodeId animId = a->id;
                 P.animKeys.erase(std::remove_if(P.animKeys.begin(), P.animKeys.end(),
@@ -425,7 +434,10 @@ namespace interstellar
             case CK::KeyClear:
             {
                 if (!a) return fail("key clear: " + t.address + " is not animated");
-                if (!(t.shape ? writeStaticText(t, anim::evalShape(P.shapeKeysOf(a->id), t.now)) : writeStatic(t, anim::eval(before, t.now))))
+                // the value at the current time stays as the parameter's own (an offset's: base + offset)
+                const auto sk = P.shapeKeysOf(a->id);
+                if (t.shape ? !sk.empty() && !writeStaticText(t, anim::evalShape(sk, t.now))
+                            : !before.empty() && !writeStatic(t, animatedValue(t)))
                     return false;
                 P.dropAnim(a->id);
                 return finish("animation removed — the value at " + canonicalNumber(t.now) + " stays");
@@ -462,7 +474,10 @@ namespace interstellar
                     }
                 if (t.shape && c.has("value")) k->shape = c.flag("value");
                 else if (c.has("value") && !number("value", x.v)) return false;
-                if (!t.shape && (x.v < t.lo || x.v > t.hi)) return fail(t.address + " is " + canonicalNumber(t.lo) + ".." + canonicalNumber(t.hi) + ", got " + canonicalNumber(x.v));
+                double lo = 0, hi = 0;
+                keyRange(t, a->mode, lo, hi);
+                if (!t.shape && (x.v < lo || x.v > hi))
+                    return fail(t.address + (a->mode == "offset" ? " offsets by " : " is ") + canonicalNumber(lo) + ".." + canonicalNumber(hi) + ", got " + canonicalNumber(x.v));
                 double to = at;
                 if (c.has("to"))
                 {
@@ -478,6 +493,41 @@ namespace interstellar
                 k->inflIn = tidy(n.inflIn); k->inflOut = tidy(n.inflOut);
                 return finish("key at " + canonicalNumber(to) + (to != at ? " (moved from " + canonicalNumber(at) + ")" : std::string()) +
                               " = " + (t.shape ? k->shape : canonicalNumber(k->v)) + ", in " + k->in + ", out " + k->out);
+            }
+            case CK::KeyMark:
+            case CK::KeyMode:
+            {
+                // R-ANIM-10: marked to animate, offset or fixed; a mode changed converts the keys against
+                // the base so the picture does not move
+                const std::string mode = c.kind == CK::KeyMode ? c.arg(1) : c.has("mode") ? c.flag("mode") : curveMode(t);
+                const char *verb = c.kind == CK::KeyMode ? "key mode" : "key mark";
+                if (mode != "offset" && mode != "fixed") return fail(std::string(verb) + ": a mode is offset or fixed, got " + mode);
+                if (t.shape && mode == "offset") return fail(std::string(verb) + ": " + t.address + " is a shape — a curve, a wheel or a crop animates by value (fixed), not by offset");
+                if (t.owner == "clip" && mode == "offset") return fail(std::string(verb) + ": " + t.address + " is the clip's own — it animates by value (fixed); offset is for Grade's parameters");
+                if (c.kind == CK::KeyMark && !a)
+                {
+                    Anim n;
+                    n.id = P.freshId("an_");
+                    n.node = t.node;
+                    n.key = t.key;
+                    n.mode = mode;
+                    P.anims.push_back(n);
+                    // fixed: what Grade has set is where it starts — its first key, now
+                    if (mode == "fixed")
+                    {
+                        std::string text = t.shape ? staticText(t) : std::string();
+                        if (!upsertKey(t, t.now, staticValue(t), nullptr, &text)) return false;
+                    }
+                    return finish("animated (" + mode + ")");
+                }
+                if (!a) return fail("key mode: " + t.address + " is not animated — `key mark` it first");
+                if (a->mode == mode) { mOutput = t.address + " is already " + mode + "\n"; return true; }
+                const double base = staticValue(t);
+                const NodeId animId = a->id;
+                for (auto &k : P.animKeys)
+                    if (k.anim == animId) k.v = tidy(mode == "offset" ? k.v - base : std::clamp(base + k.v, t.lo, t.hi));
+                P.anim(animId)->mode = mode;
+                return finish("now " + mode + " — the keys turned against the base " + canonicalNumber(tidy(base)) + ", the picture unchanged");
             }
             default: return fail("key: unknown verb");
         }
@@ -574,7 +624,11 @@ namespace interstellar
                 {
                     KeyClip *kc = nullptr;
                     for (auto &x : mKeyClipboard) if (x.node == p.t.node && x.key == p.t.key) kc = &x;
-                    if (!kc) { mKeyClipboard.push_back(KeyClip{p.t.node, p.t.key, p.t.shape, {}}); kc = &mKeyClipboard.back(); }
+                    if (!kc)
+                    {
+                        mKeyClipboard.push_back(KeyClip{p.t.node, p.t.key, p.t.shape, {}, curveMode(p.t), p.t.shape ? 0.0 : staticValue(p.t)});
+                        kc = &mKeyClipboard.back();
+                    }
                     for (const auto &k : P.animKeys)
                         if (k.anim == p.anim && std::fabs(k.t - p.at) < 5e-4)
                         {
@@ -622,13 +676,21 @@ namespace interstellar
                 {
                     if (!curveEditable(tc.first)) return false;
                     const double base = hasAt ? at : tc.first.now;
-                    for (const auto &k : tc.second->keys)
+                    // R-ANIM-10: keys land in the target's mode (a new curve takes the copied one's); between
+                    // modes a value turns through the two bases, so it shows what it showed where it came from
+                    const KeyClip &kc = *tc.second;
+                    const std::string mode = curveMode(tc.first, kc.mode);
+                    const double targetBase = tc.first.shape ? 0.0 : staticValue(tc.first);
+                    for (const auto &k : kc.keys)
                     {
                         anim::Key shape;
                         anim::parseSide(k.in, shape.in);
                         anim::parseSide(k.out, shape.out);
                         shape.speedIn = k.speedIn; shape.speedOut = k.speedOut; shape.inflIn = k.inflIn; shape.inflOut = k.inflOut;
-                        if (!upsertKey(tc.first, base + k.t, k.v, &shape, &k.shape)) return false;
+                        double v = k.v;
+                        if (!tc.first.shape && mode != kc.mode)
+                            v = mode == "offset" ? (kc.base + k.v) - targetBase : std::clamp(kc.base + k.v, tc.first.lo, tc.first.hi);
+                        if (!upsertKey(tc.first, base + k.t, tidy(v), &shape, &k.shape, mode)) return false;
                         ++n;
                     }
                     addresses.insert(tc.first.address);
@@ -663,6 +725,7 @@ namespace interstellar
             n.id = P.freshId("an_");
             n.node = to;
             n.key = a.key;
+            n.mode = a.mode;
             P.anims.push_back(n);
             std::vector<AnimKey> keys;
             for (const auto &k : P.animKeys) if (k.anim == a.id) keys.push_back(k);
@@ -686,12 +749,28 @@ namespace interstellar
         for (const auto &kv : idx)
         {
             EditParams &own = tree[(size_t)kv.second].own;
+            // a number's value now: the keys (fixed), or the base plus the keys, in the parameter's range (offset)
+            auto number = [&](const std::string &k, const std::vector<anim::Key> &ks, const std::string &mode) {
+                if (ks.empty()) return;
+                double v = anim::eval(ks, srcT);
+                if (mode == "offset")
+                {
+                    double b = 0;
+                    paramScalar(own, k, b);
+                    v += b;
+                    if (const ParamDef *d = cosmoKey(k)) v = std::clamp(v, d->min, d->max);
+                }
+                setParamText(own, k, canonicalNumber(v));
+            };
             if (pin)
             {
                 for (const auto &c : *pin)
                     if (c.node == kv.first)
-                        setParamText(own, c.key.substr(c.key.find('.') + 1),
-                                     c.shapes.empty() ? canonicalNumber(anim::eval(c.keys, srcT)) : anim::evalShape(c.shapes, srcT));
+                    {
+                        const std::string k = c.key.substr(c.key.find('.') + 1);
+                        if (!c.shapes.empty()) setParamText(own, k, anim::evalShape(c.shapes, srcT));
+                        else number(k, c.keys, c.mode);
+                    }
                 continue;
             }
             for (const auto &a : mProject->anims)
@@ -700,8 +779,7 @@ namespace interstellar
                 const std::string k = a.key.substr(a.key.find('.') + 1);
                 const auto sk = mProject->shapeKeysOf(a.id);
                 if (!sk.empty()) { setParamText(own, k, anim::evalShape(sk, srcT)); continue; }   // R-ANIM-6
-                const auto ks = mProject->keysOf(a.id);
-                if (!ks.empty()) setParamText(own, k, canonicalNumber(anim::eval(ks, srcT)));
+                number(k, mProject->keysOf(a.id), a.mode);
             }
         }
     }
@@ -711,6 +789,7 @@ namespace interstellar
         const Anim *a = mProject->animOf(node, key);
         if (!a) return fallback;
         const auto ks = mProject->keysOf(a->id);
+        if (a->mode == "offset") return fallback + (ks.empty() ? 0.0 : anim::eval(ks, t));   // the caller clamps to its range
         return ks.empty() ? fallback : anim::eval(ks, t);
     }
 
@@ -729,7 +808,8 @@ namespace interstellar
                 if (k.anim != a.id) continue;
                 o << a.node << ' ' << a.key << ' ' << canonicalNumber(k.t) << ' ' << canonicalNumber(k.v) << ' ' << k.in << ' ' << k.out << ' '
                   << canonicalNumber(k.speedIn) << ' ' << canonicalNumber(k.inflIn) << ' ' << canonicalNumber(k.speedOut) << ' '
-                  << canonicalNumber(k.inflOut) << ' ' << (k.shape.empty() ? std::string("-") : k.shape) << '\n';
+                  << canonicalNumber(k.inflOut) << ' ' << (k.shape.empty() ? std::string("-") : k.shape)
+                  << (a.mode == "offset" ? " offset" : "") << '\n';   // a fixed curve's line is what it always was
             }
         }
         return o.str();
@@ -755,11 +835,13 @@ namespace interstellar
                     anim::Key k;
                     if (!(s >> node >> key >> k.t >> k.v >> in >> out >> k.speedIn >> k.inflIn >> k.speedOut >> k.inflOut)) continue;
                     if (!(s >> shape)) shape = "-";   // a pin written before shapes keyed numbers only
+                    std::string mode;
+                    if (!(s >> mode)) mode = "fixed";  // R-ANIM-10: only an offset says so
                     anim::parseSide(in, k.in);
                     anim::parseSide(out, k.out);
                     PinCurve *c = nullptr;
                     for (auto &x2 : pc) if (x2.node == node && x2.key == key) c = &x2;
-                    if (!c) { pc.push_back(PinCurve{node, key, {}, {}}); c = &pc.back(); }
+                    if (!c) { pc.push_back(PinCurve{node, key, {}, {}, mode}); c = &pc.back(); }
                     if (shape != "-") c->shapes.push_back(anim::ShapeKey{k, shape});
                     else c->keys.push_back(k);
                 }
@@ -799,11 +881,12 @@ namespace interstellar
             am.clock = am.owner == "clip" ? "clip" : "source";
             AnimTarget t;
             std::string why;
+            am.mode = a.mode;
             if (!addr.empty() && animTarget(addr, t, why))
             {
                 am.now = t.now;
-                am.min = t.lo;
-                am.max = t.hi;
+                keyRange(t, a.mode, am.min, am.max);   // an offset's keys live in ± the range
+                am.base = t.shape ? 0.0 : staticValue(t);
             }
             const auto ks = P.keysOf(a.id);
             const auto sk = P.shapeKeysOf(a.id);

@@ -66,6 +66,21 @@ argument) · Judgement · Cause (`file:line`) · Requirement · Recommended fix 
 
 ## Closed
 
+### D-13 — Clearing one curve deleted the next curve's keys
+- **Area:** model · **Status:** Closed (same commit) · **Severity:** S1 (silently loses another
+  parameter's animation) · **Found:** 2026-10-07, while building R-ANIM-10: a tracked window's
+  centre, cleared and marked again, came back with 25 old keys.
+- **Reproduce:** animate `a.basic.exposure` and then `a.basic.contrast` (two keys each), then
+  `key clear a.basic.exposure`. Contrast's curve is still listed but has no keys, and exposure's
+  two keys stay in the file as orphans; the next curve to get the id `an_1` inherits them.
+- **Expected:** R-ANIM-1 — one curve per parameter, and clearing one touches no other.
+- **Cause:** `Project::dropAnim(const NodeId &animId)` was called as `dropAnim(a->id)`, a reference
+  into `anims` itself. Erasing the curve moved the next one into its slot, so the key erase that
+  followed read the NEXT curve's id (`model/Project.cpp:476`, since DR-ANIM-1).
+- **Fix:** `dropAnim` copies the id before erasing. Guarded by model `animModes` (two curves, the
+  first dropped by its own id: its keys gone, the other's kept), which is red with the copy made a
+  reference again.
+
 ### D-12 — A scrolled effect panel paints its section headers over the plugin list
 - **Area:** ui · **Status:** Closed (same commit) · **Severity:** S4 (cosmetic; the row under it
   stays clickable) · **Found:** 2026-10-05, looking at the `grade_lut_effect` shot at 1024×640.
