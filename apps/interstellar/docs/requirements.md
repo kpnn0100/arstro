@@ -1367,11 +1367,11 @@ not move when the base's curve does; effect and clip curves; a split keeps both 
 pins reading live curves, `set` never keying, clip curves not rendered. By hand: exposure −2 → 1.5
 eased and scale 1 → 1.6, three stills look right.
 
-### DR-ANIM-5 The properties sit under the clip's track (R-ANIM-3, R-ANIM-4, R-ANIM-8, amended 2026-10-07)
-This supersedes the lane-at-the-bottom layout described in DR-ANIM-2 and DR-ANIM-4. What a row keys,
-the graph's edits and the key menu are unchanged.
+### DR-ANIM-5 The properties sit under the clip's track — only what is animated (R-ANIM-3, R-ANIM-4, R-ANIM-8, amended 2026-10-07 twice)
+This supersedes the lane-at-the-bottom layout of DR-ANIM-2 and DR-ANIM-4. What a row keys, the graph's
+edits and the key menu are unchanged.
 
-**Opening.** The selected clip's track opens to the clip's properties. The control is a ▸ on that
+**Opening.** The selected clip's track opens to its animated properties. The control is a ▸ on that
 track's header (`app/widgets/Timeline.cpp:85`, painted at `:1162`, turning to ▾ as it opens), and the
 ruler's ◇ still opens it too.
 
@@ -1379,49 +1379,67 @@ ruler's ◇ still opens it too.
 live height, times a lane's eased distance past the opened track (clamped to 0…1). Every lane below
 moves down by exactly that much, so a lane sliding past the opened one never jumps. `laneAtY` (`:265`)
 inverts it, and a point inside the rows counts as the opened track.
-- The opened track is eased (`:776`). It is placed when the rows open, and travels when the chosen
-  clip is on another track.
-- The rows' segment is only their visible part. The timeline scrolls them partly out of view, and a
-  segment above the ruler would take its clicks, so the rest is the lane's own window offset
+- The opened track is eased (`:776`): placed when the rows open, travelling when the chosen clip is on
+  another track.
+- Only the rows' visible part is a segment. The timeline scrolls them partly out of view, and a segment
+  above the ruler would take its clicks, so the rest is the lane's own window offset
   (`KeyLane::setWindow`).
 - Opening reveals the track and its rows, re-aimed every frame while it opens (`:820`).
 
-**The rows** (`app/widgets/KeyLane.cpp`). Each property is a timeline row.
-- Left: its name and its keying diamond, as before.
-- Right: its keyframes as diamonds on the clip's span, under the frames they key (`:504`), joined by a
-  line. A source key outside this clip's frames is drawn faded.
-- A key dragged along its row moves in time: `key set <a> --at t --to t'` (`:392`). It stays between
-  its neighbours on the file's millisecond grid, and the pointer is the animation.
-- A double-click on a row inside the clip keys it there (`:398`). A right-click on a key opens the key
-  menu.
+**Only what is animated has a row** (`app/widgets/KeyLane.cpp`).
+- The lane knows every property the clip could animate (`:51`): its own six, its source's 34 colour
+  keys, each effect's mix and parameters. Each row's presence is eased to 1 when its property is
+  animated and to 0 when it is not (`:280`), so a row eases in when it becomes animated and out when
+  its curve goes. A different clip's rows are placed, not travelled.
+- The first line is **Animate…** (`:440`; click, `:392`) → `App::openAnimateMenu` (`app/App.cpp:733`).
+  It lists only what is not animated yet: the clip's own properties at once, then "Grade · Light ›",
+  "Grade · Colour ›", "Grade · Presence ›", "Grade · Detail ›", "Grade · Curves & Wheels ›",
+  "Grade · Crop ›" and "Effects · <effect> ›" as a second step in the same place. The groups are
+  Grade's own panels (`ColourKeys.h:16`), and no list outgrows a 640-px window. Choosing a property
+  dispatches `key add <address> --at <now on the clip's footage clock>` and chooses it, so its row eases
+  in with its curve open.
+- A right-click on a row's name or lane, not on a key (`:385`), gives the row's menu
+  (`App::openKeyRowContext`, `:767`): Show/Hide Curve, and **Remove Animation** → `key clear <address>`.
+- While nothing is animated, the track opens to Animate… and one line: "Nothing on this clip is
+  animated — Animate… keys a property at the playhead".
 
-**Curves inline.** Choosing a row opens its curve in a band under it, eased per row: one band opens
-while the previous one closes. The KeyGraph sits in the front row's band (`:291`). Choosing the front
-row again closes it (`:445`), and Ctrl/Shift adds curves to the same band. The chosen row is re-revealed
-every frame while the bands move (`:167`).
+**Each row.**
+- Left: the name and its keying diamond (outline: animated; filled: a key at the playhead) → `key
+  add|remove … --at <now>`.
+- Right: the keys on the clip's span under the frames they key, joined; a source key outside this
+  clip's frames is drawn faded.
+- A key dragged along the row → `key set <a> --at t --to t'`, between its neighbours on the millisecond
+  grid. A double-click inside the clip → `key add <a> --at t`. A right-click on a key → the key menu.
 
-**Folding.** The rows open on what moves (`:97`): a section starts open when one of its properties is
-animated, and CLIP starts open when nothing is. A section the user folded or opened stays as they left
-it, and choosing a property opens its section.
+**Curves inline.** Choosing a row opens its curve in a band under it, eased per row: one opens as the
+other closes. Choosing it again closes it, and Ctrl/Shift adds curves to the same band. The chosen row
+is re-revealed while the rows and bands move.
 
-**Height.** The rows' own height, no taller than `keyLaneHeight` (80…600) nor than leaves the clip's
-track showing (`Timeline.cpp:57`). It is resized at its bottom edge (`:65`) and saved.
+**Height.** The rows' own height (Animate… plus one line per animated property), no taller than
+`keyLaneHeight` (80…600) nor than leaves the clip's track showing (`Timeline.cpp:57`). It is resized at
+its bottom edge (`:65`) and saved.
 
-**Guarded by** UI `testKeyframes` (`app/tests/ui/uiTests.cpp:1187`), 500 checks:
-- the ▸ on the chosen clip's track; the eased open; the rows directly under the track, with the tracks
-  below moved down to make room;
-- the quiet CLIP folded while GRADE (keyed) is open; Exposure's keys at 0 s and 3 s on the timeline;
-- the curve opening under the row, eased, its plot starting at the clip; a row drag to `--at 5 --to`;
-  a double-click keying Contrast at source 4; the front row closing again;
-- another track's clip moving the open rows there, eased; the bottom-edge grip; at 1024×640, the track
-  and its rows scrolled into view;
-- and the earlier graph, menu, multi-curve and shape checks, unchanged.
+**Guarded by** UI `testKeyframes` (`app/tests/ui/uiTests.cpp:1231`), 509 checks:
+- only Exposure has a row (not Contrast, not the clip's opacity), and the track opens only as far as
+  that; the keys under their frames; the curve opening under its row; a row drag to `--at 5 --to`;
+- Animate… lists the clip's own and the panels and effects (≤ 20 items, nothing already animated);
+  Grade · Light lists Contrast but not Exposure; choosing Contrast keys it at 3 and its row eases in,
+  chosen; Animate… › Opacity and › Speed key the clip;
+- a double-click keying Contrast at source 4; the diamond keying Exposure at 3; Remove Animation
+  dispatching `key clear` and the row easing out; the front row closing its curve;
+- the open rows moving to another track's clip, eased; the bottom-edge grip with ten animated
+  properties (`:1465`); at 1024×640, the track and its rows in view;
+- the earlier graph, menu, multi-curve and shape checks.
 
-Shots: `cut_key_lane` (Opacity's curve open), `cut_key_lane_rows`, `cut_key_lane_curve_mid`,
-`cut_key_lane_mid`, `cut_key_lane_grade` and `cut_key_lane_multi`, at both sizes.
+Shots: `cut_key_lane_empty`, `cut_key_lane_animate`, `cut_key_lane_animate_grade`, `cut_key_lane`
+(Opacity animated, its curve open), `cut_key_lane_rows`, `cut_key_lane_curve_mid`, `cut_key_lane_mid`,
+`cut_key_lane_grade` and `cut_key_lane_multi`, at both sizes.
 
-Mutants run red: no gap (the tracks overlap), the track move snapped, the curve band snapped, the row
-drag not dispatched, every section open, the opening not revealed.
+Mutants run red:
+- every row shown; a row's presence snapped; Animate… offering what is animated; a panel step that
+  opens nothing; Remove Animation dispatching nothing;
+- from the first amendment: no gap, the track move snapped, the curve band snapped, the row drag not
+  dispatched, the opening not revealed.
 
 ### DR-ANIM-2 Animation is authored in the timeline's key lane (R-ANIM-3, R-ANIM-4, amended 2026-10-05)
 Grade carries no keyframe control: no diamond on its rows or effect parameters, no curves face in

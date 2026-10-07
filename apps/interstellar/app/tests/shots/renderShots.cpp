@@ -215,6 +215,39 @@ namespace
             tl->keyLane()->select(tl->keyLane()->row(1).address);
             r.settle();
         }});
+        v.push_back({"cut_key_lane_empty", [](FakeService &s) { s.edit(); }, [](Rig &r) {   // nothing animated: Animate… alone, and why
+            r.app->setTab(1);
+            r.settle();
+            r.app->edit().timeline()->setKeysShown(true);
+            r.settle();
+        }});
+        auto animateMenu = [](Rig &r, const char *group) {
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            auto kl = tl->keyLane();
+            const artboard::Rect b = kl->addRect();
+            const artboard::Point p = kl->worldTransform().apply(artboard::Point{b.x + b.w * 0.5, b.y + b.h * 0.5});
+            r.click(p.x, p.y);
+            r.settle();
+            if (group)
+            {
+                auto cm = r.app->edit().contextMenu();
+                for (int i = 0; i < cm->itemCount(); ++i)
+                    if (cm->item(i).label.rfind(group, 0) == 0)
+                    {
+                        const artboard::Rect ir = cm->itemRect(i);
+                        const artboard::Point q = cm->worldTransform().apply(artboard::Point{ir.x + ir.w * 0.5, ir.y + ir.h * 0.5});
+                        r.click(q.x, q.y);
+                        break;
+                    }
+                r.settle();
+            }
+        };
+        v.push_back({"cut_key_lane_animate", animated, [animateMenu](Rig &r) { animateMenu(r, nullptr); }});   // Animate…: the first step
+        v.push_back({"cut_key_lane_animate_grade", animated, [animateMenu](Rig &r) { animateMenu(r, "Grade \xC2\xB7 Light"); }});   // …a panel's properties
         v.push_back({"cut_key_lane_rows", animated, [](Rig &r) {   // the rows alone: every key on its property's row
             r.app->setTab(1);
             r.settle();

@@ -58,6 +58,8 @@ namespace interstellar_v1
         mTimeline = std::make_shared<Timeline>();
         mTimeline->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
         mTimeline->onKeyPlotContext = [this](double t, Point w) { if (onKeyPlotContext) onKeyPlotContext(t, w); };
+        mTimeline->onAnimateMenu = [this](Rect w) { if (onAnimateMenu) onAnimateMenu(w); };
+        mTimeline->onKeyRowContext = [this](const std::string &a, Point w) { if (onKeyRowContext) onKeyRowContext(a, w); };
         mTimeline->onCommand = [this](const std::string &l) { return emit(l); };
         mTimeline->onClipContext = [this](const std::string &id, Point w) { if (onClipContext) onClipContext(id, w); };
         mTimeline->onLaneContext = [this](const std::string &trk, double t, Point w) { if (onLaneContext) onLaneContext(trk, t, w); };

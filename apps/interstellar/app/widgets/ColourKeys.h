@@ -13,25 +13,26 @@ namespace interstellar_v1
     {
         const char *key;     // "basic.exposure"
         const char *label;   // "Exposure"
+        const char *group;   // where Animate… lists it: Grade's panels, in Grade's words
     };
 
     inline const ColourKey *colourKeys(int &count)
     {
         static const ColourKey k[] = {
-            {"basic.exposure", "Exposure"}, {"basic.contrast", "Contrast"}, {"basic.highlights", "Highlights"},
-            {"basic.shadows", "Shadows"}, {"basic.whites", "Whites"}, {"basic.blacks", "Blacks"},
-            {"basic.temp", "Temperature"}, {"basic.tint", "Tint"}, {"basic.vibrance", "Vibrance"},
-            {"basic.saturation", "Saturation"}, {"basic.texture", "Texture"}, {"basic.clarity", "Clarity"},
-            {"basic.dehaze", "Dehaze"}, {"basic.grainAmount", "Grain Amount"}, {"basic.grainSize", "Grain Size"},
-            {"detail.sharpenAmount", "Sharpen Amount"}, {"detail.sharpenRadius", "Sharpen Radius"},
-            {"detail.sharpenMasking", "Sharpen Masking"}, {"detail.nrLuminance", "NR Luminance"},
-            {"detail.nrColor", "NR Colour"}, {"detail.lensDistortion", "Distortion"}, {"detail.lensCA", "Defringe"},
-            {"detail.lensVignette", "Vignette"},
+            {"basic.exposure", "Exposure", "Light"}, {"basic.contrast", "Contrast", "Light"}, {"basic.highlights", "Highlights", "Light"},
+            {"basic.shadows", "Shadows", "Light"}, {"basic.whites", "Whites", "Light"}, {"basic.blacks", "Blacks", "Light"},
+            {"basic.temp", "Temperature", "Colour"}, {"basic.tint", "Tint", "Colour"}, {"basic.vibrance", "Vibrance", "Colour"},
+            {"basic.saturation", "Saturation", "Colour"}, {"basic.texture", "Texture", "Presence"}, {"basic.clarity", "Clarity", "Presence"},
+            {"basic.dehaze", "Dehaze", "Presence"}, {"basic.grainAmount", "Grain Amount", "Presence"}, {"basic.grainSize", "Grain Size", "Presence"},
+            {"detail.sharpenAmount", "Sharpen Amount", "Detail"}, {"detail.sharpenRadius", "Sharpen Radius", "Detail"},
+            {"detail.sharpenMasking", "Sharpen Masking", "Detail"}, {"detail.nrLuminance", "NR Luminance", "Detail"},
+            {"detail.nrColor", "NR Colour", "Detail"}, {"detail.lensDistortion", "Distortion", "Detail"}, {"detail.lensCA", "Defringe", "Detail"},
+            {"detail.lensVignette", "Vignette", "Detail"},
             // R-ANIM-6: shapes — keyed like numbers, edited in Grade at the key's frame
-            {"curve.curve", "Tone Curve"}, {"curve.curveR", "Red Curve"}, {"curve.curveG", "Green Curve"},
-            {"curve.curveB", "Blue Curve"}, {"grade.grade0", "Shadows Wheel"}, {"grade.grade1", "Midtones Wheel"},
-            {"grade.grade2", "Highlights Wheel"}, {"mixer.mixer0", "Mixer Hue"}, {"mixer.mixer1", "Mixer Saturation"},
-            {"mixer.mixer2", "Mixer Luminance"}, {"xform.crop", "Crop"},
+            {"curve.curve", "Tone Curve", "Curves & Wheels"}, {"curve.curveR", "Red Curve", "Curves & Wheels"}, {"curve.curveG", "Green Curve", "Curves & Wheels"},
+            {"curve.curveB", "Blue Curve", "Curves & Wheels"}, {"grade.grade0", "Shadows Wheel", "Curves & Wheels"}, {"grade.grade1", "Midtones Wheel", "Curves & Wheels"},
+            {"grade.grade2", "Highlights Wheel", "Curves & Wheels"}, {"mixer.mixer0", "Mixer Hue", "Curves & Wheels"}, {"mixer.mixer1", "Mixer Saturation", "Curves & Wheels"},
+            {"mixer.mixer2", "Mixer Luminance", "Curves & Wheels"}, {"xform.crop", "Crop", "Crop"},
         };
         count = (int)(sizeof k / sizeof k[0]);
         return k;

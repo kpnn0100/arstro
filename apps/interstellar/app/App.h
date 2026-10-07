@@ -145,6 +145,10 @@ namespace interstellar_v1
         void openAddEffectMenu(artboard::Rect at);
         void openKeyContext(const std::string &address, double t, artboard::Point at);
         void openKeyPlotContext(double t, artboard::Point at);
+        /** R-ANIM-3: Animate… — what the chosen clip does not animate yet, its own first, then Grade's
+         *  panels and each effect as a second step (no list taller than a 640-px window). */
+        void openAnimateMenu(artboard::Rect at, const std::string &group = std::string());
+        void openKeyRowContext(const std::string &address, artboard::Point at);
         /** The key lane's graph, when the Cut tab shows it (else null). */
         KeyGraph *keyGraphShown();
         void openPluginContext(const std::string &id, artboard::Point at);

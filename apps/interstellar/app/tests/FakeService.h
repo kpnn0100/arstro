@@ -438,6 +438,11 @@ namespace istest
                 std::sort(an->keys.begin(), an->keys.end(), [](const KeyframeModel &p, const KeyframeModel &q) { return p.t < q.t; });
                 if (an->keys.empty()) m.anims.erase(m.anims.begin() + (an - &m.anims[0]));
             }
+            else if (a[0] == "key" && a.size() >= 3 && a[1] == "clear")
+            {
+                // the curve goes (its value stays the parameter's own, as the service keeps it)
+                if (AnimModel *an = animFor(a[2], false)) m.anims.erase(m.anims.begin() + (an - &m.anims[0]));
+            }
             else if (a[0] == "rack" && a.size() >= 3 && a[1] == "duplicate")
             {
                 // the service's behaviour: same file, own name, at the top of the rack, selected

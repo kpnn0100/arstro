@@ -48,6 +48,8 @@ namespace interstellar_v1
         mKeyLaneW->onCommand = [this](const std::string &l) { return emit(l); };
         mKeyLaneW->onKeyContext = [this](const std::string &a, double t, Point w) { if (onKeyContext) onKeyContext(a, t, w); };
         mKeyLaneW->onPlotContext = [this](double t, Point w) { if (onKeyPlotContext) onKeyPlotContext(t, w); };
+        mKeyLaneW->onAddMenu = [this](Rect w) { if (onAnimateMenu) onAnimateMenu(w); };
+        mKeyLaneW->onRowContext = [this](const std::string &a, Point w) { if (onKeyRowContext) onKeyRowContext(a, w); };
         mKeyLaneW->opacity.set(0.0);
         mKeyLaneW->visible = false;
         addChild(mKeyLaneW);

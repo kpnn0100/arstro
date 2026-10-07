@@ -59,6 +59,7 @@ one integrator who moves, wires, tests and commits each stream:
       the grammar and the render path — DONE (DR-ANIM-1); the diamonds, the graph editor and the key menu —
       DONE (DR-ANIM-2). The 2026-10-05 request is complete.
 - [x] **2026-10-07: property animation under the clip's track** (R-ANIM-3/4/8 amended) — DR-ANIM-5.
+- [x] **2026-10-07: only animated properties have a row; Animate… marks one** (R-ANIM-3 amended again) — DR-ANIM-5.
 - [x] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
       commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
       1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
@@ -140,6 +141,16 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-07 — only animated properties have a row; Animate… marks one.** Listing every property
+the clip could animate (40+) under its track made the rows a form to search, not a timeline to read.
+Now a property gets a row only once it is animated, so opening a clip shows exactly what moves.
+- Marking a property is "Animate…", the first line under the track. It was chosen over diamonds in the
+  Cut inspector because it reaches the grade and effect properties, which Grade must not key (R-ANIM-3).
+- Its list is two steps, keyed by Grade's own panels, because cosmo's ContextMenu does not scroll and a
+  flat list of 40+ would not fit a 640-px window.
+- Rows ease in and out on the model's animation state, so adding or clearing a curve never jumps the
+  tracks below.
 
 **2026-10-07 — a property's animation sits under its clip's track, not in a lane at the bottom.** The
 user asked for animation to sit with the timeline. Of three layouts offered (rows under the clip's

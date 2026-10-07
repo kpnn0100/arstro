@@ -113,6 +113,8 @@ namespace interstellar_v1
         /** R-ANIM-4: a right-click on a keyframe in the key lane — `address`, key time, WORLD point. */
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
         std::function<void(double t, artboard::Point world)> onKeyPlotContext;   // right-click on the lane's empty plot
+        std::function<void(artboard::Rect world)> onAnimateMenu;                 // the lane's Animate… (R-ANIM-3)
+        std::function<void(const std::string &address, artboard::Point world)> onKeyRowContext;   // a property row's menu
 
         // ── the key lane (R-ANIM-3/4, amended 2026-10-07): the selected clip's properties as rows UNDER
         //    ITS TRACK — the tracks below move down to make room, the one lane mapping (`laneTop`) says so ──

@@ -247,9 +247,18 @@ The headline of this specification, and the reason it is not the first one.
   not in a lane at the bottom of the timeline. A ▸ on that track's header opens it (the ruler's ◇
   still does). The tracks below move down to make room. Each row is a lane of the timeline: its
   keyframes sit as diamonds on the clip's span under the frames they key, where a key can be dragged
-  in time, double-clicked into being, or right-clicked for its menu. The track opens on what moves: a
-  section starts open when one of its properties is animated, and CLIP starts open when nothing is.
-  When another clip is chosen, the open rows travel to its track.)
+  in time, double-clicked into being, or right-clicked for its menu. When another clip is chosen, the
+  open rows travel to its track.)
+  (**AMENDED 2026-10-07 again, user request "the UX is not friendly — only properties marked animated
+  should show in the timeline, not all of them":** a row exists only for a property that is ANIMATED.
+  The rest are not listed (the CLIP/GRADE/EFFECTS sections of every property are gone).
+  - A property is marked animated from "Animate…", the first line under the track. It offers only what
+    is not animated yet: the clip's own properties at once, then Grade's panels (Light, Colour,
+    Presence, Detail, Curves & Wheels, Crop) and each effect as a second step, so no list outgrows a
+    640-px window. Choosing one keys it at the playhead, and its row eases in with its curve open.
+  - A row's menu "Remove Animation" clears its curve (`key clear`), and the row eases out. A curve that
+    loses its last key goes the same way.
+  - While nothing is animated, the track opens to Animate… and one line saying what it is for.)
 - **R-ANIM-4 A graph editor**: every animated parameter of the selection can be shown as its value
   curve over time, keyframes dragged in time and value, bezier handles dragged to shape speed and
   influence, and a right-click on a keyframe types the incoming / outgoing speed and influence or

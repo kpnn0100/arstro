@@ -139,6 +139,8 @@ namespace interstellar_v1
         mEdit->onClipContext = [this](const std::string &id, Point w) { openClipContext(id, w); };
         mEdit->onKeyContext = [this](const std::string &a, double t, Point w) { openKeyContext(a, t, w); };
         mEdit->onKeyPlotContext = [this](double t, Point w) { openKeyPlotContext(t, w); };
+        mEdit->onAnimateMenu = [this](Rect w) { openAnimateMenu(w); };
+        mEdit->onKeyRowContext = [this](const std::string &a, Point w) { openKeyRowContext(a, w); };
         mEdit->onLaneContext = [this](const std::string &trk, double t, Point w) { openLaneContext(trk, t, w); };
         // the ref-frame slider previews in the monitor while dragged, nothing committed (R-RACK-3)
         mEdit->gradeDeck()->onPreview = [this](const std::string &bind, double t) {
@@ -728,6 +730,52 @@ namespace interstellar_v1
 
     /** R-ANIM-7: the key lane's empty plot — paste the copied keys at the playhead, here, or onto
      *  the front property. */
+    void App::openAnimateMenu(Rect at, const std::string &group)
+    {
+        // R-ANIM-3: only what is animated has a row; this is how a property becomes animated — keyed at
+        // the playhead (on the clip's footage clock), its row easing in with its curve open
+        auto kl = mEdit->timeline()->keyLane();
+        std::vector<std::string> groups;
+        std::map<std::string, std::vector<std::pair<std::string, std::string>>> props;   // group → (label, address)
+        for (int i = 0; i < kl->rowCount(); ++i)
+        {
+            const auto &r = kl->row(i);
+            if (r.state > 0) continue;
+            if (!props.count(r.group)) groups.push_back(r.group);
+            props[r.group].emplace_back(r.label, r.address);
+        }
+        auto animate = [this, kl](const std::string &address) {
+            dispatch("key add " + cmd::quote(address) + " --at " + cmd::num(kl->now()));
+            kl->select(address);
+        };
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (!group.empty())
+            for (const auto &p : props[group]) items.push_back({p.first, [animate, a = p.second] { animate(a); }});
+        else
+            for (const auto &g : groups)
+            {
+                if (g == "Clip")   // the clip's own: listed at once
+                    for (const auto &p : props[g]) items.push_back({p.first, [animate, a = p.second] { animate(a); }});
+                else               // a panel or an effect: its properties as a second step, in the same place
+                    items.push_back({g + "  \xE2\x80\xBA", [this, at, g] { openAnimateMenu(at, g); }});
+            }
+        if (items.empty()) items.push_back({"Everything here is animated", [] {}});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
+        noteActivity();
+    }
+
+    void App::openKeyRowContext(const std::string &address, Point at)
+    {
+        auto kl = mEdit->timeline()->keyLane();
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        if (kl->selected() == address) items.push_back({"Hide Curve", [kl] { kl->closeCurve(); }});
+        else items.push_back({"Show Curve", [kl, address] { kl->select(address); }});
+        // the inverse of Animate…: the curve goes, the value it has now stays (key clear)
+        items.push_back({"Remove Animation", [this, address] { dispatch("key clear " + cmd::quote(address)); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
     void App::openKeyPlotContext(double t, Point at)
     {
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();

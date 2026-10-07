@@ -51,7 +51,7 @@ PUBLIC defines match the rest of the final binary.
   |---|---|
   | File | Home → `project close` (behind the save prompt) · Open… → `onPickProjectToOpen` · Save → `project save` · Save As… → `onPickSaveAs` → `project save <path>` · Add Footage… → `onPickFootage` · Export Still… → `onPickStillToExport` → `export-still --timeline <cur> --out <p> --at <playhead>` · Render… → Deliver tab |
   | Edit | Undo → `undo` · Redo → `redo` · Copy Grade → `grade copy <sel>` · Paste Grade to Selected → `grade paste <sel>` · to All → `grade paste --all` · Group Selected… (name prompt) → `rack group new <name> --nodes <sel>` · Ungroup → `rack ungroup <sel>` · Duplicate as Variant → `rack duplicate <sel>` |
-  | Keyframes (Cut: rows under the clip's track) | ◇ beside a property → `key add|remove <address> --at <playhead, footage time>`; graph drags → `key set …`; key menu → `key set … --ease <preset>` / typed sides / `key remove` |
+  | Keyframes (Cut: animated rows under the clip's track; Animate… adds one) | ◇ beside a property → `key add|remove <address> --at <playhead, footage time>`; graph drags → `key set …`; key menu → `key set … --ease <preset>` / typed sides / `key remove` |
 | Settings | Engine Settings… → cosmo's `SettingsDialog` (each chip → `settings set <key>=<v>`); Interstellar's own rows after cosmo's, through `setExtraRows`: Hardware video Off/On → `settings set hardwareVideo=0|1`; Preview cache Off/On → `settings set previewCache=0|1` |
   | Workspace | Grade / Cut / Deliver → the tab · Reset Workspace → Grade tab + timeline zoom-to-fit (view only) |
   | Preset | Save Preset… (name prompt) → `preset save <name> --node <sel>` · Import Preset… → `onPickPresetToImport` → `preset import <path>` · Apply <name> (one per library preset) → `preset apply <name> --node <sel>` |
@@ -314,39 +314,39 @@ fade in (`kScrollMs`). Filmstrip cells keep cosmo's own behaviour (a thumbnail r
   frame came from it. Engine Settings gains two rows through cosmo's opt-in `setExtraRows`: Hardware
   video and Preview cache. Shot added: `cut_cache_bar`; live: `live_cut_cached`. UI checks: 282.
 
-## Keyframes (2026-10-05, R-ANIM-3/4; amended the same day: the timeline only; 2026-10-07: under the clip's track)
+## Keyframes (2026-10-05, R-ANIM-3/4; the timeline only; 2026-10-07: under the clip's track, only what is animated)
 
 - Grade has NO keyframe control (no diamonds, no curves face); cosmo's SliderRow/ParamPanel are their
   own code again.
-- Cut: the chosen clip's track header carries a ▸ (`Timeline::expandToggleRect`), and the ruler's ◇ does
-  the same. Either opens the clip's properties as rows DIRECTLY UNDER ITS TRACK, and the tracks below
-  move down (`gapAbove` in `laneTop`).
-  - Sections: CLIP (opacity, position, scale, rotation, speed), GRADE (its source's 23 colour keys) and
-    EFFECTS (its source's effects). The track opens on what moves: a section starts open when one of its
-    properties is animated.
-  - Each row: its diamond keys at the playhead → `key add|remove <address> --at <playhead on the clip's
-    footage clock>`.
-  - Each row's keys sit on the clip's span:
-    - drag one → `key set <a> --at t --to t'`;
-    - double-click the row → `key add <a> --at t`;
-    - right-click a key → the key menu.
-  - Choosing the clip on another track moves the open rows there, eased.
+- Cut: the chosen clip's track header carries a ▸ (`Timeline::expandToggleRect`); the ruler's ◇ does the
+  same. Either opens rows DIRECTLY UNDER ITS TRACK, and the tracks below move down (`gapAbove` in
+  `laneTop`).
+- **Only animated properties have a row** (each eases in and out).
+  - The first line is "Animate…" (`KeyLane::addRect`) → `App::openAnimateMenu`. It offers what is not
+    animated yet: the clip's own properties, then Grade's panels and each effect as a second step
+    ("Grade · Light ›" …). Choosing one → `key add <address> --at <playhead on the clip's footage
+    clock>`, and the row is chosen, its curve open.
+  - A right-click on a row (not a key) → Show/Hide Curve, Remove Animation → `key clear <address>`.
+  - Nothing animated: Animate… plus a one-line hint.
+- Each row:
+  - its diamond keys at the playhead → `key add|remove <address> --at <t>`;
+  - its keys sit on the clip's span: drag one → `key set <a> --at t --to t'`; double-click the row →
+    `key add <a> --at t`; right-click a key → the key menu.
 - Choosing a row opens its `KeyGraph` INLINE, in a band under the row (plot = the clip's span; now line
   = the playhead). Choosing it again closes it.
   - Drag a key → `key set <a> --at t [--to t'] --value v`.
   - A handle → `--speed-out s --influence-out i` (or -in).
   - Double-click → `key add <a> --at t`.
-  - Right-click → the key menu: presets, Speed & Influence… via `NamePrompt::showFields` (only changed
-    numbers sent), and Delete Key.
+  - Right-click → the key menu: presets, Speed & Influence… (only changed numbers sent), Delete Key.
 - Several properties at once: Ctrl/Shift-click rows (the last chosen in front, all in its band).
   - Box-select on empty plot.
   - A selected key's drag with a multi-selection → `key shift --keys "a@t,…" --by dt`.
-  - Key menu "Copy Key(s)" → `key copy --keys …`; the empty-plot menu → `key paste --at <t>` /
-    `--to <front>`; Ctrl+C/V copy/paste keys in Cut.
+  - Copy/paste keys: `key copy --keys …`, `key paste --at <t>` / `--to <front>`, Ctrl+C/V in Cut.
 - The rows' bottom edge (a 6-px band under them) resizes them → `settings set keyLaneHeight=<px>`. They
   never hide the clip's track, and opening scrolls the track and its rows into view.
-- Shots: `cut_key_lane` (Opacity's curve open), `cut_key_lane_rows`, `cut_key_lane_curve_mid`,
-  `cut_key_lane_mid`, `cut_key_lane_grade`, `cut_key_lane_multi`. UI checks: 500.
+- Shots: `cut_key_lane_empty`, `cut_key_lane_animate`, `cut_key_lane_animate_grade`, `cut_key_lane`,
+  `cut_key_lane_rows`, `cut_key_lane_curve_mid`, `cut_key_lane_mid`, `cut_key_lane_grade`,
+  `cut_key_lane_multi`. UI checks: 509.
 
 ## Integrating (the GTK host)
 

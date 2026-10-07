@@ -48,18 +48,11 @@ namespace interstellar_v1
         const auto &c = mClip;
         // the clip's own footage clock — and a source's time, inside this clip, is the same seconds
         mNow = std::clamp(c.in + (m.playhead - c.at) * c.speed, c.in, c.out);
-        auto header = [&](const char *name) {
-            Row r;
-            r.section = name;
-            r.label = name;
-            r.header = true;
-            r.folded = mFolded.count(name) > 0;
-            mRows.push_back(r);
-        };
-        auto prop = [&](const char *section, const std::string &label, const std::string &node, const std::string &key,
+        // every property the clip COULD animate, in a fixed order; only the animated ones get a row
+        auto prop = [&](const std::string &group, const std::string &label, const std::string &node, const std::string &key,
                         const std::string &address) {
             Row r;
-            r.section = section;
+            r.group = group;
             r.label = label;
             r.node = node;
             r.key = key;
@@ -71,53 +64,35 @@ namespace interstellar_v1
             mRows.push_back(r);
         };
         const std::string clipName = c.name.empty() ? c.id : c.name;
-        header("CLIP");
-        for (int i = 0; i < kClipRows; ++i) prop("CLIP", kClipLabel[i], c.id, kClipKey[i], clipName + "." + kClipKey[i]);
+        for (int i = 0; i < kClipRows; ++i) prop("Clip", kClipLabel[i], c.id, kClipKey[i], clipName + "." + kClipKey[i]);
         if (!c.srcName.empty())
         {
-            header("GRADE");
             int n = 0;
             const ColourKey *ck = colourKeys(n);
-            for (int i = 0; i < n; ++i) prop("GRADE", ck[i].label, c.src, ck[i].key, c.srcName + "." + ck[i].key);
-            bool any = false;
-            for (const auto &e : m.effects) any = any || e.node == c.src;
-            if (any)
+            for (int i = 0; i < n; ++i) prop(std::string("Grade \xC2\xB7 ") + ck[i].group, ck[i].label, c.src, ck[i].key, c.srcName + "." + ck[i].key);
+            for (const auto &e : m.effects)
             {
-                header("EFFECTS");
-                for (const auto &e : m.effects)
-                {
-                    if (e.node != c.src) continue;
-                    prop("EFFECTS", e.label + " \xC2\xB7 Mix", e.id, "mix", e.id + ".mix");
-                    for (const auto &pm : e.params) prop("EFFECTS", e.label + " \xC2\xB7 " + pm.label, e.id, pm.key, e.id + "." + pm.key);
-                }
+                if (e.node != c.src) continue;
+                const std::string g = "Effects \xC2\xB7 " + e.label;
+                prop(g, e.label + " \xC2\xB7 Mix", e.id, "mix", e.id + ".mix");
+                for (const auto &pm : e.params) prop(g, e.label + " \xC2\xB7 " + pm.label, e.id, pm.key, e.id + "." + pm.key);
             }
         }
-        if (mFoldClip != c.id)
+        // another clip: its rows are placed as they are (nowhere to travel from); the same clip's rows ease
+        if (mPresentClip != c.id)
         {
-            // a clip's track opens on what moves: a section starts open when something in it is animated
-            // (CLIP too when nothing is yet) — a section the user opened or folded stays as they left it
-            mFoldClip = c.id;
-            std::map<std::string, bool> animated;
-            bool any = false;
+            mPresentClip = c.id;
             for (const auto &r : mRows)
-                if (!r.header && r.state > 0) { animated[r.section] = true; any = true; }
-            for (auto &r : mRows)
-                if (r.header && !mFoldChosen.count(r.section))
-                {
-                    const bool open = animated[r.section] || (!any && r.section == "CLIP");
-                    if (open) mFolded.erase(r.section); else mFolded.insert(r.section);
-                    r.folded = !open;
-                }
-        }
-        for (const auto &r : mRows)
-            if (r.header && !mOpen.count(r.section))
             {
-                mOpen[r.section].reset(new AnimatedProperty(r.folded ? 0.0 : 1.0));   // first placement: no travel
-                mOpenApplied[r.section] = !r.folded;
+                mPresent[r.address].reset(new AnimatedProperty(r.state > 0 ? 1.0 : 0.0));
+                mPresentApplied[r.address] = r.state > 0;
             }
-        // a property that left (another clip chosen) closes its curve; none is opened for you
-        if (!mSelected.empty() && rowOf(mSelected) < 0) mSelected.clear();
-        mShownRows.erase(std::remove_if(mShownRows.begin(), mShownRows.end(), [&](const std::string &a) { return rowOf(a) < 0; }), mShownRows.end());
+        }
+        // a property no longer animated has no row, so no curve open under it
+        if (!mSelected.empty() && (rowOf(mSelected) < 0 || mRows[(size_t)rowOf(mSelected)].state == 0)) mSelected.clear();
+        mShownRows.erase(std::remove_if(mShownRows.begin(), mShownRows.end(),
+                                        [&](const std::string &a) { const int i = rowOf(a); return i < 0 || mRows[(size_t)i].state == 0; }),
+                         mShownRows.end());
         if (mSelected.empty()) mShownRows.clear();
         else if (std::find(mShownRows.begin(), mShownRows.end(), mSelected) == mShownRows.end()) mShownRows.push_back(mSelected);
     }
@@ -126,15 +101,12 @@ namespace interstellar_v1
     {
         if (!mHasClip) return;
         std::vector<std::string> ids;
-        std::string label;
-        if (const int i = rowOf(mSelected); i >= 0) label = mRows[(size_t)i].label;
         for (const auto &addr : mShownRows)
         {
             const int i = rowOf(addr);
             if (i < 0) continue;
             if (const interstellar::AnimModel *a = keys::animOf(m, mRows[(size_t)i].node, mRows[(size_t)i].key)) ids.push_back(a->id);
         }
-        mGraph->setEmptyText(label + " is not animated \xE2\x80\x94 click \xE2\x97\x87 to key it at the playhead");
         mGraph->setNow(mNow);   // the playhead in the clip — not Grade's reference frame
         mGraph->setFront(mSelected);
         mGraph->bind(m, ids, mClip.in, mClip.out);
@@ -142,7 +114,7 @@ namespace interstellar_v1
 
     void KeyLane::bind(const interstellar::AppModel &m)
     {
-        mModel = &m;   // the service's model outlives every frame: a fold or a selection rebuilds from it
+        mModel = &m;   // the service's model outlives every frame: a selection rebinds from it
         rebuild(m);
         bindGraph(m);
     }
@@ -163,8 +135,7 @@ namespace interstellar_v1
         if (!add) mShownRows.clear();
         if (std::find(mShownRows.begin(), mShownRows.end(), address) == mShownRows.end()) mShownRows.push_back(address);
         mSelected = address;
-        mFolded.erase(mRows[(size_t)i].section);   // a chosen property's section opens (eased)
-        // bring the row and its curve into view — re-aimed every frame while the bands open and close
+        // bring the row and its curve into view — re-aimed every frame while the rows and bands move
         mScroll.reveal(rowTop(i) - kTopPad, kRowH + kGraphH);
         mRevealFront = true;
         if (mModel) bindGraph(*mModel);
@@ -180,15 +151,22 @@ namespace interstellar_v1
     int KeyLane::rowOf(const std::string &address) const
     {
         for (int i = 0; i < (int)mRows.size(); ++i)
-            if (!mRows[(size_t)i].header && mRows[(size_t)i].address == address) return i;
+            if (mRows[(size_t)i].address == address) return i;
         return -1;
     }
 
-    int KeyLane::sectionRow(const std::string &section) const
+    int KeyLane::animatedCount() const
     {
-        for (int i = 0; i < (int)mRows.size(); ++i)
-            if (mRows[(size_t)i].header && mRows[(size_t)i].section == section) return i;
-        return -1;
+        int n = 0;
+        for (const auto &r : mRows) n += r.state > 0 ? 1 : 0;
+        return n;
+    }
+
+    double KeyLane::rowAmount(int i) const
+    {
+        if (i < 0 || i >= (int)mRows.size()) return 0.0;
+        const auto it = mPresent.find(mRows[(size_t)i].address);
+        return it == mPresent.end() || !it->second ? (mRows[(size_t)i].state > 0 ? 1.0 : 0.0) : it->second->value();
     }
 
     double KeyLane::diamondFill(int i) const
@@ -197,46 +175,37 @@ namespace interstellar_v1
         return it == mDia.end() ? 0.0 : it->second.fill.value();
     }
 
-    double KeyLane::openOf(const std::string &section) const
-    {
-        const auto it = mOpen.find(section);
-        return it == mOpen.end() ? 1.0 : it->second->value();
-    }
-
     double KeyLane::bandAmount(int i) const
     {
-        if (i < 0 || i >= (int)mRows.size() || mRows[(size_t)i].header) return 0.0;
+        if (i < 0 || i >= (int)mRows.size()) return 0.0;
         const auto it = mBand.find(mRows[(size_t)i].address);
-        return it == mBand.end() ? 0.0 : it->second->value();
+        return it == mBand.end() || !it->second ? 0.0 : it->second->value();
     }
 
-    double KeyLane::rowH(int i) const
-    {
-        const Row &r = mRows[(size_t)i];
-        return r.header ? kSectionH : kRowH * openOf(r.section);
-    }
-
-    double KeyLane::bandH(int i) const
-    {
-        const Row &r = mRows[(size_t)i];
-        return r.header ? 0.0 : kGraphH * bandAmount(i) * openOf(r.section);
-    }
+    double KeyLane::rowH(int i) const { return kRowH * rowAmount(i); }
+    double KeyLane::bandH(int i) const { return kGraphH * bandAmount(i) * rowAmount(i); }
 
     double KeyLane::rowTop(int i) const
     {
-        double y = kTopPad;
+        double y = kTopPad + kRowH;   // under the Animate… row
         for (int k = 0; k < i; ++k) y += rowH(k) + bandH(k);
         return y;
     }
 
     double KeyLane::contentH() const
     {
-        double h = kTopPad;
+        double h = kTopPad + kRowH;
         for (int i = 0; i < (int)mRows.size(); ++i) h += rowH(i) + bandH(i);
-        return h;
+        return h + kTopPad;
     }
 
     Rect KeyLane::rowRect(int i) const { return Rect{0.0, rowTop(i) - mScroll.value() - mCut, mColW, rowH(i)}; }
+
+    Rect KeyLane::addRect() const
+    {
+        const double y = kTopPad - mScroll.value() - mCut;
+        return Rect{kPadX - 4.0, y + 1.0, mColW - 2 * kPadX + 8.0, kRowH - 2.0};
+    }
 
     Rect KeyLane::bandRect(int i) const
     {
@@ -268,7 +237,7 @@ namespace interstellar_v1
         const Row &row = mRows[(size_t)i];
         double t = row.keys[(size_t)k];
         if (mKeyDrag.row == i && mKeyDrag.key == k && mKeyDrag.moved) t = mKeyDrag.t;   // the pointer is the animation
-        return Point{xOfTime(t), r.y + r.h * 0.5};
+        return Point{xOfTime(t), r.bottom() - kRowH * 0.5};
     }
 
     int KeyLane::keyAt(const Point &p, int &row) const
@@ -277,7 +246,7 @@ namespace interstellar_v1
         for (int i = 0; i < (int)mRows.size(); ++i)
         {
             const Row &r = mRows[(size_t)i];
-            if (r.header || rowH(i) < 2.0) continue;
+            if (rowH(i) < 2.0) continue;
             const Rect rr = rowRect(i);
             if (p.y < rr.y || p.y >= rr.bottom()) continue;
             row = i;
@@ -305,19 +274,19 @@ namespace interstellar_v1
 
     void KeyLane::advance(double nowMs)
     {
-        for (auto &kv : mOpen)
-        {
-            const bool want = !mFolded.count(kv.first);
-            if (mOpenApplied[kv.first] != want)
-            {
-                kv.second->animateTo(want ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
-                mOpenApplied[kv.first] = want;
-            }
-            kv.second->update(nowMs);
-        }
+        bool moving = false;
         for (const auto &r : mRows)
         {
-            if (r.header) continue;
+            // a row eases in when its property becomes animated, out when it stops being
+            auto &present = mPresent[r.address];
+            const bool shown = r.state > 0;
+            if (!present) { present.reset(new AnimatedProperty(shown ? 1.0 : 0.0)); mPresentApplied[r.address] = shown; }
+            else if (mPresentApplied[r.address] != shown)
+            {
+                present->animateTo(shown ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mPresentApplied[r.address] = shown;
+            }
+            present->update(nowMs);
             // a curve band opens under the front row and closes under the one that stops being it
             auto &band = mBand[r.address];
             const bool want = r.address == mSelected;
@@ -328,6 +297,7 @@ namespace interstellar_v1
                 mBandApplied[r.address] = want;
             }
             band->update(nowMs);
+            moving = moving || present->isAnimating() || band->isAnimating();
             DiamondAnim &d = mDia[r.address];
             const double fill = r.state == 2 ? 1.0 : 0.0, line = r.state == 0 ? 0.0 : 1.0;
             if (d.fillL < 0) { d.fill.set(fill); d.line.set(line); d.fillL = fill; d.lineL = line; }   // first placement
@@ -339,9 +309,6 @@ namespace interstellar_v1
         if (mRevealFront)
         {
             const int front = rowOf(mSelected);
-            bool moving = false;
-            for (const auto &kv : mBand) moving = moving || (kv.second && kv.second->isAnimating());
-            for (const auto &kv : mOpen) moving = moving || kv.second->isAnimating();
             if (front >= 0) mScroll.reveal(rowTop(front) - kTopPad, kRowH + kGraphH);
             mRevealFront = moving && front >= 0;
         }
@@ -362,7 +329,12 @@ namespace interstellar_v1
         const bool column = local.x < mColW;
         switch (g.type)
         {
-            case Gesture::Type::Move: mHover.setHovered(rowAt(local)); return true;
+            case Gesture::Type::Move:
+            {
+                const int i = rowAt(local);
+                mHover.setHovered(addRect().contains(local) ? 0 : i >= 0 ? i + 1 : -1);
+                return true;
+            }
             case Gesture::Type::Scroll: return mScroll.scrollBy(g.delta.y);   // nothing to scroll: the timeline's tracks take it
             case Gesture::Type::Down:
             {
@@ -399,7 +371,7 @@ namespace interstellar_v1
             {
                 // on a row's lane, inside the clip: a key there
                 const int i = rowAt(local);
-                if (column || i < 0 || mRows[(size_t)i].header || local.x < mSpanX0 || local.x > mSpanX1 || !onCommand) return true;
+                if (column || i < 0 || local.x < mSpanX0 || local.x > mSpanX1 || !onCommand) return true;
                 const double t = std::clamp(std::round(timeOfX(local.x) * 1000.0) / 1000.0, mClip.in, mClip.out);
                 onCommand("key add " + cmd::quote(mRows[(size_t)i].address) + " --at " + cmd::num(t));
                 return true;
@@ -408,22 +380,27 @@ namespace interstellar_v1
             {
                 int row = -1;
                 const int k = column ? -1 : keyAt(local, row);
-                if (k >= 0 && onKeyContext) onKeyContext(mRows[(size_t)row].address, mRows[(size_t)row].keys[(size_t)k], worldTransform().apply(local));
+                const Point w = worldTransform().apply(local);
+                if (k >= 0) { if (onKeyContext) onKeyContext(mRows[(size_t)row].address, mRows[(size_t)row].keys[(size_t)k], w); }
+                else if (const int i = rowAt(local); i >= 0 && onRowContext) onRowContext(mRows[(size_t)i].address, w);
                 return true;
             }
             case Gesture::Type::Click:
             {
+                if (addRect().contains(local))
+                {
+                    // Animate…: the host offers what is not animated yet, under the button
+                    if (onAddMenu)
+                    {
+                        const Rect b = addRect();
+                        const Point o = worldTransform().apply(Point{b.x, b.y});
+                        onAddMenu(Rect{o.x, o.y, b.w, b.h});
+                    }
+                    return true;
+                }
                 const int i = rowAt(local);
                 if (i < 0) return true;
                 Row &r = mRows[(size_t)i];
-                if (r.header)
-                {
-                    // fold or unfold: presentation only, eased in advance
-                    if (mFolded.count(r.section)) mFolded.erase(r.section); else mFolded.insert(r.section);
-                    r.folded = mFolded.count(r.section) > 0;
-                    mFoldChosen.insert(r.section);
-                    return true;
-                }
                 const bool onDiamond = column && diamondRect(i).contains(local);
                 if (onDiamond)
                 {
@@ -459,66 +436,71 @@ namespace interstellar_v1
         drawRoundedRect(t, Rect{0, 0, mColW, h}, 0.0, Paint::filled(surface::trackHeaderBg()));
         glyph::line(t, mColW - 0.5, 0, mColW - 0.5, h, palette::border(), 1.0);
         if (!mHasClip) { t.restore(); return; }
+        {
+            // Animate…: what marks a property animated; beside it, while nothing is, what this lane is for
+            const Rect b = addRect();
+            const double hv = mHover.amount(0);
+            drawRoundedRect(t, b, radius::control(), Paint::filledStroked(lerpColor(palette::secondary(), palette::primaryAlpha(0.22), hv), palette::border(), 1.0));
+            glyph::plus(t, Rect{b.x + 6.0, b.y + (b.h - 8.0) * 0.5, 8.0, 8.0}, lerpColor(palette::mutedForeground(), palette::primary(), hv));
+            t.setFill(lerpColor(palette::foreground(), palette::primary(), hv));
+            t.drawText(textfit::ellipsize(t, "Animate\xE2\x80\xA6", b.w - 22.0, 10.0, font::sans()), b.x + 18.0, textfit::baseline(b.y + b.h * 0.5, 10.0), 10.0, font::sans());
+            double none = 1.0;
+            for (int i = 0; i < (int)mRows.size(); ++i) none = std::min(none, 1.0 - rowAmount(i));
+            if (none > 0.001)
+            {
+                t.setFill(fade(palette::mutedForeground(), none));
+                t.drawText(textfit::ellipsize(t, "Nothing on this clip is animated \xE2\x80\x94 Animate\xE2\x80\xA6 keys a property at the playhead", w - mColW - 2 * kPadX, 10.0, font::sans()),
+                           mColW + kPadX, textfit::baseline(b.y + b.h * 0.5, 10.0), 10.0, font::sans());
+            }
+        }
         for (int i = 0; i < (int)mRows.size(); ++i)
         {
             const Rect r = rowRect(i);
             const Rect band = bandRect(i);
-            if ((r.h < 1.0 && band.h < 1.0) || std::max(r.bottom(), band.bottom()) < 0 || r.y > h) continue;
+            if ((r.h < 0.5 && band.h < 0.5) || std::max(r.bottom(), band.bottom()) < 0 || r.y > h) continue;
             const Row &row = mRows[(size_t)i];
-            if (row.header)
-            {
-                // ▸ / ▾ turns with the section's own eased amount
-                const double open = openOf(row.section), cx = kPadX + 3.0, cy = r.y + r.h * 0.5;
-                const double a = (1.0 - open) * -1.5707963;   // 0 = pointing down
-                auto pt = [&](double x, double y) { return Point{cx + x * std::cos(a) - y * std::sin(a), cy + x * std::sin(a) + y * std::cos(a)}; };
-                const Point p0 = pt(-3.0, -1.5), p1 = pt(3.0, -1.5), p2 = pt(0.0, 2.5);
-                t.beginPath(); t.moveTo(p0.x, p0.y); t.lineTo(p1.x, p1.y); t.lineTo(p2.x, p2.y); t.closePath();
-                t.setFill(palette::mutedForeground());
-                t.fillPath();
-                t.drawText(row.label, kPadX + 10.0, textfit::baseline(r.y + r.h * 0.5, 8.5), 8.5, font::sansSemiBold(), 0.13 * 8.5);
-                glyph::line(t, mColW, r.bottom() - 0.5, w, r.bottom() - 0.5, palette::border(), 1.0);
-                continue;
-            }
-            const double open = openOf(row.section);
+            const double present = rowAmount(i);
             const bool sel = row.address == mSelected;
             const bool shownToo = !sel && std::find(mShownRows.begin(), mShownRows.end(), row.address) != mShownRows.end();
-            t.pushLayer(open);
+            t.save();
+            t.clipRect(0, r.y, w, r.h + band.h);   // a row easing in or out is cut, never squashed
+            t.pushLayer(present * present);
             // ── the name and the diamond that keys at the playhead ──
-            if (sel) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::primaryAlpha(0.16)));
-            else if (shownToo) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::whiteAlpha(0.06)));
-            else if (mHover.amount(i) > 0.001) drawRoundedRect(t, Rect{r.x + 4.0, r.y + 1.0, r.w - 8.0, r.h - 2.0}, radius::control(), Paint::filled(palette::hoverWash(mHover.amount(i))));
+            const Rect line{r.x, r.bottom() - kRowH, r.w, kRowH};   // the row's full-height line, revealed from its bottom
+            if (sel) drawRoundedRect(t, Rect{line.x + 4.0, line.y + 1.0, line.w - 8.0, line.h - 2.0}, radius::control(), Paint::filled(palette::primaryAlpha(0.16)));
+            else if (shownToo) drawRoundedRect(t, Rect{line.x + 4.0, line.y + 1.0, line.w - 8.0, line.h - 2.0}, radius::control(), Paint::filled(palette::whiteAlpha(0.06)));
+            else if (mHover.amount(i + 1) > 0.001) drawRoundedRect(t, Rect{line.x + 4.0, line.y + 1.0, line.w - 8.0, line.h - 2.0}, radius::control(), Paint::filled(palette::hoverWash(mHover.amount(i + 1))));
             t.setFill(sel ? palette::foreground() : palette::mutedForeground());
-            t.drawText(textfit::ellipsize(t, row.label, r.w - kPadX - kDiamondW - 4.0, 10.0, font::sans()), kPadX, textfit::baseline(r.y + r.h * 0.5, 10.0), 10.0, font::sans());
-            const Rect d = diamondRect(i);
+            t.drawText(textfit::ellipsize(t, row.label, line.w - kPadX - kDiamondW - 4.0, 10.0, font::sans()), kPadX, textfit::baseline(line.y + line.h * 0.5, 10.0), 10.0, font::sans());
             {
+                const Rect d{line.right() - kPadX - kDiamondW + 6.0, line.y, kDiamondW, line.h};
                 const double cx = d.x + d.w * 0.5, cy = d.y + d.h * 0.5, rr = 4.0;
                 auto diamond = [&] { t.beginPath(); t.moveTo(cx, cy - rr); t.lineTo(cx + rr, cy); t.lineTo(cx, cy + rr); t.lineTo(cx - rr, cy); t.closePath(); };
                 const auto dit = mDia.find(row.address);
                 const double fill = dit == mDia.end() ? (row.state == 2 ? 1.0 : 0.0) : dit->second.fill.value();
-                const double line = dit == mDia.end() ? (row.state == 0 ? 0.0 : 1.0) : dit->second.line.value();
+                const double ln = dit == mDia.end() ? (row.state == 0 ? 0.0 : 1.0) : dit->second.line.value();
                 if (fill > 0.01) { diamond(); t.setFill(palette::primaryAlpha(fill)); t.fillPath(); }
                 diamond();
-                t.setStroke(lerpColor(palette::whiteAlpha(0.22), palette::foreground(), line), 1.0);
+                t.setStroke(lerpColor(palette::whiteAlpha(0.22), palette::foreground(), ln), 1.0);
                 t.strokePath();
             }
             // ── its lane: the clip's span, the keys under the frames they key ──
             t.save();
-            t.clipRect(mColW, r.y, std::max(0.0, w - mColW), r.h);
-            if (sel) drawRoundedRect(t, Rect{mColW, r.y, w - mColW, r.h}, 0.0, Paint::filled(palette::primaryAlpha(0.06)));
-            if (mSpanX1 > mSpanX0) drawRoundedRect(t, Rect{mSpanX0, r.y + 1.0, mSpanX1 - mSpanX0, r.h - 2.0}, 0.0, Paint::filled(palette::whiteAlpha(0.035)));
-            const double cy = r.y + r.h * 0.5;
-            if (row.keys.size() > 1)
-                glyph::line(t, keyPoint(i, 0).x, cy, keyPoint(i, (int)row.keys.size() - 1).x, cy, palette::whiteAlpha(sel ? 0.32 : 0.18), 1.0);
+            t.clipRect(mColW, line.y, std::max(0.0, w - mColW), line.h);
+            if (sel) drawRoundedRect(t, Rect{mColW, line.y, w - mColW, line.h}, 0.0, Paint::filled(palette::primaryAlpha(0.06)));
+            if (mSpanX1 > mSpanX0) drawRoundedRect(t, Rect{mSpanX0, line.y + 1.0, mSpanX1 - mSpanX0, line.h - 2.0}, 0.0, Paint::filled(palette::whiteAlpha(0.035)));
+            const double cy = line.y + line.h * 0.5;
+            if (row.keys.size() > 1) glyph::line(t, keyPoint(i, 0).x, cy, keyPoint(i, (int)row.keys.size() - 1).x, cy, palette::whiteAlpha(sel ? 0.32 : 0.18), 1.0);
             for (int k = 0; k < (int)row.keys.size(); ++k)
             {
-                const Point p = keyPoint(i, k);
+                const double x = keyPoint(i, k).x;
                 const bool inside = row.keys[(size_t)k] >= mClip.in - 1e-9 && row.keys[(size_t)k] <= mClip.out + 1e-9;   // a source key past this clip's frames
-                t.beginPath(); t.moveTo(p.x, p.y - kKeyR); t.lineTo(p.x + kKeyR, p.y); t.lineTo(p.x, p.y + kKeyR); t.lineTo(p.x - kKeyR, p.y); t.closePath();
+                t.beginPath(); t.moveTo(x, cy - kKeyR); t.lineTo(x + kKeyR, cy); t.lineTo(x, cy + kKeyR); t.lineTo(x - kKeyR, cy); t.closePath();
                 t.setFill(fade(sel || shownToo ? palette::primary() : palette::foreground(), inside ? 1.0 : 0.35));
                 t.fillPath();
             }
             t.restore();
-            glyph::line(t, mColW, r.bottom() - 0.5, w, r.bottom() - 0.5, palette::whiteAlpha(0.04), 1.0);
+            glyph::line(t, mColW, line.bottom() - 0.5, w, line.bottom() - 0.5, palette::whiteAlpha(0.04), 1.0);
             // ── its curve, when open: the column beside it says whose ──
             if (band.h > 0.5)
             {
@@ -530,6 +512,7 @@ namespace interstellar_v1
                 glyph::line(t, 0, band.bottom() - 0.5, w, band.bottom() - 0.5, palette::border(), 1.0);
             }
             t.popLayer();
+            t.restore();
         }
         // the playhead runs through the rows as it runs through the tracks
         if (mPlayheadX >= mColW && mPlayheadX <= w)
