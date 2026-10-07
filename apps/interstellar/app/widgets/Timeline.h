@@ -114,18 +114,25 @@ namespace interstellar_v1
         std::function<void(const std::string &address, double t, artboard::Point world)> onKeyContext;
         std::function<void(double t, artboard::Point world)> onKeyPlotContext;   // right-click on the lane's empty plot
 
-        // ── the key lane (R-ANIM-3/4): where animation is authored — the selected clip's properties ──
+        // ── the key lane (R-ANIM-3/4, amended 2026-10-07): the selected clip's properties as rows UNDER
+        //    ITS TRACK — the tracks below move down to make room, the one lane mapping (`laneTop`) says so ──
         static constexpr double kKeyLaneMinH = 80.0;
-        /** The lane's height now: the setting (R-ANIM-8), or the drag in flight, never more than leaves
-         *  one track showing. */
+        /** The lane's open height now: its rows' own height, no taller than the setting (R-ANIM-8) or the
+         *  drag in flight, nor than leaves the clip's track showing above it. */
         double keyLaneH() const;
-        artboard::Rect keyLaneGrabRect() const;   // the band above the lane that resizes it
+        artboard::Rect keyLaneGrabRect() const;   // the band under the lane that resizes it
         bool resizingKeyLane() const { return mLaneDragging; }
-        /** Show the key lane under the tracks while a clip is selected. Intent only; it eases. */
+        /** Open the selected clip's track to its properties. Intent only; it eases. */
         void setKeysShown(bool on) { mKeysWanted = on; }
         bool keysShown() const { return mKeysWanted; }
         double keyLaneAmount() const { return mKeyLane.value(); }
         artboard::Rect keysToggleRect() const;
+        /** The ▸ on the selected clip's track header that opens it (empty when no clip is chosen). */
+        artboard::Rect expandToggleRect() const;
+        /** The track the lane opens under, and where it is drawn (the lane eases there when the chosen
+         *  clip moves to another track). */
+        const std::string &expandedTrack() const { return mKeyClipData.track; }
+        double expandedLaneLive() const { return mExpLane.value(); }
         artboard::Rect keyLaneRect() const;
         std::shared_ptr<KeyLane> keyLane() { return mKeyLaneW; }
 
@@ -201,6 +208,7 @@ namespace interstellar_v1
         int laneOfTrack(const std::string &trackId) const;
         int laneAtY(double y) const;
         double laneTop(double laneLive) const;
+        double gapAbove(double laneLive) const;   // how far the open key lane pushes a lane down
         double contentSeconds() const { return mDuration + 2.0; }
         double fitPps() const;
         double maxScrollFor(double pps) const;
@@ -226,6 +234,9 @@ namespace interstellar_v1
         double mLaneHTarget = 140.0, mLaneHLast = -1.0;
         bool mLaneDragging = false;
         artboard::AnimatedProperty mKeyLane{0.0};
+        artboard::AnimatedProperty mExpLane{0.0};   // the lane index the key lane opens under, eased
+        double mExpLaneL = -1.0;
+        bool mRevealLane = false;   // keep the opened track and its properties in view while the lane opens
         bool mKeyClip = false;
         interstellar::ClipModel mKeyClipData;
         double mCacheSegSeconds = 1.0;

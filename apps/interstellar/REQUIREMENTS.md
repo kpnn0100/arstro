@@ -218,7 +218,7 @@ The headline of this specification, and the reason it is not the first one.
 
 ---
 
-## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the key lane, DR-ANIM-3 shapes, DR-ANIM-4 the graph and the lane's size; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day)
+## R-ANIM — keyframes — ✅ IMPLEMENTED (added 2026-10-05, user request; DR-ANIM-1 the curves, DR-ANIM-2 the key lane, DR-ANIM-3 shapes, DR-ANIM-4 the graph and the lane's size, DR-ANIM-5 the properties under the clip's track; R-ANIM-3/4 amended and R-ANIM-6..8 added the same day; R-ANIM-3/4/8 amended again 2026-10-07)
 
 - **R-ANIM-1 Every numeric parameter can be animated**: a colour key of a rack node, an effect's
   parameter, a clip's opacity and geometry. An animation is a curve of keyframes stored with its
@@ -242,6 +242,14 @@ The headline of this specification, and the reason it is not the first one.
   and its source's effects — and key at the PLAYHEAD, on the clip's footage clock. A source's colour
   and effect curves stay the source's (R-ANIM-1, law 1): the lane shows them under the clip, keys
   under the frames they key, so every clip of that source shows the same curve.)
+  (**AMENDED 2026-10-07, user request "animation for a property should be in Cut so it sits with the
+  timeline":** the properties sit IN the timeline, as rows directly under the selected clip's track,
+  not in a lane at the bottom of the timeline. A ▸ on that track's header opens it (the ruler's ◇
+  still does). The tracks below move down to make room. Each row is a lane of the timeline: its
+  keyframes sit as diamonds on the clip's span under the frames they key, where a key can be dragged
+  in time, double-clicked into being, or right-clicked for its menu. The track opens on what moves: a
+  section starts open when one of its properties is animated, and CLIP starts open when nothing is.
+  When another clip is chosen, the open rows travel to its track.)
 - **R-ANIM-4 A graph editor**: every animated parameter of the selection can be shown as its value
   curve over time, keyframes dragged in time and value, bezier handles dragged to shape speed and
   influence, and a right-click on a keyframe types the incoming / outgoing speed and influence or
@@ -249,6 +257,9 @@ The headline of this specification, and the reason it is not the first one.
   time) for rack nodes and effects, and inside the clip for a clip.
   (**AMENDED 2026-10-05, with R-ANIM-3:** the graph lives in the timeline's key lane only, under the
   selected clip, for every animated property of it — the Grade deck has no curves face.)
+  (**AMENDED 2026-10-07, with R-ANIM-3:** a property's curve opens INLINE, in a band under its row,
+  when the row is chosen. Choosing that row again closes it, and Ctrl/Shift adds curves to the same
+  band.)
 - **R-ANIM-6 Shapes animate too** (added 2026-10-05, user request; ✅ DR-ANIM-3): a tone curve, a colour wheel
   (hue, saturation, luminance — hue takes the short way round) and the crop are keyed like numbers;
   between two keys a curve's points are interpolated point by point (resampled when their counts
@@ -259,6 +270,9 @@ The headline of this specification, and the reason it is not the first one.
 - **R-ANIM-8 The key lane is usable at 1024×640** (added 2026-10-05, user request; ✅ DR-ANIM-4): its height is
   dragged at its top edge (remembered), its property list scrolls, and it never hides the tracks
   completely.
+  (**AMENDED 2026-10-07, with R-ANIM-3:** the rows sit under the clip's track, so their height is
+  dragged at their BOTTOM edge (remembered). They never take more than leaves the clip's track
+  showing above them. Opening scrolls the timeline so the track and its properties are in view.)
 - **R-ANIM-5 Animation is the rack's, like colour** (law 2): a curve is not a scalar, so a derived
   version cannot carry its own — it inherits the base's curves live, and a scalar `#tlgrade` delta
   still adds on top of the animated value.

@@ -1367,13 +1367,69 @@ not move when the base's curve does; effect and clip curves; a split keeps both 
 pins reading live curves, `set` never keying, clip curves not rendered. By hand: exposure −2 → 1.5
 eased and scale 1 → 1.6, three stills look right.
 
+### DR-ANIM-5 The properties sit under the clip's track (R-ANIM-3, R-ANIM-4, R-ANIM-8, amended 2026-10-07)
+This supersedes the lane-at-the-bottom layout described in DR-ANIM-2 and DR-ANIM-4. What a row keys,
+the graph's edits and the key menu are unchanged.
+
+**Opening.** The selected clip's track opens to the clip's properties. The control is a ▸ on that
+track's header (`app/widgets/Timeline.cpp:85`, painted at `:1162`, turning to ▾ as it opens), and the
+ruler's ◇ still opens it too.
+
+**Layout.** The one lane mapping makes the room. `laneTop` (`:254`) adds `gapAbove` (`:72`): the rows'
+live height, times a lane's eased distance past the opened track (clamped to 0…1). Every lane below
+moves down by exactly that much, so a lane sliding past the opened one never jumps. `laneAtY` (`:265`)
+inverts it, and a point inside the rows counts as the opened track.
+- The opened track is eased (`:776`). It is placed when the rows open, and travels when the chosen
+  clip is on another track.
+- The rows' segment is only their visible part. The timeline scrolls them partly out of view, and a
+  segment above the ruler would take its clicks, so the rest is the lane's own window offset
+  (`KeyLane::setWindow`).
+- Opening reveals the track and its rows, re-aimed every frame while it opens (`:820`).
+
+**The rows** (`app/widgets/KeyLane.cpp`). Each property is a timeline row.
+- Left: its name and its keying diamond, as before.
+- Right: its keyframes as diamonds on the clip's span, under the frames they key (`:504`), joined by a
+  line. A source key outside this clip's frames is drawn faded.
+- A key dragged along its row moves in time: `key set <a> --at t --to t'` (`:392`). It stays between
+  its neighbours on the file's millisecond grid, and the pointer is the animation.
+- A double-click on a row inside the clip keys it there (`:398`). A right-click on a key opens the key
+  menu.
+
+**Curves inline.** Choosing a row opens its curve in a band under it, eased per row: one band opens
+while the previous one closes. The KeyGraph sits in the front row's band (`:291`). Choosing the front
+row again closes it (`:445`), and Ctrl/Shift adds curves to the same band. The chosen row is re-revealed
+every frame while the bands move (`:167`).
+
+**Folding.** The rows open on what moves (`:97`): a section starts open when one of its properties is
+animated, and CLIP starts open when nothing is. A section the user folded or opened stays as they left
+it, and choosing a property opens its section.
+
+**Height.** The rows' own height, no taller than `keyLaneHeight` (80…600) nor than leaves the clip's
+track showing (`Timeline.cpp:57`). It is resized at its bottom edge (`:65`) and saved.
+
+**Guarded by** UI `testKeyframes` (`app/tests/ui/uiTests.cpp:1187`), 500 checks:
+- the ▸ on the chosen clip's track; the eased open; the rows directly under the track, with the tracks
+  below moved down to make room;
+- the quiet CLIP folded while GRADE (keyed) is open; Exposure's keys at 0 s and 3 s on the timeline;
+- the curve opening under the row, eased, its plot starting at the clip; a row drag to `--at 5 --to`;
+  a double-click keying Contrast at source 4; the front row closing again;
+- another track's clip moving the open rows there, eased; the bottom-edge grip; at 1024×640, the track
+  and its rows scrolled into view;
+- and the earlier graph, menu, multi-curve and shape checks, unchanged.
+
+Shots: `cut_key_lane` (Opacity's curve open), `cut_key_lane_rows`, `cut_key_lane_curve_mid`,
+`cut_key_lane_mid`, `cut_key_lane_grade` and `cut_key_lane_multi`, at both sizes.
+
+Mutants run red: no gap (the tracks overlap), the track move snapped, the curve band snapped, the row
+drag not dispatched, every section open, the opening not revealed.
+
 ### DR-ANIM-2 Animation is authored in the timeline's key lane (R-ANIM-3, R-ANIM-4, amended 2026-10-05)
 Grade carries no keyframe control: no diamond on its rows or effect parameters, no curves face in
 its deck (both were built and removed the same day at the user's request; cosmo's `SliderRow` and
 `ParamPanel` are back to their own code, so cosmo is untouched). Its sliders still edit an animated
 value where Grade stands (R-ANIM-3's `set` keying, the service's — editing, not animating).
-**The key lane** (`app/widgets/KeyLane.{h,cpp}`), opened by the ◇ toggle in the Cut ruler's header
-and revealed from the timeline's bottom (`Timeline.cpp:663`), belongs to the SELECTED clip
+**The key lane** (`app/widgets/KeyLane.{h,cpp}`) — since 2026-10-07 the rows under the clip's track,
+DR-ANIM-5; the layout below is superseded, what each row and the graph do is not — belongs to the SELECTED clip
 (`rebuild`, `KeyLane.cpp:35`): sections CLIP (opacity, position X/Y, scale, rotation — the clip's
 curves), GRADE (the 23 colour keys of its source, `ColourKeys.h` — the source's curves, law 1) and
 EFFECTS (its source's effects' mix and parameters). Each row's diamond — empty, outline, filled,
@@ -1432,7 +1488,7 @@ was copied (number vs shape checked). The key menu gains "Copy Key(s)"; a right-
 offers "Paste Keys at Playhead", "Paste Keys Here" and "Paste onto <front>" (`App.cpp:494`); Ctrl+C /
 Ctrl+V in the Cut tab copy and paste keys first when the lane holds a selection or the clipboard holds
 keys (`:754`). Model: `keyClipboardCount`, `keyClipboardCurves`.
-**The lane's size** (R-ANIM-8): `settings.keyLaneHeight` (80..600, persisted) is the lane's height,
+**The lane's size** (R-ANIM-8; resized at its BOTTOM edge since 2026-10-07, DR-ANIM-5): `settings.keyLaneHeight` (80..600, persisted) is the lane's height,
 eased when the model changes it; a 6-px band above the lane resizes it by direct manipulation and
 saves the height on release (`Timeline.cpp:410`); `keyLaneH()` (`:57`) never takes more than leaves
 one track showing, so at 1024×640 the tracks stay visible and the lane stays usable.

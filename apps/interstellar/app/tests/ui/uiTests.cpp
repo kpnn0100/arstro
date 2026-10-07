@@ -1182,6 +1182,8 @@ namespace
     /** R-ANIM-3/4 (amended): animation is authored in the timeline's key lane only — the selected
      *  clip's own properties, its source's colour keys and effects, a diamond each, the chosen one's
      *  graph under the clip; a keyframe's menu takes presets and typed numbers. Grade has none. */
+    void dblClick(Rig &r, double x, double y);   // defined with the editing tests
+
     void testKeyframes()
     {
         std::printf("keyframes: authored in the timeline's key lane, not in Grade\n");
@@ -1207,34 +1209,59 @@ namespace
             r.app->setTab(1);
             r.settle();
             auto tl = r.app->edit().timeline();
-            Point p = centre(*tl, tl->keysToggleRect());
+            // R-ANIM-3 (2026-10-07): the chosen clip's track opens to its properties — the ▸ on its header
+            const Rect ex = tl->expandToggleRect();
+            CHECK(ex.w > 0 && tl->laneRect(tl->expandedTrack()).contains(Point{tl->laneRect(tl->expandedTrack()).x, ex.y + ex.h * 0.5}),
+                  "the chosen clip's track header carries the ▸ that opens it");
+            Point p = centre(*tl, ex);
             r.click(p.x, p.y);
             const double ka = firstMoved(r, [&] { return tl->keyLaneAmount(); }, 0.0);
-            CHECK(strictlyBetween(ka, 0.0, 1.0), "the Keys toggle slides the key lane open (eased)");
+            CHECK(strictlyBetween(ka, 0.0, 1.0), "the track opens to its properties, eased");
             r.settle();
-            CHECK(tl->lanesRect().bottom() <= tl->keyLaneRect().y + 1e-6, "the lanes give the lane its room; nothing overlaps");
+            const Rect trk = tl->laneRect(tl->expandedTrack()), kr = tl->keyLaneRect();
+            CHECK(std::fabs(kr.y - trk.bottom()) < 1e-6, "the properties sit directly under the clip's track");
+            std::string below;
+            for (const auto &t : r.svc.m.tracks) if (t.order == 0 && t.audio) below = t.id;   // the first track drawn under the video
+            bool pushed = false;
+            for (const auto &t : r.svc.m.tracks)
+                if (t.id != tl->expandedTrack() && tl->laneRect(t.id).y > trk.y) pushed = pushed || std::fabs(tl->laneRect(t.id).y - kr.bottom()) < 1e-6;
+            CHECK(pushed, "…and the tracks below move down to make room: nothing overlaps");
             auto kl = tl->keyLane();
             CHECK(kl->sectionRow("CLIP") >= 0 && kl->sectionRow("GRADE") >= 0 && kl->sectionRow("EFFECTS") >= 0,
-                  "the lane lists the clip's properties, its source's colour keys and its effects");
+                  "it lists the clip's properties, its source's colour keys and its effects");
             CHECK(std::fabs(kl->now() - 3.0) < 1e-9, "it keys at the playhead, on the clip's footage clock (in 2.0 + 1.0)");
-            // a colour key: the source's, keyed from the timeline at the playhead
-            const int expo = kl->rowOf("s_day01.basic.exposure"), contrast = kl->rowOf("s_day01.basic.contrast");
+            const int expo = kl->rowOf("s_day01.basic.exposure"), contrast = kl->rowOf("s_day01.basic.contrast"), opac = kl->rowOf("c1.opacity");
             CHECK(expo >= 0 && kl->row(expo).state == 1 && kl->row(contrast).state == 0, "Exposure is animated (outline), Contrast is not");
-            kl->select("s_day01.basic.exposure");
+            CHECK(kl->rowRect(expo).h > 1.0 && kl->rowRect(opac).h < 1.0, "it opens on what moves: GRADE (Exposure is keyed) open, the quiet CLIP folded");
+            // every key on its property's row, under the frame it keys (source 2.0 = the clip's first frame)
+            const double kx = kl->worldTransform().apply(kl->keyPoint(expo, 0)).x, cx = tl->worldTransform().apply(Point{tl->timeToX(0.0), 0}).x;
+            const double kx1 = kl->worldTransform().apply(kl->keyPoint(expo, 1)).x, cx1 = tl->worldTransform().apply(Point{tl->timeToX(3.0), 0}).x;
+            CHECK(std::fabs(kx - cx) < 1e-6 && std::fabs(kx1 - cx1) < 1e-6, "Exposure's keys sit on its row under the frames they key (0 s and 3 s on the timeline)");
+            // choosing a row opens its curve under it, eased
+            p = centre(*kl, kl->rowRect(expo));
+            r.click(p.x, p.y);
+            const double band = firstMoved(r, [&] { return kl->bandAmount(expo); }, 0.0);
+            CHECK(strictlyBetween(band, 0.0, 1.0), "clicking Exposure opens its curve under its row, eased");
             r.settle();
             auto g = kl->graph();
-            CHECK(g->curveCount() == 1 && g->selectedAddress() == "s_day01.basic.exposure", "choosing Exposure shows the source's exposure curve");
-            const double x0 = g->worldTransform().apply(Point{g->plotRect().x, 0}).x, cx = tl->worldTransform().apply(Point{tl->timeToX(0.0), 0}).x;
-            CHECK(std::fabs(x0 - cx) < 1e-6, "its plot starts where the clip starts on the timeline: keys sit under their frames");
+            CHECK(g->curveCount() == 1 && g->selectedAddress() == "s_day01.basic.exposure" && std::fabs(g->worldTransform().apply(Point{0, 0}).y -
+                                                                                                        kl->worldTransform().apply(Point{0, kl->bandRect(expo).y}).y) < 1e-6,
+                  "…the source's exposure curve, in the band under the row");
+            const double x0 = g->worldTransform().apply(Point{g->plotRect().x, 0}).x;
+            CHECK(std::fabs(x0 - cx) < 1e-6, "its plot starts where the clip starts on the timeline");
+            // a key dragged along its row moves in time
             r.svc.lines.clear();
-            Rect d = kl->diamondRect(contrast);
-            kl->select("s_day01.basic.contrast");
+            const Point k1 = kl->worldTransform().apply(kl->keyPoint(expo, 1));
+            r.drag(k1.x, k1.y, k1.x - 24.0, k1.y);
+            const std::string mv = withPrefix(r.svc, "key set s_day01.basic.exposure --at 5 --to ");
+            CHECK(!mv.empty() && mv.find("--value") == std::string::npos, "dragging a key along its row moves it in time: key set … --at 5 --to <earlier>");
             r.settle();
-            d = kl->diamondRect(contrast);
-            p = centre(*kl, d);
-            if (d.bottom() > kl->height.value())   // scroll it into view first (the list scrolls, R6)
+            // the Contrast diamond keys the SOURCE at the playhead; a double-click on its row keys it there
+            r.svc.lines.clear();
+            p = centre(*kl, kl->diamondRect(contrast));
+            if (kl->diamondRect(contrast).bottom() > kl->height.value())   // the rows scroll inside the lane (R6)
             {
-                const Point in = centre(*kl, kl->rowRect(kl->sectionRow("CLIP")));
+                const Point in = centre(*kl, kl->rowRect(kl->sectionRow("GRADE")));
                 for (int k = 0; k < 20 && kl->diamondRect(contrast).bottom() > kl->height.value(); ++k)
                 {
                     r.app->wheel(in.x, in.y, -3.0);
@@ -1247,13 +1274,26 @@ namespace
             CHECK(hasLine(r.svc, "key add s_day01.basic.contrast --at 3"), "the Contrast diamond keys the SOURCE's contrast at the playhead (key add … --at 3)");
             const double df = firstMoved(r, [&] { return kl->diamondFill(contrast); }, 0.0);
             CHECK(kl->row(contrast).state == 2 && strictlyBetween(df, 0.0, 1.0), "its diamond fills, eased");
-            // folding a section is eased presentation
+            r.settle();
+            r.svc.lines.clear();
+            const Rect cr = kl->rowRect(contrast);
+            const Point dbl = kl->worldTransform().apply(Point{tl->timeToX(2.0), cr.y + cr.h * 0.5});
+            dblClick(r, dbl.x, dbl.y);
+            CHECK(hasLine(r.svc, "key add s_day01.basic.contrast --at 4"), "double-clicking Contrast's row at 2 s on the timeline keys it there (source 4.0)");
+            // the front row clicked again closes its curve; folding a section is eased presentation
+            kl->select("s_day01.basic.exposure");   // the double-click's first click chose Contrast
+            r.settle();
+            r.svc.lines.clear();
+            p = centre(*kl, kl->rowRect(expo));
+            r.click(p.x, p.y);
+            const double shut = firstMoved(r, [&] { return kl->bandAmount(expo); }, 1.0);
+            CHECK(strictlyBetween(shut, 0.0, 1.0) && kl->selected().empty() && r.svc.lines.empty(), "Exposure clicked again closes its curve, eased, dispatching nothing");
+            r.settle();
             const int grade = kl->sectionRow("GRADE");
             p = centre(*kl, kl->rowRect(grade));
             if (kl->rowRect(grade).y >= 0 && kl->rowRect(grade).bottom() <= kl->height.value())
             {
                 const double h0 = kl->rowRect(expo).h;
-                r.svc.lines.clear();
                 r.click(p.x, p.y);
                 const double h1 = firstMoved(r, [&] { return kl->rowRect(expo).h; }, h0);
                 CHECK(strictlyBetween(h1, 0.0, h0) && r.svc.lines.empty(), "folding GRADE eases its rows shut and dispatches nothing");
@@ -1380,7 +1420,27 @@ namespace
             cm->close();
         }
         {
-            // R-ANIM-8: the lane is resized at its top edge, the height saved, and never hides every track
+            // a clip chosen on another track: the open lane travels there, eased — the tracks between slide
+            Rig r(1440, 900, withCurve);
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            const std::string from = tl->expandedTrack();
+            std::string other;
+            for (const auto &c : r.svc.m.clips)
+                if (!c.audio && c.track != from && other.empty()) { other = c.id; r.svc.m.selectedClip = c.id; }
+            ++r.svc.m.revision;
+            const double l0 = tl->expandedLaneLive();
+            const double mid = firstMoved(r, [&] { return tl->expandedLaneLive(); }, l0);
+            CHECK(!other.empty() && tl->expandedTrack() != from && std::fabs(mid - l0) > 1e-6 && std::fabs(mid - std::round(mid)) > 1e-6,
+                  "choosing a clip on another track moves the open lane there, eased");
+            r.settle();
+            CHECK(std::fabs(tl->keyLaneRect().y - tl->laneRect(tl->expandedTrack()).bottom()) < 1e-6, "…to sit under that clip's track");
+        }
+        {
+            // R-ANIM-8: the lane is resized at its bottom edge, the height saved, and never hides the clip's track
             Rig r(1440, 900, [](FakeService &s) { s.edit(); s.m.selectedClip = "c1"; });
             r.app->setTab(1);
             r.settle();
@@ -1389,15 +1449,18 @@ namespace
             r.settle();
             const double h0 = tl->keyLaneH();
             const Rect gb = tl->keyLaneGrabRect();
+            CHECK(std::fabs(gb.y - tl->keyLaneRect().bottom()) < 1e-6, "the grip is the lane's bottom edge");
             const Point a0 = centre(*tl, gb);
             r.svc.lines.clear();
-            r.drag(a0.x, a0.y, a0.x, a0.y - 40.0);
-            CHECK(tl->keyLaneH() > h0 + 30.0, "dragging the lane's top edge up makes it taller (direct manipulation)");
+            r.drag(a0.x, a0.y, a0.x, a0.y + 40.0);
+            CHECK(tl->keyLaneH() > h0 + 30.0, "dragging the lane's bottom edge down makes it taller (direct manipulation)");
             CHECK(!withPrefix(r.svc, "settings set keyLaneHeight=").empty(), "…and the height is saved: settings set keyLaneHeight=<px>");
             r.svc.m.settings.keyLaneHeight = 600;   // more than the window can give
             ++r.svc.m.revision;
             r.settle();
-            CHECK(tl->lanesRect().h >= arstro::interstellar_v1::shell::trackH() - 1e-6, "however tall it is asked to be, one track still shows");
+            const Rect trk = tl->laneRect(tl->expandedTrack());
+            CHECK(trk.y >= arstro::interstellar_v1::shell::rulerH() - 1e-6 && tl->keyLaneRect().y >= trk.bottom() - 1e-6,
+                  "however tall it is asked to be, the clip's track still shows above its properties");
         }
         {
             Rig r(1024, 640, [](FakeService &s) { s.edit(); s.m.selectedClip = "c1"; });
@@ -1406,8 +1469,11 @@ namespace
             auto tl = r.app->edit().timeline();
             tl->setKeysShown(true);
             r.settle();
-            CHECK(tl->lanesRect().h >= arstro::interstellar_v1::shell::trackH() - 1e-6 && tl->keyLaneH() >= 80.0 - 1e-6,
-                  "at 1024x640 the lane leaves a track showing and keeps a usable height");
+            const Rect trk = tl->laneRect(tl->expandedTrack());
+            std::printf("      1024: track y %.1f h %.1f, lane %.1f..%.1f (h %.1f), deck h %.1f\n", trk.y, trk.h, tl->keyLaneRect().y, tl->keyLaneRect().bottom(), tl->keyLaneH(), tl->height.value());
+            CHECK(trk.y >= arstro::interstellar_v1::shell::rulerH() - 1e-6 && tl->keyLaneH() >= 80.0 - 1e-6 &&
+                      tl->keyLaneRect().bottom() <= tl->height.value() + 1e-6,
+                  "at 1024x640 opening scrolls the clip's track and its properties into view, at a usable height");
         }
         {
             // R-ANIM-6: a shape — the lane lists it; the graph keys it on a row, in time only; Grade edits it

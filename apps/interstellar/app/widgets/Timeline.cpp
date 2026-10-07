@@ -56,20 +56,37 @@ namespace interstellar_v1
     Rect Timeline::keysToggleRect() const { return Rect{shell::headerWidth() - 9.75 - 18.0, (shell::rulerH() - 18.0) * 0.5, 18.0, 18.0}; }
     double Timeline::keyLaneH() const
     {
-        const double room = height.value() - shell::rulerH() - shell::trackH();   // one track always shows
-        return std::clamp(mLaneH.value(), std::min(kKeyLaneMinH, std::max(0.0, room)), std::max(0.0, room));
+        // its rows' height, no taller than asked (R-ANIM-8) nor than leaves the clip's track above it
+        const double room = height.value() - shell::rulerH() - shell::trackH();
+        const double asked = std::clamp(mLaneH.value(), kKeyLaneMinH, 600.0);
+        return std::max(0.0, std::min({mKeyLaneW->contentHeight(), asked, std::max(kKeyLaneMinH, room)}));
     }
 
     Rect Timeline::keyLaneGrabRect() const
     {
+        // the band under the lane, over the top of the track it pushed down
         const Rect r = keyLaneRect();
-        return Rect{0.0, r.y - 6.0, width.value(), 6.0};
+        return Rect{0.0, r.bottom(), width.value(), 6.0};
+    }
+
+    double Timeline::gapAbove(double laneLive) const
+    {
+        // a lane below the opened track is pushed down by the lane's live height — a smooth function of
+        // the eased lane positions, so a lane sliding past the opened one never jumps
+        return keyLaneH() * mKeyLane.value() * std::clamp(laneLive - mExpLane.value(), 0.0, 1.0);
     }
 
     Rect Timeline::keyLaneRect() const
     {
         const double h = keyLaneH() * mKeyLane.value();
-        return Rect{0.0, height.value() - h, width.value(), h};
+        return Rect{0.0, laneTop(mExpLane.value()) + shell::trackH(), width.value(), h};
+    }
+
+    Rect Timeline::expandToggleRect() const
+    {
+        if (!mKeyClip) return Rect{0, 0, 0, 0};
+        const double y = laneTop(mExpLane.value());
+        return Rect{shell::headerWidth() - 8.0 - 14.0, y + (shell::trackH() - 14.0) * 0.5, 14.0, 14.0};
     }
 
     // ── model in ─────────────────────────────────────────────────────────────────────────
@@ -230,11 +247,14 @@ namespace interstellar_v1
     Rect Timeline::rulerRect() const { return Rect{shell::headerWidth(), 0, std::max(0.0, width.value() - shell::headerWidth()), shell::rulerH()}; }
     Rect Timeline::lanesRect() const
     {
-        // the key lane, when it is up, takes the bottom (its live eased height)
+        // the key lane opens BETWEEN tracks (gapAbove), so the lanes keep the whole deck
         return Rect{shell::headerWidth(), shell::rulerH(), std::max(0.0, width.value() - shell::headerWidth()),
-                    std::max(0.0, height.value() - shell::rulerH() - keyLaneH() * mKeyLane.value())};
+                    std::max(0.0, height.value() - shell::rulerH())};
     }
-    double Timeline::laneTop(double laneLive) const { return shell::rulerH() + laneLive * shell::trackH() - mVScroll.value(); }
+    double Timeline::laneTop(double laneLive) const
+    {
+        return shell::rulerH() + laneLive * shell::trackH() + gapAbove(laneLive) - mVScroll.value();
+    }
     Rect Timeline::laneRect(const std::string &trackId) const
     {
         // where the lane is DRAWN now (its eased position), not where it is going
@@ -242,7 +262,14 @@ namespace interstellar_v1
         const double lane = (it != mTrackAnims.end() && it->second.placed) ? it->second.lane.value() : laneOfTrack(trackId);
         return Rect{shell::headerWidth(), laneTop(lane), lanesRect().w, shell::trackH()};
     }
-    int Timeline::laneAtY(double y) const { return (int)std::floor((y - shell::rulerH() + mVScroll.value()) / shell::trackH()); }
+    int Timeline::laneAtY(double y) const
+    {
+        // the inverse of laneTop: inside the opened lane counts as the track it opened under
+        const int n = (int)mTracks.size();
+        for (int l = 0; l < n; ++l)
+            if (y < laneTop(l) + shell::trackH()) return y >= laneTop(l) ? l : (int)std::lround(mExpLane.value());
+        return n + (int)std::floor((y - laneTop(n)) / shell::trackH());
+    }
 
     const Timeline::ClipAnim *Timeline::animFor(const std::string &id) const
     {
@@ -377,6 +404,7 @@ namespace interstellar_v1
         case Gesture::Type::Down:
         {
             if (zoomOutRect().contains(local) || zoomInRect().contains(local) || keysToggleRect().contains(local)) return true;
+            if (expandToggleRect().contains(local)) return true;
             if (mKeyLane.value() > 0.5 && keyLaneGrabRect().contains(local)) { mLaneDragging = true; return true; }   // R-ANIM-8
             if (rulerRect().contains(local) && mDuration > 0.0)
             {
@@ -441,9 +469,8 @@ namespace interstellar_v1
         {
             if (mLaneDragging)
             {
-                // the pointer is the animation: the lane's top edge follows it
-                const double room = height.value() - shell::rulerH() - shell::trackH();
-                const double h = std::clamp(height.value() - local.y, std::min(kKeyLaneMinH, room), std::max(kKeyLaneMinH, std::min(600.0, room)));
+                // the pointer is the animation: the lane's bottom edge follows it
+                const double h = std::clamp(local.y - keyLaneRect().y, kKeyLaneMinH, 600.0);
                 mLaneH.set(h);
                 mLaneHTarget = mLaneHLast = h;
                 return true;
@@ -556,7 +583,7 @@ namespace interstellar_v1
         }
         case Gesture::Type::Click:
         {
-            if (keysToggleRect().contains(local)) { mKeysWanted = !mKeysWanted; return true; }
+            if (keysToggleRect().contains(local) || expandToggleRect().contains(local)) { mKeysWanted = !mKeysWanted; return true; }
             if (zoomOutRect().contains(local)) { zoomBy(1.0 / kZoomStep, timeToX(mPlayhead)); return true; }
             if (zoomInRect().contains(local)) { zoomBy(kZoomStep, timeToX(mPlayhead)); return true; }
             if (rulerRect().contains(local)) return true;   // the press already moved the playhead
@@ -746,30 +773,52 @@ namespace interstellar_v1
         mLaneH.update(nowMs);
         {
             const bool want = mKeysWanted && mKeyClip;
+            // the track it opens under: placed when it opens, eased when the chosen clip changes track
+            const int lane = mKeyClip ? std::max(0, laneOfTrack(mKeyClipData.track)) : (int)std::lround(mExpLane.value());
+            if (mExpLaneL < 0 || (mKeyLane.value() < 0.001 && !mKeyLaneApplied)) { mExpLane.set(lane); mExpLaneL = lane; }
+            else if (lane != mExpLaneL)
+            {
+                mExpLane.animateTo(lane, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
+                mExpLaneL = lane;
+                mRevealLane = mKeyLane.value() > 0.001;   // the open lane travels with the chosen clip, kept in view
+            }
+            mExpLane.update(nowMs);
             if (want != mKeyLaneApplied)
             {
                 mKeyLane.animateTo(want ? 1.0 : 0.0, motion::kSlideMs, Easing::EaseOutCubic, nowMs);
                 mKeyLaneApplied = want;
+                // opening: the track and its rows come into view together (the tracks scroll, eased) —
+                // re-aimed every frame while it opens, since the room it scrolls into is still growing
+                mRevealLane = want;
             }
             mKeyLane.update(nowMs);
-            // the lane: a fixed height revealed from the bottom (it never squashes); its graph's plot
-            // is the selected clip, on the timeline's own x
+            // the lane fills the room it opened under the track; only its visible part is a segment
+            // (above the ruler or below the deck it would take clicks that are not its), the rest is
+            // its own window offset
             const Rect kl = keyLaneRect();
             const double ka = mKeyLane.value();
+            const double top = std::max(kl.y, shell::rulerH()), bottom = std::min(kl.bottom(), height.value());
             mKeyLaneW->x.set(0);
-            mKeyLaneW->y.set(kl.y);
+            mKeyLaneW->y.set(top);
             mKeyLaneW->width.set(width.value());
-            mKeyLaneW->height.set(keyLaneH());
-            mKeyLaneW->opacity.set(ka);
-            mKeyLaneW->visible = ka > 0.001 && mKeyClip;
+            mKeyLaneW->height.set(std::max(0.0, bottom - top));
+            mKeyLaneW->setWindow(keyLaneH(), top - kl.y);
+            mKeyLaneW->opacity.set(std::min(1.0, ka * 1.5));
+            mKeyLaneW->visible = ka > 0.001 && mKeyClip && bottom > top + 0.5;
             mKeyLaneW->setColumnWidth(shell::headerWidth());
+            mKeyLaneW->setPlayheadX(timeToX(mShownPlayhead.value()));
             if (mKeyClip)
             {
                 const double dur = mKeyClipData.duration > 0 ? mKeyClipData.duration : (mKeyClipData.out - mKeyClipData.in) / std::max(1e-6, mKeyClipData.speed);
                 mKeyLaneW->setClipSpan(timeToX(mKeyClipData.at), timeToX(mKeyClipData.at + dur));
             }
         }
-        mVScroll.setExtent(shell::rulerH(), lanesRect().h, (double)mTracks.size() * shell::trackH());
+        mVScroll.setExtent(shell::rulerH(), lanesRect().h, (double)mTracks.size() * shell::trackH() + keyLaneH() * mKeyLane.value());
+        if (mRevealLane)
+        {
+            mVScroll.reveal(mExpLane.value() * shell::trackH(), shell::trackH() + keyLaneH() * mKeyLane.value());
+            mRevealLane = mKeyLane.isAnimating() || mExpLane.isAnimating();
+        }
         mVScroll.advance(nowMs);
         for (auto &cs : mCacheSegs)
         {
@@ -1108,6 +1157,19 @@ namespace interstellar_v1
             if (tk.audio) glyph::speaker(t, Rect{9.75, cy - 5.5, 11, 11}, gc);
             else glyph::film(t, Rect{9.75, cy - 5.5, 11, 11}, gc);
             double right = hw - 8.0;
+            if (mKeyClip && tk.id == mKeyClipData.track && !tk.audio)
+            {
+                // R-ANIM-3: the chosen clip's track opens to its properties — ▸ turns to ▾ with the lane
+                const Rect b{hw - 8.0 - 14.0, cy - 7.0, 14.0, 14.0};
+                const double open = mKeyLane.value(), a = (1.0 - open) * -1.5707963;
+                const double cx = b.x + 7.0;
+                auto pt = [&](double x, double yy) { return Point{cx + x * std::cos(a) - yy * std::sin(a), cy + x * std::sin(a) + yy * std::cos(a)}; };
+                const Point p0 = pt(-3.5, -1.75), p1 = pt(3.5, -1.75), p2 = pt(0.0, 2.75);
+                t.beginPath(); t.moveTo(p0.x, p0.y); t.lineTo(p1.x, p1.y); t.lineTo(p2.x, p2.y); t.closePath();
+                t.setFill(lerpColor(palette::mutedForeground(), palette::primary(), open));
+                t.fillPath();
+                right = b.x - 4.0;
+            }
             if (tk.mute)
             {
                 const Rect chip{right - 14.0, cy - 6.5, 14.0, 13.0};

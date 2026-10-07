@@ -205,7 +205,31 @@ namespace
                     const std::string n = c.name.empty() ? c.id : c.name;
                     s.animate(n + ".opacity", {{c.in, 0.0}, {c.in + (c.out - c.in) * 0.4, 1.0}, {c.out, 0.6}});
                 }
-        }, [](Rig &r) { r.app->setTab(1); r.settle(); r.app->edit().timeline()->setKeysShown(true); r.settle(); }});
+        }, [](Rig &r) {
+            // R-ANIM-3 (2026-10-07): the clip's track opened to its properties, Opacity's curve opened under its row
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            tl->keyLane()->select(tl->keyLane()->row(1).address);
+            r.settle();
+        }});
+        v.push_back({"cut_key_lane_rows", animated, [](Rig &r) {   // the rows alone: every key on its property's row
+            r.app->setTab(1);
+            r.settle();
+            r.app->edit().timeline()->setKeysShown(true);
+            r.settle();
+        }});
+        v.push_back({"cut_key_lane_curve_mid", animated, [](Rig &r) {   // a curve opening under its row, mid-ease
+            r.app->setTab(1);
+            r.settle();
+            auto tl = r.app->edit().timeline();
+            tl->setKeysShown(true);
+            r.settle();
+            tl->keyLane()->select("s_day01.basic.exposure");
+            r.pump(110);
+        }});
         v.push_back({"grade_plugins_effect", edit, [](Rig &r) {
             r.settle();
             r.app->edit().gradeInspector()->plugins()->select("ef_1");

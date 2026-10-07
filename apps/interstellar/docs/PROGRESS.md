@@ -58,6 +58,7 @@ one integrator who moves, wires, tests and commits each stream:
       hardware video — DONE (DR-PLAY-3); the graded preview cache — DONE (DR-PLAY-1). Keyframes: curves,
       the grammar and the render path — DONE (DR-ANIM-1); the diamonds, the graph editor and the key menu —
       DONE (DR-ANIM-2). The 2026-10-05 request is complete.
+- [x] **2026-10-07: property animation under the clip's track** (R-ANIM-3/4/8 amended) — DR-ANIM-5.
 - [x] **The 2026-10-05 film request** ("implement all the features you suggest" + three fixes). One
       commit per line, in this order — each line's R- tags are in REQUIREMENTS.md:
       1. [x] Animation authored in the timeline only: no diamonds/curves in Grade; the Cut key lane
@@ -139,6 +140,14 @@ one integrator who moves, wires, tests and commits each stream:
 ---
 
 ## Decisions log (newest first)
+
+**2026-10-07 — a property's animation sits under its clip's track, not in a lane at the bottom.** The
+user asked for animation to sit with the timeline. Of three layouts offered (rows under the clip's
+track, a dope sheet in the bottom lane, diamonds in the inspector), they chose rows under the track.
+- The timeline's single lane mapping (`laneTop`) makes the room, so every lane, clip, drop and hit
+  test moves with it and none can disagree.
+- Each property row shows its keys where the frames are, and a curve opens inline only when asked.
+- Sections start open on what is animated, so opening a clip's track shows what moves first.
 
 **2026-10-05 — DCP and IMF track files come from our own MXF writer, laid out as asdcplib lays them.**
 FFmpeg 4.4's MXF muxer writes no RGBA or JPEG 2000 sub-descriptor and refuses multichannel OP-Atom
