@@ -33,9 +33,39 @@ namespace cosmo_v2
     void SliderRow::setSubValueOffset(double offset) { mSlider->setSubValueOffset(offset); }
     void SliderRow::setTrackGradient(const Color &left, const Color &right) { mSlider->setTrackGradient(left, right); }
 
+    Rect SliderRow::keyRect() const { return Rect{width.value() - kKeyGutter, 0.0, kKeyGutter, kRowHeight}; }
+
+    void SliderRow::advance(double nowMs)
+    {
+        if (mKeyGutter && mKeyWanted != mKeyApplied)
+        {
+            const double fill = mKeyWanted == 2 ? 1.0 : 0.0, line = mKeyWanted == 0 ? 0.0 : 1.0;
+            if (mKeyApplied < 0) { mKeyFill.set(fill); mKeyLine.set(line); }   // first placement: nowhere to travel from
+            else
+            {
+                mKeyFill.animateTo(fill, 180.0, Easing::EaseOutCubic, nowMs);
+                mKeyLine.animateTo(line, 180.0, Easing::EaseOutCubic, nowMs);
+            }
+            mKeyApplied = mKeyWanted;
+        }
+        mKeyFill.update(nowMs);
+        mKeyLine.update(nowMs);
+        Segment::advance(nowMs);
+    }
+
+    bool SliderRow::handleGesture(const Gesture &g, const Point &local)
+    {
+        if (mKeyGutter && g.type == Gesture::Type::Click && keyRect().contains(local))
+        {
+            if (onKeyClick) onKeyClick();
+            return true;
+        }
+        return Segment::handleGesture(g, local);
+    }
+
     void SliderRow::layout()
     {
-        const double w = width.value();
+        const double w = width.value() - (mKeyGutter ? kKeyGutter : 0.0);
         const double trackW = w - kLabelWidth - kGap - kValueWidth - kGap;
         mSlider->x.set(kLabelWidth + kGap);
         mSlider->y.set((kRowHeight - mSlider->height.value()) * 0.5);
@@ -52,10 +82,25 @@ namespace cosmo_v2
         char buf[32];
         std::snprintf(buf, sizeof(buf), v > 0 ? "+%d" : "%d", (int)std::lround(v));
         const std::string text(buf);
-        const double vw = width.value();
+        const double vw = width.value() - (mKeyGutter ? kKeyGutter : 0.0);
         const double tx = vw - estimateTextWidth(text, 10.0);
         t.setFill(palette::mutedForeground());
         t.drawText(text, tx, h * 0.5 + 10.0 * 0.35, 10.0, font::mono());
+        if (mKeyGutter)
+        {
+            // the diamond: a faint outline (no curve) → an outline (animated) → filled (a key here)
+            const double cx = width.value() - kKeyGutter * 0.5, cy = h * 0.5, r = 4.0;
+            const double line = mKeyLine.value(), fill = mKeyFill.value();
+            const Color outline = lerpColor(palette::whiteAlpha(0.22), palette::foreground(), line);
+            auto diamond = [&] {
+                t.beginPath();
+                t.moveTo(cx, cy - r); t.lineTo(cx + r, cy); t.lineTo(cx, cy + r); t.lineTo(cx - r, cy); t.closePath();
+            };
+            if (fill > 0.01) { diamond(); t.setFill(palette::primaryAlpha(fill)); t.fillPath(); }
+            diamond();
+            t.setStroke(outline, 1.0);
+            t.strokePath();
+        }
     }
 }
 }

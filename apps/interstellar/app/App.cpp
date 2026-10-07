@@ -1,4 +1,5 @@
 #include "App.h"
+#include "widgets/KeyState.h"
 #include <filesystem>
 #include "widgets/CommandLine.h"
 #include <algorithm>
@@ -129,6 +130,7 @@ namespace interstellar_v1
         };
         mEdit->gradeInspector()->onAddEffect = [this](Rect r) { openAddEffectMenu(r); };
         mEdit->gradeInspector()->onPluginContext = [this](const std::string &id, Point w) { openPluginContext(id, w); };
+        mEdit->gradeInspector()->onMarkMenu = [this](const std::string &a, Point w) { openMarkMenu(a, w); };
         // a LUT effect's file row (R-COLOR-5): the host picks the .cube, the line sets it
         mEdit->gradeInspector()->effectPanel()->onChooseFile = [this](const std::string &id, const std::string &key) {
             if (onPickLutToOpen)
@@ -732,20 +734,24 @@ namespace interstellar_v1
      *  the front property. */
     void App::openAnimateMenu(Rect at, const std::string &group)
     {
-        // R-ANIM-3: only what is animated has a row; this is how a property becomes animated — keyed at
-        // the playhead (on the clip's footage clock), its row easing in with its curve open
+        // R-ANIM-9: what the chosen clip (or, with none, Grade's source) does not animate yet — marked in
+        // its default mode (an offset changes nothing on screen, R-ANIM-10), its lane easing in, curve open
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         auto kl = mEdit->timeline()->keyLane();
+        std::vector<keys::Prop> all;
+        for (const auto &c : m.clips)
+            if (c.id == m.selectedClip && !c.audio && !c.nested) all = keys::clipProps(m, c);
+        if (all.empty() && m.selectedRack >= 0 && m.selectedRack < (int)m.rack.size()) all = keys::sourceProps(m, m.rack[(size_t)m.selectedRack].rackObj);
         std::vector<std::string> groups;
         std::map<std::string, std::vector<std::pair<std::string, std::string>>> props;   // group → (label, address)
-        for (int i = 0; i < kl->rowCount(); ++i)
+        for (const auto &p : all)
         {
-            const auto &r = kl->row(i);
-            if (r.state > 0) continue;
-            if (!props.count(r.group)) groups.push_back(r.group);
-            props[r.group].emplace_back(r.label, r.address);
+            if (keys::animOf(m, p.node, p.key)) continue;
+            if (!props.count(p.group)) groups.push_back(p.group);
+            props[p.group].emplace_back(p.label, p.address);
         }
         auto animate = [this, kl](const std::string &address) {
-            dispatch("key add " + cmd::quote(address) + " --at " + cmd::num(kl->now()));
+            dispatch(keys::mark(address));
             kl->select(address);
         };
         std::vector<cosmo_v2::ContextMenu::Item> items;
@@ -759,7 +765,7 @@ namespace interstellar_v1
                 else               // a panel or an effect: its properties as a second step, in the same place
                     items.push_back({g + "  \xE2\x80\xBA", [this, at, g] { openAnimateMenu(at, g); }});
             }
-        if (items.empty()) items.push_back({"Everything here is animated", [] {}});
+        if (items.empty()) items.push_back({all.empty() ? "Choose a clip or a source first" : "Everything here is animated", [] {}});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y + at.h);
         noteActivity();
     }
@@ -770,7 +776,35 @@ namespace interstellar_v1
         std::vector<cosmo_v2::ContextMenu::Item> items;
         if (kl->selected() == address) items.push_back({"Hide Curve", [kl] { kl->closeCurve(); }});
         else items.push_back({"Show Curve", [kl, address] { kl->select(address); }});
-        // the inverse of Animate…: the curve goes, the value it has now stays (key clear)
+        const int i = kl->rowOf(address);
+        if (i >= 0) appendModeItems(items, address, kl->row(i).mode, kl->row(i).prop.fixedOnly);
+        // the inverse of marking: the curve goes, the value it has now stays (key clear)
+        items.push_back({"Remove Animation", [this, address] { dispatch("key clear " + cmd::quote(address)); }});
+        mEdit->contextMenu()->open(std::move(items), at.x, at.y);
+        noteActivity();
+    }
+
+    void App::appendModeItems(std::vector<cosmo_v2::ContextMenu::Item> &items, const std::string &address, const std::string &mode, bool fixedOnly)
+    {
+        // R-ANIM-10: the mode, the current one bulleted; switching keeps the picture (`key mode`)
+        // (a bullet, not a tick: the embedded Roboto has no U+2713)
+        if (fixedOnly) { items.push_back({"\xE2\x80\xA2 Fixed (a shape or a clip's own)", [] {}}); return; }
+        const char *tick = "\xE2\x80\xA2 ", *none = "   ";
+        items.push_back({std::string(mode == "offset" ? tick : none) + "Offset \xE2\x80\x94 rides on Grade's value",
+                         [this, address, mode] { if (mode != "offset") dispatch("key mode " + cmd::quote(address) + " offset"); }});
+        items.push_back({std::string(mode == "fixed" ? tick : none) + "Fixed \xE2\x80\x94 the keys are the value",
+                         [this, address, mode] { if (mode != "fixed") dispatch("key mode " + cmd::quote(address) + " fixed"); }});
+    }
+
+    void App::openMarkMenu(const std::string &address, Point at)
+    {
+        // R-ANIM-9: Grade's mark on a marked parameter — its mode, or unmark it
+        const auto &m = mHooks.model ? mHooks.model() : emptyModel();
+        std::string mode = "offset";
+        for (const auto &a : m.anims)
+            if (a.address == address) mode = a.mode;
+        std::vector<cosmo_v2::ContextMenu::Item> items;
+        appendModeItems(items, address, mode, false);
         items.push_back({"Remove Animation", [this, address] { dispatch("key clear " + cmd::quote(address)); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
@@ -781,12 +815,12 @@ namespace interstellar_v1
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.keyClipboardCount <= 0) return;
         auto tl = mEdit->timeline();
-        const double now = tl->keyLane()->now();
+        const double now = tl->keyLane()->now();   // -1: the playhead is not over a clip of the front lane's object
         std::vector<cosmo_v2::ContextMenu::Item> items;
-        items.push_back({"Paste Keys at Playhead  (Ctrl+V)", [this, now] { dispatch("key paste --at " + cmd::num(now)); }});
+        if (now >= 0) items.push_back({"Paste Keys at Playhead  (Ctrl+V)", [this, now] { dispatch("key paste --at " + cmd::num(now)); }});
         items.push_back({"Paste Keys Here", [this, t] { dispatch("key paste --at " + cmd::num(t)); }});
         const std::string front = tl->keyLane()->selected();
-        if (m.keyClipboardCurves == 1 && !front.empty())
+        if (m.keyClipboardCurves == 1 && !front.empty() && now >= 0)
             items.push_back({"Paste onto " + front, [this, front, now] { dispatch("key paste --to " + cmd::quote(front) + " --at " + cmd::num(now)); }});
         mEdit->contextMenu()->open(std::move(items), at.x, at.y);
         noteActivity();
@@ -1187,9 +1221,10 @@ namespace interstellar_v1
                 if (KeyGraph *g = keyGraphShown())
                 {
                     if (e.keyCode == 'C' && g->selectionCount() > 0) { dispatch("key copy --keys " + cmd::quote(g->selectionList())); return true; }
-                    if (e.keyCode == 'V' && m.keyClipboardCount > 0)
+                    // at the playhead on the front lane's clock — only over a clip of its object
+                    if (const double now = mEdit->timeline()->keyLane()->now(); e.keyCode == 'V' && m.keyClipboardCount > 0 && now >= 0)
                     {
-                        dispatch("key paste --at " + cmd::num(mEdit->timeline()->keyLane()->now()));
+                        dispatch("key paste --at " + cmd::num(now));
                         return true;
                     }
                 }

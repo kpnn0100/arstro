@@ -1,5 +1,6 @@
 #include "EffectPanel.h"
 #include "CommandLine.h"
+#include "KeyState.h"
 #include "Glyphs.h"
 #include "TextFit.h"
 #include <algorithm>
@@ -37,6 +38,18 @@ namespace interstellar_v1
                 if (onCommand) onCommand("set " + cmd::quote(id + "." + key + "=" + cmd::num(percent ? v / 100.0 : v)));
             };
             r.slider->visible = false;
+            // R-ANIM-9: its mark — marks it to animate, or, marked, opens its menu (the mode, Remove Animation)
+            r.slider->setKeyGutter(true);
+            std::weak_ptr<cosmo_v2::SliderRow> row = r.slider;
+            r.slider->onKeyClick = [this, id, key, row] {
+                const std::string address = id + "." + key;
+                if (!mMarked.count(address)) { if (onCommand) onCommand(keys::mark(address)); return; }
+                if (auto sr = row.lock(); sr && onMarkMenu)
+                {
+                    const Rect k = sr->keyRect();
+                    onMarkMenu(address, sr->worldTransform().apply(Point{k.x + k.w * 0.5, k.bottom()}));
+                }
+            };
             addChild(r.slider);
             s.rows.push_back(r);
         };
@@ -67,6 +80,7 @@ namespace interstellar_v1
         mId = sel ? sel->id : std::string();
         mNode = sel ? sel->node : std::string();
         mShown.clear();
+        mMarked.clear();
         if (sel)
         {
             std::vector<const interstellar::EffectModel *> stack;
@@ -83,6 +97,13 @@ namespace interstellar_v1
                     const auto slash = s.file.find_last_of('/');
                     s.fileButton->setLabel(s.file.empty() ? std::string("Choose a .cube\xE2\x80\xA6")
                                                           : "LUT  \xC2\xB7  " + (slash == std::string::npos ? s.file : s.file.substr(slash + 1)));
+                }
+                // the marks follow the model even mid-gesture: they say what is animated, not a value
+                for (auto &r : s.rows)
+                {
+                    const bool marked = keys::animOf(m, e->id, r.key) != nullptr;
+                    if (marked) mMarked.insert(e->id + "." + r.key);
+                    r.slider->setKeyState(marked ? 2 : 0);
                 }
                 if (interacting) continue;   // a gesture in flight outranks the model
                 for (auto &r : s.rows)

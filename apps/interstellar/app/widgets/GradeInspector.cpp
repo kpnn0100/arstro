@@ -1,4 +1,5 @@
 #include "GradeInspector.h"
+#include "KeyState.h"
 #include "CommandLine.h"
 #include "TextFit.h"
 #include "../../../cosmo/widgets/UnitConversions.h"
@@ -34,6 +35,7 @@ namespace interstellar_v1
         // A control → one `set` line. `basic` / `detail` split exactly where cosmo's own Basic
         // and Detail sections split; the keys and the unit conversions are RightColumn's.
         auto set = [this](const char *filter, const char *key, double (*toEngine)(double) = nullptr) {
+            mRowKeys.push_back(std::string(filter) + "." + key);   // row i's colour key, for its mark (R-ANIM-9)
             return [this, filter, key, toEngine](double v) {
                 send(filter, {{key, cmd::num(toEngine ? toEngine(v) : v)}});
             };
@@ -80,6 +82,18 @@ namespace interstellar_v1
             }},
         };
         mBasicDetail = std::make_shared<ParamPanel>(std::move(sections));
+        // R-ANIM-9: every row's mark — marks it to animate (an offset: nothing on screen changes), or, on a
+        // marked one, its menu (the mode, Remove Animation)
+        mBasicDetail->setKeyColumn([this](int row) {
+            if (mBind.empty() || row < 0 || row >= (int)mRowKeys.size() || row >= (int)mRowStates.size()) return;
+            const std::string address = mBind + "." + mRowKeys[(size_t)row];
+            if (mRowStates[(size_t)row] == 0) { if (onCommand) onCommand(keys::mark(address)); return; }
+            if (auto r = mBasicDetail->row(row); r && onMarkMenu)
+            {
+                const Rect k = r->keyRect();
+                onMarkMenu(address, r->worldTransform().apply(Point{k.x + k.w * 0.5, k.bottom()}));
+            }
+        });
         mTabs->addPage("Basic/Detail", mBasicDetail);
 
         mMixer = std::make_shared<MixerPanel>();
@@ -133,6 +147,7 @@ namespace interstellar_v1
         addChild(mPlugins);
         mEffectPanel = std::make_shared<EffectPanel>();
         mEffectPanel->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mEffectPanel->onMarkMenu = [this](const std::string &a, Point w) { if (onMarkMenu) onMarkMenu(a, w); };
         mEffectPanel->visible = false;
         addChild(mEffectPanel);
         // Cosmo's Mix is the node's weight (R-RACK-4, amended): one slider here, not a bar per row
@@ -169,6 +184,13 @@ namespace interstellar_v1
         mEffectPanel->bind(m, mPlugins->selected(), interacting);
         if (valid && !interacting) mCosmoMix->setValue(m.rack[(size_t)m.selectedRack].weight * 100.0);
         if (!valid) return;
+        // the marks follow the model even mid-gesture: they say what is animated, not a value
+        {
+            const std::string ro = m.rack[(size_t)m.selectedRack].rackObj;
+            mRowStates.assign(mRowKeys.size(), 0);
+            for (size_t i = 0; i < mRowKeys.size(); ++i) mRowStates[i] = keys::animOf(m, ro, mRowKeys[i]) ? 2 : 0;
+            mBasicDetail->setKeyStates(mRowStates);
+        }
         if (mBind != mLastBind)
         {
             if (!mLastBind.empty()) mSwapPending = true;   // a different node: cross-fade the page

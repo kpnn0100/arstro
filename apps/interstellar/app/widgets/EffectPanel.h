@@ -27,6 +27,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,8 @@ namespace interstellar_v1
         double scrollTarget() const { return mScroll.target(); }
 
         std::function<void(const std::string &line)> onCommand;
+        /** R-ANIM-9: a marked parameter's mark pressed — its menu at a WORLD point. */
+        std::function<void(const std::string &address, artboard::Point world)> onMarkMenu;
         /** A file-taking plugin's row was clicked (a LUT, R-COLOR-5): the app picks the file and
          *  dispatches `set <effect>.<key>=<file>`. */
         std::function<void(const std::string &effectId, const std::string &key)> onChooseFile;
@@ -94,6 +97,7 @@ namespace interstellar_v1
         std::map<std::string, Section> mSections;  // effect id → its section (kept)
         std::vector<std::string> mShown;           // the node's effects, in stack order
         std::string mId, mNode, mLastSelected;
+        std::set<std::string> mMarked;   // addresses marked to animate (R-ANIM-9)
         bool mRevealPending = false;
         EasedScroll mScroll;
         cosmo_v2::HoverFade mHover;

@@ -150,18 +150,19 @@ namespace
             r.settle();
         }});
         // the IMAGE PROCESSING list (R-FX-5): Cosmo selected (its Mix + tabs), an effect selected
-        // keyframes (R-ANIM-3/4, amended): authored in the timeline's key lane — a source's colour curve
-        // under its clip, a key's handles; and the lane mid-opening
+        // keyframes (R-ANIM-9/10): marked in Grade, authored in the timeline's ANIMATION section — a source's
+        // colour curve under every clip of it, a key's handles, a fixed clip curve beside offsets
         auto animated = [](FakeService &s) {
             s.edit();
             s.m.selectedClip = "c1";
             s.m.playhead = 2.0;
-            s.animate("s_day01.basic.exposure", {{2.0, -1.2}, {4.0, 1.4}, {6.5, 0.3}});
+            s.animate("s_day01.basic.exposure", {{2.0, -1.2}, {4.0, 1.4}, {6.5, 0.3}, {8.0, 0.8}});
             auto *a = s.animFor("s_day01.basic.exposure", false);
             a->keys[1].in = a->keys[1].out = "bezier";
             a->keys[2].in = "bezier";
             a->keys[2].inflIn = 60.0;
             s.animate("s_day01.basic.contrast", {{3.0, 10.0}, {6.0, -15.0}});
+            s.animate("c1.opacity", {{2.0, 0.0}, {3.0, 1.0}});
         };
         v.push_back({"cut_key_lane_grade", animated, [](Rig &r) {
             r.app->setTab(1);
@@ -191,11 +192,17 @@ namespace
             g->selectKey(1, 1, true);
             r.settle();
         }});
-        v.push_back({"cut_key_lane_mid", animated, [](Rig &r) {
+        v.push_back({"cut_key_lane_mid", animated, [](Rig &r) {   // the section folding, mid-ease
             r.app->setTab(1);
             r.settle();
-            r.app->edit().timeline()->setKeysShown(true);
+            r.app->edit().timeline()->setKeysShown(false);
             r.pump(100);
+        }});
+        v.push_back({"cut_key_lane_folded", animated, [](Rig &r) {   // folded to its header: the tracks take the room
+            r.app->setTab(1);
+            r.settle();
+            r.app->edit().timeline()->setKeysShown(false);
+            r.settle();
         }});
         v.push_back({"cut_key_lane", [](FakeService &s) {
             s.edit();
@@ -206,13 +213,12 @@ namespace
                     s.animate(n + ".opacity", {{c.in, 0.0}, {c.in + (c.out - c.in) * 0.4, 1.0}, {c.out, 0.6}});
                 }
         }, [](Rig &r) {
-            // R-ANIM-3 (2026-10-07): the clip's track opened to its properties, Opacity's curve opened under its row
+            // the clip's own Opacity (FIXED), its curve opened under its lane
             r.app->setTab(1);
             r.settle();
             auto tl = r.app->edit().timeline();
-            tl->setKeysShown(true);
             r.settle();
-            tl->keyLane()->select(tl->keyLane()->row(1).address);
+            tl->keyLane()->select(tl->keyLane()->row(0).prop.address);
             r.settle();
         }});
         v.push_back({"cut_key_lane_empty", [](FakeService &s) { s.edit(); }, [](Rig &r) {   // nothing animated: Animate… alone, and why
@@ -247,7 +253,17 @@ namespace
             }
         };
         v.push_back({"cut_key_lane_animate", animated, [animateMenu](Rig &r) { animateMenu(r, nullptr); }});   // Animate…: the first step
-        v.push_back({"cut_key_lane_animate_grade", animated, [animateMenu](Rig &r) { animateMenu(r, "Grade \xC2\xB7 Light"); }});   // …a panel's properties
+        v.push_back({"cut_key_lane_animate_grade", animated, [animateMenu](Rig &r) { animateMenu(r, "Tone"); }});   // …a Grade section's properties
+        // R-ANIM-9: Grade's marks — Exposure and Contrast marked; and a marked one's menu
+        v.push_back({"grade_marks", animated, [](Rig &r) { r.settle(); }});
+        v.push_back({"grade_mark_menu", animated, [](Rig &r) {
+            r.settle();
+            auto row = r.app->edit().gradeInspector()->basicDetail()->row(0);
+            const artboard::Rect k = row->keyRect();
+            const artboard::Point p = row->worldTransform().apply(artboard::Point{k.x + k.w * 0.5, k.y + k.h * 0.5});
+            r.click(p.x, p.y);
+            r.settle();
+        }});
         v.push_back({"cut_key_lane_rows", animated, [](Rig &r) {   // the rows alone: every key on its property's row
             r.app->setTab(1);
             r.settle();

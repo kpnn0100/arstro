@@ -28,6 +28,7 @@
 #include "widgets/LoadingView.h"
 #include "widgets/EditScreen.h"
 #include "../../cosmo/widgets/SettingsDialog.h"
+#include "../../cosmo/widgets/ContextMenu.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -149,6 +150,8 @@ namespace interstellar_v1
          *  panels and each effect as a second step (no list taller than a 640-px window). */
         void openAnimateMenu(artboard::Rect at, const std::string &group = std::string());
         void openKeyRowContext(const std::string &address, artboard::Point at);
+        void openMarkMenu(const std::string &address, artboard::Point at);   // Grade's mark (R-ANIM-9)
+        void appendModeItems(std::vector<cosmo_v2::ContextMenu::Item> &items, const std::string &address, const std::string &mode, bool fixedOnly);
         /** The key lane's graph, when the Cut tab shows it (else null). */
         KeyGraph *keyGraphShown();
         void openPluginContext(const std::string &id, artboard::Point at);

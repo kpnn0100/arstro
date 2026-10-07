@@ -37,14 +37,32 @@ namespace cosmo_v2
         void setTrackGradient(const artboard::Color &left, const artboard::Color &right);
         std::function<void(double)> onChange;
 
+        /** Opt-in, for an embedder that animates parameters (Interstellar's mark, its R-ANIM-9): a
+         *  diamond in a gutter after the value — state 0 a faint outline, 1 an outline, 2 filled; the
+         *  embedder says what they mean (Interstellar: 0 not animated, 2 marked to animate). A state
+         *  change eases (the fill and the outline). Off by default: cosmo draws none and its rows lay
+         *  out exactly as before. */
+        static constexpr double kKeyGutter = 14.0;
+        void setKeyGutter(bool on) { mKeyGutter = on; }
+        void setKeyState(int state) { mKeyWanted = state; }
+        int keyState() const { return mKeyWanted; }
+        double keyFillAmount() const { return mKeyFill.value(); }   // the LIVE eased fill, for a test
+        artboard::Rect keyRect() const;
+        std::function<void()> onKeyClick;
+
         void layout();  // call after width changes
+        void advance(double nowMs) override;
 
     protected:
         void onPaint(artboard::IRenderTarget &t) const override;
+        bool handleGesture(const artboard::Gesture &g, const artboard::Point &local) override;
 
     private:
         std::string mLabel;
         std::shared_ptr<artboard::Slider> mSlider;
+        bool mKeyGutter = false;
+        int mKeyWanted = 0, mKeyApplied = -1;
+        artboard::AnimatedProperty mKeyFill{0.0}, mKeyLine{0.0};
     };
 }
 }

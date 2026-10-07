@@ -1435,7 +1435,82 @@ base on an offset centre.
   curves, the version delta against the curve, the tracker writing raw onto an offset, the tracker
   starting an offset, and D-13's id taken by reference (the model test).
 
+### DR-ANIM-7 Grade's marks and the timeline's ANIMATION section (R-ANIM-9; R-ANIM-3/4/8 amended 2026-10-07)
+This supersedes DR-ANIM-5's layout, the rows under the selected clip's track. What a key, the graph and
+the key menu do is unchanged.
+
+**Grade's marks** (`app/widgets/GradeInspector.cpp:87`, `:187`; `EffectPanel.cpp:41`):
+- every Basic/Detail row and every effect parameter has a mark. It is cosmo's opt-in key gutter, the
+  one 62a54fa added and 63ec4e4 removed, restored (`cosmo/widgets/SliderRow.h:45`, `.cpp:38`;
+  `ParamPanel.cpp:74`); cosmo enables none, and its 41 shots are byte-identical with it in;
+- the mark is filled when the parameter is animated and a faint outline when not. A state change
+  eases;
+- a click on an empty mark dispatches `key mark <address>` (`KeyState.h:69`), so it becomes an
+  offset and nothing on screen moves;
+- a click on a filled mark opens its menu (`App.cpp:799`): the two modes, the current one bulleted
+  (`appendModeItems`, `:787`), and Remove Animation.
+
+**The section** (`app/widgets/KeyLane.*`; `Timeline.cpp:58`, `:66`, `:78`, `:240`, `:760`):
+- placement: a KeyLane docked below the tracks. `lanesRect` ends where the section begins, so the
+  tracks keep the rest of the deck and scroll as before;
+- the header always shows ▾ ANIMATION, the marked count and "＋ Animate…". It folds the section,
+  eased, with the chevron turning;
+- the body is no taller than its lanes, the `keyLaneHeight` setting, or what leaves one track
+  showing. It is resized by a grip straddling its top edge; the KeyLane leaves its top 3 px to the
+  Timeline (`KeyLane.h:123`);
+- lanes (`rebuild`, `KeyLane.cpp:39`): one per marked curve in the model, named by `keys::describe`
+  (`KeyState.h:171`): the property, then "object · group" (the group is where Grade shows it,
+  `panelOrder`, `:102`, with the colour keys' groups in `ColourKeys.h`). They are sorted by object
+  in rack order, then in Grade's order;
+- each lane has an OFFSET or FIXED badge: a click switches the mode with `key mode`
+  (`KeyLane.cpp:497`), except for a shape or a clip's own property;
+- a lane eases in when its property is marked, and eases out in place when it is unmarked (`:65`);
+- keys (`keyAt`, `:282`): a source's or an effect's curve is drawn under every video clip of that
+  source, a clip's under that clip, each key at `at + (t − in)/speed`, inside the clip's own span;
+- the lane's diamond keys at the playhead only while it is over a clip of the object (`nowOf`,
+  `:204`; `:485`); elsewhere it is dim and dispatches nothing;
+- a double-click keys on the clicked clip's clock (`:445`), and a drag moves a key on the clip it
+  was grabbed in;
+- the inline curve is plotted over the clip under the playhead, else the chosen clip, else the
+  first (`graphSpan`, `:102`);
+- "Animate…" (`App.cpp:735`) offers what the chosen clip, or else Grade's source, does not animate
+  yet (`keys::clipProps` / `sourceProps`, `KeyState.h:206`): the clip's own properties at once, and
+  each Grade section and each effect as a second step. It dispatches `key mark`. The new lane is
+  chosen as soon as it exists (a pending choice, `:93`);
+- a lane's menu (`App.cpp:773`): Show/Hide Curve, the modes, Remove Animation;
+- Ctrl+V and "Paste Keys at Playhead" are offered only over a clip of the front lane's object.
+
+**Fonts.** The embedded Roboto has no ✓ or ◇, so the menus bullet the current mode and the hint says
+"its diamond".
+
+**Tests** — UI `keyframes` (520 checks):
+- Grade's mark marks (`key mark …`), fills eased, opens its menu once marked (Fixed → `key mode …
+  fixed`; Remove Animation → `key clear …`), and an effect's parameter marks too;
+- the section sits below the tracks;
+- the lane's name and mode; nothing unmarked has a lane;
+- keys under c1 and under c7, the second clip of the source, at their timeline times;
+- the diamond keys at 3 over c1 and dispatches nothing between clips; a double-click under c7 keys
+  source 8.5; a lane drag moves a key in time; the badge switches the mode;
+- the curve opens eased over c1;
+- Animate… lists the clip's own properties, Grade's sections and the effects, and marks Contrast,
+  whose lane eases in chosen;
+- the lane menu (the modes, Remove Animation, eased out); the fold, eased, gives the tracks the room;
+- ten lanes in object then Grade order;
+- the top-edge grip resizes and saves; asked 600, a track still shows;
+- at 1024×640 the lanes scroll to the last one;
+- a wheel's lane is fixed only.
+
+**Mutants seen red**: keys under the first clip only; the diamond keying with no clip under the
+playhead; Grade's marks never shown; no pending choice; Animate… keying instead of marking.
+
+**Shots looked at, both sizes**: `cut_key_lane_rows`, `cut_key_lane_grade`, `cut_key_lane`,
+`cut_key_lane_multi`, `cut_key_lane_curve_mid`, `cut_key_lane_mid` (folding, mid-ease),
+`cut_key_lane_folded`, `cut_key_lane_empty`, `cut_key_lane_animate`, `cut_key_lane_animate_grade`,
+`grade_marks`, `grade_mark_menu`. Two glyphs that rendered as boxes were found by looking (✓, ◇) and
+replaced.
+
 ### DR-ANIM-5 The properties sit under the clip's track — only what is animated (R-ANIM-3, R-ANIM-4, R-ANIM-8, amended 2026-10-07 twice)
+**Superseded by DR-ANIM-7** (the ANIMATION section below the tracks); kept for the history.
 This supersedes the lane-at-the-bottom layout of DR-ANIM-2 and DR-ANIM-4. What a row keys, the graph's
 edits and the key menu are unchanged.
 

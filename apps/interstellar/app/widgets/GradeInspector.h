@@ -93,6 +93,11 @@ namespace interstellar_v1
         double bypassAmount() const { return mBypassAmt.value(); }
 
         std::function<void(const std::string &line)> onCommand;
+        /** R-ANIM-9: a marked parameter's mark pressed — its menu at a WORLD point (the mode, Remove Animation). */
+        std::function<void(const std::string &address, artboard::Point world)> onMarkMenu;
+        /** Basic/Detail row i's colour key ("basic.exposure") and its mark (0 not animated · 2 marked). */
+        const std::vector<std::string> &markKeys() const { return mRowKeys; }
+        int markState(int row) const { return row >= 0 && row < (int)mRowStates.size() ? mRowStates[(size_t)row] : 0; }
 
         void advance(double nowMs) override;
 
@@ -125,6 +130,8 @@ namespace interstellar_v1
         const interstellar::AppModel *mLastModel = nullptr;
 
         std::string mBind;          // the selected node's bind name — the address prefix
+        std::vector<std::string> mRowKeys;   // Basic/Detail row → "basic.exposure" (R-ANIM-9)
+        std::vector<int> mRowStates;         // its mark: 0 not animated · 2 marked
         std::string mLastBind;
         int mQuarterTurns = 0;
         bool mHasTarget = false, mBypassed = false, mRackEmpty = true;
