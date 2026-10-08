@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — D2: the Basic Synth and the Drum Machine, in the DSP library.*
+*Last updated: 2026-10-08 — D3: the device registry; the DSP half of the request is complete.*
 
 ---
 
 ## NEXT
 
-**► D3 — the `Device` interface and the `DeviceRegistry`**, in `core/DigitalSignalProcessing`:
-one uniform device over every instrument and effect (synth, drums, compressor, eq, reverb, delay,
-chorus, drive, filter), each parameter described once — name, unit, range, default, choices.
+**► M1 — `solaris_model`**: the `.slp` document (`docs/project-format.md`) — parse, serialize as a
+byte-exact fixed point, validate (forward-only routing, references, kinds), repair non-finite
+numbers; device parameters validated against the DSP registry.
 
 ---
 
@@ -41,8 +41,10 @@ umbrella's pointer — `arstro.rule` §7).
       `DrumMachine` (10 synthesized pads on GM notes, hat choke). — DSP `1fd677f` (REQ-inst-1,
       REQ-synth2-1…5, REQ-drum-1…5); equal temperament to 0.026 cents, kick settles on
       48·2^(tune/12) Hz, choke > 60 dB, every pad sounds and stops, renders byte-identical.
-- [ ] **D3** `Device` interface + `DeviceRegistry`: synth, drums, compressor, eq, reverb, delay,
-      chorus, drive, filter — names, units, ranges, defaults, choices; one factory.
+- [x] **D3** `Device` interface + `DeviceRegistry`: synth, drums, compressor, eq, reverb, delay,
+      chorus, drive, filter — names, units, ranges, defaults, choices; one factory. — DSP `60a4090`
+      (REQ-device-1…4); every parameter of every type at both ends renders finite; a name-written
+      parameter matches the RBJ formula to 0.000 dB. DR-DSP-1, DR-INST-1/2, DR-FX-1 written.
 
 ### M/E — model and engine
 - [ ] **M1** `solaris_model`: the `.slp` (parse, serialize fixed point, validate, repair).

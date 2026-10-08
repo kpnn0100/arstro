@@ -42,7 +42,7 @@ the section heading. Read before any code; conflict-check before accepting a new
 
 ---
 
-## R-DSP — the sound is the DSP library's — 📋 SPECIFIED
+## R-DSP — the sound is the DSP library's — 🚧 IN PROGRESS (the library side is built — DR-DSP-1; Solaris hosts it from E1)
 
 The user's rule (2026-10-08): *"make sure all the core of those instruments and basic filters is in
 dsp."*
@@ -66,7 +66,7 @@ dsp."*
 - **R-DSP-5 Splitting at note events is the host's job.** A device renders whole blocks; the engine
   splits a block at every note event so a note starts on its exact sample (was SR-TIME-3).
 
-## R-INST — instruments — 📋 SPECIFIED
+## R-INST — instruments — ✅ IMPLEMENTED in the DSP library (DR-INST-1, DR-INST-2); played by Solaris from E1
 
 The user's request (2026-10-08): *"make me some basic instruments: Drum Machine, Basic Synth with 2
 OSC."*
@@ -87,7 +87,7 @@ OSC."*
 - **R-INST-4 Reserved:** a sampler (play a sample chromatically) (was SR-INST-2), VST3 hosting (was
   SR-RACK-3).
 
-## R-FX — effects — 📋 SPECIFIED
+## R-FX — effects — 🚧 IN PROGRESS (1–4 ✅ in the DSP library, DR-FX-1; 5, the strip's rack, from E1)
 
 The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Reverb, …"*
 
