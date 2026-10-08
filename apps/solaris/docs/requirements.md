@@ -262,3 +262,39 @@ allocates nothing within prepared capacity (a capture buffer only when stems are
 While playing, `pump()` copies the last block's peaks into `strips[].peak` and
 `transport.masterPeak` (L/R, linear) — excluded from the stable dump. RMS, peak hold and the clip
 latch are the UI's to draw from these numbers (U3).
+
+### DR-UI-1 The window, Home and the song bar (R-UI-1, R-UI-2, R-UI-3, R-HOME-1, R-G-4)
+`solaris_app` (`app/`) is a platform-free Artboard tree that links no service: `App` (`app/App.h`)
+draws from `AppHooks::model()` and sends text lines through `AppHooks::dispatch` (`App::dispatch`,
+`app/App.cpp:99` — a refusal becomes a toast with the service's sentence). `linux_main.cpp` is the
+only OS code: GTK3, the frame clock, the pickers, the host functions, the service pumped every tick.
+The screen follows `AppModel::screen` and CROSS-FADES (260 ms, `App::render`, `app/App.cpp:202`).
+`installSolarisAccent()` moves cosmo's accent slot to teal `#159387` before any widget exists
+(`app/Theme.h`); every neutral, radius, font and spacing token is cosmo's, aliased. `HomeScreen`
+(`app/widgets/HomeScreen.cpp`): the `solaris.` wordmark sized to fit, New/Open, Settings, recent-song
+cards (name, `bpm · length · strips` over a plate of bars from the song's name; a moved song says
+"missing" in red and is named by its file) whose grid geometry eases on reflow (`layout`, `:86`);
+right-click forgets a card. `SongBar` (`app/widgets/SongBar.cpp`): wordmark, Home (asking first with
+cosmo's `ConfirmDialog` when unsaved, `App::requestHome`, `:124`), the song's name with an eased
+unsaved dot, Play/Stop whose glyphs cross-fade, the position as bar.beat.tick in mono, the tempo,
+the master meter (40 ms rise, 300 ms fall, `advance`, `:58`), Save, Settings. Keys: Space play/stop,
+Ctrl+S save, Enter to the start, Ctrl+, settings. Every control's command line is in `app/NOTES.md`.
+
+### DR-SET-2 The settings sheet (R-SET-1, amended)
+`SettingsSheet` (`app/widgets/SettingsSheet.cpp`) in cosmo's modal style: the scrim, the popover
+card, uppercase labels tracked +0.13 with a plain note, chips that size to their MEASURED text and
+wrap, a filled accent when chosen — the fill EASES over 200 ms whoever chose it (`advance`, `:101`) —
+the folder list with × per folder and "Add folder…", Done; 150 ms open / 120 ms close; Escape, Enter,
+Done and the scrim close it; the card scrolls when the window is short. Opening sends `devices list`
+first (`App::openSettings`, `app/App.cpp:118`). Every chip is `settings set …`, every folder control
+`folder add|remove` (`handleGesture`, `:158`); the sheet draws the model, so a setting changed from a
+shell shows at once.
+
+### DR-UI-6 Shots and UI tests over the real service (R-UI-6)
+`solaris_app_shots` renders nine named states — Home empty and with cards, Settings at rest,
+mid-fade and mid-chip-ease, the song, Home→song mid-cross-fade, a refusal toast, the unsaved
+confirm — at 1440×900 and 1024×640, over the REAL `SolarisService` (`app/tests/Rig.h`: fake devices,
+folders and decoder; a fixed 16 ms clock); `--check` fails a blank frame. `solaris_app_ui` (5
+tests) clicks the geometry the widgets publish and asserts the lines sent, the model that came back,
+and a LIVE value caught mid-tween for every transition (the cross-fade, the sheet's fade, a chip's
+fill, the close). The window ran on this machine's display (`solaris song.slp`, 4 s, no crash).

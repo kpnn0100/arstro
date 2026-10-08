@@ -202,16 +202,22 @@ audio devices so the user can take advantage of their devices."*
   the driver resamples and the transport says so.
 - **R-DEV-8 Linux first**, over the PulseAudio API (which PipeWire also serves); Windows later.
 
-## R-SET — settings — 🚧 IN PROGRESS (headless ✅ DR-SET-1; the dialog lands with U1)
+## R-SET — settings — ✅ IMPLEMENTED (DR-SET-1, DR-SET-2)
 
-- **R-SET-1 Cosmo's Settings dialog, reused,** as Interstellar R-SET-1, plus Solaris's rows: output
-  and input devices (enable, clock), sample rate (the default for new projects and the preferred
-  device rate), buffer size with the latency it costs in ms, a test tone, the port map, and the
-  **sample folders** (add, remove, reorder) that become the browser's quick-access list.
+- **R-SET-1 A settings sheet in Cosmo's modal style** — the same scrim, card, chips, fade and Done
+  button — with Solaris's rows: output and input devices (the clock is the output), sample rate
+  (the default for new projects and the preferred device rate), buffer size with the latency it
+  costs in ms, the port map, and the **sample folders** (add, remove, reorder) that become the
+  browser's quick-access list.
+  (**AMENDED 2026-10-08, building it:** this said "Cosmo's Settings dialog, reused" with Solaris rows
+  added. Cosmo's dialog is an IMAGE engine's — preview quality, GPU, threads, CPU share — none of
+  which Solaris has, and its extension point is rows of chips, which cannot hold a folder list with
+  add and remove. Showing a DAW's user five rows about a photo engine is worse than a second dialog
+  that looks the same; so the reuse is the look, not the class. A test tone waits for P2.)
 - **R-SET-2 Settings are the machine's**, persisted beside the app's other settings, never in a
   project. Each change is a `settings set` line the service validates, applies and persists.
 
-## R-HOME — Home — 🚧 IN PROGRESS (recents ✅ DR-HOME-1; the screen lands with U1)
+## R-HOME — Home — ✅ IMPLEMENTED (DR-HOME-1, DR-UI-1)
 
 - **R-HOME-1 Like Interstellar's and Cosmo's.** Recent projects as cards, newest first: name,
   `bpm · length`, version count. New (name, tempo, meter, sample rate defaulting from Settings),
@@ -301,24 +307,33 @@ R-VER, applied to an arrangement:
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
 
-## R-UI — the screens — 📋 SPECIFIED
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 6 ✅ DR-UI-1, DR-UI-6; 3 the song bar only — the browser, lanes and mixer dock with U2/U3; 4 partly; 5 with U3)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
-- **R-UI-2 The accent is teal, `#5AEDDE`, the only forked token** — cosmo's `#4F7EF7` rotated to
-  H 174° at S 80 %, L 64 % (Interstellar's recipe). Chosen because orange, the "solar" reading, sits
-  beside record-red and solo-amber, which a DAW cannot afford to confuse.
+- **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
+  "solar" reading, sits beside record-red and solo-amber, which a DAW cannot afford to confuse.
+  (**AMENDED 2026-10-08, measuring it:** this said `#5AEDDE`, Interstellar's recipe — cosmo's blue
+  rotated to H 174° at the same S 80 %, L 64 %. The recipe holds HSL LIGHTNESS, which is not
+  luminance: at H 174° that lightness is a relative luminance of 0.71 against cosmo blue's 0.23, and
+  white text (cosmo's `primaryForeground`, not forked) on it reads at 1.4:1. The hue stays; the
+  lightness drops to cosmo blue's LUMINANCE — `#159387`, 0.228, white text at 3.8:1 against cosmo's
+  3.7:1 — so every chip, button and fill that puts white on the accent stays as legible as cosmo's.)
 - **R-UI-3 The Project view:** Cosmo's menu strip and wordmark with the version chip; the browser on
   the left (R-BROWSE); lanes in the centre (R-LANE); **the mixer docked under the timeline** with a
   tab per mixer and a Matrix tab (R-MIX); the transport (R-TIME-4) with the master meter and device
   status. Docked, not a separate screen, because linked selection (R-MIX-8) needs both in view.
 - **R-UI-4 Cosmo's widgets are reused as libraries** (`SliderRow`, `SegmentedControl`, `PillButton`,
-  `IconButton`, `ConfirmDialog`, `MenuStrip`, `SettingsDialog`); Interstellar's timeline idioms are
-  followed. A copied widget is a divergence with a delay fuse.
+  `IconButton`, `ConfirmDialog`, `MenuStrip`, `HoverFade`); Interstellar's timeline idioms are
+  followed, and its header-only helpers (`TextFit`, `EasedScroll`, `Glyphs`) are INCLUDED from
+  `apps/interstellar/app/widgets/`, not copied. A copied widget is a divergence with a delay fuse.
+  (**Amended 2026-10-08:** `SettingsDialog` left the list — R-SET-1; the Interstellar helpers joined
+  it — their home should be Artboard, a task filed in `docs/PROGRESS.md`.)
 - **R-UI-5 Device panels are generated from the registry** (R-DSP-2): a knob or slider per
   parameter, grouped by its name's prefix (`osc1.*`, `filter.*`). A new DSP parameter appears in
   the UI with no UI code.
 - **R-UI-6 Every state is drawn and shot,** empty and loading included, at two window sizes,
-  mid-transition as well as at rest.
+  mid-transition as well as at rest. The shots drive the REAL service through the same hooks the
+  window uses (no fake): the service is headless and cheap, so the shot is also an integration test.
 
 ## R-NFR — non-functional — 📋 SPECIFIED
 

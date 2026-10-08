@@ -24,7 +24,8 @@ Solaris hosts devices and routes their output; it implements no DSP.
 | `apps/solaris/core/` | `solaris_core` | model, engine | `Settings` (the machine's, R-SET-2); `AudioOut` (the output seam); `Player` (the engine on a thread: Live messages, engine swaps, atomics); `Compile` (.slp → MixGraph: solo, patterns, registry-checked params); `service/`: `SolarisService` (+ `ServiceEdit`, `ServiceModel`, `ServiceRender`, `ServiceMachine`, `ServiceTransport`), `Command` (the grammar table), `Event`, `AppModel` + `AppModelCodec`, `ApiDoc`, `Json` | R-SVC, R-API, R-MIX, R-CLIP, R-RENDER |
 | `apps/solaris/host/` | `solaris_host` | core, FFmpeg + libpulse (optional) | `AudioFiles` (FFmpeg decode → stereo float at the project rate; WAV 24/32f), `Machine` (folder listing, PulseAudio device list, XDG paths), `AudioOutPulse` (the clock device's stream) | R-SVC-4, R-DEV, R-SET, R-BROWSE-1 |
 | `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only — every verb is the grammar; `solaris_api_current` drift test | R-SVC-1, R-API-1 |
-| `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets | the UI over `AppHooks` | R-UI |
+| `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets, Interstellar's header helpers | `App` (screens, toast, modals), `Theme` (aliases + teal), `AppHooks`, widgets `HomeScreen`, `SettingsSheet`, `SongBar`, `ProjectScreen`; `tests/` (Rig over the real service, shots, UI tests); `NOTES.md` | R-UI, R-HOME, R-SET |
+| `apps/solaris/linux_main.cpp` | `solaris` | app, host, GTK3 | the window: the only OS code in the GUI | R-UI-1 |
 
 *(Rows land with the code; a row whose directory does not exist yet is the plan, and says so in
 `PROGRESS.md`.)*

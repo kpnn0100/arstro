@@ -46,8 +46,8 @@ Studio's.
 | `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only |
 | `apps/solaris/app/` | `solaris_app` | Artboard, cosmo widgets | the UI over `AppHooks` |
 
-Rows land phase by phase; `PROGRESS.md` says which exist (as of V3: model, engine, core, host's
-file I/O, cli — not yet devices, settings, the UI). **Do not run a command this file names for a
+Rows land phase by phase; `PROGRESS.md` says which exist (as of U1: model, engine, core, host,
+cli, the app's Home/Settings/song bar and the window — not yet the browser, lanes, mixer dock). **Do not run a command this file names for a
 directory that does not exist yet** — build it (it is probably NEXT), or say it is missing.
 
 ---
@@ -198,11 +198,17 @@ is the diffable state; `audit` the mix report; `matrix print` every route.
 ## 6. The UI (`apps/solaris/app/`, from U1)
 
 Design law: `arstro.design.rule`; values: cosmo's. Like Interstellar, Solaris **aliases** cosmo's
-token namespaces and forks ONE token: the accent, teal `#5AEDDE` (R-UI-2), installed at startup with
-`arstro::cosmo_v2::palette::setAccent`. Cosmo's widgets are compiled from `apps/cosmo/widgets/`,
+token namespaces and forks ONE token: the accent, teal `#159387` (R-UI-2 — at cosmo blue's LUMINANCE,
+so white on it is as legible), installed at startup with `arstro::cosmo_v2::palette::setAccent`. Cosmo's widgets are compiled from `apps/cosmo/widgets/`,
 never copied; Interstellar's `app/` is the model for how (its `Theme.h`, `AppHooks.h`, `NOTES.md`).
-Device panels are generated from the registry (R-UI-5). Verify by rendering shots at two sizes,
-mid-transition as well as at rest, and **looking at them**.
+Device panels are generated from the registry (R-UI-5). **Read `apps/solaris/app/NOTES.md` first**:
+every control's command line, the shot list, the borrowed helpers, the gotchas.
+
+```bash
+SOLARIS_UI_TEST_DIR=$SCRATCH/ui build/apps/solaris/app/solaris_app_shots --outdir $SCRATCH/shots   # then LOOK at the PNGs
+build/apps/solaris/app/solaris_app_ui_tests      # the real service behind the hooks; transitions caught mid-tween
+build/apps/solaris/solaris song.slp              # the window (GTK3)
+```
 
 ---
 

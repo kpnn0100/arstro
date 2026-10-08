@@ -11,16 +11,17 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — P1: live playback on the clock device; edits heard while playing.*
+*Last updated: 2026-10-08 — U1: the window — Home, the settings sheet, the song bar.*
 
 ---
 
 ## NEXT
 
-**► U1 — the UI begins: Home + Settings.** `apps/solaris/app/` in the cosmo/interstellar family
-(teal accent): Home's recent-song cards, New/Open, and the Settings dialog (devices, rate,
-buffer, folders, port map) — every control a command line through `AppHooks::dispatch`; shots at
-two sizes, looked at. Read `arstro.design.rule` and Interstellar's `app/` first.
+**► U2 — the song view**: replace `ProjectScreen`'s summary with the browser on the left (sample
+folders from Settings, presets from the device registry, the song's own sounds; click auditions
+later) and the lanes in the centre (ruler bar.beat, lane headers, clips coloured by their strip,
+note clips showing their pattern, the playhead following the transport, a clip dragged in time and
+between lanes → `clip move`). Read `app/NOTES.md` first.
 
 ---
 
@@ -80,13 +81,20 @@ umbrella's pointer — `arstro.rule` §7).
       compensation, per-device drift/xrun/latency in the model.
 
 ### U — the UI (cosmo + interstellar family, teal accent)
-- [ ] **U1** Home + Settings (devices, rate, buffer, folders, port map).
+- [x] **U1** Home + Settings (devices, rate, buffer, folders, port map). — DR-UI-1, DR-SET-2,
+      DR-UI-6; `solaris_app_shots` (9 states × 2 sizes, looked at) and `solaris_app_ui` (5 tests,
+      every transition caught mid-tween) over the REAL service; the window runs (`solaris`). The port
+      map is a `settings set port.<name>=…` line today; its chips come with P2's several devices.
 - [ ] **U2** Project view: browser, lanes + clips, transport, version chip placeholder.
 - [ ] **U3** Mixer dock: a tab per mixer, strips (fader, pan, M/S, meter, rack chips, sends), the
       master, the Matrix tab; device panels generated from the registry.
 - [ ] **U4** Drag and drop from the browser; linked selection; Arrange by Channel; the audit panel.
 - [ ] **U5** Note editing: piano roll for the synth, step grid for the drum machine (views of a
       pattern).
+
+### T — tasks found on the way
+- [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs` into Artboard (via
+      `implement_artboard`); both apps include them from there.
 
 ### X — later (specified, not scheduled)
 - [ ] **X1** Versions (R-VER) · [ ] **X2** Recording (R-REC) · [ ] **X3** Automation (R-AUTO)
@@ -95,6 +103,10 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-08 — the accent is `#159387`, not `#5AEDDE`** (R-UI-2 amended): the hue-rotation recipe
+  keeps HSL lightness, and teal at cosmo's lightness is three times as luminous — white on it is
+  1.4:1. Matched to cosmo blue's luminance instead (white on it 3.8:1).
 
 - **2026-10-08 — `render --out` is the MASTER BUS** (after its rack and gain), not "whatever reaches
   the Main port": a strip routed straight to a port (a headphone cue) is not part of the mixdown.

@@ -320,6 +320,7 @@ namespace solaris
             return true;
         }
         case K::ProjectClose:
+            mRecentsStale = true; // Home is where the cards matter: re-read them (a song may have moved meanwhile)
             stopPlayer();
             mPosition = mLoopFrom = mLoopTo = 0;
             mModel.transport = TransportModel();
