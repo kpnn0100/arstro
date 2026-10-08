@@ -33,6 +33,20 @@ helpers it borrows.
 | Lanes › Delete / Backspace with a clip selected | `clip delete <ac>` |
 | Lanes › Ctrl+D with a clip selected | `clip duplicate <ac>` (a note clip's copy is linked) |
 | Lanes › Ctrl+wheel · wheel · Shift+wheel | nothing — zoom about the pointer, scroll, scroll sideways (the view's) |
+| Dock › a mixer tab · the chevron · its top edge dragged · a fold header | nothing — the page shown, the dock folded or sized, a group folded (the view's) |
+| Dock › "+" in the tabs | `mixer add` |
+| Dock › a mixer tab, right-click | Rename… → `set <mx>.name="…"` · Delete mixer → `mixer delete <mx>` |
+| Dock › a fader dragged (each step) · double-click | `set <ch>.gain=<dB>` (master: `set project.masterGain=<dB>`) · `…=0` |
+| Dock › pan dragged · double-click | `set <ch>.pan=<−1…1>` · `…=0` |
+| Dock › M · S | `set <ch>.mute=true\|false` · `set <ch>.solo=true\|false` |
+| Dock › "→ out" | a menu of `strips[].targets` → `route <ch> --to <target>` |
+| Dock › "+ Effect" | a menu of the registry's effects → `device add <ch\|master> --type <t>` |
+| Dock › a device chip | opens its panel (the view's); "+N more" lists the rest |
+| Dock › a send · dragged sideways | Pre/Post-fader → `set <sd>.pre=…` · Make it the main output → `route` then `send delete` · Remove → `send delete <sd>` · `set <sd>.gain=<dB>` |
+| Dock › a strip, right-click | Rename… → `set <ch>.name="…"` · Delete strip → `strip delete <ch>` |
+| Matrix › an open cell · double-click · a send cell · dragged up/down | `send add <ch> --to <col>` · `route <ch> --to <col>` · its menu (as a send) · `set <sd>.gain=<dB>` |
+| Device panel › a slider · a choice (left/right half) · double-click a slider | `set <dv>.<param>=<value in its unit>` · `set <dv>.<param>=<name>` · the registry default |
+| Device panel › On/Bypassed · Remove · × | `set <dv>.bypass=…` · `device remove <dv>` · closes (the view's) |
 
 A refusal is the toast, with the service's own sentence (`App::dispatch`).
 
@@ -42,15 +56,16 @@ The REAL App over the REAL service (`tests/Rig.h`): home-empty · home-cards (a 
 song) · settings-open · settings-mid-open (mid-fade) · settings-chip-changing (a chip's fill
 mid-ease) · project-open · home-to-project-mid (mid cross-fade) · toast-refusal ·
 browser-instruments · browser-folder · drag-sample-mid (the ghost and the drop hint) ·
-clip-dragging · clip-selected-zoomed · confirm-unsaved.
+clip-dragging · clip-selected-zoomed · mixer-sources · mixer-buses · mixer-tab-mid (pages mid
+cross-fade) · mixer-matrix · mixer-folded · device-panel · dock-folded · confirm-unsaved.
 Each at 1440×900 and 1024×640. **Look at them** after a change.
 
 ## Borrowed, not copied
 
-`interstellar/app/widgets/TextFit.h`, `EasedScroll.h`, `Glyphs.h`, `AnimatedRows.h` are included in place (namespace
+`interstellar/app/widgets/TextFit.h`, `EasedScroll.h`, `Glyphs.h`, `AnimatedRows.h`, `FadePage.h` are included in place (namespace
 `interstellar_v1`): they draw with the cosmo palette, so they draw teal here. Their right home is
-Artboard — a task in `docs/PROGRESS.md`. Cosmo's `ConfirmDialog`, `Icons`, `Theme`, `EmbeddedFonts`
-are compiled from `apps/cosmo`.
+Artboard — a task in `docs/PROGRESS.md`. Cosmo's `ConfirmDialog`, `ContextMenu`, `SliderRow` (with
+its opt-in `formatValue`), `Icons`, `Theme`, `EmbeddedFonts` are compiled from `apps/cosmo`.
 
 ## Gotchas found building U1
 
@@ -73,3 +88,14 @@ are compiled from `apps/cosmo`.
 - The model lists strips in PROCESSING order — the Main bus comes after Mixer 1's strips, so the
   newest strip is not `strips.back()`.
 - After a zoom a clip may begin off-screen: aim a test's click at `max(clip.x, kHeaderW)`.
+
+## Gotchas found building U3
+
+- A label measured in the weight it is DRAWN in moves its neighbours when the weight changes (the
+  current tab is Medium): the highlight's tween is retargeted and restarts — a one-frame stall a
+  mid-tween test caught. Measure geometry in one weight.
+- A widget built lazily must build in `advance`, not `bind`: `bind` runs only when the model's
+  revision moves, and a click that only SHOWS something (a device panel) moves nothing.
+- A culled row takes no input: aim a test at a row only after `reveal` has scrolled it in.
+- The arrow "→" is drawn (`arrowText`): the embedded Roboto has no U+2192; "●" is not there either.
+- `Rig` publishes `world()`, `cx()`, `cy()` for the shots and the UI tests alike.

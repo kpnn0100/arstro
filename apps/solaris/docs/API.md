@@ -142,10 +142,13 @@ Each is one line: `[evt] <name> key=value …` — the log line, the `--watch` s
 | `strips[].devices[].params[].max` | number |  |
 | `strips[].devices[].params[].def` | number |  |
 | `strips[].devices[].params[].choices` | string[] | empty unless a choice |
+| `strips[].devices[].params[].logScale` | bool | a control's taper: moves in ratios (frequencies, times) |
+| `strips[].devices[].params[].integer` | bool | whole steps only |
 | `strips[].peak` | number[] | the last played block's peaks, L/R (R-PLAY-3) *(not in `--stable`)* |
 | `strips[].clipCount` | int | fed by: clips playing through it (R-MIX-8) |
 | `strips[].fromLanes` | string[] | fed by: the lanes those clips are drawn on |
 | `strips[].fromStrips` | string[] | fed by: strips whose output or a send lands here |
+| `strips[].targets` | string[] | where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports |
 | `masterDevices` | object[] | the master's rack, shaped like strips[].devices |
 | `lanes` | object[] | timeline rows, in order |
 | `lanes[].id` | string |  |

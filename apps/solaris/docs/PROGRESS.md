@@ -11,19 +11,19 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — U2: the song view — the browser, the lanes, drag and drop.*
+*Last updated: 2026-10-08 — U3: the mixer dock — pages, the master, the matrix, device panels.*
 
 ---
 
 ## NEXT
 
-**► U3 — the mixer dock**: under the timeline (R-UI-3), a tab per mixer and a Matrix tab (R-MIX-9).
-A strip: name in its colour (DR-UI-7), fader (dB) and pan, mute/solo, the meter
-(`AppModel::strips[].meter`), rack chips, sends; the master at the right; strips feeding a bus fold
-under it (R-MIX-12). A device chip opens a panel GENERATED from the registry (R-UI-5): a control
-per parameter from `deviceTypes` + the device's `params`, every change a `set <dv>.<param>=<v>`
-line. The dock's height is a drag handle, eased when toggled. Every control a command line — add
-them to `app/NOTES.md`. Read `app/NOTES.md` first.
+**► U4 — the two halves talk**: linked selection (R-MIX-8) — a clip selected lights its strip in
+the dock and scrolls it into view; a strip selected lights its clips on the lanes. Arrange by Lane
+| Channel (R-LANE-2): one toggle regroups the same clips into a row per strip, and a clip dragged to
+another row there is `clip move --strip`. Drag and drop onto the dock: an effect from the browser
+onto a strip's rack → `device add <ch> --type <t> --at <slot>`; a sample onto a strip → a clip on
+that strip. The audit panel (R-MIX-10): `audit` as a list in the dock, each finding naming what to
+click. Read `app/NOTES.md` first.
 
 ---
 
@@ -93,15 +93,21 @@ umbrella's pointer — `arstro.rule` §7).
       cross-fade, a clip arriving, moved and removed from a shell — each caught mid-tween; two
       mutants that snap fail it), `solaris_app_shots` 14 states × 2 sizes, looked at. The version
       chip waits for X1.
-- [ ] **U3** Mixer dock: a tab per mixer, strips (fader, pan, M/S, meter, rack chips, sends), the
-      master, the Matrix tab; device panels generated from the registry.
-- [ ] **U4** Drag and drop onto the mixer (an effect onto a rack, a sample onto a strip); linked
-      selection; Arrange by Channel; the audit panel; waveforms (a peaks hook).
+- [x] **U3** Mixer dock: a tab per mixer, strips (fader, pan, M/S, meter, rack chips, sends), the
+      master, the Matrix tab; device panels generated from the registry. — DR-UI-8, DR-UI-5,
+      DR-MIX-4 (`targetsOf`, `strips[].targets`); R-MIX-12 amended (groups start open). Cosmo's
+      `ContextMenu` and `SliderRow` reused, `SliderRow` with an opt-in formatter. `solaris_service`
+      17, `solaris_app_ui` 11 (a fader follows the pointer, a shell's gain travels — a 0 ms mutant
+      fails it —, mute eases, the route menu is the service's list, tabs slide, a fold and the dock
+      ease, + Effect, a generated panel, a matrix send), `solaris_app_shots` 21 × 2, looked at; the
+      window runs. Waveforms and the meters' peak hold wait for U4/P2.
+- [ ] **U4** Linked selection; Arrange by Channel; drag and drop onto the dock (an effect onto a
+      rack, a sample onto a strip); the audit panel; waveforms (a peaks hook).
 - [ ] **U5** Note editing: piano roll for the synth, step grid for the drum machine (views of a
       pattern).
 
 ### T — tasks found on the way
-- [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows` into Artboard (via
+- [ ] **T1** Promote Interstellar's `TextFit`, `EasedScroll`, `Glyphs`, `AnimatedRows`, `FadePage` into Artboard (via
       `implement_artboard`); both apps include them from there.
 
 ### X — later (specified, not scheduled)
@@ -111,6 +117,14 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-08 — the fader law is gain ∝ position², +6 dB at the top** (0 dB at 70 %, −24 dB at
+  a quarter): the usual console taper, so the useful range takes most of the travel. A value set
+  above +6 from a shell sits at the top.
+- **2026-10-08 — a fold group starts open** (R-MIX-12 amended): a new song's few strips must not
+  hide behind a click; the fold is for many one-shots, and it is the view's, like zoom.
+- **2026-10-08 — cosmo's `SliderRow` grew an opt-in formatter**, rather than Solaris forking a
+  slider: one more hook on the shared widget, cosmo's rows unchanged (its tests pass).
 
 - **2026-10-08 — a strip's default colour comes from its id, not its place** (R-UI-7): by place,
   deleting one strip recoloured every later one's clips in one frame; and the mixer (U3) must agree

@@ -68,15 +68,15 @@ not built yet.
 `#amixer`, `#atrack` (strip), `#asend`, `#arack`/`#aeffect`, `#alane`, `#apattern`/`#note`,
 `#aclip` — and links nothing but the standard library: a device is its registry `type` plus its
 parameters as text, which the core checks against the DSP registry. `parseProject`
-(`model/Project.cpp:292`) reads the suite grammar: header `key = value`, node lines, indented
+(`model/Project.cpp:299`) reads the suite grammar: header `key = value`, node lines, indented
 continuation lines, whole-line and inline `;` comments (kept with the node they follow), unknown
 keys (kept in order) and unknown nodes (kept verbatim with their indented lines). The suite's
 inline `#note`s under an `#aclip` become a pattern of their own — the one normalisation, reported.
-`serializeProject` (`model/Project.cpp:516`) writes §10's canonical form: `canonicalNumber`
+`serializeProject` (`model/Project.cpp:523`) writes §10's canonical form: `canonicalNumber`
 (`model/Format.cpp:33`, shortest round-trip, always a point), `canonicalBeats` (`:52`, rounded to
 1/960 beat, fewest decimals that read back to the tick), seconds to the microsecond; defaults of
 optional fields are omitted. **Parse → serialize is a byte-exact fixed point** for canonical text.
-Refused, each naming what and where (`validateProject`, `model/Project.cpp:623`): duplicate ids,
+Refused, each naming what and where (`validateProject`, `model/Project.cpp:650`): duplicate ids,
 `master` as an id, unknown strip kinds, dangling references, an audio clip on a non-audio strip, a
 note clip on a non-instrument strip, `in ≥ out`, a clip before the song, two racks for one strip,
 an input port as a destination, a header that is not `app = solaris` / `timebase = beats` /
@@ -85,16 +85,19 @@ field's default; out-of-range pan, pitch and velocity clamp. Guarded by `solaris
 mutants checked: dropping unknown keys on write breaks the fixed point).
 
 ### DR-MIX-4 Routing only goes forward (R-MIX-4)
-`validateProject`'s `checkTarget` (`model/Project.cpp:640`) accepts an `out` or a send target only
-when it is `master`, an output port, or a strip whose mixer's `order` is GREATER than the source
-strip's; anything else is refused as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a
+`validateProject`'s `checkTarget` accepts an `out` or a send target only when it is `master`, an
+output port, or a strip `feedsForward` (`model/Project.cpp:630`) allows — one whose mixer's `order`
+is GREATER than the source strip's — the ONE copy of the rule; anything else is refused as `ch_1 (Main, on Buses) output → ch_2 (kick, on Sources): a
 strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)`. A file that routes
-backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:97`) —
+backward does not load. Because of this, `Project::stripsInOrder` (`model/Project.cpp:104`) —
 mixer order, then strip order — is a topological order of the routing graph with no cycle check
-at all. A new project is `newProject` (`model/Project.cpp:134`): Sources (`mx_1`), Buses (`mx_2`)
+at all. A new project is `newProject` (`model/Project.cpp:141`): Sources (`mx_1`), Buses (`mx_2`)
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` (mutant checked: `<=` → `<` lets a same-mixer route
-through and the test fails).
+through and the test fails). The same rule is PUBLISHED: `targetsOf` (`:636`) lists what a strip
+may feed — later strips in processing order, `master`, the output ports — as `strips[].targets`
+(`core/service/ServiceModel.cpp:190`); a front end offers exactly that list, and the test routes
+to every entry offered.
 
 ### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
 `solaris_engine` knows no project and no file: it renders a `MixGraph` (`engine/MixGraph.h`) —
@@ -174,7 +177,7 @@ it); muted strips are silent regardless. The model shows it as `strips[].audible
 it as `silent`.
 
 ### DR-MIX-8/9/10 Fed by, the matrix, the audit (R-MIX-8, R-MIX-9, R-MIX-10)
-`refreshModel` (`core/service/ServiceModel.cpp:70`) computes each strip's `clipCount`, `fromLanes`
+`refreshModel` (`core/service/ServiceModel.cpp:75`) computes each strip's `clipCount`, `fromLanes`
 and `fromStrips`. `matrix print [--json]` (`matrixText`, `:260`): rows = strips in processing order,
 columns = the buses, master and output ports; `●` = the main output, `-6.0pre` = a send's dB and tap.
 `audit` (`:193`): unused strips, strips that reach no output port, single-input and empty buses,
@@ -295,11 +298,12 @@ first (`App::openSettings`, `app/App.cpp:118`). Every chip is `settings set …`
 shell shows at once.
 
 ### DR-UI-6 Shots and UI tests over the real service (R-UI-6)
-`solaris_app_shots` renders fourteen named states — Home empty and with cards, Settings at rest,
+`solaris_app_shots` renders twenty-one named states — Home empty and with cards, Settings at rest,
 mid-fade and mid-chip-ease, the song, Home→song mid-cross-fade, a refusal toast, the browser's
 instruments and a browsed folder, a sample dragged mid-way, a clip mid-drag, a clip selected while
-zoomed, the unsaved confirm — at 1440×900 and 1024×640, over the REAL `SolarisService` (`app/tests/Rig.h`: fake devices,
-folders and decoder; a fixed 16 ms clock); `--check` fails a blank frame. `solaris_app_ui` (9
+zoomed, the mixer's Sources and Buses pages, mid page-switch, the matrix, a fold, a device panel,
+the dock folded down, the unsaved confirm — at 1440×900 and 1024×640, over the REAL `SolarisService` (`app/tests/Rig.h`: fake devices,
+folders and decoder; a fixed 16 ms clock); `--check` fails a blank frame. `solaris_app_ui` (11
 tests) clicks and drags the geometry the widgets publish and asserts the lines sent, the model that came back,
 and a LIVE value caught mid-tween for every transition (the cross-fade, the sheet's fade, a chip's
 fill, the close). The window ran on this machine's display (`solaris song.slp`, 4 s, no crash).
@@ -329,7 +333,7 @@ places everything where it is. Empty, it says what to do in words.
 slides 220 ms. Samples lists the folders from Settings; a folder clicked is `browse "<path>"`
 (`:216`) and shows its sub-folders and audio files (mono, the filename rule) under a row back up;
 with no folders it says so and a click opens Settings. Instruments lists `AppModel::deviceTypes`
-(the DSP registry, `core/service/ServiceModel.cpp:97`) — instruments, then effects. Song lists the
+(the DSP registry, `core/service/ServiceModel.cpp:100`) — instruments, then effects. Song lists the
 files the song plays. The list is `AnimatedRows` keyed by generation and content (`rebuild`, `:54`):
 a tab or folder changed starts a new generation, so the old list fades where it was scrolled while
 the new one fades in (`navigate`, `:96`); an inserted row fades in, a removed one out. A row is
@@ -342,6 +346,47 @@ lane, no `--lane` — a new lane; an effect → a notice that it goes on a strip
 places at the playhead.
 
 ### DR-UI-7 A strip's colour (R-UI-7)
-The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:164`): the
+The model's `strips[].colour` is resolved by the service (`core/service/ServiceModel.cpp:166`): the
 strip's own, else its id's number − 1 — never −1, and unchanged when other strips are added or
 deleted. Every front end draws it as is.
+
+### DR-UI-8 The mixer dock (R-UI-3, R-MIX-1/5/6/7/9/12, R-MIX-12 amended)
+`MixerDock` (`app/widgets/MixerDock.cpp`) sits under the lanes (`ProjectScreen::dockTarget`,
+`app/widgets/ProjectScreen.cpp:102`: 429 px wanted; its top edge dragged follows the pointer; the
+chevron folds it to its tab bar, eased 220 ms; it gives way before the lanes, which keep 130 px).
+Tabs: a mixer page each, "+" (`mixer add`), Matrix; keyed (`syncTabs`) so a tab added slides the
+others along, measured in one weight so choosing a tab moves nothing; the highlight slides, the
+pages cross-fade as layers. A page (`syncCards`, `:153`) is a card per strip in processing order,
+the strips feeding one bus (two or more) gathered under its header; the master pinned right. A card:
+colour, name, "audio · N clips" / "bus · fed by N"; rack chips (four slots: the devices and "+
+Effect", or two, "+N more", "+ Effect"); two sends (→ name, dB, P = pre; a third says "in the
+matrix"); pan; the fader (`faderPos`, `:89`: gain ∝ position², 0 dB at 0.708, +6 at the top) beside
+L/R meters (−60…+6 dBFS, green → amber at −12 → red at −3); M and S (solo amber); "→ <out>".
+Commands (`handleGesture`, `:733`): a fader or pan dragged — `set <ch>.gain|pan=…` (master:
+`set project.masterGain=…`) at each step, double-click → 0; M/S → `set <ch>.mute|solo=…`; "→ out"
+→ cosmo's `ContextMenu` of `strips[].targets` → `route`; "+ Effect" → the registry's effects →
+`device add` (`openAddEffect`, `:709`); a send → pre/post, make it the main output, remove; a send
+dragged sideways → `set <sd>.gain=…`; right-click → rename (`set <ch|mx>.name=…`) or delete. A
+fold header click folds its group (`:843`, the view's, eased 260 ms: members narrow to nothing, the
+header widens to "→ Main · N strips"). The Matrix (`paintMatrix`, `:1182`): rows by mixer, columns
+= strips off the first mixer, master, out ports; ● the main output, a send's dB; a cell routing
+refuses is hatched; a click on an open cell → `send add`, on a send → its menu, a double-click →
+`route`, a vertical drag → its level. **Nothing snaps** (`advance`, `:483`): every model value is
+drawn through an eased copy keyed by strip (fader and pan 220 ms, M/S/dim 200, colour cross-fade
+200 from what is shown, meters 40 up / 300 down); a dragged control follows the pointer exactly;
+cards and tabs are keyed — arriving grows, leaving shrinks, a moved card shrinks where it was and
+grows where it is. A strip a solo silences dims.
+
+### DR-UI-5 Device panels, generated (R-UI-5)
+`DevicePanel` (`app/widgets/DevicePanel.cpp`) opens from a rack chip, over the strips, fading and
+sliding (150 / 120 ms). It knows no device: per `DeviceModel::params` it builds — once per device,
+the first time it is shown (`advance`, `:257`; `build`, `:156`), kept — a page of rows grouped by the
+name's prefix (`osc1.*` → OSC1): a number is cosmo's `SliderRow` with the opt-in `formatValue`
+(Hz/kHz, ms, dB, st/ct/oct signed, a 0…1 amount in %), a `logScale` parameter mapped through a log
+taper (`logTaper`, `:76`), an `integer` one rounded; a choice is a row stepping its names (left half
+back, right half forward). A row's double-click restores the registry's default. Every change is
+`set <dv>.<param>=…` (a choice by name), the header's chip `set <dv>.bypass=…` (its fill eased),
+Remove `device remove` (none for an instrument). Another device cross-fades the pages (`FadePage`);
+while the pointer is down `bind` re-seeds nothing; the body scrolls (`reveal` eases to a row). A
+device removed by anyone closes the panel. The model publishes `params[].logScale` and `.integer`
+for it.

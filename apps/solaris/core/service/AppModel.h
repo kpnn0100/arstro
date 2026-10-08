@@ -24,6 +24,8 @@ namespace solaris
         double value = 0;       // engineering units; a choice = its index
         double min = 0, max = 1, def = 0;
         std::vector<std::string> choices;
+        bool logScale = false;  // a control's taper: frequencies and times move in ratios
+        bool integer = false;   // whole steps only (octave, voices)
     };
 
     struct DeviceModel
@@ -54,6 +56,7 @@ namespace solaris
         int clipCount = 0;
         std::vector<std::string> fromLanes;     // lanes its clips are drawn on
         std::vector<std::string> fromStrips;    // strips whose output or a send lands here
+        std::vector<std::string> targets;       // where its output or a send MAY go (R-MIX-4): later strips, master, out ports
     };
 
     struct MixerModel

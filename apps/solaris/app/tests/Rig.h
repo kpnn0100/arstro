@@ -29,6 +29,15 @@ namespace sltest
     namespace fs = std::filesystem;
     using arstro::solaris::SolarisService;
 
+    /** A widget-local rect → window coordinates (the App draws its tree at the identity transform). */
+    inline artboard::Rect world(const artboard::Segment &s, const artboard::Rect &r)
+    {
+        const artboard::Point o = s.worldTransform().apply(artboard::Point{0, 0});
+        return artboard::Rect{r.x + o.x, r.y + o.y, r.w, r.h};
+    }
+    inline double cx(const artboard::Rect &r) { return r.x + r.w * 0.5; }
+    inline double cy(const artboard::Rect &r) { return r.y + r.h * 0.5; }
+
     inline std::string scratch(const std::string &sub)
     {
         const char *t = std::getenv("SOLARIS_UI_TEST_DIR");

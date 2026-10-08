@@ -627,6 +627,26 @@ namespace solaris
 
     // ── validate ─────────────────────────────────────────────────────────────────────────────
 
+    bool feedsForward(const Project &p, const Strip &from, const Strip &to)
+    {
+        const Mixer *a = p.mixerOf(from), *b = p.mixerOf(to);
+        return &from != &to && (b ? b->order : 0) > (a ? a->order : 0);
+    }
+
+    std::vector<std::string> targetsOf(const Project &p, const Strip &s)
+    {
+        std::vector<std::string> out;
+        for (const Strip *t : p.stripsInOrder())
+            if (feedsForward(p, s, *t)) out.push_back(t->id);
+        out.push_back("master");
+        std::vector<const Port *> ports;
+        for (const auto &pt : p.ports)
+            if (pt.dir == "out") ports.push_back(&pt);
+        std::stable_sort(ports.begin(), ports.end(), [](const Port *x, const Port *y) { return x->order < y->order; });
+        for (const Port *pt : ports) out.push_back(pt->id);
+        return out;
+    }
+
     std::vector<std::string> validateProject(const Project &p)
     {
         std::vector<std::string> e;
@@ -654,8 +674,7 @@ namespace solaris
             const Strip *t = p.strip(to);
             if (!t) { e.push_back(from.id + "'s " + what + " names `" + to + "`, which is no strip, port or `master`"); return; }
             if (t == &from) { e.push_back(from.id + "'s " + what + " goes to itself"); return; }
-            const Mixer *a = p.mixerOf(from), *b = p.mixerOf(*t);
-            if ((b ? b->order : 0) <= (a ? a->order : 0))
+            if (!feedsForward(p, from, *t))
                 e.push_back(describe(from) + " " + what + " → " + describe(*t) +
                             ": a strip can only feed a strip on a LATER mixer, the master or a port (R-MIX-4)");
         };

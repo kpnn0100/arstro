@@ -66,7 +66,7 @@ namespace cosmo_v2
     void SliderRow::layout()
     {
         const double w = width.value() - (mKeyGutter ? kKeyGutter : 0.0);
-        const double trackW = w - kLabelWidth - kGap - kValueWidth - kGap;
+        const double trackW = w - kLabelWidth - kGap - mValueWidth - kGap;
         mSlider->x.set(kLabelWidth + kGap);
         mSlider->y.set((kRowHeight - mSlider->height.value()) * 0.5);
         mSlider->width.set(std::max(0.0, trackW));
@@ -79,9 +79,14 @@ namespace cosmo_v2
         t.drawText(mLabel, 0.0, h * 0.5 + 10.0 * 0.35, 10.0, font::sans());
 
         const double v = mSlider->value();
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), v > 0 ? "+%d" : "%d", (int)std::lround(v));
-        const std::string text(buf);
+        std::string text;
+        if (formatValue) text = formatValue(v);
+        else
+        {
+            char buf[32];
+            std::snprintf(buf, sizeof(buf), v > 0 ? "+%d" : "%d", (int)std::lround(v));
+            text = buf;
+        }
         const double vw = width.value() - (mKeyGutter ? kKeyGutter : 0.0);
         const double tx = vw - estimateTextWidth(text, 10.0);
         t.setFill(palette::mutedForeground());

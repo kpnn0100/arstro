@@ -32,8 +32,10 @@ namespace solaris_ui
         mProject = std::make_shared<ProjectScreen>();
         mSettings = std::make_shared<SettingsSheet>();
         mConfirm = std::make_shared<cosmo_v2::ConfirmDialog>(palette::primary());
+        mMenu = std::make_shared<cosmo_v2::ContextMenu>();
         mModalRoot = std::make_shared<Segment>();
         mModalRoot->addChild(mConfirm);
+        mModalRoot->addChild(mMenu);
 
         mHome->onNewSong = [this] { if (onPickSongToCreate) onPickSongToCreate(); };
         mHome->onOpenSong = [this] { if (onPickSongToOpen) onPickSongToOpen(); };
@@ -52,6 +54,11 @@ namespace solaris_ui
         mProject->onCommand = [this](const std::string &line) { return dispatch(line); };
         mProject->onNotice = [this](const std::string &s) { showToast(s); };
         mProject->browser().onOpenSettings = [this] { openSettings(); };
+        mProject->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { mMenu->open(std::move(items), world.x, world.y); };
+        mProject->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+            mMenu->onRename = std::move(done);
+            mMenu->openRename(cur, world.x, world.y);
+        };
 
         mSettings->onCommand = [this](const std::string &line) { dispatch(line); };
         mSettings->onAddFolder = [this] {
@@ -59,7 +66,8 @@ namespace solaris_ui
         };
 
         mRecognizer.setSink([this](const Gesture &g) {
-            if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; } // a modal owns input
+            if (mMenu->isOpen()) { mMenu->onGesture(g); return; }       // a modal owns input
+            if (mConfirm->isOpen()) { mConfirm->onGesture(g); return; }
             if (mSettings->isOpen()) { mSettings->onGesture(g); return; }
             if (mScreen == "home") mHome->onGesture(g);
             else mProject->onGesture(g);
@@ -69,7 +77,8 @@ namespace solaris_ui
 
     void App::layoutAll()
     {
-        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get()})
+        for (Segment *s : {(Segment *)mHome.get(), (Segment *)mProject.get(), (Segment *)mSettings.get(), (Segment *)mModalRoot.get(), (Segment *)mConfirm.get(),
+                           (Segment *)mMenu.get()})
         {
             s->x.set(0);
             s->y.set(0);
@@ -154,13 +163,15 @@ namespace solaris_ui
         const auto &m = mHooks.model ? mHooks.model() : emptyModel();
         if (m.revision != mBoundRevision || m.transport.playing) return true;
         if (mHome->opacity.isAnimating() || mProject->opacity.isAnimating() || mToast.isAnimating() || mToast.value() > 0.0) return true;
-        if (mSettings->appearAmount() > 0.0) return true;
+        if (mSettings->appearAmount() > 0.0 || mMenu->isOpen()) return true;
         return nowMs - mLastActivityMs < kActiveWindowMs;
     }
 
     void App::pointer(int kind, double x, double y, int button, double timeMs, bool alt, bool shift, bool ctrl)
     {
         mLastActivityMs = mNowMs;
+        if (kind == 0) mProject->setInteracting(true);
+        if (kind == 2) mProject->setInteracting(false);
         RawPointer rp{};
         rp.kind = kind == 0 ? RawPointer::Kind::Down : (kind == 2 ? RawPointer::Kind::Up : RawPointer::Kind::Move);
         rp.pos = Point{x, y};
@@ -185,6 +196,7 @@ namespace solaris_ui
     bool App::key(const KeyEvent &e)
     {
         mLastActivityMs = mNowMs;
+        if (mMenu->isOpen()) { mMenu->dispatchKey(e); return true; }
         if (mConfirm->isOpen()) { mConfirm->handleKey(e); return true; }
         if (mSettings->isOpen()) return mSettings->handleKey(e);
         if (e.type != KeyEvent::Type::Down) return false;

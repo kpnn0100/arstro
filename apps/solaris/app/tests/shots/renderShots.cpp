@@ -38,6 +38,18 @@ namespace
         r.cmd("send add ch_3 --to ch_5 --gain -8");
     }
 
+    /** The song, with a rack on the bus and the master, and a few faders moved — so the mixer has something to show. */
+    void mixedSong(sltest::Rig &r, const std::string &name)
+    {
+        songWithStrips(r, name);
+        r.cmd("device add ch_5 --type reverb");
+        r.cmd("device add ch_3 --type eq");
+        r.cmd("device add master --type compressor");
+        r.cmd("set ch_2.gain=-4.5 ch_3.pan=-0.35 ch_4.gain=-9 ch_4.pan=0.4 ch_4.mute=true ch_5.gain=-3");
+        r.cmd("send add ch_4 --to ch_5 --gain -12 --pre");
+    }
+    using sltest::world;
+
     std::vector<Shot> shots()
     {
         return {
@@ -145,6 +157,56 @@ namespace
                  r.settle();
                  const artboard::Rect c = tl.clipRect("ac_1");                   // begins off-screen once zoomed:
                  r.click(ox + std::max(c.x, arstro::solaris_ui::Timeline::kHeaderW) + 30.0, oy + c.y + 20.0); // click its visible part
+                 r.settle();
+             }},
+            {"mixer-sources",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+             }},
+            {"mixer-buses",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().dock().setTab(1);
+                 r.settle();
+             }},
+            {"mixer-tab-mid",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().dock().setTab(1);
+                 r.pump(4 * sltest::Rig::kFrameMs); // the pages mid cross-fade, the highlight mid-slide
+             }},
+            {"mixer-matrix",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 r.app->project().dock().setTab(2);
+                 r.settle();
+             }},
+            {"mixer-folded",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.foldRect("ch_1")));
+                 r.settle();
+             }},
+            {"device-panel",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.chipRect("ch_3", 0))); // Bass's Basic Synth
+                 r.settle();
+             }},
+            {"dock-folded",
+             [](sltest::Rig &r) {
+                 mixedSong(r, "Night Drive");
+                 r.settle();
+                 auto &d = r.app->project().dock();
+                 r.click(world(d, d.toggleRect()));
                  r.settle();
              }},
             {"confirm-unsaved",

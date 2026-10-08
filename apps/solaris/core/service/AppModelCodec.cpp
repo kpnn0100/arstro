@@ -56,10 +56,13 @@ namespace solaris
             {"strips[].devices[].params[].max", "number", ""},
             {"strips[].devices[].params[].def", "number", ""},
             {"strips[].devices[].params[].choices", "string[]", "empty unless a choice"},
+            {"strips[].devices[].params[].logScale", "bool", "a control's taper: moves in ratios (frequencies, times)"},
+            {"strips[].devices[].params[].integer", "bool", "whole steps only"},
             {"strips[].peak", "number[]", "the last played block's peaks, L/R (R-PLAY-3)", false},
             {"strips[].clipCount", "int", "fed by: clips playing through it (R-MIX-8)"},
             {"strips[].fromLanes", "string[]", "fed by: the lanes those clips are drawn on"},
             {"strips[].fromStrips", "string[]", "fed by: strips whose output or a send lands here"},
+            {"strips[].targets", "string[]", "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports"},
             {"masterDevices", "object[]", "the master's rack, shaped like strips[].devices"},
             {"lanes", "object[]", "timeline rows, in order"},
             {"lanes[].id", "string", ""},
@@ -164,7 +167,7 @@ namespace solaris
                     params.push(Json::object()
                                     .set("name", p.name).set("label", p.label).set("unit", p.unit).set("text", p.text)
                                     .set("value", p.value).set("min", p.min).set("max", p.max).set("def", p.def)
-                                    .set("choices", strings(p.choices)));
+                                    .set("choices", strings(p.choices)).set("logScale", p.logScale).set("integer", p.integer));
                 a.push(Json::object().set("id", d.id).set("type", d.type).set("label", d.label)
                            .set("instrument", d.instrument).set("bypass", d.bypass).set("known", d.known).set("params", params));
             }
@@ -192,7 +195,8 @@ namespace solaris
                             .set("out", s.out).set("gain", s.gain).set("pan", s.pan).set("mute", s.mute).set("solo", s.solo)
                             .set("audible", s.audible).set("colour", s.colour).set("sends", sends).set("devices", devices(s.devices));
             if (!stable) st.set("peak", Json::array().push(Json::number(s.peak[0])).push(Json::number(s.peak[1])));
-            st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips));
+            st.set("clipCount", s.clipCount).set("fromLanes", strings(s.fromLanes)).set("fromStrips", strings(s.fromStrips))
+                .set("targets", strings(s.targets));
             strips.push(st);
         }
         j.set("strips", strips);

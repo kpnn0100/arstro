@@ -106,7 +106,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (1–11 ✅ headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; 12, folding in the mixer VIEW, lands with the UI)
+## R-MIX — the mixer: every source has its own strip — ✅ IMPLEMENTED (1–11 headless: DR-ENG-1, DR-MIX-2/4/7/8/9/10/11; drawn and played with: DR-UI-8; 12 the fold: DR-UI-8; 8's linked selection with U4)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from
@@ -141,14 +141,20 @@ the 1st; the 2nd goes to master by default; a matrix view shows the whole send p
 - **R-MIX-9 The matrix** shows every route at once: rows = every strip (grouped by mixer) and every
   input port; columns = every later strip, the master, and every output port grouped by device.
   A cell shows the main output (●), a send's level in dB and pre/post. Editable from the cell.
-  `matrix print [--json]` prints the same thing.
+  `matrix print [--json]` prints the same thing. (**Added, U3:** which cells are open is the
+  service's answer — `strips[].targets` — so the view hatches what routing refuses rather than
+  re-deriving the rule.)
 - **R-MIX-10 Mix audit** — a command and a panel: strips with no clips, clips on muted strips,
   strips that reach no output, buses with a single input, peaks over 0 dBFS in the last render or
   playback. Assertable from the CLI like Interstellar's `lint`.
 - **R-MIX-11 Mix laws are the suite's**: constant-power balance pan with unity at centre and
   linear-amplitude fades — Interstellar's `AudioMix` — so one project sounds the same in both apps.
 - **R-MIX-12 Strips feeding a bus fold under it** in the mixer view (expand to see them), so thirty
-  one-shots are not thirty visible strips.
+  one-shots are not thirty visible strips. (**AMENDED (U3, 2026-10-08):** the strips on a page that
+  feed the same bus (two or more) stand together under a header naming it, and a click FOLDS them
+  into it — but they start OPEN. A new song's three strips all feed Main; folded by default, the
+  only faders a new song has would hide behind a click. The fold is the view's, not the song's: a
+  fold is not saved and no command sets it, like zoom.)
 
 ## R-LANE — the timeline: lanes hold time — 🚧 IN PROGRESS (R-LANE-1, R-CLIP-1…4 ✅: DR-CLIP-2/3 headless, DR-UI-3 drawn and dragged; R-LANE-2's view with U4)
 
@@ -314,7 +320,7 @@ R-VER, applied to an arrangement:
 - **R-API-1 The API document is generated, committed and drift-tested** — rung 4 — and includes the
   device registry (every instrument and effect parameter with unit and range).
 
-## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 6, 7 ✅ DR-UI-1, DR-UI-6, DR-UI-7; 3 the song bar, browser and lanes ✅ DR-UI-3 — the mixer dock with U3; 4 partly; 5 with U3)
+## R-UI — the screens — 🚧 IN PROGRESS (1, 2, 3, 5, 6, 7 ✅ DR-UI-1/3/5/6/7/8 — 3 without the version chip, X1; 4 partly: the Artboard move is T1)
 
 - **R-UI-1 Two screens, as Interstellar:** Home (R-HOME) and the Project view.
 - **R-UI-2 The accent is teal, `#159387`, the only forked token** — teal because orange, the
@@ -335,7 +341,10 @@ R-VER, applied to an arrangement:
   `apps/interstellar/app/widgets/`, not copied. A copied widget is a divergence with a delay fuse.
   (**Amended 2026-10-08:** `SettingsDialog` left the list — R-SET-1; the Interstellar helpers joined
   it — their home should be Artboard, a task filed in `docs/PROGRESS.md`. **U2:** `AnimatedRows`
-  joined them — the browser's list and the lanes travel through it.)
+  joined them — the browser's list and the lanes travel through it. **U3:** cosmo's `ContextMenu`
+  (routes, effects, rename) and Interstellar's `FadePage` joined; `SliderRow` gained an OPT-IN
+  readout formatter and value width — engineering units are not cosmo's −100…100 — following the
+  precedent of Interstellar's key gutter: unset, cosmo's rows draw exactly as before.)
 - **R-UI-5 Device panels are generated from the registry** (R-DSP-2): a knob or slider per
   parameter, grouped by its name's prefix (`osc1.*`, `filter.*`). A new DSP parameter appears in
   the UI with no UI code.

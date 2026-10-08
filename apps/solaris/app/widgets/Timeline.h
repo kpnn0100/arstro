@@ -63,6 +63,8 @@ namespace solaris_ui
         double pxPerBeat() const { return mPpb.value(); }          // LIVE (eased)
         /** A clip's LIVE opacity (0 = not there): a test tells a fade from a cut. */
         double clipAlpha(const std::string &id) const;
+        /** How far a clip's colour has come since its strip's last changed (1 = there). */
+        double clipHueAmount(const std::string &id) const;
         double playheadBeat() const { return mPlayhead.value(); }  // LIVE (eased on a seek)
 
         /** The browser's drag: where it would land (a row; beat), and what it is. */
@@ -99,13 +101,16 @@ namespace solaris_ui
         {
             ClipView v;
             double atTarget = 0, rowTarget = 0, atLast = 0, rowLast = 0, aLast = 0;
-            artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0};
+            artboard::AnimatedProperty at{0.0}, row{0.0}, alpha{0.0}, hueT{1.0};
+            artboard::Color hueFrom, hueTo; // its strip's colour, cross-faded when the strip's changes
+            int hueLast = 0;
             bool placed = false, gone = false;
         };
         /** A lane stripe's colour, cross-faded when it changes (an empty lane takes its first clip's). */
         struct Stripe
         {
-            int want = -1, from = -1, to = -1;
+            int want = -1, last = -1;
+            artboard::Color from, to;     // from what was SHOWN, so a change mid-fade never jumps
             artboard::AnimatedProperty t{1.0};
             bool placed = false;
         };
@@ -113,7 +118,7 @@ namespace solaris_ui
         const ClipLive *live(const std::string &id) const;
         double rowY(int i) const; // row i's LIVE top, before scrolling
         artboard::Rect clipBox(const ClipView &v, double at, double rowY) const;
-        void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring) const;
+        void paintClip(artboard::IRenderTarget &t, const ClipView &v, const artboard::Rect &r, double alpha, double ring, const artboard::Color &hue) const;
         double snap(double beat) const { return std::max(0.0, std::round(beat * 4.0) / 4.0); }
 
         std::vector<Row> mRows;                       // the model's, in order: hit-testing

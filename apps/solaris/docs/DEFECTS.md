@@ -9,7 +9,7 @@ commit hash and the test that now guards it. Entry format: `arstro.cosmo.core.de
 
 ## Closed
 
-### D-1 A refused edit announced changes it did not make — closed in U2
+### D-1 A refused edit announced changes it did not make — closed in U2, `413fec4`
 - **Found:** 2026-10-08, building U2's one-command instrument drop (reading `changed()`).
 - **Symptom:** `clip add --src new.wav --in -1` is refused and the project is restored, but the
   stream already carried `project.changed what=strip.added node=ch_3` — an agent following the

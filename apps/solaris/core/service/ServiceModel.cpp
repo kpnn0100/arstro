@@ -55,6 +55,8 @@ namespace solaris
                 pm.max = spec.max;
                 pm.def = spec.def;
                 pm.choices = spec.choices;
+                pm.logScale = spec.logScale;
+                pm.integer = spec.integer;
                 pm.value = spec.def;
                 for (const auto &kv : d.params)
                     if (kv.first == spec.name) parseParam(spec, kv.second, pm.value);
@@ -185,6 +187,7 @@ namespace solaris
                 if (sd.to == s->id) from.insert(sd.from);
             sm.fromLanes.assign(lanes.begin(), lanes.end());
             sm.fromStrips.assign(from.begin(), from.end());
+            sm.targets = targetsOf(p, *s);
             mModel.strips.push_back(sm);
         }
         if (const Rack *r = p.rack("master"))

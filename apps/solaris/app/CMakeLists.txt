@@ -40,7 +40,9 @@ set(SL_COSMO_SOURCES
     ${SL_COSMO_DIR}/Theme.cpp
     ${SL_COSMO_DIR}/EmbeddedFonts.cpp
     ${SL_COSMO_DIR}/widgets/ConfirmDialog.cpp
-    ${SL_COSMO_DIR}/widgets/Icons.cpp)
+    ${SL_COSMO_DIR}/widgets/ContextMenu.cpp
+    ${SL_COSMO_DIR}/widgets/Icons.cpp
+    ${SL_COSMO_DIR}/widgets/SliderRow.cpp)
 
 file(GLOB SL_APP_SOURCES CONFIGURE_DEPENDS ${SL_APP_DIR}/*.cpp ${SL_APP_DIR}/widgets/*.cpp)
 add_library(solaris_app STATIC

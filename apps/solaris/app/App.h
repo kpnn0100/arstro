@@ -25,6 +25,7 @@
 #include "widgets/ProjectScreen.h"
 #include "widgets/SettingsSheet.h"
 #include "../../cosmo/widgets/ConfirmDialog.h"
+#include "../../cosmo/widgets/ContextMenu.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -69,6 +70,7 @@ namespace solaris_ui
         ProjectScreen &project() { return *mProject; }
         SettingsSheet &settings() { return *mSettings; }
         cosmo_v2::ConfirmDialog &confirm() { return *mConfirm; }
+        cosmo_v2::ContextMenu &menu() { return *mMenu; }
         artboard::Segment *activeRoot();
 
     private:
@@ -84,6 +86,7 @@ namespace solaris_ui
         std::shared_ptr<ProjectScreen> mProject;
         std::shared_ptr<SettingsSheet> mSettings;
         std::shared_ptr<cosmo_v2::ConfirmDialog> mConfirm;
+        std::shared_ptr<cosmo_v2::ContextMenu> mMenu;  // cosmo's: a route, an effect, rename — modal while open
         std::shared_ptr<artboard::Segment> mModalRoot; // hosts cosmo's dialog: its advance is the tree's
         artboard::GestureRecognizer mRecognizer;
         std::string mScreen = "home";

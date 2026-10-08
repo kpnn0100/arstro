@@ -875,6 +875,18 @@
       "stable": true
     },
     {
+      "path": "strips[].devices[].params[].logScale",
+      "type": "bool",
+      "summary": "a control's taper: moves in ratios (frequencies, times)",
+      "stable": true
+    },
+    {
+      "path": "strips[].devices[].params[].integer",
+      "type": "bool",
+      "summary": "whole steps only",
+      "stable": true
+    },
+    {
       "path": "strips[].peak",
       "type": "number[]",
       "summary": "the last played block's peaks, L/R (R-PLAY-3)",
@@ -896,6 +908,12 @@
       "path": "strips[].fromStrips",
       "type": "string[]",
       "summary": "fed by: strips whose output or a send lands here",
+      "stable": true
+    },
+    {
+      "path": "strips[].targets",
+      "type": "string[]",
+      "summary": "where its output or a send may go (R-MIX-4): strips on later mixers, master, output ports",
       "stable": true
     },
     {

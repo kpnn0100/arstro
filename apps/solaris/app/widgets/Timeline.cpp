@@ -115,6 +115,12 @@ namespace solaris_ui
         return 0.0;
     }
 
+    double Timeline::clipHueAmount(const std::string &id) const
+    {
+        const ClipLive *l = live(id);
+        return l ? l->hueT.value() : 0.0;
+    }
+
     double Timeline::rowY(int i) const
     {
         const auto *r = mRowMotion.byIndex(i);
@@ -219,8 +225,19 @@ namespace solaris_ui
                 l.rowLast = l.rowTarget;
                 l.alpha.set(fadeIn ? 0.0 : 1.0);
                 l.aLast = fadeIn ? 0.0 : 1.0;
+                l.hueFrom = l.hueTo = surface::track(l.v.colour);
+                l.hueLast = l.v.colour;
                 l.placed = true;
             }
+            if (l.v.colour != l.hueLast)
+            {
+                l.hueFrom = lerpColor(l.hueFrom, l.hueTo, l.hueT.value());
+                l.hueTo = surface::track(l.v.colour);
+                l.hueT.set(0.0);
+                l.hueT.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
+                l.hueLast = l.v.colour;
+            }
+            l.hueT.update(nowMs);
             // the same 200 ms ease as the rows, so a clip and its lane travel together
             if (l.atTarget != l.atLast) { l.at.animateTo(l.atTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.atLast = l.atTarget; }
             if (l.rowTarget != l.rowLast) { l.row.animateTo(l.rowTarget, motion::kSelectMs, Easing::EaseOutCubic, nowMs); l.rowLast = l.rowTarget; }
@@ -231,14 +248,16 @@ namespace solaris_ui
         }
         mLive.erase(std::remove_if(mLive.begin(), mLive.end(), [](const ClipLive &l) { return l.gone && !l.alpha.isAnimating() && l.alpha.value() <= 0.001; }),
                     mLive.end());
+        auto stripeColour = [](int c) { return c >= 0 ? surface::track(c) : palette::whiteAlpha(0.12); };
         for (auto &kv : mStripes)
         {
             Stripe &st = kv.second;
-            if (!st.placed || !mEver) { st.from = st.to = st.want; st.t.set(1.0); st.placed = true; }
-            else if (st.want != st.to)
+            if (!st.placed || !mEver) { st.from = st.to = stripeColour(st.want); st.last = st.want; st.t.set(1.0); st.placed = true; }
+            else if (st.want != st.last)
             {
-                st.from = st.to;
-                st.to = st.want;
+                st.from = lerpColor(st.from, st.to, st.t.value());
+                st.to = stripeColour(st.want);
+                st.last = st.want;
                 st.t.set(0.0);
                 st.t.animateTo(1.0, motion::kCrossFadeMs, Easing::EaseOutCubic, nowMs);
             }
@@ -345,9 +364,8 @@ namespace solaris_ui
         }
     }
 
-    void Timeline::paintClip(IRenderTarget &t, const ClipView &v, const Rect &r, double a, double ring) const
+    void Timeline::paintClip(IRenderTarget &t, const ClipView &v, const Rect &r, double a, double ring, const Color &hue) const
     {
-        const Color hue = surface::track(v.colour);
         drawRoundedRect(t, r, radius::control(), Paint::filledStroked(fade(hue, 0.32 * a), fade(hue, 0.85 * a), 1.0));
         t.save();
         t.clipRect(r.x, r.y, r.w, r.h);
@@ -448,7 +466,7 @@ namespace solaris_ui
             const Rect r = clipBox(v, l.at.value(), l.row.value() * kRowH);
             if (r.right() < kHeaderW || r.x > W || r.bottom() < kRulerH || r.y > H) continue;
             const double ring = l.gone ? 0.0 : (v.c.id == mSelected ? mSelIn.value() : (v.c.id == mPrevSelected ? mSelOut.value() : 0.0));
-            paintClip(t, v, r, (dragged ? 0.35 : 1.0) * a, dragged ? 0.0 : ring);
+            paintClip(t, v, r, (dragged ? 0.35 : 1.0) * a, dragged ? 0.0 : ring, lerpColor(l.hueFrom, l.hueTo, l.hueT.value()));
             int hi = -1;
             for (size_t i = 0; i < mClips.size() && !l.gone; ++i)
                 if (mClips[i].c.id == v.c.id) hi = (int)i;
@@ -456,7 +474,7 @@ namespace solaris_ui
             if (hv > 0.001 && !dragged) drawRoundedRect(t, r, radius::control(), Paint::filled(palette::hoverWash(hv * a)));
         }
         if (mDragging)
-            if (const ClipLive *l = live(mPressClip)) paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow)), 1.0, 1.0);
+            if (const ClipLive *l = live(mPressClip)) paintClip(t, l->v, clipBox(l->v, mDragBeat, rowY(mDragRow)), 1.0, 1.0, lerpColor(l->hueFrom, l->hueTo, l->hueT.value()));
         // the browser's drop hint: where it would land
         if (mDropAmt.value() > 0.001 && mDropRow >= 0)
         {
@@ -483,8 +501,7 @@ namespace solaris_ui
             const Row &d = row.data;
             Color stripe = stripeColour(d.colour);
             const auto st = mStripes.find(row.key);
-            if (st != mStripes.end() && st->second.placed)
-                stripe = lerpColor(stripeColour(st->second.from), stripeColour(st->second.to), st->second.t.value());
+            if (st != mStripes.end() && st->second.placed) stripe = lerpColor(st->second.from, st->second.to, st->second.t.value());
             drawRoundedRect(t, Rect{0, r.y + 6.0, 3.0, r.h - 12.0}, radius::control(), Paint::filled(fade(stripe, a)));
             const bool own = d.lane.empty();
             t.setFill(fade(own ? palette::mutedForeground() : palette::foreground(), a));

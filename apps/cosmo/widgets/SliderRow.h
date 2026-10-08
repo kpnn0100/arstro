@@ -49,6 +49,12 @@ namespace cosmo_v2
         double keyFillAmount() const { return mKeyFill.value(); }   // the LIVE eased fill, for a test
         artboard::Rect keyRect() const;
         std::function<void()> onKeyClick;
+        /** Opt-in, for an embedder whose values are not cosmo's −100…100 (Solaris's device panels,
+         *  its R-UI-5): the readout's text for a slider value — engineering units, a taper mapped
+         *  back, a choice's name — in a value column `valueWidth` wide. Unset, the readout and the
+         *  layout are exactly cosmo's (a signed integer, kValueWidth). */
+        std::function<std::string(double)> formatValue;
+        void setValueWidth(double w) { mValueWidth = w; }
 
         void layout();  // call after width changes
         void advance(double nowMs) override;
@@ -61,6 +67,7 @@ namespace cosmo_v2
         std::string mLabel;
         std::shared_ptr<artboard::Slider> mSlider;
         bool mKeyGutter = false;
+        double mValueWidth = kValueWidth;
         int mKeyWanted = 0, mKeyApplied = -1;
         artboard::AnimatedProperty mKeyFill{0.0}, mKeyLine{0.0};
     };

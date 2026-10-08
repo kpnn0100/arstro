@@ -323,7 +323,13 @@ static void test_routing_only_goes_forward_and_refusals_change_nothing()
     r.ok("route ch_2 --to prt_1");                                    // straight to a port
     r.ok("route ch_2 --to master");
     assert(r.strip("ch_2")->out == "master");
-    pass("routing only goes forward — route, send, mixer move — and a refused command changes nothing (R-MIX-4)");
+    // what a matrix or a picker may offer — the same rule, published (Sources, Stems, Buses)
+    assert(r.strip("ch_2")->targets == std::vector<std::string>({"ch_3", "ch_1", "master", "prt_1"}));
+    assert(r.strip("ch_3")->targets == std::vector<std::string>({"ch_1", "master", "prt_1"}));
+    assert(r.strip("ch_1")->targets == std::vector<std::string>({"master", "prt_1"}));
+    const std::vector<std::string> offered = r.strip("ch_2")->targets;                 // a copy: each command rebuilds the model
+    for (const auto &t : offered) r.ok("route ch_2 --to " + t);                       // every one offered is taken
+    pass("routing only goes forward — route, send, mixer move — and a refused command changes nothing; `targets` offers exactly that (R-MIX-4)");
 }
 
 static void test_set_and_get_through_the_registry()

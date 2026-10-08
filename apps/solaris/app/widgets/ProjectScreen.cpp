@@ -28,12 +28,28 @@ namespace solaris_ui
         mBar = std::make_shared<SongBar>();
         mBrowser = std::make_shared<Browser>();
         mTimeline = std::make_shared<Timeline>();
+        mDock = std::make_shared<MixerDock>();
         addChild(mTimeline);
+        addChild(mDock);
         addChild(mBrowser);
         addChild(mBar);
 
         mBrowser->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
         mTimeline->onCommand = [this](const std::string &l) { if (onCommand) onCommand(l); };
+        mDock->onCommand = [this](const std::string &l) { return onCommand ? onCommand(l) : false; };
+        mDock->onMenu = [this](std::vector<cosmo_v2::ContextMenu::Item> items, Point world) { if (onMenu) onMenu(std::move(items), world); };
+        mDock->onRename = [this](const std::string &cur, Point world, std::function<void(const std::string &)> done) {
+            if (onRename) onRename(cur, world, std::move(done));
+        };
+        mDock->onToggle = [this] { mDockOpen = !mDockOpen; };
+        mDock->onResize = [this](double worldY) {
+            // direct manipulation: the edge follows the pointer, and that is where it stays
+            const double h = height.value() - toLocal(Point{0.0, worldY}).y;
+            mDockOpen = true;
+            mDockWant = std::max(MixerDock::kTabsH + 97.5, h);
+            mDockLast = dockTarget();
+            mDockH.set(mDockLast);
+        };
         mBrowser->onDragMove = [this](const Browser::Item &it, Point world) {
             double beat = 0;
             int row = -1;
@@ -80,6 +96,15 @@ namespace solaris_ui
         mBar->bind(m);
         mBrowser->bind(m);
         mTimeline->bind(m);
+        mDock->bind(m, mInteracting);
+    }
+
+    double ProjectScreen::dockTarget() const
+    {
+        const double avail = std::max(0.0, height.value() - SongBar::kHeight);
+        if (!mDockOpen) return MixerDock::kTabsH;
+        // the dock gives way before the lanes do (R4)
+        return std::max(MixerDock::kTabsH, std::min(mDockWant, avail - kLanesFloor));
     }
 
     void ProjectScreen::layout()
@@ -87,11 +112,16 @@ namespace solaris_ui
         const double W = width.value(), H = height.value(), top = SongBar::kHeight;
         mBar->x.set(0); mBar->y.set(0); mBar->width.set(W);
         mBrowser->x.set(0); mBrowser->y.set(top); mBrowser->width.set(Browser::kWidth); mBrowser->height.set(std::max(0.0, H - top));
+        const double rw = std::max(0.0, W - Browser::kWidth), dockH = std::min(mDockH.value(), std::max(0.0, H - top));
         mTimeline->x.set(Browser::kWidth); mTimeline->y.set(top);
-        mTimeline->width.set(std::max(0.0, W - Browser::kWidth));    // the flexible column last (§4)
-        mTimeline->height.set(std::max(0.0, H - top));
+        mTimeline->width.set(rw);                                    // the flexible column last (§4)
+        mTimeline->height.set(std::max(0.0, H - top - dockH));       // from the LIVE dock height: the seam never tears
+        mDock->x.set(Browser::kWidth); mDock->y.set(top + std::max(0.0, H - top - dockH));
+        mDock->width.set(rw);
+        mDock->height.set(dockH);
         mBrowser->layout();
         mTimeline->layout();
+        mDock->layout();
     }
 
     void ProjectScreen::advance(double nowMs)
@@ -100,6 +130,11 @@ namespace solaris_ui
         const double want = mGhostWanted ? 1.0 : 0.0;
         if (std::fabs(mGhost.value() - want) > 1e-6 && !mGhost.isAnimating()) mGhost.animateTo(want, motion::kHoverMs, Easing::EaseOutCubic, nowMs);
         mGhost.update(nowMs);
+        // the dock's height: toggled, or the window changed — eased; dragged — already set
+        const double dt = dockTarget();
+        if (!mDockInit) { mDockH.set(dt); mDockLast = dt; mDockInit = true; }
+        else if (dt != mDockLast) { mDockH.animateTo(dt, motion::kSlideMs, Easing::EaseOutCubic, nowMs); mDockLast = dt; }
+        mDockH.update(nowMs);
         Segment::advance(nowMs);
     }
 

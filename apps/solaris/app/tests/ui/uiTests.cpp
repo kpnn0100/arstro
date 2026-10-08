@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 #include "../Rig.h"
+#include "../../../../cosmo/widgets/SliderRow.h"
 using arstro::solaris_ui::Timeline;
 #include <cassert>
 #include <cmath>
@@ -153,17 +154,9 @@ static void test_home_unsaved_confirm_and_recents()
     pass("Home: unsaved changes ask first (Discard closes); a card opens its song, right-click forgets it");
 }
 
-namespace
-{
-    // a widget-local rect → window coordinates (the App draws its tree at the identity transform)
-    artboard::Rect world(const artboard::Segment &s, const artboard::Rect &r)
-    {
-        const artboard::Point o = s.worldTransform().apply(artboard::Point{0, 0});
-        return artboard::Rect{r.x + o.x, r.y + o.y, r.w, r.h};
-    }
-    double cx(const artboard::Rect &r) { return r.x + r.w * 0.5; }
-    double cy(const artboard::Rect &r) { return r.y + r.h * 0.5; }
-}
+using sltest::cx;
+using sltest::cy;
+using sltest::world;
 
 static void test_browser_tabs_and_sample_drag()
 {
@@ -272,6 +265,13 @@ static void test_lists_travel_when_the_song_changes_shape()
     r.settle();
     const double x1 = tl.clipRect("ac_1").x;
     assert(x1 > x0 && xm > x0 && xm < x1);
+    // a strip's colour set from a shell: its clips CROSS-FADE to it
+    r.cmd("set ch_2.colour=7");
+    r.frame();
+    r.frame();
+    assert(tl.clipHueAmount("ac_1") > 0.0 && tl.clipHueAmount("ac_1") < 1.0);
+    r.settle();
+    assert(tl.clipHueAmount("ac_1") == 1.0);
     // a lane removed above: the one below SLIDES up; the removed clip fades where it was and takes no input
     const double y0 = tl.rowRect(1).y;
     r.cmd("lane delete ln_1 --with-clips");
@@ -290,6 +290,157 @@ static void test_lists_travel_when_the_song_changes_shape()
     r.settle();
     assert(b.rowAlpha(1) == 1.0);
     pass("Lists travel (§1): a clip from a shell fades in, a `clip move` eases, a lane removed slides the next up, a tab cross-fades");
+}
+
+static void test_mixer_dock_strips()
+{
+    sltest::Rig r("ui-mixer", 1280, 800);
+    r.cmd("project new " + r.song("Mix") + ".slp --bpm 120");
+    r.cmd("clip add --instrument drums --at 0 --length 4");  // ch_2
+    r.cmd("clip add --instrument synth --at 0 --length 4");  // ch_3
+    r.settle();
+    auto &d = r.app->project().dock();
+    using arstro::solaris_ui::MixerDock;
+    const auto S = [&r](const std::string &id) -> const arstro::solaris::StripModel & { // by id: the model lists strips in processing order
+        for (const auto &s : r.svc->model().strips)
+            if (s.id == id) return s;
+        assert(false);
+        return r.svc->model().strips[0];
+    };
+    // a fader dragged follows the pointer EXACTLY, and every step is `set ch_2.gain=…`
+    const artboard::Rect f = world(d, d.faderRect("ch_2"));
+    const auto thumbY = [&](double pos) { return f.bottom() - 6.0 - pos * (f.h - 12.0); };
+    r.drag(f.x + f.w * 0.36, thumbY(d.faderLive("ch_2")), f.x + f.w * 0.36, thumbY(d.faderLive("ch_2")) + 30.0, 6, false);
+    const double held = d.faderLive("ch_2");
+    assert(std::fabs(thumbY(held) - (thumbY(MixerDock::faderPos(0.0)) + 30.0)) < 0.5);   // under the pointer, not easing after it
+    bool sent = false;
+    for (const auto &l : r.sent) sent |= l.rfind("set ch_2.gain=-", 0) == 0;
+    assert(sent && S("ch_2").gain < -1.0);
+    r.app->pointer(2, f.x + f.w * 0.36, thumbY(held), 0, r.now);
+    r.settle();
+    assert(std::fabs(d.faderLive("ch_2") - held) < 0.01);                                   // let go: it stays
+    // a gain set from a shell TRAVELS there
+    r.cmd("set ch_3.gain=-12");
+    r.frame();
+    r.frame();
+    const double mid = d.faderLive("ch_3");
+    assert(mid < MixerDock::faderPos(0.0) - 0.01 && mid > MixerDock::faderPos(-12.0) + 0.01);
+    r.settle();
+    assert(std::fabs(d.faderLive("ch_3") - MixerDock::faderPos(-12.0)) < 1e-6);
+    // mute: a line, and the fill eases
+    r.click(world(d, d.muteRect("ch_3")));
+    assert(sentLine(r, "set ch_3.mute=true"));
+    r.frame();
+    r.frame();
+    assert(d.muteAmount("ch_3") > 0.0 && d.muteAmount("ch_3") < 1.0);
+    r.settle();
+    assert(d.muteAmount("ch_3") == 1.0);
+    // where it goes: the menu offers exactly the service's targets
+    r.click(world(d, d.outRect("ch_3")));
+    r.settle();
+    auto &menu = r.app->menu();
+    assert(menu.isOpen() && menu.itemCount() == (int)S("ch_3").targets.size());
+    int master = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label.rfind("Master", 0) == 0) master = i;
+    r.click(menu.itemRect(master));
+    r.settle();
+    assert(sentLine(r, "route ch_3 --to master") && S("ch_3").out == "master");
+    // tabs: the highlight SLIDES, the pages CROSS-FADE
+    const double hx0 = d.tabHighlightX();
+    r.click(world(d, d.tabRect(1)));
+    r.frame();
+    r.frame();
+    assert(d.tabHighlightX() > hx0 && d.tabHighlightX() < d.tabRect(1).x);
+    assert(d.pageAmount(1) > 0.0 && d.pageAmount(1) < 1.0 && d.pageAmount(0) > 0.0);
+    r.settle();
+    assert(d.pageAmount(1) == 1.0 && d.pageAmount(0) == 0.0);
+    // a fold: two strips feed Main on Sources — folded, their cards narrow away (eased)
+    r.click(world(d, d.tabRect(0)));
+    r.settle();
+    r.cmd("route ch_3 --to ch_1");
+    r.settle();
+    r.click(world(d, d.foldRect("ch_1")));
+    r.frame();
+    r.frame();
+    assert(d.foldAmount("ch_1") > 0.0 && d.foldAmount("ch_1") < 1.0 && d.cardRect("ch_2").w > 0.0);
+    r.settle();
+    assert(d.foldAmount("ch_1") == 1.0 && d.cardRect("ch_2").w == 0.0 && d.foldRect("ch_1").w == MixerDock::kStripW);
+    // the dock folds down to its tabs, eased, and the lanes take the room
+    const double h0 = r.app->project().dockHeight();
+    r.click(world(d, d.toggleRect()));
+    r.frame();
+    r.frame();
+    const double hm = r.app->project().dockHeight();
+    assert(hm < h0 && hm > MixerDock::kTabsH);
+    r.settle();
+    assert(r.app->project().dockHeight() == MixerDock::kTabsH);
+    pass("Mixer dock: a fader follows the pointer and sends `set`; a shell's gain travels; mute eases; the route menu is the service's targets; tabs slide and cross-fade; a fold and the dock ease");
+}
+
+static void test_mixer_matrix_effects_and_device_panel()
+{
+    sltest::Rig r("ui-matrix", 1280, 800);
+    r.cmd("project new " + r.song("Matrix") + ".slp --bpm 120");
+    r.cmd("clip add --instrument synth --at 0 --length 4");  // ch_2
+    r.settle();
+    auto &d = r.app->project().dock();
+    auto &menu = r.app->menu();
+    // + Effect: the registry's effects; one picked is `device add`
+    r.click(world(d, d.chipRect("ch_2", d.chipSlots("ch_2") - 1)));
+    r.settle();
+    int reverb = -1;
+    for (int i = 0; i < menu.itemCount(); ++i)
+        if (menu.item(i).label == "Reverb") reverb = i;
+    assert(menu.isOpen() && reverb >= 0);
+    r.click(menu.itemRect(reverb));
+    r.settle();
+    assert(sentLine(r, "device add ch_2 --type reverb") && r.svc->model().strips[0].devices.size() == 2);
+    // a chip opens its device's panel, fading in; its rows are the registry's parameters
+    r.click(world(d, d.chipRect("ch_2", 0)));
+    r.frame();
+    r.frame();
+    auto &p = d.panel();
+    assert(p.shown() && p.appearAmount() > 0.0 && p.appearAmount() < 1.0);
+    r.settle();
+    const std::string dv = r.svc->model().strips[0].devices[0].id;
+    assert(p.device() == dv && p.rowCount() == (int)r.svc->model().strips[0].devices[0].params.size());
+    assert(p.slider("filter.cutoff") != nullptr && p.slider("osc1.wave") == nullptr); // a choice is not a slider
+    // a slider dragged is `set <dv>.<param>=…` in its unit (a log taper: cutoff moves in ratios)
+    int cut = -1;
+    for (int i = 0; i < p.rowCount(); ++i)
+        if (p.rowParam(i) == "filter.cutoff") cut = i;
+    p.reveal("filter.cutoff");                                           // below the fold of the panel: scroll to it
+    r.settle();
+    const artboard::Rect row = world(p, p.rowRect(cut));
+    const double sx = row.x + arstro::cosmo_v2::SliderRow::kLabelWidth + 20.0;
+    r.drag(sx, cy(row), sx + 40.0, cy(row), 5);
+    r.settle();
+    bool cutoff = false;
+    for (const auto &l : r.sent) cutoff |= l.rfind("set " + dv + ".filter.cutoff=", 0) == 0;
+    assert(cutoff);
+    // bypass, eased chip; another device cross-fades the pages
+    r.click(world(p, p.bypassRect()));
+    r.settle();
+    assert(sentLine(r, "set " + dv + ".bypass=true") && r.svc->model().strips[0].devices[0].bypass);
+    const std::string fx = r.svc->model().strips[0].devices[1].id;
+    r.click(world(d, d.chipRect("ch_2", 1)));
+    r.frame();
+    r.frame();
+    assert(p.device() == fx && p.pageAmount(fx) > 0.0 && p.pageAmount(fx) < 1.0 && p.pageAmount(dv) > 0.0);
+    r.settle();
+    // the matrix: an open cell adds a send; a backward one takes nothing
+    r.click(world(d, d.tabRect(d.tabCount() - 1)));
+    r.settle();
+    assert(d.onMatrix());
+    r.click(world(d, d.cellRect("ch_2", "master")));
+    r.settle();
+    assert(sentLine(r, "send add ch_2 --to master") && r.svc->model().strips[0].sends.size() == 1);
+    const size_t before = r.sent.size();
+    r.click(world(d, d.cellRect("ch_1", "ch_1")));                       // Main → itself: hatched
+    r.settle();
+    assert(r.sent.size() == before);
+    pass("Mixer: + Effect is the registry; a chip opens a generated panel (fade), a slider is `set` in its unit, bypass, pages cross-fade; the matrix adds a send");
 }
 
 static void test_ruler_seek_keys_and_selection()
@@ -332,6 +483,8 @@ int main()
     test_instrument_drop_and_clip_drag();
     test_ruler_seek_keys_and_selection();
     test_lists_travel_when_the_song_changes_shape();
+    test_mixer_dock_strips();
+    test_mixer_matrix_effects_and_device_panel();
     std::printf("\n%d passed, 0 failed\n", passed);
     return 0;
 }

@@ -204,6 +204,11 @@ namespace solaris
     std::string serializeProject(const Project &p);
     /** Every structural error (§11), each one sentence naming what and where. Empty = valid. */
     std::vector<std::string> validateProject(const Project &p);
+    /** R-MIX-4, the one rule: may strip `from` feed strip `to`? Only a strip on a LATER mixer. */
+    bool feedsForward(const Project &p, const Strip &from, const Strip &to);
+    /** Everything `s` may route or send to: strips on later mixers (processing order), then
+     *  "master", then the output ports — what a matrix column or a route picker offers. */
+    std::vector<std::string> targetsOf(const Project &p, const Strip &s);
 
     /** A fresh project: R-MIX-3's defaults — Mixer 1 "Sources", Mixer 2 "Buses" with bus "Main",
      *  output port "Main" fed by the master. */
