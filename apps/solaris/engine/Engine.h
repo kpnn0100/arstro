@@ -1,0 +1,94 @@
+/*
+ *  solaris_engine — Engine: renders a MixGraph, block after block (R-MIX, R-PLAY-1, R-RENDER-1).
+ *
+ *  Per strip, in index order (= processing order): sum what earlier strips routed and sent to it;
+ *  add its audio regions (Interstellar's linear-amplitude fades) or play its instrument (the block
+ *  split at every note event, so a note starts on its exact sample — R-DSP-5); run its rack; tap
+ *  pre-fader sends; apply fader and balance pan (unity at centre — Interstellar's law, R-MIX-11);
+ *  tap post-fader sends; add into its output. Then the master: its rack, its gain, its ports.
+ *
+ *  It hosts DSP; it implements none (R-DSP-1). Every device comes from `arstro::DeviceRegistry`.
+ *
+ *  **Deterministic** (R-RENDER-1): the same graph rendered from the same position gives the same
+ *  samples however the caller chops the frames. Devices are WARMED with one engine block of
+ *  silence when the engine is built, because the DSP library smooths every parameter write over a
+ *  block: without the warm-up, the first block of every render would carry a ramp from each
+ *  device's default to the project's value.
+ */
+#pragma once
+#include "MixGraph.h"
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace arstro
+{
+class Device;
+namespace solaris
+{
+namespace engine
+{
+    struct Meter
+    {
+        float peak[2] = {0, 0};      // the last render call
+        float rms[2] = {0, 0};
+        float maxPeak[2] = {0, 0};   // since the engine was built or `clearPeaks()`
+    };
+
+    /** The engine's output: one buffer per port, `channels × frames`, overwritten by `render`. */
+    struct PortBuffers
+    {
+        std::vector<std::vector<std::vector<float>>> ports; // [port][channel][frame]
+    };
+
+    class Engine
+    {
+    public:
+        static constexpr int kBlock = 128;
+
+        /** Build every device. False + `err` on a graph that routes backward or names an unknown
+         *  device type (a registry type missing from this build would be a silent part). */
+        bool build(const MixGraph &graph, std::string &err);
+        const MixGraph &graph() const { return mGraph; }
+
+        long long position() const { return mPos; }
+        /** Jump: every instrument goes silent and its state clears; effect tails ring on. */
+        void seek(long long sample);
+
+        /** Render `frames` from the current position into `out` and advance. */
+        void render(int frames, PortBuffers &out);
+
+        /** Capture a strip's post-fader output into `stem` on every render (−1 = none) — stems. */
+        void captureStrip(int strip) { mCapture = strip; }
+        const std::vector<std::vector<float>> &captured() const { return mCaptured; }
+
+        const std::vector<Meter> &stripMeters() const { return mStripMeters; }
+        const Meter &masterMeter() const { return mMasterMeter; }
+        void clearPeaks();
+
+        /** A device parameter, live (registry name). False when there is no such strip/device/name. */
+        bool setDeviceParam(int strip, int device, const std::string &name, double value);
+        bool setMasterDeviceParam(int device, const std::string &name, double value);
+
+        Engine();
+        ~Engine();
+
+    private:
+        struct StripState;
+        void renderPiece(long long p0, int n, PortBuffers &out, int outOffset);
+        void route(const Target &t, const double *L, const double *R, int n, double gain, PortBuffers &out, int outOffset);
+        void meter(Meter &m, const double *L, const double *R, int n);
+
+        MixGraph mGraph;
+        std::vector<std::unique_ptr<StripState>> mStrips;
+        std::vector<std::unique_ptr<Device>> mMasterRack;
+        std::vector<double> mMasterL, mMasterR;
+        std::vector<Meter> mStripMeters;
+        Meter mMasterMeter;
+        int mCapture = -1;
+        std::vector<std::vector<float>> mCaptured;
+        long long mPos = 0;
+    };
+}
+}
+}

@@ -20,7 +20,7 @@ Solaris hosts devices and routes their output; it implements no DSP.
 |---|---|---|---|---|
 | `core/DigitalSignalProcessing/src/` | `arstro_dsp` | — | `Biquad`, `ParametricEQ`, `StateVariableFilter`, `Noise`, `DecayEnvelope`, `BasicSynth`, `DrumMachine`, `Device` + `DeviceRegistry`, the existing `Compressor`/`Reverb`/`Repeater`/`Chorus`/`Overdrive` | R-DSP, R-INST, R-FX |
 | `apps/solaris/model/` | `solaris_model` | — | `Project` (.slp: parse, serialize, validate, `newProject`), `Format` (canonical numbers/beats/seconds, quoting, line tokens) | R-FMT, R-MIX-3/4 |
-| `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (render a block), mix laws, meters | R-MIX, R-PLAY, R-RENDER-1 |
+| `apps/solaris/engine/` | `solaris_engine` | `arstro_dsp` | `MixGraph` (plain data), `Engine` (build → warm → render pieces split at note events; meters, stems, live params, seek), `MixLaws` (Interstellar's pan/fade) | R-MIX, R-DSP-5, R-PLAY, R-RENDER-1 |
 | `apps/solaris/core/` | `solaris_core` | model, engine | `SolarisService`, `Command` table, `Event`, `AppModel` + codec, `ApiDoc`, `Compile` | R-SVC, R-API |
 | `apps/solaris/host/` | `solaris_host` | core, FFmpeg, libpulse | decoder, WAV writer, devices, settings + recents | R-SVC-4, R-DEV, R-SET |
 | `apps/solaris/cli/` | `solaris-cc` | host | argv/stdout only — every verb is the grammar | R-SVC-1 |

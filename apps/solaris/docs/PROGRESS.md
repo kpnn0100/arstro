@@ -11,15 +11,15 @@ A session reads **NEXT**, does one task, updates this file, and commits — in t
   · Why it is shaped like this: [`discussion.md`](discussion.md)
 - Legend: `[ ]` not started · `[~]` in progress · `[x]` done + verified · `[!]` done but UNVERIFIED
 
-*Last updated: 2026-10-08 — M1: the `.slp` model (fixed point, forward-only routing).*
+*Last updated: 2026-10-08 — E1: the engine (sample-accurate, deterministic, Interstellar's laws).*
 
 ---
 
 ## NEXT
 
-**► E1 — `solaris_engine`**: a `MixGraph` (plain data: strips in processing order with their
-devices, regions, note events, outputs and sends) → rendered blocks through the DSP registry's
-devices; sample-accurate note splitting; Interstellar's pan and fade laws; meters; deterministic.
+**► V1 — the service**: `SolarisService` (grammar table, events, `AppModel` + codec, compile
+`.slp` → `MixGraph` with solo resolution and pattern expansion, device params checked against the
+registry), `solaris-cc`, L2 tests through `dispatchText`.
 
 ---
 
@@ -51,8 +51,10 @@ umbrella's pointer — `arstro.rule` §7).
       DR-MIX-4; `solaris_model` 8 tests (fixed point over every node type + unknowns + comments;
       forward-only routing refused naming both ends; 24 structural refusals; 4 repairs counted).
       Device parameters are checked against the registry by the core (V1), not the model.
-- [ ] **E1** `solaris_engine`: `MixGraph` → devices, strips in mixer order, sends, ports, master;
+- [x] **E1** `solaris_engine`: `MixGraph` → devices, strips in mixer order, sends, ports, master;
       sample-accurate notes; pan/fade laws equal to Interstellar's; meters; deterministic.
+      — DR-ENG-1, DR-MIX-11; `solaris_engine` 8 tests; its chunking test found a DSP bug (the
+      synth's shared noise), fixed in DSP `a16e972`.
 
 ### V — the service (rung 1 → 4)
 - [ ] **V1** `SolarisService` + grammar table + events + `AppModel` + codec; `solaris-cc`; L2 tests.
@@ -84,6 +86,14 @@ umbrella's pointer — `arstro.rule` §7).
 ---
 
 ## Decisions log (newest first)
+
+- **2026-10-08 — the engine warms every device with a block of silence.** The DSP library smooths
+  each parameter write over a block (`SignalProcessor`), so a freshly built device ramps from its
+  default to the project's value over the first 128 samples of every render. Warming finishes the
+  ramp before time zero. The alternative — a "snap" API in the library — would have touched every
+  `SignalProcessor`; this touches none.
+- **2026-10-08 — a muted strip sends nothing, pre-fader sends included.** Simplest rule a user can
+  predict; revisit if a cue-mix workflow needs pre-fader sends to survive mute.
 
 - **2026-10-08 — the open questions of the discussion, closed with the recommended defaults** when
   the user said "implement": one clip → one strip (Q-MIX-1); dragging in Arrange-by-Channel

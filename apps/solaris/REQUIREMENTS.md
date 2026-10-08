@@ -106,7 +106,7 @@ The user's request (2026-10-08): *"and some basic filters: Compressor, EQ, Rever
 
 ---
 
-## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (4 ✅ DR-MIX-4; 3's defaults in the model)
+## R-MIX — the mixer: every source has its own strip — 🚧 IN PROGRESS (4 ✅ DR-MIX-4; 11 ✅ DR-MIX-11; 1/5/6 rendered by the engine, DR-ENG-1; 3's defaults in the model)
 
 The user's model (2026-10-08): *"sample got its own line by default; we can add multiple mixers as
 the user wants their workspace organised; the 1st mixer stores the samples, the 2nd receives from

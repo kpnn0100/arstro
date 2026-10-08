@@ -94,3 +94,33 @@ at all. A new project is `newProject` (`model/Project.cpp:134`): Sources (`mx_1`
 holding the bus Main (`ch_1` → master), the port Main (`prt_1`) fed by the master (R-MIX-3).
 Guarded by `test_routing_only_goes_forward` (mutant checked: `<=` → `<` lets a same-mixer route
 through and the test fails).
+
+### DR-ENG-1 The engine renders a MixGraph through the DSP library's devices (R-MIX-1/5/6, R-DSP-1/5, R-RENDER-1)
+`solaris_engine` knows no project and no file: it renders a `MixGraph` (`engine/MixGraph.h`) —
+strips in processing order with their devices (registry types + values), audio regions in samples
+over decoded PCM, note events in samples, an output and sends as forward indices, the master's rack
+and gain, the ports. `Engine::build` (`engine/Engine.cpp:72`) refuses a target that is not LATER
+(R-MIX-4, a second time — the graph might not come from the model), a missing port, an unknown
+device type or parameter, an instrument strip whose rack does not start with an instrument; sets
+the DSP library's process-wide sample rate (R-NFR-7); builds every device with
+`DeviceRegistry::create`; and **warms** each with one block of silence (`warm`, `:47`), because the
+library smooths every parameter write over a block and the first block of every render would
+otherwise carry a ramp from the device's default. `renderPiece` (`:206`) per strip in order: sum
+what earlier strips routed/sent to it; add its regions (looped, offset, offline = silent) or play
+its instrument with the block **split at every note event** (`:249`, R-DSP-5); run the rest of its
+rack (bypass skips); tap pre-fader sends; fader + balance pan; post-fader sends; add into its
+output (`route`, `:179` — master, a later strip, or a port; a mono port gets the average of L and
+R). A silent strip (muted or solo-silenced, decided by the core) sends nothing anywhere (`:276`).
+Then the master rack, master gain, its ports. Meters (peak, RMS per render call, max peak since
+`clearPeaks`), a captured strip for stems, live parameter writes, `seek` (instruments reset, effect
+tails ring on). Guarded by `solaris_engine` (8 tests): a region sounds from its first sample to its
+last; mute/pre/post/port routing; refusals; **a note moved one sample later renders exactly one
+sample later, to the bit** (mutant checked: applying events at block starts fails it); **two engines
+rendering in chunks of 128 and of 77 are byte-identical** over a second of drums, synth, chorus,
+compressor, reverb and EQ — which is how DSP `a16e972` (the synth's shared noise) was found.
+
+### DR-MIX-11 The mix laws are Interstellar's (R-MIX-11)
+`engine/MixLaws.h`: dB → linear `10^(dB/20)`; `balancePan` (`:24`) — unity at centre, the side
+panned away from falls on a quarter cosine; `fadeGain` (`:32`) — linear in amplitude — the same
+formulas as `apps/interstellar/render/AudioMix.cpp`. Guarded by `test_pan_and_fades_follow…`, which
+checks a 0.5 region at pan +0.5, −6 dB to 1e-7 against the closed forms.
